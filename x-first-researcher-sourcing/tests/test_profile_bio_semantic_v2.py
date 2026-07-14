@@ -471,7 +471,7 @@ class ProfileBioSemanticV2Test(unittest.TestCase):
         implementation_bundle = implementation_manifest["implementation_bundle"]
         self.assertEqual(
             implementation_bundle["format"],
-            "cpython-transitive-code-and-dependency-manifest-v1",
+            "python-source-transitive-dependency-manifest-v1",
         )
         self.assertIn("adjudicate_observed_response", implementation_bundle["controlled_symbol_sha256"])
         self.assertIn("_execution_record_errors", implementation_bundle["controlled_symbol_sha256"])

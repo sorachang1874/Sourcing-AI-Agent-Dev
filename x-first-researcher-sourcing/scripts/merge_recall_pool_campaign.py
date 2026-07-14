@@ -90,6 +90,39 @@ def _read_regular_file(
         os.close(descriptor)
 
 
+def _regular_file_size(
+    path: Path,
+    *,
+    maximum_bytes: int,
+    allowed_modes: frozenset[int],
+    require_private_parent: bool = False,
+) -> int:
+    """Validate a source descriptor and return its size without loading bytes."""
+
+    if maximum_bytes < 1 or _has_disallowed_symlink_ancestor(path):
+        raise ValueError("input_path_invalid")
+    if require_private_parent:
+        _validate_private_parent(path)
+    flags = os.O_RDONLY
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    descriptor = os.open(path, flags)
+    try:
+        opened = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(opened.st_mode)
+            or opened.st_uid != os.getuid()
+            or opened.st_nlink != 1
+            or stat.S_IMODE(opened.st_mode) not in allowed_modes
+            or opened.st_size < 1
+            or opened.st_size > maximum_bytes
+        ):
+            raise ValueError("input_file_invalid")
+        return opened.st_size
+    finally:
+        os.close(descriptor)
+
+
 def _resolve_binding_path(manifest_path: Path, binding: str) -> Path:
     candidate = Path(binding).expanduser()
     if ".." in candidate.parts:
@@ -104,11 +137,7 @@ def _validate_private_parent(path: Path) -> Path:
         raise ValueError("output_parent_invalid")
     parent = path.parent.resolve()
     opened = parent.stat()
-    if (
-        not stat.S_ISDIR(opened.st_mode)
-        or opened.st_uid != os.getuid()
-        or stat.S_IMODE(opened.st_mode) & 0o077
-    ):
+    if not stat.S_ISDIR(opened.st_mode) or opened.st_uid != os.getuid() or stat.S_IMODE(opened.st_mode) & 0o077:
         raise ValueError("output_parent_not_owner_only")
     return parent
 
@@ -216,50 +245,114 @@ def _load_sources(
     if len(request["waves"]) > ceilings["max_wave_files"]:
         raise CampaignValidationError("max_wave_files_kill_ceiling_exceeded")
     loaded: list[WaveInput] = []
+    planned: list[
+        tuple[
+            dict[str, Any],
+            Path,
+            Path,
+            Path,
+            dict[str, Path],
+            int,
+            int,
+            int,
+            dict[str, int],
+        ]
+    ] = []
     total_bytes = 0
     for binding in request["waves"]:
-        source_raw = _read_regular_file(
-            _resolve_binding_path(manifest_path, binding["source_path"]),
-            maximum_bytes=ceilings["max_bytes_per_wave"],
-            allowed_modes=_PRIVATE_FILE_MODES,
-            require_private_parent=True,
-        )
-        upstream_raw = _read_regular_file(
-            _resolve_binding_path(manifest_path, binding["upstream_request"]["path"]),
-            maximum_bytes=MAX_CONTROL_FILE_BYTES,
-            allowed_modes=_PRIVATE_FILE_MODES,
-            require_private_parent=True,
-        )
-        prompt_raw = _read_regular_file(
-            _resolve_binding_path(manifest_path, binding["prompt"]["path"]),
-            maximum_bytes=ceilings["max_bytes_per_wave"],
-            allowed_modes=_PRIVATE_FILE_MODES,
-            require_private_parent=True,
-        )
+        source_path = _resolve_binding_path(manifest_path, binding["source_path"])
+        upstream_path = _resolve_binding_path(manifest_path, binding["upstream_request"]["path"])
+        prompt_path = _resolve_binding_path(manifest_path, binding["prompt"]["path"])
         raw_directory = _resolve_binding_path(manifest_path, binding["raw_session_directory"])
         if _has_disallowed_symlink_ancestor(raw_directory / "placeholder") or not raw_directory.is_dir():
             raise ValueError("raw_session_directory_invalid")
         raw_directory = raw_directory.resolve()
         raw_directory_stat = raw_directory.stat()
-        if (
-            raw_directory_stat.st_uid != os.getuid()
-            or stat.S_IMODE(raw_directory_stat.st_mode) != 0o700
-        ):
+        if raw_directory_stat.st_uid != os.getuid() or stat.S_IMODE(raw_directory_stat.st_mode) != 0o700:
             raise ValueError("raw_session_directory_not_owner_only")
-        raw_session_files = {
-            name: _read_regular_file(
-                raw_directory / name,
+        raw_paths = {name: raw_directory / name for name in RAW_SESSION_FILES}
+        source_size = _regular_file_size(
+            source_path,
+            maximum_bytes=ceilings["max_bytes_per_wave"],
+            allowed_modes=_PRIVATE_FILE_MODES,
+            require_private_parent=True,
+        )
+        upstream_size = _regular_file_size(
+            upstream_path,
+            maximum_bytes=MAX_CONTROL_FILE_BYTES,
+            allowed_modes=_PRIVATE_FILE_MODES,
+            require_private_parent=True,
+        )
+        prompt_size = _regular_file_size(
+            prompt_path,
+            maximum_bytes=ceilings["max_bytes_per_wave"],
+            allowed_modes=_PRIVATE_FILE_MODES,
+            require_private_parent=True,
+        )
+        raw_sizes = {
+            name: _regular_file_size(
+                raw_path,
                 maximum_bytes=ceilings["max_raw_session_file_bytes"],
                 allowed_modes=_PRIVATE_FILE_MODES,
                 require_private_parent=True,
             )
-            for name in RAW_SESSION_FILES
+            for name, raw_path in raw_paths.items()
         }
-        total_bytes += len(source_raw) + len(upstream_raw) + len(prompt_raw) + sum(
-            len(raw) for raw in raw_session_files.values()
-        )
+        total_bytes += source_size + upstream_size + prompt_size + sum(raw_sizes.values())
         if total_bytes > ceilings["max_total_input_bytes"]:
             raise CampaignValidationError("max_total_input_bytes_kill_ceiling_exceeded")
+        planned.append(
+            (
+                binding,
+                source_path,
+                upstream_path,
+                prompt_path,
+                raw_paths,
+                source_size,
+                upstream_size,
+                prompt_size,
+                raw_sizes,
+            )
+        )
+
+    for (
+        binding,
+        source_path,
+        upstream_path,
+        prompt_path,
+        raw_paths,
+        source_size,
+        upstream_size,
+        prompt_size,
+        raw_sizes,
+    ) in planned:
+        source_raw = _read_regular_file(
+            source_path,
+            maximum_bytes=source_size,
+            allowed_modes=_PRIVATE_FILE_MODES,
+            require_private_parent=True,
+        )
+        upstream_raw = _read_regular_file(
+            upstream_path,
+            maximum_bytes=upstream_size,
+            allowed_modes=_PRIVATE_FILE_MODES,
+            require_private_parent=True,
+        )
+        prompt_raw = _read_regular_file(
+            prompt_path,
+            maximum_bytes=prompt_size,
+            allowed_modes=_PRIVATE_FILE_MODES,
+            require_private_parent=True,
+        )
+        raw_session_files = {
+            name: _read_regular_file(
+                raw_path,
+                maximum_bytes=raw_sizes[name],
+                allowed_modes=_PRIVATE_FILE_MODES,
+                require_private_parent=True,
+            )
+            for name, raw_path in raw_paths.items()
+        }
         loaded.append(
             WaveInput(
                 wave_id=binding["wave_id"],

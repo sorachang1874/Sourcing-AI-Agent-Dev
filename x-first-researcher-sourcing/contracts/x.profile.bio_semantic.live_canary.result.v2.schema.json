@@ -2,6 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://contracts.invalid/x.profile.bio_semantic.live_canary.result.v2.schema.json",
   "title": "Receipt-first Luna semantic live-canary result v2",
+  "description": "Closed result shape only. It is non-authoritative without validate_artifact_directory_v2 replay against the request, approval, execution, catalog, semantic-review, raw-response, and hash receipts.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -125,7 +126,7 @@
         "proxy_policy_sha256": {"const": "a2c115e2505ed08ca5930028a8458218cbc3e0e074bd33ef96f1a51db2609e72"},
         "pure_adjudication_api_version": {"const": "x.profile.bio_semantic.pure_adjudication.v1"},
         "pure_adjudication_implementation_sha256": {
-          "const": "5cef30928609e0c6a17e06bf309ac45413e3c2475b07a9b5a0bb616f1c55fd45"
+          "const": "875bfdc49c6f409409575514bfcdf6f55ba27ff577ab81247ea7de271e99e070"
         }
       }
     },

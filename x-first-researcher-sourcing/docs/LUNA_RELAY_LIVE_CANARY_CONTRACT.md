@@ -181,6 +181,12 @@ artifact, plus dedicated approval and execution receipt hashes. Private raw
 evidence has a 24-hour delete-after timestamp and a pending-deletion state; the
 contract does not falsely claim deletion already happened.
 
+`validate_result_shape_v2_non_authoritative` mirrors only the declarative
+`result.json` shape and internal arithmetic. Its name is intentionally explicit:
+passing it is not proof that the result matches a request, provider response,
+approval, or execution receipt. `validate_artifact_directory_v2` is the sole
+authoritative replay API because it rebinds every receipt and artifact hash.
+
 ## TTL purge, recovery, and scheduling
 
 Expiry is enforced mechanically. Once `delete_after` is reached, ordinary

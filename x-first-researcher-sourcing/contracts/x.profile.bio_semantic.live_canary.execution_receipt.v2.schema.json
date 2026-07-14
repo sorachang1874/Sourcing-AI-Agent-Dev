@@ -36,7 +36,7 @@
       "const": "x.profile.bio_semantic.pure_adjudication.v1"
     },
     "semantic_adjudication_implementation_sha256": {
-      "const": "5cef30928609e0c6a17e06bf309ac45413e3c2475b07a9b5a0bb616f1c55fd45"
+      "const": "875bfdc49c6f409409575514bfcdf6f55ba27ff577ab81247ea7de271e99e070"
     },
     "attempt_count": {"type": "integer", "minimum": 1, "maximum": 2},
     "attempts": {"type": "array"},

@@ -15,6 +15,7 @@ import unittest
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
@@ -32,6 +33,7 @@ from x_first.adaptive_grok_wave_runner import (  # noqa: E402
     issue_live_grant,
     load_prior_context,
     load_prior_handles,
+    purge_expired_adaptive_runs,
     recover_incomplete_run,
     recover_pending_publications,
     run_adaptive_grok_wave_fixture,
@@ -39,6 +41,18 @@ from x_first.adaptive_grok_wave_runner import (  # noqa: E402
     validate_operator_bundle,
     validate_operator_receipt,
     validate_request,
+)
+from x_first.adaptive_recall_campaign_bridge import (  # noqa: E402
+    BRIDGE_SCHEMA_FILE,
+    REASON_CODE,
+    ZERO_AUTHORITY,
+    AdaptiveCampaignBridgeError,
+    build_blocked_campaign_bridge,
+)
+from x_first.recall_pool_schema import (  # noqa: E402
+    MiniDraft202012Error,
+    assert_schema_valid,
+    contract_schema_sha256,
 )
 
 FIXED_TIME = datetime(2026, 7, 14, 10, 0, 0, tzinfo=UTC)
@@ -98,8 +112,11 @@ def _build_request(
     *,
     wave_count: int = 0,
     binary_sha: str | None = None,
+    auth_sha: str | None = None,
     grant_id: str | None = "synthetic_live_grant_001",
 ) -> tuple[dict[str, Any], Path]:
+    if binary_sha is not None and auth_sha is None and (root / "auth.json").is_file():
+        auth_sha = _bytes_sha((root / "auth.json").read_bytes())
     prompt = root / "prompt.md"
     prompt_raw = b"Find a broad public-professional synthetic researcher population.\n"
     _write_private(prompt, prompt_raw)
@@ -126,6 +143,8 @@ def _build_request(
             "model_id": "grok-4.5",
             "reasoning_effort": "high",
             "grok_binary_sha256": binary_sha,
+            "operator_account_ref": "synthetic_operator_account" if auth_sha is not None else None,
+            "oauth_auth_sha256": auth_sha,
         },
         "emergency": {
             "max_turns": 64,
@@ -145,6 +164,23 @@ def _build_request(
             "max_total_prior_wave_bytes": 268_435_456,
             "max_prior_json_depth": 64,
             "max_prior_json_nodes": 250_000,
+            "max_session_files": 64,
+            "max_session_file_bytes": 33_554_432,
+            "max_session_total_bytes": 67_108_864,
+            "max_session_updates_bytes": 16_777_216,
+            "max_session_update_line_bytes": 4_194_304,
+        },
+        "budget": {
+            "pricing_policy_id": "synthetic_pricing.v1",
+            "max_total_tokens": 1_000_000,
+            "max_cost_usd_micros": 100_000_000,
+            "input_token_cost_usd_micros_per_million": 1_000_000,
+            "output_token_cost_usd_micros_per_million": 2_000_000,
+        },
+        "retention": {
+            "policy_id": "adaptive_private_24h.v1",
+            "ttl_seconds": 86_400,
+            "deletion_receipt_required": True,
         },
         "approval": {"grant_id": grant_id},
         "authority": copy.deepcopy(AUTHORITY),
@@ -190,6 +226,8 @@ class FakeExecutor:
         kill_sent: bool = False,
         execution_error: str = "none",
         technical_limit_kind: str | None = None,
+        session_mutator: Any = None,
+        extra_session_bytes: int = 0,
     ) -> None:
         self.clock = clock
         self.raw = raw
@@ -201,9 +239,12 @@ class FakeExecutor:
         self.kill_sent = kill_sent
         self.execution_error = execution_error
         self.technical_limit_kind = technical_limit_kind
+        self.session_mutator = session_mutator
+        self.extra_session_bytes = extra_session_bytes
         self.commands: list[list[str]] = []
         self.environments: list[dict[str, str]] = []
         self.deadlines: list[float] = []
+        self.target_release_count = 0
 
     def __call__(
         self,
@@ -218,10 +259,27 @@ class FakeExecutor:
         kill_grace_ms: int,
         max_stdout_bytes: int,
         max_stderr_bytes: int,
+        session_tree_root: Path,
+        session_updates_path: Path,
+        max_session_files: int,
+        max_session_file_bytes: int,
+        max_session_total_bytes: int,
+        max_session_updates_bytes: int,
         monotonic: Any,
         on_spawn: Any,
     ) -> ProcessResult:
-        del cwd, term_grace_ms, kill_grace_ms, max_stdout_bytes, max_stderr_bytes, monotonic
+        del (
+            cwd,
+            term_grace_ms,
+            kill_grace_ms,
+            max_stdout_bytes,
+            max_stderr_bytes,
+            max_session_files,
+            max_session_file_bytes,
+            max_session_total_bytes,
+            max_session_updates_bytes,
+            monotonic,
+        )
         self.commands.append(list(command))
         self.environments.append(dict(environment))
         self.deadlines.append(deadline_at)
@@ -231,6 +289,100 @@ class FakeExecutor:
         identity_token = "a" * 64 if self.spawn else None
         if self.spawn:
             on_spawn(child_pid, process_group_id, kernel_birth_identity, identity_token)
+            self.target_release_count += 1
+            session_updates_path.parent.mkdir(parents=True, mode=0o700)
+            model_id = command[command.index("--model") + 1]
+            session_id = command[command.index("--session-id") + 1]
+            prompt_id = "synthetic-prompt-1"
+            common = {"sessionId": session_id, "_meta": {"promptId": prompt_id}}
+            usage_scalars = {
+                "inputTokens": 100,
+                "outputTokens": 50,
+                "totalTokens": 150,
+                "cachedReadTokens": 0,
+                "reasoningTokens": 10,
+                "modelCalls": 1,
+                "apiDurationMs": 1_000,
+            }
+            updates = [
+                {
+                    "params": {
+                        **common,
+                        "update": {
+                            "sessionUpdate": "user_message_chunk",
+                            "_meta": {"modelId": model_id},
+                        },
+                    }
+                },
+                {
+                    "params": {
+                        **common,
+                        "update": {
+                            "sessionUpdate": "tool_call",
+                            "toolCallId": "tool-1",
+                            "status": "in_progress",
+                        },
+                    }
+                },
+                {
+                    "params": {
+                        **common,
+                        "update": {
+                            "sessionUpdate": "tool_call_update",
+                            "toolCallId": "tool-1",
+                            "status": "completed",
+                            "rawOutput": {
+                                "call_id": "provider-call-1",
+                                "id": "tool-1",
+                                "input": canonical_json({"query": "synthetic query"}),
+                                "name": "x_keyword_search",
+                            },
+                        },
+                    }
+                },
+                {
+                    "params": {
+                        **common,
+                        "update": {
+                            "sessionUpdate": "agent_message_chunk",
+                            "content": {"type": "text", "text": self.raw.decode().strip()},
+                        },
+                    }
+                },
+                {
+                    "params": {
+                        **common,
+                        "update": {
+                            "sessionUpdate": "turn_completed",
+                            "prompt_id": prompt_id,
+                            "stop_reason": "end_turn",
+                            "usage": {
+                                **usage_scalars,
+                                "modelUsage": {model_id: usage_scalars},
+                                "numTurns": 1,
+                            },
+                        },
+                    }
+                },
+            ]
+            for index, event in enumerate(updates, start=1):
+                update_kind = event["params"]["update"]["sessionUpdate"]
+                event["method"] = "_x.ai/session/update" if update_kind == "turn_completed" else "session/update"
+                event["timestamp"] = index
+                event["params"]["_meta"] = {
+                    **event["params"]["_meta"],
+                    "eventId": f"{session_id}-{index}",
+                    "agentTimestampMs": index,
+                }
+            if self.session_mutator is not None:
+                self.session_mutator(updates)
+            session_updates_path.write_text("".join(canonical_json(row) + "\n" for row in updates))
+            os.chmod(session_updates_path, 0o600)
+            if self.extra_session_bytes:
+                extra = session_tree_root / "oversized-session-artifact.bin"
+                extra.write_bytes(b"x" * self.extra_session_bytes)
+                os.chmod(extra, 0o600)
+            self.assert_session_tree_root = session_tree_root
         _write_private(stdout_spool, self.raw)
         _write_private(stderr_spool, self.stderr)
         self.clock.advance(2.5)
@@ -250,6 +402,37 @@ class FakeExecutor:
         )
 
 
+def _completed_live_run(root: Path) -> tuple[Path, Path]:
+    os.chmod(root, 0o700)
+    binary, auth, binary_sha = _live_material(root)
+    request, request_path = _build_request(root, binary_sha=binary_sha)
+    approvals = root / "approvals"
+    issue_live_grant(
+        request_path=request_path,
+        grant_root=approvals,
+        auth_source=auth,
+        wall_clock=lambda: FIXED_TIME,
+    )
+    clock = MutableClock()
+    executor = FakeExecutor(
+        clock,
+        (canonical_json(_empty_result()) + "\n").encode(),
+        spawn=True,
+    )
+    _, run_root = _run_adaptive_wave(
+        request=request,
+        execution_mode="live",
+        runtime_root=root / "runtime",
+        approval_root=approvals,
+        binary=binary,
+        auth_source=auth,
+        executor=executor,
+        monotonic=clock,
+        wall_clock=lambda: FIXED_TIME,
+    )
+    return run_root, approvals
+
+
 class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
     def test_request_is_generic_closed_and_has_no_business_count_limits(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -263,13 +446,16 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             self.assertEqual(validate_request(request), ["request_shape_invalid"])
 
         schema_names = (
-            "x.grok.adaptive_recall_wave.request.v1.schema.json",
+            "x.grok.adaptive_recall_wave.request.v2.schema.json",
             "x.grok.adaptive_recall_wave.result.v1.schema.json",
-            "x.grok.adaptive_recall_wave.intent.v1.schema.json",
-            "x.grok.adaptive_recall_wave.operator_receipt.v1.schema.json",
-            "x.grok.adaptive_recall_wave.live_grant.v1.schema.json",
-            "x.grok.adaptive_recall_wave.live_grant_consumption.v1.schema.json",
-            "x.grok.adaptive_recall_wave.process_ledger.v1.schema.json",
+            "x.grok.adaptive_recall_wave.intent.v2.schema.json",
+            "x.grok.adaptive_recall_wave.operator_receipt.v2.schema.json",
+            "x.grok.adaptive_recall_wave.live_grant.v2.schema.json",
+            "x.grok.adaptive_recall_wave.live_grant_consumption.v2.schema.json",
+            "x.grok.adaptive_recall_wave.process_ledger.v2.schema.json",
+            "x.grok.adaptive_recall_wave.deletion_journal.v1.schema.json",
+            "x.grok.adaptive_recall_wave.deletion_receipt.v1.schema.json",
+            "x.grok.adaptive_recall_wave.campaign_bridge.v1.schema.json",
         )
         for name in schema_names:
             schema = json.loads((ROOT / "contracts" / name).read_text())
@@ -280,30 +466,28 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
 
     def test_schema_top_level_keys_match_runtime_registries(self) -> None:
         mappings = {
-            "x.grok.adaptive_recall_wave.request.v1.schema.json": runner._REQUEST_KEYS,
+            "x.grok.adaptive_recall_wave.request.v2.schema.json": runner._REQUEST_KEYS,
             "x.grok.adaptive_recall_wave.result.v1.schema.json": runner._RESULT_KEYS,
-            "x.grok.adaptive_recall_wave.intent.v1.schema.json": runner._INTENT_KEYS,
-            "x.grok.adaptive_recall_wave.operator_receipt.v1.schema.json": runner._RECEIPT_KEYS,
-            "x.grok.adaptive_recall_wave.live_grant.v1.schema.json": runner._GRANT_KEYS,
-            "x.grok.adaptive_recall_wave.live_grant_consumption.v1.schema.json": runner._CONSUMPTION_KEYS,
-            "x.grok.adaptive_recall_wave.process_ledger.v1.schema.json": runner._PROCESS_LEDGER_KEYS,
+            "x.grok.adaptive_recall_wave.intent.v2.schema.json": runner._INTENT_KEYS,
+            "x.grok.adaptive_recall_wave.operator_receipt.v2.schema.json": runner._RECEIPT_KEYS,
+            "x.grok.adaptive_recall_wave.live_grant.v2.schema.json": runner._GRANT_KEYS,
+            "x.grok.adaptive_recall_wave.live_grant_consumption.v2.schema.json": runner._CONSUMPTION_KEYS,
+            "x.grok.adaptive_recall_wave.process_ledger.v2.schema.json": runner._PROCESS_LEDGER_KEYS,
+            "x.grok.adaptive_recall_wave.deletion_journal.v1.schema.json": runner._DELETION_JOURNAL_KEYS,
+            "x.grok.adaptive_recall_wave.deletion_receipt.v1.schema.json": runner._DELETION_RECEIPT_KEYS,
         }
         for name, keys in mappings.items():
             schema = json.loads((ROOT / "contracts" / name).read_text())
             self.assertEqual(set(schema["required"]), keys, name)
             self.assertEqual(set(schema["properties"]), keys, name)
         receipt_schema = json.loads(
-            (ROOT / "contracts/x.grok.adaptive_recall_wave.operator_receipt.v1.schema.json").read_text()
+            (ROOT / "contracts/x.grok.adaptive_recall_wave.operator_receipt.v2.schema.json").read_text()
         )
         self.assertEqual(set(receipt_schema["$defs"]["command_binding"]["required"]), runner._COMMAND_BINDING_KEYS)
         self.assertEqual(set(receipt_schema["properties"]["process"]["required"]), runner._PROCESS_KEYS)
-        result_schema = json.loads(
-            (ROOT / "contracts/x.grok.adaptive_recall_wave.result.v1.schema.json").read_text()
-        )
+        result_schema = json.loads((ROOT / "contracts/x.grok.adaptive_recall_wave.result.v1.schema.json").read_text())
         self.assertEqual(set(result_schema["$defs"]["evidence"]["required"]), runner._EVIDENCE_KEYS)
-        request_schema = json.loads(
-            (ROOT / "contracts/x.grok.adaptive_recall_wave.request.v1.schema.json").read_text()
-        )
+        request_schema = json.loads((ROOT / "contracts/x.grok.adaptive_recall_wave.request.v2.schema.json").read_text())
         self.assertEqual(
             set(request_schema["properties"]["technical_limits"]["required"]),
             runner._TECHNICAL_LIMIT_KEYS,
@@ -338,9 +522,7 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
         result["local_reconciliation"]["candidate_records_validated"] = 2_000
         self.assertEqual(validate_model_result(result), [])
         result["candidates"][1]["handle"] = result["candidates"][0]["handle"].upper()
-        result["candidates"][1]["profile_url"] = (
-            f"https://profiles.invalid/{result['candidates'][1]['handle']}"
-        )
+        result["candidates"][1]["profile_url"] = f"https://profiles.invalid/{result['candidates'][1]['handle']}"
         self.assertTrue(any(error.startswith("candidate_handle_duplicate") for error in validate_model_result(result)))
         result["candidates"][1] = _candidate("fixture_0001")
         result["candidates"][0]["bio_excerpt"] = ""
@@ -479,10 +661,20 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             os.chmod(root, 0o700)
             binary, auth, binary_sha = _live_material(root)
             request, request_path = _build_request(root, binary_sha=binary_sha)
+            wrong_auth = root / "wrong-auth.json"
+            _write_private(wrong_auth, b'{"synthetic":"different-oauth"}\n')
+            with self.assertRaisesRegex(AdaptiveWaveValidationError, "live_grant_request_invalid"):
+                issue_live_grant(
+                    request_path=request_path,
+                    grant_root=root / "wrong-auth-approvals",
+                    auth_source=wrong_auth,
+                    wall_clock=lambda: FIXED_TIME,
+                )
             approvals = root / "approvals"
             issue_live_grant(
                 request_path=request_path,
                 grant_root=approvals,
+                auth_source=auth,
                 wall_clock=lambda: FIXED_TIME,
             )
             clock = MutableClock()
@@ -521,6 +713,26 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             self.assertEqual(validate_operator_bundle(run_root, approval_root=approvals), [])
             self.assertEqual(len(list(approvals.glob("grant-*.json"))), 1)
             self.assertEqual(len(list(approvals.glob("consumption-*.json"))), 1)
+            updates_path = run_root / "session-updates.jsonl"
+            original_updates = updates_path.read_bytes()
+            for mutation in ("tool", "usage", "terminal"):
+                events = [json.loads(line) for line in original_updates.splitlines()]
+                if mutation == "tool":
+                    events[2]["params"]["update"]["rawOutput"]["name"] = "web_search"
+                elif mutation == "usage":
+                    events[-1]["params"]["update"]["usage"]["totalTokens"] += 1
+                else:
+                    events[-1]["params"]["update"]["stop_reason"] = "max_turns"
+                _write_private(
+                    updates_path,
+                    "".join(canonical_json(event) + "\n" for event in events).encode(),
+                )
+                self.assertIn(
+                    "session_proof_replay_mismatch",
+                    validate_operator_bundle(run_root, approval_root=approvals),
+                    mutation,
+                )
+            _write_private(updates_path, original_updates)
             staged_binary = run_root / "executable/grok"
             staged_binary.write_bytes(b"tampered executable")
             os.chmod(staged_binary, 0o700)
@@ -528,6 +740,163 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
                 "staged_binary_request_hash_mismatch",
                 validate_operator_bundle(run_root, approval_root=approvals),
             )
+
+    def test_campaign_bridge_is_source_bound_but_always_blocked_without_native_payloads(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            run_root, approvals = _completed_live_run(root)
+            bridge = build_blocked_campaign_bridge(run_root, approval_root=approvals)
+
+            self.assertEqual(bridge["campaign_admission"], "blocked")
+            self.assertEqual(bridge["source_payload_status"], "replay_unavailable")
+            self.assertEqual(bridge["reason_code"], REASON_CODE)
+            self.assertIsNone(bridge["wave_input"])
+            self.assertEqual(
+                bridge["source_payload_binding"],
+                {"captured_payload_count": 0, "captured_payload_sha256s": []},
+            )
+            self.assertEqual(bridge["authority"], ZERO_AUTHORITY)
+            self.assertNotIn("candidates", canonical_json(bridge))
+            binding = bridge["source_binding"]
+            self.assertEqual(
+                binding["operator_request_artifact_sha256"],
+                _bytes_sha((run_root / "operator-request.json").read_bytes()),
+            )
+            self.assertEqual(
+                binding["operator_receipt_artifact_sha256"],
+                _bytes_sha((run_root / "operator-receipt.json").read_bytes()),
+            )
+            self.assertEqual(
+                binding["sanitized_result_artifact_sha256"],
+                _bytes_sha((run_root / "sanitized.json").read_bytes()),
+            )
+            self.assertEqual(
+                binding["session_transcript_artifact_sha256"],
+                _bytes_sha((run_root / "session-updates.jsonl").read_bytes()),
+            )
+            self.assertEqual(binding["bridge_schema_sha256"], contract_schema_sha256(BRIDGE_SCHEMA_FILE))
+            assert_schema_valid(bridge, BRIDGE_SCHEMA_FILE)
+
+    def test_campaign_bridge_fails_before_output_on_bundle_tamper_or_missing_source_artifacts(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            run_root, approvals = _completed_live_run(root)
+            receipt_path = run_root / "operator-receipt.json"
+            receipt = json.loads(receipt_path.read_text())
+            receipt["status"] = "process_failed"
+            _write_private(receipt_path, (canonical_json(receipt) + "\n").encode())
+            with self.assertRaisesRegex(
+                AdaptiveCampaignBridgeError,
+                "adaptive_bundle_invalid_for_campaign_bridge",
+            ):
+                build_blocked_campaign_bridge(run_root, approval_root=approvals)
+
+        for missing_name in ("sanitized.json", "session-updates.jsonl"):
+            with self.subTest(missing_name=missing_name), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                run_root, approvals = _completed_live_run(root)
+                (run_root / missing_name).unlink()
+                with self.assertRaisesRegex(
+                    AdaptiveCampaignBridgeError,
+                    "adaptive_bundle_invalid_for_campaign_bridge",
+                ):
+                    build_blocked_campaign_bridge(run_root, approval_root=approvals)
+
+    def test_campaign_bridge_holds_lease_and_rejects_same_path_bundle_swap(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            run_root, approvals = _completed_live_run(root)
+            run_id = run_root.name
+            original_location = root / "bundle-a"
+            replacement_location = root / "bundle-b"
+            os.rename(run_root, original_location)
+
+            binary = root / "grok"
+            auth = root / "auth.json"
+            binary_sha = _bytes_sha((root / "grok-real").read_bytes())
+            replacement_request, replacement_request_path = _build_request(
+                root,
+                binary_sha=binary_sha,
+                grant_id="synthetic_live_grant_002",
+            )
+            replacement_request["request_id"] = "xwave_req_22222222222222222222222222222222"
+            _write_private(
+                replacement_request_path,
+                (canonical_json(replacement_request) + "\n").encode(),
+            )
+            issue_live_grant(
+                request_path=replacement_request_path,
+                grant_root=approvals,
+                auth_source=auth,
+                wall_clock=lambda: FIXED_TIME,
+            )
+            replacement_clock = MutableClock()
+            _, replacement_run = _run_adaptive_wave(
+                request=replacement_request,
+                execution_mode="live",
+                runtime_root=root / "runtime",
+                approval_root=approvals,
+                binary=binary,
+                auth_source=auth,
+                executor=FakeExecutor(
+                    replacement_clock,
+                    (canonical_json(_empty_result()) + "\n").encode(),
+                    spawn=True,
+                ),
+                monotonic=replacement_clock,
+                wall_clock=lambda: FIXED_TIME,
+                run_id=run_id,
+            )
+            os.rename(replacement_run, replacement_location)
+            os.rename(original_location, run_root)
+
+            os.rename(run_root, original_location)
+            os.rename(replacement_location, run_root)
+            self.assertEqual(validate_operator_bundle(run_root, approval_root=approvals), [])
+            os.rename(run_root, replacement_location)
+            os.rename(original_location, run_root)
+
+            original_validate = validate_operator_bundle
+            validation_calls = 0
+
+            def validate_then_swap(path: Path, *, approval_root: Path) -> list[str]:
+                nonlocal validation_calls
+                validation_calls += 1
+                if validation_calls == 2:
+                    os.rename(run_root, original_location)
+                    os.rename(replacement_location, run_root)
+                return original_validate(path, approval_root=approval_root)
+
+            with mock.patch(
+                "x_first.adaptive_recall_campaign_bridge.validate_operator_bundle",
+                side_effect=validate_then_swap,
+            ):
+                with self.assertRaisesRegex(
+                    AdaptiveCampaignBridgeError,
+                    "adaptive_bundle_changed_during_campaign_bridge",
+                ):
+                    build_blocked_campaign_bridge(run_root, approval_root=approvals)
+            self.assertEqual(validation_calls, 2)
+
+    def test_campaign_bridge_schema_rejects_admission_payload_and_authority_mutations(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            run_root, approvals = _completed_live_run(root)
+            bridge = build_blocked_campaign_bridge(run_root, approval_root=approvals)
+            mutations = (
+                ("campaign_admission", "ready"),
+                ("source_payload_status", "replay_available"),
+                ("wave_input", {}),
+                ("source_payload_binding", {"captured_payload_count": 1, "captured_payload_sha256s": ["0" * 64]}),
+                ("authority", {**ZERO_AUTHORITY, "product_write_authorized": True}),
+                ("candidates", []),
+            )
+            for field, value in mutations:
+                with self.subTest(field=field):
+                    mutated = copy.deepcopy(bridge)
+                    mutated[field] = value
+                    with self.assertRaises(MiniDraft202012Error):
+                        assert_schema_valid(mutated, BRIDGE_SCHEMA_FILE)
 
     def test_bundle_recomputes_command_from_request_not_self_consistent_receipt(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -546,10 +915,8 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
                 artifact["command_binding"]["model_id"] = "forged-model"
                 artifact["command_binding"]["reasoning_effort"] = "low"
                 artifact["command_binding"]["max_turns"] = 7
-                artifact["command_binding"]["cli_flags_sha256"] = runner.canonical_sha256(
-                    runner._redacted_policy_from_bindings(
-                        artifact["input_binding"], artifact["command_binding"]
-                    )
+                artifact["command_binding"]["command_policy_sha256"] = runner.canonical_sha256(
+                    runner._redacted_policy_from_bindings(artifact["input_binding"], artifact["command_binding"])
                 )
             _write_private(intent_path, (canonical_json(intent) + "\n").encode())
             _write_private(receipt_path, (canonical_json(receipt) + "\n").encode())
@@ -563,7 +930,12 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             binary, auth, binary_sha = _live_material(root)
             request, request_path = _build_request(root, binary_sha=binary_sha)
             approvals = root / "approvals"
-            issue_live_grant(request_path=request_path, grant_root=approvals, wall_clock=lambda: FIXED_TIME)
+            issue_live_grant(
+                request_path=request_path,
+                grant_root=approvals,
+                auth_source=auth,
+                wall_clock=lambda: FIXED_TIME,
+            )
             raw = (canonical_json(_empty_result()) + "\n").encode()
             first = FakeExecutor(MutableClock(), raw, spawn=True)
             _run_adaptive_wave(
@@ -614,12 +986,13 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
                 )
             self.assertEqual(fake.commands, [])
             incomplete = next((root / "runtime-missing").iterdir())
-            self.assertFalse((incomplete / "ephemeral-home/auth.json").exists())
+            self.assertFalse((incomplete / "ephemeral-home").exists())
 
             approvals = root / "approvals"
             issue_live_grant(
                 request_path=request_path,
                 grant_root=approvals,
+                auth_source=auth,
                 ttl_seconds=60,
                 wall_clock=lambda: FIXED_TIME,
             )
@@ -733,9 +1106,7 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             nested_raw = (canonical_json(nested) + "\n").encode()
             nested_path = root / "nested-prior.json"
             _write_private(nested_path, nested_raw)
-            request["prior_waves"] = [
-                {"wave_id": "nested", "path": str(nested_path), "sha256": _bytes_sha(nested_raw)}
-            ]
+            request["prior_waves"] = [{"wave_id": "nested", "path": str(nested_path), "sha256": _bytes_sha(nested_raw)}]
             request["technical_limits"]["max_prior_json_depth"] = 16
             with self.assertRaisesRegex(AdaptiveWaveValidationError, "json_depth_ceiling_exceeded"):
                 load_prior_context(request)
@@ -744,9 +1115,7 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             nodes_raw = (canonical_json(many_nodes) + "\n").encode()
             nodes_path = root / "nodes-prior.json"
             _write_private(nodes_path, nodes_raw)
-            request["prior_waves"] = [
-                {"wave_id": "nodes", "path": str(nodes_path), "sha256": _bytes_sha(nodes_raw)}
-            ]
+            request["prior_waves"] = [{"wave_id": "nodes", "path": str(nodes_path), "sha256": _bytes_sha(nodes_raw)}]
             request["technical_limits"]["max_prior_json_depth"] = 64
             request["technical_limits"]["max_prior_json_nodes"] = 10_000
             with self.assertRaisesRegex(AdaptiveWaveValidationError, "json_node_ceiling_exceeded"):
@@ -799,8 +1168,7 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
                 callback_facts.append((child, group, birth, token))
 
             script = (
-                "import os,pathlib; "
-                f"pathlib.Path({str(marker)!r}).write_text(os.environ['X_FIRST_PROCESS_IDENTITY'])"
+                f"import os,pathlib; pathlib.Path({str(marker)!r}).write_text(os.environ['X_FIRST_PROCESS_IDENTITY'])"
             )
             result = ProcessGroupExecutor()(
                 [sys.executable, "-c", script],
@@ -813,6 +1181,12 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
                 kill_grace_ms=1_000,
                 max_stdout_bytes=1_000_000,
                 max_stderr_bytes=1_000_000,
+                session_tree_root=root / "session",
+                session_updates_path=root / "session/updates.jsonl",
+                max_session_files=64,
+                max_session_file_bytes=1_000_000,
+                max_session_total_bytes=2_000_000,
+                max_session_updates_bytes=1_000_000,
                 monotonic=time.monotonic,
                 on_spawn=persist_before_release,
             )
@@ -821,6 +1195,44 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             self.assertEqual(len(callback_facts), 1)
             self.assertEqual(marker.read_text(), result.process_identity_token)
             self.assertTrue(ledger_path.is_file())
+
+    def test_gated_launcher_never_execs_target_when_release_authorization_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            marker = root / "target-ran"
+
+            def reject_release(child: int, group: int, birth: str, token: str) -> None:
+                del child, group, birth, token
+                self.assertFalse(marker.exists())
+                raise PermissionError("synthetic_grant_expiry")
+
+            script = f"import pathlib; pathlib.Path({str(marker)!r}).write_text('ran')"
+            result = ProcessGroupExecutor()(
+                [sys.executable, "-c", script],
+                cwd=root,
+                environment={"PATH": "/usr/bin:/bin", "LANG": "C", "LC_ALL": "C"},
+                stdout_spool=root / "stdout",
+                stderr_spool=root / "stderr",
+                deadline_at=time.monotonic() + 5,
+                term_grace_ms=100,
+                kill_grace_ms=1_000,
+                max_stdout_bytes=1_000_000,
+                max_stderr_bytes=1_000_000,
+                session_tree_root=root / "session",
+                session_updates_path=root / "session/updates.jsonl",
+                max_session_files=64,
+                max_session_file_bytes=1_000_000,
+                max_session_total_bytes=2_000_000,
+                max_session_updates_bytes=1_000_000,
+                monotonic=time.monotonic,
+                on_spawn=reject_release,
+            )
+            self.assertFalse(marker.exists())
+            self.assertTrue(result.process_spawn_attempted)
+            self.assertIn(
+                result.execution_error_code,
+                {"process_execution_failed", "process_group_cleanup_failed"},
+            )
 
     def test_process_executor_streams_to_hard_byte_ceiling(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -840,6 +1252,12 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
                 kill_grace_ms=1_000,
                 max_stdout_bytes=50_000,
                 max_stderr_bytes=50_000,
+                session_tree_root=root / "session",
+                session_updates_path=root / "session/updates.jsonl",
+                max_session_files=64,
+                max_session_file_bytes=1_000_000,
+                max_session_total_bytes=2_000_000,
+                max_session_updates_bytes=1_000_000,
                 monotonic=time.monotonic,
                 on_spawn=lambda child, group, birth, token: spawned.append((child, group)),
             )
@@ -864,6 +1282,12 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
                 kill_grace_ms=1_000,
                 max_stdout_bytes=1_000_000,
                 max_stderr_bytes=1_000_000,
+                session_tree_root=root / "session",
+                session_updates_path=root / "session/updates.jsonl",
+                max_session_files=64,
+                max_session_file_bytes=1_000_000,
+                max_session_total_bytes=2_000_000,
+                max_session_updates_bytes=1_000_000,
                 monotonic=time.monotonic,
                 on_spawn=lambda child, group, birth, token: None,
             )
@@ -893,7 +1317,12 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             binary, auth, binary_sha = _live_material(root)
             request, request_path = _build_request(root, binary_sha=binary_sha)
             approvals = root / "approvals"
-            issue_live_grant(request_path=request_path, grant_root=approvals, wall_clock=lambda: FIXED_TIME)
+            issue_live_grant(
+                request_path=request_path,
+                grant_root=approvals,
+                auth_source=auth,
+                wall_clock=lambda: FIXED_TIME,
+            )
             raw = (canonical_json(_empty_result()) + "\n").encode()
             fake = FakeExecutor(MutableClock(), raw, spawn=True)
             _, run_root = _run_adaptive_wave(
@@ -909,7 +1338,11 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             )
             (run_root / "operator-receipt.json").unlink()
             with self.assertRaisesRegex(AdaptiveWaveValidationError, "run_process_group_still_alive"):
-                recover_incomplete_run(run_root, process_group_is_alive=lambda group: True)
+                recover_incomplete_run(
+                    run_root,
+                    approval_root=approvals,
+                    process_group_is_alive=lambda group: True,
+                )
 
             state = {"alive": True}
             terminate_calls: list[int] = []
@@ -923,6 +1356,7 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             with self.assertRaisesRegex(AdaptiveWaveValidationError, "recovery_process_identity_mismatch"):
                 recover_incomplete_run(
                     run_root,
+                    approval_root=approvals,
                     terminate_orphan=True,
                     process_group_is_alive=lambda group: state["alive"],
                     process_group_identity_matches=lambda ledger: False,
@@ -931,6 +1365,7 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             self.assertEqual(terminate_calls, [])
             recovered = recover_incomplete_run(
                 run_root,
+                approval_root=approvals,
                 terminate_orphan=True,
                 process_group_is_alive=lambda group: state["alive"],
                 process_group_identity_matches=lambda ledger: True,
@@ -973,6 +1408,427 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             self.assertEqual(validate_operator_bundle(run_root), [])
             _write_private(run_root / "raw.stdout", b"tampered")
             self.assertIn("raw_stdout_hash_mismatch", validate_operator_bundle(run_root))
+
+    def test_grant_expiry_is_checked_at_atomic_consumption_not_intent_time(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            os.chmod(root, 0o700)
+            binary, auth, binary_sha = _live_material(root)
+            request, request_path = _build_request(root, binary_sha=binary_sha)
+            approvals = root / "approvals"
+            issue_live_grant(
+                request_path=request_path,
+                grant_root=approvals,
+                auth_source=auth,
+                ttl_seconds=60,
+                wall_clock=lambda: FIXED_TIME,
+            )
+            values = iter(
+                (
+                    FIXED_TIME,
+                    FIXED_TIME + timedelta(seconds=59),
+                    FIXED_TIME + timedelta(seconds=61),
+                )
+            )
+            fake = FakeExecutor(MutableClock(), (canonical_json(_empty_result()) + "\n").encode(), spawn=True)
+            with self.assertRaisesRegex(PermissionError, "preissued_live_grant_invalid"):
+                _run_adaptive_wave(
+                    request=request,
+                    execution_mode="live",
+                    runtime_root=root / "runtime",
+                    approval_root=approvals,
+                    binary=binary,
+                    auth_source=auth,
+                    executor=fake,
+                    monotonic=fake.clock,
+                    wall_clock=lambda: next(values),
+                )
+            self.assertEqual(fake.commands, [])
+            self.assertEqual(list(approvals.glob("consumption-*.json")), [])
+
+    def test_grant_expiry_after_consumption_link_never_invokes_executor(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            os.chmod(root, 0o700)
+            binary, auth, binary_sha = _live_material(root)
+            request, request_path = _build_request(root, binary_sha=binary_sha)
+            approvals = root / "approvals"
+            issue_live_grant(
+                request_path=request_path,
+                grant_root=approvals,
+                auth_source=auth,
+                ttl_seconds=60,
+                wall_clock=lambda: FIXED_TIME,
+            )
+            values = iter(
+                (
+                    FIXED_TIME,
+                    FIXED_TIME + timedelta(seconds=59),
+                    FIXED_TIME + timedelta(seconds=59),
+                    FIXED_TIME + timedelta(seconds=61),
+                )
+            )
+            fake = FakeExecutor(MutableClock(), (canonical_json(_empty_result()) + "\n").encode(), spawn=True)
+            with self.assertRaisesRegex(
+                PermissionError,
+                "preissued_live_grant_expired_after_consumption",
+            ):
+                _run_adaptive_wave(
+                    request=request,
+                    execution_mode="live",
+                    runtime_root=root / "runtime",
+                    approval_root=approvals,
+                    binary=binary,
+                    auth_source=auth,
+                    executor=fake,
+                    monotonic=fake.clock,
+                    wall_clock=lambda: next(values),
+                )
+            self.assertEqual(fake.commands, [])
+            self.assertEqual(fake.target_release_count, 0)
+            self.assertEqual(len(list(approvals.glob("consumption-*.json"))), 1)
+
+    def test_grant_expiry_after_durable_launcher_ledger_never_releases_target(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            os.chmod(root, 0o700)
+            binary, auth, binary_sha = _live_material(root)
+            request, request_path = _build_request(root, binary_sha=binary_sha)
+            approvals = root / "approvals"
+            issue_live_grant(
+                request_path=request_path,
+                grant_root=approvals,
+                auth_source=auth,
+                ttl_seconds=60,
+                wall_clock=lambda: FIXED_TIME,
+            )
+            values = iter(
+                (
+                    FIXED_TIME,
+                    FIXED_TIME + timedelta(seconds=59),
+                    FIXED_TIME + timedelta(seconds=59),
+                    FIXED_TIME + timedelta(seconds=59),
+                    FIXED_TIME + timedelta(seconds=59),
+                    FIXED_TIME + timedelta(seconds=61),
+                )
+            )
+            fake = FakeExecutor(MutableClock(), (canonical_json(_empty_result()) + "\n").encode(), spawn=True)
+            with self.assertRaisesRegex(
+                PermissionError,
+                "live_grant_expired_before_target_release",
+            ):
+                _run_adaptive_wave(
+                    request=request,
+                    execution_mode="live",
+                    runtime_root=root / "runtime",
+                    approval_root=approvals,
+                    binary=binary,
+                    auth_source=auth,
+                    executor=fake,
+                    monotonic=fake.clock,
+                    wall_clock=lambda: next(values),
+                )
+            self.assertEqual(fake.target_release_count, 0)
+            self.assertEqual(len(list(approvals.glob("consumption-*.json"))), 1)
+            run_root = next((root / "runtime").iterdir())
+            self.assertTrue((run_root / "process-ledger.json").is_file())
+            recovered = recover_incomplete_run(
+                run_root,
+                approval_root=approvals,
+                process_group_is_alive=lambda group: False,
+                wall_clock=lambda: FIXED_TIME + timedelta(minutes=5),
+            )
+            self.assertEqual(recovered["status"], "crash_recovered")
+            self.assertEqual(validate_operator_bundle(run_root, approval_root=approvals), [])
+
+    def test_bundle_replay_rejects_launcher_verification_outside_grant_window(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            run_root, approvals = _completed_live_run(root)
+            ledger_path = run_root / "process-ledger.json"
+            ledger = json.loads(ledger_path.read_text())
+            ledger["spawned_at"] = runner._timestamp(FIXED_TIME + timedelta(minutes=16))
+            ledger_raw = (canonical_json(ledger) + "\n").encode()
+            _write_private(ledger_path, ledger_raw)
+            receipt_path = run_root / "operator-receipt.json"
+            receipt = json.loads(receipt_path.read_text())
+            receipt["process"]["process_ledger_sha256"] = _bytes_sha(ledger_raw)
+            _write_private(receipt_path, (canonical_json(receipt) + "\n").encode())
+            self.assertIn(
+                "process_release_outside_grant_window",
+                validate_operator_bundle(run_root, approval_root=approvals),
+            )
+
+    def test_live_completion_requires_model_tool_usage_and_terminal_transcript_proof(self) -> None:
+        def wrong_model(updates: list[dict[str, Any]]) -> None:
+            updates[0]["params"]["update"]["_meta"]["modelId"] = "grok-forged"
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            os.chmod(root, 0o700)
+            binary, auth, binary_sha = _live_material(root)
+            request, request_path = _build_request(root, binary_sha=binary_sha)
+            approvals = root / "approvals"
+            issue_live_grant(
+                request_path=request_path,
+                grant_root=approvals,
+                auth_source=auth,
+                wall_clock=lambda: FIXED_TIME,
+            )
+            fake = FakeExecutor(
+                MutableClock(),
+                (canonical_json(_empty_result()) + "\n").encode(),
+                spawn=True,
+                session_mutator=wrong_model,
+            )
+            receipt, run_root = _run_adaptive_wave(
+                request=request,
+                execution_mode="live",
+                runtime_root=root / "runtime",
+                approval_root=approvals,
+                binary=binary,
+                auth_source=auth,
+                executor=fake,
+                monotonic=fake.clock,
+                wall_clock=lambda: FIXED_TIME,
+            )
+            self.assertEqual(receipt["status"], "provider_evidence_invalid")
+            self.assertEqual(receipt["session_proof"]["status"], "invalid")
+            self.assertEqual(validate_operator_bundle(run_root, approval_root=approvals), [])
+
+    def test_intent_precedes_auth_and_executor_exception_deletes_entire_ephemeral_home(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            os.chmod(root, 0o700)
+            binary, auth, binary_sha = _live_material(root)
+            request, request_path = _build_request(root, binary_sha=binary_sha)
+            approvals = root / "approvals"
+            issue_live_grant(
+                request_path=request_path,
+                grant_root=approvals,
+                auth_source=auth,
+                wall_clock=lambda: FIXED_TIME,
+            )
+
+            def explode(command: Any, **kwargs: Any) -> ProcessResult:
+                del command, kwargs
+                raise RuntimeError("synthetic_executor_failure")
+
+            with self.assertRaisesRegex(RuntimeError, "synthetic_executor_failure"):
+                _run_adaptive_wave(
+                    request=request,
+                    execution_mode="live",
+                    runtime_root=root / "runtime",
+                    approval_root=approvals,
+                    binary=binary,
+                    auth_source=auth,
+                    executor=explode,
+                    monotonic=MutableClock(),
+                    wall_clock=lambda: FIXED_TIME,
+                )
+            run_root = next((root / "runtime").iterdir())
+            self.assertTrue((run_root / "operator-intent.json").is_file())
+            self.assertFalse((run_root / "ephemeral-home").exists())
+
+    def test_preconsumption_auth_failure_recovers_with_explicit_unconsumed_grant(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            os.chmod(root, 0o700)
+            binary, auth, binary_sha = _live_material(root)
+            request, request_path = _build_request(root, binary_sha=binary_sha)
+            approvals = root / "approvals"
+            issue_live_grant(
+                request_path=request_path,
+                grant_root=approvals,
+                auth_source=auth,
+                wall_clock=lambda: FIXED_TIME,
+            )
+            _write_private(auth, b'{"synthetic":"rotated-after-intent-binding"}\n')
+            fake = FakeExecutor(MutableClock(), (canonical_json(_empty_result()) + "\n").encode(), spawn=True)
+            with self.assertRaisesRegex(AdaptiveWaveValidationError, "live_auth_fingerprint_mismatch"):
+                _run_adaptive_wave(
+                    request=request,
+                    execution_mode="live",
+                    runtime_root=root / "runtime",
+                    approval_root=approvals,
+                    binary=binary,
+                    auth_source=auth,
+                    executor=fake,
+                    monotonic=fake.clock,
+                    wall_clock=lambda: FIXED_TIME,
+                )
+            run_root = next((root / "runtime").iterdir())
+            recovered = recover_incomplete_run(
+                run_root,
+                approval_root=approvals,
+                process_group_is_alive=lambda group: False,
+                wall_clock=lambda: FIXED_TIME + timedelta(minutes=5),
+            )
+            self.assertIsNone(recovered["approval"]["consumption_sha256"])
+            self.assertFalse(recovered["process"]["process_spawn_attempted"])
+            self.assertEqual(validate_operator_bundle(run_root, approval_root=approvals), [])
+
+    def test_session_tree_ceiling_is_a_technical_failure_and_home_is_deleted(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            os.chmod(root, 0o700)
+            binary, auth, binary_sha = _live_material(root)
+            request, request_path = _build_request(root, binary_sha=binary_sha)
+            request["technical_limits"].update(
+                {
+                    "max_session_file_bytes": 65_536,
+                    "max_session_total_bytes": 131_072,
+                    "max_session_updates_bytes": 65_536,
+                    "max_session_update_line_bytes": 4_096,
+                }
+            )
+            _write_private(request_path, (canonical_json(request) + "\n").encode())
+            approvals = root / "approvals"
+            issue_live_grant(
+                request_path=request_path,
+                grant_root=approvals,
+                auth_source=auth,
+                wall_clock=lambda: FIXED_TIME,
+            )
+            fake = FakeExecutor(
+                MutableClock(),
+                (canonical_json(_empty_result()) + "\n").encode(),
+                spawn=True,
+                extra_session_bytes=65_537,
+            )
+            receipt, run_root = _run_adaptive_wave(
+                request=request,
+                execution_mode="live",
+                runtime_root=root / "runtime",
+                approval_root=approvals,
+                binary=binary,
+                auth_source=auth,
+                executor=fake,
+                monotonic=fake.clock,
+                wall_clock=lambda: FIXED_TIME,
+            )
+            self.assertEqual(receipt["status"], "technical_limit_exceeded")
+            self.assertEqual(receipt["process"]["technical_limit_kind"], "session_tree_file_bytes")
+            self.assertFalse((run_root / "ephemeral-home").exists())
+
+    def test_recovery_lease_and_full_bundle_replay_fail_before_terminal_publication(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            os.chmod(root, 0o700)
+            _, request_path = _build_request(root)
+            _, run_root = run_adaptive_grok_wave_fixture(
+                request_path=request_path,
+                runtime_root=root / "runtime",
+            )
+            with runner._run_lease(run_root, create=False):
+                with self.assertRaisesRegex(AdaptiveWaveValidationError, "run_active_owner_present"):
+                    recover_incomplete_run(run_root)
+            (run_root / "operator-receipt.json").unlink()
+            intent_path = run_root / "operator-intent.json"
+            intent = json.loads(intent_path.read_text())
+            intent["emergency"]["deadline_ms"] -= 1_000
+            _write_private(intent_path, (canonical_json(intent) + "\n").encode())
+            with self.assertRaisesRegex(AdaptiveWaveValidationError, "recovery_bundle_replay_invalid"):
+                recover_incomplete_run(run_root)
+            self.assertFalse((run_root / "operator-receipt.json").exists())
+
+    def test_bundle_descriptor_reads_and_emergency_binding_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            os.chmod(root, 0o700)
+            _, request_path = _build_request(root)
+            _, run_root = run_adaptive_grok_wave_fixture(
+                request_path=request_path,
+                runtime_root=root / "runtime",
+            )
+            receipt_path = run_root / "operator-receipt.json"
+            receipt = json.loads(receipt_path.read_text())
+            receipt["process"]["deadline_ms"] -= 1_000
+            _write_private(receipt_path, (canonical_json(receipt) + "\n").encode())
+            self.assertIn("receipt_emergency_binding_mismatch", validate_operator_bundle(run_root))
+            receipt["process"]["deadline_ms"] += 1_000
+            _write_private(receipt_path, (canonical_json(receipt) + "\n").encode())
+            raw_path = run_root / "raw.stdout"
+            hardlink = root / "raw-hardlink.stdout"
+            os.link(raw_path, hardlink)
+            self.assertIn("required_artifact_permissions_invalid", validate_operator_bundle(run_root))
+            hardlink.unlink()
+            outside = root / "outside.stdout"
+            _write_private(outside, raw_path.read_bytes())
+            raw_path.unlink()
+            raw_path.symlink_to(outside)
+            self.assertIn("required_artifact_permissions_invalid", validate_operator_bundle(run_root))
+
+    def test_expired_purge_journals_before_deletion_and_emits_bound_receipt(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            os.chmod(root, 0o700)
+            request, _ = _build_request(root)
+            runtime_root = root / "runtime"
+            receipt, run_root = _run_adaptive_wave(
+                request=request,
+                execution_mode="fixture",
+                runtime_root=runtime_root,
+                approval_root=root / "unused",
+                binary=Path("fixture.invalid"),
+                auth_source=None,
+                executor=runner.OfflineFixtureExecutor(),
+                monotonic=MutableClock(),
+                wall_clock=lambda: FIXED_TIME,
+            )
+            deletion_root = root / "deletions"
+            with runner._run_lease(run_root, create=False):
+                with self.assertRaisesRegex(AdaptiveWaveValidationError, "run_active_owner_present"):
+                    purge_expired_adaptive_runs(
+                        runtime_root=runtime_root,
+                        deletion_root=deletion_root,
+                        approval_root=root / "unused",
+                        wall_clock=lambda: FIXED_TIME + timedelta(days=2),
+                    )
+            self.assertEqual(list(deletion_root.glob("journal-*.json")), [])
+            publish_receipt = runner._publish_deletion_receipt
+
+            def crash_after_delete(**kwargs: Any) -> dict[str, Any]:
+                del kwargs
+                raise RuntimeError("synthetic_post_delete_crash")
+
+            runner._publish_deletion_receipt = crash_after_delete
+            try:
+                with self.assertRaisesRegex(RuntimeError, "synthetic_post_delete_crash"):
+                    purge_expired_adaptive_runs(
+                        runtime_root=runtime_root,
+                        deletion_root=deletion_root,
+                        approval_root=root / "unused",
+                        wall_clock=lambda: FIXED_TIME + timedelta(days=2),
+                    )
+            finally:
+                runner._publish_deletion_receipt = publish_receipt
+            self.assertFalse(run_root.exists())
+            self.assertEqual(len(list(deletion_root.glob("journal-*.json"))), 1)
+            self.assertEqual(list(deletion_root.glob("receipt-*.json")), [])
+            deletion_receipts = purge_expired_adaptive_runs(
+                runtime_root=runtime_root,
+                deletion_root=deletion_root,
+                approval_root=root / "unused",
+                wall_clock=lambda: FIXED_TIME + timedelta(days=2),
+            )
+            self.assertEqual(len(deletion_receipts), 1)
+            self.assertFalse(run_root.exists())
+            journal_path = deletion_root / f"journal-{receipt['run_id']}.json"
+            deletion_path = deletion_root / f"receipt-{receipt['run_id']}.json"
+            self.assertTrue(journal_path.is_file())
+            self.assertTrue(deletion_path.is_file())
+            deletion = json.loads(deletion_path.read_text())
+            self.assertEqual(deletion["deletion_journal_sha256"], _bytes_sha(journal_path.read_bytes()))
+            self.assertEqual(
+                purge_expired_adaptive_runs(
+                    runtime_root=runtime_root,
+                    deletion_root=deletion_root,
+                    approval_root=root / "unused",
+                    wall_clock=lambda: FIXED_TIME + timedelta(days=3),
+                ),
+                [],
+            )
 
     def test_cli_defaults_to_fixture_issues_grant_separately_and_redacts_failures(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

@@ -160,10 +160,12 @@ signal. The final current-team and residual-coverage strategies fell to `0.048` 
 raw call, which justified an operator pause to move capacity to hydration. It is not a formal exhaustion decision:
 raw-session replay returns `insufficient_proof / continue_expansion` because complete non-system user context,
 legacy prior-exclusion membership, versioned strategy definitions, and precommitted query-family attribution were not
-machine-bound before execution. The private v3 merged replay binds all seven emitted assistant terminal JSON objects,
+machine-bound before execution. The private v5 merged replay binds all seven emitted assistant terminal JSON objects,
 system prompts, exact terminal byte/chunk/update locations, and terminal-start-after-tools ordering while keeping every
-candidate field `model_mediated_unverified`; the hardened artifact is hash-stable at
-`d8392f12011701b740f7cec9666919ad6b99a50e1b9af6b11d61cb65f7aea474`.
+candidate field `model_mediated_unverified`. It also binds every evidence association to the enclosing candidate,
+revalidates persisted URL-author/status-id pairs, preserves native-X thread evidence, rejects generic-web provenance
+and validates real UTC calendar instants; the replayed artifact is hash-stable at
+`4f27d046c8618e424c1f24b7dcf4978b71799284d03e75d77054dc4ab6a0d19a`.
 
 After handle merge, model labels contain `13 current/current`, `5 current/historical`, `1 historical/current`,
 `18 historical/historical`, `1` historical/conflicting row, and `60` rows with at least one ambiguous/unsupported
@@ -244,22 +246,53 @@ no accepted id, or marginal cost per new accepted account exceeds twice the cham
 `grok_cli_exploration.py` is an executable exploration diagnostic, not this Stage 2 KPI evaluator. It can hash-verify
 a raw session, reconcile tool calls/queries, validate model-mediated lead structure, compute field gaps, and emit
 non-executable hydration diagnostics. Its persisted diagnostic and hydration task are closed by
-`contracts/x.grok_cli.exploration.evaluation.v0.schema.json` and
-`contracts/x.grok_cli.candidate_hydration.task.v0.schema.json`; runtime validation additionally recomputes task keys,
+`contracts/x.grok_cli.exploration.evaluation.v1.schema.json` and
+`contracts/x.grok_cli.candidate_hydration.task.v1.schema.json`; runtime validation additionally recomputes task keys,
 parent/child experiment bindings, temporal segment mappings, counts, rates, gaps, proof state, feasibility, blockers,
-and authority before the CLI can write the private artifact. The public persisted-output validator is source-required:
+identity quarantines, and authority before the CLI can write the private artifact. The public persisted-output
+validator is source-required:
 it accepts the sanitized result and tool receipt, requires the raw session directory whenever the artifact claims
-session verification, re-runs the evaluator against the immutable public hash-only query descriptor plus the private
-receipt's exact ordered call preimages, and requires canonical output equality. The public descriptor contains an
-opaque run-binding digest, ordered tool names and call hashes, and the legacy full-policy digest; it contains no
-session/request identifiers or query operands. A detached artifact cannot validate itself. Private receipt/runtime
-schemas still validate UUIDv7 Grok session ids and UUIDv4 request ids and enforce at most 32 total exploration tool
-calls.
+session verification, re-runs the evaluator against the immutable public keyed-commitment descriptor plus the private
+receipt's exact ordered call preimages, and requires canonical output equality. A detached artifact cannot validate
+itself.
 
-Each hydration task is `planned` and binds the parent candidate SHA-256, both temporal states, and the derived segment.
-That state binding, including the segment, is part of the task key. Equal-priority mixed temporal segments are selected
-round-robin; confidence orders candidates only within one segment, preventing one mixed segment from starving the
-other. Restoring a promotion-grade evaluator still requires all of these inputs to be
+Query-policy v2 generates a fresh random 256-bit HMAC key and independent 256-bit nonce for one private run. Only the
+owner-only `0600` tool receipt retains `key_hex`, `nonce_hex`, raw run identifiers, and query arguments. The intended-
+public descriptor/registry, evaluation, and hydration tasks retain only `key_id`, `nonce_id`, a deterministic opaque
+`commitment_issuance_id`, the domain-separated HMAC commitments, and descriptor/registry/issuance-row hashes. Every
+immutable version-named registry snapshot carries an append-only issuance lineage. Runtime rejects reuse of either a
+key id or nonce id by any other run, even if the lab or policy version differs; a new lab therefore requires fresh key
+and nonce material. The key and nonce live exactly as long as the private receipt: they are
+needed for offline source replay, are never copied into tracked files or terminal summaries, and are deleted with that
+receipt under the run's private retention/purge policy. A replay after deletion is intentionally impossible. Key/nonce
+reuse across runs is forbidden. `scripts/migrate_grok_cli_query_commitments_v2.py` is the bounded one-time migration,
+replay, and explicit source-purge entrypoint. Its supplied private root must be a non-symlink owner-UID `0700`
+directory; private ancestors and regular files are descriptor checked with no-follow semantics, `0600`, and single-link
+ownership. Prepare/evaluate/purge share one nonblocking filesystem lock. Each atomic file write fsyncs the file and
+containing directory. A durable private receipt binds canonical source-to-target hashes, issuance ids, retention/delete
+owner, state, and idempotency; partial, stale, linked, or mismatched destinations fail closed. Only a byte-identical
+validated rerun is reported as idempotent. Purge first persists an intent, deletes the three legacy sources with
+directory fsync, then writes a deletion tombstone so an interrupted delete can resume without treating partial state as
+success.
+
+The former v1 public descriptor used unsalted low-entropy hashes. Those v1 config/schema files are removed from HEAD
+and disabled as evaluator defaults. Their historical Git objects may still reveal dictionary-verifiable labels; v2
+rotation prevents correlation to the new commitments but cannot retroactively erase repository history. Deletion
+condition: after every retained evaluation has a source-replayed v2 replacement and its private v1 receipt reaches its
+retention deadline, delete the old private receipt/full-policy pair; do not delete the v2 receipt before its last
+required replay.
+
+There is no candidate-count, observation-count, hydration-task-count, or total-call business cap. Runtime work is
+bounded only by a 64 MiB canonical-input ceiling, one million JSON nodes, depth 64, one absolute 30-second monotonic
+evaluation deadline passed through registry validation, hydration construction, task validation, final shape validation,
+and source replay, plus provider-specific per-call argument bounds. Nested helpers cannot restart that budget. Every rate
+publishes its exact denominator. These technical
+ceilings fail closed and are not stop rules for discovery.
+
+Each hydration task is `planned` and binds the parent candidate SHA-256, both temporal states, derived segment, and
+identity-counting status. Every hydration-needed candidate receives a task; ordering does not truncate the list.
+Equal-priority mixed temporal segments are ordered round-robin, and confidence orders candidates only within one
+segment. Restoring a promotion-grade evaluator still requires all of these inputs to be
 machine-verifiable rather than caller-reported aggregates:
 
 1. at least one explicit normalized task row with lab, query-family version, frozen time window, handle/source/turn caps,
@@ -289,10 +322,21 @@ state closed set, four complete temporal combinations, segment priority, Recall 
 and hydration triggers. Its executable schema requires four unique closed rows, while runtime validation proves the
 exact state-pair/segment bijection. Query-policy registries are immutable version-named snapshots under
 `configs/grok_cli_exploration_query_policy_registries/`; each public snapshot binds an approved experiment through an
-opaque run digest, descriptor hash, legacy full-policy hash, and exact ordered call hashes without publishing query
-operands. Adding another lab creates a new reviewed descriptor snapshot instead of editing the snapshot named by an
+opaque run commitment, append-only issuance row, descriptor hash, legacy full-policy commitment, and exact ordered call commitments without
+publishing query operands. These are domain-separated HMAC values under the private run key and nonce, not unsalted
+operand hashes. Adding another lab creates a new reviewed descriptor snapshot instead of editing the snapshot named by an
 existing evaluation, so historical artifacts remain replayable. It must not require adding a new candidate field or
 changing segment code.
+
+Candidate inclusion/exclusion and caveats are closed reason-code fields. Free-form text is permitted only as bounded
+source evidence. Descriptor and registry rows bind `protected_category_boundary_version`; the current reviewed value is
+`base-discovery-protected-category-boundary-v1`. That versioned, code-governed protected-category/value boundary scans each exact query/supporting span;
+possible protected targeting or claims such as American, Indian, Muslim, 华人, or multilingual equivalents cannot
+support a base lab/pretraining axis. This is a data-driven phrase registry, not an expanding identity regex. China/
+Asia professional-experience proxy interpretation remains a separate governed Bio-semantic lane and cannot modify
+base discovery, exclusion, Recall, Precision, or ordering decisions here. If the same non-null reported numeric X ID
+appears under multiple handles, every involved row is quarantined, excluded from unique/Recall/Precision counts, given
+`reported_platform_user_id_conflict` hydration, and retained in raw candidate-row denominators for auditability.
 
 Confidence is only a within-segment ordering tie-break. It cannot move a lead into another segment, manufacture a
 current/historical state, or remove an evidence gap. The two mixed Recall segments intentionally have equal priority;

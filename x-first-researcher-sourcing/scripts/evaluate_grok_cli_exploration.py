@@ -14,7 +14,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from x_first.grok_cli_exploration import canonical_json, evaluate_exploration  # noqa: E402
 
-MAX_INPUT_BYTES = 2_000_000
+MAX_INPUT_BYTES = 64 * 1024 * 1024
 
 
 def _reject_constant(value: str) -> None:
@@ -81,7 +81,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--query-policy-registry-version",
-        help="Select one immutable reviewed registry snapshot; defaults to the canonical v1 snapshot.",
+        help="Select one immutable reviewed registry snapshot; defaults to the canonical v2 snapshot.",
     )
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)

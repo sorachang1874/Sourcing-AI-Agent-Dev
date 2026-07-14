@@ -2,12 +2,12 @@
   "schema_version": "x.recall_pool.campaign.policy.v1",
   "policy_version": "recall_pool_campaign_policy.v1",
   "kill_ceilings": {
-    "max_wave_files": 1024,
-    "max_bytes_per_wave": 67108864,
-    "max_raw_session_file_bytes": 268435456,
-    "max_total_input_bytes": 1073741824,
-    "max_candidate_rows_in_memory": 1000000,
-    "max_evidence_rows_in_memory": 10000000
+    "max_wave_files": 128,
+    "max_bytes_per_wave": 33554432,
+    "max_raw_session_file_bytes": 67108864,
+    "max_total_input_bytes": 268435456,
+    "max_candidate_rows_in_memory": 50000,
+    "max_evidence_rows_in_memory": 250000
   },
   "stop_advisory": {
     "minimum_comparable_waves": 3,

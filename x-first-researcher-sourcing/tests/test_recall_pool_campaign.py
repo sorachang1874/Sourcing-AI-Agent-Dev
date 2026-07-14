@@ -11,12 +11,17 @@ import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
+from unittest import mock
 from uuid import NAMESPACE_DNS, uuid5
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from scripts.merge_recall_pool_campaign import _publish_private_no_replace  # noqa: E402
+from scripts.merge_recall_pool_campaign import (  # noqa: E402
+    _load_sources,
+    _publish_private_no_replace,
+    _regular_file_size,
+)
 from x_first.recall_pool_campaign import (  # noqa: E402
     CONTRACT_SCHEMA_FILES,
     CampaignValidationError,
@@ -51,13 +56,15 @@ def _policy() -> dict[str, Any]:
 def _evidence(
     author_handle: str,
     *,
+    kind: str = "post",
+    relationship: str = "self",
     post_id: str = "123456",
     excerpt: str = "Synthetic pretraining evidence.",
     supports: list[Any] | None = None,
 ) -> dict[str, Any]:
     return {
-        "kind": "post",
-        "relationship": "self",
+        "kind": kind,
+        "relationship": relationship,
         "author_handle": author_handle,
         "post_id": post_id,
         "url": f"https://x.com/{author_handle}/status/{post_id}",
@@ -96,6 +103,7 @@ def _wave_payload(
     model_evidence_items: int | None = None,
     model_tool_calls: int = 1,
     model_queries: list[str] | None = None,
+    generic_web_used: bool = False,
 ) -> dict[str, Any]:
     queries = ["model reported query"] if model_queries is None else model_queries
     evidence_items = sum(len(row["evidence"]) for row in candidates)
@@ -103,7 +111,7 @@ def _wave_payload(
         "status": "X_SEARCH_PARTIAL",
         "status_reason": "Synthetic offline wave.",
         "native_x_tool_provenance": {
-            "generic_web_used": False,
+            "generic_web_used": generic_web_used,
             "tool_calls_reported": model_tool_calls,
             "tools_reported": ["x_user_search"],
             "queries": queries,
@@ -117,9 +125,7 @@ def _wave_payload(
         "limitations": [],
         "local_reconciliation": {
             "candidate_records_validated": len(candidates),
-            "evidence_items_validated": evidence_items
-            if model_evidence_items is None
-            else model_evidence_items,
+            "evidence_items_validated": evidence_items if model_evidence_items is None else model_evidence_items,
             "post_urls_structurally_validated": evidence_items,
             "provider_post_bodies_replayable": False,
             "tool_calls_completed": model_tool_calls,
@@ -176,9 +182,7 @@ def _strategy_definition(
             {
                 "family_id": family,
                 "family_version": f"{family}.v1",
-                "allowed_call_shapes": [
-                    _user_search_call_shape(count) for count in allowed_user_search_counts
-                ],
+                "allowed_call_shapes": [_user_search_call_shape(count) for count in allowed_user_search_counts],
             }
             for family in families
         ],
@@ -212,6 +216,7 @@ def _bundle(
     model_evidence_items: int | None = None,
     model_tool_calls: int = 1,
     model_queries: list[str] | None = None,
+    generic_web_used: bool = False,
 ) -> dict[str, Any]:
     families = ["broad"] if query_family_ids is None else query_family_ids
     if call_count < len(families):
@@ -221,10 +226,7 @@ def _bundle(
     model_id = "grok-4.5"
     prompt = f"Synthetic tracked prompt for {wave_id}.\n".encode()
     system_prompt = f"Synthetic system prompt. Prior exclusion status: {prior_exclusion_status}.\n".encode()
-    calls = [
-        _call(wave_id, index, user_search_count=user_search_count)
-        for index in range(call_count)
-    ]
+    calls = [_call(wave_id, index, user_search_count=user_search_count) for index in range(call_count)]
     result_bytes = _json_bytes(
         _wave_payload(
             candidates,
@@ -232,6 +234,7 @@ def _bundle(
             model_evidence_items=model_evidence_items,
             model_tool_calls=model_tool_calls,
             model_queries=model_queries,
+            generic_web_used=generic_web_used,
         )
     )
     updates = [
@@ -423,31 +426,54 @@ def _merge(bundles: list[dict[str, Any]], policy: dict[str, Any] | None = None) 
     return merge_campaign(request, _policy() if policy is None else policy, [bundle["wave"] for bundle in bundles])
 
 
+def _materialize_bundle_sources(
+    root: Path,
+    bundle: dict[str, Any],
+) -> tuple[dict[str, Any], Path, Path]:
+    os.chmod(root, 0o700)
+    binding = bundle["binding"]
+    source = root / binding["source_path"]
+    source.write_bytes(bundle["wave"].result_bytes)
+    os.chmod(source, 0o600)
+    upstream = root / binding["upstream_request"]["path"]
+    upstream.write_bytes(bundle["wave"].upstream_request_bytes)
+    os.chmod(upstream, 0o600)
+    prompt = root / binding["prompt"]["path"]
+    prompt.write_bytes(bundle["wave"].prompt_bytes)
+    os.chmod(prompt, 0o600)
+    session = root / binding["raw_session_directory"]
+    session.mkdir(mode=0o700)
+    for name, raw in bundle["wave"].raw_session_files.items():
+        path = session / name
+        path.write_bytes(raw)
+        os.chmod(path, 0o600)
+    request = {
+        "schema_version": "x.recall_pool.campaign.request.v1",
+        "campaign_id": "synthetic_campaign",
+        "target": {"lab_id": "synthetic_lab", "research_focus_id": "pretraining"},
+        "waves": [binding],
+    }
+    manifest = root / "manifest.json"
+    manifest.write_bytes(_json_bytes(request))
+    os.chmod(manifest, 0o600)
+    return request, manifest, source
+
+
 def _mutate_system_chat(bundle: dict[str, Any]) -> None:
-    rows = [
-        json.loads(line)
-        for line in bundle["wave"].raw_session_files["chat_history.jsonl"].decode().splitlines()
-    ]
+    rows = [json.loads(line) for line in bundle["wave"].raw_session_files["chat_history.jsonl"].decode().splitlines()]
     systems = [row for row in rows if row.get("type") == "system"]
     systems[0]["content"] += "mutated"
-    bundle["wave"].raw_session_files["chat_history.jsonl"] = b"".join(
-        _json_bytes(row) for row in rows
-    )
+    bundle["wave"].raw_session_files["chat_history.jsonl"] = b"".join(_json_bytes(row) for row in rows)
 
 
 def _mutate_assistant_prompt_binding(bundle: dict[str, Any]) -> None:
-    rows = [
-        json.loads(line)
-        for line in bundle["wave"].raw_session_files["updates.jsonl"].decode().splitlines()
-    ]
+    rows = [json.loads(line) for line in bundle["wave"].raw_session_files["updates.jsonl"].decode().splitlines()]
     for row in rows:
         update = row.get("params", {}).get("update", {})
         if update.get("sessionUpdate") == "agent_message_chunk":
             row["params"]["_meta"]["promptId"] = _uuid("wrong-assistant-prompt")
             break
-    bundle["wave"].raw_session_files["updates.jsonl"] = b"".join(
-        _json_bytes(row) for row in rows
-    )
+    bundle["wave"].raw_session_files["updates.jsonl"] = b"".join(_json_bytes(row) for row in rows)
 
 
 class RecallPoolCampaignTests(unittest.TestCase):
@@ -520,9 +546,7 @@ class RecallPoolCampaignTests(unittest.TestCase):
                 bundle = _bundle("wave_1", [_candidate("Alpha")])
                 rows = [
                     json.loads(line)
-                    for line in bundle["wave"].raw_session_files["chat_history.jsonl"]
-                    .decode()
-                    .splitlines()
+                    for line in bundle["wave"].raw_session_files["chat_history.jsonl"].decode().splitlines()
                 ]
                 if mutation == "extra_row":
                     rows.append(
@@ -533,12 +557,8 @@ class RecallPoolCampaignTests(unittest.TestCase):
                     )
                 else:
                     user_row = next(row for row in rows if row.get("type") == "user")
-                    user_row["content"].append(
-                        {"type": "text", "text": "unbound visible context"}
-                    )
-                bundle["wave"].raw_session_files["chat_history.jsonl"] = b"".join(
-                    _json_bytes(row) for row in rows
-                )
+                    user_row["content"].append({"type": "text", "text": "unbound visible context"})
+                bundle["wave"].raw_session_files["chat_history.jsonl"] = b"".join(_json_bytes(row) for row in rows)
                 with self.assertRaisesRegex(
                     CampaignValidationError,
                     "raw_session_user_chat_context_hash_mismatch",
@@ -566,20 +586,14 @@ class RecallPoolCampaignTests(unittest.TestCase):
 
     def test_terminal_assistant_chunk_must_follow_every_native_x_tool_event(self) -> None:
         bundle = _bundle("wave_1", [_candidate("Alpha")])
-        rows = [
-            json.loads(line)
-            for line in bundle["wave"].raw_session_files["updates.jsonl"].decode().splitlines()
-        ]
+        rows = [json.loads(line) for line in bundle["wave"].raw_session_files["updates.jsonl"].decode().splitlines()]
         completion_index = next(
             index
             for index, row in enumerate(rows)
-            if row.get("params", {}).get("update", {}).get("sessionUpdate")
-            == "tool_call_update"
+            if row.get("params", {}).get("update", {}).get("sessionUpdate") == "tool_call_update"
         )
         rows.append(rows.pop(completion_index))
-        bundle["wave"].raw_session_files["updates.jsonl"] = b"".join(
-            _json_bytes(row) for row in rows
-        )
+        bundle["wave"].raw_session_files["updates.jsonl"] = b"".join(_json_bytes(row) for row in rows)
         with self.assertRaisesRegex(
             CampaignValidationError,
             "raw_session_terminal_assistant_causality_invalid",
@@ -588,15 +602,11 @@ class RecallPoolCampaignTests(unittest.TestCase):
 
     def test_terminal_json_cannot_start_before_tools_and_finish_after_them(self) -> None:
         bundle = _bundle("wave_1", [_candidate("Alpha")])
-        rows = [
-            json.loads(line)
-            for line in bundle["wave"].raw_session_files["updates.jsonl"].decode().splitlines()
-        ]
+        rows = [json.loads(line) for line in bundle["wave"].raw_session_files["updates.jsonl"].decode().splitlines()]
         first_assistant_index = next(
             index
             for index, row in enumerate(rows)
-            if row.get("params", {}).get("update", {}).get("sessionUpdate")
-            == "agent_message_chunk"
+            if row.get("params", {}).get("update", {}).get("sessionUpdate") == "agent_message_chunk"
         )
         first_assistant = rows.pop(first_assistant_index)
         self.assertIn("{", first_assistant["params"]["update"]["content"]["text"])
@@ -606,9 +616,7 @@ class RecallPoolCampaignTests(unittest.TestCase):
             if row.get("params", {}).get("update", {}).get("sessionUpdate") == "tool_call"
         )
         rows.insert(first_tool_index, first_assistant)
-        bundle["wave"].raw_session_files["updates.jsonl"] = b"".join(
-            _json_bytes(row) for row in rows
-        )
+        bundle["wave"].raw_session_files["updates.jsonl"] = b"".join(_json_bytes(row) for row in rows)
         with self.assertRaisesRegex(
             CampaignValidationError,
             "raw_session_terminal_assistant_causality_invalid",
@@ -746,9 +754,7 @@ class RecallPoolCampaignTests(unittest.TestCase):
         tampered = copy.deepcopy(result)
         tampered_observed = tampered["wave_yields"][0]["mechanically_observed"]
         tampered_receipt = tampered_observed["receipt"]
-        tampered_receipt["assistant_terminal_json_start_update_index"] = tampered_receipt[
-            "last_native_x_update_index"
-        ]
+        tampered_receipt["assistant_terminal_json_start_update_index"] = tampered_receipt["last_native_x_update_index"]
         tampered_observed["receipt_sha256"] = canonical_sha256(tampered_receipt)
         with self.assertRaisesRegex(
             CampaignValidationError,
@@ -764,11 +770,78 @@ class RecallPoolCampaignTests(unittest.TestCase):
         self.assertEqual(result["metrics"]["valid_candidate_evidence_association_rows"], 0)
         self.assertEqual(result["candidates"][0]["evidence"], [])
         self.assertEqual(
-            result["candidates"][0]["state_summary"]["pretraining_experience_state"][
-                "evidence_support_status"
-            ],
+            result["candidates"][0]["state_summary"]["pretraining_experience_state"]["evidence_support_status"],
             "model_mediated_unverified",
         )
+
+    def test_persisted_evidence_url_and_post_id_are_revalidated_after_rehash(self) -> None:
+        result = _merge([_bundle("wave_1", [_candidate("Alpha")])])
+
+        author_mismatch = copy.deepcopy(result)
+        author_evidence = author_mismatch["candidates"][0]["evidence"][0]
+        author_evidence["author_handle"] = "Other"
+        author_evidence["evidence_record_sha256"] = canonical_sha256(
+            {
+                key: author_evidence[key]
+                for key in (
+                    "subject_handle",
+                    "subject_binding_status",
+                    "kind",
+                    "relationship",
+                    "author_handle",
+                    "post_id",
+                    "url",
+                    "published_at",
+                    "excerpt",
+                    "support_claims",
+                    "source_status",
+                )
+            }
+        )
+        with self.assertRaisesRegex(
+            CampaignValidationError,
+            "campaign_result_evidence_url_binding_invalid",
+        ):
+            validate_campaign_result(author_mismatch)
+
+        post_id_mismatch = copy.deepcopy(result)
+        post_evidence = post_id_mismatch["candidates"][0]["evidence"][0]
+        post_evidence["post_id"] = "999999"
+        post_evidence["evidence_record_sha256"] = canonical_sha256(
+            {
+                key: post_evidence[key]
+                for key in (
+                    "subject_handle",
+                    "subject_binding_status",
+                    "kind",
+                    "relationship",
+                    "author_handle",
+                    "post_id",
+                    "url",
+                    "published_at",
+                    "excerpt",
+                    "support_claims",
+                    "source_status",
+                )
+            }
+        )
+        with self.assertRaisesRegex(
+            CampaignValidationError,
+            "campaign_result_evidence_post_binding_invalid",
+        ):
+            validate_campaign_result(post_id_mismatch)
+
+    def test_thread_evidence_is_preserved_and_schema_valid(self) -> None:
+        result = _merge(
+            [
+                _bundle(
+                    "wave_1",
+                    [_candidate("Alpha", evidence=[_evidence("Alpha", kind="thread")])],
+                )
+            ]
+        )
+        self.assertEqual(result["candidates"][0]["evidence"][0]["kind"], "thread")
+        assert_schema_valid(result, "x.recall_pool.campaign.result.v1.schema.json")
 
     def test_same_stable_id_across_handles_is_preserved_as_reversible_proposal(self) -> None:
         result = _merge(
@@ -785,7 +858,7 @@ class RecallPoolCampaignTests(unittest.TestCase):
         self.assertFalse(row["handle_history_proposal"]["auto_merge_authorized"])
 
     def test_evidence_records_are_distinct_from_candidate_associations(self) -> None:
-        shared = _evidence("Source")
+        shared = _evidence("Source", relationship="third_party")
         result = _merge(
             [
                 _bundle(
@@ -803,6 +876,42 @@ class RecallPoolCampaignTests(unittest.TestCase):
         self.assertEqual(metrics["unique_evidence_records"], 1)
         self.assertEqual(metrics["unique_candidate_evidence_associations"], 2)
         self.assertEqual(metrics["duplicate_candidate_evidence_association_rows"], 1)
+
+    def test_self_evidence_cannot_cross_candidate_subjects(self) -> None:
+        result = _merge(
+            [
+                _bundle(
+                    "wave_1",
+                    [_candidate("Alpha", evidence=[_evidence("Source")])],
+                )
+            ]
+        )
+        self.assertEqual(result["metrics"]["raw_candidate_evidence_association_rows"], 1)
+        self.assertEqual(result["metrics"]["valid_candidate_evidence_association_rows"], 0)
+        self.assertEqual(result["metrics"]["rejected_evidence_association_rows"], 1)
+        self.assertEqual(result["candidates"][0]["evidence"], [])
+
+    def test_generic_web_and_impossible_evidence_dates_fail_closed(self) -> None:
+        with self.assertRaisesRegex(CampaignValidationError, "wave_model_provenance_invalid"):
+            _merge([_bundle("wave_1", [_candidate("Alpha")], generic_web_used=True)])
+
+        impossible_date = _evidence("Alpha")
+        impossible_date["published_at"] = "2026-02-31T00:00:00Z"
+        with self.assertRaisesRegex(CampaignValidationError, "evidence_published_at_invalid"):
+            _merge(
+                [
+                    _bundle(
+                        "wave_1",
+                        [_candidate("Alpha", evidence=[impossible_date])],
+                    )
+                ]
+            )
+
+    def test_state_observation_preserves_confidence_and_caveats(self) -> None:
+        result = _merge([_bundle("wave_1", [_candidate("Alpha")])])
+        observation = result["candidates"][0]["state_observations"][0]
+        self.assertEqual(observation["confidence"], "medium")
+        self.assertEqual(observation["caveats"], ["Synthetic offline test row."])
 
     def test_stop_is_call_productivity_based_and_fail_closed_on_context(self) -> None:
         unavailable = _merge(
@@ -839,10 +948,7 @@ class RecallPoolCampaignTests(unittest.TestCase):
         )
         self.assertIn(
             "family_call_mix_not_comparable",
-            {
-                row["reason"]
-                for row in mixed_call_shapes["stop_advisory"]["excluded_wave_reasons"]
-            },
+            {row["reason"] for row in mixed_call_shapes["stop_advisory"]["excluded_wave_reasons"]},
         )
 
         fifty_one_fifty = _merge(
@@ -889,10 +995,7 @@ class RecallPoolCampaignTests(unittest.TestCase):
         self.assertEqual(shape_mismatch["stop_advisory"]["evaluation_status"], "insufficient_proof")
         self.assertIn(
             "family_call_profile_not_comparable",
-            {
-                row["reason"]
-                for row in shape_mismatch["stop_advisory"]["excluded_wave_reasons"]
-            },
+            {row["reason"] for row in shape_mismatch["stop_advisory"]["excluded_wave_reasons"]},
         )
 
         bundles = [
@@ -929,9 +1032,7 @@ class RecallPoolCampaignTests(unittest.TestCase):
             ("prompt", lambda upstream: upstream.update({"prompt_sha256": "0" * 64})),
             (
                 "strategy_digest",
-                lambda upstream: upstream["strategy"].update(
-                    {"strategy_definition_sha256": "0" * 64}
-                ),
+                lambda upstream: upstream["strategy"].update({"strategy_definition_sha256": "0" * 64}),
             ),
         ]
         for name, mutate in mutations:
@@ -968,8 +1069,7 @@ class RecallPoolCampaignTests(unittest.TestCase):
 
     def test_large_pool_has_no_business_candidate_cap(self) -> None:
         candidates = [
-            _candidate(f"u{index:05d}", platform_user_id=None, bio_excerpt=None, evidence=[])
-            for index in range(1500)
+            _candidate(f"u{index:05d}", platform_user_id=None, bio_excerpt=None, evidence=[]) for index in range(1500)
         ]
         result = _merge([_bundle("wave_1", candidates, call_count=1)])
         self.assertEqual(result["metrics"]["total_unique_handles"], 1500)
@@ -978,10 +1078,52 @@ class RecallPoolCampaignTests(unittest.TestCase):
 
     def test_memory_ceiling_is_operational_not_business_semantics(self) -> None:
         policy = _policy()
+        self.assertLessEqual(policy["kill_ceilings"]["max_total_input_bytes"], 256 * 1024 * 1024)
+        self.assertLessEqual(policy["kill_ceilings"]["max_candidate_rows_in_memory"], 50_000)
+        self.assertLessEqual(policy["kill_ceilings"]["max_evidence_rows_in_memory"], 250_000)
         policy["kill_ceilings"]["max_candidate_rows_in_memory"] = 1
         with self.assertRaisesRegex(CampaignValidationError, "max_candidate_rows_kill_ceiling_exceeded"):
             _merge([_bundle("wave_1", [_candidate("Alpha"), _candidate("Beta")])], policy)
         self.assertIsNone(policy["authority"]["business_candidate_limit"])
+
+    def test_aggregate_byte_ceiling_is_preflighted_before_any_content_read(self) -> None:
+        bundle = _bundle("wave_1", [_candidate("Alpha")])
+        policy = _policy()
+        policy["kill_ceilings"]["max_total_input_bytes"] = 1
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            request, manifest, _source = _materialize_bundle_sources(root, bundle)
+            with mock.patch("scripts.merge_recall_pool_campaign._read_regular_file") as read_file:
+                with self.assertRaisesRegex(
+                    CampaignValidationError,
+                    "max_total_input_bytes_kill_ceiling_exceeded",
+                ):
+                    _load_sources(manifest, request, policy)
+                read_file.assert_not_called()
+
+    def test_preflight_size_is_the_maximum_allowed_during_content_read(self) -> None:
+        bundle = _bundle("wave_1", [_candidate("Alpha")])
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            request, manifest, source = _materialize_bundle_sources(root, bundle)
+            preflight_calls = 0
+            mutate_after_call = 3 + len(bundle["wave"].raw_session_files)
+
+            def preflight_then_grow(*args: Any, **kwargs: Any) -> int:
+                nonlocal preflight_calls
+                size = _regular_file_size(*args, **kwargs)
+                preflight_calls += 1
+                if preflight_calls == mutate_after_call:
+                    with source.open("ab") as stream:
+                        stream.write(b"x")
+                return size
+
+            with mock.patch(
+                "scripts.merge_recall_pool_campaign._regular_file_size",
+                side_effect=preflight_then_grow,
+            ):
+                with self.assertRaisesRegex(ValueError, "input_file_invalid"):
+                    _load_sources(manifest, request, _policy())
 
     def test_all_generated_contracts_execute_and_mutations_fail(self) -> None:
         bundle = _bundle("wave_1", [_candidate("Alpha")], exact_attribution=True)
@@ -996,10 +1138,17 @@ class RecallPoolCampaignTests(unittest.TestCase):
         with self.assertRaises(MiniDraft202012Error):
             assert_schema_valid(mutated, "x.recall_pool.campaign.result.v1.schema.json")
         mutated = copy.deepcopy(result)
-        mutated["candidates"][0]["state_summary"]["pretraining_experience_state"][
-            "evidence_supported_resolution"
-        ] = "historical"
+        mutated["candidates"][0]["state_summary"]["pretraining_experience_state"]["evidence_supported_resolution"] = (
+            "historical"
+        )
         with self.assertRaises(CampaignValidationError):
+            validate_campaign_result(mutated)
+        mutated = copy.deepcopy(result)
+        mutated["wave_yields"][0]["model_reported"]["tools_reported"] = []
+        with self.assertRaisesRegex(
+            CampaignValidationError,
+            "campaign_result_model_native_tool_set_conflict",
+        ):
             validate_campaign_result(mutated)
 
     def test_cli_atomic_publish_orphan_cleanup_no_replace_and_replay(self) -> None:

@@ -25,7 +25,7 @@ separate explicit-only field.
 The successful run used installed `grok 0.2.99`, model `grok-4.5`, generic web disabled, and local terminal/read/write
 tools removed. The private raw session is bound to:
 
-- opaque `run_binding_sha256` `b8947f7e2fb986dc7364e7a62203dcba2eb9766ab3de3bc67c93fa234a776f68`;
+- opaque v2 HMAC run commitment `d6f54c517e46a434d9b249aa7320be77b7920cb3d21d2e7e2e5d44390e672db9`;
 - eight completed hosted-X calls: four `x_keyword_search`, two `x_semantic_search`, and two `x_user_search`;
 - 68 observations reported by the model, eight retained candidate leads, 18 evidence rows, and 13 Post/mention rows.
 
@@ -98,43 +98,41 @@ label is correct, nor that the current semantic-v2.2 wire or Luna canary-v2 cont
 
 File SHA-256 values:
 
-- sanitized Grok result: `83dcc28f8234644a23f413cb4ffc3c60e315dffdf34836d1bad6fbe35b150b8a`;
-- sanitized Grok tool receipt: `577108a63016903e20a5466dbf10301b96703a1a0e6daa8343a17cb1323db9c3`;
-- legacy deterministic Grok evaluation: `26c2d9b9910c83d65fc1b200868d17a8c7f2b8f29e3acf91a528e51e848bdf01`;
-- two-axis normalized Grok result: `0cdeb4d4586a1db7f0c5248a32dee0b11fc755564665dffa0d899506618a3163`;
-- one-time two-axis migration receipt: `d1ba2c3abe45b3a0c340ca205704feb224c877bd71a2b09c1c7fbc1a1ed2b825`;
-- superseded two-axis deterministic Grok evaluation: `32b9e43a4ca48cfcc1dd4bd8eff9420bf96ff727096bbc9fee4552b934b661bf`;
-- superseded strict-output-contract two-axis Grok evaluation:
-  `52eb7c7cac3f395eeeeb44759886d1660cb40721d8aa79bb873cdcc1b654cc59`;
-- immutable-registry, source-replayed two-axis Grok evaluation:
-  `eb1e08d4d64c386d27a8fa75115afafe9a55490ad7277d5922a0cdbf6eed9ffc`;
-- public hash-only query-policy descriptor canonical SHA-256:
-  `034cd6850993aee4388175cabab04482a2fb932fffc13f9d15c601cc083bcdd6`;
-- public query-policy registry canonical SHA-256:
-  `821a508d0e2cc5a384ee904561d80b6d02f9dce0a515a31a48f99f8720dcf177`;
-- owner-only legacy full-policy canonical SHA-256 bound by both public descriptor and registry:
-  `5a8e61b34a9ab920e82a011e7534b65a264710a72df5352a302562f59a380b1e`;
-- receipt-only replay evaluation under the public descriptor contract:
-  `f8dcee9534a223ab9f14cac22ca8d2187832c7d4bbc435b9c683a8a3aab00f48`;
-- exploration-evaluation schema: `b8ae72f3e78d0b935586df4883539e8f0bed9c2df7cbdbc861d68dd95a20692f`;
-- hydration-task schema: `94e156fa64c9f891216c72657e2b3253faec9d2a088b25aa1bbee63dd85d3814`;
-- public query-policy descriptor schema: `a24e582f86b05a96631586127bba4ea2dd7b90269196caf0bb7dcdabe6490f56`;
-- public query-policy registry schema: `f013108f20c3cee11bb225249953c9eef8aa469ee90625f60aef363eb955ac26`;
+- owner-only v2 commitment receipt file: `4f597160c705dc3c013570c13c45a978d3ee30a6fe891b03f1eadf6ff04fd073`;
+- owner-only decision-code v2 result file: `eca67c7370ccf562ac5076aea44ef96c194313a7ecbaaf90ef4d2a52a9231041`;
+- owner-only source-replayed evaluation v1 file: `71fd3f353339ef858ae579e1101a955b8ab154b7dc57186ba8648cd88aeb5ef6`;
+- public keyed-commitment descriptor v2 canonical SHA-256:
+  `31f797c5a870faa0997a278f496af1693aae801cce4c54afdc123e2427793d1d`;
+- public query-policy registry v2 canonical SHA-256:
+  `3d3283253e007f4686fd5ad60b20edde3be2c3eb04e762790aafc68bc464986f`;
+- exploration-evaluation v1 schema: `61ecb2704dd3cf0363f2325dc4cacabe67444d94fa29a6bb64d8a7ecaa385cbc`;
+- hydration-task v1 schema: `8bdac4a0516973d3eeb90a8e0103d6dd809ab9f8e891a830c0490f43f4038caa`;
+- public query-policy descriptor v2 schema: `9c2cf0681396fa6e82de462c218ac57ba99e4a9fbb5db658a3f118a7592cbdcc`;
+- public query-policy registry v2 schema: `612b6af6f7aaa78c4b9c8824bbc0c7b0fa02c59c046e29ef0d1ca229a8cf5e0a`;
 - sanitized Luna result: `70f93268177af6d327a436274237950be6d5ff7121eb3e5658e59500da13c5ba`;
 - Luna response-body digest recorded by the caller:
   `d391c2a90fdaa49e6544aec98d756167d63a9d1ac085518fae56c82b53d181dc`.
 
+These hashes record the original 2026-07-14 migration evidence. The subsequent offline hardening added issuance-lineage
+bindings, a durable migration/purge state machine, and stronger schemas, so the public descriptor/registry/schema hashes
+above are historical evidence rather than current-contract signoff. No private artifact was rewritten and no live call
+was made during that repair; promotion requires a new pinned independent review.
+
 The ignored project runtime files are mode `0600`; no credential is present in this Markdown record.
 
-The legacy result and the earlier evaluation were not overwritten. A one-time private migration receipt binds its exact source and target hashes,
-records the field/state mapping, and records the mechanically recomputed five-way counts. The normal evaluator accepts
-only the source-neutral two-axis fields; the old OpenAI-specific aggregate buckets are not an alternate authority.
-The tracked query-policy file is now an intended-public hash-only descriptor. It contains only the opaque
-session/request binding digest plus ordered `sequence`, `tool_name`, and exact full-call SHA-256 values; query
-arguments, handles, Bio text, Post URLs, and raw session/request identifiers remain owner-only. The immutable public
-registry separately binds the public descriptor preimage/hash and the legacy full-policy canonical hash. During
-offline replay, the evaluator validates the private receipt arguments, recomputes every full-call hash, and requires
-an exact ordered match. It does not accept a caller-supplied policy body.
+The legacy result and the earlier evaluation were not overwritten. A one-time private migration receipt binds its
+exact source and target hashes, records the field/state mapping, and records the mechanically recomputed five-way
+counts. The normal evaluator accepts only the source-neutral two-axis fields; the old OpenAI-specific aggregate
+buckets are not an alternate authority.
+
+The tracked v2 query-policy descriptor contains only run-bound, domain-separated HMAC commitments plus public key and
+nonce identifiers. Raw query arguments, handles, Bio text, Post URLs, raw session/request identifiers, key material,
+and nonce material remain only in the owner-only `0600` receipt. The immutable public registry separately binds the
+public descriptor and the keyed legacy-policy commitment. During offline replay, the evaluator validates private
+receipt arguments against those commitments and requires an exact ordered match; it does not accept a caller-supplied
+policy body. The prior unsalted v1 descriptor and registry were deleted from the intended-public HEAD because their
+small query space was dictionary-recoverable. Their values remain a Git-history residual until an explicitly approved
+history rewrite; they are not accepted by the current evaluator.
 
 The old private result and receipt replayed successfully without reading or copying their query text into tracked
 files. The resulting replacement evaluation is mode `0600` and remains `receipt_only_unverified` because the original
@@ -155,8 +153,9 @@ Do not interpret the diagnostic hydration tasks as executable approval. The next
 1. isolate raw Grok session evidence under owner-only permissions with a short TTL and deletion receipt;
 2. bind a profile task to lab, frozen window, prompt/model/tool-policy hashes, stable account identity, and exact call
    receipts;
-3. test no more than five leads for numeric platform ID, exact Bio/hash/observed time, canonical Post ID/URL/author/
-   time, and thread relationship;
+3. hydrate every selected lead that fits the reviewed technical byte/node/depth/deadline envelope for numeric platform
+   ID, exact Bio/hash/observed time, canonical Post ID/URL/author/time, and thread relationship;
 4. keep model-mediated excerpts explicitly non-replayable unless a source/citation path independently verifies them;
 5. run Luna semantic review only after the Bio snapshot is bound, then join via platform user ID + Bio hash;
-6. measure field coverage and human-reviewed precision before increasing task or Post volume.
+6. measure exact-denominator field coverage and human-reviewed precision while allowing the adaptive search to keep
+   expanding until evidence saturation, budget, deadline, cancellation, or a reviewed safety boundary stops it.

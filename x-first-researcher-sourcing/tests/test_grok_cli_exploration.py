@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import hmac
 import json
 import re
 import shutil
@@ -30,6 +31,9 @@ from x_first.grok_cli_exploration import (  # noqa: E402
 
 SESSION_ID = "019a0000-0000-7000-8000-000000000001"
 REQUEST_ID = "00000000-0000-4000-8000-000000000001"
+COMMITMENT_KEY_HEX = "11" * 32
+COMMITMENT_NONCE_HEX = "22" * 32
+_DEFAULT_PLATFORM_USER_ID = object()
 
 
 class MiniSchemaError(AssertionError):
@@ -165,10 +169,35 @@ def _call(*, query: str = "OpenAI pretraining", tool_name: str = "x_keyword_sear
     }
 
 
+def _commitment(
+    domain: str,
+    payload: Any,
+    *,
+    key_hex: str = COMMITMENT_KEY_HEX,
+    nonce_hex: str = COMMITMENT_NONCE_HEX,
+) -> str:
+    message = canonical_json({"domain": domain, "nonce_hex": nonce_hex, "payload": payload}).encode()
+    return hmac.new(bytes.fromhex(key_hex), message, hashlib.sha256).hexdigest()
+
+
+def _issuance_id(
+    *,
+    policy_version: str,
+    run_binding_commitment: str,
+    key_hex: str = COMMITMENT_KEY_HEX,
+    nonce_hex: str = COMMITMENT_NONCE_HEX,
+) -> str:
+    material = {
+        "policy_version": policy_version,
+        "run_binding_commitment": run_binding_commitment,
+        "commitment_key_id": hashlib.sha256(bytes.fromhex(key_hex)).hexdigest(),
+        "commitment_nonce_id": hashlib.sha256(bytes.fromhex(nonce_hex)).hexdigest(),
+    }
+    return f"qci_{hashlib.sha256(canonical_json(material).encode()).hexdigest()[:24]}"
+
+
 def _public_policy() -> dict[str, Any]:
-    return json.loads(
-        (ROOT / "configs/grok_cli_exploration_query_policy_descriptor.v1.json").read_text()
-    )
+    return json.loads((ROOT / "configs/grok_cli_exploration_query_policy_descriptor.v2.json").read_text())
 
 
 def _candidate_value_policy() -> dict[str, Any]:
@@ -177,20 +206,12 @@ def _candidate_value_policy() -> dict[str, Any]:
 
 def _public_query_policy_registry() -> dict[str, Any]:
     return json.loads(
-        (
-            ROOT
-            / "configs/grok_cli_exploration_query_policy_registries/approved-query-policies-v1.json"
-        ).read_text()
+        (ROOT / "configs/grok_cli_exploration_query_policy_registries/approved-query-policies-v2.json").read_text()
     )
 
 
 def _pre_migration_evaluation_fixture() -> dict[str, Any]:
-    return json.loads(
-        (
-            ROOT
-            / "fixtures/grok_cli_exploration_pre_migration_evaluation.v1.json"
-        ).read_text()
-    )
+    return json.loads((ROOT / "fixtures/grok_cli_exploration_pre_migration_evaluation.v1.json").read_text())
 
 
 def _canonical_calls() -> list[dict[str, Any]]:
@@ -227,9 +248,7 @@ def _synthetic_legacy_full_policy() -> dict[str, Any]:
             {
                 "tool_name": call["tool_name"],
                 "arguments": call["arguments"],
-                "call_sha256": canonical_sha256(
-                    {"tool_name": call["tool_name"], "arguments": call["arguments"]}
-                ),
+                "call_sha256": canonical_sha256({"tool_name": call["tool_name"], "arguments": call["arguments"]}),
             }
             for call in _canonical_calls()
         ],
@@ -237,15 +256,28 @@ def _synthetic_legacy_full_policy() -> dict[str, Any]:
 
 
 def _canonical_policy() -> dict[str, Any]:
+    run_binding_commitment = _commitment(
+        "x.grok_cli.exploration.run_binding.v2",
+        {"session_id": SESSION_ID, "request_id": REQUEST_ID},
+    )
+    policy_version = "synthetic-openai-pretrain-base-discovery-fixture-v1"
     return {
-        "schema_version": "x.grok_cli.exploration.query_policy_descriptor.v1",
-        "policy_version": "synthetic-openai-pretrain-base-discovery-fixture-v1",
+        "schema_version": "x.grok_cli.exploration.query_policy_descriptor.v2",
+        "policy_version": policy_version,
         "purpose": "base_researcher_discovery",
         "lab_id": "openai",
-        "run_binding_sha256": canonical_sha256(
-            {"session_id": SESSION_ID, "request_id": REQUEST_ID}
+        "commitment_scheme": "hmac-sha256-v1",
+        "commitment_issuance_id": _issuance_id(
+            policy_version=policy_version,
+            run_binding_commitment=run_binding_commitment,
         ),
-        "legacy_full_policy_sha256": canonical_sha256(_synthetic_legacy_full_policy()),
+        "commitment_key_id": hashlib.sha256(bytes.fromhex(COMMITMENT_KEY_HEX)).hexdigest(),
+        "commitment_nonce_id": hashlib.sha256(bytes.fromhex(COMMITMENT_NONCE_HEX)).hexdigest(),
+        "run_binding_commitment": run_binding_commitment,
+        "legacy_full_policy_commitment": _commitment(
+            "x.grok_cli.exploration.legacy_full_policy.v2",
+            _synthetic_legacy_full_policy(),
+        ),
         "allowed_decision_dimensions": [
             "lab_affiliation",
             "role_function",
@@ -253,12 +285,14 @@ def _canonical_policy() -> dict[str, Any]:
         ],
         "professional_experience_proxy_query_allowed": False,
         "protected_identity_query_allowed": False,
+        "protected_category_boundary_version": "base-discovery-protected-category-boundary-v1",
         "query_manifest": [
             {
                 "sequence": index,
                 "tool_name": call["tool_name"],
-                "call_sha256": canonical_sha256(
-                    {"tool_name": call["tool_name"], "arguments": call["arguments"]}
+                "call_commitment": _commitment(
+                    "x.grok_cli.exploration.call.v2",
+                    {"tool_name": call["tool_name"], "arguments": call["arguments"]},
                 ),
             }
             for index, call in enumerate(_canonical_calls())
@@ -268,19 +302,33 @@ def _canonical_policy() -> dict[str, Any]:
 
 def _query_policy_registry() -> dict[str, Any]:
     policy = _canonical_policy()
+    issuance = {
+        "lineage_position": 0,
+        "issuance_id": policy["commitment_issuance_id"],
+        "policy_version": policy["policy_version"],
+        "run_binding_commitment": policy["run_binding_commitment"],
+        "commitment_key_id": policy["commitment_key_id"],
+        "commitment_nonce_id": policy["commitment_nonce_id"],
+    }
     return {
-        "schema_version": "x.grok_cli.exploration.query_policy_registry.v1",
-        "registry_version": "approved-query-policies-v1",
+        "schema_version": "x.grok_cli.exploration.query_policy_registry.v2",
+        "registry_version": "approved-query-policies-v2",
+        "commitment_issuance_lineage": [issuance],
         "policies": [
             {
                 "policy_version": policy["policy_version"],
-                "policy_path": "configs/grok_cli_exploration_query_policy_descriptor.v1.json",
+                "policy_path": "configs/grok_cli_exploration_query_policy_descriptor.v2.json",
                 "policy_sha256": canonical_sha256(policy),
-                "legacy_full_policy_sha256": policy["legacy_full_policy_sha256"],
+                "commitment_scheme": policy["commitment_scheme"],
+                "commitment_issuance_id": policy["commitment_issuance_id"],
+                "commitment_key_id": policy["commitment_key_id"],
+                "commitment_nonce_id": policy["commitment_nonce_id"],
+                "legacy_full_policy_commitment": policy["legacy_full_policy_commitment"],
                 "policy_schema_version": policy["schema_version"],
                 "purpose": policy["purpose"],
                 "lab_id": policy["lab_id"],
-                "run_binding_sha256": policy["run_binding_sha256"],
+                "protected_category_boundary_version": policy["protected_category_boundary_version"],
+                "run_binding_commitment": policy["run_binding_commitment"],
                 "enabled": True,
             }
         ],
@@ -293,11 +341,18 @@ def _receipt(
 ) -> dict[str, Any]:
     selected = calls if calls is not None else _canonical_calls() if call is None else [call]
     return {
-        "schema_version": "x.grok_cli.exploration.tool_receipt.v0",
+        "schema_version": "x.grok_cli.exploration.tool_receipt.v1",
         "cli_version": "0.2.99",
         "model_id": "grok-4.5",
         "session_id": SESSION_ID,
         "request_id": REQUEST_ID,
+        "query_commitment": {
+            "scheme": "hmac-sha256-v1",
+            "key_id": hashlib.sha256(bytes.fromhex(COMMITMENT_KEY_HEX)).hexdigest(),
+            "key_hex": COMMITMENT_KEY_HEX,
+            "nonce_id": hashlib.sha256(bytes.fromhex(COMMITMENT_NONCE_HEX)).hexdigest(),
+            "nonce_hex": COMMITMENT_NONCE_HEX,
+        },
         "generic_web_disabled_by_cli": True,
         "local_tools_removed_by_denylist": True,
         "evidence_boundary": (
@@ -329,13 +384,15 @@ def _evaluate(
 
 def _candidate(
     *,
-    platform_user_id: str | None = "12345",
+    platform_user_id: str | None | object = _DEFAULT_PLATFORM_USER_ID,
     include_post: bool = True,
     handle: str = "xfsynth_fixture",
     target_lab_affiliation_state: str = "current",
     pretraining_experience_state: str = "current",
     confidence: str = "high",
 ) -> dict[str, Any]:
+    if platform_user_id is _DEFAULT_PLATFORM_USER_ID:
+        platform_user_id = str(int(hashlib.sha256(handle.casefold().encode()).hexdigest()[:12], 16))
     evidence = [
         {
             "kind": "bio",
@@ -370,7 +427,7 @@ def _candidate(
         "pretraining_experience_state": pretraining_experience_state,
         "confidence": confidence,
         "evidence": evidence,
-        "caveats": ["Synthetic contract-only account; no network access."],
+        "caveat_codes": ["synthetic_fixture"],
     }
 
 
@@ -397,7 +454,7 @@ def _result(
 
     return {
         "status": "X_SEARCH_OK",
-        "status_reason": "Synthetic structurally valid exploration result.",
+        "status_reason_code": "synthetic_fixture_completed",
         "native_x_tool_provenance": {
             "generic_web_used": False,
             "tool_calls_reported": len(selected_calls),
@@ -410,7 +467,7 @@ def _result(
         },
         "candidates": selected_candidates,
         "excluded_examples": [],
-        "limitations": ["Synthetic contract test."],
+        "limitation_codes": ["synthetic_fixture"],
         "local_reconciliation": {
             "candidate_records_validated": len(selected_candidates),
             "evidence_items_validated": sum(len(item["evidence"]) for item in selected_candidates),
@@ -433,13 +490,17 @@ def _binding() -> dict[str, str]:
     registry_row = registry["policies"][0]
     return {
         "lab_id": "openai",
-        "session_id": SESSION_ID,
-        "request_id": REQUEST_ID,
+        "run_binding_commitment": _canonical_policy()["run_binding_commitment"],
         "model_id": "grok-4.5",
-        "tool_policy_version": "x.grok_cli.exploration.tool_receipt.v0",
+        "tool_policy_version": "x.grok_cli.exploration.tool_receipt.v1",
         "query_policy_version": _canonical_policy()["policy_version"],
         "query_policy_sha256": canonical_sha256(_canonical_policy()),
-        "legacy_full_query_policy_sha256": _canonical_policy()["legacy_full_policy_sha256"],
+        "query_commitment_scheme": _canonical_policy()["commitment_scheme"],
+        "query_commitment_issuance_id": _canonical_policy()["commitment_issuance_id"],
+        "query_commitment_issuance_sha256": canonical_sha256(registry["commitment_issuance_lineage"][0]),
+        "query_commitment_key_id": _canonical_policy()["commitment_key_id"],
+        "query_commitment_nonce_id": _canonical_policy()["commitment_nonce_id"],
+        "legacy_full_query_policy_commitment": _canonical_policy()["legacy_full_policy_commitment"],
         "query_policy_registry_version": registry["registry_version"],
         "query_policy_registry_sha256": canonical_sha256(registry),
         "query_policy_registry_row_sha256": canonical_sha256(registry_row),
@@ -456,12 +517,8 @@ class GrokCliExplorationTest(unittest.TestCase):
         configs = project_root / "configs"
         registry_directory = configs / "grok_cli_exploration_query_policy_registries"
         registry_directory.mkdir(parents=True)
-        (configs / "grok_cli_exploration_query_policy_descriptor.v1.json").write_text(
-            json.dumps(_canonical_policy())
-        )
-        (registry_directory / "approved-query-policies-v1.json").write_text(
-            json.dumps(_query_policy_registry())
-        )
+        (configs / "grok_cli_exploration_query_policy_descriptor.v2.json").write_text(json.dumps(_canonical_policy()))
+        (registry_directory / "approved-query-policies-v2.json").write_text(json.dumps(_query_policy_registry()))
         cls._root_patch = mock.patch.object(exploration_module, "PROJECT_ROOT", project_root)
         cls._registry_patch = mock.patch.object(
             exploration_module,
@@ -479,22 +536,19 @@ class GrokCliExplorationTest(unittest.TestCase):
 
     def test_persisted_output_schemas_are_recursive_closed_world_contracts(self) -> None:
         evaluation_schema = json.loads(
-            (ROOT / "contracts/x.grok_cli.exploration.evaluation.v0.schema.json").read_text()
+            (ROOT / "contracts/x.grok_cli.exploration.evaluation.v1.schema.json").read_text()
         )
         hydration_schema = json.loads(
-            (ROOT / "contracts/x.grok_cli.candidate_hydration.task.v0.schema.json").read_text()
+            (ROOT / "contracts/x.grok_cli.candidate_hydration.task.v1.schema.json").read_text()
         )
         candidate_policy_schema = json.loads(
             (ROOT / "contracts/x.grok_cli.candidate_value_segment_policy.v1.schema.json").read_text()
         )
         query_policy_schema = json.loads(
-            (
-                ROOT
-                / "contracts/x.grok_cli.exploration.query_policy_descriptor.v1.schema.json"
-            ).read_text()
+            (ROOT / "contracts/x.grok_cli.exploration.query_policy_descriptor.v2.schema.json").read_text()
         )
         registry_schema = json.loads(
-            (ROOT / "contracts/x.grok_cli.exploration.query_policy_registry.v1.schema.json").read_text()
+            (ROOT / "contracts/x.grok_cli.exploration.query_policy_registry.v2.schema.json").read_text()
         )
 
         def assert_closed_objects(value: Any, path: str = "$") -> None:
@@ -509,15 +563,15 @@ class GrokCliExplorationTest(unittest.TestCase):
 
         self.assertEqual(
             evaluation_schema["properties"]["schema_version"]["const"],
-            "x.grok_cli.exploration.evaluation.v0",
+            "x.grok_cli.exploration.evaluation.v1",
         )
         self.assertEqual(
             hydration_schema["properties"]["task_version"]["const"],
-            "x.grok_cli.candidate_hydration.task.v0",
+            "x.grok_cli.candidate_hydration.task.v1",
         )
         self.assertEqual(
             evaluation_schema["properties"]["hydration_tasks"]["items"]["$ref"],
-            "x.grok_cli.candidate_hydration.task.v0.schema.json",
+            "x.grok_cli.candidate_hydration.task.v1.schema.json",
         )
         assert_closed_objects(evaluation_schema)
         assert_closed_objects(hydration_schema)
@@ -525,7 +579,7 @@ class GrokCliExplorationTest(unittest.TestCase):
         evaluation = _evaluate(result, receipt)
         task_candidate = _candidate(platform_user_id=None)
         task = build_hydration_tasks([task_candidate], experiment_binding=_binding())[0]
-        external_schemas = {"x.grok_cli.candidate_hydration.task.v0.schema.json": hydration_schema}
+        external_schemas = {"x.grok_cli.candidate_hydration.task.v1.schema.json": hydration_schema}
         _mini_schema_validate(evaluation, evaluation_schema, externals=external_schemas)
         _mini_schema_validate(task, hydration_schema)
         _mini_schema_validate(_candidate_value_policy(), candidate_policy_schema)
@@ -618,9 +672,7 @@ class GrokCliExplorationTest(unittest.TestCase):
         forged_rate = copy.deepcopy(hydration_evaluation)
         forged_rate["metrics"]["model_mediated_bio_presence_rate"] = 0.5
         forged_rate["first_field_gate_gaps"]["bio_coverage_gap_to_100_percent"] = 0.5
-        coverage_index = forged_rate["scale_blockers"].index(
-            "stable_platform_user_id_coverage_below_100_percent"
-        )
+        coverage_index = forged_rate["scale_blockers"].index("stable_platform_user_id_coverage_below_100_percent")
         forged_rate["scale_blockers"].insert(coverage_index + 1, "bio_coverage_below_100_percent")
         replay_only_mutations.append(forged_rate)
         for mutation in replay_only_mutations:
@@ -655,9 +707,7 @@ class GrokCliExplorationTest(unittest.TestCase):
             "task_status": reversed_reasons["task_status"],
             "task_version": reversed_reasons["task_version"],
         }
-        reversed_reasons["task_key"] = (
-            "xhydrate_" + hashlib.sha256(canonical_json(identity).encode()).hexdigest()[:24]
-        )
+        reversed_reasons["task_key"] = "xhydrate_" + hashlib.sha256(canonical_json(identity).encode()).hexdigest()[:24]
         task_mutations.append(reversed_reasons)
         for mutation in task_mutations:
             with self.subTest(task_mutation=mutation):
@@ -681,14 +731,165 @@ class GrokCliExplorationTest(unittest.TestCase):
         self.assertEqual(observed["input_binding"]["query_policy_version"], _canonical_policy()["policy_version"])
         self.assertFalse(any(observed["authority"].values()))
 
+    def test_more_than_32_calls_and_25_candidates_are_not_business_capped(self) -> None:
+        calls = []
+        for index in range(40):
+            call = _call(query=f"OpenAI pretraining synthetic scale fixture {index}")
+            call["tool_call_id"] = f"ctc_scale_{index}"
+            call["provider_call_id"] = f"xs_scale_{index}"
+            calls.append(call)
+        candidates = [_candidate(handle=f"xfs_{index:02d}") for index in range(40)]
+        policy = copy.deepcopy(_canonical_policy())
+        policy["query_manifest"] = [
+            {
+                "sequence": index,
+                "tool_name": call["tool_name"],
+                "call_commitment": _commitment(
+                    "x.grok_cli.exploration.call.v2",
+                    {"tool_name": call["tool_name"], "arguments": call["arguments"]},
+                ),
+            }
+            for index, call in enumerate(calls)
+        ]
+        registry = _query_policy_registry()
+        registry["policies"][0]["policy_sha256"] = canonical_sha256(policy)
+        with tempfile.TemporaryDirectory() as directory:
+            project_root = Path(directory)
+            configs = project_root / "configs"
+            registry_directory = configs / "grok_cli_exploration_query_policy_registries"
+            registry_directory.mkdir(parents=True)
+            (configs / "grok_cli_exploration_query_policy_descriptor.v2.json").write_text(json.dumps(policy))
+            (registry_directory / "approved-query-policies-v2.json").write_text(json.dumps(registry))
+            with (
+                mock.patch.object(exploration_module, "PROJECT_ROOT", project_root),
+                mock.patch.object(exploration_module, "QUERY_POLICY_REGISTRY_DIRECTORY", registry_directory),
+            ):
+                observed = evaluate_exploration(
+                    _result(calls=calls, candidates=candidates),
+                    _receipt(calls=calls),
+                )
+        self.assertEqual(observed["metrics"]["tool_call_receipt_rows"], 40)
+        self.assertEqual(observed["metrics"]["candidates_retained"], 40)
+        self.assertEqual(observed["metrics"]["unique_candidates_retained"], 40)
+        self.assertEqual(observed["metrics"]["metric_denominators"]["candidates_per_tool_call"], 40)
+
+    def test_duplicate_reported_platform_ids_are_quarantined_from_unique_and_precision_counts(self) -> None:
+        candidates = [
+            _candidate(handle="xfs_dup_a", platform_user_id="90001"),
+            _candidate(handle="xfs_dup_b", platform_user_id="90001"),
+            _candidate(handle="xfs_unique", platform_user_id="90002"),
+        ]
+        observed = _evaluate(_result(candidates=candidates), _receipt())
+        by_handle = {row["handle"]: row for row in observed["candidate_value_assessments"]}
+        for handle in ("xfs_dup_a", "xfs_dup_b"):
+            self.assertEqual(
+                by_handle[handle]["identity_counting_status"],
+                "reported_platform_user_id_conflict_quarantined",
+            )
+            self.assertFalse(by_handle[handle]["precision_tranche_eligible"])
+            self.assertFalse(by_handle[handle]["recall_pool_eligible"])
+            self.assertIn("reported_platform_user_id_conflict", by_handle[handle]["hydration_reasons"])
+        self.assertEqual(observed["metrics"]["candidates_retained"], 3)
+        self.assertEqual(observed["metrics"]["unique_candidates_retained"], 1)
+        self.assertEqual(observed["metrics"]["reported_platform_user_id_conflict_candidates"], 2)
+        self.assertEqual(observed["metrics"]["precision_tranche_candidates"], 1)
+        self.assertEqual(observed["metrics"]["candidate_value_segment_counts"]["precision_current_current"], 1)
+        self.assertEqual(len(observed["hydration_tasks"]), 2)
+        self.assertIn("reported_platform_user_id_conflict_quarantined", observed["scale_blockers"])
+
+    def test_repeated_rows_for_one_handle_fail_before_stable_id_conflict_accounting(self) -> None:
+        candidates = [
+            _candidate(handle="xfs_same", platform_user_id="90001"),
+            _candidate(handle="xfs_same", platform_user_id="90001"),
+        ]
+        with self.assertRaisesRegex(ExplorationValidationError, "duplicate_candidate_handle"):
+            _evaluate(_result(candidates=candidates), _receipt())
+
+    def test_decision_fields_are_closed_codes_and_protected_identity_text_cannot_support_base_axes(self) -> None:
+        open_caveat = _candidate()
+        open_caveat["caveat_codes"] = ["The person is Chinese."]
+        with self.assertRaisesRegex(ExplorationValidationError, "candidate_caveat_codes_invalid"):
+            _evaluate(_result(candidate=open_caveat), _receipt())
+
+        open_exclusion = _result(candidates=[])
+        open_exclusion["excluded_examples"] = [
+            {"handle": "other_fixture", "reason": "Excluded because the person is Chinese."}
+        ]
+        with self.assertRaisesRegex(ExplorationValidationError, "excluded_examples_invalid"):
+            _evaluate(open_exclusion, _receipt())
+
+        protected_support = _candidate()
+        protected_support["evidence"][1]["excerpt"] = "The person is Chinese."
+        with self.assertRaisesRegex(
+            ExplorationValidationError,
+            "protected_identity_decision_evidence_forbidden",
+        ):
+            _evaluate(_result(candidate=protected_support), _receipt())
+
+        for protected_text in (
+            "American researcher on pretraining systems.",
+            "Indian engineer working on model training.",
+            "Muslim scientist at the target lab.",
+            "美国人 researcher 负责预训练。",
+            "chercheur musulman en préentraînement",
+            "investigador estadounidense de preentrenamiento",
+            "アメリカ人の研究者",
+            "미국인 연구원",
+        ):
+            protected_support = _candidate()
+            protected_support["evidence"][1]["excerpt"] = protected_text
+            with (
+                self.subTest(protected_support=protected_text),
+                self.assertRaisesRegex(
+                    ExplorationValidationError,
+                    "protected_identity_decision_evidence_forbidden",
+                ),
+            ):
+                _evaluate(_result(candidate=protected_support), _receipt())
+
+        professional_geography = _candidate()
+        professional_geography["evidence"][1]["excerpt"] = (
+            "Worked in China and across Asia on professional pretraining systems."
+        )
+        _evaluate(_result(candidate=professional_geography), _receipt())
+
+    def test_public_outputs_never_contain_private_commitment_material_or_query_plaintext(self) -> None:
+        evaluation = _evaluate(_result(candidate=_candidate(platform_user_id=None)), _receipt())
+        public_values = [_public_policy(), _public_query_policy_registry(), evaluation, evaluation["hydration_tasks"]]
+        private_names = {
+            "key_hex",
+            "nonce_hex",
+            "arguments",
+            "queries",
+            "session_id",
+            "request_id",
+        }
+
+        def keys(value: Any) -> set[str]:
+            found: set[str] = set()
+            stack = [value]
+            while stack:
+                item = stack.pop()
+                if isinstance(item, dict):
+                    found.update(item)
+                    stack.extend(item.values())
+                elif isinstance(item, list):
+                    stack.extend(item)
+            return found
+
+        for value in public_values:
+            self.assertFalse(keys(value) & private_names)
+            rendered = canonical_json(value)
+            for call in _canonical_calls():
+                self.assertNotIn(call["arguments"].get("query", "__no_query__"), rendered)
+        self.assertIn("key_hex", _receipt()["query_commitment"])
+        self.assertIn("nonce_hex", _receipt()["query_commitment"])
+
     def test_runtime_binds_shape_schema_to_approved_registry_hash(self) -> None:
         result, receipt = _canonical_payloads()
         observed = evaluate_exploration(result, receipt)
         schema = json.loads(
-            (
-                ROOT
-                / "contracts/x.grok_cli.exploration.query_policy_descriptor.v1.schema.json"
-            ).read_text()
+            (ROOT / "contracts/x.grok_cli.exploration.query_policy_descriptor.v2.schema.json").read_text()
         )
         registry = _query_policy_registry()
         public_policy = _public_policy()
@@ -701,13 +902,13 @@ class GrokCliExplorationTest(unittest.TestCase):
             canonical_sha256(_canonical_policy()),
         )
         self.assertEqual(
-            observed["input_binding"]["legacy_full_query_policy_sha256"],
-            canonical_sha256(_synthetic_legacy_full_policy()),
+            observed["input_binding"]["legacy_full_query_policy_commitment"],
+            _canonical_policy()["legacy_full_policy_commitment"],
         )
         self.assertEqual(public_registry["policies"][0]["policy_sha256"], canonical_sha256(public_policy))
         self.assertEqual(
-            public_registry["policies"][0]["legacy_full_policy_sha256"],
-            public_policy["legacy_full_policy_sha256"],
+            public_registry["policies"][0]["legacy_full_policy_commitment"],
+            public_policy["legacy_full_policy_commitment"],
         )
         self.assertEqual(observed["input_binding"]["lab_id"], "openai")
         with self.assertRaises(TypeError):
@@ -715,39 +916,33 @@ class GrokCliExplorationTest(unittest.TestCase):
         with self.assertRaisesRegex(ExplorationValidationError, "approved_query_policy_not_found"):
             evaluate_exploration(result, receipt, query_policy_version="unapproved-policy-v1")
 
-    def test_public_policy_files_are_hash_only_and_preserve_legacy_binding(self) -> None:
+    def test_public_policy_files_use_keyed_commitments_and_expose_no_dictionary_or_key_material(self) -> None:
         policy = _public_policy()
         registry = _public_query_policy_registry()
         serialized = canonical_json({"policy": policy, "registry": registry})
 
         intended_public_migration_files = [
-            ROOT / "configs/grok_cli_exploration_query_policy_descriptor.v1.json",
-            ROOT
-            / "configs/grok_cli_exploration_query_policy_registries/approved-query-policies-v1.json",
-            ROOT / "contracts/x.grok_cli.exploration.query_policy_descriptor.v1.schema.json",
-            ROOT / "contracts/x.grok_cli.exploration.query_policy_registry.v1.schema.json",
-            ROOT / "contracts/x.grok_cli.exploration.evaluation.v0.schema.json",
-            ROOT / "contracts/x.grok_cli.candidate_hydration.task.v0.schema.json",
+            ROOT / "configs/grok_cli_exploration_query_policy_descriptor.v2.json",
+            ROOT / "configs/grok_cli_exploration_query_policy_registries/approved-query-policies-v2.json",
+            ROOT / "contracts/x.grok_cli.exploration.query_policy_descriptor.v2.schema.json",
+            ROOT / "contracts/x.grok_cli.exploration.query_policy_registry.v2.schema.json",
+            ROOT / "contracts/x.grok_cli.exploration.evaluation.v1.schema.json",
+            ROOT / "contracts/x.grok_cli.candidate_hydration.task.v1.schema.json",
             ROOT / "fixtures/grok_cli_exploration_pre_migration_evaluation.v1.json",
-            ROOT
-            / "docs/live-evidence/2026-07-14-openai-pretrain-grok-cli-and-luna-exploration.md",
+            ROOT / "docs/live-evidence/2026-07-14-openai-pretrain-grok-cli-and-luna-exploration.md",
         ]
         forbidden_patterns = {
-            "literal_uuid": re.compile(
-                r"(?i)\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b"
-            ),
+            "literal_uuid": re.compile(r"(?i)\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b"),
             "query_or_profile_operand": re.compile(
                 r"(?i)(?:from:|(?<![A-Za-z0-9_])@[A-Za-z0-9_]{1,15}\b|https?://x\.com/[A-Za-z0-9_])"
             ),
-            "private_payload_field": re.compile(
-                r'(?i)"(?:arguments|query|bio_excerpt|excerpt)"\s*:'
-            ),
+            "private_payload_field": re.compile(r'(?i)"(?:arguments|query|bio_excerpt|excerpt)"\s*:'),
             "credential_value": re.compile(
-                r'''(?ix)
+                r"""(?ix)
                 (?:sk|xai)-[A-Za-z0-9_-]{8,}
                 | bearer\s+[A-Za-z0-9._-]{8,}
                 | "(?:api_key|access_token|refresh_token)"\s*:
-                '''
+                """
             ),
         }
         for public_path in intended_public_migration_files:
@@ -760,22 +955,36 @@ class GrokCliExplorationTest(unittest.TestCase):
         self.assertNotIn('"arguments"', serialized)
         self.assertNotIn('"query"', serialized)
         self.assertNotIn('"bio"', serialized.casefold())
-        self.assertEqual(
-            policy["legacy_full_policy_sha256"],
-            "5a8e61b34a9ab920e82a011e7534b65a264710a72df5352a302562f59a380b1e",
-        )
+        self.assertNotIn("call_sha256", serialized)
+        self.assertNotIn("run_binding_sha256", serialized)
+        self.assertNotIn("legacy_full_policy_sha256", serialized)
+        self.assertNotIn("key_hex", serialized)
+        self.assertNotIn("nonce_hex", serialized)
         self.assertEqual(registry["policies"][0]["policy_sha256"], canonical_sha256(policy))
         self.assertEqual(
-            registry["policies"][0]["legacy_full_policy_sha256"],
-            policy["legacy_full_policy_sha256"],
+            registry["policies"][0]["legacy_full_policy_commitment"],
+            policy["legacy_full_policy_commitment"],
         )
         self.assertEqual(
             [item["sequence"] for item in policy["query_manifest"]],
             list(range(len(policy["query_manifest"]))),
         )
-        self.assertIn(
-            policy["run_binding_sha256"],
-            intended_public_migration_files[-1].read_text(encoding="utf-8"),
+        guesses = [
+            {
+                "tool_name": "x_keyword_search",
+                "arguments": {
+                    "query": f"synthetic query {index}",
+                    "limit": "10",
+                    "mode": "Latest",
+                },
+            }
+            for index in range(20_000)
+        ]
+        unsalted_dictionary = {canonical_sha256(guess) for guess in guesses}
+        self.assertTrue(all(item["call_commitment"] not in unsalted_dictionary for item in policy["query_manifest"]))
+        self.assertFalse((ROOT / "configs/grok_cli_exploration_query_policy_descriptor.v1.json").exists())
+        self.assertFalse(
+            (ROOT / "configs/grok_cli_exploration_query_policy_registries/approved-query-policies-v1.json").exists()
         )
 
     def test_named_pre_migration_evaluation_requires_source_replay_to_migrate(self) -> None:
@@ -814,12 +1023,8 @@ class GrokCliExplorationTest(unittest.TestCase):
         pre_migration = copy.deepcopy(current_evaluation)
         transform = fixture["pre_migration_transform"]
         source_field = transform["query_policy_sha256_source_field"]
-        pre_migration["input_binding"]["query_policy_sha256"] = pre_migration["input_binding"][
-            source_field
-        ]
-        pre_migration["input_binding"]["query_policy_schema_version"] = transform[
-            "query_policy_schema_version"
-        ]
+        pre_migration["input_binding"]["query_policy_sha256"] = pre_migration["input_binding"][source_field]
+        pre_migration["input_binding"]["query_policy_schema_version"] = transform["query_policy_schema_version"]
         for field in transform["remove_input_binding_fields"]:
             del pre_migration["input_binding"][field]
 
@@ -834,14 +1039,14 @@ class GrokCliExplorationTest(unittest.TestCase):
         self.assertEqual(canonical_json(migrated), canonical_json(current_evaluation))
         self.assertEqual(
             migrated["input_binding"]["query_policy_schema_version"],
-            "x.grok_cli.exploration.query_policy_descriptor.v1",
+            "x.grok_cli.exploration.query_policy_descriptor.v2",
         )
-        self.assertIn("legacy_full_query_policy_sha256", migrated["input_binding"])
+        self.assertIn("legacy_full_query_policy_commitment", migrated["input_binding"])
         with self.assertRaises(TypeError):
             validate_evaluation_output(migrated)  # type: ignore[call-arg]
 
         different_source_result = copy.deepcopy(source_result)
-        different_source_result["status_reason"] = "Different valid synthetic source payload."
+        different_source_result["status_reason_code"] = "native_x_search_completed"
         with self.assertRaisesRegex(ExplorationValidationError, "evaluation_source_replay_mismatch"):
             validate_evaluation_output(migrated, different_source_result, source_receipt)
 
@@ -852,12 +1057,8 @@ class GrokCliExplorationTest(unittest.TestCase):
                 configs = project_root / "configs"
                 registry_directory = configs / "grok_cli_exploration_query_policy_registries"
                 registry_directory.mkdir(parents=True)
-                (configs / "grok_cli_exploration_query_policy_descriptor.v1.json").write_text(
-                    json.dumps(policy)
-                )
-                (registry_directory / "approved-query-policies-v1.json").write_text(
-                    json.dumps(registry)
-                )
+                (configs / "grok_cli_exploration_query_policy_descriptor.v2.json").write_text(json.dumps(policy))
+                (registry_directory / "approved-query-policies-v2.json").write_text(json.dumps(registry))
                 with (
                     mock.patch.object(exploration_module, "PROJECT_ROOT", project_root),
                     mock.patch.object(
@@ -869,7 +1070,7 @@ class GrokCliExplorationTest(unittest.TestCase):
                     evaluate_exploration(_result(), _receipt())
 
         changed_call = copy.deepcopy(_canonical_policy())
-        changed_call["query_manifest"][0]["call_sha256"] = "0" * 64
+        changed_call["query_manifest"][0]["call_commitment"] = "0" * 64
         with self.assertRaisesRegex(ExplorationValidationError, "approved_query_policy_hash_mismatch"):
             evaluate_with(changed_call, _query_policy_registry())
 
@@ -891,7 +1092,7 @@ class GrokCliExplorationTest(unittest.TestCase):
             evaluate_with(reordered, reordered_registry)
 
         changed_legacy_registry = copy.deepcopy(_query_policy_registry())
-        changed_legacy_registry["policies"][0]["legacy_full_policy_sha256"] = "f" * 64
+        changed_legacy_registry["policies"][0]["legacy_full_policy_commitment"] = "f" * 64
         with self.assertRaisesRegex(ExplorationValidationError, "query_policy_binding_invalid"):
             evaluate_with(_canonical_policy(), changed_legacy_registry)
 
@@ -899,8 +1100,7 @@ class GrokCliExplorationTest(unittest.TestCase):
         policy = _candidate_value_policy()
         schema = json.loads((ROOT / "contracts/x.grok_cli.candidate_value_segment_policy.v1.schema.json").read_text())
         priorities = {
-            item["segment_id"]: policy["priority_tiers"][item["priority_tier"]]
-            for item in policy["segments"]
+            item["segment_id"]: policy["priority_tiers"][item["priority_tier"]] for item in policy["segments"]
         }
         self.assertEqual(
             priorities["recall_current_historical"],
@@ -928,10 +1128,10 @@ class GrokCliExplorationTest(unittest.TestCase):
             configs.mkdir()
             registry_directory = configs / "grok_cli_exploration_query_policy_registries"
             registry_directory.mkdir()
-            canonical_policy_path = configs / "grok_cli_exploration_query_policy_descriptor.v1.json"
+            canonical_policy_path = configs / "grok_cli_exploration_query_policy_descriptor.v2.json"
             canonical_policy_path.write_text(json.dumps(_canonical_policy()))
             canonical_registry = _query_policy_registry()
-            (registry_directory / "approved-query-policies-v1.json").write_text(json.dumps(canonical_registry))
+            (registry_directory / "approved-query-policies-v2.json").write_text(json.dumps(canonical_registry))
             calls = copy.deepcopy(_canonical_calls())
             for call in calls:
                 query = call["arguments"].get("query")
@@ -939,9 +1139,12 @@ class GrokCliExplorationTest(unittest.TestCase):
                     call["arguments"]["query"] = query.replace("OpenAI", "Anthropic")
             session_id = "019f5f72-007a-7791-ab3a-a30ac8d0d97c"
             request_id = "4f95cda0-837c-4b09-9601-71aece907d69"
+            anthropic_key_hex = "33" * 32
+            anthropic_nonce_hex = "44" * 32
+            anthropic_policy_version = "anthropic-pretrain-base-discovery-fixture-v1"
             legacy_full_policy = {
                 **_synthetic_legacy_full_policy(),
-                "policy_version": "anthropic-pretrain-base-discovery-fixture-v1",
+                "policy_version": anthropic_policy_version,
                 "lab_id": "anthropic",
                 "session_id": session_id,
                 "request_id": request_id,
@@ -957,19 +1160,39 @@ class GrokCliExplorationTest(unittest.TestCase):
                 ],
             }
             policy = copy.deepcopy(_canonical_policy())
+            run_binding_commitment = _commitment(
+                "x.grok_cli.exploration.run_binding.v2",
+                {"session_id": session_id, "request_id": request_id},
+                key_hex=anthropic_key_hex,
+                nonce_hex=anthropic_nonce_hex,
+            )
             policy.update(
-                policy_version="anthropic-pretrain-base-discovery-fixture-v1",
+                policy_version=anthropic_policy_version,
                 lab_id="anthropic",
-                run_binding_sha256=canonical_sha256(
-                    {"session_id": session_id, "request_id": request_id}
+                commitment_issuance_id=_issuance_id(
+                    policy_version=anthropic_policy_version,
+                    run_binding_commitment=run_binding_commitment,
+                    key_hex=anthropic_key_hex,
+                    nonce_hex=anthropic_nonce_hex,
                 ),
-                legacy_full_policy_sha256=canonical_sha256(legacy_full_policy),
+                commitment_key_id=hashlib.sha256(bytes.fromhex(anthropic_key_hex)).hexdigest(),
+                commitment_nonce_id=hashlib.sha256(bytes.fromhex(anthropic_nonce_hex)).hexdigest(),
+                run_binding_commitment=run_binding_commitment,
+                legacy_full_policy_commitment=_commitment(
+                    "x.grok_cli.exploration.legacy_full_policy.v2",
+                    legacy_full_policy,
+                    key_hex=anthropic_key_hex,
+                    nonce_hex=anthropic_nonce_hex,
+                ),
                 query_manifest=[
                     {
                         "sequence": index,
                         "tool_name": call["tool_name"],
-                        "call_sha256": canonical_sha256(
-                            {"tool_name": call["tool_name"], "arguments": call["arguments"]}
+                        "call_commitment": _commitment(
+                            "x.grok_cli.exploration.call.v2",
+                            {"tool_name": call["tool_name"], "arguments": call["arguments"]},
+                            key_hex=anthropic_key_hex,
+                            nonce_hex=anthropic_nonce_hex,
                         ),
                     }
                     for index, call in enumerate(calls)
@@ -978,28 +1201,51 @@ class GrokCliExplorationTest(unittest.TestCase):
             policy_path = configs / "anthropic_query_policy.v1.json"
             policy_path.write_text(json.dumps(policy))
             registry = {
-                "schema_version": "x.grok_cli.exploration.query_policy_registry.v1",
-                "registry_version": "approved-query-policies-v2",
+                "schema_version": "x.grok_cli.exploration.query_policy_registry.v2",
+                "registry_version": "approved-query-policies-v3",
+                "commitment_issuance_lineage": [
+                    *canonical_registry["commitment_issuance_lineage"],
+                    {
+                        "lineage_position": 1,
+                        "issuance_id": policy["commitment_issuance_id"],
+                        "policy_version": policy["policy_version"],
+                        "run_binding_commitment": policy["run_binding_commitment"],
+                        "commitment_key_id": policy["commitment_key_id"],
+                        "commitment_nonce_id": policy["commitment_nonce_id"],
+                    },
+                ],
                 "policies": [
                     *canonical_registry["policies"],
                     {
                         "policy_version": policy["policy_version"],
                         "policy_path": "configs/anthropic_query_policy.v1.json",
                         "policy_sha256": canonical_sha256(policy),
-                        "legacy_full_policy_sha256": policy["legacy_full_policy_sha256"],
+                        "commitment_scheme": policy["commitment_scheme"],
+                        "commitment_issuance_id": policy["commitment_issuance_id"],
+                        "commitment_key_id": policy["commitment_key_id"],
+                        "commitment_nonce_id": policy["commitment_nonce_id"],
+                        "legacy_full_policy_commitment": policy["legacy_full_policy_commitment"],
                         "policy_schema_version": policy["schema_version"],
                         "purpose": policy["purpose"],
                         "lab_id": policy["lab_id"],
-                        "run_binding_sha256": policy["run_binding_sha256"],
+                        "protected_category_boundary_version": policy["protected_category_boundary_version"],
+                        "run_binding_commitment": policy["run_binding_commitment"],
                         "enabled": True,
-                    }
+                    },
                 ],
             }
-            registry_path = registry_directory / "approved-query-policies-v2.json"
+            registry_path = registry_directory / "approved-query-policies-v3.json"
             registry_path.write_text(json.dumps(registry))
             receipt = _receipt(calls=calls)
             receipt["session_id"] = session_id
             receipt["request_id"] = request_id
+            receipt["query_commitment"] = {
+                "scheme": "hmac-sha256-v1",
+                "key_id": policy["commitment_key_id"],
+                "key_hex": anthropic_key_hex,
+                "nonce_id": policy["commitment_nonce_id"],
+                "nonce_hex": anthropic_nonce_hex,
+            }
 
             with (
                 mock.patch.object(exploration_module, "PROJECT_ROOT", project_root),
@@ -1008,18 +1254,79 @@ class GrokCliExplorationTest(unittest.TestCase):
                 historical = evaluate_exploration(
                     _result(),
                     _receipt(),
-                    query_policy_registry_version="approved-query-policies-v1",
+                    query_policy_registry_version="approved-query-policies-v2",
                 )
                 observed = evaluate_exploration(
                     _result(calls=calls),
                     receipt,
                     query_policy_version=policy["policy_version"],
-                    query_policy_registry_version="approved-query-policies-v2",
+                    query_policy_registry_version="approved-query-policies-v3",
                 )
                 validate_evaluation_output(historical, _result(), _receipt())
 
             self.assertEqual(observed["input_binding"]["lab_id"], "anthropic")
             self.assertEqual(observed["hydration_tasks"], [])
+
+    def test_commitment_issuance_lineage_rejects_cross_run_key_or_nonce_reuse(self) -> None:
+        canonical_registry = _query_policy_registry()
+        with tempfile.TemporaryDirectory() as directory:
+            project_root = Path(directory)
+            configs = project_root / "configs"
+            configs.mkdir()
+            (configs / "grok_cli_exploration_query_policy_descriptor.v2.json").write_text(
+                json.dumps(_canonical_policy())
+            )
+            registry_directory = configs / "grok_cli_exploration_query_policy_registries"
+            registry_directory.mkdir()
+            registry_path = registry_directory / "approved-query-policies-v2.json"
+
+            for reused_field in ("commitment_key_id", "commitment_nonce_id"):
+                registry = copy.deepcopy(canonical_registry)
+                extra = copy.deepcopy(registry["commitment_issuance_lineage"][0])
+                extra.update(
+                    lineage_position=1,
+                    issuance_id="qci_" + ("a" if reused_field == "commitment_key_id" else "b") * 24,
+                    policy_version=f"second-run-{reused_field}-v1",
+                    run_binding_commitment=("a" if reused_field == "commitment_key_id" else "b") * 64,
+                    commitment_key_id="c" * 64,
+                    commitment_nonce_id="d" * 64,
+                )
+                extra[reused_field] = registry["commitment_issuance_lineage"][0][reused_field]
+                registry["commitment_issuance_lineage"].append(extra)
+                registry_path.write_text(json.dumps(registry))
+                with (
+                    self.subTest(reused_field=reused_field),
+                    mock.patch.object(exploration_module, "PROJECT_ROOT", project_root),
+                    mock.patch.object(
+                        exploration_module,
+                        "QUERY_POLICY_REGISTRY_DIRECTORY",
+                        registry_directory,
+                    ),
+                    self.assertRaisesRegex(
+                        ExplorationValidationError,
+                        "query_commitment_issuance_lineage_invalid",
+                    ),
+                ):
+                    evaluate_exploration(_result(), _receipt())
+
+    def test_one_absolute_deadline_is_forwarded_through_hydration_and_shape(self) -> None:
+        observed_deadlines: list[float] = []
+
+        def record_deadline(deadline: float) -> None:
+            observed_deadlines.append(deadline)
+
+        with (
+            mock.patch.object(
+                exploration_module.time,
+                "monotonic",
+                side_effect=[10.0, 20.0, 30.0],
+            ) as monotonic_mock,
+            mock.patch.object(exploration_module, "_check_deadline", side_effect=record_deadline),
+        ):
+            _evaluate(_result(candidate=_candidate(platform_user_id=None)), _receipt())
+        self.assertEqual(monotonic_mock.call_count, 1)
+        self.assertTrue(observed_deadlines)
+        self.assertEqual(set(observed_deadlines), {40.0})
 
     def test_registry_duplicate_traversal_and_symlink_paths_fail_closed(self) -> None:
         canonical_registry = _query_policy_registry()
@@ -1027,11 +1334,11 @@ class GrokCliExplorationTest(unittest.TestCase):
             project_root = Path(directory)
             configs = project_root / "configs"
             configs.mkdir()
-            policy_path = configs / "grok_cli_exploration_query_policy_descriptor.v1.json"
+            policy_path = configs / "grok_cli_exploration_query_policy_descriptor.v2.json"
             policy_path.write_text(json.dumps(_canonical_policy()))
             registry_directory = configs / "grok_cli_exploration_query_policy_registries"
             registry_directory.mkdir()
-            registry_path = registry_directory / "approved-query-policies-v1.json"
+            registry_path = registry_directory / "approved-query-policies-v2.json"
 
             def evaluate_registry(registry: dict[str, Any]) -> None:
                 registry_path.write_text(json.dumps(registry))
@@ -1090,7 +1397,7 @@ class GrokCliExplorationTest(unittest.TestCase):
         changed["counts"]["observations_inspected_reported"] = 0
         mutations.append((changed, receipt))
         changed = copy.deepcopy(result)
-        changed["excluded_examples"] = [{"handle": "xfsynth_fixture", "reason": "Contradictory duplicate."}]
+        changed["excluded_examples"] = [{"handle": "xfsynth_fixture", "reason": "duplicate_handle"}]
         mutations.append((changed, receipt))
         changed = copy.deepcopy(result)
         changed["trace_id"] = "trace_fixture"
@@ -1108,11 +1415,40 @@ class GrokCliExplorationTest(unittest.TestCase):
         with self.assertRaisesRegex(ExplorationValidationError, "query_policy_manifest_mismatch"):
             _evaluate(_result(professional_call), _receipt(professional_call))
         unlisted_protected_proxy = _call(query="OpenAI pretraining East Asian descent")
-        with self.assertRaisesRegex(ExplorationValidationError, "query_policy_manifest_mismatch"):
+        with self.assertRaisesRegex(ExplorationValidationError, "tool_call_value_invalid"):
             _evaluate(_result(unlisted_protected_proxy), _receipt(unlisted_protected_proxy))
         chinese_protected_call = _call(query="OpenAI 预训练 华人 researcher")
         with self.assertRaises(ExplorationValidationError):
             _evaluate(_result(chinese_protected_call), _receipt(chinese_protected_call))
+        for protected_query in (
+            "OpenAI American pretraining researcher",
+            "OpenAI Indian pretraining engineer",
+            "OpenAI Muslim pretraining scientist",
+            "OpenAI 美国人 预训练 researcher",
+            "OpenAI chercheur musulman préentraînement",
+            "OpenAI investigador estadounidense preentrenamiento",
+            "OpenAI アメリカ人 事前学習",
+            "OpenAI 미국인 사전학습 연구원",
+        ):
+            protected_call = _call(query=protected_query)
+            with (
+                self.subTest(protected_query=protected_query),
+                self.assertRaisesRegex(
+                    ExplorationValidationError,
+                    "tool_call_value_invalid",
+                ),
+            ):
+                _evaluate(_result(protected_call), _receipt(protected_call))
+        self.assertTrue(
+            exploration_module._tool_arguments_valid(
+                {
+                    "query": "OpenAI pretraining China and Asia professional experience",
+                    "limit": "10",
+                    "mode": "Latest",
+                },
+                "x_keyword_search",
+            )
+        )
 
     def test_candidate_evidence_actor_timestamp_and_bio_presence_are_bound(self) -> None:
         mutations = []
@@ -1236,7 +1572,7 @@ class GrokCliExplorationTest(unittest.TestCase):
             _candidate(handle="xfs_cc", platform_user_id=None),
         ]
 
-        tasks = build_hydration_tasks(candidates, experiment_binding=_binding(), maximum=4)
+        tasks = build_hydration_tasks(candidates, experiment_binding=_binding())
 
         # Tier ordering is strict; equal-tier temporal segments are interleaved
         # before taking another row from either segment.
@@ -1267,7 +1603,7 @@ class GrokCliExplorationTest(unittest.TestCase):
                 confidence="low",
             ),
         ]
-        mixed_tasks = build_hydration_tasks(mixed_candidates, experiment_binding=_binding(), maximum=3)
+        mixed_tasks = build_hydration_tasks(mixed_candidates, experiment_binding=_binding())
         self.assertEqual(
             [task["handle"] for task in mixed_tasks],
             ["xfs_ch_hi", "xfs_hc_low", "xfs_ch_med"],
@@ -1289,7 +1625,7 @@ class GrokCliExplorationTest(unittest.TestCase):
         historical_task = build_hydration_tasks([historical_candidate], experiment_binding=_binding())[0]
         self.assertNotEqual(task["task_key"], historical_task["task_key"])
         other_binding = _binding()
-        other_binding["request_id"] = "49a6ed4f-5933-47ea-9df5-e2da38e74171"
+        other_binding["run_binding_commitment"] = "0" * 64
         with self.assertRaisesRegex(ExplorationValidationError, "hydration_experiment_binding_invalid"):
             build_hydration_tasks([candidate], experiment_binding=other_binding)
 
@@ -1484,9 +1820,7 @@ class GrokCliExplorationTest(unittest.TestCase):
             project_root = root / "project"
             (project_root / "scripts").mkdir(parents=True)
             (project_root / "src/x_first").mkdir(parents=True)
-            (project_root / "configs/grok_cli_exploration_query_policy_registries").mkdir(
-                parents=True
-            )
+            (project_root / "configs/grok_cli_exploration_query_policy_registries").mkdir(parents=True)
             shutil.copy2(
                 ROOT / "scripts/evaluate_grok_cli_exploration.py",
                 project_root / "scripts/evaluate_grok_cli_exploration.py",
@@ -1503,14 +1837,11 @@ class GrokCliExplorationTest(unittest.TestCase):
                 ROOT / "configs/candidate_value_segment_policy.v1.json",
                 project_root / "configs/candidate_value_segment_policy.v1.json",
             )
-            (
-                project_root / "configs/grok_cli_exploration_query_policy_descriptor.v1.json"
-            ).write_text(
+            (project_root / "configs/grok_cli_exploration_query_policy_descriptor.v2.json").write_text(
                 json.dumps(_canonical_policy())
             )
             (
-                project_root
-                / "configs/grok_cli_exploration_query_policy_registries/approved-query-policies-v1.json"
+                project_root / "configs/grok_cli_exploration_query_policy_registries/approved-query-policies-v2.json"
             ).write_text(json.dumps(_query_policy_registry()))
             result_path = root / "result.json"
             receipt_path = root / "receipt.json"

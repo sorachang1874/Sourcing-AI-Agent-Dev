@@ -3,10 +3,14 @@
   "fixture_id": "synthetic_pre_migration_evaluation_missing_descriptor_bindings",
   "fixture_mode": "runtime_generated_from_synthetic_source_pair",
   "pre_migration_transform": {
-    "query_policy_schema_version": "x.grok_cli.exploration.query_policy.v1",
-    "query_policy_sha256_source_field": "legacy_full_query_policy_sha256",
+    "query_policy_schema_version": "x.grok_cli.exploration.query_policy_descriptor.v1",
+    "query_policy_sha256_source_field": "query_policy_sha256",
     "remove_input_binding_fields": [
-      "legacy_full_query_policy_sha256"
+      "query_commitment_scheme",
+      "query_commitment_key_id",
+      "query_commitment_nonce_id",
+      "run_binding_commitment",
+      "legacy_full_query_policy_commitment"
     ]
   },
   "expected_current_validator_error": "evaluation_input_binding_invalid",

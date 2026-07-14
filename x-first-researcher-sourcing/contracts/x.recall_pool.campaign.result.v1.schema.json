@@ -108,8 +108,8 @@
     },
     "model_reported": {
       "type": "object", "additionalProperties": false,
-      "required": ["candidate_rows", "evidence_items", "observations_inspected", "tool_calls", "tool_counts", "query_count", "unique_query_count", "query_sha256s"],
-      "properties": {"candidate_rows": {"$ref": "#/$defs/nonnegative"}, "evidence_items": {"$ref": "#/$defs/nonnegative"}, "observations_inspected": {"$ref": "#/$defs/nonnegative"}, "tool_calls": {"$ref": "#/$defs/nonnegative"}, "tool_counts": {"$ref": "#/$defs/nullable_counts"}, "query_count": {"$ref": "#/$defs/nonnegative"}, "unique_query_count": {"$ref": "#/$defs/nonnegative"}, "query_sha256s": {"$ref": "#/$defs/sha_array"}}
+      "required": ["candidate_rows", "evidence_items", "observations_inspected", "tool_calls", "tools_reported", "tool_counts", "query_count", "unique_query_count", "query_sha256s"],
+      "properties": {"candidate_rows": {"$ref": "#/$defs/nonnegative"}, "evidence_items": {"$ref": "#/$defs/nonnegative"}, "observations_inspected": {"$ref": "#/$defs/nonnegative"}, "tool_calls": {"$ref": "#/$defs/nonnegative"}, "tools_reported": {"type": "array", "uniqueItems": true, "items": {"enum": ["x_keyword_search", "x_semantic_search", "x_user_search", "x_thread_fetch"]}}, "tool_counts": {"$ref": "#/$defs/nullable_counts"}, "query_count": {"$ref": "#/$defs/nonnegative"}, "unique_query_count": {"$ref": "#/$defs/nonnegative"}, "query_sha256s": {"$ref": "#/$defs/sha_array"}}
     },
     "mechanically_observed": {
       "type": "object", "additionalProperties": false,
@@ -168,8 +168,8 @@
     },
     "state_observation": {
       "type": "object", "additionalProperties": false,
-      "required": ["wave_id", "row_index", "target_lab_affiliation_state", "pretraining_experience_state", "source_status"],
-      "properties": {"wave_id": {"$ref": "#/$defs/slug"}, "row_index": {"$ref": "#/$defs/nonnegative"}, "target_lab_affiliation_state": {"$ref": "#/$defs/state"}, "pretraining_experience_state": {"$ref": "#/$defs/state"}, "source_status": {"const": "model_mediated_unverified"}}
+      "required": ["wave_id", "row_index", "target_lab_affiliation_state", "pretraining_experience_state", "confidence", "caveats", "source_status"],
+      "properties": {"wave_id": {"$ref": "#/$defs/slug"}, "row_index": {"$ref": "#/$defs/nonnegative"}, "target_lab_affiliation_state": {"$ref": "#/$defs/state"}, "pretraining_experience_state": {"$ref": "#/$defs/state"}, "confidence": {"enum": ["high", "medium", "low"]}, "caveats": {"type": "array", "maxItems": 12, "items": {"type": "string", "maxLength": 10000}}, "source_status": {"const": "model_mediated_unverified"}}
     },
     "dimension_summary": {
       "type": "object", "additionalProperties": false,
@@ -182,8 +182,8 @@
     },
     "evidence": {
       "type": "object", "additionalProperties": false,
-      "required": ["kind", "relationship", "author_handle", "post_id", "url", "published_at", "excerpt", "support_claims", "source_status", "evidence_record_sha256", "observed_in_wave_ids"],
-      "properties": {"kind": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$"}, "relationship": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$"}, "author_handle": {"type": "string", "pattern": "^[A-Za-z0-9_]{1,15}$"}, "post_id": {"oneOf": [{"type": "null"}, {"type": "string", "pattern": "^[0-9]{1,32}$"}]}, "url": {"type": "string", "pattern": "^https://x\\.com/[a-z0-9_]{1,15}(?:/status/[0-9]{1,32})?$", "maxLength": 512}, "published_at": {"oneOf": [{"type": "null"}, {"type": "string", "maxLength": 40}]}, "excerpt": {"type": "string", "minLength": 1, "maxLength": 10000}, "support_claims": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/support_claim"}}, "source_status": {"const": "model_mediated_unverified"}, "evidence_record_sha256": {"$ref": "#/$defs/sha256"}, "observed_in_wave_ids": {"$ref": "#/$defs/slug_array"}}
+      "required": ["subject_handle", "subject_binding_status", "kind", "relationship", "author_handle", "post_id", "url", "published_at", "excerpt", "support_claims", "source_status", "evidence_record_sha256", "observed_in_wave_ids"],
+      "properties": {"subject_handle": {"type": "string", "pattern": "^[A-Za-z0-9_]{1,15}$"}, "subject_binding_status": {"const": "enclosing_candidate_model_asserted"}, "kind": {"enum": ["bio", "mention", "post", "thread"]}, "relationship": {"enum": ["self", "colleague_or_team", "historical", "official_lab", "third_party"]}, "author_handle": {"type": "string", "pattern": "^[A-Za-z0-9_]{1,15}$"}, "post_id": {"oneOf": [{"type": "null"}, {"type": "string", "pattern": "^[0-9]{1,32}$"}]}, "url": {"type": "string", "pattern": "^https://x\\.com/[a-z0-9_]{1,15}(?:/status/[0-9]{1,32})?$", "maxLength": 512}, "published_at": {"oneOf": [{"type": "null"}, {"type": "string", "maxLength": 40}]}, "excerpt": {"type": "string", "minLength": 1, "maxLength": 10000}, "support_claims": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/support_claim"}}, "source_status": {"const": "model_mediated_unverified"}, "evidence_record_sha256": {"$ref": "#/$defs/sha256"}, "observed_in_wave_ids": {"$ref": "#/$defs/slug_array"}}
     },
     "support_claim": {
       "type": "object", "additionalProperties": false,

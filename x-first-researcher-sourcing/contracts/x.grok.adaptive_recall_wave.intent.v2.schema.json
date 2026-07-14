@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sourcing-ai-agent.invalid/contracts/x.grok.adaptive_recall_wave.intent.v2.schema.json",
+  "title": "Adaptive Grok recall-wave crash-recovery intent v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "request_id",
+    "request_sha256",
+    "execution_mode",
+    "started_at",
+    "input_binding",
+    "command_binding",
+    "approval",
+    "emergency",
+    "technical_limits",
+    "runtime_layout",
+    "authority",
+    "run_lease_sha256",
+    "budget",
+    "retention"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "x.grok.adaptive_recall_wave.intent.v2"
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^grok_wave_(fixture|live)_[0-9a-f]{32}$"
+    },
+    "request_id": {
+      "type": "string",
+      "pattern": "^xwave_req_[0-9a-f]{32}$"
+    },
+    "request_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "execution_mode": {
+      "enum": [
+        "fixture",
+        "live"
+      ]
+    },
+    "started_at": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
+    },
+    "input_binding": {
+      "$ref": "x.grok.adaptive_recall_wave.operator_receipt.v2.schema.json#/$defs/input_binding"
+    },
+    "command_binding": {
+      "$ref": "x.grok.adaptive_recall_wave.operator_receipt.v2.schema.json#/$defs/command_binding"
+    },
+    "approval": {
+      "$ref": "x.grok.adaptive_recall_wave.operator_receipt.v2.schema.json#/$defs/approval"
+    },
+    "emergency": {
+      "$ref": "x.grok.adaptive_recall_wave.request.v2.schema.json#/properties/emergency"
+    },
+    "technical_limits": {
+      "$ref": "x.grok.adaptive_recall_wave.request.v2.schema.json#/properties/technical_limits"
+    },
+    "runtime_layout": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "compiled_prompt_name",
+        "stdout_spool_name",
+        "stderr_spool_name",
+        "ephemeral_home_name",
+        "session_updates_name",
+        "run_lock_name"
+      ],
+      "properties": {
+        "compiled_prompt_name": {
+          "const": "compiled-prompt.txt"
+        },
+        "stdout_spool_name": {
+          "const": ".stdout-spool"
+        },
+        "stderr_spool_name": {
+          "const": ".stderr-spool"
+        },
+        "ephemeral_home_name": {
+          "const": "ephemeral-home"
+        },
+        "session_updates_name": {
+          "const": "session-updates.jsonl"
+        },
+        "run_lock_name": {
+          "const": "run.lock"
+        }
+      }
+    },
+    "authority": {
+      "$ref": "x.grok.adaptive_recall_wave.request.v2.schema.json#/properties/authority"
+    },
+    "run_lease_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "budget": {
+      "$ref": "x.grok.adaptive_recall_wave.request.v2.schema.json#/properties/budget"
+    },
+    "retention": {
+      "$ref": "x.grok.adaptive_recall_wave.request.v2.schema.json#/properties/retention"
+    }
+  }
+}

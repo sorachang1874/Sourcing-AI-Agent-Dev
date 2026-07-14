@@ -7,6 +7,7 @@ import re
 from collections import Counter, defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import urlsplit
 from uuid import UUID
@@ -53,9 +54,9 @@ RAW_SESSION_FILES = frozenset(
         "prompt_context.json",
     }
 )
-ALLOWED_NATIVE_X_TOOLS = frozenset(
-    {"x_keyword_search", "x_semantic_search", "x_user_search", "x_thread_fetch"}
-)
+ALLOWED_NATIVE_X_TOOLS = frozenset({"x_keyword_search", "x_semantic_search", "x_user_search", "x_thread_fetch"})
+EVIDENCE_KINDS = frozenset({"bio", "mention", "post", "thread"})
+EVIDENCE_RELATIONSHIPS = frozenset({"self", "colleague_or_team", "historical", "official_lab", "third_party"})
 TEMPORAL_STATES = frozenset({"current", "historical", "ambiguous", "unsupported"})
 DIMENSIONS = ("target_lab_affiliation_state", "pretraining_experience_state")
 _HANDLE_RE = re.compile(r"[A-Za-z0-9_]{1,15}")
@@ -152,6 +153,18 @@ def _legacy_strategy_definition_sha256(strategy_id: str, query_family_ids: Seque
 
 def bytes_sha256(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
+
+
+def _valid_utc_timestamp(value: Any) -> bool:
+    """Accept only real UTC calendar instants in the closed wire grammar."""
+
+    if not isinstance(value, str) or len(value) > 40 or _TIMESTAMP_RE.fullmatch(value) is None:
+        return False
+    try:
+        parsed = datetime.fromisoformat(value[:-1] + "+00:00")
+    except ValueError:
+        return False
+    return parsed.tzinfo == UTC
 
 
 def _reject_constant(value: str) -> None:
@@ -768,11 +781,7 @@ def _extract_bound_prompt(chat_rows: list[dict[str, Any]]) -> bytes:
 
 def _validate_bound_system_message(chat_rows: list[dict[str, Any]], system_prompt: bytes) -> None:
     systems = [row for row in chat_rows if row.get("type") == "system"]
-    if (
-        len(systems) != 1
-        or set(systems[0]) != {"type", "content"}
-        or not isinstance(systems[0]["content"], str)
-    ):
+    if len(systems) != 1 or set(systems[0]) != {"type", "content"} or not isinstance(systems[0]["content"], str):
         raise CampaignValidationError("raw_session_system_message_invalid")
     try:
         observed = systems[0]["content"].encode("utf-8")
@@ -861,10 +870,8 @@ def _replay_raw_session(
     if replayed_prompt != wave.prompt_bytes or bytes_sha256(replayed_prompt) != upstream["prompt_sha256"]:
         raise CampaignValidationError("raw_session_prompt_hash_mismatch")
     if (
-        bytes_sha256(wave.raw_session_files["system_prompt.txt"])
-        != execution_context["system_prompt_sha256"]
-        or bytes_sha256(wave.raw_session_files["prompt_context.json"])
-        != execution_context["prompt_context_sha256"]
+        bytes_sha256(wave.raw_session_files["system_prompt.txt"]) != execution_context["system_prompt_sha256"]
+        or bytes_sha256(wave.raw_session_files["prompt_context.json"]) != execution_context["prompt_context_sha256"]
     ):
         raise CampaignValidationError("raw_session_execution_context_hash_mismatch")
     prompt_context = strict_json_bytes(
@@ -1061,9 +1068,7 @@ def _replay_raw_session(
             "arguments": arguments,
         }
         call["call_identity_sha256"] = canonical_sha256(call)
-        call["query_identity_sha256"] = canonical_sha256(
-            {"tool_name": raw["name"], "arguments": arguments}
-        )
+        call["query_identity_sha256"] = canonical_sha256({"tool_name": raw["name"], "arguments": arguments})
         call["planned_call_identity_sha256"] = canonical_sha256(
             {
                 "sequence_ordinal": len(calls),
@@ -1094,21 +1099,14 @@ def _replay_raw_session(
         planned_call_hashes = [call["planned_call_identity_sha256"] for call in calls]
         if Counter(mapped) != Counter(planned_call_hashes):
             raise CampaignValidationError("query_family_call_attribution_mismatch")
-        if (
-            prompt_context.get("recall_pool_family_attribution_plan_sha256")
-            != attribution["attribution_plan_sha256"]
-        ):
+        if prompt_context.get("recall_pool_family_attribution_plan_sha256") != attribution["attribution_plan_sha256"]:
             raise CampaignValidationError("raw_session_runner_attribution_binding_mismatch")
-        family_by_planned_hash = {
-            planned_hash: family for family, values in mapping.items() for planned_hash in values
-        }
+        family_by_planned_hash = {planned_hash: family for family, values in mapping.items() for planned_hash in values}
         definition_shapes = {
             family["family_id"]: {canonical_json(shape) for shape in family["allowed_call_shapes"]}
             for family in strategy["strategy_definition"]["query_families"]
         }
-        calls_by_family: dict[str, list[dict[str, Any]]] = {
-            family: [] for family in strategy["query_family_ids"]
-        }
+        calls_by_family: dict[str, list[dict[str, Any]]] = {family: [] for family in strategy["query_family_ids"]}
         for call in calls:
             family = family_by_planned_hash[call["planned_call_identity_sha256"]]
             if canonical_json(call["mechanical_call_shape"]) not in definition_shapes[family]:
@@ -1116,9 +1114,7 @@ def _replay_raw_session(
             calls_by_family[family].append(call)
         family_call_profiles = []
         for family in strategy["query_family_ids"]:
-            shape_counts = Counter(
-                canonical_json(call["mechanical_call_shape"]) for call in calls_by_family[family]
-            )
+            shape_counts = Counter(canonical_json(call["mechanical_call_shape"]) for call in calls_by_family[family])
             family_call_profiles.append(
                 {
                     "family_id": family,
@@ -1134,8 +1130,7 @@ def _replay_raw_session(
             )
         coverage_status = "verified_complete"
         family_call_counts = {
-            family: len(attribution["family_planned_call_sha256s"][family])
-            for family in strategy["query_family_ids"]
+            family: len(attribution["family_planned_call_sha256s"][family]) for family in strategy["query_family_ids"]
         }
         family_attribution_binding_status = "precommitted_runner_bound"
         attribution_plan_digest = attribution["attribution_plan_sha256"]
@@ -1180,9 +1175,7 @@ def _replay_raw_session(
         "call_identity_sha256s": call_hashes,
         "query_identity_sha256s": sorted({call["query_identity_sha256"] for call in calls}),
         "unique_query_count": len({call["query_identity_sha256"] for call in calls}),
-        "raw_session_sha256": {
-            name: bytes_sha256(wave.raw_session_files[name]) for name in sorted(RAW_SESSION_FILES)
-        },
+        "raw_session_sha256": {name: bytes_sha256(wave.raw_session_files[name]) for name in sorted(RAW_SESSION_FILES)},
         "strategy_id": strategy["strategy_id"],
         "strategy_definition_sha256": strategy["strategy_definition_sha256"],
         "strategy_definition_binding_status": strategy_definition_binding_status,
@@ -1206,7 +1199,7 @@ def _replay_raw_session(
     return receipt
 
 
-def _validate_evidence(evidence: Any) -> dict[str, Any]:
+def _validate_evidence(evidence: Any, *, subject_handle: str, subject_profile_url: str) -> dict[str, Any]:
     evidence = _exact_keys(
         evidence,
         {"kind", "relationship", "author_handle", "post_id", "url", "published_at", "excerpt", "supports"},
@@ -1214,7 +1207,7 @@ def _validate_evidence(evidence: Any) -> dict[str, Any]:
     )
     kind = _nonempty_text(evidence["kind"], maximum=64, error="evidence_kind_invalid")
     relationship = _nonempty_text(evidence["relationship"], maximum=64, error="evidence_relationship_invalid")
-    if _TOOL_NAME_RE.fullmatch(kind) is None or _TOOL_NAME_RE.fullmatch(relationship) is None:
+    if kind not in EVIDENCE_KINDS or relationship not in EVIDENCE_RELATIONSHIPS:
         raise CampaignValidationError("evidence_classification_invalid")
     author_handle = _valid_handle(evidence["author_handle"])
     url, _ = _canonical_x_url(evidence["url"], expected_handle=author_handle)
@@ -1224,12 +1217,15 @@ def _validate_evidence(evidence: Any) -> dict[str, Any]:
     if post_id is not None and ("/status/" not in url or not url.endswith(f"/status/{post_id}")):
         raise CampaignValidationError("evidence_post_binding_invalid")
     published_at = evidence["published_at"]
-    if published_at is not None and (
-        not isinstance(published_at, str)
-        or len(published_at) > 40
-        or _TIMESTAMP_RE.fullmatch(published_at) is None
-    ):
+    if published_at is not None and not _valid_utc_timestamp(published_at):
         raise CampaignValidationError("evidence_published_at_invalid")
+    if relationship == "self" and author_handle.casefold() != subject_handle.casefold():
+        raise CampaignValidationError("evidence_self_subject_mismatch")
+    if kind == "bio":
+        if relationship != "self" or url != subject_profile_url or post_id is not None or published_at is not None:
+            raise CampaignValidationError("evidence_bio_subject_binding_invalid")
+    elif post_id is None or published_at is None or "/status/" not in url:
+        raise CampaignValidationError("evidence_post_shape_invalid")
     excerpt = _nonempty_text(evidence["excerpt"], maximum=10_000, error="evidence_excerpt_invalid")
     supports = evidence["supports"]
     if not isinstance(supports, list):
@@ -1256,6 +1252,8 @@ def _validate_evidence(evidence: Any) -> dict[str, Any]:
     if len({canonical_json(claim) for claim in support_claims}) != len(support_claims):
         raise CampaignValidationError("evidence_supports_invalid")
     return {
+        "subject_handle": subject_handle,
+        "subject_binding_status": "enclosing_candidate_model_asserted",
         "kind": kind,
         "relationship": relationship,
         "author_handle": author_handle,
@@ -1303,17 +1301,29 @@ def _validate_candidate(candidate: Any) -> dict[str, Any]:
         raise CampaignValidationError("candidate_confidence_invalid")
     evidence = candidate["evidence"]
     caveats = candidate["caveats"]
-    if not isinstance(evidence, list) or not isinstance(caveats, list) or any(
-        not isinstance(item, str) or len(item) > 10_000 for item in caveats
+    if (
+        not isinstance(evidence, list)
+        or not isinstance(caveats, list)
+        or any(not isinstance(item, str) or len(item) > 10_000 for item in caveats)
     ):
         raise CampaignValidationError("candidate_evidence_or_caveats_invalid")
     normalized_evidence: list[dict[str, Any]] = []
     rejected_evidence_items = 0
     for item in evidence:
         try:
-            normalized_evidence.append(_validate_evidence(item))
+            normalized_evidence.append(
+                _validate_evidence(
+                    item,
+                    subject_handle=handle,
+                    subject_profile_url=profile_url,
+                )
+            )
         except CampaignValidationError as exc:
-            if str(exc) != "x_url_author_handle_mismatch":
+            if str(exc) not in {
+                "x_url_author_handle_mismatch",
+                "evidence_self_subject_mismatch",
+                "evidence_bio_subject_binding_invalid",
+            }:
                 raise
             rejected_evidence_items += 1
     return {
@@ -1323,6 +1333,8 @@ def _validate_candidate(candidate: Any) -> dict[str, Any]:
         "bio_excerpt": bio_excerpt,
         "target_lab_affiliation_state": candidate["target_lab_affiliation_state"],
         "pretraining_experience_state": candidate["pretraining_experience_state"],
+        "confidence": candidate["confidence"],
+        "caveats": list(caveats),
         "evidence": normalized_evidence,
         "raw_evidence_items": len(evidence),
         "rejected_evidence_items": rejected_evidence_items,
@@ -1365,15 +1377,25 @@ def _validate_wave_payload(payload: Any) -> dict[str, Any]:
     ):
         raise CampaignValidationError("wave_model_counts_invalid")
     provenance = payload["native_x_tool_provenance"]
-    if not isinstance(provenance, Mapping):
+    if (
+        not isinstance(provenance, Mapping)
+        or set(provenance) != {"generic_web_used", "tool_calls_reported", "tools_reported", "queries"}
+        or provenance.get("generic_web_used") is not False
+    ):
         raise CampaignValidationError("wave_model_provenance_invalid")
     tool_calls = provenance.get("tool_calls_reported")
+    tools_reported = provenance.get("tools_reported")
     queries = provenance.get("queries")
-    if not _is_int(tool_calls) or tool_calls < 0 or not isinstance(queries, list):
+    if (
+        not _is_int(tool_calls)
+        or tool_calls < 0
+        or not isinstance(tools_reported, list)
+        or len(tools_reported) != len(set(tools_reported))
+        or any(tool not in ALLOWED_NATIVE_X_TOOLS for tool in tools_reported)
+        or not isinstance(queries, list)
+    ):
         raise CampaignValidationError("wave_model_provenance_invalid")
-    normalized_queries = [
-        _nonempty_text(query, maximum=10_000, error="wave_model_query_invalid") for query in queries
-    ]
+    normalized_queries = [_nonempty_text(query, maximum=10_000, error="wave_model_query_invalid") for query in queries]
     query_sha256s = sorted({hashlib.sha256(query.encode()).hexdigest() for query in normalized_queries})
     local = payload["local_reconciliation"]
     if not isinstance(local, Mapping):
@@ -1386,7 +1408,7 @@ def _validate_wave_payload(payload: Any) -> dict[str, Any]:
     if isinstance(local_tool_counts, Mapping):
         tentative: dict[str, int] = {}
         for key, value in local_tool_counts.items():
-            if not isinstance(key, str) or _TOOL_NAME_RE.fullmatch(key) is None or not _is_int(value) or value < 0:
+            if key not in ALLOWED_NATIVE_X_TOOLS or not _is_int(value) or value < 0:
                 tentative = {}
                 break
             tentative[key] = value
@@ -1399,6 +1421,7 @@ def _validate_wave_payload(payload: Any) -> dict[str, Any]:
             "evidence_items": model_evidence_items,
             "observations_inspected": model_observation_count,
             "tool_calls": tool_calls,
+            "tools_reported": sorted(tools_reported),
             "tool_counts": model_tool_counts,
             "query_count": len(normalized_queries),
             "unique_query_count": len(query_sha256s),
@@ -1409,6 +1432,8 @@ def _validate_wave_payload(payload: Any) -> dict[str, Any]:
 
 def _evidence_key(evidence: Mapping[str, Any]) -> str:
     identity = dict(evidence)
+    identity.pop("subject_handle", None)
+    identity.pop("subject_binding_status", None)
     identity["author_handle"] = identity["author_handle"].casefold()
     identity["support_claims"] = sorted(
         identity["support_claims"],
@@ -1455,17 +1480,13 @@ def _stop_advisory(
                 ],
                 "strategy_id": receipt["strategy_id"],
                 "strategy_definition_sha256": receipt["strategy_definition_sha256"],
-                "strategy_definition_binding_status": receipt[
-                    "strategy_definition_binding_status"
-                ],
+                "strategy_definition_binding_status": receipt["strategy_definition_binding_status"],
                 "comparability_rule_version": STRATEGY_COMPARABILITY_RULE_VERSION,
                 "query_family_ids": receipt["query_family_ids"],
                 "query_family_call_counts": receipt["query_family_call_counts"],
                 "query_family_call_profiles": receipt["query_family_call_profiles"],
                 "query_family_coverage_status": receipt["query_family_coverage_status"],
-                "family_attribution_binding_status": receipt[
-                    "family_attribution_binding_status"
-                ],
+                "family_attribution_binding_status": receipt["family_attribution_binding_status"],
                 "request_context_replay_status": receipt["request_context_replay_status"],
             }
         )
@@ -1519,10 +1540,7 @@ def _stop_advisory(
     else:
         evaluation_status = "evaluated"
         lookback = comparable[-lookback_count:]
-        productivity = [
-            float(row["new_unique_handles_per_replayed_completed_native_x_call"])
-            for row in lookback
-        ]
+        productivity = [float(row["new_unique_handles_per_replayed_completed_native_x_call"]) for row in lookback]
         nonincreasing = all(
             current <= previous for previous, current in zip(productivity, productivity[1:], strict=False)
         )
@@ -1637,6 +1655,8 @@ def merge_campaign(
 
         candidates = normalized["candidates"]
         model = normalized["model_reported"]
+        if model["tools_reported"] != sorted(receipt["tool_counts"]):
+            raise CampaignValidationError("model_native_tool_set_conflict")
         raw_evidence_row_count = sum(row["raw_evidence_items"] for row in candidates)
         evidence_row_count = sum(len(row["evidence"]) for row in candidates)
         rejected_evidence_row_count = sum(row["rejected_evidence_items"] for row in candidates)
@@ -1683,6 +1703,8 @@ def merge_campaign(
                 "row_index": row_index,
                 "target_lab_affiliation_state": row["target_lab_affiliation_state"],
                 "pretraining_experience_state": row["pretraining_experience_state"],
+                "confidence": row["confidence"],
+                "caveats": row["caveats"],
                 "source_status": MODEL_MEDIATED_UNVERIFIED,
             }
             accumulator["state_observations"].append(observation)
@@ -1767,16 +1789,12 @@ def merge_campaign(
     candidates_with_stable_id = 0
     for handle_key, accumulator in sorted(candidate_accumulators.items()):
         observations = accumulator["state_observations"]
-        state_summary = {
-            dimension: _dimension_summary(observations, dimension) for dimension in DIMENSIONS
-        }
+        state_summary = {dimension: _dimension_summary(observations, dimension) for dimension in DIMENSIONS}
         model_conflict = any(
-            state_summary[dimension]["model_reported_resolution"] == "conflict"
-            for dimension in DIMENSIONS
+            state_summary[dimension]["model_reported_resolution"] == "conflict" for dimension in DIMENSIONS
         )
         evidence_conflict = any(
-            state_summary[dimension]["evidence_supported_resolution"] == "conflict"
-            for dimension in DIMENSIONS
+            state_summary[dimension]["evidence_supported_resolution"] == "conflict" for dimension in DIMENSIONS
         )
         model_state_conflicts += model_conflict
         evidence_state_conflicts += evidence_conflict
@@ -1827,9 +1845,7 @@ def merge_campaign(
         if len(sorted_handles) > 1:
             multi_handle_stable_id_conflicts += 1
             proposal = {
-                "proposal_id": canonical_sha256(
-                    {"platform_user_id": platform_user_id, "handle_keys": sorted_handles}
-                ),
+                "proposal_id": canonical_sha256({"platform_user_id": platform_user_id, "handle_keys": sorted_handles}),
                 "type": "reversible_handle_history_review",
                 "handle_keys": sorted_handles,
                 "reason": "same_model_reported_platform_id_across_multiple_handles",
@@ -1852,9 +1868,9 @@ def merge_campaign(
         )
 
     total_unique = len(candidates_output)
-    replayed_completed_calls = sum(row["completed_tool_calls"] for row in (
-        wave["mechanically_observed"]["receipt"] for wave in wave_yields
-    ))
+    replayed_completed_calls = sum(
+        row["completed_tool_calls"] for row in (wave["mechanically_observed"]["receipt"] for wave in wave_yields)
+    )
     marginal_yield, stop_advisory = _stop_advisory(wave_yields, policy)
     metrics = {
         "wave_count": len(waves),
@@ -1863,8 +1879,7 @@ def merge_campaign(
         "duplicate_candidate_rows": total_candidate_rows - total_unique,
         "raw_candidate_evidence_association_rows": raw_candidate_evidence_rows,
         "valid_candidate_evidence_association_rows": sum(
-            wave["mechanically_observed"]["valid_candidate_evidence_association_rows"]
-            for wave in wave_yields
+            wave["mechanically_observed"]["valid_candidate_evidence_association_rows"] for wave in wave_yields
         ),
         "rejected_evidence_association_rows": sum(
             wave["mechanically_observed"]["rejected_evidence_association_rows"] for wave in wave_yields
@@ -1872,10 +1887,7 @@ def merge_campaign(
         "unique_evidence_records": len(global_evidence_records),
         "unique_candidate_evidence_associations": len(global_candidate_evidence_associations),
         "duplicate_candidate_evidence_association_rows": (
-            sum(
-                wave["mechanically_observed"]["valid_candidate_evidence_association_rows"]
-                for wave in wave_yields
-            )
+            sum(wave["mechanically_observed"]["valid_candidate_evidence_association_rows"] for wave in wave_yields)
             - len(global_candidate_evidence_associations)
         ),
         "candidates_with_evidence": candidates_with_evidence,
@@ -1971,9 +1983,7 @@ def validate_campaign_result(result: Any) -> None:
     if result.get("provenance") != expected_provenance:
         raise CampaignValidationError("campaign_result_provenance_invalid")
     binding = result["input_binding"]
-    expected_schema_hashes = {
-        filename: contract_schema_sha256(filename) for filename in CONTRACT_SCHEMA_FILES
-    }
+    expected_schema_hashes = {filename: contract_schema_sha256(filename) for filename in CONTRACT_SCHEMA_FILES}
     if binding["contract_schema_sha256"] != expected_schema_hashes:
         raise CampaignValidationError("campaign_result_schema_binding_invalid")
     if binding["wave_count"] != len(result["wave_yields"]):
@@ -2006,28 +2016,29 @@ def validate_campaign_result(result: Any) -> None:
         for observation in observations:
             if (
                 any(observation[dimension] not in TEMPORAL_STATES for dimension in DIMENSIONS)
+                or observation["confidence"] not in {"high", "medium", "low"}
+                or not isinstance(observation["caveats"], list)
+                or any(not isinstance(caveat, str) or len(caveat) > 10_000 for caveat in observation["caveats"])
                 or observation["source_status"] != MODEL_MEDIATED_UNVERIFIED
             ):
                 raise CampaignValidationError("campaign_result_state_observation_invalid")
-        expected_summary = {
-            dimension: _dimension_summary(observations, dimension) for dimension in DIMENSIONS
-        }
+        expected_summary = {dimension: _dimension_summary(observations, dimension) for dimension in DIMENSIONS}
         if candidate["state_summary"] != expected_summary:
             raise CampaignValidationError("campaign_result_state_summary_invalid")
         if candidate["model_reported_state_conflict"] != any(
-            expected_summary[dimension]["model_reported_resolution"] == "conflict"
-            for dimension in DIMENSIONS
+            expected_summary[dimension]["model_reported_resolution"] == "conflict" for dimension in DIMENSIONS
         ):
             raise CampaignValidationError("campaign_result_model_state_conflict_invalid")
         if candidate["evidence_supported_state_conflict"] != any(
-            expected_summary[dimension]["evidence_supported_resolution"] == "conflict"
-            for dimension in DIMENSIONS
+            expected_summary[dimension]["evidence_supported_resolution"] == "conflict" for dimension in DIMENSIONS
         ):
             raise CampaignValidationError("campaign_result_evidence_state_conflict_invalid")
         for evidence in candidate["evidence"]:
             normalized = {
                 key: evidence[key]
                 for key in (
+                    "subject_handle",
+                    "subject_binding_status",
                     "kind",
                     "relationship",
                     "author_handle",
@@ -2039,9 +2050,36 @@ def validate_campaign_result(result: Any) -> None:
                     "source_status",
                 )
             }
-            if normalized["source_status"] != MODEL_MEDIATED_UNVERIFIED or any(
-                claim["source_status"] != MODEL_MEDIATED_UNVERIFIED
-                for claim in normalized["support_claims"]
+            try:
+                canonical_evidence_url, _ = _canonical_x_url(
+                    normalized["url"],
+                    expected_handle=normalized["author_handle"],
+                )
+            except CampaignValidationError as exc:
+                raise CampaignValidationError("campaign_result_evidence_url_binding_invalid") from exc
+            if normalized["kind"] == "bio":
+                if (
+                    normalized["relationship"] != "self"
+                    or normalized["post_id"] is not None
+                    or normalized["published_at"] is not None
+                    or normalized["url"] not in candidate["profile_urls"]
+                ):
+                    raise CampaignValidationError("campaign_result_evidence_bio_binding_invalid")
+            elif (
+                normalized["post_id"] is None
+                or not _valid_utc_timestamp(normalized["published_at"])
+                or "/status/" not in canonical_evidence_url
+                or not canonical_evidence_url.endswith(f"/status/{normalized['post_id']}")
+            ):
+                raise CampaignValidationError("campaign_result_evidence_post_binding_invalid")
+            if (
+                normalized["subject_handle"].casefold() != handle_key
+                or normalized["subject_binding_status"] != "enclosing_candidate_model_asserted"
+                or normalized["kind"] not in EVIDENCE_KINDS
+                or normalized["relationship"] not in EVIDENCE_RELATIONSHIPS
+                or (normalized["relationship"] == "self" and normalized["author_handle"].casefold() != handle_key)
+                or normalized["source_status"] != MODEL_MEDIATED_UNVERIFIED
+                or any(claim["source_status"] != MODEL_MEDIATED_UNVERIFIED for claim in normalized["support_claims"])
             ):
                 raise CampaignValidationError("campaign_result_evidence_source_status_invalid")
             record_sha = _evidence_key(normalized)
@@ -2057,9 +2095,7 @@ def validate_campaign_result(result: Any) -> None:
         if len(sorted_handles) > 1:
             expected_conflicts += 1
             proposal = {
-                "proposal_id": canonical_sha256(
-                    {"platform_user_id": platform_user_id, "handle_keys": sorted_handles}
-                ),
+                "proposal_id": canonical_sha256({"platform_user_id": platform_user_id, "handle_keys": sorted_handles}),
                 "type": "reversible_handle_history_review",
                 "handle_keys": sorted_handles,
                 "reason": "same_model_reported_platform_id_across_multiple_handles",
@@ -2091,31 +2127,28 @@ def validate_campaign_result(result: Any) -> None:
     for wave in result["wave_yields"]:
         observed = wave["mechanically_observed"]
         receipt = observed["receipt"]
+        model_reported = wave["model_reported"]
         _schema_guard(receipt, MECHANICAL_RECEIPT_SCHEMA_FILE, "campaign_result_receipt_schema_invalid")
         if observed["receipt_sha256"] != canonical_sha256(receipt):
             raise CampaignValidationError("campaign_result_receipt_hash_invalid")
         if wave["wave_id"] != receipt["wave_id"]:
             raise CampaignValidationError("campaign_result_receipt_wave_invalid")
+        if model_reported["tools_reported"] != sorted(receipt["tool_counts"]):
+            raise CampaignValidationError("campaign_result_model_native_tool_set_conflict")
         if wave["source_binding"]["result_sha256"] != receipt["result_sha256"]:
             raise CampaignValidationError("campaign_result_source_receipt_invalid")
         if wave["source_binding"]["upstream_request_sha256"] != receipt["upstream_request_sha256"]:
             raise CampaignValidationError("campaign_result_source_receipt_invalid")
         if wave["source_binding"]["prompt_sha256"] != receipt["prompt_sha256"]:
             raise CampaignValidationError("campaign_result_source_receipt_invalid")
-        if (
-            wave["source_binding"]["strategy_definition_sha256"]
-            != receipt["strategy_definition_sha256"]
-        ):
+        if wave["source_binding"]["strategy_definition_sha256"] != receipt["strategy_definition_sha256"]:
             raise CampaignValidationError("campaign_result_source_receipt_invalid")
         if (
-            receipt["assistant_terminal_json_start_update_index"]
-            <= receipt["last_native_x_update_index"]
+            receipt["assistant_terminal_json_start_update_index"] <= receipt["last_native_x_update_index"]
             or receipt["assistant_terminal_json_start_update_index"]
             > receipt["assistant_terminal_json_end_update_index"]
-            or receipt["assistant_terminal_json_end_update_index"]
-            > receipt["final_assistant_update_index"]
-            or receipt["assistant_terminal_json_start_chunk_index"]
-            > receipt["assistant_terminal_json_end_chunk_index"]
+            or receipt["assistant_terminal_json_end_update_index"] > receipt["final_assistant_update_index"]
+            or receipt["assistant_terminal_json_start_chunk_index"] > receipt["assistant_terminal_json_end_chunk_index"]
             or receipt["assistant_terminal_json_start_byte_offset"]
             >= receipt["assistant_terminal_json_end_byte_offset_exclusive"]
             or receipt["source_payload_replay_status"] != "unavailable_model_mediated_only"
@@ -2138,11 +2171,7 @@ def validate_campaign_result(result: Any) -> None:
                 or profiles is None
                 or counts is None
                 or [profile["family_id"] for profile in profiles] != receipt["query_family_ids"]
-                or {
-                    profile["family_id"]: profile["completed_call_count"]
-                    for profile in profiles
-                }
-                != counts
+                or {profile["family_id"]: profile["completed_call_count"] for profile in profiles} != counts
                 or any(
                     sum(shape["completed_call_count"] for shape in profile["call_shapes"])
                     != profile["completed_call_count"]
@@ -2160,9 +2189,7 @@ def validate_campaign_result(result: Any) -> None:
             raise CampaignValidationError("campaign_result_unverified_family_profile_invalid")
         replayed_calls += receipt["completed_tool_calls"]
         replayed_queries.update(receipt["query_identity_sha256s"])
-        expected_productivity = round(
-            wave["yield"]["new_unique_handles"] / receipt["completed_tool_calls"], 8
-        )
+        expected_productivity = round(wave["yield"]["new_unique_handles"] / receipt["completed_tool_calls"], 8)
         if wave["yield"]["new_unique_handles_per_replayed_completed_native_x_call"] != expected_productivity:
             raise CampaignValidationError("campaign_result_productivity_invalid")
     metrics = result["metrics"]
@@ -2171,8 +2198,7 @@ def validate_campaign_result(result: Any) -> None:
         or metrics["unique_evidence_records"] != len(evidence_records)
         or metrics["unique_candidate_evidence_associations"] != len(associations)
         or metrics["raw_candidate_evidence_association_rows"]
-        != metrics["valid_candidate_evidence_association_rows"]
-        + metrics["rejected_evidence_association_rows"]
+        != metrics["valid_candidate_evidence_association_rows"] + metrics["rejected_evidence_association_rows"]
         or metrics["duplicate_candidate_evidence_association_rows"]
         != metrics["valid_candidate_evidence_association_rows"] - len(associations)
         or metrics["replayed_completed_native_x_calls"] != replayed_calls

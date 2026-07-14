@@ -32,15 +32,18 @@ thread tool calls were observed in the raw update ledgers. The raw session summa
 and repository HEAD, but does not independently attest every launch flag; launch-policy fields remain operator
 evidence rather than provider-signed proof.
 
-| Wave | Distinct strategy | New unique | Session | Request |
-| --- | --- | ---: | --- | --- |
-| 1 | broad official/team, first-person, profile, scaling/training and seed expansion | `29` | `ac53f063-90d5-4f7a-8ed2-fac3c71b0ebd` | `5e066447-ce47-4dfc-abfd-41bb8de0731a` |
-| 2 | papers/reports/authors, alumni, announcements, acknowledgements and systems | `12` | `42cbf474-c072-4346-a709-58f8bd6f0a24` | `b593bb74-38d5-4ad1-a3ad-9c728c88901b` |
-| 3 | lower-visibility data, tokenization, synthetic data, multimodal, kernels and infrastructure | `6` | `7aeb1479-44a0-4845-82d6-32ba257f535b` | `3c7c347a-6261-4040-87a8-ba07c36d101f` |
-| 4 | early model-training contributors, project/technical-report authors and reliability vocabulary | `20` | `ac2a800f-456e-4631-8662-a13fd27d5482` | `cfdb9e93-d6a0-4204-b67b-28e3777634ef` |
-| 5 | graph/roster challenger: colleague edges, low-posting profiles, launches, transitions and adjacent functions | `25` | `97506cb7-3098-4a31-805c-85726cbab5d9` | `bbce878e-04eb-4995-8656-09cbb4219d5e` |
-| 6 | current-team frontier, emphasizing current lab plus current training evidence | `5` | `3371db9e-7106-409a-8650-d23fb30af936` | `1080fec0-3d20-4963-bc55-2bd04225e7f7` |
-| 7 | final residual coverage audit; zero candidates explicitly allowed | `1` | `24e63fd9-ec04-4f17-868a-214aa688ee24` | `90e19525-c74f-4251-8424-aa609fdf794b` |
+| Wave | Distinct strategy | New unique | Opaque run-binding SHA-256 |
+| --- | --- | ---: | --- |
+| 1 | broad official/team, first-person, profile, scaling/training and seed expansion | `29` | `75c7dc36ac4a89fb7e9eec0c1cba8f14e5585b77de1474f04ae159abfde7ad73` |
+| 2 | papers/reports/authors, alumni, announcements, acknowledgements and systems | `12` | `fee9a12576eacfd15a1d4c8ef73f564fa32d738e9bf740f56413d7b3b5a568e6` |
+| 3 | lower-visibility data, tokenization, synthetic data, multimodal, kernels and infrastructure | `6` | `3ce3d5c4ac623c77aaa305170a061fef80fa437233a9bdad62847886eac103b8` |
+| 4 | early model-training contributors, project/technical-report authors and reliability vocabulary | `20` | `e1e685b91a04ae59b9aac82cd3513910b3678ee198987dd10b00fd95b5523c57` |
+| 5 | graph/roster challenger: colleague edges, low-posting profiles, launches, transitions and adjacent functions | `25` | `ff4d813c63d6066390a786aedda2fdd7ecbcc29de645885ebd607dba687a54af` |
+| 6 | current-team frontier, emphasizing current lab plus current training evidence | `5` | `099c1bfdde691c1e028428e86f8e602a36b3e927441b3ad42068b1104b13328b` |
+| 7 | final residual coverage audit; zero candidates explicitly allowed | `1` | `7decadca59f95422028f45ab9c9cc1618b02968399df0c79254545eb9f3a07c2` |
+
+Each opaque run binding hashes the private session/request pair. Raw operational identifiers remain only in the
+private replay artifact, while the tracked document retains a non-reusable comparison handle.
 
 Later waves received the prior handle union through ephemeral rules and excluded it case-insensitively unless a
 material state conflict or materially new evidence was found. The tracked prompts contain no real handle. Waves 1–6
@@ -68,14 +71,18 @@ were normalized case-insensitively; raw native-X call starts/completions were re
 Raw tool distribution was `417 x_keyword_search`, `43 x_semantic_search`, `233 x_user_search`, and
 `9 x_thread_fetch`, totaling `702`.
 
-An owner-only v3 replay imported the six required raw-session sources for all seven waves and materialized a private,
-raw-session-replayable merged result. The terminal-start-hardened artifact is `489,409` bytes, mode `0600`, and has
-SHA-256 `d8392f12011701b740f7cec9666919ad6b99a50e1b9af6b11d61cb65f7aea474`. A second CLI invocation reopened every
+An owner-only v5 replay imported the six required v3 raw-session sources for all seven waves and materialized a private,
+raw-session-replayable merged result. The URL-bound artifact is `534,287` bytes, mode `0600`, and has
+SHA-256 `4f27d046c8618e424c1f24b7dcf4978b71799284d03e75d77054dc4ab6a0d19a`. A second CLI invocation reopened every
 result, upstream request, prompt, summary, updates ledger, events ledger, chat history, system prompt and prompt
-context, recomputed the campaign, and returned the same hash. The v3 replay also canonical-binds each emitted
+context, recomputed the campaign, and returned the same hash. The v5 replay also canonical-binds each emitted
 assistant terminal JSON to its result, binds its exact UTF-8 byte range and source chunk/update indices, requires the
 chunk containing its opening `{` to follow every counted native-X start/completion event, and byte-binds the unique
-system chat row to `system_prompt.txt`. All seven observed terminal start chunks were the first update after the last
+system chat row to `system_prompt.txt`. Every evidence association now carries the enclosing candidate handle and a
+closed subject-binding status; `self` evidence whose author differs from that subject is quarantined. Persisted
+evidence is revalidated against URL author and status id even after a coherent record rehash, and native-X `thread`
+evidence remains a first-class kind. Generic-web
+provenance and impossible calendar dates fail closed. All seven observed terminal start chunks were the first update after the last
 native-X event. Its legacy
 strategy-label digest is not a versioned, precommitted strategy definition and therefore cannot support formal stop
 comparability. All six candidate-field categories and all `196` dimension summaries explicitly remain

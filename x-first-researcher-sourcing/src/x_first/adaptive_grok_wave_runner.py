@@ -13,12 +13,14 @@ product, identity, CRM, export, ranking, or outreach writes.
 
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import json
 import os
 import platform
 import re
 import selectors
+import shutil
 import signal
 import stat
 import subprocess
@@ -26,25 +28,32 @@ import sys
 import time
 import uuid
 from collections.abc import Callable, Mapping, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Protocol
+from urllib.parse import quote
 
-REQUEST_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.request.v1"
+REQUEST_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.request.v2"
 RESULT_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.result.v1"
-INTENT_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.intent.v1"
-RECEIPT_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.operator_receipt.v1"
-GRANT_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.live_grant.v1"
-CONSUMPTION_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.live_grant_consumption.v1"
-PROCESS_LEDGER_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.process_ledger.v1"
+INTENT_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.intent.v2"
+RECEIPT_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.operator_receipt.v2"
+GRANT_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.live_grant.v2"
+CONSUMPTION_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.live_grant_consumption.v2"
+PROCESS_LEDGER_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.process_ledger.v2"
+DELETION_JOURNAL_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.deletion_journal.v1"
+DELETION_RECEIPT_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.deletion_receipt.v1"
 
 PROVIDER_ID = "grok_cli_oauth"
 DEFAULT_MODEL_ID = "grok-4.5"
 DEFAULT_RUNTIME_ROOT = Path(__file__).resolve().parents[2] / "runtime/adaptive-grok-waves"
-DEFAULT_APPROVAL_ROOT = Path.home() / ".local/state/x-first-researcher-sourcing/adaptive-grok-wave-approvals/v1"
+DEFAULT_APPROVAL_ROOT = Path.home() / ".local/state/x-first-researcher-sourcing/adaptive-grok-wave-approvals/v2"
+DEFAULT_DELETION_ROOT = Path.home() / ".local/state/x-first-researcher-sourcing/adaptive-grok-wave-deletions/v2"
 DEFAULT_GROK_BINARY = Path.home() / ".grok/bin/grok"
 DEFAULT_GROK_AUTH = Path.home() / ".grok/auth.json"
+MAX_GROK_BINARY_BYTES = 268_435_456
+MAX_CONTRACT_SCHEMA_BYTES = 16_777_216
 
 DISALLOWED_TOOLS = (
     "run_terminal_cmd",
@@ -93,13 +102,22 @@ _REQUEST_KEYS = {
     "transport",
     "emergency",
     "technical_limits",
+    "budget",
+    "retention",
     "approval",
     "authority",
 }
 _TARGET_KEYS = {"lab_id", "research_focus_id", "scope"}
 _PROMPT_SOURCE_KEYS = {"path", "sha256"}
 _PRIOR_WAVE_KEYS = {"wave_id", "path", "sha256"}
-_TRANSPORT_KEYS = {"provider_id", "model_id", "reasoning_effort", "grok_binary_sha256"}
+_TRANSPORT_KEYS = {
+    "provider_id",
+    "model_id",
+    "reasoning_effort",
+    "grok_binary_sha256",
+    "operator_account_ref",
+    "oauth_auth_sha256",
+}
 _EMERGENCY_KEYS = {"max_turns", "deadline_ms", "term_grace_ms", "kill_grace_ms"}
 _TECHNICAL_LIMIT_KEYS = {
     "max_stdout_bytes",
@@ -113,7 +131,20 @@ _TECHNICAL_LIMIT_KEYS = {
     "max_total_prior_wave_bytes",
     "max_prior_json_depth",
     "max_prior_json_nodes",
+    "max_session_files",
+    "max_session_file_bytes",
+    "max_session_total_bytes",
+    "max_session_updates_bytes",
+    "max_session_update_line_bytes",
 }
+_BUDGET_KEYS = {
+    "pricing_policy_id",
+    "max_total_tokens",
+    "max_cost_usd_micros",
+    "input_token_cost_usd_micros_per_million",
+    "output_token_cost_usd_micros_per_million",
+}
+_RETENTION_KEYS = {"policy_id", "ttl_seconds", "deletion_receipt_required"}
 _APPROVAL_KEYS = {"grant_id"}
 _RESULT_KEYS = {
     "status",
@@ -166,11 +197,14 @@ _INTENT_KEYS = {
     "request_sha256",
     "execution_mode",
     "started_at",
+    "run_lease_sha256",
     "input_binding",
     "command_binding",
     "approval",
     "emergency",
     "technical_limits",
+    "budget",
+    "retention",
     "runtime_layout",
     "authority",
 }
@@ -181,11 +215,14 @@ _RECEIPT_KEYS = {
     "request_sha256",
     "execution_mode",
     "status",
+    "run_lease_sha256",
     "input_binding",
     "command_binding",
     "approval",
     "process",
     "artifacts",
+    "session_proof",
+    "retention",
     "reconciliation",
     "authority",
 }
@@ -204,8 +241,12 @@ _COMMAND_BINDING_KEYS = {
     "session_id",
     "grok_binary_sha256",
     "structured_output_schema_sha256",
-    "cli_flags_sha256",
+    "argv_sha256",
+    "command_policy_sha256",
     "environment_policy_sha256",
+    "tool_registry_sha256",
+    "operator_account_ref_sha256",
+    "oauth_auth_sha256",
     "max_turns",
 }
 _APPROVAL_BINDING_KEYS = {"required", "grant_id_sha256", "grant_sha256", "consumption_sha256"}
@@ -241,8 +282,36 @@ _ARTIFACT_KEYS = {
     "non_json_prefix_bytes",
     "non_json_suffix_bytes",
     "compiled_prompt_sha256",
-    "ephemeral_auth_deleted",
-    "ephemeral_tree_private",
+    "session_updates_sha256",
+    "ephemeral_tree_deleted",
+    "session_tree_file_count",
+    "session_tree_total_bytes",
+    "session_tree_max_file_bytes",
+}
+_SESSION_PROOF_KEYS = {
+    "status",
+    "updates_sha256",
+    "update_bytes",
+    "event_count",
+    "provider_prompt_id_sha256",
+    "effective_model_id",
+    "started_tool_calls",
+    "completed_tool_calls",
+    "tool_counts",
+    "query_argument_sha256s",
+    "terminal_stop_reason",
+    "input_tokens",
+    "output_tokens",
+    "total_tokens",
+    "model_turns",
+    "estimated_cost_usd_micros",
+}
+_RETENTION_RECEIPT_KEYS = {
+    "policy_id",
+    "ttl_seconds",
+    "delete_after",
+    "purge_state",
+    "deletion_receipt_required",
 }
 _RECONCILIATION_RECEIPT_KEYS = {
     "candidate_count",
@@ -251,18 +320,22 @@ _RECONCILIATION_RECEIPT_KEYS = {
     "prior_overlap_count",
     "verified_material_update_count",
     "model_reported_tool_calls",
-    "tool_facts_model_mediated",
+    "mechanically_verified_tool_calls",
+    "tool_fact_source",
 }
 _RUNTIME_LAYOUT_KEYS = {
     "compiled_prompt_name",
     "stdout_spool_name",
     "stderr_spool_name",
     "ephemeral_home_name",
+    "session_updates_name",
+    "run_lock_name",
 }
 _PROCESS_LEDGER_KEYS = {
     "schema_version",
     "run_id",
     "request_id",
+    "run_lease_sha256",
     "session_id",
     "child_pid",
     "process_group_id",
@@ -277,8 +350,17 @@ _GRANT_KEYS = {
     "request_id",
     "target_sha256",
     "model_id",
+    "grok_binary_sha256",
+    "operator_account_ref_sha256",
+    "oauth_auth_sha256",
+    "result_schema_sha256",
+    "command_policy_sha256",
+    "tool_registry_sha256",
+    "environment_policy_sha256",
     "emergency_sha256",
     "technical_limits_sha256",
+    "budget_sha256",
+    "retention_sha256",
     "issued_at",
     "expires_at",
     "issuer",
@@ -291,7 +373,28 @@ _CONSUMPTION_KEYS = {
     "execution_scope_sha256",
     "request_sha256",
     "run_id",
+    "run_lease_sha256",
     "consumed_at",
+    "state",
+}
+_DELETION_JOURNAL_KEYS = {
+    "schema_version",
+    "run_id",
+    "request_sha256",
+    "run_lease_sha256",
+    "operator_receipt_sha256",
+    "delete_after",
+    "runtime_root_sha256",
+    "created_at",
+    "state",
+}
+_DELETION_RECEIPT_KEYS = {
+    "schema_version",
+    "run_id",
+    "request_sha256",
+    "operator_receipt_sha256",
+    "deletion_journal_sha256",
+    "deleted_at",
     "state",
 }
 _RESULT_STATUSES = {"X_SEARCH_OK", "X_SEARCH_PARTIAL", "X_SEARCH_BLOCKED"}
@@ -308,8 +411,20 @@ _RECEIPT_STATUSES = {
     "timed_out",
     "structured_output_noncompliant",
     "result_contract_invalid",
+    "provider_evidence_invalid",
     "crash_recovered",
     "technical_limit_exceeded",
+}
+_TECHNICAL_LIMIT_KINDS = {
+    "stdout_bytes",
+    "stderr_bytes",
+    "json_bytes",
+    "json_structure",
+    "session_tree_files",
+    "session_tree_file_bytes",
+    "session_tree_total_bytes",
+    "session_updates_bytes",
+    "session_tree_entry_invalid",
 }
 
 
@@ -333,6 +448,42 @@ class ProcessResult:
     technical_limit_kind: str | None
 
 
+@dataclass(frozen=True)
+class ConsumedGrant:
+    grant_sha256: str
+    consumption_sha256: str
+    consumed_at: datetime
+    expires_at: datetime
+    target_release_deadline_monotonic: float
+
+
+@dataclass(frozen=True)
+class SessionProof:
+    updates_sha256: str
+    update_bytes: int
+    event_count: int
+    provider_prompt_id_sha256: str
+    effective_model_id: str
+    started_tool_calls: int
+    completed_tool_calls: int
+    tool_counts: dict[str, int]
+    query_argument_sha256s: tuple[str, ...]
+    terminal_stop_reason: str
+    input_tokens: int
+    output_tokens: int
+    total_tokens: int
+    model_turns: int
+    estimated_cost_usd_micros: int
+
+
+@dataclass(frozen=True)
+class SessionTreeMeasurement:
+    file_count: int
+    total_bytes: int
+    max_file_bytes: int
+    limit_kind: str | None
+
+
 class Executor(Protocol):
     def __call__(
         self,
@@ -347,6 +498,12 @@ class Executor(Protocol):
         kill_grace_ms: int,
         max_stdout_bytes: int,
         max_stderr_bytes: int,
+        session_tree_root: Path,
+        session_updates_path: Path,
+        max_session_files: int,
+        max_session_file_bytes: int,
+        max_session_total_bytes: int,
+        max_session_updates_bytes: int,
         monotonic: Callable[[], float],
         on_spawn: Callable[[int, int, str, str], None],
     ) -> ProcessResult: ...
@@ -484,6 +641,15 @@ def validate_request(request: Any) -> list[str]:
         or _ID_RE.fullmatch(transport["model_id"]) is None
         or transport.get("reasoning_effort") not in {"low", "medium", "high"}
         or (transport.get("grok_binary_sha256") is not None and not _is_sha(transport["grok_binary_sha256"]))
+        or (
+            transport.get("operator_account_ref") is not None
+            and (
+                not isinstance(transport["operator_account_ref"], str)
+                or _ID_RE.fullmatch(transport["operator_account_ref"]) is None
+            )
+        )
+        or (transport.get("oauth_auth_sha256") is not None and not _is_sha(transport["oauth_auth_sha256"]))
+        or ((transport.get("operator_account_ref") is None) is not (transport.get("oauth_auth_sha256") is None))
     ):
         errors.append("transport_value_invalid")
     emergency = request.get("emergency")
@@ -503,6 +669,12 @@ def validate_request(request: Any) -> list[str]:
     technical_limits = request.get("technical_limits")
     if not _technical_limits_valid(technical_limits):
         errors.append("technical_limits_invalid")
+    budget = request.get("budget")
+    if not _budget_valid(budget):
+        errors.append("budget_invalid")
+    retention = request.get("retention")
+    if not _retention_valid(retention):
+        errors.append("retention_invalid")
     approval = request.get("approval")
     if not isinstance(approval, dict) or set(approval) != _APPROVAL_KEYS:
         errors.append("approval_shape_invalid")
@@ -541,6 +713,45 @@ def _technical_limits_valid(value: Any) -> bool:
         and 16 <= value["max_prior_json_depth"] <= 512
         and _is_int(value.get("max_prior_json_nodes"))
         and 10_000 <= value["max_prior_json_nodes"] <= 5_000_000
+        and _is_int(value.get("max_session_files"))
+        and 16 <= value["max_session_files"] <= 100_000
+        and _is_int(value.get("max_session_file_bytes"))
+        and 65_536 <= value["max_session_file_bytes"] <= 536_870_912
+        and _is_int(value.get("max_session_total_bytes"))
+        and value["max_session_file_bytes"] <= value["max_session_total_bytes"] <= 1_073_741_824
+        and _is_int(value.get("max_session_updates_bytes"))
+        and 65_536 <= value["max_session_updates_bytes"] <= value["max_session_file_bytes"]
+        and _is_int(value.get("max_session_update_line_bytes"))
+        and 4_096 <= value["max_session_update_line_bytes"] <= value["max_session_updates_bytes"]
+    )
+
+
+def _budget_valid(value: Any) -> bool:
+    return (
+        isinstance(value, dict)
+        and set(value) == _BUDGET_KEYS
+        and isinstance(value.get("pricing_policy_id"), str)
+        and _ID_RE.fullmatch(value["pricing_policy_id"]) is not None
+        and _is_int(value.get("max_total_tokens"))
+        and 1_000 <= value["max_total_tokens"] <= 100_000_000
+        and _is_int(value.get("max_cost_usd_micros"))
+        and 1 <= value["max_cost_usd_micros"] <= 1_000_000_000_000
+        and _is_int(value.get("input_token_cost_usd_micros_per_million"))
+        and 0 <= value["input_token_cost_usd_micros_per_million"] <= 1_000_000_000_000
+        and _is_int(value.get("output_token_cost_usd_micros_per_million"))
+        and 0 <= value["output_token_cost_usd_micros_per_million"] <= 1_000_000_000_000
+    )
+
+
+def _retention_valid(value: Any) -> bool:
+    return (
+        isinstance(value, dict)
+        and set(value) == _RETENTION_KEYS
+        and isinstance(value.get("policy_id"), str)
+        and _ID_RE.fullmatch(value["policy_id"]) is not None
+        and _is_int(value.get("ttl_seconds"))
+        and 3_600 <= value["ttl_seconds"] <= 604_800
+        and value.get("deletion_receipt_required") is True
     )
 
 
@@ -573,9 +784,10 @@ class PriorCandidateFacts:
 
 
 def _is_post_url(value: Any) -> bool:
-    return isinstance(value, str) and re.fullmatch(
-        r"https://x\.com/[A-Za-z0-9_]{1,15}/status/[1-9][0-9]{5,31}", value
-    ) is not None
+    return (
+        isinstance(value, str)
+        and re.fullmatch(r"https://x\.com/[A-Za-z0-9_]{1,15}/status/[1-9][0-9]{5,31}", value) is not None
+    )
 
 
 def _parse_post_url(value: Any) -> tuple[str, str] | None:
@@ -691,6 +903,9 @@ def _material_update_proved(candidate: Mapping[str, Any], baseline: PriorCandida
 def _candidate_reconciliation(
     result: Mapping[str, Any],
     prior_candidates: Mapping[str, PriorCandidateFacts],
+    *,
+    session_proof: SessionProof | None = None,
+    fixture: bool = False,
 ) -> dict[str, Any]:
     candidates = result.get("candidates") if isinstance(result.get("candidates"), list) else []
     evidence_count = 0
@@ -717,7 +932,14 @@ def _candidate_reconciliation(
         "prior_overlap_count": prior_overlap_count,
         "verified_material_update_count": verified_material_updates,
         "model_reported_tool_calls": reported_calls if _validate_nonnegative_int(reported_calls) else 0,
-        "tool_facts_model_mediated": True,
+        "mechanically_verified_tool_calls": session_proof.completed_tool_calls if session_proof is not None else 0,
+        "tool_fact_source": (
+            "fixture_not_applicable"
+            if fixture
+            else "session_transcript_verified"
+            if session_proof is not None
+            else "session_transcript_unverified"
+        ),
     }
 
 
@@ -798,8 +1020,10 @@ def validate_model_result(
         ):
             errors.append("provenance_value_invalid")
     counts = result.get("counts")
-    if not isinstance(counts, dict) or set(counts) != _COUNT_KEYS or any(
-        not _validate_nonnegative_int(counts.get(key)) for key in _COUNT_KEYS
+    if (
+        not isinstance(counts, dict)
+        or set(counts) != _COUNT_KEYS
+        or any(not _validate_nonnegative_int(counts.get(key)) for key in _COUNT_KEYS)
     ):
         errors.append("counts_invalid")
     candidates = result.get("candidates")
@@ -952,10 +1176,62 @@ def validate_model_result(
 def _live_profile_urls_valid(result: Any) -> bool:
     candidates = result.get("candidates") if isinstance(result, dict) else None
     return isinstance(candidates, list) and all(
-        isinstance(candidate, dict)
-        and candidate.get("profile_url") == f"https://x.com/{candidate.get('handle')}"
+        isinstance(candidate, dict) and candidate.get("profile_url") == f"https://x.com/{candidate.get('handle')}"
         for candidate in candidates
     )
+
+
+def _read_regular_owned_bounded(
+    path: Path,
+    *,
+    maximum_bytes: int,
+    required_mode: int | None = None,
+) -> bytes:
+    """Read one descriptor-bound owner file without a check/open race."""
+
+    flags = os.O_RDONLY
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        descriptor = os.open(path, flags)
+    except OSError as exc:
+        raise AdaptiveWaveValidationError("bound_input_unreadable") from exc
+    try:
+        before = os.fstat(descriptor)
+        if before.st_size > maximum_bytes:
+            raise AdaptiveWaveValidationError("bound_input_byte_ceiling_exceeded")
+        if (
+            not stat.S_ISREG(before.st_mode)
+            or before.st_uid != os.getuid()
+            or before.st_nlink != 1
+            or before.st_size < 0
+            or (required_mode is not None and stat.S_IMODE(before.st_mode) != required_mode)
+        ):
+            raise AdaptiveWaveValidationError("bound_input_metadata_invalid")
+        chunks: list[bytes] = []
+        remaining = before.st_size
+        while remaining:
+            chunk = os.read(descriptor, min(1_048_576, remaining))
+            if not chunk:
+                raise AdaptiveWaveValidationError("bound_input_changed_during_read")
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        if os.read(descriptor, 1):
+            raise AdaptiveWaveValidationError("bound_input_byte_ceiling_exceeded")
+        after = os.fstat(descriptor)
+        try:
+            current = path.stat(follow_symlinks=False)
+        except OSError as exc:
+            raise AdaptiveWaveValidationError("bound_input_identity_changed") from exc
+
+        def identity(item: os.stat_result) -> tuple[int, int, int, int, int]:
+            return item.st_dev, item.st_ino, item.st_size, item.st_mtime_ns, item.st_nlink
+
+        if identity(before) != identity(after) or identity(after) != identity(current):
+            raise AdaptiveWaveValidationError("bound_input_identity_changed")
+        return b"".join(chunks)
+    finally:
+        os.close(descriptor)
 
 
 def _load_bound_bytes(
@@ -967,13 +1243,11 @@ def _load_bound_bytes(
 ) -> bytes:
     path = Path(path_value).expanduser()
     try:
-        if not path.is_file() or path.is_symlink():
-            raise AdaptiveWaveValidationError("bound_input_not_regular")
-        if require_private and not _private_file_valid(path):
-            raise AdaptiveWaveValidationError("bound_input_not_private")
-        if max_bytes is not None and path.stat(follow_symlinks=False).st_size > max_bytes:
-            raise AdaptiveWaveValidationError("bound_input_byte_ceiling_exceeded")
-        value = path.read_bytes()
+        value = _read_regular_owned_bounded(
+            path,
+            maximum_bytes=max_bytes if max_bytes is not None else 1_073_741_824,
+            required_mode=0o600 if require_private else None,
+        )
     except OSError as exc:
         raise AdaptiveWaveValidationError("bound_input_unreadable") from exc
     if bytes_sha256(value) != expected_sha256:
@@ -1126,88 +1400,48 @@ def compile_prompt(
 
 def result_schema_sha256() -> str:
     path = Path(__file__).resolve().parents[2] / "contracts/x.grok.adaptive_recall_wave.result.v1.schema.json"
-    return bytes_sha256(path.read_bytes())
+    return bytes_sha256(_read_regular_owned_bounded(path, maximum_bytes=MAX_CONTRACT_SCHEMA_BYTES))
 
 
-def _redacted_command_policy(
-    *,
-    request: Mapping[str, Any],
-    compiled_prompt_sha256: str,
-    session_id: str,
-) -> list[str]:
-    emergency = request["emergency"]
-    transport = request["transport"]
-    return [
-        "<grok-binary:sha256-bound>",
-        "--prompt-file",
-        f"<prompt:{compiled_prompt_sha256}>",
-        "--verbatim",
-        "--cwd",
-        "<isolated-empty-directory>",
-        "--model",
-        transport["model_id"],
-        "--reasoning-effort",
-        transport["reasoning_effort"],
-        "--output-format",
-        "plain",
-        "--tools",
-        ",".join(NATIVE_X_TOOLS),
-        "--disable-web-search",
-        "--disallowed-tools",
-        ",".join(DISALLOWED_TOOLS),
-        "--max-turns",
-        str(emergency["max_turns"]),
-        "--session-id",
-        session_id,
-        "--no-subagents",
-        "--no-plan",
-        "--no-memory",
-        "--no-auto-update",
-        "--leader-socket",
-        "<isolated-leader-socket>",
-        "--permission-mode",
-        "dontAsk",
-        "--sandbox",
-        "read-only",
-    ]
+def tool_registry_sha256() -> str:
+    return canonical_sha256(
+        {
+            "allowed_native_x_tools": list(NATIVE_X_TOOLS),
+            "disallowed_tools": list(DISALLOWED_TOOLS),
+            "generic_web_disabled": True,
+            "provider_fallback_authorized": False,
+        }
+    )
 
 
-def _redacted_policy_from_bindings(
-    input_binding: Mapping[str, Any], command_binding: Mapping[str, Any]
-) -> list[str]:
-    return [
-        "<grok-binary:sha256-bound>",
-        "--prompt-file",
-        f"<prompt:{input_binding['compiled_prompt_sha256']}>",
-        "--verbatim",
-        "--cwd",
-        "<isolated-empty-directory>",
-        "--model",
-        command_binding["model_id"],
-        "--reasoning-effort",
-        command_binding["reasoning_effort"],
-        "--output-format",
-        "plain",
-        "--tools",
-        ",".join(NATIVE_X_TOOLS),
-        "--disable-web-search",
-        "--disallowed-tools",
-        ",".join(DISALLOWED_TOOLS),
-        "--max-turns",
-        str(command_binding["max_turns"]),
-        "--session-id",
-        command_binding["session_id"],
-        "--no-subagents",
-        "--no-plan",
-        "--no-memory",
-        "--no-auto-update",
-        "--leader-socket",
-        "<isolated-leader-socket>",
-        "--permission-mode",
-        "dontAsk",
-        "--sandbox",
-        "read-only",
-    ]
+def _command_policy(request: Mapping[str, Any]) -> list[str]:
+    """Build the approved argv template through the one canonical argv builder."""
+
+    return build_grok_command(
+        binary=Path("<grok-binary:sha256-bound>"),
+        cwd=Path("<isolated-empty-directory>"),
+        request=request,
+        prompt_file=Path("<compiled-prompt:sha256-bound>"),
+        leader_socket=Path("<isolated-leader-socket>"),
+        session_id="<operator-session-id>",
+        result_schema={},
+    )
+
+
+def command_policy_sha256(request: Mapping[str, Any]) -> str:
+    return canonical_sha256(_command_policy(request))
+
+
+def _redacted_policy_from_bindings(input_binding: Mapping[str, Any], command_binding: Mapping[str, Any]) -> list[str]:
+    del input_binding
+    synthetic_request = {
+        "transport": {
+            "model_id": command_binding["model_id"],
+            "reasoning_effort": command_binding["reasoning_effort"],
+        },
+        "emergency": {"max_turns": command_binding["max_turns"]},
+    }
+    return _command_policy(synthetic_request)
 
 
 def _redacted_environment_policy() -> dict[str, str]:
@@ -1278,6 +1512,7 @@ def build_grok_command(
 
 _GATED_LAUNCHER_SOURCE = (
     "import os,sys\n"
+    "os.umask(0o077)\n"
     "gate=int(sys.argv[1]); ack=int(sys.argv[2])\n"
     "token=os.environ.get('X_FIRST_PROCESS_IDENTITY','')\n"
     "os.write(ack,(token+'\\n').encode('ascii')); os.close(ack)\n"
@@ -1315,6 +1550,81 @@ def _kernel_birth_identity(pid: int) -> str:
     if completed.returncode != 0 or not identity:
         raise AdaptiveWaveValidationError("process_birth_identity_unavailable")
     return f"{platform.system().lower()}:{identity}"
+
+
+def _measure_session_tree(
+    root: Path,
+    *,
+    max_files: int,
+    max_file_bytes: int,
+    max_total_bytes: int,
+    updates_path: Path | None = None,
+    max_updates_bytes: int | None = None,
+) -> SessionTreeMeasurement:
+    file_count = 0
+    total_bytes = 0
+    largest = 0
+    limit_kind: str | None = None
+    for current_root, directory_names, file_names in os.walk(root, topdown=True, followlinks=False):
+        current = Path(current_root)
+        try:
+            current_metadata = current.lstat()
+            if (
+                current.is_symlink()
+                or not stat.S_ISDIR(current_metadata.st_mode)
+                or current_metadata.st_uid != os.getuid()
+            ):
+                limit_kind = "session_tree_entry_invalid"
+                break
+            for name in directory_names:
+                directory_metadata = (current / name).lstat()
+                if (
+                    stat.S_ISLNK(directory_metadata.st_mode)
+                    or not stat.S_ISDIR(directory_metadata.st_mode)
+                    or directory_metadata.st_uid != os.getuid()
+                ):
+                    limit_kind = "session_tree_entry_invalid"
+                    break
+            if limit_kind is not None:
+                break
+            for name in file_names:
+                path = current / name
+                try:
+                    metadata = path.lstat()
+                except FileNotFoundError:
+                    continue
+                if stat.S_ISSOCK(metadata.st_mode):
+                    continue
+                if (
+                    not stat.S_ISREG(metadata.st_mode)
+                    or path.is_symlink()
+                    or metadata.st_uid != os.getuid()
+                    or metadata.st_nlink != 1
+                ):
+                    limit_kind = "session_tree_entry_invalid"
+                    break
+                file_count += 1
+                total_bytes += metadata.st_size
+                largest = max(largest, metadata.st_size)
+                if updates_path is not None and path == updates_path and max_updates_bytes is not None:
+                    if metadata.st_size > max_updates_bytes:
+                        limit_kind = "session_updates_bytes"
+                        break
+                if metadata.st_size > max_file_bytes:
+                    limit_kind = "session_tree_file_bytes"
+                    break
+                if file_count > max_files:
+                    limit_kind = "session_tree_files"
+                    break
+                if total_bytes > max_total_bytes:
+                    limit_kind = "session_tree_total_bytes"
+                    break
+            if limit_kind is not None:
+                break
+        except OSError:
+            limit_kind = "session_tree_entry_invalid"
+            break
+    return SessionTreeMeasurement(file_count, total_bytes, largest, limit_kind)
 
 
 class ProcessGroupExecutor:
@@ -1422,6 +1732,12 @@ class ProcessGroupExecutor:
         kill_grace_ms: int,
         max_stdout_bytes: int,
         max_stderr_bytes: int,
+        session_tree_root: Path,
+        session_updates_path: Path,
+        max_session_files: int,
+        max_session_file_bytes: int,
+        max_session_total_bytes: int,
+        max_session_updates_bytes: int,
         monotonic: Callable[[], float],
         on_spawn: Callable[[int, int, str, str], None],
     ) -> ProcessResult:
@@ -1564,6 +1880,17 @@ class ProcessGroupExecutor:
                     if process.poll() is None or self._group_alive(process_group_id):
                         timed_out = True
                         break
+                measurement = _measure_session_tree(
+                    session_tree_root,
+                    max_files=max_session_files,
+                    max_file_bytes=max_session_file_bytes,
+                    max_total_bytes=max_session_total_bytes,
+                    updates_path=session_updates_path,
+                    max_updates_bytes=max_session_updates_bytes,
+                )
+                if measurement.limit_kind is not None:
+                    technical_limit_kind = measurement.limit_kind
+                    break
                 timeout = min(0.05, max(0.0, deadline_at - monotonic()))
                 for key, _ in selector.select(timeout):
                     stream = key.fileobj
@@ -1666,6 +1993,12 @@ class OfflineFixtureExecutor:
         kill_grace_ms: int,
         max_stdout_bytes: int,
         max_stderr_bytes: int,
+        session_tree_root: Path,
+        session_updates_path: Path,
+        max_session_files: int,
+        max_session_file_bytes: int,
+        max_session_total_bytes: int,
+        max_session_updates_bytes: int,
         monotonic: Callable[[], float],
         on_spawn: Callable[[int, int, str, str], None],
     ) -> ProcessResult:
@@ -1678,6 +2011,12 @@ class OfflineFixtureExecutor:
             kill_grace_ms,
             max_stdout_bytes,
             max_stderr_bytes,
+            session_tree_root,
+            session_updates_path,
+            max_session_files,
+            max_session_file_bytes,
+            max_session_total_bytes,
+            max_session_updates_bytes,
             monotonic,
             on_spawn,
         )
@@ -1730,7 +2069,12 @@ def _ensure_private_directory(path: Path, *, create: bool) -> None:
         info = path.lstat()
     except OSError as exc:
         raise AdaptiveWaveValidationError("private_directory_unavailable") from exc
-    if not stat.S_ISDIR(info.st_mode) or path.is_symlink() or stat.S_IMODE(info.st_mode) != 0o700:
+    if (
+        not stat.S_ISDIR(info.st_mode)
+        or path.is_symlink()
+        or info.st_uid != os.getuid()
+        or stat.S_IMODE(info.st_mode) != 0o700
+    ):
         raise AdaptiveWaveValidationError("private_directory_mode_invalid")
 
 
@@ -1742,7 +2086,12 @@ def _fsync_directory(path: Path) -> None:
         os.close(descriptor)
 
 
-def _atomic_publish(path: Path, value: bytes) -> None:
+def _atomic_publish(
+    path: Path,
+    value: bytes,
+    *,
+    pre_publish: Callable[[], None] | None = None,
+) -> None:
     """Durably publish a 0600 regular file without replacement."""
 
     _ensure_private_directory(path.parent, create=False)
@@ -1760,6 +2109,8 @@ def _atomic_publish(path: Path, value: bytes) -> None:
     finally:
         os.close(descriptor)
     try:
+        if pre_publish is not None:
+            pre_publish()
         os.link(pending, path, follow_symlinks=False)
         _fsync_directory(path.parent)
     finally:
@@ -1767,7 +2118,7 @@ def _atomic_publish(path: Path, value: bytes) -> None:
             pending.unlink()
         except FileNotFoundError:
             pass
-    _fsync_directory(path.parent)
+        _fsync_directory(path.parent)
 
 
 def recover_pending_publications(run_root: Path) -> int:
@@ -1779,7 +2130,13 @@ def recover_pending_publications(run_root: Path) -> int:
         if _PENDING_RE.fullmatch(path.name) is None:
             continue
         info = path.lstat()
-        if not stat.S_ISREG(info.st_mode) or path.is_symlink() or stat.S_IMODE(info.st_mode) != 0o600:
+        if (
+            not stat.S_ISREG(info.st_mode)
+            or path.is_symlink()
+            or info.st_uid != os.getuid()
+            or info.st_nlink != 1
+            or stat.S_IMODE(info.st_mode) != 0o600
+        ):
             raise AdaptiveWaveValidationError("pending_publication_invalid")
         path.unlink()
         recovered += 1
@@ -1796,19 +2153,16 @@ class StagedExecutable:
 
 def _rehash_staged_executable(path: Path) -> str:
     try:
-        info = path.lstat()
-    except OSError as exc:
-        raise AdaptiveWaveValidationError("staged_grok_binary_unavailable") from exc
-    if (
-        not stat.S_ISREG(info.st_mode)
-        or path.is_symlink()
-        or info.st_uid != os.getuid()
-        or info.st_nlink != 1
-        or stat.S_IMODE(info.st_mode) != 0o700
-        or info.st_size <= 0
-    ):
+        raw = _read_regular_owned_bounded(
+            path,
+            maximum_bytes=MAX_GROK_BINARY_BYTES,
+            required_mode=0o700,
+        )
+    except AdaptiveWaveValidationError as exc:
+        raise AdaptiveWaveValidationError("staged_grok_binary_invalid") from exc
+    if not raw:
         raise AdaptiveWaveValidationError("staged_grok_binary_invalid")
-    return bytes_sha256(path.read_bytes())
+    return bytes_sha256(raw)
 
 
 def _stage_verified_binary(locator: Path, run_root: Path, expected_sha256: str) -> StagedExecutable:
@@ -1848,6 +2202,7 @@ def _stage_verified_binary(locator: Path, run_root: Path, expected_sha256: str) 
             or mode & 0o022
             or mode & stat.S_IXUSR == 0
             or before.st_size <= 0
+            or before.st_size > MAX_GROK_BINARY_BYTES
         ):
             raise AdaptiveWaveValidationError("grok_binary_metadata_invalid")
         destination_fd = os.open(staged, destination_flags, 0o700)
@@ -1864,8 +2219,10 @@ def _stage_verified_binary(locator: Path, run_root: Path, expected_sha256: str) 
         after = os.fstat(source_fd)
         current = canonical.stat(follow_symlinks=False)
         locator_after = locator.lstat()
+
         def identity(item: os.stat_result) -> tuple[int, int, int, int]:
             return item.st_dev, item.st_ino, item.st_size, item.st_mtime_ns
+
         if (
             identity(before) != identity(after)
             or identity(after) != identity(current)
@@ -1886,14 +2243,7 @@ def _stage_verified_binary(locator: Path, run_root: Path, expected_sha256: str) 
         os.close(source_fd)
         if destination_fd is not None:
             os.close(destination_fd)
-    staged_info = staged.stat(follow_symlinks=False)
-    if (
-        not stat.S_ISREG(staged_info.st_mode)
-        or staged_info.st_uid != os.getuid()
-        or staged_info.st_nlink != 1
-        or stat.S_IMODE(staged_info.st_mode) != 0o700
-        or bytes_sha256(staged.read_bytes()) != expected_sha256
-    ):
+    if _rehash_staged_executable(staged) != expected_sha256:
         raise AdaptiveWaveValidationError("staged_grok_binary_invalid")
     _fsync_directory(executable_root)
     return StagedExecutable(staged, expected_sha256)
@@ -1942,8 +2292,10 @@ def _copy_private_auth(source: Path, ephemeral_home: Path) -> Path:
             raise AdaptiveWaveValidationError("grok_auth_copy_incomplete")
         after = os.fstat(source_fd)
         current = source.stat(follow_symlinks=False)
+
         def identity(item: os.stat_result) -> tuple[int, int, int, int]:
             return item.st_dev, item.st_ino, item.st_size, item.st_mtime_ns
+
         if identity(info) != identity(after) or identity(after) != identity(current):
             raise AdaptiveWaveValidationError("grok_auth_identity_changed")
     except BaseException:
@@ -1960,64 +2312,10 @@ def _copy_private_auth(source: Path, ephemeral_home: Path) -> Path:
     return destination
 
 
-def _delete_ephemeral_auth(ephemeral_home: Path) -> None:
-    for name in ("auth.json", "auth.json.lock"):
-        path = ephemeral_home / name
-        try:
-            if path.is_symlink():
-                raise AdaptiveWaveValidationError("ephemeral_auth_symlink_invalid")
-            path.unlink()
-        except FileNotFoundError:
-            pass
-    _fsync_directory(ephemeral_home)
-
-
-def _harden_ephemeral_tree(root: Path) -> None:
-    """Retain only private regular session/config evidence after auth removal."""
-
-    for current_root, directory_names, file_names in os.walk(root, topdown=True, followlinks=False):
-        current = Path(current_root)
-        if current.is_symlink():
-            raise AdaptiveWaveValidationError("ephemeral_tree_symlink_invalid")
-        os.chmod(current, 0o700)
-        for name in list(directory_names):
-            path = current / name
-            if path.is_symlink():
-                raise AdaptiveWaveValidationError("ephemeral_tree_symlink_invalid")
-            os.chmod(path, 0o700)
-        for name in file_names:
-            path = current / name
-            info = path.lstat()
-            if stat.S_ISSOCK(info.st_mode):
-                path.unlink()
-                continue
-            if not stat.S_ISREG(info.st_mode) or path.is_symlink():
-                raise AdaptiveWaveValidationError("ephemeral_tree_entry_invalid")
-            os.chmod(path, 0o600)
-
-
-def _ephemeral_tree_private(root: Path) -> bool:
-    if not root.is_dir() or root.is_symlink() or stat.S_IMODE(root.stat().st_mode) != 0o700:
-        return False
-    for current_root, directory_names, file_names in os.walk(root, topdown=True, followlinks=False):
-        current = Path(current_root)
-        if current.is_symlink() or stat.S_IMODE(current.stat().st_mode) != 0o700:
-            return False
-        for name in directory_names:
-            path = current / name
-            if path.is_symlink() or stat.S_IMODE(path.stat().st_mode) != 0o700:
-                return False
-        for name in file_names:
-            path = current / name
-            if not _private_file_valid(path):
-                return False
-    return not (root / "auth.json").exists() and not (root / "auth.json.lock").exists()
-
-
 def _load_result_schema() -> dict[str, Any]:
     path = Path(__file__).resolve().parents[2] / "contracts/x.grok.adaptive_recall_wave.result.v1.schema.json"
     try:
-        schema = strict_json_loads(path.read_bytes())
+        schema = strict_json_loads(_read_regular_owned_bounded(path, maximum_bytes=MAX_CONTRACT_SCHEMA_BYTES))
     except (OSError, UnicodeError, ValueError) as exc:
         raise AdaptiveWaveValidationError("result_schema_unavailable") from exc
     if (
@@ -2090,26 +2388,10 @@ def _parse_structured_stdout(
     return payload, sanitized, prefix_bytes, suffix_bytes, syntax_compliant, contract_valid, None
 
 
-def _private_file_valid(path: Path) -> bool:
-    try:
-        info = path.lstat()
-    except OSError:
-        return False
-    return (
-        stat.S_ISREG(info.st_mode)
-        and not path.is_symlink()
-        and info.st_uid == os.getuid()
-        and info.st_nlink == 1
-        and stat.S_IMODE(info.st_mode) == 0o600
-    )
-
-
 def _read_private_json(path: Path) -> Any:
-    if not _private_file_valid(path):
-        raise AdaptiveWaveValidationError("private_json_invalid")
     try:
-        return strict_json_loads(path.read_bytes())
-    except (UnicodeError, ValueError) as exc:
+        return strict_json_loads(_read_regular_owned_bounded(path, maximum_bytes=67_108_864, required_mode=0o600))
+    except (AdaptiveWaveValidationError, UnicodeError, ValueError) as exc:
         raise AdaptiveWaveValidationError("private_json_invalid") from exc
 
 
@@ -2150,11 +2432,17 @@ def _grant_paths(grant_root: Path, grant_id_hash: str) -> tuple[Path, Path]:
     return grant_root / f"grant-{grant_id_hash}.json", grant_root / f"consumption-{grant_id_hash}.json"
 
 
+def _auth_fingerprint(path: Path) -> str:
+    return bytes_sha256(_read_regular_owned_bounded(path, maximum_bytes=64_000, required_mode=0o600))
+
+
 def _validate_grant(grant: Any, request: Mapping[str, Any], *, now: datetime) -> list[str]:
     if not isinstance(grant, dict) or set(grant) != _GRANT_KEYS:
         return ["grant_shape_invalid"]
     grant_id = request["approval"]["grant_id"]
     expected_id_hash = bytes_sha256(grant_id.encode()) if isinstance(grant_id, str) else None
+    account_ref = request.get("transport", {}).get("operator_account_ref")
+    expected_account_hash = bytes_sha256(account_ref.encode()) if isinstance(account_ref, str) else None
     errors: list[str] = []
     if (
         grant.get("schema_version") != GRANT_SCHEMA_VERSION
@@ -2163,8 +2451,17 @@ def _validate_grant(grant: Any, request: Mapping[str, Any], *, now: datetime) ->
         or grant.get("request_id") != request["request_id"]
         or grant.get("target_sha256") != canonical_sha256(request["target"])
         or grant.get("model_id") != request["transport"]["model_id"]
+        or grant.get("grok_binary_sha256") != request["transport"]["grok_binary_sha256"]
+        or grant.get("operator_account_ref_sha256") != expected_account_hash
+        or grant.get("oauth_auth_sha256") != request["transport"]["oauth_auth_sha256"]
+        or grant.get("result_schema_sha256") != result_schema_sha256()
+        or grant.get("command_policy_sha256") != command_policy_sha256(request)
+        or grant.get("tool_registry_sha256") != tool_registry_sha256()
+        or grant.get("environment_policy_sha256") != canonical_sha256(_redacted_environment_policy())
         or grant.get("emergency_sha256") != canonical_sha256(request["emergency"])
         or grant.get("technical_limits_sha256") != canonical_sha256(request["technical_limits"])
+        or grant.get("budget_sha256") != canonical_sha256(request["budget"])
+        or grant.get("retention_sha256") != canonical_sha256(request["retention"])
         or grant.get("issuer") != "local_owner_explicit_cli"
         or grant.get("state") != "preissued_single_use"
     ):
@@ -2185,6 +2482,7 @@ def issue_live_grant(
     *,
     request_path: Path,
     grant_root: Path = DEFAULT_APPROVAL_ROOT,
+    auth_source: Path = DEFAULT_GROK_AUTH,
     ttl_seconds: int = 900,
     wall_clock: Callable[[], datetime] = _utc_now,
 ) -> tuple[dict[str, Any], Path]:
@@ -2194,7 +2492,14 @@ def issue_live_grant(
         raise AdaptiveWaveValidationError("grant_ttl_invalid")
     request = _load_request(request_path)
     grant_id = request["approval"]["grant_id"]
-    if not isinstance(grant_id, str) or not _is_sha(request["transport"]["grok_binary_sha256"]):
+    transport = request["transport"]
+    if (
+        not isinstance(grant_id, str)
+        or not _is_sha(transport["grok_binary_sha256"])
+        or not isinstance(transport["operator_account_ref"], str)
+        or not _is_sha(transport["oauth_auth_sha256"])
+        or _auth_fingerprint(auth_source) != transport["oauth_auth_sha256"]
+    ):
         raise AdaptiveWaveValidationError("live_grant_request_invalid")
     now = wall_clock().astimezone(UTC)
     grant_id_hash = bytes_sha256(grant_id.encode())
@@ -2205,8 +2510,17 @@ def issue_live_grant(
         "request_id": request["request_id"],
         "target_sha256": canonical_sha256(request["target"]),
         "model_id": request["transport"]["model_id"],
+        "grok_binary_sha256": request["transport"]["grok_binary_sha256"],
+        "operator_account_ref_sha256": bytes_sha256(request["transport"]["operator_account_ref"].encode()),
+        "oauth_auth_sha256": request["transport"]["oauth_auth_sha256"],
+        "result_schema_sha256": result_schema_sha256(),
+        "command_policy_sha256": command_policy_sha256(request),
+        "tool_registry_sha256": tool_registry_sha256(),
+        "environment_policy_sha256": canonical_sha256(_redacted_environment_policy()),
         "emergency_sha256": canonical_sha256(request["emergency"]),
         "technical_limits_sha256": canonical_sha256(request["technical_limits"]),
+        "budget_sha256": canonical_sha256(request["budget"]),
+        "retention_sha256": canonical_sha256(request["retention"]),
         "issued_at": _timestamp(now),
         "expires_at": _timestamp(now + timedelta(seconds=ttl_seconds)),
         "issuer": "local_owner_explicit_cli",
@@ -2218,28 +2532,59 @@ def issue_live_grant(
     return grant, grant_path
 
 
+def _load_preissued_grant(
+    grant_root: Path,
+    *,
+    request: Mapping[str, Any],
+    now: datetime,
+) -> tuple[dict[str, Any], bytes]:
+    grant_id = request["approval"]["grant_id"]
+    if not isinstance(grant_id, str):
+        raise PermissionError("preissued_live_grant_required")
+    _ensure_private_directory(grant_root, create=True)
+    grant_path, _ = _grant_paths(grant_root, bytes_sha256(grant_id.encode()))
+    try:
+        grant_raw = _read_regular_owned_bounded(grant_path, maximum_bytes=1_048_576, required_mode=0o600)
+        grant = strict_json_loads(grant_raw)
+    except (AdaptiveWaveValidationError, UnicodeError, ValueError) as exc:
+        raise PermissionError("preissued_live_grant_invalid") from exc
+    if _validate_grant(grant, request, now=now):
+        raise PermissionError("preissued_live_grant_invalid")
+    return grant, grant_raw
+
+
 def _load_and_consume_grant(
     grant_root: Path,
     *,
     request: Mapping[str, Any],
     run_id: str,
+    run_lease_sha256: str,
     request_sha256: str,
-    consumed_at: str,
-) -> tuple[str, str]:
+    expected_grant_sha256: str,
+    monotonic: Callable[[], float],
+    wall_clock: Callable[[], datetime],
+) -> ConsumedGrant:
     grant_id = request["approval"]["grant_id"]
     if not isinstance(grant_id, str):
         raise PermissionError("preissued_live_grant_required")
     _ensure_private_directory(grant_root, create=True)
     grant_id_hash = bytes_sha256(grant_id.encode())
     grant_path, consumption_path = _grant_paths(grant_root, grant_id_hash)
+    # Read first, then obtain the authoritative clock immediately before the
+    # exclusive consumption publication.  A timestamp captured at intent or
+    # auth-preflight time could cross the grant expiry before atomic use.
+    grant_path_raw = _read_regular_owned_bounded(grant_path, maximum_bytes=1_048_576, required_mode=0o600)
     try:
-        grant = _read_private_json(grant_path)
-    except AdaptiveWaveValidationError as exc:
+        grant = strict_json_loads(grant_path_raw)
+    except (UnicodeError, ValueError) as exc:
         raise PermissionError("preissued_live_grant_invalid") from exc
+    consumed_at = _timestamp(wall_clock().astimezone(UTC))
     if _validate_grant(grant, request, now=_parse_timestamp(consumed_at)):
         raise PermissionError("preissued_live_grant_invalid")
-    grant_raw = grant_path.read_bytes()
+    grant_raw = grant_path_raw
     grant_sha = bytes_sha256(grant_raw)
+    if grant_sha != expected_grant_sha256:
+        raise PermissionError("preissued_live_grant_changed")
     payload = {
         "schema_version": CONSUMPTION_SCHEMA_VERSION,
         "grant_id_hash": grant_id_hash,
@@ -2247,15 +2592,40 @@ def _load_and_consume_grant(
         "execution_scope_sha256": execution_scope_sha256(request),
         "request_sha256": request_sha256,
         "run_id": run_id,
+        "run_lease_sha256": run_lease_sha256,
         "consumed_at": consumed_at,
         "state": "consumed_after_binary_auth_preflight_before_process_spawn",
     }
     raw = (canonical_json(payload) + "\n").encode()
+
+    def revalidate_immediately_before_link() -> None:
+        atomic_clock = wall_clock().astimezone(UTC)
+        if atomic_clock < _parse_timestamp(consumed_at) or _validate_grant(grant, request, now=atomic_clock):
+            raise PermissionError("preissued_live_grant_invalid")
+
     try:
-        _atomic_publish(consumption_path, raw)
+        _atomic_publish(consumption_path, raw, pre_publish=revalidate_immediately_before_link)
     except FileExistsError as exc:
         raise PermissionError("live_grant_already_consumed") from exc
-    return grant_sha, bytes_sha256(raw)
+    # The exclusive link is the actual single-use transition. Re-read the
+    # authoritative wall clock after that transition; a grant that expires in
+    # the pre-link/link window remains consumed but must never release Grok.
+    post_link_monotonic = monotonic()
+    post_link_clock = wall_clock().astimezone(UTC)
+    consumed_clock = _parse_timestamp(consumed_at)
+    expires_clock = _parse_timestamp(grant["expires_at"])
+    if post_link_clock < consumed_clock or _validate_grant(grant, request, now=post_link_clock):
+        raise PermissionError("preissued_live_grant_expired_after_consumption")
+    release_budget_seconds = (expires_clock - post_link_clock).total_seconds()
+    if release_budget_seconds <= 0:
+        raise PermissionError("preissued_live_grant_expired_after_consumption")
+    return ConsumedGrant(
+        grant_sha256=grant_sha,
+        consumption_sha256=bytes_sha256(raw),
+        consumed_at=consumed_clock,
+        expires_at=expires_clock,
+        target_release_deadline_monotonic=post_link_monotonic + release_budget_seconds,
+    )
 
 
 def _isolated_environment(ephemeral_home: Path) -> dict[str, str]:
@@ -2282,6 +2652,285 @@ def _isolated_environment(ephemeral_home: Path) -> dict[str, str]:
     return environment
 
 
+def _session_updates_path(ephemeral_home: Path, cwd: Path, session_id: str) -> Path:
+    encoded_cwd = quote(str(cwd.resolve()), safe="")
+    return ephemeral_home / "sessions" / encoded_cwd / session_id / "updates.jsonl"
+
+
+def _usage_values(value: Any, expected_model_id: str) -> tuple[int, int, int, int]:
+    expected = {
+        "inputTokens",
+        "outputTokens",
+        "totalTokens",
+        "cachedReadTokens",
+        "reasoningTokens",
+        "modelCalls",
+        "apiDurationMs",
+        "modelUsage",
+        "numTurns",
+    }
+    nested_fields = expected - {"modelUsage", "numTurns"}
+    if not isinstance(value, dict) or set(value) != expected:
+        raise AdaptiveWaveValidationError("session_usage_shape_invalid")
+    scalar_fields = expected - {"modelUsage"}
+    if any(not _is_int(value.get(field)) or value[field] < 0 for field in scalar_fields):
+        raise AdaptiveWaveValidationError("session_usage_value_invalid")
+    if (
+        value["totalTokens"] != value["inputTokens"] + value["outputTokens"]
+        or value["cachedReadTokens"] > value["inputTokens"]
+        or value["reasoningTokens"] > value["outputTokens"]
+        or value["modelCalls"] < 1
+        or value["numTurns"] < 1
+    ):
+        raise AdaptiveWaveValidationError("session_usage_reconciliation_invalid")
+    model_usage = value["modelUsage"]
+    if not isinstance(model_usage, dict) or set(model_usage) != {expected_model_id}:
+        raise AdaptiveWaveValidationError("session_usage_model_invalid")
+    nested = model_usage[expected_model_id]
+    if (
+        not isinstance(nested, dict)
+        or set(nested) != nested_fields
+        or any(not _is_int(nested.get(field)) or nested[field] < 0 for field in nested_fields)
+        or any(nested[field] != value[field] for field in nested_fields)
+    ):
+        raise AdaptiveWaveValidationError("session_usage_model_reconciliation_invalid")
+    return value["inputTokens"], value["outputTokens"], value["totalTokens"], value["numTurns"]
+
+
+def _estimated_cost_usd_micros(input_tokens: int, output_tokens: int, budget: Mapping[str, Any]) -> int:
+    numerator = (
+        input_tokens * budget["input_token_cost_usd_micros_per_million"]
+        + output_tokens * budget["output_token_cost_usd_micros_per_million"]
+    )
+    return (numerator + 999_999) // 1_000_000
+
+
+def _parse_session_proof(
+    raw: bytes,
+    *,
+    expected_session_id: str,
+    expected_model_id: str,
+    expected_stdout: bytes,
+    max_line_bytes: int,
+    max_turns: int,
+    budget: Mapping[str, Any],
+) -> SessionProof:
+    if not raw or not raw.endswith(b"\n"):
+        raise AdaptiveWaveValidationError("session_updates_incomplete")
+    lines = raw.splitlines()
+    started: set[str] = set()
+    completed: set[str] = set()
+    provider_call_ids: set[str] = set()
+    tool_counts: dict[str, int] = {}
+    query_hashes: list[str] = []
+    prompt_ids: set[str] = set()
+    model_ids: list[str] = []
+    assistant_chunks: list[str] = []
+    user_events = 0
+    terminal: tuple[str, tuple[int, int, int, int]] | None = None
+    for index, raw_line in enumerate(lines):
+        if len(raw_line) > max_line_bytes:
+            raise AdaptiveWaveValidationError("session_update_line_ceiling_exceeded")
+        try:
+            event = strict_json_loads_bounded(
+                raw_line,
+                max_bytes=max_line_bytes,
+                max_depth=64,
+                max_nodes=100_000,
+            )
+        except (UnicodeError, ValueError) as exc:
+            raise AdaptiveWaveValidationError("session_update_json_invalid") from exc
+        if (
+            not isinstance(event, dict)
+            or set(event) != {"method", "params", "timestamp"}
+            or not _is_int(event.get("timestamp"))
+            or event["timestamp"] < 0
+        ):
+            raise AdaptiveWaveValidationError("session_update_envelope_invalid")
+        params = event.get("params")
+        if (
+            not isinstance(params, dict)
+            or set(params) != {"_meta", "sessionId", "update"}
+            or params.get("sessionId") != expected_session_id
+        ):
+            raise AdaptiveWaveValidationError("session_update_session_mismatch")
+        update = params.get("update")
+        if not isinstance(update, dict) or not isinstance(update.get("sessionUpdate"), str):
+            raise AdaptiveWaveValidationError("session_update_payload_invalid")
+        kind = update["sessionUpdate"]
+        expected_method = "_x.ai/session/update" if kind == "turn_completed" else "session/update"
+        if event["method"] != expected_method:
+            raise AdaptiveWaveValidationError("session_update_method_invalid")
+        if terminal is not None:
+            raise AdaptiveWaveValidationError("session_update_after_terminal")
+        metadata = params.get("_meta")
+        if (
+            not isinstance(metadata, dict)
+            or not _is_text(metadata.get("eventId"), maximum=512)
+            or not metadata["eventId"].startswith(f"{expected_session_id}-")
+            or not _is_int(metadata.get("agentTimestampMs"))
+            or metadata["agentTimestampMs"] < 0
+        ):
+            raise AdaptiveWaveValidationError("session_update_metadata_invalid")
+        if isinstance(metadata, dict) and metadata.get("promptId") is not None:
+            prompt_id = metadata["promptId"]
+            if not _is_text(prompt_id, maximum=256):
+                raise AdaptiveWaveValidationError("session_prompt_id_invalid")
+            prompt_ids.add(prompt_id)
+        if kind == "user_message_chunk":
+            if user_events != 0 or started or assistant_chunks:
+                raise AdaptiveWaveValidationError("session_user_causality_invalid")
+            user_events += 1
+            update_metadata = update.get("_meta")
+            model_id = update_metadata.get("modelId") if isinstance(update_metadata, dict) else None
+            if model_id != expected_model_id:
+                raise AdaptiveWaveValidationError("session_effective_model_mismatch")
+            model_ids.append(model_id)
+        elif kind == "tool_call":
+            call_id = update.get("toolCallId")
+            if (
+                user_events != 1
+                or bool(assistant_chunks)
+                or not _is_text(call_id, maximum=256)
+                or call_id in started
+                or call_id in completed
+                or update.get("status") not in {None, "in_progress"}
+            ):
+                raise AdaptiveWaveValidationError("session_tool_start_invalid")
+            started.add(call_id)
+        elif kind == "tool_call_update":
+            call_id = update.get("toolCallId")
+            raw_output = update.get("rawOutput")
+            if (
+                not isinstance(call_id, str)
+                or call_id not in started
+                or call_id in completed
+                or update.get("status") != "completed"
+                or not isinstance(raw_output, dict)
+                or set(raw_output) != {"call_id", "id", "input", "name"}
+                or raw_output.get("id") != call_id
+                or raw_output.get("name") not in NATIVE_X_TOOLS
+                or not _is_text(raw_output.get("call_id"), maximum=256)
+                or not isinstance(raw_output.get("input"), str)
+                or raw_output["call_id"] in provider_call_ids
+            ):
+                raise AdaptiveWaveValidationError("session_tool_completion_invalid")
+            try:
+                arguments = strict_json_loads_bounded(
+                    raw_output["input"],
+                    max_bytes=max_line_bytes,
+                    max_depth=32,
+                    max_nodes=10_000,
+                )
+            except (TypeError, UnicodeError, ValueError) as exc:
+                raise AdaptiveWaveValidationError("session_tool_arguments_invalid") from exc
+            if not isinstance(arguments, dict):
+                raise AdaptiveWaveValidationError("session_tool_arguments_invalid")
+            provider_call_ids.add(raw_output["call_id"])
+            completed.add(call_id)
+            tool_name = raw_output["name"]
+            tool_counts[tool_name] = tool_counts.get(tool_name, 0) + 1
+            query_hashes.append(canonical_sha256({"tool_name": tool_name, "arguments": arguments}))
+        elif kind == "agent_message_chunk":
+            if user_events != 1 or not started or started != completed:
+                raise AdaptiveWaveValidationError("session_assistant_causality_invalid")
+            content = update.get("content")
+            if isinstance(content, dict) and content.get("type") == "text" and isinstance(content.get("text"), str):
+                assistant_chunks.append(content["text"])
+            elif isinstance(content, str):
+                assistant_chunks.append(content)
+            else:
+                raise AdaptiveWaveValidationError("session_assistant_chunk_invalid")
+        elif kind == "turn_completed":
+            if index != len(lines) - 1 or user_events != 1 or not assistant_chunks or started != completed:
+                raise AdaptiveWaveValidationError("session_terminal_not_final")
+            prompt_id = update.get("prompt_id")
+            if not _is_text(prompt_id, maximum=256):
+                raise AdaptiveWaveValidationError("session_prompt_id_invalid")
+            prompt_ids.add(prompt_id)
+            if update.get("stop_reason") != "end_turn":
+                raise AdaptiveWaveValidationError("session_terminal_stop_invalid")
+            usage = _usage_values(update.get("usage"), expected_model_id)
+            terminal = ("end_turn", usage)
+        elif kind != "agent_thought_chunk":
+            raise AdaptiveWaveValidationError("session_event_kind_invalid")
+    if (
+        user_events != 1
+        or model_ids != [expected_model_id]
+        or not started
+        or started != completed
+        or len(prompt_ids) != 1
+        or terminal is None
+        or "".join(assistant_chunks).strip().encode() != expected_stdout.strip()
+    ):
+        raise AdaptiveWaveValidationError("session_causality_invalid")
+    input_tokens, output_tokens, total_tokens, model_turns = terminal[1]
+    estimated_cost = _estimated_cost_usd_micros(input_tokens, output_tokens, budget)
+    if (
+        model_turns > max_turns
+        or total_tokens > budget["max_total_tokens"]
+        or estimated_cost > budget["max_cost_usd_micros"]
+    ):
+        raise AdaptiveWaveValidationError("session_budget_exceeded")
+    return SessionProof(
+        updates_sha256=bytes_sha256(raw),
+        update_bytes=len(raw),
+        event_count=len(lines),
+        provider_prompt_id_sha256=bytes_sha256(next(iter(prompt_ids)).encode()),
+        effective_model_id=expected_model_id,
+        started_tool_calls=len(started),
+        completed_tool_calls=len(completed),
+        tool_counts=dict(sorted(tool_counts.items())),
+        query_argument_sha256s=tuple(query_hashes),
+        terminal_stop_reason="end_turn",
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        total_tokens=total_tokens,
+        model_turns=model_turns,
+        estimated_cost_usd_micros=estimated_cost,
+    )
+
+
+def _session_proof_payload(proof: SessionProof | None, *, status: str, raw: bytes | None) -> dict[str, Any]:
+    if proof is None:
+        return {
+            "status": status,
+            "updates_sha256": bytes_sha256(raw) if raw is not None else None,
+            "update_bytes": len(raw) if raw is not None else 0,
+            "event_count": 0,
+            "provider_prompt_id_sha256": None,
+            "effective_model_id": None,
+            "started_tool_calls": 0,
+            "completed_tool_calls": 0,
+            "tool_counts": {},
+            "query_argument_sha256s": [],
+            "terminal_stop_reason": None,
+            "input_tokens": None,
+            "output_tokens": None,
+            "total_tokens": None,
+            "model_turns": None,
+            "estimated_cost_usd_micros": None,
+        }
+    return {
+        "status": "verified",
+        "updates_sha256": proof.updates_sha256,
+        "update_bytes": proof.update_bytes,
+        "event_count": proof.event_count,
+        "provider_prompt_id_sha256": proof.provider_prompt_id_sha256,
+        "effective_model_id": proof.effective_model_id,
+        "started_tool_calls": proof.started_tool_calls,
+        "completed_tool_calls": proof.completed_tool_calls,
+        "tool_counts": proof.tool_counts,
+        "query_argument_sha256s": list(proof.query_argument_sha256s),
+        "terminal_stop_reason": proof.terminal_stop_reason,
+        "input_tokens": proof.input_tokens,
+        "output_tokens": proof.output_tokens,
+        "total_tokens": proof.total_tokens,
+        "model_turns": proof.model_turns,
+        "estimated_cost_usd_micros": proof.estimated_cost_usd_micros,
+    }
+
+
 def _build_static_bindings(
     *,
     request: Mapping[str, Any],
@@ -2293,6 +2942,7 @@ def _build_static_bindings(
     session_id: str,
     schema_sha256: str,
     binary_sha256: str | None,
+    command: Sequence[str],
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     input_binding = {
         "target_sha256": canonical_sha256(request["target"]),
@@ -2302,11 +2952,7 @@ def _build_static_bindings(
         "prior_unique_handle_count": prior_handle_count,
         "prior_handle_set_sha256": canonical_sha256(sorted(item.casefold() for item in prior_handles)),
     }
-    policy = _redacted_command_policy(
-        request=request,
-        compiled_prompt_sha256=input_binding["compiled_prompt_sha256"],
-        session_id=session_id,
-    )
+    account_ref = request["transport"]["operator_account_ref"]
     command_binding = {
         "provider_id": request["transport"]["provider_id"],
         "model_id": request["transport"]["model_id"],
@@ -2314,8 +2960,12 @@ def _build_static_bindings(
         "session_id": session_id,
         "grok_binary_sha256": binary_sha256,
         "structured_output_schema_sha256": schema_sha256,
-        "cli_flags_sha256": canonical_sha256(policy),
+        "argv_sha256": canonical_sha256(list(command)),
+        "command_policy_sha256": command_policy_sha256(request),
         "environment_policy_sha256": canonical_sha256(_redacted_environment_policy()),
+        "tool_registry_sha256": tool_registry_sha256(),
+        "operator_account_ref_sha256": bytes_sha256(account_ref.encode()) if account_ref is not None else None,
+        "oauth_auth_sha256": request["transport"]["oauth_auth_sha256"],
         "max_turns": request["emergency"]["max_turns"],
     }
     return input_binding, command_binding
@@ -2330,17 +2980,73 @@ def _create_run_root(runtime_root: Path, run_id: str) -> Path:
     return run_root
 
 
+@contextmanager
+def _run_lease(run_root: Path, *, create: bool) -> Any:
+    path = run_root / "run.lock"
+    flags = os.O_RDWR
+    if create:
+        flags |= os.O_CREAT | os.O_EXCL
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        descriptor = os.open(path, flags, 0o600)
+    except OSError as exc:
+        raise AdaptiveWaveValidationError("run_lease_open_failed") from exc
+    try:
+        if create:
+            token = os.urandom(32).hex().encode()
+            os.fchmod(descriptor, 0o600)
+            os.write(descriptor, token)
+            os.fsync(descriptor)
+            _fsync_directory(run_root)
+        metadata = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_uid != os.getuid()
+            or metadata.st_nlink != 1
+            or stat.S_IMODE(metadata.st_mode) != 0o600
+            or metadata.st_size != 64
+        ):
+            raise AdaptiveWaveValidationError("run_lease_metadata_invalid")
+        os.lseek(descriptor, 0, os.SEEK_SET)
+        token = os.read(descriptor, 65)
+        if _SHA256_RE.fullmatch(token.decode(errors="ignore")) is None:
+            raise AdaptiveWaveValidationError("run_lease_token_invalid")
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise AdaptiveWaveValidationError("run_active_owner_present") from exc
+        try:
+            yield bytes_sha256(token)
+        finally:
+            fcntl.flock(descriptor, fcntl.LOCK_UN)
+    finally:
+        os.close(descriptor)
+
+
+def _read_run_lease_sha256(run_root: Path) -> str:
+    return bytes_sha256(_read_regular_owned_bounded(run_root / "run.lock", maximum_bytes=64, required_mode=0o600))
+
+
 def _load_request(path: Path) -> dict[str, Any]:
     try:
-        if not _private_file_valid(path):
-            raise AdaptiveWaveValidationError("request_json_invalid")
-        request = strict_json_loads(path.read_bytes())
-    except (OSError, UnicodeError, ValueError) as exc:
+        request = strict_json_loads(_read_regular_owned_bounded(path, maximum_bytes=4_194_304, required_mode=0o600))
+    except (AdaptiveWaveValidationError, OSError, UnicodeError, ValueError) as exc:
         raise AdaptiveWaveValidationError("request_json_invalid") from exc
     errors = validate_request(request)
     if errors:
         raise AdaptiveWaveValidationError("request_contract_invalid")
     return request
+
+
+def _delete_ephemeral_tree(path: Path) -> None:
+    if path.is_symlink():
+        raise AdaptiveWaveValidationError("ephemeral_tree_symlink_invalid")
+    if path.exists():
+        shutil.rmtree(path)
+        _fsync_directory(path.parent)
+    if path.exists() or path.is_symlink():
+        raise AdaptiveWaveValidationError("ephemeral_tree_deletion_failed")
 
 
 def _run_adaptive_wave(
@@ -2361,6 +3067,14 @@ def _run_adaptive_wave(
         raise AdaptiveWaveValidationError("request_contract_invalid")
     if execution_mode not in {"fixture", "live"}:
         raise AdaptiveWaveValidationError("execution_mode_invalid")
+    transport = request["transport"]
+    if execution_mode == "live" and (
+        not _is_sha(transport["grok_binary_sha256"])
+        or not isinstance(transport["operator_account_ref"], str)
+        or not _is_sha(transport["oauth_auth_sha256"])
+        or auth_source is None
+    ):
+        raise AdaptiveWaveValidationError("live_transport_binding_required")
     request_sha = canonical_sha256(request)
     prompt_raw = _load_bound_bytes(
         request["prompt_source"]["path"],
@@ -2374,96 +3088,44 @@ def _run_adaptive_wave(
         raise AdaptiveWaveValidationError("prompt_utf8_invalid") from exc
     prior_handles, prior_bindings, prior_candidates = load_prior_context(request)
     result_schema = _load_result_schema()
-    compiled_prompt = compile_prompt(
-        base_prompt,
-        request["target"],
-        prior_handles,
-        result_schema=result_schema,
-    )
-    if len(compiled_prompt.encode()) > request["technical_limits"]["max_compiled_prompt_bytes"]:
+    compiled_prompt = compile_prompt(base_prompt, request["target"], prior_handles, result_schema=result_schema)
+    compiled_prompt_raw = compiled_prompt.encode()
+    if len(compiled_prompt_raw) > request["technical_limits"]["max_compiled_prompt_bytes"]:
         raise AdaptiveWaveValidationError("compiled_prompt_byte_ceiling_exceeded")
-    schema_sha = result_schema_sha256()
     actual_run_id = run_id or f"grok_wave_{execution_mode}_{uuid.uuid4().hex}"
     actual_session_id = session_id or str(uuid.uuid4())
     if _RUN_ID_RE.fullmatch(actual_run_id) is None or _SESSION_ID_RE.fullmatch(actual_session_id) is None:
         raise AdaptiveWaveValidationError("operator_identity_invalid")
     run_root = _create_run_root(runtime_root, actual_run_id)
-    workspace = run_root / "workspace"
-    workspace.mkdir(mode=0o700)
-    ephemeral_home = run_root / "ephemeral-home"
-    ephemeral_home.mkdir(mode=0o700)
-    compiled_prompt_path = run_root / "compiled-prompt.txt"
-    stdout_spool = run_root / ".stdout-spool"
-    stderr_spool = run_root / ".stderr-spool"
-    runtime_layout = {
-        "compiled_prompt_name": compiled_prompt_path.name,
-        "stdout_spool_name": stdout_spool.name,
-        "stderr_spool_name": stderr_spool.name,
-        "ephemeral_home_name": ephemeral_home.name,
-    }
-    _atomic_publish(compiled_prompt_path, compiled_prompt.encode())
-    isolated_environment = _isolated_environment(ephemeral_home)
-    binary_sha: str | None = None
-    command_binary = Path("fixture-grok.invalid")
-    if execution_mode == "live":
-        expected_binary_sha = request["transport"]["grok_binary_sha256"]
-        if not _is_sha(expected_binary_sha):
-            raise AdaptiveWaveValidationError("live_binary_sha256_required")
-        staged_binary = _stage_verified_binary(binary, run_root, expected_binary_sha)
-        binary_sha = staged_binary.sha256
-        command_binary = staged_binary.path
-        if auth_source is None:
-            raise AdaptiveWaveValidationError("live_auth_source_required")
-    input_binding, command_binding = _build_static_bindings(
-        request=request,
-        prompt_raw=prompt_raw,
-        compiled_prompt=compiled_prompt,
-        prior_bindings=prior_bindings,
-        prior_handles=prior_handles,
-        prior_handle_count=len(prior_handles),
-        session_id=actual_session_id,
-        schema_sha256=schema_sha,
-        binary_sha256=binary_sha,
-    )
-    started_at = _timestamp(wall_clock())
-    grant_sha: str | None = None
-    approval_consumption_sha: str | None = None
-    auth_prepared = False
-    try:
-        if execution_mode == "live":
-            assert auth_source is not None  # validated above
-            _copy_private_auth(auth_source, ephemeral_home)
-            auth_prepared = True
-            grant_sha, approval_consumption_sha = _load_and_consume_grant(
-                approval_root,
-                request=request,
-                run_id=actual_run_id,
-                request_sha256=request_sha,
-                consumed_at=started_at,
-            )
-        approval_binding = _approval_binding(
-            request,
-            required=execution_mode == "live",
-            grant_sha256=grant_sha,
-            consumption_sha256=approval_consumption_sha,
-        )
-        intent = {
-            "schema_version": INTENT_SCHEMA_VERSION,
-            "run_id": actual_run_id,
-            "request_id": request["request_id"],
-            "request_sha256": request_sha,
-            "execution_mode": execution_mode,
-            "started_at": started_at,
-            "input_binding": input_binding,
-            "command_binding": command_binding,
-            "approval": approval_binding,
-            "emergency": request["emergency"],
-            "technical_limits": request["technical_limits"],
-            "runtime_layout": runtime_layout,
-            "authority": AUTHORITY,
+    with _run_lease(run_root, create=True) as run_lease_sha:
+        workspace = run_root / "workspace"
+        workspace.mkdir(mode=0o700)
+        ephemeral_home = run_root / "ephemeral-home"
+        ephemeral_home.mkdir(mode=0o700)
+        compiled_prompt_path = run_root / "compiled-prompt.txt"
+        stdout_spool = run_root / ".stdout-spool"
+        stderr_spool = run_root / ".stderr-spool"
+        retained_updates_path = run_root / "session-updates.jsonl"
+        runtime_layout = {
+            "compiled_prompt_name": compiled_prompt_path.name,
+            "stdout_spool_name": stdout_spool.name,
+            "stderr_spool_name": stderr_spool.name,
+            "ephemeral_home_name": ephemeral_home.name,
+            "session_updates_name": retained_updates_path.name,
+            "run_lock_name": "run.lock",
         }
-        _atomic_publish(run_root / "operator-request.json", (canonical_json(request) + "\n").encode())
-        _atomic_publish(run_root / "operator-intent.json", (canonical_json(intent) + "\n").encode())
+        _atomic_publish(compiled_prompt_path, compiled_prompt_raw)
+        isolated_environment = _isolated_environment(ephemeral_home)
+        binary_sha: str | None = None
+        command_binary = Path("fixture-grok.invalid")
+        if execution_mode == "live":
+            try:
+                staged_binary = _stage_verified_binary(binary, run_root, transport["grok_binary_sha256"])
+            except BaseException:
+                _delete_ephemeral_tree(ephemeral_home)
+                raise
+            binary_sha = staged_binary.sha256
+            command_binary = staged_binary.path
         command = build_grok_command(
             binary=command_binary,
             cwd=workspace,
@@ -2473,170 +3135,337 @@ def _run_adaptive_wave(
             session_id=actual_session_id,
             result_schema=result_schema,
         )
-    except BaseException:
-        if auth_prepared:
-            _delete_ephemeral_auth(ephemeral_home)
-        _harden_ephemeral_tree(ephemeral_home)
-        raise
-    process_ledger_sha: str | None = None
-
-    def persist_spawn(
-        child_pid: int,
-        process_group_id: int,
-        kernel_birth_identity: str,
-        process_identity_token: str,
-    ) -> None:
-        nonlocal process_ledger_sha
-        ledger = {
-            "schema_version": PROCESS_LEDGER_SCHEMA_VERSION,
+        input_binding, command_binding = _build_static_bindings(
+            request=request,
+            prompt_raw=prompt_raw,
+            compiled_prompt=compiled_prompt,
+            prior_bindings=prior_bindings,
+            prior_handles=prior_handles,
+            prior_handle_count=len(prior_handles),
+            session_id=actual_session_id,
+            schema_sha256=result_schema_sha256(),
+            binary_sha256=binary_sha,
+            command=command,
+        )
+        started_clock = wall_clock().astimezone(UTC)
+        started_at = _timestamp(started_clock)
+        grant_sha: str | None = None
+        if execution_mode == "live":
+            try:
+                _, grant_raw = _load_preissued_grant(approval_root, request=request, now=started_clock)
+            except BaseException:
+                _delete_ephemeral_tree(ephemeral_home)
+                raise
+            grant_sha = bytes_sha256(grant_raw)
+        intent_approval = _approval_binding(
+            request,
+            required=execution_mode == "live",
+            grant_sha256=grant_sha,
+            consumption_sha256=None,
+        )
+        intent = {
+            "schema_version": INTENT_SCHEMA_VERSION,
             "run_id": actual_run_id,
             "request_id": request["request_id"],
-            "session_id": actual_session_id,
-            "child_pid": child_pid,
-            "process_group_id": process_group_id,
-            "kernel_birth_identity": kernel_birth_identity,
-            "process_identity_token": process_identity_token,
-            "spawned_at": _timestamp(wall_clock()),
-        }
-        raw_ledger = (canonical_json(ledger) + "\n").encode()
-        _atomic_publish(run_root / "process-ledger.json", raw_ledger)
-        process_ledger_sha = bytes_sha256(raw_ledger)
-
-    started_monotonic = monotonic()
-    try:
-        process_result = executor(
-            command,
-            cwd=workspace,
-            environment=isolated_environment,
-            stdout_spool=stdout_spool,
-            stderr_spool=stderr_spool,
-            deadline_at=started_monotonic + request["emergency"]["deadline_ms"] / 1000,
-            term_grace_ms=request["emergency"]["term_grace_ms"],
-            kill_grace_ms=request["emergency"]["kill_grace_ms"],
-            max_stdout_bytes=request["technical_limits"]["max_stdout_bytes"],
-            max_stderr_bytes=request["technical_limits"]["max_stderr_bytes"],
-            monotonic=monotonic,
-            on_spawn=persist_spawn,
-        )
-    finally:
-        if auth_prepared:
-            _delete_ephemeral_auth(ephemeral_home)
-        _harden_ephemeral_tree(ephemeral_home)
-    if process_result.execution_error_code == "process_group_cleanup_failed":
-        raise AdaptiveWaveValidationError("process_group_cleanup_incomplete")
-    elapsed_ms = max(0, round((monotonic() - started_monotonic) * 1000))
-    completed_at = _timestamp(wall_clock())
-    if not _private_file_valid(stdout_spool) or not _private_file_valid(stderr_spool):
-        raise AdaptiveWaveValidationError("process_spool_invalid")
-    stdout_size = stdout_spool.stat().st_size
-    stderr_size = stderr_spool.stat().st_size
-    technical_limit_kind = process_result.technical_limit_kind
-    if stdout_size > request["technical_limits"]["max_stdout_bytes"]:
-        technical_limit_kind = "stdout_bytes"
-    if stderr_size > request["technical_limits"]["max_stderr_bytes"]:
-        technical_limit_kind = "stderr_bytes"
-    stdout_raw = stdout_spool.read_bytes()[: request["technical_limits"]["max_stdout_bytes"]]
-    stderr_raw = stderr_spool.read_bytes()[: request["technical_limits"]["max_stderr_bytes"]]
-    _atomic_publish(run_root / "raw.stdout", stdout_raw)
-    _atomic_publish(run_root / "stderr.txt", stderr_raw)
-    stdout_spool.unlink()
-    stderr_spool.unlink()
-    (
-        parsed_result,
-        sanitized,
-        prefix_bytes,
-        suffix_bytes,
-        syntax_compliant,
-        contract_valid,
-        json_limit_kind,
-    ) = _parse_structured_stdout(
-        stdout_raw,
-        technical_limits=request["technical_limits"],
-        prior_candidates=prior_candidates,
-        live_mode=execution_mode == "live",
-    )
-    technical_limit_kind = technical_limit_kind or json_limit_kind
-    sanitized_sha: str | None = None
-    if sanitized is not None:
-        _atomic_publish(run_root / "sanitized.json", sanitized)
-        sanitized_sha = bytes_sha256(sanitized)
-    if technical_limit_kind is not None:
-        status = "technical_limit_exceeded"
-    elif process_result.timed_out:
-        status = "timed_out"
-    elif process_result.execution_error_code != "none" or process_result.exit_code != 0:
-        status = "process_failed"
-    elif not syntax_compliant:
-        status = "structured_output_noncompliant"
-    elif not contract_valid:
-        status = "result_contract_invalid"
-    else:
-        status = "fixture_complete" if execution_mode == "fixture" else "completed"
-    mechanical_reconciliation = _candidate_reconciliation(
-        parsed_result if isinstance(parsed_result, dict) else {},
-        prior_candidates,
-    )
-    receipt = {
-        "schema_version": RECEIPT_SCHEMA_VERSION,
-        "run_id": actual_run_id,
-        "request_id": request["request_id"],
-        "request_sha256": request_sha,
-        "execution_mode": execution_mode,
-        "status": status,
-        "input_binding": input_binding,
-        "command_binding": command_binding,
-        "approval": approval_binding,
-        "process": {
+            "request_sha256": request_sha,
+            "execution_mode": execution_mode,
             "started_at": started_at,
-            "completed_at": completed_at,
-            "elapsed_ms": elapsed_ms,
-            "exit_code": process_result.exit_code,
-            "timed_out": process_result.timed_out,
-            "term_sent": process_result.term_sent,
-            "kill_sent": process_result.kill_sent,
-            "process_spawn_attempted": process_result.process_spawn_attempted,
-            "child_pid": process_result.child_pid,
-            "process_group_id": process_result.process_group_id,
-            "process_ledger_sha256": process_ledger_sha,
-            "kernel_birth_identity_sha256": (
-                bytes_sha256(process_result.kernel_birth_identity.encode())
-                if process_result.kernel_birth_identity is not None
-                else None
-            ),
-            "process_identity_token_sha256": (
-                bytes_sha256(process_result.process_identity_token.encode())
-                if process_result.process_identity_token is not None
-                else None
-            ),
-            "process_group_cleanup_confirmed": process_result.process_group_cleanup_confirmed,
-            "execution_error_code": process_result.execution_error_code,
-            "deadline_ms": request["emergency"]["deadline_ms"],
-            "term_grace_ms": request["emergency"]["term_grace_ms"],
-            "kill_grace_ms": request["emergency"]["kill_grace_ms"],
-            "fallback_used": False,
-            "technical_limit_exceeded": technical_limit_kind is not None,
-            "technical_limit_kind": technical_limit_kind,
-        },
-        "artifacts": {
-            "raw_stdout_sha256": bytes_sha256(stdout_raw),
-            "stderr_sha256": bytes_sha256(stderr_raw),
-            "sanitized_output_sha256": sanitized_sha,
-            "structured_output_compliant": syntax_compliant,
-            "structured_output_contract_valid": contract_valid,
-            "non_json_prefix_bytes": prefix_bytes,
-            "non_json_suffix_bytes": suffix_bytes,
-            "compiled_prompt_sha256": bytes_sha256(compiled_prompt_path.read_bytes()),
-            "ephemeral_auth_deleted": not (ephemeral_home / "auth.json").exists(),
-            "ephemeral_tree_private": _ephemeral_tree_private(ephemeral_home),
-        },
-        "reconciliation": mechanical_reconciliation,
-        "authority": AUTHORITY,
-    }
-    receipt_errors = validate_operator_receipt(receipt)
-    if receipt_errors:
-        raise AdaptiveWaveValidationError("generated_receipt_invalid")
-    _atomic_publish(run_root / "operator-receipt.json", (canonical_json(receipt) + "\n").encode())
-    return receipt, run_root
+            "run_lease_sha256": run_lease_sha,
+            "input_binding": input_binding,
+            "command_binding": command_binding,
+            "approval": intent_approval,
+            "emergency": request["emergency"],
+            "technical_limits": request["technical_limits"],
+            "budget": request["budget"],
+            "retention": request["retention"],
+            "runtime_layout": runtime_layout,
+            "authority": AUTHORITY,
+        }
+        _atomic_publish(run_root / "operator-request.json", (canonical_json(request) + "\n").encode())
+        _atomic_publish(run_root / "operator-intent.json", (canonical_json(intent) + "\n").encode())
+
+        approval_consumption_sha: str | None = None
+        consumed_grant: ConsumedGrant | None = None
+        if execution_mode == "live":
+            assert auth_source is not None
+            try:
+                if _auth_fingerprint(auth_source) != transport["oauth_auth_sha256"]:
+                    raise AdaptiveWaveValidationError("live_auth_fingerprint_mismatch")
+                copied_auth = _copy_private_auth(auth_source, ephemeral_home)
+                if _auth_fingerprint(copied_auth) != transport["oauth_auth_sha256"]:
+                    raise AdaptiveWaveValidationError("copied_auth_fingerprint_mismatch")
+                consumed_grant = _load_and_consume_grant(
+                    approval_root,
+                    request=request,
+                    run_id=actual_run_id,
+                    run_lease_sha256=run_lease_sha,
+                    request_sha256=request_sha,
+                    expected_grant_sha256=grant_sha,
+                    monotonic=monotonic,
+                    wall_clock=wall_clock,
+                )
+                grant_sha = consumed_grant.grant_sha256
+                approval_consumption_sha = consumed_grant.consumption_sha256
+            except BaseException:
+                _delete_ephemeral_tree(ephemeral_home)
+                raise
+        approval_binding = _approval_binding(
+            request,
+            required=execution_mode == "live",
+            grant_sha256=grant_sha,
+            consumption_sha256=approval_consumption_sha,
+        )
+        process_ledger_sha: str | None = None
+
+        def persist_spawn(
+            child_pid: int,
+            process_group_id: int,
+            kernel_birth_identity: str,
+            process_identity_token: str,
+        ) -> None:
+            nonlocal process_ledger_sha
+            launcher_verified_clock = wall_clock().astimezone(UTC)
+            ledger = {
+                "schema_version": PROCESS_LEDGER_SCHEMA_VERSION,
+                "run_id": actual_run_id,
+                "request_id": request["request_id"],
+                "run_lease_sha256": run_lease_sha,
+                "session_id": actual_session_id,
+                "child_pid": child_pid,
+                "process_group_id": process_group_id,
+                "kernel_birth_identity": kernel_birth_identity,
+                "process_identity_token": process_identity_token,
+                "spawned_at": _timestamp(launcher_verified_clock),
+            }
+            raw_ledger = (canonical_json(ledger) + "\n").encode()
+            _atomic_publish(run_root / "process-ledger.json", raw_ledger)
+            process_ledger_sha = bytes_sha256(raw_ledger)
+            # The gated launcher has not exec'd the target yet. Recheck after
+            # durable ledger publication, immediately before the executor
+            # releases the gate; no provider work occurs if this fails.
+            release_clock = wall_clock().astimezone(UTC)
+            if execution_mode == "live" and (
+                consumed_grant is None
+                or release_clock < launcher_verified_clock
+                or release_clock < consumed_grant.consumed_at
+                or release_clock >= consumed_grant.expires_at
+                or monotonic() >= consumed_grant.target_release_deadline_monotonic
+            ):
+                raise PermissionError("live_grant_expired_before_target_release")
+
+        updates_source_path = _session_updates_path(ephemeral_home, workspace, actual_session_id)
+        started_monotonic = monotonic()
+        try:
+            process_result = executor(
+                command,
+                cwd=workspace,
+                environment=isolated_environment,
+                stdout_spool=stdout_spool,
+                stderr_spool=stderr_spool,
+                deadline_at=started_monotonic + request["emergency"]["deadline_ms"] / 1000,
+                term_grace_ms=request["emergency"]["term_grace_ms"],
+                kill_grace_ms=request["emergency"]["kill_grace_ms"],
+                max_stdout_bytes=request["technical_limits"]["max_stdout_bytes"],
+                max_stderr_bytes=request["technical_limits"]["max_stderr_bytes"],
+                session_tree_root=ephemeral_home,
+                session_updates_path=updates_source_path,
+                max_session_files=request["technical_limits"]["max_session_files"],
+                max_session_file_bytes=request["technical_limits"]["max_session_file_bytes"],
+                max_session_total_bytes=request["technical_limits"]["max_session_total_bytes"],
+                max_session_updates_bytes=request["technical_limits"]["max_session_updates_bytes"],
+                monotonic=monotonic,
+                on_spawn=persist_spawn,
+            )
+        except BaseException:
+            _delete_ephemeral_tree(ephemeral_home)
+            raise
+        if process_result.execution_error_code == "process_group_cleanup_failed":
+            _delete_ephemeral_tree(ephemeral_home)
+            raise AdaptiveWaveValidationError("process_group_cleanup_incomplete")
+        elapsed_ms = max(0, round((monotonic() - started_monotonic) * 1000))
+        completed_clock = wall_clock().astimezone(UTC)
+        completed_at = _timestamp(completed_clock)
+        technical_limit_kind = process_result.technical_limit_kind
+        try:
+            stdout_raw = _read_regular_owned_bounded(
+                stdout_spool,
+                maximum_bytes=request["technical_limits"]["max_stdout_bytes"],
+                required_mode=0o600,
+            )
+            stderr_raw = _read_regular_owned_bounded(
+                stderr_spool,
+                maximum_bytes=request["technical_limits"]["max_stderr_bytes"],
+                required_mode=0o600,
+            )
+        except BaseException:
+            _delete_ephemeral_tree(ephemeral_home)
+            raise
+        _atomic_publish(run_root / "raw.stdout", stdout_raw)
+        _atomic_publish(run_root / "stderr.txt", stderr_raw)
+        stdout_spool.unlink()
+        stderr_spool.unlink()
+        (
+            parsed_result,
+            sanitized,
+            prefix_bytes,
+            suffix_bytes,
+            syntax_compliant,
+            contract_valid,
+            json_limit_kind,
+        ) = _parse_structured_stdout(
+            stdout_raw,
+            technical_limits=request["technical_limits"],
+            prior_candidates=prior_candidates,
+            live_mode=execution_mode == "live",
+        )
+        technical_limit_kind = technical_limit_kind or json_limit_kind
+        sanitized_sha: str | None = None
+        if sanitized is not None:
+            _atomic_publish(run_root / "sanitized.json", sanitized)
+            sanitized_sha = bytes_sha256(sanitized)
+
+        measurement = _measure_session_tree(
+            ephemeral_home,
+            max_files=request["technical_limits"]["max_session_files"],
+            max_file_bytes=request["technical_limits"]["max_session_file_bytes"],
+            max_total_bytes=request["technical_limits"]["max_session_total_bytes"],
+            updates_path=updates_source_path,
+            max_updates_bytes=request["technical_limits"]["max_session_updates_bytes"],
+        )
+        technical_limit_kind = technical_limit_kind or measurement.limit_kind
+        updates_raw: bytes | None = None
+        session_proof: SessionProof | None = None
+        session_proof_status = "not_applicable" if execution_mode == "fixture" else "missing"
+        if execution_mode == "live" and updates_source_path.exists() and measurement.limit_kind is None:
+            try:
+                updates_raw = _read_regular_owned_bounded(
+                    updates_source_path,
+                    maximum_bytes=request["technical_limits"]["max_session_updates_bytes"],
+                )
+                _atomic_publish(retained_updates_path, updates_raw)
+                session_proof = _parse_session_proof(
+                    updates_raw,
+                    expected_session_id=actual_session_id,
+                    expected_model_id=transport["model_id"],
+                    expected_stdout=stdout_raw,
+                    max_line_bytes=request["technical_limits"]["max_session_update_line_bytes"],
+                    max_turns=request["emergency"]["max_turns"],
+                    budget=request["budget"],
+                )
+                model_reconciliation = (
+                    parsed_result.get("local_reconciliation") if isinstance(parsed_result, dict) else None
+                )
+                if (
+                    not isinstance(model_reconciliation, dict)
+                    or session_proof.completed_tool_calls != model_reconciliation.get("tool_calls_completed")
+                    or session_proof.tool_counts != model_reconciliation.get("tool_counts")
+                ):
+                    raise AdaptiveWaveValidationError("session_model_tool_reconciliation_invalid")
+                session_proof_status = "verified"
+            except (AdaptiveWaveValidationError, OSError, UnicodeError, ValueError):
+                session_proof = None
+                session_proof_status = "invalid"
+        _delete_ephemeral_tree(ephemeral_home)
+
+        if technical_limit_kind is not None:
+            status = "technical_limit_exceeded"
+        elif process_result.timed_out:
+            status = "timed_out"
+        elif process_result.execution_error_code != "none" or process_result.exit_code != 0:
+            status = "process_failed"
+        elif not syntax_compliant:
+            status = "structured_output_noncompliant"
+        elif not contract_valid:
+            status = "result_contract_invalid"
+        elif execution_mode == "live" and session_proof is None:
+            status = "provider_evidence_invalid"
+        else:
+            status = "fixture_complete" if execution_mode == "fixture" else "completed"
+        session_payload = _session_proof_payload(
+            session_proof,
+            status=session_proof_status,
+            raw=updates_raw,
+        )
+        reconciliation = _candidate_reconciliation(
+            parsed_result if isinstance(parsed_result, dict) else {},
+            prior_candidates,
+            session_proof=session_proof,
+            fixture=execution_mode == "fixture",
+        )
+        delete_after = _timestamp(started_clock + timedelta(seconds=request["retention"]["ttl_seconds"]))
+        receipt = {
+            "schema_version": RECEIPT_SCHEMA_VERSION,
+            "run_id": actual_run_id,
+            "request_id": request["request_id"],
+            "request_sha256": request_sha,
+            "execution_mode": execution_mode,
+            "status": status,
+            "run_lease_sha256": run_lease_sha,
+            "input_binding": input_binding,
+            "command_binding": command_binding,
+            "approval": approval_binding,
+            "process": {
+                "started_at": started_at,
+                "completed_at": completed_at,
+                "elapsed_ms": elapsed_ms,
+                "exit_code": process_result.exit_code,
+                "timed_out": process_result.timed_out,
+                "term_sent": process_result.term_sent,
+                "kill_sent": process_result.kill_sent,
+                "process_spawn_attempted": process_result.process_spawn_attempted,
+                "child_pid": process_result.child_pid,
+                "process_group_id": process_result.process_group_id,
+                "process_ledger_sha256": process_ledger_sha,
+                "kernel_birth_identity_sha256": (
+                    bytes_sha256(process_result.kernel_birth_identity.encode())
+                    if process_result.kernel_birth_identity is not None
+                    else None
+                ),
+                "process_identity_token_sha256": (
+                    bytes_sha256(process_result.process_identity_token.encode())
+                    if process_result.process_identity_token is not None
+                    else None
+                ),
+                "process_group_cleanup_confirmed": process_result.process_group_cleanup_confirmed,
+                "execution_error_code": process_result.execution_error_code,
+                "deadline_ms": request["emergency"]["deadline_ms"],
+                "term_grace_ms": request["emergency"]["term_grace_ms"],
+                "kill_grace_ms": request["emergency"]["kill_grace_ms"],
+                "fallback_used": False,
+                "technical_limit_exceeded": technical_limit_kind is not None,
+                "technical_limit_kind": technical_limit_kind,
+            },
+            "artifacts": {
+                "raw_stdout_sha256": bytes_sha256(stdout_raw),
+                "stderr_sha256": bytes_sha256(stderr_raw),
+                "sanitized_output_sha256": sanitized_sha,
+                "structured_output_compliant": syntax_compliant,
+                "structured_output_contract_valid": contract_valid,
+                "non_json_prefix_bytes": prefix_bytes,
+                "non_json_suffix_bytes": suffix_bytes,
+                "compiled_prompt_sha256": bytes_sha256(compiled_prompt_raw),
+                "session_updates_sha256": bytes_sha256(updates_raw) if updates_raw is not None else None,
+                "ephemeral_tree_deleted": True,
+                "session_tree_file_count": measurement.file_count,
+                "session_tree_total_bytes": measurement.total_bytes,
+                "session_tree_max_file_bytes": measurement.max_file_bytes,
+            },
+            "session_proof": session_payload,
+            "retention": {
+                "policy_id": request["retention"]["policy_id"],
+                "ttl_seconds": request["retention"]["ttl_seconds"],
+                "delete_after": delete_after,
+                "purge_state": "pending_expiry",
+                "deletion_receipt_required": True,
+            },
+            "reconciliation": reconciliation,
+            "authority": AUTHORITY,
+        }
+        receipt_errors = validate_operator_receipt(receipt)
+        if receipt_errors:
+            raise AdaptiveWaveValidationError("generated_receipt_invalid:" + ",".join(receipt_errors))
+        _atomic_publish(run_root / "operator-receipt.json", (canonical_json(receipt) + "\n").encode())
+        return receipt, run_root
 
 
 def run_adaptive_grok_wave_fixture(
@@ -2696,11 +3525,14 @@ def _intent_valid(intent: Any) -> bool:
         and _is_sha(intent.get("request_sha256"))
         and intent.get("execution_mode") in {"fixture", "live"}
         and _timestamp_valid(intent.get("started_at"))
+        and _is_sha(intent.get("run_lease_sha256"))
         and _input_binding_valid(intent.get("input_binding"))
         and _command_binding_valid(intent.get("command_binding"))
-        and _approval_binding_valid(intent.get("approval"), intent.get("execution_mode"))
+        and _approval_binding_valid(intent.get("approval"), intent.get("execution_mode"), terminal=False)
         and _emergency_valid(intent.get("emergency"))
         and _technical_limits_valid(intent.get("technical_limits"))
+        and _budget_valid(intent.get("budget"))
+        and _retention_valid(intent.get("retention"))
         and _runtime_layout_valid(intent.get("runtime_layout"))
         and intent.get("authority") == AUTHORITY
     )
@@ -2732,8 +3564,7 @@ def _input_binding_valid(value: Any) -> bool:
         and isinstance(prior, list)
         and all(
             isinstance(row, dict)
-            and set(row)
-            == {"wave_id", "sha256", "candidate_count", "unique_handle_count", "handle_set_sha256"}
+            and set(row) == {"wave_id", "sha256", "candidate_count", "unique_handle_count", "handle_set_sha256"}
             and isinstance(row["wave_id"], str)
             and _ID_RE.fullmatch(row["wave_id"]) is not None
             and _is_sha(row["sha256"])
@@ -2761,14 +3592,25 @@ def _command_binding_valid(value: Any) -> bool:
         and _SESSION_ID_RE.fullmatch(value["session_id"]) is not None
         and (value.get("grok_binary_sha256") is None or _is_sha(value["grok_binary_sha256"]))
         and _is_sha(value.get("structured_output_schema_sha256"))
-        and _is_sha(value.get("cli_flags_sha256"))
+        and _is_sha(value.get("argv_sha256"))
+        and _is_sha(value.get("command_policy_sha256"))
         and _is_sha(value.get("environment_policy_sha256"))
+        and _is_sha(value.get("tool_registry_sha256"))
+        and (value.get("operator_account_ref_sha256") is None or _is_sha(value["operator_account_ref_sha256"]))
+        and (value.get("oauth_auth_sha256") is None or _is_sha(value["oauth_auth_sha256"]))
+        and ((value.get("operator_account_ref_sha256") is None) is (value.get("oauth_auth_sha256") is None))
         and _is_int(value.get("max_turns"))
         and 1 <= value["max_turns"] <= 512
     )
 
 
-def _approval_binding_valid(value: Any, execution_mode: Any) -> bool:
+def _approval_binding_valid(
+    value: Any,
+    execution_mode: Any,
+    *,
+    terminal: bool,
+    allow_unconsumed: bool = False,
+) -> bool:
     if not isinstance(value, dict) or set(value) != _APPROVAL_BINDING_KEYS:
         return False
     required = execution_mode == "live"
@@ -2782,7 +3624,11 @@ def _approval_binding_valid(value: Any, execution_mode: Any) -> bool:
             or (
                 _is_sha(value.get("grant_id_sha256"))
                 and _is_sha(value.get("grant_sha256"))
-                and _is_sha(value.get("consumption_sha256"))
+                and (
+                    (_is_sha(value.get("consumption_sha256")) or allow_unconsumed)
+                    if terminal
+                    else value.get("consumption_sha256") is None
+                )
             )
         )
         and (required or (value.get("grant_sha256") is None and value.get("consumption_sha256") is None))
@@ -2790,12 +3636,19 @@ def _approval_binding_valid(value: Any, execution_mode: Any) -> bool:
 
 
 def _runtime_layout_valid(value: Any) -> bool:
-    return isinstance(value, dict) and set(value) == _RUNTIME_LAYOUT_KEYS and value == {
-        "compiled_prompt_name": "compiled-prompt.txt",
-        "stdout_spool_name": ".stdout-spool",
-        "stderr_spool_name": ".stderr-spool",
-        "ephemeral_home_name": "ephemeral-home",
-    }
+    return (
+        isinstance(value, dict)
+        and set(value) == _RUNTIME_LAYOUT_KEYS
+        and value
+        == {
+            "compiled_prompt_name": "compiled-prompt.txt",
+            "stdout_spool_name": ".stdout-spool",
+            "stderr_spool_name": ".stderr-spool",
+            "ephemeral_home_name": "ephemeral-home",
+            "session_updates_name": "session-updates.jsonl",
+            "run_lock_name": "run.lock",
+        }
+    )
 
 
 def _receipt_reconciliation_valid(value: Any) -> bool:
@@ -2811,11 +3664,13 @@ def _receipt_reconciliation_valid(value: Any) -> bool:
                 "prior_overlap_count",
                 "verified_material_update_count",
                 "model_reported_tool_calls",
+                "mechanically_verified_tool_calls",
             )
         )
         and value["prior_overlap_count"] <= value["candidate_count"]
         and value["verified_material_update_count"] <= value["prior_overlap_count"]
-        and value.get("tool_facts_model_mediated") is True
+        and value.get("tool_fact_source")
+        in {"fixture_not_applicable", "session_transcript_verified", "session_transcript_unverified"}
     )
 
 
@@ -2828,6 +3683,7 @@ def _process_ledger_valid(value: Any) -> bool:
         and _RUN_ID_RE.fullmatch(value["run_id"]) is not None
         and isinstance(value.get("request_id"), str)
         and _REQUEST_ID_RE.fullmatch(value["request_id"]) is not None
+        and _is_sha(value.get("run_lease_sha256"))
         and isinstance(value.get("session_id"), str)
         and _SESSION_ID_RE.fullmatch(value["session_id"]) is not None
         and _is_int(value.get("child_pid"))
@@ -2838,6 +3694,114 @@ def _process_ledger_valid(value: Any) -> bool:
         and isinstance(value.get("process_identity_token"), str)
         and _SHA256_RE.fullmatch(value["process_identity_token"]) is not None
         and _timestamp_valid(value.get("spawned_at"))
+    )
+
+
+def _session_proof_valid(value: Any, execution_mode: Any) -> bool:
+    if not isinstance(value, dict) or set(value) != _SESSION_PROOF_KEYS:
+        return False
+    status = value.get("status")
+    if status not in {"not_applicable", "missing", "invalid", "verified"}:
+        return False
+    if execution_mode == "fixture":
+        return (
+            status == "not_applicable"
+            and value.get("updates_sha256") is None
+            and value.get("update_bytes") == 0
+            and value.get("event_count") == 0
+            and value.get("provider_prompt_id_sha256") is None
+            and value.get("effective_model_id") is None
+            and value.get("started_tool_calls") == 0
+            and value.get("completed_tool_calls") == 0
+            and value.get("tool_counts") == {}
+            and value.get("query_argument_sha256s") == []
+            and value.get("terminal_stop_reason") is None
+            and all(
+                value.get(key) is None
+                for key in (
+                    "input_tokens",
+                    "output_tokens",
+                    "total_tokens",
+                    "model_turns",
+                    "estimated_cost_usd_micros",
+                )
+            )
+        )
+    if execution_mode != "live" or status == "not_applicable":
+        return False
+    if status != "verified":
+        return (
+            (value.get("updates_sha256") is None or _is_sha(value["updates_sha256"]))
+            and _validate_nonnegative_int(value.get("update_bytes"))
+            and value.get("event_count") == 0
+            and value.get("provider_prompt_id_sha256") is None
+            and value.get("effective_model_id") is None
+            and value.get("started_tool_calls") == 0
+            and value.get("completed_tool_calls") == 0
+            and value.get("tool_counts") == {}
+            and value.get("query_argument_sha256s") == []
+            and value.get("terminal_stop_reason") is None
+            and all(
+                value.get(key) is None
+                for key in (
+                    "input_tokens",
+                    "output_tokens",
+                    "total_tokens",
+                    "model_turns",
+                    "estimated_cost_usd_micros",
+                )
+            )
+        )
+    tool_counts = value.get("tool_counts")
+    query_hashes = value.get("query_argument_sha256s")
+    return (
+        _is_sha(value.get("updates_sha256"))
+        and _validate_nonnegative_int(value.get("update_bytes"))
+        and value["update_bytes"] > 0
+        and _validate_nonnegative_int(value.get("event_count"))
+        and value["event_count"] > 0
+        and _is_sha(value.get("provider_prompt_id_sha256"))
+        and isinstance(value.get("effective_model_id"), str)
+        and _ID_RE.fullmatch(value["effective_model_id"]) is not None
+        and _validate_nonnegative_int(value.get("started_tool_calls"))
+        and value["started_tool_calls"] > 0
+        and value.get("completed_tool_calls") == value["started_tool_calls"]
+        and isinstance(tool_counts, dict)
+        and all(
+            key in NATIVE_X_TOOLS and _validate_nonnegative_int(count) and count > 0
+            for key, count in tool_counts.items()
+        )
+        and sum(tool_counts.values()) == value["completed_tool_calls"]
+        and isinstance(query_hashes, list)
+        and len(query_hashes) == value["completed_tool_calls"]
+        and all(_is_sha(item) for item in query_hashes)
+        and value.get("terminal_stop_reason") == "end_turn"
+        and all(
+            _validate_nonnegative_int(value.get(key))
+            for key in (
+                "input_tokens",
+                "output_tokens",
+                "total_tokens",
+                "model_turns",
+                "estimated_cost_usd_micros",
+            )
+        )
+        and value["total_tokens"] == value["input_tokens"] + value["output_tokens"]
+        and value["model_turns"] > 0
+    )
+
+
+def _retention_receipt_valid(value: Any) -> bool:
+    return (
+        isinstance(value, dict)
+        and set(value) == _RETENTION_RECEIPT_KEYS
+        and isinstance(value.get("policy_id"), str)
+        and _ID_RE.fullmatch(value["policy_id"]) is not None
+        and _is_int(value.get("ttl_seconds"))
+        and 3_600 <= value["ttl_seconds"] <= 604_800
+        and _timestamp_valid(value.get("delete_after"))
+        and value.get("purge_state") == "pending_expiry"
+        and value.get("deletion_receipt_required") is True
     )
 
 
@@ -2853,12 +3817,16 @@ def validate_operator_receipt(receipt: Any) -> list[str]:
         errors.append("receipt_request_id_invalid")
     if not _is_sha(receipt.get("request_sha256")):
         errors.append("receipt_request_sha256_invalid")
+    if not _is_sha(receipt.get("run_lease_sha256")):
+        errors.append("receipt_run_lease_invalid")
     mode = receipt.get("execution_mode")
     status = receipt.get("status")
     if mode not in {"fixture", "live"} or status not in _RECEIPT_STATUSES:
         errors.append("receipt_state_invalid")
-    if isinstance(receipt.get("run_id"), str) and mode in {"fixture", "live"} and not receipt["run_id"].startswith(
-        f"grok_wave_{mode}_"
+    if (
+        isinstance(receipt.get("run_id"), str)
+        and mode in {"fixture", "live"}
+        and not receipt["run_id"].startswith(f"grok_wave_{mode}_")
     ):
         errors.append("receipt_run_mode_mismatch")
     if (mode == "fixture" and status == "completed") or (mode == "live" and status == "fixture_complete"):
@@ -2870,7 +3838,12 @@ def validate_operator_receipt(receipt: Any) -> list[str]:
         errors.append("receipt_input_binding_invalid")
     if not _command_binding_valid(command_binding):
         errors.append("receipt_command_binding_invalid")
-    if not _approval_binding_valid(receipt.get("approval"), mode):
+    if not _approval_binding_valid(
+        receipt.get("approval"),
+        mode,
+        terminal=True,
+        allow_unconsumed=status == "crash_recovered",
+    ):
         errors.append("receipt_approval_invalid")
 
     process = receipt.get("process")
@@ -2884,17 +3857,14 @@ def validate_operator_receipt(receipt: Any) -> list[str]:
             timestamps_ordered = _parse_timestamp(process["completed_at"]) >= _parse_timestamp(process["started_at"])
         child_values = (process.get("child_pid"), process.get("process_group_id"))
         child_values_valid = all(value is None or (_is_int(value) and value > 0) for value in child_values)
-        ledger_hash_valid = process.get("process_ledger_sha256") is None or _is_sha(
-            process["process_ledger_sha256"]
-        )
+        ledger_hash_valid = process.get("process_ledger_sha256") is None or _is_sha(process["process_ledger_sha256"])
         identity_hashes = (
             process.get("kernel_birth_identity_sha256"),
             process.get("process_identity_token_sha256"),
         )
         identity_hashes_valid = all(value is None or _is_sha(value) for value in identity_hashes)
         spawn_binding_complete = all(
-            value is not None
-            for value in (*child_values, process.get("process_ledger_sha256"), *identity_hashes)
+            value is not None for value in (*child_values, process.get("process_ledger_sha256"), *identity_hashes)
         )
         technical_kind = process.get("technical_limit_kind")
         technical_flag = process.get("technical_limit_exceeded")
@@ -2933,7 +3903,7 @@ def validate_operator_receipt(receipt: Any) -> list[str]:
                 for key in ("term_grace_ms", "kill_grace_ms")
             )
             or process.get("fallback_used") is not False
-            or technical_kind not in {None, "stdout_bytes", "stderr_bytes", "json_bytes", "json_structure"}
+            or technical_kind not in _TECHNICAL_LIMIT_KINDS | {None}
             or technical_flag is not (technical_kind is not None)
         ):
             errors.append("receipt_process_value_invalid")
@@ -2957,10 +3927,21 @@ def validate_operator_receipt(receipt: Any) -> list[str]:
             and not _validate_nonnegative_int(artifacts["non_json_suffix_bytes"])
         )
         or not _is_sha(artifacts.get("compiled_prompt_sha256"))
-        or artifacts.get("ephemeral_auth_deleted") is not True
-        or artifacts.get("ephemeral_tree_private") is not True
+        or (artifacts.get("session_updates_sha256") is not None and not _is_sha(artifacts["session_updates_sha256"]))
+        or artifacts.get("ephemeral_tree_deleted") is not True
+        or any(
+            not _validate_nonnegative_int(artifacts.get(key))
+            for key in ("session_tree_file_count", "session_tree_total_bytes", "session_tree_max_file_bytes")
+        )
     ):
         errors.append("receipt_artifacts_value_invalid")
+
+    session_proof = receipt.get("session_proof")
+    if not _session_proof_valid(session_proof, mode):
+        errors.append("receipt_session_proof_invalid")
+    retention = receipt.get("retention")
+    if not _retention_receipt_valid(retention):
+        errors.append("receipt_retention_invalid")
 
     if not _receipt_reconciliation_valid(receipt.get("reconciliation")):
         errors.append("receipt_reconciliation_invalid")
@@ -2970,12 +3951,14 @@ def validate_operator_receipt(receipt: Any) -> list[str]:
     if _input_binding_valid(input_binding) and _command_binding_valid(command_binding):
         if command_binding["structured_output_schema_sha256"] != result_schema_sha256():
             errors.append("receipt_result_schema_hash_invalid")
-        if command_binding["cli_flags_sha256"] != canonical_sha256(
+        if command_binding["command_policy_sha256"] != canonical_sha256(
             _redacted_policy_from_bindings(input_binding, command_binding)
         ):
-            errors.append("receipt_cli_flags_hash_invalid")
+            errors.append("receipt_command_policy_hash_invalid")
         if command_binding["environment_policy_sha256"] != canonical_sha256(_redacted_environment_policy()):
             errors.append("receipt_environment_policy_hash_invalid")
+        if command_binding["tool_registry_sha256"] != tool_registry_sha256():
+            errors.append("receipt_tool_registry_hash_invalid")
         if mode == "live" and not _is_sha(command_binding.get("grok_binary_sha256")):
             errors.append("receipt_live_binary_hash_missing")
         if mode == "fixture" and command_binding.get("grok_binary_sha256") is not None:
@@ -2985,6 +3968,8 @@ def validate_operator_receipt(receipt: Any) -> list[str]:
 
     if process_shape_valid and artifacts_shape_valid:
         spawned = process.get("process_spawn_attempted") is True
+        if mode == "live" and spawned and receipt.get("approval", {}).get("consumption_sha256") is None:
+            errors.append("spawn_without_grant_consumption")
         if spawned and process.get("process_group_cleanup_confirmed") is not True:
             errors.append("spawned_process_cleanup_unconfirmed")
         if mode == "fixture" and spawned:
@@ -2997,6 +3982,11 @@ def validate_operator_receipt(receipt: Any) -> list[str]:
             and artifacts.get("structured_output_compliant") is True
             and artifacts.get("structured_output_contract_valid") is True
             and _is_sha(artifacts.get("sanitized_output_sha256"))
+            and (
+                session_proof.get("status") == "verified"
+                if mode == "live" and isinstance(session_proof, dict)
+                else mode == "fixture"
+            )
         ):
             errors.append("receipt_completion_claim_invalid")
         if status == "completed" and not spawned:
@@ -3014,6 +4004,17 @@ def validate_operator_receipt(receipt: Any) -> list[str]:
             and artifacts.get("structured_output_contract_valid") is False
         ):
             errors.append("receipt_contract_failure_claim_invalid")
+        if status == "provider_evidence_invalid" and not (
+            mode == "live"
+            and isinstance(session_proof, dict)
+            and session_proof.get("status") in {"missing", "invalid"}
+            and process.get("exit_code") == 0
+            and process.get("timed_out") is False
+            and process.get("execution_error_code") == "none"
+            and artifacts.get("structured_output_compliant") is True
+            and artifacts.get("structured_output_contract_valid") is True
+        ):
+            errors.append("receipt_provider_evidence_failure_claim_invalid")
         if status in {"structured_output_noncompliant", "result_contract_invalid"} and not (
             process.get("exit_code") == 0
             and process.get("timed_out") is False
@@ -3037,6 +4038,7 @@ def validate_operator_bundle(
     run_root: Path,
     *,
     approval_root: Path = DEFAULT_APPROVAL_ROOT,
+    receipt_override: Mapping[str, Any] | None = None,
 ) -> list[str]:
     """Replay every durable binding without trusting the terminal receipt."""
 
@@ -3045,7 +4047,11 @@ def validate_operator_bundle(
         _ensure_private_directory(run_root, create=False)
         request = _read_private_json(run_root / "operator-request.json")
         intent = _read_private_json(run_root / "operator-intent.json")
-        receipt = _read_private_json(run_root / "operator-receipt.json")
+        receipt = (
+            dict(receipt_override)
+            if receipt_override is not None
+            else _read_private_json(run_root / "operator-receipt.json")
+        )
     except AdaptiveWaveValidationError as exc:
         return [str(exc)]
     request_contract_errors = validate_request(request)
@@ -3061,32 +4067,53 @@ def validate_operator_bundle(
     request_sha = canonical_sha256(request)
     if request_sha != receipt.get("request_sha256") or request_sha != intent.get("request_sha256"):
         errors.append("request_binding_hash_mismatch")
-    if request.get("request_id") != intent.get("request_id") or request.get("request_id") != receipt.get(
-        "request_id"
-    ):
+    if request.get("request_id") != intent.get("request_id") or request.get("request_id") != receipt.get("request_id"):
         errors.append("request_id_binding_mismatch")
-    if intent.get("emergency") != request.get("emergency"):
-        errors.append("intent_emergency_binding_mismatch")
-    if intent.get("technical_limits") != request.get("technical_limits"):
-        errors.append("intent_technical_limits_binding_mismatch")
+    for key in ("emergency", "technical_limits", "budget", "retention"):
+        if intent.get(key) != request.get(key):
+            errors.append(f"intent_{key}_binding_mismatch")
+    try:
+        lease_sha = _read_run_lease_sha256(run_root)
+    except AdaptiveWaveValidationError:
+        errors.append("run_lease_replay_invalid")
+        lease_sha = None
+    if lease_sha is not None and (
+        intent.get("run_lease_sha256") != lease_sha or receipt.get("run_lease_sha256") != lease_sha
+    ):
+        errors.append("run_lease_binding_mismatch")
     if isinstance(intent, dict) and isinstance(receipt, dict):
         for key in (
             "run_id",
             "request_id",
             "request_sha256",
             "execution_mode",
+            "run_lease_sha256",
             "input_binding",
             "command_binding",
-            "approval",
             "authority",
         ):
             if intent.get(key) != receipt.get(key):
                 errors.append(f"intent_receipt_binding_mismatch:{key}")
+        intent_approval = intent.get("approval")
+        receipt_approval = receipt.get("approval")
+        if isinstance(intent_approval, dict) and isinstance(receipt_approval, dict):
+            for key in ("required", "grant_id_sha256", "grant_sha256"):
+                if intent_approval.get(key) != receipt_approval.get(key):
+                    errors.append(f"intent_receipt_approval_mismatch:{key}")
+            if intent_approval.get("consumption_sha256") is not None:
+                errors.append("intent_contains_terminal_consumption")
     prior_candidates: dict[str, PriorCandidateFacts] = {}
     compiled_prompt_path = run_root / "compiled-prompt.txt"
-    if not _private_file_valid(compiled_prompt_path):
+    try:
+        compiled_actual = _read_regular_owned_bounded(
+            compiled_prompt_path,
+            maximum_bytes=request["technical_limits"]["max_compiled_prompt_bytes"],
+            required_mode=0o600,
+        )
+    except AdaptiveWaveValidationError:
         errors.append("compiled_prompt_permissions_invalid")
-    else:
+        compiled_actual = None
+    if compiled_actual is not None:
         try:
             prompt_raw = _load_bound_bytes(
                 request["prompt_source"]["path"],
@@ -3107,7 +4134,7 @@ def validate_operator_bundle(
             errors.append("compiled_prompt_replay_failed")
             prior_handles, prior_bindings, prior_candidates = [], [], {}
         else:
-            if compiled_prompt_path.read_bytes() != compiled_expected:
+            if compiled_actual != compiled_expected:
                 errors.append("compiled_prompt_content_mismatch")
             expected_input = {
                 "target_sha256": canonical_sha256(request["target"]),
@@ -3120,9 +4147,9 @@ def validate_operator_bundle(
             if intent.get("input_binding") != expected_input or receipt.get("input_binding") != expected_input:
                 errors.append("input_binding_replay_mismatch")
 
-    ephemeral_home = run_root / "ephemeral-home"
-    if not _ephemeral_tree_private(ephemeral_home):
-        errors.append("ephemeral_tree_not_private_or_auth_present")
+    ephemeral_home = run_root / intent.get("runtime_layout", {}).get("ephemeral_home_name", "ephemeral-home")
+    if ephemeral_home.exists() or ephemeral_home.is_symlink():
+        errors.append("ephemeral_tree_not_deleted")
 
     mode = receipt.get("execution_mode")
     command_binding = receipt.get("command_binding", {})
@@ -3145,6 +4172,18 @@ def validate_operator_bundle(
         and _SESSION_ID_RE.fullmatch(session_id) is not None
         and _input_binding_valid(input_binding)
     ):
+        runtime_layout = intent.get("runtime_layout", {})
+        command_binary = staged_path if mode == "live" else Path("fixture-grok.invalid")
+        actual_command = build_grok_command(
+            binary=command_binary,
+            cwd=run_root / "workspace",
+            request=request,
+            prompt_file=run_root / runtime_layout.get("compiled_prompt_name", "compiled-prompt.txt"),
+            leader_socket=ephemeral_home / "leader.sock",
+            session_id=session_id,
+            result_schema=_load_result_schema(),
+        )
+        account_ref = request["transport"]["operator_account_ref"]
         expected_command_binding = {
             "provider_id": request["transport"]["provider_id"],
             "model_id": request["transport"]["model_id"],
@@ -3152,21 +4191,21 @@ def validate_operator_bundle(
             "session_id": session_id,
             "grok_binary_sha256": expected_binary_sha,
             "structured_output_schema_sha256": result_schema_sha256(),
-            "cli_flags_sha256": canonical_sha256(
-                _redacted_command_policy(
-                    request=request,
-                    compiled_prompt_sha256=input_binding["compiled_prompt_sha256"],
-                    session_id=session_id,
-                )
-            ),
+            "argv_sha256": canonical_sha256(actual_command),
+            "command_policy_sha256": command_policy_sha256(request),
             "environment_policy_sha256": canonical_sha256(_redacted_environment_policy()),
+            "tool_registry_sha256": tool_registry_sha256(),
+            "operator_account_ref_sha256": (bytes_sha256(account_ref.encode()) if account_ref is not None else None),
+            "oauth_auth_sha256": request["transport"]["oauth_auth_sha256"],
             "max_turns": request["emergency"]["max_turns"],
         }
-        if command_binding != expected_command_binding:
+        if command_binding != expected_command_binding or intent.get("command_binding") != expected_command_binding:
             errors.append("command_binding_request_replay_mismatch")
     else:
         errors.append("command_binding_request_replay_unavailable")
     approval = receipt.get("approval", {})
+    consumed_grant_clock: datetime | None = None
+    expires_grant_clock: datetime | None = None
     if mode == "live":
         grant_id = request.get("approval", {}).get("grant_id")
         if not isinstance(grant_id, str):
@@ -3176,49 +4215,67 @@ def validate_operator_bundle(
             grant_path, consumption_path = _grant_paths(approval_root, grant_id_hash)
             try:
                 grant = _read_private_json(grant_path)
-                consumption = _read_private_json(consumption_path)
-                grant_raw = grant_path.read_bytes()
-                consumption_raw = consumption_path.read_bytes()
+                grant_raw = _read_regular_owned_bounded(grant_path, maximum_bytes=1_048_576, required_mode=0o600)
             except AdaptiveWaveValidationError:
                 errors.append("grant_ledger_unavailable")
             else:
-                consumed_at = consumption.get("consumed_at")
-                try:
-                    consumed_clock = _parse_timestamp(consumed_at)
-                except (TypeError, AdaptiveWaveValidationError):
-                    errors.append("grant_consumed_at_invalid")
-                else:
-                    if _validate_grant(grant, request, now=consumed_clock):
-                        errors.append("grant_replay_invalid")
-                expected_consumption = {
-                    "schema_version": CONSUMPTION_SCHEMA_VERSION,
-                    "grant_id_hash": grant_id_hash,
-                    "grant_sha256": bytes_sha256(grant_raw),
-                    "execution_scope_sha256": execution_scope_sha256(request),
-                    "request_sha256": request_sha,
-                    "run_id": receipt.get("run_id"),
-                    "consumed_at": intent.get("started_at"),
-                    "state": "consumed_after_binary_auth_preflight_before_process_spawn",
-                }
-                if consumption != expected_consumption:
-                    errors.append("grant_consumption_replay_mismatch")
                 if approval.get("grant_id_sha256") != grant_id_hash:
                     errors.append("grant_id_hash_mismatch")
                 if approval.get("grant_sha256") != bytes_sha256(grant_raw):
                     errors.append("grant_hash_mismatch")
-                if approval.get("consumption_sha256") != bytes_sha256(consumption_raw):
-                    errors.append("grant_consumption_hash_mismatch")
+                if consumption_path.exists():
+                    try:
+                        consumption = _read_private_json(consumption_path)
+                        consumption_raw = _read_regular_owned_bounded(
+                            consumption_path, maximum_bytes=1_048_576, required_mode=0o600
+                        )
+                        consumed_clock = _parse_timestamp(consumption.get("consumed_at"))
+                        expires_clock = _parse_timestamp(grant.get("expires_at"))
+                    except (AdaptiveWaveValidationError, TypeError):
+                        errors.append("grant_consumed_at_invalid")
+                    else:
+                        consumed_grant_clock = consumed_clock
+                        expires_grant_clock = expires_clock
+                        if _validate_grant(grant, request, now=consumed_clock):
+                            errors.append("grant_replay_invalid")
+                        expected_consumption = {
+                            "schema_version": CONSUMPTION_SCHEMA_VERSION,
+                            "grant_id_hash": grant_id_hash,
+                            "grant_sha256": bytes_sha256(grant_raw),
+                            "execution_scope_sha256": execution_scope_sha256(request),
+                            "request_sha256": request_sha,
+                            "run_id": receipt.get("run_id"),
+                            "run_lease_sha256": receipt.get("run_lease_sha256"),
+                            "consumed_at": consumption.get("consumed_at"),
+                            "state": "consumed_after_binary_auth_preflight_before_process_spawn",
+                        }
+                        if consumption != expected_consumption:
+                            errors.append("grant_consumption_replay_mismatch")
+                        if approval.get("consumption_sha256") != bytes_sha256(consumption_raw):
+                            errors.append("grant_consumption_hash_mismatch")
+                elif approval.get("consumption_sha256") is not None or receipt.get("status") != "crash_recovered":
+                    errors.append("grant_consumption_missing")
     elif isinstance(approval, dict) and (
         approval.get("grant_sha256") is not None or approval.get("consumption_sha256") is not None
     ):
         errors.append("fixture_grant_consumption_invalid")
 
     process = receipt.get("process", {})
+    if isinstance(process, dict):
+        expected_emergency_process = {
+            "deadline_ms": request["emergency"]["deadline_ms"],
+            "term_grace_ms": request["emergency"]["term_grace_ms"],
+            "kill_grace_ms": request["emergency"]["kill_grace_ms"],
+        }
+        if any(process.get(key) != value for key, value in expected_emergency_process.items()):
+            errors.append("receipt_emergency_binding_mismatch")
+        if process.get("started_at") != intent.get("started_at"):
+            errors.append("receipt_started_at_intent_mismatch")
     ledger_path = run_root / "process-ledger.json"
     if isinstance(process, dict) and process.get("process_spawn_attempted") is True:
         try:
             ledger = _read_private_json(ledger_path)
-            ledger_raw = ledger_path.read_bytes()
+            ledger_raw = _read_regular_owned_bounded(ledger_path, maximum_bytes=1_048_576, required_mode=0o600)
         except AdaptiveWaveValidationError:
             errors.append("process_ledger_unavailable")
         else:
@@ -3227,6 +4284,7 @@ def validate_operator_bundle(
             expected_process_facts = {
                 "run_id": receipt.get("run_id"),
                 "request_id": receipt.get("request_id"),
+                "run_lease_sha256": receipt.get("run_lease_sha256"),
                 "session_id": receipt.get("command_binding", {}).get("session_id"),
                 "child_pid": process.get("child_pid"),
                 "process_group_id": process.get("process_group_id"),
@@ -3243,29 +4301,40 @@ def validate_operator_bundle(
                 ledger.get("process_identity_token", "").encode()
             ):
                 errors.append("process_identity_token_hash_mismatch")
+            try:
+                launcher_verified_clock = _parse_timestamp(ledger.get("spawned_at"))
+            except (AdaptiveWaveValidationError, TypeError):
+                errors.append("process_ledger_grant_time_invalid")
+            else:
+                if (
+                    mode == "live"
+                    and receipt.get("status") == "completed"
+                    and (
+                        consumed_grant_clock is None
+                        or expires_grant_clock is None
+                        or not consumed_grant_clock <= launcher_verified_clock < expires_grant_clock
+                    )
+                ):
+                    errors.append("process_release_outside_grant_window")
     elif ledger_path.exists():
         errors.append("unexpected_process_ledger")
 
     raw_path = run_root / "raw.stdout"
     stderr_path = run_root / "stderr.txt"
-    if not _private_file_valid(raw_path) or not _private_file_valid(stderr_path):
+    limits = request.get("technical_limits", {})
+    if not _technical_limits_valid(limits):
+        return errors + ["technical_limits_replay_invalid"]
+    try:
+        raw = _read_regular_owned_bounded(raw_path, maximum_bytes=limits["max_stdout_bytes"], required_mode=0o600)
+        stderr = _read_regular_owned_bounded(stderr_path, maximum_bytes=limits["max_stderr_bytes"], required_mode=0o600)
+    except AdaptiveWaveValidationError:
         errors.append("required_artifact_permissions_invalid")
         return errors
-    raw = raw_path.read_bytes()
-    stderr = stderr_path.read_bytes()
-    limits = request.get("technical_limits", {})
-    if _technical_limits_valid(limits):
-        if len(raw) > limits["max_stdout_bytes"]:
-            errors.append("raw_stdout_ceiling_exceeded")
-        if len(stderr) > limits["max_stderr_bytes"]:
-            errors.append("stderr_ceiling_exceeded")
     artifacts = receipt.get("artifacts", {}) if isinstance(receipt, dict) else {}
     if bytes_sha256(raw) != artifacts.get("raw_stdout_sha256"):
         errors.append("raw_stdout_hash_mismatch")
     if bytes_sha256(stderr) != artifacts.get("stderr_sha256"):
         errors.append("stderr_hash_mismatch")
-    if not _technical_limits_valid(limits):
-        return errors
     parsed_result, sanitized, prefix, suffix, compliant, contract_valid, limit_kind = _parse_structured_stdout(
         raw,
         technical_limits=limits,
@@ -3282,9 +4351,56 @@ def validate_operator_bundle(
         recorded_limit = process.get("technical_limit_kind") if isinstance(process, dict) else None
         if limit_kind is not None and recorded_limit != limit_kind:
             errors.append("structured_technical_limit_mismatch")
+    session_proof: SessionProof | None = None
+    session_raw: bytes | None = None
+    session_status = "not_applicable" if mode == "fixture" else "missing"
+    updates_path = run_root / intent.get("runtime_layout", {}).get("session_updates_name", "session-updates.jsonl")
+    if mode == "live" and updates_path.exists():
+        try:
+            session_raw = _read_regular_owned_bounded(
+                updates_path,
+                maximum_bytes=limits["max_session_updates_bytes"],
+                required_mode=0o600,
+            )
+            session_proof = _parse_session_proof(
+                session_raw,
+                expected_session_id=command_binding["session_id"],
+                expected_model_id=request["transport"]["model_id"],
+                expected_stdout=raw,
+                max_line_bytes=limits["max_session_update_line_bytes"],
+                max_turns=request["emergency"]["max_turns"],
+                budget=request["budget"],
+            )
+            model_reconciliation = (
+                parsed_result.get("local_reconciliation") if isinstance(parsed_result, dict) else None
+            )
+            if (
+                not isinstance(model_reconciliation, dict)
+                or session_proof.completed_tool_calls != model_reconciliation.get("tool_calls_completed")
+                or session_proof.tool_counts != model_reconciliation.get("tool_counts")
+            ):
+                raise AdaptiveWaveValidationError("session_model_tool_reconciliation_invalid")
+            session_status = "verified"
+        except (AdaptiveWaveValidationError, KeyError, UnicodeError, ValueError):
+            session_proof = None
+            session_status = "invalid"
+    expected_session_payload = _session_proof_payload(
+        session_proof,
+        status=session_status,
+        raw=session_raw,
+    )
+    if receipt.get("session_proof") != expected_session_payload:
+        errors.append("session_proof_replay_mismatch")
+    expected_updates_sha = bytes_sha256(session_raw) if session_raw is not None else None
+    if artifacts.get("session_updates_sha256") != expected_updates_sha:
+        errors.append("session_updates_hash_mismatch")
+    if mode == "fixture" and updates_path.exists():
+        errors.append("fixture_session_updates_unexpected")
     expected_reconciliation = _candidate_reconciliation(
         parsed_result if isinstance(parsed_result, dict) else {},
         prior_candidates,
+        session_proof=session_proof,
+        fixture=mode == "fixture",
     )
     if receipt.get("reconciliation") != expected_reconciliation:
         errors.append("receipt_reconciliation_mismatch")
@@ -3293,25 +4409,49 @@ def validate_operator_bundle(
         if artifacts.get("sanitized_output_sha256") is not None or sanitized_path.exists():
             errors.append("unexpected_sanitized_artifact")
     else:
-        if not _private_file_valid(sanitized_path):
+        try:
+            sanitized_actual = _read_regular_owned_bounded(
+                sanitized_path, maximum_bytes=limits["max_json_bytes"], required_mode=0o600
+            )
+        except AdaptiveWaveValidationError:
             errors.append("sanitized_artifact_permissions_invalid")
-        elif sanitized_path.read_bytes() != sanitized or bytes_sha256(sanitized) != artifacts.get(
-            "sanitized_output_sha256"
-        ):
-            errors.append("sanitized_artifact_hash_mismatch")
+        else:
+            if sanitized_actual != sanitized or bytes_sha256(sanitized) != artifacts.get("sanitized_output_sha256"):
+                errors.append("sanitized_artifact_hash_mismatch")
     if _command_binding_valid(command_binding) and _input_binding_valid(input_binding):
         if command_binding["structured_output_schema_sha256"] != result_schema_sha256():
             errors.append("structured_output_schema_hash_mismatch")
-        expected_policy_sha = canonical_sha256(_redacted_policy_from_bindings(input_binding, command_binding))
-        if command_binding["cli_flags_sha256"] != expected_policy_sha:
-            errors.append("cli_flags_hash_mismatch")
+        if command_binding["command_policy_sha256"] != command_policy_sha256(request):
+            errors.append("command_policy_hash_mismatch")
         if command_binding["environment_policy_sha256"] != canonical_sha256(_redacted_environment_policy()):
             errors.append("environment_policy_hash_mismatch")
-    compiled_sha = (
-        bytes_sha256(compiled_prompt_path.read_bytes()) if _private_file_valid(compiled_prompt_path) else None
-    )
+    compiled_sha = bytes_sha256(compiled_actual) if compiled_actual is not None else None
     if compiled_sha != artifacts.get("compiled_prompt_sha256"):
         errors.append("compiled_prompt_artifact_hash_mismatch")
+    if isinstance(artifacts, dict) and (
+        artifacts.get("session_tree_file_count", 0) > limits["max_session_files"]
+        or artifacts.get("session_tree_total_bytes", 0) > limits["max_session_total_bytes"]
+        or artifacts.get("session_tree_max_file_bytes", 0) > limits["max_session_file_bytes"]
+    ):
+        errors.append("session_tree_measurement_exceeds_request")
+    retention = receipt.get("retention")
+    process_started = process.get("started_at") if isinstance(process, dict) else None
+    try:
+        expected_delete_after = _timestamp(
+            _parse_timestamp(process_started) + timedelta(seconds=request["retention"]["ttl_seconds"])
+        )
+    except (AdaptiveWaveValidationError, TypeError):
+        errors.append("retention_time_replay_invalid")
+    else:
+        expected_retention = {
+            "policy_id": request["retention"]["policy_id"],
+            "ttl_seconds": request["retention"]["ttl_seconds"],
+            "delete_after": expected_delete_after,
+            "purge_state": "pending_expiry",
+            "deletion_receipt_required": True,
+        }
+        if retention != expected_retention:
+            errors.append("retention_replay_mismatch")
     return errors
 
 
@@ -3428,6 +4568,36 @@ def _terminate_existing_group(
 def recover_incomplete_run(
     run_root: Path,
     *,
+    approval_root: Path = DEFAULT_APPROVAL_ROOT,
+    terminate_orphan: bool = False,
+    process_group_is_alive: Callable[[int], bool] = ProcessGroupExecutor._group_alive,
+    process_group_identity_matches: Callable[[Mapping[str, Any]], bool] = _recorded_process_group_identity_matches,
+    terminate_process_group: Callable[..., tuple[bool, bool]] = _terminate_existing_group,
+    monotonic: Callable[[], float] = time.monotonic,
+    wall_clock: Callable[[], datetime] = _utc_now,
+) -> dict[str, Any]:
+    """Acquire the exclusive run lease before any recovery read or mutation."""
+
+    _ensure_private_directory(run_root, create=False)
+    with _run_lease(run_root, create=False) as lease_sha:
+        return _recover_incomplete_run_locked(
+            run_root,
+            held_lease_sha=lease_sha,
+            approval_root=approval_root,
+            terminate_orphan=terminate_orphan,
+            process_group_is_alive=process_group_is_alive,
+            process_group_identity_matches=process_group_identity_matches,
+            terminate_process_group=terminate_process_group,
+            monotonic=monotonic,
+            wall_clock=wall_clock,
+        )
+
+
+def _recover_incomplete_run_locked(
+    run_root: Path,
+    *,
+    held_lease_sha: str,
+    approval_root: Path,
     terminate_orphan: bool = False,
     process_group_is_alive: Callable[[int], bool] = ProcessGroupExecutor._group_alive,
     process_group_identity_matches: Callable[[Mapping[str, Any]], bool] = _recorded_process_group_identity_matches,
@@ -3437,13 +4607,14 @@ def recover_incomplete_run(
 ) -> dict[str, Any]:
     """Seal an interrupted run only after its recorded process group is dead."""
 
-    _ensure_private_directory(run_root, create=False)
     recover_pending_publications(run_root)
     if (run_root / "operator-receipt.json").exists():
         raise AdaptiveWaveValidationError("run_already_terminal")
     intent = _read_private_json(run_root / "operator-intent.json")
     if not _intent_valid(intent):
         raise AdaptiveWaveValidationError("intent_invalid")
+    if intent["run_lease_sha256"] != held_lease_sha:
+        raise AdaptiveWaveValidationError("recovery_run_lease_binding_invalid")
     request = _read_private_json(run_root / "operator-request.json")
     if validate_request(request) or canonical_sha256(request) != intent["request_sha256"]:
         raise AdaptiveWaveValidationError("recovery_request_invalid")
@@ -3462,10 +4633,13 @@ def recover_incomplete_run(
         if (
             ledger["run_id"] != intent["run_id"]
             or ledger["request_id"] != intent["request_id"]
+            or ledger["run_lease_sha256"] != held_lease_sha
             or ledger["session_id"] != intent["command_binding"]["session_id"]
         ):
             raise AdaptiveWaveValidationError("process_ledger_binding_invalid")
-        process_ledger_sha = bytes_sha256(ledger_path.read_bytes())
+        process_ledger_sha = bytes_sha256(
+            _read_regular_owned_bounded(ledger_path, maximum_bytes=1_048_576, required_mode=0o600)
+        )
         group_id = ledger["process_group_id"]
         if process_group_is_alive(group_id):
             if not terminate_orphan:
@@ -3482,8 +4656,44 @@ def recover_incomplete_run(
             )
         if process_group_is_alive(group_id):
             raise AdaptiveWaveValidationError("run_process_group_still_alive")
-    _delete_ephemeral_auth(run_root / intent["runtime_layout"]["ephemeral_home_name"])
-    _harden_ephemeral_tree(run_root / intent["runtime_layout"]["ephemeral_home_name"])
+    ephemeral_home = run_root / intent["runtime_layout"]["ephemeral_home_name"]
+    retained_updates_path = run_root / intent["runtime_layout"]["session_updates_name"]
+    measurement = SessionTreeMeasurement(0, 0, 0, None)
+    if ephemeral_home.exists():
+        source_updates_path = _session_updates_path(
+            ephemeral_home,
+            run_root / "workspace",
+            intent["command_binding"]["session_id"],
+        )
+        measurement = _measure_session_tree(
+            ephemeral_home,
+            max_files=intent["technical_limits"]["max_session_files"],
+            max_file_bytes=intent["technical_limits"]["max_session_file_bytes"],
+            max_total_bytes=intent["technical_limits"]["max_session_total_bytes"],
+            updates_path=source_updates_path,
+            max_updates_bytes=intent["technical_limits"]["max_session_updates_bytes"],
+        )
+        if measurement.limit_kind is not None:
+            _delete_ephemeral_tree(ephemeral_home)
+            raise AdaptiveWaveValidationError("recovery_session_tree_invalid")
+        if source_updates_path.exists():
+            updates_raw = _read_regular_owned_bounded(
+                source_updates_path,
+                maximum_bytes=intent["technical_limits"]["max_session_updates_bytes"],
+            )
+            if retained_updates_path.exists():
+                if (
+                    _read_regular_owned_bounded(
+                        retained_updates_path,
+                        maximum_bytes=intent["technical_limits"]["max_session_updates_bytes"],
+                        required_mode=0o600,
+                    )
+                    != updates_raw
+                ):
+                    raise AdaptiveWaveValidationError("recovery_session_updates_mismatch")
+            else:
+                _atomic_publish(retained_updates_path, updates_raw)
+        _delete_ephemeral_tree(ephemeral_home)
     raw_path = run_root / "raw.stdout"
     stderr_path = run_root / "stderr.txt"
     for final_path, spool_name, ceiling in (
@@ -3496,34 +4706,105 @@ def recover_incomplete_run(
     ):
         spool_path = run_root / spool_name
         if not final_path.exists() and spool_path.exists():
-            if not _private_file_valid(spool_path) or spool_path.stat().st_size > ceiling:
+            try:
+                spool_raw = _read_regular_owned_bounded(spool_path, maximum_bytes=ceiling, required_mode=0o600)
+            except AdaptiveWaveValidationError:
                 raise AdaptiveWaveValidationError("recovery_spool_invalid")
-            _atomic_publish(final_path, spool_path.read_bytes())
+            _atomic_publish(final_path, spool_raw)
             spool_path.unlink()
     if not raw_path.exists():
         _atomic_publish(raw_path, b"")
     if not stderr_path.exists():
         _atomic_publish(stderr_path, b"")
-    if not _private_file_valid(raw_path) or not _private_file_valid(stderr_path):
+    try:
+        raw = _read_regular_owned_bounded(
+            raw_path,
+            maximum_bytes=intent["technical_limits"]["max_stdout_bytes"],
+            required_mode=0o600,
+        )
+        stderr = _read_regular_owned_bounded(
+            stderr_path,
+            maximum_bytes=intent["technical_limits"]["max_stderr_bytes"],
+            required_mode=0o600,
+        )
+    except AdaptiveWaveValidationError:
         raise AdaptiveWaveValidationError("recovery_artifact_permissions_invalid")
     parsed_result, sanitized, _, _, _, _, _ = _parse_structured_stdout(
-        raw_path.read_bytes(),
+        raw,
         technical_limits=intent["technical_limits"],
         prior_candidates=prior_candidates,
         live_mode=intent["execution_mode"] == "live",
     )
     sanitized_path = run_root / "sanitized.json"
     if sanitized_path.exists():
-        if not _private_file_valid(sanitized_path):
-            raise AdaptiveWaveValidationError("recovery_sanitized_permissions_invalid")
-        if sanitized is None or sanitized_path.read_bytes() != sanitized:
+        try:
+            sanitized_actual = _read_regular_owned_bounded(
+                sanitized_path,
+                maximum_bytes=intent["technical_limits"]["max_json_bytes"],
+                required_mode=0o600,
+            )
+        except AdaptiveWaveValidationError as exc:
+            raise AdaptiveWaveValidationError("recovery_sanitized_permissions_invalid") from exc
+        if sanitized is None or sanitized_actual != sanitized:
             raise AdaptiveWaveValidationError("recovery_sanitized_hash_mismatch")
     elif sanitized is not None:
         _atomic_publish(sanitized_path, sanitized)
-    sanitized_sha = bytes_sha256(sanitized_path.read_bytes()) if sanitized_path.exists() else None
+    sanitized_sha = bytes_sha256(sanitized) if sanitized is not None else None
     compiled_prompt_path = run_root / intent["runtime_layout"]["compiled_prompt_name"]
-    if not _private_file_valid(compiled_prompt_path):
-        raise AdaptiveWaveValidationError("recovery_compiled_prompt_invalid")
+    try:
+        compiled_raw = _read_regular_owned_bounded(
+            compiled_prompt_path,
+            maximum_bytes=intent["technical_limits"]["max_compiled_prompt_bytes"],
+            required_mode=0o600,
+        )
+    except AdaptiveWaveValidationError as exc:
+        raise AdaptiveWaveValidationError("recovery_compiled_prompt_invalid") from exc
+    approval = dict(intent["approval"])
+    if intent["execution_mode"] == "live":
+        grant_id = request["approval"]["grant_id"]
+        if isinstance(grant_id, str):
+            _, consumption_path = _grant_paths(approval_root, bytes_sha256(grant_id.encode()))
+            if consumption_path.exists():
+                consumption_raw = _read_regular_owned_bounded(
+                    consumption_path, maximum_bytes=1_048_576, required_mode=0o600
+                )
+                approval["consumption_sha256"] = bytes_sha256(consumption_raw)
+    session_raw: bytes | None = None
+    session_proof: SessionProof | None = None
+    session_status = "not_applicable" if intent["execution_mode"] == "fixture" else "missing"
+    if intent["execution_mode"] == "live" and retained_updates_path.exists():
+        try:
+            session_raw = _read_regular_owned_bounded(
+                retained_updates_path,
+                maximum_bytes=intent["technical_limits"]["max_session_updates_bytes"],
+                required_mode=0o600,
+            )
+            session_proof = _parse_session_proof(
+                session_raw,
+                expected_session_id=intent["command_binding"]["session_id"],
+                expected_model_id=intent["command_binding"]["model_id"],
+                expected_stdout=raw,
+                max_line_bytes=intent["technical_limits"]["max_session_update_line_bytes"],
+                max_turns=intent["emergency"]["max_turns"],
+                budget=intent["budget"],
+            )
+            model_reconciliation = (
+                parsed_result.get("local_reconciliation") if isinstance(parsed_result, dict) else None
+            )
+            if (
+                not isinstance(model_reconciliation, dict)
+                or session_proof.completed_tool_calls != model_reconciliation.get("tool_calls_completed")
+                or session_proof.tool_counts != model_reconciliation.get("tool_counts")
+            ):
+                raise AdaptiveWaveValidationError("recovery_session_model_reconciliation_invalid")
+            session_status = "verified"
+        except (AdaptiveWaveValidationError, KeyError, UnicodeError, ValueError):
+            session_proof = None
+            session_status = "invalid"
+    session_payload = _session_proof_payload(session_proof, status=session_status, raw=session_raw)
+    delete_after = _timestamp(
+        _parse_timestamp(intent["started_at"]) + timedelta(seconds=intent["retention"]["ttl_seconds"])
+    )
     receipt = {
         "schema_version": RECEIPT_SCHEMA_VERSION,
         "run_id": intent["run_id"],
@@ -3531,9 +4812,10 @@ def recover_incomplete_run(
         "request_sha256": intent["request_sha256"],
         "execution_mode": intent["execution_mode"],
         "status": "crash_recovered",
+        "run_lease_sha256": held_lease_sha,
         "input_binding": intent["input_binding"],
         "command_binding": intent["command_binding"],
-        "approval": intent["approval"],
+        "approval": approval,
         "process": {
             "started_at": intent["started_at"],
             "completed_at": _timestamp(wall_clock()),
@@ -3562,28 +4844,257 @@ def recover_incomplete_run(
             "technical_limit_kind": None,
         },
         "artifacts": {
-            "raw_stdout_sha256": bytes_sha256(raw_path.read_bytes()),
-            "stderr_sha256": bytes_sha256(stderr_path.read_bytes()),
+            "raw_stdout_sha256": bytes_sha256(raw),
+            "stderr_sha256": bytes_sha256(stderr),
             "sanitized_output_sha256": sanitized_sha,
             "structured_output_compliant": False,
             "structured_output_contract_valid": False,
             "non_json_prefix_bytes": None,
             "non_json_suffix_bytes": None,
-            "compiled_prompt_sha256": bytes_sha256(compiled_prompt_path.read_bytes()),
-            "ephemeral_auth_deleted": not (
-                run_root / intent["runtime_layout"]["ephemeral_home_name"] / "auth.json"
-            ).exists(),
-            "ephemeral_tree_private": _ephemeral_tree_private(
-                run_root / intent["runtime_layout"]["ephemeral_home_name"]
-            ),
+            "compiled_prompt_sha256": bytes_sha256(compiled_raw),
+            "session_updates_sha256": bytes_sha256(session_raw) if session_raw is not None else None,
+            "ephemeral_tree_deleted": not ephemeral_home.exists() and not ephemeral_home.is_symlink(),
+            "session_tree_file_count": measurement.file_count,
+            "session_tree_total_bytes": measurement.total_bytes,
+            "session_tree_max_file_bytes": measurement.max_file_bytes,
+        },
+        "session_proof": session_payload,
+        "retention": {
+            "policy_id": intent["retention"]["policy_id"],
+            "ttl_seconds": intent["retention"]["ttl_seconds"],
+            "delete_after": delete_after,
+            "purge_state": "pending_expiry",
+            "deletion_receipt_required": True,
         },
         "reconciliation": _candidate_reconciliation(
             parsed_result if isinstance(parsed_result, dict) else {},
             prior_candidates,
+            session_proof=session_proof,
+            fixture=intent["execution_mode"] == "fixture",
         ),
         "authority": AUTHORITY,
     }
     if validate_operator_receipt(receipt):
         raise AdaptiveWaveValidationError("recovery_receipt_invalid")
+    replay_errors = validate_operator_bundle(
+        run_root,
+        approval_root=approval_root,
+        receipt_override=receipt,
+    )
+    if replay_errors:
+        raise AdaptiveWaveValidationError("recovery_bundle_replay_invalid:" + ",".join(replay_errors))
     _atomic_publish(run_root / "operator-receipt.json", (canonical_json(receipt) + "\n").encode())
     return receipt
+
+
+def _deletion_paths(deletion_root: Path, run_id: str) -> tuple[Path, Path]:
+    return (
+        deletion_root / f"journal-{run_id}.json",
+        deletion_root / f"receipt-{run_id}.json",
+    )
+
+
+def _deletion_journal_valid(value: Any) -> bool:
+    shape_valid = (
+        isinstance(value, dict)
+        and set(value) == _DELETION_JOURNAL_KEYS
+        and value.get("schema_version") == DELETION_JOURNAL_SCHEMA_VERSION
+        and isinstance(value.get("run_id"), str)
+        and _RUN_ID_RE.fullmatch(value["run_id"]) is not None
+        and all(
+            _is_sha(value.get(key))
+            for key in (
+                "request_sha256",
+                "run_lease_sha256",
+                "operator_receipt_sha256",
+                "runtime_root_sha256",
+            )
+        )
+        and _timestamp_valid(value.get("delete_after"))
+        and _timestamp_valid(value.get("created_at"))
+        and value.get("state") == "delete_intent_durable"
+    )
+    if not shape_valid:
+        return False
+    return _parse_timestamp(value["created_at"]) >= _parse_timestamp(value["delete_after"])
+
+
+def _deletion_receipt_valid(value: Any) -> bool:
+    return (
+        isinstance(value, dict)
+        and set(value) == _DELETION_RECEIPT_KEYS
+        and value.get("schema_version") == DELETION_RECEIPT_SCHEMA_VERSION
+        and isinstance(value.get("run_id"), str)
+        and _RUN_ID_RE.fullmatch(value["run_id"]) is not None
+        and all(
+            _is_sha(value.get(key)) for key in ("request_sha256", "operator_receipt_sha256", "deletion_journal_sha256")
+        )
+        and _timestamp_valid(value.get("deleted_at"))
+        and value.get("state") == "deleted_after_durable_intent"
+    )
+
+
+def _publish_deletion_receipt(
+    *,
+    deletion_root: Path,
+    journal: Mapping[str, Any],
+    journal_raw: bytes,
+    deleted_at: str,
+) -> dict[str, Any]:
+    receipt = {
+        "schema_version": DELETION_RECEIPT_SCHEMA_VERSION,
+        "run_id": journal["run_id"],
+        "request_sha256": journal["request_sha256"],
+        "operator_receipt_sha256": journal["operator_receipt_sha256"],
+        "deletion_journal_sha256": bytes_sha256(journal_raw),
+        "deleted_at": deleted_at,
+        "state": "deleted_after_durable_intent",
+    }
+    if not _deletion_receipt_valid(receipt):
+        raise AdaptiveWaveValidationError("generated_deletion_receipt_invalid")
+    _, receipt_path = _deletion_paths(deletion_root, journal["run_id"])
+    _atomic_publish(receipt_path, (canonical_json(receipt) + "\n").encode())
+    return receipt
+
+
+def purge_expired_adaptive_runs(
+    *,
+    runtime_root: Path = DEFAULT_RUNTIME_ROOT,
+    deletion_root: Path = DEFAULT_DELETION_ROOT,
+    approval_root: Path = DEFAULT_APPROVAL_ROOT,
+    wall_clock: Callable[[], datetime] = _utc_now,
+) -> list[dict[str, Any]]:
+    """Delete expired private bundles after a durable, replayable intent journal."""
+
+    if not runtime_root.exists():
+        return []
+    _ensure_private_directory(runtime_root, create=False)
+    _ensure_private_directory(deletion_root, create=True)
+    recover_pending_publications(deletion_root)
+    deletion_name = re.compile(r"(?:journal|receipt)-(grok_wave_(?:fixture|live)_[0-9a-f]{32})\.json")
+    for path in deletion_root.iterdir():
+        metadata = path.lstat()
+        if (
+            deletion_name.fullmatch(path.name) is None
+            or path.is_symlink()
+            or not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_uid != os.getuid()
+            or metadata.st_nlink != 1
+            or stat.S_IMODE(metadata.st_mode) != 0o600
+        ):
+            raise AdaptiveWaveValidationError("deletion_inventory_invalid")
+        if path.name.startswith("receipt-"):
+            run_id = deletion_name.fullmatch(path.name).group(1)  # type: ignore[union-attr]
+            journal_path, _ = _deletion_paths(deletion_root, run_id)
+            if not journal_path.exists():
+                raise AdaptiveWaveValidationError("deletion_receipt_without_journal")
+    now = wall_clock().astimezone(UTC)
+    deleted_at = _timestamp(now)
+    runtime_root_sha = canonical_sha256(str(runtime_root.resolve()))
+    receipts: list[dict[str, Any]] = []
+
+    # Finish journaled deletions first.  A crash after rmtree but before the
+    # receipt is recoverable because the external journal binds the terminal
+    # operator receipt and the exact run lease.
+    for journal_path in sorted(deletion_root.glob("journal-grok_wave_*.json")):
+        journal_raw = _read_regular_owned_bounded(journal_path, maximum_bytes=1_048_576, required_mode=0o600)
+        try:
+            journal = strict_json_loads(journal_raw)
+        except (UnicodeError, ValueError) as exc:
+            raise AdaptiveWaveValidationError("deletion_journal_invalid") from exc
+        if not _deletion_journal_valid(journal) or journal["runtime_root_sha256"] != runtime_root_sha:
+            raise AdaptiveWaveValidationError("deletion_journal_invalid")
+        if _parse_timestamp(journal["delete_after"]) > now:
+            raise AdaptiveWaveValidationError("deletion_journal_not_expired")
+        run_root = runtime_root / journal["run_id"]
+        _, receipt_path = _deletion_paths(deletion_root, journal["run_id"])
+        if receipt_path.exists():
+            receipt = _read_private_json(receipt_path)
+            if (
+                not _deletion_receipt_valid(receipt)
+                or receipt["run_id"] != journal["run_id"]
+                or receipt["request_sha256"] != journal["request_sha256"]
+                or receipt["operator_receipt_sha256"] != journal["operator_receipt_sha256"]
+                or receipt["deletion_journal_sha256"] != bytes_sha256(journal_raw)
+                or _parse_timestamp(receipt["deleted_at"]) < _parse_timestamp(journal["created_at"])
+            ):
+                raise AdaptiveWaveValidationError("deletion_receipt_invalid")
+            if run_root.exists() or run_root.is_symlink():
+                raise AdaptiveWaveValidationError("deleted_run_reappeared")
+            continue
+        if run_root.exists() or run_root.is_symlink():
+            if run_root.is_symlink() or not run_root.is_dir():
+                raise AdaptiveWaveValidationError("deletion_run_path_invalid")
+            with _run_lease(run_root, create=False) as lease_sha:
+                operator_raw = _read_regular_owned_bounded(
+                    run_root / "operator-receipt.json", maximum_bytes=67_108_864, required_mode=0o600
+                )
+                operator = strict_json_loads(operator_raw)
+                if (
+                    lease_sha != journal["run_lease_sha256"]
+                    or bytes_sha256(operator_raw) != journal["operator_receipt_sha256"]
+                    or operator.get("request_sha256") != journal["request_sha256"]
+                    or operator.get("retention", {}).get("delete_after") != journal["delete_after"]
+                    or validate_operator_bundle(run_root, approval_root=approval_root)
+                ):
+                    raise AdaptiveWaveValidationError("journaled_bundle_replay_invalid")
+                shutil.rmtree(run_root)
+                _fsync_directory(runtime_root)
+                if run_root.exists() or run_root.is_symlink():
+                    raise AdaptiveWaveValidationError("run_bundle_deletion_failed")
+        receipts.append(
+            _publish_deletion_receipt(
+                deletion_root=deletion_root,
+                journal=journal,
+                journal_raw=journal_raw,
+                deleted_at=deleted_at,
+            )
+        )
+
+    for run_root in sorted(runtime_root.iterdir()):
+        if run_root.is_symlink() or not run_root.is_dir() or _RUN_ID_RE.fullmatch(run_root.name) is None:
+            raise AdaptiveWaveValidationError("runtime_inventory_invalid")
+        journal_path, receipt_path = _deletion_paths(deletion_root, run_root.name)
+        if receipt_path.exists():
+            raise AdaptiveWaveValidationError("deleted_run_reappeared")
+        if journal_path.exists():
+            continue
+        with _run_lease(run_root, create=False) as lease_sha:
+            bundle_errors = validate_operator_bundle(run_root, approval_root=approval_root)
+            if bundle_errors:
+                raise AdaptiveWaveValidationError("purge_bundle_replay_invalid:" + ",".join(bundle_errors))
+            operator_raw = _read_regular_owned_bounded(
+                run_root / "operator-receipt.json", maximum_bytes=67_108_864, required_mode=0o600
+            )
+            operator = strict_json_loads(operator_raw)
+            delete_after = _parse_timestamp(operator["retention"]["delete_after"])
+            if delete_after > now:
+                continue
+            journal = {
+                "schema_version": DELETION_JOURNAL_SCHEMA_VERSION,
+                "run_id": run_root.name,
+                "request_sha256": operator["request_sha256"],
+                "run_lease_sha256": lease_sha,
+                "operator_receipt_sha256": bytes_sha256(operator_raw),
+                "delete_after": operator["retention"]["delete_after"],
+                "runtime_root_sha256": runtime_root_sha,
+                "created_at": deleted_at,
+                "state": "delete_intent_durable",
+            }
+            if not _deletion_journal_valid(journal):
+                raise AdaptiveWaveValidationError("generated_deletion_journal_invalid")
+            journal_raw = (canonical_json(journal) + "\n").encode()
+            _atomic_publish(journal_path, journal_raw)
+            shutil.rmtree(run_root)
+            _fsync_directory(runtime_root)
+            if run_root.exists() or run_root.is_symlink():
+                raise AdaptiveWaveValidationError("run_bundle_deletion_failed")
+        receipts.append(
+            _publish_deletion_receipt(
+                deletion_root=deletion_root,
+                journal=journal,
+                journal_raw=journal_raw,
+                deleted_at=deleted_at,
+            )
+        )
+    return receipts

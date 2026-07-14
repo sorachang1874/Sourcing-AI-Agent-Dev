@@ -10,8 +10,15 @@ planned X-search waves and merges every valid candidate. It has no 20/25-person 
 per-wave business cap, and no automatic stop. `business_candidate_limit=null`, `stop_advisory_enforced=false`, and
 `candidate_count_triggered=false` are closed contract fields.
 
-The policy's large byte/row ceilings are process kill switches for malformed input. They are not research targets or
-search budgets. Raising or lowering a kill switch cannot change which candidate is valuable.
+The policy's bounded byte/row ceilings are process kill switches for malformed input, accidental fan-out and local
+memory pressure. The tracked defaults allow 128 wave files, 256 MiB total input, 50,000 candidate rows and 250,000
+evidence rows. They are not research targets or search budgets; reaching a ceiling fails the run and requires an
+explicitly reviewed operational policy change. Raising or lowering a kill switch cannot change which candidate is
+valuable. Before loading any wave content, the CLI opens every bound source with no-follow descriptor checks and
+preflights its size against both the per-file and aggregate byte ceilings. An over-budget campaign therefore fails
+before allocating the input bodies rather than temporarily retaining a multi-file overage in memory. Each preflighted
+size also becomes that file's maximum allowed size during the later content read, so a source cannot grow between the
+aggregate check and allocation to bypass the campaign budget.
 
 ## Contract owners
 
@@ -103,8 +110,10 @@ The manifest order is authoritative. The merge:
 5. always emits empty evidence-supported values, a null evidence-supported resolution and
    `evidence_support_status=model_mediated_unverified` while source payload replay is unavailable;
 6. de-duplicates evidence records globally while separately counting candidate-to-evidence associations;
-7. quarantines an evidence association whose declared author does not match the author encoded in its X URL, so it
-   cannot be retained; all other malformed evidence fails the wave closed;
+7. binds every evidence association to its enclosing candidate; quarantines URL/author mismatch, cross-subject
+   `self` evidence and malformed candidate-Bio binding so those rows cannot be retained; all other malformed evidence
+   fails the wave closed. Native-X `thread` evidence remains a first-class evidence kind alongside `post`, `mention`
+   and `bio`; it is not silently dropped or coerced to a post;
 8. normalizes each model-reported support label to `{dimension, asserted_value, source_status}`. Legacy labels have a
    null asserted value. A future source-bound evidence lane must supply both the dimension and asserted value and pass
    a separate raw-payload binding before it can influence a state;
@@ -220,12 +229,16 @@ python3 -m py_compile \
   tests/test_recall_pool_campaign.py
 ```
 
-The 20-test focused suite covers strict schema execution, complete user-chat/system/assistant/result binding, forged
+The 27-test focused suite covers strict schema execution, complete user-chat/system/assistant/result binding, forged
 result+manifest
 rejection, split-terminal-before-tools rejection, raw source/session/model/prompt/context/terminal binding, model vs.
 mechanical count drift, global query
-uniqueness, evidence records vs. associations, evidence quarantine, missing evidence support, stable-ID reverse
+uniqueness, subject-bound evidence records vs. associations, cross-subject self-evidence quarantine, persisted
+URL-author/status-id revalidation after coherent rehash, first-class thread evidence, generic-web and
+impossible-date rejection, confidence/caveat preservation, missing evidence support, stable-ID reverse
 conflicts, target/strategy relabel prevention, persisted replay, 1,500 handles without a business cap, operational kill
-ceilings, versioned strategy and runner-bound family call-profile comparisons, 50/1/50 fail-closed behavior,
+ceilings including aggregate preflight before content reads and fail-closed post-preflight growth, versioned strategy
+and runner-bound family call-profile
+comparisons, 50/1/50 fail-closed behavior,
 model-mediated provenance, owner-only PII boundaries, all-public-prompt rejection, literal orphan cleanup, atomic
 no-replace publication and replay validation.

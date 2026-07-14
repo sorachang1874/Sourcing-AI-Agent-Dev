@@ -10,11 +10,13 @@ employment-confirmation, identity, outreach, or product-write authority.
 
 from __future__ import annotations
 
+import ast
 import copy
 import hashlib
+import inspect
 import json
 import re
-import types
+import textwrap
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -35,8 +37,10 @@ REASON_SOURCE = "closed_deterministic_explanation_template_v2.2"
 CANONICAL_PROMPT_SHA256 = "7504507db5945e08b91848fa1e01ccc7a1d7bd8f48f329e7057ca9b492b9d48f"
 CANONICAL_OUTPUT_SCHEMA_SHA256 = "37436cf27cb9b6dcbc74aeaad8fa915cf9da75d3738d2e78a164a90fec0c28f6"
 PURE_ADJUDICATION_API_VERSION = "x.profile.bio_semantic.pure_adjudication.v1"
-PURE_ADJUDICATION_IMPLEMENTATION_REVISION = "transitive-bytecode-dependency-bundle-v2"
-PURE_ADJUDICATION_IMPLEMENTATION_SHA256 = "5cef30928609e0c6a17e06bf309ac45413e3c2475b07a9b5a0bb616f1c55fd45"
+PURE_ADJUDICATION_IMPLEMENTATION_REVISION = "transitive-source-dependency-bundle-v3"
+# Updated only after the source-stable manifest is validated on every locally
+# available supported Python minor.
+PURE_ADJUDICATION_IMPLEMENTATION_SHA256 = "875bfdc49c6f409409575514bfcdf6f55ba27ff577ab81247ea7de271e99e070"
 PROXY_POLICY_SCHEMA_VERSION = "x.profile.bio.professional_experience_proxy_policy.v1"
 PROXY_POLICY_VERSION = "profile-bio-professional-experience-proxy-policy-v1"
 CANONICAL_PROXY_POLICY_SHA256 = "a2c115e2505ed08ca5930028a8458218cbc3e0e074bd33ef96f1a51db2609e72"
@@ -413,8 +417,8 @@ _PURE_ADJUDICATION_INTEGRITY_SYMBOLS = frozenset(
         "validate_pure_adjudication_implementation",
         "_pure_adjudication_implementation_bundle",
         "_pure_bundle_dependency_value",
-        "_pure_bundle_code_object",
-        "_pure_bundle_function",
+        "_pure_bundle_source",
+        "_pure_bundle_source_names",
     }
 )
 
@@ -434,8 +438,6 @@ def _pure_bundle_dependency_value(value: Any) -> Any:
         return {"kind": "str", "value": value}
     if isinstance(value, bytes):
         return {"kind": "bytes", "value_hex": value.hex()}
-    if isinstance(value, types.CodeType):
-        return {"kind": "code", "value": _pure_bundle_code_object(value)}
     if isinstance(value, tuple):
         return {"kind": "tuple", "items": [_pure_bundle_dependency_value(item) for item in value]}
     if isinstance(value, list):
@@ -458,9 +460,9 @@ def _pure_bundle_dependency_value(value: Any) -> Any:
         return {"kind": "path", "tail": "/".join(value.parts[-2:])}
     if isinstance(value, re.Pattern):
         return {"kind": "regex", "pattern": value.pattern, "flags": value.flags}
-    if isinstance(value, types.ModuleType):
+    if inspect.ismodule(value):
         return {"kind": "module", "name": value.__name__}
-    if isinstance(value, types.FunctionType) or isinstance(value, type) or callable(value):
+    if inspect.isfunction(value) or isinstance(value, type) or callable(value):
         return {
             "kind": "callable",
             "module": getattr(value, "__module__", type(value).__module__),
@@ -473,27 +475,21 @@ def _pure_bundle_dependency_value(value: Any) -> Any:
     }
 
 
-def _pure_bundle_code_object(code: types.CodeType) -> dict[str, Any]:
-    return {
-        "argcount": code.co_argcount,
-        "posonlyargcount": code.co_posonlyargcount,
-        "kwonlyargcount": code.co_kwonlyargcount,
-        "flags": code.co_flags,
-        "bytecode_sha256": hashlib.sha256(code.co_code).hexdigest(),
-        "constants": [_pure_bundle_dependency_value(value) for value in code.co_consts],
-        "names": list(code.co_names),
-        "varnames": list(code.co_varnames),
-        "freevars": list(code.co_freevars),
-        "cellvars": list(code.co_cellvars),
-    }
+def _pure_bundle_source(symbol: Any) -> str:
+    """Return the checked-in source representation, independent of CPython bytecode."""
+
+    source = inspect.getsource(symbol)
+    normalized = textwrap.dedent(source).replace("\r\n", "\n").replace("\r", "\n")
+    return normalized.rstrip() + "\n"
 
 
-def _pure_bundle_function(function: types.FunctionType) -> dict[str, Any]:
-    return {
-        "code": _pure_bundle_code_object(function.__code__),
-        "defaults": _pure_bundle_dependency_value(function.__defaults__),
-        "kwdefaults": _pure_bundle_dependency_value(function.__kwdefaults__),
-    }
+def _pure_bundle_source_names(source: str) -> list[str]:
+    """Collect referenced names without relying on version-specific code objects."""
+
+    parsed = ast.parse(source, mode="exec")
+    return sorted(
+        {node.id for node in ast.walk(parsed) if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load)}
+    )
 
 
 def _pure_adjudication_implementation_bundle() -> dict[str, Any]:
@@ -501,7 +497,7 @@ def _pure_adjudication_implementation_bundle() -> dict[str, Any]:
 
     Integrity helpers are deliberately outside the closure to avoid hashing the
     expected digest back into itself. Every other module-local function or class
-    referenced by executable bytecode is followed automatically; non-local
+    referenced by parsed checked-in source is followed automatically; non-local
     callables and all referenced data globals are recorded as dependencies.
     """
 
@@ -516,45 +512,34 @@ def _pure_adjudication_implementation_bundle() -> dict[str, Any]:
         if symbol_name in visited or symbol_name in _PURE_ADJUDICATION_INTEGRITY_SYMBOLS:
             continue
         visited.add(symbol_name)
-        code_objects: list[types.CodeType] = []
-        if isinstance(symbol, types.FunctionType) and symbol.__module__ == __name__:
-            function_manifest = _pure_bundle_function(symbol)
-            controlled[symbol_name] = canonical_sha256(function_manifest)
-            code_objects.append(symbol.__code__)
+        referenced_names: list[str] = []
+        if inspect.isfunction(symbol) and symbol.__module__ == __name__:
+            source = _pure_bundle_source(symbol)
+            controlled[symbol_name] = hashlib.sha256(source.encode("utf-8")).hexdigest()
+            referenced_names = _pure_bundle_source_names(source)
         elif isinstance(symbol, type) and symbol.__module__ == __name__:
-            method_manifests: dict[str, Any] = {}
-            for method_name, method in vars(symbol).items():
-                if isinstance(method, types.FunctionType):
-                    method_manifests[method_name] = _pure_bundle_function(method)
-                    code_objects.append(method.__code__)
-            controlled[symbol_name] = canonical_sha256(
-                {
-                    "class_name": symbol.__qualname__,
-                    "bases": [_pure_bundle_dependency_value(base) for base in symbol.__bases__],
-                    "methods": method_manifests,
-                }
-            )
+            source = _pure_bundle_source(symbol)
+            controlled[symbol_name] = hashlib.sha256(source.encode("utf-8")).hexdigest()
+            referenced_names = _pure_bundle_source_names(source)
         else:
             dependencies[symbol_name] = _pure_bundle_dependency_value(symbol)
             continue
 
-        for code in code_objects:
-            for dependency_name in code.co_names:
-                if dependency_name in _PURE_ADJUDICATION_INTEGRITY_SYMBOLS:
-                    continue
-                dependency = namespace.get(dependency_name, _MISSING)
-                if dependency is _MISSING:
-                    continue
-                if (
-                    isinstance(dependency, types.FunctionType)
-                    and dependency.__module__ == __name__
-                ) or (isinstance(dependency, type) and dependency.__module__ == __name__):
-                    pending.append((dependency_name, dependency))
-                else:
-                    dependencies[dependency_name] = _pure_bundle_dependency_value(dependency)
+        for dependency_name in referenced_names:
+            if dependency_name in _PURE_ADJUDICATION_INTEGRITY_SYMBOLS:
+                continue
+            dependency = namespace.get(dependency_name, _MISSING)
+            if dependency is _MISSING:
+                continue
+            if (inspect.isfunction(dependency) and dependency.__module__ == __name__) or (
+                isinstance(dependency, type) and dependency.__module__ == __name__
+            ):
+                pending.append((dependency_name, dependency))
+            else:
+                dependencies[dependency_name] = _pure_bundle_dependency_value(dependency)
 
     return {
-        "format": "cpython-transitive-code-and-dependency-manifest-v1",
+        "format": "python-source-transitive-dependency-manifest-v1",
         "root_symbols": ["adjudicate_observed_response"],
         "integrity_symbols_excluded_from_self_hash": sorted(_PURE_ADJUDICATION_INTEGRITY_SYMBOLS),
         "controlled_symbol_sha256": dict(sorted(controlled.items())),

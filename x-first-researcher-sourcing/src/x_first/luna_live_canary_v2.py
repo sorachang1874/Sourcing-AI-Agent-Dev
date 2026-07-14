@@ -153,9 +153,7 @@ class ObservedHttpTransport:
         else:
             outcome = "http_response"
         elapsed_ms = max(0, int((self._monotonic() - started) * 1000))
-        completed_at = legacy._timestamp(
-            legacy._parse_timestamp(started_at) + timedelta(milliseconds=elapsed_ms)
-        )
+        completed_at = legacy._timestamp(legacy._parse_timestamp(started_at) + timedelta(milliseconds=elapsed_ms))
         receipt = {
             "sequence": sequence,
             "operation": operation,
@@ -259,9 +257,7 @@ def _validate_runner_boundary(
 
 def _semantic_assets() -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     prompt = semantic.load_json(project_root() / "configs/profile_bio_semantic_prompt.v2.json")
-    output_schema = semantic.load_json(
-        project_root() / "contracts/x.profile.bio_semantic.model_output.v2.schema.json"
-    )
+    output_schema = semantic.load_json(project_root() / "contracts/x.profile.bio_semantic.model_output.v2.schema.json")
     proxy_policy = semantic.load_json(
         project_root() / "configs/profile_bio_professional_experience_proxy_policy.v1.json"
     )
@@ -775,9 +771,7 @@ def _build_result(
         "retention": {
             "class": "private_raw_evidence",
             "hours": RETENTION_HOURS,
-            "delete_after": legacy._timestamp(
-                legacy._parse_timestamp(completed_at) + timedelta(hours=RETENTION_HOURS)
-            ),
+            "delete_after": legacy._timestamp(legacy._parse_timestamp(completed_at) + timedelta(hours=RETENTION_HOURS)),
             "deletion_status": "pending",
         },
         "response_received": response_received,
@@ -858,9 +852,7 @@ def _run_luna_live_canary_v2(
     )
     attempts.append(catalog_attempt.receipt)
     if catalog_attempt.response is None:
-        catalog = legacy._catalog_receipt(
-            status="failed", http_status=None, error_code="catalog_transport_failed"
-        )
+        catalog = legacy._catalog_receipt(status="failed", http_status=None, error_code="catalog_transport_failed")
         catalog_error: str | None = "catalog_transport_failed"
     else:
         catalog, catalog_error = _parse_catalog_v2(catalog_attempt.response)
@@ -1294,7 +1286,8 @@ def _result_contract_valid(result: Any) -> bool:
         return False
     if status == "completed" and (
         identity["returned_model"] != MODEL_ID
-        or semantic_summary != {
+        or semantic_summary
+        != {
             "review_status": "completed",
             "error_codes": [],
             "review_schema_version": semantic.REVIEW_SCHEMA_VERSION,
@@ -1306,8 +1299,8 @@ def _result_contract_valid(result: Any) -> bool:
     return True
 
 
-def validate_result_contract_v2(result: Any) -> list[str]:
-    """Project strict helper mirroring the declarative v2 result schema."""
+def validate_result_shape_v2_non_authoritative(result: Any) -> list[str]:
+    """Validate result shape only; receipt consistency requires artifact replay."""
 
     try:
         valid = _result_contract_valid(result)
@@ -1607,10 +1600,7 @@ def _deletion_record_valid(
         receipt.get("schema_version") != schema_version
         or run_id_pattern.fullmatch(str(receipt.get("run_id"))) is None
         or any(
-            not isinstance(value, str)
-            or _SHA256_RE.fullmatch(value) is None
-            or value == "0" * 64
-            for value in digests
+            not isinstance(value, str) or _SHA256_RE.fullmatch(value) is None or value == "0" * 64 for value in digests
         )
         or receipt.get("artifact_inventory") not in _DELETION_INVENTORIES
         or receipt.get("deletion_method") != "atomic_owner_directory_rename_then_remove"
@@ -1755,14 +1745,11 @@ def _validate_deletion_receipt_path(
         if not _private_owner_file_valid(approval_path):
             raise ValueError("approval_ledger_invalid")
         approval = legacy._read_private_json(approval_path)
-        if (
-            not _approval_ledger_valid_for_deletion(
-                approval,
-                execution_origin=execution_origin,
-                run_id=run_id,
-            )
-            or receipt.get("approval_receipt_sha256") != legacy._canonical_sha256(approval)
-        ):
+        if not _approval_ledger_valid_for_deletion(
+            approval,
+            execution_origin=execution_origin,
+            run_id=run_id,
+        ) or receipt.get("approval_receipt_sha256") != legacy._canonical_sha256(approval):
             raise ValueError("approval_ledger_binding_invalid")
         bundle_path = runtime_owner / run_id
         deleting_path = runtime_owner / f".{run_id}.deleting"
@@ -1772,10 +1759,7 @@ def _validate_deletion_receipt_path(
             or bundle_path.is_symlink()
             or deleting_path.exists()
             or deleting_path.is_symlink()
-            or (
-                not allow_matching_journal_recovery
-                and (journal_path.exists() or journal_path.is_symlink())
-            )
+            or (not allow_matching_journal_recovery and (journal_path.exists() or journal_path.is_symlink()))
         ):
             raise ValueError("deletion_not_terminal")
     except Exception:  # noqa: BLE001 - private tombstone diagnostics stay closed
@@ -2089,4 +2073,5 @@ __all__ = [
     "validate_approval_receipt_contract_v2",
     "validate_deletion_receipt_v2",
     "validate_deletion_receipt_v2_fixture",
+    "validate_result_shape_v2_non_authoritative",
 ]

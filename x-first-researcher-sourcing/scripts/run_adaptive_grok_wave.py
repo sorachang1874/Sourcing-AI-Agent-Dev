@@ -10,6 +10,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from x_first.adaptive_grok_wave_runner import (  # noqa: E402
     issue_live_grant,
+    purge_expired_adaptive_runs,
     recover_incomplete_run,
     run_adaptive_grok_wave_fixture,
     run_adaptive_grok_wave_live,
@@ -56,8 +57,27 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="during recovery only, explicitly TERM then KILL the recorded live process group",
     )
+    parser.add_argument(
+        "--purge-expired",
+        action="store_true",
+        help="delete expired private run bundles after durable deletion journaling",
+    )
     args = parser.parse_args(argv)
     try:
+        if args.purge_expired:
+            if (
+                args.request is not None
+                or args.execute_live
+                or args.issue_live_grant
+                or args.fixture_output_root is not None
+                or args.recover_incomplete_run is not None
+                or args.terminate_orphan
+                or args.grant_ttl_seconds != 900
+            ):
+                raise ValueError("purge_mode_must_be_exclusive")
+            receipts = purge_expired_adaptive_runs()
+            print(json.dumps({"deleted_run_count": len(receipts), "status": "purge_complete"}, sort_keys=True))
+            return 0
         if args.recover_incomplete_run is not None:
             if (
                 args.request is not None

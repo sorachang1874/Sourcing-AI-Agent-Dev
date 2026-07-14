@@ -108,9 +108,7 @@ def _mini_schema_validate(
             raise MiniSchemaError(f"{path}: wrong type")
     if "const" in schema and not semantic.json_type_strict_equal(instance, schema["const"]):
         raise MiniSchemaError(f"{path}: const mismatch")
-    if "enum" in schema and not any(
-        semantic.json_type_strict_equal(instance, choice) for choice in schema["enum"]
-    ):
+    if "enum" in schema and not any(semantic.json_type_strict_equal(instance, choice) for choice in schema["enum"]):
         raise MiniSchemaError(f"{path}: enum mismatch")
     if isinstance(instance, str):
         if "pattern" in schema and re.search(schema["pattern"], instance) is None:
@@ -360,7 +358,7 @@ class LunaLiveCanaryV2Test(unittest.TestCase):
                 execution["attempts"][1]["response_body_sha256"],
                 hashlib.sha256(provider_response.body).hexdigest(),
             )
-            self.assertEqual(canary.validate_result_contract_v2(result), [])
+            self.assertEqual(canary.validate_result_shape_v2_non_authoritative(result), [])
             self.assertEqual(
                 canary.validate_execution_receipt_contract_v2(
                     execution,
@@ -406,7 +404,7 @@ class LunaLiveCanaryV2Test(unittest.TestCase):
             )
             self.assertEqual(len(client.calls), 2)
             self.assertEqual(result["error_codes"], ["response_transport_failed"])
-            self.assertEqual(canary.validate_result_contract_v2(result), [])
+            self.assertEqual(canary.validate_result_shape_v2_non_authoritative(result), [])
             execution = json.loads((bundle / "execution-receipt.json").read_text())
             response_attempt = execution["attempts"][1]
             self.assertEqual(response_attempt["outcome"], "transport_failure")
@@ -423,7 +421,7 @@ class LunaLiveCanaryV2Test(unittest.TestCase):
             root = Path(directory)
             result, bundle, approval_root, client = self._run(root, [_catalog("not-luna")])
             self.assertEqual(result["error_codes"], ["catalog_model_missing"])
-            self.assertEqual(canary.validate_result_contract_v2(result), [])
+            self.assertEqual(canary.validate_result_shape_v2_non_authoritative(result), [])
             self.assertEqual(len(client.calls), 1)
             execution = json.loads((bundle / "execution-receipt.json").read_text())
             self.assertEqual(execution["attempt_count"], 1)
@@ -488,7 +486,7 @@ class LunaLiveCanaryV2Test(unittest.TestCase):
                     [_catalog(canary.MODEL_ID), response],
                 )
                 self.assertEqual(result["error_codes"], [expected_error])
-                self.assertEqual(canary.validate_result_contract_v2(result), [])
+                self.assertEqual(canary.validate_result_shape_v2_non_authoritative(result), [])
                 self.assertIsNone(result["identity"]["returned_model"])
                 self.assertEqual(
                     canary.validate_artifact_directory_v2_fixture(bundle, approval_root=approval_root),
@@ -704,6 +702,25 @@ class LunaLiveCanaryV2Test(unittest.TestCase):
             canary.legacy._atomic_write_json(result_path, changed)
             self.assertNotEqual(canary.validate_artifact_directory_v2_fixture(bundle, approval_root=approval_root), [])
 
+    def test_shape_only_result_api_is_explicitly_non_authoritative_against_receipts(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            result, bundle, approval_root, _ = self._run(
+                root,
+                [_catalog(canary.MODEL_ID), _provider_response()],
+            )
+            receipt_inconsistent = copy.deepcopy(result)
+            receipt_inconsistent["artifact_sha256s"]["request.json"] = "0" * 64
+            self.assertEqual(
+                canary.validate_result_shape_v2_non_authoritative(receipt_inconsistent),
+                [],
+            )
+            canary.legacy._atomic_write_json(bundle / "result.json", receipt_inconsistent)
+            self.assertNotEqual(
+                canary.validate_artifact_directory_v2_fixture(bundle, approval_root=approval_root),
+                [],
+            )
+
     def test_project_strict_schema_helpers_reject_result_and_attempt_combination_mutations(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -723,7 +740,7 @@ class LunaLiveCanaryV2Test(unittest.TestCase):
             changed["evidence_provenance"]["formal_live_evidence_eligible"] = True
             result_mutations.append(changed)
             for mutation in result_mutations:
-                self.assertNotEqual(canary.validate_result_contract_v2(mutation), [])
+                self.assertNotEqual(canary.validate_result_shape_v2_non_authoritative(mutation), [])
 
             execution_mutations = []
             changed_execution = copy.deepcopy(execution)
@@ -829,8 +846,9 @@ class LunaLiveCanaryV2Test(unittest.TestCase):
             semantic.PURE_ADJUDICATION_IMPLEMENTATION_SHA256,
         )
         self.assertEqual(
-            result_schema["properties"]["semantic_contract"]["properties"]
-            ["pure_adjudication_implementation_sha256"]["const"],
+            result_schema["properties"]["semantic_contract"]["properties"]["pure_adjudication_implementation_sha256"][
+                "const"
+            ],
             semantic.PURE_ADJUDICATION_IMPLEMENTATION_SHA256,
         )
         self.assertEqual(deletion_schema["properties"]["state"]["const"], "deleted")
@@ -852,10 +870,7 @@ class LunaLiveCanaryV2Test(unittest.TestCase):
         }
         external_schemas = {
             "x.profile.bio_semantic.live_canary.result.v1.schema.json": json.loads(
-                (
-                    ROOT
-                    / "contracts/x.profile.bio_semantic.live_canary.result.v1.schema.json"
-                ).read_text()
+                (ROOT / "contracts/x.profile.bio_semantic.live_canary.result.v1.schema.json").read_text()
             )
         }
         with tempfile.TemporaryDirectory() as directory:

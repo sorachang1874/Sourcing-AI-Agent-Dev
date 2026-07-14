@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://contracts.invalid/x.grok_cli.exploration.evaluation.v0.schema.json",
-  "title": "Grok CLI exploration evaluation v0",
+  "$id": "https://contracts.invalid/x.grok_cli.exploration.evaluation.v1.schema.json",
+  "title": "Grok CLI exploration evaluation v1",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -23,7 +23,7 @@
     "authority"
   ],
   "properties": {
-    "schema_version": {"const": "x.grok_cli.exploration.evaluation.v0"},
+    "schema_version": {"const": "x.grok_cli.exploration.evaluation.v1"},
     "status": {"const": "evaluated"},
     "native_x_call_proof": {
       "enum": ["receipt_only_unverified", "session_hash_and_calls_verified"]
@@ -43,7 +43,7 @@
     "scale_verdict": {"enum": ["no_go", "eligible_for_independent_review"]},
     "scale_blockers": {
       "type": "array",
-      "maxItems": 9,
+      "maxItems": 10,
       "uniqueItems": true,
       "items": {
         "enum": [
@@ -53,6 +53,7 @@
           "stable_platform_user_id_not_source_bound",
           "stable_platform_user_id_coverage_below_100_percent",
           "bio_coverage_below_100_percent",
+          "reported_platform_user_id_conflict_quarantined",
           "raw_session_not_owner_only",
           "cli_binary_version_not_bound_to_raw_session",
           "tool_disable_flags_receipt_only"
@@ -65,23 +66,21 @@
       "additionalProperties": false,
       "minProperties": 1,
       "properties": {
-        "x_keyword_search": {"type": "integer", "minimum": 1, "maximum": 32},
-        "x_semantic_search": {"type": "integer", "minimum": 1, "maximum": 32},
-        "x_user_search": {"type": "integer", "minimum": 1, "maximum": 32},
-        "x_thread_fetch": {"type": "integer", "minimum": 1, "maximum": 32}
+        "x_keyword_search": {"type": "integer", "minimum": 1},
+        "x_semantic_search": {"type": "integer", "minimum": 1},
+        "x_user_search": {"type": "integer", "minimum": 1},
+        "x_thread_fetch": {"type": "integer", "minimum": 1}
       }
     },
     "metrics": {"$ref": "#/$defs/metrics"},
     "candidate_value_assessments": {
       "type": "array",
-      "maxItems": 25,
       "items": {"$ref": "#/$defs/assessment"}
     },
     "first_field_gate_gaps": {"$ref": "#/$defs/gaps"},
     "hydration_tasks": {
       "type": "array",
-      "maxItems": 5,
-      "items": {"$ref": "x.grok_cli.candidate_hydration.task.v0.schema.json"}
+      "items": {"$ref": "x.grok_cli.candidate_hydration.task.v1.schema.json"}
     },
     "authority": {
       "type": "object",
@@ -104,14 +103,6 @@
   },
   "$defs": {
     "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-    "session_uuid": {
-      "type": "string",
-      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-    },
-    "request_uuid": {
-      "type": "string",
-      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-    },
     "version": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"},
     "rate": {
       "oneOf": [
@@ -133,8 +124,6 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "session_id",
-        "request_id",
         "model_id",
         "tool_policy_version",
         "result_sha256",
@@ -142,7 +131,13 @@
         "query_policy_schema_version",
         "query_policy_version",
         "query_policy_sha256",
-        "legacy_full_query_policy_sha256",
+        "query_commitment_scheme",
+        "query_commitment_issuance_id",
+        "query_commitment_issuance_sha256",
+        "query_commitment_key_id",
+        "query_commitment_nonce_id",
+        "run_binding_commitment",
+        "legacy_full_query_policy_commitment",
         "query_policy_purpose",
         "query_policy_allowed_decision_dimensions",
         "query_policy_registry_schema_version",
@@ -157,16 +152,20 @@
         "raw_session"
       ],
       "properties": {
-        "session_id": {"$ref": "#/$defs/session_uuid"},
-        "request_id": {"$ref": "#/$defs/request_uuid"},
         "model_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"},
-        "tool_policy_version": {"const": "x.grok_cli.exploration.tool_receipt.v0"},
+        "tool_policy_version": {"const": "x.grok_cli.exploration.tool_receipt.v1"},
         "result_sha256": {"$ref": "#/$defs/sha256"},
         "receipt_sha256": {"$ref": "#/$defs/sha256"},
-        "query_policy_schema_version": {"const": "x.grok_cli.exploration.query_policy_descriptor.v1"},
+        "query_policy_schema_version": {"const": "x.grok_cli.exploration.query_policy_descriptor.v2"},
         "query_policy_version": {"$ref": "#/$defs/version"},
         "query_policy_sha256": {"$ref": "#/$defs/sha256"},
-        "legacy_full_query_policy_sha256": {"$ref": "#/$defs/sha256"},
+        "query_commitment_scheme": {"const": "hmac-sha256-v1"},
+        "query_commitment_issuance_id": {"type": "string", "pattern": "^qci_[0-9a-f]{24}$"},
+        "query_commitment_issuance_sha256": {"$ref": "#/$defs/sha256"},
+        "query_commitment_key_id": {"$ref": "#/$defs/sha256"},
+        "query_commitment_nonce_id": {"$ref": "#/$defs/sha256"},
+        "run_binding_commitment": {"$ref": "#/$defs/sha256"},
+        "legacy_full_query_policy_commitment": {"$ref": "#/$defs/sha256"},
         "query_policy_purpose": {"const": "base_researcher_discovery"},
         "query_policy_allowed_decision_dimensions": {
           "type": "array",
@@ -180,7 +179,7 @@
           "maxItems": 3
         },
         "query_policy_registry_schema_version": {
-          "const": "x.grok_cli.exploration.query_policy_registry.v1"
+          "const": "x.grok_cli.exploration.query_policy_registry.v2"
         },
         "query_policy_registry_version": {"$ref": "#/$defs/version"},
         "query_policy_registry_sha256": {"$ref": "#/$defs/sha256"},
@@ -221,6 +220,7 @@
     },
     "reason": {
       "enum": [
+        "reported_platform_user_id_conflict",
         "missing_platform_user_id",
         "missing_bio",
         "target_lab_affiliation_state_unresolved",
@@ -237,6 +237,7 @@
         "target_lab_affiliation_state",
         "pretraining_experience_state",
         "candidate_value_segment",
+        "identity_counting_status",
         "recall_pool_eligible",
         "precision_tranche_eligible",
         "high_authority_evidence_complete",
@@ -248,13 +249,19 @@
         "target_lab_affiliation_state": {"$ref": "#/$defs/state"},
         "pretraining_experience_state": {"$ref": "#/$defs/state"},
         "candidate_value_segment": {"$ref": "#/$defs/segment"},
+        "identity_counting_status": {
+          "enum": [
+            "unique_provisional_or_reported_id",
+            "reported_platform_user_id_conflict_quarantined"
+          ]
+        },
         "recall_pool_eligible": {"type": "boolean"},
         "precision_tranche_eligible": {"type": "boolean"},
         "high_authority_evidence_complete": {"type": "boolean"},
         "hydration_required": {"type": "boolean"},
         "hydration_reasons": {
           "type": "array",
-          "maxItems": 6,
+          "maxItems": 7,
           "uniqueItems": true,
           "items": {"$ref": "#/$defs/reason"}
         }
@@ -267,6 +274,8 @@
         "tool_call_receipt_rows",
         "session_verified_completed_tool_calls",
         "candidates_retained",
+        "unique_candidates_retained",
+        "reported_platform_user_id_conflict_candidates",
         "candidates_per_tool_call",
         "model_mediated_bio_presence_rate",
         "model_mediated_platform_user_id_presence_rate",
@@ -278,19 +287,22 @@
         "replayable_provider_post_body_rate",
         "model_reported_observations",
         "candidate_value_segment_counts",
+        "metric_denominators",
         "precision_tranche_candidates",
         "recall_pool_candidates",
         "observations_mechanically_replayable"
       ],
       "properties": {
-        "tool_call_receipt_rows": {"type": "integer", "minimum": 1, "maximum": 32},
+        "tool_call_receipt_rows": {"type": "integer", "minimum": 1},
         "session_verified_completed_tool_calls": {
           "oneOf": [
-            {"type": "integer", "minimum": 1, "maximum": 32},
+            {"type": "integer", "minimum": 1},
             {"type": "null"}
           ]
         },
-        "candidates_retained": {"type": "integer", "minimum": 0, "maximum": 25},
+        "candidates_retained": {"type": "integer", "minimum": 0},
+        "unique_candidates_retained": {"type": "integer", "minimum": 0},
+        "reported_platform_user_id_conflict_candidates": {"type": "integer", "minimum": 0},
         "candidates_per_tool_call": {
           "oneOf": [{"type": "number", "minimum": 0}, {"type": "null"}]
         },
@@ -319,6 +331,30 @@
             "recall_historical_current": {"type": "integer", "minimum": 0},
             "recall_historical_historical": {"type": "integer", "minimum": 0},
             "needs_evidence": {"type": "integer", "minimum": 0}
+          }
+        },
+        "metric_denominators": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "candidates_per_tool_call",
+            "model_mediated_bio_presence_rate",
+            "model_mediated_platform_user_id_presence_rate",
+            "model_mediated_precision_tranche_rate",
+            "model_mediated_recall_pool_rate",
+            "model_mediated_high_authority_support_coverage",
+            "third_party_only_candidate_rate",
+            "replayable_provider_post_body_rate"
+          ],
+          "properties": {
+            "candidates_per_tool_call": {"type": "integer", "minimum": 1},
+            "model_mediated_bio_presence_rate": {"type": "integer", "minimum": 0},
+            "model_mediated_platform_user_id_presence_rate": {"type": "integer", "minimum": 0},
+            "model_mediated_precision_tranche_rate": {"type": "integer", "minimum": 0},
+            "model_mediated_recall_pool_rate": {"type": "integer", "minimum": 0},
+            "model_mediated_high_authority_support_coverage": {"type": "integer", "minimum": 0},
+            "third_party_only_candidate_rate": {"type": "integer", "minimum": 0},
+            "replayable_provider_post_body_rate": {"type": "integer", "minimum": 0}
           }
         },
         "precision_tranche_candidates": {"type": "integer", "minimum": 0},

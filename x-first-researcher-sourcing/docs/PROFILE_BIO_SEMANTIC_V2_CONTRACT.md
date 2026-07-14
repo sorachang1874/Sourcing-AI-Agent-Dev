@@ -60,9 +60,12 @@ transport metadata, so a getter cannot rewrite validator source objects.
 
 Receipt-owning callers use `adjudicate_observed_response(...)`, never private result builders. Its version is
 `x.profile.bio_semantic.pure_adjudication.v1`; its manifest digest covers all semantic schema/prompt/policy versions plus
-the transitive implementation reachable from that public function. The implementation bundle records a stable digest
-of each controlled function/class code object and a type-explicit manifest of every referenced data or external
-callable dependency. This is a **trusted-runtime drift signal**, not tamper-proof integrity and not an independent trust
+the transitive implementation reachable from that public function. The implementation bundle hashes normalized
+checked-in source text for each controlled function/class, discovers module-local dependencies from parsed AST names,
+and records a type-explicit manifest of every referenced data or external callable dependency. It never hashes CPython
+bytecode, code-object flags, or interpreter-specific constants; the same source has been regression-checked to produce
+one digest under the locally available Python 3.12 and 3.14 runtimes (the package supports Python 3.11+). This is a
+**trusted-runtime drift signal**, not tamper-proof integrity and not an independent trust
 root: the digest checker and expected value live in the same Python module and can be monkey-patched together. Live
 execution authority instead belongs to the Luna bundle validator, which validates durable approval and observed HTTP
 receipts outside the semantic review payload. The pure API accepts an execution projection and raw response only to
