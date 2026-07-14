@@ -18,6 +18,8 @@ Skips without a local PG DSN; SOURCING_REQUIRE_PG_STORE_TESTS=1 turns the skip i
 from __future__ import annotations
 
 import os
+import threading
+import time
 import unittest
 from uuid import uuid4
 
@@ -170,6 +172,181 @@ class MigrationRunnerTest(unittest.TestCase):
         self.assertEqual(result.stamped, ["0001_baseline"])
         self.assertEqual(result.applied, ["0002_action_request_schema_pins"])
         self.assertEqual(ledger, ["0001_baseline", "0002_action_request_schema_pins"])
+
+    def test_request_schema_pin_constraints_install_not_valid_and_still_guard_new_writes(self) -> None:
+        schema = self._fresh_schema("pin_not_valid")
+        quoted = quote_control_plane_postgres_identifier(schema)
+        baseline_sql = _BASELINE_PATH.read_text(encoding="utf-8")
+        with psycopg.connect(self.dsn, client_encoding="utf8") as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"SET search_path TO {quoted}")
+                cur.execute(baseline_sql)
+                cur.execute(
+                    "INSERT INTO agent_actions (action_id, action_type, owner_module, operation_type, "
+                    "idempotency_key) VALUES ('brownfield-action', 'legacy', 'legacy', 'legacy', 'legacy')"
+                )
+                cur.execute(
+                    "INSERT INTO operation_runs (operation_run_id, action_id, owner_module, operation_type, "
+                    "idempotency_key) VALUES ('brownfield-run', 'brownfield-action', 'legacy', 'legacy', 'legacy')"
+                )
+            conn.commit()
+            result = mr.apply_pending_migrations(conn, schema=schema)
+            with conn.cursor() as cur:
+                cur.execute(f"SET search_path TO {quoted}")
+                cur.execute(
+                    "SELECT conname, convalidated FROM pg_constraint c "
+                    "JOIN pg_namespace n ON n.oid = c.connamespace "
+                    "WHERE n.nspname = %s AND conname IN "
+                    "('agent_actions_request_schema_pin_pair_check', "
+                    "'operation_runs_request_schema_pin_pair_check') ORDER BY conname",
+                    (schema,),
+                )
+                constraints = cur.fetchall()
+                with self.assertRaises(psycopg.errors.CheckViolation):
+                    cur.execute(
+                        "UPDATE agent_actions SET request_schema_version = 'v1', request_schema_digest = '' "
+                        "WHERE action_id = 'brownfield-action'"
+                    )
+            conn.rollback()
+        self.assertEqual(result.applied, ["0002_action_request_schema_pins"])
+        self.assertEqual(
+            constraints,
+            [
+                ("agent_actions_request_schema_pin_pair_check", False),
+                ("operation_runs_request_schema_pin_pair_check", False),
+            ],
+        )
+
+    def test_request_schema_pin_constraints_validate_after_install_without_blocking_row_exclusive_dml(self) -> None:
+        schema = self._fresh_schema("pin_validate")
+        quoted = quote_control_plane_postgres_identifier(schema)
+        baseline_sql = _BASELINE_PATH.read_text(encoding="utf-8")
+        writer_ready = threading.Event()
+        release_writer = threading.Event()
+
+        with psycopg.connect(self.dsn, client_encoding="utf8") as setup:
+            with setup.cursor() as cur:
+                cur.execute(f"SET search_path TO {quoted}")
+                cur.execute(baseline_sql)
+            setup.commit()
+            mr.apply_pending_migrations(setup, schema=schema)
+
+        def hold_row_exclusive_write() -> None:
+            with psycopg.connect(self.dsn, client_encoding="utf8") as writer:
+                with writer.cursor() as cur:
+                    cur.execute(f"SET search_path TO {quoted}")
+                    cur.execute(
+                        "INSERT INTO agent_actions (action_id, action_type, owner_module, operation_type, "
+                        "idempotency_key) VALUES ('validate-writer', 'legacy', 'legacy', 'legacy', 'validate-writer')"
+                    )
+                    writer_ready.set()
+                    release_writer.wait(timeout=10)
+                writer.rollback()
+
+        thread = threading.Thread(target=hold_row_exclusive_write, daemon=True)
+        thread.start()
+        self.assertTrue(writer_ready.wait(timeout=5), "concurrent row-exclusive writer did not start")
+        started = time.monotonic()
+        try:
+            with psycopg.connect(self.dsn, client_encoding="utf8") as validator:
+                with validator.cursor() as cur:
+                    cur.execute(f"SET search_path TO {quoted}")
+                    cur.execute("SET LOCAL lock_timeout = '5s'")
+                    cur.execute(
+                        "ALTER TABLE agent_actions VALIDATE CONSTRAINT agent_actions_request_schema_pin_pair_check"
+                    )
+                    cur.execute(
+                        "ALTER TABLE operation_runs VALIDATE CONSTRAINT operation_runs_request_schema_pin_pair_check"
+                    )
+                validator.commit()
+        finally:
+            release_writer.set()
+            thread.join(timeout=5)
+        elapsed = time.monotonic() - started
+        self.assertFalse(thread.is_alive(), "concurrent row-exclusive writer did not exit")
+        self.assertLess(elapsed, 5.0)
+        with psycopg.connect(self.dsn, autocommit=True, client_encoding="utf8") as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT conname, convalidated FROM pg_constraint c "
+                    "JOIN pg_namespace n ON n.oid = c.connamespace "
+                    "WHERE n.nspname = %s AND conname IN "
+                    "('agent_actions_request_schema_pin_pair_check', "
+                    "'operation_runs_request_schema_pin_pair_check') ORDER BY conname",
+                    (schema,),
+                )
+                constraints = cur.fetchall()
+        self.assertEqual(
+            constraints,
+            [
+                ("agent_actions_request_schema_pin_pair_check", True),
+                ("operation_runs_request_schema_pin_pair_check", True),
+            ],
+        )
+
+    def test_request_schema_pin_migration_lock_wait_is_bounded(self) -> None:
+        schema = self._fresh_schema("pin_lock_budget")
+        quoted = quote_control_plane_postgres_identifier(schema)
+        baseline_sql = _BASELINE_PATH.read_text(encoding="utf-8")
+        blocker_ready = threading.Event()
+        release_blocker = threading.Event()
+
+        def hold_agent_action_write() -> None:
+            with psycopg.connect(self.dsn, client_encoding="utf8") as blocker:
+                with blocker.cursor() as cur:
+                    cur.execute(f"SET search_path TO {quoted}")
+                    cur.execute(
+                        "INSERT INTO agent_actions (action_id, action_type, owner_module, operation_type, "
+                        "idempotency_key) VALUES ('lock-action', 'legacy', 'legacy', 'legacy', 'lock')"
+                    )
+                    blocker_ready.set()
+                    release_blocker.wait(timeout=15)
+                blocker.rollback()
+
+        with psycopg.connect(self.dsn, client_encoding="utf8") as setup:
+            with setup.cursor() as cur:
+                cur.execute(f"SET search_path TO {quoted}")
+                cur.execute(baseline_sql)
+            setup.commit()
+
+        thread = threading.Thread(target=hold_agent_action_write, daemon=True)
+        thread.start()
+        self.assertTrue(blocker_ready.wait(timeout=5), "blocking writer did not start")
+        started = time.monotonic()
+        try:
+            with psycopg.connect(self.dsn, client_encoding="utf8") as conn:
+                with self.assertRaises(psycopg.errors.LockNotAvailable):
+                    mr.apply_pending_migrations(conn, schema=schema)
+        finally:
+            release_blocker.set()
+            thread.join(timeout=5)
+        elapsed = time.monotonic() - started
+        self.assertFalse(thread.is_alive(), "blocking writer did not exit")
+        self.assertGreaterEqual(elapsed, 4.0)
+        self.assertLess(elapsed, 8.0)
+        with psycopg.connect(self.dsn, autocommit=True, client_encoding="utf8") as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT to_regclass(%s)", (f"{schema}.schema_migrations",))
+                migration_ledger = cur.fetchone()[0]
+                cur.execute(
+                    "SELECT table_name, column_name FROM information_schema.columns "
+                    "WHERE table_schema = %s AND column_name IN "
+                    "('request_schema_version', 'request_schema_digest') ORDER BY 1, 2",
+                    (schema,),
+                )
+                pin_columns = cur.fetchall()
+                cur.execute(
+                    "SELECT conname FROM pg_constraint c "
+                    "JOIN pg_namespace n ON n.oid = c.connamespace "
+                    "WHERE n.nspname = %s AND conname IN "
+                    "('agent_actions_request_schema_pin_pair_check', "
+                    "'operation_runs_request_schema_pin_pair_check') ORDER BY conname",
+                    (schema,),
+                )
+                pin_constraints = cur.fetchall()
+        self.assertIsNone(migration_ledger, "failed migration must roll back the ledger DDL and rows")
+        self.assertEqual(pin_columns, [], "failed migration must roll back both physical pin columns")
+        self.assertEqual(pin_constraints, [], "failed migration must roll back both pin constraints")
 
     def test_applied_migration_checksum_change_fails_closed(self) -> None:
         schema = self._fresh_schema("checksum")

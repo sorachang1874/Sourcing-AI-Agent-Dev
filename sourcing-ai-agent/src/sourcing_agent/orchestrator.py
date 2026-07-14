@@ -48902,6 +48902,13 @@ class SourcingOrchestrator:
                 action=action,
                 operation_run=operation_run,
             )
+            self.operation_runtime_writer.record_schema_less_compatibility_observation(
+                action=action,
+                operation_run=operation_run,
+                observation="dispatch",
+                actor=actor,
+                source="api.operation_run_dispatch",
+            )
         except OperationRuntimeStateConflict as exc:
             return self._operation_run_control_response_record(
                 {

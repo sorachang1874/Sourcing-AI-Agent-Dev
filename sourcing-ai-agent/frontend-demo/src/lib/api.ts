@@ -1075,7 +1075,7 @@ function deriveOperationRunControlState(record: Record<string, unknown>): Operat
   };
 }
 
-function deriveOperationRunRecord(record: Record<string, unknown>): OperationRunRecord {
+export function deriveOperationRunRecord(record: Record<string, unknown>): OperationRunRecord {
   const statusSummary = asObjectRecord(record.status_summary);
   const controlState = asObjectRecord(record.control_state);
   return {
@@ -1096,7 +1096,7 @@ function deriveOperationRunRecord(record: Record<string, unknown>): OperationRun
   };
 }
 
-function deriveOperationActionRecord(record: Record<string, unknown>): OperationActionRecord {
+export function deriveOperationActionRecord(record: Record<string, unknown>): OperationActionRecord {
   return {
     actionId: asString(record.action_id),
     actionType: asString(record.action_type),

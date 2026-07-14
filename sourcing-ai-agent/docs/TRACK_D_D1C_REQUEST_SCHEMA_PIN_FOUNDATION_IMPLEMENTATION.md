@@ -1,8 +1,11 @@
 # Track D D1c — Action request schema-pin foundation
 
-> Status: Author implementation complete (2026-07-14; implementation commit = this document's enclosing commit;
-> the fresh pinned non-author review must bind that exact hash). Until a hash-bound valid artifact exists, formal review
-> remains pending.
+> Status: Author implementation complete and first review feedback fixed forward (2026-07-14; foundation
+> commit=`9a0e051`; fixed-forward commit = this document's enclosing commit). The first pinned non-author attempt at
+> `runtime/reviews/20260714T075911Z_Track_D_D1c_request_schema_pin_foundation.md` is **invalid**, because its effective
+> evidence reports `causal_binding.final_response_item_exact=false`; its five substantive findings were advisory input,
+> not a formal `NO-GO`. The fresh pinned review must bind the fixed-forward hash. Until a hash-bound valid artifact
+> exists, formal review remains pending.
 > This is a bounded, non-live D1 foundation batch: all 15 production actions remain schema-less and the served Agent
 > tool population remains zero. It is not D1 completion, a formal independent-review `GO`, live-provider approval,
 > manual/product signoff, or milestone closure. A fresh pinned non-author review is required after the author commit.
@@ -20,7 +23,10 @@ served to a model. It deliberately does not populate a production schema or expo
   aliases that could override an owner field;
 - physical `request_schema_version` / `request_schema_digest` columns on both `agent_actions` and `operation_runs`;
 - submit, immediate-run, approve-run, retry-child, idempotent replay, and pre-dispatch pin copy/verify gates;
-- explicit empty/empty physical pins and durable compatibility-hit evidence for the temporary schema-less bridge.
+- explicit empty/empty physical pins and release-epoch-scoped durable compatibility-hit evidence for the temporary
+  schema-less bridge;
+- bounded brownfield migration installation (`lock_timeout` + `NOT VALID`) with later constraint validation carried as
+  an explicit separate-deployment residual.
 
 The implementation is intentionally exercised with a synthetic schema-defined action. Every action in
 `DEFAULT_ACTION_REGISTRY` still has `request_schema=None`, an empty version/digest pair, and no served-tool status.
@@ -45,7 +51,9 @@ schema and the AgentAction→OperationRun physical copy/verify boundary.
 
 `ActionRequestSpec.request_schema` must be a closed root object with exactly two required, closed object segments:
 `input_payload` and `target_ref`. The two segments cannot declare the same field. A target alias declaration is valid
-only for a real target field and cannot collide with an input field, target field, or another alias.
+only for a real target field and cannot collide with an input field, target field, or another alias. Target fields and
+aliases are checked-in identifiers: non-string or whitespace-normalized variants are rejected rather than silently
+coerced.
 
 For a schema-defined action:
 
@@ -73,9 +81,17 @@ raw target even when an owner-bound target is present. Validation completes befo
 | native PG upsert replay | compare existing and requested version/digest before accepting an identity replay | a different pair is an immutable identity collision |
 
 Migration `0002_action_request_schema_pins.sql` allows only an empty/empty pair or a normalized non-empty version plus a
-lowercase 64-hex digest. That database check enforces pair shape; immutable identity is enforced by repository/native
-upsert comparison and the action/run preflight. D1c does not claim that arbitrary direct SQL can never replace one
-otherwise valid non-empty pair with another.
+lowercase 64-hex digest. Installation sets a five-second local lock budget and adds both checks `NOT VALID`: new writes
+are guarded immediately without a brownfield table scan, while validation of existing rows remains a later,
+separately deployed transaction. A lock-timeout rolls back the migration ledger, both columns, and both constraints.
+The follow-up must not be appended as another migration in the same pending runner batch, because the runner applies
+all pending files in one transaction. This edit of `0002` is valid only because `9a0e051` was not deployed and the
+local read-only audit found zero applied `0002` ledger rows; any external environment that already applied the old
+checksum must add a new migration rather than rewrite history.
+
+The database check enforces pair shape; immutable identity is enforced by repository/native upsert comparison and the
+action/run preflight. D1c does not claim that arbitrary direct SQL can never replace one otherwise valid non-empty pair
+with another.
 
 Ordinary state updates do not update the pin columns. Idempotent action/run replay returns the original row only when
 the persisted pins match the current request identity.
@@ -88,6 +104,11 @@ All 15 production action specs still use the temporary bridge:
 - action metadata records `request_schema_status="schema_less_compatibility"` and
   `request_schema_compatibility_hit=true`;
 - the submission event payload carries the same status/hit evidence;
+- brownfield or replayed empty/empty actions append one idempotent
+  `ActionRequestSchemaCompatibilityObserved` event before replay, approve, retry, or dispatch continues. The event
+  distinguishes `pre_d1c_blank_pin_migration` from post-D1c schema-less submission, and its idempotency key/payload
+  includes checked-in observation epoch `d1c_r029_20260714_v1`; the epoch must be bumped for each release observation
+  window while R-029 remains open;
 - a schema-less action preserves its existing caller `target_ref` / `input_payload` semantics and rejects an
   `OwnerBoundTargetRef`, so the strict and compatibility paths cannot silently blend;
 - an empty/empty action/run pair still passes dispatch preflight, preserving current open operation behavior.
@@ -106,7 +127,7 @@ sufficient.
 | target resource identity | action owner through `OwnerBoundTargetRef` | schema-defined submit and dispatch | caller/model raw target or input alias | synthetic coverage only; per-action binders deferred |
 | AgentAction physical pin | `OperationRuntimeWriter` derived from current registry at submit | replay, approve, retry, dispatch, audit/API records | caller-supplied pin, metadata-only pin | active columns; empty/empty marks R-029 |
 | OperationRun physical pin | run creator copying the linked AgentAction | immediate/approve/retry run replay and dispatch | current-registry re-derivation without action equality | active columns; copy/verify required |
-| schema-less hit evidence | action metadata plus submission event payload | residual reporting/audit | absence interpreted as strict validation | R-029 pending; one-release-window zero-hit deletion gate |
+| schema-less hit evidence | action metadata/submission event plus epoch-scoped continuation observation event | residual reporting/audit across submit replay, approve, retry, and dispatch | absence interpreted as strict validation; cross-release event-key reuse | R-029 pending; bump epoch per observation window and require one-window zero-hit deletion gate |
 | served Agent population | future full D1 served predicate | future `/api/agent/tool-registry` and planner | adapter presence or command readiness alone | zero; not implemented by D1c |
 
 ## 7. Explicit exclusions and residual boundaries
@@ -121,6 +142,9 @@ D1c does not implement or claim:
 - a new workflow command type, owner side effect, CRM/projection/person/provider write path, or R-028 closure;
 - operation+action+event/command atomicity, retry reservation/child/events atomicity, command generation/lease fencing,
   or a total transaction-lock acquisition budget.
+- validation of the two `NOT VALID` request-pin constraints in a separately deployed transaction. The installation
+  contract is bounded now, but D1c is not brownfield-validation complete until that follow-up passes against audited
+  data; the runner must not apply install and validation in one pending transaction.
 
 Approve and retry now reject request-pin drift before their first write, but their existing multi-step state/event/run
 flows are not converted into one transaction. `RESIDUAL_LEDGER.md` R-019 remains open and its remediation requirements
@@ -130,12 +154,16 @@ the pre-existing partial-state window; D1c detects the eventual identity conflic
 
 R-019's prior tripwire literally blocked the next retry/dispatch touch. The owner's 2026-07-14 direction to continue
 the existing Track D plan without waiting for pending review is recorded as a one-batch clarification for D1c's
-pre-write request-pin validation/copy/verify only. The exception adds no mutation, command, or transaction-lock caller,
-does not raise the 26-call ratchet, and does not authorize any other retry/dispatch change or any R-019-gated signoff.
+pre-write request-pin validation/copy/verify. The invalid review then supplied direct new evidence that brownfield
+empty/empty continuations were unobservable, so fixed-forward adds exactly one idempotent append-only compatibility
+evidence call before replay/approve/retry/dispatch domain mutation or handler invocation. It adds no action/run/command
+state mutation or transaction-lock caller, does not raise the 26-call ratchet, and does not authorize any other
+retry/dispatch change or any R-019-gated signoff. The event append is explicitly not UoW closure; its failure aborts the
+continuation, while wider action/run/event atomicity remains R-019.
 
 ## 8. Validation and review handoff
 
-The stable-head author closeout ran the exact D1c request-contract and migration tests plus the existing D1a/D1b,
+The stable-head author closeout runs the exact D1c request-contract and migration tests plus the existing D1a/D1b,
 operation-runtime adjacency, D0 validator adjacency, command-spec, frontend build, lint/format/typecheck, and scoped
 whitespace gates. No full `tests/test_pipeline.py`, provider/model/live, W6, nightly, or manual run belongs to this
 batch.
@@ -167,15 +195,21 @@ git diff --check -- \
   src/sourcing_agent/repositories/workflow_runtime.py \
   src/sourcing_agent/control_plane_live_postgres.py \
   src/sourcing_agent/migrations/0002_action_request_schema_pins.sql \
+  frontend-demo/src/lib/api.ts \
   tests/test_d1_action_request_contract.py \
   tests/test_d1_action_request_surface_characterization.py \
   tests/test_d1_dispatch_adapter_registry.py \
   tests/test_d1_frontend_request_schema_pin_contract.py \
   tests/test_migration_runner.py \
+  tests/test_operation_runtime.py \
+  docs/AGENT_OPERATION_CONTRACT.md \
+  docs/DURABLE_EXECUTION_RUNTIME_CONTRACT.md \
+  docs/NEXT_TODO.md \
+  docs/RESIDUAL_LEDGER.md \
   docs/TRACK_D_D1C_REQUEST_SCHEMA_PIN_FOUNDATION_IMPLEMENTATION.md
 ```
 
-Stable-head author evidence:
+Foundation-commit author evidence (`9a0e051`):
 
 - combined D1c + D1a + D1b + frontend pin contract: **54 passed + 18 subtests**;
 - migration runner: **4 passed**; exact state-sync ratchet + adjacent frontend contract: **2 passed**;
@@ -185,6 +219,27 @@ Stable-head author evidence:
 - `make lint`: **58 files already formatted**, Ruff check green; focused mypy: **0 errors / 3 files**;
 - global `make typecheck`: the accepted R-011 cap remains exactly **81 errors / 4 files**;
 - the R-019 production state-update ratchet remains exactly **26**, and scoped whitespace checks are clean.
+
+The first pinned review attempt used effective `gpt-5.6-sol` / `ultra` / `priority` and produced substantive text, but
+the artifact verifier rejected it because `final_response_item_exact=false` (including raw-output/rollout causal
+binding mismatch). It therefore establishes neither formal `GO` nor formal `NO-GO`. The fixed-forward batch addresses
+the useful content as follows: old empty/empty rows gain real-path epoch-scoped observations; migration installation is
+bounded and validation is explicit residual work; `ToolSpec` ownership/strict shape/alias failure propagation is
+executable; zero-write snapshots and native unique/PK branches are independent; and frontend mappers execute absent
+versus present-empty parity. The request for a fallback repository test was rejected as out of scope because the
+runtime tables are PG-only.
+
+Fixed-forward stable-head author evidence:
+
+- D1c + D1a + D1b + executable frontend mapper contract: **78 passed + 48 subtests**;
+- migration runner: **7 passed**, including populated `NOT VALID`, five-second lock timeout with complete transaction
+  rollback, and later validation alongside a held RowExclusive writer;
+- complete operation runtime: **129 passed**; D0 model/tool runtime: **109 passed**; command specs: **16 passed**;
+- exact R-019 state-sync ratchet + adjacent frontend contract: **2 passed**, with the caller cap still **26**;
+- frontend production build: **81 modules transformed**, with only the existing chunk-size warning;
+- `make lint`: **58 files already formatted**, Ruff check green; focused mypy: **0 errors / 3 files**;
+- global `make typecheck`: the accepted R-011 cap remains exactly **81 errors / 4 files**;
+- scoped whitespace checks are clean. No full pipeline, provider/model/live, W6, nightly, or manual test was run.
 
 The implementation commit is the commit containing this document; the fresh pinned non-author review must bind that
 exact hash. Until a hash-bound valid artifact exists, formal status remains pending. Author evidence and D1b's

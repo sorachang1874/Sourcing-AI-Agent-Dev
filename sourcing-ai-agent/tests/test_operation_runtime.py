@@ -101,6 +101,7 @@ from sourcing_agent.operation_runtime import (
     ACTION_SET_CRM_STAGE,
     ACTION_START_ACQUISITION_RUN,
     DEFAULT_ACTION_REGISTRY,
+    REQUEST_SCHEMA_COMPATIBILITY_EVENT_TYPE,
     ActionRegistry,
     ActionSpec,
     OperationRuntimeStateConflict,
@@ -2839,7 +2840,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 event["event_type"]
                 for event in self.store.repos.workflow_runtime.list_operation_events(first.action["action_id"])
             ],
-            ["AgentActionQueued"],
+            ["AgentActionQueued", REQUEST_SCHEMA_COMPATIBILITY_EVENT_TYPE],
         )
         self.assertEqual(
             [
@@ -2925,7 +2926,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 event["event_type"]
                 for event in self.store.repos.workflow_runtime.list_operation_events(submitted.action["action_id"])
             ],
-            ["ActionApprovalRequired", "ActionApproved"],
+            ["ActionApprovalRequired", REQUEST_SCHEMA_COMPATIBILITY_EVENT_TYPE, "ActionApproved"],
         )
         self.assertEqual(
             [
@@ -3488,7 +3489,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         self.assertEqual(repository.list_operations(action_id=approval.action["action_id"]), [])
         self.assertEqual(
             [event["event_type"] for event in repository.list_operation_events(approval.action["action_id"])],
-            ["ActionApprovalRequired", "ActionRejected"],
+            ["ActionApprovalRequired", REQUEST_SCHEMA_COMPATIBILITY_EVENT_TYPE, "ActionRejected"],
         )
 
         resumable = self.writer.submit_action(

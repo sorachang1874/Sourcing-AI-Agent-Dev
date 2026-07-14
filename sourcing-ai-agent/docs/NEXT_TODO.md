@@ -142,18 +142,25 @@
   orchestrator 只持五项显式 bound-method map；12 supported/3 unsupported 行为不变，无 dynamic lookup。
   current candidate=`97a81d0`；scope-local advisory `GO`（P0/P1/P2/P3=`0/0/0/0`），formal review pending；
   advisory 不得写成 formal `GO`。served Agent tool population 仍为零。
-- [x] D1c request-schema pin foundation（2026-07-14；implementation commit=本条所在 enclosing commit，exact hash
-  由 fresh pinned review request 绑定）：共享 D0 `ToolSpec`
+- [x] D1c request-schema pin foundation（2026-07-14；foundation=`9a0e051`，invalid-review fixed-forward=本条所在
+  enclosing commit，exact hash 由 fresh pinned review request 绑定）：共享 D0 `ToolSpec`
   validator/digest 的 `ActionRequestSpec`、owner-bound target、`agent_actions`/`operation_runs` 物理 version+digest、
   submit/approve/retry/dispatch copy+verify 已落；全部 15 个 production actions 仍为 schema-less，物理空/空 pin
-  + durable compatibility-hit marker 是 R-029 迁移证据，served population=0。D1 OB-ID set=`∅`；本批唯一编号
+  + release-epoch-scoped replay/approve/retry/dispatch compatibility observation 是 R-029 迁移证据，served
+  population=0。`0002` 以 5s lock budget + `NOT VALID` bounded install；既有行 constraint validation 必须是后续
+  独立 deployment/transaction，不能与 install 同一 pending runner transaction。D1 OB-ID set=`∅`；本批唯一编号
   义务是 Plan §6#3，已由 R-029 + 本条登记。owner 允许按既定 Track D plan 继续，因此 R-019 仅记录 D1c
-  pre-write validation/copy/verify 的一次有界例外；26-call ratchet 不增、无新 mutation/command/lock caller，
-  UoW/lease/lock-budget 边界仍未闭合。author stable-head evidence=`54+18`、migration `4`、operation `129`、
-  D0 model/tool `109`、command specs `16`、lint `58`、mypy `81/4`；fresh pinned formal review 必须绑定 enclosing
-  commit，hash-bound valid artifact 存在前 formal status=pending，且不阻断无关 non-live Track D 开发。
+  pre-write validation/copy/verify 与一条幂等 append-only compatibility evidence event 的有界例外；26-call ratchet
+  不增、无 action/run/command state mutation 或新 lock caller，UoW/lease/lock-budget 边界仍未闭合。fixed-forward
+  evidence=`78+48`、migration `7`、operation `129`、model/tool `109`、command `16`、ratchet `2`、lint `58`、
+  focused mypy `0/3`、global mypy `81/4`。首个 pinned review artifact
+  `20260714T075911Z_Track_D_D1c_request_schema_pin_foundation` 因
+  `causal_binding.final_response_item_exact=false` 为 invalid；其中 substantive text 只作 fixed-forward 输入，不是
+  formal `NO-GO`。fresh pinned formal review 必须绑定 enclosing commit，hash-bound valid artifact 存在前 formal
+  status=pending，且不阻断无关 non-live Track D 开发。
 - [ ] R-029：宽松 action-schema bridge 仅可在 production action 尚无 reviewed schema/owner binder 期间存在；
   删除条件 = 全部 API-submittable actions（不是只看 served subset）连续一个 release window durable hit=0。
+  observation epoch 必须每个 release window bump，且 `NOT VALID` checks 的既有行 validation 在独立部署完成；
   任一 action 进入 served 集前必须满足完整 schema+adapter+Activity+revisioned model-safe result+simulate serializer
   谓词；当前 15/15 schema-less、served=0。
 - [ ] Agent Session 契约：服务端 agentic loop；工具面 = M1 manifest 导出 + 只读上下文工具 + model_native_search/fetch 转正；效果全部走 typed AgentAction（边界已由 `AGENT_OPERATION_CONTRACT.md` 规定）。

@@ -6,7 +6,7 @@ import inspect
 import textwrap
 from dataclasses import replace
 from pathlib import Path
-from types import CodeType, FunctionType, SimpleNamespace
+from types import CodeType, FunctionType
 from typing import Any, Callable
 
 import pytest
@@ -26,8 +26,20 @@ from sourcing_agent.operation_runtime import (
 from sourcing_agent.orchestrator import SourcingOrchestrator
 
 
+class _DispatchOperationRuntimeWriterProbe:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, dict[str, Any]]] = []
+
+    def validate_persisted_action_request(self, **kwargs: Any) -> None:
+        self.calls.append(("validate_persisted_action_request", dict(kwargs)))
+
+    def record_schema_less_compatibility_observation(self, **kwargs: Any) -> None:
+        self.calls.append(("record_schema_less_compatibility_observation", dict(kwargs)))
+
+
 class _DispatchProbe:
-    operation_runtime_writer = SimpleNamespace(validate_persisted_action_request=lambda **_: None)
+    def __init__(self) -> None:
+        self.operation_runtime_writer = _DispatchOperationRuntimeWriterProbe()
 
     @staticmethod
     def _operation_run_control_response_record(record: dict[str, Any]) -> dict[str, Any]:
@@ -258,6 +270,13 @@ def _dispatch_operation_run_from_records(
         self.operation_runtime_writer.validate_persisted_action_request(
             action=action,
             operation_run=operation_run,
+        )
+        self.operation_runtime_writer.record_schema_less_compatibility_observation(
+            action=action,
+            operation_run=operation_run,
+            observation="dispatch",
+            actor=actor,
+            source="api.operation_run_dispatch",
         )
     except OperationRuntimeStateConflict as exc:
         return self._operation_run_control_response_record(
@@ -582,6 +601,25 @@ def test_dispatch_bindings_are_explicit_total_and_do_not_use_getattr_or_action_b
     assert not _registered_action_literals(dispatch_tree, registered_action_types)
     assert not _action_type_control_flow_nodes(dispatch_tree)
     assert not _dynamic_attribute_lookup_nodes(dispatch_tree, binding_tree, alias_trees=(module_alias_tree,))
+    compatibility_observation_calls = [
+        node
+        for node in ast.walk(dispatch_tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "record_schema_less_compatibility_observation"
+    ]
+    assert len(compatibility_observation_calls) == 1
+    compatibility_observation_call = compatibility_observation_calls[0]
+    assert ast.unparse(compatibility_observation_call.func.value) == "self.operation_runtime_writer"
+    assert not compatibility_observation_call.args
+    assert {keyword.arg: ast.unparse(keyword.value) for keyword in compatibility_observation_call.keywords} == {
+        "action": "action",
+        "operation_run": "operation_run",
+        "observation": "'dispatch'",
+        "actor": "actor",
+        "source": "'api.operation_run_dispatch'",
+    }
+    assert not _reads_action_type(compatibility_observation_call)
     dispatch_handler_values = _dispatch_handler_assignment_values(dispatch_tree)
     assert len(dispatch_handler_values) == 1
     assert ast.unparse(dispatch_handler_values[0]) == (
@@ -866,7 +904,26 @@ def test_every_action_follows_registry_adapter_mutation_without_action_type_bran
     }
     monkeypatch.setattr(orchestrator_module, "DEFAULT_ACTION_REGISTRY", ActionRegistry(mutated_specs))
 
-    assert _dispatch(_DispatchProbe(), action_type) == {"adapter": replacement_adapter}
+    probe = _DispatchProbe()
+    assert _dispatch(probe, action_type) == {"adapter": replacement_adapter}
+    action = {"action_id": f"action-{action_type}", "action_type": action_type}
+    operation_run = {"operation_run_id": f"operation-{action_type}"}
+    assert probe.operation_runtime_writer.calls == [
+        (
+            "validate_persisted_action_request",
+            {"action": action, "operation_run": operation_run},
+        ),
+        (
+            "record_schema_less_compatibility_observation",
+            {
+                "action": action,
+                "operation_run": operation_run,
+                "observation": "dispatch",
+                "actor": "d1b-test",
+                "source": "api.operation_run_dispatch",
+            },
+        ),
+    ]
 
 
 def test_missing_bound_adapter_and_unregistered_action_fail_closed() -> None:

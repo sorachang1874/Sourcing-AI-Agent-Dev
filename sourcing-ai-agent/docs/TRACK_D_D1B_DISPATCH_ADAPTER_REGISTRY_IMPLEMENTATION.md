@@ -127,12 +127,14 @@ model calls, or live side effects.
 
 D1b satisfies only the explicit dispatch declaration prerequisite. D1c has since landed the generic owner-bound target
 type, strict request-schema shape/validator, physical action/run pin columns, submit/approve/retry/dispatch copy/verify
-foundation, and R-029 residual for the schema-less bridge. Remaining work still includes:
+foundation, epoch-scoped compatibility observations, and R-029 residual for the schema-less bridge. Remaining work
+still includes:
 
 - reviewed per-action production schemas and owner-target binders; all 15 production actions remain schema-less;
 - revisioned model-safe result schemas and their validator owner;
 - the full served predicate and simulate-dispatch serializer preflight;
-- bridge retirement only after every API-submittable action records zero compatibility hits for one release window.
+- bridge retirement only after every API-submittable action records zero compatibility hits for one release window,
+  with one checked-in epoch per window and separately deployed validation of the installed `NOT VALID` checks.
 
 Until all predicates exist, the served Agent tool population is zero. D1b's scope-local advisory `GO` does not replace
 its pending formal review. Formal review may proceed asynchronously without blocking unrelated non-live Track C or D

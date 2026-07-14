@@ -1,5 +1,10 @@
 -- Track D D1c: immutable ActionRequestSpec pins.
 -- Empty pairs are the explicit brownfield/schema-less compatibility residual.
+-- Brownfield installation is bounded and does not scan either populated table.
+-- A later, separately deployed migration must VALIDATE these constraints after
+-- the compatibility population has been audited.
+
+SET LOCAL lock_timeout = '5s';
 
 ALTER TABLE agent_actions
     ADD COLUMN request_schema_version text DEFAULT ''::text NOT NULL,
@@ -15,7 +20,7 @@ ALTER TABLE agent_actions
             AND request_schema_version ~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
             AND request_schema_digest ~ '^[0-9a-f]{64}$'
         )
-    );
+    ) NOT VALID;
 
 ALTER TABLE operation_runs
     ADD COLUMN request_schema_version text DEFAULT ''::text NOT NULL,
@@ -31,4 +36,6 @@ ALTER TABLE operation_runs
             AND request_schema_version ~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
             AND request_schema_digest ~ '^[0-9a-f]{64}$'
         )
-    );
+    ) NOT VALID;
+
+SET LOCAL lock_timeout = DEFAULT;

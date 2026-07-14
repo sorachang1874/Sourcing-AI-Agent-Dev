@@ -89,7 +89,7 @@ EXPECTED_ACTION_DISPATCH_ADAPTERS = {
     "external_intake": "",
 }
 
-SUBMIT_ACTION_CALL_INVENTORY_SHA256 = "1db4e85dcc539941c87bc7d0bb33bdddc5f8f35a7af74da776d620acd5eef46b"
+SUBMIT_ACTION_CALL_INVENTORY_SHA256 = "d2d65c9ca1ea86d4784ba8ad220ef7c2f695f75e02f7e41f3e2ca8c672a88ce6"
 
 
 def _class_method(tree: ast.Module, class_name: str, method_name: str) -> ast.FunctionDef:
@@ -268,9 +268,22 @@ class _FailClosedOperationRuntimeWriter(OperationRuntimeWriter):
         raise AssertionError(f"submit_action invoked unexpected writer callback/outbox hook: {name}")
 
 
+class _DispatchOperationRuntimeWriterProbe:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, dict[str, Any]]] = []
+
+    def validate_persisted_action_request(self, **kwargs: Any) -> None:
+        self.calls.append(("validate_persisted_action_request", dict(kwargs)))
+
+    def record_schema_less_compatibility_observation(self, **kwargs: Any) -> None:
+        self.calls.append(("record_schema_less_compatibility_observation", dict(kwargs)))
+
+
 class _DispatchProbe:
     _operation_dispatch_adapter_bindings = SourcingOrchestrator._operation_dispatch_adapter_bindings
-    operation_runtime_writer = SimpleNamespace(validate_persisted_action_request=lambda **_: None)
+
+    def __init__(self) -> None:
+        self.operation_runtime_writer = _DispatchOperationRuntimeWriterProbe()
 
     @staticmethod
     def _operation_run_control_response_record(record: dict[str, Any]) -> dict[str, Any]:
@@ -437,8 +450,9 @@ def test_submit_action_ast_freezes_keyword_only_surface_and_write_order() -> Non
     assert _signature_contract(method) == expected_signature
 
     call_inventory = _call_inventory(method)
-    assert len(call_inventory) == 32
+    assert len(call_inventory) == 33
     assert _call_inventory_digest(method) == SUBMIT_ACTION_CALL_INVENTORY_SHA256, _call_inventory_roots(method)
+    assert _call_inventory_roots(method).count("self.record_schema_less_compatibility_observation") == 1
 
     repository_calls = sorted(
         (
@@ -553,12 +567,31 @@ def test_runtime_dispatch_inventory_distinguishes_registration_from_adapter_supp
 
     probe = _DispatchProbe()
     for action_type in sorted(inventory["action_types"]):
+        operation_run = {"operation_run_id": f"operation-{action_type}"}
+        action = {"action_id": f"action-{action_type}", "action_type": action_type}
+        call_count = len(probe.operation_runtime_writer.calls)
         result = SourcingOrchestrator._dispatch_operation_run_from_records(
             probe,
-            operation_run={"operation_run_id": f"operation-{action_type}"},
-            action={"action_id": f"action-{action_type}", "action_type": action_type},
+            operation_run=operation_run,
+            action=action,
             actor="characterization",
         )
+        assert probe.operation_runtime_writer.calls[call_count:] == [
+            (
+                "validate_persisted_action_request",
+                {"action": action, "operation_run": operation_run},
+            ),
+            (
+                "record_schema_less_compatibility_observation",
+                {
+                    "action": action,
+                    "operation_run": operation_run,
+                    "observation": "dispatch",
+                    "actor": "characterization",
+                    "source": "api.operation_run_dispatch",
+                },
+            ),
+        ]
         if action_type in expected_unsupported:
             assert result["status"] == "unsupported"
             assert result["reason"] == f"operation action {action_type!r} has no W9b owner adapter"

@@ -119,10 +119,12 @@ requests, model calls, or external side effects.
 ## 5. D1 continuation gates
 
 D1c now provides the single validator/digest owner, strict two-segment schema form, owner-bound target wrapper, physical
-action/run pins, and submit/approve/retry/dispatch copy/verify foundation. The remaining D1 work must still:
+action/run pins, submit/approve/retry/dispatch copy/verify foundation, and epoch-scoped brownfield compatibility
+observations. The remaining D1 work must still:
 
 - define reviewed per-action schemas and owner target binders for production actions, then retire the R-029 schema-less
-  bridge only after all API-submittable actions record zero compatibility hits for one release window;
+  bridge only after all API-submittable actions record zero compatibility hits for one release window; bump the
+  checked-in observation epoch for each window and validate the installed `NOT VALID` checks in a separate deployment;
 - use the D1b registry-owned adapter as one necessary served-subset input, then derive the served subset only after
   schema + Activity + revisioned model-safe result schema + simulate serializer preflight also exist;
 - expose the future Agent tool registry from that full predicate without treating action registration, adapter presence,

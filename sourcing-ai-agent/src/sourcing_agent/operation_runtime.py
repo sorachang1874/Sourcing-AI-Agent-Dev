@@ -79,6 +79,21 @@ ACTION_REQUEST_PIN_FIELDS = frozenset(
 )
 REQUEST_SCHEMA_STATUS_VALIDATED = "validated"
 REQUEST_SCHEMA_STATUS_SCHEMA_LESS = "schema_less_compatibility"
+REQUEST_SCHEMA_COMPATIBILITY_EVENT_TYPE = "ActionRequestSchemaCompatibilityObserved"
+# Release owners must bump this checked-in epoch for every release window while
+# R-029 remains open.  Event idempotency is scoped to one logical continuation
+# per epoch, so an old observation cannot make a later release look unused.
+REQUEST_SCHEMA_COMPATIBILITY_OBSERVATION_EPOCH = "d1c_r029_20260714_v1"
+REQUEST_SCHEMA_COMPATIBILITY_ORIGIN_PRE_D1C = "pre_d1c_blank_pin_migration"
+REQUEST_SCHEMA_COMPATIBILITY_ORIGIN_POST_D1C = "post_d1c_schema_less_submission"
+REQUEST_SCHEMA_COMPATIBILITY_OBSERVATIONS = frozenset(
+    {
+        "approve",
+        "dispatch",
+        "retry",
+        "submit_replay",
+    }
+)
 _REQUEST_SCHEMA_VERSION_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}")
 
 
@@ -186,15 +201,22 @@ class ActionRequestSpec:
         overlap = sorted(input_fields & target_fields)
         if overlap:
             raise ValueError(f"action request fields cannot have dual owners: {','.join(overlap)}")
+        seen_target_fields: set[str] = set()
         seen_aliases: set[str] = set()
         normalized_alias_rows: list[tuple[str, tuple[str, ...]]] = []
         for target_field, aliases in self.target_ref_field_aliases:
-            normalized_target = str(target_field or "").strip()
-            normalized_aliases = tuple(str(alias or "").strip() for alias in aliases)
+            normalized_target = target_field.strip() if isinstance(target_field, str) else ""
+            normalized_aliases = tuple(alias.strip() if isinstance(alias, str) else "" for alias in aliases)
             if (
-                normalized_target not in target_fields
+                not isinstance(target_field, str)
+                or normalized_target not in target_fields
                 or normalized_target != target_field
+                or normalized_target in seen_target_fields
                 or not normalized_aliases
+                or any(
+                    not isinstance(alias, str) or alias != normalized
+                    for alias, normalized in zip(aliases, normalized_aliases)
+                )
                 or any(not alias for alias in normalized_aliases)
                 or len(set(normalized_aliases)) != len(normalized_aliases)
             ):
@@ -202,6 +224,7 @@ class ActionRequestSpec:
             forbidden = set(normalized_aliases) & (input_fields | target_fields | seen_aliases)
             if forbidden:
                 raise ValueError(f"action request target aliases cannot be caller-owned: {','.join(sorted(forbidden))}")
+            seen_target_fields.add(normalized_target)
             seen_aliases.update(normalized_aliases)
             normalized_alias_rows.append((normalized_target, normalized_aliases))
         object.__setattr__(self, "request_schema", tool_spec.input_schema)
@@ -977,6 +1000,121 @@ class OperationRuntimeWriter:
                 )
         return spec
 
+    def record_schema_less_compatibility_observation(
+        self,
+        *,
+        action: Mapping[str, Any],
+        observation: str,
+        operation_run: Mapping[str, Any] | None = None,
+        actor: str = "operation_runtime",
+        source: str = "operation_runtime",
+    ) -> dict[str, Any]:
+        """Persist one idempotent R-029 hit before a schema-less continuation.
+
+        The migration's physical empty/empty pair covers both post-D1c schema-less
+        submissions and brownfield actions.  Brownfield rows lack the submission
+        metadata marker, so the observation event records that derived origin
+        explicitly instead of silently treating an old row as a zero-hit bridge.
+        """
+
+        action_record = dict(action or {})
+        normalized_observation = str(observation or "").strip()
+        if normalized_observation not in REQUEST_SCHEMA_COMPATIBILITY_OBSERVATIONS:
+            raise ValueError(f"unsupported request-schema compatibility observation: {normalized_observation!r}")
+        action_type = str(action_record.get("action_type") or "").strip()
+        try:
+            spec = self.action_registry.spec_for(action_type)
+        except KeyError as exc:
+            raise OperationRuntimeStateConflict(
+                "operation_action_request_schema_unknown_action",
+                action_record,
+            ) from exc
+        action_version = str(action_record.get("request_schema_version") or "").strip()
+        action_digest = str(action_record.get("request_schema_digest") or "").strip()
+        if spec.has_request_schema or action_version or action_digest:
+            return {}
+        action_id = str(action_record.get("action_id") or "").strip()
+        workspace_id = str(action_record.get("workspace_id") or "default").strip() or "default"
+        if not action_id:
+            raise OperationRuntimeStateConflict(
+                "operation_action_request_schema_compatibility_identity_missing",
+                action_record,
+            )
+        operation_record = dict(operation_run or {})
+        operation_run_id = str(operation_record.get("operation_run_id") or "").strip()
+        if operation_record:
+            if (
+                str(operation_record.get("action_id") or "").strip() != action_id
+                or (str(operation_record.get("workspace_id") or "default").strip() or "default") != workspace_id
+            ):
+                raise OperationRuntimeStateConflict(
+                    "operation_run_request_identity_conflict",
+                    operation_record,
+                )
+        metadata = action_record.get("metadata")
+        metadata_record = dict(metadata) if isinstance(metadata, Mapping) else {}
+        post_d1c_marker = (
+            str(metadata_record.get("request_schema_status") or "").strip() == REQUEST_SCHEMA_STATUS_SCHEMA_LESS
+            and metadata_record.get("request_schema_compatibility_hit") is True
+        )
+        origin = (
+            REQUEST_SCHEMA_COMPATIBILITY_ORIGIN_POST_D1C
+            if post_d1c_marker
+            else REQUEST_SCHEMA_COMPATIBILITY_ORIGIN_PRE_D1C
+        )
+        identity_suffix = (
+            action_id if normalized_observation in {"submit_replay", "approve"} else operation_run_id or action_id
+        )
+        evidence_operation_run_id = "" if normalized_observation == "approve" else operation_run_id
+        idempotency_key = (
+            f"{action_id}:{REQUEST_SCHEMA_COMPATIBILITY_EVENT_TYPE}:"
+            f"{REQUEST_SCHEMA_COMPATIBILITY_OBSERVATION_EPOCH}:"
+            f"{normalized_observation}:{identity_suffix}"
+        )
+        expected_payload = {
+            "action_type": action_type,
+            "owner_module": str(action_record.get("owner_module") or "").strip(),
+            "operation_type": str(action_record.get("operation_type") or "").strip(),
+            "observation": normalized_observation,
+            "request_schema_version": "",
+            "request_schema_digest": "",
+            "request_schema_status": REQUEST_SCHEMA_STATUS_SCHEMA_LESS,
+            "request_schema_compatibility_hit": True,
+            "request_schema_compatibility_origin": origin,
+            "request_schema_compatibility_observation_epoch": REQUEST_SCHEMA_COMPATIBILITY_OBSERVATION_EPOCH,
+            "module_state_mutated": False,
+        }
+        event = self.store.repos.workflow_runtime.append_operation_event(
+            workspace_id=workspace_id,
+            event_stream_id=action_id,
+            operation_run_id=evidence_operation_run_id,
+            action_id=action_id,
+            event_family="operation_event",
+            event_type=REQUEST_SCHEMA_COMPATIBILITY_EVENT_TYPE,
+            idempotency_key=idempotency_key,
+            actor=actor,
+            source=source,
+            payload=expected_payload,
+        )
+        event_payload = event.get("payload") if isinstance(event, Mapping) else None
+        if (
+            not isinstance(event, Mapping)
+            or str(event.get("workspace_id") or "default").strip() != workspace_id
+            or str(event.get("event_stream_id") or "").strip() != action_id
+            or str(event.get("operation_run_id") or "").strip() != evidence_operation_run_id
+            or str(event.get("action_id") or "").strip() != action_id
+            or str(event.get("event_family") or "").strip() != "operation_event"
+            or str(event.get("event_type") or "").strip() != REQUEST_SCHEMA_COMPATIBILITY_EVENT_TYPE
+            or str(event.get("idempotency_key") or "").strip() != idempotency_key
+            or not isinstance(event_payload, Mapping)
+            or dict(event_payload) != expected_payload
+        ):
+            raise OperationRuntimeStateConflict(
+                "operation_action_request_schema_compatibility_evidence_conflict",
+                action_record,
+            )
+        return dict(event)
+
     @staticmethod
     def _assert_operation_request_pin(
         operation_run: Mapping[str, Any],
@@ -1193,15 +1331,16 @@ class OperationRuntimeWriter:
             "approval_policy": spec.approval_policy,
             "idempotency_key": normalized_idempotency,
         }
-        self._preflight_action_replay(expected_action=expected_action_identity)
+        existing_action = self._preflight_action_replay(expected_action=expected_action_identity)
         operation_id = ""
+        existing_operation: dict[str, Any] = {}
         if not spec.requires_approval:
             operation_id = operation_run_id_for(
                 action_id=action_id,
                 operation_type=spec.operation_type,
                 idempotency_key=normalized_idempotency,
             )
-            self._preflight_operation_replay(
+            existing_operation = self._preflight_operation_replay(
                 action={
                     "action_id": action_id,
                     "workspace_id": normalized_workspace_id,
@@ -1213,6 +1352,14 @@ class OperationRuntimeWriter:
                 operation_run_id=operation_id,
                 idempotency_key=normalized_idempotency,
                 identity_conflict_reason="operation_run_idempotency_payload_conflict",
+            )
+        if existing_action:
+            self.record_schema_less_compatibility_observation(
+                action=existing_action,
+                operation_run=existing_operation if existing_operation else None,
+                observation="submit_replay",
+                actor=actor,
+                source=source,
             )
         action = self.store.repos.workflow_runtime.upsert_action(
             action_id=action_id,
@@ -1342,6 +1489,13 @@ class OperationRuntimeWriter:
         self.validate_persisted_action_request(
             action=action,
             operation_run=existing_operation if existing_operation else None,
+        )
+        self.record_schema_less_compatibility_observation(
+            action=action,
+            operation_run=existing_operation if existing_operation else None,
+            observation="approve",
+            actor=actor,
+            source=source,
         )
         action = self.store.repos.workflow_runtime.update_action_state(
             str(action.get("action_id") or ""),
@@ -1588,6 +1742,13 @@ class OperationRuntimeWriter:
                         event,
                     )
                 replay_events.append(event)
+            self.record_schema_less_compatibility_observation(
+                action=action,
+                operation_run=operation,
+                observation="retry",
+                actor=actor,
+                source=source,
+            )
             return {
                 "parent_operation_run": operation,
                 "operation_run": existing_retry_run,
@@ -1606,6 +1767,13 @@ class OperationRuntimeWriter:
             if retry_disabled_reason == "linked_action_retry_already_planned":
                 raise OperationRuntimeStateConflict("operation_run_retry_conflict", action)
             raise ValueError(retry_disabled_reason)
+        self.record_schema_less_compatibility_observation(
+            action=action,
+            operation_run=operation,
+            observation="retry",
+            actor=actor,
+            source=source,
+        )
         if action_id:
             action = self.store.repos.workflow_runtime.requeue_action_for_operation_retry(
                 action_id,

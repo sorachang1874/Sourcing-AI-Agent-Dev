@@ -185,11 +185,16 @@ The D1c foundation is active but no production action is served to a model.
 - Dispatch revalidates a schema-defined persisted request and compares current registry, action, and run pins before
   resolving an adapter. A mismatch returns a conflict with `module_state_mutated=false`; no owner adapter may run.
 - Migration `0002_action_request_schema_pins.sql` permits only empty/empty or a normalized non-empty version paired with
-  a lowercase 64-hex digest. The CHECK constrains physical shape; repository/upsert and runtime preflight enforce
-  immutable identity. This is not a claim that unrestricted direct SQL is protected by an immutability trigger.
+  a lowercase 64-hex digest. A five-second local lock budget and `NOT VALID` checks bound brownfield installation while
+  immediately guarding new writes; validation of existing rows is a separately deployed transaction and remains
+  pending. The CHECK constrains physical shape; repository/upsert and runtime preflight enforce immutable identity.
+  This is not a claim that unrestricted direct SQL is protected by an immutability trigger.
 - All 15 production actions remain schema-less. Their physical pins are empty/empty and each submission records
   `request_schema_status=schema_less_compatibility` plus `request_schema_compatibility_hit=true` in action metadata and
-  the submission event payload. This explicit migration path is tracked by R-029; it does not make an action served.
+  the submission event payload. Any replay, approve, retry, or dispatch continuation also records an idempotent
+  `ActionRequestSchemaCompatibilityObserved` event before its first domain mutation/handler; its checked-in epoch must
+  advance for each release observation window. This explicit migration path is tracked by R-029; it does not make an
+  action served.
 - Served population remains zero until an action has a reviewed request schema and owner binder, D1b adapter,
   Agent-callable Activity spine, revisioned model-safe result schema/validator, and a simulate dispatch that exercises
   the result serializer. D1c does not add `GET /api/agent/tool-registry`.

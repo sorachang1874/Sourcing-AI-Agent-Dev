@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -8,6 +9,7 @@ TYPES_PATH = REPO_ROOT / "contracts" / "frontend_api_contract.ts"
 SCHEMA_PATH = REPO_ROOT / "contracts" / "frontend_api_contract.schema.json"
 ADAPTER_PATH = REPO_ROOT / "contracts" / "frontend_api_adapter.ts"
 DEMO_API_PATH = REPO_ROOT / "frontend-demo" / "src" / "lib" / "api.ts"
+ESBUILD_MODULE_PATH = REPO_ROOT / "frontend-demo" / "node_modules" / "esbuild" / "lib" / "main.js"
 
 PIN_FIELDS = ("request_schema_version", "request_schema_digest")
 
@@ -65,3 +67,84 @@ def test_demo_mapper_preserves_optional_and_empty_schema_less_pins() -> None:
     optional_string = _typescript_function(demo_source, "asOptionalString")
     assert 'typeof value === "string" ? value : undefined' in optional_string
     assert "trim" not in optional_string
+
+
+def test_frontend_mappers_executably_distinguish_absent_from_explicit_empty_pins(
+    tmp_path: Path,
+) -> None:
+    public_adapter_bundle = tmp_path / "frontend_api_adapter.cjs"
+    demo_api_bundle = tmp_path / "demo_api.cjs"
+    bundle_script = """
+const esbuild = require(process.argv[1]);
+esbuild.buildSync({
+  entryPoints: [process.argv[2]],
+  outfile: process.argv[3],
+  bundle: true,
+  platform: "node",
+  format: "cjs",
+  target: "node20",
+  define: { "import.meta.env": "{}" },
+});
+"""
+
+    for entrypoint, output_path in (
+        (ADAPTER_PATH, public_adapter_bundle),
+        (DEMO_API_PATH, demo_api_bundle),
+    ):
+        build = subprocess.run(
+            [
+                "node",
+                "-e",
+                bundle_script,
+                str(ESBUILD_MODULE_PATH),
+                str(entrypoint),
+                str(output_path),
+            ],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert build.returncode == 0, build.stderr
+
+    assertion_script = """
+const assert = require("node:assert/strict");
+const publicAdapter = require(process.argv[1]);
+const demoApi = require(process.argv[2]);
+
+const cases = [
+  [publicAdapter.mapOperationActionRecord, "request_schema_version", "request_schema_version"],
+  [publicAdapter.mapOperationActionRecord, "request_schema_digest", "request_schema_digest"],
+  [publicAdapter.mapOperationRunRecord, "request_schema_version", "request_schema_version"],
+  [publicAdapter.mapOperationRunRecord, "request_schema_digest", "request_schema_digest"],
+  [demoApi.deriveOperationActionRecord, "request_schema_version", "requestSchemaVersion"],
+  [demoApi.deriveOperationActionRecord, "request_schema_digest", "requestSchemaDigest"],
+  [demoApi.deriveOperationRunRecord, "request_schema_version", "requestSchemaVersion"],
+  [demoApi.deriveOperationRunRecord, "request_schema_digest", "requestSchemaDigest"],
+];
+
+for (const [mapper, wireField, mappedField] of cases) {
+  assert.equal(typeof mapper, "function");
+  const absent = mapper({});
+  const schemaLess = mapper({ [wireField]: "" });
+  assert.equal(absent[mappedField], undefined);
+  assert.equal(schemaLess[mappedField], "");
+  assert.equal(Object.prototype.hasOwnProperty.call(schemaLess, mappedField), true);
+  assert.equal(JSON.stringify(absent).includes(`"${mappedField}"`), false);
+  assert.equal(JSON.stringify(schemaLess).includes(`"${mappedField}":""`), true);
+}
+"""
+    assertion = subprocess.run(
+        [
+            "node",
+            "-e",
+            assertion_script,
+            str(public_adapter_bundle),
+            str(demo_api_bundle),
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert assertion.returncode == 0, assertion.stderr

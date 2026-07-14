@@ -53,13 +53,17 @@ W8 operation persistence contract:
   pair and current registry before accepting work. Dispatch also revalidates a schema-defined persisted request before
   invoking an adapter; drift returns a zero-module-mutation conflict.
 - Migration `0002_action_request_schema_pins.sql` permits only empty/empty or a normalized non-empty version paired with
-  a lowercase 64-hex digest. The database CHECK owns pair shape; repository/upsert and runtime preflight own immutable
-  replay identity. No direct-SQL immutability-trigger guarantee is claimed.
+  a lowercase 64-hex digest. It uses a five-second local lock budget and `NOT VALID` checks so installation does not
+  scan populated tables; validation of existing rows is a later, separately deployed transaction. The database CHECK
+  owns pair shape; repository/upsert and runtime preflight own immutable replay identity. No direct-SQL
+  immutability-trigger guarantee is claimed.
 - All 15 production actions remain on the R-029 schema-less compatibility bridge: physical pins are empty/empty and
   durable action metadata plus the submission event record `request_schema_status=schema_less_compatibility` and
-  `request_schema_compatibility_hit=true`. Served Agent tool population remains zero. The bridge closes only after all
-  API-submittable actions have reviewed schemas/owner binders and the complete population records zero hits for one
-  release window; measuring only a future served subset is insufficient.
+  `request_schema_compatibility_hit=true`. Replay/approve/retry/dispatch continuations record a pre-mutation,
+  release-epoch-scoped `ActionRequestSchemaCompatibilityObserved` event, including brownfield origin. Served Agent tool
+  population remains zero. The bridge closes only after all API-submittable actions have reviewed schemas/owner
+  binders and the complete population records zero hits for one release window; measuring only a future served subset
+  is insufficient.
 - Operation-layer persistence must not create `workflow_commands`, CRM rows, projection rows, person assets/evidence/assertions, provider registry rows, or export artifacts. Those remain module-owner effects.
 - W9 backend operation controls may approve, reject, query, and cancel operation state through operation runtime tables and append-only events. They must still not execute module side effects or bypass workflow command owners.
 - `store.repos.workflow_runtime` is the public storage owner for `agent_actions`, `operation_runs`, `operation_events`,
