@@ -18,8 +18,8 @@ from typing import Any
 from urllib.parse import urlsplit
 
 POLICY_SCHEMA_VERSION = "x.profile.bio_signal.policy.v1"
-POLICY_VERSION = "profile-bio-signal-v1"
-CANONICAL_POLICY_SHA256 = "d4d74823f1cd8cb202afbf92c5065fbf591069496f262bea1d35eb016aa1e4f2"
+POLICY_VERSION = "profile-bio-signal-v1.1"
+CANONICAL_POLICY_SHA256 = "167176f76450fe3e36ff78c31f51b4b4da5476d6f046a79d3c9decde4abc9a2d"
 BUNDLE_SCHEMA_VERSION = "x.profile.bio_evidence.bundle.v1"
 ANALYSIS_SCHEMA_VERSION = "x.profile.bio_signal.analysis.v1"
 
@@ -184,13 +184,27 @@ def _handle_relation_clauses(value: str, handle: str) -> list[str]:
     return [clause for clause in clauses if _contains_handle(clause, handle)]
 
 
-def _contains_closed_subject_claim(value: str, ecosystem: dict[str, Any]) -> bool:
-    for statement in _statements(value):
+def _contains_closed_subject_claim(
+    value: str,
+    ecosystem: dict[str, Any],
+    claim_guards: dict[str, list[str]],
+) -> bool:
+    clauses = [clause.strip() for clause in _RELATION_CLAUSE_SPLIT_RE.split(value) if clause.strip()]
+    negation_prefixes = [_normalize_text(prefix) for prefix in claim_guards["negation_prefixes"]]
+    blocked_continuations = [_normalize_text(prefix) for prefix in claim_guards["non_ownership_continuation_prefixes"]]
+    for clause in clauses:
+        normalized_clause = _normalize_text(clause)
+        if any(normalized_clause.startswith(prefix) for prefix in negation_prefixes):
+            continue
         for alias in ecosystem["aliases"]:
             for template in ecosystem["subject_claim_templates"]:
-                rendered = template.replace("{alias}", alias)
-                if _contains_marker(statement, rendered):
-                    return True
+                rendered = _normalize_text(template.replace("{alias}", alias))
+                if not normalized_clause.startswith(rendered):
+                    continue
+                continuation = normalized_clause[len(rendered) :].lstrip()
+                if any(continuation.startswith(prefix) for prefix in blocked_continuations):
+                    continue
+                return True
     return False
 
 
@@ -206,6 +220,14 @@ def _relations_for_handle(
         elif any(_contains_marker(clause, marker) for marker in relation_markers["current"]):
             detected.add("current")
     return detected
+
+
+def _has_blocked_relation_context(value: str, handle: str, blocked_markers: list[str]) -> bool:
+    return any(
+        _contains_marker(clause, marker)
+        for clause in _handle_relation_clauses(value, handle)
+        for marker in blocked_markers
+    )
 
 
 def _valid_profile_url(value: Any, *, current_handle: Any) -> bool:
@@ -259,7 +281,9 @@ def validate_policy(policy: Any) -> list[str]:
         "policy_version",
         "proposal_kinds",
         "china_ecosystems",
+        "ownership_claim_guards",
         "affiliation_relations",
+        "affiliation_blocked_context_markers",
         "limits",
         "forbidden_proposal_fields",
     }
@@ -271,7 +295,7 @@ def validate_policy(policy: Any) -> list[str]:
         _append(errors, "$", "must be canonical JSON")
         return errors
     if policy_sha256 != CANONICAL_POLICY_SHA256:
-        _append(errors, "$", "must exactly match the pinned profile-bio-signal-v1 policy")
+        _append(errors, "$", f"must exactly match the pinned {POLICY_VERSION} policy")
         return errors
     if policy["schema_version"] != POLICY_SCHEMA_VERSION:
         _append(errors, "$.schema_version", "unsupported")
@@ -310,6 +334,23 @@ def validate_policy(policy: Any) -> list[str]:
         ):
             _append(errors, f"{item_path}.subject_claim_templates", "each template must contain one {alias}")
 
+    claim_guards = policy["ownership_claim_guards"]
+    if _exact_keys(
+        claim_guards,
+        {"negation_prefixes", "non_ownership_continuation_prefixes"},
+        path="$.ownership_claim_guards",
+        errors=errors,
+    ):
+        for field in ("negation_prefixes", "non_ownership_continuation_prefixes"):
+            values = claim_guards[field]
+            if (
+                not isinstance(values, list)
+                or not values
+                or any(not isinstance(value, str) or not value.strip() for value in values)
+                or len({_normalize_text(value) for value in values}) != len(values)
+            ):
+                _append(errors, f"$.ownership_claim_guards.{field}", "must contain unique non-empty strings")
+
     relations = policy["affiliation_relations"]
     if not isinstance(relations, list) or [
         item.get("relation") for item in relations if isinstance(item, dict)
@@ -329,6 +370,15 @@ def validate_policy(policy: Any) -> list[str]:
                 _append(errors, f"{item_path}.markers", "unspecified must have no markers")
             if item["relation"] != "unspecified" and not markers:
                 _append(errors, f"{item_path}.markers", "specific relation requires markers")
+
+    blocked_context_markers = policy["affiliation_blocked_context_markers"]
+    if (
+        not isinstance(blocked_context_markers, list)
+        or not blocked_context_markers
+        or any(not isinstance(value, str) or not value.strip() for value in blocked_context_markers)
+        or len({_normalize_text(value) for value in blocked_context_markers}) != len(blocked_context_markers)
+    ):
+        _append(errors, "$.affiliation_blocked_context_markers", "must contain unique non-empty strings")
 
     limits = policy["limits"]
     limit_keys = {
@@ -447,6 +497,7 @@ def validate_evidence_bundle(bundle: Any, *, policy: Any) -> list[str]:
     affiliation_signatures: set[tuple[str, str]] = set()
     ecosystem_by_id = {item["ecosystem_id"]: item for item in policy["china_ecosystems"]}
     relation_markers = {item["relation"]: item["markers"] for item in policy["affiliation_relations"]}
+    blocked_relation_contexts = policy["affiliation_blocked_context_markers"]
 
     for index, proposal in enumerate(proposals):
         path = f"$.proposals[{index}]"
@@ -494,6 +545,9 @@ def validate_evidence_bundle(bundle: Any, *, policy: Any) -> list[str]:
         details = proposal["details"]
         if not _exact_keys(details, _DETAIL_KEYS, path=f"{path}.details", errors=errors):
             continue
+        for field, value in details.items():
+            if value is not None and not isinstance(value, str):
+                _append(errors, f"{path}.details.{field}", "must be a string or null")
         if kind == "observed_chinese_content":
             if details != {
                 "script": "han",
@@ -526,15 +580,17 @@ def validate_evidence_bundle(bundle: Any, *, policy: Any) -> list[str]:
             if ecosystem is None:
                 _append(errors, f"{path}.details.ecosystem_id", "unregistered")
             else:
-                if not _contains_closed_subject_claim(excerpt, ecosystem):
-                    _append(errors, f"{path}.excerpt", "does not match a closed same-statement subject-claim grammar")
+                if not _contains_closed_subject_claim(excerpt, ecosystem, policy["ownership_claim_guards"]):
+                    _append(errors, f"{path}.excerpt", "does not match an anchored same-clause subject-claim grammar")
         elif kind == "organization_mention":
             relation = details["affiliation_relation"]
             handle = details["organization_handle"]
             role_text = details["role_text"]
-            if relation not in AFFILIATION_RELATIONS:
+            relation_is_valid = isinstance(relation, str) and relation in AFFILIATION_RELATIONS
+            if not relation_is_valid:
                 _append(errors, f"{path}.details.affiliation_relation", "unsupported")
-            if not isinstance(handle, str) or _HANDLE_RE.fullmatch(handle) is None:
+            handle_is_valid = isinstance(handle, str) and _HANDLE_RE.fullmatch(handle) is not None
+            if not handle_is_valid:
                 _append(errors, f"{path}.details.organization_handle", "invalid")
             elif not _contains_handle(excerpt, handle):
                 _append(errors, f"{path}.excerpt", "does not contain the exact organization mention")
@@ -544,17 +600,24 @@ def validate_evidence_bundle(bundle: Any, *, policy: Any) -> list[str]:
                 )
             if details["resolution_status"] != "unresolved":
                 _append(errors, f"{path}.details.resolution_status", "must be unresolved")
-            if role_text is not None and (
-                not isinstance(role_text, str)
-                or not role_text.strip()
-                or len(role_text) > policy["limits"]["max_role_text_characters"]
-                or not any(_contains_marker(statement, role_text) for statement in _handle_statements(excerpt, handle))
-            ):
-                _append(errors, f"{path}.details.role_text", "must be a bounded marker in the handle statement")
-            if isinstance(handle, str) and _HANDLE_RE.fullmatch(handle) is not None:
+            if role_text is not None:
+                role_text_is_valid = (
+                    isinstance(role_text, str)
+                    and bool(role_text.strip())
+                    and len(role_text) <= policy["limits"]["max_role_text_characters"]
+                )
+                if not role_text_is_valid or not handle_is_valid:
+                    _append(errors, f"{path}.details.role_text", "must be a bounded marker in the handle statement")
+                elif not any(
+                    _contains_marker(statement, role_text) for statement in _handle_statements(excerpt, handle)
+                ):
+                    _append(errors, f"{path}.details.role_text", "must be a bounded marker in the handle statement")
+            if handle_is_valid:
                 detected_relations = _relations_for_handle(excerpt, handle, relation_markers)
-                expected_relations = {relation} if relation in {"current", "previous"} else set()
-                if detected_relations != expected_relations:
+                expected_relations = {relation} if relation_is_valid and relation in ("current", "previous") else set()
+                if _has_blocked_relation_context(excerpt, handle, blocked_relation_contexts):
+                    _append(errors, f"{path}.excerpt", "handle clause contains blocked negation or recruiting context")
+                elif detected_relations != expected_relations:
                     _append(errors, f"{path}.excerpt", "handle clause must contain only the declared relation")
             signature = (str(relation), str(handle).casefold())
             if signature in affiliation_signatures:

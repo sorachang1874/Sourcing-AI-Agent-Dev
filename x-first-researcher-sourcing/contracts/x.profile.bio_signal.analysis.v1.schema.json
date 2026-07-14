@@ -23,7 +23,7 @@
       "const": "x.profile.bio_signal.analysis.v1"
     },
     "policy_version": {
-      "const": "profile-bio-signal-v1"
+      "const": "profile-bio-signal-v1.1"
     },
     "analysis_id": {
       "type": "string",

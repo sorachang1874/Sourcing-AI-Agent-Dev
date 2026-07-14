@@ -55,8 +55,8 @@ it cannot access Grok, X, OAuth, or another provider.
 | Live profile field availability | Deferred profile capability v2 | V1 has no native receipt trust root and rejects live/native claims |
 | Raw Bio | Fixture profile snapshot | Exact synthetic text, observation time, content version, and SHA-256 |
 | Extracted proposal | `x.profile.bio_evidence.bundle.v1` | Exact fixture Bio span and excerpt hash; null tool receipt |
-| Ecosystem registry | `profile_bio_signal_policy.v1.json` | Canonical hash-pinned aliases and `{alias}` ownership templates |
-| Affiliation relation | Evidence proposal | Exact handle clause contains only the declared relation; output remains unresolved |
+| Ecosystem registry | `profile_bio_signal_policy.v1.json`, policy v1.1 | Canonical hash-pinned aliases, `{alias}` ownership templates, negation prefixes, and non-ownership continuations |
+| Affiliation relation | Evidence proposal | Exact handle clause contains only the declared relation and no registered negation/recruiting context; output remains unresolved |
 | Physical location experience | Region-experience evidence owner | Never derived from this lane |
 | Canonical person/employment/assertion | Existing product owners | No writes or confirmation from this lane |
 
@@ -85,18 +85,25 @@ physical presence, or from a Bio mention to confirmed employment.
 - Proposal kinds: `observed_chinese_content`, `china_ecosystem_self_claim`, `organization_mention`.
 - Affiliation relations: `current`, `previous`, `unspecified`.
 - V1 transport is only `offline_fixture`; native mode, live URLs, and non-null receipts are invalid.
-- Ecosystem support requires one closed ownership template, such as `同名{alias}` or `我的{alias}`, to match within
-  one statement. Topic/follower co-occurrence such as `小红书用户有很多粉丝` is insufficient.
+- Ecosystem support requires one closed ownership template, such as `同名{alias}` or `我的{alias}`, anchored at the
+  start of the punctuation-delimited clause. Registered negative prefixes (`不是`, `并非`, `非`, `没有`, and English
+  equivalents) and non-ownership continuations such as `用户画像`, `好友`, `研究`, or `推荐` invalidate the clause.
+  Topic/follower co-occurrence such as `小红书用户有很多粉丝` is insufficient, while explicit claims such as
+  `同名小红书四万粉丝` and `我的公众号 SyntheticFounder` remain supported.
 - Current/previous affiliation requires an exact `@handle` and only the declared registered relation in the same
   line/punctuation-delimited clause. Bare `前` is not a marker; explicit `Prev`, `曾任`, or `前任职于` forms remain
   supported, and an explicit previous marker takes precedence over a role phrase such as `Engineer at` in that clause.
+  Registered negation or recruiting contexts such as `Not Head of`, `Looking for Head of`, `从未任职于`, and
+  `Not Previously` invalidate the relation proposal.
 - Handle-only organization proposals remain `unresolved`; target platform user ID is null.
 - All display-name, protected-identity, confirmation, discovery/ranking, and canonical-write claims are fixed false.
 
 The runtime pins the canonical SHA-256 of the complete policy, while the policy schema pins the same complete JSON
-value. Any alias, ownership template, relation marker, limit, forbidden field, or output-state change under the same
-`policy_version` fails closed. Such a change requires a version bump, schema/runtime/hash/fixture/test update, and
-non-author review rather than a hidden prompt change.
+value. Policy v1.1 records the ownership and affiliation context guards added after the v1 adversarial review. Any
+alias, ownership template, context guard, relation marker, limit, forbidden field, or output-state change under the
+same `policy_version` fails closed. Such a change requires another version bump, schema/runtime/hash/fixture/test
+update, and non-author review rather than a hidden prompt change. Runtime validation is terminal-total for all
+single-field nested JSON type substitutions covered by the fixture mutation corpus.
 
 ## Current limits
 

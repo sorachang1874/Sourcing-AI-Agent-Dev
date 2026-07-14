@@ -1,6 +1,6 @@
 {
   "schema_version": "x.profile.bio_signal.policy.v1",
-  "policy_version": "profile-bio-signal-v1",
+  "policy_version": "profile-bio-signal-v1.1",
   "proposal_kinds": [
     "observed_chinese_content",
     "china_ecosystem_self_claim",
@@ -46,6 +46,31 @@
       ]
     }
   ],
+  "ownership_claim_guards": {
+    "negation_prefixes": [
+      "不是",
+      "并非",
+      "非",
+      "没有",
+      "无",
+      "not",
+      "never",
+      "no"
+    ],
+    "non_ownership_continuation_prefixes": [
+      "用户画像",
+      "用户",
+      "好友",
+      "研究",
+      "推荐",
+      "users",
+      "user",
+      "friends",
+      "friend",
+      "research",
+      "recommendation"
+    ]
+  },
   "affiliation_relations": [
     {
       "relation": "current",
@@ -75,6 +100,20 @@
       "relation": "unspecified",
       "markers": []
     }
+  ],
+  "affiliation_blocked_context_markers": [
+    "not",
+    "never",
+    "looking for",
+    "hiring",
+    "seeking",
+    "不是",
+    "并非",
+    "没有",
+    "从未",
+    "未曾",
+    "招聘",
+    "招募"
   ],
   "limits": {
     "max_bio_characters": 2000,

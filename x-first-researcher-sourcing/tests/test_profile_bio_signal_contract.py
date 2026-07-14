@@ -51,14 +51,16 @@ def _imported_modules(source: str) -> set[str]:
             modules.update(alias.name for alias in node.names)
         elif isinstance(node, ast.ImportFrom) and node.module:
             modules.add(node.module)
+            modules.update(f"{node.module}.{alias.name}" for alias in node.names if alias.name != "*")
     return modules
 
 
 def _forbidden_runtime_imports(source: str) -> set[str]:
     return {
-        module
+        forbidden
         for module in _imported_modules(source)
-        if any(module == forbidden or module.startswith(f"{forbidden}.") for forbidden in FORBIDDEN_RUNTIME_IMPORTS)
+        for forbidden in FORBIDDEN_RUNTIME_IMPORTS
+        if module == forbidden or module.startswith(f"{forbidden}.")
     }
 
 
@@ -202,6 +204,12 @@ class ProfileBioSignalContractTest(unittest.TestCase):
         relation = copy.deepcopy(self.policy)
         relation["affiliation_relations"][1]["markers"].append("前")
         mutations.append(relation)
+        ownership_guard = copy.deepcopy(self.policy)
+        ownership_guard["ownership_claim_guards"]["negation_prefixes"].append("hardly")
+        mutations.append(ownership_guard)
+        affiliation_guard = copy.deepcopy(self.policy)
+        affiliation_guard["affiliation_blocked_context_markers"].append("interviewing for")
+        mutations.append(affiliation_guard)
         limits = copy.deepcopy(self.policy)
         limits["limits"]["max_proposals"] += 1
         mutations.append(limits)
@@ -246,18 +254,23 @@ class ProfileBioSignalContractTest(unittest.TestCase):
         self.assertNotEqual(changed_analysis["input_sha256"], self.analysis["input_sha256"])
         self.assertNotEqual(changed_analysis["analysis_id"], self.analysis["analysis_id"])
 
-    def test_ecosystem_requires_closed_same_statement_ownership_grammar(self) -> None:
+    def test_ecosystem_requires_anchored_same_clause_ownership_grammar(self) -> None:
         negatives = (
             "看到小红书行业讨论",
             "小红书用户有很多粉丝",
             "同名个人博客。小红书用户有很多粉丝",
+            "这不是我的小红书账号",
+            "不是我的公众号",
+            "并非同名小红书账号",
+            "我的小红书用户画像研究",
+            "推荐我的小红书好友",
         )
         for excerpt in negatives:
             payload = self._single_proposal_bundle(self.bundle, 4, excerpt=excerpt)
             with self.subTest(excerpt=excerpt):
                 self.assert_bundle_rejected(payload)
                 errors = validate_evidence_bundle(payload, policy=self.policy)
-                self.assertTrue(any("closed same-statement subject-claim grammar" in error for error in errors))
+                self.assertTrue(any("anchored same-clause subject-claim grammar" in error for error in errors))
 
         positive_xiaohongshu = self._single_proposal_bundle(self.bundle, 4, excerpt="同名小红书四万粉丝")
         positive_wechat = self._single_proposal_bundle(
@@ -293,6 +306,18 @@ class ProfileBioSignalContractTest(unittest.TestCase):
             excerpt="Head of @synth_listen, Prev @another_org",
         )
         self.assert_bundle_rejected(ambiguous_relation)
+        blocked_contexts = (
+            (1, "Not Head of @synthetic_hub"),
+            (1, "Looking for Head of @synthetic_hub"),
+            (1, "从未任职于 @synthetic_hub"),
+            (2, "Not Previously @synth_listen"),
+        )
+        for proposal_index, excerpt in blocked_contexts:
+            with self.subTest(excerpt=excerpt):
+                blocked = self._single_proposal_bundle(self.bundle, proposal_index, excerpt=excerpt)
+                self.assert_bundle_rejected(blocked)
+                errors = validate_evidence_bundle(blocked, policy=self.policy)
+                self.assertTrue(any("blocked negation or recruiting context" in error for error in errors))
         for excerpt in ("曾任 @synth_listen", "前任职于 @synth_listen"):
             with self.subTest(excerpt=excerpt):
                 chinese_previous = self._single_proposal_bundle(self.bundle, 2, excerpt=excerpt)
@@ -383,6 +408,39 @@ class ProfileBioSignalContractTest(unittest.TestCase):
         nested_malformed["proposals"] = [None, [], "proposal", 1, True]
         self.assert_bundle_rejected(nested_malformed)
 
+        def descendants(value: Any, path: tuple[str | int, ...] = ()) -> list[tuple[tuple[str | int, ...], Any]]:
+            found: list[tuple[tuple[str | int, ...], Any]] = []
+            if isinstance(value, dict):
+                for key, child in value.items():
+                    child_path = (*path, key)
+                    found.append((child_path, child))
+                    found.extend(descendants(child, child_path))
+            elif isinstance(value, list):
+                for index, child in enumerate(value):
+                    child_path = (*path, index)
+                    found.append((child_path, child))
+                    found.extend(descendants(child, child_path))
+            return found
+
+        mutation_count = 0
+        replacement_corpus: tuple[Any, ...] = (None, False, 0, 1.5, "invalid_scalar", [], {})
+        for path, original in descendants(self.bundle):
+            for replacement in replacement_corpus:
+                if type(replacement) is type(original) and replacement == original:
+                    continue
+                payload = copy.deepcopy(self.bundle)
+                owner: Any = payload
+                for token in path[:-1]:
+                    owner = owner[token]
+                owner[path[-1]] = copy.deepcopy(replacement)
+                schema_errors = _schema_errors(payload, self.bundle_schema)
+                if not schema_errors:
+                    continue
+                with self.subTest(path=path, replacement=repr(replacement)):
+                    self.assertTrue(validate_evidence_bundle(payload, policy=self.policy))
+                mutation_count += 1
+        self.assertEqual(mutation_count, 1007)
+
     def test_cli_and_source_boundary_are_offline_and_terminal(self) -> None:
         command = [
             sys.executable,
@@ -412,12 +470,15 @@ class ProfileBioSignalContractTest(unittest.TestCase):
 from httpx import Client
 from requests.sessions import Session
 from urllib.request import urlopen
+from urllib import request
+from urllib import request as request_alias
 import socket
 """
         self.assertEqual(
             _forbidden_runtime_imports(synthetic_forbidden_imports),
-            {"httpx", "requests.sessions", "socket", "urllib.request"},
+            {"httpx", "requests", "socket", "urllib.request"},
         )
+        self.assertEqual(_forbidden_runtime_imports("from urllib import parse"), set())
 
 
 if __name__ == "__main__":
