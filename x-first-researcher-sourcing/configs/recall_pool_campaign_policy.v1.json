@@ -1,0 +1,26 @@
+{
+  "schema_version": "x.recall_pool.campaign.policy.v1",
+  "policy_version": "recall_pool_campaign_policy.v1",
+  "kill_ceilings": {
+    "max_wave_files": 1024,
+    "max_bytes_per_wave": 67108864,
+    "max_raw_session_file_bytes": 268435456,
+    "max_total_input_bytes": 1073741824,
+    "max_candidate_rows_in_memory": 1000000,
+    "max_evidence_rows_in_memory": 10000000
+  },
+  "stop_advisory": {
+    "minimum_comparable_waves": 3,
+    "lookback_comparable_waves": 3,
+    "max_latest_new_unique_per_completed_call_for_plateau": 0.02,
+    "minimum_productivity_decline_fraction": 0.5,
+    "require_nonincreasing_productivity": true
+  },
+  "public_prompt_sha256_allowlist": [],
+  "authority": {
+    "business_candidate_limit": null,
+    "stop_advisory_enforced": false,
+    "provider_calls_allowed": false,
+    "product_writes_allowed": false
+  }
+}

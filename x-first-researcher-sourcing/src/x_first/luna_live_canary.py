@@ -27,7 +27,10 @@ from typing import Any, Protocol
 from urllib import error
 from urllib import request as urllib_request
 
-from . import profile_bio_semantic_v2 as semantic
+# The v1 artifact contract is immutable.  Its validator must never drift when
+# the active semantic contract advances, so it imports a frozen v2.1 snapshot
+# and reads only the matching legacy assets below.
+from . import profile_bio_semantic_legacy_v21 as semantic
 
 RESULT_SCHEMA_VERSION = "x.profile.bio_semantic.live_canary.result.v1"
 CATALOG_RECEIPT_SCHEMA_VERSION = "x.profile.bio_semantic.live_canary.catalog_receipt.v1"
@@ -56,6 +59,7 @@ MAX_ARTIFACT_BYTES = 2_000_000
 
 _KEY_RE = re.compile(r"sk-[A-Za-z0-9_-]{16,252}")
 _KEY_BYTES_RE = re.compile(rb"sk-[A-Za-z0-9_-]{16,252}")
+_JSON_ESCAPED_KEY_BYTES_RE = re.compile(rb"sk\\u002[dD][A-Za-z0-9_-]{16,252}")
 _RUN_ID_RE = re.compile(r"luna_canary_run_[0-9a-f]{32}")
 _SHA256_RE = re.compile(r"[0-9a-f]{64}")
 _CANONICAL_TIME_RE = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z")
@@ -198,6 +202,10 @@ def project_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
 
+def _legacy_asset_root() -> Path:
+    return project_root() / "legacy/luna_canary_v1"
+
+
 def _runtime_root() -> Path:
     return project_root() / "runtime/luna-live-canaries"
 
@@ -271,8 +279,10 @@ def _parse_timestamp(value: str) -> datetime:
 
 
 def _semantic_assets() -> tuple[dict[str, Any], dict[str, Any]]:
-    prompt = semantic.load_json(project_root() / "configs/profile_bio_semantic_prompt.v2.json")
-    output_schema = semantic.load_json(project_root() / "contracts/x.profile.bio_semantic.model_output.v2.schema.json")
+    prompt = semantic.load_json(_legacy_asset_root() / "configs/profile_bio_semantic_prompt.v2.1.json")
+    output_schema = semantic.load_json(
+        _legacy_asset_root() / "contracts/x.profile.bio_semantic.model_output.v2.1.schema.json"
+    )
     if semantic.validate_prompt(prompt) or semantic.validate_output_schema(output_schema):
         raise RuntimeError("semantic_v2_assets_invalid")
     return prompt, output_schema
@@ -282,7 +292,9 @@ def build_synthetic_live_request() -> dict[str, Any]:
     """Build the pinned synthetic ``.invalid`` request through semantic v2."""
 
     prompt, output_schema = _semantic_assets()
-    request = copy.deepcopy(semantic.load_json(project_root() / "fixtures/profile_bio_semantic_request_v2.json"))
+    request = copy.deepcopy(
+        semantic.load_json(_legacy_asset_root() / "fixtures/profile_bio_semantic_request.v2.1.json")
+    )
     request["request_id"] = "xbsv2r_333333333333333333333333"
     request["model_execution_mode"] = "live_canary"
     if semantic.validate_request(request, prompt=prompt, output_schema=output_schema):
@@ -535,12 +547,36 @@ def _catalog_receipt_valid(catalog: Any) -> bool:
     return False
 
 
+def _body_contains_secret(body: bytes, key: str | None = None) -> bool:
+    if (
+        (key is not None and key.encode() in body)
+        or _KEY_BYTES_RE.search(body) is not None
+        or _JSON_ESCAPED_KEY_BYTES_RE.search(body) is not None
+    ):
+        return True
+    try:
+        parsed = _strict_json_loads(body)
+    except (UnicodeError, ValueError, RecursionError):
+        return False
+    stack = [parsed]
+    while stack:
+        value = stack.pop()
+        if isinstance(value, str):
+            if (key is not None and key in value) or _KEY_RE.search(value) is not None:
+                return True
+        elif isinstance(value, dict):
+            stack.extend(value.keys())
+            stack.extend(value.values())
+        elif isinstance(value, list):
+            stack.extend(value)
+    return False
+
+
 def _raw_response_receipt(response: HttpResponse, key: str) -> dict[str, Any]:
     content_type = _content_type(response.headers)
     content_type_bytes = content_type.encode("ascii", errors="ignore")
     secret_present = (
-        key.encode() in response.body
-        or _KEY_BYTES_RE.search(response.body) is not None
+        _body_contains_secret(response.body, key)
         or key.encode() in content_type_bytes
         or _KEY_BYTES_RE.search(content_type_bytes) is not None
     )
@@ -568,6 +604,8 @@ def _decode_raw_response(receipt: Mapping[str, Any]) -> bytes | None:
     except ValueError as exc:
         raise ValueError("raw_response_invalid") from exc
     if len(body) > MAX_RESPONSE_BYTES or hashlib.sha256(body).hexdigest() != receipt.get("body_sha256"):
+        raise ValueError("raw_response_invalid")
+    if _body_contains_secret(body):
         raise ValueError("raw_response_invalid")
     return body
 
@@ -764,7 +802,7 @@ def _write_bundle(root: Path, run_id: str, payloads: Mapping[str, Mapping[str, A
     return final
 
 
-def run_luna_live_canary(
+def _run_luna_live_canary_fixture_v1(
     *,
     execute_live: bool,
     http_client: HttpClient | None = None,
@@ -774,10 +812,12 @@ def run_luna_live_canary(
     wall_clock: Callable[[], datetime] | None = None,
     monotonic: Callable[[], float] | None = None,
 ) -> tuple[dict[str, Any], Path]:
-    """Consume the fixed approval and execute at most two external calls."""
+    """Offline-only v1 compatibility runner used by frozen replay tests."""
 
     if execute_live is not True:
         raise PermissionError("execute_live_required")
+    if http_client is None or environ is None or runtime_root is None or approval_root is None:
+        raise PermissionError("legacy_v1_fixture_injection_required")
     environment = os.environ if environ is None else environ
     key = environment.get(KEY_ENVIRONMENT_VARIABLE)
     if not _valid_key(key):
@@ -921,6 +961,13 @@ def run_luna_live_canary(
     payloads["result.json"] = result
     artifact_root = _write_bundle(artifact_owner, run_id, payloads)
     return result, artifact_root
+
+
+def run_luna_live_canary(*args: Any, **kwargs: Any) -> tuple[dict[str, Any], Path]:
+    """Reject all v1 live execution; only the frozen artifact validator remains public."""
+
+    del args, kwargs
+    raise PermissionError("legacy_v1_live_execution_disabled")
 
 
 def _read_private_json(path: Path) -> Any:
@@ -1317,6 +1364,5 @@ __all__ = [
     "RESPONSES_URL",
     "UrllibHttpClient",
     "build_synthetic_live_request",
-    "run_luna_live_canary",
     "validate_artifact_directory",
 ]

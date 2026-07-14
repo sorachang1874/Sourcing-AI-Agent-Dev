@@ -1,0 +1,17 @@
+{
+  "schema_version": "x.profile.bio_semantic.live_canary.legacy_asset_manifest.v1",
+  "source_commit": "f02c72c",
+  "freeze_policy": "sha256_pin_semantic_assets_runner_result_schema_and_shared_cli",
+  "files": {
+    "configs/profile_bio_semantic_prompt.v2.1.json": "edfdef7644795f14f91bd150e11901dc86592405b15ba4ae41a90196f801a62b",
+    "contracts/x.profile.bio_semantic.model_output.v2.1.schema.json": "4e80783da84e396d2a3071801b2499d5d9071b5e9dabf3dfa57a24ca0658c0db",
+    "fixtures/profile_bio_semantic_model_output.v2.1.json": "ce6e1cf64952156af47009e10a553e204bb17f94699a964c29ac1d053f655ddb",
+    "fixtures/profile_bio_semantic_request.v2.1.json": "a937f783b9dd48f8fedb370aa4294a79b32615fc367ee79ba72d61cc99a83bc2"
+  },
+  "project_files": {
+    "src/x_first/profile_bio_semantic_legacy_v21.py": "1a69f2777ba213b9cadc1be362fef482194b42e7faf9d97d7a9bf700fbeec5c1",
+    "src/x_first/luna_live_canary.py": "9a545b53653412d2a3ca96e85682e47a8004aa58d04bb72552bc11942011894a",
+    "contracts/x.profile.bio_semantic.live_canary.result.v1.schema.json": "fbd38ad21c69697381241d9e4624bc638fc3334754072c019272272f701a2682",
+    "scripts/run_luna_live_canary.py": "098a9efec98a9ccfda418e58db51a3bfe5e34703945a7de3e24f6e114743df6a"
+  }
+}

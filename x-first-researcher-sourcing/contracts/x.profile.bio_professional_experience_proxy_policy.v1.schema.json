@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.invalid/x.profile.bio_professional_experience_proxy_policy.v1.schema.json",
+  "title": "Profile Bio professional-experience proxy policy v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "policy_version",
+    "source_status",
+    "regions",
+    "strength_order",
+    "unmapped_strength",
+    "proposal_mappings",
+    "usage_boundary"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "x.profile.bio.professional_experience_proxy_policy.v1"
+    },
+    "policy_version": {
+      "const": "profile-bio-professional-experience-proxy-policy-v1"
+    },
+    "source_status": {
+      "const": "unverified_model_derived"
+    },
+    "regions": {
+      "const": [
+        "china",
+        "asia"
+      ]
+    },
+    "strength_order": {
+      "const": [
+        "none",
+        "weak_proxy",
+        "strong_proxy"
+      ]
+    },
+    "unmapped_strength": {
+      "const": "none"
+    },
+    "proposal_mappings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "professional_china_digital_ecosystem",
+        "observed_chinese_professional_content"
+      ],
+      "properties": {
+        "professional_china_digital_ecosystem": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "strength",
+            "regions"
+          ],
+          "properties": {
+            "strength": {
+              "const": "strong_proxy"
+            },
+            "regions": {
+              "const": [
+                "china",
+                "asia"
+              ]
+            }
+          }
+        },
+        "observed_chinese_professional_content": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "strength",
+            "regions"
+          ],
+          "properties": {
+            "strength": {
+              "const": "weak_proxy"
+            },
+            "regions": {
+              "const": [
+                "china",
+                "asia"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "usage_boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "machine_use",
+        "final_eligibility_or_ranking",
+        "physical_region_inference",
+        "protected_identity_inference",
+        "canonical_employment"
+      ],
+      "properties": {
+        "machine_use": {
+          "const": "independently_governed_high_recall_verification_queue_only"
+        },
+        "final_eligibility_or_ranking": {
+          "const": false
+        },
+        "physical_region_inference": {
+          "const": false
+        },
+        "protected_identity_inference": {
+          "const": false
+        },
+        "canonical_employment": {
+          "const": false
+        }
+      }
+    }
+  }
+}

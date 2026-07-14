@@ -1,0 +1,346 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.invalid/x.grok_cli.exploration.evaluation.v0.schema.json",
+  "title": "Grok CLI exploration evaluation v0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "native_x_call_proof",
+    "input_binding",
+    "candidate_search_feasibility",
+    "researcher_role_function_feasibility",
+    "source_replayability",
+    "scale_verdict",
+    "scale_blockers",
+    "next_phase",
+    "tool_counts",
+    "metrics",
+    "candidate_value_assessments",
+    "first_field_gate_gaps",
+    "hydration_tasks",
+    "authority"
+  ],
+  "properties": {
+    "schema_version": {"const": "x.grok_cli.exploration.evaluation.v0"},
+    "status": {"const": "evaluated"},
+    "native_x_call_proof": {
+      "enum": ["receipt_only_unverified", "session_hash_and_calls_verified"]
+    },
+    "input_binding": {"$ref": "#/$defs/input_binding"},
+    "candidate_search_feasibility": {
+      "enum": [
+        "receipt_only_model_mediated_result_unverified",
+        "model_mediated_precision_tranche_lead_demonstrated",
+        "model_mediated_recall_pool_leads_observed",
+        "model_mediated_candidate_needs_evidence",
+        "model_mediated_lead_not_demonstrated"
+      ]
+    },
+    "researcher_role_function_feasibility": {"const": "not_evaluated"},
+    "source_replayability": {"const": "tool_and_query_only"},
+    "scale_verdict": {"enum": ["no_go", "eligible_for_independent_review"]},
+    "scale_blockers": {
+      "type": "array",
+      "maxItems": 9,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "provider_post_bodies_not_replayable",
+          "candidate_role_function_not_structured",
+          "bio_snapshot_not_source_bound",
+          "stable_platform_user_id_not_source_bound",
+          "stable_platform_user_id_coverage_below_100_percent",
+          "bio_coverage_below_100_percent",
+          "raw_session_not_owner_only",
+          "cli_binary_version_not_bound_to_raw_session",
+          "tool_disable_flags_receipt_only"
+        ]
+      }
+    },
+    "next_phase": {"enum": ["candidate_hydration", "manual_adjudication"]},
+    "tool_counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "x_keyword_search": {"type": "integer", "minimum": 1, "maximum": 32},
+        "x_semantic_search": {"type": "integer", "minimum": 1, "maximum": 32},
+        "x_user_search": {"type": "integer", "minimum": 1, "maximum": 32},
+        "x_thread_fetch": {"type": "integer", "minimum": 1, "maximum": 32}
+      }
+    },
+    "metrics": {"$ref": "#/$defs/metrics"},
+    "candidate_value_assessments": {
+      "type": "array",
+      "maxItems": 25,
+      "items": {"$ref": "#/$defs/assessment"}
+    },
+    "first_field_gate_gaps": {"$ref": "#/$defs/gaps"},
+    "hydration_tasks": {
+      "type": "array",
+      "maxItems": 5,
+      "items": {"$ref": "x.grok_cli.candidate_hydration.task.v0.schema.json"}
+    },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "formal_gate_eligible",
+        "canonical_person_or_employment_confirmed",
+        "discovery_scale_authorized",
+        "product_write_authorized",
+        "outreach_authorized"
+      ],
+      "properties": {
+        "formal_gate_eligible": {"const": false},
+        "canonical_person_or_employment_confirmed": {"const": false},
+        "discovery_scale_authorized": {"const": false},
+        "product_write_authorized": {"const": false},
+        "outreach_authorized": {"const": false}
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "session_uuid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "request_uuid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "version": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"},
+    "rate": {
+      "oneOf": [
+        {"type": "number", "minimum": 0, "maximum": 1},
+        {"type": "null"}
+      ]
+    },
+    "state": {"enum": ["current", "historical", "ambiguous", "unsupported"]},
+    "segment": {
+      "enum": [
+        "precision_current_current",
+        "recall_current_historical",
+        "recall_historical_current",
+        "recall_historical_historical",
+        "needs_evidence"
+      ]
+    },
+    "input_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "session_id",
+        "request_id",
+        "model_id",
+        "tool_policy_version",
+        "result_sha256",
+        "receipt_sha256",
+        "query_policy_schema_version",
+        "query_policy_version",
+        "query_policy_sha256",
+        "legacy_full_query_policy_sha256",
+        "query_policy_purpose",
+        "query_policy_allowed_decision_dimensions",
+        "query_policy_registry_schema_version",
+        "query_policy_registry_version",
+        "query_policy_registry_sha256",
+        "query_policy_registry_row_sha256",
+        "lab_id",
+        "candidate_value_policy_schema_version",
+        "candidate_value_policy_version",
+        "candidate_value_policy_sha256",
+        "result_to_receipt",
+        "raw_session"
+      ],
+      "properties": {
+        "session_id": {"$ref": "#/$defs/session_uuid"},
+        "request_id": {"$ref": "#/$defs/request_uuid"},
+        "model_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"},
+        "tool_policy_version": {"const": "x.grok_cli.exploration.tool_receipt.v0"},
+        "result_sha256": {"$ref": "#/$defs/sha256"},
+        "receipt_sha256": {"$ref": "#/$defs/sha256"},
+        "query_policy_schema_version": {"const": "x.grok_cli.exploration.query_policy_descriptor.v1"},
+        "query_policy_version": {"$ref": "#/$defs/version"},
+        "query_policy_sha256": {"$ref": "#/$defs/sha256"},
+        "legacy_full_query_policy_sha256": {"$ref": "#/$defs/sha256"},
+        "query_policy_purpose": {"const": "base_researcher_discovery"},
+        "query_policy_allowed_decision_dimensions": {
+          "type": "array",
+          "prefixItems": [
+            {"const": "lab_affiliation"},
+            {"const": "role_function"},
+            {"const": "pretraining_relevance"}
+          ],
+          "items": false,
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "query_policy_registry_schema_version": {
+          "const": "x.grok_cli.exploration.query_policy_registry.v1"
+        },
+        "query_policy_registry_version": {"$ref": "#/$defs/version"},
+        "query_policy_registry_sha256": {"$ref": "#/$defs/sha256"},
+        "query_policy_registry_row_sha256": {"$ref": "#/$defs/sha256"},
+        "lab_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"},
+        "candidate_value_policy_schema_version": {
+          "const": "x.grok_cli.candidate_value_segment_policy.v1"
+        },
+        "candidate_value_policy_version": {"$ref": "#/$defs/version"},
+        "candidate_value_policy_sha256": {"$ref": "#/$defs/sha256"},
+        "result_to_receipt": {"const": "exact_tool_query_reconciliation_model_mediated_result"},
+        "raw_session": {"$ref": "#/$defs/raw_session"}
+      }
+    },
+    "raw_session": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "hashes_verified",
+        "tool_calls_verified",
+        "model_id_verified",
+        "cli_version_verified",
+        "tool_disable_flags_verified",
+        "owner_only_permissions"
+      ],
+      "properties": {
+        "status": {"enum": ["not_supplied", "verified"]},
+        "hashes_verified": {"type": "boolean"},
+        "tool_calls_verified": {"type": "boolean"},
+        "model_id_verified": {"type": "boolean"},
+        "cli_version_verified": {"type": "boolean"},
+        "tool_disable_flags_verified": {"type": "boolean"},
+        "owner_only_permissions": {
+          "oneOf": [{"type": "boolean"}, {"type": "null"}]
+        }
+      }
+    },
+    "reason": {
+      "enum": [
+        "missing_platform_user_id",
+        "missing_bio",
+        "target_lab_affiliation_state_unresolved",
+        "pretraining_experience_state_unresolved",
+        "high_authority_target_lab_affiliation_state_evidence_missing",
+        "high_authority_pretraining_experience_state_evidence_missing"
+      ]
+    },
+    "assessment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "handle",
+        "target_lab_affiliation_state",
+        "pretraining_experience_state",
+        "candidate_value_segment",
+        "recall_pool_eligible",
+        "precision_tranche_eligible",
+        "high_authority_evidence_complete",
+        "hydration_required",
+        "hydration_reasons"
+      ],
+      "properties": {
+        "handle": {"type": "string", "pattern": "^[A-Za-z0-9_]{1,15}$"},
+        "target_lab_affiliation_state": {"$ref": "#/$defs/state"},
+        "pretraining_experience_state": {"$ref": "#/$defs/state"},
+        "candidate_value_segment": {"$ref": "#/$defs/segment"},
+        "recall_pool_eligible": {"type": "boolean"},
+        "precision_tranche_eligible": {"type": "boolean"},
+        "high_authority_evidence_complete": {"type": "boolean"},
+        "hydration_required": {"type": "boolean"},
+        "hydration_reasons": {
+          "type": "array",
+          "maxItems": 6,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/reason"}
+        }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tool_call_receipt_rows",
+        "session_verified_completed_tool_calls",
+        "candidates_retained",
+        "candidates_per_tool_call",
+        "model_mediated_bio_presence_rate",
+        "model_mediated_platform_user_id_presence_rate",
+        "model_mediated_precision_tranche_rate",
+        "model_mediated_recall_pool_rate",
+        "model_mediated_high_authority_support_coverage",
+        "third_party_only_candidate_rate",
+        "post_evidence_records",
+        "replayable_provider_post_body_rate",
+        "model_reported_observations",
+        "candidate_value_segment_counts",
+        "precision_tranche_candidates",
+        "recall_pool_candidates",
+        "observations_mechanically_replayable"
+      ],
+      "properties": {
+        "tool_call_receipt_rows": {"type": "integer", "minimum": 1, "maximum": 32},
+        "session_verified_completed_tool_calls": {
+          "oneOf": [
+            {"type": "integer", "minimum": 1, "maximum": 32},
+            {"type": "null"}
+          ]
+        },
+        "candidates_retained": {"type": "integer", "minimum": 0, "maximum": 25},
+        "candidates_per_tool_call": {
+          "oneOf": [{"type": "number", "minimum": 0}, {"type": "null"}]
+        },
+        "model_mediated_bio_presence_rate": {"$ref": "#/$defs/rate"},
+        "model_mediated_platform_user_id_presence_rate": {"$ref": "#/$defs/rate"},
+        "model_mediated_precision_tranche_rate": {"$ref": "#/$defs/rate"},
+        "model_mediated_recall_pool_rate": {"$ref": "#/$defs/rate"},
+        "model_mediated_high_authority_support_coverage": {"$ref": "#/$defs/rate"},
+        "third_party_only_candidate_rate": {"$ref": "#/$defs/rate"},
+        "post_evidence_records": {"type": "integer", "minimum": 0},
+        "replayable_provider_post_body_rate": {"$ref": "#/$defs/rate"},
+        "model_reported_observations": {"type": "integer", "minimum": 0},
+        "candidate_value_segment_counts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "precision_current_current",
+            "recall_current_historical",
+            "recall_historical_current",
+            "recall_historical_historical",
+            "needs_evidence"
+          ],
+          "properties": {
+            "precision_current_current": {"type": "integer", "minimum": 0},
+            "recall_current_historical": {"type": "integer", "minimum": 0},
+            "recall_historical_current": {"type": "integer", "minimum": 0},
+            "recall_historical_historical": {"type": "integer", "minimum": 0},
+            "needs_evidence": {"type": "integer", "minimum": 0}
+          }
+        },
+        "precision_tranche_candidates": {"type": "integer", "minimum": 0},
+        "recall_pool_candidates": {"type": "integer", "minimum": 0},
+        "observations_mechanically_replayable": {"const": false}
+      }
+    },
+    "gaps": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bio_coverage_gap_to_100_percent",
+        "stable_id_coverage_gap_to_100_percent",
+        "evidence_complete_gap_to_90_percent",
+        "provider_post_body_replayability_gap_to_100_percent"
+      ],
+      "properties": {
+        "bio_coverage_gap_to_100_percent": {"$ref": "#/$defs/rate"},
+        "stable_id_coverage_gap_to_100_percent": {"$ref": "#/$defs/rate"},
+        "evidence_complete_gap_to_90_percent": {"$ref": "#/$defs/rate"},
+        "provider_post_body_replayability_gap_to_100_percent": {"$ref": "#/$defs/rate"}
+      }
+    }
+  }
+}

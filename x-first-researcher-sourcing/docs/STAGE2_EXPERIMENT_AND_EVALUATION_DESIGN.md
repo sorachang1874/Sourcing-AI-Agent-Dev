@@ -1,8 +1,10 @@
 # Stage 2 experiment and evaluation design
 
-> Status: design-only, not an execution approval. Stage 1 native-X access remains subject to a pinned independent
-> review and one successful bounded handshake. No Stage 2 provider adapter, live profile probe, Batch runner, durable
-> task ledger, executable evaluator, API credential path, or canonical product writer exists yet.
+> Status: design plus exploration evidence, not a promotion approval. Seven later Grok CLI sessions proved native-X
+> keyword, semantic, user, and thread search plus adaptive recall expansion, but did not prove replayable Post bodies
+> or complete profile fields. No
+> Stage 2 provider adapter, reviewed live profile probe, Batch runner, durable task ledger, promotion-grade evaluator,
+> supported API credential path, or canonical product writer exists yet.
 
 ## Decision this design supports
 
@@ -41,6 +43,21 @@ owner-reviewed multi-window / multi-lab experiment
 
 Every arrow fails closed. Batch is deliberately last: a high-throughput queue must not be the first place a basic
 field, identity, provenance, or query-semantics drift is discovered.
+
+### Observed exploration checkpoint
+
+The first 2026-07-14 session completed eight hosted-X calls; a later seven-wave campaign mechanically observed `702`
+native-X calls and retained `99` rows / `98` unique handles. New unique yield was
+`29/12/6/20/25/5/1`, showing the value of strategy diversity and a low-yield final frontier. “Can this installed
+client/account perform adaptive native-X researcher discovery?” is no longer open for those runs. Exhaustiveness
+remains open: the replay stop owner returns `insufficient_proof / continue_expansion` because legacy request context
+and query-family call attribution are incomplete.
+
+The next gate begins at field hydration: after handle merge, `95/98` leads contain model-mediated Bio text and `48/98`
+contain a model-mediated numeric platform ID, but neither is a source-bound snapshot. Retained Post bodies are
+likewise model-mediated and not replayable. The replay copy is owner-only, but the original Grok session permissions
+still fail the owner-only retention requirement. These gaps prevent promotion or batching but do not negate the
+search result.
 
 ## Future artifact owners
 
@@ -146,9 +163,12 @@ The first owner-reviewed canary remains intentionally small:
 ### Independent golden set
 
 Build the golden set before looking at Grok output, using official lab people/research pages, official technical
-reports/blogs, and papers. The first directional set contains 12-20 positives and 8-12 hard negatives, double-reviewed
-with conflicts preserved. Hard negatives include former staff, non-pretraining roles, parody/aggregator accounts,
-common-name conflicts, handle renames, mention-only accounts, and coauthors without current-affiliation evidence.
+reports/blogs, and papers. Build two linked gold views: a narrow current-target-lab/current-pretraining precision set
+and an experience-recall set spanning all four current/historical lab × current/historical pretraining combinations.
+The first directional set contains 12-20 supported rows and 8-12 hard negatives, double-reviewed with conflicts
+preserved. Former staff with supported pretraining experience are positives in the experience view, not automatic hard
+negatives. Unsupported affiliation/experience, parody/aggregator accounts, false identity joins and unbound claims are
+hard negatives; ambiguous rows remain explicit hydration cases.
 
 Provider discoveries may be added to a later challenger set, never retroactively to the frozen evaluation set.
 
@@ -174,18 +194,20 @@ Failure makes the profile lane `no_go`; it cannot be filled from Post prose or i
 
 ### C. Search feasibility
 
-Let `S` be all selected packets, `A` the unique manually accepted evidence-complete packets, `G` the frozen golden
-population, `Gx` the independently verified public-X subset, and `T` completed normalized discovery tasks.
+Let `Scc`/`Acc` be the selected/accepted current-current precision tranche, `Eexp` the evidence-complete four-segment
+experience population, `Gcc`/`Gexp` the corresponding frozen golden views, their `_x` subsets the independently
+verified public-X rows, and `T` completed normalized discovery tasks.
 
 | Dimension | First canary gate |
 | --- | --- |
 | Terminal and coverage | `5/5` tasks have terminal, coverage, and call-accounting rows; every selected packet stays in the denominator |
 | Evidence binding | `100%` of retained observations bind task/call/citation/object id/URL |
 | Stable identity | `100%` of accepted packets have numeric platform user id |
-| Evidence completeness | `>=90%` of selected packets have independent current-affiliation and pretraining-relevance evidence |
-| Precision | `|A| / |S| >= 80%` |
-| Conditional recall | `|A intersect Gx| / |Gx| >= 50%` |
-| Minimum yield | reviewed unique `>=5`, accepted unique `>=5`, and `|A| / T >= 1.0` |
+| Evidence completeness | `>=90%` of precision-selected packets have independent lab-affiliation and pretraining-experience evidence |
+| Precision | `|Acc| / |Scc| >= 80%` |
+| Conditional recall | report both `|Acc intersect Gcc_x| / |Gcc_x|` and `|Eexp intersect Gexp_x| / |Gexp_x|`; first canary target `>=50%` for each |
+| Segment retention | all four supported current/historical combinations remain visible; `needs_evidence` cannot disappear |
+| Minimum yield | reviewed unique `>=5`, experience-accepted unique `>=5`, and `|Eexp| / T >= 1.0` |
 | Dedupe | false merge `=0`; exact duplicate task/call `=0`; near-duplicate task rate `<=10%` |
 | Guardrails | fallback, cross-account evidence, overrun, unbound claim, product write, and retention violation all `=0` |
 | Cost | every call has usage; known total stays within request cap; unknown remains `unreported` |
@@ -193,8 +215,8 @@ population, `Gx` the independently verified public-X subset, and `T` completed n
 | Novelty | at least two of four discovery families each add one accepted id; stop after two consecutive zero-marginal families |
 
 Precision and conditional recall always include Wilson 95% intervals. Small-sample point estimates are feasibility
-evidence, not production claims. End-to-end recall `|A intersect G| / |G|` is reported alongside X-account availability
-`|Gx| / |G|`; excluding people without a verified X account must not inflate the headline result.
+evidence, not production claims. Both end-to-end recall views are reported beside their X-account availability;
+excluding people without a verified X account must not inflate either headline result.
 
 ### D. Batch transport
 
@@ -227,7 +249,7 @@ relevance segment. Efficiency cannot regress more than 10% unless another effici
 
 Stage 1 and later canaries must measure rather than assume:
 
-1. whether this installed OAuth CLI actually completes hosted native `x_search` with a stable receipt shape;
+1. whether the observed CLI call/event shape remains stable across a second frozen window and client version;
 2. whether returned Posts include numeric author ids and exact authored timestamps;
 3. whether text is complete, truncated, normalized, or only recoverable through citations;
 4. which reply/quote/thread/media/engagement/profile fields are available and source-bound;
@@ -240,14 +262,15 @@ Stage 1 and later canaries must measure rather than assume:
 
 ## Owner decisions still required
 
-Before Stage 2 live work, the owner must separately approve:
+Before Stage 2 promotion or volume expansion, the owner must separately approve:
 
 - the four contract/envelope versions and their independent review scope;
 - a supported xAI API credential path; Grok OAuth must not be exported or reverse-engineered into one;
 - exact model, transport, cost/deadline/turn/source/observation budgets and kill switch;
 - the private raw-evidence fields, TTL, purge owner, and deletion evidence;
 - the golden-set reviewers, split, adjudication rubric, and private storage;
-- the first live field/search canary; then, separately, the five-request Batch canary;
+- the reviewed five-lead field-hydration canary; then, separately, the five-request Batch canary;
 - any later lab expansion, retry policy, product adapter, canonical materialization, or outreach use.
 
-Until those decisions and reviews exist, Stage 2 remains fixture/design work only.
+Until those decisions and reviews exist, Stage 2 remains design/diagnostic work only; the completed exploration is not
+a Stage 2 `GO`.

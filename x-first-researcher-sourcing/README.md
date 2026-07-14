@@ -6,13 +6,25 @@ separate so X can be evaluated without changing LinkedIn-first canonical person 
 
 ## Current status
 
-`fixture_default + bounded_canaries + no_scale_claim` — fixture validation still performs no Grok, X, provider,
-model, credential, network, database, CRM, export, or outreach call. The one approved Stage 1 Grok/X attempt was
-executed and failed closed before any recognized X-search call (`unknown` tool event); its approval is consumed and it
-did not prove native-X capability. A separate chshapi relay canary now tests only whether the exact
-`gpt-5.6-luna` model can review one synthetic `.invalid` Bio through the semantic-v2 contract; independent review and
-its one-shot live result are still pending. No live post, Bio, profile, researcher, or batch-search result has been
-accepted.
+`fixture_default + adaptive_live_exploration + no_promotion_claim` — fixture validation still performs no Grok, X,
+provider, model, credential, network, database, CRM, export, or outreach call. A seven-wave bounded campaign has now
+mechanically observed 702 native-X calls and retained 99 candidate rows / 98 case-insensitive unique handles. It used
+no business candidate, observation, answer-length, or per-wave call ceiling; the operator paused after a current-team
+frontier and a residual coverage audit fell to `5/104` then `1/70` new unique handles per raw call. A private v3 replay
+recomputed all seven raw sessions, bound each emitted assistant terminal JSON and system prompt, and mapped every
+terminal object's byte span to its source assistant chunks. It requires the chunk containing the terminal JSON's
+opening `{` to occur after every native-X start/completion event and keeps every candidate field explicitly
+`model_mediated_unverified`. The `0600`
+merged artifact has SHA-256
+`d8392f12011701b740f7cec9666919ad6b99a50e1b9af6b11d61cb65f7aea474`. Its formal stop result is still
+`insufficient_proof / continue_expansion`, not exhausted. Exact Post bodies remain unreplayable, Bios/IDs are
+model-mediated rather than source-bound, and the original `~/.grok` copies remain below the owner-only contract;
+therefore hydration, product promotion, and supported API batching remain `NO-GO`. A
+corrected live `gpt-5.6-luna` request also validated the intended
+China/Asia professional-experience proxy semantics on four cases, but it is feasibility evidence rather than a formal
+semantic-v2.2 live gate. The formal Luna canary now has a separate receipt-first v2 offline implementation: legacy v1
+validation is frozen to semantic v2.1 assets, while v2 binds current semantic v2.2 and persists exact observed
+route/model/payload/timing/HTTP-or-failure receipts. It has not been executed live and still requires independent GO.
 
 The first vertical slice covers OpenAI with:
 
@@ -32,11 +44,16 @@ account-level and fixture-only: its only positive verdict is `fixture_contract_v
 
 ## Population boundary
 
-The population is defined only by current lab affiliation and `PRETRAIN_CORE` or `PRETRAIN_ADJACENT` professional
-evidence. Public professional bios, posts, mentions, and one-hop graph edges may supply bounded affiliation or technical
-evidence, but they can never be used to infer or proxy ethnicity, nationality, or any protected trait. Display names
-never drive selection. Directly observed language or regional-professional ecosystem terms may open a verification
-lead for broader evidence retrieval, but cannot establish eligibility, ranking, region experience, or identity.
+The discovery population is defined by two independent professional-evidence dimensions: target-lab affiliation
+`current|historical` and pretraining experience `current|historical`. All four supported combinations remain in the
+experience-recall pool; only evidence-complete `current/current` is in the default business precision tranche.
+Ambiguous or unsupported dimensions remain explicit bounded hydration cases. Public professional bios, posts,
+mentions, and one-hop graph edges may supply bounded affiliation or technical
+evidence, but they can never be used to infer ethnicity, nationality, or another protected identity. Display names
+never drive selection. Within that base population, a separately governed high-recall verification queue may treat
+subject-owned China digital-ecosystem professional activity as a `strong_proxy` and Chinese-language professional or
+technical content as a `weak_proxy` for China and Asia professional experience. These proxies do not establish
+physical location or identity and do not themselves authorize final ranking, eligibility, or outreach.
 
 ## Artifact boundary
 
@@ -47,18 +64,19 @@ not import `sourcing_agent`, and fixture output cannot write canonical person/ev
 
 | Capability | Current state |
 | --- | --- |
-| AI-native Grok/X retrieval | Intended transport is hosted `x_search`; installed CLI support is evidenced offline, live access is not yet proven |
+| AI-native Grok/X retrieval | Proven across seven bounded CLI sessions: 702 raw native-X calls; 98 unique model-mediated leads |
 | Full Post metadata | Stage 1 requests stable post id, URL, author id, timestamp and a bounded excerpt; it deliberately does not retain a full body |
-| Bio and mention enrichment | Fixture-only deterministic baseline v1.5 separates observed Chinese content, full-window positive-grammar China-ecosystem leads, exact positive current/previous organization proposals and graph edges. Its complete regex-AST and template-specific continuation mapping are policy/hash pinned, and the loaded grammar interpreter is implementation-digest bound. It is a conservative regression oracle/guardrail, not the recall classifier; the Luna-native semantic-review v2 lane is the primary open-text path. Both reject native/live profile claims until a separately reviewed profile-capability trust root exists |
-| Region-experience classification | Hardened evidence-backed classifier is committed; non-author follow-up review is still pending |
-| Multiple query tasks | Synthetic Stage 2 fixtures cover eight query families; no live scheduler exists yet |
-| Large asynchronous search | Not implemented. Official xAI Batch/Responses APIs are the planned scale transport and require supported API credentials |
+| Bio and mention enrichment | The merged campaign retained model-mediated Bio text for 95/98 handles and 274 valid candidate/evidence associations; none is a source-bound profile/Post capability claim. The isolated reported-text semantic contract can deterministically adjudicate supplied model outputs into terminal strong/weak/none verification-queue proposals without upgrading provenance; a real 95-item Luna batch runner is not implemented. Luna semantic v2 remains the source-bound open-text path after trust-bound hydration |
+| Candidate value segmentation | Configured target-lab affiliation × pretraining-experience matrix preserves current/historical recall; current/current is the default precision tranche |
+| Region-experience classification | Explicit physical-region classifier stays separate; semantic v2.2 adds unverified professional-experience proxy roll-up |
+| Multiple query tasks | Seven adaptive waves exercised keyword, semantic, user and thread search with prior-handle exclusion and strategy diversification; deterministic source replay and merge are author-complete and independent review remains pending |
+| Large asynchronous search | Interactive adaptive expansion is empirically viable; a supported durable xAI Batch/Responses scheduler is not implemented and still requires API credentials and separate promotion review |
 
 Display names and handles are retained as raw alias/history, not treated as proof of a real name or region. A
 subject-authored Bio may produce separate proposed evidence: explicit role/organization mentions, prior-affiliation
-mentions, observed language, and China-ecosystem activity such as a declared public channel. Only explicit physical
-work/education/research/residence evidence can support a physical region-experience label; ecosystem/language evidence
-remains a verification lead and is measured separately for incremental recall and false positives.
+mentions, observed language, and subject-owned China-ecosystem professional activity. Only explicit physical work/
+education/research/residence evidence can support a physical region-experience label. Ecosystem/language proposals
+feed the distinct strong/weak professional-experience proxy policy and remain unverified until human adjudication.
 The executable Bio v1 accepts only canonical lowercase-scheme/lowercase-host `.invalid` fixture profiles, null tool
 receipts, extractor versions of at most 100 characters, and canonical policy v1.5. It has
 no negative-phrase denylist: ownership and current/previous affiliation must full-match one versioned positive grammar
@@ -85,6 +103,9 @@ PYTHONPATH=src ../sourcing-ai-agent/.venv/bin/python -m x_first.profile_bio_sign
 PYTHONPATH=src ../sourcing-ai-agent/.venv/bin/python scripts/generate_openai_fixture.py --check
 PYTHONPATH=src ../sourcing-ai-agent/.venv/bin/python scripts/generate_capability_probe_fixtures.py --check
 PYTHONPATH=src ../sourcing-ai-agent/.venv/bin/python -m unittest tests.test_luna_live_canary -v
+PYTHONPATH=src ../sourcing-ai-agent/.venv/bin/python -m unittest tests.test_luna_live_canary_v2 -v
+PYTHONPATH=src ../sourcing-ai-agent/.venv/bin/python -m unittest tests.test_grok_cli_exploration -v
+PYTHONPATH=src ../sourcing-ai-agent/.venv/bin/python -m unittest tests.test_reported_profile_text_semantic -v
 ```
 
 Regenerate the deterministic fixture only when the contract intentionally changes:
@@ -95,9 +116,14 @@ PYTHONPATH=src ../sourcing-ai-agent/.venv/bin/python scripts/generate_openai_fix
 
 ## Next gate
 
-The consumed Stage 1 Grok/X attempt is recorded in
-`docs/live-evidence/2026-07-14-stage1-grok-x-handshake.md`; a retry or CLI tool-family compatibility probe requires a
-new owner decision. The separate Luna relay path is specified in `docs/LUNA_RELAY_LIVE_CANARY_CONTRACT.md` and cannot
-prove X/profile access. A stable author platform id remains a hard prerequisite for any Stage 2 owner review. Live
-researcher mapping remains `NO-GO` until that later decision and contract are complete. Workflow evaluation and
-champion/challenger rules are defined in `docs/X_FIRST_EVALUATION_CONTRACT.md`.
+The failed-closed Stage 1 runner, initial eight-lead experiment, and seven-wave adaptive recall campaign are separately
+recorded under `docs/live-evidence/`. Native search and high-recall multi-strategy expansion are empirically proven;
+profile-field completeness, original-source owner-only retention, researcher role/function adjudication, replayable
+Post bodies, and durable task accounting are not. Exploration is paused at 98 unique leads to move capacity to
+hydration, not because a volume cap fired or formal exhaustion was proved; the replay evaluator remains
+`insufficient_proof / continue_expansion`. The offline reported-text semantic contract and adjudicator are ready for
+supplied model outputs while preserving that trust level; they have not run the 95 real model-mediated texts and do
+not include a Luna transport. They cannot replace the next gate of source-bound account/Bio/Post hydration.
+Provider-costing batch review and precision/conditional-recall measurement remain separately review-gated. Workflow
+evaluation and champion/challenger rules are defined in
+`docs/X_FIRST_EVALUATION_CONTRACT.md`.

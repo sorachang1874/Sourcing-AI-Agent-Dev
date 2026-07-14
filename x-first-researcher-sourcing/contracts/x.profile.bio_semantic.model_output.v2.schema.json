@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://contracts.invalid/x.profile.bio_semantic.model_output.v2.1.schema.json",
-  "title": "X profile Bio semantic model output v2.1",
+  "$id": "https://contracts.invalid/x.profile.bio_semantic.model_output.v2.2.schema.json",
+  "title": "X profile Bio semantic model output v2.2",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -16,7 +16,7 @@
   ],
   "properties": {
     "schema_version": {
-      "const": "x.profile.bio_semantic.model_output.v2.1"
+      "const": "x.profile.bio_semantic.model_output.v2.2"
     },
     "request_id": {
       "type": "string",
@@ -111,12 +111,19 @@
           },
           "reason": {
             "type": "string",
-            "minLength": 1,
-            "maxLength": 240,
-            "description": "Untrusted display-only model narrative. It is not a fact source and has no machine-judgment authority; only the exact span and closed reason code do."
+            "enum": [
+              "The cited Bio span explicitly states professional region experience.",
+              "The cited Bio span explicitly states China digital-ecosystem professional activity.",
+              "The cited Bio span explicitly states a current claimed organization affiliation.",
+              "The cited Bio span explicitly states a previous claimed organization affiliation.",
+              "The cited Bio span states a future or aspirational organization affiliation.",
+              "The cited Bio span states an organization affiliation with unspecified timing.",
+              "The cited Bio span contains observed Chinese-language professional content."
+            ],
+            "description": "Closed deterministic explanation template selected by proposal_type plus relation_state; it cannot carry model-authored facts or identity claims."
           },
           "reason_source": {
-            "const": "model_proposed_untrusted_narrative"
+            "const": "closed_deterministic_explanation_template_v2.2"
           },
           "confidence": {
             "enum": [

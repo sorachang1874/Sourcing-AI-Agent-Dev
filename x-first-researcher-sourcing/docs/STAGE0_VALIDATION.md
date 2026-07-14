@@ -46,10 +46,14 @@ fc554fabd8997e5a0a0af0f87ba36c60d44f190655d5ddc7ced707236866988a  generator
 
 ## Safety boundary
 
-Stage 0 uses synthetic `.invalid` identities and URLs only. Discovery/ranking population semantics are restricted to
-lab, current professional affiliation, and pretraining relevance. The system must not infer or proxy ethnicity,
+Stage 0 uses synthetic `.invalid` identities and URLs only. Its frozen v1 fixture semantics are restricted to lab,
+current professional affiliation, and pretraining relevance. The system must not infer or proxy ethnicity,
 nationality, race, citizenship, religion, gender, or another protected identity from name, language, region, school,
 community, biography, post, mention, or graph position.
+
+This fixture is a narrower historical baseline, not the candidate-value authority. The separate two-axis exploration
+contract adds current/historical target-lab affiliation × current/historical pretraining experience without rewriting
+the v1 fixture or its recorded hashes.
 
 Stage 1 live work remains blocked until its owner/legal/privacy/model/access/cost/rate/deadline/kill-switch/account and
 retention decisions are explicit and the capability gate passes. The offline Grok advisory does not grant any of those

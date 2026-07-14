@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://contracts.invalid/x.profile.bio_semantic.request.v2.1.schema.json",
-  "title": "X profile Bio semantic review request v2.1",
+  "$id": "https://contracts.invalid/x.profile.bio_semantic.request.v2.2.schema.json",
+  "title": "X profile Bio semantic review request v2.2",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -17,7 +17,7 @@
   ],
   "properties": {
     "schema_version": {
-      "const": "x.profile.bio_semantic.request.v2.1"
+      "const": "x.profile.bio_semantic.request.v2.2"
     },
     "request_id": {
       "type": "string",
@@ -75,11 +75,12 @@
         "profile_url": {
           "type": "string",
           "format": "uri",
-          "maxLength": 300
+          "maxLength": 300,
+          "pattern": "^https://profiles\\.invalid/x/[a-z0-9_]{1,15}$"
         },
         "current_handle": {
           "type": "string",
-          "pattern": "^[A-Za-z0-9_]{1,15}$"
+          "pattern": "^[a-z0-9_]{1,15}$"
         },
         "bio_text": {
           "type": "string",
@@ -112,6 +113,8 @@
         "prompt_sha256",
         "output_schema_version",
         "output_schema_sha256",
+        "professional_experience_proxy_policy_version",
+        "professional_experience_proxy_policy_sha256",
         "strict_structured_output",
         "fallback_model"
       ],
@@ -126,18 +129,22 @@
           "const": "low"
         },
         "prompt_version": {
-          "const": "profile-bio-semantic-prompt-v2.1"
+          "const": "profile-bio-semantic-prompt-v2.2"
         },
         "prompt_sha256": {
-          "type": "string",
-          "pattern": "^[0-9a-f]{64}$"
+          "const": "7504507db5945e08b91848fa1e01ccc7a1d7bd8f48f329e7057ca9b492b9d48f"
         },
         "output_schema_version": {
-          "const": "x.profile.bio_semantic.model_output.v2.1"
+          "const": "x.profile.bio_semantic.model_output.v2.2"
         },
         "output_schema_sha256": {
-          "type": "string",
-          "pattern": "^[0-9a-f]{64}$"
+          "const": "37436cf27cb9b6dcbc74aeaad8fa915cf9da75d3738d2e78a164a90fec0c28f6"
+        },
+        "professional_experience_proxy_policy_version": {
+          "const": "profile-bio-professional-experience-proxy-policy-v1"
+        },
+        "professional_experience_proxy_policy_sha256": {
+          "const": "a2c115e2505ed08ca5930028a8458218cbc3e0e074bd33ef96f1a51db2609e72"
         },
         "strict_structured_output": {
           "const": true
@@ -163,6 +170,7 @@
         "max_json_string_characters",
         "max_json_string_bytes",
         "max_raw_response_canonical_bytes",
+        "max_request_canonical_bytes",
         "max_reasoning_summary_items",
         "max_reasoning_summary_characters",
         "max_reasoning_summary_bytes"
@@ -203,6 +211,9 @@
         },
         "max_raw_response_canonical_bytes": {
           "const": 262144
+        },
+        "max_request_canonical_bytes": {
+          "const": 65536
         },
         "max_reasoning_summary_items": {
           "const": 4

@@ -1,0 +1,133 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.invalid/x.reported_profile_text.semantic.model_output.v1.schema.json",
+  "title": "Strict offline model output for reported profile text v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "item_request_id",
+    "observation_id",
+    "text_sha256",
+    "verdict",
+    "proposals",
+    "authority"
+  ],
+  "properties": {
+    "schema_version": {"const": "x.reported_profile_text.semantic.model_output.v1"},
+    "item_request_id": {"type": "string", "pattern": "^xrpt_item_[0-9a-f]{24}$"},
+    "observation_id": {"type": "string", "pattern": "^xrpt_obs_[0-9a-f]{24}$"},
+    "text_sha256": {"$ref": "#/$defs/nonzero_sha256"},
+    "verdict": {
+      "enum": ["proposals_available", "no_supported_professional_context", "abstained"]
+    },
+    "proposals": {
+      "type": "array",
+      "maxItems": 12,
+      "items": {"$ref": "#/$defs/proposal"}
+    },
+    "authority": {
+      "const": {
+        "external_facts_used": false,
+        "protected_identity_inferred": false,
+        "discovery_or_ranking_recommended": false,
+        "eligibility_decided": false,
+        "canonical_employment_asserted": false,
+        "canonical_write_recommended": false
+      }
+    }
+  },
+  "allOf": [
+    {
+      "oneOf": [
+        {
+          "properties": {
+            "verdict": {"const": "proposals_available"},
+            "proposals": {"type": "array", "minItems": 1, "maxItems": 12}
+          }
+        },
+        {
+          "properties": {
+            "verdict": {"enum": ["no_supported_professional_context", "abstained"]},
+            "proposals": {"const": []}
+          }
+        }
+      ]
+    }
+  ],
+  "$defs": {
+    "nonzero_sha256": {
+      "type": "string",
+      "pattern": "^(?!0{64}$)[0-9a-f]{64}$"
+    },
+    "proposal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "proposal_type",
+        "relation_state",
+        "span_start",
+        "span_end",
+        "excerpt",
+        "reason_codes",
+        "reason",
+        "reason_source",
+        "confidence",
+        "evidence_basis",
+        "requires_independent_verification"
+      ],
+      "properties": {
+        "proposal_type": {
+          "enum": [
+            "professional_region_experience",
+            "professional_china_digital_ecosystem",
+            "professional_affiliation",
+            "observed_chinese_professional_content"
+          ]
+        },
+        "relation_state": {
+          "enum": [
+            "current_claimed",
+            "previous_claimed",
+            "future_or_aspirational",
+            "unspecified",
+            "not_applicable"
+          ]
+        },
+        "span_start": {"type": "integer", "minimum": 0, "maximum": 2000},
+        "span_end": {"type": "integer", "minimum": 1, "maximum": 2000},
+        "excerpt": {"type": "string", "minLength": 1, "maxLength": 500},
+        "reason_codes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "items": {
+            "enum": [
+              "explicit_professional_region_experience",
+              "explicit_china_digital_ecosystem_activity",
+              "explicit_current_organization_claim",
+              "explicit_previous_organization_claim",
+              "observed_chinese_professional_content",
+              "ambiguous_professional_context_requires_review"
+            ]
+          }
+        },
+        "reason": {
+          "enum": [
+            "The cited Bio span explicitly states professional region experience.",
+            "The cited Bio span explicitly states China digital-ecosystem professional activity.",
+            "The cited Bio span explicitly states a current claimed organization affiliation.",
+            "The cited Bio span explicitly states a previous claimed organization affiliation.",
+            "The cited Bio span states a future or aspirational organization affiliation.",
+            "The cited Bio span states an organization affiliation with unspecified timing.",
+            "The cited Bio span contains observed Chinese-language professional content."
+          ]
+        },
+        "reason_source": {"const": "closed_deterministic_explanation_template_v2.2"},
+        "confidence": {"enum": ["high", "medium", "low"]},
+        "evidence_basis": {"const": "model_mediated_unverified_text_only"},
+        "requires_independent_verification": {"const": true}
+      }
+    }
+  }
+}

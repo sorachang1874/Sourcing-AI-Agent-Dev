@@ -1,5 +1,5 @@
 {
-  "schema_version": "x.profile.bio_semantic.request.v2.1",
+  "schema_version": "x.profile.bio_semantic.request.v2.2",
   "request_id": "xbsv2r_111111111111111111111111",
   "profile_source_mode": "offline_fixture",
   "model_execution_mode": "offline_fake",
@@ -21,10 +21,12 @@
     "provider": "openai_compatible_responses",
     "model_id": "gpt-5.6-luna",
     "reasoning_effort": "low",
-    "prompt_version": "profile-bio-semantic-prompt-v2.1",
-    "prompt_sha256": "458463f2252e3384ca72c4cbc6f9fdaadced817c4a7bd77499337f37d8b109c6",
-    "output_schema_version": "x.profile.bio_semantic.model_output.v2.1",
-    "output_schema_sha256": "f3a059f09160e4fd2e3181c9bac2f26385f9321464a56ca40fabbd2b36c465a4",
+    "prompt_version": "profile-bio-semantic-prompt-v2.2",
+    "prompt_sha256": "7504507db5945e08b91848fa1e01ccc7a1d7bd8f48f329e7057ca9b492b9d48f",
+    "output_schema_version": "x.profile.bio_semantic.model_output.v2.2",
+    "output_schema_sha256": "37436cf27cb9b6dcbc74aeaad8fa915cf9da75d3738d2e78a164a90fec0c28f6",
+    "professional_experience_proxy_policy_version": "profile-bio-professional-experience-proxy-policy-v1",
+    "professional_experience_proxy_policy_sha256": "a2c115e2505ed08ca5930028a8458218cbc3e0e074bd33ef96f1a51db2609e72",
     "strict_structured_output": true,
     "fallback_model": null
   },
@@ -41,6 +43,7 @@
     "max_json_string_characters": 12000,
     "max_json_string_bytes": 48000,
     "max_raw_response_canonical_bytes": 262144,
+    "max_request_canonical_bytes": 65536,
     "max_reasoning_summary_items": 4,
     "max_reasoning_summary_characters": 2000,
     "max_reasoning_summary_bytes": 8000

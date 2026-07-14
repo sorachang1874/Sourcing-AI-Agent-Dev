@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sourcing-ai-agent.invalid/contracts/x.grok.adaptive_recall_wave.process_ledger.v1.schema.json",
+  "title": "Adaptive Grok recall-wave process ledger v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "run_id", "request_id", "session_id", "child_pid", "process_group_id",
+    "kernel_birth_identity", "process_identity_token", "spawned_at"
+  ],
+  "properties": {
+    "schema_version": {"const": "x.grok.adaptive_recall_wave.process_ledger.v1"},
+    "run_id": {"type": "string", "pattern": "^grok_wave_live_[0-9a-f]{32}$"},
+    "request_id": {"type": "string", "pattern": "^xwave_req_[0-9a-f]{32}$"},
+    "session_id": {"type": "string", "format": "uuid"},
+    "child_pid": {"type": "integer", "minimum": 1},
+    "process_group_id": {"type": "integer", "minimum": 1},
+    "kernel_birth_identity": {"type": "string", "minLength": 1, "maxLength": 512},
+    "process_identity_token": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "spawned_at": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"}
+  }
+}

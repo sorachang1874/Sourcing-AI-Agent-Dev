@@ -7,7 +7,9 @@
 
 - Reviewed implementation scope: `a6fea069d9410cbdeb24d67de5b1681e08355374` plus count-only follow-up
   `477ac6ffd51083463ef05aaf0c35da15921ac641`.
-- Independent verdict before execution: `GO`, P0/P1/P2/P3 = `0/0/0/0`.
+- Author record says the pre-execution review returned `GO`, P0/P1/P2/P3 = `0/0/0/0`; the corresponding pinned
+  review artifact, artifact hash, and effective-model metadata are not present in this sibling's public tree, so that
+  historical verdict is not independently verifiable here and is not a current formal `GO`.
 - Execution entrypoint: the sole reviewed `run_live_capability_probe.py --execute-live` path.
 - Started: `2026-07-14T06:11:51.405Z`.
 - Completed: `2026-07-14T06:12:03.072Z`.

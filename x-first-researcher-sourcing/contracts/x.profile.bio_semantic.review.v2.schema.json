@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://contracts.invalid/x.profile.bio_semantic.review.v2.1.schema.json",
-  "title": "Validated X profile Bio semantic review v2.1",
+  "$id": "https://contracts.invalid/x.profile.bio_semantic.review.v2.2.schema.json",
+  "title": "Validated X profile Bio semantic review v2.2",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -17,12 +17,14 @@
     "usage",
     "verdict",
     "proposals",
+    "professional_experience_proxy_policy",
+    "professional_experience_proxy_rollup",
     "error_codes",
     "authority"
   ],
   "properties": {
     "schema_version": {
-      "const": "x.profile.bio_semantic.review.v2.1"
+      "const": "x.profile.bio_semantic.review.v2.2"
     },
     "status": {
       "enum": [
@@ -58,32 +60,62 @@
         "mode",
         "transport_id",
         "execute_live",
+        "transport_invocations",
         "provider_external_calls",
-        "fallback_used"
+        "response_received",
+        "fallback_used",
+        "phase",
+        "contract_error"
       ],
       "properties": {
         "mode": {
           "enum": [
             "offline_fake",
-            "live"
+            "live",
+            "invalid",
+            "not_inspected"
           ]
         },
         "transport_id": {
           "enum": [
             "offline_fake_responses",
-            "openai_compatible_responses"
+            "openai_compatible_responses",
+            "invalid",
+            "not_inspected"
           ]
         },
         "execute_live": {
-          "type": "boolean"
+          "type": ["boolean", "null"]
+        },
+        "transport_invocations": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1
         },
         "provider_external_calls": {
           "type": "integer",
           "minimum": 0,
           "maximum": 1
         },
+        "response_received": {
+          "type": "boolean"
+        },
         "fallback_used": {
           "const": false
+        },
+        "phase": {
+          "enum": ["preflight", "authorization", "transport", "response", "semantic", "completed"]
+        },
+        "contract_error": {
+          "enum": [
+            "none",
+            "not_evaluated",
+            "invalid_is_live",
+            "invalid_transport_id",
+            "transport_pair_mismatch",
+            "invalid_execute_live",
+            "offline_execute_live"
+          ]
         }
       }
     },
@@ -116,14 +148,14 @@
           "const": "gpt-5.6-luna"
         },
         "prompt_version": {
-          "const": "profile-bio-semantic-prompt-v2.1"
+          "const": "profile-bio-semantic-prompt-v2.2"
         },
         "prompt_sha256": {
           "type": "string",
           "pattern": "^[0-9a-f]{64}$"
         },
         "output_schema_version": {
-          "const": "x.profile.bio_semantic.model_output.v2.1"
+          "const": "x.profile.bio_semantic.model_output.v2.2"
         },
         "output_schema_sha256": {
           "type": "string",
@@ -264,12 +296,19 @@
           },
           "reason": {
             "type": "string",
-            "minLength": 1,
-            "maxLength": 240,
-            "description": "Untrusted display-only model narrative with no fact or machine-judgment authority."
+            "enum": [
+              "The cited Bio span explicitly states professional region experience.",
+              "The cited Bio span explicitly states China digital-ecosystem professional activity.",
+              "The cited Bio span explicitly states a current claimed organization affiliation.",
+              "The cited Bio span explicitly states a previous claimed organization affiliation.",
+              "The cited Bio span states a future or aspirational organization affiliation.",
+              "The cited Bio span states an organization affiliation with unspecified timing.",
+              "The cited Bio span contains observed Chinese-language professional content."
+            ],
+            "description": "Closed deterministic explanation template; no model-authored display prose survives validation."
           },
           "reason_source": {
-            "const": "model_proposed_untrusted_narrative"
+            "const": "closed_deterministic_explanation_template_v2.2"
           },
           "confidence": {
             "enum": [
@@ -290,6 +329,152 @@
         }
       }
     },
+    "professional_experience_proxy_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["expected", "observed", "validation_status"],
+      "properties": {
+        "expected": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["policy_version", "policy_sha256"],
+          "properties": {
+            "policy_version": {
+              "const": "profile-bio-professional-experience-proxy-policy-v1"
+            },
+            "policy_sha256": {
+              "const": "a2c115e2505ed08ca5930028a8458218cbc3e0e074bd33ef96f1a51db2609e72"
+            }
+          }
+        },
+        "observed": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["policy_version", "policy_sha256"],
+          "properties": {
+            "policy_version": {
+              "type": ["string", "null"],
+              "maxLength": 200
+            },
+            "policy_sha256": {
+              "type": ["string", "null"],
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        },
+        "validation_status": {
+          "enum": ["validated_canonical", "invalid"]
+        }
+      },
+      "allOf": [
+        {
+          "oneOf": [
+            {
+              "properties": {
+                "observed": {
+                  "const": {
+                    "policy_version": "profile-bio-professional-experience-proxy-policy-v1",
+                    "policy_sha256": "a2c115e2505ed08ca5930028a8458218cbc3e0e074bd33ef96f1a51db2609e72"
+                  }
+                },
+                "validation_status": {
+                  "const": "validated_canonical"
+                }
+              }
+            },
+            {
+              "properties": {
+                "observed": {
+                  "not": {
+                    "const": {
+                      "policy_version": "profile-bio-professional-experience-proxy-policy-v1",
+                      "policy_sha256": "a2c115e2505ed08ca5930028a8458218cbc3e0e074bd33ef96f1a51db2609e72"
+                    }
+                  }
+                },
+                "validation_status": {
+                  "const": "invalid"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "professional_experience_proxy_rollup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "regions"],
+      "properties": {
+        "status": {
+          "enum": ["unverified_model_derived", "none"]
+        },
+        "regions": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["china", "asia"],
+          "properties": {
+            "china": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["strength", "contributing_proposals"],
+              "properties": {
+                "strength": {"enum": ["strong_proxy", "weak_proxy", "none"]},
+                "contributing_proposals": {
+                  "type": "array",
+                  "maxItems": 12,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["proposal_id", "proposal_type", "confidence", "mapped_strength"],
+                    "properties": {
+                      "proposal_id": {"type": "string", "pattern": "^xbsv2p_[0-9a-f]{24}$"},
+                      "proposal_type": {
+                        "enum": [
+                          "professional_china_digital_ecosystem",
+                          "observed_chinese_professional_content"
+                        ]
+                      },
+                      "confidence": {"enum": ["high", "medium", "low"]},
+                      "mapped_strength": {"enum": ["strong_proxy", "weak_proxy"]}
+                    }
+                  }
+                }
+              }
+            },
+            "asia": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["strength", "contributing_proposals"],
+              "properties": {
+                "strength": {"enum": ["strong_proxy", "weak_proxy", "none"]},
+                "contributing_proposals": {
+                  "type": "array",
+                  "maxItems": 12,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["proposal_id", "proposal_type", "confidence", "mapped_strength"],
+                    "properties": {
+                      "proposal_id": {"type": "string", "pattern": "^xbsv2p_[0-9a-f]{24}$"},
+                      "proposal_type": {
+                        "enum": [
+                          "professional_china_digital_ecosystem",
+                          "observed_chinese_professional_content"
+                        ]
+                      },
+                      "confidence": {"enum": ["high", "medium", "low"]},
+                      "mapped_strength": {"enum": ["strong_proxy", "weak_proxy"]}
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "description": "Policy-derived, unverified high-recall professional-experience proxies with proposal provenance. They are neither physical-region evidence nor protected identity inference."
+    },
     "error_codes": {
       "type": "array",
       "maxItems": 8,
@@ -298,6 +483,7 @@
           "request_invalid",
           "prompt_invalid",
           "output_schema_invalid",
+          "proxy_policy_invalid",
           "execute_live_required",
           "request_mode_mismatch",
           "execution_contract_invalid",
@@ -336,8 +522,12 @@
                     "mode": "offline_fake",
                     "transport_id": "offline_fake_responses",
                     "execute_live": false,
+                    "transport_invocations": 1,
                     "provider_external_calls": 0,
-                    "fallback_used": false
+                    "response_received": true,
+                    "fallback_used": false,
+                    "phase": "completed",
+                    "contract_error": "none"
                   }
                 },
                 {
@@ -345,8 +535,12 @@
                     "mode": "live",
                     "transport_id": "openai_compatible_responses",
                     "execute_live": true,
+                    "transport_invocations": 1,
                     "provider_external_calls": 1,
-                    "fallback_used": false
+                    "response_received": true,
+                    "fallback_used": false,
+                    "phase": "completed",
+                    "contract_error": "none"
                   }
                 }
               ]
@@ -360,14 +554,19 @@
             "usage": {"const": null},
             "verdict": {"const": "abstained"},
             "proposals": {"maxItems": 0},
+            "professional_experience_proxy_rollup": {"const": {"status": "none", "regions": {"china": {"strength": "none", "contributing_proposals": []}, "asia": {"strength": "none", "contributing_proposals": []}}}},
             "error_codes": {"const": ["execute_live_required"]},
             "execution": {
               "const": {
                 "mode": "live",
                 "transport_id": "openai_compatible_responses",
                 "execute_live": false,
+                "transport_invocations": 0,
                 "provider_external_calls": 0,
-                "fallback_used": false
+                "response_received": false,
+                "fallback_used": false,
+                "phase": "authorization",
+                "contract_error": "none"
               }
             }
           }
@@ -379,6 +578,7 @@
             "usage": {"const": null},
             "verdict": {"const": "abstained"},
             "proposals": {"maxItems": 0},
+            "professional_experience_proxy_rollup": {"const": {"status": "none", "regions": {"china": {"strength": "none", "contributing_proposals": []}, "asia": {"strength": "none", "contributing_proposals": []}}}},
             "error_codes": {
               "minItems": 1,
               "maxItems": 1,
@@ -387,26 +587,73 @@
                   "request_invalid",
                   "prompt_invalid",
                   "output_schema_invalid",
-                  "request_mode_mismatch",
-                  "transport_failed",
-                  "response_invalid",
-                  "model_output_invalid",
-                  "budget_exceeded"
+                  "proxy_policy_invalid"
                 ]
               }
             },
             "execution": {
+              "const": {
+                "mode": "not_inspected",
+                "transport_id": "not_inspected",
+                "execute_live": null,
+                "transport_invocations": 0,
+                "provider_external_calls": 0,
+                "response_received": false,
+                "fallback_used": false,
+                "phase": "preflight",
+                "contract_error": "not_evaluated"
+              }
+            }
+          }
+        },
+        {
+          "properties": {
+            "status": {"const": "failed"},
+            "model_receipt": {"const": null},
+            "usage": {"const": null},
+            "verdict": {"const": "abstained"},
+            "proposals": {"maxItems": 0},
+            "professional_experience_proxy_rollup": {"const": {"status": "none", "regions": {"china": {"strength": "none", "contributing_proposals": []}, "asia": {"strength": "none", "contributing_proposals": []}}}},
+            "error_codes": {"const": ["request_mode_mismatch"]},
+            "execution": {
               "oneOf": [
                 {
-                  "properties": {
-                    "mode": {"const": "offline_fake"},
-                    "transport_id": {"const": "offline_fake_responses"}
+                  "const": {
+                    "mode": "offline_fake",
+                    "transport_id": "offline_fake_responses",
+                    "execute_live": false,
+                    "transport_invocations": 0,
+                    "provider_external_calls": 0,
+                    "response_received": false,
+                    "fallback_used": false,
+                    "phase": "preflight",
+                    "contract_error": "none"
                   }
                 },
                 {
-                  "properties": {
-                    "mode": {"const": "live"},
-                    "transport_id": {"const": "openai_compatible_responses"}
+                  "const": {
+                    "mode": "live",
+                    "transport_id": "openai_compatible_responses",
+                    "execute_live": false,
+                    "transport_invocations": 0,
+                    "provider_external_calls": 0,
+                    "response_received": false,
+                    "fallback_used": false,
+                    "phase": "preflight",
+                    "contract_error": "none"
+                  }
+                },
+                {
+                  "const": {
+                    "mode": "live",
+                    "transport_id": "openai_compatible_responses",
+                    "execute_live": true,
+                    "transport_invocations": 0,
+                    "provider_external_calls": 0,
+                    "response_received": false,
+                    "fallback_used": false,
+                    "phase": "preflight",
+                    "contract_error": "none"
                   }
                 }
               ]
@@ -420,29 +667,146 @@
             "usage": {"const": null},
             "verdict": {"const": "abstained"},
             "proposals": {"maxItems": 0},
+            "professional_experience_proxy_rollup": {"const": {"status": "none", "regions": {"china": {"strength": "none", "contributing_proposals": []}, "asia": {"strength": "none", "contributing_proposals": []}}}},
             "error_codes": {"const": ["execution_contract_invalid"]},
+            "execution": {
+              "properties": {
+                "phase": {"const": "preflight"},
+                "transport_invocations": {"const": 0},
+                "provider_external_calls": {"const": 0},
+                "response_received": {"const": false},
+                "contract_error": {
+                  "enum": [
+                    "invalid_is_live",
+                    "invalid_transport_id",
+                    "transport_pair_mismatch",
+                    "invalid_execute_live",
+                    "offline_execute_live"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "properties": {
+            "status": {"const": "failed"},
+            "model_receipt": {"const": null},
+            "usage": {"const": null},
+            "verdict": {"const": "abstained"},
+            "proposals": {"maxItems": 0},
+            "professional_experience_proxy_rollup": {"const": {"status": "none", "regions": {"china": {"strength": "none", "contributing_proposals": []}, "asia": {"strength": "none", "contributing_proposals": []}}}},
+            "error_codes": {"const": ["transport_failed"]},
             "execution": {
               "oneOf": [
                 {
-                  "properties": {
-                    "mode": {"const": "offline_fake"},
-                    "transport_id": {"const": "openai_compatible_responses"},
-                    "provider_external_calls": {"const": 0}
+                  "const": {
+                    "mode": "offline_fake",
+                    "transport_id": "offline_fake_responses",
+                    "execute_live": false,
+                    "transport_invocations": 1,
+                    "provider_external_calls": 0,
+                    "response_received": false,
+                    "fallback_used": false,
+                    "phase": "transport",
+                    "contract_error": "none"
                   }
                 },
                 {
-                  "properties": {
-                    "mode": {"const": "live"},
-                    "transport_id": {"const": "offline_fake_responses"},
-                    "provider_external_calls": {"const": 0}
+                  "const": {
+                    "mode": "live",
+                    "transport_id": "openai_compatible_responses",
+                    "execute_live": true,
+                    "transport_invocations": 1,
+                    "provider_external_calls": 1,
+                    "response_received": false,
+                    "fallback_used": false,
+                    "phase": "transport",
+                    "contract_error": "none"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "properties": {
+            "status": {"const": "failed"},
+            "model_receipt": {"const": null},
+            "usage": {"const": null},
+            "verdict": {"const": "abstained"},
+            "proposals": {"maxItems": 0},
+            "professional_experience_proxy_rollup": {"const": {"status": "none", "regions": {"china": {"strength": "none", "contributing_proposals": []}, "asia": {"strength": "none", "contributing_proposals": []}}}},
+            "error_codes": {
+              "enum": [["response_invalid"], ["budget_exceeded"]]
+            },
+            "execution": {
+              "oneOf": [
+                {
+                  "const": {
+                    "mode": "offline_fake",
+                    "transport_id": "offline_fake_responses",
+                    "execute_live": false,
+                    "transport_invocations": 1,
+                    "provider_external_calls": 0,
+                    "response_received": true,
+                    "fallback_used": false,
+                    "phase": "response",
+                    "contract_error": "none"
                   }
                 },
                 {
-                  "properties": {
-                    "mode": {"const": "offline_fake"},
-                    "transport_id": {"const": "offline_fake_responses"},
-                    "execute_live": {"const": true},
-                    "provider_external_calls": {"const": 0}
+                  "const": {
+                    "mode": "live",
+                    "transport_id": "openai_compatible_responses",
+                    "execute_live": true,
+                    "transport_invocations": 1,
+                    "provider_external_calls": 1,
+                    "response_received": true,
+                    "fallback_used": false,
+                    "phase": "response",
+                    "contract_error": "none"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "properties": {
+            "status": {"const": "failed"},
+            "model_receipt": {"const": null},
+            "usage": {"const": null},
+            "verdict": {"const": "abstained"},
+            "proposals": {"maxItems": 0},
+            "professional_experience_proxy_rollup": {"const": {"status": "none", "regions": {"china": {"strength": "none", "contributing_proposals": []}, "asia": {"strength": "none", "contributing_proposals": []}}}},
+            "error_codes": {"const": ["model_output_invalid"]},
+            "execution": {
+              "oneOf": [
+                {
+                  "const": {
+                    "mode": "offline_fake",
+                    "transport_id": "offline_fake_responses",
+                    "execute_live": false,
+                    "transport_invocations": 1,
+                    "provider_external_calls": 0,
+                    "response_received": true,
+                    "fallback_used": false,
+                    "phase": "semantic",
+                    "contract_error": "none"
+                  }
+                },
+                {
+                  "const": {
+                    "mode": "live",
+                    "transport_id": "openai_compatible_responses",
+                    "execute_live": true,
+                    "transport_invocations": 1,
+                    "provider_external_calls": 1,
+                    "response_received": true,
+                    "fallback_used": false,
+                    "phase": "semantic",
+                    "contract_error": "none"
                   }
                 }
               ]

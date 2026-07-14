@@ -1,0 +1,18 @@
+{
+  "schema_version": "x.grok_cli.exploration.pre_migration_evaluation_fixture.v1",
+  "fixture_id": "synthetic_pre_migration_evaluation_missing_descriptor_bindings",
+  "fixture_mode": "runtime_generated_from_synthetic_source_pair",
+  "pre_migration_transform": {
+    "query_policy_schema_version": "x.grok_cli.exploration.query_policy.v1",
+    "query_policy_sha256_source_field": "legacy_full_query_policy_sha256",
+    "remove_input_binding_fields": [
+      "legacy_full_query_policy_sha256"
+    ]
+  },
+  "expected_current_validator_error": "evaluation_input_binding_invalid",
+  "migration_contract": {
+    "requires_source_result": true,
+    "requires_source_receipt": true,
+    "detached_evaluation_may_self_validate": false
+  }
+}

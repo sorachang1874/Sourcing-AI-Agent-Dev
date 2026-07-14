@@ -1,0 +1,108 @@
+{
+  "schema_version": "x.profile.bio_semantic.model_output.v2.1",
+  "request_id": "xbsv2r_111111111111111111111111",
+  "profile_snapshot_id": "xbsv2s_222222222222222222222222",
+  "platform_user_id": "900000000000000001",
+  "bio_sha256": "7848b585c337dfd7ff611afb6990846335b7cd7a28fe97a88dd277349b462400",
+  "verdict": "proposals_available",
+  "proposals": [
+    {
+      "proposal_type": "professional_region_experience",
+      "relation_state": "not_applicable",
+      "span_start": 0,
+      "span_end": 13,
+      "excerpt": "在新加坡从事模型训练研究。",
+      "reason_codes": [
+        "explicit_professional_region_experience"
+      ],
+      "reason": "Bio explicitly states professional work in 新加坡.",
+      "reason_source": "model_proposed_untrusted_narrative",
+      "confidence": "high",
+      "evidence_basis": "profile_bio_only",
+      "requires_independent_verification": true
+    },
+    {
+      "proposal_type": "professional_affiliation",
+      "relation_state": "current_claimed",
+      "span_start": 14,
+      "span_end": 43,
+      "excerpt": "Head of growth @synthetic_hub",
+      "reason_codes": [
+        "explicit_current_organization_claim"
+      ],
+      "reason": "Bio explicitly states a current role at @synthetic_hub.",
+      "reason_source": "model_proposed_untrusted_narrative",
+      "confidence": "high",
+      "evidence_basis": "profile_bio_only",
+      "requires_independent_verification": true
+    },
+    {
+      "proposal_type": "professional_affiliation",
+      "relation_state": "previous_claimed",
+      "span_start": 44,
+      "span_end": 62,
+      "excerpt": "Prev @synth_listen",
+      "reason_codes": [
+        "explicit_previous_organization_claim"
+      ],
+      "reason": "Bio explicitly marks @synth_listen as a previous organization.",
+      "reason_source": "model_proposed_untrusted_narrative",
+      "confidence": "high",
+      "evidence_basis": "profile_bio_only",
+      "requires_independent_verification": true
+    },
+    {
+      "proposal_type": "professional_china_digital_ecosystem",
+      "relation_state": "not_applicable",
+      "span_start": 63,
+      "span_end": 72,
+      "excerpt": "小红书同名四万粉丝",
+      "reason_codes": [
+        "explicit_china_digital_ecosystem_activity"
+      ],
+      "reason": "Bio explicitly names 小红书 professional activity.",
+      "reason_source": "model_proposed_untrusted_narrative",
+      "confidence": "high",
+      "evidence_basis": "profile_bio_only",
+      "requires_independent_verification": true
+    },
+    {
+      "proposal_type": "professional_china_digital_ecosystem",
+      "relation_state": "not_applicable",
+      "span_start": 73,
+      "span_end": 99,
+      "excerpt": "公众号 SyntheticFounder（长文首发）",
+      "reason_codes": [
+        "explicit_china_digital_ecosystem_activity"
+      ],
+      "reason": "Bio explicitly names SyntheticFounder as a professional account.",
+      "reason_source": "model_proposed_untrusted_narrative",
+      "confidence": "high",
+      "evidence_basis": "profile_bio_only",
+      "requires_independent_verification": true
+    },
+    {
+      "proposal_type": "observed_chinese_professional_content",
+      "relation_state": "not_applicable",
+      "span_start": 100,
+      "span_end": 113,
+      "excerpt": "分享中文 AI 工程实践。",
+      "reason_codes": [
+        "observed_chinese_professional_content"
+      ],
+      "reason": "Bio contains observed Chinese language and AI engineering content.",
+      "reason_source": "model_proposed_untrusted_narrative",
+      "confidence": "high",
+      "evidence_basis": "profile_bio_only",
+      "requires_independent_verification": true
+    }
+  ],
+  "authority": {
+    "external_facts_used": false,
+    "protected_identity_inferred": false,
+    "discovery_or_ranking_recommended": false,
+    "eligibility_decided": false,
+    "canonical_employment_asserted": false,
+    "canonical_write_recommended": false
+  }
+}

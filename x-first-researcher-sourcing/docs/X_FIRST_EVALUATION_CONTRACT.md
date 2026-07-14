@@ -1,8 +1,8 @@
 # X-first workflow evaluation contract
 
-> Status: Design methodology only. The first executable draft was withdrawn after adversarial review found that
-> caller-reported counters could pass with zero tasks and inflate recall. Live Stage 2 inputs do not yet exist;
-> thresholds below are proposed feasibility gates, not executable policy, production claims, or permission to scale.
+> Status: Design methodology plus executable offline exploration and recall-campaign evaluators. Seven live
+> exploration waves supply author evidence only; thresholds below remain proposed feasibility gates, not production
+> claims or permission to promote.
 
 ## Decision this framework supports
 
@@ -10,31 +10,41 @@ The evaluator answers whether an X-first researcher-discovery workflow is accura
 efficient, and safe enough for another bounded owner-reviewed experiment. It does not decide canonical identity,
 employment, promotion, outreach, or product integration.
 
-The evaluation grain is fixed as `lab + query family + frozen time window + handle/source/turn cap`. Splitting one task into smaller
-requests cannot improve yield. Every selected packet stays in the precision denominator until adjudicated; unresolved
-or incomplete packets cannot disappear from metrics.
+The evaluation grain is fixed as `lab + strategy/query family + frozen time window + request/prompt/model receipt`.
+Operational deadline and emergency resource ceilings remain explicit, but candidate/observation/call totals are not
+business success caps. Splitting one task into smaller requests cannot improve yield. Every selected packet stays in
+the precision denominator until adjudicated; unresolved or incomplete packets cannot disappear from metrics.
 
-## Three primary KPIs
+## Precision delivery and experience-recall views
 
 Let:
 
-- `S` be every packet selected as review-ready;
-- `A` be the unique packets manually confirmed to have current lab affiliation, `PRETRAIN_CORE|PRETRAIN_ADJACENT`
-  relevance, complete evidence, and a stable X platform user id;
-- `G` be every independently labeled in-scope subject in the frozen golden set;
-- `Gx` be subjects in `G` with an independently verified public X account;
+- `Scc` be every packet selected for the business-facing current-lab/current-pretraining precision tranche;
+- `Acc` be the unique evidence-complete packets confirmed `target_lab=current` and `pretraining=current`, with a
+  stable X platform user id;
+- `Lexp` be every model-mediated lead assigned to one of the four supported current/historical temporal combinations;
+- `Eexp` be the unique evidence-complete packets in any of the four supported current/historical lab × current/
+  historical pretraining combinations;
+- `Gcc` and `Gexp` be independently labeled golden populations for those two views;
+- `Gcc_x` and `Gexp_x` be their independently verified public-X subsets;
 - `T` be completed normalized tasks.
 
 | KPI | Formula | Why it changes a decision |
 | --- | --- | --- |
-| Evidence-qualified precision | `|A| / |S|` | Measures reviewer-facing quality without hiding unresolved packets |
-| End-to-end reachable recall | `|A intersect G| / |G|` | Measures actual population coverage instead of excluding people without X |
-| Qualified reachable yield | `100 * |A| / T` | Measures useful output at a stable operational grain |
+| Current/current evidence-qualified precision | `|Acc| / |Scc|` | Measures the narrow business delivery without mixing in experience-only segments |
+| Current/current end-to-end recall | `|Acc intersect Gcc| / |Gcc|` | Measures coverage of the high-precision target |
+| Experience end-to-end recall | `|Eexp intersect Gexp| / |Gexp|` | Prevents current/historical, historical/current, and historical/historical researchers from disappearing |
+| Qualified experience yield | `100 * |Eexp| / T` | Measures useful discovery at a stable operational grain |
 
-Recall is decomposed into `X account availability = |Gx|/|G|` and
-`conditional search recall = |A intersect Gx|/|Gx|`. This separates platform reachability from query quality.
-The future executable evaluator must report Wilson 95% intervals for precision and conditional recall; small samples cannot be
-presented as precise production estimates.
+`Lexp` is a Recall-oriented discovery queue, not an accepted packet set. A lead can therefore belong to a configured
+temporal segment while still requiring stable-account, Bio, or high-authority evidence hydration. Likewise,
+`precision_current_current` is a value segment name, not permission to deliver that row: a packet enters `Scc`/`Acc`
+only after the precision completeness rule passes. This separation prevents both common errors: dropping valuable
+historical experience too early and presenting incomplete current/current leads as Precision output.
+
+Each view decomposes recall into X-account availability and conditional search recall. The future executable evaluator
+must report Wilson 95% intervals for precision and both conditional-recall views; small samples cannot be presented as
+precise production estimates. Every selected or hydration-needed packet remains visible in a denominator or segment.
 
 ## Drivers and diagnostics
 
@@ -52,11 +62,47 @@ Failure ownership uses the closed families `capability`, `query_miss`, `paginati
 `affiliation`, `relevance`, `dedupe`, `review`, and `retention`. Optimization must address the owning failure rather
 than masking it in a downstream score.
 
+### Decision KPI hierarchy
+
+Keep the operating review focused on three primary KPIs:
+
+| Primary KPI | Decision | Required source of truth |
+| --- | --- | --- |
+| Evidence-qualified experience conditional recall | whether another discovery strategy materially improves coverage | independent `Gexp_x` plus source-bound `Eexp`; model leads cannot enter numerator |
+| Current/current evidence-qualified precision | whether the narrow tranche is safe to present for business review | human-adjudicated `Acc/Scc` with stable account identity |
+| Marginal qualified unique yield per completed native-X call | whether to continue discovery or move capacity to hydration | new source-bound accepted accounts divided by raw-session-replayed completed calls, segmented by distinct strategy |
+
+Each primary KPI has actionable drivers:
+
+- recall: strategy/query-family coverage, X-account availability, and newly hydrated evidence-complete accounts;
+- precision: stable-ID coverage, independent lab/pretraining evidence coverage, and adjudication disagreement;
+- efficiency: raw new-unique/call, qualified new-unique/call, latency, provider cost, and review minutes per accepted
+  account.
+
+Guardrails remain zero-tolerance for false merges, protected-identity inference, provider fallback, unbound evidence,
+product/outreach writes, and deadline/retention violations. Raw lead count is a capacity diagnostic, not a success KPI:
+it is easy to inflate by weakening evidence.
+
+### Metric ownership and denominator trust
+
+| Layer | May own | Must not own |
+| --- | --- | --- |
+| Grok/model self-report | diagnostic observations, claimed calls/queries, proposed labels | mechanical calls, unique population, precision, recall, source completeness |
+| Sanitized JSON parser | candidate/evidence row counts, casefold handle novelty, missing-field rates | provider terminal state, source truth, accepted identity/employment |
+| Raw-session replay | completed native-X call lifecycle, tool distribution, CLI terminal and hashes | provider Post-body replayability or provider terminal usage when absent |
+| Hydration + human adjudication | stable account, source-bound evidence completeness, accepted segment | independent golden-population denominator |
+| Frozen gold owner | `Gcc/Gexp` and public-X subsets | provider-discovered relabeling after the experiment |
+
+The first fixed targets remain provisional feasibility gates: `>=80%` current/current precision and `>=50%`
+conditional recall in each gold view. No universal discovery-stop threshold is set from one lab. Each experiment
+versions a non-enforcing call-normalized plateau advisory and requires at least two materially different recent
+strategies plus an explicit coverage audit. A candidate-count threshold can never trigger stopping.
+
 ## Hard guardrails
 
 Any nonzero violation makes the run `no_go` regardless of KPI values:
 
-- protected-trait or proxy query/ranking/label use;
+- protected-identity inference or protected-identity proxy query/ranking/label use;
 - false identity merge, cross-account evidence, or handle-only automatic merge;
 - generic web, search-engine, Apify, or other provider fallback;
 - unverified provenance/request hash/stable object id/canonical URL;
@@ -66,10 +112,63 @@ Any nonzero violation makes the run `no_go` regardless of KPI values:
 - incomplete terminal artifact or coverage ledger;
 - exact duplicate normalized task; near-duplicate rate above 10%.
 
-Discovery and ranking population is only lab, current professional affiliation, and pretraining relevance. Name,
-language, region, school, community, biography, post text, mentions, or graph position cannot infer or proxy ethnicity,
-nationality, race, citizenship, religion, gender, or another protected identity. The stricter sibling rule controls even
-where a source project's general query guardrail permits region/language as an explicit outreach skill.
+Discovery and ranking population is only target-lab affiliation (current or historical), professional role/function,
+and pretraining experience/relevance (current or historical). Name, language, region, school, community, biography,
+post text, mentions, or graph position cannot infer or proxy ethnicity, nationality, race, citizenship, religion,
+gender, or another protected identity. The stricter sibling rule controls even where a source project's general query
+guardrail permits region/language as an explicit outreach skill.
+
+This does not ban the distinct professional-experience proxy contract. After the base population is established, a
+separately versioned and governed verification-queue policy may consume `strong_proxy|weak_proxy` China/Asia
+professional-experience proposals with their source refs and unverified status. It cannot alter the base population,
+be relabelled as physical-region evidence or identity, or independently decide final eligibility/ranking/outreach.
+
+## 2026-07-14 exploration baseline
+
+The Grok CLI diagnostic recomputed one real session from raw hashes and call events:
+
+- `8/8` completed native-X calls reconciled;
+- eight retained model-mediated leads from 68 model-reported observations;
+- model-mediated Bio presence `62.5%`, model-mediated platform-user-ID presence `12.5%`;
+- model-mediated high-authority support coverage `25%`, third-party-only leads `25%`;
+- provider Post-body replayability `0%`;
+- raw Grok session permissions were not owner-only.
+
+After explicitly migrating the legacy model result into the two-axis contract, the diagnostic mechanically reported:
+
+- `precision_current_current=2` lead segments;
+- `recall_current_historical=1`;
+- `recall_historical_current=0`;
+- `recall_historical_historical=1`;
+- `needs_evidence=4`;
+- four of eight leads in the experience-Recall pool, but zero evidence-qualified Precision packets because the
+  current/current leads still lacked required stable platform IDs.
+
+The legacy result remains immutable and hash-bound; the normalized result and migration receipt are separate private
+artifacts. These counts demonstrate the intended denominator preservation, not accuracy or recall against a golden
+population.
+
+This is capability and first-field-gap evidence only. It supplies neither a golden set nor role/function labels,
+adjudicated selected packets, conditional recall, evidence-qualified precision, cost, or a scale-ready task ledger.
+
+### Adaptive recall campaign
+
+A later seven-wave campaign deliberately removed candidate/observation/call success ceilings and diversified search
+strategy. It produced `99` rows / `98` unique handles from `702` mechanically observed native-X calls. New unique
+yield by wave was `29/12/6/20/25/5/1`; the rebound in waves 4–5 proves that one declining wave is not a valid stop
+signal. The final current-team and residual-coverage strategies fell to `0.048` and `0.014` new unique handles per
+raw call, which justified an operator pause to move capacity to hydration. It is not a formal exhaustion decision:
+raw-session replay returns `insufficient_proof / continue_expansion` because complete non-system user context,
+legacy prior-exclusion membership, versioned strategy definitions, and precommitted query-family attribution were not
+machine-bound before execution. The private v3 merged replay binds all seven emitted assistant terminal JSON objects,
+system prompts, exact terminal byte/chunk/update locations, and terminal-start-after-tools ordering while keeping every
+candidate field `model_mediated_unverified`; the hardened artifact is hash-stable at
+`d8392f12011701b740f7cec9666919ad6b99a50e1b9af6b11d61cb65f7aea474`.
+
+After handle merge, model labels contain `13 current/current`, `5 current/historical`, `1 historical/current`,
+`18 historical/historical`, `1` historical/conflicting row, and `60` rows with at least one ambiguous/unsupported
+dimension. These are recall leads, not accepted packets. Exact evidence and stable account identity remain unverified. See
+`docs/live-evidence/2026-07-14-openai-pretrain-recall-campaign.md`.
 
 ## Golden-set contract
 
@@ -84,8 +183,10 @@ Required row shape:
 gold_subject_id                 opaque
 lab_id
 as_of
-affiliation_label               current_confirmed|former|unknown|out
-relevance_label                 PRETRAIN_CORE|PRETRAIN_ADJACENT|OUT_OF_SCOPE|UNKNOWN
+target_lab_affiliation_state    current|historical|ambiguous|unsupported
+pretraining_experience_state    current|historical|ambiguous|unsupported
+candidate_value_segment         precision_current_current|recall_current_historical|
+                                recall_historical_current|recall_historical_historical|needs_evidence
 x_presence                      verified_public|no_verified_account|unknown
 platform_user_id                only when independently verified
 handle_history
@@ -96,8 +197,10 @@ label_status                    double_reviewed|conflict
 split                           development|blind_holdout
 ```
 
-Hard negatives include former employees, non-pretraining roles, parody/aggregator accounts, common-name conflicts,
-handle renames, mention-only accounts, list/graph-only accounts, and coauthors without current-affiliation evidence.
+Former employees are not automatically negative. Historical target-lab affiliation with supported current or historical
+pretraining experience belongs to the experience-recall population. Hard negatives instead include unsupported target-
+lab affiliation or unsupported pretraining experience, parody/aggregator accounts, common-name conflicts, false
+identity joins, and rows whose claimed experience lacks source support. Ambiguous rows remain in `needs_evidence`.
 The first directional lab set should contain 12-20 positives and 8-12 hard negatives. Method-level scale claims need
 at least 30 blind positives, 50 reviewed selected packets, two labs, and three frozen windows.
 
@@ -106,8 +209,9 @@ at least 30 blind positives, 50 reviewed selected packets, two labs, and three f
 The first Stage 2 feasibility policy should require:
 
 - at least five reviewed and five accepted unique accounts;
-- evidence-qualified precision >=80%;
-- conditional search recall >=50%;
+- current/current evidence-qualified precision >=80%;
+- current/current conditional search recall >=50%;
+- experience-recall results reported separately for all four current/historical combinations;
 - evidence completeness >=90%;
 - all hard guardrails zero.
 
@@ -137,7 +241,25 @@ no accepted id, or marginal cost per new accepted account exceeds twice the cham
 
 ## Executable evaluator
 
-There is intentionally no executable evaluator in the current slice. Restoring one requires all of these inputs to be
+`grok_cli_exploration.py` is an executable exploration diagnostic, not this Stage 2 KPI evaluator. It can hash-verify
+a raw session, reconcile tool calls/queries, validate model-mediated lead structure, compute field gaps, and emit
+non-executable hydration diagnostics. Its persisted diagnostic and hydration task are closed by
+`contracts/x.grok_cli.exploration.evaluation.v0.schema.json` and
+`contracts/x.grok_cli.candidate_hydration.task.v0.schema.json`; runtime validation additionally recomputes task keys,
+parent/child experiment bindings, temporal segment mappings, counts, rates, gaps, proof state, feasibility, blockers,
+and authority before the CLI can write the private artifact. The public persisted-output validator is source-required:
+it accepts the sanitized result and tool receipt, requires the raw session directory whenever the artifact claims
+session verification, re-runs the evaluator against the immutable public hash-only query descriptor plus the private
+receipt's exact ordered call preimages, and requires canonical output equality. The public descriptor contains an
+opaque run-binding digest, ordered tool names and call hashes, and the legacy full-policy digest; it contains no
+session/request identifiers or query operands. A detached artifact cannot validate itself. Private receipt/runtime
+schemas still validate UUIDv7 Grok session ids and UUIDv4 request ids and enforce at most 32 total exploration tool
+calls.
+
+Each hydration task is `planned` and binds the parent candidate SHA-256, both temporal states, and the derived segment.
+That state binding, including the segment, is part of the task key. Equal-priority mixed temporal segments are selected
+round-robin; confidence orders candidates only within one segment, preventing one mixed segment from starving the
+other. Restoring a promotion-grade evaluator still requires all of these inputs to be
 machine-verifiable rather than caller-reported aggregates:
 
 1. at least one explicit normalized task row with lab, query-family version, frozen time window, handle/source/turn caps,
@@ -158,3 +280,20 @@ machine-verifiable rather than caller-reported aggregates:
 The future evaluator consumes only opaque task/subject/packet ids and adjudication labels. It neither performs provider
 calls nor writes product state. Its implementation and schemas require their own independent review before any live
 Stage 2 decision uses them.
+
+## Configured candidate-value owner
+
+The exploration diagnostic keeps its candidate-value semantics in the reviewed
+`configs/candidate_value_segment_policy.v1.json` policy, not in lab-specific algorithm branches. That policy owns the
+state closed set, four complete temporal combinations, segment priority, Recall eligibility, Precision completeness,
+and hydration triggers. Its executable schema requires four unique closed rows, while runtime validation proves the
+exact state-pair/segment bijection. Query-policy registries are immutable version-named snapshots under
+`configs/grok_cli_exploration_query_policy_registries/`; each public snapshot binds an approved experiment through an
+opaque run digest, descriptor hash, legacy full-policy hash, and exact ordered call hashes without publishing query
+operands. Adding another lab creates a new reviewed descriptor snapshot instead of editing the snapshot named by an
+existing evaluation, so historical artifacts remain replayable. It must not require adding a new candidate field or
+changing segment code.
+
+Confidence is only a within-segment ordering tie-break. It cannot move a lead into another segment, manufacture a
+current/historical state, or remove an evidence gap. The two mixed Recall segments intentionally have equal priority;
+historical/historical is retained at the next configured priority rather than treated as a negative.

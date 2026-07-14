@@ -1,0 +1,202 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.invalid/x.profile.bio_semantic.live_canary.execution_receipt.v2.schema.json",
+  "title": "Observed Luna semantic execution receipt v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "execution_origin",
+    "provider",
+    "base_url",
+    "requested_model",
+    "request_payload_sha256",
+    "semantic_adjudication_api_version",
+    "semantic_adjudication_implementation_sha256",
+    "attempt_count",
+    "attempts",
+    "started_at",
+    "completed_at",
+    "elapsed_ms",
+    "total_timeout_ms",
+    "max_attempts_per_operation",
+    "retry_allowed",
+    "fallback_allowed"
+  ],
+  "properties": {
+    "schema_version": {"const": "x.profile.bio_semantic.live_canary.execution_receipt.v2"},
+    "run_id": {"type": "string"},
+    "execution_origin": {"enum": ["production_http", "offline_fixture"]},
+    "provider": {"const": "chshapi_openai_compatible_relay"},
+    "base_url": {"const": "https://api.chshapi.org/v1"},
+    "requested_model": {"const": "gpt-5.6-luna"},
+    "request_payload_sha256": {"$ref": "#/$defs/sha256"},
+    "semantic_adjudication_api_version": {
+      "const": "x.profile.bio_semantic.pure_adjudication.v1"
+    },
+    "semantic_adjudication_implementation_sha256": {
+      "const": "5cef30928609e0c6a17e06bf309ac45413e3c2475b07a9b5a0bb616f1c55fd45"
+    },
+    "attempt_count": {"type": "integer", "minimum": 1, "maximum": 2},
+    "attempts": {"type": "array"},
+    "started_at": {"$ref": "#/$defs/timestamp"},
+    "completed_at": {"$ref": "#/$defs/timestamp"},
+    "elapsed_ms": {"type": "integer", "minimum": 0},
+    "total_timeout_ms": {"const": 30000},
+    "max_attempts_per_operation": {"const": 1},
+    "retry_allowed": {"const": false},
+    "fallback_allowed": {"const": false}
+  },
+  "allOf": [
+    {
+      "oneOf": [
+        {
+          "properties": {
+            "execution_origin": {"const": "production_http"},
+            "run_id": {"pattern": "^luna_canary_v2_run_[0-9a-f]{32}$"}
+          }
+        },
+        {
+          "properties": {
+            "execution_origin": {"const": "offline_fixture"},
+            "run_id": {"pattern": "^luna_canary_v2_fixture_run_[0-9a-f]{32}$"}
+          }
+        }
+      ]
+    },
+    {
+      "oneOf": [
+        {
+          "properties": {
+            "attempt_count": {"const": 1},
+            "attempts": {
+              "minItems": 1,
+              "maxItems": 1,
+              "prefixItems": [{"$ref": "#/$defs/catalog_attempt"}],
+              "items": false
+            }
+          }
+        },
+        {
+          "properties": {
+            "attempt_count": {"const": 2},
+            "attempts": {
+              "minItems": 2,
+              "maxItems": 2,
+              "prefixItems": [
+                {"$ref": "#/$defs/catalog_attempt"},
+                {"$ref": "#/$defs/semantic_attempt"}
+              ],
+              "items": false
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "timestamp": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
+    },
+    "catalog_attempt": {
+      "$ref": "#/$defs/attempt",
+      "properties": {
+        "sequence": {"const": 1},
+        "operation": {"const": "model_catalog"},
+        "method": {"const": "GET"},
+        "endpoint": {"const": "https://api.chshapi.org/v1/models"},
+        "requested_model": {"const": null},
+        "request_payload_sha256": {
+          "const": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    "semantic_attempt": {
+      "$ref": "#/$defs/attempt",
+      "properties": {
+        "sequence": {"const": 2},
+        "operation": {"const": "semantic_response"},
+        "method": {"const": "POST"},
+        "endpoint": {"const": "https://api.chshapi.org/v1/responses"},
+        "requested_model": {"const": "gpt-5.6-luna"}
+      }
+    },
+    "attempt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sequence",
+        "operation",
+        "method",
+        "endpoint",
+        "requested_model",
+        "request_payload_sha256",
+        "started_at",
+        "completed_at",
+        "elapsed_ms",
+        "timeout_ms",
+        "outcome",
+        "http_status",
+        "response_body_sha256",
+        "response_content_type",
+        "response_received",
+        "retry_used",
+        "fallback_used"
+      ],
+      "properties": {
+        "sequence": {"type": "integer", "minimum": 1, "maximum": 2},
+        "operation": {"enum": ["model_catalog", "semantic_response"]},
+        "method": {"enum": ["GET", "POST"]},
+        "endpoint": {
+          "enum": ["https://api.chshapi.org/v1/models", "https://api.chshapi.org/v1/responses"]
+        },
+        "requested_model": {"enum": ["gpt-5.6-luna", null]},
+        "request_payload_sha256": {"$ref": "#/$defs/sha256"},
+        "started_at": {"$ref": "#/$defs/timestamp"},
+        "completed_at": {"$ref": "#/$defs/timestamp"},
+        "elapsed_ms": {"type": "integer", "minimum": 0},
+        "timeout_ms": {"type": "integer", "minimum": 1, "maximum": 30000},
+        "outcome": {"enum": ["http_response", "transport_failure"]},
+        "http_status": {"type": ["integer", "null"], "minimum": 100, "maximum": 599},
+        "response_body_sha256": {
+          "anyOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]
+        },
+        "response_content_type": {
+          "anyOf": [
+            {"type": "string", "maxLength": 200, "pattern": "^[ -~]*$"},
+            {"type": "null"}
+          ]
+        },
+        "response_received": {"type": "boolean"},
+        "retry_used": {"const": false},
+        "fallback_used": {"const": false}
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "outcome": {"const": "transport_failure"},
+            "http_status": {"const": null},
+            "response_body_sha256": {"const": null},
+            "response_content_type": {"const": null},
+            "response_received": {"const": false}
+          }
+        },
+        {
+          "properties": {
+            "outcome": {"const": "http_response"},
+            "http_status": {"type": "integer", "minimum": 100, "maximum": 599},
+            "response_body_sha256": {"$ref": "#/$defs/sha256"},
+            "response_content_type": {"type": "string", "maxLength": 200, "pattern": "^[ -~]*$"},
+            "response_received": {"const": true}
+          }
+        }
+      ]
+    }
+  }
+}

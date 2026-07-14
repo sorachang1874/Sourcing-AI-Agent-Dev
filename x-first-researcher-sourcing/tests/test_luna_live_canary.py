@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import copy
+import hashlib
 import io
 import json
 import os
@@ -18,7 +19,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from x_first import luna_live_canary as canary  # noqa: E402
-from x_first import profile_bio_semantic_v2 as semantic  # noqa: E402
+from x_first import profile_bio_semantic_legacy_v21 as semantic  # noqa: E402
 
 FAKE_KEY = "sk-" + "a" * 32
 
@@ -39,7 +40,9 @@ def _provider_response(*, model: str = canary.MODEL_ID, malformed: bool = False)
     if malformed:
         return _json_response({"object": "response", "model": model, "status": "completed"})
     request = canary.build_synthetic_live_request()
-    model_output = semantic.load_json(ROOT / "fixtures/profile_bio_semantic_model_output_v2.json")
+    model_output = semantic.load_json(
+        ROOT / "legacy/luna_canary_v1/fixtures/profile_bio_semantic_model_output.v2.1.json"
+    )
     model_output["request_id"] = request["request_id"]
     return _json_response(
         {
@@ -85,6 +88,49 @@ class FakeHttpClient:
 
 
 class LunaLiveCanaryTest(unittest.TestCase):
+    def test_v1_is_frozen_to_semantic_v21_assets(self) -> None:
+        request = canary.build_synthetic_live_request()
+        self.assertEqual(request["schema_version"], "x.profile.bio_semantic.request.v2.1")
+        self.assertEqual(semantic.REVIEW_SCHEMA_VERSION, "x.profile.bio_semantic.review.v2.1")
+        self.assertEqual(
+            canary._legacy_asset_root(),
+            ROOT / "legacy/luna_canary_v1",
+        )
+
+    def test_v1_public_live_execution_is_unconditionally_disabled(self) -> None:
+        client = FakeHttpClient([_catalog(canary.MODEL_ID), _provider_response()])
+        with self.assertRaisesRegex(PermissionError, "legacy_v1_live_execution_disabled"):
+            canary.run_luna_live_canary(
+                execute_live=True,
+                http_client=client,
+                environ={canary.KEY_ENVIRONMENT_VARIABLE: FAKE_KEY},
+            )
+        self.assertEqual(client.calls, [])
+
+    def test_v1_frozen_hash_manifest_and_golden_bundle_replay(self) -> None:
+        manifest = json.loads(
+            (ROOT / "legacy/luna_canary_v1/frozen_asset_manifest.v1.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(manifest["source_commit"], "f02c72c")
+        self.assertEqual(
+            manifest["freeze_policy"],
+            "sha256_pin_semantic_assets_runner_result_schema_and_shared_cli",
+        )
+        for relative, expected_sha256 in manifest["files"].items():
+            path = ROOT / "legacy/luna_canary_v1" / relative
+            self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(), expected_sha256)
+        for relative, expected_sha256 in manifest["project_files"].items():
+            path = ROOT / relative
+            self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(), expected_sha256)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            result, bundle, approval_root, _ = self._run(
+                root,
+                [_catalog(canary.MODEL_ID), _provider_response()],
+            )
+            self.assertEqual(result["status"], "completed")
+            self.assertEqual(canary.validate_artifact_directory(bundle, approval_root=approval_root), [])
+
     def _run(
         self,
         root: Path,
@@ -92,7 +138,7 @@ class LunaLiveCanaryTest(unittest.TestCase):
     ) -> tuple[dict[str, Any], Path, Path, FakeHttpClient]:
         client = FakeHttpClient(responses)
         approval_root = root / "approval"
-        result, bundle = canary.run_luna_live_canary(
+        result, bundle = canary._run_luna_live_canary_fixture_v1(
             execute_live=True,
             http_client=client,
             environ={canary.KEY_ENVIRONMENT_VARIABLE: FAKE_KEY},
@@ -109,7 +155,7 @@ class LunaLiveCanaryTest(unittest.TestCase):
                 runtime = root / f"runtime-{execute_live}-{len(environment)}"
                 approval = root / f"approval-{execute_live}-{len(environment)}"
                 with self.assertRaises(PermissionError):
-                    canary.run_luna_live_canary(
+                    canary._run_luna_live_canary_fixture_v1(
                         execute_live=execute_live,
                         http_client=client,
                         environ=environment,
@@ -129,7 +175,7 @@ class LunaLiveCanaryTest(unittest.TestCase):
             approval = root / "approval"
             client = FakeHttpClient([_catalog(canary.MODEL_ID), _provider_response()])
             with self.assertRaisesRegex(ValueError, "private_directory_unsafe"):
-                canary.run_luna_live_canary(
+                canary._run_luna_live_canary_fixture_v1(
                     execute_live=True,
                     http_client=client,
                     environ={canary.KEY_ENVIRONMENT_VARIABLE: FAKE_KEY},
@@ -161,7 +207,7 @@ class LunaLiveCanaryTest(unittest.TestCase):
             )
             self.assertEqual(canary.validate_artifact_directory(bundle, approval_root=approval_root), [])
             with self.assertRaises(PermissionError):
-                canary.run_luna_live_canary(
+                canary._run_luna_live_canary_fixture_v1(
                     execute_live=True,
                     http_client=client,
                     environ={canary.KEY_ENVIRONMENT_VARIABLE: FAKE_KEY},
@@ -243,7 +289,7 @@ class LunaLiveCanaryTest(unittest.TestCase):
 
             environment = {key: value for key, value in os.environ.items() if key != canary.KEY_ENVIRONMENT_VARIABLE}
             completed = subprocess.run(
-                [sys.executable, str(ROOT / "scripts/run_luna_live_canary.py"), "--execute-live"],
+                [sys.executable, str(ROOT / "scripts/run_luna_live_canary.py"), "--execute-live-v2"],
                 check=False,
                 capture_output=True,
                 text=True,
@@ -314,33 +360,33 @@ class LunaLiveCanaryTest(unittest.TestCase):
             self.assertNotEqual(canary.validate_artifact_directory(bundle, approval_root=approval_root), [])
 
     def test_secret_echo_is_redacted_and_terminal(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            secret_echo = canary.HttpResponse(
-                200,
-                {"content-type": "application/json"},
-                json.dumps({"model": canary.MODEL_ID, "echo": FAKE_KEY}).encode(),
-            )
-            result, bundle, approval_root, _ = self._run(
-                root,
-                [_catalog(canary.MODEL_ID), secret_echo],
-            )
-            self.assertEqual(result["error_codes"], ["response_secret_detected"])
-            raw = json.loads((bundle / "raw-response.json").read_text())
-            self.assertIs(raw["secret_redacted"], True)
-            self.assertIsNone(raw["body_base64"])
-            self.assertNotIn(FAKE_KEY.encode(), b"".join(path.read_bytes() for path in bundle.iterdir()))
-            self.assertEqual(canary.validate_artifact_directory(bundle, approval_root=approval_root), [])
+        secret_bodies = (
+            json.dumps({"model": canary.MODEL_ID, "echo": FAKE_KEY}).encode(),
+            ('{"model":"gpt-5.6-luna","echo":"sk\\u002d' + "a" * 32 + '"}').encode(),
+        )
+        for body in secret_bodies:
+            with self.subTest(body=body), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                secret_echo = canary.HttpResponse(200, {"content-type": "application/json"}, body)
+                result, bundle, approval_root, _ = self._run(
+                    root,
+                    [_catalog(canary.MODEL_ID), secret_echo],
+                )
+                self.assertEqual(result["error_codes"], ["response_secret_detected"])
+                raw = json.loads((bundle / "raw-response.json").read_text())
+                self.assertIs(raw["secret_redacted"], True)
+                self.assertIsNone(raw["body_base64"])
+                self.assertNotIn(FAKE_KEY.encode(), b"".join(path.read_bytes() for path in bundle.iterdir()))
+                self.assertEqual(canary.validate_artifact_directory(bundle, approval_root=approval_root), [])
 
-            raw_path = bundle / "raw-response.json"
-            result_path = bundle / "result.json"
-            raw = json.loads(raw_path.read_text())
-            raw["body_base64"] = "cmV0YWluZWQ="
-            changed = copy.deepcopy(result)
-            changed["artifact_sha256s"]["raw-response.json"] = canary._canonical_sha256(raw)
-            canary._atomic_write_json(raw_path, raw)
-            canary._atomic_write_json(result_path, changed)
-            self.assertNotEqual(canary.validate_artifact_directory(bundle, approval_root=approval_root), [])
+                raw_path = bundle / "raw-response.json"
+                result_path = bundle / "result.json"
+                raw["body_base64"] = "cmV0YWluZWQ="
+                changed = copy.deepcopy(result)
+                changed["artifact_sha256s"]["raw-response.json"] = canary._canonical_sha256(raw)
+                canary._atomic_write_json(raw_path, raw)
+                canary._atomic_write_json(result_path, changed)
+                self.assertNotEqual(canary.validate_artifact_directory(bundle, approval_root=approval_root), [])
 
     def test_global_approval_has_one_concurrent_winner(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -354,7 +400,7 @@ class LunaLiveCanaryTest(unittest.TestCase):
             def worker(index: int) -> None:
                 barrier.wait()
                 try:
-                    canary.run_luna_live_canary(
+                    canary._run_luna_live_canary_fixture_v1(
                         execute_live=True,
                         http_client=client,
                         environ={canary.KEY_ENVIRONMENT_VARIABLE: FAKE_KEY},
@@ -379,7 +425,9 @@ class LunaLiveCanaryTest(unittest.TestCase):
 
     def test_cli_surface_has_only_execution_and_validation_modes(self) -> None:
         script = (ROOT / "scripts/run_luna_live_canary.py").read_text(encoding="utf-8")
-        self.assertIn('"--execute-live"', script)
+        self.assertIn('"--execute-live-v2"', script)
+        self.assertNotIn('"--execute-live-v1"', script)
+        self.assertNotIn('"--execute-live"', script)
         self.assertIn('"--validate-directory"', script)
         self.assertNotIn("key-file", script)
         self.assertNotIn("api-key", script)

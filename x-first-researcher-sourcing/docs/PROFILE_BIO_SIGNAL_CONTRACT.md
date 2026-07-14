@@ -73,8 +73,9 @@ it cannot access Grok, X, OAuth, or another provider.
 
 ## Downstream use
 
-Within a population already selected by lab, current professional affiliation, role/research evidence, and pretraining
-relevance, these outputs can expand the human verification queue for China-related professional experience. V1.5
+Within a population already selected by target-lab affiliation (current or historical), role/research evidence, and
+pretraining experience/relevance (current or historical), these outputs can expand the human verification queue for
+China-related professional experience. V1.5
 intentionally gives up open-text recall for deterministic precision; Luna v2 owns semantic recall. Neither lane is
 permitted to discover or rank people by inferred ethnicity, nationality, race, citizenship, or real name.
 
@@ -151,6 +152,11 @@ physical presence, or from a Bio mention to confirmed employment.
 
 All positive ecosystem rows produce only a `china_digital_ecosystem` verification lead. They leave
 `physical_region_experience.status=not_evaluated` and every ethnicity/nationality/name inference claim false.
+
+This deterministic rule lane does not own the business `strong_proxy|weak_proxy` roll-up. Open Bio ownership and
+professional-context judgment belongs to semantic v2; its separate versioned proxy policy may map a validated,
+unverified subject-owned professional ecosystem proposal to a strong China/Asia professional-experience proxy. A bare
+platform alias match in this rule lane never performs that promotion.
 
 The runtime pins the canonical SHA-256 of the complete policy, while the policy schema pins the same complete JSON
 value. Policy v1.5 records the complete positive grammar manifest rather than grammar IDs alone: every regex body,

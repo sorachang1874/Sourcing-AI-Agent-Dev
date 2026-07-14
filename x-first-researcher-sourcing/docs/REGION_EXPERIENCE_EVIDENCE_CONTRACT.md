@@ -140,11 +140,12 @@ An explicit first-person language-capability declaration may later be modeled as
 region experience, nationality, or ethnicity. Observed Chinese text is only `observed_language` and does not create
 that declaration.
 
-Likewise, explicit subject-authored Bio evidence of activity in a China-specific professional/platform ecosystem may
-later form a separate `china_ecosystem_lead` verification proposal. It does not prove physical worked/studied/lived/
-researched experience. Bio strings such as `Head of ... @org` or `Prev @org` are subject-claimed current/previous
-affiliation proposals or mention edges; they require organization or independent evidence before confirmation. These
-lead/affiliation contracts are intentionally outside this region-only slice.
+The separate semantic-Bio contract now permits an unverified subject-owned China digital-ecosystem professional-
+activity proposal and an observed Chinese professional/technical-content proposal. A versioned policy may roll those
+into strong or weak China/Asia **professional-experience proxies** for a high-recall verification queue. They do not
+enter this classifier and cannot prove physical worked/studied/lived/researched experience. Bio strings such as
+`Head of ... @org` or `Prev @org` remain subject-claimed current/previous affiliation proposals or mention edges and
+require organization or independent evidence before confirmation.
 
 Region labels must never be used as a proxy to reconstruct ethnicity, nationality, citizenship, race, ancestry,
 community membership, or cultural identity. They are not permitted inputs to X-first discovery or ranking. The result

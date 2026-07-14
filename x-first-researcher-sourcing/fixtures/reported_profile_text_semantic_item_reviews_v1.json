@@ -1,0 +1,359 @@
+{
+  "schema_version": "x.reported_profile_text.semantic.item_review_fixture_set.v1",
+  "items": [
+    {
+      "schema_version": "x.reported_profile_text.semantic.item_review.v1",
+      "status": "completed",
+      "batch_id": "xrpt_batch_2a135e7f5443cb347e8f37df",
+      "item_request_id": "xrpt_item_687500e12614d16ff2ab2b1b",
+      "observation_id": "xrpt_obs_a5e0a68fdb48fa8830afc7ee",
+      "observation_sha256": "6d677f289d601c5944468a7c88dece2805ab8a4f516af6f6958e60a329850693",
+      "text_sha256": "09bc1594dac7324948878bf89319500e4d29b123fb2241f686d6653d9d919e7f",
+      "source_trust": "model_mediated_unverified",
+      "reported_platform_user_id_diagnostic": {
+        "status": "model_mediated_unverified",
+        "value": "123456789012345678",
+        "used_as_identity_key": false
+      },
+      "model_output_sha256": "db29f7d12f097265c9227e9d8a5c83b00cc8c8646a9561ff9358018fbd632ee6",
+      "verdict": "proposals_available",
+      "proposals": [
+        {
+          "proposal_type": "professional_china_digital_ecosystem",
+          "relation_state": "not_applicable",
+          "span_start": 0,
+          "span_end": 47,
+          "excerpt": "Professional publishing account on Xiaohongshu.",
+          "reason_codes": [
+            "explicit_china_digital_ecosystem_activity"
+          ],
+          "reason": "The cited Bio span explicitly states China digital-ecosystem professional activity.",
+          "reason_source": "closed_deterministic_explanation_template_v2.2",
+          "confidence": "high",
+          "evidence_basis": "model_mediated_unverified_text_only",
+          "requires_independent_verification": true,
+          "proposal_id": "xrpt_prop_75606081e87b428cad4fd1ac",
+          "excerpt_sha256": "09bc1594dac7324948878bf89319500e4d29b123fb2241f686d6653d9d919e7f",
+          "verification_status": "unverified_reported_profile_text_proposal"
+        }
+      ],
+      "professional_experience_proxy_policy": {
+        "policy_version": "profile-bio-professional-experience-proxy-policy-v1",
+        "policy_sha256": "a2c115e2505ed08ca5930028a8458218cbc3e0e074bd33ef96f1a51db2609e72",
+        "validation_status": "validated_canonical"
+      },
+      "professional_experience_proxy_rollup": {
+        "status": "unverified_model_derived",
+        "regions": {
+          "china": {
+            "strength": "strong_proxy",
+            "contributing_proposals": [
+              {
+                "proposal_id": "xrpt_prop_75606081e87b428cad4fd1ac",
+                "proposal_type": "professional_china_digital_ecosystem",
+                "confidence": "high",
+                "mapped_strength": "strong_proxy"
+              }
+            ]
+          },
+          "asia": {
+            "strength": "strong_proxy",
+            "contributing_proposals": [
+              {
+                "proposal_id": "xrpt_prop_75606081e87b428cad4fd1ac",
+                "proposal_type": "professional_china_digital_ecosystem",
+                "confidence": "high",
+                "mapped_strength": "strong_proxy"
+              }
+            ]
+          }
+        }
+      },
+      "error_codes": [],
+      "authority": {
+        "source_bound_x_profile_accepted": false,
+        "stable_platform_identity_verified": false,
+        "external_facts_accepted": false,
+        "protected_identity_inferred": false,
+        "physical_region_inferred": false,
+        "discovery_or_ranking_authorized": false,
+        "eligibility_decided": false,
+        "canonical_employment_confirmed": false,
+        "canonical_write_authorized": false,
+        "outreach_authorized": false,
+        "verification_queue_only": true
+      }
+    },
+    {
+      "schema_version": "x.reported_profile_text.semantic.item_review.v1",
+      "status": "completed",
+      "batch_id": "xrpt_batch_2a135e7f5443cb347e8f37df",
+      "item_request_id": "xrpt_item_850ebc006bb4cbc4a4c61b31",
+      "observation_id": "xrpt_obs_c3dc65cdf4570a68ef249935",
+      "observation_sha256": "a44b9557404278c35edc8e7197e827914943929d6ac4d5be1d6667c8aefdd8e9",
+      "text_sha256": "74ba9136075f5af66d9992d4bd241a14475e9fef7c345eedb84e6d07a7f17dc0",
+      "source_trust": "model_mediated_unverified",
+      "reported_platform_user_id_diagnostic": {
+        "status": "absent",
+        "value": null,
+        "used_as_identity_key": false
+      },
+      "model_output_sha256": "46495eaa1ae580cba97afdcf402510bd8a1260a391bff2fd579312fbb5c1b59d",
+      "verdict": "proposals_available",
+      "proposals": [
+        {
+          "proposal_type": "observed_chinese_professional_content",
+          "relation_state": "not_applicable",
+          "span_start": 0,
+          "span_end": 10,
+          "excerpt": "发布模型训练技术笔记",
+          "reason_codes": [
+            "observed_chinese_professional_content"
+          ],
+          "reason": "The cited Bio span contains observed Chinese-language professional content.",
+          "reason_source": "closed_deterministic_explanation_template_v2.2",
+          "confidence": "high",
+          "evidence_basis": "model_mediated_unverified_text_only",
+          "requires_independent_verification": true,
+          "proposal_id": "xrpt_prop_a0bb02007ace79cab46ab8ec",
+          "excerpt_sha256": "74ba9136075f5af66d9992d4bd241a14475e9fef7c345eedb84e6d07a7f17dc0",
+          "verification_status": "unverified_reported_profile_text_proposal"
+        }
+      ],
+      "professional_experience_proxy_policy": {
+        "policy_version": "profile-bio-professional-experience-proxy-policy-v1",
+        "policy_sha256": "a2c115e2505ed08ca5930028a8458218cbc3e0e074bd33ef96f1a51db2609e72",
+        "validation_status": "validated_canonical"
+      },
+      "professional_experience_proxy_rollup": {
+        "status": "unverified_model_derived",
+        "regions": {
+          "china": {
+            "strength": "weak_proxy",
+            "contributing_proposals": [
+              {
+                "proposal_id": "xrpt_prop_a0bb02007ace79cab46ab8ec",
+                "proposal_type": "observed_chinese_professional_content",
+                "confidence": "high",
+                "mapped_strength": "weak_proxy"
+              }
+            ]
+          },
+          "asia": {
+            "strength": "weak_proxy",
+            "contributing_proposals": [
+              {
+                "proposal_id": "xrpt_prop_a0bb02007ace79cab46ab8ec",
+                "proposal_type": "observed_chinese_professional_content",
+                "confidence": "high",
+                "mapped_strength": "weak_proxy"
+              }
+            ]
+          }
+        }
+      },
+      "error_codes": [],
+      "authority": {
+        "source_bound_x_profile_accepted": false,
+        "stable_platform_identity_verified": false,
+        "external_facts_accepted": false,
+        "protected_identity_inferred": false,
+        "physical_region_inferred": false,
+        "discovery_or_ranking_authorized": false,
+        "eligibility_decided": false,
+        "canonical_employment_confirmed": false,
+        "canonical_write_authorized": false,
+        "outreach_authorized": false,
+        "verification_queue_only": true
+      }
+    },
+    {
+      "schema_version": "x.reported_profile_text.semantic.item_review.v1",
+      "status": "completed",
+      "batch_id": "xrpt_batch_2a135e7f5443cb347e8f37df",
+      "item_request_id": "xrpt_item_43b3642c12aff1e5532dd6aa",
+      "observation_id": "xrpt_obs_b222b24ea7435b57472dbec2",
+      "observation_sha256": "6b053864f7e0375788c7a640523c699005ecf354f00b27cb47e6a46e80b76079",
+      "text_sha256": "63be52e88fdf8e46b7c80d985546a147d8cd11cbeb26cb211b2f87014eac59ed",
+      "source_trust": "model_mediated_unverified",
+      "reported_platform_user_id_diagnostic": {
+        "status": "absent",
+        "value": null,
+        "used_as_identity_key": false
+      },
+      "model_output_sha256": "bcb105878c7fed44a12fa2fa9c1adf206f59fb97a41213c3fba7c24a4655b667",
+      "verdict": "proposals_available",
+      "proposals": [
+        {
+          "proposal_type": "professional_region_experience",
+          "relation_state": "not_applicable",
+          "span_start": 0,
+          "span_end": 38,
+          "excerpt": "Worked on model training in Singapore.",
+          "reason_codes": [
+            "explicit_professional_region_experience"
+          ],
+          "reason": "The cited Bio span explicitly states professional region experience.",
+          "reason_source": "closed_deterministic_explanation_template_v2.2",
+          "confidence": "high",
+          "evidence_basis": "model_mediated_unverified_text_only",
+          "requires_independent_verification": true,
+          "proposal_id": "xrpt_prop_82d80ffa36ea14a3441b1b5e",
+          "excerpt_sha256": "63be52e88fdf8e46b7c80d985546a147d8cd11cbeb26cb211b2f87014eac59ed",
+          "verification_status": "unverified_reported_profile_text_proposal"
+        }
+      ],
+      "professional_experience_proxy_policy": {
+        "policy_version": "profile-bio-professional-experience-proxy-policy-v1",
+        "policy_sha256": "a2c115e2505ed08ca5930028a8458218cbc3e0e074bd33ef96f1a51db2609e72",
+        "validation_status": "validated_canonical"
+      },
+      "professional_experience_proxy_rollup": {
+        "status": "none",
+        "regions": {
+          "china": {
+            "strength": "none",
+            "contributing_proposals": []
+          },
+          "asia": {
+            "strength": "none",
+            "contributing_proposals": []
+          }
+        }
+      },
+      "error_codes": [],
+      "authority": {
+        "source_bound_x_profile_accepted": false,
+        "stable_platform_identity_verified": false,
+        "external_facts_accepted": false,
+        "protected_identity_inferred": false,
+        "physical_region_inferred": false,
+        "discovery_or_ranking_authorized": false,
+        "eligibility_decided": false,
+        "canonical_employment_confirmed": false,
+        "canonical_write_authorized": false,
+        "outreach_authorized": false,
+        "verification_queue_only": true
+      }
+    },
+    {
+      "schema_version": "x.reported_profile_text.semantic.item_review.v1",
+      "status": "completed",
+      "batch_id": "xrpt_batch_2a135e7f5443cb347e8f37df",
+      "item_request_id": "xrpt_item_85b8afbffe4331ba92a0640d",
+      "observation_id": "xrpt_obs_84c22470d64f3b99e650f840",
+      "observation_sha256": "57c2f3477e24ddadaf308d9905a77a5599f623b3a57fe565823e7e042b44ba55",
+      "text_sha256": "a1795fedb6ca007f32836575e135168a23af9cb2e9b523c20e86ebc1343be93c",
+      "source_trust": "model_mediated_unverified",
+      "reported_platform_user_id_diagnostic": {
+        "status": "absent",
+        "value": null,
+        "used_as_identity_key": false
+      },
+      "model_output_sha256": "93bc841ddf0147963c62274e122df2f95ff4325e21df0f09ec8e786706feb154",
+      "verdict": "proposals_available",
+      "proposals": [
+        {
+          "proposal_type": "professional_affiliation",
+          "relation_state": "previous_claimed",
+          "span_start": 0,
+          "span_end": 38,
+          "excerpt": "Previously Researcher at @fixture_lab.",
+          "reason_codes": [
+            "explicit_previous_organization_claim"
+          ],
+          "reason": "The cited Bio span explicitly states a previous claimed organization affiliation.",
+          "reason_source": "closed_deterministic_explanation_template_v2.2",
+          "confidence": "high",
+          "evidence_basis": "model_mediated_unverified_text_only",
+          "requires_independent_verification": true,
+          "proposal_id": "xrpt_prop_ec6e70d264938b443ac0f96d",
+          "excerpt_sha256": "a1795fedb6ca007f32836575e135168a23af9cb2e9b523c20e86ebc1343be93c",
+          "verification_status": "unverified_reported_profile_text_proposal"
+        }
+      ],
+      "professional_experience_proxy_policy": {
+        "policy_version": "profile-bio-professional-experience-proxy-policy-v1",
+        "policy_sha256": "a2c115e2505ed08ca5930028a8458218cbc3e0e074bd33ef96f1a51db2609e72",
+        "validation_status": "validated_canonical"
+      },
+      "professional_experience_proxy_rollup": {
+        "status": "none",
+        "regions": {
+          "china": {
+            "strength": "none",
+            "contributing_proposals": []
+          },
+          "asia": {
+            "strength": "none",
+            "contributing_proposals": []
+          }
+        }
+      },
+      "error_codes": [],
+      "authority": {
+        "source_bound_x_profile_accepted": false,
+        "stable_platform_identity_verified": false,
+        "external_facts_accepted": false,
+        "protected_identity_inferred": false,
+        "physical_region_inferred": false,
+        "discovery_or_ranking_authorized": false,
+        "eligibility_decided": false,
+        "canonical_employment_confirmed": false,
+        "canonical_write_authorized": false,
+        "outreach_authorized": false,
+        "verification_queue_only": true
+      }
+    },
+    {
+      "schema_version": "x.reported_profile_text.semantic.item_review.v1",
+      "status": "completed",
+      "batch_id": "xrpt_batch_2a135e7f5443cb347e8f37df",
+      "item_request_id": "xrpt_item_7e95c5dda9594abd014ea960",
+      "observation_id": "xrpt_obs_02074a63b897626b3e718bbe",
+      "observation_sha256": "480995d655202d1950aa95632b47554e3bbd4a1990ca3825284c06db6ef082dd",
+      "text_sha256": "14d3328773d16b6b9cb23daff83b00b0721679c7b8bc077c7b86f9a13133793c",
+      "source_trust": "model_mediated_unverified",
+      "reported_platform_user_id_diagnostic": {
+        "status": "absent",
+        "value": null,
+        "used_as_identity_key": false
+      },
+      "model_output_sha256": "bea9c67d086644151c32436d588981153811a85d608423ba0acc5daa84e1bf4b",
+      "verdict": "no_supported_professional_context",
+      "proposals": [],
+      "professional_experience_proxy_policy": {
+        "policy_version": "profile-bio-professional-experience-proxy-policy-v1",
+        "policy_sha256": "a2c115e2505ed08ca5930028a8458218cbc3e0e074bd33ef96f1a51db2609e72",
+        "validation_status": "validated_canonical"
+      },
+      "professional_experience_proxy_rollup": {
+        "status": "none",
+        "regions": {
+          "china": {
+            "strength": "none",
+            "contributing_proposals": []
+          },
+          "asia": {
+            "strength": "none",
+            "contributing_proposals": []
+          }
+        }
+      },
+      "error_codes": [],
+      "authority": {
+        "source_bound_x_profile_accepted": false,
+        "stable_platform_identity_verified": false,
+        "external_facts_accepted": false,
+        "protected_identity_inferred": false,
+        "physical_region_inferred": false,
+        "discovery_or_ranking_authorized": false,
+        "eligibility_decided": false,
+        "canonical_employment_confirmed": false,
+        "canonical_write_authorized": false,
+        "outreach_authorized": false,
+        "verification_queue_only": true
+      }
+    }
+  ]
+}

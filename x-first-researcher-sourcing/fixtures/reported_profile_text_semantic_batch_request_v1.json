@@ -1,0 +1,128 @@
+{
+  "schema_version": "x.reported_profile_text.semantic.batch_request.v1",
+  "batch_id": "xrpt_batch_2a135e7f5443cb347e8f37df",
+  "source_manifest": {
+    "campaign_result_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+    "observation_count": 5,
+    "observations_sha256": "7f7789b119b7b624a1005cf220169dba6162c56ffa7e286552ca972175f0285f"
+  },
+  "semantic_policy": {
+    "execution_mode": "offline_fixture",
+    "intended_model_id": "gpt-5.6-luna",
+    "reasoning_effort": "low",
+    "semantic_vocabulary_version": "x.profile.bio_semantic.v2.2",
+    "model_output_schema_version": "x.reported_profile_text.semantic.model_output.v1",
+    "professional_experience_proxy_policy_version": "profile-bio-professional-experience-proxy-policy-v1",
+    "professional_experience_proxy_policy_sha256": "a2c115e2505ed08ca5930028a8458218cbc3e0e074bd33ef96f1a51db2609e72",
+    "strict_structured_output": true,
+    "fallback_model": null
+  },
+  "operational_limits": {
+    "max_items": 10000,
+    "max_text_characters_per_item": 2000,
+    "max_total_text_characters": 20000000,
+    "max_batch_canonical_bytes": 32000000,
+    "max_model_output_canonical_bytes": 262144,
+    "max_validation_depth": 64,
+    "max_validation_nodes": 500000,
+    "max_proposals_per_item": 12
+  },
+  "observations": [
+    {
+      "schema_version": "x.reported_profile_text.observation.v1",
+      "observation_id": "xrpt_obs_a5e0a68fdb48fa8830afc7ee",
+      "source_kind": "grok_model_mediated_unverified_text",
+      "candidate_ref": "xrpt_candidate_d0864d39d2ee4c8c3ec749a3",
+      "campaign_result_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+      "candidate_row_sha256": "0000000000000000000000000000000000000000000000000000000000000002",
+      "text": "Professional publishing account on Xiaohongshu.",
+      "text_sha256": "09bc1594dac7324948878bf89319500e4d29b123fb2241f686d6653d9d919e7f",
+      "reported_platform_user_id": "123456789012345678",
+      "reported_platform_user_id_status": "model_mediated_unverified",
+      "authority": {
+        "x_profile_snapshot_claimed": false,
+        "stable_platform_identity_verified": false,
+        "automatic_identity_merge_authorized": false
+      }
+    },
+    {
+      "schema_version": "x.reported_profile_text.observation.v1",
+      "observation_id": "xrpt_obs_c3dc65cdf4570a68ef249935",
+      "source_kind": "grok_model_mediated_unverified_text",
+      "candidate_ref": "xrpt_candidate_151acb41133c2b8f769691a5",
+      "campaign_result_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+      "candidate_row_sha256": "0000000000000000000000000000000000000000000000000000000000000003",
+      "text": "发布模型训练技术笔记",
+      "text_sha256": "74ba9136075f5af66d9992d4bd241a14475e9fef7c345eedb84e6d07a7f17dc0",
+      "reported_platform_user_id": null,
+      "reported_platform_user_id_status": "absent",
+      "authority": {
+        "x_profile_snapshot_claimed": false,
+        "stable_platform_identity_verified": false,
+        "automatic_identity_merge_authorized": false
+      }
+    },
+    {
+      "schema_version": "x.reported_profile_text.observation.v1",
+      "observation_id": "xrpt_obs_b222b24ea7435b57472dbec2",
+      "source_kind": "grok_model_mediated_unverified_text",
+      "candidate_ref": "xrpt_candidate_364b06eeb9d2a48993af826c",
+      "campaign_result_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+      "candidate_row_sha256": "0000000000000000000000000000000000000000000000000000000000000004",
+      "text": "Worked on model training in Singapore.",
+      "text_sha256": "63be52e88fdf8e46b7c80d985546a147d8cd11cbeb26cb211b2f87014eac59ed",
+      "reported_platform_user_id": null,
+      "reported_platform_user_id_status": "absent",
+      "authority": {
+        "x_profile_snapshot_claimed": false,
+        "stable_platform_identity_verified": false,
+        "automatic_identity_merge_authorized": false
+      }
+    },
+    {
+      "schema_version": "x.reported_profile_text.observation.v1",
+      "observation_id": "xrpt_obs_84c22470d64f3b99e650f840",
+      "source_kind": "grok_model_mediated_unverified_text",
+      "candidate_ref": "xrpt_candidate_9e37cf3823e9d74e4bf21fb1",
+      "campaign_result_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+      "candidate_row_sha256": "0000000000000000000000000000000000000000000000000000000000000005",
+      "text": "Previously Researcher at @fixture_lab.",
+      "text_sha256": "a1795fedb6ca007f32836575e135168a23af9cb2e9b523c20e86ebc1343be93c",
+      "reported_platform_user_id": null,
+      "reported_platform_user_id_status": "absent",
+      "authority": {
+        "x_profile_snapshot_claimed": false,
+        "stable_platform_identity_verified": false,
+        "automatic_identity_merge_authorized": false
+      }
+    },
+    {
+      "schema_version": "x.reported_profile_text.observation.v1",
+      "observation_id": "xrpt_obs_02074a63b897626b3e718bbe",
+      "source_kind": "grok_model_mediated_unverified_text",
+      "candidate_ref": "xrpt_candidate_6beeb7993000572d568c2a97",
+      "campaign_result_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+      "candidate_row_sha256": "0000000000000000000000000000000000000000000000000000000000000006",
+      "text": "General AI systems notes.",
+      "text_sha256": "14d3328773d16b6b9cb23daff83b00b0721679c7b8bc077c7b86f9a13133793c",
+      "reported_platform_user_id": null,
+      "reported_platform_user_id_status": "absent",
+      "authority": {
+        "x_profile_snapshot_claimed": false,
+        "stable_platform_identity_verified": false,
+        "automatic_identity_merge_authorized": false
+      }
+    }
+  ],
+  "authority": {
+    "provider_or_network_allowed": false,
+    "external_facts_allowed": false,
+    "protected_identity_inference_allowed": false,
+    "physical_region_inference_allowed": false,
+    "discovery_or_ranking_allowed": false,
+    "eligibility_decision_allowed": false,
+    "canonical_employment_allowed": false,
+    "canonical_write_allowed": false,
+    "outreach_allowed": false
+  }
+}

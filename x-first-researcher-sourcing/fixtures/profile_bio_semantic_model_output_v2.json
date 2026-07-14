@@ -1,5 +1,5 @@
 {
-  "schema_version": "x.profile.bio_semantic.model_output.v2.1",
+  "schema_version": "x.profile.bio_semantic.model_output.v2.2",
   "request_id": "xbsv2r_111111111111111111111111",
   "profile_snapshot_id": "xbsv2s_222222222222222222222222",
   "platform_user_id": "900000000000000001",
@@ -15,8 +15,8 @@
       "reason_codes": [
         "explicit_professional_region_experience"
       ],
-      "reason": "Bio explicitly states professional work in 新加坡.",
-      "reason_source": "model_proposed_untrusted_narrative",
+      "reason": "The cited Bio span explicitly states professional region experience.",
+      "reason_source": "closed_deterministic_explanation_template_v2.2",
       "confidence": "high",
       "evidence_basis": "profile_bio_only",
       "requires_independent_verification": true
@@ -30,8 +30,8 @@
       "reason_codes": [
         "explicit_current_organization_claim"
       ],
-      "reason": "Bio explicitly states a current role at @synthetic_hub.",
-      "reason_source": "model_proposed_untrusted_narrative",
+      "reason": "The cited Bio span explicitly states a current claimed organization affiliation.",
+      "reason_source": "closed_deterministic_explanation_template_v2.2",
       "confidence": "high",
       "evidence_basis": "profile_bio_only",
       "requires_independent_verification": true
@@ -45,8 +45,8 @@
       "reason_codes": [
         "explicit_previous_organization_claim"
       ],
-      "reason": "Bio explicitly marks @synth_listen as a previous organization.",
-      "reason_source": "model_proposed_untrusted_narrative",
+      "reason": "The cited Bio span explicitly states a previous claimed organization affiliation.",
+      "reason_source": "closed_deterministic_explanation_template_v2.2",
       "confidence": "high",
       "evidence_basis": "profile_bio_only",
       "requires_independent_verification": true
@@ -60,8 +60,8 @@
       "reason_codes": [
         "explicit_china_digital_ecosystem_activity"
       ],
-      "reason": "Bio explicitly names 小红书 professional activity.",
-      "reason_source": "model_proposed_untrusted_narrative",
+      "reason": "The cited Bio span explicitly states China digital-ecosystem professional activity.",
+      "reason_source": "closed_deterministic_explanation_template_v2.2",
       "confidence": "high",
       "evidence_basis": "profile_bio_only",
       "requires_independent_verification": true
@@ -75,8 +75,8 @@
       "reason_codes": [
         "explicit_china_digital_ecosystem_activity"
       ],
-      "reason": "Bio explicitly names SyntheticFounder as a professional account.",
-      "reason_source": "model_proposed_untrusted_narrative",
+      "reason": "The cited Bio span explicitly states China digital-ecosystem professional activity.",
+      "reason_source": "closed_deterministic_explanation_template_v2.2",
       "confidence": "high",
       "evidence_basis": "profile_bio_only",
       "requires_independent_verification": true
@@ -90,8 +90,8 @@
       "reason_codes": [
         "observed_chinese_professional_content"
       ],
-      "reason": "Bio contains observed Chinese language and AI engineering content.",
-      "reason_source": "model_proposed_untrusted_narrative",
+      "reason": "The cited Bio span contains observed Chinese-language professional content.",
+      "reason_source": "closed_deterministic_explanation_template_v2.2",
       "confidence": "high",
       "evidence_basis": "profile_bio_only",
       "requires_independent_verification": true
