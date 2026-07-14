@@ -188,7 +188,9 @@ The post-`fee3699` reviews reproduced nineteen false-green or non-terminal class
     UTF-8 encoding, and ASCII-escaped artifact serialization provides a final terminality boundary; and
 19. a rehashed artifact could retain an escaped unpaired surrogate in the provider request id, call id, observed model
     ids, unexpected-tool list, or evidence-error list and still pass reload validation. The executable result and tool
-    receipt validators, plus their schemas, now enforce the same Unicode-scalar invariant used by the runner.
+    receipt validators, provider-output/result schemas, and owner-root artifact reload tests now enforce the same
+    Unicode-scalar invariant used by the runner. The successful-result schema also requires a non-null provider request
+    id, matching executable provenance requirements.
 
 Each now has a deterministic concurrency, mutation, artifact, or subprocess regression. These tests prove the local
 fail-closed contract only; they are not a live X capability result or an independent-review `GO`.

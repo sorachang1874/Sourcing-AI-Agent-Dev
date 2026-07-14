@@ -404,6 +404,18 @@ class XFirstLiveCapabilityContractTest(unittest.TestCase):
         success_usage = result_schema["allOf"][0]["then"]["properties"]["usage"]["properties"]
         self.assertEqual(success_usage["model_turns"]["maximum"], 4)
         self.assertEqual(success_usage["elapsed_ms"]["maximum"], 180000)
+        self.assertEqual(
+            result_schema["allOf"][0]["then"]["properties"]["provenance"]["properties"]["provider_request_id"]["type"],
+            "string",
+        )
+        self.assertEqual(
+            result_schema["$defs"]["observation"]["properties"]["excerpt"]["pattern"],
+            "^[^\\uD800-\\uDFFF]+$",
+        )
+        self.assertEqual(
+            live_probe.GROK_RESPONSE_SCHEMA["properties"]["observations"]["items"]["properties"]["excerpt"]["pattern"],
+            r"^[^\ud800-\udfff]+$",
+        )
         self.assertNotIn("maximum", result_schema["$defs"]["usage"]["properties"]["cost_usd"])
         receipt_binding = result_schema["allOf"][1]
         self.assertEqual(
@@ -1488,32 +1500,76 @@ class XFirstLiveCapabilityContractTest(unittest.TestCase):
             ):
                 bundle, base_result, _, base_tool = _write_valid_bundle(root, approval_root)
 
-                def assert_success_bundle_rejected(mutator: object) -> None:
+                def assert_success_bundle_rejected(mutator: object, expected_error: str) -> None:
                     result = copy.deepcopy(base_result)
                     tool = copy.deepcopy(base_tool)
                     mutator(result, tool)  # type: ignore[operator]
                     result["provenance"]["tool_receipt_sha256"] = live_probe.canonical_sha256(tool)  # type: ignore[index]
                     live_probe._atomic_write_json(bundle / "tool-receipt.json", tool)
                     live_probe._atomic_write_json(bundle / "result.json", result)
-                    self.assertTrue(validate_artifact_pair(bundle / "request.json", bundle / "result.json"))
+                    errors = validate_artifact_pair(bundle / "request.json", bundle / "result.json")
+                    self.assertNotIn(
+                        f"{live_probe.LIVE_DIAGNOSTIC_CODE}: live artifact pair could not be loaded",
+                        errors,
+                    )
+                    self.assertIn(expected_error, errors)
 
                 assert_success_bundle_rejected(
                     lambda result, tool: (
                         result["provenance"].update(provider_request_id=surrogate),
                         tool.update(provider_request_id=surrogate),
-                    )
+                    ),
+                    f"{live_probe.LIVE_DIAGNOSTIC_CODE}: result provider request id is invalid",
                 )
-                assert_success_bundle_rejected(lambda _result, tool: tool["calls"][0].update(call_id=surrogate))
+                assert_success_bundle_rejected(
+                    lambda _result, tool: tool["calls"][0].update(call_id=surrogate),
+                    f"{live_probe.LIVE_DIAGNOSTIC_CODE}: tool-call receipt id is invalid",
+                )
+                assert_success_bundle_rejected(
+                    lambda result, tool: (
+                        result["provenance"].update(provider_request_id=None),
+                        tool.update(provider_request_id=None),
+                    ),
+                    f"{live_probe.LIVE_DIAGNOSTIC_CODE}: successful result lacks provider/session provenance",
+                )
+
+        def assert_failure_bundle_rejected(
+            result: dict[str, object],
+            tool: dict[str, object],
+            bundle: Path,
+            expected_error: str,
+        ) -> None:
+            root = bundle.parents[2]
+            binary_sha256 = result["provenance"]["grok_binary_sha256"]  # type: ignore[index]
+            with (
+                mock.patch("x_first.live_probe.project_root", return_value=root),
+                mock.patch(
+                    "x_first.live_probe._global_approval_root",
+                    return_value=root / "global-approval",
+                ),
+                mock.patch("x_first.live_probe.PINNED_GROK_BINARY_SHA256", binary_sha256),
+            ):
+                result["provenance"]["tool_receipt_sha256"] = live_probe.canonical_sha256(tool)  # type: ignore[index]
+                live_probe._atomic_write_json(bundle / "tool-receipt.json", tool)
+                live_probe._atomic_write_json(bundle / "result.json", result)
+                errors = validate_artifact_pair(bundle / "request.json", bundle / "result.json")
+            self.assertNotIn(
+                f"{live_probe.LIVE_DIAGNOSTIC_CODE}: live artifact pair could not be loaded",
+                errors,
+            )
+            self.assertIn(expected_error, errors)
 
         model_result, model_tool, model_bundle = self._run_bounded_provider_events(
             lambda session_id: _session_events(session_id=session_id, raw_output={"posts": []})
         )
         model_result["provenance"]["observed_model_ids"] = [surrogate]  # type: ignore[index]
         model_tool["observed_model_ids"] = [surrogate]
-        model_result["provenance"]["tool_receipt_sha256"] = live_probe.canonical_sha256(model_tool)  # type: ignore[index]
-        live_probe._atomic_write_json(model_bundle / "tool-receipt.json", model_tool)
-        live_probe._atomic_write_json(model_bundle / "result.json", model_result)
-        self.assertTrue(validate_artifact_pair(model_bundle / "request.json", model_bundle / "result.json"))
+        assert_failure_bundle_rejected(
+            model_result,
+            model_tool,
+            model_bundle,
+            f"{live_probe.LIVE_DIAGNOSTIC_CODE}: tool receipt observed-model list is invalid",
+        )
 
         unexpected_result, unexpected_tool, unexpected_bundle = self._run_bounded_provider_events(
             lambda session_id: _session_events(
@@ -1523,12 +1579,12 @@ class XFirstLiveCapabilityContractTest(unittest.TestCase):
             )
         )
         unexpected_tool["unexpected_tool_calls"] = [surrogate]
-        unexpected_result["provenance"]["tool_receipt_sha256"] = live_probe.canonical_sha256(  # type: ignore[index]
-            unexpected_tool
+        assert_failure_bundle_rejected(
+            unexpected_result,
+            unexpected_tool,
+            unexpected_bundle,
+            f"{live_probe.LIVE_DIAGNOSTIC_CODE}: tool receipt unexpected-tool list is invalid",
         )
-        live_probe._atomic_write_json(unexpected_bundle / "tool-receipt.json", unexpected_tool)
-        live_probe._atomic_write_json(unexpected_bundle / "result.json", unexpected_result)
-        self.assertTrue(validate_artifact_pair(unexpected_bundle / "request.json", unexpected_bundle / "result.json"))
 
         def evidence_error_events(session_id: str) -> list[dict[str, object]]:
             events = _session_events(session_id=session_id, call_ids=())
@@ -1537,10 +1593,12 @@ class XFirstLiveCapabilityContractTest(unittest.TestCase):
 
         error_result, error_tool, error_bundle = self._run_bounded_provider_events(evidence_error_events)
         error_tool["evidence_errors"] = [surrogate]
-        error_result["provenance"]["tool_receipt_sha256"] = live_probe.canonical_sha256(error_tool)  # type: ignore[index]
-        live_probe._atomic_write_json(error_bundle / "tool-receipt.json", error_tool)
-        live_probe._atomic_write_json(error_bundle / "result.json", error_result)
-        self.assertTrue(validate_artifact_pair(error_bundle / "request.json", error_bundle / "result.json"))
+        assert_failure_bundle_rejected(
+            error_result,
+            error_tool,
+            error_bundle,
+            f"{live_probe.LIVE_DIAGNOSTIC_CODE}: tool receipt evidence-error list is invalid",
+        )
 
     def test_outer_only_and_receiptless_projections_fail_closed_before_publish(self) -> None:
         outer = _outer_response(_inner_response())

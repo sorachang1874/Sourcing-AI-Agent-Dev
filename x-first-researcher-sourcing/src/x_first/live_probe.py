@@ -160,7 +160,11 @@ GROK_RESPONSE_SCHEMA: Mapping[str, Any] = {
                         "pattern": "^https://x\\.com/OpenAI/status/[0-9]{5,32}$",
                     },
                     "authored_at": {"type": "string", "format": "date-time", "maxLength": 32},
-                    "excerpt": {"type": "string", "maxLength": 280},
+                    "excerpt": {
+                        "type": "string",
+                        "maxLength": 280,
+                        "pattern": r"^[^\ud800-\udfff]+$",
+                    },
                     "full_body_stored": {"const": False},
                 },
             },
