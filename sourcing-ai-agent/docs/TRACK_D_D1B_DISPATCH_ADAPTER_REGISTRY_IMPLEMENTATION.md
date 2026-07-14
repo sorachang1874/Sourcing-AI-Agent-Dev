@@ -7,7 +7,10 @@
 > The scoped pinned review of `2184d64` found one false-green regression oracle: a hard-coded registered action-name
 > literal branch for an action other than the single mutated export case could pass all D1a+D1b tests. This follow-up
 > parameterizes the mutation across all 15 actions and adds a self-proving AST literal/control-flow rejection check.
-> Re-review remains pending.
+> A fresh pinned re-review of `528ba81` then found a second false-green: the `getattr` check recognized only a direct
+> `getattr(...)` call, so qualified or aliased dynamic attribute resolution could pass the AST oracle while all 15
+> registry mutations and the missing-binding probe stayed green. The current author follow-up closes that detector gap;
+> a new non-author re-review remains pending.
 
 ## 1. Outcome and scope
 
@@ -28,7 +31,7 @@ The implementation is deliberately additive and behavior-equivalent:
 - `external_intake` command metadata does not imply an action adapter;
 - unknown adapter identifiers are rejected when a registry is constructed;
 - an unknown action, empty adapter, or missing runtime binding cannot invoke an owner method;
-- dispatch never resolves a method with `getattr` or a module path supplied by registry data.
+- dispatch never resolves a method through dynamic attribute lookup or a module path supplied by registry data.
 
 This slice does not change request payloads, target ownership, approval/budget behavior, persistence, migrations,
 HTTP routes, frontend contracts, workflow command ownership, provider/model transport, or live execution gates.
@@ -76,8 +79,11 @@ runtime. Immutable request-schema version/digest pins are outside D1b and must n
 
 1. unknown and whitespace-padded adapter identifiers reject registry construction;
 2. the runtime binding map is total over the five closed adapter identifiers;
-3. AST inspection rejects action constants, registered action-name string literals, direct `action_type` control-flow
-   branches, and arbitrary `getattr` in selector/binding code;
+3. AST inspection rejects direct or qualified action constants, registered action-name string literals, direct or raw
+   `action_type` control-flow branches, and dynamic attribute lookup in selector/binding code. The lookup detector
+   covers direct, qualified, imported-alias, and assignment-alias `getattr`; `__getattribute__`/`attrgetter`; and
+   `vars(...)`/`__dict__` namespace selection while an explicit negative control preserves ordinary static-dictionary
+   `.get(dispatch_adapter)`;
 4. parameterized in-memory registry mutations reroute every one of the 15 actions to a different legal adapter,
    proving dispatch follows registry data for supported and empty-adapter actions rather than a hidden action-name
    branch;
@@ -158,3 +164,10 @@ Ruff check/format; and scoped whitespace diff check. These results are author ev
 False-green follow-up author validation: the expanded D1a+D1b suites passed 25 tests; focused mypy reported no issues
 in the two test files; Ruff check/format and the scoped whitespace diff check passed. No production source changed in
 this follow-up.
+
+Second false-green follow-up author validation: D1a+D1b passed 25 tests; 14 PG-backed registry/dispatch nodes and the
+16-test command-spec suite passed; focused mypy reported no issues in three checked files; Ruff check/format and the
+scoped whitespace diff check passed. Independent mutation probes produced zero findings for the production selector,
+at least one finding each for qualified `builtins.getattr`, an assignment alias, `__getattribute__`, and
+`vars(self)[name]`, and zero findings for an ordinary dictionary `.get(name)`. This follow-up changes only the D1b test
+and this document; its results are author evidence, and a fresh non-author review is still required.
