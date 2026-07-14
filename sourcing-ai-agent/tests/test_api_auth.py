@@ -100,13 +100,28 @@ class BearerTokenParsingTest(unittest.TestCase):
         with patch.dict(os.environ, {"SOURCING_API_BEARER_TOKENS": json.dumps({"t1": "u1", "t2": "u2"})}):
             self.assertEqual(_api_bearer_tokens(), {"t1": "u1", "t2": "u2"})
 
-    def test_malformed_json_is_empty(self) -> None:
+    def test_malformed_json_fails_closed(self) -> None:
         with patch.dict(os.environ, {"SOURCING_API_BEARER_TOKENS": "not-json{"}):
-            self.assertEqual(_api_bearer_tokens(), {})
+            with self.assertRaisesRegex(ValueError, "SOURCING_API_BEARER_TOKENS"):
+                _api_bearer_tokens()
 
-    def test_non_object_json_is_empty(self) -> None:
+    def test_non_object_json_fails_closed(self) -> None:
         with patch.dict(os.environ, {"SOURCING_API_BEARER_TOKENS": json.dumps(["t1", "t2"])}):
-            self.assertEqual(_api_bearer_tokens(), {})
+            with self.assertRaisesRegex(ValueError, "SOURCING_API_BEARER_TOKENS"):
+                _api_bearer_tokens()
+
+    def test_empty_object_fails_closed(self) -> None:
+        with patch.dict(os.environ, {"SOURCING_API_BEARER_TOKENS": "{}"}):
+            with self.assertRaisesRegex(ValueError, "SOURCING_API_BEARER_TOKENS"):
+                _api_bearer_tokens()
+
+    def test_filtered_empty_object_fails_closed(self) -> None:
+        with patch.dict(
+            os.environ,
+            {"SOURCING_API_BEARER_TOKENS": json.dumps({"": "u1", "t2": ""})},
+        ):
+            with self.assertRaisesRegex(ValueError, "SOURCING_API_BEARER_TOKENS"):
+                _api_bearer_tokens()
 
     def test_drops_blank_token_or_user(self) -> None:
         with patch.dict(
@@ -164,6 +179,11 @@ class AuthServerWiringTest(unittest.TestCase):
         base_url, opener = self._start_server(env={"SOURCING_API_BEARER_TOKENS": json.dumps({"tok-1": "user-1"})})
         # Valid bearer clears auth; /health responds 200 (gate did not 401).
         self.assertEqual(self._request(opener, f"{base_url}/health", headers={"Authorization": "Bearer tok-1"}), 200)
+
+    def test_malformed_config_fails_app_construction(self) -> None:
+        with patch.dict(os.environ, {"SOURCING_API_BEARER_TOKENS": "not-json{"}):
+            with self.assertRaisesRegex(ValueError, "SOURCING_API_BEARER_TOKENS"):
+                create_server(_StubOrchestrator(), host="127.0.0.1", port=0)
 
 
 if __name__ == "__main__":

@@ -205,26 +205,28 @@ _AUTH_EXEMPT_PATHS = frozenset(
 def _api_bearer_tokens() -> dict[str, str]:
     """Parse SOURCING_API_BEARER_TOKENS into a {token: user_id} map.
 
-    Single-org static per-user bearer tokens (no login UI). Returns {} when the
-    env var is unset or malformed, which disables auth enforcement (pre-auth /
-    open mode) so unconfigured deploys and the test lanes are not broken before
-    the frontend ships its bearer (C2.4).
+    Single-org static per-user bearer tokens (no login UI). An unset/blank env
+    keeps the explicit pre-auth/open compatibility mode. Once the operator sets
+    the env, malformed, non-object, or filtered-empty configuration fails app
+    construction instead of silently disabling authentication.
     """
     raw = str(os.getenv("SOURCING_API_BEARER_TOKENS") or "").strip()
     if not raw:
         return {}
     try:
         parsed = json.loads(raw)
-    except (TypeError, ValueError):
-        return {}
+    except (TypeError, ValueError) as exc:
+        raise ValueError("SOURCING_API_BEARER_TOKENS must be a valid JSON object") from exc
     if not isinstance(parsed, dict):
-        return {}
+        raise ValueError("SOURCING_API_BEARER_TOKENS must be a JSON object")
     tokens: dict[str, str] = {}
     for token, user_id in parsed.items():
         token_text = str(token or "").strip()
         user_text = str(user_id or "").strip()
         if token_text and user_text:
             tokens[token_text] = user_text
+    if not tokens:
+        raise ValueError("SOURCING_API_BEARER_TOKENS must contain at least one non-empty token mapping")
     return tokens
 
 
@@ -364,6 +366,46 @@ def _apply_server_identity(
     return payload
 
 
+def _apply_server_read_scope(
+    payload: dict[str, Any],
+    request: Request,
+    *,
+    requester: bool = False,
+    tenant: bool = False,
+    workspace: bool = False,
+) -> dict[str, Any]:
+    """Apply authenticated read scope while preserving explicit legacy reads.
+
+    Authenticated reads default to the caller's server-derived namespace and
+    ignore spoofed requester/tenant/workspace aliases. An explicit
+    ``default`` namespace is the only compatibility selector for pre-auth rows:
+    it remains readable, but requester filtering is removed so rows that never
+    had a trustworthy requester are not accidentally hidden. Open mode is an
+    exact no-op.
+
+    ``requester=True, tenant=True`` is the query-dispatch contract;
+    ``workspace=True`` is the CRM/private-overlay contract.
+    """
+    identity = _server_identity(request)
+    if identity is None:
+        return payload
+    legacy_default_requested = any(str(payload.get(key) or "").strip() == "default" for key in _IDENTITY_TENANT_KEYS)
+    namespace = "default" if legacy_default_requested else _user_namespace(identity["user_id"])
+    if requester:
+        for key in _IDENTITY_REQUESTER_KEYS:
+            payload.pop(key, None)
+        if not legacy_default_requested:
+            payload["requester_id"] = identity["user_id"]
+    if tenant or workspace:
+        for key in _IDENTITY_TENANT_KEYS:
+            payload.pop(key, None)
+    if tenant:
+        payload["tenant_id"] = namespace
+    if workspace:
+        payload["workspace_id"] = namespace
+    return payload
+
+
 # ---------------------------------------------------------------------------
 # C2.3: tighten user-private reads. A user-private GET serves its normal payload
 # when (a) open mode [identity None], (b) the stored owner is a legacy/pre-auth
@@ -397,6 +439,35 @@ def _read_allowed_namespace(request: Request, owner_value: str | None) -> bool:
     identity = _server_identity(request)
     expected = _user_namespace(identity["user_id"]) if identity else ""
     return _read_allowed_for_expected(request, owner_value, expected)
+
+
+def _write_allowed_job_owner(request: Request, job_row: dict[str, Any]) -> bool:
+    """Exact authenticated job write authority; legacy read access is excluded."""
+    identity = _server_identity(request)
+    if identity is None:
+        return True
+    user_id = identity["user_id"]
+    return str(job_row.get("requester_id") or "").strip() == user_id and str(
+        job_row.get("tenant_id") or ""
+    ).strip() == _user_namespace(user_id)
+
+
+def _write_allowed_crm_owner(request: Request, crm_record: dict[str, Any]) -> bool:
+    """Exact authenticated CRM workspace write authority.
+
+    ``workspace_id`` is the currently populated owner source of truth. A
+    non-empty ``owner_user_id`` is an additional exact-match invariant; blank is
+    tolerated for modern rows created before that redundant column was wired.
+    Legacy/default workspaces never grant authenticated write authority.
+    """
+    identity = _server_identity(request)
+    if identity is None:
+        return True
+    user_id = identity["user_id"]
+    if str(crm_record.get("workspace_id") or "").strip() != _user_namespace(user_id):
+        return False
+    owner_user_id = str(crm_record.get("owner_user_id") or "").strip()
+    return not owner_user_id or owner_user_id == user_id
 
 
 class _RequestConcurrencyMiddleware:
@@ -612,6 +683,15 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
             return _json_response(HTTPStatus.NOT_FOUND, {"error": "job not found"})
         return None
 
+    def _gate_job_write_owner(request: Request, job_id: str) -> Response | None:
+        """404 unless an authenticated caller has exact modern job ownership."""
+        if _server_identity(request) is None:
+            return None
+        job_row = orchestrator.store.get_job(job_id)
+        if job_row is not None and not _write_allowed_job_owner(request, job_row):
+            return _json_response(HTTPStatus.NOT_FOUND, {"error": "job not found"})
+        return None
+
     def _gate_crm_record_owner(request: Request, record_id: str) -> Response | None:
         """C2.3: 404 when the caller is not the CRM record's workspace owner.
 
@@ -624,6 +704,15 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
             return None
         crm_record = orchestrator.store.get_crm_record(record_id)
         if crm_record is not None and not _read_allowed_namespace(request, crm_record.get("workspace_id")):
+            return _json_response(HTTPStatus.NOT_FOUND, {"status": "not_found", "record_id": record_id})
+        return None
+
+    def _gate_crm_record_write_owner(request: Request, record_id: str) -> Response | None:
+        """404 unless an authenticated caller has exact CRM write authority."""
+        if _server_identity(request) is None:
+            return None
+        crm_record = orchestrator.store.get_crm_record(record_id)
+        if crm_record is not None and not _write_allowed_crm_owner(request, crm_record):
             return _json_response(HTTPStatus.NOT_FOUND, {"status": "not_found", "record_id": record_id})
         return None
 
@@ -777,6 +866,7 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["GET"], "/api/plan/reviews", get_plan_reviews)
 
     def get_query_dispatches(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        _apply_server_read_scope(query, request, requester=True, tenant=True)
         return _json_response(HTTPStatus.OK, orchestrator.list_query_dispatches(query))
 
     add(["GET"], "/api/query-dispatches", get_query_dispatches)
@@ -1154,6 +1244,7 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["GET"], "/api/frontend-history/{history_id}", get_frontend_history_recovery)
 
     def get_crm_records(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        _apply_server_read_scope(query, request, workspace=True)
         return _json_response(
             HTTPStatus.OK,
             orchestrator.list_crm_records_api(
@@ -1167,6 +1258,7 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["GET"], "/api/crm/records", get_crm_records)
 
     def get_crm_tasks(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        _apply_server_read_scope(query, request, workspace=True)
         return _json_response(
             HTTPStatus.OK,
             orchestrator.list_crm_tasks_api(
@@ -1180,6 +1272,7 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["GET"], "/api/crm/tasks", get_crm_tasks)
 
     def get_crm_record_tasks(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        _apply_server_read_scope(query, request, workspace=True)
         result = orchestrator.list_crm_tasks_api(
             workspace_id=str(query.get("workspace_id") or "default"),
             crm_record_id=_decode_path_param(request.path_params["record_id"]),
@@ -1193,6 +1286,7 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["GET"], "/api/crm/records/{record_id}/tasks", get_crm_record_tasks)
 
     def get_crm_record(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        _apply_server_read_scope(query, request, workspace=True)
         result = orchestrator.get_crm_record_api(
             _decode_path_param(request.path_params["record_id"]),
             workspace_id=str(query.get("workspace_id") or "default"),
@@ -1274,6 +1368,7 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["GET"], "/api/collections/{collection_id}/coverage", get_collection_coverage)
 
     def get_projection_crm_state(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        _apply_server_read_scope(query, request, workspace=True)
         crm_payload = orchestrator.get_projection_crm_state_api(
             request.path_params["projection_id"],
             candidate_identity_keys=[
@@ -1315,6 +1410,7 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["GET"], "/api/projections/{projection_id:sourcing_ident}/search", get_projection_search)
 
     def get_projection_person_detail(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        _apply_server_read_scope(query, request, workspace=True)
         person_payload = orchestrator.get_serving_projection_person_detail_api(
             request.path_params["projection_id"],
             _decode_path_param(request.path_params["person_key"]),
@@ -1356,6 +1452,7 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["GET"], "/api/projections/{projection_id:sourcing_ident}", get_projection)
 
     def get_person_summary(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        _apply_server_read_scope(query, request, workspace=True)
         person_payload = orchestrator.get_person_summary_api(
             _decode_path_param(request.path_params["person_key"]),
             workspace_id=str(query.get("workspace_id") or "default"),
@@ -1702,6 +1799,7 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["POST"], "/api/providers/apify/webhook", post_apify_webhook, read_body=True)
 
     def post_query_dispatches_list(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        _apply_server_read_scope(payload, request, requester=True, tenant=True)
         return _json_response(HTTPStatus.OK, orchestrator.list_query_dispatches(payload))
 
     add(["POST"], "/api/query-dispatches/list", post_query_dispatches_list, read_body=True)
@@ -1726,6 +1824,9 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["POST"], "/api/workflows", post_workflows, read_body=True)
 
     def post_continue_stage2(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        denied = _gate_job_write_owner(request, request.path_params["job_id"])
+        if denied is not None:
+            return denied
         _apply_server_identity(payload, request, requester=True, tenant=True)
         result = orchestrator.continue_workflow_stage2({**payload, "job_id": request.path_params["job_id"]})
         status = HTTPStatus.ACCEPTED
@@ -1738,6 +1839,9 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["POST"], "/api/workflows/{job_id:sourcing_ident}/continue-stage2", post_continue_stage2, read_body=True)
 
     def post_job_profile_completion(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        denied = _gate_job_write_owner(request, request.path_params["job_id"])
+        if denied is not None:
+            return denied
         result = orchestrator.complete_job_candidate_profiles(request.path_params["job_id"], payload)
         status = HTTPStatus.OK
         if result.get("status") == "not_found":
@@ -1754,6 +1858,9 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     )
 
     def post_job_candidates_batch(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        denied = _gate_job_owner(request, request.path_params["job_id"])
+        if denied is not None:
+            return denied
         candidate_ids = payload.get("candidate_ids")
         candidate_batch_result = orchestrator.get_job_candidate_details_batch(
             request.path_params["job_id"],
@@ -2092,6 +2199,9 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     def post_target_candidates_import_from_job(
         request: Request, query: dict[str, Any], payload: dict[str, Any]
     ) -> Response:
+        denied = _gate_job_write_owner(request, str(payload.get("job_id") or "").strip())
+        if denied is not None:
+            return denied
         result = orchestrator.import_target_candidates_from_job(payload)
         status = HTTPStatus.CREATED if result.get("status") == "imported" else HTTPStatus.BAD_REQUEST
         if result.get("status") == "not_found":
@@ -2101,7 +2211,13 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["POST"], "/api/target-candidates/import-from-job", post_target_candidates_import_from_job, read_body=True)
 
     def post_crm_records(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
-        _apply_server_identity(payload, request, actor_fields=("actor_id",), lock_actor_type=True)
+        _apply_server_identity(
+            payload,
+            request,
+            workspace=True,
+            actor_fields=("actor_id",),
+            lock_actor_type=True,
+        )
         result = orchestrator.add_projection_candidate_to_crm(payload)
         status = HTTPStatus.CREATED if result.get("status") in {"upserted", "idempotent"} else HTTPStatus.BAD_REQUEST
         if result.get("status") == "reselected":
@@ -2119,6 +2235,7 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     def post_crm_backfill_target_candidates(
         request: Request, query: dict[str, Any], payload: dict[str, Any]
     ) -> Response:
+        _apply_server_identity(payload, request, workspace=True)
         result = orchestrator.backfill_crm_from_target_candidates(payload)
         status = HTTPStatus.OK if result.get("status") in {"backfilled", "dry_run"} else HTTPStatus.BAD_REQUEST
         return _json_response(status, result)
@@ -2128,6 +2245,10 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     def post_projections_backfill_from_job(
         request: Request, query: dict[str, Any], payload: dict[str, Any]
     ) -> Response:
+        source_job_id = str(payload.get("job_id") or payload.get("run_id") or "").strip()
+        denied = _gate_job_write_owner(request, source_job_id)
+        if denied is not None:
+            return denied
         result = orchestrator.backfill_serving_projection_for_job(payload)
         status = HTTPStatus.CREATED if result.get("status") == "backfilled" else HTTPStatus.BAD_REQUEST
         if result.get("status") == "skipped_existing_projection":
@@ -2268,6 +2389,7 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     def post_crm_backfill_public_web_promotions(
         request: Request, query: dict[str, Any], payload: dict[str, Any]
     ) -> Response:
+        _apply_server_identity(payload, request, workspace=True)
         result = orchestrator.backfill_public_web_promotions_to_person_assertions(payload)
         status = HTTPStatus.OK if result.get("status") in {"backfilled", "dry_run"} else HTTPStatus.BAD_REQUEST
         return _json_response(status, result)
@@ -2407,11 +2529,15 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     )
 
     def post_crm_public_web_promotion(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        record_id = _decode_path_param(request.path_params["record_id"])
+        denied = _gate_crm_record_write_owner(request, record_id)
+        if denied is not None:
+            return denied
         # Attribution only: workspace_id is derived server-side from the CRM record
         # lookup, not the payload, so it is intentionally not forced here.
         _apply_server_identity(payload, request, actor_fields=("operator", "requested_by"))
         result = orchestrator.promote_crm_record_public_web_signal(
-            _decode_path_param(request.path_params["record_id"]),
+            record_id,
             payload,
         )
         status = HTTPStatus.CREATED if result.get("status") in {"promoted", "rejected"} else HTTPStatus.BAD_REQUEST
@@ -2513,6 +2639,9 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["POST"], "/api/runtime/services/shutdown", post_runtime_services_shutdown, read_body=True)
 
     def post_job_cancel(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        denied = _gate_job_write_owner(request, request.path_params["job_id"])
+        if denied is not None:
+            return denied
         result = orchestrator.cancel_workflow_job(request.path_params["job_id"], payload)
         status = HTTPStatus.OK
         if result.get("status") == "not_found":
@@ -2530,9 +2659,19 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
 
     # ---------------------------------------------------------------- PATCH
     def patch_crm_record(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
-        _apply_server_identity(payload, request, actor_fields=("actor_id",), lock_actor_type=True)
+        record_id = _decode_path_param(request.path_params["record_id"])
+        denied = _gate_crm_record_write_owner(request, record_id)
+        if denied is not None:
+            return denied
+        _apply_server_identity(
+            payload,
+            request,
+            workspace=True,
+            actor_fields=("actor_id",),
+            lock_actor_type=True,
+        )
         result = orchestrator.update_crm_record_api(
-            _decode_path_param(request.path_params["record_id"]),
+            record_id,
             payload,
         )
         status = HTTPStatus.OK if result.get("status") == "updated" else HTTPStatus.BAD_REQUEST
