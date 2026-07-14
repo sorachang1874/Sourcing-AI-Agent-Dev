@@ -107,6 +107,10 @@ characterized and locked before implementation; this batch does not guess them. 
 population manifests, and dormant bootstrap factory/verifier remain rollout step 3 and cannot precede complete
 Migration A.
 
+The follow-up characterization is recorded in
+`TRACK_D_D3C2C_ACTIVITY_TERMINAL_EVIDENCE_CHARACTERIZATION.md`. It freezes the current physical inventory and derives
+the next dormant ActivityRun/ActivityAttempt fragment, but deliberately does not ratify or implement its DDL.
+
 Migration B-D, the scoped-session repository, OperationRun exact-copy runtime, Stage A/B, claim generation/token/epoch,
 business/terminal/dispatch paths, action-root durable-scope gate, OB-10.1/10.2/10.3/10.4, R-019, and served Agent tool
 population all remain open. No fake, scripted, or live provider/model path is authorized by this physical foundation.

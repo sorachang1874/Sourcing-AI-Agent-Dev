@@ -288,6 +288,14 @@ serve、会话/事件层、planner loop），用一个垂直切片证明闭环�
   （P0/P1/P2/P3=`0/0/0/0`，scope digest
   `7988dd50814ba1c2cc4a3c5efa7ec40ac7eb47b80cbce901ecc8c04a83a92685`）。该 scope-local `GO` 不关闭
   R-019、完整 Migration A 或任何 runtime/live activation gate。
+- D3c2c characterization-only batch 机械冻结 current ActivityRun/ActivityAttempt/event 为 `20/22/17` columns，
+  `upsert_activity_run=30/5 files`、`upsert_activity_attempt=22/4 files`、`append_event_and_reduce=62/7 modules`；
+  ActivityAttempt get 的 raw/external/internal 口径为 `2/1/1`，current `attempt_number` 不得解释为 future
+  `command_attempt`。唯一 physical event INSERT owner 与唯一 ActivityRun direct-cancel UPDATE 已锁定；future
+  verification intent、response/failure receipt、late quarantine、terminal registry、durable dispatch exposure 的
+  physical owner/table 全为 0，event→commands→outbox→state 仍是 R-019 multi-commit。下一批必须先 ratify DDL，
+  再按 dormant ActivityRun+Attempt → event → intent/receipt/quarantine 顺序推进；本批不设计 schema，不关闭
+  R-019/R-023/R-027/R-029、action-root、OB-10.1-10.4 或 served=0。
 
 ### D4 — 之后（本文只圈定，不展开）
 
@@ -407,6 +415,11 @@ TD-4 初始路由表已按 owner 2026-07-13 裁决落档（D0 §4）。
    artifact `20260714T222746Z_*` 为 scope-local `GO`（digest `7988dd50...a92685`），但不关闭 R-019 或后续 rollout。
    这不是完整 Migration A：activity/event/receipt/quarantine fragments、Migration B-D、
    canonical-id 最终 grammar 与本项以下所有 owner/runtime/acceptance obligations 仍 open。
+   D3c2c 随后仅完成 current physical surface characterization：ActivityRun/Attempt/event descriptor=`20/22/17`，
+   writer call populations=`30/22/62`，future intent/receipt/quarantine/terminal-registry/dispatch-exposure physical
+   owner 全为 0；详细 mechanical oracle 见
+   `TRACK_D_D3C2C_ACTIVITY_TERMINAL_EVIDENCE_CHARACTERIZATION.md`。因此下一有界 implementation 是先取得
+   owner-ratified DDL，再落 dormant ActivityRun+ActivityAttempt fragment；characterization 本身不授权 rollout。
    canonical coordination lineage 为 `coordination_plan_review_id=plan_review_sessions.review_id`，物理类型同为
    positive `BIGINT`（brownfield `NULL`，strict `>0`，禁止 `TEXT`/empty）；poll-mode 的唯一 scope issuer 是
    private scoped review-session repository：它从 server-owned runtime context + authenticated workspace

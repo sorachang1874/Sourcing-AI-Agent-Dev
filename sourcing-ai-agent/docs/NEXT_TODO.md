@@ -377,6 +377,17 @@
   （P0/P1/P2/P3=`0/0/0/0`，scope digest
   `7988dd50814ba1c2cc4a3c5efa7ec40ac7eb47b80cbce901ecc8c04a83a92685`）。该 `GO` 只覆盖 dormant
   nine-file physical foundation，不关闭 R-019、完整 Migration A、runtime activation 或 live/signoff gate。
+- [x] D3c2c Activity / terminal-evidence physical surface characterization（2026-07-15；零产品码/零 migration）：
+  descriptor/call inventory 机械冻结为 ActivityRun `20 cols / 30 upserts in 5 files / 20 list / 25 raw get
+  = 24 external + 1 internal`、ActivityAttempt `22 cols / 22 upserts in 4 files / 21 list / 2 raw get = 1 external
+  + 1 internal`、event `17 cols / 62 append_event_and_reduce in 7 modules / 2 list`；唯一 physical event INSERT
+  owner 为 `LiveControlPlanePostgresAdapter.append_workflow_event`，ActivityRun 另有唯一 direct cancel `UPDATE`。
+  current `attempt_number` 不是 future post-claim `command_attempt`；event→commands→outbox→state 仍为 R-019
+  multi-commit。verification intent、response/failure receipts、late quarantine、terminal registry 与 durable
+  dispatch-exposure physical owner/table 均为 0。下一 implementation 只能从 owner-ratified DDL 开始，顺序为
+  dormant ActivityRun+Attempt fragment → event fragment → intent/receipt/quarantine fragments；不得猜 schema/owner。
+  R-019/R-023/R-027/R-029、action-root、OB-10.1-10.4、完整 Migration A 与 served=0 均不变。完整事实与
+  executable oracle 见 `TRACK_D_D3C2C_ACTIVITY_TERMINAL_EVIDENCE_CHARACTERIZATION.md`。
 - [ ] Track D 后的 user-owned cohort selection contract（Thinking Machines Lab live 前置）：以一个 versioned、
   registry-digest-pinned `CohortSelection` 作为唯一 owner，显式承载 canonical ordered
   `role_bucket_ids[]`（Researcher/Engineer/Product Manager 可自由多选且 registry 可扩展）、
