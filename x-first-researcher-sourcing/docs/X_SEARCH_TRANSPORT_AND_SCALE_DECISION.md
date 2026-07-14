@@ -7,9 +7,11 @@
 
 Use two separate transports rather than stretching the Grok CLI into a batch service:
 
-1. **Grok CLI OAuth** is only the Stage 1 capability handshake. It can demonstrate that this installed client and
-   account expose hosted native `x_search`, but it is synchronous, its hosted tool is not accepted by the local
-   `--tools` allowlist, and it cannot enforce a provider-side maximum number of tool calls.
+1. **Grok CLI OAuth** is only the Stage 1 capability handshake. It may demonstrate that this installed client and
+   account expose hosted native `x_search`, but that remains unproven before the live handshake. In pinned CLI 0.2.99,
+   `--tools` is a built-in internal-id allowlist; neither the documented public streaming events nor binary strings
+   establish that `--tools x_search` is a supported enforcement boundary. The runner does not depend on it, and the
+   CLI cannot enforce a provider-side maximum number of tool calls.
 2. **xAI Responses/Batch API** is the intended Stage 2/scale transport after a supported xAI API credential, a
    provider adapter, and a separate independent review exist. Requests expose only `x_search`, use handle/date filters,
    carry unique idempotency keys, and retain structured call/source receipts.
@@ -20,6 +22,11 @@ normalization, identity proposals, classification, adjudication, and product ada
 ## What official X Search does and does not establish
 
 Official xAI documentation says `x_search` supports keyword search, semantic search, user search, and thread fetch.
+API tool-call records may name `x_user_search`, `x_keyword_search`, `x_semantic_search`, or `x_thread_fetch`, but
+server-side tool output is not returned; downstream evidence must bind model output to returned citations, tool-call
+invocations, and server-side usage. Those API function names do not establish CLI internal ids. Conversely, the pinned
+local binary's lack of an exact `x_keyword_search` string does not disprove hosted keyword search or prove/deny a CLI
+`--tools` mapping.
 It accepts `allowed_x_handles`/`excluded_x_handles` (up to 20) and date bounds. Responses expose structured
 `x_search_call` entries and sources.
 

@@ -6,6 +6,7 @@
   "additionalProperties": false,
   "required": [
     "schema_version",
+    "owner_id",
     "probe_id",
     "request_sha256",
     "run_id",
@@ -15,6 +16,7 @@
   ],
   "properties": {
     "schema_version": {"const": "x.grok.live_approval_consumption.v1"},
+    "owner_id": {"const": "user_state:x-first-researcher-sourcing/live-approvals/v1"},
     "probe_id": {"const": "xprobe_live_openai_official_v1"},
     "request_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "run_id": {"type": "string", "pattern": "^xprobe_run_[0-9a-f]{32}$"},

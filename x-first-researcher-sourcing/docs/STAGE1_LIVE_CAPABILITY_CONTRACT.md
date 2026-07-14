@@ -22,15 +22,15 @@ transition.
 
 | Concern | Owner/source of truth | V2 rule | Forbidden fallback |
 | --- | --- | --- | --- |
-| User trigger | closed request + durable consumption ledger | Exact 2026-07-14 approval is atomically consumed once before spawn | Inferring approval from OAuth/login state or replaying the flag |
+| User trigger | closed request + checkout-independent user-state ledger | Exact 2026-07-14 approval is atomically consumed once before spawn under `~/.local/state/x-first-researcher-sourcing/live-approvals/` | Per-checkout/runtime ledgers, OAuth/login inference, or replaying the flag |
 | Legal/privacy basis | request `owner_decisions.legal_privacy` | Public-professional, minimized official-account evidence | Private content, protected identity, full-body retention |
 | Access mode | runner command + structured Grok session updates | Pinned Grok CLI digest, `grok-4.5`, OAuth, successful artifact requires exactly one completed `x_search` call | `web_search`, `web_fetch`, model memory, Apify, another provider |
 | Request identity | canonical sorted-JSON SHA-256 | Result binds exact closed request | Mutable prompt-only approval |
-| Tool proof | ephemeral `updates.jsonl` parser + minimized tool receipt | Structured call/update, exact tool id, model id, raw result post/author ids and completion | Searching prompt/response prose for the string `x_search` |
+| Tool proof | ephemeral `updates.jsonl` parser + minimized provider-evidence receipt | Exact Grok 0.2.99 envelope/session, one final terminal event, reconciled usage, structured call/update, exact tool/model, and per-post author binding | Recursive key search, global URL/author unions, prompt prose, or model-declared provenance |
 | External account | X platform | Numeric `platform_user_id` plus handle history | Handle/name as canonical person identity |
 | Post identity | X platform | Numeric post id and exact `https://x.com/OpenAI/status/{id}` | Snippet URL, search-result redirect, reconstructed id |
-| Usage | Grok envelope + monotonic clock + live process monitor | One accepted execution/call/result set, max 5 observations/4 turns/180s; a detected overrun is retained only as failed evidence | Missing cost represented as `$0` or a detected second call treated as success |
-| Retention | private ignored atomic artifact bundle | 24h, excerpts <=280 chars, approval/tool receipts, explicit expiry and purge receipt; raw transcript deleted on exit | Checked-in live artifact or unbounded full-body transcript |
+| Usage | reconciled headless envelope + structured terminal + monotonic/wall clock + live process monitor | Session ids, normal stop reasons, token totals and turns must agree; one accepted execution/call/result set, max 5 observations/4 turns/180s | Missing cost represented as `$0`, `MaxTurns` accepted as success, or a detected second call treated as success |
+| Retention | exact private ignored atomic artifact bundle | Directory name equals run id; exact 3/4-file inventory; real UTC time and exact 24h expiry; deletion receipt only after verified removal | Renamed/extra-file bundle, impossible calendar time, null expiry, or prewritten deletion receipt |
 | Product state | existing product owners | All candidate/link/assertion/write arrays empty | PersonAsset, CRM, projection, export, outreach |
 
 The executable owners are `src/x_first/live_probe.py`, the v2 request/result JSON schemas, and
@@ -39,7 +39,7 @@ The executable owners are `src/x_first/live_probe.py`, the v2 request/result JSO
 ## Execution topology
 
 ```text
-closed v2 request -- atomic one-shot approval consumption
+closed v2 request -- global atomic one-shot approval consumption
       |
       v
 verified CLI binary copy + fd-bound OAuth copy + isolated env/cwd
@@ -49,7 +49,7 @@ temporary GROK_HOME -- grok-4.5 -- generic web/local tools disabled
       |                                      |
       |                                      +-- one hosted X Search call maximum
       v
-bounded stdio/process-group monitor + structured session-tool proof
+bounded stdio/process-tree monitor + strict session/tool/terminal proof
       |
       +-- invalid/ambiguous --------> capability_unavailable, observations=[]
       |
@@ -60,20 +60,34 @@ bounded stdio/process-group monitor + structured session-tool proof
 atomic private bundle: request/result/approval/tool receipts; no raw transcript or product writer
 ```
 
-The runner uses an explicit `--execute-live` gate and atomically consumes the single approval in a mode-`0600`
-ledger before spawning the provider process. Replays and concurrent contenders fail before another external process
-starts. It copies a current-user-owned, non-writable reviewed Grok binary into the temporary home and verifies SHA-256
+The runner uses an explicit `--execute-live` gate and atomically consumes the single approval in one mode-`0600`
+user-state ledger before spawning the provider process. That owner is outside every repository checkout, so two
+checkouts or copied runtime directories contend on the same `O_EXCL` record. Replays and concurrent contenders fail
+before another external process starts. It copies a current-user-owned, non-writable reviewed Grok binary into the
+temporary home and verifies SHA-256
 `01bcacec...9ff81`; the OAuth cache is opened with no-follow semantics, checked by file descriptor, and copied without
 rendering its contents. The child gets a closed environment, isolated non-project working directory, disabled updater,
 generic web disabled, and all known local tools removed. It does not inherit API keys, proxy variables, project
 instructions, or repository access.
 
-The CLI does not accept hosted `x_search` in its local `--tools` allowlist. The process monitor therefore watches
-structured session updates and kills the entire process group when it observes an unknown/non-X tool, a second X call,
-oversized output/evidence, or the deadline. This limits further work but cannot prove that a second
+For pinned Grok CLI 0.2.99 (`b1b49ccb71a7`), headless `--tools` is documented as a built-in internal-id allowlist,
+while public streaming JSON documents only text/thought/end/error records. The installed binary contains `x_search`,
+`x_user_search`, `x_thread_fetch`, and `tool_overrides.x_search`, but no exact `x_keyword_search`. That local string
+inventory neither disproves hosted keyword search nor proves or denies any CLI `--tools` mapping. The runner therefore
+does not pass `--tools x_search` and treats
+that mapping as unproven until the one Stage 1 execution. It instead watches the private structured session artifact
+and kills the entire dedicated process group when it observes an unknown/non-X tool, a
+second X call, malformed completed evidence, oversized output/evidence, or the deadline. The cleanup runs even when
+the direct parent reports a clean exit, preventing a same-process-group child from surviving the runner. This limits
+further work but cannot prove that a second
 server-side call was stopped before transport. A successful artifact still requires exactly one completed call and
 exact raw-result-to-observation reconciliation; any ambiguity is a failed probe. The temporary transcript is deleted.
-Only a minimized call receipt (ids, statuses, canonical post ids/URLs, author ids and model id) is retained.
+Only a minimized provider-evidence receipt is retained. It binds the command session to the headless envelope and
+every Grok 0.2.99 `session/update` wrapper, requires one final `_x.ai/session/update`/`turn_completed`, reconciles both
+usage views, and stores author ids only on the exact source records that carried their author dictionaries. Retained
+Stage 1 observations remain minimized model output mechanically bound to those source ids/URLs and the call receipt;
+they are not represented as verbatim raw provider output. A URL in one subtree and an author id elsewhere can prove at
+most post retrieval; it cannot prove stable account identity.
 
 ## Budgets and kill switch
 
@@ -94,9 +108,32 @@ Any generic-web/local tool, second X call, budget overrun, invalid/duplicate pos
 unsafe OAuth file, unbounded output, protected/proxy content, full-body retention, or product-writer field fails closed.
 Failed results discard all observations.
 
-Request/result/approval/tool files are written to a private staging directory and renamed as one atomic bundle. Each
-result records its exact 24-hour deletion deadline. `--purge-expired` deletes expired bundles and leaves a
-non-sensitive deletion receipt. `runtime/` is ignored by Git.
+Request/result/approval/tool files are written to a private staging directory and renamed as one atomic bundle. A
+successful bundle has exactly four files; a failure without structured tool evidence has exactly three. Validation
+rejects extra transcripts, renamed directories, non-private files, a run-id mismatch, an absent global ledger, invalid
+calendar timestamps, and any expiry other than exactly completion plus 24 hours. `--purge-expired` detects unexpected
+or renamed paths instead of silently skipping them, deletes a validated expired bundle, verifies it is gone, fsyncs
+the runtime owner, and only then writes a non-sensitive deletion receipt. `runtime/` is ignored by Git.
+
+## Adversarial regression closure
+
+The post-`fee3699` non-author review reproduced seven false-green classes before this hardening:
+
+1. two independent runtime roots could each consume the same approval;
+2. a wrapped update with a post URL and an unrelated author dictionary could claim stable identity;
+3. `MaxTurns` plus a different outer session id could validate;
+4. a locally forged, renamed bundle with an extra transcript and an impossible February 31/null-expiry timeline could validate;
+5. rename caused purge to skip the bundle, while a failed `rmtree` still left a `deleted` receipt;
+6. a 30-second same-process-group child survived after its direct parent exited; and
+7. malformed JSONL hid two observed X calls from the monitor.
+
+Each now has a deterministic concurrency, mutation, artifact, or subprocess regression. These tests prove the local
+fail-closed contract only; they are not a live X capability result or an independent-review `GO`.
+
+An additional read-only compatibility check parsed one already-existing, completed, no-tool local session from pinned
+Grok CLI 0.2.99: command/session metadata, `grok-4.5`, `end_turn`, and terminal usage reconciled with zero evidence
+errors. That check proves only the wrapper/terminal parser shape. Because the session contained no X call, it supplies
+no evidence that hosted `x_search` is available or that the Stage 1 source-binding parser matches a real X result.
 
 ## Commands
 

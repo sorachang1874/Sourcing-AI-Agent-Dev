@@ -4,9 +4,13 @@ import copy
 import hashlib
 import json
 import stat
+import subprocess
 import sys
 import tempfile
+import threading
+import time
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest import mock
@@ -14,10 +18,14 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
+import x_first.live_probe as live_probe  # noqa: E402
 from x_first.live_probe import (  # noqa: E402
+    GLOBAL_APPROVAL_OWNER_ID,
     LIVE_RESULT_SCHEMA_VERSION,
     PINNED_GROK_BINARY_SHA256,
     BoundedCommandResult,
+    ProviderUsageReceipt,
+    RawXPostReceipt,
     ToolCallReceipt,
     ToolProof,
     _run_bounded_command,
@@ -31,8 +39,16 @@ from x_first.live_probe import (  # noqa: E402
     validate_live_result,
 )
 
+SESSION_ID = "01234567-89ab-4cde-8fab-0123456789ab"
+POST_ID = "1900000000000000001"
+USER_ID = "4398626122"
+POST_URL = f"https://x.com/OpenAI/status/{POST_ID}"
+RUN_ID = "xprobe_run_0123456789abcdef0123456789abcdef"
+STARTED_AT = "2026-07-14T09:00:00.000Z"
+COMPLETED_AT = "2026-07-14T09:00:01.000Z"
 
-def _inner_response(*, stable_user_id: str | None = "4398626122") -> dict[str, object]:
+
+def _inner_response(*, stable_user_id: str | None = USER_ID) -> dict[str, object]:
     return {
         "reported_verdict": "x_native_candidate",
         "access_mode": "x_search",
@@ -43,10 +59,10 @@ def _inner_response(*, stable_user_id: str | None = "4398626122") -> dict[str, o
         },
         "observations": [
             {
-                "platform_object_id": "1900000000000000001",
+                "platform_object_id": POST_ID,
                 "platform_user_id": stable_user_id,
                 "author_handle": "OpenAI",
-                "canonical_url": "https://x.com/OpenAI/status/1900000000000000001",
+                "canonical_url": POST_URL,
                 "authored_at": "2026-07-13T08:00:00Z",
                 "excerpt": "Technical model-training update from the official lab account.",
                 "full_body_stored": False,
@@ -56,13 +72,46 @@ def _inner_response(*, stable_user_id: str | None = "4398626122") -> dict[str, o
     }
 
 
-def _outer_response(inner: dict[str, object], *, cost: float | None = 0.01) -> dict[str, object]:
+def _terminal_usage(*, model_turns: int = 2) -> dict[str, object]:
+    per_model = {
+        "inputTokens": 100,
+        "outputTokens": 50,
+        "totalTokens": 150,
+        "cachedReadTokens": 20,
+        "reasoningTokens": 10,
+        "modelCalls": 2,
+        "apiDurationMs": 250,
+    }
+    return {**per_model, "modelUsage": {"grok-4.5": per_model}, "numTurns": model_turns}
+
+
+def _usage_receipt(*, model_turns: int = 2) -> ProviderUsageReceipt:
+    return ProviderUsageReceipt(
+        input_tokens=100,
+        output_tokens=50,
+        total_tokens=150,
+        cached_read_tokens=20,
+        reasoning_tokens=10,
+        model_calls=2,
+        api_duration_ms=250,
+        model_turns=model_turns,
+    )
+
+
+def _outer_response(
+    inner: dict[str, object],
+    *,
+    session_id: str = SESSION_ID,
+    stop_reason: str = "EndTurn",
+    model_turns: int = 2,
+    cost: float | None = 0.01,
+) -> dict[str, object]:
     outer: dict[str, object] = {
         "text": json.dumps(inner),
-        "stopReason": "EndTurn",
-        "sessionId": "provider-session",
+        "stopReason": stop_reason,
+        "sessionId": session_id,
         "requestId": "provider-request",
-        "num_turns": 2,
+        "num_turns": model_turns,
         "usage": {"input_tokens": 100, "output_tokens": 50, "total_tokens": 150},
     }
     if cost is not None:
@@ -70,18 +119,123 @@ def _outer_response(inner: dict[str, object], *, cost: float | None = 0.01) -> d
     return outer
 
 
-def _raw_x_output(*, stable_user_id: str | None = "4398626122") -> dict[str, object]:
-    author_info: dict[str, object] = {"legacy": {"screen_name": "OpenAI"}}
+def _raw_x_output(*, stable_user_id: str | None = USER_ID) -> dict[str, object]:
+    post: dict[str, object] = {"canonical_url": POST_URL}
     if stable_user_id is not None:
-        author_info["rest_id"] = stable_user_id
+        post["author_info"] = {
+            "legacy": {"screen_name": "OpenAI"},
+            "rest_id": stable_user_id,
+        }
+    return {"posts": [post]}
+
+
+def _unbound_raw_x_output() -> dict[str, object]:
     return {
-        "posts": [
-            {
-                "canonical_url": "https://x.com/OpenAI/status/1900000000000000001",
-                "author_info": author_info,
-            }
-        ]
+        "posts": [{"canonical_url": POST_URL}],
+        "unrelated": {"author": {"screen_name": "OpenAI", "id": USER_ID}},
     }
+
+
+def _event(
+    update: dict[str, object],
+    *,
+    session_id: str = SESSION_ID,
+    terminal: bool = False,
+    timestamp: int = 1,
+) -> dict[str, object]:
+    return {
+        "method": "_x.ai/session/update" if terminal else "session/update",
+        "params": {
+            "_meta": {"agentTimestampMs": timestamp, "eventId": f"{session_id}-{timestamp}"},
+            "sessionId": session_id,
+            "update": update,
+        },
+        "timestamp": timestamp,
+    }
+
+
+def _tool_call(call_id: str, *, tool_name: str = "x_search", session_id: str = SESSION_ID) -> dict[str, object]:
+    return _event(
+        {
+            "_meta": {"x.ai/tool": {"name": tool_name}},
+            "sessionUpdate": "tool_call",
+            "title": tool_name,
+            "toolCallId": call_id,
+        },
+        session_id=session_id,
+        timestamp=2,
+    )
+
+
+def _tool_result(
+    call_id: str,
+    *,
+    raw_output: object,
+    session_id: str = SESSION_ID,
+) -> dict[str, object]:
+    return _event(
+        {
+            "content": [],
+            "rawOutput": raw_output,
+            "sessionUpdate": "tool_call_update",
+            "status": "completed",
+            "toolCallId": call_id,
+        },
+        session_id=session_id,
+        timestamp=3,
+    )
+
+
+def _terminal_event(
+    *,
+    session_id: str = SESSION_ID,
+    stop_reason: str = "end_turn",
+    model_turns: int = 2,
+) -> dict[str, object]:
+    return _event(
+        {
+            "prompt_id": "prompt-1",
+            "sessionUpdate": "turn_completed",
+            "stop_reason": stop_reason,
+            "usage": _terminal_usage(model_turns=model_turns),
+        },
+        session_id=session_id,
+        terminal=True,
+        timestamp=4,
+    )
+
+
+def _session_events(
+    *,
+    session_id: str = SESSION_ID,
+    raw_output: object | None = None,
+    tool_name: str = "x_search",
+    call_ids: tuple[str, ...] = ("x-call",),
+    terminal_stop_reason: str = "end_turn",
+) -> list[dict[str, object]]:
+    events = [
+        _event(
+            {
+                "_meta": {"modelId": "grok-4.5", "promptIndex": 0},
+                "content": {},
+                "sessionUpdate": "user_message_chunk",
+            },
+            session_id=session_id,
+            timestamp=1,
+        )
+    ]
+    for index, call_id in enumerate(call_ids):
+        events.append(_tool_call(call_id, tool_name=tool_name, session_id=session_id))
+        if raw_output is not None:
+            events.append(_tool_result(call_id, raw_output=raw_output, session_id=session_id))
+        events[-1]["timestamp"] = 2 + index  # type: ignore[index]
+    events.append(_terminal_event(session_id=session_id, stop_reason=terminal_stop_reason))
+    return events
+
+
+def _write_events(path: Path, events: list[dict[str, object]]) -> None:
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    path.write_text("\n".join(json.dumps(event) for event in events) + "\n", encoding="utf-8")
 
 
 def _proof(
@@ -89,36 +243,95 @@ def _proof(
     x_calls: int = 1,
     completed: int = 1,
     unexpected: tuple[str, ...] = (),
-    stable_user_id: str | None = "4398626122",
+    stable_user_id: str | None = USER_ID,
+    post_id: str = POST_ID,
 ) -> ToolProof:
+    post_url = f"https://x.com/OpenAI/status/{post_id}"
+    posts = (RawXPostReceipt(post_id, post_url, stable_user_id),) if x_calls else ()
     return ToolProof(
+        session_id=SESSION_ID,
         x_search_calls=x_calls,
         x_search_completed_calls=completed,
         unexpected_tool_calls=unexpected,
-        raw_result_post_pairs=(("1900000000000000001", "https://x.com/OpenAI/status/1900000000000000001"),),
-        raw_result_author_user_ids=((stable_user_id,) if stable_user_id is not None else ()),
+        raw_result_posts=posts,
         observed_model_ids=("grok-4.5",),
         call_receipts=(
             ToolCallReceipt(
                 call_id="x-call",
                 tool_id="x_search",
-                statuses=("completed",),
-                raw_result_post_pairs=(("1900000000000000001", "https://x.com/OpenAI/status/1900000000000000001"),),
-                raw_result_author_user_ids=((stable_user_id,) if stable_user_id is not None else ()),
+                statuses=("completed", "in_progress") if completed else ("in_progress",),
+                raw_result_posts=posts,
             ),
         )
         if x_calls
         else (),
         updates_sha256="a" * 64,
         update_bytes=120,
+        terminal_stop_reason="end_turn",
+        terminal_usage=_usage_receipt(),
+        evidence_errors=(),
     )
+
+
+def _approval_receipt(request: dict[str, object], *, run_id: str = RUN_ID) -> dict[str, object]:
+    return {
+        "schema_version": live_probe.APPROVAL_RECEIPT_SCHEMA_VERSION,
+        "owner_id": GLOBAL_APPROVAL_OWNER_ID,
+        "probe_id": request["probe_id"],
+        "request_sha256": live_probe.canonical_sha256(request),
+        "run_id": run_id,
+        "consumed_at": STARTED_AT,
+        "binary_sha256": PINNED_GROK_BINARY_SHA256,
+        "state": "consumed_before_spawn",
+    }
+
+
+def _write_valid_bundle(
+    root: Path,
+    approval_root: Path,
+    *,
+    run_id: str = RUN_ID,
+) -> tuple[Path, dict[str, object], dict[str, object], dict[str, object]]:
+    request = build_live_request()
+    proof = _proof()
+    outer = _outer_response(_inner_response())
+    approval = _approval_receipt(request, run_id=run_id)
+    tool_receipt = live_probe._build_tool_receipt(proof=proof, session_id=SESSION_ID, outer=outer)
+    result = build_live_result(
+        request=request,
+        run_id=run_id,
+        session_id=SESSION_ID,
+        started_at=STARTED_AT,
+        completed_at=COMPLETED_AT,
+        elapsed_ms=1000,
+        outer=outer,
+        inner=_inner_response(),
+        proof=proof,
+        approval_receipt_sha256=live_probe.canonical_sha256(approval),
+        grok_binary_sha256=PINNED_GROK_BINARY_SHA256,
+        tool_receipt_sha256=live_probe.canonical_sha256(tool_receipt),
+    )
+    runtime_root = root / "runtime/live-probes"
+    runtime_root.mkdir(mode=0o700, parents=True)
+    bundle = runtime_root / run_id
+    bundle.mkdir(mode=0o700)
+    for name, payload in (
+        ("request.json", request),
+        ("result.json", result),
+        ("approval-receipt.json", approval),
+        ("tool-receipt.json", tool_receipt),
+    ):
+        live_probe._atomic_write_json(bundle / name, payload)
+    approval_root.mkdir(mode=0o700, parents=True)
+    live_probe._atomic_write_json(approval_root / f"{request['probe_id']}.json", approval)
+    return bundle, result, approval, tool_receipt
 
 
 class XFirstLiveCapabilityContractTest(unittest.TestCase):
     def setUp(self) -> None:
         self.request = build_live_request()
 
-    def test_live_request_is_exact_and_mutations_fail_closed(self) -> None:
+    def test_live_request_and_declarative_contracts_are_closed(self) -> None:
         self.assertEqual(validate_live_request(self.request), [])
         request_schema = json.loads(
             (ROOT / "contracts/x.grok.capability_probe.request.v2.schema.json").read_text(encoding="utf-8")
@@ -132,13 +345,20 @@ class XFirstLiveCapabilityContractTest(unittest.TestCase):
         tool_schema = json.loads(
             (ROOT / "contracts/x.grok.x_search_tool_receipt.v1.schema.json").read_text(encoding="utf-8")
         )
-        self.assertEqual(request_schema["properties"]["schema_version"]["const"], self.request["schema_version"])
         self.assertEqual(set(request_schema["required"]), set(self.request))
         self.assertEqual(result_schema["properties"]["schema_version"]["const"], LIVE_RESULT_SCHEMA_VERSION)
+        self.assertIn("owner_id", approval_schema["required"])
+        self.assertEqual(approval_schema["properties"]["owner_id"]["const"], GLOBAL_APPROVAL_OWNER_ID)
         self.assertEqual(
-            approval_schema["properties"]["schema_version"]["const"], "x.grok.live_approval_consumption.v1"
+            set(tool_schema["required"]),
+            set(
+                live_probe._build_tool_receipt(
+                    proof=_proof(),
+                    session_id=SESSION_ID,
+                    outer=_outer_response(_inner_response()),
+                )
+            ),
         )
-        self.assertEqual(tool_schema["properties"]["schema_version"]["const"], "x.grok.x_search_tool_receipt.v1")
         for mutate in (
             lambda value: value["hard_budgets"].update(max_x_search_calls=2),
             lambda value: value["claims"].update(researcher_mapping_authorized=True),
@@ -149,144 +369,137 @@ class XFirstLiveCapabilityContractTest(unittest.TestCase):
             mutate(mutated)
             self.assertTrue(validate_live_request(mutated))
 
-    def test_tool_proof_uses_only_structured_tool_events(self) -> None:
+    def test_tool_proof_requires_real_grok_0_2_99_envelope_and_terminal(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "updates.jsonl"
-            path.write_text(
-                "\n".join(
-                    (
-                        json.dumps(
-                            {
-                                "sessionUpdate": "user_message_chunk",
-                                "_meta": {"modelId": "grok-4.5"},
-                            }
-                        ),
-                        json.dumps(
-                            {
-                                "sessionUpdate": "agent_message_chunk",
-                                "content": "The prompt requested x_search and prohibited web_search.",
-                            }
-                        ),
-                        json.dumps(
-                            {
-                                "sessionUpdate": "tool_call",
-                                "toolCallId": "call-1",
-                                "title": "X Search",
-                                "status": "in_progress",
-                            }
-                        ),
-                        json.dumps(
-                            {
-                                "sessionUpdate": "tool_call_update",
-                                "toolCallId": "call-1",
-                                "status": "completed",
-                                "rawOutput": _raw_x_output(),
-                            }
-                        ),
-                    )
-                )
-                + "\n",
-                encoding="utf-8",
-            )
-            proof = extract_tool_proof(path)
-        self.assertEqual(proof.x_search_calls, 1)
-        self.assertEqual(proof.x_search_completed_calls, 1)
-        self.assertEqual(proof.unexpected_tool_calls, ())
-        self.assertEqual(
-            proof.raw_result_post_pairs,
-            (("1900000000000000001", "https://x.com/OpenAI/status/1900000000000000001"),),
+            _write_events(path, _session_events(raw_output=_raw_x_output()))
+            proof = extract_tool_proof(path, expected_session_id=SESSION_ID)
+            self.assertEqual(proof.x_search_calls, 1)
+            self.assertEqual(proof.x_search_completed_calls, 1)
+            self.assertEqual(proof.unexpected_tool_calls, ())
+            self.assertEqual(proof.raw_result_post_pairs, ((POST_ID, POST_URL),))
+            self.assertEqual(proof.raw_result_author_user_ids, (USER_ID,))
+            self.assertEqual(proof.terminal_stop_reason, "end_turn")
+            self.assertEqual(proof.terminal_usage, _usage_receipt())
+
+            naked = Path(directory) / "naked.jsonl"
+            naked.write_text(json.dumps({"sessionUpdate": "tool_call", "toolCallId": "x"}) + "\n")
+            with self.assertRaises(ValueError):
+                extract_tool_proof(naked, expected_session_id=SESSION_ID)
+
+            wrong_session = Path(directory) / "wrong.jsonl"
+            _write_events(wrong_session, _session_events(session_id="11234567-89ab-4cde-8fab-0123456789ab"))
+            with self.assertRaises(ValueError):
+                extract_tool_proof(wrong_session, expected_session_id=SESSION_ID)
+
+            wrong_event = Path(directory) / "wrong-event.jsonl"
+            wrong_event_values = _session_events(raw_output=_raw_x_output())
+            wrong_event_values[0]["params"]["_meta"]["eventId"] = "unbound-event"  # type: ignore[index]
+            _write_events(wrong_event, wrong_event_values)
+            with self.assertRaises(ValueError):
+                extract_tool_proof(wrong_event, expected_session_id=SESSION_ID)
+
+            max_turns = Path(directory) / "max-turns.jsonl"
+            _write_events(max_turns, _session_events(raw_output=_raw_x_output(), terminal_stop_reason="max_turns"))
+            with self.assertRaises(ValueError):
+                extract_tool_proof(max_turns, expected_session_id=SESSION_ID)
+
+    def test_raw_post_author_binding_is_per_post_not_global(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "updates.jsonl"
+            _write_events(path, _session_events(raw_output=_unbound_raw_x_output()))
+            proof = extract_tool_proof(path, expected_session_id=SESSION_ID)
+        self.assertEqual(proof.raw_result_post_pairs, ((POST_ID, POST_URL),))
+        self.assertEqual(proof.raw_result_author_user_ids, ())
+        result = build_live_result(
+            request=self.request,
+            run_id=RUN_ID,
+            session_id=SESSION_ID,
+            started_at=STARTED_AT,
+            completed_at=COMPLETED_AT,
+            elapsed_ms=1000,
+            outer=_outer_response(_inner_response()),
+            inner=_inner_response(),
+            proof=proof,
+            approval_receipt_sha256="b" * 64,
+            grok_binary_sha256=PINNED_GROK_BINARY_SHA256,
+            tool_receipt_sha256="c" * 64,
         )
-        self.assertEqual(proof.raw_result_author_user_ids, ("4398626122",))
-        self.assertEqual(proof.observed_model_ids, ("grok-4.5",))
+        self.assertEqual(result["capability"]["verdict"], "post_retrieval_only")
+        self.assertIsNone(result["observations"][0]["platform_user_id"])
+        self.assertEqual(validate_live_result(result, request=self.request), [])
 
-    def test_tool_proof_rejects_generic_web_fallback(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "updates.jsonl"
-            path.write_text(
-                json.dumps(
-                    {
-                        "sessionUpdate": "tool_call",
-                        "toolCallId": "call-web",
-                        "title": "Web Search",
-                        "status": "completed",
-                    }
-                )
-                + "\n",
-                encoding="utf-8",
-            )
-            proof = extract_tool_proof(path)
-        self.assertEqual(proof.x_search_calls, 0)
-        self.assertEqual(proof.unexpected_tool_calls, ("web_search",))
-
-    def test_tool_proof_rejects_duplicate_unknown_and_local_tool_events(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "updates.jsonl"
-            events = [
-                {
-                    "sessionUpdate": "tool_call",
-                    "toolCallId": "duplicate",
-                    "title": "X Search",
-                    "status": "in_progress",
-                },
-                {
-                    "sessionUpdate": "tool_call",
-                    "toolCallId": "duplicate",
-                    "title": "X Search",
-                    "status": "in_progress",
-                },
-                {
-                    "sessionUpdate": "tool_call_update",
-                    "toolCallId": "isolated",
-                    "status": "completed",
-                },
-                {
-                    "sessionUpdate": "tool_call",
-                    "toolCallId": "shell",
-                    "title": "Run Terminal Cmd",
-                    "status": "completed",
-                },
-            ]
-            path.write_text("\n".join(json.dumps(event) for event in events) + "\n", encoding="utf-8")
-            proof = extract_tool_proof(path)
-        self.assertEqual(proof.x_search_calls, 1)
-        self.assertEqual(
-            proof.unexpected_tool_calls,
-            ("duplicate_tool_call_id", "run_terminal_cmd", "unknown"),
-        )
-
-    def test_process_monitor_kills_on_second_x_call_before_waiting_for_completion(self) -> None:
+    def test_generic_unknown_duplicate_and_local_tools_fail_closed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            updates = root / "updates.jsonl"
-            events = [
-                {
-                    "sessionUpdate": "tool_call",
-                    "toolCallId": f"x-call-{index}",
-                    "title": "X Search",
-                }
-                for index in (1, 2)
-            ]
-            updates.write_text("\n".join(json.dumps(event) for event in events) + "\n", encoding="utf-8")
-            started = datetime.now(UTC)
-            completed = _run_bounded_command(
-                [sys.executable, "-c", "import time; time.sleep(30)"],
-                cwd=root,
-                environment={"PATH": "/usr/bin:/bin", "HOME": str(root)},
-                updates_path=updates,
-            )
-            elapsed = (datetime.now(UTC) - started).total_seconds()
-        self.assertEqual(completed.stop_reason, "tool_kill_switch_tripped")
-        self.assertLess(elapsed, 2)
+            for tool_name in ("web_search", "read_file"):
+                path = root / f"{tool_name}.jsonl"
+                _write_events(path, _session_events(tool_name=tool_name))
+                proof = extract_tool_proof(path, expected_session_id=SESSION_ID)
+                self.assertEqual(proof.x_search_calls, 0)
+                self.assertIn(tool_name, proof.unexpected_tool_calls)
 
-    def test_result_distinguishes_x_post_proof_from_stable_identity_proof(self) -> None:
+            alias = root / "x-alias.jsonl"
+            _write_events(alias, _session_events(tool_name="X Search"))
+            proof = extract_tool_proof(alias, expected_session_id=SESSION_ID)
+            self.assertEqual(proof.x_search_calls, 0)
+            self.assertIn("noncanonical_x_search_alias", proof.unexpected_tool_calls)
+
+            duplicate = root / "duplicate.jsonl"
+            events = _session_events(call_ids=("duplicate", "duplicate"))
+            _write_events(duplicate, events)
+            proof = extract_tool_proof(duplicate, expected_session_id=SESSION_ID)
+            self.assertIn("duplicate_tool_call_id", proof.unexpected_tool_calls)
+
+            unknown = root / "unknown.jsonl"
+            events = _session_events(call_ids=())
+            events.insert(
+                -1,
+                _event(
+                    {
+                        "sessionUpdate": "tool_call_update",
+                        "status": "completed",
+                        "toolCallId": "missing",
+                    },
+                    timestamp=3,
+                ),
+            )
+            _write_events(unknown, events)
+            proof = extract_tool_proof(unknown, expected_session_id=SESSION_ID)
+            self.assertIn("unknown_tool_call_update", proof.unexpected_tool_calls)
+
+    def test_outer_envelope_session_stop_and_usage_must_match_terminal(self) -> None:
+        proof = _proof()
         common = {
             "request": self.request,
-            "run_id": "xprobe_run_0123456789abcdef0123456789abcdef",
-            "session_id": "01234567-89ab-4cde-8fab-0123456789ab",
-            "started_at": "2026-07-14T09:00:00.000Z",
-            "completed_at": "2026-07-14T09:00:01.000Z",
+            "run_id": RUN_ID,
+            "session_id": SESSION_ID,
+            "started_at": STARTED_AT,
+            "completed_at": COMPLETED_AT,
             "elapsed_ms": 1000,
-            "proof": _proof(),
+            "inner": _inner_response(),
+            "proof": proof,
+            "approval_receipt_sha256": "b" * 64,
+            "grok_binary_sha256": PINNED_GROK_BINARY_SHA256,
+            "tool_receipt_sha256": "c" * 64,
+        }
+        for outer in (
+            _outer_response(_inner_response(), stop_reason="MaxTurns"),
+            _outer_response(_inner_response(), session_id="11234567-89ab-4cde-8fab-0123456789ab"),
+            {**_outer_response(_inner_response()), "num_turns": 3},
+            {**_outer_response(_inner_response()), "usage": {"input_tokens": 1, "output_tokens": 1, "total_tokens": 2}},
+        ):
+            with self.assertRaises(ValueError):
+                build_live_result(**common, outer=outer)
+
+    def test_result_verdicts_and_raw_receipt_mutations(self) -> None:
+        common = {
+            "request": self.request,
+            "run_id": RUN_ID,
+            "session_id": SESSION_ID,
+            "started_at": STARTED_AT,
+            "completed_at": COMPLETED_AT,
+            "elapsed_ms": 1000,
             "approval_receipt_sha256": "b" * 64,
             "grok_binary_sha256": PINNED_GROK_BINARY_SHA256,
             "tool_receipt_sha256": "c" * 64,
@@ -295,97 +508,231 @@ class XFirstLiveCapabilityContractTest(unittest.TestCase):
             **common,
             outer=_outer_response(_inner_response()),
             inner=_inner_response(),
+            proof=_proof(),
         )
-        self.assertEqual(ready["schema_version"], LIVE_RESULT_SCHEMA_VERSION)
         self.assertEqual(ready["capability"]["verdict"], "x_native_identity_ready")
-        self.assertTrue(ready["capability"]["x_native_access_proven"])
-        self.assertTrue(ready["capability"]["stable_account_id_proven"])
-        self.assertTrue(ready["capability"]["stage2_eligible_for_owner_review"])
         self.assertEqual(validate_live_result(ready, request=self.request), [])
 
-        no_stable_id = _inner_response(stable_user_id=None)
-        no_stable_common = {**common, "proof": _proof(stable_user_id=None)}
-        retrieval_only = build_live_result(
-            **no_stable_common,
-            outer=_outer_response(no_stable_id, cost=None),
-            inner=no_stable_id,
+        no_id_inner = _inner_response(stable_user_id=None)
+        retrieval = build_live_result(
+            **common,
+            outer=_outer_response(no_id_inner, cost=None),
+            inner=no_id_inner,
+            proof=_proof(stable_user_id=None),
         )
-        self.assertEqual(retrieval_only["capability"]["verdict"], "post_retrieval_only")
-        self.assertTrue(retrieval_only["capability"]["x_native_access_proven"])
-        self.assertFalse(retrieval_only["capability"]["stable_account_id_proven"])
-        self.assertFalse(retrieval_only["capability"]["stage2_eligible_for_owner_review"])
-        self.assertEqual(retrieval_only["usage"]["cost_status"], "unreported")
-        self.assertIsNone(retrieval_only["usage"]["cost_usd"])
-        self.assertEqual(validate_live_result(retrieval_only, request=self.request), [])
+        self.assertEqual(retrieval["capability"]["verdict"], "post_retrieval_only")
+        self.assertEqual(validate_live_result(retrieval, request=self.request), [])
 
-    def test_result_drops_observations_without_verified_x_tool_provenance(self) -> None:
-        inner = _inner_response()
-        result = build_live_result(
-            request=self.request,
-            run_id="xprobe_run_0123456789abcdef0123456789abcdef",
-            session_id="01234567-89ab-4cde-8fab-0123456789ab",
-            started_at="2026-07-14T09:00:00.000Z",
-            completed_at="2026-07-14T09:00:01.000Z",
-            elapsed_ms=1000,
-            outer=_outer_response(inner),
-            inner=inner,
+        no_call = build_live_result(
+            **common,
+            outer=_outer_response(_inner_response()),
+            inner=_inner_response(),
             proof=_proof(x_calls=0, completed=0),
-            approval_receipt_sha256="b" * 64,
-            grok_binary_sha256=PINNED_GROK_BINARY_SHA256,
-            tool_receipt_sha256="c" * 64,
         )
-        self.assertEqual(result["capability"]["verdict"], "capability_unavailable")
-        self.assertEqual(result["observations"], [])
-        self.assertEqual(result["usage"]["observations"], 0)
-        self.assertEqual(validate_live_result(result, request=self.request), [])
+        self.assertEqual(no_call["capability"]["verdict"], "capability_unavailable")
+        self.assertEqual(no_call["observations"], [])
 
-    def test_result_drops_model_claim_when_raw_x_receipt_does_not_match(self) -> None:
-        inner = _inner_response()
-        proof = _proof()
-        mismatched = ToolProof(
-            **{
-                **proof.__dict__,
-                "raw_result_post_pairs": (("1900000000000000002", "https://x.com/OpenAI/status/1900000000000000002"),),
-            }
-        )
-        result = build_live_result(
-            request=self.request,
-            run_id="xprobe_run_0123456789abcdef0123456789abcdef",
-            session_id="01234567-89ab-4cde-8fab-0123456789ab",
-            started_at="2026-07-14T09:00:00.000Z",
-            completed_at="2026-07-14T09:00:01.000Z",
-            elapsed_ms=1000,
-            outer=_outer_response(inner),
-            inner=inner,
+        mismatched = _proof(post_id="1900000000000000002")
+        mismatch = build_live_result(
+            **common,
+            outer=_outer_response(_inner_response()),
+            inner=_inner_response(),
             proof=mismatched,
-            approval_receipt_sha256="b" * 64,
-            grok_binary_sha256=PINNED_GROK_BINARY_SHA256,
-            tool_receipt_sha256="c" * 64,
         )
-        self.assertEqual(result["capability"]["verdict"], "capability_unavailable")
-        self.assertEqual(result["observations"], [])
+        self.assertEqual(mismatch["capability"]["verdict"], "capability_unavailable")
 
-    def test_runner_requires_explicit_gate_and_uses_ephemeral_grok_home(self) -> None:
+    def test_global_approval_owner_allows_only_one_concurrent_checkout(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            approval_root = Path(directory) / "global-owner"
+            barrier = threading.Barrier(2)
+
+            def consume(index: int) -> str:
+                barrier.wait()
+                try:
+                    live_probe._consume_live_approval(
+                        approval_root,
+                        request=self.request,
+                        run_id=f"xprobe_run_{index:032x}",
+                        binary_sha256=PINNED_GROK_BINARY_SHA256,
+                        consumed_at=STARTED_AT,
+                    )
+                except PermissionError:
+                    return "blocked"
+                return "consumed"
+
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                outcomes = sorted(executor.map(consume, (1, 2)))
+            self.assertEqual(outcomes, ["blocked", "consumed"])
+            ledger = json.loads((approval_root / f"{self.request['probe_id']}.json").read_text())
+            self.assertEqual(ledger["owner_id"], GLOBAL_APPROVAL_OWNER_ID)
+
+    def test_monitor_detects_duplicate_calls_even_with_malformed_tail(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            updates = root / "updates.jsonl"
+            events = _session_events(call_ids=("x-call-1", "x-call-2"))[:-1]
+            updates.write_bytes(("\n".join(json.dumps(event) for event in events) + "\n{bad").encode())
+            started = time.monotonic()
+            completed = _run_bounded_command(
+                [sys.executable, "-c", "import time; time.sleep(30)"],
+                cwd=root,
+                environment={"PATH": "/usr/bin:/bin", "HOME": str(root)},
+                updates_path=updates,
+                expected_session_id=SESSION_ID,
+            )
+        self.assertEqual(completed.stop_reason, "tool_kill_switch_tripped")
+        self.assertLess(time.monotonic() - started, 2)
+
+    def test_process_group_cleanup_kills_descendant_after_parent_exit(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            pid_path = root / "child.pid"
+            code = (
+                "import subprocess,sys; "
+                "p=subprocess.Popen([sys.executable,'-c','import time; time.sleep(30)']); "
+                "open(sys.argv[1],'w').write(str(p.pid))"
+            )
+            completed = _run_bounded_command(
+                [sys.executable, "-c", code, str(pid_path)],
+                cwd=root,
+                environment={"PATH": "/usr/bin:/bin", "HOME": str(root)},
+                updates_path=root / "missing.jsonl",
+                expected_session_id=SESSION_ID,
+            )
+            child_pid = int(pid_path.read_text())
+            child_alive = subprocess.run(
+                ["/bin/ps", "-p", str(child_pid), "-o", "pid="],
+                check=False,
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(child_alive, "")
+
+    def test_artifact_validation_rejects_forgery_inventory_rename_and_impossible_time(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            approval_root = root / "global-approval"
+            with (
+                mock.patch("x_first.live_probe.project_root", return_value=root),
+                mock.patch("x_first.live_probe._global_approval_root", return_value=approval_root),
+            ):
+                bundle, result, approval, _ = _write_valid_bundle(root, approval_root)
+                self.assertEqual(validate_artifact_pair(bundle / "request.json", bundle / "result.json"), [])
+
+                extra = bundle / "updates.jsonl"
+                extra.write_text("forged transcript", encoding="utf-8")
+                extra.chmod(0o600)
+                self.assertTrue(validate_artifact_pair(bundle / "request.json", bundle / "result.json"))
+                extra.unlink()
+
+                renamed = bundle.with_name("renamed-success")
+                bundle.rename(renamed)
+                self.assertTrue(validate_artifact_pair(renamed / "request.json", renamed / "result.json"))
+                renamed.rename(bundle)
+
+                # A self-consistent local bundle is not valid without the checkout-independent owner ledger.
+                ledger_path = approval_root / f"{self.request['probe_id']}.json"
+                ledger_path.unlink()
+                self.assertTrue(validate_artifact_pair(bundle / "request.json", bundle / "result.json"))
+                live_probe._atomic_write_json(ledger_path, approval)
+                self.assertEqual(validate_artifact_pair(bundle / "request.json", bundle / "result.json"), [])
+
+                impossible = "2026-02-31T09:00:00.000Z"
+                approval["consumed_at"] = impossible
+                result["run"]["started_at"] = impossible  # type: ignore[index]
+                result["run"]["completed_at"] = impossible  # type: ignore[index]
+                result["retention"]["delete_after"] = None  # type: ignore[index]
+                result["provenance"]["approval_receipt_sha256"] = live_probe.canonical_sha256(approval)  # type: ignore[index]
+                live_probe._atomic_write_json(bundle / "approval-receipt.json", approval)
+                live_probe._atomic_write_json(bundle / "result.json", result)
+                live_probe._atomic_write_json(
+                    approval_root / f"{self.request['probe_id']}.json",
+                    approval,
+                )
+                self.assertTrue(validate_artifact_pair(bundle / "request.json", bundle / "result.json"))
+
+    def test_purge_detects_renames_and_never_records_deletion_before_success(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            approval_root = root / "global-approval"
+            with (
+                mock.patch("x_first.live_probe.project_root", return_value=root),
+                mock.patch("x_first.live_probe._global_approval_root", return_value=approval_root),
+            ):
+                bundle, _, _, _ = _write_valid_bundle(root, approval_root)
+                renamed = bundle.with_name("renamed-success")
+                bundle.rename(renamed)
+                with self.assertRaises(ValueError):
+                    purge_expired_live_artifacts(
+                        runtime_root=root / "runtime/live-probes",
+                        now=datetime.now(UTC) + timedelta(days=2),
+                    )
+                renamed.rename(bundle)
+
+                with mock.patch("x_first.live_probe.shutil.rmtree", side_effect=OSError("blocked")):
+                    with self.assertRaises(OSError):
+                        purge_expired_live_artifacts(
+                            runtime_root=root / "runtime/live-probes",
+                            now=datetime.now(UTC) + timedelta(days=2),
+                        )
+                self.assertTrue(bundle.exists())
+                self.assertFalse((root / "runtime/live-probes/.deletions" / f"{RUN_ID}.json").exists())
+
+                receipts = purge_expired_live_artifacts(
+                    runtime_root=root / "runtime/live-probes",
+                    now=datetime.now(UTC) + timedelta(days=2),
+                )
+                self.assertEqual([receipt["run_id"] for receipt in receipts], [RUN_ID])
+                self.assertFalse(bundle.exists())
+
+    def test_provider_receipt_semantic_mutations_fail_even_when_rehashed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            approval_root = root / "global-approval"
+            with (
+                mock.patch("x_first.live_probe.project_root", return_value=root),
+                mock.patch("x_first.live_probe._global_approval_root", return_value=approval_root),
+            ):
+                bundle, base_result, _, base_tool = _write_valid_bundle(root, approval_root)
+
+                def assert_rejected(mutator: object) -> None:
+                    result = copy.deepcopy(base_result)
+                    tool = copy.deepcopy(base_tool)
+                    mutator(tool)  # type: ignore[operator]
+                    result["provenance"]["tool_receipt_sha256"] = live_probe.canonical_sha256(tool)  # type: ignore[index]
+                    live_probe._atomic_write_json(bundle / "tool-receipt.json", tool)
+                    live_probe._atomic_write_json(bundle / "result.json", result)
+                    self.assertTrue(validate_artifact_pair(bundle / "request.json", bundle / "result.json"))
+
+                for mutate in (
+                    lambda value: value.update(outer_stop_reason="MaxTurns"),
+                    lambda value: value.update(outer_session_id="11234567-89ab-4cde-8fab-0123456789ab"),
+                    lambda value: value["terminal_usage"].update(total_tokens=151),
+                    lambda value: value["calls"][0]["raw_result_posts"][0].update(platform_user_id=None),
+                    lambda value: value.update(evidence_errors=["forged"]),
+                    lambda value: value.update(extra="field"),
+                ):
+                    assert_rejected(mutate)
+
+    def test_runner_uses_global_approval_strict_evidence_and_private_bundle(self) -> None:
         with self.assertRaises(PermissionError):
             run_live_probe(execute_live=False)
 
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
+            approval_root = root / "global-approval"
             binary = root / "grok"
             binary.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
             binary.chmod(stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
             auth = root / "auth.json"
             auth.write_text('{"private":"credential-material"}', encoding="utf-8")
             auth.chmod(0o600)
-            inner = _inner_response()
             binary_digest = hashlib.sha256(binary.read_bytes()).hexdigest()
 
             def fake_run(command: list[str], **kwargs: object) -> BoundedCommandResult:
                 environment = kwargs["environment"]
                 self.assertIsInstance(environment, dict)
-                grok_home = Path(environment["GROK_HOME"])  # type: ignore[index]
-                self.assertNotEqual(grok_home, Path.home() / ".grok")
-                self.assertNotIn("XAI_API_KEY", environment)  # type: ignore[operator]
                 self.assertEqual(
                     set(environment),
                     {
@@ -400,45 +747,18 @@ class XFirstLiveCapabilityContractTest(unittest.TestCase):
                         "TMPDIR",
                     },
                 )
+                self.assertNotIn("XAI_API_KEY", environment)
                 self.assertIn("--disable-web-search", command)
                 self.assertNotIn("--tools", command)
                 self.assertEqual(command[command.index("--sandbox") + 1], "read-only")
-                self.assertNotEqual(Path(kwargs["cwd"]), ROOT)
+                session_id = command[command.index("--session-id") + 1]
+                self.assertEqual(kwargs["expected_session_id"], session_id)
                 updates = Path(kwargs["updates_path"])
-                updates.parent.mkdir(parents=True)
-                updates.write_text(
-                    "\n".join(
-                        (
-                            json.dumps(
-                                {
-                                    "sessionUpdate": "tool_call",
-                                    "toolCallId": "x-call",
-                                    "title": "X Search",
-                                    "status": "in_progress",
-                                }
-                            ),
-                            json.dumps(
-                                {
-                                    "sessionUpdate": "tool_call_update",
-                                    "toolCallId": "x-call",
-                                    "status": "completed",
-                                    "rawOutput": _raw_x_output(),
-                                }
-                            ),
-                            json.dumps(
-                                {
-                                    "sessionUpdate": "user_message_chunk",
-                                    "_meta": {"modelId": "grok-4.5"},
-                                }
-                            ),
-                        )
-                    )
-                    + "\n",
-                    encoding="utf-8",
-                )
+                _write_events(updates, _session_events(session_id=session_id, raw_output=_raw_x_output()))
+                inner = _inner_response()
                 return BoundedCommandResult(
                     returncode=0,
-                    stdout=json.dumps(_outer_response(inner)).encode("utf-8"),
+                    stdout=json.dumps(_outer_response(inner, session_id=session_id)).encode(),
                     stderr=b"",
                     stop_reason=None,
                 )
@@ -446,41 +766,26 @@ class XFirstLiveCapabilityContractTest(unittest.TestCase):
             with (
                 mock.patch("x_first.live_probe._run_bounded_command", side_effect=fake_run),
                 mock.patch("x_first.live_probe.project_root", return_value=root),
+                mock.patch("x_first.live_probe._global_approval_root", return_value=approval_root),
                 mock.patch("x_first.live_probe.PINNED_GROK_BINARY_SHA256", binary_digest),
             ):
-                result, artifact_root = run_live_probe(
-                    execute_live=True,
-                    grok_binary=binary,
-                    auth_path=auth,
-                )
-            self.assertEqual(result["capability"]["verdict"], "x_native_identity_ready")
-            with mock.patch("x_first.live_probe.PINNED_GROK_BINARY_SHA256", binary_digest):
+                result, artifact_root = run_live_probe(execute_live=True, grok_binary=binary, auth_path=auth)
+                self.assertEqual(result["capability"]["verdict"], "x_native_identity_ready")
                 self.assertEqual(
-                    validate_artifact_pair(artifact_root / "request.json", artifact_root / "result.json"), []
+                    validate_artifact_pair(artifact_root / "request.json", artifact_root / "result.json"),
+                    [],
                 )
-                tool_path = artifact_root / "tool-receipt.json"
-                tool_receipt = json.loads(tool_path.read_text(encoding="utf-8"))
-                tool_receipt["calls"][0]["raw_result_posts"][0]["platform_object_id"] = "1900000000000000002"
-                tool_path.write_text(json.dumps(tool_receipt), encoding="utf-8")
-                tool_path.chmod(0o600)
-                self.assertTrue(validate_artifact_pair(artifact_root / "request.json", artifact_root / "result.json"))
-            rendered = (artifact_root / "result.json").read_text(encoding="utf-8")
-            self.assertNotIn("credential-material", rendered)
-            self.assertEqual(stat.S_IMODE((artifact_root / "result.json").stat().st_mode), 0o600)
-            self.assertTrue((artifact_root / "approval-receipt.json").is_file())
-            self.assertTrue((artifact_root / "tool-receipt.json").is_file())
-            with (
-                mock.patch("x_first.live_probe.project_root", return_value=root),
-                mock.patch("x_first.live_probe.PINNED_GROK_BINARY_SHA256", binary_digest),
-            ):
                 with self.assertRaises(PermissionError):
                     run_live_probe(execute_live=True, grok_binary=binary, auth_path=auth)
-            deletion_receipts = purge_expired_live_artifacts(
-                runtime_root=root / "runtime/live-probes",
-                now=datetime.now(UTC) + timedelta(days=2),
+                receipts = purge_expired_live_artifacts(
+                    runtime_root=root / "runtime/live-probes",
+                    now=datetime.now(UTC) + timedelta(days=2),
+                )
+                self.assertEqual([receipt["run_id"] for receipt in receipts], [artifact_root.name])
+            self.assertNotIn(
+                "credential-material",
+                json.dumps(result),
             )
-            self.assertEqual([receipt["run_id"] for receipt in deletion_receipts], [artifact_root.name])
-            self.assertFalse(artifact_root.exists())
 
 
 if __name__ == "__main__":

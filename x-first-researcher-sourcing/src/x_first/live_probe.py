@@ -57,8 +57,10 @@ MAX_BINARY_BYTES = 300_000_000
 MAX_VIOLATION_RECEIPT_CALLS = 8
 MAX_VIOLATION_RECEIPT_POSTS = 25
 PROCESS_POLL_SECONDS = 0.05
+PROCESS_GROUP_CLEANUP_SECONDS = 5.0
 LIVE_DIAGNOSTIC_CODE = "XCAP_LIVE_INVALID"
 LIVE_EXECUTION_ERROR_CODE = "XCAP_LIVE_EXECUTION_FAILED"
+GLOBAL_APPROVAL_OWNER_ID = "user_state:x-first-researcher-sourcing/live-approvals/v1"
 DISALLOWED_LOCAL_TOOLS = (
     "run_terminal_cmd",
     "grep",
@@ -176,25 +178,54 @@ GROK_RESPONSE_SCHEMA: Mapping[str, Any] = {
 
 
 @dataclass(frozen=True)
+class RawXPostReceipt:
+    platform_object_id: str
+    canonical_url: str
+    platform_user_id: str | None
+
+
+@dataclass(frozen=True)
+class ProviderUsageReceipt:
+    input_tokens: int
+    output_tokens: int
+    total_tokens: int
+    cached_read_tokens: int
+    reasoning_tokens: int
+    model_calls: int
+    api_duration_ms: int
+    model_turns: int
+
+
+@dataclass(frozen=True)
 class ToolCallReceipt:
     call_id: str
     tool_id: str
     statuses: tuple[str, ...]
-    raw_result_post_pairs: tuple[tuple[str, str], ...]
-    raw_result_author_user_ids: tuple[str, ...]
+    raw_result_posts: tuple[RawXPostReceipt, ...]
 
 
 @dataclass(frozen=True)
 class ToolProof:
+    session_id: str
     x_search_calls: int
     x_search_completed_calls: int
     unexpected_tool_calls: tuple[str, ...]
-    raw_result_post_pairs: tuple[tuple[str, str], ...]
-    raw_result_author_user_ids: tuple[str, ...]
+    raw_result_posts: tuple[RawXPostReceipt, ...]
     observed_model_ids: tuple[str, ...]
     call_receipts: tuple[ToolCallReceipt, ...]
     updates_sha256: str
     update_bytes: int
+    terminal_stop_reason: str | None
+    terminal_usage: ProviderUsageReceipt | None
+    evidence_errors: tuple[str, ...]
+
+    @property
+    def raw_result_post_pairs(self) -> tuple[tuple[str, str], ...]:
+        return tuple((post.platform_object_id, post.canonical_url) for post in self.raw_result_posts)
+
+    @property
+    def raw_result_author_user_ids(self) -> tuple[str, ...]:
+        return tuple(sorted({post.platform_user_id for post in self.raw_result_posts if post.platform_user_id}))
 
 
 @dataclass(frozen=True)
@@ -207,6 +238,15 @@ class BoundedCommandResult:
 
 def _utc_now() -> str:
     return datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
+def _parse_canonical_timestamp(value: Any) -> datetime:
+    if not isinstance(value, str) or re.fullmatch(CANONICAL_TIMESTAMP_PATTERN, value) is None:
+        raise ValueError("timestamp is not canonical UTC milliseconds")
+    parsed = datetime.strptime(value, "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=UTC)
+    if parsed.isoformat(timespec="milliseconds").replace("+00:00", "Z") != value:
+        raise ValueError("timestamp does not round-trip canonically")
+    return parsed
 
 
 def _reject_json_constant(value: str) -> None:
@@ -362,45 +402,18 @@ def _walk_dicts(value: Any) -> Iterable[dict[str, Any]]:
             yield from _walk_dicts(child)
 
 
-def _event_kind(node: Mapping[str, Any]) -> str | None:
-    for key in ("sessionUpdate", "session_update", "type"):
-        value = node.get(key)
-        if value in {"tool_call", "tool_call_update"}:
-            return str(value)
-    return None
-
-
-def _tool_identity(node: Mapping[str, Any]) -> str | None:
-    metadata = node.get("_meta")
+def _tool_identity(update: Mapping[str, Any]) -> str | None:
+    metadata = update.get("_meta")
     if isinstance(metadata, dict):
         tool_metadata = metadata.get("x.ai/tool")
         if isinstance(tool_metadata, dict):
-            normalized = _normalize_tool_name(tool_metadata.get("name"))
+            raw_name = tool_metadata.get("name")
+            normalized = _normalize_tool_name(raw_name)
             if normalized is not None:
+                if normalized == TOOL_ID and raw_name != TOOL_ID:
+                    return "noncanonical_x_search_alias"
                 return normalized
-    for key in ("toolName", "tool_name", "tool", "name", "title"):
-        normalized = _normalize_tool_name(node.get(key))
-        if normalized is not None:
-            return normalized
     return None
-
-
-def _tool_call_id(node: Mapping[str, Any], *, fallback: str) -> str:
-    for key in ("toolCallId", "tool_call_id", "id"):
-        value = node.get(key)
-        if isinstance(value, str) and value:
-            return value
-    return fallback
-
-
-def _tool_statuses(node: Mapping[str, Any]) -> set[str]:
-    statuses: set[str] = set()
-    for nested in _walk_dicts(node):
-        for key in ("status", "state"):
-            value = nested.get(key)
-            if isinstance(value, str):
-                statuses.add(value.strip().lower())
-    return statuses
 
 
 def _walk_values(value: Any) -> Iterable[Any]:
@@ -438,116 +451,351 @@ def _contains_target_handle_field(value: Any) -> bool:
     return False
 
 
-def _raw_x_author_user_ids(value: Any) -> set[str]:
+def _author_ids_for_post_record(value: Mapping[str, Any]) -> set[str]:
     identifiers: set[str] = set()
-    author_path_tokens = {"author", "author_info", "authorinfo", "user", "user_info", "userinfo", "profile"}
+    author_keys = {"author", "author_info", "authorinfo", "user", "user_info", "userinfo", "profile"}
     id_keys = {"id", "id_str", "idstr", "rest_id", "restid", "user_id", "userid", "platform_user_id"}
-
-    def visit(child: Any, path: tuple[str, ...]) -> None:
-        if isinstance(child, dict):
-            normalized_path = {re.sub(r"[^a-z0-9]+", "_", part.casefold()).strip("_") for part in path if part}
-            if normalized_path & author_path_tokens and _contains_target_handle_field(child):
-                for node in _walk_dicts(child):
-                    for key, candidate in node.items():
-                        normalized_key = re.sub(r"[^a-z0-9]+", "_", str(key).casefold()).strip("_")
-                        if (
-                            normalized_key in id_keys
-                            and isinstance(candidate, str)
-                            and re.fullmatch(r"[0-9]{3,32}", candidate)
-                        ):
-                            identifiers.add(candidate)
-            for key, nested in child.items():
-                visit(nested, (*path, str(key)))
-        elif isinstance(child, list):
-            for index, nested in enumerate(child):
-                visit(nested, (*path, str(index)))
-
-    visit(value, ())
+    for key, child in value.items():
+        normalized_key = re.sub(r"[^a-z0-9]+", "_", str(key).casefold()).strip("_")
+        if normalized_key not in author_keys or not isinstance(child, dict) or not _contains_target_handle_field(child):
+            continue
+        for node in _walk_dicts(child):
+            for nested_key, candidate in node.items():
+                normalized_nested_key = re.sub(r"[^a-z0-9]+", "_", str(nested_key).casefold()).strip("_")
+                if (
+                    normalized_nested_key in id_keys
+                    and isinstance(candidate, str)
+                    and re.fullmatch(r"[0-9]{3,32}", candidate)
+                ):
+                    identifiers.add(candidate)
     return identifiers
 
 
-def _observed_model_ids(payload: Any) -> set[str]:
-    model_ids: set[str] = set()
-    for node in _walk_dicts(payload):
-        for key in ("modelId", "model_id"):
-            value = node.get(key)
-            if isinstance(value, str) and value.strip():
-                model_ids.add(value.strip())
-    return model_ids
+def _raw_x_posts(value: Any) -> tuple[tuple[RawXPostReceipt, ...], bool]:
+    all_pairs = _raw_x_post_pairs(value)
+    bound_ids: dict[tuple[str, str], set[str]] = {pair: set() for pair in all_pairs}
+    for node in _walk_dicts(value):
+        direct_pairs: set[tuple[str, str]] = set()
+        for key, child in node.items():
+            normalized_key = re.sub(r"[^a-z0-9]+", "_", str(key).casefold()).strip("_")
+            if normalized_key in {"canonical_url", "url", "post_url", "tweet_url"} and isinstance(child, str):
+                direct_pairs.update(_raw_x_post_pairs(child))
+        if not direct_pairs:
+            continue
+        author_ids = _author_ids_for_post_record(node)
+        if author_ids:
+            for pair in direct_pairs:
+                bound_ids.setdefault(pair, set()).update(author_ids)
+    conflicting = any(len(values) > 1 for values in bound_ids.values())
+    posts = tuple(
+        RawXPostReceipt(
+            platform_object_id=object_id,
+            canonical_url=canonical_url,
+            platform_user_id=next(iter(bound_ids[(object_id, canonical_url)]))
+            if len(bound_ids[(object_id, canonical_url)]) == 1
+            else None,
+        )
+        for object_id, canonical_url in sorted(all_pairs)
+    )
+    return posts, conflicting
 
 
-def extract_tool_proof(updates_path: Path) -> ToolProof:
-    if updates_path.is_symlink() or not updates_path.is_file():
-        raise ValueError("session updates are unavailable")
-    raw = updates_path.read_bytes()
-    if len(raw) > MAX_SESSION_UPDATES_BYTES:
-        raise ValueError("session updates exceed the bounded parser size")
+def _parse_provider_usage(value: Any) -> ProviderUsageReceipt:
+    expected_fields = {
+        "inputTokens",
+        "outputTokens",
+        "totalTokens",
+        "cachedReadTokens",
+        "reasoningTokens",
+        "modelCalls",
+        "apiDurationMs",
+        "modelUsage",
+        "numTurns",
+    }
+    nested_fields = expected_fields - {"modelUsage", "numTurns"}
+    if not isinstance(value, dict) or set(value) != expected_fields:
+        raise ValueError("terminal usage fields do not match Grok 0.2.99")
+    scalar_fields = expected_fields - {"modelUsage"}
+    if any(type(value.get(field)) is not int or value[field] < 0 for field in scalar_fields):
+        raise ValueError("terminal usage counters are invalid")
+    if value["modelCalls"] < 1 or not 1 <= value["numTurns"] <= MAX_TURNS:
+        raise ValueError("terminal usage call/turn counts are invalid")
+    if value["totalTokens"] != value["inputTokens"] + value["outputTokens"]:
+        raise ValueError("terminal token totals do not reconcile")
+    if value["cachedReadTokens"] > value["inputTokens"] or value["reasoningTokens"] > value["outputTokens"]:
+        raise ValueError("terminal token detail exceeds its parent counter")
+    model_usage = value.get("modelUsage")
+    if not isinstance(model_usage, dict) or set(model_usage) != {MODEL_ID}:
+        raise ValueError("terminal model-usage identity is invalid")
+    nested = model_usage.get(MODEL_ID)
+    if not isinstance(nested, dict) or set(nested) != nested_fields:
+        raise ValueError("terminal model-usage fields do not match Grok 0.2.99")
+    if any(type(nested.get(field)) is not int or nested[field] < 0 for field in nested_fields):
+        raise ValueError("terminal model-usage counters are invalid")
+    if any(nested[field] != value[field] for field in nested_fields):
+        raise ValueError("terminal model-usage counters do not reconcile")
+    return ProviderUsageReceipt(
+        input_tokens=value["inputTokens"],
+        output_tokens=value["outputTokens"],
+        total_tokens=value["totalTokens"],
+        cached_read_tokens=value["cachedReadTokens"],
+        reasoning_tokens=value["reasoningTokens"],
+        model_calls=value["modelCalls"],
+        api_duration_ms=value["apiDurationMs"],
+        model_turns=value["numTurns"],
+    )
+
+
+def _parse_update_envelope(
+    payload: Any,
+    *,
+    expected_session_id: str,
+) -> tuple[str, Mapping[str, Any], Mapping[str, Any]]:
+    if not isinstance(payload, dict) or set(payload) != {"method", "params", "timestamp"}:
+        raise ValueError("session update envelope fields do not match Grok 0.2.99")
+    if type(payload.get("timestamp")) is not int or payload["timestamp"] < 0:
+        raise ValueError("session update timestamp is invalid")
+    params = payload.get("params")
+    if not isinstance(params, dict) or set(params) != {"_meta", "sessionId", "update"}:
+        raise ValueError("session update params fields do not match Grok 0.2.99")
+    envelope_metadata = params.get("_meta")
+    if params.get("sessionId") != expected_session_id or not isinstance(envelope_metadata, dict):
+        raise ValueError("session update is not bound to the command session")
+    event_id = envelope_metadata.get("eventId")
+    agent_timestamp_ms = envelope_metadata.get("agentTimestampMs")
+    if (
+        not isinstance(event_id, str)
+        or not event_id.startswith(f"{expected_session_id}-")
+        or type(agent_timestamp_ms) is not int
+        or agent_timestamp_ms < 0
+    ):
+        raise ValueError("session update metadata is not bound to the command session")
+    update = params.get("update")
+    if not isinstance(update, dict) or not isinstance(update.get("sessionUpdate"), str):
+        raise ValueError("session update payload is invalid")
+    kind = update["sessionUpdate"]
+    expected_method = "_x.ai/session/update" if kind == "turn_completed" else "session/update"
+    if payload.get("method") != expected_method:
+        raise ValueError("session update method does not match its payload kind")
+    return kind, update, params
+
+
+def _merge_raw_posts(
+    target: dict[tuple[str, str], set[str]],
+    posts: Iterable[RawXPostReceipt],
+) -> None:
+    for post in posts:
+        values = target.setdefault((post.platform_object_id, post.canonical_url), set())
+        if post.platform_user_id is not None:
+            values.add(post.platform_user_id)
+
+
+def _receipts_from_bindings(bindings: Mapping[tuple[str, str], set[str]]) -> tuple[RawXPostReceipt, ...]:
+    return tuple(
+        RawXPostReceipt(
+            platform_object_id=object_id,
+            canonical_url=canonical_url,
+            platform_user_id=next(iter(author_ids)) if len(author_ids) == 1 else None,
+        )
+        for (object_id, canonical_url), author_ids in sorted(bindings.items())
+    )
+
+
+def _parse_update_stream(
+    raw: bytes,
+    *,
+    expected_session_id: str,
+    require_terminal: bool,
+    tolerate_trailing_partial: bool,
+) -> ToolProof:
+    try:
+        uuid.UUID(expected_session_id)
+    except (ValueError, AttributeError) as error:
+        raise ValueError("expected command session id is invalid") from error
     tool_calls: dict[str, str] = {}
     x_calls: dict[str, set[str]] = {}
-    receipt_pairs: dict[str, set[tuple[str, str]]] = {}
-    receipt_author_ids: dict[str, set[str]] = {}
+    receipt_bindings: dict[str, dict[tuple[str, str], set[str]]] = {}
+    all_bindings: dict[tuple[str, str], set[str]] = {}
     unexpected: set[str] = set()
-    raw_post_pairs: set[tuple[str, str]] = set()
-    raw_author_user_ids: set[str] = set()
     model_ids: set[str] = set()
-    event_index = 0
-    for raw_line in raw.splitlines():
+    evidence_errors: set[str] = set()
+    terminal_stop_reason: str | None = None
+    terminal_usage: ProviderUsageReceipt | None = None
+    terminal_index: int | None = None
+    user_event_count = 0
+    lines = raw.splitlines(keepends=True)
+    if not lines:
+        evidence_errors.add("session updates are empty")
+    for index, raw_line_with_ending in enumerate(lines):
+        raw_line = raw_line_with_ending.rstrip(b"\r\n")
         if len(raw_line) > MAX_UPDATE_LINE_BYTES:
-            raise ValueError("session update line exceeds the bounded parser size")
+            evidence_errors.add("session update line exceeds the bounded parser size")
+            continue
         try:
             payload = _strict_json_loads(raw_line)
-        except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
-            raise ValueError("session updates are not valid JSON lines") from error
-        model_ids.update(_observed_model_ids(payload))
-        for node in _walk_dicts(payload):
-            kind = _event_kind(node)
-            if kind is None:
-                continue
-            tool_name = _tool_identity(node)
-            call_id = _tool_call_id(node, fallback=f"anonymous-{event_index}")
-            event_index += 1
-            if kind == "tool_call":
-                if call_id in tool_calls:
-                    unexpected.add("duplicate_tool_call_id")
-                tool_calls[call_id] = tool_name or "unknown"
-            resolved_tool = tool_name or tool_calls.get(call_id)
-            if resolved_tool == "x_search":
-                x_calls.setdefault(call_id, set()).update(_tool_statuses(node))
-                raw_output = node.get("rawOutput")
-                if isinstance(raw_output, (dict, list)):
-                    post_pairs = _raw_x_post_pairs(raw_output)
-                    author_ids = _raw_x_author_user_ids(raw_output)
-                    raw_post_pairs.update(post_pairs)
-                    raw_author_user_ids.update(author_ids)
-                    receipt_pairs.setdefault(call_id, set()).update(post_pairs)
-                    receipt_author_ids.setdefault(call_id, set()).update(author_ids)
-            elif resolved_tool is not None:
-                unexpected.add(resolved_tool)
+        except (UnicodeDecodeError, json.JSONDecodeError, ValueError):
+            is_trailing_partial = index == len(lines) - 1 and not raw.endswith(b"\n")
+            if not (tolerate_trailing_partial and is_trailing_partial):
+                evidence_errors.add("session updates contain malformed JSONL")
+            continue
+        try:
+            kind, update, _ = _parse_update_envelope(payload, expected_session_id=expected_session_id)
+        except ValueError as error:
+            evidence_errors.add(str(error))
+            continue
+        if terminal_index is not None:
+            evidence_errors.add("session updates continue after the terminal event")
+        if kind == "user_message_chunk":
+            user_event_count += 1
+            metadata = update.get("_meta")
+            model_id = metadata.get("modelId") if isinstance(metadata, dict) else None
+            if not isinstance(model_id, str) or not model_id:
+                evidence_errors.add("session user event lacks the effective model id")
             else:
-                unexpected.add("unknown")
-    completed_states = {"completed", "complete", "succeeded", "success"}
+                model_ids.add(model_id)
+        elif kind == "tool_call":
+            call_id = update.get("toolCallId")
+            if not isinstance(call_id, str) or not call_id or len(call_id) > 160:
+                evidence_errors.add("tool call id is invalid")
+                continue
+            if call_id in tool_calls:
+                unexpected.add("duplicate_tool_call_id")
+                continue
+            tool_name = _tool_identity(update)
+            tool_calls[call_id] = tool_name or "unknown"
+            if tool_name == TOOL_ID:
+                x_calls.setdefault(call_id, set()).add("in_progress")
+                receipt_bindings.setdefault(call_id, {})
+            else:
+                unexpected.add(tool_name or "unknown")
+        elif kind == "tool_call_update":
+            call_id = update.get("toolCallId")
+            if not isinstance(call_id, str) or call_id not in tool_calls:
+                unexpected.add("unknown_tool_call_update")
+                continue
+            resolved_tool = tool_calls[call_id]
+            update_tool = _tool_identity(update)
+            if update_tool is not None and update_tool != resolved_tool:
+                unexpected.add("tool_identity_drift")
+            if resolved_tool != TOOL_ID:
+                unexpected.add(resolved_tool)
+                continue
+            status = update.get("status")
+            if status is not None:
+                if not isinstance(status, str) or not status.strip():
+                    evidence_errors.add("tool update status is invalid")
+                else:
+                    x_calls.setdefault(call_id, set()).add(status.strip().lower())
+            raw_output = update.get("rawOutput")
+            if raw_output is not None:
+                posts, conflicting = _raw_x_posts(raw_output)
+                if conflicting:
+                    unexpected.add("conflicting_raw_post_author_binding")
+                _merge_raw_posts(receipt_bindings.setdefault(call_id, {}), posts)
+                _merge_raw_posts(all_bindings, posts)
+        elif kind == "turn_completed":
+            if terminal_index is not None:
+                evidence_errors.add("session updates contain multiple terminal events")
+                continue
+            terminal_index = index
+            if set(update) != {"prompt_id", "sessionUpdate", "stop_reason", "usage"}:
+                evidence_errors.add("terminal event fields do not match Grok 0.2.99")
+            terminal_stop_reason = update.get("stop_reason") if isinstance(update.get("stop_reason"), str) else None
+            try:
+                terminal_usage = _parse_provider_usage(update.get("usage"))
+            except ValueError as error:
+                evidence_errors.add(str(error))
+        elif kind not in {"agent_thought_chunk", "agent_message_chunk"}:
+            evidence_errors.add("session updates contain an unsupported event kind")
+    if require_terminal:
+        if not raw.endswith(b"\n"):
+            evidence_errors.add("session updates lack a complete final JSONL record")
+        if terminal_index is None or terminal_index != len(lines) - 1:
+            evidence_errors.add("session updates lack one final terminal event")
+        if terminal_stop_reason != "end_turn":
+            evidence_errors.add("session terminal stop reason is not end_turn")
+        if terminal_usage is None:
+            evidence_errors.add("session terminal usage is unavailable")
+        if model_ids != {MODEL_ID}:
+            evidence_errors.add("session effective model identity is invalid")
+        if user_event_count != 1:
+            evidence_errors.add("session updates do not contain exactly one user event")
+    for bindings in (*receipt_bindings.values(), all_bindings):
+        if any(len(author_ids) > 1 for author_ids in bindings.values()):
+            unexpected.add("conflicting_raw_post_author_binding")
+    completed_states = {"completed"}
     completed = sum(1 for statuses in x_calls.values() if statuses & completed_states)
     call_receipts = tuple(
         ToolCallReceipt(
             call_id=call_id,
-            tool_id="x_search",
+            tool_id=TOOL_ID,
             statuses=tuple(sorted(statuses)),
-            raw_result_post_pairs=tuple(sorted(receipt_pairs.get(call_id, set()))),
-            raw_result_author_user_ids=tuple(sorted(receipt_author_ids.get(call_id, set()))),
+            raw_result_posts=_receipts_from_bindings(receipt_bindings.get(call_id, {})),
         )
         for call_id, statuses in sorted(x_calls.items())
     )
     return ToolProof(
+        session_id=expected_session_id,
         x_search_calls=len(x_calls),
         x_search_completed_calls=completed,
         unexpected_tool_calls=tuple(sorted(unexpected)),
-        raw_result_post_pairs=tuple(sorted(raw_post_pairs)),
-        raw_result_author_user_ids=tuple(sorted(raw_author_user_ids)),
+        raw_result_posts=_receipts_from_bindings(all_bindings),
         observed_model_ids=tuple(sorted(model_ids)),
         call_receipts=call_receipts,
         updates_sha256=hashlib.sha256(raw).hexdigest(),
         update_bytes=len(raw),
+        terminal_stop_reason=terminal_stop_reason,
+        terminal_usage=terminal_usage,
+        evidence_errors=tuple(sorted(evidence_errors)),
     )
+
+
+def _read_updates_bytes(updates_path: Path) -> bytes:
+    descriptor, source_stat = _open_regular_owned_file(
+        updates_path,
+        maximum_bytes=MAX_SESSION_UPDATES_BYTES,
+        private=False,
+    )
+    try:
+        chunks: list[bytes] = []
+        remaining = source_stat.st_size
+        while remaining:
+            chunk = os.read(descriptor, min(remaining, 1024 * 1024))
+            if not chunk:
+                raise ValueError("session updates changed while they were read")
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        if os.read(descriptor, 1):
+            raise ValueError("session updates changed while they were read")
+    finally:
+        os.close(descriptor)
+    return b"".join(chunks)
+
+
+def _extract_partial_tool_proof(
+    updates_path: Path,
+    *,
+    expected_session_id: str,
+    tolerate_trailing_partial: bool,
+) -> ToolProof:
+    return _parse_update_stream(
+        _read_updates_bytes(updates_path),
+        expected_session_id=expected_session_id,
+        require_terminal=False,
+        tolerate_trailing_partial=tolerate_trailing_partial,
+    )
+
+
+def extract_tool_proof(updates_path: Path, *, expected_session_id: str) -> ToolProof:
+    proof = _parse_update_stream(
+        _read_updates_bytes(updates_path),
+        expected_session_id=expected_session_id,
+        require_terminal=True,
+        tolerate_trailing_partial=False,
+    )
+    if proof.evidence_errors:
+        raise ValueError("session updates failed the strict Grok 0.2.99 evidence contract")
+    return proof
 
 
 def _session_updates_path(grok_home: Path, cwd: Path, session_id: str) -> Path:
@@ -619,7 +867,55 @@ def _canonical_observation(value: Any, *, observed_at: str) -> dict[str, Any] | 
     }
 
 
-def _parse_outer_response(stdout: bytes) -> tuple[dict[str, Any], dict[str, Any]]:
+def _outer_response_errors(
+    outer: Any,
+    *,
+    expected_session_id: str,
+    proof: ToolProof | None,
+) -> list[str]:
+    errors: list[str] = []
+    required_fields = {"text", "stopReason", "sessionId", "requestId", "num_turns", "usage"}
+    allowed_fields = required_fields | {"total_cost_usd"}
+    if not isinstance(outer, dict) or not required_fields <= set(outer) or not set(outer) <= allowed_fields:
+        return ["Grok headless envelope fields do not match the closed contract"]
+    if outer.get("stopReason") != "EndTurn":
+        errors.append("Grok headless envelope did not end normally")
+    if outer.get("sessionId") != expected_session_id:
+        errors.append("Grok headless envelope session does not match the command session")
+    request_id = outer.get("requestId")
+    if not isinstance(request_id, str) or not request_id or len(request_id) > 160:
+        errors.append("Grok headless envelope request id is invalid")
+    model_turns = outer.get("num_turns")
+    if type(model_turns) is not int or not 1 <= model_turns <= MAX_TURNS:
+        errors.append("Grok headless envelope turn count is invalid")
+    usage = outer.get("usage")
+    if not isinstance(usage, dict) or set(usage) != {"input_tokens", "output_tokens", "total_tokens"}:
+        errors.append("Grok headless usage fields do not match the closed contract")
+    elif any(type(usage.get(field)) is not int or usage[field] < 0 for field in usage):
+        errors.append("Grok headless usage counters are invalid")
+    elif usage["total_tokens"] != usage["input_tokens"] + usage["output_tokens"]:
+        errors.append("Grok headless token totals do not reconcile")
+    cost_status, _ = _cost_projection(outer)
+    if cost_status == "invalid":
+        errors.append("Grok headless cost is invalid")
+    if proof is not None:
+        terminal = proof.terminal_usage
+        if proof.session_id != expected_session_id:
+            errors.append("structured updates are not bound to the command session")
+        if proof.terminal_stop_reason != "end_turn" or terminal is None:
+            errors.append("structured updates lack a successful terminal event")
+        elif isinstance(usage, dict):
+            expected_usage = {
+                "input_tokens": terminal.input_tokens,
+                "output_tokens": terminal.output_tokens,
+                "total_tokens": terminal.total_tokens,
+            }
+            if usage != expected_usage or model_turns != terminal.model_turns:
+                errors.append("headless and structured terminal usage do not reconcile")
+    return sorted(set(errors))
+
+
+def _parse_outer_response(stdout: bytes, *, expected_session_id: str) -> tuple[dict[str, Any], dict[str, Any]]:
     if len(stdout) > MAX_STDOUT_BYTES:
         raise ValueError("Grok output exceeds the bounded parser size")
     try:
@@ -628,6 +924,8 @@ def _parse_outer_response(stdout: bytes) -> tuple[dict[str, Any], dict[str, Any]
         raise ValueError("Grok output is not one JSON object") from error
     if not isinstance(outer, dict) or outer.get("type") == "error":
         raise ValueError("Grok did not return a successful headless envelope")
+    if _outer_response_errors(outer, expected_session_id=expected_session_id, proof=None):
+        raise ValueError("Grok headless envelope failed the strict contract")
     text = outer.get("text")
     if not isinstance(text, str) or len(text.encode("utf-8")) > MAX_STDOUT_BYTES:
         raise ValueError("Grok response text is missing or oversized")
@@ -808,7 +1106,7 @@ def _open_regular_owned_file(source: Path, *, maximum_bytes: int, private: bool)
     try:
         source_stat = os.fstat(descriptor)
         mode = stat.S_IMODE(source_stat.st_mode)
-        if not stat.S_ISREG(source_stat.st_mode) or source_stat.st_uid != os.getuid():
+        if not stat.S_ISREG(source_stat.st_mode) or source_stat.st_uid != os.getuid() or source_stat.st_nlink != 1:
             raise ValueError("required local input is not a regular user-owned file")
         if mode & (0o077 if private else 0o022):
             raise ValueError("required local input permissions are unsafe")
@@ -856,6 +1154,24 @@ def _copy_from_descriptor(
     return digest.hexdigest()
 
 
+def _read_private_json(path: Path, *, maximum_bytes: int = MAX_STDOUT_BYTES) -> Any:
+    descriptor, source_stat = _open_regular_owned_file(path, maximum_bytes=maximum_bytes, private=True)
+    try:
+        chunks: list[bytes] = []
+        remaining = source_stat.st_size
+        while remaining:
+            chunk = os.read(descriptor, min(remaining, 1024 * 1024))
+            if not chunk:
+                raise ValueError("private JSON artifact changed while it was read")
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        if os.read(descriptor, 1):
+            raise ValueError("private JSON artifact changed while it was read")
+    finally:
+        os.close(descriptor)
+    return _strict_json_loads(b"".join(chunks))
+
+
 def _secure_auth_copy(source: Path, destination: Path) -> None:
     descriptor, source_stat = _open_regular_owned_file(source, maximum_bytes=MAX_AUTH_BYTES, private=True)
     try:
@@ -899,22 +1215,36 @@ def _ensure_private_directory(path: Path) -> None:
         raise ValueError("private runtime directory must not be a symlink")
     path.mkdir(mode=0o700, parents=True, exist_ok=True)
     mode = stat.S_IMODE(path.stat().st_mode)
-    if not path.is_dir() or mode & 0o077:
+    if not path.is_dir() or path.stat().st_uid != os.getuid() or mode & 0o077:
         raise ValueError("private runtime directory permissions are unsafe")
 
 
+def _global_approval_root() -> Path:
+    return Path.home() / ".local/state/x-first-researcher-sourcing/live-approvals"
+
+
+def _canonical_runtime_root() -> Path:
+    return project_root() / "runtime/live-probes"
+
+
+def _approval_ledger_path(approval_root: Path, probe_id: Any) -> Path:
+    if probe_id != "xprobe_live_openai_official_v1":
+        raise ValueError("live approval probe identity is invalid")
+    return approval_root / f"{probe_id}.json"
+
+
 def _consume_live_approval(
-    runtime_root: Path,
+    approval_root: Path,
     *,
     request: Mapping[str, Any],
     run_id: str,
     binary_sha256: str,
     consumed_at: str,
 ) -> tuple[dict[str, Any], Path]:
-    approval_root = runtime_root / ".approvals"
     _ensure_private_directory(approval_root)
     receipt = {
         "schema_version": APPROVAL_RECEIPT_SCHEMA_VERSION,
+        "owner_id": GLOBAL_APPROVAL_OWNER_ID,
         "probe_id": request["probe_id"],
         "request_sha256": canonical_sha256(request),
         "run_id": run_id,
@@ -922,7 +1252,7 @@ def _consume_live_approval(
         "binary_sha256": binary_sha256,
         "state": "consumed_before_spawn",
     }
-    receipt_path = approval_root / f"{request['probe_id']}.json"
+    receipt_path = _approval_ledger_path(approval_root, request["probe_id"])
     serialized = (json.dumps(receipt, ensure_ascii=True, sort_keys=True, separators=(",", ":")) + "\n").encode()
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
     if hasattr(os, "O_NOFOLLOW"):
@@ -940,27 +1270,66 @@ def _consume_live_approval(
         os.fsync(descriptor)
     finally:
         os.close(descriptor)
+    directory_descriptor = os.open(approval_root, os.O_RDONLY)
+    try:
+        os.fsync(directory_descriptor)
+    finally:
+        os.close(directory_descriptor)
     return receipt, receipt_path
 
 
-def _build_tool_receipt(*, proof: ToolProof, session_id: str) -> dict[str, Any]:
+def _provider_usage_payload(usage: ProviderUsageReceipt | None) -> dict[str, int] | None:
+    if usage is None:
+        return None
+    return {
+        "input_tokens": usage.input_tokens,
+        "output_tokens": usage.output_tokens,
+        "total_tokens": usage.total_tokens,
+        "cached_read_tokens": usage.cached_read_tokens,
+        "reasoning_tokens": usage.reasoning_tokens,
+        "model_calls": usage.model_calls,
+        "api_duration_ms": usage.api_duration_ms,
+        "model_turns": usage.model_turns,
+    }
+
+
+def _build_tool_receipt(
+    *,
+    proof: ToolProof,
+    session_id: str,
+    outer: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    outer_usage = outer.get("usage") if isinstance(outer, Mapping) else None
     return {
         "schema_version": TOOL_RECEIPT_SCHEMA_VERSION,
         "session_id": session_id,
+        "provider_request_id": outer.get("requestId") if isinstance(outer, Mapping) else None,
+        "outer_session_id": outer.get("sessionId") if isinstance(outer, Mapping) else None,
+        "outer_stop_reason": outer.get("stopReason") if isinstance(outer, Mapping) else None,
+        "outer_usage": dict(outer_usage) if isinstance(outer_usage, Mapping) else None,
         "session_updates_sha256": proof.updates_sha256,
         "session_update_bytes": proof.update_bytes,
+        "terminal_stop_reason": proof.terminal_stop_reason,
+        "terminal_usage": _provider_usage_payload(proof.terminal_usage),
         "observed_model_ids": list(proof.observed_model_ids),
         "unexpected_tool_calls": list(proof.unexpected_tool_calls),
+        "evidence_errors": list(proof.evidence_errors),
         "calls": [
             {
                 "call_id": call.call_id,
                 "tool_id": call.tool_id,
                 "statuses": list(call.statuses),
                 "raw_result_posts": [
-                    {"platform_object_id": object_id, "canonical_url": canonical_url}
-                    for object_id, canonical_url in call.raw_result_post_pairs
+                    {
+                        "platform_object_id": post.platform_object_id,
+                        "canonical_url": post.canonical_url,
+                        "platform_user_id": post.platform_user_id,
+                    }
+                    for post in call.raw_result_posts
                 ],
-                "raw_result_author_user_ids": list(call.raw_result_author_user_ids),
+                "raw_result_author_user_ids": sorted(
+                    {post.platform_user_id for post in call.raw_result_posts if post.platform_user_id}
+                ),
             }
             for call in proof.call_receipts
         ],
@@ -982,12 +1351,46 @@ def _isolated_environment(grok_home: Path) -> dict[str, str]:
 
 
 def _terminate_process_group(process: subprocess.Popen[bytes]) -> None:
-    if process.poll() is not None:
-        return
     try:
         os.killpg(process.pid, signal.SIGKILL)
     except ProcessLookupError:
         return
+
+
+def _wait_for_process_group_exit(process_group_id: int) -> None:
+    deadline = time.monotonic() + PROCESS_GROUP_CLEANUP_SECONDS
+    while True:
+        group_exists = True
+        try:
+            os.killpg(process_group_id, 0)
+        except ProcessLookupError:
+            group_exists = False
+        except PermissionError:
+            # A killed orphan can briefly be a launchd-owned zombie on macOS. Verify that no executable
+            # member remains instead of treating the zombie accounting row as a live provider process.
+            group_exists = True
+        if not group_exists:
+            return
+        process_rows = subprocess.run(
+            ["/bin/ps", "-axo", "pgid=,stat="],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if process_rows.returncode != 0:
+            raise RuntimeError("bounded Grok process group could not be verified after termination")
+        active_members = []
+        for row in process_rows.stdout.splitlines():
+            fields = row.split()
+            if len(fields) >= 2 and fields[0].isdigit() and int(fields[0]) == process_group_id:
+                state = fields[1]
+                if not state.startswith("Z"):
+                    active_members.append(state)
+        if not active_members:
+            return
+        if time.monotonic() >= deadline:
+            raise RuntimeError("bounded Grok process group did not terminate")
+        time.sleep(PROCESS_POLL_SECONDS)
 
 
 def _run_bounded_command(
@@ -996,6 +1399,7 @@ def _run_bounded_command(
     cwd: Path,
     environment: Mapping[str, str],
     updates_path: Path,
+    expected_session_id: str,
 ) -> BoundedCommandResult:
     with tempfile.TemporaryDirectory(prefix="x-first-grok-stdio-") as stdio_name:
         stdio_root = Path(stdio_name)
@@ -1023,21 +1427,29 @@ def _run_bounded_command(
                         stop_reason = "provider_evidence_budget_exceeded"
                     else:
                         try:
-                            proof = extract_tool_proof(updates_path)
+                            proof = _extract_partial_tool_proof(
+                                updates_path,
+                                expected_session_id=expected_session_id,
+                                tolerate_trailing_partial=True,
+                            )
                         except ValueError:
-                            # A final JSONL record may be incomplete while the provider is still writing it.
                             proof = None
                         if proof is not None and (proof.x_search_calls > 1 or proof.unexpected_tool_calls):
                             stop_reason = "tool_kill_switch_tripped"
+                        elif proof is not None and proof.evidence_errors:
+                            stop_reason = "invalid_provider_evidence"
                 if stop_reason is not None:
-                    _terminate_process_group(process)
                     break
                 time.sleep(PROCESS_POLL_SECONDS)
+            # A headless parent can exit while leaving same-session descendants behind. Always kill the
+            # dedicated process group, including on an apparently clean parent exit.
+            _terminate_process_group(process)
             try:
                 returncode = process.wait(timeout=5)
             except subprocess.TimeoutExpired:
                 _terminate_process_group(process)
                 returncode = process.wait(timeout=5)
+            _wait_for_process_group_exit(process.pid)
         stdout = stdout_path.read_bytes()
         stderr = stderr_path.read_bytes()
         if len(stdout) > MAX_STDOUT_BYTES:
@@ -1073,7 +1485,7 @@ def _atomic_write_json(path: Path, payload: Mapping[str, Any]) -> None:
 
 
 def _expiry_timestamp(completed_at: str) -> str:
-    completed = datetime.fromisoformat(completed_at.replace("Z", "+00:00"))
+    completed = _parse_canonical_timestamp(completed_at)
     return (completed + timedelta(hours=24)).astimezone(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
@@ -1122,19 +1534,17 @@ def run_live_probe(
     request_errors = validate_live_request(live_request)
     if request_errors:
         raise ValueError("live request failed the closed contract")
-    root = project_root()
     binary = grok_binary or Path.home() / ".grok/bin/grok"
     oauth = auth_path or Path.home() / ".grok/auth.json"
-    runtime_root = root / "runtime/live-probes"
+    runtime_root = _canonical_runtime_root()
     _ensure_private_directory(runtime_root)
     run_id = f"xprobe_run_{uuid.uuid4().hex}"
     session_id = str(uuid.uuid4())
-    started_at = _utc_now()
-    started_monotonic = time.monotonic()
     prompt = build_grok_prompt(live_request)
     result: dict[str, Any]
     tool_receipt: dict[str, Any] | None = None
     proof: ToolProof | None = None
+    outer: dict[str, Any] | None = None
     with tempfile.TemporaryDirectory(prefix="x-first-grok-home-") as temporary_home_name:
         temporary_home = Path(temporary_home_name)
         isolated_cwd = temporary_home / "work"
@@ -1144,8 +1554,10 @@ def run_live_probe(
         staged_binary = temporary_home / "grok"
         binary_sha256 = _stage_verified_binary(binary, staged_binary)
         _secure_auth_copy(oauth, temporary_home / "auth.json")
+        started_at = _utc_now()
+        started_monotonic = time.monotonic()
         approval_receipt, _ = _consume_live_approval(
-            runtime_root,
+            _global_approval_root(),
             request=live_request,
             run_id=run_id,
             binary_sha256=binary_sha256,
@@ -1190,6 +1602,7 @@ def run_live_probe(
                 cwd=isolated_cwd,
                 environment=_isolated_environment(temporary_home),
                 updates_path=updates_path,
+                expected_session_id=session_id,
             )
         except Exception:
             completed_at = _utc_now()
@@ -1214,9 +1627,9 @@ def run_live_probe(
                 if completed.returncode != 0:
                     raise ValueError("Grok exited without a successful response")
                 _validate_grok_stderr(completed.stderr)
-                outer, inner = _parse_outer_response(completed.stdout)
-                proof = extract_tool_proof(updates_path)
-                tool_receipt = _build_tool_receipt(proof=proof, session_id=session_id)
+                outer, inner = _parse_outer_response(completed.stdout, expected_session_id=session_id)
+                proof = extract_tool_proof(updates_path, expected_session_id=session_id)
+                tool_receipt = _build_tool_receipt(proof=proof, session_id=session_id, outer=outer)
                 tool_receipt_sha256 = canonical_sha256(tool_receipt)
                 result = build_live_result(
                     request=live_request,
@@ -1235,8 +1648,16 @@ def run_live_probe(
             except Exception:
                 if tool_receipt is None and updates_path.exists():
                     try:
-                        proof = extract_tool_proof(updates_path)
-                        tool_receipt = _build_tool_receipt(proof=proof, session_id=session_id)
+                        proof = _extract_partial_tool_proof(
+                            updates_path,
+                            expected_session_id=session_id,
+                            tolerate_trailing_partial=False,
+                        )
+                        tool_receipt = _build_tool_receipt(
+                            proof=proof,
+                            session_id=session_id,
+                            outer=outer,
+                        )
                     except ValueError:
                         tool_receipt = None
                 tool_receipt_sha256 = canonical_sha256(tool_receipt) if tool_receipt is not None else None
@@ -1287,6 +1708,9 @@ def run_live_probe(
         approval_receipt=approval_receipt,
         tool_receipt=tool_receipt,
     )
+    artifact_errors = validate_artifact_pair(output_root / "request.json", output_root / "result.json")
+    if artifact_errors:
+        raise RuntimeError("written live artifact bundle failed the executable contract")
     return result, output_root
 
 
@@ -1307,6 +1731,8 @@ def build_live_result(
 ) -> dict[str, Any]:
     if _validate_grok_response(inner, observed_at=completed_at):
         raise ValueError("Grok structured response failed the executable contract")
+    if proof.evidence_errors or _outer_response_errors(outer, expected_session_id=session_id, proof=proof):
+        raise ValueError("Grok provider evidence failed the executable contract")
     reported_verdict = inner.get("reported_verdict")
     access_mode = inner.get("access_mode")
     raw_observations = inner.get("observations")
@@ -1322,6 +1748,9 @@ def build_live_result(
     unique_urls = {item["canonical_url"] for item in observations}
     observation_pairs = {(item["platform_object_id"], item["canonical_url"]) for item in observations}
     raw_result_pairs = set(proof.raw_result_post_pairs)
+    raw_result_posts = {
+        (post.platform_object_id, post.canonical_url): post.platform_user_id for post in proof.raw_result_posts
+    }
     account_ids = {item["platform_user_id"] for item in observations if item["platform_user_id"] is not None}
     target = inner.get("target") if isinstance(inner.get("target"), dict) else {}
     target_account_id = target.get("platform_user_id")
@@ -1332,6 +1761,10 @@ def build_live_result(
         and set(proof.raw_result_author_user_ids) == {target_account_id}
         and len(account_ids) == 1
         and all(item["platform_user_id"] == target_account_id for item in observations)
+        and all(
+            raw_result_posts.get((item["platform_object_id"], item["canonical_url"])) == target_account_id
+            for item in observations
+        )
     )
     x_native_proven = (
         reported_verdict == "x_native_candidate"
@@ -1340,13 +1773,15 @@ def build_live_result(
         and proof.x_search_completed_calls == 1
         and not proof.unexpected_tool_calls
         and proof.observed_model_ids == (MODEL_ID,)
+        and proof.terminal_stop_reason == "end_turn"
+        and proof.terminal_usage is not None
         and 1 <= len(observations) <= MAX_OBSERVATIONS
         and len(unique_objects) == len(observations)
         and len(unique_urls) == len(observations)
         and observation_pairs <= raw_result_pairs
     )
     cost_status, cost_usd = _cost_projection(outer)
-    model_turns = outer.get("num_turns") if type(outer.get("num_turns")) is int else 0
+    model_turns = proof.terminal_usage.model_turns if proof.terminal_usage is not None else 0
     budget_exceeded = (
         elapsed_ms > MAX_ELAPSED_MS
         or model_turns > MAX_TURNS
@@ -1361,6 +1796,7 @@ def build_live_result(
         verdict = "x_native_identity_ready"
     elif x_native_proven:
         verdict = "post_retrieval_only"
+        observations = [{**item, "platform_user_id": None} for item in observations]
     else:
         verdict = "capability_unavailable"
         observations = []
@@ -1546,16 +1982,16 @@ def validate_live_result(payload: Any, *, request: Any) -> list[str]:
             errors.append("result probe-error stop reason is invalid")
     elif task.get("stop_reason") != verdict:
         errors.append("result task stop reason contradicts capability verdict")
-    for field in ("started_at", "completed_at"):
-        if not isinstance(run.get(field), str) or re.fullmatch(CANONICAL_TIMESTAMP_PATTERN, run[field]) is None:
-            errors.append("result run timestamps must be canonical UTC milliseconds")
+    run_duration_ms: int | None = None
     try:
-        started = datetime.fromisoformat(str(run.get("started_at")).replace("Z", "+00:00"))
-        completed = datetime.fromisoformat(str(run.get("completed_at")).replace("Z", "+00:00"))
+        started = _parse_canonical_timestamp(run.get("started_at"))
+        completed = _parse_canonical_timestamp(run.get("completed_at"))
         if started > completed:
             errors.append("result run starts after it completes")
-    except ValueError:
-        pass
+        else:
+            run_duration_ms = round((completed - started).total_seconds() * 1000)
+    except (TypeError, ValueError):
+        errors.append("result run timestamps must be real canonical UTC milliseconds")
     observations_value = result.get("observations")
     observations = observations_value if isinstance(observations_value, list) else []
     if not isinstance(observations_value, list) or len(observations) > MAX_OBSERVATIONS:
@@ -1574,6 +2010,7 @@ def validate_live_result(payload: Any, *, request: Any) -> list[str]:
         if (
             not isinstance(observed_at, str)
             or _canonical_observation(inner_observation, observed_at=observed_at) != observation
+            or observed_at != run.get("completed_at")
         ):
             errors.append("result contains a non-canonical live observation")
             break
@@ -1702,6 +2139,12 @@ def validate_live_result(payload: Any, *, request: Any) -> list[str]:
         errors.append("successful result must prove exactly one X call/result set")
     if usage.get("observations") != len(observations) or usage.get("model_turns", 0) > MAX_TURNS:
         errors.append("result usage does not reconcile")
+    if run_duration_ms is not None and (
+        run_duration_ms > MAX_ELAPSED_MS
+        or type(usage.get("elapsed_ms")) is not int
+        or abs(usage["elapsed_ms"] - run_duration_ms) > 2_000
+    ):
+        errors.append("result elapsed time does not reconcile with its wall-clock interval")
     cost_status = usage.get("cost_status")
     cost_usd = usage.get("cost_usd")
     if cost_status == "reported":
@@ -1777,6 +2220,7 @@ def _validate_approval_receipt(
     errors: list[str] = []
     expected_fields = {
         "schema_version",
+        "owner_id",
         "probe_id",
         "request_sha256",
         "run_id",
@@ -1790,6 +2234,8 @@ def _validate_approval_receipt(
     provenance = result.get("provenance") if isinstance(result.get("provenance"), dict) else {}
     if receipt.get("schema_version") != APPROVAL_RECEIPT_SCHEMA_VERSION:
         errors.append("approval receipt schema version mismatch")
+    if receipt.get("owner_id") != GLOBAL_APPROVAL_OWNER_ID:
+        errors.append("approval receipt owner mismatch")
     if receipt.get("probe_id") != request.get("probe_id"):
         errors.append("approval receipt probe mismatch")
     if receipt.get("request_sha256") != canonical_sha256(request):
@@ -1798,6 +2244,10 @@ def _validate_approval_receipt(
         errors.append("approval receipt run binding mismatch")
     if receipt.get("consumed_at") != run.get("started_at"):
         errors.append("approval must be consumed immediately before the recorded spawn window")
+    try:
+        _parse_canonical_timestamp(receipt.get("consumed_at"))
+    except (TypeError, ValueError):
+        errors.append("approval consumption timestamp is invalid")
     if receipt.get("binary_sha256") != PINNED_GROK_BINARY_SHA256:
         errors.append("approval receipt binary digest does not match the reviewed pin")
     if receipt.get("binary_sha256") != provenance.get("grok_binary_sha256"):
@@ -1814,22 +2264,32 @@ def _validate_tool_receipt(receipt: Any, *, result: Mapping[str, Any]) -> list[s
     expected_fields = {
         "schema_version",
         "session_id",
+        "provider_request_id",
+        "outer_session_id",
+        "outer_stop_reason",
+        "outer_usage",
         "session_updates_sha256",
         "session_update_bytes",
+        "terminal_stop_reason",
+        "terminal_usage",
         "observed_model_ids",
         "unexpected_tool_calls",
+        "evidence_errors",
         "calls",
     }
     if not isinstance(receipt, dict) or set(receipt) != expected_fields:
         return ["tool receipt fields do not match the closed contract"]
     provenance = result.get("provenance") if isinstance(result.get("provenance"), dict) else {}
     capability = result.get("capability") if isinstance(result.get("capability"), dict) else {}
+    result_usage = result.get("usage") if isinstance(result.get("usage"), dict) else {}
     observations = result.get("observations") if isinstance(result.get("observations"), list) else []
     successful = capability.get("verdict") in {"x_native_identity_ready", "post_retrieval_only"}
     if receipt.get("schema_version") != TOOL_RECEIPT_SCHEMA_VERSION:
         errors.append("tool receipt schema version mismatch")
     if receipt.get("session_id") != provenance.get("session_id"):
         errors.append("tool receipt session binding mismatch")
+    if receipt.get("provider_request_id") != provenance.get("provider_request_id"):
+        errors.append("tool receipt request binding mismatch")
     updates_sha256 = receipt.get("session_updates_sha256")
     if (
         not isinstance(updates_sha256, str)
@@ -1843,10 +2303,80 @@ def _validate_tool_receipt(receipt: Any, *, result: Mapping[str, Any]) -> list[s
     if receipt.get("observed_model_ids") != provenance.get("observed_model_ids"):
         errors.append("tool receipt model ids do not reconcile")
     unexpected = receipt.get("unexpected_tool_calls")
-    if not isinstance(unexpected, list) or any(not isinstance(value, str) for value in unexpected):
+    if (
+        not isinstance(unexpected, list)
+        or len(unexpected) > MAX_VIOLATION_RECEIPT_CALLS
+        or len(set(unexpected)) != len(unexpected)
+        or any(not isinstance(value, str) or not value or len(value) > 160 for value in unexpected)
+    ):
         errors.append("tool receipt unexpected-tool list is invalid")
     if successful and unexpected:
         errors.append("successful tool receipt contains unexpected tools")
+    evidence_errors = receipt.get("evidence_errors")
+    if (
+        not isinstance(evidence_errors, list)
+        or len(evidence_errors) > MAX_VIOLATION_RECEIPT_CALLS
+        or len(set(evidence_errors)) != len(evidence_errors)
+        or any(not isinstance(value, str) or not value or len(value) > 200 for value in evidence_errors)
+    ):
+        errors.append("tool receipt evidence-error list is invalid")
+    if successful and evidence_errors:
+        errors.append("successful tool receipt contains provider-evidence errors")
+    normalized_usage_fields = {
+        "input_tokens",
+        "output_tokens",
+        "total_tokens",
+        "cached_read_tokens",
+        "reasoning_tokens",
+        "model_calls",
+        "api_duration_ms",
+        "model_turns",
+    }
+    terminal_usage = receipt.get("terminal_usage")
+    outer_usage = receipt.get("outer_usage")
+    if successful:
+        if receipt.get("outer_session_id") != receipt.get("session_id"):
+            errors.append("successful tool receipt outer session mismatch")
+        if receipt.get("outer_stop_reason") != "EndTurn" or receipt.get("terminal_stop_reason") != "end_turn":
+            errors.append("successful tool receipt lacks matching terminal stop reasons")
+        if not isinstance(terminal_usage, dict) or set(terminal_usage) != normalized_usage_fields:
+            errors.append("successful tool receipt terminal usage is invalid")
+            terminal_usage = {}
+        elif any(type(terminal_usage.get(field)) is not int or terminal_usage[field] < 0 for field in terminal_usage):
+            errors.append("successful tool receipt terminal counters are invalid")
+        if not isinstance(outer_usage, dict) or set(outer_usage) != {
+            "input_tokens",
+            "output_tokens",
+            "total_tokens",
+        }:
+            errors.append("successful tool receipt outer usage is invalid")
+            outer_usage = {}
+        elif any(type(outer_usage.get(field)) is not int or outer_usage[field] < 0 for field in outer_usage):
+            errors.append("successful tool receipt outer counters are invalid")
+        if terminal_usage and (
+            terminal_usage.get("total_tokens")
+            != terminal_usage.get("input_tokens", -1) + terminal_usage.get("output_tokens", -1)
+            or terminal_usage.get("cached_read_tokens", 0) > terminal_usage.get("input_tokens", -1)
+            or terminal_usage.get("reasoning_tokens", 0) > terminal_usage.get("output_tokens", -1)
+            or not 1 <= terminal_usage.get("model_turns", 0) <= MAX_TURNS
+            or terminal_usage.get("model_calls", 0) < 1
+        ):
+            errors.append("successful tool receipt terminal usage does not reconcile")
+        if outer_usage and (
+            outer_usage.get("total_tokens")
+            != outer_usage.get("input_tokens", -1) + outer_usage.get("output_tokens", -1)
+            or any(outer_usage.get(field) != terminal_usage.get(field) for field in outer_usage)
+        ):
+            errors.append("tool receipt outer and terminal token usage do not reconcile")
+        if terminal_usage and terminal_usage.get("model_turns") != result_usage.get("model_turns"):
+            errors.append("tool receipt model turns do not match result usage")
+    else:
+        if receipt.get("terminal_stop_reason") not in {None, "end_turn", "max_turns"}:
+            errors.append("failed tool receipt terminal stop reason is invalid")
+        if terminal_usage is not None and (
+            not isinstance(terminal_usage, dict) or set(terminal_usage) != normalized_usage_fields
+        ):
+            errors.append("failed tool receipt terminal usage is malformed")
     calls = receipt.get("calls")
     if not isinstance(calls, list) or len(calls) > (1 if successful else MAX_VIOLATION_RECEIPT_CALLS):
         errors.append("tool receipt exceeds the bounded call-receipt contract")
@@ -1856,6 +2386,8 @@ def _validate_tool_receipt(receipt: Any, *, result: Mapping[str, Any]) -> list[s
     call_ids: set[str] = set()
     post_pairs: set[tuple[str, str]] = set()
     author_ids: set[str] = set()
+    post_bindings: dict[tuple[str, str], str | None] = {}
+    completed_calls = 0
     for call in calls:
         if not isinstance(call, dict) or set(call) != {
             "call_id",
@@ -1874,28 +2406,52 @@ def _validate_tool_receipt(receipt: Any, *, result: Mapping[str, Any]) -> list[s
         if call.get("tool_id") != TOOL_ID:
             errors.append("tool-call receipt is not native X Search")
         statuses = call.get("statuses")
-        if not isinstance(statuses, list) or any(not isinstance(value, str) for value in statuses):
+        if (
+            not isinstance(statuses, list)
+            or len(set(statuses)) != len(statuses)
+            or any(value not in {"in_progress", "completed"} for value in statuses)
+        ):
             errors.append("tool-call receipt statuses are invalid")
-        elif successful and not set(statuses) & {"completed", "complete", "succeeded", "success"}:
-            errors.append("successful X Search receipt lacks completion")
+        else:
+            if "completed" in statuses:
+                completed_calls += 1
+            if successful and "completed" not in statuses:
+                errors.append("successful X Search receipt lacks completion")
         posts = call.get("raw_result_posts")
         if not isinstance(posts, list) or len(posts) > MAX_VIOLATION_RECEIPT_POSTS:
             errors.append("tool-call raw post receipt exceeds the bound")
             posts = []
         for post in posts:
-            if not isinstance(post, dict) or set(post) != {"platform_object_id", "canonical_url"}:
+            if not isinstance(post, dict) or set(post) != {
+                "platform_object_id",
+                "canonical_url",
+                "platform_user_id",
+            }:
                 errors.append("tool-call raw post fields are invalid")
                 continue
             object_id = post.get("platform_object_id")
             canonical_url = post.get("canonical_url")
+            platform_user_id = post.get("platform_user_id")
             if (
                 not isinstance(object_id, str)
                 or re.fullmatch(r"[0-9]{5,32}", object_id) is None
                 or canonical_url != f"https://x.com/{TARGET_HANDLE}/status/{object_id}"
+                or (
+                    platform_user_id is not None
+                    and (
+                        not isinstance(platform_user_id, str) or re.fullmatch(r"[0-9]{3,32}", platform_user_id) is None
+                    )
+                )
             ):
                 errors.append("tool-call raw post identity is invalid")
                 continue
-            post_pairs.add((object_id, canonical_url))
+            pair = (object_id, canonical_url)
+            if pair in post_bindings and post_bindings[pair] != platform_user_id:
+                errors.append("tool-call raw post has conflicting author bindings")
+            post_bindings[pair] = platform_user_id
+            post_pairs.add(pair)
+            if platform_user_id is not None:
+                author_ids.add(platform_user_id)
         ids = call.get("raw_result_author_user_ids")
         if (
             not isinstance(ids, list)
@@ -1903,8 +2459,14 @@ def _validate_tool_receipt(receipt: Any, *, result: Mapping[str, Any]) -> list[s
             or any(not isinstance(value, str) or re.fullmatch(r"[0-9]{3,32}", value) is None for value in ids)
         ):
             errors.append("tool-call raw author ids are invalid")
-        else:
-            author_ids.update(ids)
+        elif sorted(ids) != sorted(
+            {
+                post.get("platform_user_id")
+                for post in posts
+                if isinstance(post, dict) and post.get("platform_user_id") is not None
+            }
+        ):
+            errors.append("tool-call raw author ids are not derived from bound post records")
     expected_pairs = {
         (str(observation.get("platform_object_id")), str(observation.get("canonical_url")))
         for observation in observations
@@ -1912,6 +2474,16 @@ def _validate_tool_receipt(receipt: Any, *, result: Mapping[str, Any]) -> list[s
     }
     if successful and not expected_pairs <= post_pairs:
         errors.append("retained observations are not a subset of raw tool-receipt posts")
+    if successful:
+        for observation in observations:
+            if not isinstance(observation, dict):
+                continue
+            pair = (str(observation.get("platform_object_id")), str(observation.get("canonical_url")))
+            if post_bindings.get(pair) != observation.get("platform_user_id"):
+                errors.append("retained observation author is not bound on its raw X post record")
+                break
+    if result_usage.get("x_search_calls") != len(calls) or result_usage.get("result_sets") != completed_calls:
+        errors.append("tool receipt calls/result sets do not match result usage")
     if sorted(object_id for object_id, _ in post_pairs) != provenance.get("raw_result_post_ids"):
         errors.append("tool receipt raw post ids do not match result provenance")
     if sorted(author_ids) != provenance.get("raw_result_author_user_ids"):
@@ -1923,28 +2495,67 @@ def _validate_tool_receipt(receipt: Any, *, result: Mapping[str, Any]) -> list[s
 
 def validate_artifact_pair(request_path: Path, result_path: Path) -> list[str]:
     try:
+        request_path = request_path.absolute()
+        result_path = result_path.absolute()
+        if request_path.name != "request.json" or result_path.name != "result.json":
+            raise ValueError("live artifact filenames do not match the closed bundle contract")
         if request_path.parent != result_path.parent:
             raise ValueError("live artifact files must share a directory")
         artifact_root = request_path.parent
-        if artifact_root.is_symlink() or stat.S_IMODE(artifact_root.stat().st_mode) & 0o077:
+        canonical_runtime_root = _canonical_runtime_root().absolute()
+        if artifact_root.parent != canonical_runtime_root:
+            raise ValueError("live artifact bundle is outside the canonical runtime owner")
+        if canonical_runtime_root.is_symlink() or artifact_root.is_symlink():
+            raise ValueError("live artifact path must not be a symlink")
+        runtime_stat = canonical_runtime_root.stat()
+        artifact_stat = artifact_root.stat()
+        if (
+            not canonical_runtime_root.is_dir()
+            or not artifact_root.is_dir()
+            or runtime_stat.st_uid != os.getuid()
+            or artifact_stat.st_uid != os.getuid()
+            or stat.S_IMODE(runtime_stat.st_mode) & 0o077
+            or stat.S_IMODE(artifact_stat.st_mode) & 0o077
+        ):
             raise ValueError("live artifact directory is not private")
-        for path in (request_path, result_path):
-            if path.is_symlink() or stat.S_IMODE(path.stat().st_mode) & 0o077:
-                raise ValueError("live artifact file is not private")
-        if request_path.stat().st_size > MAX_STDOUT_BYTES or result_path.stat().st_size > MAX_STDOUT_BYTES:
-            raise ValueError("live artifact pair exceeds the bounded parser size")
-        request = _strict_json_loads(request_path.read_text(encoding="utf-8"))
-        result = _strict_json_loads(result_path.read_text(encoding="utf-8"))
+        request = _read_private_json(request_path)
+        result = _read_private_json(result_path)
         if not isinstance(request, dict) or not isinstance(result, dict):
             raise ValueError("live artifact pair must contain objects")
+        run = result.get("run") if isinstance(result.get("run"), dict) else {}
+        if (
+            artifact_root.name != run.get("run_id")
+            or re.fullmatch(r"xprobe_run_[0-9a-f]{32}", artifact_root.name) is None
+        ):
+            raise ValueError("live artifact directory is not bound to the result run id")
         approval_path = artifact_root / "approval-receipt.json"
-        if approval_path.is_symlink() or approval_path.stat().st_size > MAX_STDOUT_BYTES:
-            raise ValueError("approval receipt is unavailable")
-        approval = _strict_json_loads(approval_path.read_text(encoding="utf-8"))
-        ledger_path = artifact_root.parent / ".approvals" / f"{request.get('probe_id')}.json"
-        if ledger_path.is_symlink() or not ledger_path.is_file():
-            raise ValueError("durable approval consumption ledger is unavailable")
-        ledger = _strict_json_loads(ledger_path.read_text(encoding="utf-8"))
+        provenance = result.get("provenance") if isinstance(result.get("provenance"), dict) else {}
+        expected_inventory = {"request.json", "result.json", "approval-receipt.json"}
+        if provenance.get("tool_receipt_sha256") is not None:
+            expected_inventory.add("tool-receipt.json")
+        actual_inventory = {entry.name for entry in artifact_root.iterdir()}
+        if actual_inventory != expected_inventory:
+            raise ValueError("live artifact inventory does not match the closed bundle contract")
+        for name in expected_inventory:
+            path = artifact_root / name
+            path_stat = path.lstat()
+            if (
+                path.is_symlink()
+                or not stat.S_ISREG(path_stat.st_mode)
+                or path_stat.st_uid != os.getuid()
+                or path_stat.st_nlink != 1
+                or stat.S_IMODE(path_stat.st_mode) & 0o077
+            ):
+                raise ValueError("live artifact file is not a private user-owned regular file")
+        approval = _read_private_json(approval_path)
+        approval_root = _global_approval_root()
+        if approval_root.is_symlink() or not approval_root.is_dir():
+            raise ValueError("global approval owner is unavailable")
+        approval_root_stat = approval_root.stat()
+        if approval_root_stat.st_uid != os.getuid() or stat.S_IMODE(approval_root_stat.st_mode) & 0o077:
+            raise ValueError("global approval owner is unsafe")
+        ledger_path = _approval_ledger_path(approval_root, request.get("probe_id"))
+        ledger = _read_private_json(ledger_path)
         if ledger != approval:
             raise ValueError("approval receipt does not match the durable consumption ledger")
     except Exception:
@@ -1957,13 +2568,10 @@ def validate_artifact_pair(request_path: Path, result_path: Path) -> list[str]:
             for value in _validate_approval_receipt(approval, request=request, result=result)
         ],
     ]
-    provenance = result.get("provenance") if isinstance(result.get("provenance"), dict) else {}
     tool_path = request_path.parent / "tool-receipt.json"
     if provenance.get("tool_receipt_sha256") is not None:
         try:
-            if tool_path.is_symlink() or tool_path.stat().st_size > MAX_STDOUT_BYTES:
-                raise ValueError("tool receipt is unavailable")
-            tool_receipt = _strict_json_loads(tool_path.read_text(encoding="utf-8"))
+            tool_receipt = _read_private_json(tool_path)
         except Exception:
             errors.append(f"{LIVE_DIAGNOSTIC_CODE}: tool receipt could not be loaded")
         else:
@@ -1980,7 +2588,7 @@ def purge_expired_live_artifacts(
     runtime_root: Path | None = None,
     now: datetime | None = None,
 ) -> list[dict[str, Any]]:
-    root = runtime_root or project_root() / "runtime/live-probes"
+    root = runtime_root or _canonical_runtime_root()
     if not root.exists():
         return []
     _ensure_private_directory(root)
@@ -1989,14 +2597,17 @@ def purge_expired_live_artifacts(
     current = (now or datetime.now(UTC)).astimezone(UTC)
     receipts: list[dict[str, Any]] = []
     for artifact_root in sorted(root.iterdir()):
-        if not re.fullmatch(r"xprobe_run_[0-9a-f]{32}", artifact_root.name):
+        if artifact_root.name == ".deletions":
             continue
+        if re.fullmatch(r"xprobe_run_[0-9a-f]{32}", artifact_root.name) is None:
+            raise ValueError("live artifact runtime contains an unexpected path")
         if artifact_root.is_symlink() or not artifact_root.is_dir():
             raise ValueError("live artifact runtime contains an unsafe run path")
         result_path = artifact_root / "result.json"
-        if result_path.is_symlink() or not result_path.is_file() or result_path.stat().st_size > MAX_STDOUT_BYTES:
-            raise ValueError("live artifact runtime contains an invalid result")
-        result = _strict_json_loads(result_path.read_text(encoding="utf-8"))
+        artifact_errors = validate_artifact_pair(artifact_root / "request.json", result_path)
+        if artifact_errors:
+            raise ValueError("live artifact runtime contains an invalid closed bundle")
+        result = _read_private_json(result_path)
         if not isinstance(result, dict):
             raise ValueError("live artifact runtime contains a non-object result")
         retention = result.get("retention")
@@ -2005,7 +2616,7 @@ def purge_expired_live_artifacts(
         expires_value = retention.get("delete_after")
         if not isinstance(expires_value, str):
             raise ValueError("live artifact runtime is missing its deletion deadline")
-        expires_at = datetime.fromisoformat(expires_value.replace("Z", "+00:00"))
+        expires_at = _parse_canonical_timestamp(expires_value)
         if expires_at > current:
             continue
         receipt = {
@@ -2017,16 +2628,29 @@ def purge_expired_live_artifacts(
             "state": "deleted",
         }
         deletion_path = deletion_root / f"{artifact_root.name}.json"
-        _atomic_write_json(deletion_path, receipt)
+        if deletion_path.exists() or deletion_path.is_symlink():
+            raise ValueError("live artifact deletion receipt already exists before deletion")
         shutil.rmtree(artifact_root)
+        if artifact_root.exists() or artifact_root.is_symlink():
+            raise OSError("live artifact deletion did not remove the bundle")
+        root_descriptor = os.open(root, os.O_RDONLY)
+        try:
+            os.fsync(root_descriptor)
+        finally:
+            os.close(root_descriptor)
+        _atomic_write_json(deletion_path, receipt)
         receipts.append(receipt)
     return receipts
 
 
 __all__ = [
     "GROK_RESPONSE_SCHEMA",
+    "GLOBAL_APPROVAL_OWNER_ID",
     "LIVE_REQUEST_SCHEMA_VERSION",
     "LIVE_RESULT_SCHEMA_VERSION",
+    "ProviderUsageReceipt",
+    "RawXPostReceipt",
+    "ToolCallReceipt",
     "ToolProof",
     "build_grok_prompt",
     "build_live_request",
