@@ -195,7 +195,7 @@ The post-`fee3699` reviews reproduced nineteen false-green or non-terminal class
 Each now has a deterministic concurrency, mutation, artifact, or subprocess regression. These tests prove the local
 fail-closed contract only; they are not a live X capability result or an independent-review `GO`.
 
-The fixed-forward checkout discovers 26 focused live-contract tests and 92 repository tests. The reviewed `a6d9e07`
+The fixed-forward checkout discovers 26 focused live-contract tests and 100 repository tests. The reviewed `a6d9e07`
 baseline was 20 focused and 85 repository tests, not 86; the additional repository test before this fixed-forward
 slice belongs to the separately committed profile/Bio lane.
 
