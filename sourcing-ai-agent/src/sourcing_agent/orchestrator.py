@@ -54785,7 +54785,7 @@ class SourcingOrchestrator:
         expected_requester_id: str = "",
         expected_tenant_id: str = "",
     ) -> dict[str, Any]:
-        preflight = self._preflight_criteria_rerun_job_ownership(
+        preflight = self._preflight_criteria_job_ownership(
             payload,
             expected_requester_id=expected_requester_id,
             expected_tenant_id=expected_tenant_id,
@@ -54819,7 +54819,7 @@ class SourcingOrchestrator:
         expected_requester_id: str = "",
         expected_tenant_id: str = "",
     ) -> dict[str, Any]:
-        preflight = self._preflight_criteria_rerun_job_ownership(
+        preflight = self._preflight_criteria_job_ownership(
             payload,
             expected_requester_id=expected_requester_id,
             expected_tenant_id=expected_tenant_id,
@@ -54918,7 +54918,7 @@ class SourcingOrchestrator:
         source_job_id = str(
             preflight_suggestion.get("source_job_id") or (source_feedback or {}).get("job_id") or ""
         ).strip()
-        preflight = self._preflight_criteria_rerun_job_ownership(
+        preflight = self._preflight_criteria_job_ownership(
             payload,
             expected_requester_id=expected_requester_id,
             expected_tenant_id=expected_tenant_id,
@@ -54994,7 +54994,7 @@ class SourcingOrchestrator:
             "rerun": rerun,
         }
 
-    def _preflight_criteria_rerun_job_ownership(
+    def _preflight_criteria_job_ownership(
         self,
         payload: dict[str, Any],
         *,
@@ -55002,17 +55002,19 @@ class SourcingOrchestrator:
         expected_tenant_id: str = "",
         additional_job_ids: tuple[str, ...] = (),
     ) -> dict[str, Any]:
-        """Read-only exact-owner gate before any optional-rerun mutation.
+        """Read-only exact-owner gate before any criteria-domain mutation.
 
         Both explicit id spellings are checked instead of using a fallback
         ladder, and suggestion/source jobs are supplied by the caller. This
         prevents a second, ignored foreign id from crossing the mutation
         boundary. Automatic baseline selection remains owner-scoped inside the
         rerun helper because it depends on the freshly compiled request.
+
+        ``rerun_retrieval`` is intentionally irrelevant here: it controls only
+        whether a successful mutation requests a retrieval rerun, never whether
+        a caller-supplied resource reference requires authorization.
         """
 
-        if not payload.get("rerun_retrieval"):
-            return {"status": "ready"}
         job_ids: list[str] = []
         for raw_job_id in (
             payload.get("job_id"),

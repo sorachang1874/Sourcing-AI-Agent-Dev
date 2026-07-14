@@ -235,8 +235,9 @@ class _ScopeOrchestrator:
 
     def record_criteria_feedback(self, payload, **owner):
         self._capture("criteria_feedback", {**dict(payload), **owner})
-        job = self.store.get_job(str(payload.get("job_id") or payload.get("baseline_job_id") or ""))
-        if payload.get("rerun_retrieval") and (
+        job_id = str(payload.get("job_id") or payload.get("baseline_job_id") or "")
+        job = self.store.get_job(job_id)
+        if job_id and (
             not job
             or job.get("requester_id") != owner.get("expected_requester_id")
             or job.get("tenant_id") != owner.get("expected_tenant_id")
@@ -246,8 +247,9 @@ class _ScopeOrchestrator:
 
     def review_pattern_suggestion(self, payload, **owner):
         self._capture("criteria_suggestion", {**dict(payload), **owner})
-        job = self.store.get_job(str(payload.get("job_id") or payload.get("baseline_job_id") or ""))
-        if payload.get("rerun_retrieval") and (
+        job_id = str(payload.get("job_id") or payload.get("baseline_job_id") or "")
+        job = self.store.get_job(job_id)
+        if job_id and (
             not job
             or job.get("requester_id") != owner.get("expected_requester_id")
             or job.get("tenant_id") != owner.get("expected_tenant_id")
@@ -257,8 +259,9 @@ class _ScopeOrchestrator:
 
     def recompile_criteria(self, payload, **owner):
         self._capture("criteria_recompile", {**dict(payload), **owner})
-        job = self.store.get_job(str(payload.get("job_id") or payload.get("baseline_job_id") or ""))
-        if payload.get("rerun_retrieval") and (
+        job_id = str(payload.get("job_id") or payload.get("baseline_job_id") or "")
+        job = self.store.get_job(job_id)
+        if job_id and (
             not job
             or job.get("requester_id") != owner.get("expected_requester_id")
             or job.get("tenant_id") != owner.get("expected_tenant_id")
@@ -610,7 +613,7 @@ class RequestScopeWiringTest(unittest.TestCase):
         self.assertEqual(missing_worker, foreign_worker)
         self.assertEqual(missing_worker, (404, {"status": "not_found", "reason": "job_not_found"}))
 
-    def test_criteria_rerun_routes_propagate_exact_owner_and_hide_foreign_baselines(self) -> None:
+    def test_criteria_routes_always_propagate_exact_owner_and_hide_foreign_baselines(self) -> None:
         base, opener, orchestrator = self._start_server()
         endpoints = (
             ("/api/criteria/feedback", "criteria_feedback", 201),
@@ -618,27 +621,28 @@ class RequestScopeWiringTest(unittest.TestCase):
             ("/api/criteria/recompile", "criteria_recompile", 200),
         )
         for path, capture_name, success_status in endpoints:
-            owned = self._request(
-                opener,
-                f"{base}{path}",
-                method="POST",
-                body={"rerun_retrieval": True, "job_id": "job-alice"},
-            )
-            foreign = self._request(
-                opener,
-                f"{base}{path}",
-                method="POST",
-                body={"rerun_retrieval": True, "job_id": "job-bob"},
-            )
-            missing = self._request(
-                opener,
-                f"{base}{path}",
-                method="POST",
-                body={"rerun_retrieval": True, "job_id": "job-missing"},
-            )
-            self.assertEqual(owned[0], success_status)
-            self.assertEqual(foreign, missing)
-            self.assertEqual(foreign, (404, {"status": "not_found", "reason": "job_not_found"}))
+            for rerun_payload in ({}, {"rerun_retrieval": False}):
+                owned = self._request(
+                    opener,
+                    f"{base}{path}",
+                    method="POST",
+                    body={**rerun_payload, "job_id": "job-alice"},
+                )
+                foreign = self._request(
+                    opener,
+                    f"{base}{path}",
+                    method="POST",
+                    body={**rerun_payload, "job_id": "job-bob"},
+                )
+                missing = self._request(
+                    opener,
+                    f"{base}{path}",
+                    method="POST",
+                    body={**rerun_payload, "job_id": "job-missing"},
+                )
+                self.assertEqual(owned[0], success_status)
+                self.assertEqual(foreign, missing)
+                self.assertEqual(foreign, (404, {"status": "not_found", "reason": "job_not_found"}))
             self.assertTrue(orchestrator.captured[capture_name])
             for captured in orchestrator.captured[capture_name]:
                 self.assertEqual(captured["expected_requester_id"], "alice")

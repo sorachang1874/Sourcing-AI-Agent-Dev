@@ -1,7 +1,7 @@
 # Track C C2.7 conditional-owner closure
 
-Status: author fixed-forward implementation; independent review required before
-live/manual/product/milestone signoff.
+Status: pinned review `NO-GO`; the criteria preflight finding is fixed forward
+by `TRACK_C_C2_8_CRITERIA_OWNER_PREFLIGHT_TOTALITY_IMPLEMENTATION.md`.
 
 ## Goal and scope
 
@@ -14,13 +14,13 @@ the first durable write through a PostgreSQL owner predicate or row-lock UoW.
 
 1. The authenticated route registry now includes criteria feedback, suggestion
    review, and explicit recompile. All three pass the bearer-derived exact job
-   owner into optional retrieval reruns. A shared read-only preflight validates
-   every caller-supplied `job_id`/`baseline_job_id` and the suggestion's source
-   job before feedback, pattern-review, criteria-version, compiler, result, or
-   derived-job writes. Missing and foreign baselines therefore produce the same
-   zero-write `job_not_found`; automatic matching is filtered by requester and
-   tenant, and the owner is re-read before execution and persisted on the
-   derived job.
+   owner into optional retrieval reruns. The `4b2370a` implementation intended
+   to preflight every explicit/source job before criteria-domain writes, but its
+   shared helper incorrectly returned early when `rerun_retrieval` was missing
+   or false. The pinned review therefore found a foreign/missing-owner write
+   path and returned `NO-GO`; C2.8 owns the correction. Automatic rerun matching
+   itself remains filtered by requester and tenant, with a final owner re-read
+   before execution.
 2. Authenticated `GET /api/workers/daemon/status?job_id=...` ignores raw detail
    opt-in and uses a dedicated allowlist instead of constructing the general
    runtime-controls view. It probes service status only when the stored control

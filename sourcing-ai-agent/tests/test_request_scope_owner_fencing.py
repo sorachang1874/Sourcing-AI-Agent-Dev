@@ -548,76 +548,216 @@ def test_criteria_rerun_rejects_foreign_explicit_baseline_before_results_read() 
     assert result == {"status": "not_found", "reason": "job_not_found"}
 
 
-def test_criteria_feedback_preflights_missing_explicit_baseline_before_any_write() -> None:
+@pytest.mark.parametrize("rerun_value", [pytest.param(None, id="missing"), pytest.param(False, id="false")])
+@pytest.mark.parametrize("job_state", ["foreign", "missing"])
+def test_criteria_feedback_preflights_every_explicit_job_before_any_write(
+    rerun_value: bool | None,
+    job_state: str,
+) -> None:
     events: list[str] = []
     criteria_repo = SimpleNamespace(
-        record_feedback=lambda _payload: events.append("record_feedback"),
+        record_feedback=lambda _payload: events.append("write:feedback"),
     )
     orchestrator = object.__new__(SourcingOrchestrator)
     orchestrator.store = SimpleNamespace(
         repos=SimpleNamespace(criteria_confidence=criteria_repo),
-        get_job=lambda _job_id: events.append("get_job") or None,
+        get_job=lambda job_id: events.append(f"read:job:{job_id}")
+        or (_foreign_job() if job_state == "foreign" else None),
     )
     orchestrator.criteria_evolution = SimpleNamespace(
-        recompile_after_feedback=lambda *_args: events.append("recompile")
+        recompile_after_feedback=lambda *_args: events.append("write:compiler")
     )
+    payload = {"job_id": f"job-{job_state}"}
+    if rerun_value is not None:
+        payload["rerun_retrieval"] = rerun_value
 
     result = orchestrator.record_criteria_feedback(
-        {"rerun_retrieval": True, "job_id": "job-missing"},
+        payload,
         expected_requester_id="alice",
         expected_tenant_id="user-alice",
     )
 
     assert result == {"status": "not_found", "reason": "job_not_found"}
-    assert events == ["get_job"]
+    assert events == [f"read:job:job-{job_state}"]
+    assert not [event for event in events if event.startswith("write:")]
 
 
-def test_criteria_recompile_preflights_foreign_explicit_baseline_before_any_write() -> None:
+@pytest.mark.parametrize("rerun_value", [pytest.param(None, id="missing"), pytest.param(False, id="false")])
+@pytest.mark.parametrize("job_state", ["foreign", "missing"])
+@pytest.mark.parametrize("job_field", ["job_id", "baseline_job_id"])
+def test_criteria_recompile_preflights_every_explicit_job_before_any_write(
+    rerun_value: bool | None,
+    job_state: str,
+    job_field: str,
+) -> None:
     events: list[str] = []
     orchestrator = object.__new__(SourcingOrchestrator)
     orchestrator.store = SimpleNamespace(
-        get_job=lambda _job_id: events.append("get_job") or _foreign_job(),
+        get_job=lambda job_id: events.append(f"read:job:{job_id}")
+        or (_foreign_job() if job_state == "foreign" else None),
     )
     orchestrator.criteria_evolution = SimpleNamespace(
-        recompile_after_feedback=lambda *_args: events.append("recompile")
+        recompile_after_feedback=lambda *_args: events.append("write:compiler")
     )
+    payload = {job_field: f"job-{job_state}"}
+    if rerun_value is not None:
+        payload["rerun_retrieval"] = rerun_value
 
     result = orchestrator.recompile_criteria(
-        {"rerun_retrieval": True, "baseline_job_id": "job-bob"},
+        payload,
         expected_requester_id="alice",
         expected_tenant_id="user-alice",
     )
 
     assert result == {"status": "not_found", "reason": "job_not_found"}
-    assert events == ["get_job"]
+    assert events == [f"read:job:job-{job_state}"]
+    assert not [event for event in events if event.startswith("write:")]
 
 
-def test_criteria_suggestion_preflights_foreign_source_baseline_before_review_write() -> None:
+@pytest.mark.parametrize("rerun_value", [pytest.param(None, id="missing"), pytest.param(False, id="false")])
+@pytest.mark.parametrize("job_state", ["foreign", "missing"])
+def test_criteria_suggestion_preflights_every_source_job_before_any_write(
+    rerun_value: bool | None,
+    job_state: str,
+) -> None:
     events: list[str] = []
     criteria_repo = SimpleNamespace(
         get_suggestion=lambda _suggestion_id: (
-            events.append("get_suggestion") or {"suggestion_id": 7, "source_feedback_id": 11}
+            events.append("read:suggestion") or {"suggestion_id": 7, "source_feedback_id": 11}
         ),
-        get_feedback=lambda _feedback_id: events.append("get_feedback") or {"job_id": "job-bob"},
-        review_suggestion=lambda **_kwargs: events.append("review_suggestion"),
+        get_feedback=lambda _feedback_id: events.append("read:feedback")
+        or {"job_id": f"job-{job_state}"},
+        review_suggestion=lambda **_kwargs: events.append("write:review"),
     )
     orchestrator = object.__new__(SourcingOrchestrator)
     orchestrator.store = SimpleNamespace(
         repos=SimpleNamespace(criteria_confidence=criteria_repo),
-        get_job=lambda _job_id: events.append("get_job") or _foreign_job(),
+        get_job=lambda job_id: events.append(f"read:job:{job_id}")
+        or (_foreign_job() if job_state == "foreign" else None),
     )
     orchestrator.criteria_evolution = SimpleNamespace(
-        recompile_after_feedback=lambda *_args: events.append("recompile")
+        recompile_after_feedback=lambda *_args: events.append("write:compiler")
     )
+    payload = {"suggestion_id": 7, "action": "apply"}
+    if rerun_value is not None:
+        payload["rerun_retrieval"] = rerun_value
 
     result = orchestrator.review_pattern_suggestion(
-        {"suggestion_id": 7, "action": "apply", "rerun_retrieval": True},
+        payload,
         expected_requester_id="alice",
         expected_tenant_id="user-alice",
     )
 
     assert result == {"status": "not_found", "reason": "job_not_found"}
-    assert events == ["get_suggestion", "get_feedback", "get_job"]
+    assert events == ["read:suggestion", "read:feedback", f"read:job:job-{job_state}"]
+    assert not [event for event in events if event.startswith("write:")]
+
+
+@pytest.mark.parametrize(
+    ("owner_kwargs", "job", "job_id"),
+    [
+        (
+            {"expected_requester_id": "alice", "expected_tenant_id": "user-alice"},
+            _owned_job(),
+            "job-owned",
+        ),
+        (
+            {"expected_requester_id": "alice", "expected_tenant_id": "user-alice"},
+            None,
+            "",
+        ),
+        ({}, _owned_job(requester_id="", tenant_id=""), "job-open-mode"),
+    ],
+    ids=["same-owner", "no-ref", "open-mode"],
+)
+def test_criteria_owner_preflight_preserves_positive_contracts(
+    owner_kwargs: dict[str, str],
+    job: dict[str, object] | None,
+    job_id: str,
+) -> None:
+    reads: list[str] = []
+    orchestrator = object.__new__(SourcingOrchestrator)
+    orchestrator.store = SimpleNamespace(
+        get_job=lambda read_job_id: reads.append(read_job_id) or job,
+    )
+
+    result = orchestrator._preflight_criteria_job_ownership(
+        {"job_id": job_id, "rerun_retrieval": False},
+        **owner_kwargs,
+    )
+
+    assert result == {"status": "ready"}
+    assert reads == ([job_id] if job_id else [])
+
+
+def test_criteria_feedback_same_owner_still_writes_without_rerun() -> None:
+    events: list[str] = []
+    orchestrator = object.__new__(SourcingOrchestrator)
+    orchestrator.store = SimpleNamespace(
+        get_job=lambda job_id: events.append(f"read:job:{job_id}") or _owned_job(),
+        repos=SimpleNamespace(
+            criteria_confidence=SimpleNamespace(
+                record_feedback=lambda _payload: events.append("write:feedback") or {"feedback_id": 3}
+            )
+        ),
+    )
+    orchestrator._suggest_patterns_from_feedback = lambda _feedback_id: []
+    orchestrator.criteria_evolution = SimpleNamespace(
+        recompile_after_feedback=lambda *_args: events.append("write:compiler") or {"status": "recompiled"}
+    )
+
+    result = orchestrator.record_criteria_feedback(
+        {"job_id": "job-owned", "rerun_retrieval": False},
+        expected_requester_id="alice",
+        expected_tenant_id="user-alice",
+    )
+
+    assert result["status"] == "recorded"
+    assert result["rerun"] == {"status": "not_requested"}
+    assert events == ["read:job:job-owned", "write:feedback", "write:compiler"]
+
+
+def test_criteria_recompile_without_job_ref_still_writes_without_owner_read() -> None:
+    events: list[str] = []
+    orchestrator = object.__new__(SourcingOrchestrator)
+    orchestrator.store = SimpleNamespace(
+        get_job=lambda _job_id: (_ for _ in ()).throw(AssertionError("unexpected owner read")),
+    )
+    orchestrator.criteria_evolution = SimpleNamespace(
+        recompile_after_feedback=lambda *_args: events.append("write:compiler") or {"status": "recompiled"}
+    )
+
+    result = orchestrator.recompile_criteria(
+        {"target_company": "OpenAI", "rerun_retrieval": False},
+        expected_requester_id="alice",
+        expected_tenant_id="user-alice",
+    )
+
+    assert result == {"status": "recompiled", "rerun": {"status": "not_requested"}}
+    assert events == ["write:compiler"]
+
+
+def test_criteria_suggestion_open_mode_still_reviews_existing_source_job() -> None:
+    events: list[str] = []
+    criteria_repo = SimpleNamespace(
+        get_suggestion=lambda _suggestion_id: {"suggestion_id": 7, "source_job_id": "job-legacy"},
+        review_suggestion=lambda **_kwargs: events.append("write:review")
+        or {"status": "rejected", "suggestion_id": 7},
+    )
+    orchestrator = object.__new__(SourcingOrchestrator)
+    orchestrator.store = SimpleNamespace(
+        get_job=lambda job_id: events.append(f"read:job:{job_id}")
+        or _owned_job(requester_id="", tenant_id=""),
+        repos=SimpleNamespace(criteria_confidence=criteria_repo),
+    )
+
+    result = orchestrator.review_pattern_suggestion(
+        {"suggestion_id": 7, "action": "reject", "rerun_retrieval": False}
+    )
+
+    assert result["status"] == "reviewed"
+    assert result["rerun"] == {"status": "not_requested"}
+    assert events == ["read:job:job-legacy", "write:review"]
 
 
 def test_criteria_automatic_baseline_selection_is_exact_owner_scoped() -> None:
