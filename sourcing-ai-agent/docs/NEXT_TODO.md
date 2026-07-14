@@ -174,13 +174,148 @@
   API dict pass-through 风险。§6#6 仍只是 characterized prerequisite，未实施 migration/claim fence；company
   physical PG schema/workspace mapping/precedence/backfill implementation、
   claim physical shape/authority/redaction/CAS consumer 均未猜测。author evidence=`11+6` characterization、company
-  adjacency `24+3`、claim PG adjacency `3`；fresh pinned formal review pending，不阻断下一 non-live bounded batch。
-- [ ] D3b workflow-command claim-fence contract + effect/CAS consumer characterization：只做零产品码、零 migration、
-  非 live 的决策锁定；从 Plan §6#6（该义务**没有 OB-ID**）、§6#7、R-019 与 R8 pre-transport fence 推导，
-  穷举 claim 后 running/partial/prerequisite/terminal、child command、ActivityAttempt、EntityDelta、result/event/domain
-  apply 写面，裁决 generation 与 opaque capability、control epoch、atomic mint、stale zero-write、API redaction、
-  rolling migration/backfill/bridge deletion 与 29-caller rollout。D3 OB 集仍为 `OB-1.1/2.1/4.1/5.1/10.1/10.2`；
-  `OB-9.1` 已 stale，不得拿来替代 §6#6。D3b 后才允许 D3c physical claim-fence implementation；served=0 不变。
+  adjacency `24+3`、claim PG adjacency `3`；首个 canonical formal runner 于 420s 超时并按门禁写成 NO-GO，
+  不构成 review evidence；fresh 缩域 pinned rerun 仍 pending，且不阻断下一 non-live bounded batch。
+- [x] D3b workflow-command claim-fence contract + effect/CAS consumer characterization（2026-07-14；enclosing
+  commit 由提交后 handoff 固定）：按 Plan §6#6（**没有 OB-ID**）+ §6#7 + R-019 决策锁定，零产品码、
+  零 migration、非 live。Scout 冻结 **13** 个物理 command mutator、claim/running **29/29**、
+  success/failure/partial/wait **39/71/15/3**、event/reducer **62**（child planner **34**），以及 API
+  mapper **80 calls/30 functions**、command/evidence carrier **14+6**、control-sync **27 calls/26 functions/5 files**、
+  raw nested command return **7 sites/3 files**。现 operation/command/activity 表还没有 durable namespace/mode
+  issuer 与 claim/terminal identity。owner 裁决 = plan-review session 必须先创建；canonical physical coordination
+  lineage 是 `coordination_plan_review_id=plan_review_sessions.review_id`，物理类型同为 positive `BIGINT`；brownfield
+  `NULL`、strict `>0`，禁止 `TEXT`/empty。baseline review row 无 scope；bootstrap 不得借用尚不存在 positive
+  review/gate 的 normal fence。source session-create command 单独使用 `scoped_session_bootstrap_v1` context；private
+  factory 在 exact selection 后签发 one-use `ScopedReviewSessionBootstrapAuthority`，Stage A claim commit 后交付
+  pre-session current-claim `ScopedReviewSessionBootstrapReceipt`（不含 ActivityRun/ActivityAttempt/review/event/result），repository/factory+verifier 以
+  `scoped-session-bootstrap-lock-v1(scope tuple, creation_idempotency_key)` 序列化（key **不含** review id/gate），
+  exact-verify source generation/epoch/post-claim command attempt/lease、authenticated workspace、immutable source event 与 typed plan pins。
+  private API 的 create variant 以 `(scope_digest, creation_idempotency_key)` unique，在一个 specialized bootstrap
+  Stage-B PG UoW 写 claim-bound ActivityRun/ActivityAttempt + session/session-created event/source command terminal pair；
+  Stage A 后未 commit 的 crash 须等 lease expiry/reselection。commit 后只用 credential-free
+  `ScopedSessionCommittedReplayContext` read/exact-compare，禁止重建 authority/receipt/token 或写入；
+  stale/cancelled/cross-tenant/collision 零写，post-commit retry 返回同一
+  `ScopedReviewSessionCreateResult`/review id。只有 session commit 后 OperationRun 才可 lock 后 exact-copy positive review
+  scope/id，并进入 normal `d3_v1` authority/business/coordination fence；legacy unscoped/JSON-scan session 不可采用。
+  scoped-session repository 是 poll/action strict-D3 的唯一 scope/coordination issuer，OperationRun 与 downstream
+  只能 exact-copy、不得 remint；command authority/receipt bind，全链 FK/lock-key numeric encoding 一致。
+  `workflow_commands` 复用 existing
+  `operation_id`（严格等于 OperationRun id），
+  不新增 alias；future strict additive columns 精确 **20**（prior 16 + 四项 `workflow_commands` typed nullable
+  predecessor columns；all-null initial/complete successor，禁止 JSON/half-null）；action-
+  backed root 另受 Plan §6#6 `action-root durable-scope gate`（无 OB-ID、非 OB-10.4）阻断。canonical factory 只在
+  exact-command selection 后单次铸 one-use ClaimAuthority；strict registry digest pins
+  `claim_fence_policy=d3_v1` + `allowed_stage_ids`/stage policy；Migration C 的 physical population guards 是
+  registry-generated hash-bound `scoped_session_bootstrap_command_types_v1` 与 `strict_d3_command_types_v1` 两个
+  literal manifests + immutable command type，分别约束 bootstrap pre-review/terminal shape 与 normal positive-review
+  D3 shape，禁止以
+  digest sentinel 判别；`expected_stage_id` 只来自 exact selected row；authority 同时绑定 coordination
+  id、business digest、selection generation、repository-time expiry、pre-claim command attempt 与
+  atomic consumed authority identity；`consumed_claim_authority_id` 仅 current-selection one-use slot，reselection
+  generation+1 后 clear，且该 slot 不承担/不宣称 durable historical audit SOT。selection UoW 先证明旧 execution lease/selection
+  reservation absent/expired，再落 exact unexpired reservation，Stage A exact-match 并以 execution lease 覆盖它
+  （绝不要求 absent/expired）+ atomic consumed id + command attempt `+1`，禁止 fenced wrapper 启动期铸造/standing
+  capability；Stage A mint 含 post-claim attempt 的 current ClaimIdentity，ActivityAttempt exact-copy
+  `command_attempt`，intent immutable source core 再持久化 `source_command_attempt`。Stage B/async supersession 共享
+  physical predecessor generation/control-source-event CAS；initial tuple all-null 且锁内证明无 current phase，
+  successor tuple complete，half-null fail closed。只有 typed `final_adjudication` terminal event 计划唯一
+  record command；source binding = immutable core + append-once terminal tuple，record 有独立 current claim，并
+  在同一 record UoW 内 fixed-order 锁定 source + record command，exact-compare current source
+  operation/scope/generation/epoch/post-claim command attempt/status/event/digest。exact outcome map：authorizable→verification
+  shadow_would_verify/intent applied；awaiting_budget→pending/awaiting_budget；needs_human→needs_human/applied；
+  failed→failed/applied；timed_out record outcome→timed_out/applied；每项发 typed
+  `company_identity_verification_recorded` discriminant event。fallback/policy-invalid→needs_human，nonretryable
+  execution→failed；control timeout 是独立 intent timed_out + verification needs_human + control event。awaiting resume
+  采用 post-gate-apply convergence：record UoW 只写 awaiting intent+`recorded_event_id`/domain event 并 terminalize；
+  gate owner UoW 在推进 exact watermark 前按全局顺序 reserve/lock
+  `resume-after-grant-v2:<scope_digest>:<positive-coordination-review-decimal>:<intent_id>:<phase_generation>:<recorded_event_id>`，再由 post-apply typed pins
+  完成 command/outbox（active grant=`queued`，否则 `retry_wait`）；gate-event/grant owner 共用
+  `maybe_plan_resume`。identity 含 recorded_event_id，不含 grant/瞬时 delivery；grant-first/record-first
+  均可 exact-replay/reawaken，关闭 one-shot gap/old gate-digest collision。`not_applied` 仅允许
+  `reason=stale_claim|business_precondition_conflict` 的零写返回，不是 event/state。
+  跨 owner human/recompile/所有 cancel、D3 OperationRun terminal/cancel/retry/requeue/resume/reset/rebuild/recovery 与
+  dispatch-invalidating control 共用 `d3-dispatch-v2` 有界 coordination lock，key=immutable scope tuple + exact
+  coordination id，root intent 不参与；Stage B/async supersession/
+  record/terminal/control/dispatch/resume_after_grant 的唯一锁序均为 operation root → optional plan/review/gate →
+  **all participating workflow_commands**（source/record/resume/supersession/current owner/idempotency target，确定序）
+  → intent/predecessor → ActivityRun/Attempt → optional grant/cost；进入 intent 后不得回头 insert/lock command，未触及
+  aggregate 只可跳过、不可逆序。`d3_business_fence_v1` evaluator 只收 closed typed context union：claimed-command
+  `stage_b|terminal|record|dispatch|resume_after_grant` 带 authority+receipt；aggregate `control` 带 registered control
+  authority/expected revisions 且无 claim token；六 phase mandatory、wrong context fail closed，JSON/ambient 不得补齐
+  （仅 heartbeat/read-only
+  exact replay 窄例外）。只有 invalidating control/input/requeue 接受态推进 control epoch `+1`；
+  `succeeded|failed_terminal` terminal 不加 epoch，但清 token/lease并写 terminal pair。control-first/stale/business
+  mismatch 的 domain/attempt/intent/event/command/source/result 零写；dispatch-first 只允许已授权 in-flight，
+  response 才入 shared quarantine repository。immutable identity/digests insert-once，cost/retention typed CAS
+  entrypoints 写集分离且 monotonic；`cost_state: pending_reconciliation -> reconciled_confirmed | reconciled_uncertain |
+  reconciled_no_call` 与 `retention_state: retained -> purged_tombstone` 正交、domain 零 apply。terminal command/event
+  用 local both-null/both-non-null CHECK + `MATCH SIMPLE DEFERRABLE` composite FK；该 FK 只证明 forward edge，
+  reverse orphan-event rejection 由 terminal repository 单 PG UoW + injected-failure rollback 证明；pair 在 result-terminal 期间不可变，
+  仅 registered reopen 可清；future native-PG DDL 须证明 null/half-null/exact/mismatch/non-orphan 语义。heartbeat 按
+  occurrence identity；public allowlist/token 永不投影；完整 29-caller inventory 仅作
+  observation/zero-unauthorized-increase denominator，scope-local deletion 只覆盖 bootstrap/strict-D3 manifests；任何 `legacy_unfenced` entry/
+  caller 尚存时 generic bridge 明确保留。
+  record apply 是 terminal-UoW specialization：one PG transaction 同时执行 record+terminal predicates，写
+  verification/intent、recorded domain event、workflow terminal event、ActivityAttempt+command terminal pair；crash
+  全回滚/exact replay 全 aggregate。terminal policy registry 与 transport terminal receipts 现为两个独立 owner row。
+  checked-in `TERMINAL_PROVENANCE_SPECS` / closed `TerminalProvenanceSpec` union 是唯一 semantic SOT，精确包含
+  `TransportResponseSpec|TransportAttemptFailureSpec|NoExposureTerminalSpec` 三类；每个
+  `(command_type, stage_id, terminal_transport_variant, terminal_status, terminal_event_type, terminal_outcome,
+  terminal_reason if exposure, failure_code if attempt_failure)` 必须命中唯一 applicable entry。
+  `terminal_provenance_policy_digest` 在 command creation 固定，并在 exposure creation exact-copy；historical
+  entry/digest 在仍有 active/retained command、exposure、response/failure receipt、terminal event、source-intent
+  tuple、quarantine/tombstone 或 cost/audit 引用时不得删除或
+  reinterpret。transport-backed response terminal exact-bind committed exposure/physical-call/provider-call/
+  `ModelInvocationEnvelope`/stable occurrence + canonical response/result digest + result artifact ref/digest；合法
+  `length|content_filter` terminal envelope 仍是 response，只有 incomplete/truncated wire 或 protocol-parse failure
+  才能写 `TransportAttemptFailureReceipt`。exposure `result_ref=receipt.result_artifact_ref or ''`；same-digest/
+  different-result-ref、different artifact 或 half-pair 全部零写 mismatch。failure receipt exact-pin registered failure
+  spec/code/canonical digest、required failure artifact、claim/business pins、wire-call state、`retry_policy_revision` 与
+  `retryable|terminal` disposition；retryable 只能 `retry_wait` 且 terminal/source tuple 零写。response/failure creator
+  与 exposure-backed terminal 共锁同一 exposure：response-first 拒 failure terminal；terminal-disposition failure-
+  first 后 valid response 仅进 quarantine；retryable-failure→`retry_wait` 与 later valid response 同样只留 response
+  receipt/late quarantine，不能恢复 apply。registered non-transport 或 proven pre-call/no-send terminal 仅由
+  `NoExposureTerminalSpec` 授权 complete-none `no_exposure`；它在 common `d3-dispatch-v2` coordination lock 下证明
+  dispatch/exposure absence，**绝不**尝试锁一个不存在的 exposure row。stale already-authorized receipts 仅 audit/cost、
+  不授权 apply；attempt/protocol failure 本身不进 response quarantine。provider delivery id 或 durable inbound
+  `TransportResponseReceipt` get-or-create stable occurrence；redelivery 复用，exact key=
+  `late-response-v1:<scope_digest>:<dispatch_exposure_id>:<canonical_delivery_identity>`，digest mismatch collision。
+  post-network 仅承接已授权 exposure，固定 exposure→receipt→quarantine/cost-axis order，绝不回到 operation/command/
+  intent/domain，也不授权 send/apply。Plan §6#7 的 owner matrix 已锁成机械非空 **26×10**（将 terminal policy
+  registry 与 transport terminal receipts 分行；owner/SOT/allowed/derivation/consumers/forbidden/fallback/migration/
+  deletion），decision shape complete；物理 owner/migration/repository/runtime 仍 NOT IMPLEMENTED。rollout 依赖序
+  固定为 public projection/migration 与 registry/policy pins、双 population manifests、bootstrap authority
+  factory+verifier 先落；随后才启用 `scoped_session_bootstrap_v1` specialized Stage-B session UoW 与
+  credential-free committed replay；session commit 后才创建 exact-copy OperationRun 并进入 normal positive-
+  review `d3_v1` fence；三类 terminal receipts/race acceptance 完成后才可启用 non-live strict path。
+  `OB-10.1/10.2/10.3/10.4` 与 action-root gate 均 carry；R-019 仍 open，served=0。首轮 local non-author
+  advisory=`NO-GO`（P0/P1/P2/P3=`0/8/2/0`）；第二次 fresh local advisory 仍为 `NO-GO`
+  （`0/8/3/0`，11 findings）；第三次 fresh local advisory 仍为 `NO-GO`（`0/5/4/0`，9 findings）；round4 fresh
+  advisory=`NO-GO`（`0/3/2/0`），parallel semantic audit=`NO-GO`（`0/5/4/0`）；round5 semantic=`NO-GO`
+  （`0/5/2/0`），fresh broad=`NO-GO`（`0/3/3/0`）；post-round5 round6 semantic=`NO-GO`（`0/1/2/0`），
+  broad=`NO-GO`（`0/4/0/0`）；round7 semantic=`NO-GO`（`0/4/0/0`），broad=`NO-GO`（`0/4/2/0`）；round8
+  semantic=`NO-GO`（`0/1/0/0`），broad=`NO-GO`（`0/6/1/0`）。全部 finding 均在本 decision-only 文档批
+  fixed-forward；两次 round9 local advisory 因 Codex operator usage limit 在 final response/artifact 前终止，故
+  **没有 verdict**；其直接 partial findings 已 fixed-forward。fresh non-author re-review 与 pinned formal review
+  pending，不能写成 formal GO，并仅对 Live/signoff fail closed。current author evidence=D3b `32 passed`、D3a+D3b
+  characterization `49 passed`、lint `58 files`、mypy `81 errors/4 files`（棘轮持平）、diff clean；这些仍不是 formal GO，
+  且不阻断 owner 已授权的下一 non-live bounded implementation。
+- [ ] D3c1 public workflow-command projection seal（由 D3b §10/rollout step 1 推导；零 migration、零 claim/CAS）：
+  `CommandKernel._workflow_command_api_record` 改 checked-in closed allowlist，保留 33 个既有 descriptor +
+  `claim_generation/control_epoch` 两个只读 diagnostic + 7 derived fields；递归移除 payload/result capability，
+  消除 **7** 个 nested raw command returns，令 14 carrier routes/15 method-route variants、6 schema refs、typed
+  `operation_sync`、frontend adapter/demo raw 全部收敛到同一 projector。Scope issuer/ClaimAuthority/29 callers/
+  Stage A/B/dispatch/migration/action-root durable-scope gate/R-019/OB-10.1-10.4 与 served=0 全部继续 carry；
+  不得借 projection seal 宣称 fence 闭合。
+- [ ] Track D 后的 user-owned cohort selection contract（Thinking Machines Lab live 前置）：以一个 versioned、
+  registry-digest-pinned `CohortSelection` 作为唯一 owner，显式承载 canonical ordered
+  `role_bucket_ids[]`（Researcher/Engineer/Product Manager 可自由多选且 registry 可扩展）、
+  `employment_statuses[]`（current/former 可自由多选）、`role_match=any|all` 与 `source=user_explicit`。UI → request
+  schema → plan/review → compiler/provider lanes → result/audit 必须 exact-copy；用户显式选择优先于 raw text/model
+  patch，unknown 值 fail closed，hash 前按 registry order canonicalize。HarvestAPI 若只接受 scalar employment
+  status，current+former 必须编译为两个独立有界 lanes 后确定性 merge/dedupe，禁止取数组第一项决定 provider
+  lane；legacy flat fields 只在 report-visible compatibility boundary 物化并有删除条件。fake/scripted E2E 必须
+  覆盖单选/多选、顺序不变 hash、model 不可覆盖、lane budget/cost 和结果中 effective cohort 可审计。
 - [ ] Track D 落地后的首个 live canary：fake/scripted 与 scope-matched review gate 全绿后，仅使用 operator 外置、
   不入库/不落日志的凭据做 **Thinking Machines Lab-only** 有界尝试，目标为华人 pre-training researcher mapping；
   OpenAI/Anthropic/Google DeepMind/xAI/Meta 及全量扩展另行 gating，不与首轮 canary 合并。

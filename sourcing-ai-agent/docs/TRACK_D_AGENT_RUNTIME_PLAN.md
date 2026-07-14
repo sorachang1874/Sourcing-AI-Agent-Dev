@@ -123,26 +123,96 @@ serve、会话/事件层、planner loop），用一个垂直切片证明闭环�
   workspace 租户列与授权 scope；投影 ownership = turn owner 单写者；可重建（从 canonical workflow
   事件重放恢复，重放语义随表 DDL 声明）；fast preflight 断言 terminal 真值只存在于 canonical
   workflow 状态表。
-- loop 预算：turn 级 max_steps/max_cost/max_wall 超限 fail-closed 转 HITL；每步落 `agent_events`。
+- loop 预算：turn 级 max_steps/max_cost/max_wall 超限 fail-closed；D3 使用详设的 closed typed map（可补 grant 的
+  step/cost/search-envelope exhaustion=`awaiting_budget`，hard no-more-grant policy exhaustion=`needs_human`，
+  execution failure=`failed`，deadline/max_wall=`timed_out`），其他 slice 在自己的 owner contract 中映射 HITL；
+  每步落 `agent_events`。
 - 依赖：poll-mode 单进程版可先行；C2 身份/C3 拆进程是**多用户 hosted 激活**前置（见 §3 v2 拆分）。
 
 ### D3 — 第一垂直切片：公司身份自验证 loop（详设 v2：`TRACK_D_D3_COMPANY_IDENTITY_SELF_VERIFICATION_DESIGN.md`）
 
 - v4 要点（与 D3 详设 v4 严格同词汇，历经三轮评审收敛）：
   - **事件驱动 W11 接入（review-first，v8 与 D3 详设逐字对齐）**：plan.build 结果事件 → reducer
-    计划 plan_review.request → session 创建事件 → reducer 计划 `company.identity.verify.evidence`
-    → 验证 terminal 事件**判别化路由**（final_adjudication → record 授权分支；
-    evidence_insufficient → grant 可用则 search.expand、否则 record 非授权分支 + intent
-    `awaiting_budget`【grant 授予事件续跑】；失败/超时 → record 非授权分支）→
-    `company.identity.verification.record`（验证 owner，三分支：授权/非授权【needs_human 等
-    真实域写】/not_applied【仅 stale 围栏失配】）→ recorded 域事件（授权与非授权分支均触发）→
+    计划 plan_review.request → session 先创建并产 canonical `review_id` → strict OperationRun 固定 pin
+    `coordination_plan_review_id=plan_review_sessions.review_id`（same positive `BIGINT`；brownfield `NULL`、strict
+    `>0`，禁止 `TEXT`/empty）；baseline review row 没有 scope，所以 strict session 必须先由 private scoped-session
+    owner 从 server runtime + authenticated workspace 写 namespace/mode/workspace/issuer/digest，OperationRun 锁后
+    exact-copy scope/id，legacy unscoped session 不可采用；command exact-copy、authority/receipt bind →
+    reducer 才计划 `company.identity.verify.evidence`
+    → 验证 terminal 事件**判别化路由**（active grant 下的 `evidence_insufficient` 只计划 search.expand；暂无
+    grant 但 policy 允许补发=`awaiting_budget`；hard envelope/policy 禁止再 grant 或 semantic/protocol-invalid=
+    `needs_human`；non-retryable execution failure=`failed`；deadline/max_wall=`timed_out`；均先由验证 owner
+    规范化为 typed `final_adjudication(record_outcome=awaiting_budget|failed|timed_out|needs_human)`；授权结果为
+    `final_adjudication(record_outcome=authorizable)`；**reducer 仅从 final_adjudication 计划 record**）→
+    唯一 command type `company.identity.verification.record`（验证 owner，exact map：authorizable→
+    verification `shadow_would_verify`/intent `applied`；awaiting_budget→`pending`/`awaiting_budget`；
+    needs_human→`needs_human`/`applied`；failed→`failed`/`applied`；timed_out record outcome→
+    `timed_out`/`applied`，每项发 `company_identity_verification_recorded` typed discriminant event）/not_applied【仅 stale 或 business 围栏失配的 typed
+    零持久写返回，不落域事件】）→ recorded 域事件
+    （仅授权与非授权分支触发）→
     reducer 计划 `plan_review.identity_result.apply`（plan review owner 写 gate，watermark 单调，
     阻塞方向恒占优）；commit owner 同事务复查 canonical 验证行；legacy 前门同一共享 helper。
+    `awaiting_budget` record UoW 只写 awaiting intent + `recorded_event_id`/domain event 并 terminalize；随后 gate
+    owner UoW 在 gate→all-command rows 的全局顺序中先 reserve/lock
+    `resume-after-grant-v2:<scope_digest>:<positive-coordination-review-decimal>:<intent_id>:<phase_generation>:<recorded_event_id>`，再原子推进 watermark 并以
+    post-gate-apply typed pins 创建 command/outbox（active grant=`queued`，否则 `retry_wait`）。gate-event owner/grant
+    owner 共用 `maybe_plan_resume`；identity 包含 recorded_event_id、不含 grant/瞬时 delivery。grant-first
+    由 gate apply 看见 durable grant，record-first 由 later grant reawaken，关闭 one-shot gap/old gate-digest collision。
+    control timeout 单独映射 intent=`timed_out`、verification=`needs_human` + control event，不能冒充 record outcome。
   - **身份专属 gate reason**（TD-7）：`company_identity_unverified` OR 组合、只清自己；Phase 1
     shadow（`shadow_would_verify` 非授权态 + 人一键确认）→ 统计门 + owner GO + 逐行 revalidation
     + promotion 命令 → Phase 2（`verified_accepted`）。**修复今天低置信直接执行的真空洞**。
-  - **「人永远赢」**：verification intent 绑定物理执行身份（command claim generation +
-    attempt id）+ 单 UoW 全条件 CAS + 人工原子 supersession；晚到/失配一律 `not_applied` 显式终态。
+  - **「人永远赢」**：workflow registry/scheduler 只在 exact-command selection 后由 private factory 单次铸造
+    不可由字符串/公共 payload 构造的 one-use `ClaimAuthority`（selection generation/repository expiry/atomic
+    consumed id + 精确 owner/type/scope/worker/lease/control epoch）；wrapper 无启动期铸造/standing capability。
+    selection UoW 先证明旧 execution lease/selection reservation absent/expired，再持久化 exact unexpired
+    reservation；Stage A 必须匹配该 reservation 并以 execution lease 覆盖它，不能要求 lease absent/expired，且
+    只有原子消费 authority 后才推进 claim generation、轮换 token verifier 并返回 current `ClaimIdentity`。
+    strict registry entry 将 `claim_fence_policy=d3_v1`、`allowed_stage_ids`/stage policy 纳入 authority digest；
+    Migration C 从 registry 分别生成 hash-bound `scoped_session_bootstrap_command_types_v1` 与
+    `strict_d3_command_types_v1` literal manifests，并以 immutable command type 做各自物理 population guard，禁止
+    用 digest sentinel 判别。authority 的 `expected_stage_id` 只来自 exact selected row。normal authority 另绑定
+    pre-claim `workflow_commands.attempt`，Stage A 原子 `+1` 后 ClaimIdentity/ActivityAttempt exact-copy post-claim
+    attempt。verification intent 绑定 **source verification command** 的 immutable core generation/control epoch/source command attempt +
+    append-once terminal status/event/digest；后继 record command 有独立 current claim，record owner 单 UoW
+    exact-compare current source row。requeue successor 由下一 Stage-B 与 async supersession
+    共享 physical predecessor generation/control-source-event CAS 后创建；initial Stage B 的 predecessor tuple
+    全 sentinel 且证明无 current phase，successor tuple 全非空，half-sentinel fail closed。人工/重编译/所有
+    cancel、D3 OperationRun terminal/cancel/retry/requeue/resume/reset/rebuild/recovery 与 dispatch 共用 `d3-dispatch-v2` 有界
+    coordination lock，key = immutable scope tuple + exact `coordination_plan_review_id`（root intent 不参与），
+    唯一行锁序为 operation root → optional plan/review/gate → **all participating workflow_commands**
+    （source/record/resume/supersession/current owner/idempotency target，确定序）→ intent/predecessor →
+    ActivityRun/Attempt → optional grant/cost；进入 intent 后不得回头 insert/lock command，未触及 aggregate 只可
+    跳过、不可逆序。四项 predecessor pins 是 `workflow_commands` typed nullable physical columns，只允许 all-null
+    initial role 或 complete successor CAS，禁止 JSON/half-null。`workflow_commands.d3_business_fence_digest` 是
+    canonical `d3_business_fence_v1` 的 immutable digest；closed typed context union 明确 claimed-command
+    `stage_b|terminal|record|dispatch|resume_after_grant` 必须带 authority+receipt，aggregate `control` 带 registered
+    control authority/expected revisions 且无 claim token；六 phase 全部 mandatory、wrong context fail closed，并
+    复查 typed plan/review/gate/base-intent + phase manifest/grant/exposure pins（仅 heartbeat/read-only exact replay
+    是 command-only 窄例外）。stale application/business mismatch 只返回
+    `not_applied(reason=stale_claim|business_precondition_conflict)`，该返回不是 event/state，且 domain/attempt/intent/
+    event/command/source/result 零写；只有 authorization 已提交的 in-flight response 才入 shared quarantine
+    repository，由 insert-once immutable identity 与 disjoint monotonic cost/retention CAS entrypoints 管理，
+    不伪造 command/domain terminal/event。record apply 是 terminal-UoW specialization：同一 PG transaction 执行
+    `phase=record` + `phase=terminal` predicates，并原子写 verification+intent、recorded domain event、workflow
+    terminal event、ActivityAttempt+command terminal pair；crash 全回滚/exact replay 全 aggregate，绝无 applied intent
+    + running command gap。response-backed terminal exact-bind committed exposure/physical call/provider call/
+    ModelInvocationEnvelope/result occurrence+digest，且 result-ref 唯一派生 receipt artifact ref；checked-in
+    `TERMINAL_PROVENANCE_SPECS` 以 `TransportResponseSpec|TransportAttemptFailureSpec|NoExposureTerminalSpec`
+    三 variant 唯一拥有 response、attempt-failure 与 proven no-send 语义；applicability key 包含
+    command/stage/terminal transport variant/status/event/outcome、response reason 或 failure code。其唯一 applicable entry 集合的 digest
+    在 command/exposure 创建时经 authority/business pins 冻结；已 pin 的历史 policy 不得被 deployment 重新解释，
+    且保留到没有 active/retained command、exposure、receipt、event、source-intent、quarantine/tombstone 或
+    cost/audit 引用。
+    committed-exposure pre-response failure 走 typed `TransportAttemptFailureReceipt` + `attempt_failure`；valid
+    response envelope 的 `terminal_reason=length|content_filter` 仍是 response receipt（只影响 adjudication 接受），
+    只有 incomplete/truncated wire 或 protocol parse failure 才是 attempt failure。registered non-transport 或
+    proven pre-call/no-send 由 `NoExposureTerminalSpec` 授权 complete-none `no_exposure`，并在 common coordination/
+    command lock 下证明 exposure 缺席，不能锁一条必须不存在的 exposure。provider delivery id 或 durable inbound
+    `TransportResponseReceipt` get-or-create stable response occurrence；redelivery 复用，digest mismatch collision；
+    retry transition 也锁 exposure：response receipt 先赢则拒 retry，retry 先赢推进 epoch，后到 response 只可
+    receipt+quarantine。post-network 只承接已授权 exposure，固定 exposure→receipt→quarantine/cost-axis order，绝不
+    回到 operation/command/intent/domain，且不授权 send/apply。
   - **provenance**：机器验证 = 服务端引用（公共 ingress 禁携带）；人工 override 现字段不变；
     执行期付费 search+judge 路径「以消费代退役」+ **既有全局文件注册表收编为 PG canonical**
     （inventory 全部 4+ 写入方/快照重扫、backfill=needs_human、迁移桥+删除条件、precedence preflight）。
@@ -154,6 +224,15 @@ serve、会话/事件层、planner loop），用一个垂直切片证明闭环�
     （身份/usage/fallback 模型不可自证）；确定性接受谓词七条前置于模型置信；统计门 = 零误确认 +
     分母 ≥120。
 - 不依赖 D0 tool-calling、不依赖 D2、不依赖 model_native_search；与 Track C 可完全并行。
+- D3b round4 fresh local advisory=`NO-GO`（P0/P1/P2/P3=`0/3/2/0`），独立 semantic audit=`NO-GO`
+  （`0/5/4/0`）；round5 semantic=`NO-GO 0/5/2/0`、fresh broad=`NO-GO 0/3/3/0`；round6
+  semantic=`NO-GO 0/1/2/0`、broad=`NO-GO 0/4/0/0`；round7 semantic=`NO-GO 0/4/0/0`、
+  broad=`NO-GO 0/4/2/0`；round8 semantic=`NO-GO 0/1/0/0`、broad=`NO-GO 0/6/1/0`，全部只作
+  fixed-forward 输入而非 formal verdict。两次 round9 local advisory 因 Codex operator usage limit 在 final
+  response/artifact 前终止，故没有 verdict；直接 partial findings 已 fixed-forward。current author
+  evidence=`32/49/58/81` + diff clean；fresh non-author local re-review 与 pinned formal review
+  pending，仅对 Live/signoff fail closed，不冻结后续 non-live batch；served
+  Agent tool population=`0`，R-019、action-root gate 与 OB-10.1/10.2/10.3/10.4 继续 open。
 
 ### D4 — 之后（本文只圈定，不展开）
 
@@ -252,8 +331,148 @@ TD-4 初始路由表已按 owner 2026-07-13 裁决落档（D0 §4）。
    approve/retry run（D0/D2 批）。
 5. `judge_call_key` 追加 workspace/intent generation/有效路由/schema/policy revision 维度；
    「official domain 归属」的服务端证明规则成文（D3 批）。
-6. workflow_commands 新增永不重置的 claim generation/token 列（migration，D3 批前置）。
-7. §4b owner 矩阵扩展到全部共享字段（补 derivation/migration-status 列）（D3 批）。
+6. workflow command claim-fence（migration，D3 批前置；本项没有 OB-ID）：review session 必须先创建，
+   canonical coordination lineage 为 `coordination_plan_review_id=plan_review_sessions.review_id`，物理类型同为
+   positive `BIGINT`（brownfield `NULL`，strict `>0`，禁止 `TEXT`/empty）；poll-mode 的唯一 scope issuer 是
+   private scoped review-session repository：它从 server-owned runtime context + authenticated workspace
+   签发 immutable namespace/mode/workspace/issuer/digest，并把
+   `creation_source_workflow_command_id/creation_source_event_id/creation_plan_id/creation_plan_revision/
+   creation_plan_bundle_digest/creation_idempotency_key` 固定为 durable causal/idempotency identity。该 owner
+   以 `(scope_digest, creation_idempotency_key)` scope-aware unique key 与专用
+   `scoped-session-bootstrap-lock-v1` transaction lock（key 只含 canonical scope tuple +
+   `creation_idempotency_key`，明确不含尚不存在的 review id/gate）在一个 PG UoW 内 create-or-exact-replay session、session-created
+   event 与 source command terminal pair。bootstrap command 的 registry policy 是
+   `claim_fence_policy=scoped_session_bootstrap_v1`：closed typed
+   `ScopedSessionBootstrapContext = ScopedSessionCreateContext | ScopedSessionCommittedReplayContext` 明确不进入
+   normal six-phase business union；exact selection 后 private
+   `mint_scoped_review_session_bootstrap_authority(...)` 只铸一次
+   `ScopedReviewSessionBootstrapAuthority`，Stage A claim commit 后返回 matching pre-session current-claim
+   `ScopedReviewSessionBootstrapReceipt`（不含 ActivityRun/ActivityAttempt/review/event/result），creator
+   只通过 `verify_scoped_session_bootstrap(...)` 验证；二者绑定
+   source command generation/epoch/post-claim command attempt/lease、authenticated workspace 与 typed plan pins，但 coordination review id/
+   review/gate 明确 absent，且只能授权 session create，禁止 transport/domain effect。creator 在 bootstrap lock 下
+   exact-validate 该 authority/receipt 与 tenant/plan；specialized bootstrap Stage B 在 session UoW 内创建
+   ActivityRun/ActivityAttempt + session/event/source terminal。Stage A 后未 commit 的 crash 须等 lease expiry/
+   reselection；commit 后只由 credential-free `ScopedSessionCommittedReplayContext` read/exact-compare，禁止重建
+   authority/receipt/token 或写入。session commit/exact replay 返回独立 `ScopedReviewSessionCreateResult`，此后才允许 normal positive-review-id
+   `d3-dispatch-v2`/`d3_business_fence_v1`。stale/cancelled/cross-tenant 只返回零写，collision 逐字段不等即零写，crash/retry 必须返回同一
+   positive review id。legacy
+   JSON-scan/unscoped creator 不能 seed strict D3。strict OperationRun creation 只锁 scoped session 后
+   exact-copy scope 与 coordination id，禁止另行 remint；
+   command/ActivityRun/ActivityAttempt/terminal event/verification intent 在各自创建 UoW exact-copy+compare；
+   ActivityAttempt 物理 exact-copy post-claim `command_attempt`，verification intent source core 再持久化相同
+   `source_command_attempt`。
+   `workflow_commands` 复用既有 `operation_id` 作为唯一 operation link，并 exact-equal
+   `operation_runs.operation_run_id`；不得新增 alias。future strict command additive columns 精确为 **20**（prior
+   sixteen + 四项 typed nullable predecessor pins）；predecessor local shape 只允许 all-null initial role 或 complete
+   successor CAS，禁止 JSON/half-null。它至少持久化 scope
+   identity、registry authority digest（其 `CommandTypeSpec` 同时纳入由唯一 applicable terminal specs 推导的
+   `terminal_provenance_policy_digest`）；Migration C 从同一 registry 分别生成 hash-bound
+   `scoped_session_bootstrap_command_types_v1` 与 `strict_d3_command_types_v1` literal manifests，以 immutable
+   command type 分别 guard bootstrap pre-review/terminal 与 normal positive-review D3 population（禁止 digest
+   sentinel discriminator）。
+   selection generation/consumed authority id、永不重置的 claim generation/private token verifier、独立 control
+   epoch、heartbeat occurrence 与 nullable terminal outcome digest/event identity；不得从 payload、ambient env、
+   `attempt`、`lease_owner` 或行自身 owner 自比推导授权。poll/action strict-D3 root 都只能由上述 scoped
+   review-session repository 签发；action-backed root 另受
+   **Plan §6#6 action-root durable-scope gate**（稳定本地名、无 OB-ID）阻断：action owner 必须先物理持久化
+   namespace/mode/workspace/issuer/digest，scoped-session repository 先 lock/exact-compare action pins 再签发
+   session scope，OperationRun UoW 只 exact-copy；该 gate 不得借 OB-10.4 代替。
+   canonical registry/scheduler 只在 repository exact-command selection 后由 private factory 单次铸造 one-use
+   `ClaimAuthority`（strict registry entry 把 `allowed_stage_ids`/stage policy 纳入 digest，`expected_stage_id`
+   只来自 exact selected row；同时绑定 coordination/business pins、selection generation + repository expiry +
+   pre-claim command attempt + expected control epoch）；selection UoW 必须先证明
+   旧 execution lease/selection reservation absent/expired，并以 existing lease fields 持久化 exact unexpired
+   reservation；Stage A exact-match 该 current reservation、以 execution lease 覆盖它（绝不要求 absent/expired），
+   同一 CAS 原子写 consumed authority id、将 command attempt `+1` 并返回含 post-claim attempt 的 current
+   `ClaimIdentity`。`consumed_claim_authority_id` 只是
+   current-selection one-use slot；reselection 先 generation+1 并 clear，且该 slot 不承担/不宣称 durable
+   historical audit SOT。完整 29-wrapper inventory 仅作 observation/zero-unauthorized-increase denominator；
+   D3b 只删除 bootstrap/strict-D3 manifest population 的 scope-local bridge，任何 `legacy_unfenced` entry/caller
+   尚存时 generic legacy bridge 明确保留。fenced wrapper 无启动期铸造/standing capability，也不得传
+   expected-owner 字符串替代 capability。Stage B 原子创建 attempt，并与 async supersession command 对 D3
+   source intent 共享 physical expected predecessor id/generation/control-source-event CAS；四项具名为
+   `workflow_commands` typed nullable physical columns，initial tuple all-null 且证明无 current phase，successor tuple
+   complete，half-null fail closed，完成
+   lock/supersede/successor 单赢。只有 `final_adjudication` terminal event 能计划唯一 typed-outcome record command；
+   record UoW exact-compare current source + independent record command 的 source operation/scope/
+   generation/epoch/post-claim command attempt/status/event/digest 与 frozen binding。`d3_business_fence_v1` 对 typed base
+   plan/review/gate/intent pins canonicalize；closed typed context union 的 claimed-command
+   `stage_b|terminal|record|dispatch|resume_after_grant` 都必须带 authority+receipt，aggregate `control` 带
+   registered control authority/expected revisions 且无 claim token；六 phase mandatory，wrong context fail closed。
+   provider/model transport 与人工/重编译/所有 cancel、D3 OperationRun
+   terminal/cancel/retry/requeue/resume/reset/rebuild/recovery 及一切
+   dispatch-invalidating command control 使用 `d3-dispatch-v2` 同一有界 coordination lock，key = immutable
+   scope tuple + exact `coordination_plan_review_id`，root intent 不参与；Stage B、async supersession、
+   record/terminal/control/dispatch/resume_after_grant 的唯一 row-lock order 均为 operation root → optional
+   plan/review/gate → all participating workflow_commands（source/record/resume/supersession/current owner/
+   idempotency target，确定序）→ intent/current predecessor → ActivityRun/Attempt → optional grant/cost；进入 intent
+   后不得回头 insert/lock command，未触及 aggregate 只可跳过、不可逆序，并复查
+   plan/review/gate/intent/grant/cost predicate；仅 heartbeat occurrence/read-only terminal exact replay 是窄例外；
+   只有 invalidating control/input/requeue 接受态推进 command control epoch `+1`，`succeeded|failed_terminal`
+   terminal 不推进 epoch但清 token/lease并写 terminal pair；
+   control 先赢则零 send，dispatch 先赢只形成已授权 in-flight，response 仅可入 durable quarantine/cost
+   reconciliation；provider delivery id 或 durable inbound `TransportResponseReceipt` get-or-create stable
+   `response_occurrence_id`（stable occurrence），redelivery 复用；exact quarantine key=
+   `late-response-v1:<scope_digest>:<dispatch_exposure_id>:<canonical_delivery_identity>`，digest mismatch 是
+   collision；post-network 固定 exposure→receipt→quarantine/cost-axis order，绝不
+   回到 operation/command/intent/domain，也不授权 send/apply。stale application/business mismatch 只返回
+   `not_applied(reason=stale_claim|business_precondition_conflict)`（不是 event/state），domain/attempt/intent/event/
+   command/source/result 全零写；
+   quarantine 由一个 SQL repository 拥有，immutable identity/digests insert-once，cost/retention typed CAS
+   entrypoints 写集分离且 monotonic；quarantine 的 cost_state/retention_state 正交：
+   `cost_state: pending_reconciliation -> reconciled_confirmed | reconciled_uncertain | reconciled_no_call` 与
+   `retention_state: retained -> purged_tombstone` 正交，禁止混成
+   disposition；禁止持 PG transaction 跨网络。strict-D3 首次 `succeeded|failed_terminal` result command+event 取 common lock，在同一 UoW 写
+   canonical nullable outcome digest/event pair；pair 在 result-terminal 期间不可变，仅 registered reopen 可在
+   requeue 前清除；event composite unique + command `MATCH SIMPLE DEFERRABLE` FK + local both-null/both-non-null
+   CHECK；该单向 FK 不证明 reverse event→terminal command，orphan-event rejection 由同一 repository UoW 与
+   injected-failure rollback 证明。future native-PG DDL 必须证明 null pair 接受、half-null/missing event 拒绝、exact event 接受且不可
+   orphan；exact replay 零写，mismatch fail-closed。record apply 是 terminal-UoW specialization：one PG transaction
+   同时执行 record+terminal predicates，写 verification/intent、recorded domain event、workflow terminal event 与
+   attempt+command terminal pair；crash 全回滚/exact replay 全 aggregate。transport-backed terminal 绑定 committed
+   exposure/physical-call/provider-call/ModelInvocationEnvelope/response occurrence + canonical response/result
+   digest + result artifact ref/digest，typed terminal outcome 必须 exact-copy/exact-equal receipt：exposure 的
+   `result_ref` 唯一等于 receipt `result_artifact_ref`（缺席则 canonical empty），`result_digest` 等于 canonical
+   result digest，artifact pair exact-copy；same-digest/different-ref 或 half-pair 均 fail closed。D0 明确不承载的
+   committed-exposure pre-response transport/protocol failure 走独立 typed `TransportAttemptFailureReceipt` +
+   `attempt_failure` terminal variant：它 exact-bind current claim/business pins、registered failure code/spec/canonical
+   digest、required failure artifact 与 committed exposure/wire-call state，result/envelope/response receipt 全
+   complete-none；terminal retry disposition 才可写 `failed_terminal`，late response 仍只能入 quarantine，绝不伪造
+   `ModelInvocationEnvelopeV1`。registered non-transport result 或 proven pre-call/no-send terminal 只能由 registry
+   `NoExposureTerminalSpec` 授权 complete-none `no_exposure` variant；caller flag 不可选路。checked-in
+   `TERMINAL_PROVENANCE_SPECS` 是
+   `TransportResponseSpec|TransportAttemptFailureSpec|NoExposureTerminalSpec` 的唯一 registry SOT，闭集 pins
+   command/stage/status/event/outcome 与 variant digest；failure spec 另 pins failure-code→`retryable|terminal` map 和
+   `retry_policy_revision`。registry preflight 必须证明每个
+   `(command_type, stage_id, terminal_transport_variant, terminal_status, terminal_event_type, terminal_outcome,
+   terminal_reason if exposure, failure_code if attempt_failure)` 恰有一个 applicable entry；其集合形成
+   `terminal_provenance_policy_digest`，纳入 `CommandTypeSpec` authority digest，并在 command 与 exposure 创建时经
+   existing authority/business pins durable freeze（不新增 workflow-command column）；historical specs 保留到没有
+   active 或 retained command、exposure、response/failure receipt、terminal event、source-intent tuple、
+   quarantine/tombstone 或 cost/audit 引用。receipt/outcome exact-copy，retryable 只能 `retry_wait`、不得 terminalize。valid
+   response envelope 即使 `terminal_reason=length|content_filter` 也走 `TransportResponseReceipt`；只有 incomplete/
+   truncated wire 或 protocol parse failure 才走 attempt-failure receipt。response/failure receipt creator、failure
+   terminal 与 retry transition 都先 `FOR UPDATE` 同一 exposure；response 先赢则 failure/retry 被拒，retry 先赢先
+   推进 epoch，后到 valid response 只可 receipt+quarantine，failure terminal 先赢亦同。no-exposure branch 不锁
+   exposure row；它持 common coordination/command locks，而 dispatch creation 必须持同一 locks，故只在锁内证明
+   exposure absent 后 terminalize。已授权 exposure 在 claim/business stale 后仍可写 response/failure evidence 供
+   audit/cost，但都不授权 apply；protocol failure 本身只留 failure receipt/cost audit，不进 response quarantine。
+   `awaiting_budget` record 只落 awaiting intent+recorded_event 并 terminalize；gate
+   owner 在 post-apply watermark 下先 reserve/lock
+   `resume-after-grant-v2:<scope_digest>:<positive-coordination-review-decimal>:<intent_id>:<phase_generation>:<recorded_event_id>` row，再填 typed pins，grant owner 共用
+   `maybe_plan_resume` reawaken；key 含 recorded_event_id、不含 grant/delivery，禁止 event-only gap。exact outcome
+   owner map 由 D3 详设 §2.2 的五行表控制；control timeout 单独为 intent timed_out + verification needs_human。
+   rollout 必须先落 migrations/terminal registries、bootstrap/strict-D3 双 population manifests 与 dormant
+   bootstrap factory+predicate，再启用 scoped-session specialized Stage-B creator + credential-free committed replay/
+   exact-copy，最后按 Stage A→business evaluator→normal D3 paths 顺序激活；任何 consumer 不得先于其
+   authority/receipt/registry dependency 部署。
+7. §4b owner 矩阵扩展到全部共享字段（D3 批）：round8 single-owner fixed-forward 将 terminal policy registry 与
+   receipt persistence 拆行，matrix 形状锁为机械非空十列 × **26 data rows**
+   `Field/object, Single owner, Physical SOT, Allowed values, Derivation rule, Consumers, Forbidden consumers,
+   Fallback/brownfield status, Migration status, Deletion condition`，因此 decision shape complete；它与物理
+   scope/claim identity contract 是 D3c 的开工输入，但 owner/migration/repository/runtime 仍未实施；未落
+   migration 前仍为 NOT IMPLEMENTED，且没有运行证据也不得关闭 §6#7 的 physical implementation。
 8. 文档标签清理（残留「详设 v2」字样等）随下一次文档批处理。
 
 ## 7. v1 评审 findings 处置总索引
