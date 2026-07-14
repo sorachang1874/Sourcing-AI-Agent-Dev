@@ -249,6 +249,9 @@ const WORKFLOW_COMMAND_PUBLIC_WIRE_FIELDS = [
 const WORKFLOW_COMMAND_PUBLIC_NUMBER_FIELDS = new Set([
   "attempt",
   "max_attempts",
+]);
+
+const WORKFLOW_COMMAND_PUBLIC_NONNEGATIVE_SAFE_INTEGER_FIELDS = new Set([
   "claim_generation",
   "control_epoch",
 ]);
@@ -272,7 +275,147 @@ const WORKFLOW_COMMAND_PUBLIC_OBJECT_FIELDS = new Set([
   "execution_summary",
 ]);
 
-const WORKFLOW_COMMAND_PRIVATE_PUBLIC_MIRROR_FIELDS = new Set([
+type WorkflowPublicJsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: WorkflowPublicJsonValue }
+  | WorkflowPublicJsonValue[];
+
+const WORKFLOW_ACTIVITY_CONTROL_TARGET_PUBLIC_WIRE_FIELDS = [
+  "target_type",
+  "command_id",
+  "command_type",
+  "owner",
+  "command_status",
+  "display_contract",
+  "control_policy",
+  "control_state",
+  "activity_spine_policy",
+  "fallback_status",
+] as const;
+
+const WORKFLOW_ACTIVITY_PUBLIC_WIRE_FIELDS = [
+  "activity_run_id",
+  "workspace_id",
+  "workflow_run_id",
+  "operation_run_id",
+  "acquisition_run_id",
+  "command_id",
+  "parent_activity_run_id",
+  "activity_type",
+  "owner",
+  "status",
+  "phase",
+  "idempotency_key",
+  "provider_ref",
+  "input",
+  "output",
+  "artifact_refs",
+  "entity_counts",
+  "metadata",
+  "created_at",
+  "updated_at",
+  "mutation_contract",
+  "module_state_mutated",
+  "control_target",
+] as const;
+
+const WORKFLOW_ACTIVITY_ATTEMPT_PUBLIC_WIRE_FIELDS = [
+  "attempt_id",
+  "workspace_id",
+  "activity_run_id",
+  "workflow_run_id",
+  "command_id",
+  "attempt_number",
+  "activity_type",
+  "owner",
+  "status",
+  "provider",
+  "provider_request_ref",
+  "provider_run_ref",
+  "started_at",
+  "completed_at",
+  "next_retry_at",
+  "rate_limit_ref",
+  "error",
+  "input",
+  "output",
+  "artifact_refs",
+  "idempotency_key",
+  "metadata",
+  "created_at",
+  "updated_at",
+  "mutation_contract",
+  "module_state_mutated",
+  "control_target",
+] as const;
+
+const WORKFLOW_ENTITY_DELTA_PUBLIC_WIRE_FIELDS = [
+  "delta_id",
+  "workspace_id",
+  "workflow_run_id",
+  "operation_run_id",
+  "command_id",
+  "activity_run_id",
+  "attempt_id",
+  "acquisition_run_id",
+  "activity_type",
+  "owner",
+  "entity_type",
+  "entity_key",
+  "delta_kind",
+  "status",
+  "reason",
+  "source_ref",
+  "entity_payload",
+  "projection_effect",
+  "artifact_refs",
+  "idempotency_key",
+  "metadata",
+  "created_at",
+  "updated_at",
+  "mutation_contract",
+  "module_state_mutated",
+  "control_target",
+] as const;
+
+const WORKFLOW_ACTIVITY_CONTROL_TARGET_PUBLIC_OBJECT_FIELDS = new Set([
+  "display_contract",
+  "control_policy",
+  "control_state",
+  "activity_spine_policy",
+]);
+
+const WORKFLOW_ACTIVITY_PUBLIC_OBJECT_FIELDS = new Set([
+  "provider_ref",
+  "input",
+  "output",
+  "entity_counts",
+  "metadata",
+]);
+
+const WORKFLOW_ACTIVITY_ATTEMPT_PUBLIC_OBJECT_FIELDS = new Set([
+  "rate_limit_ref",
+  "error",
+  "input",
+  "output",
+  "metadata",
+]);
+
+const WORKFLOW_ACTIVITY_ATTEMPT_PUBLIC_NONNEGATIVE_SAFE_INTEGER_FIELDS = new Set([
+  "attempt_number",
+]);
+
+const WORKFLOW_ENTITY_DELTA_PUBLIC_OBJECT_FIELDS = new Set([
+  "source_ref",
+  "entity_payload",
+  "projection_effect",
+  "metadata",
+]);
+
+const WORKFLOW_COMMAND_PRIVATE_PUBLIC_MIRROR_ROOTS = [
   "authority_id",
   "authority_seal",
   "bootstrap_authority",
@@ -298,28 +441,435 @@ const WORKFLOW_COMMAND_PRIVATE_PUBLIC_MIRROR_FIELDS = new Set([
   "lease_token",
   "scoped_review_session_bootstrap_authority",
   "scoped_review_session_bootstrap_receipt",
+] as const;
+
+const WORKFLOW_COMMAND_PRIVATE_PUBLIC_MIRROR_FIELDS: ReadonlySet<string> = new Set(WORKFLOW_COMMAND_PRIVATE_PUBLIC_MIRROR_ROOTS);
+
+const WORKFLOW_COMMAND_PRIVATE_PUBLIC_MIRROR_ROOT_SPECS = Array.from(
+  WORKFLOW_COMMAND_PRIVATE_PUBLIC_MIRROR_ROOTS,
+  (root) => ({
+    normalized: root,
+    compact: root.replace(/_/g, ""),
+  }),
+);
+
+const WORKFLOW_COMMAND_PUBLIC_CARRIER_FIELDS: ReadonlySet<string> = new Set([
+  "workflow_command",
+  "latest_workflow_command",
+]);
+const WORKFLOW_COMMAND_PUBLIC_CARRIER_LIST_FIELDS: ReadonlySet<string> = new Set([
+  "workflow_commands",
+]);
+const WORKFLOW_PUBLIC_HAZARDOUS_MIRROR_FIELDS: ReadonlySet<string> = new Set([
+  "__proto__",
+  "prototype",
+  "constructor",
+]);
+
+const WORKFLOW_ACTIVITY_RUN_PUBLIC_CARRIER_FIELDS: ReadonlySet<string> = new Set([
+  "workflow_activity",
+  "workflow_activity_run",
+]);
+const WORKFLOW_ACTIVITY_ATTEMPT_PUBLIC_CARRIER_FIELDS: ReadonlySet<string> = new Set([
+  "workflow_activity_attempt",
+]);
+const WORKFLOW_ENTITY_DELTA_PUBLIC_CARRIER_FIELDS: ReadonlySet<string> = new Set([
+  "workflow_entity_delta",
+]);
+const WORKFLOW_ACTIVITY_RUN_PUBLIC_CARRIER_LIST_FIELDS: ReadonlySet<string> = new Set([
+  "workflow_activities",
+  "workflow_activity_runs",
+]);
+const WORKFLOW_ACTIVITY_ATTEMPT_PUBLIC_CARRIER_LIST_FIELDS: ReadonlySet<string> = new Set([
+  "workflow_activity_attempts",
+]);
+const WORKFLOW_ENTITY_DELTA_PUBLIC_CARRIER_LIST_FIELDS: ReadonlySet<string> = new Set([
+  "workflow_entity_deltas",
+]);
+const WORKFLOW_ACTIVITY_RUN_TRUSTED_DERIVED_FIELDS: ReadonlySet<string> = new Set([
+  "control_target",
+  "module_state_mutated",
+  "mutation_contract",
+]);
+const WORKFLOW_ACTIVITY_ATTEMPT_TRUSTED_DERIVED_FIELDS: ReadonlySet<string> = new Set([
+  "activity_type",
+  "owner",
+  "control_target",
+  "module_state_mutated",
+  "mutation_contract",
+]);
+const WORKFLOW_COMMAND_CONTROL_POLICY_STRING_ARRAY_FIELDS: ReadonlySet<string> = new Set([
+  "running_control_categories",
+  "generic_cancel_statuses",
+  "generic_retry_statuses",
+  "generic_resume_statuses",
+  "running_cancel_statuses",
+  "running_cancel_prerequisites",
+  "running_cancel_upgrade_requirements",
+  "running_resume_statuses",
+  "running_resume_prerequisites",
+  "running_resume_upgrade_requirements",
+]);
+const WORKFLOW_COMMAND_CONTROL_POLICY_BOOLEAN_FIELDS: ReadonlySet<string> = new Set([
+  "running_cancel_supported",
+  "module_state_mutated_on_running_cancel",
+  "running_resume_supported",
+  "module_state_mutated_on_running_resume",
+]);
+const WORKFLOW_COMMAND_CONTROL_POLICY_STRING_FIELDS: ReadonlySet<string> = new Set([
+  "schema_version",
+  "command_type",
+  "owner",
+  "running_control_category",
+  "running_control_maturity",
+  "running_control_gap_status",
+  "running_control_surface",
+  "running_cancel_owner",
+  "running_cancel_delegate",
+  "running_cancel_blocked_reason",
+  "running_cancel_contract",
+  "unsupported_running_cancel_reason",
+  "running_resume_owner",
+  "running_resume_delegate",
+  "running_resume_blocked_reason",
+  "running_resume_contract",
+  "unsupported_running_resume_reason",
+  "control_source_of_truth",
+  "agent_callable_surface",
+  "fallback_status",
+]);
+const WORKFLOW_COMMAND_CONTROL_STATE_STRING_ARRAY_FIELDS: ReadonlySet<string> = new Set([
+  "allowed_actions",
+  "running_cancel_prerequisites",
+  "running_resume_prerequisites",
+]);
+const WORKFLOW_COMMAND_CONTROL_STATE_BOOLEAN_FIELDS: ReadonlySet<string> = new Set([
+  "can_cancel",
+  "can_retry",
+  "can_resume",
+  "running_cancel_supported",
+  "running_resume_supported",
+  "module_state_mutated_on_cancel",
+  "module_state_mutated_on_resume",
+]);
+const WORKFLOW_COMMAND_CONTROL_STATE_STRING_FIELDS: ReadonlySet<string> = new Set([
+  "schema_version",
+  "command_type",
+  "owner",
+  "command_status",
+  "cancel_mode",
+  "retry_mode",
+  "resume_mode",
+  "running_cancel_delegate",
+  "running_resume_delegate",
+  "control_source_of_truth",
+  "policy_source_of_truth",
+  "fallback_status",
+]);
+const WORKFLOW_COMMAND_ACTIVITY_SPINE_BOOLEAN_FIELDS: ReadonlySet<string> = new Set([
+  "must_write_activity_run",
+  "must_write_activity_attempt",
+  "must_write_entity_delta",
+  "downstream_activity_required",
+  "agent_callable",
+]);
+const WORKFLOW_COMMAND_ACTIVITY_SPINE_STRING_FIELDS: ReadonlySet<string> = new Set([
+  "schema_version",
+  "command_type",
+  "owner",
+  "requirement",
+  "activity_table",
+  "attempt_table",
+  "entity_delta_table",
+  "source_of_truth",
+  "agent_callable_surface",
+  "fallback_status",
+  "migration_status",
+  "deletion_condition",
+]);
+const WORKFLOW_COMMAND_DISPLAY_CONTRACT_STRING_FIELDS: ReadonlySet<string> = new Set([
+  "schema_version",
+  "command_type",
+  "owner",
+  "display_label",
+  "display_category",
+  "description",
+  "source_of_truth",
+  "fallback_status",
+]);
+const WORKFLOW_COMMAND_EXECUTION_SUMMARY_STRING_FIELDS: ReadonlySet<string> = new Set([
+  "source",
+  "fallback_status",
+  "latest_effect_status",
+]);
+const WORKFLOW_COMMAND_EXECUTION_SUMMARY_BOOLEAN_FIELDS: ReadonlySet<string> = new Set([
+  "fallback_used",
+  "module_state_mutated",
+  "sample_truncated",
+]);
+const WORKFLOW_COMMAND_EXECUTION_SUMMARY_NUMBER_FIELDS: ReadonlySet<string> = new Set([
+  "activity_count",
+  "attempt_count",
+  "entity_delta_count",
+  "sample_limit",
+]);
+const WORKFLOW_COMMAND_EXECUTION_SUMMARY_NUMBER_RECORD_FIELDS: ReadonlySet<string> = new Set([
+  "activity_status_counts",
+  "attempt_status_counts",
+  "entity_delta_status_counts",
+  "entity_delta_kind_counts",
+]);
+const OPERATION_ACTION_DISPLAY_CONTRACT_STRING_FIELDS: ReadonlySet<string> = new Set([
+  "schema_version",
+  "action_type",
+  "owner_module",
+  "operation_type",
+  "display_label",
+  "display_category",
+  "description",
+  "source_of_truth",
+  "fallback_status",
+]);
+const OPERATION_ACTION_PUBLIC_STRING_FIELDS: ReadonlySet<string> = new Set([
+  "action_id",
+  "workspace_id",
+  "conversation_id",
+  "action_type",
+  "owner_module",
+  "operation_type",
+  "approval_status",
+  "approval_policy",
+  "status",
+  "request_schema_version",
+  "request_schema_digest",
+  "created_at",
+  "updated_at",
+]);
+const OPERATION_ACTION_PUBLIC_OBJECT_FIELDS: ReadonlySet<string> = new Set([
+  "display_contract",
+  "target_ref",
+  "input",
+  "budget",
+  "result_ref",
+  "metadata",
+]);
+const OPERATION_EVENT_PUBLIC_STRING_FIELDS: ReadonlySet<string> = new Set([
+  "event_id",
+  "workspace_id",
+  "event_stream_id",
+  "operation_run_id",
+  "action_id",
+  "event_family",
+  "event_type",
+  "actor",
+  "source",
+  "occurred_at",
+  "recorded_at",
+]);
+const OPERATION_RUN_PUBLIC_STRING_FIELDS: ReadonlySet<string> = new Set([
+  "operation_run_id",
+  "workspace_id",
+  "action_id",
+  "owner_module",
+  "operation_type",
+  "status",
+  "request_schema_version",
+  "request_schema_digest",
+  "started_at",
+  "completed_at",
+  "created_at",
+  "updated_at",
+]);
+const OPERATION_RUN_PUBLIC_OBJECT_FIELDS: ReadonlySet<string> = new Set([
+  "display_contract",
+  "progress",
+  "workflow_ref",
+  "cost_budget",
+  "result_ref",
+  "metadata",
+  "control_state",
+  "status_summary",
+]);
+const OPERATION_RUN_CONTROL_STATE_STRING_FIELDS: ReadonlySet<string> = new Set([
+  "operation_status",
+  "action_status",
+  "operation_phase",
+  "control_source_of_truth",
+  "fallback_status",
+  "schema_version",
+]);
+const OPERATION_RUN_CONTROL_STATE_BOOLEAN_FIELDS: ReadonlySet<string> = new Set([
+  "can_dispatch",
+  "can_cancel",
+  "can_retry",
+  "can_resume",
+  "module_state_mutated_on_control",
+]);
+const OPERATION_RUN_STATUS_SUMMARY_STRING_FIELDS: ReadonlySet<string> = new Set([
+  "source",
+  "fallback_status",
+  "operation_status",
+  "operation_phase",
+  "latest_event_type",
+]);
+const OPERATION_RUN_STATUS_SUMMARY_BOOLEAN_FIELDS: ReadonlySet<string> = new Set([
+  "fallback_used",
+  "module_state_mutated",
+]);
+const OPERATION_RUN_STATUS_SUMMARY_NUMBER_FIELDS: ReadonlySet<string> = new Set([
+  "workflow_command_count",
+  "operation_event_count",
 ]);
 
 function normalizeWorkflowCommandPublicMirrorFieldName(value: unknown): string {
   return String(value ?? "")
     .trim()
-    .replace(/-/g, "_")
-    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .replace(/[-\s]+/g, "_")
+    .replace(/(?<=[A-Z])(?=[A-Z][a-z])/g, "_")
+    .replace(/(?<=[a-z0-9])(?=[A-Z])/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "")
     .toLowerCase();
 }
 
 function isPrivateWorkflowCommandPublicMirrorField(value: unknown): boolean {
   const normalized = normalizeWorkflowCommandPublicMirrorFieldName(value);
-  return (
-    WORKFLOW_COMMAND_PRIVATE_PUBLIC_MIRROR_FIELDS.has(normalized) ||
-    normalized.startsWith("bootstrap_authority_") ||
-    normalized.startsWith("claim_authority_") ||
-    normalized.startsWith("claim_token_") ||
-    normalized.startsWith("scoped_review_session_bootstrap_")
+  if (WORKFLOW_COMMAND_PRIVATE_PUBLIC_MIRROR_FIELDS.has(normalized)) {
+    return true;
+  }
+  const compact = normalized.replace(/_/g, "");
+  return WORKFLOW_COMMAND_PRIVATE_PUBLIC_MIRROR_ROOT_SPECS.some(
+    (root) =>
+      normalized.startsWith(`${root.normalized}_`) ||
+      compact === root.compact ||
+      compact.startsWith(root.compact),
   );
 }
 
-function sanitizeWorkflowCommandPublicMirrorValue(value: unknown): unknown {
+function isHazardousWorkflowPublicMirrorField(value: unknown): boolean {
+  return WORKFLOW_PUBLIC_HAZARDOUS_MIRROR_FIELDS.has(String(value ?? "").trim().toLowerCase());
+}
+
+function isPlainWorkflowPublicObject(value: unknown): value is Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+function defineWorkflowPublicOwnField(
+  target: Record<string, unknown>,
+  key: string,
+  value: unknown,
+): void {
+  Object.defineProperty(target, key, {
+    value,
+    enumerable: true,
+    configurable: true,
+    writable: true,
+  });
+}
+
+function projectWorkflowCommandPublicCarrier(
+  key: string,
+  value: unknown,
+): { matched: boolean; value?: unknown } {
+  const normalizedKey = normalizeWorkflowCommandPublicMirrorFieldName(key);
+  if (WORKFLOW_COMMAND_PUBLIC_CARRIER_FIELDS.has(normalizedKey)) {
+    return {
+      matched: true,
+      value: isPlainWorkflowPublicObject(value)
+        ? projectWorkflowCommandGenericCarrierRecord(value)
+        : undefined,
+    };
+  }
+  if (!WORKFLOW_COMMAND_PUBLIC_CARRIER_LIST_FIELDS.has(normalizedKey)) {
+    return { matched: false };
+  }
+  if (!Array.isArray(value)) {
+    return { matched: true };
+  }
+  return {
+    matched: true,
+    value: value
+      .filter(isPlainWorkflowPublicObject)
+      .map(projectWorkflowCommandGenericCarrierRecord),
+  };
+}
+
+function projectWorkflowCommandGenericCarrierRecord(
+  command: Record<string, unknown>,
+): Record<string, unknown> {
+  const projected = projectWorkflowCommandPublicRecord(command);
+  delete projected.execution_summary;
+  return projected;
+}
+
+function projectWorkflowActivityPublicCarrier(
+  key: string,
+  value: unknown,
+): { matched: boolean; value?: unknown } {
+  const normalizedKey = normalizeWorkflowCommandPublicMirrorFieldName(key);
+  let projector: ((record: Record<string, unknown>) => Record<string, unknown>) | undefined;
+  let trustedDerivedFields: ReadonlySet<string> | undefined;
+  if (WORKFLOW_ACTIVITY_RUN_PUBLIC_CARRIER_FIELDS.has(normalizedKey)) {
+    projector = projectWorkflowActivityPublicRecord;
+    trustedDerivedFields = WORKFLOW_ACTIVITY_RUN_TRUSTED_DERIVED_FIELDS;
+  } else if (WORKFLOW_ACTIVITY_ATTEMPT_PUBLIC_CARRIER_FIELDS.has(normalizedKey)) {
+    projector = projectWorkflowActivityAttemptPublicRecord;
+    trustedDerivedFields = WORKFLOW_ACTIVITY_ATTEMPT_TRUSTED_DERIVED_FIELDS;
+  } else if (WORKFLOW_ENTITY_DELTA_PUBLIC_CARRIER_FIELDS.has(normalizedKey)) {
+    projector = projectWorkflowEntityDeltaPublicRecord;
+    trustedDerivedFields = WORKFLOW_ACTIVITY_ATTEMPT_TRUSTED_DERIVED_FIELDS;
+  }
+  if (projector) {
+    const projected = isPlainWorkflowPublicObject(value) ? projector(value) : undefined;
+    if (projected) {
+      for (const field of trustedDerivedFields ?? []) {
+        delete projected[field];
+      }
+    }
+    return {
+      matched: true,
+      value: projected,
+    };
+  }
+
+  let listProjector: ((record: Record<string, unknown>) => Record<string, unknown>) | undefined;
+  let listTrustedDerivedFields: ReadonlySet<string> | undefined;
+  if (WORKFLOW_ACTIVITY_RUN_PUBLIC_CARRIER_LIST_FIELDS.has(normalizedKey)) {
+    listProjector = projectWorkflowActivityPublicRecord;
+    listTrustedDerivedFields = WORKFLOW_ACTIVITY_RUN_TRUSTED_DERIVED_FIELDS;
+  } else if (WORKFLOW_ACTIVITY_ATTEMPT_PUBLIC_CARRIER_LIST_FIELDS.has(normalizedKey)) {
+    listProjector = projectWorkflowActivityAttemptPublicRecord;
+    listTrustedDerivedFields = WORKFLOW_ACTIVITY_ATTEMPT_TRUSTED_DERIVED_FIELDS;
+  } else if (WORKFLOW_ENTITY_DELTA_PUBLIC_CARRIER_LIST_FIELDS.has(normalizedKey)) {
+    listProjector = projectWorkflowEntityDeltaPublicRecord;
+    listTrustedDerivedFields = WORKFLOW_ACTIVITY_ATTEMPT_TRUSTED_DERIVED_FIELDS;
+  }
+  if (!listProjector) {
+    return { matched: false };
+  }
+  if (!Array.isArray(value)) {
+    return { matched: true };
+  }
+  return {
+    matched: true,
+    value: value.filter(isPlainWorkflowPublicObject).map((item) => {
+      const projected = listProjector(item);
+      for (const field of listTrustedDerivedFields ?? []) {
+        delete projected[field];
+      }
+      return projected;
+    }),
+  };
+}
+
+function sanitizeWorkflowCommandPublicMirrorValue(
+  value: unknown,
+  allowExecutionSummaryAtCurrentLevel = false,
+): unknown {
   if (value === null || typeof value === "string" || typeof value === "boolean") {
     return value;
   }
@@ -340,25 +890,51 @@ function sanitizeWorkflowCommandPublicMirrorValue(value: unknown): unknown {
   }
   const result: Record<string, unknown> = {};
   for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
-    if (isPrivateWorkflowCommandPublicMirrorField(key)) {
+    const normalizedKey = normalizeWorkflowCommandPublicMirrorFieldName(key);
+    if (
+      isPrivateWorkflowCommandPublicMirrorField(key) ||
+      isHazardousWorkflowPublicMirrorField(key) ||
+      (normalizedKey === "execution_summary" && !allowExecutionSummaryAtCurrentLevel)
+    ) {
+      continue;
+    }
+    const commandCarrier = projectWorkflowCommandPublicCarrier(key, item);
+    if (commandCarrier.matched) {
+      if (commandCarrier.value !== undefined) {
+        defineWorkflowPublicOwnField(result, key, commandCarrier.value);
+      }
+      continue;
+    }
+    const carrier = projectWorkflowActivityPublicCarrier(key, item);
+    if (carrier.matched) {
+      if (carrier.value !== undefined) {
+        defineWorkflowPublicOwnField(result, key, carrier.value);
+      }
       continue;
     }
     const sanitized = sanitizeWorkflowCommandPublicMirrorValue(item);
     if (sanitized !== undefined) {
-      result[key] = sanitized;
+      defineWorkflowPublicOwnField(result, key, sanitized);
     }
   }
   return result;
 }
 
 function projectWorkflowCommandPublicRecord(record: Record<string, unknown>): Record<string, unknown> {
-  const sanitized = asObjectRecord(sanitizeWorkflowCommandPublicMirrorValue(record));
+  const sanitized = asObjectRecord(sanitizeWorkflowCommandPublicMirrorValue(record, true));
   const projected: Record<string, unknown> = {};
   for (const field of WORKFLOW_COMMAND_PUBLIC_WIRE_FIELDS) {
     if (!Object.prototype.hasOwnProperty.call(sanitized, field)) {
       continue;
     }
     const value = sanitized[field];
+    if (WORKFLOW_COMMAND_PUBLIC_NONNEGATIVE_SAFE_INTEGER_FIELDS.has(field)) {
+      const safeInteger = asNonnegativeSafeInteger(value);
+      if (safeInteger !== undefined) {
+        projected[field] = safeInteger;
+      }
+      continue;
+    }
     if (WORKFLOW_COMMAND_PUBLIC_NUMBER_FIELDS.has(field)) {
       if (typeof value === "number" && Number.isFinite(value)) {
         projected[field] = value;
@@ -381,7 +957,353 @@ function projectWorkflowCommandPublicRecord(record: Record<string, unknown>): Re
       projected[field] = value;
     }
   }
+  const nestedProjectors: Record<string, (value: unknown) => Record<string, unknown>> = {
+    display_contract: projectWorkflowCommandDisplayContractPublicRecord,
+    control_policy: projectWorkflowCommandControlPolicyPublicRecord,
+    control_state: projectWorkflowCommandControlStatePublicRecord,
+    activity_spine_policy: projectWorkflowCommandActivitySpinePublicRecord,
+    execution_summary: projectWorkflowCommandExecutionSummaryPublicRecord,
+  };
+  for (const [field, projector] of Object.entries(nestedProjectors)) {
+    if (isPlainWorkflowPublicObject(projected[field])) {
+      projected[field] = projector(projected[field]);
+    }
+  }
   return projected;
+}
+
+function projectWorkflowPublicOpenObject(
+  value: unknown,
+  stringFields: ReadonlySet<string> = new Set(),
+  stringArrayFields: ReadonlySet<string> = new Set(),
+  objectFields: ReadonlySet<string> = new Set(),
+  booleanFields: ReadonlySet<string> = new Set(),
+  numberFields: ReadonlySet<string> = new Set(),
+  numberRecordFields: ReadonlySet<string> = new Set(),
+): Record<string, unknown> {
+  const sanitized = asObjectRecord(sanitizeWorkflowCommandPublicMirrorValue(value));
+  const projected = { ...sanitized };
+  for (const field of stringFields) {
+    if (Object.prototype.hasOwnProperty.call(projected, field) && typeof projected[field] !== "string") {
+      delete projected[field];
+    }
+  }
+  for (const field of stringArrayFields) {
+    if (!Object.prototype.hasOwnProperty.call(projected, field)) continue;
+    projected[field] = Array.isArray(projected[field])
+      ? projected[field].filter((item): item is string => typeof item === "string")
+      : [];
+  }
+  for (const field of objectFields) {
+    if (
+      Object.prototype.hasOwnProperty.call(projected, field) &&
+      !isPlainWorkflowPublicObject(projected[field])
+    ) {
+      delete projected[field];
+    }
+  }
+  for (const field of booleanFields) {
+    if (
+      Object.prototype.hasOwnProperty.call(projected, field) &&
+      typeof projected[field] !== "boolean"
+    ) {
+      delete projected[field];
+    }
+  }
+  for (const field of numberFields) {
+    if (!Object.prototype.hasOwnProperty.call(projected, field)) continue;
+    const value = projected[field];
+    if (typeof value !== "number" || !Number.isFinite(value)) {
+      delete projected[field];
+    }
+  }
+  for (const field of numberRecordFields) {
+    if (!Object.prototype.hasOwnProperty.call(projected, field)) continue;
+    const value = projected[field];
+    if (!isPlainWorkflowPublicObject(value)) {
+      projected[field] = {};
+      continue;
+    }
+    projected[field] = Object.fromEntries(
+      Object.entries(value).filter(
+        ([, item]) => typeof item === "number" && Number.isFinite(item),
+      ),
+    );
+  }
+  return projected;
+}
+
+function projectWorkflowCommandDisplayContractPublicRecord(value: unknown): Record<string, unknown> {
+  return projectWorkflowPublicOpenObject(value, WORKFLOW_COMMAND_DISPLAY_CONTRACT_STRING_FIELDS);
+}
+
+function projectWorkflowCommandExecutionSummaryPublicRecord(
+  value: unknown,
+): Record<string, unknown> {
+  const projected = projectWorkflowPublicOpenObject(
+    value,
+    WORKFLOW_COMMAND_EXECUTION_SUMMARY_STRING_FIELDS,
+    new Set(),
+    new Set([
+      "latest_activity",
+      "latest_attempt",
+      "latest_entity_delta",
+    ]),
+    WORKFLOW_COMMAND_EXECUTION_SUMMARY_BOOLEAN_FIELDS,
+    WORKFLOW_COMMAND_EXECUTION_SUMMARY_NUMBER_FIELDS,
+    WORKFLOW_COMMAND_EXECUTION_SUMMARY_NUMBER_RECORD_FIELDS,
+  );
+  if (isPlainWorkflowPublicObject(projected.latest_activity)) {
+    projected.latest_activity = projectWorkflowActivityPublicRecord(projected.latest_activity);
+  }
+  if (isPlainWorkflowPublicObject(projected.latest_attempt)) {
+    projected.latest_attempt = projectWorkflowActivityAttemptPublicRecord(projected.latest_attempt);
+  }
+  if (isPlainWorkflowPublicObject(projected.latest_entity_delta)) {
+    projected.latest_entity_delta = projectWorkflowEntityDeltaPublicRecord(
+      projected.latest_entity_delta,
+    );
+  }
+  return projected;
+}
+
+function projectOperationActionDisplayContractPublicRecord(value: unknown): Record<string, unknown> {
+  return projectWorkflowPublicOpenObject(value, OPERATION_ACTION_DISPLAY_CONTRACT_STRING_FIELDS);
+}
+
+function projectOperationActionPublicRecord(record: Record<string, unknown>): Record<string, unknown> {
+  const projected = projectWorkflowPublicOpenObject(
+    record,
+    OPERATION_ACTION_PUBLIC_STRING_FIELDS,
+    new Set(),
+    OPERATION_ACTION_PUBLIC_OBJECT_FIELDS,
+  );
+  if (isPlainWorkflowPublicObject(projected.display_contract)) {
+    projected.display_contract = projectOperationActionDisplayContractPublicRecord(
+      projected.display_contract,
+    );
+  }
+  return projected;
+}
+
+function projectOperationEventPublicRecord(record: Record<string, unknown>): Record<string, unknown> {
+  return projectWorkflowPublicOpenObject(
+    record,
+    OPERATION_EVENT_PUBLIC_STRING_FIELDS,
+    new Set(),
+    new Set(["payload"]),
+    new Set(),
+    new Set(["sequence_number"]),
+  );
+}
+
+function projectOperationRunControlStatePublicRecord(value: unknown): Record<string, unknown> {
+  return projectWorkflowPublicOpenObject(
+    value,
+    OPERATION_RUN_CONTROL_STATE_STRING_FIELDS,
+    new Set(["allowed_actions"]),
+    new Set(["disabled_reasons"]),
+    OPERATION_RUN_CONTROL_STATE_BOOLEAN_FIELDS,
+  );
+}
+
+function projectOperationRunStatusSummaryPublicRecord(value: unknown): Record<string, unknown> {
+  const rawSource = isPlainWorkflowPublicObject(value) ? value : {};
+  const projected = projectWorkflowPublicOpenObject(
+    rawSource,
+    OPERATION_RUN_STATUS_SUMMARY_STRING_FIELDS,
+    new Set(),
+    new Set(["latest_event", "latest_workflow_command"]),
+    OPERATION_RUN_STATUS_SUMMARY_BOOLEAN_FIELDS,
+    OPERATION_RUN_STATUS_SUMMARY_NUMBER_FIELDS,
+    new Set(["command_status_counts"]),
+  );
+  if (isPlainWorkflowPublicObject(rawSource.latest_event)) {
+    projected.latest_event = projectOperationEventPublicRecord(rawSource.latest_event);
+  }
+  if (isPlainWorkflowPublicObject(rawSource.latest_workflow_command)) {
+    projected.latest_workflow_command = projectWorkflowCommandPublicRecord(
+      rawSource.latest_workflow_command,
+    );
+  }
+  return projected;
+}
+
+function projectOperationRunPublicRecord(record: Record<string, unknown>): Record<string, unknown> {
+  const projected = projectWorkflowPublicOpenObject(
+    record,
+    OPERATION_RUN_PUBLIC_STRING_FIELDS,
+    new Set(),
+    OPERATION_RUN_PUBLIC_OBJECT_FIELDS,
+  );
+  if (isPlainWorkflowPublicObject(projected.display_contract)) {
+    projected.display_contract = projectOperationActionDisplayContractPublicRecord(
+      projected.display_contract,
+    );
+  }
+  if (isPlainWorkflowPublicObject(projected.control_state)) {
+    projected.control_state = projectOperationRunControlStatePublicRecord(projected.control_state);
+  }
+  if (isPlainWorkflowPublicObject(record.status_summary)) {
+    projected.status_summary = projectOperationRunStatusSummaryPublicRecord(record.status_summary);
+  }
+  return projected;
+}
+
+function projectOperationResponsePublicEnvelope(value: unknown): Record<string, unknown> {
+  return projectWorkflowPublicOpenObject(
+    value,
+    new Set([
+      "status",
+      "contract",
+      "reason",
+      "command_status",
+      "operation_status",
+      "control_action",
+    ]),
+    new Set(),
+    new Set(),
+    new Set(["module_state_mutated"]),
+  );
+}
+
+function projectWorkflowCommandControlPolicyPublicRecord(value: unknown): Record<string, unknown> {
+  return projectWorkflowPublicOpenObject(
+    value,
+    WORKFLOW_COMMAND_CONTROL_POLICY_STRING_FIELDS,
+    WORKFLOW_COMMAND_CONTROL_POLICY_STRING_ARRAY_FIELDS,
+    new Set(),
+    WORKFLOW_COMMAND_CONTROL_POLICY_BOOLEAN_FIELDS,
+  );
+}
+
+function projectWorkflowCommandControlStatePublicRecord(value: unknown): Record<string, unknown> {
+  return projectWorkflowPublicOpenObject(
+    value,
+    WORKFLOW_COMMAND_CONTROL_STATE_STRING_FIELDS,
+    WORKFLOW_COMMAND_CONTROL_STATE_STRING_ARRAY_FIELDS,
+    new Set(["disabled_reasons"]),
+    WORKFLOW_COMMAND_CONTROL_STATE_BOOLEAN_FIELDS,
+  );
+}
+
+function projectWorkflowCommandActivitySpinePublicRecord(value: unknown): Record<string, unknown> {
+  return projectWorkflowPublicOpenObject(
+    value,
+    WORKFLOW_COMMAND_ACTIVITY_SPINE_STRING_FIELDS,
+    new Set(),
+    new Set(),
+    WORKFLOW_COMMAND_ACTIVITY_SPINE_BOOLEAN_FIELDS,
+  );
+}
+
+function projectWorkflowActivityControlTargetPublicRecord(
+  record: Record<string, unknown>,
+): Record<string, unknown> {
+  const sanitized = asObjectRecord(sanitizeWorkflowCommandPublicMirrorValue(record));
+  const projected: Record<string, unknown> = {};
+  for (const field of WORKFLOW_ACTIVITY_CONTROL_TARGET_PUBLIC_WIRE_FIELDS) {
+    if (!Object.prototype.hasOwnProperty.call(sanitized, field)) {
+      continue;
+    }
+    const value = sanitized[field];
+    if (WORKFLOW_ACTIVITY_CONTROL_TARGET_PUBLIC_OBJECT_FIELDS.has(field)) {
+      if (value && typeof value === "object" && !Array.isArray(value)) {
+        const projectors: Record<string, (item: unknown) => Record<string, unknown>> = {
+          display_contract: projectWorkflowCommandDisplayContractPublicRecord,
+          control_policy: projectWorkflowCommandControlPolicyPublicRecord,
+          control_state: projectWorkflowCommandControlStatePublicRecord,
+          activity_spine_policy: projectWorkflowCommandActivitySpinePublicRecord,
+        };
+        projected[field] = projectors[field](value);
+      }
+      continue;
+    }
+    if (typeof value === "string") {
+      projected[field] = value;
+    }
+  }
+  return projected;
+}
+
+function projectWorkflowActivityEvidencePublicRecord(
+  record: Record<string, unknown>,
+  wireFields: readonly string[],
+  objectFields: ReadonlySet<string>,
+  numberFields: ReadonlySet<string> = new Set(),
+): Record<string, unknown> {
+  const sanitized = asObjectRecord(sanitizeWorkflowCommandPublicMirrorValue(record));
+  const projected: Record<string, unknown> = {};
+  for (const field of wireFields) {
+    if (!Object.prototype.hasOwnProperty.call(sanitized, field)) {
+      continue;
+    }
+    const value = sanitized[field];
+    if (field === "control_target") {
+      if (value && typeof value === "object" && !Array.isArray(value)) {
+        projected[field] = projectWorkflowActivityControlTargetPublicRecord(
+          value as Record<string, unknown>,
+        );
+      }
+      continue;
+    }
+    if (field === "module_state_mutated") {
+      if (typeof value === "boolean") {
+        projected[field] = value;
+      }
+      continue;
+    }
+    if (numberFields.has(field)) {
+      const safeInteger = asNonnegativeSafeInteger(value);
+      if (safeInteger !== undefined) {
+        projected[field] = safeInteger;
+      }
+      continue;
+    }
+    if (field === "artifact_refs") {
+      if (Array.isArray(value)) {
+        projected[field] = value;
+      }
+      continue;
+    }
+    if (objectFields.has(field)) {
+      if (value && typeof value === "object" && !Array.isArray(value)) {
+        projected[field] = value;
+      }
+      continue;
+    }
+    if (typeof value === "string") {
+      projected[field] = value;
+    }
+  }
+  return projected;
+}
+
+function projectWorkflowActivityPublicRecord(record: Record<string, unknown>): Record<string, unknown> {
+  return projectWorkflowActivityEvidencePublicRecord(
+    record,
+    WORKFLOW_ACTIVITY_PUBLIC_WIRE_FIELDS,
+    WORKFLOW_ACTIVITY_PUBLIC_OBJECT_FIELDS,
+  );
+}
+
+function projectWorkflowActivityAttemptPublicRecord(
+  record: Record<string, unknown>,
+): Record<string, unknown> {
+  return projectWorkflowActivityEvidencePublicRecord(
+    record,
+    WORKFLOW_ACTIVITY_ATTEMPT_PUBLIC_WIRE_FIELDS,
+    WORKFLOW_ACTIVITY_ATTEMPT_PUBLIC_OBJECT_FIELDS,
+    WORKFLOW_ACTIVITY_ATTEMPT_PUBLIC_NONNEGATIVE_SAFE_INTEGER_FIELDS,
+  );
+}
+
+function projectWorkflowEntityDeltaPublicRecord(record: Record<string, unknown>): Record<string, unknown> {
+  return projectWorkflowActivityEvidencePublicRecord(
+    record,
+    WORKFLOW_ENTITY_DELTA_PUBLIC_WIRE_FIELDS,
+    WORKFLOW_ENTITY_DELTA_PUBLIC_OBJECT_FIELDS,
+  );
 }
 
 export interface WorkflowCommandRecord {
@@ -403,49 +1325,105 @@ export interface WorkflowCommandRecord {
   raw: Record<string, unknown>;
 }
 
+export interface WorkflowActivityControlTarget {
+  targetType: string;
+  commandId: string;
+  commandType: string;
+  owner: string;
+  commandStatus: string;
+  displayContract: Record<string, unknown>;
+  controlPolicy: Record<string, unknown>;
+  controlState: Record<string, unknown>;
+  activitySpinePolicy: Record<string, unknown>;
+  fallbackStatus: string;
+  raw: Record<string, unknown>;
+}
+
 export interface WorkflowActivityRecord {
   activityRunId: string;
+  workspaceId: string;
   workflowRunId: string;
   operationRunId: string;
   acquisitionRunId: string;
   commandId: string;
+  parentActivityRunId: string;
   activityType: string;
   owner: string;
   status: string;
   phase: string;
+  idempotencyKey: string;
+  providerRef: Record<string, unknown>;
+  input: Record<string, unknown>;
+  output: Record<string, unknown>;
+  artifactRefs: WorkflowPublicJsonValue[];
+  entityCounts: Record<string, unknown>;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
   mutationContract: string;
   moduleStateMutated: boolean;
+  controlTarget?: WorkflowActivityControlTarget;
   raw: Record<string, unknown>;
 }
 
 export interface WorkflowActivityAttemptRecord {
   attemptId: string;
+  workspaceId: string;
   activityRunId: string;
   workflowRunId: string;
   commandId: string;
+  attemptNumber?: number;
   activityType: string;
   owner: string;
   status: string;
   provider: string;
+  providerRequestRef: string;
+  providerRunRef: string;
+  startedAt: string;
+  completedAt: string;
+  nextRetryAt: string;
+  rateLimitRef: Record<string, unknown>;
+  error: Record<string, unknown>;
+  input: Record<string, unknown>;
+  output: Record<string, unknown>;
+  artifactRefs: WorkflowPublicJsonValue[];
+  idempotencyKey: string;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
   mutationContract: string;
   moduleStateMutated: boolean;
+  controlTarget?: WorkflowActivityControlTarget;
   raw: Record<string, unknown>;
 }
 
 export interface WorkflowEntityDeltaRecord {
   deltaId: string;
+  workspaceId: string;
   workflowRunId: string;
   operationRunId: string;
   commandId: string;
   activityRunId: string;
   attemptId: string;
+  acquisitionRunId: string;
+  activityType: string;
+  owner: string;
   entityType: string;
   entityKey: string;
   deltaKind: string;
   status: string;
   reason: string;
+  sourceRef: Record<string, unknown>;
+  entityPayload: Record<string, unknown>;
+  projectionEffect: Record<string, unknown>;
+  artifactRefs: WorkflowPublicJsonValue[];
+  idempotencyKey: string;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
   mutationContract: string;
   moduleStateMutated: boolean;
+  controlTarget?: WorkflowActivityControlTarget;
   raw: Record<string, unknown>;
 }
 
@@ -1098,12 +2076,13 @@ function asObjectRecord(value: unknown): Record<string, unknown> {
     : {};
 }
 
-function asNumberRecord(value: unknown): Record<string, number> {
+function asWorkflowPublicNumberRecord(value: unknown): Record<string, number> {
   const source = asObjectRecord(value);
   return Object.fromEntries(
-    Object.entries(source)
-      .map(([key, item]) => [key, asNumber(item) ?? 0] as const)
-      .filter(([, item]) => item > 0),
+    Object.entries(source).filter(
+      (entry): entry is [string, number] =>
+        typeof entry[1] === "number" && Number.isFinite(entry[1]),
+    ),
   );
 }
 
@@ -1116,14 +2095,14 @@ function deriveWorkflowCommandExecutionSummary(record: Record<string, unknown>):
     activityCount: asNumber(record.activity_count) ?? 0,
     attemptCount: asNumber(record.attempt_count) ?? 0,
     entityDeltaCount: asNumber(record.entity_delta_count) ?? 0,
-    activityStatusCounts: asNumberRecord(record.activity_status_counts),
-    attemptStatusCounts: asNumberRecord(record.attempt_status_counts),
-    entityDeltaStatusCounts: asNumberRecord(record.entity_delta_status_counts),
-    entityDeltaKindCounts: asNumberRecord(record.entity_delta_kind_counts),
+    activityStatusCounts: asWorkflowPublicNumberRecord(record.activity_status_counts),
+    attemptStatusCounts: asWorkflowPublicNumberRecord(record.attempt_status_counts),
+    entityDeltaStatusCounts: asWorkflowPublicNumberRecord(record.entity_delta_status_counts),
+    entityDeltaKindCounts: asWorkflowPublicNumberRecord(record.entity_delta_kind_counts),
     latestEffectStatus: asString(record.latest_effect_status),
-    latestActivity: asObjectRecord(record.latest_activity),
-    latestAttempt: asObjectRecord(record.latest_attempt),
-    latestEntityDelta: asObjectRecord(record.latest_entity_delta),
+    latestActivity: projectWorkflowActivityPublicRecord(asObjectRecord(record.latest_activity)),
+    latestAttempt: projectWorkflowActivityAttemptPublicRecord(asObjectRecord(record.latest_attempt)),
+    latestEntityDelta: projectWorkflowEntityDeltaPublicRecord(asObjectRecord(record.latest_entity_delta)),
     sampleLimit: asNumber(record.sample_limit) ?? 0,
     sampleTruncated: asBoolean(record.sample_truncated) === true,
   };
@@ -1158,8 +2137,8 @@ export function deriveWorkflowCommandRecord(record: Record<string, unknown>): Wo
     agentExposureStatus: asString(publicRecord.agent_exposure_status),
     agentExposureGate: asString(publicRecord.agent_exposure_gate),
     status: asString(publicRecord.status),
-    claimGeneration: asNumber(publicRecord.claim_generation) ?? undefined,
-    controlEpoch: asNumber(publicRecord.control_epoch) ?? undefined,
+    claimGeneration: asNonnegativeSafeInteger(publicRecord.claim_generation),
+    controlEpoch: asNonnegativeSafeInteger(publicRecord.control_epoch),
     displayContract: asObjectRecord(publicRecord.display_contract),
     controlPolicy: deriveWorkflowCommandControlPolicy(controlPolicy),
     controlState: asObjectRecord(publicRecord.control_state),
@@ -1171,71 +2150,147 @@ export function deriveWorkflowCommandRecord(record: Record<string, unknown>): Wo
   };
 }
 
-function deriveWorkflowActivityRecord(record: Record<string, unknown>): WorkflowActivityRecord {
+function deriveWorkflowActivityControlTarget(
+  record: Record<string, unknown>,
+): WorkflowActivityControlTarget {
+  const publicRecord = projectWorkflowActivityControlTargetPublicRecord(record);
   return {
-    activityRunId: asString(record.activity_run_id),
-    workflowRunId: asString(record.workflow_run_id),
-    operationRunId: asString(record.operation_run_id),
-    acquisitionRunId: asString(record.acquisition_run_id),
-    commandId: asString(record.command_id),
-    activityType: asString(record.activity_type),
-    owner: asString(record.owner),
-    status: asString(record.status),
-    phase: asString(record.phase),
-    mutationContract: asString(record.mutation_contract),
-    moduleStateMutated: asBoolean(record.module_state_mutated) === true,
-    raw: record,
+    targetType: asString(publicRecord.target_type),
+    commandId: asString(publicRecord.command_id),
+    commandType: asString(publicRecord.command_type),
+    owner: asString(publicRecord.owner),
+    commandStatus: asString(publicRecord.command_status),
+    displayContract: asObjectRecord(publicRecord.display_contract),
+    controlPolicy: asObjectRecord(publicRecord.control_policy),
+    controlState: asObjectRecord(publicRecord.control_state),
+    activitySpinePolicy: asObjectRecord(publicRecord.activity_spine_policy),
+    fallbackStatus: asString(publicRecord.fallback_status),
+    raw: publicRecord,
   };
 }
 
-function deriveWorkflowActivityAttemptRecord(record: Record<string, unknown>): WorkflowActivityAttemptRecord {
+export function deriveWorkflowActivityRecord(record: Record<string, unknown>): WorkflowActivityRecord {
+  const publicRecord = projectWorkflowActivityPublicRecord(record);
+  const controlTarget = asObjectRecord(publicRecord.control_target);
   return {
-    attemptId: asString(record.attempt_id),
-    activityRunId: asString(record.activity_run_id),
-    workflowRunId: asString(record.workflow_run_id),
-    commandId: asString(record.command_id),
-    activityType: asString(record.activity_type),
-    owner: asString(record.owner),
-    status: asString(record.status),
-    provider: asString(record.provider),
-    mutationContract: asString(record.mutation_contract),
-    moduleStateMutated: asBoolean(record.module_state_mutated) === true,
-    raw: record,
+    activityRunId: asString(publicRecord.activity_run_id),
+    workspaceId: asString(publicRecord.workspace_id),
+    workflowRunId: asString(publicRecord.workflow_run_id),
+    operationRunId: asString(publicRecord.operation_run_id),
+    acquisitionRunId: asString(publicRecord.acquisition_run_id),
+    commandId: asString(publicRecord.command_id),
+    parentActivityRunId: asString(publicRecord.parent_activity_run_id),
+    activityType: asString(publicRecord.activity_type),
+    owner: asString(publicRecord.owner),
+    status: asString(publicRecord.status),
+    phase: asString(publicRecord.phase),
+    idempotencyKey: asString(publicRecord.idempotency_key),
+    providerRef: asObjectRecord(publicRecord.provider_ref),
+    input: asObjectRecord(publicRecord.input),
+    output: asObjectRecord(publicRecord.output),
+    artifactRefs: asArray(publicRecord.artifact_refs) as WorkflowPublicJsonValue[],
+    entityCounts: asObjectRecord(publicRecord.entity_counts),
+    metadata: asObjectRecord(publicRecord.metadata),
+    createdAt: asString(publicRecord.created_at),
+    updatedAt: asString(publicRecord.updated_at),
+    mutationContract: asString(publicRecord.mutation_contract),
+    moduleStateMutated: asBoolean(publicRecord.module_state_mutated) === true,
+    controlTarget: Object.keys(controlTarget).length
+      ? deriveWorkflowActivityControlTarget(controlTarget)
+      : undefined,
+    raw: publicRecord,
   };
 }
 
-function deriveWorkflowEntityDeltaRecord(record: Record<string, unknown>): WorkflowEntityDeltaRecord {
+export function deriveWorkflowActivityAttemptRecord(
+  record: Record<string, unknown>,
+): WorkflowActivityAttemptRecord {
+  const publicRecord = projectWorkflowActivityAttemptPublicRecord(record);
+  const controlTarget = asObjectRecord(publicRecord.control_target);
   return {
-    deltaId: asString(record.delta_id),
-    workflowRunId: asString(record.workflow_run_id),
-    operationRunId: asString(record.operation_run_id),
-    commandId: asString(record.command_id),
-    activityRunId: asString(record.activity_run_id),
-    attemptId: asString(record.attempt_id),
-    entityType: asString(record.entity_type),
-    entityKey: asString(record.entity_key),
-    deltaKind: asString(record.delta_kind),
-    status: asString(record.status),
-    reason: asString(record.reason),
-    mutationContract: asString(record.mutation_contract),
-    moduleStateMutated: asBoolean(record.module_state_mutated) === true,
-    raw: record,
+    attemptId: asString(publicRecord.attempt_id),
+    workspaceId: asString(publicRecord.workspace_id),
+    activityRunId: asString(publicRecord.activity_run_id),
+    workflowRunId: asString(publicRecord.workflow_run_id),
+    commandId: asString(publicRecord.command_id),
+    attemptNumber: asNonnegativeSafeInteger(publicRecord.attempt_number),
+    activityType: asString(publicRecord.activity_type),
+    owner: asString(publicRecord.owner),
+    status: asString(publicRecord.status),
+    provider: asString(publicRecord.provider),
+    providerRequestRef: asString(publicRecord.provider_request_ref),
+    providerRunRef: asString(publicRecord.provider_run_ref),
+    startedAt: asString(publicRecord.started_at),
+    completedAt: asString(publicRecord.completed_at),
+    nextRetryAt: asString(publicRecord.next_retry_at),
+    rateLimitRef: asObjectRecord(publicRecord.rate_limit_ref),
+    error: asObjectRecord(publicRecord.error),
+    input: asObjectRecord(publicRecord.input),
+    output: asObjectRecord(publicRecord.output),
+    artifactRefs: asArray(publicRecord.artifact_refs) as WorkflowPublicJsonValue[],
+    idempotencyKey: asString(publicRecord.idempotency_key),
+    metadata: asObjectRecord(publicRecord.metadata),
+    createdAt: asString(publicRecord.created_at),
+    updatedAt: asString(publicRecord.updated_at),
+    mutationContract: asString(publicRecord.mutation_contract),
+    moduleStateMutated: asBoolean(publicRecord.module_state_mutated) === true,
+    controlTarget: Object.keys(controlTarget).length
+      ? deriveWorkflowActivityControlTarget(controlTarget)
+      : undefined,
+    raw: publicRecord,
+  };
+}
+
+export function deriveWorkflowEntityDeltaRecord(record: Record<string, unknown>): WorkflowEntityDeltaRecord {
+  const publicRecord = projectWorkflowEntityDeltaPublicRecord(record);
+  const controlTarget = asObjectRecord(publicRecord.control_target);
+  return {
+    deltaId: asString(publicRecord.delta_id),
+    workspaceId: asString(publicRecord.workspace_id),
+    workflowRunId: asString(publicRecord.workflow_run_id),
+    operationRunId: asString(publicRecord.operation_run_id),
+    commandId: asString(publicRecord.command_id),
+    activityRunId: asString(publicRecord.activity_run_id),
+    attemptId: asString(publicRecord.attempt_id),
+    acquisitionRunId: asString(publicRecord.acquisition_run_id),
+    activityType: asString(publicRecord.activity_type),
+    owner: asString(publicRecord.owner),
+    entityType: asString(publicRecord.entity_type),
+    entityKey: asString(publicRecord.entity_key),
+    deltaKind: asString(publicRecord.delta_kind),
+    status: asString(publicRecord.status),
+    reason: asString(publicRecord.reason),
+    sourceRef: asObjectRecord(publicRecord.source_ref),
+    entityPayload: asObjectRecord(publicRecord.entity_payload),
+    projectionEffect: asObjectRecord(publicRecord.projection_effect),
+    artifactRefs: asArray(publicRecord.artifact_refs) as WorkflowPublicJsonValue[],
+    idempotencyKey: asString(publicRecord.idempotency_key),
+    metadata: asObjectRecord(publicRecord.metadata),
+    createdAt: asString(publicRecord.created_at),
+    updatedAt: asString(publicRecord.updated_at),
+    mutationContract: asString(publicRecord.mutation_contract),
+    moduleStateMutated: asBoolean(publicRecord.module_state_mutated) === true,
+    controlTarget: Object.keys(controlTarget).length
+      ? deriveWorkflowActivityControlTarget(controlTarget)
+      : undefined,
+    raw: publicRecord,
   };
 }
 
 function deriveOperationRunStatusSummary(record: Record<string, unknown>): OperationRunStatusSummary {
-  const latestCommand = asObjectRecord(record.latest_workflow_command);
+  const publicRecord = projectOperationRunStatusSummaryPublicRecord(record);
+  const latestCommand = asObjectRecord(publicRecord.latest_workflow_command);
   return {
-    source: asString(record.source),
-    fallbackStatus: asString(record.fallback_status),
-    fallbackUsed: asBoolean(record.fallback_used) === true,
-    moduleStateMutated: asBoolean(record.module_state_mutated) === true,
-    operationStatus: asString(record.operation_status),
-    operationPhase: asString(record.operation_phase),
-    workflowCommandCount: asNumber(record.workflow_command_count) ?? 0,
-    operationEventCount: asNumber(record.operation_event_count) ?? 0,
-    commandStatusCounts: asNumberRecord(record.command_status_counts),
-    latestEventType: asString(record.latest_event_type),
+    source: asString(publicRecord.source),
+    fallbackStatus: asString(publicRecord.fallback_status),
+    fallbackUsed: asBoolean(publicRecord.fallback_used) === true,
+    moduleStateMutated: asBoolean(publicRecord.module_state_mutated) === true,
+    operationStatus: asString(publicRecord.operation_status),
+    operationPhase: asString(publicRecord.operation_phase),
+    workflowCommandCount: asNumber(publicRecord.workflow_command_count) ?? 0,
+    operationEventCount: asNumber(publicRecord.operation_event_count) ?? 0,
+    commandStatusCounts: asWorkflowPublicNumberRecord(publicRecord.command_status_counts),
+    latestEventType: asString(publicRecord.latest_event_type),
     latestWorkflowCommand: Object.keys(latestCommand).length
       ? deriveWorkflowCommandRecord(latestCommand)
       : undefined,
@@ -1243,77 +2298,83 @@ function deriveOperationRunStatusSummary(record: Record<string, unknown>): Opera
 }
 
 function deriveOperationRunControlState(record: Record<string, unknown>): OperationRunControlState {
-  const disabledReasons = asObjectRecord(record.disabled_reasons);
+  const publicRecord = projectOperationRunControlStatePublicRecord(record);
+  const disabledReasons = asObjectRecord(publicRecord.disabled_reasons);
   return {
-    operationStatus: asString(record.operation_status),
-    actionStatus: asString(record.action_status),
-    operationPhase: asString(record.operation_phase),
-    canDispatch: asBoolean(record.can_dispatch) === true,
-    canCancel: asBoolean(record.can_cancel) === true,
-    canRetry: asBoolean(record.can_retry) === true,
-    canResume: asBoolean(record.can_resume) === true,
-    allowedActions: asArray(record.allowed_actions).map((item) => String(item)).filter(Boolean),
+    operationStatus: asString(publicRecord.operation_status),
+    actionStatus: asString(publicRecord.action_status),
+    operationPhase: asString(publicRecord.operation_phase),
+    canDispatch: asBoolean(publicRecord.can_dispatch) === true,
+    canCancel: asBoolean(publicRecord.can_cancel) === true,
+    canRetry: asBoolean(publicRecord.can_retry) === true,
+    canResume: asBoolean(publicRecord.can_resume) === true,
+    allowedActions: asArray(publicRecord.allowed_actions)
+      .filter((item): item is string => typeof item === "string"),
     disabledReasons: Object.fromEntries(
       Object.entries(disabledReasons).map(([key, value]) => [key, String(value)]),
     ),
-    controlSourceOfTruth: asString(record.control_source_of_truth),
-    fallbackStatus: asString(record.fallback_status),
-    moduleStateMutatedOnControl: asBoolean(record.module_state_mutated_on_control) === true,
-    raw: record,
+    controlSourceOfTruth: asString(publicRecord.control_source_of_truth),
+    fallbackStatus: asString(publicRecord.fallback_status),
+    moduleStateMutatedOnControl:
+      asBoolean(publicRecord.module_state_mutated_on_control) === true,
+    raw: publicRecord,
   };
 }
 
 export function deriveOperationRunRecord(record: Record<string, unknown>): OperationRunRecord {
-  const statusSummary = asObjectRecord(record.status_summary);
-  const controlState = asObjectRecord(record.control_state);
+  const publicRecord = projectOperationRunPublicRecord(record);
+  const statusSummary = asObjectRecord(publicRecord.status_summary);
+  const controlState = asObjectRecord(publicRecord.control_state);
   return {
-    operationRunId: asString(record.operation_run_id),
-    actionId: asString(record.action_id),
-    ownerModule: asString(record.owner_module),
-    operationType: asString(record.operation_type),
-    displayContract: asObjectRecord(record.display_contract),
-    status: asString(record.status),
-    progress: asObjectRecord(record.progress),
-    workflowRef: asObjectRecord(record.workflow_ref),
-    resultRef: asObjectRecord(record.result_ref),
-    requestSchemaVersion: asOptionalString(record.request_schema_version),
-    requestSchemaDigest: asOptionalString(record.request_schema_digest),
+    operationRunId: asString(publicRecord.operation_run_id),
+    actionId: asString(publicRecord.action_id),
+    ownerModule: asString(publicRecord.owner_module),
+    operationType: asString(publicRecord.operation_type),
+    displayContract: asObjectRecord(publicRecord.display_contract),
+    status: asString(publicRecord.status),
+    progress: asObjectRecord(publicRecord.progress),
+    workflowRef: asObjectRecord(publicRecord.workflow_ref),
+    resultRef: asObjectRecord(publicRecord.result_ref),
+    requestSchemaVersion: asOptionalString(publicRecord.request_schema_version),
+    requestSchemaDigest: asOptionalString(publicRecord.request_schema_digest),
     controlState: Object.keys(controlState).length ? deriveOperationRunControlState(controlState) : undefined,
     statusSummary: Object.keys(statusSummary).length ? deriveOperationRunStatusSummary(statusSummary) : undefined,
-    raw: record,
+    raw: publicRecord,
   };
 }
 
 export function deriveOperationActionRecord(record: Record<string, unknown>): OperationActionRecord {
+  const publicRecord = projectOperationActionPublicRecord(record);
   return {
-    actionId: asString(record.action_id),
-    actionType: asString(record.action_type),
-    ownerModule: asString(record.owner_module),
-    operationType: asString(record.operation_type),
-    displayContract: asObjectRecord(record.display_contract),
-    approvalStatus: asString(record.approval_status),
-    approvalPolicy: asString(record.approval_policy),
-    status: asString(record.status),
-    targetRef: asObjectRecord(record.target_ref),
-    input: asObjectRecord(record.input),
-    requestSchemaVersion: asOptionalString(record.request_schema_version),
-    requestSchemaDigest: asOptionalString(record.request_schema_digest),
-    createdAt: asString(record.created_at),
-    updatedAt: asString(record.updated_at),
-    raw: record,
+    actionId: asString(publicRecord.action_id),
+    actionType: asString(publicRecord.action_type),
+    ownerModule: asString(publicRecord.owner_module),
+    operationType: asString(publicRecord.operation_type),
+    displayContract: asObjectRecord(publicRecord.display_contract),
+    approvalStatus: asString(publicRecord.approval_status),
+    approvalPolicy: asString(publicRecord.approval_policy),
+    status: asString(publicRecord.status),
+    targetRef: asObjectRecord(publicRecord.target_ref),
+    input: asObjectRecord(publicRecord.input),
+    requestSchemaVersion: asOptionalString(publicRecord.request_schema_version),
+    requestSchemaDigest: asOptionalString(publicRecord.request_schema_digest),
+    createdAt: asString(publicRecord.created_at),
+    updatedAt: asString(publicRecord.updated_at),
+    raw: publicRecord,
   };
 }
 
-function deriveOperationEventRecord(record: Record<string, unknown>): OperationEventRecord {
+export function deriveOperationEventRecord(record: Record<string, unknown>): OperationEventRecord {
+  const publicRecord = projectOperationEventPublicRecord(record);
   return {
-    eventId: asString(record.event_id),
-    eventType: asString(record.event_type),
-    sequenceNumber: asNumber(record.sequence_number) ?? 0,
-    actor: asString(record.actor),
-    source: asString(record.source),
-    payload: asObjectRecord(record.payload),
-    recordedAt: asString(record.recorded_at),
-    raw: record,
+    eventId: asString(publicRecord.event_id),
+    eventType: asString(publicRecord.event_type),
+    sequenceNumber: asNumber(publicRecord.sequence_number) ?? 0,
+    actor: asString(publicRecord.actor),
+    source: asString(publicRecord.source),
+    payload: asObjectRecord(publicRecord.payload),
+    recordedAt: asString(publicRecord.recorded_at),
+    raw: publicRecord,
   };
 }
 
@@ -1375,13 +2436,38 @@ async function postOperationActionDecision(
       }),
     },
   );
+  const status = requirePublicResponseStatus(response.status, `Operation action ${decision}`);
+  if (["invalid", "not_found", "failed", "unsupported"].includes(status)) {
+    const reason = asString(response.reason) || status;
+    throw new Error(`Operation action ${decision} failed: ${reason}`);
+  }
   const action = asObjectRecord(response.action);
   const operationRun = asObjectRecord(response.operation_run);
+  const derivedAction = Object.keys(action).length ? deriveOperationActionRecord(action) : null;
+  const derivedOperationRun = Object.keys(operationRun).length
+    ? deriveOperationRunRecord(operationRun)
+    : null;
+  const events = asArray(response.events)
+    .filter(isPlainWorkflowPublicObject)
+    .map(deriveOperationEventRecord);
+  const publicResponse = projectOperationResponsePublicEnvelope(response);
+  publicResponse.status = status;
+  if (derivedAction) {
+    publicResponse.action = derivedAction.raw;
+  } else {
+    delete publicResponse.action;
+  }
+  if (derivedOperationRun) {
+    publicResponse.operation_run = derivedOperationRun.raw;
+  } else {
+    delete publicResponse.operation_run;
+  }
+  publicResponse.events = events.map((event) => event.raw);
   return {
-    status: asString(response.status),
-    action: Object.keys(action).length ? deriveOperationActionRecord(action) : null,
-    operationRun: Object.keys(operationRun).length ? deriveOperationRunRecord(operationRun) : null,
-    raw: response,
+    status,
+    action: derivedAction,
+    operationRun: derivedOperationRun,
+    raw: publicResponse,
   };
 }
 
@@ -1397,19 +2483,44 @@ export async function getOperationRunProvenance(operationRunId: string): Promise
   const payload = await fetchJson<Record<string, unknown>>(
     `/api/operations/runs/${encodeURIComponent(operationRunId)}/provenance`,
   );
+  const status = requirePublicResponseStatus(payload.status, "Operation provenance");
+  const actionSource = asObjectRecord(payload.action);
+  const operationRunSource = asObjectRecord(payload.operation_run);
+  const action = Object.keys(actionSource).length ? deriveOperationActionRecord(actionSource) : null;
+  const operationRun = Object.keys(operationRunSource).length
+    ? deriveOperationRunRecord(operationRunSource)
+    : null;
+  const actionEvents = asArray(payload.action_events)
+    .filter(isPlainWorkflowPublicObject)
+    .map(deriveOperationEventRecord);
+  const operationEvents = asArray(payload.operation_events)
+    .filter(isPlainWorkflowPublicObject)
+    .map(deriveOperationEventRecord);
+  const eventTimeline = asArray(payload.event_timeline)
+    .filter(isPlainWorkflowPublicObject)
+    .map(deriveOperationEventRecord);
+  const workflowCommands = asArray(payload.workflow_commands)
+    .filter(isPlainWorkflowPublicObject)
+    .map(deriveWorkflowCommandRecord);
+  const publicPayload = projectOperationResponsePublicEnvelope(payload);
+  publicPayload.status = status;
+  if (action) publicPayload.action = action.raw;
+  else delete publicPayload.action;
+  if (operationRun) publicPayload.operation_run = operationRun.raw;
+  else delete publicPayload.operation_run;
+  publicPayload.action_events = actionEvents.map((event) => event.raw);
+  publicPayload.operation_events = operationEvents.map((event) => event.raw);
+  publicPayload.event_timeline = eventTimeline.map((event) => event.raw);
+  publicPayload.workflow_commands = workflowCommands.map((command) => command.raw);
   return {
-    status: asString(payload.status),
-    action: Object.keys(asObjectRecord(payload.action)).length
-      ? deriveOperationActionRecord(asObjectRecord(payload.action))
-      : null,
-    operationRun: Object.keys(asObjectRecord(payload.operation_run)).length
-      ? deriveOperationRunRecord(asObjectRecord(payload.operation_run))
-      : null,
-    actionEvents: asArray(payload.action_events).map((item) => deriveOperationEventRecord(asObjectRecord(item))),
-    operationEvents: asArray(payload.operation_events).map((item) => deriveOperationEventRecord(asObjectRecord(item))),
-    eventTimeline: asArray(payload.event_timeline).map((item) => deriveOperationEventRecord(asObjectRecord(item))),
-    workflowCommands: asArray(payload.workflow_commands).map((item) => deriveWorkflowCommandRecord(asObjectRecord(item))),
-    raw: payload,
+    status,
+    action,
+    operationRun,
+    actionEvents,
+    operationEvents,
+    eventTimeline,
+    workflowCommands,
+    raw: publicPayload,
   };
 }
 
@@ -1421,7 +2532,7 @@ async function postOperationRunControl(operationRunId: string, action: "cancel" 
       body: JSON.stringify({ actor: "frontend-demo", source: "operation_queue" }),
     },
   );
-  const status = asString(payload.status);
+  const status = requirePublicResponseStatus(payload.status, `Operation ${action}`);
   if (status === "invalid" || status === "not_found" || status === "failed" || status === "unsupported") {
     const reason = asString(payload.reason) || status || "unknown";
     throw new Error(`Operation ${action} failed: ${reason}`);
@@ -1474,12 +2585,15 @@ async function postWorkflowCommandControl(
       body: JSON.stringify({ actor: "frontend-demo", source: "operation_queue" }),
     },
   );
-  const status = asString(payload.status);
+  const status = requirePublicResponseStatus(payload.status, `Workflow command ${action}`);
   if (status === "invalid" || status === "not_found" || status === "failed" || status === "unsupported") {
     const reason = asString(payload.reason) || asString(payload.command_status) || status || "unknown";
     throw new Error(`Workflow command ${action} failed: ${reason}`);
   }
-  const workflowCommand = asObjectRecord(payload.workflow_command);
+  const workflowCommandSource = asObjectRecord(payload.workflow_command);
+  const workflowCommand = Object.keys(workflowCommandSource).length
+    ? projectWorkflowCommandGenericCarrierRecord(workflowCommandSource)
+    : {};
   if (!Object.keys(workflowCommand).length) {
     const reason = asString(payload.reason) || asString(payload.command_status) || status || "missing workflow_command";
     throw new Error(`Workflow command ${action} failed: ${reason}`);
@@ -6677,6 +7791,17 @@ function asString(value: unknown): string {
   return trimmed;
 }
 
+function requirePublicResponseStatus(value: unknown, context: string): string {
+  if (typeof value !== "string") {
+    throw new Error(`${context} failed: malformed status`);
+  }
+  const status = asString(value);
+  if (!status) {
+    throw new Error(`${context} failed: missing status`);
+  }
+  return status;
+}
+
 function asOptionalString(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
@@ -6696,6 +7821,13 @@ function asNumber(value: unknown): number | null {
     }
   }
   return null;
+}
+
+function asNonnegativeSafeInteger(value: unknown): number | undefined {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
+    return undefined;
+  }
+  return value === 0 ? 0 : value;
 }
 
 function asBoolean(value: unknown): boolean | undefined {

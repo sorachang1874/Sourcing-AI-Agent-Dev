@@ -91,6 +91,104 @@ WORKFLOW_COMMAND_OPERATION_SYNC_PUBLIC_FIELDS = (
     "workflow_command",
 )
 
+WORKFLOW_ACTIVITY_RUN_PUBLIC_FIELDS = (
+    "activity_run_id",
+    "workspace_id",
+    "workflow_run_id",
+    "operation_run_id",
+    "acquisition_run_id",
+    "command_id",
+    "parent_activity_run_id",
+    "activity_type",
+    "owner",
+    "status",
+    "phase",
+    "idempotency_key",
+    "provider_ref",
+    "input",
+    "output",
+    "artifact_refs",
+    "entity_counts",
+    "metadata",
+    "created_at",
+    "updated_at",
+    "control_target",
+    "module_state_mutated",
+    "mutation_contract",
+)
+
+WORKFLOW_ACTIVITY_ATTEMPT_PUBLIC_FIELDS = (
+    "attempt_id",
+    "workspace_id",
+    "activity_run_id",
+    "workflow_run_id",
+    "command_id",
+    "attempt_number",
+    "status",
+    "provider",
+    "provider_request_ref",
+    "provider_run_ref",
+    "started_at",
+    "completed_at",
+    "next_retry_at",
+    "rate_limit_ref",
+    "error",
+    "input",
+    "output",
+    "artifact_refs",
+    "idempotency_key",
+    "metadata",
+    "created_at",
+    "updated_at",
+    "activity_type",
+    "owner",
+    "control_target",
+    "module_state_mutated",
+    "mutation_contract",
+)
+
+WORKFLOW_ENTITY_DELTA_PUBLIC_FIELDS = (
+    "delta_id",
+    "workspace_id",
+    "workflow_run_id",
+    "operation_run_id",
+    "command_id",
+    "activity_run_id",
+    "attempt_id",
+    "acquisition_run_id",
+    "entity_type",
+    "entity_key",
+    "delta_kind",
+    "status",
+    "reason",
+    "source_ref",
+    "entity_payload",
+    "projection_effect",
+    "artifact_refs",
+    "idempotency_key",
+    "metadata",
+    "created_at",
+    "updated_at",
+    "activity_type",
+    "owner",
+    "control_target",
+    "module_state_mutated",
+    "mutation_contract",
+)
+
+WORKFLOW_ACTIVITY_CONTROL_TARGET_PUBLIC_FIELDS = (
+    "target_type",
+    "command_id",
+    "command_type",
+    "owner",
+    "command_status",
+    "display_contract",
+    "control_policy",
+    "control_state",
+    "activity_spine_policy",
+    "fallback_status",
+)
+
 WORKFLOW_COMMAND_PRIVATE_PUBLIC_MIRROR_FIELDS = frozenset(
     {
         "authority_id",
@@ -121,17 +219,326 @@ WORKFLOW_COMMAND_PRIVATE_PUBLIC_MIRROR_FIELDS = frozenset(
     }
 )
 _WORKFLOW_COMMAND_PUBLIC_MIRROR_OMIT = object()
+_WORKFLOW_COMMAND_PUBLIC_SAFE_INTEGER_MAX = 9_007_199_254_740_991
+_WORKFLOW_COMMAND_PUBLIC_SAFE_INTEGER_DIAGNOSTICS = frozenset({"claim_generation", "control_epoch"})
+_WORKFLOW_COMMAND_PUBLIC_NUMBER_FIELDS = frozenset({"attempt", "max_attempts"})
+_WORKFLOW_COMMAND_PUBLIC_STRING_ARRAY_FIELDS = frozenset(
+    {"input_artifact_refs", "output_artifact_refs", "downstream_command_ids", "artifact_refs"}
+)
+_WORKFLOW_COMMAND_PUBLIC_OBJECT_FIELDS = frozenset({"produced_entity_counts", "payload", "retry_policy", "result"})
+_WORKFLOW_COMMAND_OPERATION_SYNC_PUBLIC_OBJECT_FIELDS = frozenset({"operation_run", "event", "workflow_command"})
+_WORKFLOW_ACTIVITY_ATTEMPT_PUBLIC_SAFE_INTEGER_FIELDS = frozenset({"attempt_number"})
+_WORKFLOW_ACTIVITY_RUN_PUBLIC_OBJECT_FIELDS = frozenset(
+    {"provider_ref", "input", "output", "entity_counts", "metadata"}
+)
+_WORKFLOW_ACTIVITY_ATTEMPT_PUBLIC_OBJECT_FIELDS = frozenset({"rate_limit_ref", "error", "input", "output", "metadata"})
+_WORKFLOW_ENTITY_DELTA_PUBLIC_OBJECT_FIELDS = frozenset(
+    {"source_ref", "entity_payload", "projection_effect", "metadata"}
+)
+_WORKFLOW_ACTIVITY_CONTROL_TARGET_PUBLIC_OBJECT_FIELDS = frozenset(
+    {"display_contract", "control_policy", "control_state", "activity_spine_policy"}
+)
+_WORKFLOW_COMMAND_CONTROL_POLICY_STRING_ARRAY_FIELDS = frozenset(
+    {
+        "running_control_categories",
+        "generic_cancel_statuses",
+        "generic_retry_statuses",
+        "generic_resume_statuses",
+        "running_cancel_statuses",
+        "running_cancel_prerequisites",
+        "running_cancel_upgrade_requirements",
+        "running_resume_statuses",
+        "running_resume_prerequisites",
+        "running_resume_upgrade_requirements",
+    }
+)
+_WORKFLOW_COMMAND_CONTROL_POLICY_BOOLEAN_FIELDS = frozenset(
+    {
+        "running_cancel_supported",
+        "module_state_mutated_on_running_cancel",
+        "running_resume_supported",
+        "module_state_mutated_on_running_resume",
+    }
+)
+_WORKFLOW_COMMAND_CONTROL_POLICY_STRING_FIELDS = frozenset(
+    {
+        "schema_version",
+        "command_type",
+        "owner",
+        "running_control_category",
+        "running_control_maturity",
+        "running_control_gap_status",
+        "running_control_surface",
+        "running_cancel_owner",
+        "running_cancel_delegate",
+        "running_cancel_blocked_reason",
+        "running_cancel_contract",
+        "unsupported_running_cancel_reason",
+        "running_resume_owner",
+        "running_resume_delegate",
+        "running_resume_blocked_reason",
+        "running_resume_contract",
+        "unsupported_running_resume_reason",
+        "control_source_of_truth",
+        "agent_callable_surface",
+        "fallback_status",
+    }
+)
+_WORKFLOW_COMMAND_CONTROL_STATE_STRING_ARRAY_FIELDS = frozenset(
+    {"allowed_actions", "running_cancel_prerequisites", "running_resume_prerequisites"}
+)
+_WORKFLOW_COMMAND_CONTROL_STATE_BOOLEAN_FIELDS = frozenset(
+    {
+        "can_cancel",
+        "can_retry",
+        "can_resume",
+        "running_cancel_supported",
+        "running_resume_supported",
+        "module_state_mutated_on_cancel",
+        "module_state_mutated_on_resume",
+    }
+)
+_WORKFLOW_COMMAND_CONTROL_STATE_STRING_FIELDS = frozenset(
+    {
+        "schema_version",
+        "command_type",
+        "owner",
+        "command_status",
+        "cancel_mode",
+        "retry_mode",
+        "resume_mode",
+        "running_cancel_delegate",
+        "running_resume_delegate",
+        "control_source_of_truth",
+        "policy_source_of_truth",
+        "fallback_status",
+    }
+)
+_WORKFLOW_COMMAND_ACTIVITY_SPINE_BOOLEAN_FIELDS = frozenset(
+    {
+        "must_write_activity_run",
+        "must_write_activity_attempt",
+        "must_write_entity_delta",
+        "downstream_activity_required",
+        "agent_callable",
+    }
+)
+_WORKFLOW_COMMAND_ACTIVITY_SPINE_STRING_FIELDS = frozenset(
+    {
+        "schema_version",
+        "command_type",
+        "owner",
+        "requirement",
+        "activity_table",
+        "attempt_table",
+        "entity_delta_table",
+        "source_of_truth",
+        "agent_callable_surface",
+        "fallback_status",
+        "migration_status",
+        "deletion_condition",
+    }
+)
+_WORKFLOW_COMMAND_DISPLAY_CONTRACT_STRING_FIELDS = frozenset(
+    {
+        "schema_version",
+        "command_type",
+        "owner",
+        "display_label",
+        "display_category",
+        "description",
+        "source_of_truth",
+        "fallback_status",
+    }
+)
+_WORKFLOW_COMMAND_EXECUTION_SUMMARY_STRING_FIELDS = frozenset({"source", "fallback_status", "latest_effect_status"})
+_WORKFLOW_COMMAND_EXECUTION_SUMMARY_BOOLEAN_FIELDS = frozenset(
+    {"fallback_used", "module_state_mutated", "sample_truncated"}
+)
+_WORKFLOW_COMMAND_EXECUTION_SUMMARY_NUMBER_FIELDS = frozenset(
+    {"activity_count", "attempt_count", "entity_delta_count", "sample_limit"}
+)
+_WORKFLOW_COMMAND_EXECUTION_SUMMARY_NUMBER_RECORD_FIELDS = frozenset(
+    {
+        "activity_status_counts",
+        "attempt_status_counts",
+        "entity_delta_status_counts",
+        "entity_delta_kind_counts",
+    }
+)
+_WORKFLOW_COMMAND_EXECUTION_SUMMARY_OBJECT_FIELDS = frozenset(
+    {
+        "latest_activity",
+        "latest_attempt",
+        "latest_entity_delta",
+    }
+)
+_OPERATION_ACTION_DISPLAY_CONTRACT_STRING_FIELDS = frozenset(
+    {
+        "schema_version",
+        "action_type",
+        "owner_module",
+        "operation_type",
+        "display_label",
+        "display_category",
+        "description",
+        "source_of_truth",
+        "fallback_status",
+    }
+)
+_OPERATION_ACTION_PUBLIC_STRING_FIELDS = frozenset(
+    {
+        "action_id",
+        "workspace_id",
+        "conversation_id",
+        "action_type",
+        "owner_module",
+        "operation_type",
+        "approval_status",
+        "approval_policy",
+        "status",
+        "request_schema_version",
+        "request_schema_digest",
+        "created_at",
+        "updated_at",
+    }
+)
+_OPERATION_ACTION_PUBLIC_OBJECT_FIELDS = frozenset(
+    {"display_contract", "target_ref", "input", "budget", "result_ref", "metadata"}
+)
+_OPERATION_EVENT_PUBLIC_STRING_FIELDS = frozenset(
+    {
+        "event_id",
+        "workspace_id",
+        "event_stream_id",
+        "operation_run_id",
+        "action_id",
+        "event_family",
+        "event_type",
+        "actor",
+        "source",
+        "occurred_at",
+        "recorded_at",
+    }
+)
+_OPERATION_RUN_PUBLIC_STRING_FIELDS = frozenset(
+    {
+        "operation_run_id",
+        "workspace_id",
+        "action_id",
+        "owner_module",
+        "operation_type",
+        "status",
+        "request_schema_version",
+        "request_schema_digest",
+        "started_at",
+        "completed_at",
+        "created_at",
+        "updated_at",
+    }
+)
+_OPERATION_RUN_PUBLIC_OBJECT_FIELDS = frozenset(
+    {
+        "display_contract",
+        "progress",
+        "workflow_ref",
+        "cost_budget",
+        "result_ref",
+        "metadata",
+        "control_state",
+        "status_summary",
+    }
+)
+_OPERATION_RUN_CONTROL_STATE_STRING_FIELDS = frozenset(
+    {
+        "operation_status",
+        "action_status",
+        "operation_phase",
+        "control_source_of_truth",
+        "fallback_status",
+        "schema_version",
+    }
+)
+_OPERATION_RUN_CONTROL_STATE_BOOLEAN_FIELDS = frozenset(
+    {"can_dispatch", "can_cancel", "can_retry", "can_resume", "module_state_mutated_on_control"}
+)
+_OPERATION_RUN_STATUS_SUMMARY_STRING_FIELDS = frozenset(
+    {"source", "fallback_status", "operation_status", "operation_phase", "latest_event_type"}
+)
+_OPERATION_RUN_STATUS_SUMMARY_BOOLEAN_FIELDS = frozenset({"fallback_used", "module_state_mutated"})
+_OPERATION_RUN_STATUS_SUMMARY_NUMBER_FIELDS = frozenset({"workflow_command_count", "operation_event_count"})
+_WORKFLOW_ACTIVITY_PUBLIC_JSON_ARRAY_FIELDS = frozenset({"artifact_refs"})
+_WORKFLOW_ACTIVITY_PUBLIC_BOOLEAN_FIELDS = frozenset({"module_state_mutated"})
+_WORKFLOW_ACTIVITY_RUN_TRUSTED_DERIVED_FIELDS = frozenset(
+    {"control_target", "module_state_mutated", "mutation_contract"}
+)
+_WORKFLOW_ACTIVITY_ATTEMPT_TRUSTED_DERIVED_FIELDS = frozenset(
+    {"activity_type", "owner", "control_target", "module_state_mutated", "mutation_contract"}
+)
+_WORKFLOW_ENTITY_DELTA_TRUSTED_DERIVED_FIELDS = _WORKFLOW_ACTIVITY_ATTEMPT_TRUSTED_DERIVED_FIELDS
+_WORKFLOW_ACTIVITY_RUN_PUBLIC_CARRIER_FIELDS = frozenset({"workflow_activity", "workflow_activity_run"})
+_WORKFLOW_ACTIVITY_ATTEMPT_PUBLIC_CARRIER_FIELDS = frozenset({"workflow_activity_attempt"})
+_WORKFLOW_ENTITY_DELTA_PUBLIC_CARRIER_FIELDS = frozenset({"workflow_entity_delta"})
+_WORKFLOW_ACTIVITY_RUN_PUBLIC_CARRIER_LIST_FIELDS = frozenset({"workflow_activities", "workflow_activity_runs"})
+_WORKFLOW_ACTIVITY_ATTEMPT_PUBLIC_CARRIER_LIST_FIELDS = frozenset({"workflow_activity_attempts"})
+_WORKFLOW_ENTITY_DELTA_PUBLIC_CARRIER_LIST_FIELDS = frozenset({"workflow_entity_deltas"})
+_WORKFLOW_COMMAND_PUBLIC_CARRIER_FIELDS = frozenset({"workflow_command", "latest_workflow_command"})
+_WORKFLOW_COMMAND_PUBLIC_CARRIER_LIST_FIELDS = frozenset({"workflow_commands"})
+WORKFLOW_COMMAND_CONTROL_PUBLIC_ACTIVITY_CARRIER_FIELDS = (
+    "workflow_activity",
+    "workflow_activity_run",
+    "workflow_activity_attempt",
+    "workflow_entity_delta",
+    "workflow_activity_runs",
+    "workflow_activity_attempts",
+    "workflow_entity_deltas",
+)
+_WORKFLOW_PUBLIC_HAZARDOUS_MIRROR_FIELDS = frozenset({"__proto__", "prototype", "constructor"})
+
+
+def _normalized_workflow_public_safe_integer(value: Any) -> int | None:
+    if type(value) not in {int, float}:
+        return None
+    if type(value) is float and not value.is_integer():
+        return None
+    normalized = int(value)
+    if 0 <= normalized <= _WORKFLOW_COMMAND_PUBLIC_SAFE_INTEGER_MAX:
+        return normalized
+    return None
 
 
 def _normalized_public_mirror_field_name(value: Any) -> str:
-    raw = str(value or "").strip().replace("-", "_")
-    return re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", raw).lower()
+    raw = re.sub(r"[-\s]+", "_", str(value or "").strip())
+    raw = re.sub(r"(?<=[A-Z])(?=[A-Z][a-z])", "_", raw)
+    raw = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", raw)
+    return re.sub(r"_+", "_", raw).strip("_").lower()
 
 
 def _is_private_workflow_command_public_mirror_field(value: Any) -> bool:
     normalized = _normalized_public_mirror_field_name(value)
-    return normalized in WORKFLOW_COMMAND_PRIVATE_PUBLIC_MIRROR_FIELDS or normalized.startswith(
-        ("bootstrap_authority_", "claim_authority_", "claim_token_", "scoped_review_session_bootstrap_")
+    compact = normalized.replace("_", "")
+    for private_root in WORKFLOW_COMMAND_PRIVATE_PUBLIC_MIRROR_FIELDS:
+        compact_root = private_root.replace("_", "")
+        if normalized == private_root or normalized.startswith(f"{private_root}_"):
+            return True
+        if compact == compact_root or compact.startswith(compact_root):
+            return True
+    return False
+
+
+def _is_hazardous_workflow_public_mirror_field(value: Any) -> bool:
+    return str(value or "").strip().lower() in _WORKFLOW_PUBLIC_HAZARDOUS_MIRROR_FIELDS
+
+
+def is_workflow_activity_public_carrier_field(value: Any) -> bool:
+    normalized = _normalized_public_mirror_field_name(value)
+    return normalized in (
+        _WORKFLOW_ACTIVITY_RUN_PUBLIC_CARRIER_FIELDS
+        | _WORKFLOW_ACTIVITY_ATTEMPT_PUBLIC_CARRIER_FIELDS
+        | _WORKFLOW_ENTITY_DELTA_PUBLIC_CARRIER_FIELDS
+        | _WORKFLOW_ACTIVITY_RUN_PUBLIC_CARRIER_LIST_FIELDS
+        | _WORKFLOW_ACTIVITY_ATTEMPT_PUBLIC_CARRIER_LIST_FIELDS
+        | _WORKFLOW_ENTITY_DELTA_PUBLIC_CARRIER_LIST_FIELDS
     )
 
 
@@ -139,7 +546,7 @@ def _sanitize_workflow_command_public_mirror(value: Any) -> Any:
     if isinstance(value, dict):
         sanitized_record: dict[str, Any] = {}
         for key, item in value.items():
-            if _is_private_workflow_command_public_mirror_field(key):
+            if _is_private_workflow_command_public_mirror_field(key) or _is_hazardous_workflow_public_mirror_field(key):
                 continue
             sanitized_item = _sanitize_workflow_command_public_mirror(item)
             if sanitized_item is not _WORKFLOW_COMMAND_PUBLIC_MIRROR_OMIT:
@@ -153,6 +560,202 @@ def _sanitize_workflow_command_public_mirror(value: Any) -> Any:
     if isinstance(value, float):
         return value if math.isfinite(value) else _WORKFLOW_COMMAND_PUBLIC_MIRROR_OMIT
     return _WORKFLOW_COMMAND_PUBLIC_MIRROR_OMIT
+
+
+def _project_workflow_public_mirror_fields(
+    value: dict[str, Any] | None,
+    *,
+    fields: tuple[str, ...],
+    safe_integer_fields: frozenset[str] = frozenset(),
+    number_fields: frozenset[str] = frozenset(),
+    string_array_fields: frozenset[str] = frozenset(),
+    json_array_fields: frozenset[str] = frozenset(),
+    object_fields: frozenset[str] = frozenset(),
+    boolean_fields: frozenset[str] = frozenset(),
+) -> dict[str, Any]:
+    source = dict(value or {})
+    record: dict[str, Any] = {}
+    for field in fields:
+        if field not in source or source[field] is None:
+            continue
+        if field in safe_integer_fields:
+            integer_value = _normalized_workflow_public_safe_integer(source[field])
+            if integer_value is not None:
+                record[field] = integer_value
+            continue
+        value = source[field]
+        if field in number_fields:
+            if type(value) in {int, float} and (type(value) is int or math.isfinite(value)):
+                record[field] = value
+            continue
+        if field in string_array_fields:
+            if isinstance(value, (list, tuple)):
+                record[field] = [item for item in value if isinstance(item, str)]
+            continue
+        sanitized = _sanitize_workflow_command_public_mirror(value)
+        if field in json_array_fields:
+            if isinstance(sanitized, list):
+                record[field] = sanitized
+            continue
+        if field in object_fields:
+            if isinstance(sanitized, dict):
+                record[field] = sanitized
+            continue
+        if field in boolean_fields:
+            if type(value) is bool:
+                record[field] = value
+            continue
+        if isinstance(sanitized, str):
+            record[field] = sanitized
+    return record
+
+
+def _project_workflow_public_open_object(
+    value: Any,
+    *,
+    string_fields: frozenset[str] = frozenset(),
+    string_array_fields: frozenset[str] = frozenset(),
+    object_fields: frozenset[str] = frozenset(),
+    boolean_fields: frozenset[str] = frozenset(),
+    number_fields: frozenset[str] = frozenset(),
+    number_record_fields: frozenset[str] = frozenset(),
+) -> dict[str, Any]:
+    sanitized = _sanitize_workflow_command_public_mirror(value)
+    if not isinstance(sanitized, dict):
+        return {}
+    record = dict(sanitized)
+    for field in string_fields:
+        if field in record and not isinstance(record[field], str):
+            record.pop(field, None)
+    for field in string_array_fields:
+        if field not in record:
+            continue
+        field_value = record[field]
+        record[field] = [item for item in field_value if isinstance(item, str)] if isinstance(field_value, list) else []
+    for field in object_fields:
+        if field in record and not isinstance(record[field], dict):
+            record.pop(field, None)
+    for field in boolean_fields:
+        if field in record and type(record[field]) is not bool:
+            record.pop(field, None)
+    for field in number_fields:
+        if field not in record:
+            continue
+        field_value = record[field]
+        if type(field_value) not in {int, float} or (type(field_value) is float and not math.isfinite(field_value)):
+            record.pop(field, None)
+    for field in number_record_fields:
+        if field not in record:
+            continue
+        field_value = record[field]
+        if not isinstance(field_value, dict):
+            record[field] = {}
+            continue
+        record[field] = {
+            str(key): item
+            for key, item in field_value.items()
+            if type(item) in {int, float} and (type(item) is int or math.isfinite(item))
+        }
+    return record
+
+
+def _project_workflow_command_control_policy_public_mirror(value: Any) -> dict[str, Any]:
+    return _project_workflow_public_open_object(
+        value,
+        string_fields=_WORKFLOW_COMMAND_CONTROL_POLICY_STRING_FIELDS,
+        string_array_fields=_WORKFLOW_COMMAND_CONTROL_POLICY_STRING_ARRAY_FIELDS,
+        boolean_fields=_WORKFLOW_COMMAND_CONTROL_POLICY_BOOLEAN_FIELDS,
+    )
+
+
+def _project_workflow_command_control_state_public_mirror(value: Any) -> dict[str, Any]:
+    return _project_workflow_public_open_object(
+        value,
+        string_fields=_WORKFLOW_COMMAND_CONTROL_STATE_STRING_FIELDS,
+        string_array_fields=_WORKFLOW_COMMAND_CONTROL_STATE_STRING_ARRAY_FIELDS,
+        object_fields=frozenset({"disabled_reasons"}),
+        boolean_fields=_WORKFLOW_COMMAND_CONTROL_STATE_BOOLEAN_FIELDS,
+    )
+
+
+def _project_workflow_command_activity_spine_public_mirror(value: Any) -> dict[str, Any]:
+    return _project_workflow_public_open_object(
+        value,
+        string_fields=_WORKFLOW_COMMAND_ACTIVITY_SPINE_STRING_FIELDS,
+        boolean_fields=_WORKFLOW_COMMAND_ACTIVITY_SPINE_BOOLEAN_FIELDS,
+    )
+
+
+def _project_workflow_command_display_contract_public_mirror(value: Any) -> dict[str, Any]:
+    return _project_workflow_public_open_object(
+        value,
+        string_fields=_WORKFLOW_COMMAND_DISPLAY_CONTRACT_STRING_FIELDS,
+    )
+
+
+def _project_operation_event_public_mirror(value: Any) -> dict[str, Any]:
+    return _project_workflow_public_open_object(
+        value,
+        string_fields=_OPERATION_EVENT_PUBLIC_STRING_FIELDS,
+        object_fields=frozenset({"payload"}),
+        number_fields=frozenset({"sequence_number"}),
+    )
+
+
+def _project_operation_action_public_mirror(value: Any) -> dict[str, Any]:
+    record = _project_workflow_public_open_object(
+        value,
+        string_fields=_OPERATION_ACTION_PUBLIC_STRING_FIELDS,
+        object_fields=_OPERATION_ACTION_PUBLIC_OBJECT_FIELDS,
+    )
+    if isinstance(record.get("display_contract"), dict):
+        record["display_contract"] = _project_workflow_public_open_object(
+            record["display_contract"],
+            string_fields=_OPERATION_ACTION_DISPLAY_CONTRACT_STRING_FIELDS,
+        )
+    return record
+
+
+def _project_operation_run_control_state_public_mirror(value: Any) -> dict[str, Any]:
+    return _project_workflow_public_open_object(
+        value,
+        string_fields=_OPERATION_RUN_CONTROL_STATE_STRING_FIELDS,
+        string_array_fields=frozenset({"allowed_actions"}),
+        object_fields=frozenset({"disabled_reasons"}),
+        boolean_fields=_OPERATION_RUN_CONTROL_STATE_BOOLEAN_FIELDS,
+    )
+
+
+def _project_operation_run_status_summary_public_mirror(value: Any) -> dict[str, Any]:
+    record = _project_workflow_public_open_object(
+        value,
+        string_fields=_OPERATION_RUN_STATUS_SUMMARY_STRING_FIELDS,
+        object_fields=frozenset({"latest_event", "latest_workflow_command"}),
+        boolean_fields=_OPERATION_RUN_STATUS_SUMMARY_BOOLEAN_FIELDS,
+        number_fields=_OPERATION_RUN_STATUS_SUMMARY_NUMBER_FIELDS,
+        number_record_fields=frozenset({"command_status_counts"}),
+    )
+    if isinstance(record.get("latest_event"), dict):
+        record["latest_event"] = _project_operation_event_public_mirror(record["latest_event"])
+    return record
+
+
+def _project_operation_run_public_mirror(value: Any) -> dict[str, Any]:
+    record = _project_workflow_public_open_object(
+        value,
+        string_fields=_OPERATION_RUN_PUBLIC_STRING_FIELDS,
+        object_fields=_OPERATION_RUN_PUBLIC_OBJECT_FIELDS,
+    )
+    if isinstance(record.get("display_contract"), dict):
+        record["display_contract"] = _project_workflow_public_open_object(
+            record["display_contract"],
+            string_fields=_OPERATION_ACTION_DISPLAY_CONTRACT_STRING_FIELDS,
+        )
+    if isinstance(record.get("control_state"), dict):
+        record["control_state"] = _project_operation_run_control_state_public_mirror(record["control_state"])
+    if isinstance(record.get("status_summary"), dict):
+        record["status_summary"] = _project_operation_run_status_summary_public_mirror(record["status_summary"])
+    return record
 
 
 # NOTE: the three helpers below duplicate module-level helpers in
@@ -205,7 +808,7 @@ class CommandKernel:
         *,
         migration_phase: str,
     ) -> dict[str, Any]:
-        payload = dict(command or {})
+        payload = self._workflow_command_api_record(dict(command or {}))
         record = {
             key: payload.get(key)
             for key in (
@@ -483,11 +1086,14 @@ class CommandKernel:
 
     def _workflow_command_api_record(self, command: dict[str, Any]) -> dict[str, Any]:
         source = dict(command or {})
-        record = {
-            field: _sanitize_workflow_command_public_mirror(source[field])
-            for field in WORKFLOW_COMMAND_PUBLIC_DESCRIPTOR_FIELDS
-            if field in source and source[field] is not None
-        }
+        record = _project_workflow_public_mirror_fields(
+            source,
+            fields=WORKFLOW_COMMAND_PUBLIC_DESCRIPTOR_FIELDS,
+            safe_integer_fields=_WORKFLOW_COMMAND_PUBLIC_SAFE_INTEGER_DIAGNOSTICS,
+            number_fields=_WORKFLOW_COMMAND_PUBLIC_NUMBER_FIELDS,
+            string_array_fields=_WORKFLOW_COMMAND_PUBLIC_STRING_ARRAY_FIELDS,
+            object_fields=_WORKFLOW_COMMAND_PUBLIC_OBJECT_FIELDS,
+        )
         command_type = str(record.get("command_type") or "").strip()
         owner = str(record.get("owner") or "").strip()
         record.update(self._workflow_command_agent_exposure_record(command_type))
@@ -508,57 +1114,250 @@ class CommandKernel:
             command_type=command_type,
             owner=owner,
         )
-        return dict(_sanitize_workflow_command_public_mirror(record))
+        sanitized = _sanitize_workflow_command_public_mirror(record)
+        activity_projected = self._workflow_activity_public_carriers_api_record(sanitized)
+        return dict(self._workflow_command_nested_public_carriers_api_record(activity_projected))
+
+    def _workflow_command_nested_public_carriers_api_record(self, value: Any) -> Any:
+        if isinstance(value, list):
+            return [self._workflow_command_nested_public_carriers_api_record(item) for item in value]
+        if not isinstance(value, dict):
+            return value
+        record: dict[str, Any] = {}
+        for key, item in value.items():
+            normalized_key = _normalized_public_mirror_field_name(key)
+            if normalized_key == "execution_summary":
+                continue
+            if normalized_key in _WORKFLOW_COMMAND_PUBLIC_CARRIER_FIELDS:
+                if isinstance(item, dict):
+                    record[str(key)] = self._workflow_command_api_record(item)
+                continue
+            if normalized_key in _WORKFLOW_COMMAND_PUBLIC_CARRIER_LIST_FIELDS:
+                if isinstance(item, list):
+                    record[str(key)] = [
+                        self._workflow_command_api_record(entry) for entry in item if isinstance(entry, dict)
+                    ]
+                continue
+            record[str(key)] = self._workflow_command_nested_public_carriers_api_record(item)
+        return record
+
+    def _workflow_activity_public_api_record(
+        self,
+        activity: dict[str, Any] | None,
+        *,
+        include_trusted_derived: bool = False,
+    ) -> dict[str, Any]:
+        record = _project_workflow_public_mirror_fields(
+            activity,
+            fields=WORKFLOW_ACTIVITY_RUN_PUBLIC_FIELDS,
+            json_array_fields=_WORKFLOW_ACTIVITY_PUBLIC_JSON_ARRAY_FIELDS,
+            object_fields=_WORKFLOW_ACTIVITY_RUN_PUBLIC_OBJECT_FIELDS,
+            boolean_fields=_WORKFLOW_ACTIVITY_PUBLIC_BOOLEAN_FIELDS,
+        )
+        record = self._workflow_activity_record_with_closed_control_target(record, source=activity)
+        if not include_trusted_derived:
+            for field in _WORKFLOW_ACTIVITY_RUN_TRUSTED_DERIVED_FIELDS:
+                record.pop(field, None)
+        activity_projected = self._workflow_activity_public_carriers_api_record(record)
+        return dict(self._workflow_command_nested_public_carriers_api_record(activity_projected))
+
+    def _workflow_activity_attempt_public_api_record(
+        self,
+        attempt: dict[str, Any] | None,
+        *,
+        include_trusted_derived: bool = False,
+    ) -> dict[str, Any]:
+        record = _project_workflow_public_mirror_fields(
+            attempt,
+            fields=WORKFLOW_ACTIVITY_ATTEMPT_PUBLIC_FIELDS,
+            safe_integer_fields=_WORKFLOW_ACTIVITY_ATTEMPT_PUBLIC_SAFE_INTEGER_FIELDS,
+            json_array_fields=_WORKFLOW_ACTIVITY_PUBLIC_JSON_ARRAY_FIELDS,
+            object_fields=_WORKFLOW_ACTIVITY_ATTEMPT_PUBLIC_OBJECT_FIELDS,
+            boolean_fields=_WORKFLOW_ACTIVITY_PUBLIC_BOOLEAN_FIELDS,
+        )
+        record = self._workflow_activity_record_with_closed_control_target(record, source=attempt)
+        if not include_trusted_derived:
+            for field in _WORKFLOW_ACTIVITY_ATTEMPT_TRUSTED_DERIVED_FIELDS:
+                record.pop(field, None)
+        activity_projected = self._workflow_activity_public_carriers_api_record(record)
+        return dict(self._workflow_command_nested_public_carriers_api_record(activity_projected))
+
+    def _workflow_entity_delta_public_api_record(
+        self,
+        delta: dict[str, Any] | None,
+        *,
+        include_trusted_derived: bool = False,
+    ) -> dict[str, Any]:
+        record = _project_workflow_public_mirror_fields(
+            delta,
+            fields=WORKFLOW_ENTITY_DELTA_PUBLIC_FIELDS,
+            json_array_fields=_WORKFLOW_ACTIVITY_PUBLIC_JSON_ARRAY_FIELDS,
+            object_fields=_WORKFLOW_ENTITY_DELTA_PUBLIC_OBJECT_FIELDS,
+            boolean_fields=_WORKFLOW_ACTIVITY_PUBLIC_BOOLEAN_FIELDS,
+        )
+        record = self._workflow_activity_record_with_closed_control_target(record, source=delta)
+        if not include_trusted_derived:
+            for field in _WORKFLOW_ENTITY_DELTA_TRUSTED_DERIVED_FIELDS:
+                record.pop(field, None)
+        activity_projected = self._workflow_activity_public_carriers_api_record(record)
+        return dict(self._workflow_command_nested_public_carriers_api_record(activity_projected))
+
+    def _workflow_activity_control_target_public_api_record(
+        self,
+        control_target: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        record = _project_workflow_public_mirror_fields(
+            control_target,
+            fields=WORKFLOW_ACTIVITY_CONTROL_TARGET_PUBLIC_FIELDS,
+            object_fields=_WORKFLOW_ACTIVITY_CONTROL_TARGET_PUBLIC_OBJECT_FIELDS,
+        )
+        nested_projectors = {
+            "display_contract": _project_workflow_command_display_contract_public_mirror,
+            "control_policy": _project_workflow_command_control_policy_public_mirror,
+            "control_state": _project_workflow_command_control_state_public_mirror,
+            "activity_spine_policy": _project_workflow_command_activity_spine_public_mirror,
+        }
+        for field, projector in nested_projectors.items():
+            if isinstance(record.get(field), dict):
+                record[field] = projector(record[field])
+        return record
+
+    def _workflow_activity_record_with_closed_control_target(
+        self,
+        record: dict[str, Any],
+        *,
+        source: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        record.pop("control_target", None)
+        source_control_target = dict(source or {}).get("control_target")
+        if isinstance(source_control_target, dict):
+            projected_control_target = self._workflow_activity_control_target_public_api_record(source_control_target)
+            if projected_control_target:
+                record["control_target"] = projected_control_target
+        return record
+
+    def _workflow_command_trusted_execution_summary_api_record(
+        self,
+        execution_summary: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        source = dict(execution_summary or {})
+        projected = _project_workflow_public_open_object(
+            source,
+            string_fields=_WORKFLOW_COMMAND_EXECUTION_SUMMARY_STRING_FIELDS,
+            object_fields=_WORKFLOW_COMMAND_EXECUTION_SUMMARY_OBJECT_FIELDS,
+            boolean_fields=_WORKFLOW_COMMAND_EXECUTION_SUMMARY_BOOLEAN_FIELDS,
+            number_fields=_WORKFLOW_COMMAND_EXECUTION_SUMMARY_NUMBER_FIELDS,
+            number_record_fields=_WORKFLOW_COMMAND_EXECUTION_SUMMARY_NUMBER_RECORD_FIELDS,
+        )
+        record = self._workflow_activity_public_carriers_api_record(projected)
+        latest_projectors = {
+            "latest_activity": lambda value: self._workflow_activity_public_api_record(
+                value, include_trusted_derived=True
+            ),
+            "latest_attempt": lambda value: self._workflow_activity_attempt_public_api_record(
+                value, include_trusted_derived=True
+            ),
+            "latest_entity_delta": lambda value: self._workflow_entity_delta_public_api_record(
+                value, include_trusted_derived=True
+            ),
+        }
+        for field, projector in latest_projectors.items():
+            value = source.get(field)
+            if isinstance(value, dict):
+                record[field] = projector(value)
+            else:
+                record.pop(field, None)
+        return dict(self._workflow_command_nested_public_carriers_api_record(record))
+
+    def _workflow_activity_public_carriers_api_record(self, value: Any) -> Any:
+        if isinstance(value, list):
+            return [self._workflow_activity_public_carriers_api_record(item) for item in value]
+        if not isinstance(value, dict):
+            return value
+        record: dict[str, Any] = {}
+        for key, item in value.items():
+            normalized_key = _normalized_public_mirror_field_name(key)
+            if normalized_key in _WORKFLOW_ACTIVITY_RUN_PUBLIC_CARRIER_FIELDS:
+                if isinstance(item, dict):
+                    record[str(key)] = self._workflow_activity_public_api_record(item)
+                continue
+            if normalized_key in _WORKFLOW_ACTIVITY_ATTEMPT_PUBLIC_CARRIER_FIELDS:
+                if isinstance(item, dict):
+                    record[str(key)] = self._workflow_activity_attempt_public_api_record(item)
+                continue
+            if normalized_key in _WORKFLOW_ENTITY_DELTA_PUBLIC_CARRIER_FIELDS:
+                if isinstance(item, dict):
+                    record[str(key)] = self._workflow_entity_delta_public_api_record(item)
+                continue
+            if normalized_key in _WORKFLOW_ACTIVITY_RUN_PUBLIC_CARRIER_LIST_FIELDS:
+                if isinstance(item, list):
+                    record[str(key)] = [
+                        self._workflow_activity_public_api_record(entry) for entry in item if isinstance(entry, dict)
+                    ]
+                continue
+            if normalized_key in _WORKFLOW_ACTIVITY_ATTEMPT_PUBLIC_CARRIER_LIST_FIELDS:
+                if isinstance(item, list):
+                    record[str(key)] = [
+                        self._workflow_activity_attempt_public_api_record(entry)
+                        for entry in item
+                        if isinstance(entry, dict)
+                    ]
+                continue
+            if normalized_key in _WORKFLOW_ENTITY_DELTA_PUBLIC_CARRIER_LIST_FIELDS:
+                if isinstance(item, list):
+                    record[str(key)] = [
+                        self._workflow_entity_delta_public_api_record(entry)
+                        for entry in item
+                        if isinstance(entry, dict)
+                    ]
+                continue
+            record[str(key)] = self._workflow_activity_public_carriers_api_record(item)
+        return record
+
+    def _operation_action_public_api_record(
+        self,
+        action: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        return self._workflow_command_public_carrier_api_record(_project_operation_action_public_mirror(action))
+
+    def _operation_event_public_api_record(
+        self,
+        event: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        return self._workflow_command_public_carrier_api_record(_project_operation_event_public_mirror(event))
+
+    def _operation_run_public_api_record(
+        self,
+        operation_run: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        return self._workflow_command_public_carrier_api_record(_project_operation_run_public_mirror(operation_run))
 
     def _workflow_command_operation_sync_api_record(
         self,
         operation_sync: dict[str, Any] | None,
     ) -> dict[str, Any]:
         source = dict(operation_sync or {})
-        record = {
-            field: source[field]
-            for field in WORKFLOW_COMMAND_OPERATION_SYNC_PUBLIC_FIELDS
-            if field in source and source[field] is not None
-        }
+        record = _project_workflow_public_mirror_fields(
+            source,
+            fields=WORKFLOW_COMMAND_OPERATION_SYNC_PUBLIC_FIELDS,
+            object_fields=_WORKFLOW_COMMAND_OPERATION_SYNC_PUBLIC_OBJECT_FIELDS,
+        )
+        if isinstance(record.get("operation_run"), dict):
+            record["operation_run"] = _project_operation_run_public_mirror(record["operation_run"])
+        if isinstance(record.get("event"), dict):
+            record["event"] = _project_operation_event_public_mirror(record["event"])
         command = record.get("workflow_command")
         if isinstance(command, dict):
             record["workflow_command"] = self._workflow_command_api_record(command)
-        return dict(_sanitize_workflow_command_public_mirror(record))
+        return self._workflow_command_public_carrier_api_record(record)
 
     def _workflow_command_public_carrier_api_record(
         self,
         carrier: dict[str, Any] | None,
     ) -> dict[str, Any]:
         sanitized = _sanitize_workflow_command_public_mirror(dict(carrier or {}))
-
-        def _project_command(value: dict[str, Any]) -> dict[str, Any]:
-            command_record = self._workflow_command_api_record(value)
-            summary = value.get("execution_summary")
-            if isinstance(summary, dict):
-                sanitized_summary = _sanitize_workflow_command_public_mirror(summary)
-                if isinstance(sanitized_summary, dict):
-                    command_record["execution_summary"] = sanitized_summary
-            return command_record
-
-        def _project_nested_commands(value: Any) -> Any:
-            if isinstance(value, dict):
-                record: dict[str, Any] = {}
-                for key, item in value.items():
-                    normalized_key = _normalized_public_mirror_field_name(key)
-                    if normalized_key in {"workflow_command", "latest_workflow_command"} and isinstance(item, dict):
-                        record[str(key)] = _project_command(item)
-                    elif normalized_key == "workflow_commands" and isinstance(item, list):
-                        record[str(key)] = [
-                            _project_command(command) if isinstance(command, dict) else command for command in item
-                        ]
-                    else:
-                        record[str(key)] = _project_nested_commands(item)
-                return record
-            if isinstance(value, list):
-                return [_project_nested_commands(item) for item in value]
-            return value
-
-        return dict(_project_nested_commands(sanitized))
+        activity_projected = self._workflow_activity_public_carriers_api_record(sanitized)
+        return dict(self._workflow_command_nested_public_carriers_api_record(activity_projected))
 
     def _workflow_command_control_response_policy_records(
         self,

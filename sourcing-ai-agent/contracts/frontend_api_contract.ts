@@ -1284,7 +1284,7 @@ export interface WorkflowCommandOperationSync {
   workflow_command?: WorkflowCommandRecord;
 }
 
-export interface WorkflowCommandExecutionSummary extends JsonObject {
+export interface WorkflowCommandExecutionSummary {
   source?: string;
   fallback_status?: string;
   fallback_used?: boolean;
@@ -1302,6 +1302,7 @@ export interface WorkflowCommandExecutionSummary extends JsonObject {
   latest_entity_delta?: WorkflowEntityDeltaRecord;
   sample_limit?: number;
   sample_truncated?: boolean;
+  [key: string]: unknown;
 }
 
 export interface WorkflowCommandListResponse {
@@ -1324,6 +1325,13 @@ export interface WorkflowCommandControlResponse {
   command_status?: string;
   workflow_command?: WorkflowCommandRecord;
   operation_sync?: WorkflowCommandOperationSync;
+  workflow_activity?: WorkflowActivityRecord;
+  workflow_activity_run?: WorkflowActivityRecord;
+  workflow_activity_attempt?: WorkflowActivityAttemptRecord;
+  workflow_entity_delta?: WorkflowEntityDeltaRecord;
+  workflow_activity_runs?: WorkflowActivityRecord[];
+  workflow_activity_attempts?: WorkflowActivityAttemptRecord[];
+  workflow_entity_deltas?: WorkflowEntityDeltaRecord[];
   display_contract?: WorkflowCommandDisplayContract;
   control_policy?: WorkflowCommandControlPolicy;
   control_state?: WorkflowCommandControlState;
@@ -1339,55 +1347,94 @@ export interface WorkflowActivityControlTarget {
   command_id?: string;
   command_type?: string;
   owner?: string;
+  command_status?: string;
   display_contract?: WorkflowCommandDisplayContract;
   control_policy?: WorkflowCommandControlPolicy;
   control_state?: WorkflowCommandControlState;
   activity_spine_policy?: WorkflowCommandActivitySpinePolicy;
   fallback_status?: string;
-  [key: string]: JsonValue | undefined;
 }
 
-export interface WorkflowActivityRecord extends JsonObject {
+export interface WorkflowActivityRecord {
   activity_run_id?: string;
+  workspace_id?: string;
   workflow_run_id?: string;
   operation_run_id?: string;
   acquisition_run_id?: string;
   command_id?: string;
+  parent_activity_run_id?: string;
   activity_type?: string;
   owner?: string;
   status?: string;
   phase?: string;
+  idempotency_key?: string;
+  provider_ref?: JsonObject;
+  input?: JsonObject;
+  output?: JsonObject;
+  artifact_refs?: JsonValue[];
+  entity_counts?: JsonObject;
+  metadata?: JsonObject;
+  created_at?: string;
+  updated_at?: string;
   mutation_contract?: string;
   module_state_mutated?: boolean;
   control_target?: WorkflowActivityControlTarget;
 }
 
-export interface WorkflowActivityAttemptRecord extends JsonObject {
+export interface WorkflowActivityAttemptRecord {
   attempt_id?: string;
+  workspace_id?: string;
   activity_run_id?: string;
   workflow_run_id?: string;
   command_id?: string;
+  attempt_number?: number;
   activity_type?: string;
   owner?: string;
   status?: string;
   provider?: string;
+  provider_request_ref?: string;
+  provider_run_ref?: string;
+  started_at?: string;
+  completed_at?: string;
+  next_retry_at?: string;
+  rate_limit_ref?: JsonObject;
+  error?: JsonObject;
+  input?: JsonObject;
+  output?: JsonObject;
+  artifact_refs?: JsonValue[];
+  idempotency_key?: string;
+  metadata?: JsonObject;
+  created_at?: string;
+  updated_at?: string;
   mutation_contract?: string;
   module_state_mutated?: boolean;
   control_target?: WorkflowActivityControlTarget;
 }
 
-export interface WorkflowEntityDeltaRecord extends JsonObject {
+export interface WorkflowEntityDeltaRecord {
   delta_id?: string;
+  workspace_id?: string;
   workflow_run_id?: string;
   operation_run_id?: string;
   command_id?: string;
   activity_run_id?: string;
   attempt_id?: string;
+  acquisition_run_id?: string;
+  activity_type?: string;
+  owner?: string;
   entity_type?: string;
   entity_key?: string;
   delta_kind?: string;
   status?: string;
   reason?: string;
+  source_ref?: JsonObject;
+  entity_payload?: JsonObject;
+  projection_effect?: JsonObject;
+  artifact_refs?: JsonValue[];
+  idempotency_key?: string;
+  metadata?: JsonObject;
+  created_at?: string;
+  updated_at?: string;
   mutation_contract?: string;
   module_state_mutated?: boolean;
   control_target?: WorkflowActivityControlTarget;
@@ -1416,7 +1463,7 @@ export interface WorkflowActivityListResponse {
   status?: string;
   contract?: string;
   workflow_activities: WorkflowActivityRecord[];
-  [key: string]: JsonValue | undefined;
+  [key: string]: unknown;
 }
 
 export interface WorkflowActivityDetailResponse {
@@ -1424,35 +1471,35 @@ export interface WorkflowActivityDetailResponse {
   contract?: string;
   workflow_activity?: WorkflowActivityRecord;
   activity_attempts?: WorkflowActivityAttemptRecord[];
-  [key: string]: JsonValue | undefined;
+  [key: string]: unknown;
 }
 
 export interface WorkflowActivityAttemptListResponse {
   status?: string;
   contract?: string;
   workflow_activity_attempts: WorkflowActivityAttemptRecord[];
-  [key: string]: JsonValue | undefined;
+  [key: string]: unknown;
 }
 
 export interface WorkflowActivityAttemptDetailResponse {
   status: string;
   contract?: string;
   workflow_activity_attempt?: WorkflowActivityAttemptRecord;
-  [key: string]: JsonValue | undefined;
+  [key: string]: unknown;
 }
 
 export interface WorkflowEntityDeltaListResponse {
   status?: string;
   contract?: string;
   workflow_entity_deltas: WorkflowEntityDeltaRecord[];
-  [key: string]: JsonValue | undefined;
+  [key: string]: unknown;
 }
 
 export interface WorkflowEntityDeltaDetailResponse {
   status: string;
   contract?: string;
   workflow_entity_delta?: WorkflowEntityDeltaRecord;
-  [key: string]: JsonValue | undefined;
+  [key: string]: unknown;
 }
 
 export interface AcquisitionDiscoveryLaneListResponse {

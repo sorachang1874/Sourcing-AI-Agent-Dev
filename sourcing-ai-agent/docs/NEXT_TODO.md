@@ -308,10 +308,37 @@
   收敛到同一 projector。author evidence=`7` D3c1、`45` D3a+D3b+D3c1、operation/control adjacency `14`、
   frontend build `81 modules`、lint `58 files`、mypy `81 errors/4 files`（棘轮持平）、diff clean。首个 pinned formal
   attempt 的 reviewer substantive output=`0/2/3/0`，但 runner 因 active settings/prompt/final/single-turn causal
-  binding 失败将 artifact 标记 invalid；因此既不是 formal NO-GO 也不是 GO，五项 direct findings 作为
-  fixed-forward 输入，fresh valid re-review 仍 pending。Scope issuer/ClaimAuthority/29 callers/
+  binding 失败将 artifact 标记 invalid；因此既不是 formal NO-GO 也不是 GO，五项 direct findings 已由下列
+  D3c1a candidate fixed-forward；原 D3c1 candidate 不再是当前评审候选。Scope issuer/ClaimAuthority/29 callers/
   Stage A/B/dispatch/migration/action-root durable-scope gate/R-019/OB-10.1-10.4 与 served=0 全部继续 carry；
   不得借 projection seal 宣称 fence 闭合。
+- [x] D3c1a workflow-command public-projection fixed-forward（2026-07-15）：先闭合 D3c1 invalid artifact 的五项
+  direct findings；随后 precommit adversarial author-audit 又闭合结构化 Activity `artifact_refs`、cancel/retry/resume
+  **4 singular + 3 served plural** Activity carriers + derived control fields、command `result` 内 **8 canonical + normalized aliases**
+  recursive Activity carrier keys、跨语言 mathematical safe-integer canonicalization（`1.0 -> 1`、`-0 -> 0`）与
+  lazy `CommandKernel` partial-construction compatibility；canonical/normalized nested workflow-command carriers、
+  operation-sync/direct-Activity nested-command closure、generic recursive forged-summary removal、hazardous-key
+  rejection、backend/frontend typed malformed-input parity、generic Activity derived-provenance stripping、compact
+  observation canonicalization 与
+  descriptor/literal independent oracle，以及完整 Operation action/event/run、registry mirror、typed trusted
+  execution summary、normalized response-envelope dual-source、demo raw/provenance、strict required-status wrapper
+  也在同一 precommit audit fixed-forward。这些后续项不是 retroactive invalid-review findings，也
+  不是 formal review evidence。
+  ActivityRun/ActivityAttempt/EntityDelta 与 `WorkflowActivityControlTarget` 改为 backend-owned
+  closed projection，并与 schema/TypeScript/adapter/demo 的 `23/27/26/10` fields 机械对齐；private roots 统一以
+  normalized snake + compact root-prefix fail closed；generic carrier 一律丢弃 caller-supplied `execution_summary`，
+  只有 trusted Activity owner 可在 final projection 后重挂；Activity `artifact_refs` 保留经递归净化的 mixed JSON，
+  command `artifact_refs` 继续是既有 string array；`claim_generation`/`control_epoch` 与 Activity `attempt_number`
+  限于 canonical non-negative JavaScript-safe mathematical integer。primary public manifest=
+  `17 command/operation/action + 6 Activity = 23 method-route variants`，compact job-materialization binding 继续
+  独立计数。final stable candidate author evidence：D3c1a `13`、D3a+D3b+D3c1a+durable `56`、full operation
+  runtime `129`、pre-Agent adjacency `4`、Activity HTTP/route parity `2`、adjacent migration/PG `9 + 20 subtests`、
+  frontend standalone compile exit 0 + build `81 modules`、lint repo `58 files` + D3 tests + pre-Agent oracle、
+  mypy `81/4`、diff clean。
+  fresh pinned non-author review 仍 **pending**；在 valid scope-matched artifact 前既无 formal GO 也无 formal NO-GO，Live/W6/manual/promotion/
+  signoff fail closed，但不冻结无关 non-live batch。该批零 storage/runtime write、migration、claim/CAS、Stage A/B、
+  dispatch 或 served 激活；完整非闭合边界见
+  `TRACK_D_D3C1A_WORKFLOW_COMMAND_PUBLIC_PROJECTION_FIXED_FORWARD.md`，R-019、action-root、OB gates 与 served=0 不变。
 - [x] D3c2a dormant workflow-command claim-fence migration foundation（2026-07-15；仅 D3b Migration A 的 command
   subbatch）：`0003_workflow_command_claim_fence_foundation.sql` 精确新增 20 列 + 16 个 `NOT VALID` local checks，
   5s transaction-local lock budget；populated

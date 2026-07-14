@@ -5,7 +5,6 @@ import json
 import re
 from collections import Counter
 from pathlib import Path
-from types import SimpleNamespace
 
 from sourcing_agent.command_kernel import CommandKernel
 from sourcing_agent.repositories.workflow_runtime import WORKFLOW_COMMANDS
@@ -286,14 +285,7 @@ def test_descriptor_to_api_path_uses_the_d3c1_closed_public_projection() -> None
         "future_unknown_descriptor": "must-not-project",
         **synthetic_identity,
     }
-    probe = SimpleNamespace(
-        _workflow_command_agent_exposure_record=lambda _command_type: {},
-        _workflow_command_display_contract_record=lambda **_kwargs: {},
-        _workflow_command_control_policy_record=lambda **_kwargs: {},
-        _workflow_command_control_state_record=lambda **_kwargs: {},
-        _workflow_command_activity_spine_policy_record=lambda **_kwargs: {},
-    )
-    api_record = CommandKernel._workflow_command_api_record(probe, command)  # type: ignore[arg-type]
+    api_record = CommandKernel(store=None)._workflow_command_api_record(command)
     assert api_record["claim_generation"] == 7
     assert api_record["control_epoch"] == 11
     assert api_record["payload"] == {"business_value": "preserved", "nested": {}}

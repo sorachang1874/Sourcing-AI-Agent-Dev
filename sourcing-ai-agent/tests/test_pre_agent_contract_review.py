@@ -3360,9 +3360,11 @@ def test_frontend_contract_exposes_operation_command_activity_spine_policy() -> 
     assert "control_state?: OperationRunControlState" in types_source
     assert "display_contract?: OperationActionDisplayContract" in types_source
     assert '"display_contract": { "$ref": "#/$defs/OperationActionDisplayContract" }' in schema_source
-    assert "mapOperationActionDisplayContract(source.display_contract)" in adapter_source
+    assert "display_contract: mapOptionalPlainWorkflowPublicObject(" in adapter_source
+    assert "mapOperationActionDisplayContract," in adapter_source
     assert '"control_state": { "$ref": "#/$defs/OperationRunControlState" }' in schema_source
-    assert "mapOperationRunControlState(source.control_state)" in adapter_source
+    assert "control_state: mapOptionalPlainWorkflowPublicObject(" in adapter_source
+    assert "mapOperationRunControlState," in adapter_source
     assert "operation_run.control_state" in frontend_doc
     operation_control_types = types_source.split("export interface OperationRunControlResponse", 1)[1].split(
         "export interface WorkflowCommandRegistryResponse",
@@ -3380,8 +3382,10 @@ def test_frontend_contract_exposes_operation_command_activity_spine_policy() -> 
     assert "display_contract?: OperationActionDisplayContract" in operation_control_types
     assert '"control_state": { "$ref": "#/$defs/OperationRunControlState" }' in operation_control_schema
     assert '"display_contract": { "$ref": "#/$defs/OperationActionDisplayContract" }' in operation_control_schema
-    assert "mapOperationRunControlState(source.control_state)" in operation_control_adapter
-    assert "mapOperationActionDisplayContract(source.display_contract)" in operation_control_adapter
+    assert "control_state: mapOptionalPlainWorkflowPublicObject(" in operation_control_adapter
+    assert "mapOperationRunControlState," in operation_control_adapter
+    assert "display_contract: mapOptionalPlainWorkflowPublicObject(" in operation_control_adapter
+    assert "mapOperationActionDisplayContract," in operation_control_adapter
     assert "retry selection follows the returned child OperationRun" in next_todo
     control_response_types = types_source.split("export interface WorkflowCommandControlResponse", 1)[1].split(
         "export interface WorkflowActivityControlTarget",
@@ -3409,19 +3413,25 @@ def test_frontend_contract_exposes_operation_command_activity_spine_policy() -> 
     )
     assert '"display_contract": { "$ref": "#/$defs/WorkflowCommandDisplayContract" }' in control_response_schema
     assert '"control_state": { "$ref": "#/$defs/WorkflowCommandControlState" }' in control_response_schema
-    assert "mapWorkflowCommandDisplayContract(source.display_contract)" in control_response_adapter
-    assert "mapWorkflowCommandControlState(source.control_state)" in control_response_adapter
+    assert "display_contract: mapOptionalPlainWorkflowPublicObject(" in control_response_adapter
+    assert "mapWorkflowCommandDisplayContract," in control_response_adapter
+    assert "control_state: mapOptionalPlainWorkflowPublicObject(" in control_response_adapter
+    assert "mapWorkflowCommandControlState," in control_response_adapter
     assert (
         '"activity_spine_policy": { "$ref": "#/$defs/WorkflowCommandActivitySpinePolicy" }' in control_response_schema
     )
-    assert "mapWorkflowCommandActivitySpinePolicy(source.activity_spine_policy)" in control_response_adapter
+    assert "activity_spine_policy: mapOptionalPlainWorkflowPublicObject(" in control_response_adapter
+    assert "mapWorkflowCommandActivitySpinePolicy," in control_response_adapter
     assert "execution_summary?: WorkflowCommandExecutionSummary" in types_source
     assert '"execution_summary": { "$ref": "#/$defs/WorkflowCommandExecutionSummary" }' in schema_source
-    assert "mapWorkflowCommandExecutionSummary(source.execution_summary)" in adapter_source
+    assert "execution_summary: mapOptionalPlainWorkflowPublicObject(" in adapter_source
+    assert "mapWorkflowCommandExecutionSummary," in adapter_source
     assert "display_contract?: WorkflowCommandDisplayContract" in types_source
     assert '"display_contract": { "$ref": "#/$defs/WorkflowCommandDisplayContract" }' in schema_source
-    assert "mapWorkflowCommandDisplayContract(source.display_contract)" in adapter_source
-    assert "mapWorkflowCommandControlState(source.control_state)" in adapter_source
+    assert "display_contract: mapOptionalPlainWorkflowPublicObject(" in adapter_source
+    assert "mapWorkflowCommandDisplayContract," in adapter_source
+    assert "control_state: mapOptionalPlainWorkflowPublicObject(" in adapter_source
+    assert "mapWorkflowCommandControlState," in adapter_source
     assert "include_execution_summary=true" in frontend_doc
     assert "workflow_command.execution_summary" in frontend_doc
     assert "workflow_command.execution_summary" in agent_doc
@@ -3433,7 +3443,8 @@ def test_frontend_contract_exposes_operation_command_activity_spine_policy() -> 
     assert "operation_run.status_summary" in agent_doc
     assert "Operation queue summaries must be operation/runtime-owned" in review_doc
     assert "include_status_summary=true" in frontend_doc
-    assert "mapOperationRunStatusSummary(source.status_summary)" in adapter_source
+    assert "status_summary: mapOptionalPlainWorkflowPublicObject(" in adapter_source
+    assert "mapOperationRunStatusSummary," in adapter_source
     assert "Command status/provenance summaries must be Activity-spine-owned" in review_doc
     assert "Operation UI command status copy must be Activity-spine-owned" in review_doc
     assert "Operation UI Activity drill-down is read-only runtime inspection" in review_doc
@@ -3539,12 +3550,12 @@ def test_operations_page_is_operation_api_only_control_surface() -> None:
     assert "commandExecutionEffect" in operations_source
     assert "latestExecutionReason" in operations_source
     assert "latestExecutionEntity" in operations_source
-    assert "activityStatusCounts: asNumberRecord(record.activity_status_counts)" in api_source
-    assert "attemptStatusCounts: asNumberRecord(record.attempt_status_counts)" in api_source
-    assert "entityDeltaStatusCounts: asNumberRecord(record.entity_delta_status_counts)" in api_source
-    assert "entityDeltaKindCounts: asNumberRecord(record.entity_delta_kind_counts)" in api_source
+    assert "activityStatusCounts: asWorkflowPublicNumberRecord(record.activity_status_counts)" in api_source
+    assert "attemptStatusCounts: asWorkflowPublicNumberRecord(record.attempt_status_counts)" in api_source
+    assert "entityDeltaStatusCounts: asWorkflowPublicNumberRecord(record.entity_delta_status_counts)" in api_source
+    assert "entityDeltaKindCounts: asWorkflowPublicNumberRecord(record.entity_delta_kind_counts)" in api_source
     assert "sampleTruncated: asBoolean(record.sample_truncated) === true" in api_source
-    assert "displayContract: asObjectRecord(record.display_contract)" in api_source
+    assert "displayContract: asObjectRecord(publicRecord.display_contract)" in api_source
     assert "activityStatusCounts" in operations_source
     assert "displayContract?.display_label" in operations_source
     assert "displayContract?.display_category" in operations_source

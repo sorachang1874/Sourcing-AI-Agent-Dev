@@ -619,37 +619,44 @@ export function mapTargetCandidatePublicWebPromotionResponse(
 }
 
 export function mapWorkflowCommandControlPolicy(payload: unknown): WorkflowCommandControlPolicy {
-  const source = asObject(payload ?? {}, "WorkflowCommandControlPolicy");
+  const source = asWorkflowCommandPublicMirrorSource(
+    payload ?? {},
+    "WorkflowCommandControlPolicy",
+  );
   return {
     ...(source as JsonObject),
     schema_version: asOptionalString(source.schema_version),
     command_type: asOptionalString(source.command_type),
     owner: asOptionalString(source.owner),
     running_control_category: asOptionalString(source.running_control_category),
-    running_control_categories: asOptionalStringArray(source.running_control_categories),
+    running_control_categories: asSparseOptionalStringArray(source.running_control_categories),
     running_control_maturity: asOptionalString(source.running_control_maturity),
     running_control_gap_status: asOptionalString(source.running_control_gap_status),
     running_control_surface: asOptionalString(source.running_control_surface),
-    generic_cancel_statuses: asOptionalStringArray(source.generic_cancel_statuses),
-    generic_retry_statuses: asOptionalStringArray(source.generic_retry_statuses),
-    generic_resume_statuses: asOptionalStringArray(source.generic_resume_statuses),
+    generic_cancel_statuses: asSparseOptionalStringArray(source.generic_cancel_statuses),
+    generic_retry_statuses: asSparseOptionalStringArray(source.generic_retry_statuses),
+    generic_resume_statuses: asSparseOptionalStringArray(source.generic_resume_statuses),
     running_cancel_supported: asOptionalBoolean(source.running_cancel_supported),
-    running_cancel_statuses: asOptionalStringArray(source.running_cancel_statuses),
+    running_cancel_statuses: asSparseOptionalStringArray(source.running_cancel_statuses),
     running_cancel_owner: asOptionalString(source.running_cancel_owner),
     running_cancel_delegate: asOptionalString(source.running_cancel_delegate),
-    running_cancel_prerequisites: asOptionalStringArray(source.running_cancel_prerequisites),
+    running_cancel_prerequisites: asSparseOptionalStringArray(source.running_cancel_prerequisites),
     running_cancel_blocked_reason: asOptionalString(source.running_cancel_blocked_reason),
-    running_cancel_upgrade_requirements: asOptionalStringArray(source.running_cancel_upgrade_requirements),
+    running_cancel_upgrade_requirements: asSparseOptionalStringArray(
+      source.running_cancel_upgrade_requirements,
+    ),
     running_cancel_contract: asOptionalString(source.running_cancel_contract),
     unsupported_running_cancel_reason: asOptionalString(source.unsupported_running_cancel_reason),
     module_state_mutated_on_running_cancel: asOptionalBoolean(source.module_state_mutated_on_running_cancel),
     running_resume_supported: asOptionalBoolean(source.running_resume_supported),
-    running_resume_statuses: asOptionalStringArray(source.running_resume_statuses),
+    running_resume_statuses: asSparseOptionalStringArray(source.running_resume_statuses),
     running_resume_owner: asOptionalString(source.running_resume_owner),
     running_resume_delegate: asOptionalString(source.running_resume_delegate),
-    running_resume_prerequisites: asOptionalStringArray(source.running_resume_prerequisites),
+    running_resume_prerequisites: asSparseOptionalStringArray(source.running_resume_prerequisites),
     running_resume_blocked_reason: asOptionalString(source.running_resume_blocked_reason),
-    running_resume_upgrade_requirements: asOptionalStringArray(source.running_resume_upgrade_requirements),
+    running_resume_upgrade_requirements: asSparseOptionalStringArray(
+      source.running_resume_upgrade_requirements,
+    ),
     running_resume_contract: asOptionalString(source.running_resume_contract),
     unsupported_running_resume_reason: asOptionalString(source.unsupported_running_resume_reason),
     module_state_mutated_on_running_resume: asOptionalBoolean(source.module_state_mutated_on_running_resume),
@@ -660,7 +667,10 @@ export function mapWorkflowCommandControlPolicy(payload: unknown): WorkflowComma
 }
 
 export function mapWorkflowCommandControlState(payload: unknown): WorkflowCommandControlState {
-  const source = asObject(payload ?? {}, "WorkflowCommandControlState");
+  const source = asWorkflowCommandPublicMirrorSource(
+    payload ?? {},
+    "WorkflowCommandControlState",
+  );
   return {
     ...(source as JsonObject),
     schema_version: asOptionalString(source.schema_version),
@@ -673,14 +683,14 @@ export function mapWorkflowCommandControlState(payload: unknown): WorkflowComman
     cancel_mode: asOptionalString(source.cancel_mode),
     retry_mode: asOptionalString(source.retry_mode),
     resume_mode: asOptionalString(source.resume_mode),
-    allowed_actions: asOptionalStringArray(source.allowed_actions),
-    disabled_reasons: source.disabled_reasons ? asJsonObject(source.disabled_reasons) : undefined,
+    allowed_actions: asSparseOptionalStringArray(source.allowed_actions),
+    disabled_reasons: asOptionalWorkflowCommandPublicMirrorObject(source.disabled_reasons),
     running_cancel_supported: asOptionalBoolean(source.running_cancel_supported),
     running_cancel_delegate: asOptionalString(source.running_cancel_delegate),
-    running_cancel_prerequisites: asOptionalStringArray(source.running_cancel_prerequisites),
+    running_cancel_prerequisites: asSparseOptionalStringArray(source.running_cancel_prerequisites),
     running_resume_supported: asOptionalBoolean(source.running_resume_supported),
     running_resume_delegate: asOptionalString(source.running_resume_delegate),
-    running_resume_prerequisites: asOptionalStringArray(source.running_resume_prerequisites),
+    running_resume_prerequisites: asSparseOptionalStringArray(source.running_resume_prerequisites),
     module_state_mutated_on_cancel: asOptionalBoolean(source.module_state_mutated_on_cancel),
     module_state_mutated_on_resume: asOptionalBoolean(source.module_state_mutated_on_resume),
     control_source_of_truth: asOptionalString(source.control_source_of_truth),
@@ -690,7 +700,10 @@ export function mapWorkflowCommandControlState(payload: unknown): WorkflowComman
 }
 
 export function mapWorkflowCommandActivitySpinePolicy(payload: unknown): WorkflowCommandActivitySpinePolicy {
-  const source = asObject(payload ?? {}, "WorkflowCommandActivitySpinePolicy");
+  const source = asWorkflowCommandPublicMirrorSource(
+    payload ?? {},
+    "WorkflowCommandActivitySpinePolicy",
+  );
   return {
     ...(source as JsonObject),
     schema_version: asOptionalString(source.schema_version),
@@ -702,6 +715,11 @@ export function mapWorkflowCommandActivitySpinePolicy(payload: unknown): Workflo
     must_write_entity_delta: asOptionalBoolean(source.must_write_entity_delta),
     downstream_activity_required: asOptionalBoolean(source.downstream_activity_required),
     agent_callable: asOptionalBoolean(source.agent_callable),
+    activity_table: asOptionalString(source.activity_table),
+    attempt_table: asOptionalString(source.attempt_table),
+    entity_delta_table: asOptionalString(source.entity_delta_table),
+    source_of_truth: asOptionalString(source.source_of_truth),
+    agent_callable_surface: asOptionalString(source.agent_callable_surface),
     fallback_status: asOptionalString(source.fallback_status),
     migration_status: asOptionalString(source.migration_status),
     deletion_condition: asOptionalString(source.deletion_condition),
@@ -709,7 +727,10 @@ export function mapWorkflowCommandActivitySpinePolicy(payload: unknown): Workflo
 }
 
 export function mapWorkflowCommandDisplayContract(payload: unknown): WorkflowCommandDisplayContract {
-  const source = asObject(payload ?? {}, "WorkflowCommandDisplayContract");
+  const source = asWorkflowCommandPublicMirrorSource(
+    payload ?? {},
+    "WorkflowCommandDisplayContract",
+  );
   return {
     ...(source as JsonObject),
     schema_version: asOptionalString(source.schema_version),
@@ -724,7 +745,10 @@ export function mapWorkflowCommandDisplayContract(payload: unknown): WorkflowCom
 }
 
 export function mapOperationActionDisplayContract(payload: unknown): OperationActionDisplayContract {
-  const source = asObject(payload ?? {}, "OperationActionDisplayContract");
+  const source = asWorkflowCommandPublicMirrorSource(
+    payload ?? {},
+    "OperationActionDisplayContract",
+  );
   return {
     ...(source as JsonObject),
     schema_version: asOptionalString(source.schema_version),
@@ -740,7 +764,7 @@ export function mapOperationActionDisplayContract(payload: unknown): OperationAc
 }
 
 export function mapWorkflowCommandContract(payload: unknown): WorkflowCommandContract {
-  const source = asObject(payload, "WorkflowCommandContract");
+  const source = asWorkflowCommandPublicMirrorSource(payload, "WorkflowCommandContract");
   return {
     ...(source as JsonObject),
     command_type: asString(source.command_type),
@@ -749,19 +773,65 @@ export function mapWorkflowCommandContract(payload: unknown): WorkflowCommandCon
     agent_exposure_gate: asOptionalString(source.agent_exposure_gate),
     stage_id: asOptionalString(source.stage_id),
     readiness_effect: asOptionalString(source.readiness_effect),
-    display_contract: source.display_contract
-      ? mapWorkflowCommandDisplayContract(source.display_contract)
-      : undefined,
-    control_policy: source.control_policy ? mapWorkflowCommandControlPolicy(source.control_policy) : undefined,
-    control_state: source.control_state ? mapWorkflowCommandControlState(source.control_state) : undefined,
-    activity_spine_policy: source.activity_spine_policy
-      ? mapWorkflowCommandActivitySpinePolicy(source.activity_spine_policy)
-      : undefined,
+    display_contract: mapOptionalPlainWorkflowPublicObject(
+      source.display_contract,
+      mapWorkflowCommandDisplayContract,
+    ),
+    control_policy: mapOptionalPlainWorkflowPublicObject(
+      source.control_policy,
+      mapWorkflowCommandControlPolicy,
+    ),
+    control_state: mapOptionalPlainWorkflowPublicObject(
+      source.control_state,
+      mapWorkflowCommandControlState,
+    ),
+    activity_spine_policy: mapOptionalPlainWorkflowPublicObject(
+      source.activity_spine_policy,
+      mapWorkflowCommandActivitySpinePolicy,
+    ),
+  };
+}
+
+export function mapWorkflowCommandControlSummary(
+  payload: unknown,
+): WorkflowCommandControlSummary {
+  const source = asWorkflowCommandPublicMirrorSource(
+    payload ?? {},
+    "WorkflowCommandControlSummary",
+  );
+  return {
+    ...(source as JsonObject),
+    source_of_truth: asOptionalString(source.source_of_truth),
+    fallback_status: asOptionalString(source.fallback_status),
+    command_count: asOptionalNumber(source.command_count),
+    running_control_maturity_counts: asSparseRecordOfNumber(
+      source.running_control_maturity_counts,
+    ),
+    running_control_gap_status_counts: asSparseRecordOfNumber(
+      source.running_control_gap_status_counts,
+    ),
+    running_control_category_counts: asSparseRecordOfNumber(
+      source.running_control_category_counts,
+    ),
+    has_fail_closed_running_controls: asOptionalBoolean(
+      source.has_fail_closed_running_controls,
+    ),
+    has_owner_specific_running_controls: asOptionalBoolean(
+      source.has_owner_specific_running_controls,
+    ),
+    default_workflow_command_type: asOptionalString(source.default_workflow_command_type),
+    default_running_control_maturity: asOptionalString(
+      source.default_running_control_maturity,
+    ),
+    default_running_control_gap_status: asOptionalString(
+      source.default_running_control_gap_status,
+    ),
+    agent_ui_guidance: asOptionalString(source.agent_ui_guidance),
   };
 }
 
 export function mapOperationActionRegistryEntry(payload: unknown): OperationActionRegistryEntry {
-  const source = asObject(payload, "OperationActionRegistryEntry");
+  const source = asWorkflowCommandPublicMirrorSource(payload, "OperationActionRegistryEntry");
   return {
     ...(source as JsonObject),
     owner_module: asOptionalString(source.owner_module),
@@ -769,25 +839,36 @@ export function mapOperationActionRegistryEntry(payload: unknown): OperationActi
     approval_policy: asOptionalString(source.approval_policy),
     budget_required: asOptionalBoolean(source.budget_required),
     description: asOptionalString(source.description),
-    display_contract: source.display_contract
-      ? mapOperationActionDisplayContract(source.display_contract)
-      : undefined,
-    allowed_workflow_command_types: asOptionalStringArray(source.allowed_workflow_command_types),
+    display_contract: mapOptionalPlainWorkflowPublicObject(
+      source.display_contract,
+      mapOperationActionDisplayContract,
+    ),
+    allowed_workflow_command_types: asSparseOptionalStringArray(
+      source.allowed_workflow_command_types,
+    ),
     default_workflow_command_type: asOptionalString(source.default_workflow_command_type),
     workflow_command_exposure_gate: asOptionalString(source.workflow_command_exposure_gate),
     workflow_command_exposure_status: asOptionalString(source.workflow_command_exposure_status),
-    allowed_workflow_command_contracts: asArray(source.allowed_workflow_command_contracts).map(mapWorkflowCommandContract),
-    workflow_command_control_summary: source.workflow_command_control_summary
-      ? (asObject(source.workflow_command_control_summary, "WorkflowCommandControlSummary") as WorkflowCommandControlSummary)
-      : undefined,
-    default_workflow_command_contract: source.default_workflow_command_contract
-      ? mapWorkflowCommandContract(source.default_workflow_command_contract)
-      : undefined,
+    allowed_workflow_command_contracts: mapSparsePlainWorkflowPublicObjectsSafely(
+      source.allowed_workflow_command_contracts,
+      mapWorkflowCommandContract,
+    ),
+    workflow_command_control_summary: mapOptionalPlainWorkflowPublicObject(
+      source.workflow_command_control_summary,
+      mapWorkflowCommandControlSummary,
+    ),
+    default_workflow_command_contract: mapOptionalPlainWorkflowPublicObjectSafely(
+      source.default_workflow_command_contract,
+      mapWorkflowCommandContract,
+    ),
   };
 }
 
 export function mapOperationActionRegistryResponse(payload: unknown): OperationActionRegistryResponse {
-  const source = asObject(payload, "OperationActionRegistryResponse");
+  const source = asWorkflowCommandPublicMirrorSource(
+    payload,
+    "OperationActionRegistryResponse",
+  );
   return {
     ...(source as JsonObject),
     status: asString(source.status),
@@ -797,7 +878,7 @@ export function mapOperationActionRegistryResponse(payload: unknown): OperationA
 }
 
 export function mapOperationEventRecord(payload: unknown): OperationEventRecord {
-  const source = asObject(payload, "OperationEventRecord");
+  const source = asWorkflowCommandPublicMirrorSource(payload, "OperationEventRecord");
   return {
     ...(source as JsonObject),
     event_id: asOptionalString(source.event_id),
@@ -810,14 +891,14 @@ export function mapOperationEventRecord(payload: unknown): OperationEventRecord 
     sequence_number: asOptionalNumber(source.sequence_number),
     actor: asOptionalString(source.actor),
     source: asOptionalString(source.source),
-    payload: source.payload ? asJsonObject(source.payload) : undefined,
+    payload: asOptionalWorkflowCommandPublicMirrorObject(source.payload),
     occurred_at: asOptionalString(source.occurred_at),
     recorded_at: asOptionalString(source.recorded_at),
   };
 }
 
 export function mapOperationActionRecord(payload: unknown): OperationActionRecord {
-  const source = asObject(payload, "OperationActionRecord");
+  const source = asWorkflowCommandPublicMirrorSource(payload, "OperationActionRecord");
   return {
     ...(source as JsonObject),
     action_id: asOptionalString(source.action_id),
@@ -826,17 +907,18 @@ export function mapOperationActionRecord(payload: unknown): OperationActionRecor
     action_type: asOptionalString(source.action_type),
     owner_module: asOptionalString(source.owner_module),
     operation_type: asOptionalString(source.operation_type),
-    display_contract: source.display_contract
-      ? mapOperationActionDisplayContract(source.display_contract)
-      : undefined,
-    target_ref: source.target_ref ? asJsonObject(source.target_ref) : undefined,
-    input: source.input ? asJsonObject(source.input) : undefined,
+    display_contract: mapOptionalPlainWorkflowPublicObject(
+      source.display_contract,
+      mapOperationActionDisplayContract,
+    ),
+    target_ref: asOptionalWorkflowCommandPublicMirrorObject(source.target_ref),
+    input: asOptionalWorkflowCommandPublicMirrorObject(source.input),
     approval_status: asOptionalString(source.approval_status),
     approval_policy: asOptionalString(source.approval_policy),
-    budget: source.budget ? asJsonObject(source.budget) : undefined,
+    budget: asOptionalWorkflowCommandPublicMirrorObject(source.budget),
     status: asOptionalString(source.status),
-    result_ref: source.result_ref ? asJsonObject(source.result_ref) : undefined,
-    metadata: source.metadata ? asJsonObject(source.metadata) : undefined,
+    result_ref: asOptionalWorkflowCommandPublicMirrorObject(source.result_ref),
+    metadata: asOptionalWorkflowCommandPublicMirrorObject(source.metadata),
     request_schema_version: asOptionalString(source.request_schema_version),
     request_schema_digest: asOptionalString(source.request_schema_digest),
     created_at: asOptionalString(source.created_at),
@@ -845,7 +927,8 @@ export function mapOperationActionRecord(payload: unknown): OperationActionRecor
 }
 
 export function mapOperationRunRecord(payload: unknown): OperationRunRecord {
-  const source = asObject(payload, "OperationRunRecord");
+  const rawSource = asObject(payload, "OperationRunRecord");
+  const source = asWorkflowCommandPublicMirrorSource(payload, "OperationRunRecord");
   return {
     ...(source as JsonObject),
     operation_run_id: asOptionalString(source.operation_run_id),
@@ -853,19 +936,26 @@ export function mapOperationRunRecord(payload: unknown): OperationRunRecord {
     action_id: asOptionalString(source.action_id),
     owner_module: asOptionalString(source.owner_module),
     operation_type: asOptionalString(source.operation_type),
-    display_contract: source.display_contract
-      ? mapOperationActionDisplayContract(source.display_contract)
-      : undefined,
+    display_contract: mapOptionalPlainWorkflowPublicObject(
+      source.display_contract,
+      mapOperationActionDisplayContract,
+    ),
     status: asOptionalString(source.status),
-    progress: source.progress ? asJsonObject(source.progress) : undefined,
-    workflow_ref: source.workflow_ref ? asJsonObject(source.workflow_ref) : undefined,
-    cost_budget: source.cost_budget ? asJsonObject(source.cost_budget) : undefined,
-    result_ref: source.result_ref ? asJsonObject(source.result_ref) : undefined,
-    metadata: source.metadata ? asJsonObject(source.metadata) : undefined,
+    progress: asOptionalWorkflowCommandPublicMirrorObject(source.progress),
+    workflow_ref: asOptionalWorkflowCommandPublicMirrorObject(source.workflow_ref),
+    cost_budget: asOptionalWorkflowCommandPublicMirrorObject(source.cost_budget),
+    result_ref: asOptionalWorkflowCommandPublicMirrorObject(source.result_ref),
+    metadata: asOptionalWorkflowCommandPublicMirrorObject(source.metadata),
     request_schema_version: asOptionalString(source.request_schema_version),
     request_schema_digest: asOptionalString(source.request_schema_digest),
-    control_state: source.control_state ? mapOperationRunControlState(source.control_state) : undefined,
-    status_summary: source.status_summary ? mapOperationRunStatusSummary(source.status_summary) : undefined,
+    control_state: mapOptionalPlainWorkflowPublicObject(
+      source.control_state,
+      mapOperationRunControlState,
+    ),
+    status_summary: mapOptionalPlainWorkflowPublicObject(
+      rawSource.status_summary,
+      mapOperationRunStatusSummary,
+    ),
     started_at: asOptionalString(source.started_at),
     completed_at: asOptionalString(source.completed_at),
     created_at: asOptionalString(source.created_at),
@@ -874,7 +964,10 @@ export function mapOperationRunRecord(payload: unknown): OperationRunRecord {
 }
 
 export function mapOperationRunControlState(payload: unknown): OperationRunControlState {
-  const source = asObject(payload ?? {}, "OperationRunControlState");
+  const source = asWorkflowCommandPublicMirrorSource(
+    payload ?? {},
+    "OperationRunControlState",
+  );
   return {
     ...(source as JsonObject),
     operation_status: asOptionalString(source.operation_status),
@@ -884,8 +977,8 @@ export function mapOperationRunControlState(payload: unknown): OperationRunContr
     can_cancel: asOptionalBoolean(source.can_cancel),
     can_retry: asOptionalBoolean(source.can_retry),
     can_resume: asOptionalBoolean(source.can_resume),
-    allowed_actions: asOptionalStringArray(source.allowed_actions),
-    disabled_reasons: source.disabled_reasons ? asJsonObject(source.disabled_reasons) : undefined,
+    allowed_actions: asSparseOptionalStringArray(source.allowed_actions),
+    disabled_reasons: asOptionalWorkflowCommandPublicMirrorObject(source.disabled_reasons),
     control_source_of_truth: asOptionalString(source.control_source_of_truth),
     fallback_status: asOptionalString(source.fallback_status),
     module_state_mutated_on_control: asOptionalBoolean(source.module_state_mutated_on_control),
@@ -894,7 +987,11 @@ export function mapOperationRunControlState(payload: unknown): OperationRunContr
 }
 
 export function mapOperationRunStatusSummary(payload: unknown): OperationRunStatusSummary {
-  const source = asObject(payload ?? {}, "OperationRunStatusSummary");
+  const rawSource = asObject(payload ?? {}, "OperationRunStatusSummary");
+  const source = asWorkflowCommandPublicMirrorSource(
+    payload ?? {},
+    "OperationRunStatusSummary",
+  );
   return {
     ...(source as JsonObject),
     source: asOptionalString(source.source),
@@ -905,98 +1002,149 @@ export function mapOperationRunStatusSummary(payload: unknown): OperationRunStat
     operation_phase: asOptionalString(source.operation_phase),
     workflow_command_count: asOptionalNumber(source.workflow_command_count),
     operation_event_count: asOptionalNumber(source.operation_event_count),
-    command_status_counts: asRecordOfNumber(source.command_status_counts),
+    command_status_counts: asSparseRecordOfNumber(source.command_status_counts),
     latest_event_type: asOptionalString(source.latest_event_type),
-    latest_event: source.latest_event ? mapOperationEventRecord(source.latest_event) : undefined,
-    latest_workflow_command: source.latest_workflow_command
-      ? mapWorkflowCommandRecord(source.latest_workflow_command)
-      : undefined,
+    latest_event: mapOptionalPlainWorkflowPublicObject(source.latest_event, mapOperationEventRecord),
+    latest_workflow_command: mapOptionalPlainWorkflowPublicObject(
+      rawSource.latest_workflow_command,
+      mapWorkflowCommandRecord,
+    ),
   };
 }
 
 export function mapOperationActionListResponse(payload: unknown): OperationActionListResponse {
-  const source = asObject(payload, "OperationActionListResponse");
+  const rawSource = asObject(payload, "OperationActionListResponse");
+  const source = asWorkflowCommandPublicMirrorSource(payload, "OperationActionListResponse");
   return {
     ...(source as JsonObject),
     status: asOptionalString(source.status),
     contract: asOptionalString(source.contract),
-    actions: asArray(source.actions).map(mapOperationActionRecord),
+    actions: asArray(rawSource.actions)
+      .filter(isPlainWorkflowPublicObject)
+      .map(mapOperationActionRecord),
   };
 }
 
 export function mapOperationActionDetailResponse(payload: unknown): OperationActionDetailResponse {
-  const source = asObject(payload, "OperationActionDetailResponse");
+  const rawSource = asObject(payload, "OperationActionDetailResponse");
+  const source = asWorkflowCommandPublicMirrorSource(payload, "OperationActionDetailResponse");
   return {
     ...(source as JsonObject),
     status: asString(source.status),
     contract: asOptionalString(source.contract),
-    action: source.action ? mapOperationActionRecord(source.action) : undefined,
-    operation_run: source.operation_run ? mapOperationRunRecord(source.operation_run) : undefined,
-    events: asArray(source.events).map(mapOperationEventRecord),
+    action: mapOptionalPlainWorkflowPublicObject(rawSource.action, mapOperationActionRecord),
+    operation_run: mapOptionalPlainWorkflowPublicObject(
+      rawSource.operation_run,
+      mapOperationRunRecord,
+    ),
+    events: asArray(rawSource.events)
+      .filter(isPlainWorkflowPublicObject)
+      .map(mapOperationEventRecord),
   };
 }
 
 export function mapOperationRunListResponse(payload: unknown): OperationRunListResponse {
-  const source = asObject(payload, "OperationRunListResponse");
+  const rawSource = asObject(payload, "OperationRunListResponse");
+  const source = asWorkflowCommandPublicMirrorSource(payload, "OperationRunListResponse");
   return {
     ...(source as JsonObject),
     status: asOptionalString(source.status),
     contract: asOptionalString(source.contract),
-    operation_runs: asArray(source.operation_runs).map(mapOperationRunRecord),
+    operation_runs: asArray(rawSource.operation_runs)
+      .filter(isPlainWorkflowPublicObject)
+      .map(mapOperationRunRecord),
   };
 }
 
 export function mapOperationRunDetailResponse(payload: unknown): OperationRunDetailResponse {
-  const source = asObject(payload, "OperationRunDetailResponse");
+  const rawSource = asObject(payload, "OperationRunDetailResponse");
+  const source = asWorkflowCommandPublicMirrorSource(payload, "OperationRunDetailResponse");
   return {
     ...(source as JsonObject),
     status: asString(source.status),
     contract: asOptionalString(source.contract),
-    operation_run: source.operation_run ? mapOperationRunRecord(source.operation_run) : undefined,
-    events: asArray(source.events).map(mapOperationEventRecord),
+    operation_run: mapOptionalPlainWorkflowPublicObject(
+      rawSource.operation_run,
+      mapOperationRunRecord,
+    ),
+    events: asArray(rawSource.events)
+      .filter(isPlainWorkflowPublicObject)
+      .map(mapOperationEventRecord),
   };
 }
 
 export function mapOperationRunProvenanceResponse(payload: unknown): OperationRunProvenanceResponse {
-  const source = asObject(payload, "OperationRunProvenanceResponse");
+  const rawSource = asObject(payload, "OperationRunProvenanceResponse");
+  const source = asWorkflowCommandPublicMirrorSource(
+    payload,
+    "OperationRunProvenanceResponse",
+  );
   return {
     ...(source as JsonObject),
     status: asString(source.status),
     contract: asOptionalString(source.contract),
-    action: source.action ? mapOperationActionRecord(source.action) : undefined,
-    operation_run: source.operation_run ? mapOperationRunRecord(source.operation_run) : undefined,
-    action_events: asArray(source.action_events).map(mapOperationEventRecord),
-    operation_events: asArray(source.operation_events).map(mapOperationEventRecord),
-    event_timeline: asArray(source.event_timeline).map(mapOperationEventRecord),
-    workflow_commands: asArray(source.workflow_commands).map(mapWorkflowCommandRecord),
+    action: mapOptionalPlainWorkflowPublicObject(rawSource.action, mapOperationActionRecord),
+    operation_run: mapOptionalPlainWorkflowPublicObject(
+      rawSource.operation_run,
+      mapOperationRunRecord,
+    ),
+    action_events: asArray(rawSource.action_events)
+      .filter(isPlainWorkflowPublicObject)
+      .map(mapOperationEventRecord),
+    operation_events: asArray(rawSource.operation_events)
+      .filter(isPlainWorkflowPublicObject)
+      .map(mapOperationEventRecord),
+    event_timeline: asArray(rawSource.event_timeline)
+      .filter(isPlainWorkflowPublicObject)
+      .map(mapOperationEventRecord),
+    workflow_commands: asArray(rawSource.workflow_commands)
+      .filter(isPlainWorkflowPublicObject)
+      .map(mapWorkflowCommandRecord),
     module_state_mutated: asOptionalBoolean(source.module_state_mutated),
   };
 }
 
 export function mapOperationRunControlResponse(payload: unknown): OperationRunControlResponse {
-  const source = asObject(payload, "OperationRunControlResponse");
+  const rawSource = asObject(payload, "OperationRunControlResponse");
+  const source = asWorkflowCommandPublicMirrorSource(payload, "OperationRunControlResponse");
   return {
     ...(source as JsonObject),
     status: asString(source.status),
     reason: asOptionalString(source.reason),
     contract: asOptionalString(source.contract),
-    action: source.action ? mapOperationActionRecord(source.action) : undefined,
-    operation_run: source.operation_run ? mapOperationRunRecord(source.operation_run) : undefined,
-    parent_operation_run: source.parent_operation_run
-      ? mapOperationRunRecord(source.parent_operation_run)
-      : undefined,
-    display_contract: source.display_contract
-      ? mapOperationActionDisplayContract(source.display_contract)
-      : undefined,
-    control_state: source.control_state ? mapOperationRunControlState(source.control_state) : undefined,
-    workflow_command: source.workflow_command ? mapWorkflowCommandRecord(source.workflow_command) : undefined,
-    events: asArray(source.events).map(mapOperationEventRecord),
+    action: mapOptionalPlainWorkflowPublicObject(rawSource.action, mapOperationActionRecord),
+    operation_run: mapOptionalPlainWorkflowPublicObject(
+      rawSource.operation_run,
+      mapOperationRunRecord,
+    ),
+    parent_operation_run: mapOptionalPlainWorkflowPublicObject(
+      rawSource.parent_operation_run,
+      mapOperationRunRecord,
+    ),
+    display_contract: mapOptionalPlainWorkflowPublicObject(
+      rawSource.display_contract,
+      mapOperationActionDisplayContract,
+    ),
+    control_state: mapOptionalPlainWorkflowPublicObject(
+      rawSource.control_state,
+      mapOperationRunControlState,
+    ),
+    workflow_command: mapOptionalPlainWorkflowPublicObject(
+      source.workflow_command,
+      mapWorkflowCommandRecord,
+    ),
+    events: asArray(rawSource.events)
+      .filter(isPlainWorkflowPublicObject)
+      .map(mapOperationEventRecord),
     module_state_mutated: asOptionalBoolean(source.module_state_mutated),
   };
 }
 
 export function mapWorkflowCommandRegistryResponse(payload: unknown): WorkflowCommandRegistryResponse {
-  const source = asObject(payload, "WorkflowCommandRegistryResponse");
+  const source = asWorkflowCommandPublicMirrorSource(
+    payload,
+    "WorkflowCommandRegistryResponse",
+  );
   return {
     ...(source as JsonObject),
     status: asString(source.status),
@@ -1017,21 +1165,21 @@ export function mapWorkflowCommandExecutionSummary(payload: unknown): WorkflowCo
     activity_count: asOptionalNumber(source.activity_count),
     attempt_count: asOptionalNumber(source.attempt_count),
     entity_delta_count: asOptionalNumber(source.entity_delta_count),
-    activity_status_counts: asRecordOfNumber(source.activity_status_counts),
-    attempt_status_counts: asRecordOfNumber(source.attempt_status_counts),
-    entity_delta_status_counts: asRecordOfNumber(source.entity_delta_status_counts),
-    entity_delta_kind_counts: asRecordOfNumber(source.entity_delta_kind_counts),
+    activity_status_counts: asSparseRecordOfNumber(source.activity_status_counts),
+    attempt_status_counts: asSparseRecordOfNumber(source.attempt_status_counts),
+    entity_delta_status_counts: asSparseRecordOfNumber(source.entity_delta_status_counts),
+    entity_delta_kind_counts: asSparseRecordOfNumber(source.entity_delta_kind_counts),
     latest_effect_status: asOptionalString(source.latest_effect_status),
-    latest_activity: source.latest_activity ? mapWorkflowActivityRecord(source.latest_activity) : undefined,
-    latest_attempt: source.latest_attempt ? mapWorkflowActivityAttemptRecord(source.latest_attempt) : undefined,
-    latest_entity_delta: source.latest_entity_delta ? mapWorkflowEntityDeltaRecord(source.latest_entity_delta) : undefined,
+    latest_activity: mapOptionalPlainWorkflowPublicObject(source.latest_activity, mapWorkflowActivityRecord),
+    latest_attempt: mapOptionalPlainWorkflowPublicObject(source.latest_attempt, mapWorkflowActivityAttemptRecord),
+    latest_entity_delta: mapOptionalPlainWorkflowPublicObject(source.latest_entity_delta, mapWorkflowEntityDeltaRecord),
     sample_limit: asOptionalNumber(source.sample_limit),
     sample_truncated: asOptionalBoolean(source.sample_truncated),
   };
 }
 
 export function mapWorkflowCommandRecord(payload: unknown): WorkflowCommandRecord {
-  const source = asWorkflowCommandPublicMirrorSource(payload, "WorkflowCommandRecord");
+  const source = asWorkflowCommandPublicMirrorSource(payload, "WorkflowCommandRecord", true);
   return {
     command_id: asOptionalString(source.command_id),
     workflow_run_id: asOptionalString(source.workflow_run_id),
@@ -1066,21 +1214,30 @@ export function mapWorkflowCommandRecord(payload: unknown): WorkflowCommandRecor
     schema_version: asOptionalString(source.schema_version),
     created_at: asOptionalString(source.created_at),
     updated_at: asOptionalString(source.updated_at),
-    claim_generation: asOptionalNumber(source.claim_generation),
-    control_epoch: asOptionalNumber(source.control_epoch),
+    claim_generation: asOptionalNonnegativeSafeInteger(source.claim_generation),
+    control_epoch: asOptionalNonnegativeSafeInteger(source.control_epoch),
     agent_exposure_gate: asOptionalString(source.agent_exposure_gate),
     agent_exposure_status: asOptionalString(source.agent_exposure_status),
-    display_contract: source.display_contract
-      ? mapWorkflowCommandDisplayContract(source.display_contract)
-      : undefined,
-    control_policy: source.control_policy ? mapWorkflowCommandControlPolicy(source.control_policy) : undefined,
-    control_state: source.control_state ? mapWorkflowCommandControlState(source.control_state) : undefined,
-    activity_spine_policy: source.activity_spine_policy
-      ? mapWorkflowCommandActivitySpinePolicy(source.activity_spine_policy)
-      : undefined,
-    execution_summary: source.execution_summary
-      ? mapWorkflowCommandExecutionSummary(source.execution_summary)
-      : undefined,
+    display_contract: mapOptionalPlainWorkflowPublicObject(
+      source.display_contract,
+      mapWorkflowCommandDisplayContract,
+    ),
+    control_policy: mapOptionalPlainWorkflowPublicObject(
+      source.control_policy,
+      mapWorkflowCommandControlPolicy,
+    ),
+    control_state: mapOptionalPlainWorkflowPublicObject(
+      source.control_state,
+      mapWorkflowCommandControlState,
+    ),
+    activity_spine_policy: mapOptionalPlainWorkflowPublicObject(
+      source.activity_spine_policy,
+      mapWorkflowCommandActivitySpinePolicy,
+    ),
+    execution_summary: mapOptionalPlainWorkflowPublicObject(
+      source.execution_summary,
+      mapWorkflowCommandExecutionSummary,
+    ),
   };
 }
 
@@ -1093,49 +1250,105 @@ export function mapWorkflowCommandOperationSync(payload: unknown): WorkflowComma
     operation_status: asOptionalString(source.operation_status),
     control_action: asOptionalString(source.control_action),
     command_status: asOptionalString(source.command_status),
-    operation_run: source.operation_run ? mapOperationRunRecord(source.operation_run) : undefined,
-    event: source.event ? mapOperationEventRecord(source.event) : undefined,
-    workflow_command: source.workflow_command ? mapWorkflowCommandRecord(source.workflow_command) : undefined,
+    operation_run: mapOptionalPlainWorkflowPublicObject(source.operation_run, mapOperationRunRecord),
+    event: mapOptionalPlainWorkflowPublicObject(source.event, mapOperationEventRecord),
+    workflow_command: mapOptionalPlainWorkflowPublicObject(source.workflow_command, mapWorkflowCommandRecord),
   };
 }
 
 export function mapWorkflowCommandListResponse(payload: unknown): WorkflowCommandListResponse {
-  const source = asObject(payload, "WorkflowCommandListResponse");
+  const rawSource = asObject(payload, "WorkflowCommandListResponse");
+  const source = asWorkflowCommandPublicMirrorSource(payload, "WorkflowCommandListResponse");
   return {
     ...(source as JsonObject),
     status: asOptionalString(source.status),
     contract: asOptionalString(source.contract),
-    workflow_commands: asArray(source.workflow_commands).map(mapWorkflowCommandRecord),
+    workflow_commands: asArray(rawSource.workflow_commands)
+      .filter(isPlainWorkflowPublicObject)
+      .map(mapWorkflowCommandRecord),
   };
 }
 
 export function mapWorkflowCommandDetailResponse(payload: unknown): WorkflowCommandDetailResponse {
-  const source = asObject(payload, "WorkflowCommandDetailResponse");
+  const rawSource = asObject(payload, "WorkflowCommandDetailResponse");
+  const source = asWorkflowCommandPublicMirrorSource(payload, "WorkflowCommandDetailResponse");
   return {
     ...(source as JsonObject),
     status: asString(source.status),
     contract: asOptionalString(source.contract),
-    workflow_command: source.workflow_command ? mapWorkflowCommandRecord(source.workflow_command) : undefined,
+    workflow_command: mapOptionalPlainWorkflowPublicObject(
+      rawSource.workflow_command,
+      mapWorkflowCommandRecord,
+    ),
   };
 }
 
 export function mapWorkflowCommandControlResponse(payload: unknown): WorkflowCommandControlResponse {
+  const rawSource = asObject(payload, "WorkflowCommandControlResponse");
   const source = asWorkflowCommandPublicMirrorSource(payload, "WorkflowCommandControlResponse");
+  const publicSource = { ...(source as JsonObject) };
+  for (const field of Object.keys(publicSource)) {
+    if (
+      isWorkflowActivityPublicCarrierField(field) &&
+      !WORKFLOW_COMMAND_CONTROL_PUBLIC_ACTIVITY_CARRIER_FIELDS.has(field)
+    ) {
+      delete publicSource[field];
+    }
+  }
   return {
-    ...(source as JsonObject),
+    ...publicSource,
     status: asString(source.status),
     reason: asOptionalString(source.reason),
     command_status: asOptionalString(source.command_status),
-    workflow_command: source.workflow_command ? mapWorkflowCommandRecord(source.workflow_command) : undefined,
-    operation_sync: source.operation_sync ? mapWorkflowCommandOperationSync(source.operation_sync) : undefined,
-    display_contract: source.display_contract
-      ? mapWorkflowCommandDisplayContract(source.display_contract)
-      : undefined,
-    control_policy: source.control_policy ? mapWorkflowCommandControlPolicy(source.control_policy) : undefined,
-    control_state: source.control_state ? mapWorkflowCommandControlState(source.control_state) : undefined,
-    activity_spine_policy: source.activity_spine_policy
-      ? mapWorkflowCommandActivitySpinePolicy(source.activity_spine_policy)
-      : undefined,
+    workflow_command: mapOptionalPlainWorkflowPublicObject(source.workflow_command, mapWorkflowCommandRecord),
+    operation_sync: mapOptionalPlainWorkflowPublicObject(
+      source.operation_sync,
+      mapWorkflowCommandOperationSync,
+    ),
+    workflow_activity: mapOptionalPlainWorkflowPublicObject(
+      rawSource.workflow_activity,
+      mapWorkflowActivityRecord,
+    ),
+    workflow_activity_run: mapOptionalPlainWorkflowPublicObject(
+      rawSource.workflow_activity_run,
+      mapWorkflowActivityRecord,
+    ),
+    workflow_activity_attempt: mapOptionalPlainWorkflowPublicObject(
+      rawSource.workflow_activity_attempt,
+      mapWorkflowActivityAttemptRecord,
+    ),
+    workflow_entity_delta: mapOptionalPlainWorkflowPublicObject(
+      rawSource.workflow_entity_delta,
+      mapWorkflowEntityDeltaRecord,
+    ),
+    workflow_activity_runs: mapOptionalPlainWorkflowPublicObjectArray(
+      rawSource.workflow_activity_runs,
+      mapWorkflowActivityRecord,
+    ),
+    workflow_activity_attempts: mapOptionalPlainWorkflowPublicObjectArray(
+      rawSource.workflow_activity_attempts,
+      mapWorkflowActivityAttemptRecord,
+    ),
+    workflow_entity_deltas: mapOptionalPlainWorkflowPublicObjectArray(
+      rawSource.workflow_entity_deltas,
+      mapWorkflowEntityDeltaRecord,
+    ),
+    display_contract: mapOptionalPlainWorkflowPublicObject(
+      source.display_contract,
+      mapWorkflowCommandDisplayContract,
+    ),
+    control_policy: mapOptionalPlainWorkflowPublicObject(
+      source.control_policy,
+      mapWorkflowCommandControlPolicy,
+    ),
+    control_state: mapOptionalPlainWorkflowPublicObject(
+      source.control_state,
+      mapWorkflowCommandControlState,
+    ),
+    activity_spine_policy: mapOptionalPlainWorkflowPublicObject(
+      source.activity_spine_policy,
+      mapWorkflowCommandActivitySpinePolicy,
+    ),
     module_state_mutated: asOptionalBoolean(source.module_state_mutated),
     owner_specific_control: asOptionalBoolean(source.owner_specific_control),
     contract: asOptionalString(source.contract),
@@ -1143,145 +1356,223 @@ export function mapWorkflowCommandControlResponse(payload: unknown): WorkflowCom
 }
 
 export function mapWorkflowActivityControlTarget(payload: unknown): WorkflowActivityControlTarget {
-  const source = asObject(payload ?? {}, "WorkflowActivityControlTarget");
+  const source = asWorkflowCommandPublicMirrorSource(payload ?? {}, "WorkflowActivityControlTarget");
   return {
-    ...(source as JsonObject),
     target_type: asOptionalString(source.target_type),
     command_id: asOptionalString(source.command_id),
     command_type: asOptionalString(source.command_type),
     owner: asOptionalString(source.owner),
-    display_contract: source.display_contract
-      ? mapWorkflowCommandDisplayContract(source.display_contract)
-      : undefined,
-    control_policy: source.control_policy ? mapWorkflowCommandControlPolicy(source.control_policy) : undefined,
-    control_state: source.control_state ? mapWorkflowCommandControlState(source.control_state) : undefined,
-    activity_spine_policy: source.activity_spine_policy
-      ? mapWorkflowCommandActivitySpinePolicy(source.activity_spine_policy)
-      : undefined,
+    command_status: asOptionalString(source.command_status),
+    display_contract: mapOptionalPlainWorkflowPublicObject(
+      source.display_contract,
+      mapWorkflowCommandDisplayContract,
+    ),
+    control_policy: mapOptionalPlainWorkflowPublicObject(
+      source.control_policy,
+      mapWorkflowCommandControlPolicy,
+    ),
+    control_state: mapOptionalPlainWorkflowPublicObject(
+      source.control_state,
+      mapWorkflowCommandControlState,
+    ),
+    activity_spine_policy: mapOptionalPlainWorkflowPublicObject(
+      source.activity_spine_policy,
+      mapWorkflowCommandActivitySpinePolicy,
+    ),
     fallback_status: asOptionalString(source.fallback_status),
   };
 }
 
 export function mapWorkflowActivityRecord(payload: unknown): WorkflowActivityRecord {
-  const source = asObject(payload, "WorkflowActivityRecord");
+  const source = asWorkflowCommandPublicMirrorSource(payload, "WorkflowActivityRecord");
   return {
-    ...(source as JsonObject),
     activity_run_id: asOptionalString(source.activity_run_id),
+    workspace_id: asOptionalString(source.workspace_id),
     workflow_run_id: asOptionalString(source.workflow_run_id),
     operation_run_id: asOptionalString(source.operation_run_id),
     acquisition_run_id: asOptionalString(source.acquisition_run_id),
     command_id: asOptionalString(source.command_id),
+    parent_activity_run_id: asOptionalString(source.parent_activity_run_id),
     activity_type: asOptionalString(source.activity_type),
     owner: asOptionalString(source.owner),
     status: asOptionalString(source.status),
     phase: asOptionalString(source.phase),
+    idempotency_key: asOptionalString(source.idempotency_key),
+    provider_ref: asOptionalWorkflowCommandPublicMirrorObject(source.provider_ref),
+    input: asOptionalWorkflowCommandPublicMirrorObject(source.input),
+    output: asOptionalWorkflowCommandPublicMirrorObject(source.output),
+    artifact_refs: asOptionalWorkflowCommandJsonArray(source.artifact_refs),
+    entity_counts: asOptionalWorkflowCommandPublicMirrorObject(source.entity_counts),
+    metadata: asOptionalWorkflowCommandPublicMirrorObject(source.metadata),
+    created_at: asOptionalString(source.created_at),
+    updated_at: asOptionalString(source.updated_at),
     mutation_contract: asOptionalString(source.mutation_contract),
     module_state_mutated: asOptionalBoolean(source.module_state_mutated),
-    control_target: source.control_target ? mapWorkflowActivityControlTarget(source.control_target) : undefined,
+    control_target: mapOptionalPlainWorkflowPublicObject(
+      source.control_target,
+      mapWorkflowActivityControlTarget,
+    ),
   };
 }
 
 export function mapWorkflowActivityAttemptRecord(payload: unknown): WorkflowActivityAttemptRecord {
-  const source = asObject(payload, "WorkflowActivityAttemptRecord");
+  const source = asWorkflowCommandPublicMirrorSource(payload, "WorkflowActivityAttemptRecord");
   return {
-    ...(source as JsonObject),
     attempt_id: asOptionalString(source.attempt_id),
+    workspace_id: asOptionalString(source.workspace_id),
     activity_run_id: asOptionalString(source.activity_run_id),
     workflow_run_id: asOptionalString(source.workflow_run_id),
     command_id: asOptionalString(source.command_id),
+    attempt_number: asOptionalNonnegativeSafeInteger(source.attempt_number),
     activity_type: asOptionalString(source.activity_type),
     owner: asOptionalString(source.owner),
     status: asOptionalString(source.status),
     provider: asOptionalString(source.provider),
+    provider_request_ref: asOptionalString(source.provider_request_ref),
+    provider_run_ref: asOptionalString(source.provider_run_ref),
+    started_at: asOptionalString(source.started_at),
+    completed_at: asOptionalString(source.completed_at),
+    next_retry_at: asOptionalString(source.next_retry_at),
+    rate_limit_ref: asOptionalWorkflowCommandPublicMirrorObject(source.rate_limit_ref),
+    error: asOptionalWorkflowCommandPublicMirrorObject(source.error),
+    input: asOptionalWorkflowCommandPublicMirrorObject(source.input),
+    output: asOptionalWorkflowCommandPublicMirrorObject(source.output),
+    artifact_refs: asOptionalWorkflowCommandJsonArray(source.artifact_refs),
+    idempotency_key: asOptionalString(source.idempotency_key),
+    metadata: asOptionalWorkflowCommandPublicMirrorObject(source.metadata),
+    created_at: asOptionalString(source.created_at),
+    updated_at: asOptionalString(source.updated_at),
     mutation_contract: asOptionalString(source.mutation_contract),
     module_state_mutated: asOptionalBoolean(source.module_state_mutated),
-    control_target: source.control_target ? mapWorkflowActivityControlTarget(source.control_target) : undefined,
+    control_target: mapOptionalPlainWorkflowPublicObject(
+      source.control_target,
+      mapWorkflowActivityControlTarget,
+    ),
   };
 }
 
 export function mapWorkflowEntityDeltaRecord(payload: unknown): WorkflowEntityDeltaRecord {
-  const source = asObject(payload, "WorkflowEntityDeltaRecord");
+  const source = asWorkflowCommandPublicMirrorSource(payload, "WorkflowEntityDeltaRecord");
   return {
-    ...(source as JsonObject),
     delta_id: asOptionalString(source.delta_id),
+    workspace_id: asOptionalString(source.workspace_id),
     workflow_run_id: asOptionalString(source.workflow_run_id),
     operation_run_id: asOptionalString(source.operation_run_id),
     command_id: asOptionalString(source.command_id),
     activity_run_id: asOptionalString(source.activity_run_id),
     attempt_id: asOptionalString(source.attempt_id),
+    acquisition_run_id: asOptionalString(source.acquisition_run_id),
+    activity_type: asOptionalString(source.activity_type),
+    owner: asOptionalString(source.owner),
     entity_type: asOptionalString(source.entity_type),
     entity_key: asOptionalString(source.entity_key),
     delta_kind: asOptionalString(source.delta_kind),
     status: asOptionalString(source.status),
     reason: asOptionalString(source.reason),
+    source_ref: asOptionalWorkflowCommandPublicMirrorObject(source.source_ref),
+    entity_payload: asOptionalWorkflowCommandPublicMirrorObject(source.entity_payload),
+    projection_effect: asOptionalWorkflowCommandPublicMirrorObject(source.projection_effect),
+    artifact_refs: asOptionalWorkflowCommandJsonArray(source.artifact_refs),
+    idempotency_key: asOptionalString(source.idempotency_key),
+    metadata: asOptionalWorkflowCommandPublicMirrorObject(source.metadata),
+    created_at: asOptionalString(source.created_at),
+    updated_at: asOptionalString(source.updated_at),
     mutation_contract: asOptionalString(source.mutation_contract),
     module_state_mutated: asOptionalBoolean(source.module_state_mutated),
-    control_target: source.control_target ? mapWorkflowActivityControlTarget(source.control_target) : undefined,
+    control_target: mapOptionalPlainWorkflowPublicObject(
+      source.control_target,
+      mapWorkflowActivityControlTarget,
+    ),
   };
 }
 
 export function mapWorkflowActivityListResponse(payload: unknown): WorkflowActivityListResponse {
-  const source = asObject(payload, "WorkflowActivityListResponse");
+  const rawSource = asObject(payload, "WorkflowActivityListResponse");
+  const source = asWorkflowCommandPublicMirrorSource(payload, "WorkflowActivityListResponse");
   return {
     ...(source as JsonObject),
     status: asOptionalString(source.status),
     contract: asOptionalString(source.contract),
-    workflow_activities: asArray(source.workflow_activities).map(mapWorkflowActivityRecord),
+    workflow_activities: asArray(rawSource.workflow_activities)
+      .filter(isPlainWorkflowPublicObject)
+      .map(mapWorkflowActivityRecord),
   };
 }
 
 export function mapWorkflowActivityDetailResponse(payload: unknown): WorkflowActivityDetailResponse {
-  const source = asObject(payload, "WorkflowActivityDetailResponse");
+  const rawSource = asObject(payload, "WorkflowActivityDetailResponse");
+  const source = asWorkflowCommandPublicMirrorSource(payload, "WorkflowActivityDetailResponse");
   return {
     ...(source as JsonObject),
     status: asString(source.status),
     contract: asOptionalString(source.contract),
-    workflow_activity: source.workflow_activity ? mapWorkflowActivityRecord(source.workflow_activity) : undefined,
-    activity_attempts: asArray(source.activity_attempts).map(mapWorkflowActivityAttemptRecord),
+    workflow_activity: mapOptionalPlainWorkflowPublicObject(
+      rawSource.workflow_activity,
+      mapWorkflowActivityRecord,
+    ),
+    activity_attempts: asArray(rawSource.activity_attempts)
+      .filter(isPlainWorkflowPublicObject)
+      .map(mapWorkflowActivityAttemptRecord),
   };
 }
 
 export function mapWorkflowActivityAttemptListResponse(payload: unknown): WorkflowActivityAttemptListResponse {
-  const source = asObject(payload, "WorkflowActivityAttemptListResponse");
+  const rawSource = asObject(payload, "WorkflowActivityAttemptListResponse");
+  const source = asWorkflowCommandPublicMirrorSource(
+    payload,
+    "WorkflowActivityAttemptListResponse",
+  );
   return {
     ...(source as JsonObject),
     status: asOptionalString(source.status),
     contract: asOptionalString(source.contract),
-    workflow_activity_attempts: asArray(source.workflow_activity_attempts).map(mapWorkflowActivityAttemptRecord),
+    workflow_activity_attempts: asArray(rawSource.workflow_activity_attempts)
+      .filter(isPlainWorkflowPublicObject)
+      .map(mapWorkflowActivityAttemptRecord),
   };
 }
 
 export function mapWorkflowActivityAttemptDetailResponse(payload: unknown): WorkflowActivityAttemptDetailResponse {
-  const source = asObject(payload, "WorkflowActivityAttemptDetailResponse");
+  const rawSource = asObject(payload, "WorkflowActivityAttemptDetailResponse");
+  const source = asWorkflowCommandPublicMirrorSource(
+    payload,
+    "WorkflowActivityAttemptDetailResponse",
+  );
   return {
     ...(source as JsonObject),
     status: asString(source.status),
     contract: asOptionalString(source.contract),
-    workflow_activity_attempt: source.workflow_activity_attempt
-      ? mapWorkflowActivityAttemptRecord(source.workflow_activity_attempt)
-      : undefined,
+    workflow_activity_attempt: mapOptionalPlainWorkflowPublicObject(
+      rawSource.workflow_activity_attempt,
+      mapWorkflowActivityAttemptRecord,
+    ),
   };
 }
 
 export function mapWorkflowEntityDeltaListResponse(payload: unknown): WorkflowEntityDeltaListResponse {
-  const source = asObject(payload, "WorkflowEntityDeltaListResponse");
+  const rawSource = asObject(payload, "WorkflowEntityDeltaListResponse");
+  const source = asWorkflowCommandPublicMirrorSource(payload, "WorkflowEntityDeltaListResponse");
   return {
     ...(source as JsonObject),
     status: asOptionalString(source.status),
     contract: asOptionalString(source.contract),
-    workflow_entity_deltas: asArray(source.workflow_entity_deltas).map(mapWorkflowEntityDeltaRecord),
+    workflow_entity_deltas: asArray(rawSource.workflow_entity_deltas)
+      .filter(isPlainWorkflowPublicObject)
+      .map(mapWorkflowEntityDeltaRecord),
   };
 }
 
 export function mapWorkflowEntityDeltaDetailResponse(payload: unknown): WorkflowEntityDeltaDetailResponse {
-  const source = asObject(payload, "WorkflowEntityDeltaDetailResponse");
+  const rawSource = asObject(payload, "WorkflowEntityDeltaDetailResponse");
+  const source = asWorkflowCommandPublicMirrorSource(payload, "WorkflowEntityDeltaDetailResponse");
   return {
     ...(source as JsonObject),
     status: asString(source.status),
     contract: asOptionalString(source.contract),
-    workflow_entity_delta: source.workflow_entity_delta
-      ? mapWorkflowEntityDeltaRecord(source.workflow_entity_delta)
-      : undefined,
+    workflow_entity_delta: mapOptionalPlainWorkflowPublicObject(
+      rawSource.workflow_entity_delta,
+      mapWorkflowEntityDeltaRecord,
+    ),
   };
 }
 
@@ -1304,7 +1595,10 @@ export function mapAcquisitionDiscoveryLaneRecord(payload: unknown): Acquisition
     read_model_role: asOptionalString(source.read_model_role),
     mutation_contract: asOptionalString(source.mutation_contract),
     module_state_mutated: asOptionalBoolean(source.module_state_mutated),
-    control_target: source.control_target ? mapWorkflowActivityControlTarget(source.control_target) : undefined,
+    control_target: mapOptionalPlainWorkflowPublicObject(
+      source.control_target,
+      mapWorkflowActivityControlTarget,
+    ),
   };
 }
 
@@ -2276,7 +2570,7 @@ function toHeaderRecord(headers: HeadersInit): Record<string, string> {
   return { ...headers };
 }
 
-const WORKFLOW_COMMAND_PRIVATE_PUBLIC_MIRROR_FIELDS = new Set([
+const WORKFLOW_COMMAND_PRIVATE_PUBLIC_MIRROR_ROOTS = [
   "authority_id",
   "authority_seal",
   "bootstrap_authority",
@@ -2302,28 +2596,286 @@ const WORKFLOW_COMMAND_PRIVATE_PUBLIC_MIRROR_FIELDS = new Set([
   "lease_token",
   "scoped_review_session_bootstrap_authority",
   "scoped_review_session_bootstrap_receipt",
+] as const;
+
+const WORKFLOW_COMMAND_PRIVATE_PUBLIC_MIRROR_FIELDS: ReadonlySet<string> = new Set(WORKFLOW_COMMAND_PRIVATE_PUBLIC_MIRROR_ROOTS);
+
+const WORKFLOW_COMMAND_PRIVATE_PUBLIC_MIRROR_ROOT_SPECS = Array.from(
+  WORKFLOW_COMMAND_PRIVATE_PUBLIC_MIRROR_ROOTS,
+  (root) => ({
+    normalized: root,
+    compact: root.replace(/_/g, ""),
+  }),
+);
+
+const WORKFLOW_COMMAND_PUBLIC_CARRIER_FIELDS: ReadonlySet<string> = new Set([
+  "workflow_command",
+  "latest_workflow_command",
+]);
+const WORKFLOW_COMMAND_PUBLIC_CARRIER_LIST_FIELDS: ReadonlySet<string> = new Set([
+  "workflow_commands",
+]);
+const WORKFLOW_COMMAND_CONTROL_PUBLIC_ACTIVITY_CARRIER_FIELDS: ReadonlySet<string> = new Set([
+  "workflow_activity",
+  "workflow_activity_run",
+  "workflow_activity_attempt",
+  "workflow_entity_delta",
+  "workflow_activity_runs",
+  "workflow_activity_attempts",
+  "workflow_entity_deltas",
+]);
+const WORKFLOW_PUBLIC_HAZARDOUS_MIRROR_FIELDS: ReadonlySet<string> = new Set([
+  "__proto__",
+  "prototype",
+  "constructor",
+]);
+
+const WORKFLOW_ACTIVITY_RUN_PUBLIC_CARRIER_FIELDS: ReadonlySet<string> = new Set([
+  "workflow_activity",
+  "workflow_activity_run",
+]);
+const WORKFLOW_ACTIVITY_ATTEMPT_PUBLIC_CARRIER_FIELDS: ReadonlySet<string> = new Set([
+  "workflow_activity_attempt",
+]);
+const WORKFLOW_ENTITY_DELTA_PUBLIC_CARRIER_FIELDS: ReadonlySet<string> = new Set([
+  "workflow_entity_delta",
+]);
+const WORKFLOW_ACTIVITY_RUN_PUBLIC_CARRIER_LIST_FIELDS: ReadonlySet<string> = new Set([
+  "workflow_activities",
+  "workflow_activity_runs",
+]);
+const WORKFLOW_ACTIVITY_ATTEMPT_PUBLIC_CARRIER_LIST_FIELDS: ReadonlySet<string> = new Set([
+  "workflow_activity_attempts",
+]);
+const WORKFLOW_ENTITY_DELTA_PUBLIC_CARRIER_LIST_FIELDS: ReadonlySet<string> = new Set([
+  "workflow_entity_deltas",
+]);
+const WORKFLOW_ACTIVITY_RUN_TRUSTED_DERIVED_FIELDS: ReadonlySet<string> = new Set([
+  "control_target",
+  "module_state_mutated",
+  "mutation_contract",
+]);
+const WORKFLOW_ACTIVITY_ATTEMPT_TRUSTED_DERIVED_FIELDS: ReadonlySet<string> = new Set([
+  "activity_type",
+  "owner",
+  "control_target",
+  "module_state_mutated",
+  "mutation_contract",
 ]);
 
 function normalizeWorkflowCommandPublicMirrorFieldName(value: unknown): string {
   return String(value ?? "")
     .trim()
-    .replace(/-/g, "_")
-    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .replace(/[-\s]+/g, "_")
+    .replace(/(?<=[A-Z])(?=[A-Z][a-z])/g, "_")
+    .replace(/(?<=[a-z0-9])(?=[A-Z])/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "")
     .toLowerCase();
 }
 
 function isPrivateWorkflowCommandPublicMirrorField(value: unknown): boolean {
   const normalized = normalizeWorkflowCommandPublicMirrorFieldName(value);
-  return (
-    WORKFLOW_COMMAND_PRIVATE_PUBLIC_MIRROR_FIELDS.has(normalized) ||
-    normalized.startsWith("bootstrap_authority_") ||
-    normalized.startsWith("claim_authority_") ||
-    normalized.startsWith("claim_token_") ||
-    normalized.startsWith("scoped_review_session_bootstrap_")
+  if (WORKFLOW_COMMAND_PRIVATE_PUBLIC_MIRROR_FIELDS.has(normalized)) {
+    return true;
+  }
+  const compact = normalized.replace(/_/g, "");
+  return WORKFLOW_COMMAND_PRIVATE_PUBLIC_MIRROR_ROOT_SPECS.some(
+    (root) =>
+      normalized.startsWith(`${root.normalized}_`) ||
+      compact === root.compact ||
+      compact.startsWith(root.compact),
   );
 }
 
-function sanitizeWorkflowCommandPublicMirrorValue(value: unknown): JsonValue | undefined {
+function isHazardousWorkflowPublicMirrorField(value: unknown): boolean {
+  return WORKFLOW_PUBLIC_HAZARDOUS_MIRROR_FIELDS.has(String(value ?? "").trim().toLowerCase());
+}
+
+function isWorkflowActivityPublicCarrierField(value: unknown): boolean {
+  const normalized = normalizeWorkflowCommandPublicMirrorFieldName(value);
+  return (
+    WORKFLOW_ACTIVITY_RUN_PUBLIC_CARRIER_FIELDS.has(normalized) ||
+    WORKFLOW_ACTIVITY_ATTEMPT_PUBLIC_CARRIER_FIELDS.has(normalized) ||
+    WORKFLOW_ENTITY_DELTA_PUBLIC_CARRIER_FIELDS.has(normalized) ||
+    WORKFLOW_ACTIVITY_RUN_PUBLIC_CARRIER_LIST_FIELDS.has(normalized) ||
+    WORKFLOW_ACTIVITY_ATTEMPT_PUBLIC_CARRIER_LIST_FIELDS.has(normalized) ||
+    WORKFLOW_ENTITY_DELTA_PUBLIC_CARRIER_LIST_FIELDS.has(normalized)
+  );
+}
+
+function isPlainWorkflowPublicObject(value: unknown): value is Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+function mapOptionalPlainWorkflowPublicObject<T>(
+  value: unknown,
+  mapper: (payload: unknown) => T,
+): T | undefined {
+  return isPlainWorkflowPublicObject(value) ? mapper(value) : undefined;
+}
+
+function mapOptionalPlainWorkflowPublicObjectSafely<T>(
+  value: unknown,
+  mapper: (payload: unknown) => T,
+): T | undefined {
+  if (!isPlainWorkflowPublicObject(value)) {
+    return undefined;
+  }
+  try {
+    return mapper(value);
+  } catch {
+    return undefined;
+  }
+}
+
+function mapSparsePlainWorkflowPublicObjectsSafely<T>(
+  value: unknown,
+  mapper: (payload: unknown) => T,
+): T[] | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  const result: T[] = [];
+  for (const item of asArray(value)) {
+    const mapped = mapOptionalPlainWorkflowPublicObjectSafely(item, mapper);
+    if (mapped !== undefined) {
+      result.push(mapped);
+    }
+  }
+  return result;
+}
+
+function mapOptionalPlainWorkflowPublicObjectArray<T>(
+  value: unknown,
+  mapper: (payload: unknown) => T,
+): T[] | undefined {
+  return Array.isArray(value)
+    ? value.filter(isPlainWorkflowPublicObject).map(mapper)
+    : undefined;
+}
+
+function defineWorkflowPublicOwnField(
+  target: Record<string, unknown>,
+  key: string,
+  value: unknown,
+): void {
+  Object.defineProperty(target, key, {
+    value,
+    enumerable: true,
+    configurable: true,
+    writable: true,
+  });
+}
+
+function sanitizeWorkflowCommandPublicCarrier(
+  key: string,
+  value: unknown,
+): { matched: boolean; value?: JsonValue } {
+  const projectCommand = (command: Record<string, unknown>): JsonValue | undefined => {
+    const projected = mapWorkflowCommandRecord(command);
+    delete projected.execution_summary;
+    return sanitizeWorkflowCommandPublicMirrorValue(projected);
+  };
+  const normalizedKey = normalizeWorkflowCommandPublicMirrorFieldName(key);
+  if (WORKFLOW_COMMAND_PUBLIC_CARRIER_FIELDS.has(normalizedKey)) {
+    return {
+      matched: true,
+      value: isPlainWorkflowPublicObject(value) ? projectCommand(value) : undefined,
+    };
+  }
+  if (!WORKFLOW_COMMAND_PUBLIC_CARRIER_LIST_FIELDS.has(normalizedKey)) {
+    return { matched: false };
+  }
+  if (!Array.isArray(value)) {
+    return { matched: true };
+  }
+  const projected: JsonValue[] = [];
+  for (const item of value) {
+    if (!isPlainWorkflowPublicObject(item)) {
+      continue;
+    }
+    const sanitized = projectCommand(item);
+    if (sanitized !== undefined) {
+      projected.push(sanitized);
+    }
+  }
+  return { matched: true, value: projected };
+}
+
+function sanitizeWorkflowActivityPublicCarrier(
+  key: string,
+  value: unknown,
+): { matched: boolean; value?: JsonValue } {
+  const normalizedKey = normalizeWorkflowCommandPublicMirrorFieldName(key);
+  let mapper: ((payload: unknown) => unknown) | undefined;
+  let trustedDerivedFields: ReadonlySet<string> | undefined;
+  if (WORKFLOW_ACTIVITY_RUN_PUBLIC_CARRIER_FIELDS.has(normalizedKey)) {
+    mapper = mapWorkflowActivityRecord;
+    trustedDerivedFields = WORKFLOW_ACTIVITY_RUN_TRUSTED_DERIVED_FIELDS;
+  } else if (WORKFLOW_ACTIVITY_ATTEMPT_PUBLIC_CARRIER_FIELDS.has(normalizedKey)) {
+    mapper = mapWorkflowActivityAttemptRecord;
+    trustedDerivedFields = WORKFLOW_ACTIVITY_ATTEMPT_TRUSTED_DERIVED_FIELDS;
+  } else if (WORKFLOW_ENTITY_DELTA_PUBLIC_CARRIER_FIELDS.has(normalizedKey)) {
+    mapper = mapWorkflowEntityDeltaRecord;
+    trustedDerivedFields = WORKFLOW_ACTIVITY_ATTEMPT_TRUSTED_DERIVED_FIELDS;
+  }
+  if (mapper) {
+    const projected = isPlainWorkflowPublicObject(value) ? mapper(value) : undefined;
+    if (projected && typeof projected === "object" && !Array.isArray(projected)) {
+      for (const field of trustedDerivedFields ?? []) {
+        delete (projected as Record<string, unknown>)[field];
+      }
+    }
+    return {
+      matched: true,
+      value: projected ? sanitizeWorkflowCommandPublicMirrorValue(projected) : undefined,
+    };
+  }
+
+  let listMapper: ((payload: unknown) => unknown) | undefined;
+  let listTrustedDerivedFields: ReadonlySet<string> | undefined;
+  if (WORKFLOW_ACTIVITY_RUN_PUBLIC_CARRIER_LIST_FIELDS.has(normalizedKey)) {
+    listMapper = mapWorkflowActivityRecord;
+    listTrustedDerivedFields = WORKFLOW_ACTIVITY_RUN_TRUSTED_DERIVED_FIELDS;
+  } else if (WORKFLOW_ACTIVITY_ATTEMPT_PUBLIC_CARRIER_LIST_FIELDS.has(normalizedKey)) {
+    listMapper = mapWorkflowActivityAttemptRecord;
+    listTrustedDerivedFields = WORKFLOW_ACTIVITY_ATTEMPT_TRUSTED_DERIVED_FIELDS;
+  } else if (WORKFLOW_ENTITY_DELTA_PUBLIC_CARRIER_LIST_FIELDS.has(normalizedKey)) {
+    listMapper = mapWorkflowEntityDeltaRecord;
+    listTrustedDerivedFields = WORKFLOW_ACTIVITY_ATTEMPT_TRUSTED_DERIVED_FIELDS;
+  }
+  if (!listMapper) {
+    return { matched: false };
+  }
+  if (!Array.isArray(value)) {
+    return { matched: true };
+  }
+  const projected: JsonValue[] = [];
+  for (const item of value) {
+    if (!isPlainWorkflowPublicObject(item)) {
+      continue;
+    }
+    const mapped = listMapper(item) as Record<string, unknown>;
+    for (const field of listTrustedDerivedFields ?? []) {
+      delete mapped[field];
+    }
+    const sanitized = sanitizeWorkflowCommandPublicMirrorValue(mapped);
+    if (sanitized !== undefined) {
+      projected.push(sanitized);
+    }
+  }
+  return { matched: true, value: projected };
+}
+
+function sanitizeWorkflowCommandPublicMirrorValue(
+  value: unknown,
+  allowExecutionSummaryAtCurrentLevel = false,
+): JsonValue | undefined {
   if (value === null) {
     return null;
   }
@@ -2352,20 +2904,46 @@ function sanitizeWorkflowCommandPublicMirrorValue(value: unknown): JsonValue | u
   }
   const result: JsonObject = {};
   for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
-    if (isPrivateWorkflowCommandPublicMirrorField(key)) {
+    const normalizedKey = normalizeWorkflowCommandPublicMirrorFieldName(key);
+    if (
+      isPrivateWorkflowCommandPublicMirrorField(key) ||
+      isHazardousWorkflowPublicMirrorField(key) ||
+      (normalizedKey === "execution_summary" && !allowExecutionSummaryAtCurrentLevel)
+    ) {
+      continue;
+    }
+    const commandCarrier = sanitizeWorkflowCommandPublicCarrier(key, item);
+    if (commandCarrier.matched) {
+      if (commandCarrier.value !== undefined) {
+        defineWorkflowPublicOwnField(result, key, commandCarrier.value);
+      }
+      continue;
+    }
+    const carrier = sanitizeWorkflowActivityPublicCarrier(key, item);
+    if (carrier.matched) {
+      if (carrier.value !== undefined) {
+        defineWorkflowPublicOwnField(result, key, carrier.value);
+      }
       continue;
     }
     const sanitized = sanitizeWorkflowCommandPublicMirrorValue(item);
     if (sanitized !== undefined) {
-      result[key] = sanitized;
+      defineWorkflowPublicOwnField(result, key, sanitized);
     }
   }
   return result;
 }
 
-function asWorkflowCommandPublicMirrorSource(value: unknown, label: string): Record<string, unknown> {
+function asWorkflowCommandPublicMirrorSource(
+  value: unknown,
+  label: string,
+  allowExecutionSummaryAtCurrentLevel = false,
+): Record<string, unknown> {
   const source = asObject(value, label);
-  const sanitized = sanitizeWorkflowCommandPublicMirrorValue(source);
+  const sanitized = sanitizeWorkflowCommandPublicMirrorValue(
+    source,
+    allowExecutionSummaryAtCurrentLevel,
+  );
   if (!sanitized || typeof sanitized !== "object" || Array.isArray(sanitized)) {
     throw new Error(`${label} must be a JSON object`);
   }
@@ -2384,6 +2962,18 @@ function asOptionalWorkflowCommandPublicMirrorObject(value: unknown): JsonObject
 
 function asOptionalWorkflowCommandStringArray(value: unknown): string[] | undefined {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : undefined;
+}
+
+function asOptionalWorkflowCommandJsonArray(value: unknown): JsonValue[] | undefined {
+  const sanitized = sanitizeWorkflowCommandPublicMirrorValue(value);
+  return Array.isArray(sanitized) ? sanitized : undefined;
+}
+
+function asOptionalNonnegativeSafeInteger(value: unknown): number | undefined {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
+    return undefined;
+  }
+  return value === 0 ? 0 : value;
 }
 
 function asObject(value: unknown, label: string): Record<string, unknown> {
@@ -2428,6 +3018,10 @@ function asOptionalStringArray(value: unknown): string[] {
   return asArray(value).filter((item): item is string => typeof item === "string");
 }
 
+function asSparseOptionalStringArray(value: unknown): string[] | undefined {
+  return value === undefined ? undefined : asOptionalStringArray(value);
+}
+
 function asRecordOfNumber(value: unknown): Record<string, number> {
   const source = value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -2439,6 +3033,10 @@ function asRecordOfNumber(value: unknown): Record<string, number> {
     }
   }
   return result;
+}
+
+function asSparseRecordOfNumber(value: unknown): Record<string, number> | undefined {
+  return value === undefined ? undefined : asRecordOfNumber(value);
 }
 
 function asRecordOfMappedObject<T extends JsonObject>(

@@ -5,6 +5,18 @@
 > Stage A/B, dispatch, provider/model call, served Agent command, or R-019 remediation claim. Author validation and a
 > fresh pinned non-author review are required before this status can be promoted.
 
+> Fixed-forward note (2026-07-15):
+> [`TRACK_D_D3C1A_WORKFLOW_COMMAND_PUBLIC_PROJECTION_FIXED_FORWARD.md`](TRACK_D_D3C1A_WORKFLOW_COMMAND_PUBLIC_PROJECTION_FIXED_FORWARD.md)
+> supersedes this original candidate as the current review scope and addresses the five direct findings from D3c1's
+> invalid pinned-review artifact. D3c1a also contains separately labelled precommit adversarial author-audit fixes for
+> structured Activity refs, `4 singular + 3 served plural` control carriers/derived fields, `8 canonical + normalized aliases` recursive
+> Activity carrier keys, nested workflow-command/operation-sync/direct-Activity closure, hazardous-key rejection,
+> typed malformed-input parity, generic-derived provenance stripping, and compact-observation closure,
+> mathematical safe-integer canonicalization, and lazy-kernel compatibility; those are not
+> retroactive findings from the invalid artifact and are not formal review evidence. D3c1a final candidate author
+> evidence is recorded in the fixed-forward document; fresh pinned non-author review remains pending;
+> this document is retained as the original implementation baseline, not as a current formal verdict.
+
 ## 1. Outcome and impact
 
 The public workflow-command boundary no longer spreads arbitrary repository dictionaries. One checked-in owner in

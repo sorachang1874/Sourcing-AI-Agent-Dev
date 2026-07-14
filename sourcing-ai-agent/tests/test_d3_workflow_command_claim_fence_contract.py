@@ -4,7 +4,6 @@ import ast
 import json
 import re
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any
 
 from sourcing_agent.command_kernel import CommandKernel
@@ -2752,15 +2751,7 @@ def test_d3c1_public_mapper_is_closed_and_preserves_only_safe_diagnostics() -> N
         "status": "claimed",
         **CURRENT_SYNTHETIC_IDENTITY,
     }
-    probe = SimpleNamespace(
-        _workflow_command_agent_exposure_record=lambda _command_type: {},
-        _workflow_command_display_contract_record=lambda **_kwargs: {},
-        _workflow_command_control_policy_record=lambda **_kwargs: {},
-        _workflow_command_control_state_record=lambda **_kwargs: {},
-        _workflow_command_activity_spine_policy_record=lambda **_kwargs: {},
-    )
-
-    public_record = CommandKernel._workflow_command_api_record(probe, command)  # type: ignore[arg-type]
+    public_record = CommandKernel(store=None)._workflow_command_api_record(command)
     assert public_record["claim_generation"] == CURRENT_SYNTHETIC_IDENTITY["claim_generation"]
     assert public_record["control_epoch"] == CURRENT_SYNTHETIC_IDENTITY["control_epoch"]
     assert PRIVATE_CAPABILITY_FIELDS.isdisjoint(public_record)
@@ -2813,14 +2804,18 @@ def test_d3c1_frontend_contract_is_closed_and_names_only_safe_diagnostics() -> N
     assert _schema_ref_count(schema, "#/$defs/WorkflowCommandRecord") == CURRENT_FRONTEND_WORKFLOW_COMMAND_REF_COUNT
     for definition_name in (
         "WorkflowCommandExecutionSummary",
-        "WorkflowActivityRecord",
-        "WorkflowActivityAttemptRecord",
-        "WorkflowEntityDeltaRecord",
         "OperationEventRecord",
         "OperationRunStatusSummary",
         "WorkflowCommandControlResponse",
     ):
         assert definitions[definition_name]["additionalProperties"] is True
+    for definition_name in (
+        "WorkflowActivityControlTarget",
+        "WorkflowActivityRecord",
+        "WorkflowActivityAttemptRecord",
+        "WorkflowEntityDeltaRecord",
+    ):
+        assert definitions[definition_name]["additionalProperties"] is False
 
     contract_source = FRONTEND_CONTRACT_PATH.read_text(encoding="utf-8")
     adapter_source = FRONTEND_ADAPTER_PATH.read_text(encoding="utf-8")
@@ -2844,7 +2839,8 @@ def test_d3c1_frontend_contract_is_closed_and_names_only_safe_diagnostics() -> N
     assert "export interface WorkflowCommandRecord extends JsonObject" not in contract_source
     assert "operation_sync?: WorkflowCommandOperationSync" in contract_source
     assert "...(source as JsonObject)" not in mapper_source
-    assert "mapWorkflowCommandOperationSync(source.operation_sync)" in control_mapper_source
+    assert "operation_sync: mapOptionalPlainWorkflowPublicObject(" in control_mapper_source
+    assert "mapWorkflowCommandOperationSync," in control_mapper_source
     assert "raw: record" not in demo_mapper_source
 
 

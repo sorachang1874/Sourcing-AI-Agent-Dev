@@ -233,14 +233,33 @@ serve、会话/事件层、planner loop），用一个垂直切片证明闭环�
   evidence=`32/49/58/81` + diff clean；fresh non-author local re-review 与 pinned formal review
   pending，仅对 Live/signoff fail closed，不冻结后续 non-live batch；served
   Agent tool population=`0`，R-019、action-root gate 与 OB-10.1/10.2/10.3/10.4 继续 open。
-- D3c1 public projection implementation candidate 已把 command public shape 锁成 33 descriptor + 2 safe
+- D3c1 public projection baseline 已把 command public shape 锁成 33 descriptor + 2 safe
   diagnostics + 7 derived = **42** 个 optional fields，把 `operation_sync` 锁成 **9** fields，并明确
   `WorkflowCommandRecord` schema refs=`6 existing + 1 typed nested = 7`；七个 raw nested return 已降为 **0**，
   carrier inventory 修正为 **16 routes/17 method-route variants**。递归 sanitizer 覆盖 command、operation
   action/run/event、provenance 与 execution summary，frontend adapter/demo 不再保留 raw command dict。author
   evidence=`7/45/14`、frontend build `81 modules`、lint `58 files`、mypy `81/4` + diff clean。首个 pinned formal
   attempt 的 substantive output=`0/2/3/0`，但 causal-binding verifier 将 artifact 判 invalid；它没有 formal
-  verdict，五项 direct findings 进入 fixed-forward，fresh valid re-review pending。该批零
+  verdict，原 candidate 不再是当前评审候选。
+- D3c1a current fixed-forward candidate 针对上述五项 direct findings，把 ActivityRun/ActivityAttempt/EntityDelta
+  与 control target 收敛为 backend-owned closed projection（`23/27/26/10` fields），以 normalized snake + compact
+  root-prefix 封闭私有 aliases，禁止 generic carrier 携带 caller-supplied `execution_summary`，并把 future
+  diagnostics/Activity attempt number 限于 canonical non-negative JavaScript-safe mathematical integer。
+  后续 precommit adversarial author-audit 另固定结构化 Activity `artifact_refs`、cancel/retry/resume
+  **4 singular + 3 served plural** carriers + derived control fields、command `result` 内 **8 canonical + normalized aliases** recursive
+  carrier keys、
+  `1.0 -> 1`/`-0 -> 0` 与 lazy `CommandKernel` partial-construction compatibility，并继续封闭 nested command/
+  operation-sync/direct-Activity nested-command closure、recursive forged-summary removal、hazardous-key rejection、
+  backend/frontend typed malformed-input parity、generic Activity derived-provenance stripping、compact-observation
+  canonicalization、完整 Operation action/event/run 与 registry mirrors、typed trusted execution summary、normalized
+  response-envelope dual-source、demo raw/provenance 与 strict required-status wrappers，并以 independent
+  descriptor/literal oracles 替代 self-referential-oracle gap；这些不是 invalid artifact 五项的
+  retroactive findings，也不构成 formal review evidence。primary manifest 现在是 **23 method-route variants**（既有
+  17 + Activity 6），
+  compact materialization 独立计数。final stable candidate author evidence=`13` D3c1a、`56` D3+durable、
+  full operation `129`、pre-Agent `4`、Activity HTTP/route parity `2`、adjacent migration/PG `9 + 20 subtests`、
+  frontend compile+`81 modules` build、lint `58 files`+D3 tests+pre-Agent oracle、mypy `81/4`、diff clean；fresh pinned non-author
+  review 仍 pending，在 valid scope-matched artifact 前没有 formal verdict。该批零
   migration/claim/CAS/Stage A/B/dispatch/served，故 R-019、action-root gate、
   OB-10.1/10.2/10.3/10.4 和 served=0 均不变。
 - D3c2a dormant migration candidate 仅安装 `workflow_commands` 的精确 20 columns + 16 个 `NOT VALID` local
@@ -348,7 +367,17 @@ TD-4 初始路由表已按 owner 2026-07-13 裁决落档（D0 §4）。
 5. `judge_call_key` 追加 workspace/intent generation/有效路由/schema/policy revision 维度；
    「official domain 归属」的服务端证明规则成文（D3 批）。
 6. workflow command claim-fence（migration，D3 批前置；本项没有 OB-ID）：review session 必须先创建，
-   **Implementation status (2026-07-15):** D3c1 已先封闭 public projection；D3c2a 仅安装
+   **Implementation status (2026-07-15):** D3c1 已先封闭 command public projection，D3c1a current candidate
+   fixed-forward Activity spine/private aliases/trusted summary/safe-integer findings；precommit adversarial
+   author-audit 又闭合结构化 Activity refs、control **4 singular + 3 served plural** carriers + derived fields、
+   command-result **8 canonical + normalized aliases** recursive carrier keys、mathematical integer canonicalization、
+   nested workflow-command/operation-sync/direct-Activity closure、recursive forged-summary stripping、hazardous-key
+   rejection、typed malformed-input parity、generic Activity derived-provenance stripping、compact-observation
+   canonicalization、完整 Operation action/event/run 与 registry mirrors、typed trusted execution summary、normalized
+   response-envelope dual-source、demo raw/provenance、strict required-status wrappers、independent descriptor/literal
+   oracles 与 lazy-kernel compatibility。
+   这些 author-audit 项不冒充 invalid review findings 或 formal verdict；两批都不授权 runtime write。
+   D3c2a 仅安装
    `workflow_commands` 的 20-column/16-`NOT VALID` dormant command subbatch，descriptor 与 runtime writers 未激活。
    这不是完整 Migration A：review-session/OperationRun/activity/event/receipt/quarantine roots、Migration B-D、
    canonical-id 最终 grammar 与本项以下所有 owner/runtime/acceptance obligations 仍 open。
