@@ -383,11 +383,14 @@
   + 1 internal`、event `17 cols / 62 append_event_and_reduce in 7 modules / 2 list`；唯一 physical event INSERT
   owner 为 `LiveControlPlanePostgresAdapter.append_workflow_event`，ActivityRun 另有唯一 direct cancel `UPDATE`。
   current `attempt_number` 不是 future post-claim `command_attempt`；event→commands→outbox→state 仍为 R-019
-  multi-commit。verification intent、response/failure receipts、late quarantine、terminal registry 与 durable
-  dispatch-exposure physical owner/table 均为 0。下一 implementation 只能从 owner-ratified DDL 开始，顺序为
+  multi-commit。ratified exact verification-intent/response-failure-receipt/late-quarantine/terminal-registry named
+  schema surfaces 当前未出现；durable dispatch-exposure owner/table name 仍 `unratified/undetermined`，不得作
+  zero claim 或发明 lexical predicate。下一 implementation 只能从 owner-ratified DDL 开始，顺序为
   dormant ActivityRun+Attempt fragment → event fragment → intent/receipt/quarantine fragments；不得猜 schema/owner。
   R-019/R-023/R-027/R-029、action-root、OB-10.1-10.4、完整 Migration A 与 served=0 均不变。完整事实与
-  executable oracle 见 `TRACK_D_D3C2C_ACTIVITY_TERMINAL_EVIDENCE_CHARACTERIZATION.md`。
+  executable oracle 见 `TRACK_D_D3C2C_ACTIVITY_TERMINAL_EVIDENCE_CHARACTERIZATION.md`。首个 pinned artifact
+  `20260714T232853Z_*` 因 `final_response_item_exact=false` invalid、不是 formal `NO-GO`；其 lexical exposure-zero
+  advisory 已 fixed-forward，fresh pinned retry pending。
 - [x] D3c2d dormant ActivityRun / ActivityAttempt claim-chain foundation（2026-07-15；implementation candidate）：
   `0005_d3_activity_claim_chain_foundation.sql` 按 D3b §5.2/§11.1 ratify 并安装 ActivityRun `6` columns 与
   ActivityAttempt `10` columns，保留 existing workspace/operation/command links；`command_attempt` 为 future

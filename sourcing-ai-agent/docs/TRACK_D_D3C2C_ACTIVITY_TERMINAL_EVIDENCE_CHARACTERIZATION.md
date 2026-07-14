@@ -3,6 +3,13 @@
 Status: **characterization-only; no product code, migration, schema, runtime activation, provider/model call, or served
 Agent population.**
 
+The first pinned review artifact
+`runtime/reviews/20260714T232853Z_Track_D_D3c2c_activity_terminal_evidence_characterization.md` is **invalid**, not a
+formal `NO-GO`, because `causal_binding.final_response_item_exact=false`. Its direct advisory correctly rejected the
+lexical dispatch-exposure zero proof. This fixed-forward records that surface as `unratified / undetermined`, removes
+the heuristic predicate, narrows the remaining absence checks to already-ratified canonical named surfaces, and adds a
+structural Migration-A order assertion. A fresh pinned review remains required.
+
 Scout snapshot: `e76d20e36fd34ffb6184079668b7c57deda0496f` on
 `governance-phase0-ttl-20260611` (2026-07-15). The enclosing implementation commit for this documentation/test batch is
 not assigned here.
@@ -100,26 +107,29 @@ This uniqueness does not provide the terminal UoW required by D3b. The current p
 `enqueue_runtime_outbox`, and `upsert_workflow_current_state`, with no enclosing writer UoW. The event, command, outbox,
 and state writes therefore remain a **multi-commit R-019 surface**. D3c2c neither closes nor waives it.
 
-## 5. Future terminal-evidence physical-owner census
+## 5. Future terminal-evidence named-surface census
 
-The current source, checked-in migrations, repository descriptors, and bootstrap SQL have **zero** physical owner/table
-population for each of the following D3b concepts:
+For the D3b concepts whose exact table or registry symbol names are already ratified, the current canonical repository
+descriptors, checked-in migrations/bootstrap SQL, and Python definition surfaces contain no matching named definition:
 
-| future concept | current physical owner/table result |
-|---|---:|
-| `verification_intent` | 0 |
-| `transport_response_receipts` | 0 |
-| `transport_attempt_failure_receipts` | 0 |
-| `workflow_late_result_quarantine` | 0 |
-| checked-in `TERMINAL_PROVENANCE_SPECS` and its three variant types | 0 |
-| durable dispatch-exposure table/physical owner | 0 |
+| future concept | current canonical named-surface observation |
+|---|---|
+| `verification_intent` | no exact descriptor/migration/bootstrap table definition observed |
+| `transport_response_receipts` | no exact descriptor/migration/bootstrap table definition observed |
+| `transport_attempt_failure_receipts` | no exact descriptor/migration/bootstrap table definition observed |
+| `workflow_late_result_quarantine` | no exact descriptor/migration/bootstrap table definition observed |
+| checked-in `TERMINAL_PROVENANCE_SPECS` and its three variant types | no exact Python definition observed |
+| durable dispatch-exposure table/physical owner | **unratified / undetermined; no zero claim** |
 
-The dispatch-exposure canonical table name is not ratified by current code or D3c2c. The oracle therefore proves zero
-by mechanically rejecting any current descriptor/physical SQL table or defined Python symbol whose identity contains
-both `dispatch` and `exposure`; it does not invent a table name.
+The exact-name observations are deliberately bounded to canonical named schema/definition surfaces; they are not a
+proof that arbitrary lexical wrappers or generic mutation gateways cannot exist. The dispatch-exposure canonical table
+name and owner are not ratified by current code or D3c2c, so no sound absence oracle can be constructed yet. D3c2c
+therefore records that concept as undetermined and does not invent a token-conjunction predicate or table name.
 
-These zeros are blockers against schema guessing, not evidence that the concepts can be omitted. Receipt/quarantine
-identity, terminal registry retention, and physical-call exposure ownership must be ratified before implementation.
+These absences and the undetermined exposure owner are blockers against schema guessing, not evidence that the concepts
+can be omitted. Receipt/quarantine identity, terminal registry retention, and physical-call exposure ownership must be
+ratified before implementation; once ratified, their implementation batch needs an explicit source inventory plus
+mutation tests rather than a heuristic name scan.
 
 ## 6. Next bounded physical order and decisions still required
 
@@ -169,5 +179,9 @@ Final shared-tree author evidence:
   → **all checks passed**;
 - `git diff --check`
   → clean.
+
+Fixed-forward focused evidence: the ratified named-surface check, structural Migration-A order check, and document
+boundary check are **3 passed / 5 deselected**; Ruff format/check and scoped diff check are clean. The full oracle is
+rerun from the pinned clean commit when concurrent D3c1a projection work is excluded.
 
 These commands validate this oracle/document batch only; they do not validate future DDL or close any gate in §7.

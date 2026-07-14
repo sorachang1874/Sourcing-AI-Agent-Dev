@@ -292,10 +292,12 @@ serve、会话/事件层、planner loop），用一个垂直切片证明闭环�
   `upsert_activity_run=30/5 files`、`upsert_activity_attempt=22/4 files`、`append_event_and_reduce=62/7 modules`；
   ActivityAttempt get 的 raw/external/internal 口径为 `2/1/1`，current `attempt_number` 不得解释为 future
   `command_attempt`。唯一 physical event INSERT owner 与唯一 ActivityRun direct-cancel UPDATE 已锁定；future
-  verification intent、response/failure receipt、late quarantine、terminal registry、durable dispatch exposure 的
-  physical owner/table 全为 0，event→commands→outbox→state 仍是 R-019 multi-commit。下一批必须先 ratify DDL，
+  ratified exact verification-intent/response-failure-receipt/late-quarantine/terminal-registry named surfaces 尚未
+  出现；durable dispatch exposure owner/table name 为 `unratified/undetermined`，不作 zero claim。
+  event→commands→outbox→state 仍是 R-019 multi-commit。下一批必须先 ratify DDL，
   再按 dormant ActivityRun+Attempt → event → intent/receipt/quarantine 顺序推进；本批不设计 schema，不关闭
-  R-019/R-023/R-027/R-029、action-root、OB-10.1-10.4 或 served=0。
+  R-019/R-023/R-027/R-029、action-root、OB-10.1-10.4 或 served=0。首个 D3c2c pinned artifact 因
+  `final_response_item_exact=false` invalid；其 exposure lexical-zero advisory 已 fixed-forward，fresh retry pending。
 - D3c2d implementation candidate 已据 §5.2/§11.1 ratify 并安装 dormant ActivityRun `6` columns +
   ActivityAttempt `10` columns，以及 `7+11` 个 `NOT VALID` local checks；5s second-table contention 必须回滚
   first-table DDL 与 ledger。existing `attempt_number` 与 future post-claim exact-copy `command_attempt` 明确分离，
@@ -421,8 +423,8 @@ TD-4 初始路由表已按 owner 2026-07-13 裁决落档（D0 §4）。
    这不是完整 Migration A：activity/event/receipt/quarantine fragments、Migration B-D、
    canonical-id 最终 grammar 与本项以下所有 owner/runtime/acceptance obligations 仍 open。
    D3c2c 随后仅完成 current physical surface characterization：ActivityRun/Attempt/event descriptor=`20/22/17`，
-   writer call populations=`30/22/62`，future intent/receipt/quarantine/terminal-registry/dispatch-exposure physical
-   owner 全为 0；详细 mechanical oracle 见
+   writer call populations=`30/22/62`；ratified exact future intent/receipt/quarantine/terminal-registry named surfaces
+   尚未出现，而 dispatch-exposure owner/name 未 ratify、不得以 token heuristic 宣称为 0；详细 oracle 边界见
    `TRACK_D_D3C2C_ACTIVITY_TERMINAL_EVIDENCE_CHARACTERIZATION.md`。因此下一有界 implementation 是先取得
    owner-ratified DDL，再落 dormant ActivityRun+ActivityAttempt fragment；characterization 本身不授权 rollout。
    D3c2d candidate 已完成该 owner decision 并只安装 `0005_d3_activity_claim_chain_foundation.sql` 的

@@ -20,6 +20,7 @@ CONTROL_PLANE_PATH = SOURCE_ROOT / "control_plane_live_postgres.py"
 DURABLE_RUNTIME_PATH = SOURCE_ROOT / "durable_runtime.py"
 WORKFLOW_REPOSITORY_PATH = SOURCE_ROOT / "repositories" / "workflow_runtime.py"
 CHARACTERIZATION_DOC_PATH = REPO_ROOT / "docs" / "TRACK_D_D3C2C_ACTIVITY_TERMINAL_EVIDENCE_CHARACTERIZATION.md"
+D3B_CONTRACT_PATH = REPO_ROOT / "docs" / "TRACK_D_D3B_WORKFLOW_COMMAND_CLAIM_FENCE_CONTRACT.md"
 
 EXPECTED_ACTIVITY_RUN_COLUMNS = (
     "activity_run_id",
@@ -426,14 +427,24 @@ def test_current_event_reduce_path_is_split_across_multiple_mutation_calls() -> 
     assert not any(isinstance(node, (ast.With, ast.AsyncWith)) for node in ast.walk(reduce_method))
 
 
-def test_future_intent_receipt_quarantine_registry_and_exposure_have_no_physical_owner() -> None:
+def test_ratified_future_tables_and_registry_symbols_are_absent_from_named_schema_surfaces() -> None:
     physical_tables = _defined_table_descriptors() | _physical_sql_table_names()
     assert FUTURE_PHYSICAL_TABLES.isdisjoint(physical_tables)
-    assert not {table for table in physical_tables if "dispatch" in table and "exposure" in table}
 
     symbols = _defined_python_symbols()
     assert FUTURE_TERMINAL_REGISTRY_SYMBOLS.isdisjoint(symbols)
-    assert not {symbol for symbol in symbols if "dispatch" in symbol.lower() and "exposure" in symbol.lower()}
+
+
+def test_d3b_migration_a_orders_activity_before_event_before_receipt_surfaces() -> None:
+    normalized = _normalized_source(D3B_CONTRACT_PATH.read_text(encoding="utf-8"))
+    migration_a = normalized[normalized.index("### 11.1 Migration A") : normalized.index("### 11.2 Migration B")]
+    activity_position = migration_a.index(
+        "adds scope/coordination/spec/business-fence columns to `workflow_activity_runs`"
+    )
+    assert "`workflow_activity_attempts`" in migration_a[activity_position:]
+    event_position = migration_a.index("reuses `workflow_events.operation_id`", activity_position)
+    receipt_position = migration_a.index("creates `transport_response_receipts`", event_position)
+    assert activity_position < event_position < receipt_position
 
 
 def test_characterization_document_preserves_owner_ratification_and_open_gates() -> None:
@@ -447,6 +458,7 @@ def test_characterization_document_preserves_owner_ratification_and_open_gates()
         "ActivityRun + ActivityAttempt",
         "workflow event",
         "verification intent + response/failure receipts + late quarantine",
+        "unratified / undetermined",
         "R-019",
         "R-023",
         "R-027",
