@@ -1,0 +1,72 @@
+{
+  "$id": "https://contracts.invalid/x.region_experience.evidence_bundle.v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "evidence": {
+      "items": {"$ref": "#/$defs/evidence"},
+      "maxItems": 100,
+      "type": "array"
+    },
+    "policy_version": {"const": "x-region-experience-public-professional-v1"},
+    "schema_version": {"const": "x.region_experience.evidence_bundle.v1"},
+    "subject_ref": {"pattern": "^xregion_subject_[a-z0-9_]+$", "type": "string"}
+  },
+  "required": ["schema_version", "policy_version", "subject_ref", "evidence"],
+  "title": "X-first provider-neutral region-experience evidence bundle v1",
+  "type": "object",
+  "$defs": {
+    "evidence": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence_id": {"pattern": "^xregion_ev_[a-z0-9_]+$", "type": "string"},
+        "experience_kind": {
+          "enum": ["based_in", "lived_in", "worked_in", "studied_in", "researched_in"]
+        },
+        "excerpt": {"maxLength": 280, "minLength": 1, "type": "string"},
+        "location_code": {
+          "enum": [
+            "asia_unspecified",
+            "greater_china_unspecified",
+            "mainland_china",
+            "hong_kong",
+            "macau",
+            "taiwan",
+            "singapore",
+            "japan",
+            "south_korea",
+            "india"
+          ]
+        },
+        "location_text": {"maxLength": 80, "minLength": 1, "type": "string"},
+        "observed_at": {
+          "maxLength": 24,
+          "minLength": 24,
+          "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:[0-2][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]\\.[0-9]{3}Z$",
+          "type": "string"
+        },
+        "source_actor": {"enum": ["subject_self", "verified_organization", "third_party"]},
+        "source_kind": {"enum": ["bio", "employment", "education", "research", "post"]},
+        "source_url": {"format": "uri", "pattern": "^https://", "type": "string"},
+        "statement_scope": {
+          "enum": ["subject_explicit_experience", "location_topic_only", "third_party_mention"]
+        },
+        "subject_ref": {"pattern": "^xregion_subject_[a-z0-9_]+$", "type": "string"}
+      },
+      "required": [
+        "evidence_id",
+        "subject_ref",
+        "source_kind",
+        "source_actor",
+        "statement_scope",
+        "experience_kind",
+        "location_code",
+        "location_text",
+        "source_url",
+        "observed_at",
+        "excerpt"
+      ],
+      "type": "object"
+    }
+  }
+}

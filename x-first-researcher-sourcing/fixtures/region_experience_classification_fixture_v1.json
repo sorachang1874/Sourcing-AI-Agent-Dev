@@ -1,0 +1,86 @@
+{
+  "claims": {
+    "canonical_writes_authorized": false,
+    "citizenship_inferred": false,
+    "ethnicity_inferred": false,
+    "handle_used": false,
+    "language_used": false,
+    "name_used": false,
+    "nationality_inferred": false,
+    "outreach_authorized": false,
+    "protected_identity_inferred": false,
+    "social_graph_used": false,
+    "third_party_mentions_used": false
+  },
+  "evidence_decisions": [
+    {
+      "evidence_id": "xregion_ev_bio_singapore",
+      "reason": "eligible_explicit_experience",
+      "status": "eligible"
+    },
+    {
+      "evidence_id": "xregion_ev_employment_beijing",
+      "reason": "eligible_explicit_experience",
+      "status": "eligible"
+    },
+    {
+      "evidence_id": "xregion_ev_education_tokyo",
+      "reason": "eligible_explicit_experience",
+      "status": "eligible"
+    },
+    {
+      "evidence_id": "xregion_ev_research_hong_kong",
+      "reason": "eligible_explicit_experience",
+      "status": "eligible"
+    },
+    {
+      "evidence_id": "xregion_ev_post_taipei_self",
+      "reason": "eligible_explicit_experience",
+      "status": "eligible"
+    },
+    {
+      "evidence_id": "xregion_ev_post_topic_only",
+      "reason": "rejected_non_subject_scope",
+      "status": "rejected"
+    },
+    {
+      "evidence_id": "xregion_ev_post_third_party_mention",
+      "reason": "rejected_non_subject_scope",
+      "status": "rejected"
+    }
+  ],
+  "input_sha256": "c7158c96f4423e1ef39554d566dcd946bc8e28cdfa56b3d0d41546f370cc07b5",
+  "labels": [
+    {
+      "evidence_refs": [
+        "xregion_ev_bio_singapore",
+        "xregion_ev_education_tokyo",
+        "xregion_ev_employment_beijing",
+        "xregion_ev_post_taipei_self",
+        "xregion_ev_research_hong_kong"
+      ],
+      "label": "ASIA_EXPERIENCE",
+      "status": "supported"
+    },
+    {
+      "evidence_refs": [
+        "xregion_ev_bio_singapore",
+        "xregion_ev_employment_beijing",
+        "xregion_ev_post_taipei_self",
+        "xregion_ev_research_hong_kong"
+      ],
+      "label": "GREATER_CHINA_EXPERIENCE",
+      "status": "supported"
+    },
+    {
+      "evidence_refs": [
+        "xregion_ev_employment_beijing"
+      ],
+      "label": "MAINLAND_CHINA_EXPERIENCE",
+      "status": "supported"
+    }
+  ],
+  "policy_version": "x-region-experience-public-professional-v1",
+  "schema_version": "x.region_experience.classification.v1",
+  "subject_ref": "xregion_subject_fixture_001"
+}

@@ -1,0 +1,104 @@
+{
+  "$id": "https://contracts.invalid/x.region_experience.classification.v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "claims": {"$ref": "#/$defs/claims"},
+    "evidence_decisions": {
+      "items": {"$ref": "#/$defs/evidence_decision"},
+      "maxItems": 100,
+      "type": "array"
+    },
+    "input_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+    "labels": {
+      "items": {"$ref": "#/$defs/label"},
+      "maxItems": 3,
+      "minItems": 3,
+      "type": "array"
+    },
+    "policy_version": {"const": "x-region-experience-public-professional-v1"},
+    "schema_version": {"const": "x.region_experience.classification.v1"},
+    "subject_ref": {"pattern": "^xregion_subject_[a-z0-9_]+$", "type": "string"}
+  },
+  "required": [
+    "schema_version",
+    "policy_version",
+    "subject_ref",
+    "input_sha256",
+    "evidence_decisions",
+    "labels",
+    "claims"
+  ],
+  "title": "X-first provider-neutral region-experience classification v1",
+  "type": "object",
+  "$defs": {
+    "claims": {
+      "additionalProperties": false,
+      "properties": {
+        "canonical_writes_authorized": {"const": false},
+        "citizenship_inferred": {"const": false},
+        "ethnicity_inferred": {"const": false},
+        "handle_used": {"const": false},
+        "language_used": {"const": false},
+        "name_used": {"const": false},
+        "nationality_inferred": {"const": false},
+        "outreach_authorized": {"const": false},
+        "protected_identity_inferred": {"const": false},
+        "social_graph_used": {"const": false},
+        "third_party_mentions_used": {"const": false}
+      },
+      "required": [
+        "protected_identity_inferred",
+        "ethnicity_inferred",
+        "nationality_inferred",
+        "citizenship_inferred",
+        "name_used",
+        "handle_used",
+        "language_used",
+        "social_graph_used",
+        "third_party_mentions_used",
+        "canonical_writes_authorized",
+        "outreach_authorized"
+      ],
+      "type": "object"
+    },
+    "evidence_decision": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence_id": {"pattern": "^xregion_ev_[a-z0-9_]+$", "type": "string"},
+        "reason": {
+          "enum": [
+            "eligible_explicit_experience",
+            "rejected_non_subject_scope",
+            "rejected_source_actor",
+            "rejected_experience_kind",
+            "rejected_location_alias"
+          ]
+        },
+        "status": {"enum": ["eligible", "rejected"]}
+      },
+      "required": ["evidence_id", "status", "reason"],
+      "type": "object"
+    },
+    "label": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence_refs": {
+          "items": {"pattern": "^xregion_ev_[a-z0-9_]+$", "type": "string"},
+          "type": "array",
+          "uniqueItems": true
+        },
+        "label": {
+          "enum": [
+            "ASIA_EXPERIENCE",
+            "GREATER_CHINA_EXPERIENCE",
+            "MAINLAND_CHINA_EXPERIENCE"
+          ]
+        },
+        "status": {"enum": ["supported", "not_supported"]}
+      },
+      "required": ["label", "status", "evidence_refs"],
+      "type": "object"
+    }
+  }
+}

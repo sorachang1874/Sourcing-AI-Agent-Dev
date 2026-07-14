@@ -1,0 +1,98 @@
+{
+  "evidence": [
+    {
+      "evidence_id": "xregion_ev_bio_singapore",
+      "experience_kind": "based_in",
+      "excerpt": "Synthetic public-professional bio explicitly states that the fixture subject is based in Singapore.",
+      "location_code": "singapore",
+      "location_text": "Singapore",
+      "observed_at": "2026-07-14T00:00:00.000Z",
+      "source_actor": "subject_self",
+      "source_kind": "bio",
+      "source_url": "https://profiles.invalid/region-fixture/bio",
+      "statement_scope": "subject_explicit_experience",
+      "subject_ref": "xregion_subject_fixture_001"
+    },
+    {
+      "evidence_id": "xregion_ev_employment_beijing",
+      "experience_kind": "worked_in",
+      "excerpt": "Synthetic public employment record explicitly places the fixture subject's work in Beijing.",
+      "location_code": "mainland_china",
+      "location_text": "Beijing",
+      "observed_at": "2026-07-14T00:00:00.000Z",
+      "source_actor": "verified_organization",
+      "source_kind": "employment",
+      "source_url": "https://organizations.invalid/region-fixture/employment",
+      "statement_scope": "subject_explicit_experience",
+      "subject_ref": "xregion_subject_fixture_001"
+    },
+    {
+      "evidence_id": "xregion_ev_education_tokyo",
+      "experience_kind": "studied_in",
+      "excerpt": "Synthetic public education record explicitly places the fixture subject's study in Tokyo.",
+      "location_code": "japan",
+      "location_text": "Tokyo",
+      "observed_at": "2026-07-14T00:00:00.000Z",
+      "source_actor": "verified_organization",
+      "source_kind": "education",
+      "source_url": "https://education.invalid/region-fixture/record",
+      "statement_scope": "subject_explicit_experience",
+      "subject_ref": "xregion_subject_fixture_001"
+    },
+    {
+      "evidence_id": "xregion_ev_research_hong_kong",
+      "experience_kind": "researched_in",
+      "excerpt": "Synthetic public research record explicitly places the fixture subject's research in Hong Kong.",
+      "location_code": "hong_kong",
+      "location_text": "Hong Kong",
+      "observed_at": "2026-07-14T00:00:00.000Z",
+      "source_actor": "verified_organization",
+      "source_kind": "research",
+      "source_url": "https://research.invalid/region-fixture/record",
+      "statement_scope": "subject_explicit_experience",
+      "subject_ref": "xregion_subject_fixture_001"
+    },
+    {
+      "evidence_id": "xregion_ev_post_taipei_self",
+      "experience_kind": "lived_in",
+      "excerpt": "Synthetic first-person post explicitly states that the fixture subject lived in Taipei.",
+      "location_code": "taiwan",
+      "location_text": "Taipei",
+      "observed_at": "2026-07-14T00:00:00.000Z",
+      "source_actor": "subject_self",
+      "source_kind": "post",
+      "source_url": "https://posts.invalid/region-fixture/self-experience",
+      "statement_scope": "subject_explicit_experience",
+      "subject_ref": "xregion_subject_fixture_001"
+    },
+    {
+      "evidence_id": "xregion_ev_post_topic_only",
+      "experience_kind": "researched_in",
+      "excerpt": "Synthetic first-person post discusses research about Mainland China but states no personal experience there.",
+      "location_code": "mainland_china",
+      "location_text": "Mainland China",
+      "observed_at": "2026-07-14T00:00:00.000Z",
+      "source_actor": "subject_self",
+      "source_kind": "post",
+      "source_url": "https://posts.invalid/region-fixture/topic-only",
+      "statement_scope": "location_topic_only",
+      "subject_ref": "xregion_subject_fixture_001"
+    },
+    {
+      "evidence_id": "xregion_ev_post_third_party_mention",
+      "experience_kind": "worked_in",
+      "excerpt": "Synthetic third-party post mentions work in Macau but makes no first-person claim for the fixture subject.",
+      "location_code": "macau",
+      "location_text": "Macau",
+      "observed_at": "2026-07-14T00:00:00.000Z",
+      "source_actor": "third_party",
+      "source_kind": "post",
+      "source_url": "https://posts.invalid/region-fixture/third-party-mention",
+      "statement_scope": "third_party_mention",
+      "subject_ref": "xregion_subject_fixture_001"
+    }
+  ],
+  "policy_version": "x-region-experience-public-professional-v1",
+  "schema_version": "x.region_experience.evidence_bundle.v1",
+  "subject_ref": "xregion_subject_fixture_001"
+}

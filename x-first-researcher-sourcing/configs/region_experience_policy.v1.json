@@ -1,0 +1,207 @@
+{
+  "forbidden_input_fields": [
+    "ancestry",
+    "bilingual",
+    "citizenship",
+    "community",
+    "country_of_origin",
+    "current_handle",
+    "display_name",
+    "ethnicity",
+    "gender",
+    "handle",
+    "language",
+    "languages",
+    "name",
+    "nationality",
+    "race",
+    "religion",
+    "social_graph",
+    "social_graph_position"
+  ],
+  "labels": [
+    {
+      "label": "ASIA_EXPERIENCE",
+      "location_codes": [
+        "asia_unspecified",
+        "greater_china_unspecified",
+        "mainland_china",
+        "hong_kong",
+        "macau",
+        "taiwan",
+        "singapore",
+        "japan",
+        "south_korea",
+        "india"
+      ]
+    },
+    {
+      "label": "GREATER_CHINA_EXPERIENCE",
+      "location_codes": [
+        "greater_china_unspecified",
+        "mainland_china",
+        "hong_kong",
+        "macau",
+        "taiwan",
+        "singapore"
+      ]
+    },
+    {
+      "label": "MAINLAND_CHINA_EXPERIENCE",
+      "location_codes": [
+        "mainland_china"
+      ]
+    }
+  ],
+  "locations": [
+    {
+      "aliases": [
+        "Asia"
+      ],
+      "location_code": "asia_unspecified"
+    },
+    {
+      "aliases": [
+        "Greater China"
+      ],
+      "location_code": "greater_china_unspecified"
+    },
+    {
+      "aliases": [
+        "Mainland China",
+        "China Mainland",
+        "Beijing",
+        "Beijing, Mainland China",
+        "Shanghai",
+        "Shanghai, Mainland China",
+        "Shenzhen",
+        "Shenzhen, Mainland China",
+        "Guangzhou",
+        "Guangzhou, Mainland China",
+        "Hangzhou",
+        "Hangzhou, Mainland China",
+        "Nanjing",
+        "Nanjing, Mainland China",
+        "Wuhan",
+        "Wuhan, Mainland China",
+        "Chengdu",
+        "Chengdu, Mainland China"
+      ],
+      "location_code": "mainland_china"
+    },
+    {
+      "aliases": [
+        "Hong Kong",
+        "Hong Kong SAR"
+      ],
+      "location_code": "hong_kong"
+    },
+    {
+      "aliases": [
+        "Macau",
+        "Macao",
+        "Macau SAR",
+        "Macao SAR"
+      ],
+      "location_code": "macau"
+    },
+    {
+      "aliases": [
+        "Taiwan",
+        "Taipei",
+        "Taipei, Taiwan"
+      ],
+      "location_code": "taiwan"
+    },
+    {
+      "aliases": [
+        "Singapore"
+      ],
+      "location_code": "singapore"
+    },
+    {
+      "aliases": [
+        "Japan",
+        "Tokyo",
+        "Tokyo, Japan"
+      ],
+      "location_code": "japan"
+    },
+    {
+      "aliases": [
+        "South Korea",
+        "Seoul",
+        "Seoul, South Korea"
+      ],
+      "location_code": "south_korea"
+    },
+    {
+      "aliases": [
+        "India",
+        "Bengaluru",
+        "Bengaluru, India",
+        "Bangalore",
+        "Bangalore, India"
+      ],
+      "location_code": "india"
+    }
+  ],
+  "policy_version": "x-region-experience-public-professional-v1",
+  "schema_version": "x.region_experience.policy.v1",
+  "source_rules": [
+    {
+      "experience_kinds": [
+        "based_in",
+        "lived_in"
+      ],
+      "source_actors": [
+        "subject_self"
+      ],
+      "source_kind": "bio"
+    },
+    {
+      "experience_kinds": [
+        "based_in",
+        "worked_in"
+      ],
+      "source_actors": [
+        "subject_self",
+        "verified_organization"
+      ],
+      "source_kind": "employment"
+    },
+    {
+      "experience_kinds": [
+        "studied_in"
+      ],
+      "source_actors": [
+        "subject_self",
+        "verified_organization"
+      ],
+      "source_kind": "education"
+    },
+    {
+      "experience_kinds": [
+        "researched_in"
+      ],
+      "source_actors": [
+        "subject_self",
+        "verified_organization"
+      ],
+      "source_kind": "research"
+    },
+    {
+      "experience_kinds": [
+        "based_in",
+        "lived_in",
+        "worked_in",
+        "studied_in",
+        "researched_in"
+      ],
+      "source_actors": [
+        "subject_self"
+      ],
+      "source_kind": "post"
+    }
+  ]
+}

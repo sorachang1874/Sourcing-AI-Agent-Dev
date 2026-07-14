@@ -1,0 +1,116 @@
+{
+  "$id": "https://contracts.invalid/x.region_experience.policy.v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "forbidden_input_fields": {
+      "items": {"type": "string"},
+      "maxItems": 18,
+      "minItems": 18,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "labels": {
+      "items": {"$ref": "#/$defs/label"},
+      "maxItems": 3,
+      "minItems": 3,
+      "type": "array"
+    },
+    "locations": {
+      "items": {"$ref": "#/$defs/location"},
+      "maxItems": 10,
+      "minItems": 10,
+      "type": "array"
+    },
+    "policy_version": {"const": "x-region-experience-public-professional-v1"},
+    "schema_version": {"const": "x.region_experience.policy.v1"},
+    "source_rules": {
+      "items": {"$ref": "#/$defs/source_rule"},
+      "maxItems": 5,
+      "minItems": 5,
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "policy_version",
+    "labels",
+    "locations",
+    "source_rules",
+    "forbidden_input_fields"
+  ],
+  "title": "X-first public-professional region-experience policy v1",
+  "type": "object",
+  "$defs": {
+    "label": {
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "enum": [
+            "ASIA_EXPERIENCE",
+            "GREATER_CHINA_EXPERIENCE",
+            "MAINLAND_CHINA_EXPERIENCE"
+          ]
+        },
+        "location_codes": {
+          "items": {"$ref": "#/$defs/location_code"},
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": ["label", "location_codes"],
+      "type": "object"
+    },
+    "location": {
+      "additionalProperties": false,
+      "properties": {
+        "aliases": {
+          "items": {"minLength": 1, "type": "string"},
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "location_code": {"$ref": "#/$defs/location_code"}
+      },
+      "required": ["location_code", "aliases"],
+      "type": "object"
+    },
+    "location_code": {
+      "enum": [
+        "asia_unspecified",
+        "greater_china_unspecified",
+        "mainland_china",
+        "hong_kong",
+        "macau",
+        "taiwan",
+        "singapore",
+        "japan",
+        "south_korea",
+        "india"
+      ]
+    },
+    "source_rule": {
+      "additionalProperties": false,
+      "properties": {
+        "experience_kinds": {
+          "items": {
+            "enum": ["based_in", "lived_in", "worked_in", "studied_in", "researched_in"]
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "source_actors": {
+          "items": {"enum": ["subject_self", "verified_organization"]},
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "source_kind": {"enum": ["bio", "employment", "education", "research", "post"]}
+      },
+      "required": ["source_kind", "source_actors", "experience_kinds"],
+      "type": "object"
+    }
+  }
+}
