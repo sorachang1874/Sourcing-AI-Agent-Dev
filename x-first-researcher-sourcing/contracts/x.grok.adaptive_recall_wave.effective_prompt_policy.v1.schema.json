@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sourcing-ai-agent.invalid/contracts/x.grok.adaptive_recall_wave.effective_prompt_policy.v1.schema.json",
+  "title": "Adaptive Grok recall-wave approved effective prompt policy v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "policy_id",
+    "owner",
+    "allowed_discovery_dimensions",
+    "entries"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "x.grok.adaptive_recall_wave.effective_prompt_policy.v1"
+    },
+    "policy_id": {
+      "const": "adaptive_base_discovery_effective_prompts.v1"
+    },
+    "owner": {
+      "const": "x_first_adaptive_wave_operator"
+    },
+    "allowed_discovery_dimensions": {
+      "const": [
+        "target_lab_affiliation",
+        "professional_role_or_function",
+        "public_research_evidence",
+        "pretraining_relevance"
+      ]
+    },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "policy_entry_id",
+          "target",
+          "source_prompt_sha256",
+          "authority"
+        ],
+        "properties": {
+          "policy_entry_id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_.-]{0,127}$"
+          },
+          "target": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "lab_id",
+              "research_focus_id",
+              "scope"
+            ],
+            "properties": {
+              "lab_id": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9_.-]{0,127}$"
+              },
+              "research_focus_id": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9_.-]{0,127}$"
+              },
+              "scope": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 20000
+              }
+            }
+          },
+          "source_prompt_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "authority": {
+            "enum": [
+              "fixture_only",
+              "live_authorized"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

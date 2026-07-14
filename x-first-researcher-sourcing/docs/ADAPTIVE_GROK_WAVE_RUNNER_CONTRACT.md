@@ -18,7 +18,7 @@ The operator still has non-business safety boundaries:
 - a configurable, deliberately high model-turn emergency ceiling;
 - one monotonic wall deadline;
 - high stdout, stderr, JSON-byte, JSON-depth, and JSON-node ceilings;
-- high session-file, per-file, aggregate, update-log, and update-line ceilings;
+- high session-entry, depth, per-file, aggregate, update-log, and update-line ceilings;
 - request-bound token and estimated-cost ceilings plus a private retention TTL;
 - bounded process-group `TERM`, then `KILL` cleanup.
 
@@ -32,8 +32,8 @@ CRM, export, billing, permission, or outreach state. Protected-identity inferenc
 
 | Concern | Owner/source of truth | Fail-closed rule |
 |---|---|---|
-| Target lab and focus | SHA-bound request | No hard-coded company or research focus |
-| Prompt | Private `0600` source plus SHA-256 | Symlink, wrong owner/mode, digest mismatch, or invalid UTF-8 fails |
+| Live target and prompt | Versioned module-owned effective-prompt policy plus SHA-bound request | The exact target tuple and source-prompt digest must be one reviewed `live_authorized` row; arbitrary scope text or a new prompt fails before any run root is retained |
+| Fixture target and prompt | SHA-bound request plus private `0600` source | Fixture requests remain generic and offline; a `fixture_only` policy row never grants live authority |
 | Prior waves | Private `0600` files plus SHA-256 | Casefold duplicates inside a prior wave fail |
 | Prior completion | Local validator | An old handle may reappear only with new evidence digest or a new temporal state |
 | Grok executable | Request digest plus canonical local locator | Stable owner-controlled target is descriptor-copied to a private staged executable |
@@ -51,7 +51,7 @@ CRM, export, billing, permission, or outreach state. Protected-identity inferenc
 
 The closed schema is `contracts/x.grok.adaptive_recall_wave.request.v2.schema.json`. Required sections are:
 
-- `target`: configurable `lab_id`, `research_focus_id`, and free-text scope;
+- `target`: configurable `lab_id`, `research_focus_id`, and scope in fixture mode; live grant issuance/execution additionally require the exact tuple to be approved with the prompt digest in the module-owned effective-prompt policy;
 - `prompt_source`: private path and exact digest;
 - `prior_waves`: any number of private wave locators and digests;
 - `transport`: fixed provider owner, configurable model/effort, exact live binary/auth digests, and opaque operator account reference;
@@ -138,6 +138,25 @@ Example fixture request shape:
 
 No array in the request or result schemas has `maxItems`.
 
+### Live effective-prompt owner
+
+`configs/adaptive_grok_wave_effective_prompt_policy.v1.json` is the production owner for the complete live objective,
+not merely a prompt allowlist. A row binds the exact target tuple and exact source-prompt SHA-256 and is explicitly
+`fixture_only` or `live_authorized`. Grant issuance accepts only `live_authorized`; the policy digest and entry ID are
+bound into the grant, intent, command binding, terminal receipt, and bundle replay. The production registry currently
+authorizes the seven tracked OpenAI recall-wave prompts for one controlled target tuple:
+
+```text
+lab_id=openai
+research_focus_id=pretraining
+scope=Public professional evidence of current or historical OpenAI affiliation and current or historical pre-training or base-model training relevance.
+```
+
+The synthetic row is `fixture_only`. Tests replace the module path with an isolated test policy; no public live
+entrypoint accepts a caller-supplied policy path. Adding another lab, focus, scope, or prompt therefore requires a
+reviewed registry change rather than an algorithm special case. Prior-wave files remain parsed handle exclusions and
+material-update baselines only; they cannot replace or extend the approved objective.
+
 ## Native-X command and isolation
 
 The live process executes the staged binary in an empty owner-only workspace with an isolated owner-only `HOME`,
@@ -182,8 +201,11 @@ The configured Grok locator may be an owner-controlled symlink. Before grant con
 
 The canonical OAuth file must be a current-owner, one-link, regular `0600` file within the size ceiling and must match
 the request-pinned digest. It is descriptor-copied with pre/post identity checks. The durable intent is published
-before auth is copied. Success, failure, and pre-spawn exception paths recursively delete the complete ephemeral home;
-a terminal receipt requires `ephemeral_tree_deleted=true`.
+before auth is copied. From the copy through grant consumption, executor completion, bounded session-tree measurement,
+and transcript capture, every exit deletes the complete ephemeral home in a `finally` boundary. Normal execution
+deletes it before raw stdout/stderr publication, structured-output parsing, sanitized-result publication, or terminal
+receipt construction. A terminal receipt requires `ephemeral_tree_deleted=true`; a post-executor publication failure
+can be recovered from the durable intent/spools without retaining OAuth bytes.
 
 ## Preissued single-use live grant
 
@@ -200,7 +222,11 @@ command policy, tool registry, environment policy, emergency envelope, technical
 SHA-256 of the complete execution scope. Its default lifetime is 900 seconds and cannot exceed 3600 seconds. The
 opaque grant ID is stored only as a digest.
 
-After binary and auth preflight, live execution obtains a fresh wall-clock value, revalidates grant expiry, and
+Before reading the prompt, staging the binary, or creating a run root, live execution validates the module-owned
+effective-prompt row and the complete preissued grant at a fresh wall-clock value. Missing, expired, wrong-scope, or
+wrong-prompt authority therefore leaves no unowned run directory. Disk/staging failures before durable intent are
+also recursively discarded; purge sees no intent-less orphan. After binary and auth preflight, execution revalidates
+grant expiry and
 publishes exactly one `O_EXCL` consumption record bound to the run lease. It then reads the authoritative clock again
 after the exclusive link. If the grant expired in that window, the record remains consumed but the executor is never
 invoked. A conservative monotonic deadline is derived from the remaining lifetime. The gated launcher rechecks both
@@ -274,6 +300,12 @@ depth, and node ceilings produce `technical_limit_exceeded`, not a business-qual
 Prompt bytes are checked before reading. Each prior-wave file is independently byte-bounded, and its JSON is bounded
 by depth and node count before handle or evidence extraction. These are high technical ceilings, not array-item or
 candidate-count limits.
+
+The v2 wire field `max_session_files` is retained for compatibility but is enforced as a stricter all-entry ceiling:
+regular files, directories, and the one exact `ephemeral-home/leader.sock` all count. The scanner rejects every other
+socket and all symlinks/special entries, enforces a hard depth ceiling, and checks the run's monotonic deadline during
+traversal. Receipts record both regular-file and all-entry counts plus maximum depth. Recovery applies the same entry,
+socket, and depth rules under its own bounded monotonic scan window.
 
 The direct child first runs a tiny isolated gated launcher in a new session with `umask 077`. It acknowledges a random inherited
 identity token, then blocks. The parent reads a kernel/process-table birth identity and atomically publishes

@@ -17,6 +17,8 @@
     "result_schema_sha256",
     "command_policy_sha256",
     "tool_registry_sha256",
+    "effective_prompt_policy_sha256",
+    "effective_prompt_policy_entry_id",
     "environment_policy_sha256",
     "emergency_sha256",
     "technical_limits_sha256",
@@ -96,6 +98,14 @@
     "tool_registry_sha256": {
       "type": "string",
       "pattern": "^[0-9a-f]{64}$"
+    },
+    "effective_prompt_policy_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "effective_prompt_policy_entry_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_.-]{0,127}$"
     },
     "environment_policy_sha256": {
       "type": "string",

@@ -1,0 +1,23 @@
+{
+  "schema_version": "x.grok.adaptive_recall_wave.effective_prompt_policy.v1",
+  "policy_id": "adaptive_base_discovery_effective_prompts.v1",
+  "owner": "x_first_adaptive_wave_operator",
+  "allowed_discovery_dimensions": [
+    "target_lab_affiliation",
+    "professional_role_or_function",
+    "public_research_evidence",
+    "pretraining_relevance"
+  ],
+  "entries": [
+    {
+      "policy_entry_id": "synthetic_lab_test_live_simulation.v1",
+      "target": {
+        "lab_id": "synthetic_lab",
+        "research_focus_id": "base_model_training",
+        "scope": "Public professional evidence for a synthetic lab-neutral fixture."
+      },
+      "source_prompt_sha256": "1583b055b0156e02ddbfc0a33b4f36ab46d560d89c8d7919c772877aba173cae",
+      "authority": "live_authorized"
+    }
+  ]
+}

@@ -204,10 +204,14 @@
             "json_bytes",
             "json_structure",
             "session_tree_files",
+            "session_tree_entries",
+            "session_tree_depth",
             "session_tree_file_bytes",
             "session_tree_total_bytes",
             "session_updates_bytes",
-            "session_tree_entry_invalid"
+            "session_tree_entry_invalid",
+            "session_tree_unexpected_socket",
+            "session_tree_scan_deadline"
           ]
         }
       }
@@ -227,6 +231,8 @@
         "session_updates_sha256",
         "ephemeral_tree_deleted",
         "session_tree_file_count",
+        "session_tree_entry_count",
+        "session_tree_max_depth",
         "session_tree_total_bytes",
         "session_tree_max_file_bytes"
       ],
@@ -280,6 +286,15 @@
         "session_tree_file_count": {
           "type": "integer",
           "minimum": 0
+        },
+        "session_tree_entry_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "session_tree_max_depth": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 64
         },
         "session_tree_total_bytes": {
           "type": "integer",
@@ -540,6 +555,8 @@
         "command_policy_sha256",
         "environment_policy_sha256",
         "tool_registry_sha256",
+        "effective_prompt_policy_sha256",
+        "effective_prompt_policy_entry_id",
         "operator_account_ref_sha256",
         "oauth_auth_sha256",
         "max_turns"
@@ -584,6 +601,20 @@
         },
         "tool_registry_sha256": {
           "$ref": "#/$defs/sha256"
+        },
+        "effective_prompt_policy_sha256": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "effective_prompt_policy_entry_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[a-z0-9][a-z0-9_.-]{0,127}$"
         },
         "operator_account_ref_sha256": {
           "type": [

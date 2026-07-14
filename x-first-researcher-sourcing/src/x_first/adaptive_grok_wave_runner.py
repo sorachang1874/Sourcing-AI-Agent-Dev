@@ -35,6 +35,8 @@ from pathlib import Path
 from typing import Any, Protocol
 from urllib.parse import quote
 
+from x_first.grok_cli_exploration import base_discovery_tool_subject_allowed
+
 REQUEST_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.request.v2"
 RESULT_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.result.v1"
 INTENT_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.intent.v2"
@@ -54,6 +56,20 @@ DEFAULT_GROK_BINARY = Path.home() / ".grok/bin/grok"
 DEFAULT_GROK_AUTH = Path.home() / ".grok/auth.json"
 MAX_GROK_BINARY_BYTES = 268_435_456
 MAX_CONTRACT_SCHEMA_BYTES = 16_777_216
+MAX_EFFECTIVE_PROMPT_POLICY_BYTES = 4_194_304
+MAX_SESSION_TREE_DEPTH = 64
+DEFAULT_EFFECTIVE_PROMPT_POLICY = (
+    Path(__file__).resolve().parents[2] / "configs/adaptive_grok_wave_effective_prompt_policy.v1.json"
+)
+EFFECTIVE_PROMPT_POLICY_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.effective_prompt_policy.v1"
+EFFECTIVE_PROMPT_POLICY_ID = "adaptive_base_discovery_effective_prompts.v1"
+EFFECTIVE_PROMPT_POLICY_OWNER = "x_first_adaptive_wave_operator"
+ALLOWED_DISCOVERY_DIMENSIONS = (
+    "target_lab_affiliation",
+    "professional_role_or_function",
+    "public_research_evidence",
+    "pretraining_relevance",
+)
 
 DISALLOWED_TOOLS = (
     "run_terminal_cmd",
@@ -245,6 +261,8 @@ _COMMAND_BINDING_KEYS = {
     "command_policy_sha256",
     "environment_policy_sha256",
     "tool_registry_sha256",
+    "effective_prompt_policy_sha256",
+    "effective_prompt_policy_entry_id",
     "operator_account_ref_sha256",
     "oauth_auth_sha256",
     "max_turns",
@@ -285,6 +303,8 @@ _ARTIFACT_KEYS = {
     "session_updates_sha256",
     "ephemeral_tree_deleted",
     "session_tree_file_count",
+    "session_tree_entry_count",
+    "session_tree_max_depth",
     "session_tree_total_bytes",
     "session_tree_max_file_bytes",
 }
@@ -356,6 +376,8 @@ _GRANT_KEYS = {
     "result_schema_sha256",
     "command_policy_sha256",
     "tool_registry_sha256",
+    "effective_prompt_policy_sha256",
+    "effective_prompt_policy_entry_id",
     "environment_policy_sha256",
     "emergency_sha256",
     "technical_limits_sha256",
@@ -425,6 +447,10 @@ _TECHNICAL_LIMIT_KINDS = {
     "session_tree_total_bytes",
     "session_updates_bytes",
     "session_tree_entry_invalid",
+    "session_tree_entries",
+    "session_tree_depth",
+    "session_tree_unexpected_socket",
+    "session_tree_scan_deadline",
 }
 
 
@@ -479,9 +505,17 @@ class SessionProof:
 @dataclass(frozen=True)
 class SessionTreeMeasurement:
     file_count: int
+    entry_count: int
     total_bytes: int
     max_file_bytes: int
+    max_depth: int
     limit_kind: str | None
+
+
+@dataclass(frozen=True)
+class EffectivePromptPolicyBinding:
+    policy_sha256: str
+    policy_entry_id: str
 
 
 class Executor(Protocol):
@@ -1414,6 +1448,94 @@ def tool_registry_sha256() -> str:
     )
 
 
+def _load_effective_prompt_policy() -> tuple[dict[str, Any], str]:
+    """Load the module-owned live prompt/target owner with a closed shape."""
+
+    try:
+        raw = _read_regular_owned_bounded(
+            DEFAULT_EFFECTIVE_PROMPT_POLICY,
+            maximum_bytes=MAX_EFFECTIVE_PROMPT_POLICY_BYTES,
+        )
+        policy = strict_json_loads_bounded(
+            raw,
+            max_bytes=MAX_EFFECTIVE_PROMPT_POLICY_BYTES,
+            max_depth=16,
+            max_nodes=10_000,
+        )
+    except (AdaptiveWaveValidationError, OSError, UnicodeError, ValueError) as exc:
+        raise AdaptiveWaveValidationError("effective_prompt_policy_unavailable") from exc
+    expected_keys = {
+        "schema_version",
+        "policy_id",
+        "owner",
+        "allowed_discovery_dimensions",
+        "entries",
+    }
+    if (
+        not isinstance(policy, dict)
+        or set(policy) != expected_keys
+        or policy.get("schema_version") != EFFECTIVE_PROMPT_POLICY_SCHEMA_VERSION
+        or policy.get("policy_id") != EFFECTIVE_PROMPT_POLICY_ID
+        or policy.get("owner") != EFFECTIVE_PROMPT_POLICY_OWNER
+        or policy.get("allowed_discovery_dimensions") != list(ALLOWED_DISCOVERY_DIMENSIONS)
+        or not isinstance(policy.get("entries"), list)
+    ):
+        raise AdaptiveWaveValidationError("effective_prompt_policy_invalid")
+    entry_ids: set[str] = set()
+    bindings: set[tuple[str, str]] = set()
+    for entry in policy["entries"]:
+        if not isinstance(entry, dict) or set(entry) != {
+            "policy_entry_id",
+            "target",
+            "source_prompt_sha256",
+            "authority",
+        }:
+            raise AdaptiveWaveValidationError("effective_prompt_policy_invalid")
+        entry_id = entry.get("policy_entry_id")
+        target = entry.get("target")
+        source_prompt_sha = entry.get("source_prompt_sha256")
+        if (
+            not isinstance(entry_id, str)
+            or _ID_RE.fullmatch(entry_id) is None
+            or entry_id in entry_ids
+            or not isinstance(target, dict)
+            or set(target) != _TARGET_KEYS
+            or not isinstance(target.get("lab_id"), str)
+            or _ID_RE.fullmatch(target["lab_id"]) is None
+            or not isinstance(target.get("research_focus_id"), str)
+            or _ID_RE.fullmatch(target["research_focus_id"]) is None
+            or not _is_text(target.get("scope"), maximum=20_000)
+            or not _is_sha(source_prompt_sha)
+            or entry.get("authority") not in {"fixture_only", "live_authorized"}
+        ):
+            raise AdaptiveWaveValidationError("effective_prompt_policy_invalid")
+        binding = (canonical_sha256(target), source_prompt_sha)
+        if binding in bindings:
+            raise AdaptiveWaveValidationError("effective_prompt_policy_invalid")
+        entry_ids.add(entry_id)
+        bindings.add(binding)
+    return policy, bytes_sha256(raw)
+
+
+def _approved_effective_prompt_binding(request: Mapping[str, Any]) -> EffectivePromptPolicyBinding:
+    policy, policy_sha = _load_effective_prompt_policy()
+    target_sha = canonical_sha256(request["target"])
+    prompt_sha = request["prompt_source"]["sha256"]
+    matches = [
+        entry
+        for entry in policy["entries"]
+        if entry["authority"] == "live_authorized"
+        and canonical_sha256(entry["target"]) == target_sha
+        and entry["source_prompt_sha256"] == prompt_sha
+    ]
+    if len(matches) != 1:
+        raise PermissionError("effective_prompt_target_not_approved")
+    return EffectivePromptPolicyBinding(
+        policy_sha256=policy_sha,
+        policy_entry_id=matches[0]["policy_entry_id"],
+    )
+
+
 def _command_policy(request: Mapping[str, Any]) -> list[str]:
     """Build the approved argv template through the one canonical argv builder."""
 
@@ -1560,13 +1682,36 @@ def _measure_session_tree(
     max_total_bytes: int,
     updates_path: Path | None = None,
     max_updates_bytes: int | None = None,
+    expected_socket_path: Path | None = None,
+    max_depth: int = MAX_SESSION_TREE_DEPTH,
+    deadline_at: float | None = None,
+    monotonic: Callable[[], float] = time.monotonic,
 ) -> SessionTreeMeasurement:
+    """Measure every child entry under a bounded, deadline-aware traversal.
+
+    ``max_files`` is retained as the v2 wire name, but it is deliberately
+    enforced as the stricter all-entry ceiling (regular files, directories,
+    and the one expected leader socket).  This prevents directory or socket
+    floods from bypassing the original file-only counter.
+    """
+
     file_count = 0
+    entry_count = 0
     total_bytes = 0
     largest = 0
+    deepest = 0
     limit_kind: str | None = None
-    for current_root, directory_names, file_names in os.walk(root, topdown=True, followlinks=False):
-        current = Path(current_root)
+    try:
+        root.lstat()
+    except FileNotFoundError:
+        return SessionTreeMeasurement(0, 0, 0, 0, 0, None)
+    scan_deadline = deadline_at if deadline_at is not None else float("inf")
+    stack: list[tuple[Path, int]] = [(root, 0)]
+    while stack:
+        if monotonic() >= scan_deadline:
+            limit_kind = "session_tree_scan_deadline"
+            break
+        current, current_depth = stack.pop()
         try:
             current_metadata = current.lstat()
             if (
@@ -1576,55 +1721,55 @@ def _measure_session_tree(
             ):
                 limit_kind = "session_tree_entry_invalid"
                 break
-            for name in directory_names:
-                directory_metadata = (current / name).lstat()
-                if (
-                    stat.S_ISLNK(directory_metadata.st_mode)
-                    or not stat.S_ISDIR(directory_metadata.st_mode)
-                    or directory_metadata.st_uid != os.getuid()
-                ):
-                    limit_kind = "session_tree_entry_invalid"
-                    break
-            if limit_kind is not None:
-                break
-            for name in file_names:
-                path = current / name
-                try:
-                    metadata = path.lstat()
-                except FileNotFoundError:
-                    continue
-                if stat.S_ISSOCK(metadata.st_mode):
-                    continue
-                if (
-                    not stat.S_ISREG(metadata.st_mode)
-                    or path.is_symlink()
-                    or metadata.st_uid != os.getuid()
-                    or metadata.st_nlink != 1
-                ):
-                    limit_kind = "session_tree_entry_invalid"
-                    break
-                file_count += 1
-                total_bytes += metadata.st_size
-                largest = max(largest, metadata.st_size)
-                if updates_path is not None and path == updates_path and max_updates_bytes is not None:
-                    if metadata.st_size > max_updates_bytes:
-                        limit_kind = "session_updates_bytes"
+            with os.scandir(current) as entries:
+                for entry in entries:
+                    if monotonic() >= scan_deadline:
+                        limit_kind = "session_tree_scan_deadline"
                         break
-                if metadata.st_size > max_file_bytes:
-                    limit_kind = "session_tree_file_bytes"
+                    path = current / entry.name
+                    metadata = entry.stat(follow_symlinks=False)
+                    entry_count += 1
+                    if entry_count > max_files:
+                        limit_kind = "session_tree_entries"
+                        break
+                    depth = current_depth + 1
+                    deepest = max(deepest, depth)
+                    if depth > max_depth:
+                        limit_kind = "session_tree_depth"
+                        break
+                    if stat.S_ISLNK(metadata.st_mode) or metadata.st_uid != os.getuid():
+                        limit_kind = "session_tree_entry_invalid"
+                        break
+                    if stat.S_ISDIR(metadata.st_mode):
+                        stack.append((path, depth))
+                        continue
+                    if stat.S_ISSOCK(metadata.st_mode):
+                        if expected_socket_path is None or path != expected_socket_path or metadata.st_nlink != 1:
+                            limit_kind = "session_tree_unexpected_socket"
+                            break
+                        continue
+                    if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
+                        limit_kind = "session_tree_entry_invalid"
+                        break
+                    file_count += 1
+                    total_bytes += metadata.st_size
+                    largest = max(largest, metadata.st_size)
+                    if updates_path is not None and path == updates_path and max_updates_bytes is not None:
+                        if metadata.st_size > max_updates_bytes:
+                            limit_kind = "session_updates_bytes"
+                            break
+                    if metadata.st_size > max_file_bytes:
+                        limit_kind = "session_tree_file_bytes"
+                        break
+                    if total_bytes > max_total_bytes:
+                        limit_kind = "session_tree_total_bytes"
+                        break
+                if limit_kind is not None:
                     break
-                if file_count > max_files:
-                    limit_kind = "session_tree_files"
-                    break
-                if total_bytes > max_total_bytes:
-                    limit_kind = "session_tree_total_bytes"
-                    break
-            if limit_kind is not None:
-                break
         except OSError:
             limit_kind = "session_tree_entry_invalid"
             break
-    return SessionTreeMeasurement(file_count, total_bytes, largest, limit_kind)
+    return SessionTreeMeasurement(file_count, entry_count, total_bytes, largest, deepest, limit_kind)
 
 
 class ProcessGroupExecutor:
@@ -1887,6 +2032,10 @@ class ProcessGroupExecutor:
                     max_total_bytes=max_session_total_bytes,
                     updates_path=session_updates_path,
                     max_updates_bytes=max_session_updates_bytes,
+                    expected_socket_path=session_tree_root / "leader.sock",
+                    max_depth=MAX_SESSION_TREE_DEPTH,
+                    deadline_at=deadline_at,
+                    monotonic=monotonic,
                 )
                 if measurement.limit_kind is not None:
                     technical_limit_kind = measurement.limit_kind
@@ -2443,6 +2592,10 @@ def _validate_grant(grant: Any, request: Mapping[str, Any], *, now: datetime) ->
     expected_id_hash = bytes_sha256(grant_id.encode()) if isinstance(grant_id, str) else None
     account_ref = request.get("transport", {}).get("operator_account_ref")
     expected_account_hash = bytes_sha256(account_ref.encode()) if isinstance(account_ref, str) else None
+    try:
+        prompt_policy_binding = _approved_effective_prompt_binding(request)
+    except (AdaptiveWaveValidationError, PermissionError):
+        prompt_policy_binding = None
     errors: list[str] = []
     if (
         grant.get("schema_version") != GRANT_SCHEMA_VERSION
@@ -2457,6 +2610,9 @@ def _validate_grant(grant: Any, request: Mapping[str, Any], *, now: datetime) ->
         or grant.get("result_schema_sha256") != result_schema_sha256()
         or grant.get("command_policy_sha256") != command_policy_sha256(request)
         or grant.get("tool_registry_sha256") != tool_registry_sha256()
+        or prompt_policy_binding is None
+        or grant.get("effective_prompt_policy_sha256") != prompt_policy_binding.policy_sha256
+        or grant.get("effective_prompt_policy_entry_id") != prompt_policy_binding.policy_entry_id
         or grant.get("environment_policy_sha256") != canonical_sha256(_redacted_environment_policy())
         or grant.get("emergency_sha256") != canonical_sha256(request["emergency"])
         or grant.get("technical_limits_sha256") != canonical_sha256(request["technical_limits"])
@@ -2491,6 +2647,7 @@ def issue_live_grant(
     if not _is_int(ttl_seconds) or not 60 <= ttl_seconds <= 3_600:
         raise AdaptiveWaveValidationError("grant_ttl_invalid")
     request = _load_request(request_path)
+    prompt_policy_binding = _approved_effective_prompt_binding(request)
     grant_id = request["approval"]["grant_id"]
     transport = request["transport"]
     if (
@@ -2516,6 +2673,8 @@ def issue_live_grant(
         "result_schema_sha256": result_schema_sha256(),
         "command_policy_sha256": command_policy_sha256(request),
         "tool_registry_sha256": tool_registry_sha256(),
+        "effective_prompt_policy_sha256": prompt_policy_binding.policy_sha256,
+        "effective_prompt_policy_entry_id": prompt_policy_binding.policy_entry_id,
         "environment_policy_sha256": canonical_sha256(_redacted_environment_policy()),
         "emergency_sha256": canonical_sha256(request["emergency"]),
         "technical_limits_sha256": canonical_sha256(request["technical_limits"]),
@@ -2826,6 +2985,8 @@ def _parse_session_proof(
                 raise AdaptiveWaveValidationError("session_tool_arguments_invalid") from exc
             if not isinstance(arguments, dict):
                 raise AdaptiveWaveValidationError("session_tool_arguments_invalid")
+            if not base_discovery_tool_subject_allowed(arguments, raw_output["name"]):
+                raise AdaptiveWaveValidationError("session_tool_subject_boundary_invalid")
             provider_call_ids.add(raw_output["call_id"])
             completed.add(call_id)
             tool_name = raw_output["name"]
@@ -2943,6 +3104,7 @@ def _build_static_bindings(
     schema_sha256: str,
     binary_sha256: str | None,
     command: Sequence[str],
+    effective_prompt_policy: EffectivePromptPolicyBinding | None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     input_binding = {
         "target_sha256": canonical_sha256(request["target"]),
@@ -2964,6 +3126,12 @@ def _build_static_bindings(
         "command_policy_sha256": command_policy_sha256(request),
         "environment_policy_sha256": canonical_sha256(_redacted_environment_policy()),
         "tool_registry_sha256": tool_registry_sha256(),
+        "effective_prompt_policy_sha256": (
+            effective_prompt_policy.policy_sha256 if effective_prompt_policy is not None else None
+        ),
+        "effective_prompt_policy_entry_id": (
+            effective_prompt_policy.policy_entry_id if effective_prompt_policy is not None else None
+        ),
         "operator_account_ref_sha256": bytes_sha256(account_ref.encode()) if account_ref is not None else None,
         "oauth_auth_sha256": request["transport"]["oauth_auth_sha256"],
         "max_turns": request["emergency"]["max_turns"],
@@ -3049,6 +3217,36 @@ def _delete_ephemeral_tree(path: Path) -> None:
         raise AdaptiveWaveValidationError("ephemeral_tree_deletion_failed")
 
 
+@contextmanager
+def _discard_run_root_without_intent_on_failure(run_root: Path) -> Any:
+    """Leave only crash-recoverable roots that durably published an intent."""
+
+    try:
+        yield
+    except BaseException:
+        intent_path = run_root / "operator-intent.json"
+        try:
+            intent_metadata = intent_path.lstat()
+            durable_intent_present = (
+                stat.S_ISREG(intent_metadata.st_mode)
+                and not intent_path.is_symlink()
+                and intent_metadata.st_uid == os.getuid()
+                and intent_metadata.st_nlink == 1
+                and stat.S_IMODE(intent_metadata.st_mode) == 0o600
+            )
+        except OSError:
+            durable_intent_present = False
+        if not durable_intent_present:
+            if run_root.is_symlink():
+                raise AdaptiveWaveValidationError("preintent_run_root_symlink_invalid")
+            if run_root.exists():
+                shutil.rmtree(run_root)
+                _fsync_directory(run_root.parent)
+            if run_root.exists() or run_root.is_symlink():
+                raise AdaptiveWaveValidationError("preintent_run_root_deletion_failed")
+        raise
+
+
 def _run_adaptive_wave(
     *,
     request: Mapping[str, Any],
@@ -3076,6 +3274,13 @@ def _run_adaptive_wave(
     ):
         raise AdaptiveWaveValidationError("live_transport_binding_required")
     request_sha = canonical_sha256(request)
+    started_clock = wall_clock().astimezone(UTC)
+    effective_prompt_policy: EffectivePromptPolicyBinding | None = None
+    grant_sha: str | None = None
+    if execution_mode == "live":
+        effective_prompt_policy = _approved_effective_prompt_binding(request)
+        _, grant_raw = _load_preissued_grant(approval_root, request=request, now=started_clock)
+        grant_sha = bytes_sha256(grant_raw)
     prompt_raw = _load_bound_bytes(
         request["prompt_source"]["path"],
         request["prompt_source"]["sha256"],
@@ -3097,7 +3302,7 @@ def _run_adaptive_wave(
     if _RUN_ID_RE.fullmatch(actual_run_id) is None or _SESSION_ID_RE.fullmatch(actual_session_id) is None:
         raise AdaptiveWaveValidationError("operator_identity_invalid")
     run_root = _create_run_root(runtime_root, actual_run_id)
-    with _run_lease(run_root, create=True) as run_lease_sha:
+    with _discard_run_root_without_intent_on_failure(run_root), _run_lease(run_root, create=True) as run_lease_sha:
         workspace = run_root / "workspace"
         workspace.mkdir(mode=0o700)
         ephemeral_home = run_root / "ephemeral-home"
@@ -3146,17 +3351,9 @@ def _run_adaptive_wave(
             schema_sha256=result_schema_sha256(),
             binary_sha256=binary_sha,
             command=command,
+            effective_prompt_policy=effective_prompt_policy,
         )
-        started_clock = wall_clock().astimezone(UTC)
         started_at = _timestamp(started_clock)
-        grant_sha: str | None = None
-        if execution_mode == "live":
-            try:
-                _, grant_raw = _load_preissued_grant(approval_root, request=request, now=started_clock)
-            except BaseException:
-                _delete_ephemeral_tree(ephemeral_home)
-                raise
-            grant_sha = bytes_sha256(grant_raw)
         intent_approval = _approval_binding(
             request,
             required=execution_mode == "live",
@@ -3186,6 +3383,13 @@ def _run_adaptive_wave(
 
         approval_consumption_sha: str | None = None
         consumed_grant: ConsumedGrant | None = None
+        process_ledger_sha: str | None = None
+        updates_source_path = _session_updates_path(ephemeral_home, workspace, actual_session_id)
+        started_monotonic = monotonic()
+        execution_deadline = started_monotonic + request["emergency"]["deadline_ms"] / 1000
+        updates_raw: bytes | None = None
+        session_capture_status = "not_applicable" if execution_mode == "fixture" else "missing"
+        measurement = SessionTreeMeasurement(0, 0, 0, 0, 0, None)
         if execution_mode == "live":
             assert auth_source is not None
             try:
@@ -3209,13 +3413,6 @@ def _run_adaptive_wave(
             except BaseException:
                 _delete_ephemeral_tree(ephemeral_home)
                 raise
-        approval_binding = _approval_binding(
-            request,
-            required=execution_mode == "live",
-            grant_sha256=grant_sha,
-            consumption_sha256=approval_consumption_sha,
-        )
-        process_ledger_sha: str | None = None
 
         def persist_spawn(
             child_pid: int,
@@ -3253,16 +3450,20 @@ def _run_adaptive_wave(
             ):
                 raise PermissionError("live_grant_expired_before_target_release")
 
-        updates_source_path = _session_updates_path(ephemeral_home, workspace, actual_session_id)
-        started_monotonic = monotonic()
         try:
+            approval_binding = _approval_binding(
+                request,
+                required=execution_mode == "live",
+                grant_sha256=grant_sha,
+                consumption_sha256=approval_consumption_sha,
+            )
             process_result = executor(
                 command,
                 cwd=workspace,
                 environment=isolated_environment,
                 stdout_spool=stdout_spool,
                 stderr_spool=stderr_spool,
-                deadline_at=started_monotonic + request["emergency"]["deadline_ms"] / 1000,
+                deadline_at=execution_deadline,
                 term_grace_ms=request["emergency"]["term_grace_ms"],
                 kill_grace_ms=request["emergency"]["kill_grace_ms"],
                 max_stdout_bytes=request["technical_limits"]["max_stdout_bytes"],
@@ -3276,30 +3477,47 @@ def _run_adaptive_wave(
                 monotonic=monotonic,
                 on_spawn=persist_spawn,
             )
-        except BaseException:
+            if process_result.execution_error_code == "process_group_cleanup_failed":
+                raise AdaptiveWaveValidationError("process_group_cleanup_incomplete")
+            measurement = _measure_session_tree(
+                ephemeral_home,
+                max_files=request["technical_limits"]["max_session_files"],
+                max_file_bytes=request["technical_limits"]["max_session_file_bytes"],
+                max_total_bytes=request["technical_limits"]["max_session_total_bytes"],
+                updates_path=updates_source_path,
+                max_updates_bytes=request["technical_limits"]["max_session_updates_bytes"],
+                expected_socket_path=ephemeral_home / "leader.sock",
+                max_depth=MAX_SESSION_TREE_DEPTH,
+                deadline_at=execution_deadline,
+                monotonic=monotonic,
+            )
+            if execution_mode == "live" and updates_source_path.exists() and measurement.limit_kind is None:
+                try:
+                    updates_raw = _read_regular_owned_bounded(
+                        updates_source_path,
+                        maximum_bytes=request["technical_limits"]["max_session_updates_bytes"],
+                    )
+                    _atomic_publish(retained_updates_path, updates_raw)
+                    session_capture_status = "captured"
+                except (AdaptiveWaveValidationError, OSError, UnicodeError, ValueError):
+                    updates_raw = None
+                    session_capture_status = "invalid"
+        finally:
             _delete_ephemeral_tree(ephemeral_home)
-            raise
-        if process_result.execution_error_code == "process_group_cleanup_failed":
-            _delete_ephemeral_tree(ephemeral_home)
-            raise AdaptiveWaveValidationError("process_group_cleanup_incomplete")
         elapsed_ms = max(0, round((monotonic() - started_monotonic) * 1000))
         completed_clock = wall_clock().astimezone(UTC)
         completed_at = _timestamp(completed_clock)
-        technical_limit_kind = process_result.technical_limit_kind
-        try:
-            stdout_raw = _read_regular_owned_bounded(
-                stdout_spool,
-                maximum_bytes=request["technical_limits"]["max_stdout_bytes"],
-                required_mode=0o600,
-            )
-            stderr_raw = _read_regular_owned_bounded(
-                stderr_spool,
-                maximum_bytes=request["technical_limits"]["max_stderr_bytes"],
-                required_mode=0o600,
-            )
-        except BaseException:
-            _delete_ephemeral_tree(ephemeral_home)
-            raise
+        technical_limit_kind = process_result.technical_limit_kind or measurement.limit_kind
+        stdout_raw = _read_regular_owned_bounded(
+            stdout_spool,
+            maximum_bytes=request["technical_limits"]["max_stdout_bytes"],
+            required_mode=0o600,
+        )
+        stderr_raw = _read_regular_owned_bounded(
+            stderr_spool,
+            maximum_bytes=request["technical_limits"]["max_stderr_bytes"],
+            required_mode=0o600,
+        )
         _atomic_publish(run_root / "raw.stdout", stdout_raw)
         _atomic_publish(run_root / "stderr.txt", stderr_raw)
         stdout_spool.unlink()
@@ -3324,25 +3542,10 @@ def _run_adaptive_wave(
             _atomic_publish(run_root / "sanitized.json", sanitized)
             sanitized_sha = bytes_sha256(sanitized)
 
-        measurement = _measure_session_tree(
-            ephemeral_home,
-            max_files=request["technical_limits"]["max_session_files"],
-            max_file_bytes=request["technical_limits"]["max_session_file_bytes"],
-            max_total_bytes=request["technical_limits"]["max_session_total_bytes"],
-            updates_path=updates_source_path,
-            max_updates_bytes=request["technical_limits"]["max_session_updates_bytes"],
-        )
-        technical_limit_kind = technical_limit_kind or measurement.limit_kind
-        updates_raw: bytes | None = None
         session_proof: SessionProof | None = None
         session_proof_status = "not_applicable" if execution_mode == "fixture" else "missing"
-        if execution_mode == "live" and updates_source_path.exists() and measurement.limit_kind is None:
+        if execution_mode == "live" and updates_raw is not None and session_capture_status == "captured":
             try:
-                updates_raw = _read_regular_owned_bounded(
-                    updates_source_path,
-                    maximum_bytes=request["technical_limits"]["max_session_updates_bytes"],
-                )
-                _atomic_publish(retained_updates_path, updates_raw)
                 session_proof = _parse_session_proof(
                     updates_raw,
                     expected_session_id=actual_session_id,
@@ -3365,7 +3568,8 @@ def _run_adaptive_wave(
             except (AdaptiveWaveValidationError, OSError, UnicodeError, ValueError):
                 session_proof = None
                 session_proof_status = "invalid"
-        _delete_ephemeral_tree(ephemeral_home)
+        elif execution_mode == "live" and session_capture_status == "invalid":
+            session_proof_status = "invalid"
 
         if technical_limit_kind is not None:
             status = "technical_limit_exceeded"
@@ -3447,6 +3651,8 @@ def _run_adaptive_wave(
                 "session_updates_sha256": bytes_sha256(updates_raw) if updates_raw is not None else None,
                 "ephemeral_tree_deleted": True,
                 "session_tree_file_count": measurement.file_count,
+                "session_tree_entry_count": measurement.entry_count,
+                "session_tree_max_depth": measurement.max_depth,
                 "session_tree_total_bytes": measurement.total_bytes,
                 "session_tree_max_file_bytes": measurement.max_file_bytes,
             },
@@ -3596,6 +3802,17 @@ def _command_binding_valid(value: Any) -> bool:
         and _is_sha(value.get("command_policy_sha256"))
         and _is_sha(value.get("environment_policy_sha256"))
         and _is_sha(value.get("tool_registry_sha256"))
+        and (
+            (
+                value.get("effective_prompt_policy_sha256") is None
+                and value.get("effective_prompt_policy_entry_id") is None
+            )
+            or (
+                _is_sha(value.get("effective_prompt_policy_sha256"))
+                and isinstance(value.get("effective_prompt_policy_entry_id"), str)
+                and _ID_RE.fullmatch(value["effective_prompt_policy_entry_id"]) is not None
+            )
+        )
         and (value.get("operator_account_ref_sha256") is None or _is_sha(value["operator_account_ref_sha256"]))
         and (value.get("oauth_auth_sha256") is None or _is_sha(value["oauth_auth_sha256"]))
         and ((value.get("operator_account_ref_sha256") is None) is (value.get("oauth_auth_sha256") is None))
@@ -3931,7 +4148,13 @@ def validate_operator_receipt(receipt: Any) -> list[str]:
         or artifacts.get("ephemeral_tree_deleted") is not True
         or any(
             not _validate_nonnegative_int(artifacts.get(key))
-            for key in ("session_tree_file_count", "session_tree_total_bytes", "session_tree_max_file_bytes")
+            for key in (
+                "session_tree_file_count",
+                "session_tree_entry_count",
+                "session_tree_max_depth",
+                "session_tree_total_bytes",
+                "session_tree_max_file_bytes",
+            )
         )
     ):
         errors.append("receipt_artifacts_value_invalid")
@@ -3959,6 +4182,12 @@ def validate_operator_receipt(receipt: Any) -> list[str]:
             errors.append("receipt_environment_policy_hash_invalid")
         if command_binding["tool_registry_sha256"] != tool_registry_sha256():
             errors.append("receipt_tool_registry_hash_invalid")
+        policy_sha = command_binding.get("effective_prompt_policy_sha256")
+        policy_entry_id = command_binding.get("effective_prompt_policy_entry_id")
+        if mode == "live" and (not _is_sha(policy_sha) or not isinstance(policy_entry_id, str)):
+            errors.append("receipt_live_effective_prompt_policy_missing")
+        if mode == "fixture" and (policy_sha is not None or policy_entry_id is not None):
+            errors.append("receipt_fixture_effective_prompt_policy_invalid")
         if mode == "live" and not _is_sha(command_binding.get("grok_binary_sha256")):
             errors.append("receipt_live_binary_hash_missing")
         if mode == "fixture" and command_binding.get("grok_binary_sha256") is not None:
@@ -4184,6 +4413,11 @@ def validate_operator_bundle(
             result_schema=_load_result_schema(),
         )
         account_ref = request["transport"]["operator_account_ref"]
+        try:
+            effective_prompt_policy = _approved_effective_prompt_binding(request) if mode == "live" else None
+        except (AdaptiveWaveValidationError, PermissionError):
+            effective_prompt_policy = None
+            errors.append("effective_prompt_policy_replay_invalid")
         expected_command_binding = {
             "provider_id": request["transport"]["provider_id"],
             "model_id": request["transport"]["model_id"],
@@ -4195,6 +4429,12 @@ def validate_operator_bundle(
             "command_policy_sha256": command_policy_sha256(request),
             "environment_policy_sha256": canonical_sha256(_redacted_environment_policy()),
             "tool_registry_sha256": tool_registry_sha256(),
+            "effective_prompt_policy_sha256": (
+                effective_prompt_policy.policy_sha256 if effective_prompt_policy is not None else None
+            ),
+            "effective_prompt_policy_entry_id": (
+                effective_prompt_policy.policy_entry_id if effective_prompt_policy is not None else None
+            ),
             "operator_account_ref_sha256": (bytes_sha256(account_ref.encode()) if account_ref is not None else None),
             "oauth_auth_sha256": request["transport"]["oauth_auth_sha256"],
             "max_turns": request["emergency"]["max_turns"],
@@ -4658,7 +4898,7 @@ def _recover_incomplete_run_locked(
             raise AdaptiveWaveValidationError("run_process_group_still_alive")
     ephemeral_home = run_root / intent["runtime_layout"]["ephemeral_home_name"]
     retained_updates_path = run_root / intent["runtime_layout"]["session_updates_name"]
-    measurement = SessionTreeMeasurement(0, 0, 0, None)
+    measurement = SessionTreeMeasurement(0, 0, 0, 0, 0, None)
     if ephemeral_home.exists():
         source_updates_path = _session_updates_path(
             ephemeral_home,
@@ -4672,6 +4912,10 @@ def _recover_incomplete_run_locked(
             max_total_bytes=intent["technical_limits"]["max_session_total_bytes"],
             updates_path=source_updates_path,
             max_updates_bytes=intent["technical_limits"]["max_session_updates_bytes"],
+            expected_socket_path=ephemeral_home / "leader.sock",
+            max_depth=MAX_SESSION_TREE_DEPTH,
+            deadline_at=monotonic() + 5.0,
+            monotonic=monotonic,
         )
         if measurement.limit_kind is not None:
             _delete_ephemeral_tree(ephemeral_home)
@@ -4855,6 +5099,8 @@ def _recover_incomplete_run_locked(
             "session_updates_sha256": bytes_sha256(session_raw) if session_raw is not None else None,
             "ephemeral_tree_deleted": not ephemeral_home.exists() and not ephemeral_home.is_symlink(),
             "session_tree_file_count": measurement.file_count,
+            "session_tree_entry_count": measurement.entry_count,
+            "session_tree_max_depth": measurement.max_depth,
             "session_tree_total_bytes": measurement.total_bytes,
             "session_tree_max_file_bytes": measurement.max_file_bytes,
         },

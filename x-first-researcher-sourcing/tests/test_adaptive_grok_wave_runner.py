@@ -5,7 +5,7 @@ import hashlib
 import json
 import os
 import runpy
-import signal
+import socket
 import stat
 import subprocess
 import sys
@@ -56,6 +56,8 @@ from x_first.recall_pool_schema import (  # noqa: E402
 )
 
 FIXED_TIME = datetime(2026, 7, 14, 10, 0, 0, tzinfo=UTC)
+PRODUCTION_EFFECTIVE_PROMPT_POLICY = ROOT / "configs/adaptive_grok_wave_effective_prompt_policy.v1.json"
+TEST_EFFECTIVE_PROMPT_POLICY = ROOT / "tests/fixtures/adaptive_grok_wave_effective_prompt_policy.test.v1.json"
 
 
 def _bytes_sha(value: bytes) -> str:
@@ -119,6 +121,11 @@ def _build_request(
         auth_sha = _bytes_sha((root / "auth.json").read_bytes())
     prompt = root / "prompt.md"
     prompt_raw = b"Find a broad public-professional synthetic researcher population.\n"
+    target = {
+        "lab_id": "synthetic_lab",
+        "research_focus_id": "base_model_training",
+        "scope": "Public professional evidence for a synthetic lab-neutral fixture.",
+    }
     _write_private(prompt, prompt_raw)
     prior_waves: list[dict[str, str]] = []
     for index in range(wave_count):
@@ -131,11 +138,7 @@ def _build_request(
     request = {
         "schema_version": runner.REQUEST_SCHEMA_VERSION,
         "request_id": "xwave_req_11111111111111111111111111111111",
-        "target": {
-            "lab_id": "synthetic_lab",
-            "research_focus_id": "base_model_training",
-            "scope": "Public professional evidence for a synthetic lab-neutral fixture.",
-        },
+        "target": target,
         "prompt_source": {"path": str(prompt), "sha256": _bytes_sha(prompt_raw)},
         "prior_waves": prior_waves,
         "transport": {
@@ -434,6 +437,17 @@ def _completed_live_run(root: Path) -> tuple[Path, Path]:
 
 
 class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self._effective_prompt_policy_patch = mock.patch.object(
+            runner,
+            "DEFAULT_EFFECTIVE_PROMPT_POLICY",
+            TEST_EFFECTIVE_PROMPT_POLICY,
+        )
+        self._effective_prompt_policy_patch.start()
+
+    def tearDown(self) -> None:
+        self._effective_prompt_policy_patch.stop()
+
     def test_request_is_generic_closed_and_has_no_business_count_limits(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -456,6 +470,7 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             "x.grok.adaptive_recall_wave.deletion_journal.v1.schema.json",
             "x.grok.adaptive_recall_wave.deletion_receipt.v1.schema.json",
             "x.grok.adaptive_recall_wave.campaign_bridge.v1.schema.json",
+            "x.grok.adaptive_recall_wave.effective_prompt_policy.v1.schema.json",
         )
         for name in schema_names:
             schema = json.loads((ROOT / "contracts" / name).read_text())
@@ -492,6 +507,47 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             set(request_schema["properties"]["technical_limits"]["required"]),
             runner._TECHNICAL_LIMIT_KEYS,
         )
+
+    def test_production_effective_prompt_policy_owns_all_seven_openai_waves(self) -> None:
+        policy = json.loads(PRODUCTION_EFFECTIVE_PROMPT_POLICY.read_text())
+        assert_schema_valid(policy, "x.grok.adaptive_recall_wave.effective_prompt_policy.v1.schema.json")
+        synthetic = [entry for entry in policy["entries"] if entry["target"]["lab_id"] == "synthetic_lab"]
+        self.assertEqual(len(synthetic), 1)
+        self.assertEqual(synthetic[0]["authority"], "fixture_only")
+        expected_target = {
+            "lab_id": "openai",
+            "research_focus_id": "pretraining",
+            "scope": (
+                "Public professional evidence of current or historical OpenAI affiliation and current or historical "
+                "pre-training or base-model training relevance."
+            ),
+        }
+        live_entries = [entry for entry in policy["entries"] if entry["authority"] == "live_authorized"]
+        prompt_paths = sorted((ROOT / "prompts/live-exploration").glob("2026-07-14-openai-pretrain-recall-wave*.md"))
+        self.assertEqual(len(live_entries), len(prompt_paths), 7)
+        self.assertEqual({canonical_json(entry["target"]) for entry in live_entries}, {canonical_json(expected_target)})
+        self.assertEqual(
+            {entry["source_prompt_sha256"] for entry in live_entries},
+            {_bytes_sha(path.read_bytes()) for path in prompt_paths},
+        )
+        with mock.patch.object(runner, "DEFAULT_EFFECTIVE_PROMPT_POLICY", PRODUCTION_EFFECTIVE_PROMPT_POLICY):
+            with tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                os.chmod(root, 0o700)
+                binary, auth, binary_sha = _live_material(root)
+                request, request_path = _build_request(root, binary_sha=binary_sha)
+                prompt_raw = prompt_paths[0].read_bytes()
+                _write_private(Path(request["prompt_source"]["path"]), prompt_raw)
+                request["prompt_source"]["sha256"] = _bytes_sha(prompt_raw)
+                request["target"] = expected_target
+                _write_private(request_path, (canonical_json(request) + "\n").encode())
+                grant, _ = issue_live_grant(
+                    request_path=request_path,
+                    grant_root=root / "approvals",
+                    auth_source=auth,
+                    wall_clock=lambda: FIXED_TIME,
+                )
+                self.assertEqual(grant["effective_prompt_policy_entry_id"], "openai_pretraining_recall_wave1.v1")
 
     def test_prior_waves_are_sha_bound_casefold_unique_and_exclusion_only(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -964,6 +1020,29 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
                 )
             self.assertEqual(second.commands, [])
 
+    def test_grant_issuance_rejects_unregistered_target_and_base_prompt(self) -> None:
+        for mutation in ("target", "prompt"):
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                os.chmod(root, 0o700)
+                _, auth, binary_sha = _live_material(root)
+                request, request_path = _build_request(root, binary_sha=binary_sha)
+                if mutation == "target":
+                    request["target"]["scope"] = "Find women in the synthetic lab."
+                else:
+                    prompt_raw = b"Find women researchers in the synthetic lab.\n"
+                    _write_private(Path(request["prompt_source"]["path"]), prompt_raw)
+                    request["prompt_source"]["sha256"] = _bytes_sha(prompt_raw)
+                _write_private(request_path, (canonical_json(request) + "\n").encode())
+                with self.assertRaisesRegex(PermissionError, "effective_prompt_target_not_approved"):
+                    issue_live_grant(
+                        request_path=request_path,
+                        grant_root=root / "approvals",
+                        auth_source=auth,
+                        wall_clock=lambda: FIXED_TIME,
+                    )
+                self.assertFalse((root / "approvals").exists())
+
     def test_missing_expired_or_wrong_scope_grant_never_spawns_and_deletes_auth(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -985,8 +1064,16 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
                     wall_clock=lambda: FIXED_TIME,
                 )
             self.assertEqual(fake.commands, [])
-            incomplete = next((root / "runtime-missing").iterdir())
-            self.assertFalse((incomplete / "ephemeral-home").exists())
+            self.assertFalse((root / "runtime-missing").exists())
+            self.assertEqual(
+                purge_expired_adaptive_runs(
+                    runtime_root=root / "runtime-missing",
+                    deletion_root=root / "missing-deletions",
+                    approval_root=root / "missing-approvals",
+                    wall_clock=lambda: FIXED_TIME + timedelta(days=2),
+                ),
+                [],
+            )
 
             approvals = root / "approvals"
             issue_live_grant(
@@ -999,7 +1086,7 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             changed = copy.deepcopy(request)
             changed["target"]["scope"] = "Changed after grant issuance."
             wrong_scope = FakeExecutor(MutableClock(), raw, spawn=True)
-            with self.assertRaisesRegex(PermissionError, "preissued_live_grant_invalid"):
+            with self.assertRaisesRegex(PermissionError, "effective_prompt_target_not_approved"):
                 _run_adaptive_wave(
                     request=changed,
                     execution_mode="live",
@@ -1025,6 +1112,49 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
                     wall_clock=lambda: FIXED_TIME + timedelta(seconds=61),
                 )
             self.assertEqual(wrong_scope.commands + expired.commands, [])
+            self.assertFalse((root / "runtime-scope").exists())
+            self.assertFalse((root / "runtime-expired").exists())
+
+    def test_preintent_binary_failure_leaves_no_run_root_or_purge_blocker(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            os.chmod(root, 0o700)
+            binary, auth, binary_sha = _live_material(root)
+            request, request_path = _build_request(root, binary_sha=binary_sha)
+            approvals = root / "approvals"
+            issue_live_grant(
+                request_path=request_path,
+                grant_root=approvals,
+                auth_source=auth,
+                wall_clock=lambda: FIXED_TIME,
+            )
+            binary.resolve().write_bytes(b"#!/bin/sh\nexit 1\n")
+            os.chmod(binary.resolve(), 0o700)
+            fake = FakeExecutor(MutableClock(), (canonical_json(_empty_result()) + "\n").encode(), spawn=True)
+            runtime_root = root / "runtime"
+            with self.assertRaisesRegex(AdaptiveWaveValidationError, "grok_binary_sha256_mismatch"):
+                _run_adaptive_wave(
+                    request=request,
+                    execution_mode="live",
+                    runtime_root=runtime_root,
+                    approval_root=approvals,
+                    binary=binary,
+                    auth_source=auth,
+                    executor=fake,
+                    monotonic=fake.clock,
+                    wall_clock=lambda: FIXED_TIME,
+                )
+            self.assertTrue(runtime_root.is_dir())
+            self.assertEqual(list(runtime_root.iterdir()), [])
+            self.assertEqual(
+                purge_expired_adaptive_runs(
+                    runtime_root=runtime_root,
+                    deletion_root=root / "deletions",
+                    approval_root=approvals,
+                    wall_clock=lambda: FIXED_TIME + timedelta(days=2),
+                ),
+                [],
+            )
 
     def test_non_json_prefix_is_retained_but_cannot_claim_completion(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -1269,7 +1399,13 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             executor = ProcessGroupExecutor()
-            script = "import signal,time; signal.signal(signal.SIGTERM, signal.SIG_IGN); time.sleep(30)"
+            readiness = root / "child-ready"
+            script = (
+                "import pathlib,signal,time; "
+                "signal.signal(signal.SIGTERM, signal.SIG_IGN); "
+                f"pathlib.Path({str(readiness)!r}).write_text('ready'); "
+                "time.sleep(30)"
+            )
             started = time.monotonic()
             result = executor(
                 [sys.executable, "-c", script],
@@ -1277,7 +1413,7 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
                 environment=dict(os.environ),
                 stdout_spool=root / "stdout",
                 stderr_spool=root / "stderr",
-                deadline_at=started + 0.5,
+                deadline_at=started + 2.0,
                 term_grace_ms=100,
                 kill_grace_ms=1_000,
                 max_stdout_bytes=1_000_000,
@@ -1293,8 +1429,10 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             )
             self.assertTrue(result.timed_out)
             self.assertTrue(result.term_sent)
-            self.assertTrue(result.kill_sent)
-            self.assertEqual(result.exit_code, -signal.SIGKILL)
+            self.assertTrue(readiness.is_file())
+            self.assertTrue(result.process_group_cleanup_confirmed)
+            self.assertIsNotNone(result.process_group_id)
+            self.assertFalse(ProcessGroupExecutor._group_alive(result.process_group_id))
             self.assertLess(time.monotonic() - started, 5)
 
     def test_atomic_publication_is_exclusive_and_pending_files_recover(self) -> None:
@@ -1596,6 +1734,45 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             self.assertEqual(receipt["session_proof"]["status"], "invalid")
             self.assertEqual(validate_operator_bundle(run_root, approval_root=approvals), [])
 
+    def test_live_transcript_rejects_protected_category_query_subjects(self) -> None:
+        def protected_query(updates: list[dict[str, Any]]) -> None:
+            updates[2]["params"]["update"]["rawOutput"]["input"] = canonical_json(
+                {"query": "OpenAI women pretraining researchers"}
+            )
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            os.chmod(root, 0o700)
+            binary, auth, binary_sha = _live_material(root)
+            request, request_path = _build_request(root, binary_sha=binary_sha)
+            approvals = root / "approvals"
+            issue_live_grant(
+                request_path=request_path,
+                grant_root=approvals,
+                auth_source=auth,
+                wall_clock=lambda: FIXED_TIME,
+            )
+            fake = FakeExecutor(
+                MutableClock(),
+                (canonical_json(_empty_result()) + "\n").encode(),
+                spawn=True,
+                session_mutator=protected_query,
+            )
+            receipt, run_root = _run_adaptive_wave(
+                request=request,
+                execution_mode="live",
+                runtime_root=root / "runtime",
+                approval_root=approvals,
+                binary=binary,
+                auth_source=auth,
+                executor=fake,
+                monotonic=fake.clock,
+                wall_clock=lambda: FIXED_TIME,
+            )
+            self.assertEqual(receipt["status"], "provider_evidence_invalid")
+            self.assertEqual(receipt["session_proof"]["status"], "invalid")
+            self.assertEqual(validate_operator_bundle(run_root, approval_root=approvals), [])
+
     def test_intent_precedes_auth_and_executor_exception_deletes_entire_ephemeral_home(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -1667,6 +1844,125 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             self.assertIsNone(recovered["approval"]["consumption_sha256"])
             self.assertFalse(recovered["process"]["process_spawn_attempted"])
             self.assertEqual(validate_operator_bundle(run_root, approval_root=approvals), [])
+
+    def test_post_executor_publication_failure_deletes_auth_immediately_and_recovers(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            os.chmod(root, 0o700)
+            binary, auth, binary_sha = _live_material(root)
+            request, request_path = _build_request(root, binary_sha=binary_sha)
+            approvals = root / "approvals"
+            issue_live_grant(
+                request_path=request_path,
+                grant_root=approvals,
+                auth_source=auth,
+                wall_clock=lambda: FIXED_TIME,
+            )
+            fake = FakeExecutor(MutableClock(), (canonical_json(_empty_result()) + "\n").encode(), spawn=True)
+            original_publish = runner._atomic_publish
+
+            def fail_raw_stdout(path: Path, value: bytes, *, pre_publish: Any = None) -> None:
+                if path.name == "raw.stdout":
+                    raise FileExistsError("synthetic_raw_stdout_conflict")
+                original_publish(path, value, pre_publish=pre_publish)
+
+            with mock.patch.object(runner, "_atomic_publish", side_effect=fail_raw_stdout):
+                with self.assertRaisesRegex(FileExistsError, "synthetic_raw_stdout_conflict"):
+                    _run_adaptive_wave(
+                        request=request,
+                        execution_mode="live",
+                        runtime_root=root / "runtime",
+                        approval_root=approvals,
+                        binary=binary,
+                        auth_source=auth,
+                        executor=fake,
+                        monotonic=fake.clock,
+                        wall_clock=lambda: FIXED_TIME,
+                    )
+            run_root = next((root / "runtime").iterdir())
+            self.assertTrue((run_root / "operator-intent.json").is_file())
+            self.assertFalse((run_root / "ephemeral-home").exists())
+            recovered = recover_incomplete_run(
+                run_root,
+                approval_root=approvals,
+                process_group_is_alive=lambda group: False,
+                wall_clock=lambda: FIXED_TIME + timedelta(minutes=5),
+            )
+            self.assertEqual(recovered["status"], "crash_recovered")
+            self.assertEqual(validate_operator_bundle(run_root, approval_root=approvals), [])
+
+    def test_session_tree_counts_directories_allows_one_socket_and_bounds_depth_and_deadline(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "session"
+            root.mkdir(mode=0o700)
+            for index in range(4):
+                (root / f"directory-{index}").mkdir(mode=0o700)
+            entries = runner._measure_session_tree(
+                root,
+                max_files=3,
+                max_file_bytes=1_000_000,
+                max_total_bytes=2_000_000,
+            )
+            self.assertEqual(entries.limit_kind, "session_tree_entries")
+            self.assertGreater(entries.entry_count, entries.file_count)
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "session"
+            root.mkdir(mode=0o700)
+            leader_path = root / "leader.sock"
+            leader = socket.socket(socket.AF_UNIX)
+            leader.bind(str(leader_path))
+            try:
+                allowed = runner._measure_session_tree(
+                    root,
+                    max_files=16,
+                    max_file_bytes=1_000_000,
+                    max_total_bytes=2_000_000,
+                    expected_socket_path=leader_path,
+                )
+                self.assertIsNone(allowed.limit_kind)
+                self.assertEqual(allowed.entry_count, 1)
+                unexpected_path = root / "unexpected.sock"
+                unexpected = socket.socket(socket.AF_UNIX)
+                unexpected.bind(str(unexpected_path))
+                try:
+                    rejected = runner._measure_session_tree(
+                        root,
+                        max_files=16,
+                        max_file_bytes=1_000_000,
+                        max_total_bytes=2_000_000,
+                        expected_socket_path=leader_path,
+                    )
+                    self.assertEqual(rejected.limit_kind, "session_tree_unexpected_socket")
+                finally:
+                    unexpected.close()
+            finally:
+                leader.close()
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "session"
+            nested = root
+            for name in ("one", "two", "three"):
+                nested /= name
+                nested.mkdir(mode=0o700, parents=True)
+            depth = runner._measure_session_tree(
+                root,
+                max_files=16,
+                max_file_bytes=1_000_000,
+                max_total_bytes=2_000_000,
+                max_depth=2,
+            )
+            self.assertEqual(depth.limit_kind, "session_tree_depth")
+            deadline_clock = MutableClock()
+            deadline = runner._measure_session_tree(
+                root,
+                max_files=16,
+                max_file_bytes=1_000_000,
+                max_total_bytes=2_000_000,
+                deadline_at=deadline_clock(),
+                monotonic=deadline_clock,
+            )
+            self.assertEqual(deadline.limit_kind, "session_tree_scan_deadline")
 
     def test_session_tree_ceiling_is_a_technical_failure_and_home_is_deleted(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
