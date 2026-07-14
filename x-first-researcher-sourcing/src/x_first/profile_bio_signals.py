@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import inspect
 import json
 import re
 import unicodedata
@@ -18,8 +19,8 @@ from typing import Any
 from urllib.parse import urlsplit
 
 POLICY_SCHEMA_VERSION = "x.profile.bio_signal.policy.v1"
-POLICY_VERSION = "profile-bio-signal-v1.4"
-CANONICAL_POLICY_SHA256 = "3b6e7bf7df7f267ae77caf7c7fb92482ccba717271ab95e942f2f47710a0e1d7"
+POLICY_VERSION = "profile-bio-signal-v1.5"
+CANONICAL_POLICY_SHA256 = "f3a055002b87d02dd9d63eb2d346661f6698263516c29e8c14b65dfe57b45341"
 BUNDLE_SCHEMA_VERSION = "x.profile.bio_evidence.bundle.v1"
 ANALYSIS_SCHEMA_VERSION = "x.profile.bio_signal.analysis.v1"
 
@@ -31,32 +32,19 @@ PROPOSAL_KINDS = (
 AFFILIATION_RELATIONS = ("current", "previous")
 EXTRACTOR_MODES = ("offline_fixture",)
 
-OWNERSHIP_CONTINUATION_CLASSES = (
-    "account_identifier",
-    "ownership_noun",
-    "parenthetical_note",
-    "audience_count",
+GRAMMAR_MANIFEST_VERSION = "profile-bio-positive-regex-ast-v1"
+GRAMMAR_RUNTIME_ID = "profile-bio-policy-regex-interpreter-v1"
+_GRAMMAR_RUNTIME_FUNCTION_NAMES = (
+    "_normalize_claim_window",
+    "_claim_suffix",
+    "_fullmatch_policy_pattern",
+    "_policy_note_allowed",
+    "_claim_continuation_allowed",
+    "_contains_closed_subject_claim",
+    "_extract_policy_handles",
+    "_match_affiliation_positive_grammar",
+    "_parse_affiliation_claim",
 )
-OWNERSHIP_PARENTHETICAL_NOTES = ("长文首发",)
-AFFILIATION_POSITIVE_GRAMMARS = {
-    "current": (
-        "head_of_role",
-        "founder_at_handle",
-        "researcher_at_handle",
-        "engineer_at_handle",
-        "employed_at_cn_handle",
-        "works_at_cn_handle",
-    ),
-    "previous": (
-        "prev_handles",
-        "previously_handles",
-        "formerly_handles",
-        "former_role",
-        "former_cn_handles",
-        "previous_employed_at_cn_handle",
-        "prior_employed_at_cn_handle",
-    ),
-}
 
 _ULID = r"[0-9A-HJKMNP-TV-Z]{26}"
 _SUBJECT_REF_RE = re.compile(rf"pp_x_{_ULID}")
@@ -64,19 +52,9 @@ _SNAPSHOT_ID_RE = re.compile(rf"xps_{_ULID}")
 _PROPOSAL_ID_RE = re.compile(rf"xbp_{_ULID}")
 _PLATFORM_USER_ID_RE = re.compile(r"[1-9][0-9]{1,24}")
 _HANDLE_RE = re.compile(r"[A-Za-z0-9_]{1,15}")
-_HANDLE_MENTION_RE = re.compile(r"(?<![A-Za-z0-9_])@([A-Za-z0-9_]{1,15})(?![A-Za-z0-9_])")
-_ACCOUNT_IDENTIFIER_CONTINUATION_RE = re.compile(r"[a-z0-9_][a-z0-9_.-]{1,79}(?:\s*\((?P<note>[^()\r\n]{1,80})\))?")
-_OWNERSHIP_NOUN_CONTINUATION_RE = re.compile(r"(?:账号|账户|account|channel)(?:\s*\((?P<note>[^()\r\n]{1,80})\))?")
-_PARENTHETICAL_CONTINUATION_RE = re.compile(r"\((?P<note>[^()\r\n]{1,80})\)")
-_AUDIENCE_COUNT_TOKEN = r"(?:[0-9]+(?:\.[0-9]+)?(?:k|m|万|千)?|[零〇一二两三四五六七八九十百千万亿]+)"
-_AUDIENCE_CONTINUATION_RE = re.compile(
-    rf"(?:用户数{_AUDIENCE_COUNT_TOKEN}|{_AUDIENCE_COUNT_TOKEN}(?:粉丝|关注者|followers?))"
-)
-_ROLE_BODY = r"[A-Za-z0-9\u3400-\u4dbf\u4e00-\u9fff][A-Za-z0-9\u3400-\u4dbf\u4e00-\u9fff &+./-]{0,79}"
 _SHA256_RE = re.compile(r"[0-9a-f]{64}")
 _CANONICAL_TIME_RE = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z")
 _HAN_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]")
-_REJECTED_CLAIM_UNICODE_CATEGORIES = frozenset({"Cc", "Cf"})
 
 _TOP_LEVEL_KEYS = {
     "schema_version",
@@ -197,18 +175,15 @@ def _canonical_time(value: Any) -> bool:
     return parsed.isoformat(timespec="milliseconds").replace("+00:00", "Z") == value
 
 
-def _clause_handles(value: str) -> set[str]:
-    return {match.group(1).casefold() for match in _HANDLE_MENTION_RE.finditer(value)}
-
-
-def _normalize_claim_window(value: Any) -> str | None:
+def _normalize_claim_window(value: Any, grammar_manifest: dict[str, Any]) -> str | None:
     """Return a compatibility-normalized claim only when every token is reviewable."""
     if not isinstance(value, str):
         return None
     normalized = unicodedata.normalize("NFKC", value)
     if normalized != normalized.strip():
         return None
-    if any(unicodedata.category(character) in _REJECTED_CLAIM_UNICODE_CATEGORIES for character in normalized):
+    rejected_categories = set(grammar_manifest["rejected_unicode_categories"])
+    if any(unicodedata.category(character) in rejected_categories for character in normalized):
         return None
     return normalized
 
@@ -222,23 +197,42 @@ def _claim_suffix(claim: str, rendered_prefix: str) -> str | None:
     return suffix
 
 
-def _claim_continuation_allowed(continuation: str, positive_grammar: dict[str, Any]) -> bool:
-    if not continuation:
+def _fullmatch_policy_pattern(
+    value: str,
+    pattern: str,
+    *,
+    case_insensitive: bool,
+) -> re.Match[str] | None:
+    flags = re.IGNORECASE if case_insensitive else 0
+    return re.fullmatch(pattern, value, flags=flags)
+
+
+def _policy_note_allowed(matched: re.Match[str], continuation: dict[str, Any]) -> bool:
+    note_group = continuation["note_group"]
+    if note_group is None:
         return True
-    patterns = {
-        "account_identifier": _ACCOUNT_IDENTIFIER_CONTINUATION_RE,
-        "ownership_noun": _OWNERSHIP_NOUN_CONTINUATION_RE,
-        "parenthetical_note": _PARENTHETICAL_CONTINUATION_RE,
-        "audience_count": _AUDIENCE_CONTINUATION_RE,
-    }
-    folded = continuation.casefold()
-    allowed_notes = {value.casefold() for value in positive_grammar["parenthetical_note_values"]}
-    for class_name in positive_grammar["continuation_classes"]:
-        matched = patterns[class_name].fullmatch(folded)
-        if matched is None:
-            continue
-        note = matched.groupdict().get("note")
-        if note is None or note.casefold() in allowed_notes:
+    note = matched.groupdict().get(note_group)
+    if note is None:
+        return True
+    return note.casefold() in {value.casefold() for value in continuation["note_values"]}
+
+
+def _claim_continuation_allowed(
+    continuation: str,
+    continuation_ids: list[str],
+    ownership_manifest: dict[str, Any],
+    *,
+    case_insensitive: bool,
+) -> bool:
+    continuations = {item["continuation_id"]: item for item in ownership_manifest["continuations"]}
+    for continuation_id in continuation_ids:
+        definition = continuations[continuation_id]
+        matched = _fullmatch_policy_pattern(
+            continuation,
+            definition["pattern"],
+            case_insensitive=case_insensitive,
+        )
+        if matched is not None and _policy_note_allowed(matched, definition):
             return True
     return False
 
@@ -246,76 +240,74 @@ def _claim_continuation_allowed(continuation: str, positive_grammar: dict[str, A
 def _contains_closed_subject_claim(
     value: str,
     ecosystem: dict[str, Any],
-    positive_grammar: dict[str, Any],
+    grammar_manifest: dict[str, Any],
 ) -> bool:
-    claim = _normalize_claim_window(value)
+    claim = _normalize_claim_window(value, grammar_manifest)
     if claim is None:
         return False
+    ownership_manifest = grammar_manifest["ownership"]
+    case_insensitive = grammar_manifest["case_insensitive"]
+    claim_forms = {item["form_id"]: item for item in ownership_manifest["claim_forms"]}
     for alias in ecosystem["aliases"]:
         normalized_alias = unicodedata.normalize("NFKC", alias)
-        for template in ecosystem["subject_claim_templates"]:
-            rendered = unicodedata.normalize("NFKC", template.replace("{alias}", alias))
+        for form_id in ecosystem["claim_form_ids"]:
+            form = claim_forms[form_id]
+            rendered = unicodedata.normalize("NFKC", form["template"].replace("{alias}", alias))
             continuation = _claim_suffix(claim, rendered)
             if continuation is None:
                 continue
-            if _claim_continuation_allowed(continuation, positive_grammar):
+            if not continuation and form["allow_empty"]:
                 return True
-        if not ecosystem["bare_alias_identifier_claim"]:
-            continue
+            if continuation and _claim_continuation_allowed(
+                continuation,
+                form["continuation_ids"],
+                ownership_manifest,
+                case_insensitive=case_insensitive,
+            ):
+                return True
         continuation = _claim_suffix(claim, normalized_alias)
         if continuation and _claim_continuation_allowed(
             continuation,
-            {
-                **positive_grammar,
-                "continuation_classes": [positive_grammar["bare_alias_continuation_class"]],
-            },
+            ecosystem["bare_alias_continuation_ids"],
+            ownership_manifest,
+            case_insensitive=case_insensitive,
         ):
             return True
     return False
 
 
+def _extract_policy_handles(claim: str, affiliation_manifest: dict[str, Any]) -> set[str]:
+    pattern = re.compile(
+        affiliation_manifest["handle_mention_pattern"],
+        flags=re.IGNORECASE if affiliation_manifest["case_insensitive"] else 0,
+    )
+    return {match.group("handle").casefold() for match in pattern.finditer(claim)}
+
+
 def _match_affiliation_positive_grammar(
-    grammar_id: str,
+    grammar: dict[str, Any],
     claim: str,
     handle: str,
+    affiliation_manifest: dict[str, Any],
 ) -> tuple[bool, str | None]:
-    escaped_handle = re.escape(handle)
-    multi_handle_prefixes = {
-        "prev_handles": "Prev",
-        "previously_handles": "Previously",
-        "formerly_handles": "Formerly",
-        "former_cn_handles": "曾任",
-    }
-    if grammar_id in multi_handle_prefixes:
-        prefix = re.escape(multi_handle_prefixes[grammar_id])
-        matched = re.fullmatch(
-            rf"{prefix}(?: +@[A-Za-z0-9_]{{1,15}}){{1,8}}",
-            claim,
-            flags=re.IGNORECASE,
-        )
-        return (
-            matched is not None and handle.casefold() in _clause_handles(claim),
-            None,
-        )
-
-    patterns = {
-        "head_of_role": rf"(?P<role>Head +of +{_ROLE_BODY}) +@{escaped_handle}",
-        "founder_at_handle": rf"(?P<role>Founder) +at +@{escaped_handle}",
-        "researcher_at_handle": rf"(?P<role>Researcher) +at +@{escaped_handle}",
-        "engineer_at_handle": rf"(?P<role>Engineer) +at +@{escaped_handle}",
-        "employed_at_cn_handle": rf"任职于 +@{escaped_handle}",
-        "works_at_cn_handle": rf"就职于 +@{escaped_handle}",
-        "former_role": rf"Former +(?P<role>{_ROLE_BODY}) +@{escaped_handle}",
-        "previous_employed_at_cn_handle": rf"前任职于 +@{escaped_handle}",
-        "prior_employed_at_cn_handle": rf"此前任职于 +@{escaped_handle}",
-    }
-    pattern = patterns.get(grammar_id)
-    if pattern is None:
-        return False, None
-    matched = re.fullmatch(pattern, claim, flags=re.IGNORECASE)
+    matched = _fullmatch_policy_pattern(
+        claim,
+        grammar["pattern"],
+        case_insensitive=affiliation_manifest["case_insensitive"],
+    )
     if matched is None:
         return False, None
-    return True, matched.groupdict().get("role")
+    binding = grammar["handle_binding"]
+    if binding == "named_group_equals":
+        bound = matched.groupdict().get("handle")
+        handle_matches = bound is not None and bound.casefold() == handle.casefold()
+    elif binding == "mention_set_contains":
+        handle_matches = handle.casefold() in _extract_policy_handles(claim, affiliation_manifest)
+    else:
+        return False, None
+    role_group = grammar["role_group"]
+    role_span = matched.groupdict().get(role_group) if role_group is not None else None
+    return handle_matches, role_span
 
 
 def _parse_affiliation_claim(
@@ -323,21 +315,36 @@ def _parse_affiliation_claim(
     *,
     handle: str,
     relation: str,
-    grammar_registry: list[dict[str, Any]],
+    grammar_manifest: dict[str, Any],
 ) -> tuple[str, str | None] | None:
-    claim = _normalize_claim_window(value)
+    claim = _normalize_claim_window(value, grammar_manifest)
     if claim is None:
         return None
-    grammar_ids = next(
-        (item["grammar_ids"] for item in grammar_registry if item["relation"] == relation),
+    affiliation_manifest = grammar_manifest["affiliation"]
+    grammars = next(
+        (item["grammars"] for item in affiliation_manifest["relations"] if item["relation"] == relation),
         [],
     )
     matches: list[tuple[str, str | None]] = []
-    for grammar_id in grammar_ids:
-        matched, role_span = _match_affiliation_positive_grammar(grammar_id, claim, handle)
+    for grammar in grammars:
+        matched, role_span = _match_affiliation_positive_grammar(
+            grammar,
+            claim,
+            handle,
+            affiliation_manifest,
+        )
         if matched:
-            matches.append((grammar_id, role_span))
+            matches.append((grammar["grammar_id"], role_span))
     return matches[0] if len(matches) == 1 else None
+
+
+def grammar_runtime_implementation_sha256() -> str | None:
+    """Hash the loaded grammar interpreter; source drift or monkeypatching fails closed."""
+    try:
+        parts = [inspect.getsource(globals()[name]).strip() for name in _GRAMMAR_RUNTIME_FUNCTION_NAMES]
+    except (KeyError, OSError, TypeError):
+        return None
+    return text_sha256("\n\n".join(parts))
 
 
 def _valid_profile_url(value: Any, *, current_handle: Any) -> bool:
@@ -360,10 +367,12 @@ def _valid_profile_url(value: Any, *, current_handle: Any) -> bool:
         return False
     if not isinstance(current_handle, str) or _HANDLE_RE.fullmatch(current_handle) is None:
         return False
-    host = parsed.hostname.casefold()
+    host = parsed.hostname
     parts = [part for part in parsed.path.split("/") if part]
     return (
-        host.endswith(".invalid")
+        value.startswith("https://")
+        and host.endswith(".invalid")
+        and parsed.netloc == host
         and bool(parts)
         and all(re.fullmatch(r"[A-Za-z0-9_-]+", part) is not None for part in parts)
         and parts[-1].casefold() == current_handle.casefold()
@@ -430,8 +439,8 @@ def validate_policy(policy: Any) -> list[str]:
         "policy_version",
         "proposal_kinds",
         "china_ecosystems",
-        "ownership_positive_grammar",
-        "affiliation_positive_grammars",
+        "positive_grammar_manifest",
+        "grammar_runtime_binding",
         "limits",
         "forbidden_proposal_fields",
     }
@@ -452,6 +461,159 @@ def validate_policy(policy: Any) -> list[str]:
     if policy["proposal_kinds"] != list(PROPOSAL_KINDS):
         _append(errors, "$.proposal_kinds", "must equal the closed registry")
 
+    runtime_binding = policy["grammar_runtime_binding"]
+    if _exact_keys(
+        runtime_binding,
+        {"runtime_id", "implementation_sha256"},
+        path="$.grammar_runtime_binding",
+        errors=errors,
+    ):
+        if runtime_binding["runtime_id"] != GRAMMAR_RUNTIME_ID:
+            _append(errors, "$.grammar_runtime_binding.runtime_id", "unsupported")
+        loaded_digest = grammar_runtime_implementation_sha256()
+        if loaded_digest is None or runtime_binding["implementation_sha256"] != loaded_digest:
+            _append(
+                errors,
+                "$.grammar_runtime_binding.implementation_sha256",
+                "loaded grammar interpreter does not match the policy-pinned implementation",
+            )
+
+    manifest = policy["positive_grammar_manifest"]
+    manifest_keys = {
+        "manifest_version",
+        "regex_dialect",
+        "case_insensitive",
+        "rejected_unicode_categories",
+        "ownership",
+        "affiliation",
+    }
+    if not _exact_keys(manifest, manifest_keys, path="$.positive_grammar_manifest", errors=errors):
+        return errors
+    if manifest["manifest_version"] != GRAMMAR_MANIFEST_VERSION:
+        _append(errors, "$.positive_grammar_manifest.manifest_version", "unsupported")
+    if manifest["regex_dialect"] != "python-re-fullmatch-v1":
+        _append(errors, "$.positive_grammar_manifest.regex_dialect", "unsupported")
+    if manifest["case_insensitive"] is not True:
+        _append(errors, "$.positive_grammar_manifest.case_insensitive", "must be true")
+    if manifest["rejected_unicode_categories"] != ["Cc", "Cf"]:
+        _append(errors, "$.positive_grammar_manifest.rejected_unicode_categories", "must equal ['Cc', 'Cf']")
+
+    ownership = manifest["ownership"]
+    ownership_keys = {"mode", "claim_forms", "continuations"}
+    claim_form_ids: set[str] = set()
+    continuation_ids: set[str] = set()
+    if _exact_keys(ownership, ownership_keys, path="$.positive_grammar_manifest.ownership", errors=errors):
+        if ownership["mode"] != "single_window_positive_fullmatch_v2":
+            _append(errors, "$.positive_grammar_manifest.ownership.mode", "unsupported")
+        for index, continuation in enumerate(ownership["continuations"]):
+            item_path = f"$.positive_grammar_manifest.ownership.continuations[{index}]"
+            if not _exact_keys(
+                continuation,
+                {"continuation_id", "ast_node", "pattern", "note_group", "note_values"},
+                path=item_path,
+                errors=errors,
+            ):
+                continue
+            continuation_id = continuation["continuation_id"]
+            if not isinstance(continuation_id, str) or not continuation_id:
+                _append(errors, f"{item_path}.continuation_id", "invalid")
+            elif continuation_id in continuation_ids:
+                _append(errors, f"{item_path}.continuation_id", "duplicate")
+            continuation_ids.add(str(continuation_id))
+            if continuation["ast_node"] != "regex_fullmatch":
+                _append(errors, f"{item_path}.ast_node", "unsupported")
+            try:
+                compiled = re.compile(continuation["pattern"], flags=re.IGNORECASE)
+            except (TypeError, re.error):
+                _append(errors, f"{item_path}.pattern", "invalid")
+                continue
+            note_group = continuation["note_group"]
+            if note_group is not None and note_group not in compiled.groupindex:
+                _append(errors, f"{item_path}.note_group", "must name a pattern group")
+            if note_group is None and continuation["note_values"]:
+                _append(errors, f"{item_path}.note_values", "requires note_group")
+        for index, form in enumerate(ownership["claim_forms"]):
+            item_path = f"$.positive_grammar_manifest.ownership.claim_forms[{index}]"
+            if not _exact_keys(
+                form,
+                {"form_id", "template", "allow_empty", "continuation_ids"},
+                path=item_path,
+                errors=errors,
+            ):
+                continue
+            form_id = form["form_id"]
+            if not isinstance(form_id, str) or not form_id:
+                _append(errors, f"{item_path}.form_id", "invalid")
+            elif form_id in claim_form_ids:
+                _append(errors, f"{item_path}.form_id", "duplicate")
+            claim_form_ids.add(str(form_id))
+            if not isinstance(form["template"], str) or form["template"].count("{alias}") != 1:
+                _append(errors, f"{item_path}.template", "must contain exactly one {alias}")
+            if not isinstance(form["allow_empty"], bool):
+                _append(errors, f"{item_path}.allow_empty", "must be boolean")
+            if not isinstance(form["continuation_ids"], list) or any(
+                item not in continuation_ids for item in form["continuation_ids"]
+            ):
+                _append(errors, f"{item_path}.continuation_ids", "must reference declared continuations")
+
+    affiliation = manifest["affiliation"]
+    affiliation_keys = {"case_insensitive", "handle_mention_pattern", "relations"}
+    if _exact_keys(affiliation, affiliation_keys, path="$.positive_grammar_manifest.affiliation", errors=errors):
+        try:
+            handle_pattern = re.compile(
+                affiliation["handle_mention_pattern"],
+                flags=re.IGNORECASE if affiliation["case_insensitive"] else 0,
+            )
+        except (TypeError, re.error):
+            _append(errors, "$.positive_grammar_manifest.affiliation.handle_mention_pattern", "invalid")
+            handle_pattern = None
+        if handle_pattern is not None and "handle" not in handle_pattern.groupindex:
+            _append(
+                errors,
+                "$.positive_grammar_manifest.affiliation.handle_mention_pattern",
+                "must expose the handle group",
+            )
+        relations = affiliation["relations"]
+        if not isinstance(relations, list) or [item.get("relation") for item in relations] != list(
+            AFFILIATION_RELATIONS
+        ):
+            _append(errors, "$.positive_grammar_manifest.affiliation.relations", "must equal relation registry")
+        else:
+            grammar_ids: set[str] = set()
+            for relation_index, relation_item in enumerate(relations):
+                relation_path = f"$.positive_grammar_manifest.affiliation.relations[{relation_index}]"
+                if not _exact_keys(relation_item, {"relation", "grammars"}, path=relation_path, errors=errors):
+                    continue
+                for grammar_index, grammar in enumerate(relation_item["grammars"]):
+                    item_path = f"{relation_path}.grammars[{grammar_index}]"
+                    if not _exact_keys(
+                        grammar,
+                        {"grammar_id", "ast_node", "pattern", "handle_binding", "role_group"},
+                        path=item_path,
+                        errors=errors,
+                    ):
+                        continue
+                    grammar_id = grammar["grammar_id"]
+                    if not isinstance(grammar_id, str) or not grammar_id:
+                        _append(errors, f"{item_path}.grammar_id", "invalid")
+                    elif grammar_id in grammar_ids:
+                        _append(errors, f"{item_path}.grammar_id", "duplicate")
+                    grammar_ids.add(str(grammar_id))
+                    if grammar["ast_node"] != "regex_fullmatch":
+                        _append(errors, f"{item_path}.ast_node", "unsupported")
+                    if grammar["handle_binding"] not in {"named_group_equals", "mention_set_contains"}:
+                        _append(errors, f"{item_path}.handle_binding", "unsupported")
+                    try:
+                        compiled = re.compile(grammar["pattern"], flags=re.IGNORECASE)
+                    except (TypeError, re.error):
+                        _append(errors, f"{item_path}.pattern", "invalid")
+                        continue
+                    if grammar["handle_binding"] == "named_group_equals" and "handle" not in compiled.groupindex:
+                        _append(errors, f"{item_path}.pattern", "must expose the handle group")
+                    role_group = grammar["role_group"]
+                    if role_group is not None and role_group not in compiled.groupindex:
+                        _append(errors, f"{item_path}.role_group", "must name a pattern group")
+
     ecosystems = policy["china_ecosystems"]
     if not isinstance(ecosystems, list) or not ecosystems:
         _append(errors, "$.china_ecosystems", "must be a non-empty array")
@@ -461,7 +623,7 @@ def validate_policy(policy: Any) -> list[str]:
         item_path = f"$.china_ecosystems[{index}]"
         if not _exact_keys(
             item,
-            {"ecosystem_id", "aliases", "subject_claim_templates", "bare_alias_identifier_claim"},
+            {"ecosystem_id", "aliases", "claim_form_ids", "bare_alias_continuation_ids"},
             path=item_path,
             errors=errors,
         ):
@@ -472,65 +634,34 @@ def validate_policy(policy: Any) -> list[str]:
         elif ecosystem_id in ecosystem_ids:
             _append(errors, f"{item_path}.ecosystem_id", "duplicate")
         ecosystem_ids.add(str(ecosystem_id))
-        for field in ("aliases", "subject_claim_templates"):
-            values = item[field]
-            if (
-                not isinstance(values, list)
-                or not values
-                or any(not isinstance(value, str) or not value.strip() for value in values)
-                or len({_normalize_text(value) for value in values}) != len(values)
-            ):
-                _append(errors, f"{item_path}.{field}", "must contain unique non-empty strings")
-        templates = item["subject_claim_templates"]
-        if isinstance(templates, list) and any(
-            template.count("{alias}") != 1 for template in templates if isinstance(template, str)
+        aliases = item["aliases"]
+        if (
+            not isinstance(aliases, list)
+            or not aliases
+            or any(not isinstance(value, str) or not value.strip() for value in aliases)
+            or len({_normalize_text(value) for value in aliases}) != len(aliases)
         ):
-            _append(errors, f"{item_path}.subject_claim_templates", "each template must contain one {alias}")
-        if not isinstance(item["bare_alias_identifier_claim"], bool):
-            _append(errors, f"{item_path}.bare_alias_identifier_claim", "must be boolean")
-
-    ownership_grammar = policy["ownership_positive_grammar"]
-    if _exact_keys(
-        ownership_grammar,
-        {
-            "mode",
-            "continuation_classes",
-            "bare_alias_continuation_class",
-            "parenthetical_note_values",
-            "rejected_unicode_categories",
-        },
-        path="$.ownership_positive_grammar",
-        errors=errors,
-    ):
-        if ownership_grammar["mode"] != "single_window_positive_fullmatch_v1":
-            _append(errors, "$.ownership_positive_grammar.mode", "unsupported")
-        if ownership_grammar["continuation_classes"] != list(OWNERSHIP_CONTINUATION_CLASSES):
-            _append(errors, "$.ownership_positive_grammar.continuation_classes", "must equal the closed registry")
-        if ownership_grammar["bare_alias_continuation_class"] != "account_identifier":
-            _append(errors, "$.ownership_positive_grammar.bare_alias_continuation_class", "unsupported")
-        if ownership_grammar["parenthetical_note_values"] != list(OWNERSHIP_PARENTHETICAL_NOTES):
-            _append(errors, "$.ownership_positive_grammar.parenthetical_note_values", "must equal the closed registry")
-        if ownership_grammar["rejected_unicode_categories"] != sorted(_REJECTED_CLAIM_UNICODE_CATEGORIES):
-            _append(errors, "$.ownership_positive_grammar.rejected_unicode_categories", "must equal ['Cc', 'Cf']")
-
-    affiliation_grammars = policy["affiliation_positive_grammars"]
-    if not isinstance(affiliation_grammars, list) or [
-        item.get("relation") for item in affiliation_grammars if isinstance(item, dict)
-    ] != list(AFFILIATION_RELATIONS):
-        _append(errors, "$.affiliation_positive_grammars", "must equal the closed relation registry")
-    else:
-        for index, item in enumerate(affiliation_grammars):
-            item_path = f"$.affiliation_positive_grammars[{index}]"
-            if not _exact_keys(item, {"relation", "grammar_ids"}, path=item_path, errors=errors):
-                continue
-            relation = item["relation"]
-            if item["grammar_ids"] != list(AFFILIATION_POSITIVE_GRAMMARS[relation]):
-                _append(errors, f"{item_path}.grammar_ids", "must equal the closed positive grammar registry")
+            _append(errors, f"{item_path}.aliases", "must contain unique non-empty strings")
+        if (
+            not isinstance(item["claim_form_ids"], list)
+            or not item["claim_form_ids"]
+            or any(form_id not in claim_form_ids for form_id in item["claim_form_ids"])
+        ):
+            _append(errors, f"{item_path}.claim_form_ids", "must reference declared ownership claim forms")
+        if not isinstance(item["bare_alias_continuation_ids"], list) or any(
+            continuation_id not in continuation_ids for continuation_id in item["bare_alias_continuation_ids"]
+        ):
+            _append(
+                errors,
+                f"{item_path}.bare_alias_continuation_ids",
+                "must reference declared ownership continuations",
+            )
 
     limits = policy["limits"]
     limit_keys = {
         "max_bio_characters",
         "max_display_alias_characters",
+        "max_extractor_version_characters",
         "max_proposals",
         "max_excerpt_characters",
         "max_role_text_characters",
@@ -657,8 +788,7 @@ def validate_evidence_bundle(bundle: Any, *, policy: Any) -> list[str]:
     proposal_ids: set[str] = set()
     affiliation_signatures: set[tuple[str, str]] = set()
     ecosystem_by_id = {item["ecosystem_id"]: item for item in policy["china_ecosystems"]}
-    ownership_positive_grammar = policy["ownership_positive_grammar"]
-    affiliation_positive_grammars = policy["affiliation_positive_grammars"]
+    positive_grammar_manifest = policy["positive_grammar_manifest"]
 
     for index, proposal in enumerate(proposals):
         path = f"$.proposals[{index}]"
@@ -698,7 +828,11 @@ def validate_evidence_bundle(bundle: Any, *, policy: Any) -> list[str]:
         if _exact_keys(extractor, _EXTRACTOR_KEYS, path=f"{path}.extractor", errors=errors):
             if extractor["mode"] != retrieval_mode:
                 _append(errors, f"{path}.extractor.mode", "must match snapshot retrieval mode")
-            if not isinstance(extractor["version"], str) or not extractor["version"].strip():
+            if (
+                not isinstance(extractor["version"], str)
+                or not extractor["version"].strip()
+                or len(extractor["version"]) > policy["limits"]["max_extractor_version_characters"]
+            ):
                 _append(errors, f"{path}.extractor.version", "invalid")
             if extractor["tool_call_id"] is not None:
                 _append(errors, f"{path}.extractor.tool_call_id", "v1 fixture tool call must be null")
@@ -741,7 +875,7 @@ def validate_evidence_bundle(bundle: Any, *, policy: Any) -> list[str]:
             if ecosystem is None:
                 _append(errors, f"{path}.details.ecosystem_id", "unregistered")
             else:
-                if not _contains_closed_subject_claim(excerpt, ecosystem, ownership_positive_grammar):
+                if not _contains_closed_subject_claim(excerpt, ecosystem, positive_grammar_manifest):
                     _append(errors, f"{path}.excerpt", "does not fully match the closed positive ownership grammar")
         elif kind == "organization_mention":
             relation = details["affiliation_relation"]
@@ -764,7 +898,7 @@ def validate_evidence_bundle(bundle: Any, *, policy: Any) -> list[str]:
                     excerpt,
                     handle=handle,
                     relation=relation,
-                    grammar_registry=affiliation_positive_grammars,
+                    grammar_manifest=positive_grammar_manifest,
                 )
                 if handle_is_valid and relation_is_valid
                 else None
@@ -773,7 +907,9 @@ def validate_evidence_bundle(bundle: Any, *, policy: Any) -> list[str]:
                 _append(errors, f"{path}.excerpt", "must fully match one declared positive affiliation grammar")
             else:
                 _, parsed_role_span = parsed_claim
-                role_window = _normalize_claim_window(role_text) if role_text is not None else None
+                role_window = (
+                    _normalize_claim_window(role_text, positive_grammar_manifest) if role_text is not None else None
+                )
                 role_text_is_bounded = role_text is None or (
                     isinstance(role_text, str)
                     and bool(role_text)

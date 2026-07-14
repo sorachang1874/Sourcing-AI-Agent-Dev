@@ -17,7 +17,7 @@
       "const": "x.profile.bio_evidence.bundle.v1"
     },
     "policy_version": {
-      "const": "profile-bio-signal-v1.4"
+      "const": "profile-bio-signal-v1.5"
     },
     "subject": {
       "$ref": "#/$defs/subject"
@@ -96,7 +96,7 @@
           "type": "string",
           "format": "uri",
           "maxLength": 300,
-          "pattern": "^https://[A-Za-z0-9.-]+\\.invalid/[A-Za-z0-9/_-]+$"
+          "pattern": "^https://[a-z0-9.-]+\\.invalid/[A-Za-z0-9/_-]+$"
         },
         "current_handle": {
           "type": "string",

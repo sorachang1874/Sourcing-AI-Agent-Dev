@@ -49,7 +49,7 @@ not import `sourcing_agent`, and fixture output cannot write canonical person/ev
 | --- | --- |
 | AI-native Grok/X retrieval | Intended transport is hosted `x_search`; installed CLI support is evidenced offline, live access is not yet proven |
 | Full Post metadata | Stage 1 requests stable post id, URL, author id, timestamp and a bounded excerpt; it deliberately does not retain a full body |
-| Bio and mention enrichment | Fixture-only deterministic baseline v1.4 separates observed Chinese content, full-window positive-grammar China-ecosystem leads, exact positive current/previous organization proposals and graph edges. It is a conservative regression oracle/guardrail, not the recall classifier; the Luna-native semantic-review v2 lane is the primary open-text path. Both reject native/live profile claims until a separately reviewed profile-capability trust root exists |
+| Bio and mention enrichment | Fixture-only deterministic baseline v1.5 separates observed Chinese content, full-window positive-grammar China-ecosystem leads, exact positive current/previous organization proposals and graph edges. Its complete regex-AST and template-specific continuation mapping are policy/hash pinned, and the loaded grammar interpreter is implementation-digest bound. It is a conservative regression oracle/guardrail, not the recall classifier; the Luna-native semantic-review v2 lane is the primary open-text path. Both reject native/live profile claims until a separately reviewed profile-capability trust root exists |
 | Region-experience classification | Hardened evidence-backed classifier is committed; non-author follow-up review is still pending |
 | Multiple query tasks | Synthetic Stage 2 fixtures cover eight query families; no live scheduler exists yet |
 | Large asynchronous search | Not implemented. Official xAI Batch/Responses APIs are the planned scale transport and require supported API credentials |
@@ -59,11 +59,14 @@ subject-authored Bio may produce separate proposed evidence: explicit role/organ
 mentions, observed language, and China-ecosystem activity such as a declared public channel. Only explicit physical
 work/education/research/residence evidence can support a physical region-experience label; ecosystem/language evidence
 remains a verification lead and is measured separately for incremental recall and false positives.
-The executable Bio v1 accepts only `.invalid` fixture profiles, null tool receipts, and canonical policy v1.4. It has
+The executable Bio v1 accepts only canonical lowercase-scheme/lowercase-host `.invalid` fixture profiles, null tool
+receipts, extractor versions of at most 100 characters, and canonical policy v1.5. It has
 no negative-phrase denylist: ownership and current/previous affiliation must full-match one versioned positive grammar
 after NFKC normalization. Any unconsumed prefix, suffix, second clause, arbitrary parenthetical note, or `Cc`/`Cf`
-character fails closed. A role is accepted only when it equals the exact bounded role span parsed by a role-bearing
-grammar; handles, handle prefixes, pure prepositions, and free substrings are invalid. This deliberately conservative
+character fails closed. Ownership continuations are bound to each template, so the account-ending
+`my {alias} account` form cannot consume a second identifier. A role is accepted only when it equals the exact bounded
+role span parsed from the policy's closed role alternatives; open role text, handles, handle prefixes, pure
+prepositions, and free substrings are invalid. This deliberately conservative
 champion does not chase recall by adding aliases or exceptions; Luna v2 owns semantic recall. Unicode-scalar plus
 depth/node preflights keep malformed nested JSON terminal-total. V1 cannot be relabelled as proof that Grok returned a
 Bio or stable account identity.

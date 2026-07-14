@@ -11,11 +11,13 @@ import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
+from unittest import mock
 from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
+from x_first import profile_bio_signals  # noqa: E402
 from x_first.profile_bio_signals import (  # noqa: E402
     ANALYSIS_SCHEMA_VERSION,
     BUNDLE_SCHEMA_VERSION,
@@ -199,27 +201,34 @@ class ProfileBioSignalContractTest(unittest.TestCase):
         alias = copy.deepcopy(self.policy)
         alias["china_ecosystems"][0]["aliases"].append("UnversionedNetwork")
         mutations.append(alias)
-        grammar = copy.deepcopy(self.policy)
-        grammar["china_ecosystems"][0]["subject_claim_templates"].append("I browse {alias}")
-        mutations.append(grammar)
-        bare_identifier = copy.deepcopy(self.policy)
-        bare_identifier["china_ecosystems"][0]["bare_alias_identifier_claim"] = True
-        mutations.append(bare_identifier)
+        form_mapping = copy.deepcopy(self.policy)
+        form_mapping["china_ecosystems"][0]["claim_form_ids"].append("unversioned_form")
+        mutations.append(form_mapping)
+        bare_continuation = copy.deepcopy(self.policy)
+        bare_continuation["china_ecosystems"][0]["bare_alias_continuation_ids"] = ["account_identifier"]
+        mutations.append(bare_continuation)
         relation = copy.deepcopy(self.policy)
-        relation["affiliation_positive_grammars"][1]["grammar_ids"].append("unversioned_previous_form")
+        relation["positive_grammar_manifest"]["affiliation"]["relations"][1]["grammars"][0]["pattern"] = ".*"
         mutations.append(relation)
         ownership_mode = copy.deepcopy(self.policy)
-        ownership_mode["ownership_positive_grammar"]["mode"] = "prefix_match"
+        ownership_mode["positive_grammar_manifest"]["ownership"]["mode"] = "prefix_match"
         mutations.append(ownership_mode)
         ownership_continuation = copy.deepcopy(self.policy)
-        ownership_continuation["ownership_positive_grammar"]["continuation_classes"].append("free_text")
+        ownership_continuation["positive_grammar_manifest"]["ownership"]["claim_forms"][7]["continuation_ids"].append(
+            "account_identifier"
+        )
         mutations.append(ownership_continuation)
         parenthetical_note = copy.deepcopy(self.policy)
-        parenthetical_note["ownership_positive_grammar"]["parenthetical_note_values"].append("unversioned note")
+        parenthetical_note["positive_grammar_manifest"]["ownership"]["continuations"][0]["note_values"].append(
+            "unversioned note"
+        )
         mutations.append(parenthetical_note)
         unicode_category = copy.deepcopy(self.policy)
-        unicode_category["ownership_positive_grammar"]["rejected_unicode_categories"].append("Co")
+        unicode_category["positive_grammar_manifest"]["rejected_unicode_categories"].append("Co")
         mutations.append(unicode_category)
+        implementation_digest = copy.deepcopy(self.policy)
+        implementation_digest["grammar_runtime_binding"]["implementation_sha256"] = "0" * 64
+        mutations.append(implementation_digest)
         limits = copy.deepcopy(self.policy)
         limits["limits"]["max_proposals"] += 1
         mutations.append(limits)
@@ -230,6 +239,17 @@ class ProfileBioSignalContractTest(unittest.TestCase):
             with self.subTest(payload=canonical_sha256(payload)):
                 self.assertTrue(validate_policy(payload))
                 self.assertTrue(_schema_errors(payload, self.policy_schema))
+
+    def test_policy_rejects_loaded_grammar_implementation_drift(self) -> None:
+        with mock.patch.object(
+            profile_bio_signals,
+            "_match_affiliation_positive_grammar",
+            return_value=(True, None),
+        ):
+            policy_errors = validate_policy(self.policy)
+            self.assertTrue(any("loaded grammar interpreter" in error for error in policy_errors))
+            bundle_errors = validate_evidence_bundle(self.bundle, policy=self.policy)
+            self.assertTrue(any("loaded grammar interpreter" in error for error in bundle_errors))
 
     def test_fixture_recomputes_and_separates_alias_language_ecosystem_and_affiliation(self) -> None:
         self.assertEqual(analyze_profile_bio_signals(self.bundle, policy=self.policy), self.analysis)
@@ -302,6 +322,11 @@ class ProfileBioSignalContractTest(unittest.TestCase):
             (4, "my Xiaohongshu account; my friend runs it"),
             (4, "my Xiaohongshu account; it doesn't belong to me"),
             (4, "my Xiaohongshu account; it isn’t mine"),
+            (4, "my Xiaohongshu account list"),
+            (4, "my Xiaohongshu account topic"),
+            (4, "my Xiaohongshu account research"),
+            (4, "my Xiaohongshu account directory"),
+            (4, "my Xiaohongshu account archive"),
             (7, "公众号 SyntheticFounder（由同事运营）"),
             (7, "公众号 SyntheticFounder（朋友在运营）"),
             (7, "公众号 SyntheticFounder（并不属于我）"),
@@ -387,6 +412,42 @@ class ProfileBioSignalContractTest(unittest.TestCase):
             (1, "Head of growth @synthetic_hub, advisor", "advisor"),
             (1, "Head of growth @synthetic_hub @another_org", "Head of growth"),
             (1, "Head of @synthetic_hub, advisor @synthetic_hub", "advisor"),
+            (
+                1,
+                "Head of growth. Not employed by @synthetic_hub",
+                "Head of growth. Not employed by",
+            ),
+            (
+                1,
+                "Head of growth / never employed by @synthetic_hub",
+                "Head of growth / never employed by",
+            ),
+            (
+                1,
+                "Head of growth - not currently at @synthetic_hub",
+                "Head of growth - not currently at",
+            ),
+            (
+                1,
+                "Head of growth not anymore at @synthetic_hub",
+                "Head of growth not anymore at",
+            ),
+            (
+                1,
+                "Head of growth future role at @synthetic_hub",
+                "Head of growth future role at",
+            ),
+            (
+                1,
+                "Head of growth planning to join @synthetic_hub",
+                "Head of growth planning to join",
+            ),
+            (2, "Former never employed @synth_listen", "never employed"),
+            (2, "Former not employed @synth_listen", "not employed"),
+            (2, "Former incoming researcher @synth_listen", "incoming researcher"),
+            (2, "Former future engineer @synth_listen", "future engineer"),
+            (2, "Former aspiring founder @synth_listen", "aspiring founder"),
+            (2, "Former planning to join @synth_listen", "planning to join"),
         )
         for proposal_index, excerpt, role_text in rejected_claims:
             with self.subTest(excerpt=excerpt, role_text=role_text):
@@ -484,6 +545,29 @@ class ProfileBioSignalContractTest(unittest.TestCase):
         mismatched_fixture_url = copy.deepcopy(self.bundle)
         mismatched_fixture_url["profile_snapshot"]["profile_url"] = "https://profiles.invalid/x/other_account"
         self.assert_bundle_rejected(mismatched_fixture_url)
+
+        for noncanonical_url in (
+            "HTTPS://profiles.invalid/x/syntheticbuild",
+            "https://PROFILES.invalid/x/syntheticbuild",
+        ):
+            with self.subTest(profile_url=noncanonical_url):
+                payload = copy.deepcopy(self.bundle)
+                payload["profile_snapshot"]["profile_url"] = noncanonical_url
+                self.assert_bundle_rejected(payload, schema_too=True)
+
+    def test_extractor_version_runtime_and_schema_share_the_100_character_bound(self) -> None:
+        schema_maximum = self.bundle_schema["$defs"]["extractor"]["properties"]["version"]["maxLength"]
+        self.assertEqual(self.policy["limits"]["max_extractor_version_characters"], schema_maximum)
+        self.assertEqual(schema_maximum, 100)
+
+        bounded = copy.deepcopy(self.bundle)
+        bounded["proposals"][0]["extractor"]["version"] = "v" * 100
+        self.assertEqual(validate_evidence_bundle(bounded, policy=self.policy), [])
+        self.assertEqual(_schema_errors(bounded, self.bundle_schema), [])
+
+        oversized = copy.deepcopy(self.bundle)
+        oversized["proposals"][0]["extractor"]["version"] = "v" * 101
+        self.assert_bundle_rejected(oversized, schema_too=True)
 
     def test_schema_runtime_mutation_corpus_and_malformed_types_are_terminal_total(self) -> None:
         structural_mutations = []
@@ -614,7 +698,7 @@ class ProfileBioSignalContractTest(unittest.TestCase):
         deep_subject = '{"child":' * 1500 + "null" + "}" * 1500
         deep_raw = (
             '{"schema_version":"x.profile.bio_evidence.bundle.v1",'
-            '"policy_version":"profile-bio-signal-v1.4","subject":'
+            '"policy_version":"profile-bio-signal-v1.5","subject":'
             + deep_subject
             + ',"profile_snapshot":{},"proposals":[],"claims":{}}'
         )

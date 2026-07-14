@@ -9,14 +9,14 @@
     "policy_version",
     "proposal_kinds",
     "china_ecosystems",
-    "ownership_positive_grammar",
-    "affiliation_positive_grammars",
+    "positive_grammar_manifest",
+    "grammar_runtime_binding",
     "limits",
     "forbidden_proposal_fields"
   ],
   "const": {
     "schema_version": "x.profile.bio_signal.policy.v1",
-    "policy_version": "profile-bio-signal-v1.4",
+    "policy_version": "profile-bio-signal-v1.5",
     "proposal_kinds": [
       "observed_chinese_content",
       "china_ecosystem_self_claim",
@@ -30,19 +30,19 @@
           "Xiaohongshu",
           "REDnote"
         ],
-        "subject_claim_templates": [
-          "同名{alias}",
-          "{alias}同名",
-          "我的{alias}",
-          "本人运营{alias}",
-          "我运营{alias}",
-          "我在{alias}发布",
-          "my {alias} account",
-          "i run {alias}",
-          "i publish on {alias}",
-          "same-name {alias}"
+        "claim_form_ids": [
+          "same_name_prefix",
+          "same_name_suffix",
+          "my_cn_standard",
+          "operated_by_me_formal",
+          "operated_by_me",
+          "publish_cn",
+          "my_en_account",
+          "run_en",
+          "publish_en",
+          "same_name_en"
         ],
-        "bare_alias_identifier_claim": false
+        "bare_alias_continuation_ids": []
       },
       {
         "ecosystem_id": "wechat_official_account",
@@ -51,66 +51,296 @@
           "微信公众号",
           "WeChat Official Account"
         ],
-        "subject_claim_templates": [
-          "同名{alias}",
-          "{alias}同名",
-          "我的{alias}",
-          "本人运营{alias}",
-          "我运营{alias}",
-          "我在{alias}发布",
-          "my {alias} account",
-          "i run {alias}",
-          "i publish on {alias}",
-          "same-name {alias}"
+        "claim_form_ids": [
+          "same_name_prefix",
+          "same_name_suffix",
+          "my_cn_account_identifier",
+          "operated_by_me_formal",
+          "operated_by_me",
+          "publish_cn",
+          "my_en_account",
+          "run_en",
+          "publish_en",
+          "same_name_en"
         ],
-        "bare_alias_identifier_claim": true
+        "bare_alias_continuation_ids": [
+          "account_identifier"
+        ]
       }
     ],
-    "ownership_positive_grammar": {
-      "mode": "single_window_positive_fullmatch_v1",
-      "continuation_classes": [
-        "account_identifier",
-        "ownership_noun",
-        "parenthetical_note",
-        "audience_count"
-      ],
-      "bare_alias_continuation_class": "account_identifier",
-      "parenthetical_note_values": [
-        "长文首发"
-      ],
+    "positive_grammar_manifest": {
+      "manifest_version": "profile-bio-positive-regex-ast-v1",
+      "regex_dialect": "python-re-fullmatch-v1",
+      "case_insensitive": true,
       "rejected_unicode_categories": [
         "Cc",
         "Cf"
-      ]
-    },
-    "affiliation_positive_grammars": [
-      {
-        "relation": "current",
-        "grammar_ids": [
-          "head_of_role",
-          "founder_at_handle",
-          "researcher_at_handle",
-          "engineer_at_handle",
-          "employed_at_cn_handle",
-          "works_at_cn_handle"
+      ],
+      "ownership": {
+        "mode": "single_window_positive_fullmatch_v2",
+        "claim_forms": [
+          {
+            "form_id": "same_name_prefix",
+            "template": "同名{alias}",
+            "allow_empty": true,
+            "continuation_ids": [
+              "ownership_noun",
+              "parenthetical_note",
+              "audience_count"
+            ]
+          },
+          {
+            "form_id": "same_name_suffix",
+            "template": "{alias}同名",
+            "allow_empty": true,
+            "continuation_ids": [
+              "ownership_noun",
+              "parenthetical_note",
+              "audience_count"
+            ]
+          },
+          {
+            "form_id": "my_cn_standard",
+            "template": "我的{alias}",
+            "allow_empty": true,
+            "continuation_ids": [
+              "ownership_noun",
+              "parenthetical_note",
+              "audience_count"
+            ]
+          },
+          {
+            "form_id": "my_cn_account_identifier",
+            "template": "我的{alias}",
+            "allow_empty": true,
+            "continuation_ids": [
+              "account_identifier",
+              "ownership_noun",
+              "parenthetical_note",
+              "audience_count"
+            ]
+          },
+          {
+            "form_id": "operated_by_me_formal",
+            "template": "本人运营{alias}",
+            "allow_empty": true,
+            "continuation_ids": [
+              "ownership_noun",
+              "parenthetical_note",
+              "audience_count"
+            ]
+          },
+          {
+            "form_id": "operated_by_me",
+            "template": "我运营{alias}",
+            "allow_empty": true,
+            "continuation_ids": [
+              "ownership_noun",
+              "parenthetical_note",
+              "audience_count"
+            ]
+          },
+          {
+            "form_id": "publish_cn",
+            "template": "我在{alias}发布",
+            "allow_empty": true,
+            "continuation_ids": [
+              "parenthetical_note",
+              "audience_count"
+            ]
+          },
+          {
+            "form_id": "my_en_account",
+            "template": "my {alias} account",
+            "allow_empty": true,
+            "continuation_ids": [
+              "parenthetical_note",
+              "audience_count"
+            ]
+          },
+          {
+            "form_id": "run_en",
+            "template": "i run {alias}",
+            "allow_empty": true,
+            "continuation_ids": [
+              "ownership_noun",
+              "parenthetical_note",
+              "audience_count"
+            ]
+          },
+          {
+            "form_id": "publish_en",
+            "template": "i publish on {alias}",
+            "allow_empty": true,
+            "continuation_ids": [
+              "parenthetical_note",
+              "audience_count"
+            ]
+          },
+          {
+            "form_id": "same_name_en",
+            "template": "same-name {alias}",
+            "allow_empty": true,
+            "continuation_ids": [
+              "ownership_noun",
+              "parenthetical_note",
+              "audience_count"
+            ]
+          }
+        ],
+        "continuations": [
+          {
+            "continuation_id": "account_identifier",
+            "ast_node": "regex_fullmatch",
+            "pattern": "[a-z0-9_][a-z0-9_.-]{1,79}(?:\\s*\\((?P<note>[^()\\r\\n]{1,80})\\))?",
+            "note_group": "note",
+            "note_values": [
+              "长文首发"
+            ]
+          },
+          {
+            "continuation_id": "ownership_noun",
+            "ast_node": "regex_fullmatch",
+            "pattern": "(?:账号|账户|account|channel)(?:\\s*\\((?P<note>[^()\\r\\n]{1,80})\\))?",
+            "note_group": "note",
+            "note_values": [
+              "长文首发"
+            ]
+          },
+          {
+            "continuation_id": "parenthetical_note",
+            "ast_node": "regex_fullmatch",
+            "pattern": "\\((?P<note>[^()\\r\\n]{1,80})\\)",
+            "note_group": "note",
+            "note_values": [
+              "长文首发"
+            ]
+          },
+          {
+            "continuation_id": "audience_count",
+            "ast_node": "regex_fullmatch",
+            "pattern": "(?:用户数(?:[0-9]+(?:\\.[0-9]+)?(?:k|m|万|千)?|[零〇一二两三四五六七八九十百千万亿]+)|(?:[0-9]+(?:\\.[0-9]+)?(?:k|m|万|千)?|[零〇一二两三四五六七八九十百千万亿]+)(?:粉丝|关注者|followers?))",
+            "note_group": null,
+            "note_values": []
+          }
         ]
       },
-      {
-        "relation": "previous",
-        "grammar_ids": [
-          "prev_handles",
-          "previously_handles",
-          "formerly_handles",
-          "former_role",
-          "former_cn_handles",
-          "previous_employed_at_cn_handle",
-          "prior_employed_at_cn_handle"
+      "affiliation": {
+        "case_insensitive": true,
+        "handle_mention_pattern": "(?<![A-Za-z0-9_])@(?P<handle>[A-Za-z0-9_]{1,15})(?![A-Za-z0-9_])",
+        "relations": [
+          {
+            "relation": "current",
+            "grammars": [
+              {
+                "grammar_id": "head_of_closed_function_handle",
+                "ast_node": "regex_fullmatch",
+                "pattern": "(?P<role>Head +of +(?:growth|research|engineering|AI)) +@(?P<handle>[A-Za-z0-9_]{1,15})",
+                "handle_binding": "named_group_equals",
+                "role_group": "role"
+              },
+              {
+                "grammar_id": "founder_at_handle",
+                "ast_node": "regex_fullmatch",
+                "pattern": "(?P<role>Founder) +at +@(?P<handle>[A-Za-z0-9_]{1,15})",
+                "handle_binding": "named_group_equals",
+                "role_group": "role"
+              },
+              {
+                "grammar_id": "researcher_at_handle",
+                "ast_node": "regex_fullmatch",
+                "pattern": "(?P<role>Researcher) +at +@(?P<handle>[A-Za-z0-9_]{1,15})",
+                "handle_binding": "named_group_equals",
+                "role_group": "role"
+              },
+              {
+                "grammar_id": "engineer_at_handle",
+                "ast_node": "regex_fullmatch",
+                "pattern": "(?P<role>Engineer) +at +@(?P<handle>[A-Za-z0-9_]{1,15})",
+                "handle_binding": "named_group_equals",
+                "role_group": "role"
+              },
+              {
+                "grammar_id": "employed_at_cn_handle",
+                "ast_node": "regex_fullmatch",
+                "pattern": "任职于 +@(?P<handle>[A-Za-z0-9_]{1,15})",
+                "handle_binding": "named_group_equals",
+                "role_group": null
+              },
+              {
+                "grammar_id": "works_at_cn_handle",
+                "ast_node": "regex_fullmatch",
+                "pattern": "就职于 +@(?P<handle>[A-Za-z0-9_]{1,15})",
+                "handle_binding": "named_group_equals",
+                "role_group": null
+              }
+            ]
+          },
+          {
+            "relation": "previous",
+            "grammars": [
+              {
+                "grammar_id": "prev_handles",
+                "ast_node": "regex_fullmatch",
+                "pattern": "Prev(?: +@[A-Za-z0-9_]{1,15}){1,8}",
+                "handle_binding": "mention_set_contains",
+                "role_group": null
+              },
+              {
+                "grammar_id": "previously_handles",
+                "ast_node": "regex_fullmatch",
+                "pattern": "Previously(?: +@[A-Za-z0-9_]{1,15}){1,8}",
+                "handle_binding": "mention_set_contains",
+                "role_group": null
+              },
+              {
+                "grammar_id": "formerly_handles",
+                "ast_node": "regex_fullmatch",
+                "pattern": "Formerly(?: +@[A-Za-z0-9_]{1,15}){1,8}",
+                "handle_binding": "mention_set_contains",
+                "role_group": null
+              },
+              {
+                "grammar_id": "former_closed_role_handle",
+                "ast_node": "regex_fullmatch",
+                "pattern": "Former +(?P<role>(?:Researcher|Engineer|Founder|Head +of +(?:growth|research|engineering|AI))) +@(?P<handle>[A-Za-z0-9_]{1,15})",
+                "handle_binding": "named_group_equals",
+                "role_group": "role"
+              },
+              {
+                "grammar_id": "former_cn_handles",
+                "ast_node": "regex_fullmatch",
+                "pattern": "曾任(?: +@[A-Za-z0-9_]{1,15}){1,8}",
+                "handle_binding": "mention_set_contains",
+                "role_group": null
+              },
+              {
+                "grammar_id": "previous_employed_at_cn_handle",
+                "ast_node": "regex_fullmatch",
+                "pattern": "前任职于 +@(?P<handle>[A-Za-z0-9_]{1,15})",
+                "handle_binding": "named_group_equals",
+                "role_group": null
+              },
+              {
+                "grammar_id": "prior_employed_at_cn_handle",
+                "ast_node": "regex_fullmatch",
+                "pattern": "此前任职于 +@(?P<handle>[A-Za-z0-9_]{1,15})",
+                "handle_binding": "named_group_equals",
+                "role_group": null
+              }
+            ]
+          }
         ]
       }
-    ],
+    },
+    "grammar_runtime_binding": {
+      "runtime_id": "profile-bio-policy-regex-interpreter-v1",
+      "implementation_sha256": "d7735fe35fbb524465cea2a4a6eb9ac8384d11da2afd54981b7c810600c13a9b"
+    },
     "limits": {
       "max_bio_characters": 2000,
       "max_display_alias_characters": 100,
+      "max_extractor_version_characters": 100,
       "max_proposals": 32,
       "max_excerpt_characters": 500,
       "max_role_text_characters": 120,
@@ -133,7 +363,7 @@
       "const": "x.profile.bio_signal.policy.v1"
     },
     "policy_version": {
-      "const": "profile-bio-signal-v1.4"
+      "const": "profile-bio-signal-v1.5"
     },
     "proposal_kinds": {
       "type": "array"
@@ -141,11 +371,11 @@
     "china_ecosystems": {
       "type": "array"
     },
-    "ownership_positive_grammar": {
+    "positive_grammar_manifest": {
       "type": "object"
     },
-    "affiliation_positive_grammars": {
-      "type": "array"
+    "grammar_runtime_binding": {
+      "type": "object"
     },
     "limits": {
       "type": "object"
