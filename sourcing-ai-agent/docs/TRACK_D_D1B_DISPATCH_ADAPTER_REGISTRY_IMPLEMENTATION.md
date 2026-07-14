@@ -3,6 +3,11 @@
 > Status: Author implementation, non-live and review-pending (2026-07-14). This batch is behavior-equivalent to the
 > D1a dispatch inventory and does not claim D1 completion, independent-review `GO`, served Agent tools, live-provider
 > approval, manual/product signoff, or milestone closure.
+>
+> The scoped pinned review of `2184d64` found one false-green regression oracle: a hard-coded registered action-name
+> literal branch for an action other than the single mutated export case could pass all D1a+D1b tests. This follow-up
+> parameterizes the mutation across all 15 actions and adds a self-proving AST literal/control-flow rejection check.
+> Re-review remains pending.
 
 ## 1. Outcome and scope
 
@@ -71,9 +76,11 @@ runtime. Immutable request-schema version/digest pins are outside D1b and must n
 
 1. unknown and whitespace-padded adapter identifiers reject registry construction;
 2. the runtime binding map is total over the five closed adapter identifiers;
-3. AST inspection rejects action-constant branches and arbitrary `getattr` in selector/binding code;
-4. an in-memory registry mutation reroutes `export_candidates`, proving dispatch follows registry data rather than a
-   hidden action-name branch;
+3. AST inspection rejects action constants, registered action-name string literals, direct `action_type` control-flow
+   branches, and arbitrary `getattr` in selector/binding code;
+4. parameterized in-memory registry mutations reroute every one of the 15 actions to a different legal adapter,
+   proving dispatch follows registry data for supported and empty-adapter actions rather than a hidden action-name
+   branch;
 5. deleting the export binding fails closed without invoking another owner;
 6. the exact three empty-adapter actions remain unsupported;
 7. public registry records expose neither the internal adapter nor request schema, model-safe result schema,
@@ -147,3 +154,7 @@ OperationRuntime registry/submission/workflow-command nodes; four existing real 
 export, person Public Web, CRM writer, and company Public Web; command-spec suite 16 tests; focused mypy with no issues;
 Ruff check/format; and scoped whitespace diff check. These results are author evidence only, not independent-review
 `GO`.
+
+False-green follow-up author validation: the expanded D1a+D1b suites passed 25 tests; focused mypy reported no issues
+in the two test files; Ruff check/format and the scoped whitespace diff check passed. No production source changed in
+this follow-up.

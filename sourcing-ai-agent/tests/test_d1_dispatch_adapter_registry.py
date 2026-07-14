@@ -17,7 +17,6 @@ from sourcing_agent.operation_runtime import (
     ACTION_PROMOTE_PERSON_ASSERTION,
     DEFAULT_ACTION_REGISTRY,
     DISPATCH_ADAPTER_EXPORT,
-    DISPATCH_ADAPTER_PROJECTION_READ,
     ActionRegistry,
     ActionSpec,
 )
@@ -84,6 +83,32 @@ def _valid_spec(*, action_type: str, dispatch_adapter: str) -> ActionSpec:
     )
 
 
+def _registered_action_literals(tree: ast.AST, registered_action_types: set[str]) -> set[str]:
+    return {
+        node.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Constant) and isinstance(node.value, str) and node.value in registered_action_types
+    }
+
+
+def _action_type_control_flow_nodes(tree: ast.AST) -> list[ast.AST]:
+    predicate_nodes: list[ast.AST] = []
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.If, ast.IfExp, ast.While)):
+            predicate_nodes.append(node.test)
+        elif isinstance(node, ast.Match):
+            predicate_nodes.append(node.subject)
+        elif isinstance(node, ast.comprehension):
+            predicate_nodes.extend(node.ifs)
+    return [
+        predicate
+        for predicate in predicate_nodes
+        if any(
+            isinstance(descendant, ast.Name) and descendant.id == "action_type" for descendant in ast.walk(predicate)
+        )
+    ]
+
+
 def test_dispatch_adapter_registry_is_closed_and_normalized() -> None:
     with pytest.raises(ValueError, match="unregistered dispatch adapter"):
         ActionRegistry(
@@ -115,9 +140,12 @@ def test_dispatch_bindings_are_explicit_total_and_do_not_use_getattr_or_action_b
     dispatch_source = textwrap.dedent(inspect.getsource(SourcingOrchestrator._dispatch_operation_run_from_records))
     binding_source = textwrap.dedent(inspect.getsource(SourcingOrchestrator._operation_dispatch_adapter_bindings))
     dispatch_tree = ast.parse(dispatch_source)
+    registered_action_types = set(DEFAULT_ACTION_REGISTRY.to_record(include_command_contracts=False))
     assert not {
         node.id for node in ast.walk(dispatch_tree) if isinstance(node, ast.Name) and node.id.startswith("ACTION_")
     }
+    assert not _registered_action_literals(dispatch_tree, registered_action_types)
+    assert not _action_type_control_flow_nodes(dispatch_tree)
     assert not [
         node
         for tree in (dispatch_tree, ast.parse(binding_source))
@@ -125,24 +153,43 @@ def test_dispatch_bindings_are_explicit_total_and_do_not_use_getattr_or_action_b
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "getattr"
     ]
 
+    literal_branch_mutation = dispatch_source.replace(
+        '    action_type = str(action.get("action_type") or "").strip()\n',
+        '    action_type = str(action.get("action_type") or "").strip()\n'
+        '    if action_type == "search_projection":\n'
+        "        return {}\n",
+        1,
+    )
+    assert literal_branch_mutation != dispatch_source
+    literal_branch_tree = ast.parse(literal_branch_mutation)
+    assert _registered_action_literals(literal_branch_tree, registered_action_types) == {"search_projection"}
+    assert _action_type_control_flow_nodes(literal_branch_tree)
 
-def test_registry_mapping_mutation_changes_dispatch_without_action_type_branch(
+
+@pytest.mark.parametrize(
+    "action_type",
+    sorted(DEFAULT_ACTION_REGISTRY.to_record(include_command_contracts=False)),
+)
+def test_every_action_follows_registry_adapter_mutation_without_action_type_branch(
+    action_type: str,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    original_adapter = DEFAULT_ACTION_REGISTRY.spec_for(action_type).dispatch_adapter
+    replacement_adapter = next(adapter for adapter in sorted(ACTION_DISPATCH_ADAPTERS) if adapter != original_adapter)
     mutated_specs = {
-        action_type: replace(
-            DEFAULT_ACTION_REGISTRY.spec_for(action_type),
+        registered_action_type: replace(
+            DEFAULT_ACTION_REGISTRY.spec_for(registered_action_type),
             dispatch_adapter=(
-                DISPATCH_ADAPTER_PROJECTION_READ
-                if action_type == ACTION_EXPORT_CANDIDATES
-                else DEFAULT_ACTION_REGISTRY.spec_for(action_type).dispatch_adapter
+                replacement_adapter
+                if registered_action_type == action_type
+                else DEFAULT_ACTION_REGISTRY.spec_for(registered_action_type).dispatch_adapter
             ),
         )
-        for action_type in DEFAULT_ACTION_REGISTRY.to_record()
+        for registered_action_type in DEFAULT_ACTION_REGISTRY.to_record(include_command_contracts=False)
     }
     monkeypatch.setattr(orchestrator_module, "DEFAULT_ACTION_REGISTRY", ActionRegistry(mutated_specs))
 
-    assert _dispatch(_DispatchProbe(), ACTION_EXPORT_CANDIDATES) == {"adapter": "projection_read"}
+    assert _dispatch(_DispatchProbe(), action_type) == {"adapter": replacement_adapter}
 
 
 def test_missing_bound_adapter_and_unregistered_action_fail_closed() -> None:
