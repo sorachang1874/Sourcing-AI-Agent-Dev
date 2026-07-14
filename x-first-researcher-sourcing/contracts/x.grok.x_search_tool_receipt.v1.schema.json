@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.invalid/x.grok.x_search_tool_receipt.v1.schema.json",
+  "title": "Minimized structured Grok X Search tool receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "session_id",
+    "session_updates_sha256",
+    "session_update_bytes",
+    "observed_model_ids",
+    "unexpected_tool_calls",
+    "calls"
+  ],
+  "properties": {
+    "schema_version": {"const": "x.grok.x_search_tool_receipt.v1"},
+    "session_id": {"type": "string", "format": "uuid"},
+    "session_updates_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "session_update_bytes": {"type": "integer", "minimum": 1, "maximum": 5000000},
+    "observed_model_ids": {
+      "type": "array",
+      "maxItems": 8,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 80}
+    },
+    "unexpected_tool_calls": {
+      "type": "array",
+      "maxItems": 8,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 160}
+    },
+    "calls": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "call_id",
+          "tool_id",
+          "statuses",
+          "raw_result_posts",
+          "raw_result_author_user_ids"
+        ],
+        "properties": {
+          "call_id": {"type": "string", "minLength": 1, "maxLength": 160},
+          "tool_id": {"const": "x_search"},
+          "statuses": {
+            "type": "array",
+            "maxItems": 16,
+            "uniqueItems": true,
+            "items": {"type": "string", "minLength": 1, "maxLength": 80}
+          },
+          "raw_result_posts": {
+            "type": "array",
+            "maxItems": 25,
+            "uniqueItems": true,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["platform_object_id", "canonical_url"],
+              "properties": {
+                "platform_object_id": {"type": "string", "pattern": "^[0-9]{5,32}$"},
+                "canonical_url": {
+                  "type": "string",
+                  "pattern": "^https://x\\.com/OpenAI/status/[0-9]{5,32}$"
+                }
+              }
+            }
+          },
+          "raw_result_author_user_ids": {
+            "type": "array",
+            "maxItems": 8,
+            "uniqueItems": true,
+            "items": {"type": "string", "pattern": "^[0-9]{3,32}$"}
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.invalid/x.grok.live_approval_consumption.v1.schema.json",
+  "title": "One-shot X-first live approval consumption receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "probe_id",
+    "request_sha256",
+    "run_id",
+    "consumed_at",
+    "binary_sha256",
+    "state"
+  ],
+  "properties": {
+    "schema_version": {"const": "x.grok.live_approval_consumption.v1"},
+    "probe_id": {"const": "xprobe_live_openai_official_v1"},
+    "request_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "run_id": {"type": "string", "pattern": "^xprobe_run_[0-9a-f]{32}$"},
+    "consumed_at": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])-([0-2][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]\\.[0-9]{3}Z$"
+    },
+    "binary_sha256": {
+      "const": "01bcacec12e7c2a164d23975f1595400ff7f3cbd74f50b1858f6a5a14eb9ff81"
+    },
+    "state": {"const": "consumed_before_spawn"}
+  }
+}
