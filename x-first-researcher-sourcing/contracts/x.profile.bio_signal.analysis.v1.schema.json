@@ -1,0 +1,304 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.invalid/x.profile.bio_signal.analysis.v1.schema.json",
+  "title": "X profile Bio signal analysis v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "policy_version",
+    "analysis_id",
+    "input_sha256",
+    "policy_sha256",
+    "subject",
+    "profile_capability",
+    "signals",
+    "affiliation_proposals",
+    "graph_edges",
+    "experience_leads",
+    "claims"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "x.profile.bio_signal.analysis.v1"
+    },
+    "policy_version": {
+      "const": "profile-bio-signal-v1"
+    },
+    "analysis_id": {
+      "type": "string",
+      "pattern": "^xpba_[0-9a-f]{24}$"
+    },
+    "input_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "policy_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "subject": {
+      "$ref": "#/$defs/subject"
+    },
+    "profile_capability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "retrieval_mode",
+        "stable_account_identity",
+        "bio_text",
+        "display_alias_role"
+      ],
+      "properties": {
+        "retrieval_mode": {
+          "enum": [
+            "offline_fixture",
+            "grok_x_native"
+          ]
+        },
+        "stable_account_identity": {
+          "const": "source_bound"
+        },
+        "bio_text": {
+          "const": "present"
+        },
+        "display_alias_role": {
+          "const": "raw_alias_only"
+        }
+      }
+    },
+    "signals": {
+      "type": "array",
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/signal"
+      }
+    },
+    "affiliation_proposals": {
+      "type": "array",
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/affiliation"
+      }
+    },
+    "graph_edges": {
+      "type": "array",
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/edge"
+      }
+    },
+    "experience_leads": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "china_digital_ecosystem",
+        "physical_region_experience"
+      ],
+      "properties": {
+        "china_digital_ecosystem": {
+          "$ref": "#/$defs/ecosystem_lead"
+        },
+        "physical_region_experience": {
+          "const": {
+            "status": "not_evaluated",
+            "evidence_refs": []
+          }
+        }
+      }
+    },
+    "claims": {
+      "const": {
+        "affiliation_confirmed": false,
+        "canonical_write_authorized": false,
+        "discovery_or_ranking_authorized": false,
+        "display_alias_used_as_identity": false,
+        "ethnicity_inferred": false,
+        "name_signal_used": false,
+        "nationality_inferred": false,
+        "physical_region_inferred_from_language_or_ecosystem": false
+      }
+    }
+  },
+  "$defs": {
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provisional_person_id",
+        "platform_user_id"
+      ],
+      "properties": {
+        "provisional_person_id": {
+          "type": "string",
+          "pattern": "^pp_x_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "platform_user_id": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]{1,24}$"
+        }
+      }
+    },
+    "signal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "signal_id",
+        "signal_type",
+        "state",
+        "value",
+        "evidence_ref"
+      ],
+      "properties": {
+        "signal_id": {
+          "type": "string",
+          "pattern": "^xsig_[0-9a-f]{24}$"
+        },
+        "signal_type": {
+          "enum": [
+            "observed_chinese_content",
+            "china_ecosystem_experience_lead"
+          ]
+        },
+        "state": {
+          "enum": [
+            "observed",
+            "subject_claimed"
+          ]
+        },
+        "value": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "evidence_ref": {
+          "type": "string",
+          "pattern": "^xbp_[0-9A-HJKMNP-TV-Z]{26}$"
+        }
+      }
+    },
+    "affiliation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "affiliation_proposal_id",
+        "relation",
+        "organization_handle",
+        "organization_platform_user_id",
+        "role_text",
+        "resolution_status",
+        "confirmation_status",
+        "evidence_ref"
+      ],
+      "properties": {
+        "affiliation_proposal_id": {
+          "type": "string",
+          "pattern": "^xaf_[0-9a-f]{24}$"
+        },
+        "relation": {
+          "enum": [
+            "current",
+            "previous",
+            "unspecified"
+          ]
+        },
+        "organization_handle": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_]{1,15}$"
+        },
+        "organization_platform_user_id": {
+          "type": "null"
+        },
+        "role_text": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 120
+        },
+        "resolution_status": {
+          "const": "unresolved"
+        },
+        "confirmation_status": {
+          "const": "subject_claim_only"
+        },
+        "evidence_ref": {
+          "type": "string",
+          "pattern": "^xbp_[0-9A-HJKMNP-TV-Z]{26}$"
+        }
+      }
+    },
+    "edge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "edge_id",
+        "from_platform_user_id",
+        "to_handle_observed",
+        "to_platform_user_id",
+        "edge_type",
+        "resolution_status",
+        "evidence_ref"
+      ],
+      "properties": {
+        "edge_id": {
+          "type": "string",
+          "pattern": "^xedge_[0-9a-f]{24}$"
+        },
+        "from_platform_user_id": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]{1,24}$"
+        },
+        "to_handle_observed": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_]{1,15}$"
+        },
+        "to_platform_user_id": {
+          "type": "null"
+        },
+        "edge_type": {
+          "enum": [
+            "subject_claimed_current_affiliation",
+            "subject_claimed_previous_affiliation",
+            "subject_claimed_unspecified_affiliation"
+          ]
+        },
+        "resolution_status": {
+          "const": "unresolved"
+        },
+        "evidence_ref": {
+          "type": "string",
+          "pattern": "^xbp_[0-9A-HJKMNP-TV-Z]{26}$"
+        }
+      }
+    },
+    "ecosystem_lead": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "evidence_refs"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "supported",
+            "insufficient_evidence"
+          ]
+        },
+        "evidence_refs": {
+          "type": "array",
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^xbp_[0-9A-HJKMNP-TV-Z]{26}$"
+          }
+        }
+      }
+    }
+  }
+}

@@ -46,8 +46,8 @@ not import `sourcing_agent`, and fixture output cannot write canonical person/ev
 | --- | --- |
 | AI-native Grok/X retrieval | Intended transport is hosted `x_search`; installed CLI support is evidenced offline, live access is not yet proven |
 | Full Post metadata | Stage 1 requests stable post id, URL, author id, timestamp and a bounded excerpt; it deliberately does not retain a full body |
-| Bio and mention enrichment | Designed as a later profile/mention evidence lane; no live collector or confirmation flow exists yet |
-| Region-experience classification | Evidence-backed classifier exists, but its first review found source-binding gaps; follow-up is pending |
+| Bio and mention enrichment | Offline source-span-bound fixture now separates observed Chinese content, China-ecosystem leads, organization proposals and graph edges; no live collector or confirmation flow exists yet |
+| Region-experience classification | Hardened evidence-backed classifier is committed; non-author follow-up review is still pending |
 | Multiple query tasks | Synthetic Stage 2 fixtures cover eight query families; no live scheduler exists yet |
 | Large asynchronous search | Not implemented. Official xAI Batch/Responses APIs are the planned scale transport and require supported API credentials |
 
@@ -57,7 +57,7 @@ mentions, observed language, and China-ecosystem activity such as a declared pub
 work/education/research/residence evidence can support a physical region-experience label; ecosystem/language evidence
 remains a verification lead and is measured separately for incremental recall and false positives.
 See `docs/X_SEARCH_TRANSPORT_AND_SCALE_DECISION.md` for the CLI/API split, Bio/mention evidence model, batch topology,
-and scale gates.
+and scale gates. See `docs/PROFILE_BIO_SIGNAL_CONTRACT.md` for the executable offline Bio proposal boundary.
 
 ## Commands
 
@@ -67,6 +67,7 @@ From this folder:
 PYTHONPATH=src ../sourcing-ai-agent/.venv/bin/python -m unittest discover -s tests -v
 PYTHONPATH=src ../sourcing-ai-agent/.venv/bin/python -m x_first.contracts
 PYTHONPATH=src ../sourcing-ai-agent/.venv/bin/python -m x_first.capability_probe
+PYTHONPATH=src ../sourcing-ai-agent/.venv/bin/python -m x_first.profile_bio_signals fixtures/profile_bio_evidence_fixture_v1.json --policy configs/profile_bio_signal_policy.v1.json
 PYTHONPATH=src ../sourcing-ai-agent/.venv/bin/python scripts/generate_openai_fixture.py --check
 PYTHONPATH=src ../sourcing-ai-agent/.venv/bin/python scripts/generate_capability_probe_fixtures.py --check
 ```

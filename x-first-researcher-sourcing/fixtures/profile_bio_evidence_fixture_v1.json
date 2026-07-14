@@ -1,0 +1,189 @@
+{
+  "schema_version": "x.profile.bio_evidence.bundle.v1",
+  "policy_version": "profile-bio-signal-v1",
+  "subject": {
+    "provisional_person_id": "pp_x_01J00000000000000000000000",
+    "platform_user_id": "900000000000000001"
+  },
+  "profile_snapshot": {
+    "snapshot_id": "xps_01J00000000000000000000001",
+    "platform_user_id": "900000000000000001",
+    "profile_url": "https://profiles.invalid/x/syntheticbuild",
+    "current_handle": "syntheticbuild",
+    "display_alias": "Synthetic Builder",
+    "bio_text": "本科辍学创业，分享 AI 工程实践。\nHead of growth @synthetic_hub\nPrev @synth_listen @synth_int\n同名小红书四万粉丝，公众号 SyntheticFounder（长文首发）\n观点仅代表个人，欢迎 DM。",
+    "observed_at": "2026-07-14T00:00:00.000Z",
+    "content_version": "fixture-v1",
+    "content_sha256": "8bb005ce5141c494fc4e7021b633198fcb5de606121243b59d699055d1557456",
+    "retrieval_mode": "offline_fixture",
+    "native_profile_receipt_ref": null,
+    "field_capabilities": {
+      "platform_user_id": "present",
+      "current_handle": "present",
+      "display_alias": "present",
+      "bio_text": "present"
+    }
+  },
+  "proposals": [
+    {
+      "proposal_id": "xbp_01J00000000000000000000002",
+      "kind": "observed_chinese_content",
+      "source_field": "bio_text",
+      "span_start": 0,
+      "span_end": 18,
+      "excerpt": "本科辍学创业，分享 AI 工程实践。",
+      "excerpt_sha256": "fa41bc52a2742bd7fd49f7737f80c60807414530edb75cac7245fe7373fa4e49",
+      "proposal_status": "proposed",
+      "extractor": {
+        "mode": "offline_fixture",
+        "version": "profile-bio-fixture-v1",
+        "tool_call_id": null
+      },
+      "details": {
+        "script": "han",
+        "language_candidate": "zh",
+        "ecosystem_id": null,
+        "affiliation_relation": null,
+        "organization_handle": null,
+        "organization_platform_user_id": null,
+        "role_text": null,
+        "resolution_status": null
+      }
+    },
+    {
+      "proposal_id": "xbp_01J00000000000000000000003",
+      "kind": "organization_mention",
+      "source_field": "bio_text",
+      "span_start": 19,
+      "span_end": 48,
+      "excerpt": "Head of growth @synthetic_hub",
+      "excerpt_sha256": "2a1b6c99491d557b39c5a03e2b0afb0cd0ef0a11044b0f9085df1a982d5809c0",
+      "proposal_status": "proposed",
+      "extractor": {
+        "mode": "offline_fixture",
+        "version": "profile-bio-fixture-v1",
+        "tool_call_id": null
+      },
+      "details": {
+        "script": null,
+        "language_candidate": null,
+        "ecosystem_id": null,
+        "affiliation_relation": "current",
+        "organization_handle": "synthetic_hub",
+        "organization_platform_user_id": null,
+        "role_text": "Head of growth",
+        "resolution_status": "unresolved"
+      }
+    },
+    {
+      "proposal_id": "xbp_01J00000000000000000000004",
+      "kind": "organization_mention",
+      "source_field": "bio_text",
+      "span_start": 49,
+      "span_end": 78,
+      "excerpt": "Prev @synth_listen @synth_int",
+      "excerpt_sha256": "00d9cc7ec5073f2ba7d5b9c0bc67b84a1756903751b3e89e9bc4fbf2a552ba40",
+      "proposal_status": "proposed",
+      "extractor": {
+        "mode": "offline_fixture",
+        "version": "profile-bio-fixture-v1",
+        "tool_call_id": null
+      },
+      "details": {
+        "script": null,
+        "language_candidate": null,
+        "ecosystem_id": null,
+        "affiliation_relation": "previous",
+        "organization_handle": "synth_listen",
+        "organization_platform_user_id": null,
+        "role_text": null,
+        "resolution_status": "unresolved"
+      }
+    },
+    {
+      "proposal_id": "xbp_01J00000000000000000000005",
+      "kind": "organization_mention",
+      "source_field": "bio_text",
+      "span_start": 49,
+      "span_end": 78,
+      "excerpt": "Prev @synth_listen @synth_int",
+      "excerpt_sha256": "00d9cc7ec5073f2ba7d5b9c0bc67b84a1756903751b3e89e9bc4fbf2a552ba40",
+      "proposal_status": "proposed",
+      "extractor": {
+        "mode": "offline_fixture",
+        "version": "profile-bio-fixture-v1",
+        "tool_call_id": null
+      },
+      "details": {
+        "script": null,
+        "language_candidate": null,
+        "ecosystem_id": null,
+        "affiliation_relation": "previous",
+        "organization_handle": "synth_int",
+        "organization_platform_user_id": null,
+        "role_text": null,
+        "resolution_status": "unresolved"
+      }
+    },
+    {
+      "proposal_id": "xbp_01J00000000000000000000006",
+      "kind": "china_ecosystem_self_claim",
+      "source_field": "bio_text",
+      "span_start": 79,
+      "span_end": 115,
+      "excerpt": "同名小红书四万粉丝，公众号 SyntheticFounder（长文首发）",
+      "excerpt_sha256": "4488398ff1e77f67c4aa4730b3e29f457b4b20f985d33c2a79d8d978b60a131c",
+      "proposal_status": "proposed",
+      "extractor": {
+        "mode": "offline_fixture",
+        "version": "profile-bio-fixture-v1",
+        "tool_call_id": null
+      },
+      "details": {
+        "script": null,
+        "language_candidate": null,
+        "ecosystem_id": "xiaohongshu",
+        "affiliation_relation": null,
+        "organization_handle": null,
+        "organization_platform_user_id": null,
+        "role_text": null,
+        "resolution_status": "subject_claimed"
+      }
+    },
+    {
+      "proposal_id": "xbp_01J00000000000000000000007",
+      "kind": "china_ecosystem_self_claim",
+      "source_field": "bio_text",
+      "span_start": 79,
+      "span_end": 115,
+      "excerpt": "同名小红书四万粉丝，公众号 SyntheticFounder（长文首发）",
+      "excerpt_sha256": "4488398ff1e77f67c4aa4730b3e29f457b4b20f985d33c2a79d8d978b60a131c",
+      "proposal_status": "proposed",
+      "extractor": {
+        "mode": "offline_fixture",
+        "version": "profile-bio-fixture-v1",
+        "tool_call_id": null
+      },
+      "details": {
+        "script": null,
+        "language_candidate": null,
+        "ecosystem_id": "wechat_official_account",
+        "affiliation_relation": null,
+        "organization_handle": null,
+        "organization_platform_user_id": null,
+        "role_text": null,
+        "resolution_status": "subject_claimed"
+      }
+    }
+  ],
+  "claims": {
+    "display_alias_used_as_identity": false,
+    "name_signal_used": false,
+    "nationality_inferred": false,
+    "ethnicity_inferred": false,
+    "physical_region_inferred_from_language_or_ecosystem": false,
+    "affiliation_confirmed": false,
+    "discovery_or_ranking_authorized": false,
+    "canonical_write_authorized": false
+  }
+}

@@ -1,0 +1,87 @@
+{
+  "schema_version": "x.profile.bio_signal.policy.v1",
+  "policy_version": "profile-bio-signal-v1",
+  "proposal_kinds": [
+    "observed_chinese_content",
+    "china_ecosystem_self_claim",
+    "organization_mention"
+  ],
+  "china_ecosystems": [
+    {
+      "ecosystem_id": "xiaohongshu",
+      "aliases": [
+        "小红书",
+        "Xiaohongshu",
+        "REDnote"
+      ],
+      "subject_claim_markers": [
+        "同名",
+        "我的",
+        "本人",
+        "账号",
+        "粉丝"
+      ]
+    },
+    {
+      "ecosystem_id": "wechat_official_account",
+      "aliases": [
+        "公众号",
+        "微信公众号",
+        "WeChat Official Account"
+      ],
+      "subject_claim_markers": [
+        "同名",
+        "我的",
+        "本人",
+        "首发",
+        "长文"
+      ]
+    }
+  ],
+  "affiliation_relations": [
+    {
+      "relation": "current",
+      "markers": [
+        "Head of",
+        "Founder at",
+        "Researcher at",
+        "Engineer at",
+        "现任",
+        "任职于",
+        "就职于"
+      ]
+    },
+    {
+      "relation": "previous",
+      "markers": [
+        "Prev",
+        "Previously",
+        "Formerly",
+        "Former",
+        "曾任",
+        "前"
+      ]
+    },
+    {
+      "relation": "unspecified",
+      "markers": []
+    }
+  ],
+  "limits": {
+    "max_bio_characters": 2000,
+    "max_display_alias_characters": 100,
+    "max_proposals": 32,
+    "max_excerpt_characters": 500,
+    "max_role_text_characters": 120
+  },
+  "forbidden_proposal_fields": [
+    "ancestry",
+    "citizenship",
+    "ethnicity",
+    "gender",
+    "nationality",
+    "race",
+    "real_name",
+    "religion"
+  ]
+}
