@@ -388,6 +388,16 @@
   dormant ActivityRun+Attempt fragment → event fragment → intent/receipt/quarantine fragments；不得猜 schema/owner。
   R-019/R-023/R-027/R-029、action-root、OB-10.1-10.4、完整 Migration A 与 served=0 均不变。完整事实与
   executable oracle 见 `TRACK_D_D3C2C_ACTIVITY_TERMINAL_EVIDENCE_CHARACTERIZATION.md`。
+- [x] D3c2d dormant ActivityRun / ActivityAttempt claim-chain foundation（2026-07-15；implementation candidate）：
+  `0005_d3_activity_claim_chain_foundation.sql` 按 D3b §5.2/§11.1 ratify 并安装 ActivityRun `6` columns 与
+  ActivityAttempt `10` columns，保留 existing workspace/operation/command links；`command_attempt` 为 future
+  post-claim `workflow_commands.attempt` exact-copy，current `attempt_number` 继续独立 retry accounting。迁移以
+  5s local lock budget 安装 `7+11=18` 个 `NOT VALID` local checks，populated rows 保持 empty/NULL/zero sentinel；
+  ActivityAttempt lock contention 必须证明 first-table DDL/constraints/ledger 全回滚后 exact-once recovery。
+  current 20/22-column descriptors、30/22 upsert population、direct cancel owner 与所有 runtime writer 均未激活新列。
+  workflow event、intent/terminal registry/dispatch exposure/response-failure receipt/quarantine、Migration B-D、
+  R-019/R-023/R-027/R-029、action-root/OB-10.1-10.4 与 served=0 继续 open；完整记录见
+  `TRACK_D_D3C2D_ACTIVITY_CLAIM_CHAIN_MIGRATION_IMPLEMENTATION.md`，author validation/fresh pinned review 待记录。
 - [ ] Track D 后的 user-owned cohort selection contract（Thinking Machines Lab live 前置）：以一个 versioned、
   registry-digest-pinned `CohortSelection` 作为唯一 owner，显式承载 canonical ordered
   `role_bucket_ids[]`（Researcher/Engineer/Product Manager 可自由多选且 registry 可扩展）、

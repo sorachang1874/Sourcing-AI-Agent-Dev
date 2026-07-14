@@ -296,6 +296,11 @@ serve、会话/事件层、planner loop），用一个垂直切片证明闭环�
   physical owner/table 全为 0，event→commands→outbox→state 仍是 R-019 multi-commit。下一批必须先 ratify DDL，
   再按 dormant ActivityRun+Attempt → event → intent/receipt/quarantine 顺序推进；本批不设计 schema，不关闭
   R-019/R-023/R-027/R-029、action-root、OB-10.1-10.4 或 served=0。
+- D3c2d implementation candidate 已据 §5.2/§11.1 ratify 并安装 dormant ActivityRun `6` columns +
+  ActivityAttempt `10` columns，以及 `7+11` 个 `NOT VALID` local checks；5s second-table contention 必须回滚
+  first-table DDL 与 ledger。existing `attempt_number` 与 future post-claim exact-copy `command_attempt` 明确分离，
+  current 20/22-column descriptors 和全部 runtime writers 保持 dormant。event/intent/receipt/quarantine、完整
+  Migration A、R-019/R-023/R-027/R-029、action-root、OB-10.1-10.4 与 served=0 继续 open。
 
 ### D4 — 之后（本文只圈定，不展开）
 
@@ -420,6 +425,9 @@ TD-4 初始路由表已按 owner 2026-07-13 裁决落档（D0 §4）。
    owner 全为 0；详细 mechanical oracle 见
    `TRACK_D_D3C2C_ACTIVITY_TERMINAL_EVIDENCE_CHARACTERIZATION.md`。因此下一有界 implementation 是先取得
    owner-ratified DDL，再落 dormant ActivityRun+ActivityAttempt fragment；characterization 本身不授权 rollout。
+   D3c2d candidate 已完成该 owner decision 并只安装 `0005_d3_activity_claim_chain_foundation.sql` 的
+   ActivityRun/Attempt `6+10` columns、`7+11` local checks 与 both-table rollback proof；descriptors/runtime 未切换，
+   因此 rollout step 3 仍须等待 workflow-event 与 intent/receipt/quarantine 等其余 Migration-A fragments。
    canonical coordination lineage 为 `coordination_plan_review_id=plan_review_sessions.review_id`，物理类型同为
    positive `BIGINT`（brownfield `NULL`，strict `>0`，禁止 `TEXT`/empty）；poll-mode 的唯一 scope issuer 是
    private scoped review-session repository：它从 server-owned runtime context + authenticated workspace

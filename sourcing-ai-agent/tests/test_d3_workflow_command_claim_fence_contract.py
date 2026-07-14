@@ -44,6 +44,8 @@ D3C2A_IMPLEMENTATION_PATH = (
 )
 D3C2B_MIGRATION_PATH = SOURCE_ROOT / "migrations" / "0004_d3_scoped_root_foundation.sql"
 D3C2B_IMPLEMENTATION_PATH = REPO_ROOT / "docs" / "TRACK_D_D3C2B_SCOPED_ROOT_MIGRATION_IMPLEMENTATION.md"
+D3C2D_MIGRATION_PATH = SOURCE_ROOT / "migrations" / "0005_d3_activity_claim_chain_foundation.sql"
+D3C2D_IMPLEMENTATION_PATH = REPO_ROOT / "docs" / "TRACK_D_D3C2D_ACTIVITY_CLAIM_CHAIN_MIGRATION_IMPLEMENTATION.md"
 
 D3C2A_COMMAND_COLUMNS = (
     "runtime_namespace",
@@ -86,6 +88,26 @@ D3C2B_OPERATION_ROOT_COLUMNS = (
     "scope_issuer",
     "scope_digest",
     "coordination_plan_review_id",
+)
+D3C2D_ACTIVITY_RUN_COLUMNS = (
+    "runtime_namespace",
+    "provider_mode",
+    "scope_digest",
+    "coordination_plan_review_id",
+    "claim_authority_spec_digest",
+    "d3_business_fence_digest",
+)
+D3C2D_ACTIVITY_ATTEMPT_COLUMNS = (
+    "operation_run_id",
+    "runtime_namespace",
+    "provider_mode",
+    "scope_digest",
+    "coordination_plan_review_id",
+    "claim_authority_spec_digest",
+    "d3_business_fence_digest",
+    "claim_generation",
+    "command_attempt",
+    "control_epoch",
 )
 
 # D3b is a characterization/decision batch. These CURRENT_* values intentionally
@@ -531,6 +553,56 @@ def test_d3c2b_document_keeps_scoped_runtime_and_later_rollout_steps_open() -> N
         "response/failure receipt",
         "Registry/policy pins",
         "cannot precede complete Migration A",
+        "OB-10.1/10.2/10.3/10.4",
+        "R-019",
+    )
+    _assert_any(document, "served Agent tool", "served Agent command")
+    _assert_any(document, "fresh pinned non-author review", "pinned non-author review")
+
+
+def test_d3c2d_migration_is_exactly_the_dormant_activity_claim_chain_subbatch() -> None:
+    sql = D3C2D_MIGRATION_PATH.read_text(encoding="utf-8")
+    normalized = _normalized(sql)
+    alter_sections = re.findall(
+        r"ALTER TABLE ([a-z0-9_]+)(.*?);",
+        sql,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+
+    assert [table for table, _section in alter_sections] == [
+        "workflow_activity_runs",
+        "workflow_activity_attempts",
+    ]
+    run_columns = tuple(re.findall(r"\bADD COLUMN ([a-z0-9_]+)\b", alter_sections[0][1], flags=re.IGNORECASE))
+    attempt_columns = tuple(re.findall(r"\bADD COLUMN ([a-z0-9_]+)\b", alter_sections[1][1], flags=re.IGNORECASE))
+    assert run_columns == D3C2D_ACTIVITY_RUN_COLUMNS
+    assert attempt_columns == D3C2D_ACTIVITY_ATTEMPT_COLUMNS
+    assert "SET LOCAL lock_timeout = '5s'" in sql
+    assert "SET LOCAL lock_timeout = DEFAULT" in sql
+    assert normalized.count("not valid") == 18
+    assert "validate constraint" not in normalized
+    assert "foreign key" not in normalized
+    assert "create index" not in normalized
+    assert "claim_token" not in normalized
+    assert "attempt_number" not in attempt_columns
+    assert set(D3C2D_ACTIVITY_RUN_COLUMNS).isdisjoint(WORKFLOW_ACTIVITY_RUNS.column_names())
+    assert set(D3C2D_ACTIVITY_ATTEMPT_COLUMNS).isdisjoint(WORKFLOW_ACTIVITY_ATTEMPTS.column_names())
+
+
+def test_d3c2d_document_keeps_activity_runtime_and_later_migration_fragments_open() -> None:
+    document = D3C2D_IMPLEMENTATION_PATH.read_text(encoding="utf-8")
+
+    _assert_all(
+        document,
+        "Dormant ActivityRun / ActivityAttempt claim-chain foundation",
+        "six ActivityRun columns",
+        "ten ActivityAttempt columns",
+        "eighteen local `CHECK ... NOT VALID` constraints",
+        "20/22-column descriptors",
+        "attempt_number",
+        "command_attempt",
+        "workflow-event fragment",
+        "response/failure receipt",
         "OB-10.1/10.2/10.3/10.4",
         "R-019",
     )

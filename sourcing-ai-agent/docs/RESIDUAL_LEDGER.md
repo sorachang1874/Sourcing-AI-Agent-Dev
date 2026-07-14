@@ -75,6 +75,16 @@
   `7988dd50814ba1c2cc4a3c5efa7ec40ac7eb47b80cbce901ecc8c04a83a92685`; that verdict covers only this dormant
   nine-file migration slice and does not close the named residuals.
 
+- **R-019 / D3c2d (2026-07-15):** the Activity-chain Migration-A fragment adds only the dormant
+  `workflow_activity_runs` six-column and `workflow_activity_attempts` ten-column scope/coordination/claim-identity
+  shapes plus eighteen `NOT VALID` local checks. It keeps existing 20/22-column descriptors and all characterized
+  runtime writers closed to the new fields; current `attempt_number` remains retry accounting and is not future
+  post-claim `command_attempt`. The two-table timeout/recovery, populated sentinel, malformed-new-write, and descriptor
+  invisibility proofs are migration-local only. Workflow-event/intent/receipt/quarantine fragments, terminal UoW,
+  registries/manifests/factory, Migration B-D, action-root, OB-10.1/10.2/10.3/10.4, and served population remain open.
+  Therefore this candidate changes neither R-019 status nor the 26-call ratchet, and it authorizes no runtime/live path;
+  its exact implementation commit and fresh pinned review are recorded only after final validation.
+
 ## 使用方式
 
 - **批验收**：suite 失败 ⊆ 本台账未 closed 行 = 绿（green-modulo-ledger）；任何不在台账内的失败必须现场 worktree 归因，

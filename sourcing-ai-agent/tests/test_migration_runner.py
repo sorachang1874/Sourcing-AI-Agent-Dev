@@ -42,11 +42,13 @@ _REQUIRE = os.getenv("SOURCING_REQUIRE_PG_STORE_TESTS") == "1"
 _BASELINE_PATH = next(path for version, path in mr.discover_migrations() if version == "0001_baseline")
 _D3_COMMAND_MIGRATION = "0003_workflow_command_claim_fence_foundation"
 _D3_SCOPED_ROOT_MIGRATION = "0004_d3_scoped_root_foundation"
+_D3_ACTIVITY_MIGRATION = "0005_d3_activity_claim_chain_foundation"
 _ALL_MIGRATIONS = [
     "0001_baseline",
     "0002_action_request_schema_pins",
     _D3_COMMAND_MIGRATION,
     _D3_SCOPED_ROOT_MIGRATION,
+    _D3_ACTIVITY_MIGRATION,
 ]
 _D3_COMMAND_COLUMNS = (
     ("runtime_namespace", "text", "NO", "''::text"),
@@ -170,6 +172,78 @@ _D3_OPERATION_ROOT_CHECKS = {
     "operation_runs_runtime_namespace_shape_ck": ("runtime_namespace", "[^[:space:]]"),
     "operation_runs_scope_digest_shape_ck": ("scope_digest", "[0-9a-f]{64}"),
     "operation_runs_scope_issuer_shape_ck": ("scope_issuer", "plan_review_session"),
+}
+_D3_ACTIVITY_RUN_COLUMNS = (
+    ("runtime_namespace", "text", "NO", "''::text"),
+    ("provider_mode", "text", "NO", "''::text"),
+    ("scope_digest", "text", "NO", "''::text"),
+    ("coordination_plan_review_id", "bigint", "YES", None),
+    ("claim_authority_spec_digest", "text", "NO", "''::text"),
+    ("d3_business_fence_digest", "text", "NO", "''::text"),
+)
+_D3_ACTIVITY_ATTEMPT_COLUMNS = (
+    ("operation_run_id", "text", "NO", "''::text"),
+    ("runtime_namespace", "text", "NO", "''::text"),
+    ("provider_mode", "text", "NO", "''::text"),
+    ("scope_digest", "text", "NO", "''::text"),
+    ("coordination_plan_review_id", "bigint", "YES", None),
+    ("claim_authority_spec_digest", "text", "NO", "''::text"),
+    ("d3_business_fence_digest", "text", "NO", "''::text"),
+    ("claim_generation", "bigint", "NO", "0"),
+    ("command_attempt", "bigint", "NO", "0"),
+    ("control_epoch", "bigint", "NO", "0"),
+)
+_D3_ACTIVITY_RUN_CHECKS = {
+    "workflow_activity_runs_claim_authority_spec_digest_shape_ck": (
+        "claim_authority_spec_digest",
+        "[0-9a-f]{64}",
+    ),
+    "workflow_activity_runs_coordination_plan_review_id_shape_ck": (
+        "coordination_plan_review_id",
+        "> 0",
+    ),
+    "workflow_activity_runs_d3_business_fence_digest_shape_ck": (
+        "d3_business_fence_digest",
+        "[0-9a-f]{64}",
+    ),
+    "workflow_activity_runs_provider_mode_shape_ck": (
+        "provider_mode",
+        "live",
+        "simulate",
+        "scripted",
+        "replay",
+    ),
+    "workflow_activity_runs_runtime_namespace_shape_ck": ("runtime_namespace", "[^[:space:]]"),
+    "workflow_activity_runs_scope_digest_shape_ck": ("scope_digest", "[0-9a-f]{64}"),
+    "workflow_activity_runs_workspace_id_shape_ck": ("workspace_id", "[^[:space:]]"),
+}
+_D3_ACTIVITY_ATTEMPT_CHECKS = {
+    "workflow_activity_attempts_claim_authority_spec_digest_shape_ck": (
+        "claim_authority_spec_digest",
+        "[0-9a-f]{64}",
+    ),
+    "workflow_activity_attempts_claim_generation_nonnegative_ck": ("claim_generation", ">= 0"),
+    "workflow_activity_attempts_command_attempt_nonnegative_ck": ("command_attempt", ">= 0"),
+    "workflow_activity_attempts_control_epoch_nonnegative_ck": ("control_epoch", ">= 0"),
+    "workflow_activity_attempts_coordination_plan_review_id_shape_ck": (
+        "coordination_plan_review_id",
+        "> 0",
+    ),
+    "workflow_activity_attempts_d3_business_fence_digest_shape_ck": (
+        "d3_business_fence_digest",
+        "[0-9a-f]{64}",
+    ),
+    "workflow_activity_attempts_operation_run_id_shape_ck": ("operation_run_id", "[^[:space:]]"),
+    "workflow_activity_attempts_provider_mode_shape_ck": (
+        "provider_mode",
+        "live",
+        "simulate",
+        "scripted",
+        "replay",
+    ),
+    "workflow_activity_attempts_runtime_namespace_shape_ck": ("runtime_namespace", "[^[:space:]]"),
+    "workflow_activity_attempts_scope_digest_shape_ck": ("scope_digest", "[0-9a-f]{64}"),
+    "workflow_activity_attempts_workspace_id_shape_ck": ("workspace_id", "[^[:space:]]"),
 }
 
 
@@ -312,7 +386,12 @@ class MigrationRunnerTest(unittest.TestCase):
         self.assertEqual(result.stamped, ["0001_baseline"])
         self.assertEqual(
             result.applied,
-            ["0002_action_request_schema_pins", _D3_COMMAND_MIGRATION, _D3_SCOPED_ROOT_MIGRATION],
+            [
+                "0002_action_request_schema_pins",
+                _D3_COMMAND_MIGRATION,
+                _D3_SCOPED_ROOT_MIGRATION,
+                _D3_ACTIVITY_MIGRATION,
+            ],
         )
         self.assertEqual(ledger, _ALL_MIGRATIONS)
 
@@ -353,7 +432,12 @@ class MigrationRunnerTest(unittest.TestCase):
             conn.rollback()
         self.assertEqual(
             result.applied,
-            ["0002_action_request_schema_pins", _D3_COMMAND_MIGRATION, _D3_SCOPED_ROOT_MIGRATION],
+            [
+                "0002_action_request_schema_pins",
+                _D3_COMMAND_MIGRATION,
+                _D3_SCOPED_ROOT_MIGRATION,
+                _D3_ACTIVITY_MIGRATION,
+            ],
         )
         self.assertEqual(
             constraints,
@@ -566,7 +650,10 @@ class MigrationRunnerTest(unittest.TestCase):
                 )
                 checks = cur.fetchall()
 
-        self.assertEqual(result.applied, [_D3_COMMAND_MIGRATION, _D3_SCOPED_ROOT_MIGRATION])
+        self.assertEqual(
+            result.applied,
+            [_D3_COMMAND_MIGRATION, _D3_SCOPED_ROOT_MIGRATION, _D3_ACTIVITY_MIGRATION],
+        )
         self.assertEqual(columns, list(_D3_COMMAND_COLUMNS))
         self.assertEqual(
             sentinel,
@@ -727,7 +814,10 @@ class MigrationRunnerTest(unittest.TestCase):
         with psycopg.connect(self.dsn, client_encoding="utf8") as conn:
             recovered = mr.apply_pending_migrations(conn, schema=schema)
             again = mr.apply_pending_migrations(conn, schema=schema)
-        self.assertEqual(recovered.applied, [_D3_COMMAND_MIGRATION, _D3_SCOPED_ROOT_MIGRATION])
+        self.assertEqual(
+            recovered.applied,
+            [_D3_COMMAND_MIGRATION, _D3_SCOPED_ROOT_MIGRATION, _D3_ACTIVITY_MIGRATION],
+        )
         self.assertEqual(again.applied, [])
         self.assertEqual(again.already_applied, _ALL_MIGRATIONS)
 
@@ -806,7 +896,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 )
                 checks = cur.fetchall()
 
-        self.assertEqual(result.applied, [_D3_SCOPED_ROOT_MIGRATION])
+        self.assertEqual(result.applied, [_D3_SCOPED_ROOT_MIGRATION, _D3_ACTIVITY_MIGRATION])
         self.assertEqual(session_columns, list(_D3_SCOPED_SESSION_COLUMNS))
         self.assertEqual(operation_columns, list(_D3_OPERATION_ROOT_COLUMNS))
         self.assertEqual(session_sentinel, ("", "", "", "", "", "", "", "", 0, "", ""))
@@ -994,7 +1084,288 @@ class MigrationRunnerTest(unittest.TestCase):
         with psycopg.connect(self.dsn, client_encoding="utf8") as conn:
             recovered = mr.apply_pending_migrations(conn, schema=schema)
             again = mr.apply_pending_migrations(conn, schema=schema)
-        self.assertEqual(recovered.applied, [_D3_SCOPED_ROOT_MIGRATION])
+        self.assertEqual(recovered.applied, [_D3_SCOPED_ROOT_MIGRATION, _D3_ACTIVITY_MIGRATION])
+        self.assertEqual(again.applied, [])
+        self.assertEqual(again.already_applied, _ALL_MIGRATIONS)
+
+    def test_d3_activity_claim_chain_foundation_installs_on_populated_tables_and_guards_new_writes(self) -> None:
+        schema = self._fresh_schema("d3_activity_chain")
+        quoted = quote_control_plane_postgres_identifier(schema)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            migrations_dir = Path(temp_dir)
+            _copy_migrations_through(migrations_dir, 4)
+            with psycopg.connect(self.dsn, client_encoding="utf8") as conn:
+                prefix_result = mr.apply_pending_migrations(
+                    conn,
+                    schema=schema,
+                    migrations_dir=migrations_dir,
+                )
+                with conn.cursor() as cur:
+                    cur.execute(f"SET search_path TO {quoted}")
+                    cur.execute(
+                        "INSERT INTO workflow_activity_runs "
+                        "(activity_run_id, workspace_id, workflow_run_id, operation_run_id, command_id, "
+                        "activity_type, idempotency_key) VALUES "
+                        "('legacy-activity', 'workspace-a', 'workflow-a', 'operation-a', 'command-a', "
+                        "'company_identity_verification', 'legacy-activity')"
+                    )
+                    cur.execute(
+                        "INSERT INTO workflow_activity_attempts "
+                        "(attempt_id, workspace_id, activity_run_id, workflow_run_id, command_id, "
+                        "attempt_number, idempotency_key) VALUES "
+                        "('legacy-attempt', 'workspace-a', 'legacy-activity', 'workflow-a', 'command-a', "
+                        "7, 'legacy-attempt')"
+                    )
+                conn.commit()
+
+        self.assertEqual(prefix_result.applied, _ALL_MIGRATIONS[:4])
+        with psycopg.connect(self.dsn, client_encoding="utf8") as conn:
+            result = mr.apply_pending_migrations(conn, schema=schema)
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns "
+                    "WHERE table_schema = %s AND table_name = 'workflow_activity_runs' "
+                    "AND column_name = ANY(%s) ORDER BY ordinal_position",
+                    (schema, [name for name, _data_type, _nullable, _default in _D3_ACTIVITY_RUN_COLUMNS]),
+                )
+                run_columns = cur.fetchall()
+                cur.execute(
+                    "SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns "
+                    "WHERE table_schema = %s AND table_name = 'workflow_activity_attempts' "
+                    "AND column_name = ANY(%s) ORDER BY ordinal_position",
+                    (schema, [name for name, _data_type, _nullable, _default in _D3_ACTIVITY_ATTEMPT_COLUMNS]),
+                )
+                attempt_columns = cur.fetchall()
+                cur.execute(f"SET search_path TO {quoted}")
+                cur.execute(
+                    "SELECT runtime_namespace, provider_mode, scope_digest, coordination_plan_review_id, "
+                    "claim_authority_spec_digest, d3_business_fence_digest "
+                    "FROM workflow_activity_runs WHERE activity_run_id = 'legacy-activity'"
+                )
+                run_sentinel = cur.fetchone()
+                cur.execute(
+                    "SELECT operation_run_id, runtime_namespace, provider_mode, scope_digest, "
+                    "coordination_plan_review_id, claim_authority_spec_digest, d3_business_fence_digest, "
+                    "claim_generation, command_attempt, control_epoch "
+                    "FROM workflow_activity_attempts WHERE attempt_id = 'legacy-attempt'"
+                )
+                attempt_sentinel = cur.fetchone()
+                cur.execute(
+                    "SELECT t.relname, conname, convalidated, pg_get_constraintdef(c.oid) "
+                    "FROM pg_constraint c JOIN pg_class t ON t.oid = c.conrelid "
+                    "JOIN pg_namespace n ON n.oid = t.relnamespace "
+                    "WHERE n.nspname = %s AND conname = ANY(%s) ORDER BY t.relname, conname",
+                    (
+                        schema,
+                        [*_D3_ACTIVITY_RUN_CHECKS, *_D3_ACTIVITY_ATTEMPT_CHECKS],
+                    ),
+                )
+                checks = cur.fetchall()
+
+        self.assertEqual(result.applied, [_D3_ACTIVITY_MIGRATION])
+        self.assertEqual(run_columns, list(_D3_ACTIVITY_RUN_COLUMNS))
+        self.assertEqual(attempt_columns, list(_D3_ACTIVITY_ATTEMPT_COLUMNS))
+        self.assertEqual(run_sentinel, ("", "", "", None, "", ""))
+        self.assertEqual(attempt_sentinel, ("", "", "", "", None, "", "", 0, 0, 0))
+        expected_checks = {
+            **{("workflow_activity_runs", name): fragments for name, fragments in _D3_ACTIVITY_RUN_CHECKS.items()},
+            **{
+                ("workflow_activity_attempts", name): fragments
+                for name, fragments in _D3_ACTIVITY_ATTEMPT_CHECKS.items()
+            },
+        }
+        self.assertEqual(
+            [(table, name, validated) for table, name, validated, _definition in checks],
+            [(table, name, False) for table, name in sorted(expected_checks)],
+        )
+        for table, name, _validated, definition in checks:
+            normalized_definition = " ".join(str(definition).split()).casefold()
+            for required_fragment in expected_checks[(table, name)]:
+                self.assertIn(required_fragment.casefold(), normalized_definition, (name, definition))
+
+        digest_a = "a" * 64
+        digest_b = "b" * 64
+        digest_c = "c" * 64
+        with psycopg.connect(self.dsn, autocommit=True, client_encoding="utf8") as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"SET search_path TO {quoted}")
+                cur.execute(
+                    "UPDATE workflow_activity_runs SET runtime_namespace = 'runtime-a', "
+                    "provider_mode = 'scripted', scope_digest = %s, coordination_plan_review_id = 1, "
+                    "claim_authority_spec_digest = %s, d3_business_fence_digest = %s "
+                    "WHERE activity_run_id = 'legacy-activity'",
+                    (digest_a, digest_b, digest_c),
+                )
+                cur.execute(
+                    "UPDATE workflow_activity_attempts SET operation_run_id = 'operation-a', "
+                    "runtime_namespace = 'runtime-a', provider_mode = 'scripted', scope_digest = %s, "
+                    "coordination_plan_review_id = 1, claim_authority_spec_digest = %s, "
+                    "d3_business_fence_digest = %s, claim_generation = 2, command_attempt = 3, "
+                    "control_epoch = 4 WHERE attempt_id = 'legacy-attempt'",
+                    (digest_a, digest_b, digest_c),
+                )
+                cur.execute("SELECT * FROM workflow_activity_runs WHERE activity_run_id = 'legacy-activity'")
+                raw_run = dict(zip([column.name for column in cur.description], cur.fetchone(), strict=True))
+                cur.execute("SELECT * FROM workflow_activity_attempts WHERE attempt_id = 'legacy-attempt'")
+                raw_attempt = dict(zip([column.name for column in cur.description], cur.fetchone(), strict=True))
+                cur.execute(
+                    "SELECT attempt_number, command_attempt FROM workflow_activity_attempts "
+                    "WHERE attempt_id = 'legacy-attempt'"
+                )
+                retry_and_claim_attempt = cur.fetchone()
+
+        from sourcing_agent.repositories.workflow_runtime import (
+            WORKFLOW_ACTIVITY_ATTEMPTS,
+            WORKFLOW_ACTIVITY_RUNS,
+        )
+
+        mapped_run = WORKFLOW_ACTIVITY_RUNS.from_row(raw_run)
+        mapped_attempt = WORKFLOW_ACTIVITY_ATTEMPTS.from_row(raw_attempt)
+        for field_name, _data_type, _nullable, _default in _D3_ACTIVITY_RUN_COLUMNS:
+            self.assertNotIn(field_name, mapped_run)
+        for field_name, _data_type, _nullable, _default in _D3_ACTIVITY_ATTEMPT_COLUMNS:
+            self.assertNotIn(field_name, mapped_attempt)
+        self.assertEqual(retry_and_claim_attempt, (7, 3), "attempt_number and command_attempt must stay distinct")
+
+        invalid_updates = (
+            ("workflow_activity_runs", "runtime_namespace = '   '", "activity_run_id = 'legacy-activity'"),
+            ("workflow_activity_runs", "provider_mode = 'fake'", "activity_run_id = 'legacy-activity'"),
+            ("workflow_activity_runs", "workspace_id = '   '", "activity_run_id = 'legacy-activity'"),
+            ("workflow_activity_runs", "scope_digest = 'BAD'", "activity_run_id = 'legacy-activity'"),
+            (
+                "workflow_activity_runs",
+                "coordination_plan_review_id = 0",
+                "activity_run_id = 'legacy-activity'",
+            ),
+            (
+                "workflow_activity_runs",
+                "claim_authority_spec_digest = 'BAD'",
+                "activity_run_id = 'legacy-activity'",
+            ),
+            (
+                "workflow_activity_runs",
+                "d3_business_fence_digest = 'BAD'",
+                "activity_run_id = 'legacy-activity'",
+            ),
+            (
+                "workflow_activity_attempts",
+                "operation_run_id = '   '",
+                "attempt_id = 'legacy-attempt'",
+            ),
+            (
+                "workflow_activity_attempts",
+                "runtime_namespace = '   '",
+                "attempt_id = 'legacy-attempt'",
+            ),
+            ("workflow_activity_attempts", "provider_mode = 'fake'", "attempt_id = 'legacy-attempt'"),
+            ("workflow_activity_attempts", "workspace_id = '   '", "attempt_id = 'legacy-attempt'"),
+            ("workflow_activity_attempts", "scope_digest = 'BAD'", "attempt_id = 'legacy-attempt'"),
+            (
+                "workflow_activity_attempts",
+                "coordination_plan_review_id = 0",
+                "attempt_id = 'legacy-attempt'",
+            ),
+            (
+                "workflow_activity_attempts",
+                "claim_authority_spec_digest = 'BAD'",
+                "attempt_id = 'legacy-attempt'",
+            ),
+            (
+                "workflow_activity_attempts",
+                "d3_business_fence_digest = 'BAD'",
+                "attempt_id = 'legacy-attempt'",
+            ),
+            ("workflow_activity_attempts", "claim_generation = -1", "attempt_id = 'legacy-attempt'"),
+            ("workflow_activity_attempts", "command_attempt = -1", "attempt_id = 'legacy-attempt'"),
+            ("workflow_activity_attempts", "control_epoch = -1", "attempt_id = 'legacy-attempt'"),
+        )
+        for table_name, assignment, where_sql in invalid_updates:
+            with self.subTest(table=table_name, assignment=assignment):
+                with psycopg.connect(self.dsn, autocommit=True, client_encoding="utf8") as conn:
+                    with conn.cursor() as cur:
+                        cur.execute(f"SET search_path TO {quoted}")
+                        with self.assertRaises(psycopg.errors.CheckViolation):
+                            cur.execute(f"UPDATE {table_name} SET {assignment} WHERE {where_sql}")
+
+    def test_d3_activity_claim_chain_lock_wait_rolls_back_both_tables_and_recovers_once(self) -> None:
+        schema = self._fresh_schema("d3_activity_chain_lock")
+        quoted = quote_control_plane_postgres_identifier(schema)
+        blocker_ready = threading.Event()
+        release_blocker = threading.Event()
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            migrations_dir = Path(temp_dir)
+            _copy_migrations_through(migrations_dir, 4)
+            with psycopg.connect(self.dsn, client_encoding="utf8") as setup:
+                prefix_result = mr.apply_pending_migrations(
+                    setup,
+                    schema=schema,
+                    migrations_dir=migrations_dir,
+                )
+        self.assertEqual(prefix_result.applied, _ALL_MIGRATIONS[:4])
+
+        def hold_activity_attempt_write() -> None:
+            with psycopg.connect(self.dsn, client_encoding="utf8") as blocker:
+                with blocker.cursor() as cur:
+                    cur.execute(f"SET search_path TO {quoted}")
+                    cur.execute(
+                        "INSERT INTO workflow_activity_attempts "
+                        "(attempt_id, workspace_id, activity_run_id, workflow_run_id, command_id, idempotency_key) "
+                        "VALUES ('lock-attempt', 'workspace-a', 'activity-a', 'workflow-a', 'command-a', "
+                        "'lock-attempt')"
+                    )
+                    blocker_ready.set()
+                    release_blocker.wait(timeout=15)
+                blocker.rollback()
+
+        thread = threading.Thread(target=hold_activity_attempt_write, daemon=True)
+        thread.start()
+        self.assertTrue(blocker_ready.wait(timeout=5), "blocking ActivityAttempt writer did not start")
+        started = time.monotonic()
+        try:
+            with psycopg.connect(self.dsn, client_encoding="utf8") as conn:
+                with self.assertRaises(psycopg.errors.LockNotAvailable):
+                    mr.apply_pending_migrations(conn, schema=schema)
+        finally:
+            release_blocker.set()
+            thread.join(timeout=5)
+        elapsed = time.monotonic() - started
+        self.assertFalse(thread.is_alive(), "blocking ActivityAttempt writer did not exit")
+        self.assertGreaterEqual(elapsed, 4.0)
+        self.assertLess(elapsed, 8.0)
+
+        with psycopg.connect(self.dsn, autocommit=True, client_encoding="utf8") as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"SET search_path TO {quoted}")
+                cur.execute("SELECT version FROM schema_migrations ORDER BY version")
+                ledger = [row[0] for row in cur.fetchall()]
+                cur.execute(
+                    "SELECT table_name, column_name FROM information_schema.columns "
+                    "WHERE table_schema = %s AND ((table_name = 'workflow_activity_runs' AND column_name = ANY(%s)) "
+                    "OR (table_name = 'workflow_activity_attempts' AND column_name = ANY(%s))) ORDER BY 1, 2",
+                    (
+                        schema,
+                        [name for name, _data_type, _nullable, _default in _D3_ACTIVITY_RUN_COLUMNS],
+                        [name for name, _data_type, _nullable, _default in _D3_ACTIVITY_ATTEMPT_COLUMNS],
+                    ),
+                )
+                columns = cur.fetchall()
+                cur.execute(
+                    "SELECT conname FROM pg_constraint c JOIN pg_namespace n ON n.oid = c.connamespace "
+                    "WHERE n.nspname = %s AND conname = ANY(%s) ORDER BY conname",
+                    (schema, [*_D3_ACTIVITY_RUN_CHECKS, *_D3_ACTIVITY_ATTEMPT_CHECKS]),
+                )
+                checks = cur.fetchall()
+
+        self.assertEqual(ledger, _ALL_MIGRATIONS[:4])
+        self.assertEqual(columns, [], "0005 timeout must roll back both tables' columns")
+        self.assertEqual(checks, [], "0005 timeout must roll back both tables' checks")
+
+        with psycopg.connect(self.dsn, client_encoding="utf8") as conn:
+            recovered = mr.apply_pending_migrations(conn, schema=schema)
+            again = mr.apply_pending_migrations(conn, schema=schema)
+        self.assertEqual(recovered.applied, [_D3_ACTIVITY_MIGRATION])
         self.assertEqual(again.applied, [])
         self.assertEqual(again.already_applied, _ALL_MIGRATIONS)
 

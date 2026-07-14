@@ -133,6 +133,10 @@ The first item is the next bounded batch. Before its SQL is written, its owner-r
 columns, types, local checks, brownfield sentinel semantics, lock/rollback behavior, descriptor dormancy, all current
 upsert/direct-cancel interactions, and the rule that existing `attempt_number` is not future `command_attempt`.
 
+The follow-up D3c2d candidate performs that owner decision and installs only this first dormant fragment; see
+`TRACK_D_D3C2D_ACTIVITY_CLAIM_CHAIN_MIGRATION_IMPLEMENTATION.md`. It does not retroactively broaden this
+characterization or authorize the event/receipt/quarantine items below it.
+
 This order does not authorize the later items and does not move registry/manifests/bootstrap factory work ahead of a
 complete Migration A. Event terminal-UoW design, verification-intent owner/CAS, response/failure receipt owner, late
 quarantine gateways, terminal registry, and durable dispatch-exposure table/owner all remain decisions for their

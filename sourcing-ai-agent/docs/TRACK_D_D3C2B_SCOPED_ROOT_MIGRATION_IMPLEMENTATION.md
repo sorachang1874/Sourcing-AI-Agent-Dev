@@ -110,6 +110,8 @@ Migration A.
 The follow-up characterization is recorded in
 `TRACK_D_D3C2C_ACTIVITY_TERMINAL_EVIDENCE_CHARACTERIZATION.md`. It freezes the current physical inventory and derives
 the next dormant ActivityRun/ActivityAttempt fragment, but deliberately does not ratify or implement its DDL.
+That DDL is ratified and installed only by the separate D3c2d candidate documented in
+`TRACK_D_D3C2D_ACTIVITY_CLAIM_CHAIN_MIGRATION_IMPLEMENTATION.md`; neither follow-up broadens D3c2b's reviewed scope.
 
 Migration B-D, the scoped-session repository, OperationRun exact-copy runtime, Stage A/B, claim generation/token/epoch,
 business/terminal/dispatch paths, action-root durable-scope gate, OB-10.1/10.2/10.3/10.4, R-019, and served Agent tool
