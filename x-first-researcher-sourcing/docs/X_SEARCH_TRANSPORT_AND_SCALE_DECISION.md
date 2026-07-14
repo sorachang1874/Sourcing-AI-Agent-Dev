@@ -39,12 +39,13 @@ Stage 1 therefore asks for only five official-account posts and separately disti
 
 - native post retrieval with stable post ids/URLs;
 - stable external-account identity;
-- profile/Bio field availability;
 - explicit source/call receipts.
 
-The current Stage 1 result retains a 280-character excerpt and deliberately rejects full-body persistence. A later
-private raw-evidence lane may temporarily retain more provider fields only under its own schema, TTL, deletion receipt,
-and review.
+The current Stage 1 result retains a 280-character excerpt and deliberately rejects full-body persistence. It does not
+probe or make any claim about profile/Bio availability. That requires an independently owner-approved later
+field-capability probe with its own request/result schema, field-level source receipts, TTL, deletion receipt, and
+independent review. A later private raw-evidence lane may temporarily retain more provider fields only under those
+separate controls.
 
 ## Scalable task topology
 

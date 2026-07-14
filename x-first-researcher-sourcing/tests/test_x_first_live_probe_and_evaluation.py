@@ -120,7 +120,7 @@ def _outer_response(
 
 
 def _raw_x_output(*, stable_user_id: str | None = USER_ID) -> dict[str, object]:
-    post: dict[str, object] = {"canonical_url": POST_URL}
+    post: dict[str, object] = {"id": POST_ID, "canonical_url": POST_URL}
     if stable_user_id is not None:
         post["author_info"] = {
             "legacy": {"screen_name": "OpenAI"},
@@ -131,7 +131,7 @@ def _raw_x_output(*, stable_user_id: str | None = USER_ID) -> dict[str, object]:
 
 def _unbound_raw_x_output() -> dict[str, object]:
     return {
-        "posts": [{"canonical_url": POST_URL}],
+        "posts": [{"id": POST_ID, "canonical_url": POST_URL}],
         "unrelated": {"author": {"screen_name": "OpenAI", "id": USER_ID}},
     }
 
@@ -347,6 +347,8 @@ class XFirstLiveCapabilityContractTest(unittest.TestCase):
         )
         self.assertEqual(set(request_schema["required"]), set(self.request))
         self.assertEqual(result_schema["properties"]["schema_version"]["const"], LIVE_RESULT_SCHEMA_VERSION)
+        self.assertEqual(result_schema["$defs"]["usage"]["properties"]["elapsed_ms"]["maximum"], 200000)
+        self.assertNotIn("maximum", result_schema["$defs"]["usage"]["properties"]["cost_usd"])
         self.assertIn("owner_id", approval_schema["required"])
         self.assertEqual(approval_schema["properties"]["owner_id"]["const"], GLOBAL_APPROVAL_OWNER_ID)
         self.assertEqual(
@@ -359,6 +361,12 @@ class XFirstLiveCapabilityContractTest(unittest.TestCase):
                 )
             ),
         )
+        stage1_contract = (ROOT / "docs/STAGE1_LIVE_CAPABILITY_CONTRACT.md").read_text(encoding="utf-8")
+        transport_decision = (ROOT / "docs/X_SEARCH_TRANSPORT_AND_SCALE_DECISION.md").read_text(encoding="utf-8")
+        self.assertIn("bounded stdio/process-group monitor", stage1_contract)
+        self.assertNotIn("process-tree monitor", stage1_contract)
+        self.assertIn("It does not\nprobe or make any claim about profile/Bio availability", transport_decision)
+        self.assertNotIn("- profile/Bio field availability;", transport_decision)
         for mutate in (
             lambda value: value["hard_budgets"].update(max_x_search_calls=2),
             lambda value: value["claims"].update(researcher_mapping_authorized=True),
@@ -404,6 +412,62 @@ class XFirstLiveCapabilityContractTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 extract_tool_proof(max_turns, expected_session_id=SESSION_ID)
 
+    def test_raw_post_proof_requires_a_structured_colocated_matching_id(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            diagnostic = root / "diagnostic.jsonl"
+            _write_events(
+                diagnostic,
+                _session_events(
+                    raw_output={"diagnostic": f"No post record was returned; requested URL was {POST_URL}"}
+                ),
+            )
+            diagnostic_proof = extract_tool_proof(diagnostic, expected_session_id=SESSION_ID)
+            self.assertEqual(diagnostic_proof.raw_result_post_pairs, ())
+            result = build_live_result(
+                request=self.request,
+                run_id=RUN_ID,
+                session_id=SESSION_ID,
+                started_at=STARTED_AT,
+                completed_at=COMPLETED_AT,
+                elapsed_ms=1000,
+                outer=_outer_response(_inner_response(stable_user_id=None)),
+                inner=_inner_response(stable_user_id=None),
+                proof=diagnostic_proof,
+                approval_receipt_sha256="b" * 64,
+                grok_binary_sha256=PINNED_GROK_BINARY_SHA256,
+                tool_receipt_sha256="c" * 64,
+            )
+            self.assertEqual(result["capability"]["verdict"], "capability_unavailable")
+
+            mismatched = root / "mismatched.jsonl"
+            _write_events(
+                mismatched,
+                _session_events(raw_output={"posts": [{"id": "1900000000000000002", "canonical_url": POST_URL}]}),
+            )
+            mismatched_proof = extract_tool_proof(mismatched, expected_session_id=SESSION_ID)
+            self.assertEqual(mismatched_proof.raw_result_post_pairs, ())
+            self.assertIn("invalid_raw_post_record_binding", mismatched_proof.unexpected_tool_calls)
+
+            conflicting_ids = root / "conflicting-ids.jsonl"
+            _write_events(
+                conflicting_ids,
+                _session_events(
+                    raw_output={
+                        "posts": [
+                            {
+                                "id": POST_ID,
+                                "id_str": "1900000000000000002",
+                                "canonical_url": POST_URL,
+                            }
+                        ]
+                    }
+                ),
+            )
+            conflicting_proof = extract_tool_proof(conflicting_ids, expected_session_id=SESSION_ID)
+            self.assertEqual(conflicting_proof.raw_result_post_pairs, ())
+            self.assertIn("invalid_raw_post_record_binding", conflicting_proof.unexpected_tool_calls)
+
     def test_raw_post_author_binding_is_per_post_not_global(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "updates.jsonl"
@@ -428,6 +492,90 @@ class XFirstLiveCapabilityContractTest(unittest.TestCase):
         self.assertEqual(result["capability"]["verdict"], "post_retrieval_only")
         self.assertIsNone(result["observations"][0]["platform_user_id"])
         self.assertEqual(validate_live_result(result, request=self.request), [])
+
+        with tempfile.TemporaryDirectory() as directory:
+            nested_unrelated = Path(directory) / "nested-unrelated.jsonl"
+            _write_events(
+                nested_unrelated,
+                _session_events(
+                    raw_output={
+                        "posts": [
+                            {
+                                "id": POST_ID,
+                                "canonical_url": POST_URL,
+                                "author_info": {
+                                    "legacy": {"screen_name": "OpenAI"},
+                                    "unrelated_object": {"id": USER_ID},
+                                },
+                            }
+                        ]
+                    }
+                ),
+            )
+            nested_proof = extract_tool_proof(nested_unrelated, expected_session_id=SESSION_ID)
+        self.assertEqual(nested_proof.raw_result_post_pairs, ((POST_ID, POST_URL),))
+        self.assertEqual(nested_proof.raw_result_author_user_ids, ())
+        nested_result = build_live_result(
+            request=self.request,
+            run_id=RUN_ID,
+            session_id=SESSION_ID,
+            started_at=STARTED_AT,
+            completed_at=COMPLETED_AT,
+            elapsed_ms=1000,
+            outer=_outer_response(_inner_response()),
+            inner=_inner_response(),
+            proof=nested_proof,
+            approval_receipt_sha256="b" * 64,
+            grok_binary_sha256=PINNED_GROK_BINARY_SHA256,
+            tool_receipt_sha256="c" * 64,
+        )
+        self.assertEqual(nested_result["capability"]["verdict"], "post_retrieval_only")
+        self.assertFalse(nested_result["capability"]["stable_account_id_proven"])
+
+    def test_failure_receipts_reconcile_post_call_evidence_cost_and_cleanup_wall_time(self) -> None:
+        outer = _outer_response(_inner_response(), cost=0.30)
+        proof = _proof()
+        tool_receipt = live_probe._build_tool_receipt(proof=proof, session_id=SESSION_ID, outer=outer)
+        failure = live_probe._build_failure_result(
+            request=self.request,
+            run_id=RUN_ID,
+            started_at=STARTED_AT,
+            completed_at=COMPLETED_AT,
+            elapsed_ms=1000,
+            code="invalid_provider_evidence",
+            message="Provider evidence was contradictory.",
+            approval_receipt_sha256="b" * 64,
+            grok_binary_sha256=PINNED_GROK_BINARY_SHA256,
+            tool_receipt_sha256=live_probe.canonical_sha256(tool_receipt),
+            session_id=SESSION_ID,
+            proof=proof,
+            outer=outer,
+        )
+        self.assertEqual(failure["provenance"]["provider_request_id"], "provider-request")
+        self.assertEqual(failure["usage"]["result_sets"], 1)
+        self.assertEqual(failure["usage"]["model_turns"], 2)
+        self.assertEqual(failure["usage"]["cost_status"], "reported")
+        self.assertEqual(failure["usage"]["cost_usd"], 0.30)
+        self.assertEqual(validate_live_result(failure, request=self.request), [])
+        self.assertEqual(live_probe._validate_tool_receipt(tool_receipt, result=failure), [])
+
+        deadline_failure = live_probe._build_failure_result(
+            request=self.request,
+            run_id=RUN_ID,
+            started_at="2026-07-14T09:00:00.000Z",
+            completed_at="2026-07-14T09:03:05.000Z",
+            elapsed_ms=185000,
+            code="deadline_exceeded",
+            message="The provider deadline was exceeded before bounded cleanup completed.",
+            approval_receipt_sha256="b" * 64,
+            grok_binary_sha256=PINNED_GROK_BINARY_SHA256,
+        )
+        self.assertEqual(validate_live_result(deadline_failure, request=self.request), [])
+        over_cleanup_budget = copy.deepcopy(deadline_failure)
+        over_cleanup_budget["run"]["completed_at"] = "2026-07-14T09:03:21.000Z"
+        over_cleanup_budget["usage"]["elapsed_ms"] = 201000
+        over_cleanup_budget["retention"]["delete_after"] = "2026-07-15T09:03:21.000Z"
+        self.assertTrue(validate_live_result(over_cleanup_budget, request=self.request))
 
     def test_generic_unknown_duplicate_and_local_tools_fail_closed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -540,6 +688,16 @@ class XFirstLiveCapabilityContractTest(unittest.TestCase):
             proof=mismatched,
         )
         self.assertEqual(mismatch["capability"]["verdict"], "capability_unavailable")
+
+        over_cost = build_live_result(
+            **common,
+            outer=_outer_response(_inner_response(), cost=0.30),
+            inner=_inner_response(),
+            proof=_proof(),
+        )
+        self.assertEqual(over_cost["capability"]["verdict"], "budget_exceeded")
+        self.assertEqual(over_cost["usage"]["cost_usd"], 0.30)
+        self.assertEqual(validate_live_result(over_cost, request=self.request), [])
 
     def test_global_approval_owner_allows_only_one_concurrent_checkout(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -708,8 +866,16 @@ class XFirstLiveCapabilityContractTest(unittest.TestCase):
                 for mutate in (
                     lambda value: value.update(outer_stop_reason="MaxTurns"),
                     lambda value: value.update(outer_session_id="11234567-89ab-4cde-8fab-0123456789ab"),
+                    lambda value: value.update(outer_model_turns=3),
+                    lambda value: value.update(outer_total_cost_usd=0.02),
                     lambda value: value["terminal_usage"].update(total_tokens=151),
                     lambda value: value["calls"][0]["raw_result_posts"][0].update(platform_user_id=None),
+                    lambda value: value["calls"][0]["raw_result_posts"].append(
+                        copy.deepcopy(value["calls"][0]["raw_result_posts"][0])
+                    ),
+                    lambda value: value["calls"][0].update(raw_result_author_user_ids=[USER_ID, USER_ID]),
+                    lambda value: value.update(observed_model_ids=[{"not": "a-string"}]),
+                    lambda value: value["calls"][0].update(statuses=[{"not": "a-status"}]),
                     lambda value: value.update(evidence_errors=["forged"]),
                     lambda value: value.update(extra="field"),
                 ):
@@ -786,6 +952,47 @@ class XFirstLiveCapabilityContractTest(unittest.TestCase):
                 "credential-material",
                 json.dumps(result),
             )
+
+    def test_runner_persists_a_valid_post_call_failure_bundle(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            approval_root = root / "global-approval"
+            binary = root / "grok"
+            binary.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+            binary.chmod(stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
+            auth = root / "auth.json"
+            auth.write_text('{"private":"credential-material"}', encoding="utf-8")
+            auth.chmod(0o600)
+            binary_digest = hashlib.sha256(binary.read_bytes()).hexdigest()
+
+            def fake_run(command: list[str], **kwargs: object) -> BoundedCommandResult:
+                session_id = command[command.index("--session-id") + 1]
+                updates = Path(kwargs["updates_path"])
+                _write_events(updates, _session_events(session_id=session_id, raw_output=_raw_x_output()))
+                invalid_inner = {**_inner_response(), "unexpected": "field"}
+                return BoundedCommandResult(
+                    returncode=0,
+                    stdout=json.dumps(_outer_response(invalid_inner, session_id=session_id, cost=0.30)).encode(),
+                    stderr=b"",
+                    stop_reason=None,
+                )
+
+            with (
+                mock.patch("x_first.live_probe._run_bounded_command", side_effect=fake_run),
+                mock.patch("x_first.live_probe.project_root", return_value=root),
+                mock.patch("x_first.live_probe._global_approval_root", return_value=approval_root),
+                mock.patch("x_first.live_probe.PINNED_GROK_BINARY_SHA256", binary_digest),
+            ):
+                result, artifact_root = run_live_probe(execute_live=True, grok_binary=binary, auth_path=auth)
+                self.assertEqual(result["run"]["status"], "failed")
+                self.assertEqual(result["task"]["stop_reason"], "invalid_provider_evidence")
+                self.assertEqual(result["usage"]["x_search_calls"], 1)
+                self.assertEqual(result["usage"]["result_sets"], 1)
+                self.assertEqual(result["usage"]["cost_usd"], 0.30)
+                self.assertEqual(
+                    validate_artifact_pair(artifact_root / "request.json", artifact_root / "result.json"),
+                    [],
+                )
 
 
 if __name__ == "__main__":

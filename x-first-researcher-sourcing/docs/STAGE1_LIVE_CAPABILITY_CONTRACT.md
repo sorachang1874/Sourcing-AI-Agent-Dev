@@ -26,10 +26,10 @@ transition.
 | Legal/privacy basis | request `owner_decisions.legal_privacy` | Public-professional, minimized official-account evidence | Private content, protected identity, full-body retention |
 | Access mode | runner command + structured Grok session updates | Pinned Grok CLI digest, `grok-4.5`, OAuth, successful artifact requires exactly one completed `x_search` call | `web_search`, `web_fetch`, model memory, Apify, another provider |
 | Request identity | canonical sorted-JSON SHA-256 | Result binds exact closed request | Mutable prompt-only approval |
-| Tool proof | ephemeral `updates.jsonl` parser + minimized provider-evidence receipt | Exact Grok 0.2.99 envelope/session, one final terminal event, reconciled usage, structured call/update, exact tool/model, and per-post author binding | Recursive key search, global URL/author unions, prompt prose, or model-declared provenance |
+| Tool proof | ephemeral `updates.jsonl` parser + minimized provider-evidence receipt | Exact Grok 0.2.99 envelope/session, one final terminal event, reconciled usage, structured call/update, exact tool/model, and co-located post/author bindings from a closed shape registry | Recursive string/key search, global URL/author unions, prompt prose, or model-declared provenance |
 | External account | X platform | Numeric `platform_user_id` plus handle history | Handle/name as canonical person identity |
 | Post identity | X platform | Numeric post id and exact `https://x.com/OpenAI/status/{id}` | Snippet URL, search-result redirect, reconstructed id |
-| Usage | reconciled headless envelope + structured terminal + monotonic/wall clock + live process monitor | Session ids, normal stop reasons, token totals and turns must agree; one accepted execution/call/result set, max 5 observations/4 turns/180s | Missing cost represented as `$0`, `MaxTurns` accepted as success, or a detected second call treated as success |
+| Usage | reconciled headless envelope + structured terminal + monotonic/wall clock + live process monitor | Session ids, normal stop reasons, token totals and turns must agree; success is at most 180s, while a failed receipt may use at most 200s only to truthfully include bounded process-group cleanup | Missing cost represented as `$0`, an over-budget reported cost erased, `MaxTurns` accepted as success, or a detected second call treated as success |
 | Retention | exact private ignored atomic artifact bundle | Directory name equals run id; exact 3/4-file inventory; real UTC time and exact 24h expiry; deletion receipt only after verified removal | Renamed/extra-file bundle, impossible calendar time, null expiry, or prewritten deletion receipt |
 | Product state | existing product owners | All candidate/link/assertion/write arrays empty | PersonAsset, CRM, projection, export, outreach |
 
@@ -49,7 +49,7 @@ temporary GROK_HOME -- grok-4.5 -- generic web/local tools disabled
       |                                      |
       |                                      +-- one hosted X Search call maximum
       v
-bounded stdio/process-tree monitor + strict session/tool/terminal proof
+bounded stdio/process-group monitor + strict session/tool/terminal proof
       |
       +-- invalid/ambiguous --------> capability_unavailable, observations=[]
       |
@@ -82,12 +82,21 @@ the direct parent reports a clean exit, preventing a same-process-group child fr
 further work but cannot prove that a second
 server-side call was stopped before transport. A successful artifact still requires exactly one completed call and
 exact raw-result-to-observation reconciliation; any ambiguity is a failed probe. The temporary transcript is deleted.
-Only a minimized provider-evidence receipt is retained. It binds the command session to the headless envelope and
-every Grok 0.2.99 `session/update` wrapper, requires one final `_x.ai/session/update`/`turn_completed`, reconciles both
+Only a minimized provider-evidence receipt is retained. A raw post is accepted only when one reviewed structured
+record co-locates a numeric post id and the exactly matching canonical URL. A stable author id additionally requires a
+reviewed author shape with the target handle and numeric author id at exact registered paths. Only then does the
+parser bind the command session to the headless envelope and every Grok 0.2.99 `session/update` wrapper. It requires
+one final `_x.ai/session/update`/`turn_completed`, reconciles both
 usage views, and stores author ids only on the exact source records that carried their author dictionaries. Retained
 Stage 1 observations remain minimized model output mechanically bound to those source ids/URLs and the call receipt;
 they are not represented as verbatim raw provider output. A URL in one subtree and an author id elsewhere can prove at
 most post retrieval; it cannot prove stable account identity.
+
+The v1 raw-record registry accepts `canonical_url` co-located with one matching `id`, `id_str`, or `rest_id`. Author
+identity is accepted only from `author_info.rest_id + author_info.legacy.screen_name`,
+`author.id_str + author.screen_name`, `author.id + author.username`, or the corresponding two exact `user` shapes.
+Unknown shapes remain post-retrieval-only or unavailable;
+the parser never searches arbitrary prose or recursively adopts another nested object's generic `id`.
 
 ## Budgets and kill switch
 
@@ -97,6 +106,7 @@ most post retrieval; it cannot prove stable account identity.
 - at most five observations;
 - at most four model turns;
 - 180-second subprocess deadline;
+- at most 20 additional seconds in a failed wall-clock receipt for bounded kill/wait verification; never for success;
 - reported monetary cost at most `$0.25`;
 - no fallback, retry, graph expansion, or researcher task.
 
@@ -107,6 +117,9 @@ be reported as free.
 Any generic-web/local tool, second X call, budget overrun, invalid/duplicate post identity, missing structured provenance,
 unsafe OAuth file, unbounded output, protected/proxy content, full-body retention, or product-writer field fails closed.
 Failed results discard all observations.
+When a call has already occurred, a failure receipt still preserves and reconciles the observed provider request id,
+call/completed-result counts, terminal and outer turn counts, raw ids, model ids, and reported or unreported cost. An
+over-budget reported cost remains visible in the failed receipt instead of being rewritten as unreported.
 
 Request/result/approval/tool files are written to a private staging directory and renamed as one atomic bundle. A
 successful bundle has exactly four files; a failure without structured tool evidence has exactly three. Validation

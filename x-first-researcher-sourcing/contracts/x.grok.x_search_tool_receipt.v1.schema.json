@@ -11,6 +11,8 @@
     "outer_session_id",
     "outer_stop_reason",
     "outer_usage",
+    "outer_model_turns",
+    "outer_total_cost_usd",
     "session_updates_sha256",
     "session_update_bytes",
     "terminal_stop_reason",
@@ -41,6 +43,8 @@
         }
       ]
     },
+    "outer_model_turns": {"type": ["integer", "null"], "minimum": 1, "maximum": 4},
+    "outer_total_cost_usd": {"type": ["number", "null"], "minimum": 0},
     "session_updates_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "session_update_bytes": {"type": "integer", "minimum": 1, "maximum": 5000000},
     "terminal_stop_reason": {"type": ["string", "null"], "enum": ["end_turn", "max_turns", null]},

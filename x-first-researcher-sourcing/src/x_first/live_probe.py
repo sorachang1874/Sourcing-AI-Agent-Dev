@@ -47,6 +47,7 @@ MAX_OBSERVATIONS = 5
 MAX_ERRORS = 1
 MAX_TURNS = 4
 MAX_ELAPSED_MS = 180_000
+MAX_FAILURE_WALL_ELAPSED_MS = 200_000
 MAX_REPORTED_COST_USD = 0.25
 MAX_STDOUT_BYTES = 256_000
 MAX_STDERR_BYTES = 256_000
@@ -416,77 +417,79 @@ def _tool_identity(update: Mapping[str, Any]) -> str | None:
     return None
 
 
-def _walk_values(value: Any) -> Iterable[Any]:
-    yield value
-    if isinstance(value, dict):
-        for child in value.values():
-            yield from _walk_values(child)
-    elif isinstance(value, list):
-        for child in value:
-            yield from _walk_values(child)
+def _path_value(value: Mapping[str, Any], path: tuple[str, ...]) -> Any:
+    current: Any = value
+    for key in path:
+        if not isinstance(current, Mapping) or key not in current:
+            return None
+        current = current[key]
+    return current
 
 
-def _raw_x_post_pairs(value: Any) -> set[tuple[str, str]]:
-    pairs: set[tuple[str, str]] = set()
-    pattern = re.compile(r"https://x\.com/OpenAI/status/([0-9]{5,32})(?![0-9])")
-    for child in _walk_values(value):
-        if not isinstance(child, str):
-            continue
-        for match in pattern.finditer(child):
-            object_id = match.group(1)
-            pairs.add((object_id, f"https://x.com/{TARGET_HANDLE}/status/{object_id}"))
-    return pairs
-
-
-def _contains_target_handle_field(value: Any) -> bool:
-    if not isinstance(value, dict):
-        return False
-    handle_keys = {"screen_name", "screenname", "username", "handle", "author_handle"}
-    for node in _walk_dicts(value):
-        for key, child in node.items():
-            normalized_key = re.sub(r"[^a-z0-9]+", "_", str(key).casefold()).strip("_")
-            if normalized_key in handle_keys and isinstance(child, str):
-                if child.strip().lstrip("@").casefold() == TARGET_HANDLE.casefold():
-                    return True
-    return False
+def _structured_post_pair(value: Mapping[str, Any]) -> tuple[tuple[str, str] | None, bool]:
+    """Return one co-located post id/URL pair from the closed reviewed record shapes."""
+    canonical_url = value.get("canonical_url")
+    if canonical_url is None:
+        return None, False
+    id_keys = ("id", "id_str", "rest_id")
+    identifiers = [value[id_key] for id_key in id_keys if id_key in value]
+    if (
+        not isinstance(canonical_url, str)
+        or not identifiers
+        or any(not isinstance(identifier, str) for identifier in identifiers)
+        or len(set(identifiers)) != 1
+    ):
+        return None, True
+    object_id = identifiers[0]
+    if re.fullmatch(r"[0-9]{5,32}", object_id) is None:
+        return None, True
+    expected_url = f"https://x.com/{TARGET_HANDLE}/status/{object_id}"
+    if canonical_url != expected_url:
+        return None, True
+    return (object_id, canonical_url), False
 
 
 def _author_ids_for_post_record(value: Mapping[str, Any]) -> set[str]:
+    """Read author identity only from exact, co-located reviewed author shapes."""
+    shapes = (
+        ("author_info", ("legacy", "screen_name"), ("rest_id",)),
+        ("author", ("screen_name",), ("id_str",)),
+        ("author", ("username",), ("id",)),
+        ("user", ("screen_name",), ("id_str",)),
+        ("user", ("username",), ("id",)),
+    )
     identifiers: set[str] = set()
-    author_keys = {"author", "author_info", "authorinfo", "user", "user_info", "userinfo", "profile"}
-    id_keys = {"id", "id_str", "idstr", "rest_id", "restid", "user_id", "userid", "platform_user_id"}
-    for key, child in value.items():
-        normalized_key = re.sub(r"[^a-z0-9]+", "_", str(key).casefold()).strip("_")
-        if normalized_key not in author_keys or not isinstance(child, dict) or not _contains_target_handle_field(child):
+    for author_key, handle_path, id_path in shapes:
+        author = value.get(author_key)
+        if not isinstance(author, Mapping):
             continue
-        for node in _walk_dicts(child):
-            for nested_key, candidate in node.items():
-                normalized_nested_key = re.sub(r"[^a-z0-9]+", "_", str(nested_key).casefold()).strip("_")
-                if (
-                    normalized_nested_key in id_keys
-                    and isinstance(candidate, str)
-                    and re.fullmatch(r"[0-9]{3,32}", candidate)
-                ):
-                    identifiers.add(candidate)
+        handle = _path_value(author, handle_path)
+        identifier = _path_value(author, id_path)
+        if (
+            isinstance(handle, str)
+            and handle.strip().lstrip("@").casefold() == TARGET_HANDLE.casefold()
+            and isinstance(identifier, str)
+            and re.fullmatch(r"[0-9]{3,32}", identifier)
+        ):
+            identifiers.add(identifier)
     return identifiers
 
 
-def _raw_x_posts(value: Any) -> tuple[tuple[RawXPostReceipt, ...], bool]:
-    all_pairs = _raw_x_post_pairs(value)
-    bound_ids: dict[tuple[str, str], set[str]] = {pair: set() for pair in all_pairs}
+def _raw_x_posts(value: Any) -> tuple[tuple[RawXPostReceipt, ...], tuple[str, ...]]:
+    bound_ids: dict[tuple[str, str], set[str]] = {}
+    invalid_record = False
     for node in _walk_dicts(value):
-        direct_pairs: set[tuple[str, str]] = set()
-        for key, child in node.items():
-            normalized_key = re.sub(r"[^a-z0-9]+", "_", str(key).casefold()).strip("_")
-            if normalized_key in {"canonical_url", "url", "post_url", "tweet_url"} and isinstance(child, str):
-                direct_pairs.update(_raw_x_post_pairs(child))
-        if not direct_pairs:
+        pair, malformed = _structured_post_pair(node)
+        invalid_record = invalid_record or malformed
+        if pair is None:
             continue
         author_ids = _author_ids_for_post_record(node)
-        if author_ids:
-            for pair in direct_pairs:
-                bound_ids.setdefault(pair, set()).update(author_ids)
-    conflicting = any(len(values) > 1 for values in bound_ids.values())
+        bound_ids.setdefault(pair, set()).update(author_ids)
+    binding_errors: list[str] = []
+    if invalid_record:
+        binding_errors.append("invalid_raw_post_record_binding")
+    if any(len(values) > 1 for values in bound_ids.values()):
+        binding_errors.append("conflicting_raw_post_author_binding")
     posts = tuple(
         RawXPostReceipt(
             platform_object_id=object_id,
@@ -495,9 +498,9 @@ def _raw_x_posts(value: Any) -> tuple[tuple[RawXPostReceipt, ...], bool]:
             if len(bound_ids[(object_id, canonical_url)]) == 1
             else None,
         )
-        for object_id, canonical_url in sorted(all_pairs)
+        for object_id, canonical_url in sorted(bound_ids)
     )
-    return posts, conflicting
+    return posts, tuple(binding_errors)
 
 
 def _parse_provider_usage(value: Any) -> ProviderUsageReceipt:
@@ -685,12 +688,15 @@ def _parse_update_stream(
                 if not isinstance(status, str) or not status.strip():
                     evidence_errors.add("tool update status is invalid")
                 else:
-                    x_calls.setdefault(call_id, set()).add(status.strip().lower())
+                    normalized_status = status.strip().lower()
+                    if normalized_status not in {"in_progress", "completed"}:
+                        evidence_errors.add("tool update status is invalid")
+                    else:
+                        x_calls.setdefault(call_id, set()).add(normalized_status)
             raw_output = update.get("rawOutput")
             if raw_output is not None:
-                posts, conflicting = _raw_x_posts(raw_output)
-                if conflicting:
-                    unexpected.add("conflicting_raw_post_author_binding")
+                posts, binding_errors = _raw_x_posts(raw_output)
+                unexpected.update(binding_errors)
                 _merge_raw_posts(receipt_bindings.setdefault(call_id, {}), posts)
                 _merge_raw_posts(all_bindings, posts)
         elif kind == "turn_completed":
@@ -1029,8 +1035,23 @@ def _build_failure_result(
     tool_receipt_sha256: str | None = None,
     session_id: str | None = None,
     proof: ToolProof | None = None,
+    outer: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     raw_result_pairs = set(proof.raw_result_post_pairs) if proof is not None else set()
+    outer_mapping = outer if isinstance(outer, Mapping) else {}
+    provider_request_id = outer_mapping.get("requestId")
+    if not isinstance(provider_request_id, str) or not provider_request_id:
+        provider_request_id = None
+    observed_turns = []
+    outer_turns = outer_mapping.get("num_turns")
+    if type(outer_turns) is int and outer_turns >= 0:
+        observed_turns.append(outer_turns)
+    if proof is not None and proof.terminal_usage is not None:
+        observed_turns.append(proof.terminal_usage.model_turns)
+    model_turns = max(observed_turns, default=0)
+    cost_status, cost_usd = _cost_projection(outer_mapping)
+    if cost_status == "invalid":
+        cost_status, cost_usd = "unreported", None
     return {
         "schema_version": LIVE_RESULT_SCHEMA_VERSION,
         "probe_id": request["probe_id"],
@@ -1050,7 +1071,7 @@ def _build_failure_result(
             "access_mode": "unavailable",
             "model_id": MODEL_ID,
             "tool_id": TOOL_ID,
-            "provider_request_id": None,
+            "provider_request_id": provider_request_id,
             "session_id": session_id if proof is not None else None,
             "prompt_version": PROMPT_VERSION,
             "prompt_sha256": canonical_sha256({"prompt": build_grok_prompt(request)}),
@@ -1065,11 +1086,11 @@ def _build_failure_result(
         "usage": {
             "executions": 1,
             "x_search_calls": proof.x_search_calls if proof is not None else 0,
-            "result_sets": 0,
+            "result_sets": proof.x_search_completed_calls if proof is not None else 0,
             "observations": 0,
-            "model_turns": 0,
-            "cost_status": "unreported",
-            "cost_usd": None,
+            "model_turns": model_turns,
+            "cost_status": cost_status,
+            "cost_usd": cost_usd,
             "elapsed_ms": elapsed_ms,
         },
         "observations": [],
@@ -1300,6 +1321,8 @@ def _build_tool_receipt(
     outer: Mapping[str, Any] | None,
 ) -> dict[str, Any]:
     outer_usage = outer.get("usage") if isinstance(outer, Mapping) else None
+    outer_model_turns = outer.get("num_turns") if isinstance(outer, Mapping) else None
+    outer_cost = outer.get("total_cost_usd") if isinstance(outer, Mapping) else None
     return {
         "schema_version": TOOL_RECEIPT_SCHEMA_VERSION,
         "session_id": session_id,
@@ -1307,6 +1330,8 @@ def _build_tool_receipt(
         "outer_session_id": outer.get("sessionId") if isinstance(outer, Mapping) else None,
         "outer_stop_reason": outer.get("stopReason") if isinstance(outer, Mapping) else None,
         "outer_usage": dict(outer_usage) if isinstance(outer_usage, Mapping) else None,
+        "outer_model_turns": outer_model_turns if type(outer_model_turns) is int else None,
+        "outer_total_cost_usd": outer_cost if type(outer_cost) in {int, float} else None,
         "session_updates_sha256": proof.updates_sha256,
         "session_update_bytes": proof.update_bytes,
         "terminal_stop_reason": proof.terminal_stop_reason,
@@ -1606,7 +1631,7 @@ def run_live_probe(
             )
         except Exception:
             completed_at = _utc_now()
-            elapsed_ms = min(round((time.monotonic() - started_monotonic) * 1000), MAX_ELAPSED_MS)
+            elapsed_ms = round((time.monotonic() - started_monotonic) * 1000)
             result = _build_failure_result(
                 request=live_request,
                 run_id=run_id,
@@ -1681,6 +1706,7 @@ def run_live_probe(
                     tool_receipt_sha256=tool_receipt_sha256,
                     session_id=session_id,
                     proof=proof,
+                    outer=outer,
                 )
     errors = validate_live_result(result, request=live_request)
     if errors:
@@ -1689,7 +1715,7 @@ def run_live_probe(
             run_id=run_id,
             started_at=started_at,
             completed_at=_utc_now(),
-            elapsed_ms=min(round((time.monotonic() - started_monotonic) * 1000), MAX_ELAPSED_MS),
+            elapsed_ms=round((time.monotonic() - started_monotonic) * 1000),
             code="result_validation_failed",
             message="The bounded live result failed its executable contract.",
             approval_receipt_sha256=approval_receipt_sha256,
@@ -1697,6 +1723,7 @@ def run_live_probe(
             tool_receipt_sha256=canonical_sha256(tool_receipt) if tool_receipt is not None else None,
             session_id=session_id,
             proof=proof,
+            outer=outer,
         )
         if validate_live_result(result, request=live_request):
             raise RuntimeError("internal failure artifact did not satisfy the executable contract")
@@ -1833,13 +1860,13 @@ def build_live_result(
         "capability": {
             "verdict": verdict,
             "proof_scope": "bounded_live_official_account",
-            "x_native_access_proven": x_native_proven,
-            "stable_account_id_proven": stable_account_id and x_native_proven,
+            "x_native_access_proven": x_native_proven and successful,
+            "stable_account_id_proven": stable_account_id and x_native_proven and successful,
             "stage2_eligible_for_owner_review": verdict == "x_native_identity_ready",
         },
         "provenance": {
             "provider_id": PROVIDER_ID,
-            "access_mode": "x_search" if x_native_proven else "unavailable",
+            "access_mode": "x_search" if successful else "unavailable",
             "model_id": MODEL_ID,
             "tool_id": TOOL_ID,
             "provider_request_id": outer.get("requestId") if isinstance(outer.get("requestId"), str) else None,
@@ -2082,6 +2109,7 @@ def validate_live_result(payload: Any, *, request: Any) -> list[str]:
         not isinstance(model_ids, list)
         or len(model_ids) > (1 if successful else MAX_VIOLATION_RECEIPT_CALLS)
         or any(not isinstance(value, str) or not value or len(value) > 80 for value in model_ids)
+        or len(set(model_ids)) != len(model_ids)
         or (successful and model_ids != [MODEL_ID])
     ):
         errors.append("result effective-model receipt is invalid")
@@ -2128,11 +2156,12 @@ def validate_live_result(payload: Any, *, request: Any) -> list[str]:
     integer_fields = ("executions", "x_search_calls", "result_sets", "observations", "model_turns", "elapsed_ms")
     if any(type(usage.get(field)) is not int or usage[field] < 0 for field in integer_fields):
         errors.append("result usage counters must be non-negative integers")
+    maximum_elapsed_ms = MAX_ELAPSED_MS if successful else MAX_FAILURE_WALL_ELAPSED_MS
     if (
         usage.get("executions") != 1
         or usage.get("x_search_calls", 0) > (1 if successful else MAX_VIOLATION_RECEIPT_CALLS)
         or usage.get("result_sets", 0) > (1 if successful else MAX_VIOLATION_RECEIPT_CALLS)
-        or usage.get("elapsed_ms", 0) > MAX_ELAPSED_MS
+        or usage.get("elapsed_ms", 0) > maximum_elapsed_ms
     ):
         errors.append("result execution evidence exceeds the bounded failure-receipt contract")
     if successful and (usage.get("x_search_calls") != 1 or usage.get("result_sets") != 1):
@@ -2140,7 +2169,7 @@ def validate_live_result(payload: Any, *, request: Any) -> list[str]:
     if usage.get("observations") != len(observations) or usage.get("model_turns", 0) > MAX_TURNS:
         errors.append("result usage does not reconcile")
     if run_duration_ms is not None and (
-        run_duration_ms > MAX_ELAPSED_MS
+        run_duration_ms > maximum_elapsed_ms
         or type(usage.get("elapsed_ms")) is not int
         or abs(usage["elapsed_ms"] - run_duration_ms) > 2_000
     ):
@@ -2152,7 +2181,7 @@ def validate_live_result(payload: Any, *, request: Any) -> list[str]:
             type(cost_usd) not in {int, float}
             or not math.isfinite(float(cost_usd))
             or cost_usd < 0
-            or cost_usd > MAX_REPORTED_COST_USD
+            or (successful and cost_usd > MAX_REPORTED_COST_USD)
         ):
             errors.append("reported cost exceeds the bounded contract")
     elif cost_status != "unreported" or cost_usd is not None:
@@ -2268,6 +2297,8 @@ def _validate_tool_receipt(receipt: Any, *, result: Mapping[str, Any]) -> list[s
         "outer_session_id",
         "outer_stop_reason",
         "outer_usage",
+        "outer_model_turns",
+        "outer_total_cost_usd",
         "session_updates_sha256",
         "session_update_bytes",
         "terminal_stop_reason",
@@ -2300,14 +2331,22 @@ def _validate_tool_receipt(receipt: Any, *, result: Mapping[str, Any]) -> list[s
     update_bytes = receipt.get("session_update_bytes")
     if type(update_bytes) is not int or not 0 < update_bytes <= MAX_SESSION_UPDATES_BYTES:
         errors.append("tool receipt update size is invalid")
-    if receipt.get("observed_model_ids") != provenance.get("observed_model_ids"):
+    observed_model_ids = receipt.get("observed_model_ids")
+    if (
+        not isinstance(observed_model_ids, list)
+        or len(observed_model_ids) > MAX_VIOLATION_RECEIPT_CALLS
+        or any(not isinstance(value, str) or not value or len(value) > 80 for value in observed_model_ids)
+        or len(set(observed_model_ids)) != len(observed_model_ids)
+    ):
+        errors.append("tool receipt observed-model list is invalid")
+    if observed_model_ids != provenance.get("observed_model_ids"):
         errors.append("tool receipt model ids do not reconcile")
     unexpected = receipt.get("unexpected_tool_calls")
     if (
         not isinstance(unexpected, list)
         or len(unexpected) > MAX_VIOLATION_RECEIPT_CALLS
-        or len(set(unexpected)) != len(unexpected)
         or any(not isinstance(value, str) or not value or len(value) > 160 for value in unexpected)
+        or len(set(unexpected)) != len(unexpected)
     ):
         errors.append("tool receipt unexpected-tool list is invalid")
     if successful and unexpected:
@@ -2316,8 +2355,8 @@ def _validate_tool_receipt(receipt: Any, *, result: Mapping[str, Any]) -> list[s
     if (
         not isinstance(evidence_errors, list)
         or len(evidence_errors) > MAX_VIOLATION_RECEIPT_CALLS
-        or len(set(evidence_errors)) != len(evidence_errors)
         or any(not isinstance(value, str) or not value or len(value) > 200 for value in evidence_errors)
+        or len(set(evidence_errors)) != len(evidence_errors)
     ):
         errors.append("tool receipt evidence-error list is invalid")
     if successful and evidence_errors:
@@ -2334,49 +2373,85 @@ def _validate_tool_receipt(receipt: Any, *, result: Mapping[str, Any]) -> list[s
     }
     terminal_usage = receipt.get("terminal_usage")
     outer_usage = receipt.get("outer_usage")
-    if successful:
-        if receipt.get("outer_session_id") != receipt.get("session_id"):
-            errors.append("successful tool receipt outer session mismatch")
-        if receipt.get("outer_stop_reason") != "EndTurn" or receipt.get("terminal_stop_reason") != "end_turn":
-            errors.append("successful tool receipt lacks matching terminal stop reasons")
-        if not isinstance(terminal_usage, dict) or set(terminal_usage) != normalized_usage_fields:
-            errors.append("successful tool receipt terminal usage is invalid")
-            terminal_usage = {}
-        elif any(type(terminal_usage.get(field)) is not int or terminal_usage[field] < 0 for field in terminal_usage):
-            errors.append("successful tool receipt terminal counters are invalid")
+    outer_session_id = receipt.get("outer_session_id")
+    if outer_session_id is not None:
+        try:
+            if not isinstance(outer_session_id, str):
+                raise ValueError("outer session id is not a string")
+            uuid.UUID(str(outer_session_id))
+        except (ValueError, AttributeError):
+            errors.append("tool receipt outer session id is invalid")
+    outer_stop_reason = receipt.get("outer_stop_reason")
+    if outer_stop_reason not in {None, "EndTurn"}:
+        errors.append("tool receipt outer stop reason is invalid")
+    terminal_stop_reason = receipt.get("terminal_stop_reason")
+    if terminal_stop_reason not in {None, "end_turn", "max_turns"}:
+        errors.append("tool receipt terminal stop reason is invalid")
+    outer_model_turns = receipt.get("outer_model_turns")
+    if outer_model_turns is not None and (
+        type(outer_model_turns) is not int or not 1 <= outer_model_turns <= MAX_TURNS
+    ):
+        errors.append("tool receipt outer model turns are invalid")
+        outer_model_turns = None
+    outer_cost = receipt.get("outer_total_cost_usd")
+    if outer_cost is not None and (
+        type(outer_cost) not in {int, float} or not math.isfinite(float(outer_cost)) or outer_cost < 0
+    ):
+        errors.append("tool receipt outer cost is invalid")
+        outer_cost = None
+    if outer_usage is not None:
         if not isinstance(outer_usage, dict) or set(outer_usage) != {
             "input_tokens",
             "output_tokens",
             "total_tokens",
         }:
-            errors.append("successful tool receipt outer usage is invalid")
-            outer_usage = {}
+            errors.append("tool receipt outer usage is invalid")
+            outer_usage = None
         elif any(type(outer_usage.get(field)) is not int or outer_usage[field] < 0 for field in outer_usage):
-            errors.append("successful tool receipt outer counters are invalid")
-        if terminal_usage and (
-            terminal_usage.get("total_tokens")
-            != terminal_usage.get("input_tokens", -1) + terminal_usage.get("output_tokens", -1)
-            or terminal_usage.get("cached_read_tokens", 0) > terminal_usage.get("input_tokens", -1)
-            or terminal_usage.get("reasoning_tokens", 0) > terminal_usage.get("output_tokens", -1)
-            or not 1 <= terminal_usage.get("model_turns", 0) <= MAX_TURNS
-            or terminal_usage.get("model_calls", 0) < 1
+            errors.append("tool receipt outer counters are invalid")
+            outer_usage = None
+        elif outer_usage["total_tokens"] != outer_usage["input_tokens"] + outer_usage["output_tokens"]:
+            errors.append("tool receipt outer token usage does not reconcile")
+    if terminal_usage is not None:
+        if not isinstance(terminal_usage, dict) or set(terminal_usage) != normalized_usage_fields:
+            errors.append("tool receipt terminal usage is invalid")
+            terminal_usage = None
+        elif any(type(terminal_usage.get(field)) is not int or terminal_usage[field] < 0 for field in terminal_usage):
+            errors.append("tool receipt terminal counters are invalid")
+            terminal_usage = None
+        elif (
+            terminal_usage["total_tokens"] != terminal_usage["input_tokens"] + terminal_usage["output_tokens"]
+            or terminal_usage["cached_read_tokens"] > terminal_usage["input_tokens"]
+            or terminal_usage["reasoning_tokens"] > terminal_usage["output_tokens"]
+            or not 1 <= terminal_usage["model_turns"] <= MAX_TURNS
+            or terminal_usage["model_calls"] < 1
         ):
-            errors.append("successful tool receipt terminal usage does not reconcile")
-        if outer_usage and (
-            outer_usage.get("total_tokens")
-            != outer_usage.get("input_tokens", -1) + outer_usage.get("output_tokens", -1)
-            or any(outer_usage.get(field) != terminal_usage.get(field) for field in outer_usage)
-        ):
-            errors.append("tool receipt outer and terminal token usage do not reconcile")
-        if terminal_usage and terminal_usage.get("model_turns") != result_usage.get("model_turns"):
-            errors.append("tool receipt model turns do not match result usage")
-    else:
-        if receipt.get("terminal_stop_reason") not in {None, "end_turn", "max_turns"}:
-            errors.append("failed tool receipt terminal stop reason is invalid")
-        if terminal_usage is not None and (
-            not isinstance(terminal_usage, dict) or set(terminal_usage) != normalized_usage_fields
-        ):
-            errors.append("failed tool receipt terminal usage is malformed")
+            errors.append("tool receipt terminal usage does not reconcile")
+    observed_turns = [
+        value
+        for value in (
+            outer_model_turns,
+            terminal_usage.get("model_turns") if isinstance(terminal_usage, dict) else None,
+        )
+        if type(value) is int
+    ]
+    if result_usage.get("model_turns") != max(observed_turns, default=0):
+        errors.append("tool receipt model turns do not match result usage")
+    expected_cost_status = "reported" if outer_cost is not None else "unreported"
+    expected_cost = outer_cost if outer_cost is not None else None
+    if result_usage.get("cost_status") != expected_cost_status or result_usage.get("cost_usd") != expected_cost:
+        errors.append("tool receipt cost does not match result usage")
+    if successful:
+        if outer_session_id != receipt.get("session_id"):
+            errors.append("successful tool receipt outer session mismatch")
+        if outer_stop_reason != "EndTurn" or terminal_stop_reason != "end_turn":
+            errors.append("successful tool receipt lacks matching terminal stop reasons")
+        if outer_usage is None or terminal_usage is None or outer_model_turns is None:
+            errors.append("successful tool receipt lacks complete usage evidence")
+        elif any(
+            outer_usage.get(field) != terminal_usage.get(field) for field in outer_usage
+        ) or outer_model_turns != terminal_usage.get("model_turns"):
+            errors.append("tool receipt outer and terminal usage do not reconcile")
     calls = receipt.get("calls")
     if not isinstance(calls, list) or len(calls) > (1 if successful else MAX_VIOLATION_RECEIPT_CALLS):
         errors.append("tool receipt exceeds the bounded call-receipt contract")
@@ -2408,8 +2483,8 @@ def _validate_tool_receipt(receipt: Any, *, result: Mapping[str, Any]) -> list[s
         statuses = call.get("statuses")
         if (
             not isinstance(statuses, list)
+            or any(not isinstance(value, str) or value not in {"in_progress", "completed"} for value in statuses)
             or len(set(statuses)) != len(statuses)
-            or any(value not in {"in_progress", "completed"} for value in statuses)
         ):
             errors.append("tool-call receipt statuses are invalid")
         else:
@@ -2421,6 +2496,7 @@ def _validate_tool_receipt(receipt: Any, *, result: Mapping[str, Any]) -> list[s
         if not isinstance(posts, list) or len(posts) > MAX_VIOLATION_RECEIPT_POSTS:
             errors.append("tool-call raw post receipt exceeds the bound")
             posts = []
+        seen_raw_posts: set[tuple[str, str, str | None]] = set()
         for post in posts:
             if not isinstance(post, dict) or set(post) != {
                 "platform_object_id",
@@ -2445,6 +2521,11 @@ def _validate_tool_receipt(receipt: Any, *, result: Mapping[str, Any]) -> list[s
             ):
                 errors.append("tool-call raw post identity is invalid")
                 continue
+            raw_post_identity = (object_id, canonical_url, platform_user_id)
+            if raw_post_identity in seen_raw_posts:
+                errors.append("tool-call raw post receipt contains duplicates")
+                continue
+            seen_raw_posts.add(raw_post_identity)
             pair = (object_id, canonical_url)
             if pair in post_bindings and post_bindings[pair] != platform_user_id:
                 errors.append("tool-call raw post has conflicting author bindings")
@@ -2457,6 +2538,7 @@ def _validate_tool_receipt(receipt: Any, *, result: Mapping[str, Any]) -> list[s
             not isinstance(ids, list)
             or len(ids) > (1 if successful else MAX_VIOLATION_RECEIPT_CALLS)
             or any(not isinstance(value, str) or re.fullmatch(r"[0-9]{3,32}", value) is None for value in ids)
+            or len(set(ids)) != len(ids)
         ):
             errors.append("tool-call raw author ids are invalid")
         elif sorted(ids) != sorted(
