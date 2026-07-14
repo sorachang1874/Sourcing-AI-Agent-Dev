@@ -626,6 +626,22 @@ def test_causal_binding_requires_one_complete_root_exec_turn_and_exact_messages(
     assert runner._review_causal_binding_valid(valid_binding) is True
     assert valid_blockers == []
 
+    memory_annotation = """<oai-mem-citation>
+<citation_entries>
+MEMORY.md:10-12|note=[pinned scope evidence]
+</citation_entries>
+<rollout_ids>
+019f5c2a-7a5b-71f0-8ad4-14fe34740cf3
+</rollout_ids>
+</oai-mem-citation>"""
+    annotated_events = json.loads(json.dumps(base_events))
+    annotated_events[6]["payload"]["content"][0]["text"] = (
+        final_output.rstrip("\r\n") + "\n\n" + memory_annotation
+    )
+    annotated_binding, annotated_blockers = causal(annotated_events)
+    assert runner._review_causal_binding_valid(annotated_binding) is True
+    assert annotated_blockers == []
+
     scenarios = (
         ("non_exec", "session_source_exec", "review_artifact_rollout_causal_session_source_not_exec"),
         (
@@ -640,6 +656,16 @@ def test_causal_binding_requires_one_complete_root_exec_turn_and_exact_messages(
         ),
         (
             "wrong_final_response",
+            "final_response_item_exact",
+            "review_artifact_rollout_causal_final_response_item_mismatch",
+        ),
+        (
+            "arbitrary_final_response_suffix",
+            "final_response_item_exact",
+            "review_artifact_rollout_causal_final_response_item_mismatch",
+        ),
+        (
+            "malformed_memory_annotation",
             "final_response_item_exact",
             "review_artifact_rollout_causal_final_response_item_mismatch",
         ),
@@ -662,6 +688,14 @@ def test_causal_binding_requires_one_complete_root_exec_turn_and_exact_messages(
             events.pop(3)
         elif scenario == "wrong_final_response":
             events[6]["payload"]["content"][0]["text"] = "different final"
+        elif scenario == "arbitrary_final_response_suffix":
+            events[6]["payload"]["content"][0]["text"] = final_output + "unbound suffix"
+        elif scenario == "malformed_memory_annotation":
+            events[6]["payload"]["content"][0]["text"] = (
+                final_output.rstrip("\r\n")
+                + "\n\n"
+                + memory_annotation.replace("</rollout_ids>", "</wrong_tag>")
+            )
         elif scenario == "wrong_final_event":
             events[5]["payload"]["message"] = "different final"
         elif scenario == "wrong_task_complete":

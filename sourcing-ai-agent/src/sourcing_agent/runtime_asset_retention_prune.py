@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import posixpath
+import re
 import shutil
 import stat
 import subprocess
@@ -2670,6 +2671,63 @@ def _review_normalize_trailing_newlines(value: str) -> str:
     return value.rstrip("\r\n")
 
 
+_MEMORY_CITATION_ENTRY_PATTERN = re.compile(
+    r"^[^<>\r\n]+:\d+-\d+\|note=\[[^<>\r\n]*\]$"
+)
+_MEMORY_CITATION_ROLLOUT_ID_PATTERN = re.compile(
+    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+)
+_MEMORY_CITATION_SEPARATOR = "\n\n<oai-mem-citation>"
+
+
+def independent_review_response_item_matches_raw_output(observed: str, expected: str) -> bool:
+    """Match a rollout response item to raw output plus one app-owned memory annotation.
+
+    The app-server final item, rollout ``agent_message``, and ``task_complete`` remain
+    byte-equivalent to the raw reviewer output after trailing-newline normalization.
+    Some Codex Desktop rollouts append a terminal memory-citation transport annotation
+    only to the persisted ``response_item``. Accept precisely that documented shape so
+    the redundant response-item observation can corroborate the same model output
+    without treating arbitrary suffix text as reviewer evidence.
+    """
+
+    normalized_observed = _review_normalize_trailing_newlines(observed)
+    normalized_expected = _review_normalize_trailing_newlines(expected)
+    if normalized_observed == normalized_expected:
+        return True
+    if normalized_observed.count("<oai-mem-citation>") != 1:
+        return False
+    if normalized_observed.count("</oai-mem-citation>") != 1:
+        return False
+    prefix, separator, suffix = normalized_observed.rpartition(_MEMORY_CITATION_SEPARATOR)
+    if not separator or prefix != normalized_expected:
+        return False
+
+    block_lines = ("<oai-mem-citation>" + suffix).split("\n")
+    if len(block_lines) < 7:
+        return False
+    if block_lines[:2] != ["<oai-mem-citation>", "<citation_entries>"]:
+        return False
+    if block_lines[-2:] != ["</rollout_ids>", "</oai-mem-citation>"]:
+        return False
+    try:
+        citation_close_index = block_lines.index("</citation_entries>", 2)
+    except ValueError:
+        return False
+    citation_entries = block_lines[2:citation_close_index]
+    if not citation_entries or not all(
+        _MEMORY_CITATION_ENTRY_PATTERN.fullmatch(entry) for entry in citation_entries
+    ):
+        return False
+    rollout_open_index = citation_close_index + 1
+    if rollout_open_index >= len(block_lines) or block_lines[rollout_open_index] != "<rollout_ids>":
+        return False
+    rollout_ids = block_lines[rollout_open_index + 1 : -2]
+    return len(rollout_ids) == len(set(rollout_ids)) and all(
+        _MEMORY_CITATION_ROLLOUT_ID_PATTERN.fullmatch(rollout_id) for rollout_id in rollout_ids
+    )
+
+
 def _parse_independent_review_causal_binding(
     *,
     rollout_raw: bytes,
@@ -2757,13 +2815,21 @@ def _parse_independent_review_causal_binding(
     start_line = task_starts[0][0] if single_task_turn else -1
     complete_line = task_completes[0][0] if single_task_turn else -1
 
-    def exact_between(observations: list[tuple[int, str]], expected: str, *, normalize_newlines: bool = False) -> bool:
+    def exact_between(
+        observations: list[tuple[int, str]],
+        expected: str,
+        *,
+        normalize_newlines: bool = False,
+        allow_response_item_memory_annotation: bool = False,
+    ) -> bool:
         matches = [
             line_number
             for line_number, observed in observations
             if start_line < line_number < complete_line
             and (
-                _review_normalize_trailing_newlines(observed) == _review_normalize_trailing_newlines(expected)
+                independent_review_response_item_matches_raw_output(observed, expected)
+                if allow_response_item_memory_annotation
+                else _review_normalize_trailing_newlines(observed) == _review_normalize_trailing_newlines(expected)
                 if normalize_newlines
                 else observed == expected
             )
@@ -2785,6 +2851,7 @@ def _parse_independent_review_causal_binding(
             response_final_messages,
             final_output,
             normalize_newlines=True,
+            allow_response_item_memory_annotation=True,
         ),
         "final_event_message_exact": exact_between(
             event_final_messages,

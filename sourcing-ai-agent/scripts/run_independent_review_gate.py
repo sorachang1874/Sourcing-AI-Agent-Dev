@@ -18,6 +18,7 @@ from typing import NamedTuple
 
 from sourcing_agent.runtime_asset_retention_prune import (
     build_independent_review_scope_evidence,
+    independent_review_response_item_matches_raw_output,
     normalize_independent_review_files,
 )
 
@@ -1052,13 +1053,21 @@ def _review_causal_binding(
     start_line = task_starts[0][0] if single_task_turn else -1
     complete_line = task_completes[0][0] if single_task_turn else -1
 
-    def exact_between(observations: list[tuple[int, str]], expected: str, *, normalize_newlines: bool = False) -> bool:
+    def exact_between(
+        observations: list[tuple[int, str]],
+        expected: str,
+        *,
+        normalize_newlines: bool = False,
+        allow_response_item_memory_annotation: bool = False,
+    ) -> bool:
         matching = [
             line_number
             for line_number, observed in observations
             if (start_line < line_number < complete_line)
             and (
-                _normalize_trailing_newlines(observed) == _normalize_trailing_newlines(expected)
+                independent_review_response_item_matches_raw_output(observed, expected)
+                if allow_response_item_memory_annotation
+                else _normalize_trailing_newlines(observed) == _normalize_trailing_newlines(expected)
                 if normalize_newlines
                 else observed == expected
             )
@@ -1085,6 +1094,7 @@ def _review_causal_binding(
             final_response_items,
             final_output,
             normalize_newlines=True,
+            allow_response_item_memory_annotation=True,
         ),
         "final_event_message_exact": exact_between(
             final_event_messages,
