@@ -5,7 +5,8 @@ import functools
 import inspect
 import textwrap
 from dataclasses import replace
-from types import FunctionType
+from pathlib import Path
+from types import CodeType, FunctionType
 from typing import Any, Callable
 
 import pytest
@@ -375,7 +376,102 @@ _RUNTIME_METHOD_QUALNAMES = {
 }
 
 
-def _runtime_method_source(method_name: str) -> str | None:
+def _code_constant_fingerprint(value: Any) -> tuple[Any, ...]:
+    if isinstance(value, CodeType):
+        return ("code", _code_fingerprint(value))
+    if isinstance(value, tuple):
+        return ("tuple", tuple(_code_constant_fingerprint(item) for item in value))
+    return ("value", type(value), value)
+
+
+def _code_fingerprint(code: CodeType) -> tuple[Any, ...]:
+    return (
+        code.co_name,
+        code.co_qualname,
+        code.co_argcount,
+        code.co_posonlyargcount,
+        code.co_kwonlyargcount,
+        code.co_nlocals,
+        code.co_stacksize,
+        code.co_flags,
+        code.co_code,
+        tuple(_code_constant_fingerprint(value) for value in code.co_consts),
+        code.co_names,
+        code.co_varnames,
+        code.co_cellvars,
+        code.co_freevars,
+        getattr(code, "co_exceptiontable", b""),
+    )
+
+
+def _nested_code_objects(code: CodeType) -> list[CodeType]:
+    nested = [code]
+    for value in code.co_consts:
+        if isinstance(value, CodeType):
+            nested.extend(_nested_code_objects(value))
+    return nested
+
+
+@functools.lru_cache(maxsize=1)
+def _compile_orchestrator_source(source: str) -> tuple[ast.Module, CodeType]:
+    return (
+        ast.parse(source),
+        compile(source, "<d1b-fresh-orchestrator-source>", "exec", dont_inherit=True),
+    )
+
+
+def _direct_orchestrator_method(
+    tree: ast.Module,
+    method_name: str,
+) -> ast.FunctionDef | None:
+    classes = [node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == "SourcingOrchestrator"]
+    if len(classes) != 1:
+        return None
+    methods = [node for node in classes[0].body if isinstance(node, ast.FunctionDef) and node.name == method_name]
+    return methods[0] if len(methods) == 1 else None
+
+
+def _method_source_segment(source: str, method: ast.FunctionDef) -> str | None:
+    if method.end_lineno is None:
+        return None
+    start_line = min(
+        [method.lineno, *(decorator.lineno for decorator in method.decorator_list)],
+    )
+    lines = source.splitlines(keepends=True)
+    if start_line < 1 or method.end_lineno > len(lines):
+        return None
+    return textwrap.dedent("".join(lines[start_line - 1 : method.end_lineno]))
+
+
+def _fresh_orchestrator_method_contract(
+    method_name: str,
+) -> tuple[str, ast.Module, CodeType] | None:
+    module_file = getattr(orchestrator_module, "__file__", None)
+    if not isinstance(module_file, str) or not module_file:
+        return None
+    try:
+        source = Path(module_file).read_text(encoding="utf-8")
+        tree, compiled_module = _compile_orchestrator_source(source)
+    except (OSError, SyntaxError, TypeError, ValueError):
+        return None
+    method = _direct_orchestrator_method(tree, method_name)
+    source_segment = _method_source_segment(source, method) if method is not None else None
+    expected_qualname = _RUNTIME_METHOD_QUALNAMES.get(method_name)
+    code_matches = [
+        code
+        for code in _nested_code_objects(compiled_module)
+        if code.co_name == method_name and code.co_qualname == expected_qualname
+    ]
+    if method is None or source_segment is None or len(code_matches) != 1:
+        return None
+    return (
+        source_segment,
+        ast.Module(body=[method], type_ignores=[]),
+        code_matches[0],
+    )
+
+
+def _runtime_method_contract(method_name: str) -> tuple[str, ast.Module] | None:
     method = SourcingOrchestrator.__dict__.get(method_name)
     if not isinstance(method, FunctionType):
         return None
@@ -391,22 +487,28 @@ def _runtime_method_source(method_name: str) -> str | None:
         return None
     if "__wrapped__" in vars(method):
         return None
-    if method.__code__.co_filename != orchestrator_module.__file__:
+    fresh_contract = _fresh_orchestrator_method_contract(method_name)
+    if fresh_contract is None:
         return None
-    try:
-        return textwrap.dedent(inspect.getsource(method.__code__))
-    except (OSError, TypeError):
+    source, tree, compiled_code = fresh_contract
+    if _code_fingerprint(method.__code__) != _code_fingerprint(compiled_code):
         return None
+    return source, tree
+
+
+def _runtime_method_source(method_name: str) -> str | None:
+    contract = _runtime_method_contract(method_name)
+    return contract[0] if contract is not None else None
 
 
 def _runtime_selector_is_canonical() -> bool:
-    source = _runtime_method_source("_dispatch_operation_run_from_records")
-    return source is not None and _selector_is_canonical(ast.parse(source))
+    contract = _runtime_method_contract("_dispatch_operation_run_from_records")
+    return contract is not None and _selector_is_canonical(contract[1])
 
 
 def _runtime_binding_is_canonical() -> bool:
-    source = _runtime_method_source("_operation_dispatch_adapter_bindings")
-    return source is not None and _binding_is_canonical(ast.parse(source))
+    contract = _runtime_method_contract("_operation_dispatch_adapter_bindings")
+    return contract is not None and _binding_is_canonical(contract[1])
 
 
 def test_dispatch_adapter_registry_is_closed_and_normalized() -> None:
@@ -659,6 +761,63 @@ def test_runtime_wrapped_dispatch_methods_cannot_hide_rebinding(
 
     legacy_source = textwrap.dedent(inspect.getsource(getattr(SourcingOrchestrator, method_name)))
     assert legacy_shape_check(ast.parse(legacy_source))
+    assert _runtime_method_source(method_name) is None
+    assert not runtime_shape_check()
+
+
+@pytest.mark.parametrize(
+    ("method_name", "legacy_shape_check", "runtime_shape_check"),
+    [
+        (
+            "_dispatch_operation_run_from_records",
+            _selector_is_canonical,
+            _runtime_selector_is_canonical,
+        ),
+        (
+            "_operation_dispatch_adapter_bindings",
+            _binding_is_canonical,
+            _runtime_binding_is_canonical,
+        ),
+    ],
+)
+def test_runtime_code_fingerprint_rejects_forged_source_location(
+    method_name: str,
+    legacy_shape_check: Callable[[ast.AST], bool],
+    runtime_shape_check: Callable[[], bool],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original = SourcingOrchestrator.__dict__.get(method_name)
+    assert isinstance(original, FunctionType)
+
+    def forged(*_: Any, **__: Any) -> dict[str, bool]:
+        return {"forged": True}
+
+    forged_code = forged.__code__.replace(
+        co_filename=original.__code__.co_filename,
+        co_firstlineno=original.__code__.co_firstlineno,
+        co_name=original.__code__.co_name,
+        co_qualname=original.__code__.co_qualname,
+    )
+    rebound = FunctionType(forged_code, vars(orchestrator_module), method_name)
+    rebound.__qualname__ = original.__qualname__
+    rebound.__module__ = original.__module__
+    monkeypatch.setattr(SourcingOrchestrator, method_name, rebound)
+
+    assert rebound(None) == {"forged": True}
+    assert SourcingOrchestrator.__dict__.get(method_name) is rebound
+    assert rebound.__name__ == method_name
+    assert rebound.__qualname__ == _RUNTIME_METHOD_QUALNAMES[method_name]
+    assert rebound.__module__ == orchestrator_module.__name__
+    assert rebound.__globals__ is vars(orchestrator_module)
+    assert rebound.__closure__ is None
+    assert rebound.__defaults__ is None
+    assert rebound.__kwdefaults__ is None
+    assert "__wrapped__" not in vars(rebound)
+    legacy_source = textwrap.dedent(inspect.getsource(rebound.__code__))
+    assert legacy_shape_check(ast.parse(legacy_source))
+    fresh_contract = _fresh_orchestrator_method_contract(method_name)
+    assert fresh_contract is not None
+    assert _code_fingerprint(rebound.__code__) != _code_fingerprint(fresh_contract[2])
     assert _runtime_method_source(method_name) is None
     assert not runtime_shape_check()
 

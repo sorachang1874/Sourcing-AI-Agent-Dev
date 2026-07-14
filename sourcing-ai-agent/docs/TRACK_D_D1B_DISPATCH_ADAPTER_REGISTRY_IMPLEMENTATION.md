@@ -15,9 +15,13 @@
 > canonical selector/binding AST shapes and exact body dependency closures. The pinned re-review of `0a5e844` then
 > found a runtime/source identity false-green: `inspect.getsource(function)` follows `function.__wrapped__`, so a normal
 > `functools.wraps` wrapper plus class-method rebinding could execute outside the canonical body while the source oracle,
-> all 15 adjacent operation-runtime nodes, and command-spec tests stayed green. The current author follow-up reads the
-> raw class-dictionary function and its code object, rejects wrapper/rebinding identity drift, and adds selector and
-> binding regressions; a new non-author re-review remains pending.
+> all 15 adjacent operation-runtime nodes, and command-spec tests stayed green. The follow-up at `e22d720` read the raw
+> class-dictionary function and rejected that wrapper. Its pinned re-review found a deeper source-location false-green:
+> arbitrary runtime bytecode could copy the canonical function's filename, first line, name, and qualname, causing
+> `inspect.getsource(code)` to return canonical text even though the rebound function executed another body. The current
+> author follow-up compiles the complete module source without executing it and compares the actual runtime code object
+> with the uniquely qualified freshly compiled code object using a location-independent recursive fingerprint; a new
+> non-author re-review remains pending.
 
 ## 1. Outcome and scope
 
@@ -87,8 +91,12 @@ runtime. Immutable request-schema version/digest pins are outside D1b and must n
 1. unknown and whitespace-padded adapter identifiers reject registry construction;
 2. the runtime binding map is total over the five closed adapter identifiers;
 3. runtime identity inspection requires each selector/binding member to remain a direct class-dictionary function from
-   `sourcing_agent.orchestrator`, with the canonical name/qualname, module globals, code filename, no closure/defaults,
-   and no `__wrapped__` chain. Source inspection uses the raw code object rather than an implicitly unwrapped function;
+   `sourcing_agent.orchestrator`, with the canonical name/qualname and module globals, no closure/defaults, and no
+   `__wrapped__` chain. The gate reads the complete `orchestrator.py`, parses it, and compiles it without `exec`; it then
+   recursively locates the one code object with the exact class-method qualname. Actual and freshly compiled runtime
+   code must have the same recursive structural fingerprint over bytecode, constants including nested code, symbol and
+   local/cell/free-variable tables, argument counts, flags, stack size, and exception table. Filename, first-line, and
+   line-table metadata are deliberately excluded and cannot make arbitrary bytecode appear canonical;
 4. canonical AST inspection freezes the complete selector shape and the exact five adapter-key-to-`self.method`
    binding entries. Separate exact body-dependency closures allow only the registry, adapter/handler locals, closed
    adapter constants, and five direct bound methods; any helper call, module alias, new local alias, or extra control
@@ -98,10 +106,12 @@ runtime. Immutable request-schema version/digest pins are outside D1b and must n
    branch;
 6. self-proving mutations cover direct, qualified, imported, multi-hop assignment, and module-helper `getattr`;
    `__getattribute__`, `attrgetter`, `getattr_static`, `vars(...)`, and `__dict__`; qualified action constants; raw
-   `action_type`; module/local multi-hop action aliases; and `functools.wraps` rebinding of both runtime methods. The
-   prior module-helper and aliased-action-branch counterexamples fail the canonical/dependency gate; wrappers fail the
-   raw runtime-identity gate even though the legacy `inspect.getsource(function)` view still appears canonical. An
-   ordinary static-dictionary `.get(...)` remains a negative control for the supplemental dangerous-symbol detector;
+   `action_type`; module/local multi-hop action aliases; `functools.wraps` rebinding; and forged `FunctionType` code for
+   both runtime methods. The prior module-helper and aliased-action-branch counterexamples fail the canonical/dependency
+   gate. Wrappers fail the raw function-identity gate. Forged bytecode copies the canonical filename, first line, name,
+   qualname, module, and globals so the legacy `inspect.getsource(code)` view remains canonical, but fails the freshly
+   compiled runtime-code fingerprint. An ordinary static-dictionary `.get(...)` remains a negative control for the
+   supplemental dangerous-symbol detector;
 7. deleting the export binding fails closed without invoking another owner;
 8. the exact three empty-adapter actions remain unsupported;
 9. public registry records expose neither the internal adapter nor request schema, model-safe result schema,
@@ -204,3 +214,11 @@ reported no issues in three checked files; and Ruff check, Ruff format, and scop
 two new regressions prove that `functools.wraps` keeps the legacy source view canonical for both selector and binding
 rebindings while the raw runtime-identity gate rejects both. This follow-up changes only the D1b test and this document;
 its evidence remains author evidence, and a fresh non-author re-review is required.
+
+Fifth false-green follow-up author validation on the final stable worktree: D1a+D1b passed 29 tests; the documented 15
+PG-backed registry/dispatch/adjacent exposure nodes passed with an explicit local DSN and required-PG flag; the
+command-spec suite passed 16 tests; focused mypy reported no issues in three checked files; and Ruff check, Ruff format,
+and scoped whitespace diff check passed. The two forged-code regressions prove that copying all legacy source-location
+and function metadata keeps `inspect.getsource(code)` canonical for both methods while the actual runtime bytecode is
+different and the freshly compiled recursive fingerprint fails closed. This follow-up changes only the D1b test and
+this document; its evidence remains author evidence, and a fresh non-author re-review is required.
