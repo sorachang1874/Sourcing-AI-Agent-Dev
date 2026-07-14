@@ -6,10 +6,13 @@ separate so X can be evaluated without changing LinkedIn-first canonical person 
 
 ## Current status
 
-`fixture_default + live_probe_hardening + no_scale_claim` — fixture validation still performs no Grok, X, provider,
-model, credential, network, database, CRM, export, or outreach call. A separate v2 runner implements one
-owner-approved account-level Grok native-X capability probe, but it has not passed independent review or executed.
-No live post, Bio, profile, researcher, or batch-search result has been accepted yet.
+`fixture_default + bounded_canaries + no_scale_claim` — fixture validation still performs no Grok, X, provider,
+model, credential, network, database, CRM, export, or outreach call. The one approved Stage 1 Grok/X attempt was
+executed and failed closed before any recognized X-search call (`unknown` tool event); its approval is consumed and it
+did not prove native-X capability. A separate chshapi relay canary now tests only whether the exact
+`gpt-5.6-luna` model can review one synthetic `.invalid` Bio through the semantic-v2 contract; independent review and
+its one-shot live result are still pending. No live post, Bio, profile, researcher, or batch-search result has been
+accepted.
 
 The first vertical slice covers OpenAI with:
 
@@ -78,6 +81,7 @@ PYTHONPATH=src ../sourcing-ai-agent/.venv/bin/python -m x_first.capability_probe
 PYTHONPATH=src ../sourcing-ai-agent/.venv/bin/python -m x_first.profile_bio_signals fixtures/profile_bio_evidence_fixture_v1.json --policy configs/profile_bio_signal_policy.v1.json
 PYTHONPATH=src ../sourcing-ai-agent/.venv/bin/python scripts/generate_openai_fixture.py --check
 PYTHONPATH=src ../sourcing-ai-agent/.venv/bin/python scripts/generate_capability_probe_fixtures.py --check
+PYTHONPATH=src ../sourcing-ai-agent/.venv/bin/python -m unittest tests.test_luna_live_canary -v
 ```
 
 Regenerate the deterministic fixture only when the contract intentionally changes:
@@ -88,9 +92,9 @@ PYTHONPATH=src ../sourcing-ai-agent/.venv/bin/python scripts/generate_openai_fix
 
 ## Next gate
 
-The Stage 1 live v2 contract and runner are described in `docs/STAGE1_LIVE_CAPABILITY_CONTRACT.md`. The user approved
-one bounded execution, while independent review and working OAuth remain runtime prerequisites. The runner must prove
-an actual completed `x_search` tool call; generic web search does not count. A stable author platform id is an
-additional hard prerequisite for any Stage 2 owner review. Live researcher mapping remains `NO-GO` until that later
-decision and contract are complete. Workflow evaluation and champion/challenger rules are defined in
-`docs/X_FIRST_EVALUATION_CONTRACT.md`.
+The consumed Stage 1 Grok/X attempt is recorded in
+`docs/live-evidence/2026-07-14-stage1-grok-x-handshake.md`; a retry or CLI tool-family compatibility probe requires a
+new owner decision. The separate Luna relay path is specified in `docs/LUNA_RELAY_LIVE_CANARY_CONTRACT.md` and cannot
+prove X/profile access. A stable author platform id remains a hard prerequisite for any Stage 2 owner review. Live
+researcher mapping remains `NO-GO` until that later decision and contract are complete. Workflow evaluation and
+champion/challenger rules are defined in `docs/X_FIRST_EVALUATION_CONTRACT.md`.

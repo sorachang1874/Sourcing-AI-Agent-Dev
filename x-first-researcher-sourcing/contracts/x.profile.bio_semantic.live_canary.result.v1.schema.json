@@ -1,0 +1,577 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.invalid/x.profile.bio_semantic.live_canary.result.v1.schema.json",
+  "title": "X profile Bio semantic Luna live-canary result v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "error_codes",
+    "run",
+    "identity",
+    "catalog",
+    "semantic",
+    "calls",
+    "usage",
+    "timing",
+    "budgets",
+    "retention",
+    "response_received",
+    "artifact_inventory",
+    "artifact_sha256s",
+    "approval_receipt_sha256",
+    "authority"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "x.profile.bio_semantic.live_canary.result.v1"
+    },
+    "status": {
+      "enum": ["completed", "failed"]
+    },
+    "error_codes": {
+      "type": "array",
+      "maxItems": 1,
+      "items": {
+        "enum": [
+          "catalog_transport_failed",
+          "catalog_redirect_rejected",
+          "catalog_http_failed",
+          "catalog_invalid",
+          "catalog_model_missing",
+          "total_timeout_exceeded",
+          "response_transport_failed",
+          "response_redirect_rejected",
+          "response_http_failed",
+          "response_secret_detected",
+          "response_model_mismatch",
+          "semantic_review_failed"
+        ]
+      }
+    },
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["run_id", "probe_id", "request_id", "request_sha256", "owner_approval_id"],
+      "properties": {
+        "run_id": {
+          "type": "string",
+          "pattern": "^luna_canary_run_[0-9a-f]{32}$"
+        },
+        "probe_id": {
+          "const": "profile_bio_semantic_v2_chshapi_luna_one_shot_v1"
+        },
+        "request_id": {
+          "const": "xbsv2r_333333333333333333333333"
+        },
+        "request_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "owner_approval_id": {
+          "const": "user_approved_2026_07_14_chshapi_luna_one_shot_v1"
+        }
+      }
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider",
+        "base_url",
+        "catalog_endpoint",
+        "responses_endpoint",
+        "requested_model",
+        "returned_model",
+        "exact_model_match",
+        "fallback_used",
+        "tools_used",
+        "response_id",
+        "response_status"
+      ],
+      "properties": {
+        "provider": {
+          "const": "chshapi_openai_compatible_relay"
+        },
+        "base_url": {
+          "const": "https://api.chshapi.org/v1"
+        },
+        "catalog_endpoint": {
+          "const": "https://api.chshapi.org/v1/models"
+        },
+        "responses_endpoint": {
+          "const": "https://api.chshapi.org/v1/responses"
+        },
+        "requested_model": {
+          "const": "gpt-5.6-luna"
+        },
+        "returned_model": {
+          "type": ["string", "null"],
+          "maxLength": 160
+        },
+        "exact_model_match": {
+          "type": "boolean"
+        },
+        "fallback_used": {
+          "const": false
+        },
+        "tools_used": {
+          "const": false
+        },
+        "response_id": {
+          "type": ["string", "null"],
+          "maxLength": 128
+        },
+        "response_status": {
+          "type": ["string", "null"],
+          "maxLength": 32
+        }
+      }
+    },
+    "catalog": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "http_status",
+        "model_count",
+        "distinct_model_count",
+        "model_ids_sha256",
+        "exact_model_matches",
+        "error_code"
+      ],
+      "properties": {
+        "status": {
+          "enum": ["completed", "failed"]
+        },
+        "http_status": {
+          "type": ["integer", "null"],
+          "minimum": 100,
+          "maximum": 599
+        },
+        "model_count": {
+          "type": ["integer", "null"],
+          "minimum": 1,
+          "maximum": 4096
+        },
+        "distinct_model_count": {
+          "type": ["integer", "null"],
+          "minimum": 1,
+          "maximum": 4096
+        },
+        "model_ids_sha256": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/sha256"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "exact_model_matches": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "maximum": 4096
+        },
+        "error_code": {
+          "type": ["string", "null"],
+          "maxLength": 64
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "status": {"const": "completed"},
+            "http_status": {"const": 200},
+            "model_count": {"type": "integer"},
+            "distinct_model_count": {"type": "integer"},
+            "model_ids_sha256": {"$ref": "#/$defs/sha256"},
+            "exact_model_matches": {"const": 1},
+            "error_code": {"const": null}
+          }
+        },
+        {
+          "properties": {
+            "status": {"const": "failed"},
+            "http_status": {"const": null},
+            "model_count": {"const": null},
+            "distinct_model_count": {"const": null},
+            "model_ids_sha256": {"const": null},
+            "exact_model_matches": {"const": null},
+            "error_code": {"const": "catalog_transport_failed"}
+          }
+        },
+        {
+          "properties": {
+            "status": {"const": "failed"},
+            "http_status": {"type": "integer", "minimum": 300, "maximum": 399},
+            "model_count": {"const": null},
+            "distinct_model_count": {"const": null},
+            "model_ids_sha256": {"const": null},
+            "exact_model_matches": {"const": null},
+            "error_code": {"const": "catalog_redirect_rejected"}
+          }
+        },
+        {
+          "properties": {
+            "status": {"const": "failed"},
+            "http_status": {
+              "type": "integer",
+              "not": {
+                "anyOf": [
+                  {"const": 200},
+                  {"minimum": 300, "maximum": 399}
+                ]
+              }
+            },
+            "model_count": {"const": null},
+            "distinct_model_count": {"const": null},
+            "model_ids_sha256": {"const": null},
+            "exact_model_matches": {"const": null},
+            "error_code": {"const": "catalog_http_failed"}
+          }
+        },
+        {
+          "properties": {
+            "status": {"const": "failed"},
+            "http_status": {"const": 200},
+            "model_count": {"const": null},
+            "distinct_model_count": {"const": null},
+            "model_ids_sha256": {"const": null},
+            "exact_model_matches": {"const": null},
+            "error_code": {"const": "catalog_invalid"}
+          }
+        },
+        {
+          "properties": {
+            "status": {"const": "failed"},
+            "http_status": {"const": 200},
+            "model_count": {"type": "integer"},
+            "distinct_model_count": {"type": "integer"},
+            "model_ids_sha256": {"$ref": "#/$defs/sha256"},
+            "exact_model_matches": {"type": "integer", "not": {"const": 1}},
+            "error_code": {"const": "catalog_model_missing"}
+          }
+        }
+      ]
+    },
+    "semantic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["review_status", "error_codes", "review_schema_version"],
+      "properties": {
+        "review_status": {
+          "type": ["string", "null"],
+          "enum": ["completed", "failed", "blocked", null]
+        },
+        "error_codes": {
+          "type": "array",
+          "maxItems": 1,
+          "items": {
+            "type": "string",
+            "maxLength": 64
+          }
+        },
+        "review_schema_version": {
+          "type": ["string", "null"],
+          "enum": ["x.profile.bio_semantic.review.v2.1", null]
+        }
+      }
+    },
+    "calls": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "catalog_external_calls",
+        "model_external_calls",
+        "total_external_calls",
+        "semantic_model_calls"
+      ],
+      "properties": {
+        "catalog_external_calls": {
+          "const": 1
+        },
+        "model_external_calls": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "total_external_calls": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2
+        },
+        "semantic_model_calls": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "usage": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["input_tokens", "output_tokens", "total_tokens", "source", "billable"],
+          "properties": {
+            "input_tokens": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 4000
+            },
+            "output_tokens": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1600
+            },
+            "total_tokens": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 5600
+            },
+            "source": {
+              "const": "provider_reported"
+            },
+            "billable": {
+              "const": true
+            }
+          }
+        }
+      ]
+    },
+    "timing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["started_at", "completed_at", "elapsed_ms", "timeout_ms"],
+      "properties": {
+        "started_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "completed_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "elapsed_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "timeout_ms": {
+          "const": 30000
+        }
+      }
+    },
+    "budgets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "timeout_ms",
+        "max_catalog_bytes",
+        "max_response_bytes",
+        "max_json_depth",
+        "max_json_nodes",
+        "max_json_leaves",
+        "max_catalog_external_calls",
+        "max_model_external_calls",
+        "max_total_external_calls",
+        "max_semantic_model_calls"
+      ],
+      "properties": {
+        "timeout_ms": {
+          "const": 30000
+        },
+        "max_catalog_bytes": {
+          "const": 262144
+        },
+        "max_response_bytes": {
+          "const": 1048576
+        },
+        "max_json_depth": {
+          "const": 64
+        },
+        "max_json_nodes": {
+          "const": 16384
+        },
+        "max_json_leaves": {
+          "const": 12288
+        },
+        "max_catalog_external_calls": {
+          "const": 1
+        },
+        "max_model_external_calls": {
+          "const": 1
+        },
+        "max_total_external_calls": {
+          "const": 2
+        },
+        "max_semantic_model_calls": {
+          "const": 1
+        }
+      }
+    },
+    "retention": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["class", "hours", "delete_after", "deletion_status"],
+      "properties": {
+        "class": {
+          "const": "private_raw_evidence"
+        },
+        "hours": {
+          "const": 24
+        },
+        "delete_after": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "deletion_status": {
+          "const": "pending"
+        }
+      }
+    },
+    "response_received": {
+      "type": "boolean"
+    },
+    "artifact_inventory": {
+      "enum": [
+        ["approval-receipt.json", "catalog-receipt.json", "request.json", "result.json"],
+        [
+          "approval-receipt.json",
+          "catalog-receipt.json",
+          "raw-response.json",
+          "request.json",
+          "result.json",
+          "semantic-review.json"
+        ]
+      ]
+    },
+    "artifact_sha256s": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["approval-receipt.json", "catalog-receipt.json", "request.json"],
+          "properties": {
+            "approval-receipt.json": {
+              "$ref": "#/$defs/sha256"
+            },
+            "catalog-receipt.json": {
+              "$ref": "#/$defs/sha256"
+            },
+            "request.json": {
+              "$ref": "#/$defs/sha256"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "approval-receipt.json",
+            "catalog-receipt.json",
+            "raw-response.json",
+            "request.json",
+            "semantic-review.json"
+          ],
+          "properties": {
+            "approval-receipt.json": {
+              "$ref": "#/$defs/sha256"
+            },
+            "catalog-receipt.json": {
+              "$ref": "#/$defs/sha256"
+            },
+            "raw-response.json": {
+              "$ref": "#/$defs/sha256"
+            },
+            "request.json": {
+              "$ref": "#/$defs/sha256"
+            },
+            "semantic-review.json": {
+              "$ref": "#/$defs/sha256"
+            }
+          }
+        }
+      ]
+    },
+    "approval_receipt_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "discovery_or_ranking_authorized",
+        "eligibility_decided",
+        "canonical_employment_confirmed",
+        "canonical_write_authorized",
+        "outreach_authorized"
+      ],
+      "properties": {
+        "discovery_or_ranking_authorized": {
+          "const": false
+        },
+        "eligibility_decided": {
+          "const": false
+        },
+        "canonical_employment_confirmed": {
+          "const": false
+        },
+        "canonical_write_authorized": {
+          "const": false
+        },
+        "outreach_authorized": {
+          "const": false
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "completed"}}},
+      "then": {
+        "properties": {
+          "error_codes": {"maxItems": 0},
+          "identity": {
+            "properties": {
+              "returned_model": {"const": "gpt-5.6-luna"},
+              "exact_model_match": {"const": true},
+              "response_status": {"const": "completed"}
+            }
+          },
+          "semantic": {
+            "properties": {
+              "review_status": {"const": "completed"},
+              "error_codes": {"maxItems": 0},
+              "review_schema_version": {"const": "x.profile.bio_semantic.review.v2.1"}
+            }
+          },
+          "calls": {
+            "properties": {
+              "model_external_calls": {"const": 1},
+              "total_external_calls": {"const": 2},
+              "semantic_model_calls": {"const": 1}
+            }
+          },
+          "usage": {"type": "object"},
+          "response_received": {"const": true}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"status": {"const": "failed"}}},
+      "then": {"properties": {"error_codes": {"minItems": 1, "maxItems": 1}}}
+    }
+  ],
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "timestamp": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
+    }
+  }
+}
