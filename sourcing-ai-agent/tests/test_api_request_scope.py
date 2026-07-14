@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 import threading
 import unittest
 from unittest.mock import patch
@@ -10,7 +11,9 @@ from urllib import request as urllib_request
 from urllib.error import HTTPError
 
 from sourcing_agent.api import (
+    AUTHENTICATED_REQUEST_SCOPE_REGISTRY,
     _apply_server_read_scope,
+    _build_routes,
     _write_allowed_crm_owner,
     _write_allowed_job_owner,
     create_server,
@@ -170,6 +173,62 @@ class _ScopeOrchestrator:
         self._capture("query_dispatches", payload)
         return {"query_dispatches": [], "scope": dict(payload)}
 
+    def start_excel_intake_workflow(self, payload):
+        self._capture("excel_create", payload)
+        return {"status": "queued", "job_id": "excel-owned"}
+
+    def compile_post_acquisition_refinement(self, payload, **owner):
+        self._capture("refine_compile", {**dict(payload), **owner})
+        job = self.store.get_job(str(payload.get("job_id") or ""))
+        if (
+            not job
+            or job.get("requester_id") != owner.get("expected_requester_id")
+            or job.get("tenant_id") != owner.get("expected_tenant_id")
+        ):
+            return {"status": "not_found", "reason": "job_not_found"}
+        return {"status": "compiled"}
+
+    def apply_post_acquisition_refinement(self, payload, **owner):
+        self._capture("refine_apply", {**dict(payload), **owner})
+        job = self.store.get_job(str(payload.get("job_id") or ""))
+        if (
+            not job
+            or job.get("requester_id") != owner.get("expected_requester_id")
+            or job.get("tenant_id") != owner.get("expected_tenant_id")
+        ):
+            return {"status": "not_found", "reason": "job_not_found"}
+        return {"status": "completed", "rerun_job_id": "derived-owned"}
+
+    def interrupt_agent_worker(self, payload, **owner):
+        self._capture("worker_interrupt", {**dict(payload), **owner})
+        if int(payload.get("worker_id") or 0) != 1:
+            return {"status": "not_found", "reason": "job_not_found"}
+        return {"status": "interrupt_requested"}
+
+    def cleanup_recoverable_workers(self, payload, **owner):
+        self._capture("worker_cleanup", {**dict(payload), **owner})
+        return {"status": "completed"}
+
+    def request_runtime_service_shutdown(self, payload, **owner):
+        self._capture("runtime_shutdown", {**dict(payload), **owner})
+        return {"status": "requested"}
+
+    def signal_shared_recovery(self, **payload):
+        self._capture("shared_recovery", payload)
+        return {"status": "accepted"}
+
+    def write_worker_daemon_systemd_unit(self, payload):
+        self._capture("systemd_unit", payload)
+        return {"status": "written"}
+
+    def list_recoverable_agent_workers(self, payload=None):
+        self._capture("worker_list", dict(payload or {}))
+        return {"recoverable_workers": [], "count": 0}
+
+    def get_worker_daemon_status(self, payload=None):
+        self._capture("worker_status", dict(payload or {}))
+        return {"status": "ok"}
+
     def list_crm_records_api(self, **kwargs):
         self._capture("crm_records", kwargs)
         return {"status": "ready", "workspace_id": kwargs["workspace_id"], "crm_records": []}
@@ -204,32 +263,32 @@ class _ScopeOrchestrator:
         self._capture("person_summary", {"person_key": person_key, "workspace_id": workspace_id})
         return {"status": "ready", "workspace_id": workspace_id}
 
-    def continue_workflow_stage2(self, payload):
-        self._capture("continue_stage2", payload)
+    def continue_workflow_stage2(self, payload, **owner):
+        self._capture("continue_stage2", {**dict(payload), **owner})
         return {"status": "queued"}
 
-    def complete_job_candidate_profiles(self, job_id, payload):
-        self._capture("profile_completion", {"job_id": job_id, **dict(payload)})
+    def complete_job_candidate_profiles(self, job_id, payload, **owner):
+        self._capture("profile_completion", {"job_id": job_id, **dict(payload), **owner})
         return {"status": "completed"}
 
     def get_job_candidate_details_batch(self, job_id, candidate_ids):
         self._capture("candidate_batch", {"job_id": job_id, "candidate_ids": list(candidate_ids)})
         return {"status": "ready", "candidates": []}
 
-    def cancel_workflow_job(self, job_id, payload):
-        self._capture("job_cancel", {"job_id": job_id, **dict(payload)})
+    def cancel_workflow_job(self, job_id, payload, **owner):
+        self._capture("job_cancel", {"job_id": job_id, **dict(payload), **owner})
         return {"status": "cancelled"}
 
     def add_projection_candidate_to_crm(self, payload):
         self._capture("crm_create", payload)
         return {"status": "upserted"}
 
-    def import_target_candidates_from_job(self, payload):
-        self._capture("target_import", payload)
+    def import_target_candidates_from_job(self, payload, **owner):
+        self._capture("target_import", {**dict(payload), **owner})
         return {"status": "imported"}
 
-    def backfill_serving_projection_for_job(self, payload):
-        self._capture("projection_backfill", payload)
+    def backfill_serving_projection_for_job(self, payload, **owner):
+        self._capture("projection_backfill", {**dict(payload), **owner})
         return {"status": "backfilled"}
 
     def backfill_crm_from_target_candidates(self, payload):
@@ -240,12 +299,12 @@ class _ScopeOrchestrator:
         self._capture("crm_promotion_backfill", payload)
         return {"status": "backfilled"}
 
-    def update_crm_record_api(self, record_id, payload):
-        self._capture("crm_update", {"record_id": record_id, **dict(payload)})
+    def update_crm_record_api(self, record_id, payload, **owner):
+        self._capture("crm_update", {"record_id": record_id, **dict(payload), **owner})
         return {"status": "updated"}
 
-    def promote_crm_record_public_web_signal(self, record_id, payload):
-        self._capture("crm_promotion", {"record_id": record_id, **dict(payload)})
+    def promote_crm_record_public_web_signal(self, record_id, payload, **owner):
+        self._capture("crm_promotion", {"record_id": record_id, **dict(payload), **owner})
         return {"status": "promoted"}
 
 
@@ -373,6 +432,182 @@ class RequestScopeWiringTest(unittest.TestCase):
                     self.assertEqual(status, expected_status)
             self.assertEqual(len(orchestrator.captured.get(capture_name, [])), 1)
 
+    def test_authenticated_missing_and_foreign_writes_are_non_enumerating(self) -> None:
+        base, opener, _orchestrator = self._start_server()
+        job_routes = (
+            ("POST", "/api/workflows/{resource}/continue-stage2", {}),
+            ("POST", "/api/jobs/{resource}/profile-completion", {"candidate_ids": ["candidate-1"]}),
+            ("POST", "/api/jobs/{resource}/cancel", {}),
+        )
+        for method, path_template, body in job_routes:
+            with self.subTest(path=path_template):
+                foreign = self._request(
+                    opener,
+                    f"{base}{path_template.format(resource='job-bob')}",
+                    method=method,
+                    body=body,
+                )
+                missing = self._request(
+                    opener,
+                    f"{base}{path_template.format(resource='job-missing')}",
+                    method=method,
+                    body=body,
+                )
+                self.assertEqual(foreign, missing)
+                self.assertEqual(foreign, (404, {"status": "not_found", "reason": "job_not_found"}))
+
+        for method, path_template in (
+            ("PATCH", "/api/crm/records/{resource}"),
+            ("POST", "/api/crm/records/{resource}/public-web-promotions"),
+        ):
+            with self.subTest(path=path_template):
+                foreign = self._request(
+                    opener,
+                    f"{base}{path_template.format(resource='rec-bob')}",
+                    method=method,
+                    body={"signal_id": "signal-1"},
+                )
+                missing = self._request(
+                    opener,
+                    f"{base}{path_template.format(resource='rec-missing')}",
+                    method=method,
+                    body={"signal_id": "signal-1"},
+                )
+                self.assertEqual(foreign, missing)
+                self.assertEqual(
+                    foreign,
+                    (404, {"status": "not_found", "reason": "crm_record_not_found"}),
+                )
+
+    def test_excel_create_and_refine_use_server_owned_job_scope(self) -> None:
+        base, opener, orchestrator = self._start_server()
+        status, _ = self._request(
+            opener,
+            f"{base}/api/intake/excel/workflow",
+            method="POST",
+            body={"requester_id": "bob", "tenant_id": "user-bob", "file_content_base64": "eA=="},
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(orchestrator.captured["excel_create"][-1]["requester_id"], "alice")
+        self.assertEqual(orchestrator.captured["excel_create"][-1]["tenant_id"], "user-alice")
+
+        for path, capture_name in (
+            ("/api/results/refine/compile-instruction", "refine_compile"),
+            ("/api/results/refine", "refine_apply"),
+        ):
+            for job_id, expected_status in (("job-alice", 200), ("job-bob", 404), ("job-missing", 404)):
+                status, result = self._request(
+                    opener,
+                    f"{base}{path}",
+                    method="POST",
+                    body={"job_id": job_id, "request_patch": {"query": "refined"}},
+                )
+                self.assertEqual(status, expected_status)
+                if expected_status == 404:
+                    self.assertEqual(result, {"status": "not_found", "reason": "job_not_found"})
+            self.assertEqual(orchestrator.captured[capture_name][0]["expected_requester_id"], "alice")
+            self.assertEqual(orchestrator.captured[capture_name][0]["expected_tenant_id"], "user-alice")
+
+    def test_authenticated_global_worker_controls_fail_closed_but_owned_job_scope_works(self) -> None:
+        base, opener, orchestrator = self._start_server()
+        for method, path, body in (
+            ("GET", "/api/workers/recoverable", None),
+            ("GET", "/api/workers/daemon/status", None),
+            ("POST", "/api/workers/cleanup", {}),
+            ("POST", "/api/runtime/services/shutdown", {}),
+            ("POST", "/api/workers/daemon/run-once", {}),
+            ("POST", "/api/workers/daemon/systemd-unit", {}),
+        ):
+            with self.subTest(path=path):
+                status, result = self._request(opener, f"{base}{path}", method=method, body=body)
+                self.assertEqual(status, 403)
+                self.assertEqual(result, {"status": "forbidden", "reason": "admin_scope_required"})
+
+        for path in ("/api/workers/recoverable", "/api/workers/daemon/status"):
+            status, _ = self._request(opener, self._url(base, path, {"job_id": "job-alice"}))
+            self.assertEqual(status, 200)
+        status, _ = self._request(
+            opener,
+            f"{base}/api/workers/cleanup",
+            method="POST",
+            body={"job_id": "job-alice"},
+        )
+        self.assertEqual(status, 200)
+        status, _ = self._request(
+            opener,
+            f"{base}/api/runtime/services/shutdown",
+            method="POST",
+            body={"job_id": "job-alice", "service_name": "foreign-global-service"},
+        )
+        self.assertEqual(status, 403)
+        status, _ = self._request(
+            opener,
+            f"{base}/api/runtime/services/shutdown",
+            method="POST",
+            body={"job_id": "job-alice"},
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(orchestrator.captured["worker_cleanup"][-1]["expected_requester_id"], "alice")
+        self.assertEqual(orchestrator.captured["runtime_shutdown"][-1]["expected_tenant_id"], "user-alice")
+
+        missing_worker = self._request(
+            opener,
+            f"{base}/api/workers/interrupt",
+            method="POST",
+            body={"worker_id": 99},
+        )
+        foreign_worker = self._request(
+            opener,
+            f"{base}/api/workers/interrupt",
+            method="POST",
+            body={"worker_id": 2},
+        )
+        self.assertEqual(missing_worker, foreign_worker)
+        self.assertEqual(missing_worker, (404, {"status": "not_found", "reason": "job_not_found"}))
+
+    def test_request_scope_registry_covers_public_job_and_worker_side_effects(self) -> None:
+        expected = {
+            ("POST", "/api/workflows"),
+            ("POST", "/api/intake/excel/workflow"),
+            ("POST", "/api/workflows/{job_id}/continue-stage2"),
+            ("POST", "/api/jobs/{job_id}/profile-completion"),
+            ("POST", "/api/results/refine/compile-instruction"),
+            ("POST", "/api/results/refine"),
+            ("POST", "/api/target-candidates/import-from-job"),
+            ("POST", "/api/projections/backfill-from-job"),
+            ("POST", "/api/workers/interrupt"),
+            ("POST", "/api/workers/cleanup"),
+            ("POST", "/api/workers/daemon/run-once"),
+            ("POST", "/api/workers/daemon/systemd-unit"),
+            ("POST", "/api/runtime/services/shutdown"),
+            ("POST", "/api/jobs/{job_id}/cancel"),
+        }
+        self.assertTrue(expected.issubset(AUTHENTICATED_REQUEST_SCOPE_REGISTRY))
+        self.assertNotIn("unclassified", AUTHENTICATED_REQUEST_SCOPE_REGISTRY.values())
+
+        def in_inventory(method: str, path: str) -> bool:
+            if path.startswith("/api/workers"):
+                return True
+            if method != "POST":
+                return False
+            return (
+                path.startswith("/api/workflows")
+                or path.startswith("/api/jobs/")
+                or path.startswith("/api/results/refine")
+                or path == "/api/intake/excel/workflow"
+                or path == "/api/target-candidates/import-from-job"
+                or path == "/api/projections/backfill-from-job"
+                or path == "/api/runtime/services/shutdown"
+            )
+
+        discovered = set()
+        for route in _build_routes(_ScopeOrchestrator()):
+            normalized_path = re.sub(r"\{([^}:]+):[^}]+\}", r"{\1}", route.path)
+            for method in set(route.methods or ()) - {"HEAD", "OPTIONS"}:
+                if in_inventory(method, normalized_path):
+                    discovered.add((method, normalized_path))
+        self.assertEqual(discovered, set(AUTHENTICATED_REQUEST_SCOPE_REGISTRY))
+
     def test_candidate_batch_is_post_read_and_retains_legacy_read_policy(self) -> None:
         base, opener, orchestrator = self._start_server()
         for job_id, expected_status in (("job-alice", 200), ("job-legacy", 200), ("job-bob", 404)):
@@ -385,6 +620,20 @@ class RequestScopeWiringTest(unittest.TestCase):
                 )
                 self.assertEqual(status, expected_status)
         self.assertEqual(len(orchestrator.captured["candidate_batch"]), 2)
+        foreign = self._request(
+            opener,
+            f"{base}/api/jobs/job-bob/candidates/batch",
+            method="POST",
+            body={"candidate_ids": ["candidate-1"]},
+        )
+        missing = self._request(
+            opener,
+            f"{base}/api/jobs/job-missing/candidates/batch",
+            method="POST",
+            body={"candidate_ids": ["candidate-1"]},
+        )
+        self.assertEqual(foreign, missing)
+        self.assertEqual(foreign, (404, {"status": "not_found", "reason": "job_not_found"}))
 
     def test_job_derived_migration_writes_require_exact_source_job_owner(self) -> None:
         base, opener, orchestrator = self._start_server()
@@ -480,6 +729,22 @@ class RequestScopeWiringTest(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(orchestrator.captured["crm_update"][-1]["workspace_id"], "custom")
         self.assertEqual(orchestrator.captured["crm_update"][-1]["actor_id"], "legacy")
+
+        for path, capture_name in (
+            ("/api/workers/cleanup", "worker_cleanup"),
+            ("/api/runtime/services/shutdown", "runtime_shutdown"),
+            ("/api/workers/daemon/run-once", "shared_recovery"),
+            ("/api/workers/daemon/systemd-unit", "systemd_unit"),
+        ):
+            status, _ = self._request(
+                opener,
+                f"{base}{path}",
+                method="POST",
+                body={"service_name": "legacy-operator-service"},
+                token=None,
+            )
+            self.assertIn(status, {200, 202})
+            self.assertTrue(orchestrator.captured[capture_name])
 
 
 if __name__ == "__main__":

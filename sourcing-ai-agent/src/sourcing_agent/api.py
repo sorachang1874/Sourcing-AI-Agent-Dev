@@ -213,18 +213,26 @@ def _api_bearer_tokens() -> dict[str, str]:
     raw = str(os.getenv("SOURCING_API_BEARER_TOKENS") or "").strip()
     if not raw:
         return {}
+    class _JSONObjectPairs(list[tuple[str, Any]]):
+        """Marker that preserves duplicate object keys during JSON parsing."""
+
     try:
-        parsed = json.loads(raw)
+        parsed = json.loads(raw, object_pairs_hook=_JSONObjectPairs)
     except (TypeError, ValueError) as exc:
         raise ValueError("SOURCING_API_BEARER_TOKENS must be a valid JSON object") from exc
-    if not isinstance(parsed, dict):
+    if not isinstance(parsed, _JSONObjectPairs):
         raise ValueError("SOURCING_API_BEARER_TOKENS must be a JSON object")
     tokens: dict[str, str] = {}
-    for token, user_id in parsed.items():
-        token_text = str(token or "").strip()
-        user_text = str(user_id or "").strip()
-        if token_text and user_text:
-            tokens[token_text] = user_text
+    for token, user_id in parsed:
+        if not isinstance(token, str) or not isinstance(user_id, str):
+            raise ValueError("SOURCING_API_BEARER_TOKENS mappings must use non-empty string tokens and user ids")
+        token_text = token.strip()
+        user_text = user_id.strip()
+        if not token_text or not user_text:
+            raise ValueError("SOURCING_API_BEARER_TOKENS mappings must use non-empty string tokens and user ids")
+        if token_text in tokens:
+            raise ValueError("SOURCING_API_BEARER_TOKENS contains tokens that collide after whitespace normalization")
+        tokens[token_text] = user_text
     if not tokens:
         raise ValueError("SOURCING_API_BEARER_TOKENS must contain at least one non-empty token mapping")
     return tokens
@@ -321,6 +329,62 @@ def _server_identity(request: Request) -> dict[str, str] | None:
         return None
     user_id = str(identity.get("user_id") or "").strip()
     return {"user_id": user_id} if user_id else None
+
+
+def _expected_job_owner_kwargs(request: Request) -> dict[str, str]:
+    """Canonical-owner fence arguments for authenticated job operations."""
+    identity = _server_identity(request)
+    if identity is None:
+        return {}
+    user_id = identity["user_id"]
+    return {
+        "expected_requester_id": user_id,
+        "expected_tenant_id": _user_namespace(user_id),
+    }
+
+
+def _expected_crm_owner_kwargs(request: Request) -> dict[str, str]:
+    """Canonical-owner fence arguments for authenticated CRM operations."""
+    identity = _server_identity(request)
+    if identity is None:
+        return {}
+    user_id = identity["user_id"]
+    return {
+        "expected_workspace_id": _user_namespace(user_id),
+        "expected_owner_user_id": user_id,
+    }
+
+
+# C2.6 request-boundary inventory. Every public route that creates, reads via
+# POST, or mutates/controls a job/worker is classified here so additions cannot
+# silently bypass an ownership decision. ``global_admin`` routes deliberately
+# fail closed for authenticated ordinary users until an admin capability exists;
+# open mode remains the explicit operator compatibility surface.
+AUTHENTICATED_REQUEST_SCOPE_REGISTRY: dict[tuple[str, str], str] = {
+    ("POST", "/api/workflows/explain"): "shared_read_via_post",
+    ("POST", "/api/workflows"): "server_owned_job_create",
+    ("POST", "/api/intake/excel/workflow"): "server_owned_job_create",
+    ("POST", "/api/workflows/{job_id}/continue-stage2"): "exact_job_write",
+    ("POST", "/api/jobs/{job_id}/profile-completion"): "exact_job_write",
+    ("POST", "/api/jobs/{job_id}/candidates/batch"): "owned_job_read_via_post",
+    ("POST", "/api/results/refine/compile-instruction"): "exact_job_read_via_post",
+    ("POST", "/api/results/refine"): "exact_job_derived_create",
+    ("POST", "/api/target-candidates/import-from-job"): "exact_job_write",
+    ("POST", "/api/projections/backfill-from-job"): "exact_job_write",
+    ("GET", "/api/workers/recoverable"): "exact_job_read_or_global_admin",
+    ("GET", "/api/workers/daemon/status"): "exact_job_read_or_global_admin",
+    ("POST", "/api/workers/interrupt"): "exact_worker_job_write",
+    ("POST", "/api/workers/cleanup"): "exact_job_write_or_global_admin",
+    ("POST", "/api/workers/daemon/run-once"): "global_admin",
+    ("POST", "/api/workers/daemon/systemd-unit"): "global_admin",
+    ("POST", "/api/runtime/services/shutdown"): "exact_job_write_or_global_admin",
+    ("POST", "/api/jobs/{job_id}/cancel"): "exact_job_write",
+}
+
+
+_JOB_NOT_FOUND_BODY = {"status": "not_found", "reason": "job_not_found"}
+_CRM_RECORD_NOT_FOUND_BODY = {"status": "not_found", "reason": "crm_record_not_found"}
+_ADMIN_SCOPE_REQUIRED_BODY = {"status": "forbidden", "reason": "admin_scope_required"}
 
 
 def _apply_server_identity(
@@ -672,24 +736,28 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
         """C2.3: 404 when the caller is not the job's owner. None => proceed.
 
         Pre-fetches the job row (a single indexed PK read the downstream getter
-        repeats anyway) and gates on jobs.requester_id. Gates only when the row
-        exists, so a genuinely-missing job keeps its route's normal not-found.
-        Open mode is a true no-op (no pre-fetch).
+        repeats anyway) and gates on jobs.requester_id. Missing and foreign ids
+        share the same body. Open mode is a true no-op (no pre-fetch).
         """
         if _server_identity(request) is None:
             return None
         job_row = orchestrator.store.get_job(job_id)
-        if job_row is not None and not _read_allowed_requester(request, job_row.get("requester_id")):
-            return _json_response(HTTPStatus.NOT_FOUND, {"error": "job not found"})
+        if job_row is None or not _read_allowed_requester(request, job_row.get("requester_id")):
+            return _json_response(HTTPStatus.NOT_FOUND, _JOB_NOT_FOUND_BODY)
         return None
 
     def _gate_job_write_owner(request: Request, job_id: str) -> Response | None:
-        """404 unless an authenticated caller has exact modern job ownership."""
+        """404 unless an authenticated caller has exact modern job ownership.
+
+        Missing and foreign ids intentionally use the same route-independent
+        body. Returning here for both also prevents a missing-at-check id from
+        becoming writable if a row appears before the canonical owner runs.
+        """
         if _server_identity(request) is None:
             return None
         job_row = orchestrator.store.get_job(job_id)
-        if job_row is not None and not _write_allowed_job_owner(request, job_row):
-            return _json_response(HTTPStatus.NOT_FOUND, {"error": "job not found"})
+        if job_row is None or not _write_allowed_job_owner(request, job_row):
+            return _json_response(HTTPStatus.NOT_FOUND, _JOB_NOT_FOUND_BODY)
         return None
 
     def _gate_crm_record_owner(request: Request, record_id: str) -> Response | None:
@@ -697,14 +765,14 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
 
         Gates the record-by-id subresource reads (profile / public-web detail /
         promotions) on crm_records.workspace_id (set to 'user-<id>' by C2.2).
-        Gates only when the record exists, so a missing record keeps its route's
-        normal not-found. Open mode is a true no-op (no pre-fetch).
+        Missing and foreign ids share the same body. Open mode is a true no-op
+        (no pre-fetch).
         """
         if _server_identity(request) is None:
             return None
         crm_record = orchestrator.store.get_crm_record(record_id)
-        if crm_record is not None and not _read_allowed_namespace(request, crm_record.get("workspace_id")):
-            return _json_response(HTTPStatus.NOT_FOUND, {"status": "not_found", "record_id": record_id})
+        if crm_record is None or not _read_allowed_namespace(request, crm_record.get("workspace_id")):
+            return _json_response(HTTPStatus.NOT_FOUND, _CRM_RECORD_NOT_FOUND_BODY)
         return None
 
     def _gate_crm_record_write_owner(request: Request, record_id: str) -> Response | None:
@@ -712,8 +780,8 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
         if _server_identity(request) is None:
             return None
         crm_record = orchestrator.store.get_crm_record(record_id)
-        if crm_record is not None and not _write_allowed_crm_owner(request, crm_record):
-            return _json_response(HTTPStatus.NOT_FOUND, {"status": "not_found", "record_id": record_id})
+        if crm_record is None or not _write_allowed_crm_owner(request, crm_record):
+            return _json_response(HTTPStatus.NOT_FOUND, _CRM_RECORD_NOT_FOUND_BODY)
         return None
 
     def _gate_export_owner(request: Request, command_id: str) -> Response | None:
@@ -1298,11 +1366,25 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["GET"], "/api/crm/records/{record_id}", get_crm_record)
 
     def get_recoverable_workers(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
-        return _json_response(HTTPStatus.OK, orchestrator.list_recoverable_agent_workers())
+        if _server_identity(request) is not None:
+            job_id = str(query.get("job_id") or "").strip()
+            if not job_id:
+                return _json_response(HTTPStatus.FORBIDDEN, _ADMIN_SCOPE_REQUIRED_BODY)
+            denied = _gate_job_write_owner(request, job_id)
+            if denied is not None:
+                return denied
+        return _json_response(HTTPStatus.OK, orchestrator.list_recoverable_agent_workers(query))
 
     add(["GET"], "/api/workers/recoverable", get_recoverable_workers)
 
     def get_worker_daemon_status(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        if _server_identity(request) is not None:
+            job_id = str(query.get("job_id") or "").strip()
+            if not job_id:
+                return _json_response(HTTPStatus.FORBIDDEN, _ADMIN_SCOPE_REQUIRED_BODY)
+            denied = _gate_job_write_owner(request, job_id)
+            if denied is not None:
+                return denied
         return _json_response(HTTPStatus.OK, orchestrator.get_worker_daemon_status(query))
 
     add(["GET"], "/api/workers/daemon/status", get_worker_daemon_status)
@@ -1828,7 +1910,10 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
         if denied is not None:
             return denied
         _apply_server_identity(payload, request, requester=True, tenant=True)
-        result = orchestrator.continue_workflow_stage2({**payload, "job_id": request.path_params["job_id"]})
+        result = orchestrator.continue_workflow_stage2(
+            {**payload, "job_id": request.path_params["job_id"]},
+            **_expected_job_owner_kwargs(request),
+        )
         status = HTTPStatus.ACCEPTED
         if result.get("status") in {"not_found"}:
             status = HTTPStatus.NOT_FOUND
@@ -1842,7 +1927,11 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
         denied = _gate_job_write_owner(request, request.path_params["job_id"])
         if denied is not None:
             return denied
-        result = orchestrator.complete_job_candidate_profiles(request.path_params["job_id"], payload)
+        result = orchestrator.complete_job_candidate_profiles(
+            request.path_params["job_id"],
+            payload,
+            **_expected_job_owner_kwargs(request),
+        )
         status = HTTPStatus.OK
         if result.get("status") == "not_found":
             status = HTTPStatus.NOT_FOUND
@@ -2029,6 +2118,7 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["POST"], "/api/intake/excel", post_intake_excel, read_body=True)
 
     def post_intake_excel_workflow(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        _apply_server_identity(payload, request, requester=True, tenant=True)
         result = orchestrator.start_excel_intake_workflow(payload)
         status = HTTPStatus.OK if result.get("status") != "invalid" else HTTPStatus.BAD_REQUEST
         return _json_response(status, result)
@@ -2071,7 +2161,10 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     def post_results_refine_compile_instruction(
         request: Request, query: dict[str, Any], payload: dict[str, Any]
     ) -> Response:
-        result = orchestrator.compile_post_acquisition_refinement(payload)
+        result = orchestrator.compile_post_acquisition_refinement(
+            payload,
+            **_expected_job_owner_kwargs(request),
+        )
         status = HTTPStatus.OK
         if result.get("status") == "not_found":
             status = HTTPStatus.NOT_FOUND
@@ -2082,7 +2175,10 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["POST"], "/api/results/refine/compile-instruction", post_results_refine_compile_instruction, read_body=True)
 
     def post_results_refine(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
-        result = orchestrator.apply_post_acquisition_refinement(payload)
+        result = orchestrator.apply_post_acquisition_refinement(
+            payload,
+            **_expected_job_owner_kwargs(request),
+        )
         status = HTTPStatus.OK
         if result.get("status") == "not_found":
             status = HTTPStatus.NOT_FOUND
@@ -2202,7 +2298,10 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
         denied = _gate_job_write_owner(request, str(payload.get("job_id") or "").strip())
         if denied is not None:
             return denied
-        result = orchestrator.import_target_candidates_from_job(payload)
+        result = orchestrator.import_target_candidates_from_job(
+            payload,
+            **_expected_job_owner_kwargs(request),
+        )
         status = HTTPStatus.CREATED if result.get("status") == "imported" else HTTPStatus.BAD_REQUEST
         if result.get("status") == "not_found":
             status = HTTPStatus.NOT_FOUND
@@ -2249,7 +2348,10 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
         denied = _gate_job_write_owner(request, source_job_id)
         if denied is not None:
             return denied
-        result = orchestrator.backfill_serving_projection_for_job(payload)
+        result = orchestrator.backfill_serving_projection_for_job(
+            payload,
+            **_expected_job_owner_kwargs(request),
+        )
         status = HTTPStatus.CREATED if result.get("status") == "backfilled" else HTTPStatus.BAD_REQUEST
         if result.get("status") == "skipped_existing_projection":
             status = HTTPStatus.OK
@@ -2539,7 +2641,10 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
         result = orchestrator.promote_crm_record_public_web_signal(
             record_id,
             payload,
+            **_expected_crm_owner_kwargs(request),
         )
+        if result.get("status") == "not_found" and result.get("reason") == "crm_record_not_found":
+            result = dict(_CRM_RECORD_NOT_FOUND_BODY)
         status = HTTPStatus.CREATED if result.get("status") in {"promoted", "rejected"} else HTTPStatus.BAD_REQUEST
         if result.get("status") == "not_found":
             status = HTTPStatus.NOT_FOUND
@@ -2603,7 +2708,7 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["POST"], "/api/criteria/recompile", post_criteria_recompile, read_body=True)
 
     def post_workers_interrupt(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
-        result = orchestrator.interrupt_agent_worker(payload)
+        result = orchestrator.interrupt_agent_worker(payload, **_expected_job_owner_kwargs(request))
         status = HTTPStatus.OK
         if result.get("status") == "invalid":
             status = HTTPStatus.BAD_REQUEST
@@ -2614,7 +2719,20 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["POST"], "/api/workers/interrupt", post_workers_interrupt, read_body=True)
 
     def post_workers_cleanup(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
-        return _json_response(HTTPStatus.OK, orchestrator.cleanup_recoverable_workers(payload))
+        if _server_identity(request) is not None:
+            job_id = str(payload.get("job_id") or "").strip()
+            if not job_id:
+                return _json_response(HTTPStatus.FORBIDDEN, _ADMIN_SCOPE_REQUIRED_BODY)
+            denied = _gate_job_write_owner(request, job_id)
+            if denied is not None:
+                return denied
+        result = orchestrator.cleanup_recoverable_workers(payload, **_expected_job_owner_kwargs(request))
+        status = HTTPStatus.OK
+        if result.get("status") == "not_found":
+            status = HTTPStatus.NOT_FOUND
+        elif result.get("status") == "forbidden":
+            status = HTTPStatus.FORBIDDEN
+        return _json_response(status, result)
 
     add(["POST"], "/api/workers/cleanup", post_workers_cleanup, read_body=True)
 
@@ -2622,6 +2740,8 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
         # C3a: the API process is a signaler, never a recovery runner. Client
         # payload fields are deliberately ignored so stale thresholds, limits,
         # job scope, phases, or fallback controls cannot cross this boundary.
+        if _server_identity(request) is not None:
+            return _json_response(HTTPStatus.FORBIDDEN, _ADMIN_SCOPE_REQUIRED_BODY)
         result = orchestrator.signal_shared_recovery(
             reason="operator_api_recovery_signal",
             requested_by="operator_api",
@@ -2632,8 +2752,30 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["POST"], "/api/workers/daemon/run-once", post_workers_daemon_run_once, read_body=True)
 
     def post_runtime_services_shutdown(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
-        result = orchestrator.request_runtime_service_shutdown(payload)
+        identity = _server_identity(request)
+        if identity is not None:
+            job_id = str(payload.get("job_id") or "").strip()
+            if (
+                not job_id
+                or payload.get("service_names")
+                or payload.get("service_name")
+                or bool(payload.get("include_hosted_watchdog"))
+                or bool(payload.get("include_shared_recovery"))
+            ):
+                return _json_response(HTTPStatus.FORBIDDEN, _ADMIN_SCOPE_REQUIRED_BODY)
+            denied = _gate_job_write_owner(request, job_id)
+            if denied is not None:
+                return denied
+            payload["requested_by"] = identity["user_id"]
+        result = orchestrator.request_runtime_service_shutdown(
+            payload,
+            **_expected_job_owner_kwargs(request),
+        )
         status = HTTPStatus.OK if result.get("status") != "invalid" else HTTPStatus.BAD_REQUEST
+        if result.get("status") == "not_found":
+            status = HTTPStatus.NOT_FOUND
+        elif result.get("status") == "forbidden":
+            status = HTTPStatus.FORBIDDEN
         return _json_response(status, result)
 
     add(["POST"], "/api/runtime/services/shutdown", post_runtime_services_shutdown, read_body=True)
@@ -2642,7 +2784,11 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
         denied = _gate_job_write_owner(request, request.path_params["job_id"])
         if denied is not None:
             return denied
-        result = orchestrator.cancel_workflow_job(request.path_params["job_id"], payload)
+        result = orchestrator.cancel_workflow_job(
+            request.path_params["job_id"],
+            payload,
+            **_expected_job_owner_kwargs(request),
+        )
         status = HTTPStatus.OK
         if result.get("status") == "not_found":
             status = HTTPStatus.NOT_FOUND
@@ -2653,6 +2799,8 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["POST"], "/api/jobs/{job_id:sourcing_ident}/cancel", post_job_cancel, read_body=True)
 
     def post_workers_daemon_systemd_unit(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        if _server_identity(request) is not None:
+            return _json_response(HTTPStatus.FORBIDDEN, _ADMIN_SCOPE_REQUIRED_BODY)
         return _json_response(HTTPStatus.OK, orchestrator.write_worker_daemon_systemd_unit(payload))
 
     add(["POST"], "/api/workers/daemon/systemd-unit", post_workers_daemon_systemd_unit, read_body=True)
@@ -2673,7 +2821,10 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
         result = orchestrator.update_crm_record_api(
             record_id,
             payload,
+            **_expected_crm_owner_kwargs(request),
         )
+        if result.get("status") == "not_found" and result.get("reason") == "crm_record_not_found":
+            result = dict(_CRM_RECORD_NOT_FOUND_BODY)
         status = HTTPStatus.OK if result.get("status") == "updated" else HTTPStatus.BAD_REQUEST
         if result.get("status") == "not_found":
             status = HTTPStatus.NOT_FOUND

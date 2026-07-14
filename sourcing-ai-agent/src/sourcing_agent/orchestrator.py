@@ -434,6 +434,7 @@ from .request_normalization import (
 from .request_normalization import (
     supplement_request_query_signals as _shared_supplement_request_query_signals,
 )
+from .request_ownership import exact_job_owner_matches as _exact_job_owner_matches
 from .rerun_policy import decide_rerun_policy
 from .result_diff import build_result_diff
 from .results_store import (
@@ -1210,7 +1211,14 @@ class SourcingOrchestrator:
             build_artifacts=bool(payload.get("build_artifacts", True)),
         )
 
-    def complete_job_candidate_profiles(self, job_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def complete_job_candidate_profiles(
+        self,
+        job_id: str,
+        payload: dict[str, Any],
+        *,
+        expected_requester_id: str = "",
+        expected_tenant_id: str = "",
+    ) -> dict[str, Any]:
         normalized_job_id = str(job_id or "").strip()
         if not normalized_job_id:
             return {"status": "invalid", "reason": "job_id is required"}
@@ -1218,8 +1226,13 @@ class SourcingOrchestrator:
         if not requested_candidate_ids:
             return {"status": "invalid", "reason": "candidate_ids is required"}
         job = self.store.get_job(normalized_job_id)
-        if job is None:
-            return {"status": "not_found", "reason": "job not found", "job_id": normalized_job_id}
+        if not _exact_job_owner_matches(
+            job,
+            expected_requester_id=expected_requester_id,
+            expected_tenant_id=expected_tenant_id,
+        ):
+            return {"status": "not_found", "reason": "job_not_found"}
+        assert job is not None
 
         workflow_stage_summaries = self._load_workflow_stage_summaries(job=job)
         job_summary = dict(job.get("summary") or {})
@@ -1282,6 +1295,16 @@ class SourcingOrchestrator:
                 "skipped_candidate_ids": skipped_candidate_ids,
             }
 
+        # The handler pre-check is advisory. Re-read at the canonical owner just
+        # before the provider-capable side effect so an ownership change between
+        # request dispatch and execution fails closed.
+        latest_job = self.store.get_job(normalized_job_id)
+        if not _exact_job_owner_matches(
+            latest_job,
+            expected_requester_id=expected_requester_id,
+            expected_tenant_id=expected_tenant_id,
+        ):
+            return {"status": "not_found", "reason": "job_not_found"}
         completion_manager = CompanyAssetCompletionManager(
             runtime_dir=self.runtime_dir,
             store=self.store,
@@ -3816,14 +3839,25 @@ class SourcingOrchestrator:
             },
         }
 
-    def continue_workflow_stage2(self, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    def continue_workflow_stage2(
+        self,
+        payload: dict[str, Any] | None = None,
+        *,
+        expected_requester_id: str = "",
+        expected_tenant_id: str = "",
+    ) -> dict[str, Any]:
         payload = dict(payload or {})
         job_id = str(payload.get("job_id") or "").strip()
         if not job_id:
             return {"status": "invalid", "reason": "job_id is required"}
         job = self.store.get_job(job_id)
-        if job is None:
-            return {"status": "not_found", "job_id": job_id}
+        if not _exact_job_owner_matches(
+            job,
+            expected_requester_id=expected_requester_id,
+            expected_tenant_id=expected_tenant_id,
+        ):
+            return {"status": "not_found", "reason": "job_not_found"}
+        assert job is not None
         if str(job.get("job_type") or "") != "workflow":
             return {"status": "invalid", "reason": "job is not a workflow", "job_id": job_id}
 
@@ -3839,6 +3873,12 @@ class SourcingOrchestrator:
                 }
 
             job = self.store.get_job(job_id) or {}
+            if not _exact_job_owner_matches(
+                job,
+                expected_requester_id=expected_requester_id,
+                expected_tenant_id=expected_tenant_id,
+            ):
+                return {"status": "not_found", "reason": "job_not_found"}
             job_status = str(job.get("status") or "").strip().lower()
             job_stage = str(job.get("stage") or "").strip().lower()
             job_summary = dict(job.get("summary") or {})
@@ -29224,7 +29264,14 @@ class SourcingOrchestrator:
             },
         }
 
-    def update_crm_record_api(self, crm_record_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def update_crm_record_api(
+        self,
+        crm_record_id: str,
+        payload: dict[str, Any],
+        *,
+        expected_workspace_id: str = "",
+        expected_owner_user_id: str = "",
+    ) -> dict[str, Any]:
         normalized = dict(payload or {})
         result = self.crm_writer.update_crm_record(
             crm_record_id=str(
@@ -29248,6 +29295,8 @@ class SourcingOrchestrator:
                 "avatar_url": normalized.get("avatar_url") or normalized.get("avatarUrl") or "",
                 "linkedin_url": normalized.get("linkedin_url") or normalized.get("linkedinUrl") or "",
             },
+            expected_workspace_id=expected_workspace_id,
+            expected_owner_user_id=expected_owner_user_id,
         )
         if result.get("crm_record"):
             result["crm_record"] = self._public_crm_record_payload(dict(result.get("crm_record") or {}))
@@ -30136,14 +30185,25 @@ class SourcingOrchestrator:
             "skipped_assertions": skipped_assertions,
         }
 
-    def backfill_serving_projection_for_job(self, payload: dict[str, Any]) -> dict[str, Any]:
+    def backfill_serving_projection_for_job(
+        self,
+        payload: dict[str, Any],
+        *,
+        expected_requester_id: str = "",
+        expected_tenant_id: str = "",
+    ) -> dict[str, Any]:
         normalized = dict(payload or {})
         job_id = str(normalized.get("job_id") or normalized.get("run_id") or "").strip()
         if not job_id:
             return {"status": "invalid", "reason": "job_id_required"}
         job = self.store.get_job(job_id)
-        if job is None:
-            return {"status": "not_found", "reason": "job_not_found", "job_id": job_id}
+        if not _exact_job_owner_matches(
+            job,
+            expected_requester_id=expected_requester_id,
+            expected_tenant_id=expected_tenant_id,
+        ):
+            return {"status": "not_found", "reason": "job_not_found"}
+        assert job is not None
         status = str(job.get("status") or "").strip().lower()
         if status not in {"completed", "results"} and not bool(normalized.get("force")):
             return {
@@ -30158,6 +30218,12 @@ class SourcingOrchestrator:
         collection_id = str(
             normalized.get("collection_id") or (f"company:{company_key}" if company_key else "")
         ).strip()
+        if not _exact_job_owner_matches(
+            self.store.get_job(job_id),
+            expected_requester_id=expected_requester_id,
+            expected_tenant_id=expected_tenant_id,
+        ):
+            return {"status": "not_found", "reason": "job_not_found"}
         backfill = ServingProjectionMigrationBackfill(self.store)
         return backfill.backfill_run_scope_projection(
             run_id=job_id,
@@ -39030,10 +39096,38 @@ class SourcingOrchestrator:
             "scheduler": summarize_scheduler(plan_payload=plan_payload, workers=workers),
         }
 
-    def interrupt_agent_worker(self, payload: dict[str, Any]) -> dict[str, Any]:
+    def interrupt_agent_worker(
+        self,
+        payload: dict[str, Any],
+        *,
+        expected_requester_id: str = "",
+        expected_tenant_id: str = "",
+    ) -> dict[str, Any]:
         worker_id = int(payload.get("worker_id") or 0)
         if worker_id <= 0:
             return {"status": "invalid", "reason": "worker_id is required"}
+        owner_fenced = bool(str(expected_requester_id or "").strip() or str(expected_tenant_id or "").strip())
+        if owner_fenced:
+            worker_row = self.store.get_agent_worker(worker_id=worker_id)
+            job_id = str((worker_row or {}).get("job_id") or "").strip()
+            job = self.store.get_job(job_id) if job_id else None
+            if not worker_row or not _exact_job_owner_matches(
+                job,
+                expected_requester_id=expected_requester_id,
+                expected_tenant_id=expected_tenant_id,
+            ):
+                return {"status": "not_found", "reason": "job_not_found"}
+            # Re-read both links immediately before the interrupt request. A
+            # worker re-parent or job-owner change is indistinguishable from a
+            # missing worker to the caller.
+            latest_worker = self.store.get_agent_worker(worker_id=worker_id)
+            latest_job_id = str((latest_worker or {}).get("job_id") or "").strip()
+            if latest_job_id != job_id or not _exact_job_owner_matches(
+                self.store.get_job(latest_job_id) if latest_job_id else None,
+                expected_requester_id=expected_requester_id,
+                expected_tenant_id=expected_tenant_id,
+            ):
+                return {"status": "not_found", "reason": "job_not_found"}
         worker = self.agent_runtime.interrupt_worker(worker_id)
         if worker is None:
             return {"status": "not_found", "worker_id": worker_id}
@@ -39055,8 +39149,25 @@ class SourcingOrchestrator:
             "job_id": str(payload.get("job_id") or ""),
         }
 
-    def cleanup_recoverable_workers(self, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    def cleanup_recoverable_workers(
+        self,
+        payload: dict[str, Any] | None = None,
+        *,
+        expected_requester_id: str = "",
+        expected_tenant_id: str = "",
+    ) -> dict[str, Any]:
         payload = dict(payload or {})
+        owner_fenced = bool(str(expected_requester_id or "").strip() or str(expected_tenant_id or "").strip())
+        explicit_job_id = str(payload.get("job_id") or "").strip()
+        if owner_fenced:
+            if not explicit_job_id:
+                return {"status": "forbidden", "reason": "admin_scope_required"}
+            if not _exact_job_owner_matches(
+                self.store.get_job(explicit_job_id),
+                expected_requester_id=expected_requester_id,
+                expected_tenant_id=expected_tenant_id,
+            ):
+                return {"status": "not_found", "reason": "job_not_found"}
         stale_after_seconds = max(1, int(payload.get("stale_after_seconds") or 180))
         limit = max(1, int(payload.get("limit") or 200))
         dry_run = _coerce_bool(payload.get("dry_run"), False)
@@ -39082,6 +39193,11 @@ class SourcingOrchestrator:
         skipped: list[dict[str, Any]] = []
         for worker in recoverable_workers:
             job_id = str(worker.get("job_id") or "").strip()
+            # Do not trust the repository filter as the authorization boundary:
+            # every returned worker must still link to the one explicitly-owned
+            # job before any details are included in preview or execution.
+            if owner_fenced and job_id != explicit_job_id:
+                continue
             job = self.store.get_job(job_id) or {}
             job_type = str(job.get("job_type") or "").strip().lower()
             job_status = str(job.get("status") or "").strip().lower()
@@ -39141,6 +39257,12 @@ class SourcingOrchestrator:
             )
 
         if dry_run:
+            if owner_fenced and not _exact_job_owner_matches(
+                self.store.get_job(explicit_job_id),
+                expected_requester_id=expected_requester_id,
+                expected_tenant_id=expected_tenant_id,
+            ):
+                return {"status": "not_found", "reason": "job_not_found"}
             return {
                 "status": "preview",
                 "candidate_count": len(candidates),
@@ -39156,6 +39278,21 @@ class SourcingOrchestrator:
 
         retired_by_worker_id: dict[int, dict[str, Any]] = {}
         for cleanup_status, worker_ids in grouped_worker_ids.items():
+            if owner_fenced:
+                if not _exact_job_owner_matches(
+                    self.store.get_job(explicit_job_id),
+                    expected_requester_id=expected_requester_id,
+                    expected_tenant_id=expected_tenant_id,
+                ):
+                    return {"status": "not_found", "reason": "job_not_found"}
+                worker_ids = [
+                    worker_id
+                    for worker_id in worker_ids
+                    if str((self.store.get_agent_worker(worker_id=worker_id) or {}).get("job_id") or "").strip()
+                    == explicit_job_id
+                ]
+                if not worker_ids:
+                    continue
             retired_workers = self.store.retire_agent_workers(
                 worker_ids=worker_ids,
                 status=cleanup_status,
@@ -42169,13 +42306,34 @@ class SourcingOrchestrator:
         status = read_service_status(self.runtime_dir, service_name)
         return status if include_details else compact_service_status(status)
 
-    def request_runtime_service_shutdown(self, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    def request_runtime_service_shutdown(
+        self,
+        payload: dict[str, Any] | None = None,
+        *,
+        expected_requester_id: str = "",
+        expected_tenant_id: str = "",
+    ) -> dict[str, Any]:
         payload = dict(payload or {})
         requested_by = str(payload.get("requested_by") or "").strip() or "operator"
         reason = str(payload.get("reason") or "").strip() or "operator_shutdown_requested"
         include_details = _coerce_bool(payload.get("include_details"), False)
         requested_service_names = payload.get("service_names") or payload.get("service_name")
         job_id = str(payload.get("job_id") or "").strip()
+        owner_fenced = bool(str(expected_requester_id or "").strip() or str(expected_tenant_id or "").strip())
+        if owner_fenced:
+            if (
+                not job_id
+                or requested_service_names
+                or bool(payload.get("include_hosted_watchdog"))
+                or bool(payload.get("include_shared_recovery"))
+            ):
+                return {"status": "forbidden", "reason": "admin_scope_required"}
+            if not _exact_job_owner_matches(
+                self.store.get_job(job_id),
+                expected_requester_id=expected_requester_id,
+                expected_tenant_id=expected_tenant_id,
+            ):
+                return {"status": "not_found", "reason": "job_not_found"}
         service_names = (
             _normalize_service_name_list(requested_service_names)
             if requested_service_names
@@ -42190,6 +42348,12 @@ class SourcingOrchestrator:
         service_names = _dedupe_texts(service_names)
         requests: list[dict[str, Any]] = []
         for service_name in service_names:
+            if owner_fenced and not _exact_job_owner_matches(
+                self.store.get_job(job_id),
+                expected_requester_id=expected_requester_id,
+                expected_tenant_id=expected_tenant_id,
+            ):
+                return {"status": "not_found", "reason": "job_not_found"}
             status = read_service_status(self.runtime_dir, service_name)
             requests.append(
                 {
@@ -42210,14 +42374,35 @@ class SourcingOrchestrator:
             "requests": requests,
         }
 
-    def cancel_workflow_job(self, job_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    def cancel_workflow_job(
+        self,
+        job_id: str,
+        payload: dict[str, Any] | None = None,
+        *,
+        expected_requester_id: str = "",
+        expected_tenant_id: str = "",
+    ) -> dict[str, Any]:
         payload = dict(payload or {})
         normalized_job_id = str(job_id or payload.get("job_id") or "").strip()
         if not normalized_job_id:
             return {"status": "invalid", "reason": "job_id is required"}
         job = self.store.get_job(normalized_job_id)
-        if job is None:
-            return {"status": "not_found", "job_id": normalized_job_id}
+        if not _exact_job_owner_matches(
+            job,
+            expected_requester_id=expected_requester_id,
+            expected_tenant_id=expected_tenant_id,
+        ):
+            return {"status": "not_found", "reason": "job_not_found"}
+        assert job is not None
+        latest_authorized_job = self.store.get_job(normalized_job_id)
+        if not _exact_job_owner_matches(
+            latest_authorized_job,
+            expected_requester_id=expected_requester_id,
+            expected_tenant_id=expected_tenant_id,
+        ):
+            return {"status": "not_found", "reason": "job_not_found"}
+        assert latest_authorized_job is not None
+        job = latest_authorized_job
         if str(job.get("job_type") or "") != "workflow":
             return {"status": "invalid", "job_id": normalized_job_id, "reason": "job is not a workflow"}
         current_status = str(job.get("status") or "").strip().lower()
@@ -42234,6 +42419,18 @@ class SourcingOrchestrator:
         summary["message"] = reason
         summary["cancelled_reason"] = reason
         summary["cancelled_at"] = datetime.now(timezone.utc).isoformat()
+        # Re-fetch immediately before the first write. In authenticated mode
+        # this is the authoritative fence; the API handler's earlier lookup is
+        # only a fast non-enumeration check.
+        latest_job = self.store.get_job(normalized_job_id)
+        if not _exact_job_owner_matches(
+            latest_job,
+            expected_requester_id=expected_requester_id,
+            expected_tenant_id=expected_tenant_id,
+        ):
+            return {"status": "not_found", "reason": "job_not_found"}
+        assert latest_job is not None
+        job = latest_job
         self.store.save_job(
             job_id=normalized_job_id,
             job_type="workflow",
@@ -42267,7 +42464,9 @@ class SourcingOrchestrator:
                 "job_id": normalized_job_id,
                 "reason": reason,
                 "requested_by": str(payload.get("requested_by") or "operator"),
-            }
+            },
+            expected_requester_id=expected_requester_id,
+            expected_tenant_id=expected_tenant_id,
         )
         self.store.append_job_event(
             normalized_job_id,
@@ -52400,8 +52599,18 @@ class SourcingOrchestrator:
             "items": results,
         }
 
-    def compile_post_acquisition_refinement(self, payload: dict[str, Any]) -> dict[str, Any]:
-        baseline_job = self._resolve_baseline_job_for_refinement(payload)
+    def compile_post_acquisition_refinement(
+        self,
+        payload: dict[str, Any],
+        *,
+        expected_requester_id: str = "",
+        expected_tenant_id: str = "",
+    ) -> dict[str, Any]:
+        baseline_job = self._resolve_baseline_job_for_refinement(
+            payload,
+            expected_requester_id=expected_requester_id,
+            expected_tenant_id=expected_tenant_id,
+        )
         if isinstance(baseline_job, dict) and baseline_job.get("status") in {"not_found", "invalid"}:
             return baseline_job
         assert isinstance(baseline_job, dict)
@@ -52434,9 +52643,16 @@ class SourcingOrchestrator:
         request = JobRequest.from_payload(merged_request)
         plan = self._build_augmented_sourcing_plan(request)
         effective_request = _build_effective_retrieval_request(request, plan)
+        baseline_job_id = str(baseline_job.get("job_id") or "")
+        if not _exact_job_owner_matches(
+            self.store.get_job(baseline_job_id),
+            expected_requester_id=expected_requester_id,
+            expected_tenant_id=expected_tenant_id,
+        ):
+            return {"status": "not_found", "reason": "job_not_found"}
         return {
             "status": "compiled",
-            "baseline_job_id": str(baseline_job.get("job_id") or ""),
+            "baseline_job_id": baseline_job_id,
             "request_patch": request_patch,
             "request": request.to_record(),
             "request_preview": _build_request_preview_payload(
@@ -52452,19 +52668,40 @@ class SourcingOrchestrator:
             ),
         }
 
-    def apply_post_acquisition_refinement(self, payload: dict[str, Any]) -> dict[str, Any]:
-        compiled = self.compile_post_acquisition_refinement(payload)
+    def apply_post_acquisition_refinement(
+        self,
+        payload: dict[str, Any],
+        *,
+        expected_requester_id: str = "",
+        expected_tenant_id: str = "",
+    ) -> dict[str, Any]:
+        compiled = self.compile_post_acquisition_refinement(
+            payload,
+            expected_requester_id=expected_requester_id,
+            expected_tenant_id=expected_tenant_id,
+        )
         if compiled.get("status") != "compiled":
             return compiled
 
         baseline_job_id = str(compiled.get("baseline_job_id") or "")
         baseline_job = self.store.get_job(baseline_job_id) if baseline_job_id else None
-        if baseline_job is None:
-            return {"status": "not_found", "reason": "baseline job not found", "baseline_job_id": baseline_job_id}
+        if not _exact_job_owner_matches(
+            baseline_job,
+            expected_requester_id=expected_requester_id,
+            expected_tenant_id=expected_tenant_id,
+        ):
+            return {"status": "not_found", "reason": "job_not_found"}
+        assert baseline_job is not None
 
         request = JobRequest.from_payload(dict(compiled.get("request") or {}))
         plan_payload = dict(compiled.get("plan") or {})
         candidate_source = dict(compiled.get("baseline_candidate_source") or {})
+        if not _exact_job_owner_matches(
+            self.store.get_job(baseline_job_id),
+            expected_requester_id=expected_requester_id,
+            expected_tenant_id=expected_tenant_id,
+        ):
+            return {"status": "not_found", "reason": "job_not_found"}
         criteria_artifacts = self._persist_criteria_artifacts(
             request=request,
             plan_payload=plan_payload,
@@ -52480,6 +52717,12 @@ class SourcingOrchestrator:
         snapshot_id = str(candidate_source.get("snapshot_id") or "").strip()
         if snapshot_id:
             runtime_policy["workflow_snapshot_id"] = snapshot_id
+        if not _exact_job_owner_matches(
+            self.store.get_job(baseline_job_id),
+            expected_requester_id=expected_requester_id,
+            expected_tenant_id=expected_tenant_id,
+        ):
+            return {"status": "not_found", "reason": "job_not_found"}
         artifact = self._run_retrieval_job(
             request_payload=request.to_record(),
             plan_payload=plan_payload,
@@ -52487,6 +52730,8 @@ class SourcingOrchestrator:
             criteria_artifacts=criteria_artifacts,
             runtime_policy=runtime_policy,
             event_detail="Retrieval refinement started from an existing acquired roster.",
+            requester_id=str(baseline_job.get("requester_id") or expected_requester_id or "").strip(),
+            tenant_id=str(baseline_job.get("tenant_id") or expected_tenant_id or "").strip(),
         )
         rerun_job_id = str(artifact.get("job_id") or "")
         baseline_results = self.store.get_job_results(baseline_job_id)
@@ -52549,13 +52794,24 @@ class SourcingOrchestrator:
             "rerun_result": artifact,
         }
 
-    def _resolve_baseline_job_for_refinement(self, payload: dict[str, Any]) -> dict[str, Any]:
+    def _resolve_baseline_job_for_refinement(
+        self,
+        payload: dict[str, Any],
+        *,
+        expected_requester_id: str = "",
+        expected_tenant_id: str = "",
+    ) -> dict[str, Any]:
         baseline_job_id = str(payload.get("job_id") or payload.get("baseline_job_id") or "").strip()
         if not baseline_job_id:
             return {"status": "invalid", "reason": "job_id is required"}
         baseline_job = self.store.get_job(baseline_job_id)
-        if baseline_job is None:
-            return {"status": "not_found", "baseline_job_id": baseline_job_id}
+        if not _exact_job_owner_matches(
+            baseline_job,
+            expected_requester_id=expected_requester_id,
+            expected_tenant_id=expected_tenant_id,
+        ):
+            return {"status": "not_found", "reason": "job_not_found"}
+        assert baseline_job is not None
         if str(baseline_job.get("status") or "").strip() != "completed":
             return {
                 "status": "invalid",
@@ -53045,8 +53301,20 @@ class SourcingOrchestrator:
     def list_crm_record_public_web_promotions(self, crm_record_id: str) -> dict[str, Any]:
         return self._crm_public_web_owner.list_crm_record_public_web_promotions(crm_record_id)
 
-    def promote_crm_record_public_web_signal(self, crm_record_id: str, payload: dict[str, Any]) -> dict[str, Any]:
-        return self._crm_public_web_owner.promote_crm_record_public_web_signal(crm_record_id, payload)
+    def promote_crm_record_public_web_signal(
+        self,
+        crm_record_id: str,
+        payload: dict[str, Any],
+        *,
+        expected_workspace_id: str = "",
+        expected_owner_user_id: str = "",
+    ) -> dict[str, Any]:
+        return self._crm_public_web_owner.promote_crm_record_public_web_signal(
+            crm_record_id,
+            payload,
+            expected_workspace_id=expected_workspace_id,
+            expected_owner_user_id=expected_owner_user_id,
+        )
 
     def export_crm_record_public_web_archive(self, payload: dict[str, Any]) -> dict[str, Any]:
         return self._crm_public_web_owner.export_crm_record_public_web_archive(payload)
@@ -53621,13 +53889,32 @@ class SourcingOrchestrator:
             }
         )
 
-    def import_target_candidates_from_job(self, payload: dict[str, Any]) -> dict[str, Any]:
+    def import_target_candidates_from_job(
+        self,
+        payload: dict[str, Any],
+        *,
+        expected_requester_id: str = "",
+        expected_tenant_id: str = "",
+    ) -> dict[str, Any]:
         job_id = str(payload.get("job_id") or "").strip()
         if not job_id:
             return {"status": "invalid", "reason": "job_id is required"}
         job = self.store.get_job(job_id)
-        if job is None:
-            return {"status": "not_found", "reason": "job not found", "job_id": job_id}
+        if not _exact_job_owner_matches(
+            job,
+            expected_requester_id=expected_requester_id,
+            expected_tenant_id=expected_tenant_id,
+        ):
+            return {"status": "not_found", "reason": "job_not_found"}
+        assert job is not None
+
+        def owner_still_matches() -> bool:
+            return _exact_job_owner_matches(
+                self.store.get_job(job_id),
+                expected_requester_id=expected_requester_id,
+                expected_tenant_id=expected_tenant_id,
+            )
+
         history_id = str(payload.get("history_id") or "").strip()
         follow_up_status = str(payload.get("follow_up_status") or "pending_outreach").strip() or "pending_outreach"
         limit = min(max(_coerce_int(payload.get("limit"), 2000), 1), 5000)
@@ -53648,6 +53935,8 @@ class SourcingOrchestrator:
                 }
             missing_candidate_ids: list[str] = []
             for candidate_id in marker_candidate_ids[:limit]:
+                if not owner_still_matches():
+                    return {"status": "not_found", "reason": "job_not_found"}
                 candidate_model = self.store.get_candidate(candidate_id)
                 if candidate_model is None:
                     missing_candidate_ids.append(candidate_id)
@@ -53710,6 +53999,8 @@ class SourcingOrchestrator:
             if not candidates:
                 break
             for candidate in candidates:
+                if not owner_still_matches():
+                    return {"status": "not_found", "reason": "job_not_found"}
                 candidate_id = str(candidate.get("id") or candidate.get("candidate_id") or "").strip()
                 linkedin_url = str(candidate.get("linkedin_url") or candidate.get("profile_url") or "").strip()
                 candidate_name = str(
@@ -72403,6 +72694,8 @@ class SourcingOrchestrator:
         criteria_artifacts: dict[str, Any] | None = None,
         runtime_policy: dict[str, Any] | None = None,
         event_detail: str = "Synchronous retrieval job started.",
+        requester_id: str = "",
+        tenant_id: str = "",
     ) -> dict[str, Any]:
         request = JobRequest.from_payload(request_payload)
         job_id = job_id or uuid.uuid4().hex[:12]
@@ -72413,6 +72706,8 @@ class SourcingOrchestrator:
             stage="retrieving",
             request_payload=request.to_record(),
             plan_payload=plan_payload,
+            requester_id=str(requester_id or "").strip(),
+            tenant_id=str(tenant_id or "").strip(),
         )
         self.store.append_job_event(job_id, "retrieving", "running", event_detail)
         try:
@@ -72478,6 +72773,8 @@ class SourcingOrchestrator:
                 request_payload=request.to_record(),
                 plan_payload=plan_payload,
                 summary_payload=failure_summary,
+                requester_id=str(requester_id or "").strip(),
+                tenant_id=str(tenant_id or "").strip(),
             )
             self.store.update_agent_runtime_session_status(job_id, "failed")
             self.store.append_job_event(job_id, "failed", "failed", str(exc))

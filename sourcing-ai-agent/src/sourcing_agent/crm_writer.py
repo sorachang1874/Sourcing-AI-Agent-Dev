@@ -4,6 +4,7 @@ from hashlib import sha1
 from typing import Any
 
 from .person_identity import build_person_summary_view, resolve_person_identity_key
+from .request_ownership import exact_crm_owner_matches
 from .serving_projection_reader import ServingProjectionReader
 from .storage import ControlPlaneStore
 
@@ -549,6 +550,8 @@ class CRMWriter:
         comment: str = "",
         comment_present: bool = False,
         display_patch: dict[str, Any] | None = None,
+        expected_workspace_id: str = "",
+        expected_owner_user_id: str = "",
     ) -> dict[str, Any]:
         normalized_workspace_id = str(workspace_id or "default").strip() or "default"
         normalized_record_id = _require_non_empty(crm_record_id, "crm_record_id")
@@ -562,6 +565,13 @@ class CRMWriter:
                 "crm_record_id": normalized_record_id,
                 "workspace_id": normalized_workspace_id,
             }
+
+        if not exact_crm_owner_matches(
+            record,
+            expected_workspace_id=expected_workspace_id,
+            expected_owner_user_id=expected_owner_user_id,
+        ):
+            return {"status": "not_found", "reason": "crm_record_not_found"}
 
         current_engagement = self.store.get_crm_engagement(str(record.get("current_engagement_id") or ""))
         current_record_metadata = dict(record.get("metadata") or {})
@@ -600,6 +610,15 @@ class CRMWriter:
             if patch_value:
                 next_record_metadata[metadata_key] = patch_value
 
+        # Canonical last-write fence. The API lookup is intentionally not
+        # authoritative because ownership can change while request work is in
+        # flight.
+        if not exact_crm_owner_matches(
+            self.store.get_crm_record(normalized_record_id),
+            expected_workspace_id=expected_workspace_id,
+            expected_owner_user_id=expected_owner_user_id,
+        ):
+            return {"status": "not_found", "reason": "crm_record_not_found"}
         updated_record = self.store.upsert_crm_record(
             {
                 **record,

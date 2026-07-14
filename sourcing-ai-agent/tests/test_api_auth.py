@@ -123,12 +123,41 @@ class BearerTokenParsingTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "SOURCING_API_BEARER_TOKENS"):
                 _api_bearer_tokens()
 
-    def test_drops_blank_token_or_user(self) -> None:
+    def test_any_blank_token_or_user_fails_entire_config_closed(self) -> None:
         with patch.dict(
             os.environ,
             {"SOURCING_API_BEARER_TOKENS": json.dumps({"t1": "u1", "": "u2", "t3": ""})},
         ):
-            self.assertEqual(_api_bearer_tokens(), {"t1": "u1"})
+            with self.assertRaisesRegex(ValueError, "non-empty string"):
+                _api_bearer_tokens()
+
+    def test_structured_or_non_string_user_id_fails_closed(self) -> None:
+        for value in ({"id": "alice"}, ["alice"], 42, True):
+            with (
+                self.subTest(value=value),
+                patch.dict(
+                    os.environ,
+                    {"SOURCING_API_BEARER_TOKENS": json.dumps({"tok": value})},
+                ),
+            ):
+                with self.assertRaisesRegex(ValueError, "non-empty string"):
+                    _api_bearer_tokens()
+
+    def test_trim_normalized_token_collision_fails_closed(self) -> None:
+        with patch.dict(
+            os.environ,
+            {"SOURCING_API_BEARER_TOKENS": json.dumps({"tok": "alice", " tok ": "bob"})},
+        ):
+            with self.assertRaisesRegex(ValueError, "collide"):
+                _api_bearer_tokens()
+
+    def test_exact_duplicate_token_key_fails_closed(self) -> None:
+        with patch.dict(
+            os.environ,
+            {"SOURCING_API_BEARER_TOKENS": '{"tok":"alice","tok":"bob"}'},
+        ):
+            with self.assertRaisesRegex(ValueError, "collide"):
+                _api_bearer_tokens()
 
 
 class _StubOrchestrator:

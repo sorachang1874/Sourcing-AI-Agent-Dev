@@ -211,6 +211,8 @@ class ExcelIntakeOwner:
             }
 
         normalized_payload = dict(payload)
+        requester_id = str(normalized_payload.get("requester_id") or "").strip()
+        tenant_id = str(normalized_payload.get("tenant_id") or "").strip()
         explicit_target_company = str(normalized_payload.get("target_company") or "").strip()
         parent_history_id = str(normalized_payload.get("history_id") or "").strip()
         attach_to_snapshot = _coerce_bool(normalized_payload.get("attach_to_snapshot"), True)
@@ -316,6 +318,8 @@ class ExcelIntakeOwner:
                     "schema_inference": dict(prepared_contact_batch.get("schema_inference") or {}),
                     "contacts": [dict(item) for item in list(group.get("contacts") or []) if isinstance(item, dict)],
                 },
+                requester_id=requester_id,
+                tenant_id=tenant_id,
             )
             queued["row_count"] = int(group.get("row_count") or 0)
             queued["source_companies"] = [
@@ -538,6 +542,8 @@ class ExcelIntakeOwner:
         batch_id: str,
         source_companies: list[str],
         prepared_contact_batch: dict[str, Any],
+        requester_id: str = "",
+        tenant_id: str = "",
     ) -> dict[str, Any]:
         request = JobRequest.from_payload(
             {
@@ -603,6 +609,8 @@ class ExcelIntakeOwner:
             stage="acquiring",
             summary_payload=initial_summary,
             execution_bundle_payload=execution_bundle,
+            requester_id=requester_id,
+            tenant_id=tenant_id,
         )
         self.store.append_job_event(
             job_id,
@@ -1791,10 +1799,18 @@ class ExcelIntakeOwner:
         summary_payload: dict[str, Any],
         artifact_path: str = "",
         execution_bundle_payload: dict[str, Any] | None = None,
+        requester_id: str = "",
+        tenant_id: str = "",
     ) -> None:
+        existing_job = self.store.get_job(job_id) or {}
         resolved_artifact_path = str(artifact_path or "").strip()
         if not resolved_artifact_path:
-            resolved_artifact_path = str((self.store.get_job(job_id) or {}).get("artifact_path") or "")
+            resolved_artifact_path = str(existing_job.get("artifact_path") or "")
+        # Once a job exists its stored owner is authoritative. Parameters seed
+        # the initial create (or fill a truly blank legacy row), but may not
+        # transfer an existing job to a different requester/tenant.
+        resolved_requester_id = str(existing_job.get("requester_id") or requester_id or "").strip()
+        resolved_tenant_id = str(existing_job.get("tenant_id") or tenant_id or "").strip()
         self.store.save_job(
             job_id=job_id,
             job_type="excel_intake",
@@ -1805,6 +1821,8 @@ class ExcelIntakeOwner:
             execution_bundle_payload=execution_bundle_payload,
             summary_payload=summary_payload,
             artifact_path=resolved_artifact_path,
+            requester_id=resolved_requester_id,
+            tenant_id=resolved_tenant_id,
         )
 
     @staticmethod

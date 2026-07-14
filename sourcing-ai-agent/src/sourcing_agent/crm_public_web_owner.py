@@ -81,6 +81,7 @@ from .durable_runtime import (
 from .linkedin_url_normalization import normalize_linkedin_profile_url_key
 from .person_asset_writer import PersonAssetWriter
 from .public_web_runtime_core import utc_compact_timestamp
+from .request_ownership import exact_crm_owner_matches
 from .storage import _json_safe_payload as _storage_json_safe_payload
 
 # NOTE: the helpers below duplicate small module-level helpers in
@@ -2736,11 +2737,23 @@ class CrmPublicWebOwner:
         result = self._list_crm_record_public_web_promotions_from_owner(record_result)
         return self._with_crm_public_web_contract(result, operation="promotion_list", read=True)
 
-    def promote_crm_record_public_web_signal(self, crm_record_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def promote_crm_record_public_web_signal(
+        self,
+        crm_record_id: str,
+        payload: dict[str, Any],
+        *,
+        expected_workspace_id: str = "",
+        expected_owner_user_id: str = "",
+    ) -> dict[str, Any]:
         record_result = self._prepare_single_crm_public_web_record_id(crm_record_id)
         if isinstance(record_result, dict):
             return record_result
-        result = self._promote_crm_public_web_signal_from_owner(record_result, dict(payload or {}))
+        result = self._promote_crm_public_web_signal_from_owner(
+            record_result,
+            dict(payload or {}),
+            expected_workspace_id=expected_workspace_id,
+            expected_owner_user_id=expected_owner_user_id,
+        )
         return self._with_crm_public_web_contract(result, operation="promotion")
 
     def export_crm_record_public_web_archive(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -4177,7 +4190,14 @@ class CrmPublicWebOwner:
             "public_web_storage_owner": "crm_public_web_v1",
         }
 
-    def _promote_crm_public_web_signal_from_owner(self, crm_record_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def _promote_crm_public_web_signal_from_owner(
+        self,
+        crm_record_id: str,
+        payload: dict[str, Any],
+        *,
+        expected_workspace_id: str = "",
+        expected_owner_user_id: str = "",
+    ) -> dict[str, Any]:
         normalized_record_id = str(crm_record_id or "").strip()
         if not normalized_record_id:
             return {"status": "invalid", "reason": "crm_record_id is required"}
@@ -4189,6 +4209,13 @@ class CrmPublicWebOwner:
                 "record_id": normalized_record_id,
                 "crm_record_id": normalized_record_id,
             }
+
+        if not exact_crm_owner_matches(
+            crm_record,
+            expected_workspace_id=expected_workspace_id,
+            expected_owner_user_id=expected_owner_user_id,
+        ):
+            return {"status": "not_found", "reason": "crm_record_not_found"}
         record = self._public_crm_record_payload(crm_record)
         workspace_id = str(crm_record.get("workspace_id") or "default").strip() or "default"
         signal_id = str(payload.get("signal_id") or "").strip()
@@ -4343,6 +4370,14 @@ class CrmPublicWebOwner:
                 "owner": "crm_public_web_v1",
             },
         }
+        # Re-check at the canonical writer immediately before the first durable
+        # mutation. A foreign/missing record has the same non-enumerating body.
+        if not exact_crm_owner_matches(
+            self.store.get_crm_record(normalized_record_id),
+            expected_workspace_id=expected_workspace_id,
+            expected_owner_user_id=expected_owner_user_id,
+        ):
+            return {"status": "not_found", "reason": "crm_record_not_found"}
         promotion = self.store.upsert_crm_public_web_promotion(promotion_payload)
         assertion: dict[str, Any] = {}
         assertion_event: dict[str, Any] = {}
