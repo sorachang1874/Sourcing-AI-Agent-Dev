@@ -18,8 +18,8 @@ from typing import Any
 from urllib.parse import urlsplit
 
 POLICY_SCHEMA_VERSION = "x.profile.bio_signal.policy.v1"
-POLICY_VERSION = "profile-bio-signal-v1.2"
-CANONICAL_POLICY_SHA256 = "02a57dd779a5838090a5d841403f3be7809089a6a12fa0e3c84873e74d807fe7"
+POLICY_VERSION = "profile-bio-signal-v1.3"
+CANONICAL_POLICY_SHA256 = "c683b1d838f12482609544b2b78ed04d1ae05e9f59ab21d57432a290d481451d"
 BUNDLE_SCHEMA_VERSION = "x.profile.bio_evidence.bundle.v1"
 ANALYSIS_SCHEMA_VERSION = "x.profile.bio_signal.analysis.v1"
 
@@ -38,7 +38,13 @@ _PROPOSAL_ID_RE = re.compile(rf"xbp_{_ULID}")
 _PLATFORM_USER_ID_RE = re.compile(r"[1-9][0-9]{1,24}")
 _HANDLE_RE = re.compile(r"[A-Za-z0-9_]{1,15}")
 _HANDLE_MENTION_RE = re.compile(r"(?<![A-Za-z0-9_])@([A-Za-z0-9_]{1,15})(?![A-Za-z0-9_])")
-_BARE_ACCOUNT_IDENTIFIER_RE = re.compile(r"[a-z0-9_][a-z0-9_.-]{1,79}")
+_ACCOUNT_IDENTIFIER_CONTINUATION_RE = re.compile(r"[a-z0-9_][a-z0-9_.-]{1,79}(?:\s*\([^()\r\n]{1,80}\))?")
+_OWNERSHIP_NOUN_CONTINUATION_RE = re.compile(r"(?:账号|账户|account|channel)(?:\s*\([^()\r\n]{1,80}\))?")
+_PARENTHETICAL_CONTINUATION_RE = re.compile(r"\([^()\r\n]{1,80}\)")
+_AUDIENCE_COUNT_TOKEN = r"(?:[0-9]+(?:\.[0-9]+)?(?:k|m|万|千)?|[零〇一二两三四五六七八九十百千万亿]+)"
+_AUDIENCE_CONTINUATION_RE = re.compile(
+    rf"(?:用户数{_AUDIENCE_COUNT_TOKEN}|{_AUDIENCE_COUNT_TOKEN}(?:粉丝|关注者|followers?))"
+)
 _SHA256_RE = re.compile(r"[0-9a-f]{64}")
 _CANONICAL_TIME_RE = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z")
 _HAN_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]")
@@ -119,6 +125,17 @@ def text_sha256(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
+def _is_utf8_scalar_text(value: Any) -> bool:
+    """Return whether a JSON string contains only Unicode scalar values."""
+    if not isinstance(value, str):
+        return False
+    try:
+        value.encode("utf-8", errors="strict")
+    except UnicodeEncodeError:
+        return False
+    return True
+
+
 def _normalize_text(value: str) -> str:
     return re.sub(r"\s+", " ", unicodedata.normalize("NFKC", value).casefold()).strip()
 
@@ -189,7 +206,17 @@ def _claim_continuation_allowed(continuation: str, claim_guards: dict[str, list[
     ):
         return False
     blocked_continuations = [_normalize_text(prefix) for prefix in claim_guards["non_ownership_continuation_prefixes"]]
-    return not any(continuation.startswith(prefix) for prefix in blocked_continuations)
+    if any(continuation.startswith(prefix) for prefix in blocked_continuations):
+        return False
+    return not continuation or any(
+        pattern.fullmatch(continuation) is not None
+        for pattern in (
+            _ACCOUNT_IDENTIFIER_CONTINUATION_RE,
+            _OWNERSHIP_NOUN_CONTINUATION_RE,
+            _PARENTHETICAL_CONTINUATION_RE,
+            _AUDIENCE_CONTINUATION_RE,
+        )
+    )
 
 
 def _contains_closed_subject_claim(
@@ -197,6 +224,13 @@ def _contains_closed_subject_claim(
     ecosystem: dict[str, Any],
     claim_guards: dict[str, list[str]],
 ) -> bool:
+    claim_window_guards = (
+        *claim_guards["non_ownership_continuation_prefixes"],
+        *claim_guards["post_claim_negation_markers"],
+        *claim_guards["third_party_operation_markers"],
+    )
+    if any(_contains_marker(value, marker) for marker in claim_window_guards):
+        return False
     clauses = [clause.strip() for clause in _RELATION_CLAUSE_SPLIT_RE.split(value) if clause.strip()]
     negation_prefixes = [_normalize_text(prefix) for prefix in claim_guards["negation_prefixes"]]
     for clause in clauses:
@@ -218,9 +252,9 @@ def _contains_closed_subject_claim(
             if not normalized_clause.startswith(rendered_alias):
                 continue
             continuation = normalized_clause[len(rendered_alias) :].lstrip()
-            if _BARE_ACCOUNT_IDENTIFIER_RE.match(continuation) is None:
-                continue
-            if _claim_continuation_allowed(continuation, claim_guards):
+            if _ACCOUNT_IDENTIFIER_CONTINUATION_RE.fullmatch(continuation) is not None and _claim_continuation_allowed(
+                continuation, claim_guards
+            ):
                 return True
     return False
 
@@ -282,16 +316,17 @@ def _valid_profile_url(value: Any, *, current_handle: Any) -> bool:
     )
 
 
-def _forbidden_key_hits(
+def _tree_preflight(
     value: Any,
     forbidden: set[str],
     *,
     max_depth: int,
     max_nodes: int,
     path: str = "$",
-) -> tuple[list[str], list[str]]:
+) -> tuple[list[str], list[str], bool]:
     hits: list[str] = []
     budget_errors: set[str] = set()
+    invalid_unicode_scalar = False
     stack: list[tuple[Any, str, int]] = [(value, path, 0)]
     visited = 0
     exhausted = False
@@ -301,6 +336,9 @@ def _forbidden_key_hits(
         if visited > max_nodes:
             budget_errors.add("nested_node_budget_exceeded")
             break
+        if isinstance(node, str) and not _is_utf8_scalar_text(node):
+            invalid_unicode_scalar = True
+            continue
         if isinstance(node, (dict, list)) and node and depth >= max_depth:
             budget_errors.add("nested_depth_budget_exceeded")
             continue
@@ -317,14 +355,18 @@ def _forbidden_key_hits(
                 exhausted = True
                 break
             if isinstance(node, dict):
-                folded = re.sub(r"[^a-z0-9]", "", unicodedata.normalize("NFKC", str(key)).casefold())
-                child_path = f"{node_path}.{key}"
-                if folded in forbidden:
-                    hits.append(child_path)
+                if isinstance(key, str) and not _is_utf8_scalar_text(key):
+                    invalid_unicode_scalar = True
+                    child_path = f"{node_path}.<invalid-key>"
+                else:
+                    folded = re.sub(r"[^a-z0-9]", "", unicodedata.normalize("NFKC", str(key)).casefold())
+                    child_path = f"{node_path}.{key}"
+                    if folded in forbidden:
+                        hits.append(child_path)
             else:
                 child_path = f"{node_path}[{key}]"
             stack.append((child, child_path, depth + 1))
-    return hits, sorted(budget_errors)
+    return hits, sorted(budget_errors), invalid_unicode_scalar
 
 
 def validate_policy(policy: Any) -> list[str]:
@@ -487,7 +529,7 @@ def validate_evidence_bundle(bundle: Any, *, policy: Any) -> list[str]:
         _append(errors, "$.policy_version", "mismatch")
 
     forbidden = {re.sub(r"[^a-z0-9]", "", value.casefold()) for value in policy["forbidden_proposal_fields"]}
-    forbidden_hits, traversal_errors = _forbidden_key_hits(
+    forbidden_hits, traversal_errors, invalid_unicode_scalar = _tree_preflight(
         bundle,
         forbidden,
         max_depth=policy["limits"]["max_nested_validation_depth"],
@@ -497,7 +539,9 @@ def validate_evidence_bundle(bundle: Any, *, policy: Any) -> list[str]:
         _append(errors, hit, "forbidden protected-identity or real-name field")
     for traversal_error in traversal_errors:
         _append(errors, "$.validation", traversal_error)
-    if traversal_errors:
+    if invalid_unicode_scalar:
+        _append(errors, "$.validation", "non_unicode_scalar_text")
+    if traversal_errors or invalid_unicode_scalar:
         return errors
 
     subject = bundle["subject"]
@@ -844,7 +888,7 @@ def validate_analysis(analysis: Any, *, evidence_bundle: Any, policy: Any) -> li
         return [f"evidence {error}" for error in errors]
     if not isinstance(analysis, dict):
         return ["$: must be an object"]
-    _, traversal_errors = _forbidden_key_hits(
+    _, traversal_errors, invalid_unicode_scalar = _tree_preflight(
         analysis,
         set(),
         max_depth=policy["limits"]["max_nested_validation_depth"],
@@ -852,6 +896,8 @@ def validate_analysis(analysis: Any, *, evidence_bundle: Any, policy: Any) -> li
     )
     if traversal_errors:
         return [f"$.validation: {error}" for error in traversal_errors]
+    if invalid_unicode_scalar:
+        return ["$.validation: non_unicode_scalar_text"]
     expected = analyze_profile_bio_signals(evidence_bundle, policy=policy)
     try:
         matches_expected = analysis == expected

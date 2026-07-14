@@ -17,7 +17,7 @@
       "const": "x.profile.bio_evidence.bundle.v1"
     },
     "policy_version": {
-      "const": "profile-bio-signal-v1.2"
+      "const": "profile-bio-signal-v1.3"
     },
     "subject": {
       "$ref": "#/$defs/subject"

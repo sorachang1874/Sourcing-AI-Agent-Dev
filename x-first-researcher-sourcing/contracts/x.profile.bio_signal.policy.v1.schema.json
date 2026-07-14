@@ -17,7 +17,7 @@
   ],
   "const": {
     "schema_version": "x.profile.bio_signal.policy.v1",
-    "policy_version": "profile-bio-signal-v1.2",
+    "policy_version": "profile-bio-signal-v1.3",
     "proposal_kinds": [
       "observed_chinese_content",
       "china_ecosystem_self_claim",
@@ -165,6 +165,16 @@
       "Aspiring",
       "Incoming",
       "Future",
+      "即将",
+      "将要",
+      "未来",
+      "计划",
+      "拟任",
+      "待任",
+      "过去",
+      "曾经",
+      "以前",
+      "原任职于",
       "不是",
       "并非",
       "没有",
@@ -198,7 +208,7 @@
       "const": "x.profile.bio_signal.policy.v1"
     },
     "policy_version": {
-      "const": "profile-bio-signal-v1.2"
+      "const": "profile-bio-signal-v1.3"
     },
     "proposal_kinds": {
       "type": "array"

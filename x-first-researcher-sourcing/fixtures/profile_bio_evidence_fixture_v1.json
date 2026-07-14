@@ -1,6 +1,6 @@
 {
   "schema_version": "x.profile.bio_evidence.bundle.v1",
-  "policy_version": "profile-bio-signal-v1.2",
+  "policy_version": "profile-bio-signal-v1.3",
   "subject": {
     "provisional_person_id": "pp_x_01J00000000000000000000000",
     "platform_user_id": "900000000000000001"

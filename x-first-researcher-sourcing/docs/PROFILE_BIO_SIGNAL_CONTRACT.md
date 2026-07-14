@@ -63,7 +63,7 @@ it cannot access Grok, X, OAuth, or another provider.
 | Live profile field availability | Deferred profile capability v2 | V1 has no native receipt trust root and rejects live/native claims |
 | Raw Bio | Fixture profile snapshot | Exact synthetic text, observation time, content version, and SHA-256 |
 | Extracted proposal | `x.profile.bio_evidence.bundle.v1` | Exact fixture Bio span and excerpt hash; null tool receipt |
-| Ecosystem registry | `profile_bio_signal_policy.v1.json`, policy v1.2 | Canonical hash-pinned aliases, ownership templates, bare-identifier opt-in, post-claim guards, and non-ownership continuations |
+| Ecosystem registry | `profile_bio_signal_policy.v1.json`, policy v1.3 | Canonical hash-pinned aliases, ownership templates, bare-identifier opt-in, whole-window post-claim guards, and closed continuations |
 | Affiliation relation | Evidence proposal | Role text, relation marker, and sole target handle share one punctuation clause; temporal/intent ambiguity fails closed and output remains unresolved |
 | Physical location experience | Region-experience evidence owner | Never derived from this lane |
 | Canonical person/employment/assertion | Existing product owners | No writes or confirmation from this lane |
@@ -93,14 +93,17 @@ physical presence, or from a Bio mention to confirmed employment.
 - Proposal kinds: `observed_chinese_content`, `china_ecosystem_self_claim`, `organization_mention`.
 - Affiliation relations: `current`, `previous`, `unspecified`.
 - V1 transport is only `offline_fixture`; native mode, live URLs, and non-null receipts are invalid.
-- Ecosystem support requires one registered ownership form anchored at the start of a punctuation-delimited clause.
+- Ecosystem support requires one registered ownership form anchored at the start of a punctuation-delimited clause
+  inside a bounded proposal claim window.
   Xiaohongshu accepts closed forms such as `同名{alias}`, `{alias}同名`, and `我的{alias}`. The WeChat official-account
   registry additionally opts into `公众号 <bounded account identifier>` so a Bio can name a channel without an
-  artificial `我的` prefix. This opt-in is per ecosystem, not a generic alias/topic heuristic.
-- Negative prefixes, post-claim negation, third-party operation, and non-account objects fail closed. A positive
-  template cannot win before a later `不是`/`并非`; `由朋友运营` cannot become subject ownership; and account/list/topic
-  continuations such as `用户画像`, `关注列表`, `用户有`, `研究`, or `推荐` are not self-claims. The narrower `用户数`
-  continuation remains supported to preserve explainable recall for a claimed account's audience count.
+  artificial `我的` prefix. The complete identifier and its closed optional note must be consumed; trailing free text
+  is not silently ignored. This opt-in is per ecosystem, not a generic alias/topic heuristic.
+- Negative prefixes, post-claim negation, third-party operation, and non-account objects fail closed across the whole
+  proposal excerpt. A positive clause cannot win before a later punctuation-delimited `不是`/`并非`; `由朋友运营` cannot
+  become subject ownership; and account/list/topic continuations such as `用户画像`, `关注列表`, `用户有`, `研究`, or
+  `推荐` are not self-claims. Closed account/noun/parenthetical and audience-count continuations preserve the existing
+  explainable fixture recall without adding ecosystem aliases.
 - Current/previous affiliation requires an exact `@handle` and only the declared registered relation in the same
   line/punctuation-delimited clause. Bare `前` is not a marker; explicit `Prev`, `曾任`, or `前任职于` forms remain
   supported, and an explicit previous marker takes precedence over a role phrase such as `Engineer at` in that clause.
@@ -109,8 +112,9 @@ physical presence, or from a Bio mention to confirmed employment.
 - `role_text`, its relation marker, and the sole target handle must be bound to the same punctuation clause. A
   role-bearing clause with multiple handles is ambiguous and rejected. A multi-handle statement such as `Prev @a @b`
   may still produce one handle-bound unresolved proposal per target only when `role_text=null`.
-- V1.2 has no reversible output state for past-current or future/intended affiliations. `Ex-`, `Was`, `Past`,
-  `Aspiring`, `Incoming`, and `Future` clauses are therefore rejected rather than mislabeled as `current`.
+- V1.3 has no reversible output state for past-current or future/intended affiliations. English markers such as `Ex-`,
+  `Was`, `Past`, `Aspiring`, `Incoming`, and `Future`, plus Chinese temporal/intent markers such as `即将`, `未来`,
+  `计划`, `过去`, and `曾经`, are therefore rejected rather than mislabeled as `current`.
 - Handle-only organization proposals remain `unresolved`; target platform user ID is null.
 - All display-name, protected-identity, confirmation, discovery/ranking, and canonical-write claims are fixed false.
 
@@ -126,23 +130,28 @@ physical presence, or from a Bio mention to confirmed employment.
 | `同名小红书并非本人运营` | Reject | Post-template ownership negation |
 | `我的小红书账号由朋友运营` | Reject | Third-party operation |
 | `我的小红书关注列表` | Reject | Non-account/list object |
-| `Future Head of @synthetic_hub` | Reject | Future intent has no truthful v1.2 affiliation state |
+| `公众号 SyntheticFounder 关注列表` | Reject | Bare account identifier has an unconsumed list suffix |
+| `我的小红书账号。并非本人运营` | Reject | Whole-window post-claim negation overrides an earlier positive clause |
+| `我的小红书账号，由朋友运营` | Reject | Whole-window third-party operation overrides an earlier positive clause |
+| `Future Head of @synthetic_hub` | Reject | Future intent has no truthful v1.3 affiliation state |
+| `即将任职于 @synthetic_hub` | Reject | Chinese future intent has no truthful v1.3 affiliation state |
 | `Head of growth @synthetic_hub @another_org` with a role | Reject | Role-bearing clause has multiple target handles |
 
 All positive ecosystem rows produce only a `china_digital_ecosystem` verification lead. They leave
 `physical_region_experience.status=not_evaluated` and every ethnicity/nationality/name inference claim false.
 
 The runtime pins the canonical SHA-256 of the complete policy, while the policy schema pins the same complete JSON
-value. Policy v1.2 records the post-template/third-party ownership guards, explicit high-recall account forms,
+value. Policy v1.3 records whole-window post-template/third-party ownership guards, closed account continuations,
 temporal/intent affiliation rejects, clause-bound roles, and validation traversal budgets added after adversarial
 review. Any
 alias, ownership template, context guard, relation marker, limit, forbidden field, or output-state change under the
 same `policy_version` fails closed. Such a change requires another version bump, schema/runtime/hash/fixture/test
 update, and non-author review rather than a hidden prompt change. Runtime validation is terminal-total for all
-single-field nested JSON type substitutions covered by the fixture mutation corpus. Iterative traversal stops at 64
-nested container levels or 4,096 scheduled nodes and returns typed validation errors before recursive equality or
-hashing. The CLI also converts parser recursion failures into a bounded `input_unreadable_or_invalid` result without a
-traceback.
+single-field nested JSON type substitutions covered by the fixture mutation corpus. A shared tree preflight rejects
+non-Unicode-scalar strings before hashing, normalization, deterministic comparison, or CLI rendering. Iterative
+traversal stops at 64 nested container levels or 4,096 scheduled nodes and returns typed validation errors before
+recursive equality or hashing. The CLI also converts parser recursion failures into a bounded
+`input_unreadable_or_invalid` result without a traceback.
 
 ## Current limits
 

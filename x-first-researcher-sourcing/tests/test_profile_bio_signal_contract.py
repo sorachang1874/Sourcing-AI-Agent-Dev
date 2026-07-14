@@ -268,21 +268,27 @@ class ProfileBioSignalContractTest(unittest.TestCase):
 
     def test_ecosystem_requires_anchored_same_clause_ownership_grammar(self) -> None:
         negatives = (
-            "看到小红书行业讨论",
-            "小红书用户有很多粉丝",
-            "同名个人博客。小红书用户有很多粉丝",
-            "这不是我的小红书账号",
-            "不是我的公众号",
-            "并非同名小红书账号",
-            "我的小红书用户画像研究",
-            "推荐我的小红书好友",
-            "我的小红书不是我的账号",
-            "同名小红书并非本人运营",
-            "我的小红书账号由朋友运营",
-            "我的小红书关注列表",
+            (4, "看到小红书行业讨论"),
+            (4, "小红书用户有很多粉丝"),
+            (4, "同名个人博客。小红书用户有很多粉丝"),
+            (4, "这不是我的小红书账号"),
+            (4, "不是我的公众号"),
+            (4, "并非同名小红书账号"),
+            (4, "我的小红书用户画像研究"),
+            (4, "推荐我的小红书好友"),
+            (4, "我的小红书不是我的账号"),
+            (4, "同名小红书并非本人运营"),
+            (4, "我的小红书账号由朋友运营"),
+            (4, "我的小红书关注列表"),
+            (7, "公众号 AI research"),
+            (7, "公众号 SyntheticFounder 关注列表"),
+            (7, "公众号 SyntheticFounder 用户列表"),
+            (4, "我的小红书 account list"),
+            (4, "我的小红书账号。并非本人运营"),
+            (4, "我的小红书账号，由朋友运营"),
         )
-        for excerpt in negatives:
-            payload = self._single_proposal_bundle(self.bundle, 4, excerpt=excerpt)
+        for proposal_index, excerpt in negatives:
+            payload = self._single_proposal_bundle(self.bundle, proposal_index, excerpt=excerpt)
             with self.subTest(excerpt=excerpt):
                 self.assert_bundle_rejected(payload)
                 errors = validate_evidence_bundle(payload, policy=self.policy)
@@ -355,6 +361,19 @@ class ProfileBioSignalContractTest(unittest.TestCase):
             with self.subTest(excerpt=excerpt):
                 blocked = self._single_proposal_bundle(self.bundle, 1, excerpt=excerpt)
                 blocked["proposals"][0]["details"]["role_text"] = "Head of"
+                self.assert_bundle_rejected(blocked)
+                errors = validate_evidence_bundle(blocked, policy=self.policy)
+                self.assertTrue(any("blocked negation or recruiting context" in error for error in errors))
+        for excerpt in (
+            "即将任职于 @synthetic_hub",
+            "未来任职于 @synthetic_hub",
+            "过去任职于 @synthetic_hub",
+            "计划任职于 @synthetic_hub",
+            "曾经任职于 @synthetic_hub",
+        ):
+            with self.subTest(excerpt=excerpt):
+                blocked = self._single_proposal_bundle(self.bundle, 1, excerpt=excerpt)
+                blocked["proposals"][0]["details"]["role_text"] = "任职于"
                 self.assert_bundle_rejected(blocked)
                 errors = validate_evidence_bundle(blocked, policy=self.policy)
                 self.assertTrue(any("blocked negation or recruiting context" in error for error in errors))
@@ -460,6 +479,25 @@ class ProfileBioSignalContractTest(unittest.TestCase):
         nested_malformed["proposals"] = [None, [], "proposal", 1, True]
         self.assert_bundle_rejected(nested_malformed)
 
+        for location in ("bio_text", "excerpt"):
+            surrogate = copy.deepcopy(self.bundle)
+            if location == "bio_text":
+                surrogate["profile_snapshot"]["bio_text"] = "bad-\ud800"
+            else:
+                surrogate["proposals"][0]["excerpt"] = "bad-\ud800"
+            with self.subTest(location=location):
+                self.assertEqual(
+                    validate_evidence_bundle(surrogate, policy=self.policy),
+                    ["$.validation: non_unicode_scalar_text"],
+                )
+
+        surrogate_analysis = copy.deepcopy(self.analysis)
+        surrogate_analysis["signals"][0]["value"] = "bad-\ud800"
+        self.assertEqual(
+            validate_analysis(surrogate_analysis, evidence_bundle=self.bundle, policy=self.policy),
+            ["$.validation: non_unicode_scalar_text"],
+        )
+
         deep_value: Any = None
         for _ in range(1500):
             deep_value = {"child": deep_value}
@@ -540,7 +578,7 @@ class ProfileBioSignalContractTest(unittest.TestCase):
         deep_subject = '{"child":' * 1500 + "null" + "}" * 1500
         deep_raw = (
             '{"schema_version":"x.profile.bio_evidence.bundle.v1",'
-            '"policy_version":"profile-bio-signal-v1.2","subject":'
+            '"policy_version":"profile-bio-signal-v1.3","subject":'
             + deep_subject
             + ',"profile_snapshot":{},"proposals":[],"claims":{}}'
         )
@@ -567,6 +605,41 @@ class ProfileBioSignalContractTest(unittest.TestCase):
         self.assertEqual(deep_completed.stderr, "")
         self.assertEqual(json.loads(deep_completed.stdout)["status"], "invalid")
         self.assertNotIn("Traceback", deep_completed.stdout)
+
+        surrogate_payloads = []
+        bio_surrogate = copy.deepcopy(self.bundle)
+        bio_surrogate["profile_snapshot"]["bio_text"] = "bad-\ud800"
+        surrogate_payloads.append(("bio", bio_surrogate))
+        excerpt_surrogate = copy.deepcopy(self.bundle)
+        excerpt_surrogate["proposals"][0]["excerpt"] = "bad-\ud800"
+        surrogate_payloads.append(("excerpt", excerpt_surrogate))
+        with tempfile.TemporaryDirectory() as temp_dir:
+            for label, payload in surrogate_payloads:
+                with self.subTest(label=label):
+                    surrogate_path = Path(temp_dir) / f"{label}.json"
+                    surrogate_path.write_text(json.dumps(payload, ensure_ascii=True), encoding="utf-8")
+                    surrogate_completed = subprocess.run(
+                        [
+                            sys.executable,
+                            "-m",
+                            "x_first.profile_bio_signals",
+                            str(surrogate_path),
+                            "--policy",
+                            str(ROOT / "configs/profile_bio_signal_policy.v1.json"),
+                        ],
+                        cwd=ROOT,
+                        env={**os.environ, "PYTHONPATH": "src"},
+                        check=False,
+                        capture_output=True,
+                        text=True,
+                        timeout=10,
+                    )
+                    self.assertEqual(surrogate_completed.returncode, 1)
+                    self.assertEqual(surrogate_completed.stderr, "")
+                    self.assertEqual(
+                        json.loads(surrogate_completed.stdout),
+                        {"errors": ["$.validation: non_unicode_scalar_text"], "status": "invalid"},
+                    )
 
         source = (ROOT / "src/x_first/profile_bio_signals.py").read_text(encoding="utf-8")
         self.assertEqual(_forbidden_runtime_imports(source), set())
