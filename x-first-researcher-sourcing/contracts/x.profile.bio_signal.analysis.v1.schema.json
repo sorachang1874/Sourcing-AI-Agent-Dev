@@ -23,7 +23,7 @@
       "const": "x.profile.bio_signal.analysis.v1"
     },
     "policy_version": {
-      "const": "profile-bio-signal-v1.3"
+      "const": "profile-bio-signal-v1.4"
     },
     "analysis_id": {
       "type": "string",
@@ -198,8 +198,7 @@
         "relation": {
           "enum": [
             "current",
-            "previous",
-            "unspecified"
+            "previous"
           ]
         },
         "organization_handle": {
@@ -259,8 +258,7 @@
         "edge_type": {
           "enum": [
             "subject_claimed_current_affiliation",
-            "subject_claimed_previous_affiliation",
-            "subject_claimed_unspecified_affiliation"
+            "subject_claimed_previous_affiliation"
           ]
         },
         "resolution_status": {

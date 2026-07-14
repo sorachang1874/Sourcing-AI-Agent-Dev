@@ -9,15 +9,14 @@
     "policy_version",
     "proposal_kinds",
     "china_ecosystems",
-    "ownership_claim_guards",
-    "affiliation_relations",
-    "affiliation_blocked_context_markers",
+    "ownership_positive_grammar",
+    "affiliation_positive_grammars",
     "limits",
     "forbidden_proposal_fields"
   ],
   "const": {
     "schema_version": "x.profile.bio_signal.policy.v1",
-    "policy_version": "profile-bio-signal-v1.3",
+    "policy_version": "profile-bio-signal-v1.4",
     "proposal_kinds": [
       "observed_chinese_content",
       "china_ecosystem_self_claim",
@@ -67,121 +66,47 @@
         "bare_alias_identifier_claim": true
       }
     ],
-    "ownership_claim_guards": {
-      "negation_prefixes": [
-        "不是",
-        "并非",
-        "非",
-        "没有",
-        "无",
-        "not",
-        "never",
-        "no"
+    "ownership_positive_grammar": {
+      "mode": "single_window_positive_fullmatch_v1",
+      "continuation_classes": [
+        "account_identifier",
+        "ownership_noun",
+        "parenthetical_note",
+        "audience_count"
       ],
-      "non_ownership_continuation_prefixes": [
-        "用户画像",
-        "用户研究",
-        "用户行为",
-        "用户列表",
-        "用户群",
-        "用户有",
-        "好友",
-        "关注列表",
-        "收藏列表",
-        "研究",
-        "推荐",
-        "列表",
-        "users",
-        "user research",
-        "friends",
-        "following list",
-        "watchlist",
-        "research",
-        "recommendation"
+      "bare_alias_continuation_class": "account_identifier",
+      "parenthetical_note_values": [
+        "长文首发"
       ],
-      "post_claim_negation_markers": [
-        "不是",
-        "并非",
-        "没有",
-        "非本人",
-        "not",
-        "never",
-        "is not",
-        "isn't",
-        "isnt"
-      ],
-      "third_party_operation_markers": [
-        "由朋友运营",
-        "朋友运营",
-        "由他人运营",
-        "他人运营",
-        "由团队运营",
-        "团队运营",
-        "代运营",
-        "operated by",
-        "run by",
-        "managed by"
+      "rejected_unicode_categories": [
+        "Cc",
+        "Cf"
       ]
     },
-    "affiliation_relations": [
+    "affiliation_positive_grammars": [
       {
         "relation": "current",
-        "markers": [
-          "Head of",
-          "Founder at",
-          "Researcher at",
-          "Engineer at",
-          "现任",
-          "任职于",
-          "就职于"
+        "grammar_ids": [
+          "head_of_role",
+          "founder_at_handle",
+          "researcher_at_handle",
+          "engineer_at_handle",
+          "employed_at_cn_handle",
+          "works_at_cn_handle"
         ]
       },
       {
         "relation": "previous",
-        "markers": [
-          "Prev",
-          "Previously",
-          "Formerly",
-          "Former",
-          "曾任",
-          "前任职于",
-          "此前任职于"
+        "grammar_ids": [
+          "prev_handles",
+          "previously_handles",
+          "formerly_handles",
+          "former_role",
+          "former_cn_handles",
+          "previous_employed_at_cn_handle",
+          "prior_employed_at_cn_handle"
         ]
-      },
-      {
-        "relation": "unspecified",
-        "markers": []
       }
-    ],
-    "affiliation_blocked_context_markers": [
-      "not",
-      "never",
-      "looking for",
-      "hiring",
-      "seeking",
-      "Ex",
-      "Was",
-      "Past",
-      "Aspiring",
-      "Incoming",
-      "Future",
-      "即将",
-      "将要",
-      "未来",
-      "计划",
-      "拟任",
-      "待任",
-      "过去",
-      "曾经",
-      "以前",
-      "原任职于",
-      "不是",
-      "并非",
-      "没有",
-      "从未",
-      "未曾",
-      "招聘",
-      "招募"
     ],
     "limits": {
       "max_bio_characters": 2000,
@@ -208,7 +133,7 @@
       "const": "x.profile.bio_signal.policy.v1"
     },
     "policy_version": {
-      "const": "profile-bio-signal-v1.3"
+      "const": "profile-bio-signal-v1.4"
     },
     "proposal_kinds": {
       "type": "array"
@@ -216,13 +141,10 @@
     "china_ecosystems": {
       "type": "array"
     },
-    "ownership_claim_guards": {
+    "ownership_positive_grammar": {
       "type": "object"
     },
-    "affiliation_relations": {
-      "type": "array"
-    },
-    "affiliation_blocked_context_markers": {
+    "affiliation_positive_grammars": {
       "type": "array"
     },
     "limits": {

@@ -206,17 +206,20 @@ class ProfileBioSignalContractTest(unittest.TestCase):
         bare_identifier["china_ecosystems"][0]["bare_alias_identifier_claim"] = True
         mutations.append(bare_identifier)
         relation = copy.deepcopy(self.policy)
-        relation["affiliation_relations"][1]["markers"].append("前")
+        relation["affiliation_positive_grammars"][1]["grammar_ids"].append("unversioned_previous_form")
         mutations.append(relation)
-        ownership_guard = copy.deepcopy(self.policy)
-        ownership_guard["ownership_claim_guards"]["negation_prefixes"].append("hardly")
-        mutations.append(ownership_guard)
-        post_claim_guard = copy.deepcopy(self.policy)
-        post_claim_guard["ownership_claim_guards"]["post_claim_negation_markers"].append("disclaimed")
-        mutations.append(post_claim_guard)
-        affiliation_guard = copy.deepcopy(self.policy)
-        affiliation_guard["affiliation_blocked_context_markers"].append("interviewing for")
-        mutations.append(affiliation_guard)
+        ownership_mode = copy.deepcopy(self.policy)
+        ownership_mode["ownership_positive_grammar"]["mode"] = "prefix_match"
+        mutations.append(ownership_mode)
+        ownership_continuation = copy.deepcopy(self.policy)
+        ownership_continuation["ownership_positive_grammar"]["continuation_classes"].append("free_text")
+        mutations.append(ownership_continuation)
+        parenthetical_note = copy.deepcopy(self.policy)
+        parenthetical_note["ownership_positive_grammar"]["parenthetical_note_values"].append("unversioned note")
+        mutations.append(parenthetical_note)
+        unicode_category = copy.deepcopy(self.policy)
+        unicode_category["ownership_positive_grammar"]["rejected_unicode_categories"].append("Co")
+        mutations.append(unicode_category)
         limits = copy.deepcopy(self.policy)
         limits["limits"]["max_proposals"] += 1
         mutations.append(limits)
@@ -266,7 +269,7 @@ class ProfileBioSignalContractTest(unittest.TestCase):
         self.assertNotEqual(changed_analysis["input_sha256"], self.analysis["input_sha256"])
         self.assertNotEqual(changed_analysis["analysis_id"], self.analysis["analysis_id"])
 
-    def test_ecosystem_requires_anchored_same_clause_ownership_grammar(self) -> None:
+    def test_ecosystem_requires_full_window_positive_ownership_grammar(self) -> None:
         negatives = (
             (4, "看到小红书行业讨论"),
             (4, "小红书用户有很多粉丝"),
@@ -281,18 +284,37 @@ class ProfileBioSignalContractTest(unittest.TestCase):
             (4, "我的小红书账号由朋友运营"),
             (4, "我的小红书关注列表"),
             (7, "公众号 AI research"),
+            (7, "公众号"),
             (7, "公众号 SyntheticFounder 关注列表"),
             (7, "公众号 SyntheticFounder 用户列表"),
             (4, "我的小红书 account list"),
             (4, "我的小红书账号。并非本人运营"),
             (4, "我的小红书账号，由朋友运营"),
+            (4, "我的小红书账号。其实不属于我"),
+            (4, "我的小红书账号，并不属于本人"),
+            (4, "我的小红书账号，和我无关"),
+            (4, "同名小红书四万粉丝。非同一人"),
+            (4, "我的小红书账号，由同事运营"),
+            (4, "我的小红书账号，由朋友负责运营"),
+            (4, "我的小红书账号，朋友在运营"),
+            (4, "我的小红书账号，运营者是朋友"),
+            (4, "我的小红书账号，已转让给朋友"),
+            (4, "my Xiaohongshu account; my friend runs it"),
+            (4, "my Xiaohongshu account; it doesn't belong to me"),
+            (4, "my Xiaohongshu account; it isn’t mine"),
+            (7, "公众号 SyntheticFounder（由同事运营）"),
+            (7, "公众号 SyntheticFounder（朋友在运营）"),
+            (7, "公众号 SyntheticFounder（并不属于我）"),
+            (4, "我的小红书账号。由朋\u200b友运营"),
+            (4, "我的小红书账号。并\u200b非本人运营"),
+            (4, "我的小红书\t账号"),
         )
         for proposal_index, excerpt in negatives:
             payload = self._single_proposal_bundle(self.bundle, proposal_index, excerpt=excerpt)
             with self.subTest(excerpt=excerpt):
                 self.assert_bundle_rejected(payload)
                 errors = validate_evidence_bundle(payload, policy=self.policy)
-                self.assertTrue(any("anchored same-clause subject-claim grammar" in error for error in errors))
+                self.assertTrue(any("closed positive ownership grammar" in error for error in errors))
 
         positives = (
             (4, "同名小红书四万粉丝", "xiaohongshu"),
@@ -314,85 +336,99 @@ class ProfileBioSignalContractTest(unittest.TestCase):
                 self.assertIs(analysis["claims"]["ethnicity_inferred"], False)
 
     def test_organization_mentions_are_handle_bound_proposals_not_confirmed_employment(self) -> None:
-        missing_marker = self._single_proposal_bundle(
-            self.bundle,
-            1,
-            excerpt="Discussing growth with @synthetic_hub",
+        rejected_claims = (
+            (1, "Discussing growth with @synthetic_hub", None),
+            (2, "前沿研究讨论 @synth_listen", None),
+            (2, "Prev role elsewhere。Discussing @synth_listen", None),
+            (2, "Head of @synth_listen, Prev @another_org", None),
+            (1, "Not Head of @synthetic_hub", "Head of"),
+            (1, "Looking for Head of @synthetic_hub", "Head of"),
+            (1, "从未任职于 @synthetic_hub", None),
+            (2, "Not Previously @synth_listen", None),
+            (1, "Ex-Head of @synthetic_hub", "Head of"),
+            (1, "Was Head of @synthetic_hub", "Head of"),
+            (1, "Past Head of @synthetic_hub", "Head of"),
+            (1, "Aspiring Head of @synthetic_hub", "Head of"),
+            (1, "Incoming Head of @synthetic_hub", "Head of"),
+            (1, "Future Head of @synthetic_hub", "Head of"),
+            (1, "曾就职于 @synthetic_hub", None),
+            (1, "此前就职于 @synthetic_hub", None),
+            (1, "原就职于 @synthetic_hub", None),
+            (1, "不再任职于 @synthetic_hub", None),
+            (1, "并不任职于 @synthetic_hub", None),
+            (1, "尚未任职于 @synthetic_hub", None),
+            (1, "从不任职于 @synthetic_hub", None),
+            (1, "将任职于 @synthetic_hub", None),
+            (1, "将就职于 @synthetic_hub", None),
+            (1, "准备任职于 @synthetic_hub", None),
+            (1, "打算任职于 @synthetic_hub", None),
+            (1, "希望任职于 @synthetic_hub", None),
+            (1, "想任职于 @synthetic_hub", None),
+            (1, "有意任职于 @synthetic_hub", None),
+            (1, "Will be Head of @synthetic_hub", "Head of"),
+            (1, "Used to be Head of @synthetic_hub", "Head of"),
+            (1, "Hoping to be Engineer at @synthetic_hub", "Engineer at"),
+            (1, "Planning to be Engineer at @synthetic_hub", "Engineer at"),
+            (1, "之前任职于 @synthetic_hub", None),
+            (1, "即将任职于 @synthetic_hub", None),
+            (1, "未来任职于 @synthetic_hub", None),
+            (1, "计划任职于 @synthetic_hub", None),
+            (1, "过去任职于 @synthetic_hub", None),
+            (2, "不曾任 @synth_listen", None),
+            (2, "并不曾任 @synth_listen", None),
+            (2, "未曾任 @synth_listen", None),
+            (1, "即\u200b将任职于 @synthetic_hub", None),
+            (1, "未\u200b曾任职于 @synthetic_hub", None),
+            (1, "从\u200b未任职于 @synthetic_hub", None),
+            (1, "计\u200b划任职于 @synthetic_hub", None),
+            (1, "Fu\u200bture Head of @synthetic_hub", "Head of"),
+            (1, "N\u200bot Head of @synthetic_hub", "Head of"),
+            (1, "Head of growth\t@synthetic_hub", "Head of growth"),
+            (1, "Head of growth @synthetic_hub, advisor", "advisor"),
+            (1, "Head of growth @synthetic_hub @another_org", "Head of growth"),
+            (1, "Head of @synthetic_hub, advisor @synthetic_hub", "advisor"),
         )
-        self.assert_bundle_rejected(missing_marker)
-        frontier_not_previous = self._single_proposal_bundle(
-            self.bundle,
-            2,
-            excerpt="前沿研究讨论 @synth_listen",
+        for proposal_index, excerpt, role_text in rejected_claims:
+            with self.subTest(excerpt=excerpt, role_text=role_text):
+                payload = self._single_proposal_bundle(self.bundle, proposal_index, excerpt=excerpt)
+                payload["proposals"][0]["details"]["role_text"] = role_text
+                self.assert_bundle_rejected(payload)
+                errors = validate_evidence_bundle(payload, policy=self.policy)
+                self.assertTrue(any("positive affiliation grammar" in error for error in errors))
+
+        invalid_role_texts = (
+            ("Head of growth @synthetic_hub", "@synthetic_hub"),
+            ("Head of growth @synthetic_hub", "synthetic_hub"),
+            ("Head of growth @synthetic_hub", "@synthetic"),
+            ("Researcher at @synthetic_hub", "at"),
         )
-        self.assert_bundle_rejected(frontier_not_previous)
-        cross_statement = self._single_proposal_bundle(
-            self.bundle,
-            2,
-            excerpt="Prev role elsewhere。Discussing @synth_listen",
-        )
-        self.assert_bundle_rejected(cross_statement)
-        ambiguous_relation = self._single_proposal_bundle(
-            self.bundle,
-            2,
-            excerpt="Head of @synth_listen, Prev @another_org",
-        )
-        self.assert_bundle_rejected(ambiguous_relation)
-        blocked_contexts = (
-            (1, "Not Head of @synthetic_hub"),
-            (1, "Looking for Head of @synthetic_hub"),
-            (1, "从未任职于 @synthetic_hub"),
-            (2, "Not Previously @synth_listen"),
-        )
-        for proposal_index, excerpt in blocked_contexts:
-            with self.subTest(excerpt=excerpt):
-                blocked = self._single_proposal_bundle(self.bundle, proposal_index, excerpt=excerpt)
-                self.assert_bundle_rejected(blocked)
-                errors = validate_evidence_bundle(blocked, policy=self.policy)
-                self.assertTrue(any("blocked negation or recruiting context" in error for error in errors))
-        for excerpt in (
-            "Ex-Head of @synthetic_hub",
-            "Was Head of @synthetic_hub",
-            "Past Head of @synthetic_hub",
-            "Aspiring Head of @synthetic_hub",
-            "Incoming Head of @synthetic_hub",
-            "Future Head of @synthetic_hub",
-        ):
-            with self.subTest(excerpt=excerpt):
-                blocked = self._single_proposal_bundle(self.bundle, 1, excerpt=excerpt)
-                blocked["proposals"][0]["details"]["role_text"] = "Head of"
-                self.assert_bundle_rejected(blocked)
-                errors = validate_evidence_bundle(blocked, policy=self.policy)
-                self.assertTrue(any("blocked negation or recruiting context" in error for error in errors))
-        for excerpt in (
-            "即将任职于 @synthetic_hub",
-            "未来任职于 @synthetic_hub",
-            "过去任职于 @synthetic_hub",
-            "计划任职于 @synthetic_hub",
-            "曾经任职于 @synthetic_hub",
-        ):
-            with self.subTest(excerpt=excerpt):
-                blocked = self._single_proposal_bundle(self.bundle, 1, excerpt=excerpt)
-                blocked["proposals"][0]["details"]["role_text"] = "任职于"
-                self.assert_bundle_rejected(blocked)
-                errors = validate_evidence_bundle(blocked, policy=self.policy)
-                self.assertTrue(any("blocked negation or recruiting context" in error for error in errors))
-        role_binding_mutations = (
-            ("Head of growth @synthetic_hub, advisor", "advisor"),
-            ("Head of growth @synthetic_hub @another_org", "Head of growth"),
-            ("Head of @synthetic_hub, advisor @synthetic_hub", "advisor"),
-        )
-        for excerpt, role_text in role_binding_mutations:
+        for excerpt, role_text in invalid_role_texts:
             with self.subTest(excerpt=excerpt, role_text=role_text):
                 payload = self._single_proposal_bundle(self.bundle, 1, excerpt=excerpt)
                 payload["proposals"][0]["details"]["role_text"] = role_text
                 self.assert_bundle_rejected(payload)
                 errors = validate_evidence_bundle(payload, policy=self.policy)
-                self.assertTrue(any("sole target handle" in error for error in errors))
-        for excerpt in ("曾任 @synth_listen", "前任职于 @synth_listen"):
-            with self.subTest(excerpt=excerpt):
-                chinese_previous = self._single_proposal_bundle(self.bundle, 2, excerpt=excerpt)
-                self.assertEqual(validate_evidence_bundle(chinese_previous, policy=self.policy), [])
+                self.assertTrue(any("exact bounded role span" in error for error in errors))
+
+        positive_claims = (
+            (1, "Head of growth @synthetic_hub", "Head of growth", "current"),
+            (1, "Researcher at @synthetic_hub", "Researcher", "current"),
+            (1, "任职于 @synthetic_hub", None, "current"),
+            (1, "就职于 @synthetic_hub", None, "current"),
+            (2, "Prev @synth_listen @synth_int", None, "previous"),
+            (2, "曾任 @synth_listen", None, "previous"),
+            (2, "前任职于 @synth_listen", None, "previous"),
+            (2, "此前任职于 @synth_listen", None, "previous"),
+            (2, "Former Researcher @synth_listen", "Researcher", "previous"),
+        )
+        for proposal_index, excerpt, role_text, expected_relation in positive_claims:
+            with self.subTest(excerpt=excerpt, role_text=role_text):
+                payload = self._single_proposal_bundle(self.bundle, proposal_index, excerpt=excerpt)
+                payload["proposals"][0]["details"]["role_text"] = role_text
+                self.assertEqual(validate_evidence_bundle(payload, policy=self.policy), [])
+                analysis = analyze_profile_bio_signals(payload, policy=self.policy)
+                self.assertEqual(analysis["affiliation_proposals"][0]["relation"], expected_relation)
+                self.assertEqual(analysis["affiliation_proposals"][0]["role_text"], role_text)
         resolved_without_owner = copy.deepcopy(self.bundle)
         resolved_without_owner["proposals"][1]["details"]["organization_platform_user_id"] = "900000000000000002"
         self.assert_bundle_rejected(resolved_without_owner)
@@ -578,7 +614,7 @@ class ProfileBioSignalContractTest(unittest.TestCase):
         deep_subject = '{"child":' * 1500 + "null" + "}" * 1500
         deep_raw = (
             '{"schema_version":"x.profile.bio_evidence.bundle.v1",'
-            '"policy_version":"profile-bio-signal-v1.3","subject":'
+            '"policy_version":"profile-bio-signal-v1.4","subject":'
             + deep_subject
             + ',"profile_snapshot":{},"proposals":[],"claims":{}}'
         )

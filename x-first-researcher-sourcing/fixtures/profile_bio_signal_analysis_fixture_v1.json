@@ -1,9 +1,9 @@
 {
   "schema_version": "x.profile.bio_signal.analysis.v1",
-  "policy_version": "profile-bio-signal-v1.3",
-  "analysis_id": "xpba_c8eda570445bce95c2b4241c",
-  "input_sha256": "990aaa84c722022fa10c394d5da9664b86b1a0d841c745f4ee7ff25486071594",
-  "policy_sha256": "c683b1d838f12482609544b2b78ed04d1ae05e9f59ab21d57432a290d481451d",
+  "policy_version": "profile-bio-signal-v1.4",
+  "analysis_id": "xpba_f8680e5028f9fd66b5b71350",
+  "input_sha256": "4f5d50ddbda90c3c94133a70ed09a94e7a4cec7ab58070e578505f7b70d0a0ad",
+  "policy_sha256": "3b6e7bf7df7f267ae77caf7c7fb92482ccba717271ab95e942f2f47710a0e1d7",
   "subject": {
     "provisional_person_id": "pp_x_01J00000000000000000000000",
     "platform_user_id": "900000000000000001"
