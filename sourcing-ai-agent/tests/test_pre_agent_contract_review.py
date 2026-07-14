@@ -3425,7 +3425,8 @@ def test_frontend_contract_exposes_operation_command_activity_spine_policy() -> 
     assert "execution_summary?: WorkflowCommandExecutionSummary" in types_source
     assert '"execution_summary": { "$ref": "#/$defs/WorkflowCommandExecutionSummary" }' in schema_source
     assert "execution_summary: mapOptionalPlainWorkflowPublicObject(" in adapter_source
-    assert "mapWorkflowCommandExecutionSummary," in adapter_source
+    assert "(value) => mapWorkflowCommandExecutionSummary(value, traversal, depth + 1)" in adapter_source
+    assert "markWorkflowPublicProjectionClosed(mapped, traversal, true)" in adapter_source
     assert "display_contract?: WorkflowCommandDisplayContract" in types_source
     assert '"display_contract": { "$ref": "#/$defs/WorkflowCommandDisplayContract" }' in schema_source
     assert "display_contract: mapOptionalPlainWorkflowPublicObject(" in adapter_source
@@ -3615,18 +3616,19 @@ def test_operations_page_is_operation_api_only_control_surface() -> None:
     assert "/api/workflow/activity-attempts" in api_source
     assert "/api/workflow/entity-deltas" in api_source
     assert "/api/workflow/commands/${encodeURIComponent(commandId)}/${action}" in api_source
-    assert 'status === "invalid" || status === "not_found" || status === "failed"' in api_source
-    assert "expectedStatus = action ===" not in api_source
-    assert "throw new Error(`Workflow command ${action} failed: ${reason}`)" in api_source
+    assert "requirePublicResponseOutcome" in api_source
+    assert "unexpected status ${status}" in api_source
+    assert "WORKFLOW_COMMAND_CONTROL_APPLIED_OUTCOMES" in api_source
+    assert "OPERATION_RUN_CONTROL_APPLIED_OUTCOMES" in api_source
+    assert "OPERATION_ACTION_DECISION_APPLIED_OUTCOMES" in api_source
+    assert "OPERATION_RUN_PROVENANCE_SUCCESS_STATUSES" in api_source
     workflow_command_control_block = _typescript_block(
         api_source,
         "async function postWorkflowCommandControl",
         "export function cancelWorkflowCommand",
     )
-    assert (
-        'status === "invalid" || status === "not_found" || status === "failed" || status === "unsupported"'
-        in workflow_command_control_block
-    )
+    assert "WORKFLOW_COMMAND_CONTROL_APPLIED_OUTCOMES[action]" in workflow_command_control_block
+    assert "requirePublicResponseOutcome" in workflow_command_control_block
     assert "missing workflow_command" in workflow_command_control_block
     for required_command_contract in ("control_state", "display_contract", "control_policy", "activity_spine_policy"):
         assert required_command_contract in workflow_command_control_block
@@ -3635,10 +3637,8 @@ def test_operations_page_is_operation_api_only_control_surface() -> None:
         "async function postOperationRunControl",
         "export function cancelOperationRun",
     )
-    assert (
-        'status === "invalid" || status === "not_found" || status === "failed" || status === "unsupported"'
-        in operation_run_control_block
-    )
+    assert "OPERATION_RUN_CONTROL_APPLIED_OUTCOMES[action]" in operation_run_control_block
+    assert "requirePublicResponseOutcome" in operation_run_control_block
     assert "missing operation_run" in operation_run_control_block
     assert "throw new Error(`Operation ${action} failed: ${reason}`)" in operation_run_control_block
     assert "Activity-spine copy/drill-down/control follow-up" in next_todo

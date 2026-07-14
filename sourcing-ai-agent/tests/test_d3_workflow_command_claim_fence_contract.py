@@ -92,8 +92,10 @@ D3C2B_OPERATION_ROOT_COLUMNS = (
 # describe the debt at its pinned baseline; D3c must replace the assertions when
 # it installs the physical fence and public projection boundary.
 CURRENT_WORKFLOW_COMMAND_COLUMN_COUNT = 33
-CURRENT_PUBLIC_MAPPER_CALL_COUNT = 83
-CURRENT_PUBLIC_MAPPER_CALLING_FUNCTION_COUNT = 32
+# D3c1a's two final control envelopes now reproject their canonical nested
+# command explicitly; both calls are intentional public-boundary coverage.
+CURRENT_PUBLIC_MAPPER_CALL_COUNT = 85
+CURRENT_PUBLIC_MAPPER_CALLING_FUNCTION_COUNT = 34
 CURRENT_CONTROL_SYNC_CALL_COUNT = 27
 CURRENT_CONTROL_SYNC_CALLING_FUNCTION_COUNT = 26
 CURRENT_CONTROL_SYNC_FILE_COUNT = 5

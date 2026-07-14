@@ -248,7 +248,7 @@ serve、会话/事件层、planner loop），用一个垂直切片证明闭环�
   后续 precommit adversarial author-audit 另固定结构化 Activity `artifact_refs`、cancel/retry/resume
   **4 singular + 3 served plural** carriers + derived control fields、command `result` 内 **8 canonical + normalized aliases** recursive
   carrier keys、
-  `1.0 -> 1`/`-0 -> 0` 与 lazy `CommandKernel` partial-construction compatibility，并继续封闭 nested command/
+  `1.0 -> 1`/`-0 -> 0`，并继续封闭 nested command/
   operation-sync/direct-Activity nested-command closure、recursive forged-summary removal、hazardous-key rejection、
   backend/frontend typed malformed-input parity、generic Activity derived-provenance stripping、compact-observation
   canonicalization、完整 Operation action/event/run 与 registry mirrors、typed trusted execution summary、normalized
@@ -256,10 +256,19 @@ serve、会话/事件层、planner loop），用一个垂直切片证明闭环�
   descriptor/literal oracles 替代 self-referential-oracle gap；这些不是 invalid artifact 五项的
   retroactive findings，也不构成 formal review evidence。primary manifest 现在是 **23 method-route variants**（既有
   17 + Activity 6），
-  compact materialization 独立计数。final stable candidate author evidence=`13` D3c1a、`56` D3+durable、
+  compact materialization 独立计数。commit `4cfd1916da8bd98483d1ecfdba1f66639b122da9` 的 author evidence=
+  `13` D3c1a、`56` D3+durable、
   full operation `129`、pre-Agent `4`、Activity HTTP/route parity `2`、adjacent migration/PG `9 + 20 subtests`、
-  frontend compile+`81 modules` build、lint `58 files`+D3 tests+pre-Agent oracle、mypy `81/4`、diff clean；fresh pinned non-author
-  review 仍 pending，在 valid scope-matched artifact 前没有 formal verdict。该批零
+  frontend compile+`81 modules` build、lint `58 files`+D3 tests+pre-Agent oracle、mypy `81/4`、diff clean。
+  后续 pinned artifact `runtime/reviews/20260714T215839Z_Track_D_D3c1a_workflow-command_public_projection_fixed-forward.md`
+  因 `causal_binding.final_response_item_exact=false` 为 invalid/advisory；其 substantive `NO-GO` 不是 formal
+  `NO-GO`。#1/#2/#4-#11 已以 exact-built-in bounded copier、single backend/frontend traversal budgets、ActivityRun
+  descriptor 与 WorkflowCommand control-target 分 owner current evidence、once-sanitized strict envelope/applied-outcome、
+  shared `NumberRecord`、producer-owned policy field families 与
+  constructor-only `CommandKernel` fixed-forward；#3=`R-019` 继续 open。该 follow-up stable evidence=
+  `18/63/129/60/51`、frontend `81 modules`、public mapper `85/34`、Ruff/diff clean、mypy `81/4`，fresh
+  dirty-tree non-author advisory=`0/0/0/0 CLEAN`；pinned review 仍 pending，在 valid scope-matched artifact 前没有
+  formal verdict。该批零
   migration/claim/CAS/Stage A/B/dispatch/served，故 R-019、action-root gate、
   OB-10.1/10.2/10.3/10.4 和 served=0 均不变。
 - D3c2a dormant migration candidate 仅安装 `workflow_commands` 的精确 20 columns + 16 个 `NOT VALID` local
@@ -273,7 +282,12 @@ serve、会话/事件层、planner loop），用一个垂直切片证明闭环�
   保护新写；5s lock timeout 证明先执行 session DDL、再被 OperationRun writer 阻塞时，两表 columns/checks
   与 0004 ledger 整笔回滚，恢复后 single apply + no-op。legacy mappers 继续丢弃全部新列，零 scoped
   repository/exact-copy writer/claim/dispatch/served 激活。Activity/event/receipt/quarantine Migration-A fragments
-  仍 open；完整 Migration A 前不得进入 rollout step 3 的 registries/manifests/factory。
+  仍 open；完整 Migration A 前不得进入 rollout step 3 的 registries/manifests/factory。implementation=
+  `0aa253c7d7e5324f5c0021570e2980f358ea3922`；valid pinned review
+  `runtime/reviews/20260714T222746Z_Track_D_D3c2b_scoped_root_migration_retry_1.md`=`GO`
+  （P0/P1/P2/P3=`0/0/0/0`，scope digest
+  `7988dd50814ba1c2cc4a3c5efa7ec40ac7eb47b80cbce901ecc8c04a83a92685`）。该 scope-local `GO` 不关闭
+  R-019、完整 Migration A 或任何 runtime/live activation gate。
 
 ### D4 — 之后（本文只圈定，不展开）
 
@@ -381,12 +395,16 @@ TD-4 初始路由表已按 owner 2026-07-13 裁决落档（D0 §4）。
    rejection、typed malformed-input parity、generic Activity derived-provenance stripping、compact-observation
    canonicalization、完整 Operation action/event/run 与 registry mirrors、typed trusted execution summary、normalized
    response-envelope dual-source、demo raw/provenance、strict required-status wrappers、independent descriptor/literal
-   oracles 与 lazy-kernel compatibility。
-   这些 author-audit 项不冒充 invalid review findings 或 formal verdict；两批都不授权 runtime write。
+   oracles。
+   `20260714T215839Z_*` D3c1a artifact 因 `final_response_item_exact=false` 仅为 invalid/advisory，不是 formal
+   `NO-GO`；其 #1/#2/#4-#11 已按 bounded exact-built-in copier、single frontend traversal、source-exclusive current
+   evidence、strict envelope/outcome、`NumberRecord`、producer-owned policy families 与 constructor-only kernel
+   fixed-forward，#3=`R-019` 保持 open。当前 follow-up 的 fresh validation/review 尚未记录；两批都不授权 runtime write。
    D3c2a 仅安装
    `workflow_commands` 的 20-column/16-`NOT VALID` dormant command subbatch，descriptor 与 runtime writers 未激活。
    D3c2b 接续安装 `plan_review_sessions` 11-column + `operation_runs` 5-column scoped-root dormant subbatch，
-   legacy mappers 仍封闭，scoped repository 与 exact-copy writer 均未激活。
+   legacy mappers 仍封闭，scoped repository 与 exact-copy writer 均未激活；commit `0aa253c7...` 的 valid pinned
+   artifact `20260714T222746Z_*` 为 scope-local `GO`（digest `7988dd50...a92685`），但不关闭 R-019 或后续 rollout。
    这不是完整 Migration A：activity/event/receipt/quarantine fragments、Migration B-D、
    canonical-id 最终 grammar 与本项以下所有 owner/runtime/acceptance obligations 仍 open。
    canonical coordination lineage 为 `coordination_plan_review_id=plan_review_sessions.review_id`，物理类型同为

@@ -316,7 +316,7 @@
   direct findings；随后 precommit adversarial author-audit 又闭合结构化 Activity `artifact_refs`、cancel/retry/resume
   **4 singular + 3 served plural** Activity carriers + derived control fields、command `result` 内 **8 canonical + normalized aliases**
   recursive Activity carrier keys、跨语言 mathematical safe-integer canonicalization（`1.0 -> 1`、`-0 -> 0`）与
-  lazy `CommandKernel` partial-construction compatibility；canonical/normalized nested workflow-command carriers、
+  canonical/normalized nested workflow-command carriers、
   operation-sync/direct-Activity nested-command closure、generic recursive forged-summary removal、hazardous-key
   rejection、backend/frontend typed malformed-input parity、generic Activity derived-provenance stripping、compact
   observation canonicalization 与
@@ -331,11 +331,22 @@
   command `artifact_refs` 继续是既有 string array；`claim_generation`/`control_epoch` 与 Activity `attempt_number`
   限于 canonical non-negative JavaScript-safe mathematical integer。primary public manifest=
   `17 command/operation/action + 6 Activity = 23 method-route variants`，compact job-materialization binding 继续
-  独立计数。final stable candidate author evidence：D3c1a `13`、D3a+D3b+D3c1a+durable `56`、full operation
+  独立计数。commit `4cfd1916da8bd98483d1ecfdba1f66639b122da9` 的 author evidence：D3c1a `13`、
+  D3a+D3b+D3c1a+durable `56`、full operation
   runtime `129`、pre-Agent adjacency `4`、Activity HTTP/route parity `2`、adjacent migration/PG `9 + 20 subtests`、
   frontend standalone compile exit 0 + build `81 modules`、lint repo `58 files` + D3 tests + pre-Agent oracle、
   mypy `81/4`、diff clean。
-  fresh pinned non-author review 仍 **pending**；在 valid scope-matched artifact 前既无 formal GO 也无 formal NO-GO，Live/W6/manual/promotion/
+  后续 pinned artifact
+  `runtime/reviews/20260714T215839Z_Track_D_D3c1a_workflow-command_public_projection_fixed-forward.md` 虽
+  `reviewer_exit_code=0`，但 `causal_binding.final_response_item_exact=false`，故为 **invalid/advisory only**；其
+  substantive `NO-GO` 不得写成 formal `NO-GO`。#1/#2/#4-#11 已通过 exact-built-in bounded copier、single
+  backend/frontend traversal budgets、ActivityRun descriptor 与 WorkflowCommand control-target 分 owner current
+  evidence、once-sanitized strict envelope/applied-outcome、shared
+  `NumberRecord`、producer-owned policy field families、constructor-only `CommandKernel` 与一致 review wording
+  fixed-forward；#3=`R-019` 继续 open。该 follow-up 的 stable evidence=`18` D3c1a、`63` D3+durable、full
+  operation `129`、pre-Agent `60`、cancel/request-scope `51`、frontend `81 modules`、public mapper `85/34`、
+  Ruff/diff clean、mypy `81/4`；fresh dirty-tree non-author advisory=`0/0/0/0 CLEAN`，但 fresh pinned review 仍 pending。
+  因此在 valid scope-matched artifact 前既无 formal GO 也无 formal NO-GO，Live/W6/manual/promotion/
   signoff fail closed，但不冻结无关 non-live batch。该批零 storage/runtime write、migration、claim/CAS、Stage A/B、
   dispatch 或 served 激活；完整非闭合边界见
   `TRACK_D_D3C1A_WORKFLOW_COMMAND_PUBLIC_PROJECTION_FIXED_FORWARD.md`，R-019、action-root、OB gates 与 served=0 不变。
@@ -360,8 +371,12 @@
   `81 errors/4 files`（棘轮持平）、diff clean。
   Activity/event/receipt/quarantine Migration-A fragments、Migration
   B-D、registry/policy pins、双 population manifests、bootstrap factory+verifier、R-019/action-root/OB-10.1-10.4
-  与 served=0 全部继续 open；完整 Migration A 前不得越序进入 rollout step 3。fresh pinned review pending，
-  不能写成 formal GO。
+  与 served=0 全部继续 open；完整 Migration A 前不得越序进入 rollout step 3。implementation=
+  `0aa253c7d7e5324f5c0021570e2980f358ea3922`；fresh pinned artifact
+  `runtime/reviews/20260714T222746Z_Track_D_D3c2b_scoped_root_migration_retry_1.md` 为 valid scope-local `GO`
+  （P0/P1/P2/P3=`0/0/0/0`，scope digest
+  `7988dd50814ba1c2cc4a3c5efa7ec40ac7eb47b80cbce901ecc8c04a83a92685`）。该 `GO` 只覆盖 dormant
+  nine-file physical foundation，不关闭 R-019、完整 Migration A、runtime activation 或 live/signoff gate。
 - [ ] Track D 后的 user-owned cohort selection contract（Thinking Machines Lab live 前置）：以一个 versioned、
   registry-digest-pinned `CohortSelection` 作为唯一 owner，显式承载 canonical ordered
   `role_bucket_ids[]`（Researcher/Engineer/Product Manager 可自由多选且 registry 可扩展）、

@@ -60,6 +60,24 @@ const DEFAULT_API_TIMEOUT_MS = 30_000;
 const PLAN_API_TIMEOUT_MS = 90_000;
 const WORKFLOW_START_TIMEOUT_MS = 60_000;
 const RESULTS_API_TIMEOUT_MS = 120_000;
+type OperationActionDecisionAppliedOutcome = "queued" | "rejected";
+type OperationRunProvenanceSuccessStatus = "ok";
+const OPERATION_ACTION_DECISION_APPLIED_OUTCOMES = {
+  approve: ["queued"],
+  reject: ["rejected"],
+} as const;
+const OPERATION_RUN_PROVENANCE_SUCCESS_STATUSES = ["ok"] as const;
+const OPERATION_RUN_CONTROL_APPLIED_OUTCOMES = {
+  cancel: ["cancelled"],
+  retry: ["queued"],
+  resume: ["queued"],
+  dispatch: ["planned"],
+} as const;
+const WORKFLOW_COMMAND_CONTROL_APPLIED_OUTCOMES = {
+  cancel: ["cancelled"],
+  retry: ["queued"],
+  resume: ["queued"],
+} as const;
 const EXPORT_POLL_INTERVAL_MS = 1_500;
 const PROFILE_COMPLETION_TIMEOUT_MS = 180_000;
 const DASHBOARD_INITIAL_CANDIDATE_CHUNK_SIZE = 96;
@@ -190,6 +208,14 @@ export interface WorkflowCommandExecutionSummary {
 export interface WorkflowCommandControlPolicy {
   commandType: string;
   owner: string;
+  genericControlContract: string;
+  providerAfterStartControlContract: string;
+  providerAfterStartControlStatus: string;
+  providerAfterStartControlMode: string;
+  providerAfterStartControlOwner: string;
+  providerAfterStartControlBlockedReason: string;
+  providerAfterStartControlUpgradeRequirements: string[];
+  moduleStateMutatedOnProviderAfterStartControl: boolean;
   runningControlCategory: string;
   runningControlCategories: string[];
   runningControlMaturity: string;
@@ -509,17 +535,25 @@ const WORKFLOW_COMMAND_CONTROL_POLICY_STRING_ARRAY_FIELDS: ReadonlySet<string> =
   "running_resume_statuses",
   "running_resume_prerequisites",
   "running_resume_upgrade_requirements",
+  "provider_after_start_control_upgrade_requirements",
 ]);
 const WORKFLOW_COMMAND_CONTROL_POLICY_BOOLEAN_FIELDS: ReadonlySet<string> = new Set([
   "running_cancel_supported",
   "module_state_mutated_on_running_cancel",
   "running_resume_supported",
   "module_state_mutated_on_running_resume",
+  "module_state_mutated_on_provider_after_start_control",
 ]);
 const WORKFLOW_COMMAND_CONTROL_POLICY_STRING_FIELDS: ReadonlySet<string> = new Set([
   "schema_version",
   "command_type",
   "owner",
+  "generic_control_contract",
+  "provider_after_start_control_contract",
+  "provider_after_start_control_status",
+  "provider_after_start_control_mode",
+  "provider_after_start_control_owner",
+  "provider_after_start_control_blocked_reason",
   "running_control_category",
   "running_control_maturity",
   "running_control_gap_status",
@@ -1493,7 +1527,7 @@ export interface OperationActionRecord {
 }
 
 export interface OperationActionDecisionResult {
-  status: string;
+  status: OperationActionDecisionAppliedOutcome;
   action: OperationActionRecord | null;
   operationRun: OperationRunRecord | null;
   raw: Record<string, unknown>;
@@ -1511,7 +1545,7 @@ export interface OperationEventRecord {
 }
 
 export interface OperationRunProvenance {
-  status: string;
+  status: OperationRunProvenanceSuccessStatus;
   action: OperationActionRecord | null;
   operationRun: OperationRunRecord | null;
   actionEvents: OperationEventRecord[];
@@ -2112,6 +2146,21 @@ function deriveWorkflowCommandControlPolicy(record: Record<string, unknown>): Wo
   return {
     commandType: asString(record.command_type),
     owner: asString(record.owner),
+    genericControlContract: asString(record.generic_control_contract),
+    providerAfterStartControlContract: asString(record.provider_after_start_control_contract),
+    providerAfterStartControlStatus: asString(record.provider_after_start_control_status),
+    providerAfterStartControlMode: asString(record.provider_after_start_control_mode),
+    providerAfterStartControlOwner: asString(record.provider_after_start_control_owner),
+    providerAfterStartControlBlockedReason: asString(
+      record.provider_after_start_control_blocked_reason,
+    ),
+    providerAfterStartControlUpgradeRequirements: asArray(
+      record.provider_after_start_control_upgrade_requirements,
+    )
+      .map((item) => asString(item))
+      .filter(Boolean),
+    moduleStateMutatedOnProviderAfterStartControl:
+      asBoolean(record.module_state_mutated_on_provider_after_start_control) === true,
     runningControlCategory: asString(record.running_control_category),
     runningControlCategories: asArray(record.running_control_categories).map((item) => asString(item)).filter(Boolean),
     runningControlMaturity: asString(record.running_control_maturity),
@@ -2436,11 +2485,11 @@ async function postOperationActionDecision(
       }),
     },
   );
-  const status = requirePublicResponseStatus(response.status, `Operation action ${decision}`);
-  if (["invalid", "not_found", "failed", "unsupported"].includes(status)) {
-    const reason = asString(response.reason) || status;
-    throw new Error(`Operation action ${decision} failed: ${reason}`);
-  }
+  const status = requirePublicResponseOutcome(
+    response.status,
+    OPERATION_ACTION_DECISION_APPLIED_OUTCOMES[decision],
+    `Operation action ${decision}`,
+  );
   const action = asObjectRecord(response.action);
   const operationRun = asObjectRecord(response.operation_run);
   const derivedAction = Object.keys(action).length ? deriveOperationActionRecord(action) : null;
@@ -2483,7 +2532,11 @@ export async function getOperationRunProvenance(operationRunId: string): Promise
   const payload = await fetchJson<Record<string, unknown>>(
     `/api/operations/runs/${encodeURIComponent(operationRunId)}/provenance`,
   );
-  const status = requirePublicResponseStatus(payload.status, "Operation provenance");
+  const status = requirePublicResponseOutcome(
+    payload.status,
+    OPERATION_RUN_PROVENANCE_SUCCESS_STATUSES,
+    "Operation provenance",
+  );
   const actionSource = asObjectRecord(payload.action);
   const operationRunSource = asObjectRecord(payload.operation_run);
   const action = Object.keys(actionSource).length ? deriveOperationActionRecord(actionSource) : null;
@@ -2532,11 +2585,11 @@ async function postOperationRunControl(operationRunId: string, action: "cancel" 
       body: JSON.stringify({ actor: "frontend-demo", source: "operation_queue" }),
     },
   );
-  const status = requirePublicResponseStatus(payload.status, `Operation ${action}`);
-  if (status === "invalid" || status === "not_found" || status === "failed" || status === "unsupported") {
-    const reason = asString(payload.reason) || status || "unknown";
-    throw new Error(`Operation ${action} failed: ${reason}`);
-  }
+  const status = requirePublicResponseOutcome(
+    payload.status,
+    OPERATION_RUN_CONTROL_APPLIED_OUTCOMES[action],
+    `Operation ${action}`,
+  );
   const operationRun = asObjectRecord(payload.operation_run);
   if (!Object.keys(operationRun).length) {
     const reason = asString(payload.reason) || status || "missing operation_run";
@@ -2585,11 +2638,11 @@ async function postWorkflowCommandControl(
       body: JSON.stringify({ actor: "frontend-demo", source: "operation_queue" }),
     },
   );
-  const status = requirePublicResponseStatus(payload.status, `Workflow command ${action}`);
-  if (status === "invalid" || status === "not_found" || status === "failed" || status === "unsupported") {
-    const reason = asString(payload.reason) || asString(payload.command_status) || status || "unknown";
-    throw new Error(`Workflow command ${action} failed: ${reason}`);
-  }
+  const status = requirePublicResponseOutcome(
+    payload.status,
+    WORKFLOW_COMMAND_CONTROL_APPLIED_OUTCOMES[action],
+    `Workflow command ${action}`,
+  );
   const workflowCommandSource = asObjectRecord(payload.workflow_command);
   const workflowCommand = Object.keys(workflowCommandSource).length
     ? projectWorkflowCommandGenericCarrierRecord(workflowCommandSource)
@@ -7800,6 +7853,18 @@ function requirePublicResponseStatus(value: unknown, context: string): string {
     throw new Error(`${context} failed: missing status`);
   }
   return status;
+}
+
+function requirePublicResponseOutcome<const T extends readonly string[]>(
+  value: unknown,
+  allowedOutcomes: T,
+  context: string,
+): T[number] {
+  const status = requirePublicResponseStatus(value, context);
+  if (!allowedOutcomes.some((outcome) => outcome === status)) {
+    throw new Error(`${context} failed: unexpected status ${status}`);
+  }
+  return status as T[number];
 }
 
 function asOptionalString(value: unknown): string | undefined {

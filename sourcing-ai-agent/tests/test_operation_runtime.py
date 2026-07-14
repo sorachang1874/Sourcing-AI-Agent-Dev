@@ -14,6 +14,7 @@ from urllib import request as urllib_request
 from sourcing_agent.acquisition import AcquisitionEngine
 from sourcing_agent.api import create_server
 from sourcing_agent.asset_catalog import AssetCatalog
+from sourcing_agent.command_kernel import CommandKernel
 from sourcing_agent.company_asset_writer import CompanyAssetWriter
 from sourcing_agent.crm_public_web_runtime import start_crm_public_web_batch
 from sourcing_agent.domain import JobRequest
@@ -3145,6 +3146,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         self.assertEqual(repository.list_operation_events("operation-workspace-a"), [])
         orchestrator = object.__new__(SourcingOrchestrator)
         orchestrator.store = self.store
+        orchestrator._command_kernel = CommandKernel(self.store)
         public_run = orchestrator.get_operation_run_api("operation-workspace-a")["operation_run"]
         control_state = public_run["control_state"]
         self.assertEqual(control_state["allowed_actions"], [])
@@ -3230,6 +3232,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         repository = self.store.repos.workflow_runtime
         orchestrator = object.__new__(SourcingOrchestrator)
         orchestrator.store = self.store
+        orchestrator._command_kernel = CommandKernel(self.store)
         orchestrator.operation_runtime_writer = self.writer
 
         reject_submission = self.writer.submit_action(
@@ -3461,6 +3464,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         repository = self.store.repos.workflow_runtime
         orchestrator = object.__new__(SourcingOrchestrator)
         orchestrator.store = self.store
+        orchestrator._command_kernel = CommandKernel(self.store)
         orchestrator.operation_runtime_writer = self.writer
 
         approval = self.writer.submit_action(

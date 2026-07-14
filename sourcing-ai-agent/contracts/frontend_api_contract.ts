@@ -10,6 +10,48 @@ export interface JsonObject {
   [key: string]: JsonValue;
 }
 
+export type NumberRecord = Record<string, number>;
+
+export const OPERATION_ACTION_DETAIL_SUCCESS_STATUSES = [
+  "ok",
+  "queued",
+  "approval_required",
+  "rejected",
+] as const;
+export type OperationActionDetailSuccessStatus =
+  (typeof OPERATION_ACTION_DETAIL_SUCCESS_STATUSES)[number];
+
+export const OPERATION_ACTION_DECISION_APPLIED_OUTCOMES = {
+  approve: ["queued"],
+  reject: ["rejected"],
+} as const;
+export type OperationActionDecision = keyof typeof OPERATION_ACTION_DECISION_APPLIED_OUTCOMES;
+export type OperationActionDecisionAppliedOutcome =
+  (typeof OPERATION_ACTION_DECISION_APPLIED_OUTCOMES)[OperationActionDecision][number];
+
+export const OPERATION_RUN_PROVENANCE_SUCCESS_STATUSES = ["ok"] as const;
+export type OperationRunProvenanceSuccessStatus =
+  (typeof OPERATION_RUN_PROVENANCE_SUCCESS_STATUSES)[number];
+
+export const OPERATION_RUN_CONTROL_APPLIED_OUTCOMES = {
+  cancel: ["cancelled"],
+  retry: ["queued"],
+  resume: ["queued"],
+  dispatch: ["planned"],
+} as const;
+export type OperationRunControlAction = keyof typeof OPERATION_RUN_CONTROL_APPLIED_OUTCOMES;
+export type OperationRunControlAppliedOutcome =
+  (typeof OPERATION_RUN_CONTROL_APPLIED_OUTCOMES)[OperationRunControlAction][number];
+
+export const WORKFLOW_COMMAND_CONTROL_APPLIED_OUTCOMES = {
+  cancel: ["cancelled"],
+  retry: ["queued"],
+  resume: ["queued"],
+} as const;
+export type WorkflowCommandControlAction = keyof typeof WORKFLOW_COMMAND_CONTROL_APPLIED_OUTCOMES;
+export type WorkflowCommandControlAppliedOutcome =
+  (typeof WORKFLOW_COMMAND_CONTROL_APPLIED_OUTCOMES)[WorkflowCommandControlAction][number];
+
 export interface IntentRewriteRule {
   rewrite_id?: string;
   summary_label?: string;
@@ -906,6 +948,13 @@ export interface WorkflowCommandControlPolicy {
   command_type?: string;
   owner?: string;
   generic_control_contract?: string;
+  provider_after_start_control_contract?: string;
+  provider_after_start_control_status?: string;
+  provider_after_start_control_mode?: string;
+  provider_after_start_control_owner?: string;
+  provider_after_start_control_blocked_reason?: string;
+  provider_after_start_control_upgrade_requirements?: string[];
+  module_state_mutated_on_provider_after_start_control?: boolean;
   running_control_category?: string;
   running_control_categories?: string[];
   running_control_maturity?: string;
@@ -1153,7 +1202,7 @@ export interface OperationRunStatusSummary {
   operation_phase?: string;
   workflow_command_count?: number;
   operation_event_count?: number;
-  command_status_counts?: JsonObject;
+  command_status_counts?: NumberRecord;
   latest_event_type?: string;
   latest_event?: OperationEventRecord;
   latest_workflow_command?: WorkflowCommandRecord;
@@ -1168,7 +1217,7 @@ export interface OperationActionListResponse {
 }
 
 export interface OperationActionDetailResponse {
-  status: string;
+  status: OperationActionDetailSuccessStatus;
   contract?: string;
   action?: OperationActionRecord;
   operation_run?: OperationRunRecord;
@@ -1192,7 +1241,7 @@ export interface OperationRunDetailResponse {
 }
 
 export interface OperationRunProvenanceResponse {
-  status: string;
+  status: OperationRunProvenanceSuccessStatus;
   contract?: string;
   action?: OperationActionRecord;
   operation_run?: OperationRunRecord;
@@ -1205,7 +1254,7 @@ export interface OperationRunProvenanceResponse {
 }
 
 export interface OperationRunControlResponse {
-  status: string;
+  status: OperationRunControlAppliedOutcome;
   reason?: string;
   contract?: string;
   action?: OperationActionRecord;
@@ -1292,10 +1341,10 @@ export interface WorkflowCommandExecutionSummary {
   activity_count?: number;
   attempt_count?: number;
   entity_delta_count?: number;
-  activity_status_counts?: JsonObject;
-  attempt_status_counts?: JsonObject;
-  entity_delta_status_counts?: JsonObject;
-  entity_delta_kind_counts?: JsonObject;
+  activity_status_counts?: NumberRecord;
+  attempt_status_counts?: NumberRecord;
+  entity_delta_status_counts?: NumberRecord;
+  entity_delta_kind_counts?: NumberRecord;
   latest_effect_status?: string;
   latest_activity?: WorkflowActivityRecord;
   latest_attempt?: WorkflowActivityAttemptRecord;
@@ -1320,7 +1369,7 @@ export interface WorkflowCommandDetailResponse {
 }
 
 export interface WorkflowCommandControlResponse {
-  status: string;
+  status: WorkflowCommandControlAppliedOutcome;
   reason?: string;
   command_status?: string;
   workflow_command?: WorkflowCommandRecord;

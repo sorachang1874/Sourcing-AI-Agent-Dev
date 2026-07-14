@@ -5,9 +5,12 @@ import copy
 import json
 import re
 import subprocess
+import time
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
+
+import pytest
 
 from sourcing_agent.command_kernel import (
     _WORKFLOW_ACTIVITY_ATTEMPT_PUBLIC_CARRIER_FIELDS,
@@ -18,6 +21,9 @@ from sourcing_agent.command_kernel import (
     _WORKFLOW_COMMAND_PUBLIC_CARRIER_LIST_FIELDS,
     _WORKFLOW_ENTITY_DELTA_PUBLIC_CARRIER_FIELDS,
     _WORKFLOW_ENTITY_DELTA_PUBLIC_CARRIER_LIST_FIELDS,
+    _WORKFLOW_PUBLIC_MIRROR_MAX_COLLECTION_ITEMS,
+    _WORKFLOW_PUBLIC_MIRROR_MAX_DEPTH,
+    _WORKFLOW_PUBLIC_MIRROR_MAX_NODES,
     WORKFLOW_ACTIVITY_ATTEMPT_PUBLIC_FIELDS,
     WORKFLOW_ACTIVITY_CONTROL_TARGET_PUBLIC_FIELDS,
     WORKFLOW_ACTIVITY_RUN_PUBLIC_FIELDS,
@@ -27,6 +33,13 @@ from sourcing_agent.command_kernel import (
     WORKFLOW_COMMAND_PUBLIC_DESCRIPTOR_FIELDS,
     WORKFLOW_ENTITY_DELTA_PUBLIC_FIELDS,
     CommandKernel,
+)
+from sourcing_agent.durable_runtime import (
+    WORKFLOW_COMMAND_CONTROL_POLICY_BOOLEAN_FIELDS,
+    WORKFLOW_COMMAND_CONTROL_POLICY_PUBLIC_FIELDS,
+    WORKFLOW_COMMAND_CONTROL_POLICY_STRING_ARRAY_FIELDS,
+    WORKFLOW_COMMAND_CONTROL_POLICY_STRING_FIELDS,
+    workflow_command_control_policy,
 )
 from sourcing_agent.repositories.workflow_runtime import (
     WORKFLOW_ACTIVITY_ATTEMPTS,
@@ -998,11 +1011,11 @@ def _projection_orchestrator(store: _ActivitySummaryStore) -> Any:
     return orchestrator
 
 
-def test_partially_constructed_orchestrator_lazily_reuses_one_store_bound_kernel() -> None:
+def test_partially_constructed_orchestrator_requires_explicit_kernel_injection() -> None:
     from sourcing_agent.orchestrator import SourcingOrchestrator
 
     command = {
-        "command_id": "cmd-lazy-kernel",
+        "command_id": "cmd-explicit-kernel",
         "command_type": "test.command",
         "owner": "test-owner",
         "status": "running",
@@ -1011,12 +1024,186 @@ def test_partially_constructed_orchestrator_lazily_reuses_one_store_bound_kernel
     orchestrator = object.__new__(SourcingOrchestrator)
     orchestrator.store = store
 
-    first = orchestrator._command_kernel
-    second = orchestrator._command_kernel
-    assert isinstance(first, CommandKernel)
-    assert first is second
-    assert orchestrator.__dict__["_command_kernel_instance"] is first
+    with pytest.raises(AttributeError):
+        _ = orchestrator._command_kernel
+
+    kernel = CommandKernel(store=store)
+    orchestrator._command_kernel = kernel
+    assert orchestrator._command_kernel is kernel
     assert orchestrator._workflow_command_api_record(command)["command_id"] == command["command_id"]
+
+
+def test_public_json_copier_rejects_hostile_types_cycles_and_over_budget_members() -> None:
+    class StatefulKey:
+        def __init__(self) -> None:
+            self.bool_calls = 0
+            self.string_calls = 0
+
+        def __hash__(self) -> int:
+            return 7
+
+        def __eq__(self, other: object) -> bool:
+            return self is other
+
+        def __bool__(self) -> bool:
+            self.bool_calls += 1
+            return True
+
+        def __str__(self) -> str:
+            self.string_calls += 1
+            return "safe" if self.string_calls < 3 else "claim_token"
+
+    class ThrowingMapping(dict[str, Any]):
+        def items(self) -> Any:
+            raise AssertionError("mapping subclass methods must never execute")
+
+    kernel = CommandKernel(store=None)
+    hostile_key = StatefulKey()
+    cycle: dict[str, Any] = {"safe": "preserved"}
+    cycle["self"] = cycle
+    deep: dict[str, Any] = {"leaf": "preserved"}
+    for _ in range(_WORKFLOW_PUBLIC_MIRROR_MAX_DEPTH + 20):
+        deep = {"next": deep}
+    projected = kernel._workflow_command_public_carrier_api_record(
+        {
+            "safe": "preserved",
+            "hostile_key_record": {hostile_key: "secret", "safe": True},
+            "throwing_mapping": ThrowingMapping({"claim_token": "secret"}),
+            "cycle": cycle,
+            "deep": deep,
+            "bounded_collection": list(range(_WORKFLOW_PUBLIC_MIRROR_MAX_COLLECTION_ITEMS + 5)),
+        }
+    )
+
+    assert hostile_key.bool_calls == 0
+    assert hostile_key.string_calls == 0
+    assert projected["hostile_key_record"] == {"safe": True}
+    assert "throwing_mapping" not in projected
+    assert projected["cycle"] == {"safe": "preserved"}
+    assert len(projected["bounded_collection"]) == _WORKFLOW_PUBLIC_MIRROR_MAX_COLLECTION_ITEMS
+    cursor = projected["deep"]
+    copied_depth = 0
+    while type(cursor) is dict and "next" in cursor:
+        copied_depth += 1
+        cursor = cursor["next"]
+    assert copied_depth <= _WORKFLOW_PUBLIC_MIRROR_MAX_DEPTH
+
+    node_heavy = {
+        "items": [
+            {"index": index, "values": list(range(100))}
+            for index in range(_WORKFLOW_PUBLIC_MIRROR_MAX_COLLECTION_ITEMS)
+        ]
+    }
+    bounded = kernel._workflow_command_public_carrier_api_record(node_heavy)
+
+    def _node_count(value: Any) -> int:
+        if type(value) is dict:
+            return 1 + sum(_node_count(item) for item in value.values())
+        if type(value) is list:
+            return 1 + sum(_node_count(item) for item in value)
+        return 1
+
+    assert _node_count(bounded) <= _WORKFLOW_PUBLIC_MIRROR_MAX_NODES
+    assert len(bounded["items"]) < _WORKFLOW_PUBLIC_MIRROR_MAX_COLLECTION_ITEMS
+
+
+def test_alternating_command_activity_carriers_use_one_bounded_backend_traversal() -> None:
+    class CountingKernel(CommandKernel):
+        def __init__(self) -> None:
+            super().__init__(store=None)
+            self.command_projection_calls = 0
+
+        def _workflow_command_api_record(
+            self,
+            command: dict[str, Any],
+            **kwargs: Any,
+        ) -> dict[str, Any]:
+            self.command_projection_calls += 1
+            return super()._workflow_command_api_record(command, **kwargs)
+
+    nested_command: dict[str, Any] = {
+        "command_id": "cmd-alternating-leaf",
+        "command_type": "test.command",
+        "owner": "test-owner",
+        "status": "running",
+    }
+    chain_depth = 8
+    for index in range(chain_depth):
+        nested_command = {
+            "command_id": f"cmd-alternating-{index}",
+            "command_type": "test.command",
+            "owner": "test-owner",
+            "status": "running",
+            "result": {
+                "workflow_activity_run": {
+                    "activity_run_id": f"activity-alternating-{index}",
+                    "command_id": f"cmd-alternating-{index}",
+                    "activity_type": "test.activity",
+                    "owner": "test-activity-owner",
+                    "metadata": {"workflow_command": nested_command},
+                }
+            },
+        }
+
+    kernel = CountingKernel()
+    started_at = time.monotonic()
+    projected = kernel._workflow_command_api_record(nested_command)
+    elapsed_seconds = time.monotonic() - started_at
+
+    assert projected["command_id"] == f"cmd-alternating-{chain_depth - 1}"
+    assert kernel.command_projection_calls <= chain_depth + 1
+    assert elapsed_seconds < 2.0
+
+    singular_carriers = (
+        _WORKFLOW_COMMAND_PUBLIC_CARRIER_FIELDS
+        | _WORKFLOW_ACTIVITY_RUN_PUBLIC_CARRIER_FIELDS
+        | _WORKFLOW_ACTIVITY_ATTEMPT_PUBLIC_CARRIER_FIELDS
+        | _WORKFLOW_ENTITY_DELTA_PUBLIC_CARRIER_FIELDS
+    )
+    plural_carriers = (
+        _WORKFLOW_COMMAND_PUBLIC_CARRIER_LIST_FIELDS
+        | _WORKFLOW_ACTIVITY_RUN_PUBLIC_CARRIER_LIST_FIELDS
+        | _WORKFLOW_ACTIVITY_ATTEMPT_PUBLIC_CARRIER_LIST_FIELDS
+        | _WORKFLOW_ENTITY_DELTA_PUBLIC_CARRIER_LIST_FIELDS
+    )
+
+    def _assert_no_empty_carriers(value: Any) -> None:
+        if type(value) is list:
+            for item in value:
+                _assert_no_empty_carriers(item)
+            return
+        if type(value) is not dict:
+            return
+        for key, item in value.items():
+            if key in singular_carriers:
+                assert item != {}
+            elif key in plural_carriers and type(item) is list:
+                assert all(member != {} for member in item)
+            _assert_no_empty_carriers(item)
+
+    _assert_no_empty_carriers(projected)
+
+
+def test_control_policy_public_field_families_are_producer_owned_and_strict() -> None:
+    policy = workflow_command_control_policy("test.command", owner="test-owner").to_record()
+    assert frozenset(policy) == WORKFLOW_COMMAND_CONTROL_POLICY_PUBLIC_FIELDS
+    assert (
+        WORKFLOW_COMMAND_CONTROL_POLICY_STRING_FIELDS
+        | WORKFLOW_COMMAND_CONTROL_POLICY_STRING_ARRAY_FIELDS
+        | WORKFLOW_COMMAND_CONTROL_POLICY_BOOLEAN_FIELDS
+    ) == WORKFLOW_COMMAND_CONTROL_POLICY_PUBLIC_FIELDS
+
+    malformed = {field: False for field in WORKFLOW_COMMAND_CONTROL_POLICY_STRING_FIELDS}
+    malformed.update({field: "bad" for field in WORKFLOW_COMMAND_CONTROL_POLICY_STRING_ARRAY_FIELDS})
+    malformed.update({field: 1 for field in WORKFLOW_COMMAND_CONTROL_POLICY_BOOLEAN_FIELDS})
+    malformed["safe_extension"] = "preserved"
+    projected = CommandKernel(store=None)._workflow_activity_control_target_public_api_record(
+        {"target_type": "workflow_command", "control_policy": malformed}
+    )
+    assert projected["control_policy"] == {
+        **{field: [] for field in WORKFLOW_COMMAND_CONTROL_POLICY_STRING_ARRAY_FIELDS},
+        "safe_extension": "preserved",
+    }
 
 
 def test_checked_in_public_field_contract_matches_descriptor_and_is_exactly_42() -> None:
@@ -1669,6 +1856,7 @@ def test_activity_control_target_and_command_control_activity_payloads_are_close
         "workflow_activity_attempts": [raw_activity_attempt],
         "workflow_entity_deltas": [raw_entity_delta],
     }
+    store.repos.workflow_runtime._activities = [copy.deepcopy(raw_activity_run)]
     raw_response = {
         "status": "cancelled",
         "workflow_command": command,
@@ -1722,6 +1910,213 @@ def test_activity_control_target_and_command_control_activity_payloads_are_close
             assert projected["mutation_contract"].startswith("read_only_")
             _assert_alias_keys_absent(projected)
             _assert_no_private_capability(projected)
+
+
+def test_trusted_activity_provenance_is_reattached_only_from_consistent_current_evidence() -> None:
+    command = {
+        "command_id": "cmd-current-evidence",
+        "command_type": "test.command",
+        "owner": "test-owner",
+        "status": "running",
+    }
+    activity = {
+        "activity_run_id": "activity-current-evidence",
+        "command_id": command["command_id"],
+        "activity_type": command["command_type"],
+        "owner": command["owner"],
+        "status": "running",
+        "control_target": {"command_id": "forged-source"},
+    }
+    store = _ActivitySummaryStore(command=command, activities=[activity], attempts=[], deltas=[])
+    orchestrator = _projection_orchestrator(store)
+    attempt = {
+        "attempt_id": "attempt-current-evidence",
+        "activity_run_id": activity["activity_run_id"],
+        "command_id": command["command_id"],
+        "attempt_number": 1,
+        "status": "running",
+        "activity_type": "forged-type",
+        "owner": "forged-owner",
+        "control_target": {"command_id": "forged-source"},
+    }
+    delta = {
+        "delta_id": "delta-current-evidence",
+        "activity_run_id": activity["activity_run_id"],
+        "attempt_id": attempt["attempt_id"],
+        "command_id": command["command_id"],
+        "status": "pending",
+        "activity_type": "forged-type",
+        "owner": "forged-owner",
+        "control_target": {"command_id": "forged-source"},
+    }
+
+    projected_activity = orchestrator._workflow_activity_api_record(activity)
+    projected_forged_activity = orchestrator._workflow_activity_api_record(
+        {**activity, "activity_type": "forged-type", "owner": "forged-owner"}
+    )
+    projected_attempt = orchestrator._workflow_activity_attempt_api_record(attempt)
+    projected_delta = orchestrator._workflow_entity_delta_api_record(delta)
+    for record in (projected_activity, projected_forged_activity, projected_attempt, projected_delta):
+        assert record["control_target"]["command_id"] == command["command_id"]
+        assert record["control_target"]["command_type"] == command["command_type"]
+        assert record["control_target"]["owner"] == command["owner"]
+    assert projected_forged_activity["activity_type"] == command["command_type"]
+    assert projected_forged_activity["owner"] == command["owner"]
+    assert projected_attempt["activity_type"] == command["command_type"]
+    assert projected_attempt["owner"] == command["owner"]
+    assert projected_delta["activity_type"] == command["command_type"]
+    assert projected_delta["owner"] == command["owner"]
+
+    cross_owner_activity = {
+        **activity,
+        "activity_type": "downstream.activity",
+        "owner": "downstream-owner",
+    }
+    store.repos.workflow_runtime._activities = [cross_owner_activity]
+    projected_cross_owner_activity = orchestrator._workflow_activity_api_record(cross_owner_activity)
+    projected_cross_owner_attempt = orchestrator._workflow_activity_attempt_api_record(attempt)
+    projected_cross_owner_delta = orchestrator._workflow_entity_delta_api_record(delta)
+    for record in (
+        projected_cross_owner_activity,
+        projected_cross_owner_attempt,
+        projected_cross_owner_delta,
+    ):
+        assert record["activity_type"] == cross_owner_activity["activity_type"]
+        assert record["owner"] == cross_owner_activity["owner"]
+        assert record["control_target"]["command_type"] == command["command_type"]
+        assert record["control_target"]["owner"] == command["owner"]
+
+    store.repos.workflow_runtime._activities = [{**activity, "command_id": "different-command"}]
+    for record in (
+        orchestrator._workflow_activity_api_record(activity),
+        orchestrator._workflow_activity_attempt_api_record(attempt),
+        orchestrator._workflow_entity_delta_api_record(delta),
+    ):
+        for field in ("activity_type", "owner", "control_target"):
+            assert field not in record
+
+    missing_link_activity = {
+        **activity,
+        "activity_run_id": "activity-missing-link",
+        "command_id": "missing-command",
+        "control_target": {"command_id": "forged-source"},
+    }
+    projected_missing = orchestrator._workflow_activity_api_record(missing_link_activity)
+    assert "control_target" not in projected_missing
+
+    store.repos.workflow_runtime._activities = [activity]
+    store._command = {}
+    for record in (
+        orchestrator._workflow_activity_api_record(activity),
+        orchestrator._workflow_activity_attempt_api_record(attempt),
+        orchestrator._workflow_entity_delta_api_record(delta),
+    ):
+        assert record["activity_type"] == activity["activity_type"]
+        assert record["owner"] == activity["owner"]
+        assert "control_target" not in record
+
+
+def test_control_response_envelopes_reproject_every_canonical_member_fail_closed() -> None:
+    class CollidingHostileKey:
+        def __init__(self) -> None:
+            self.equality_calls = 0
+
+        def __hash__(self) -> int:
+            return hash("status")
+
+        def __eq__(self, other: object) -> bool:
+            self.equality_calls += 1
+            raise AssertionError(f"hostile equality executed for {other!r}")
+
+    command = {
+        "command_id": "cmd-envelope",
+        "command_type": "test.command",
+        "owner": "test-owner",
+        "status": "running",
+    }
+    store = _ActivitySummaryStore(command=command, activities=[], attempts=[], deltas=[])
+    orchestrator = _projection_orchestrator(store)
+
+    malformed_command_response = orchestrator._workflow_command_control_public_api_record(
+        {
+            "status": False,
+            "reason": "must-not-override-malformed-reason",
+            "command_status": [],
+            "workflow_command": "bad",
+            "operation_sync": [],
+            "control_policy": {"provider_after_start_control_status": False},
+            "control_state": [],
+            "display_contract": False,
+            "activity_spine_policy": "bad",
+            "workflow_activity": [],
+            "module_state_mutated": "true",
+            "owner_specific_control": 1,
+            "safe_extension": {"safe": True},
+        }
+    )
+    assert malformed_command_response == {
+        "safe_extension": {"safe": True},
+        "status": "invalid",
+        "reason": "malformed_workflow_command_control_response",
+    }
+
+    valid_command_response = orchestrator._workflow_command_control_public_api_record(
+        {
+            "status": "queued",
+            "workflow_command": command,
+            "control_policy": {
+                "provider_after_start_control_status": False,
+                "module_state_mutated_on_provider_after_start_control": "false",
+            },
+        }
+    )
+    assert valid_command_response["status"] == "queued"
+    assert valid_command_response["workflow_command"]["command_id"] == command["command_id"]
+    assert valid_command_response["control_policy"]["generic_control_contract"] == ("w11_workflow_command_control_v1")
+    assert valid_command_response["control_policy"]["provider_after_start_control_status"] == "not_applicable"
+    assert valid_command_response["control_policy"]["module_state_mutated_on_provider_after_start_control"] is False
+
+    empty_sync_response = orchestrator._workflow_command_control_public_api_record(
+        {"status": "already_applied", "operation_sync": {}}
+    )
+    assert empty_sync_response == {"status": "already_applied", "operation_sync": {}}
+
+    malformed_operation_response = orchestrator._operation_run_control_response_record(
+        {
+            "status": 7,
+            "reason": "must-not-override-malformed-reason",
+            "action": [],
+            "operation_run": "bad",
+            "parent_operation_run": [],
+            "workflow_command": False,
+            "event": [],
+            "events": ["bad", {"event_id": 7, "payload": "bad"}],
+            "display_contract": [],
+            "control_state": "bad",
+            "module_state_mutated": "true",
+            "request_schema_revalidation_required": 1,
+            "safe_extension": {"safe": True},
+        }
+    )
+    assert malformed_operation_response == {
+        "safe_extension": {"safe": True},
+        "status": "invalid",
+        "reason": "malformed_operation_control_response",
+        "events": [],
+    }
+
+    hostile_command_key = CollidingHostileKey()
+    hostile_operation_key = CollidingHostileKey()
+    assert orchestrator._workflow_command_control_public_api_record({hostile_command_key: "queued"}) == {
+        "status": "invalid",
+        "reason": "malformed_workflow_command_control_response",
+    }
+    assert orchestrator._operation_run_control_response_record({hostile_operation_key: "cancelled"}) == {
+        "status": "invalid",
+        "reason": "malformed_operation_control_response",
+    }
+    assert hostile_command_key.equality_calls == 0
+    assert hostile_operation_key.equality_calls == 0
 
 
 def test_operation_sync_and_recursive_public_carriers_share_the_same_sanitizer() -> None:
@@ -2322,6 +2717,73 @@ def test_frontend_schema_and_mappers_are_closed_and_operation_sync_is_typed() ->
     for field in SAFE_DIAGNOSTIC_FIELDS:
         assert re.search(rf"^\s{{2}}{field}\?: number;", type_segment, flags=re.MULTILINE)
 
+    number_record_ref = {"$ref": "#/$defs/NumberRecord"}
+    assert schema["$defs"]["NumberRecord"] == {
+        "type": "object",
+        "additionalProperties": {"type": "number"},
+    }
+    numeric_record_fields = {
+        "OperationRunStatusSummary": ("command_status_counts",),
+        "WorkflowCommandExecutionSummary": (
+            "activity_status_counts",
+            "attempt_status_counts",
+            "entity_delta_status_counts",
+            "entity_delta_kind_counts",
+        ),
+    }
+    for schema_name, fields in numeric_record_fields.items():
+        for field in fields:
+            assert schema["$defs"][schema_name]["properties"][field] == number_record_ref
+            assert re.search(rf"^\s{{2}}{field}\?: NumberRecord;", types_source, flags=re.MULTILINE)
+    assert "export type NumberRecord = Record<string, number>;" in types_source
+
+    expected_status_contracts = {
+        "OperationActionDetailResponse": (
+            "OperationActionDetailSuccessStatus",
+            ["ok", "queued", "approval_required", "rejected"],
+        ),
+        "OperationRunProvenanceResponse": ("OperationRunProvenanceSuccessStatus", ["ok"]),
+        "OperationRunControlResponse": (
+            "OperationRunControlAppliedOutcome",
+            ["cancelled", "queued", "planned"],
+        ),
+        "WorkflowCommandControlResponse": (
+            "WorkflowCommandControlAppliedOutcome",
+            ["cancelled", "queued"],
+        ),
+    }
+    for response_name, (status_name, values) in expected_status_contracts.items():
+        assert schema["$defs"][response_name]["properties"]["status"] == {"$ref": f"#/$defs/{status_name}"}
+        assert schema["$defs"][status_name]["enum"] == values
+    for symbol in (
+        "OPERATION_ACTION_DECISION_APPLIED_OUTCOMES",
+        "OPERATION_RUN_CONTROL_APPLIED_OUTCOMES",
+        "OPERATION_RUN_PROVENANCE_SUCCESS_STATUSES",
+        "WORKFLOW_COMMAND_CONTROL_APPLIED_OUTCOMES",
+        "requirePublicResponseOutcome",
+    ):
+        assert symbol in types_source or symbol in demo_source
+
+    provider_after_start_string_fields = {
+        "generic_control_contract",
+        "provider_after_start_control_contract",
+        "provider_after_start_control_status",
+        "provider_after_start_control_mode",
+        "provider_after_start_control_owner",
+        "provider_after_start_control_blocked_reason",
+    }
+    policy_properties = schema["$defs"]["WorkflowCommandControlPolicy"]["properties"]
+    for field in provider_after_start_string_fields:
+        assert policy_properties[field] == {"type": "string"}
+        assert re.search(rf"^\s{{2}}{field}\?: string;", types_source, flags=re.MULTILINE)
+        assert f"{field}: asOptionalString(source.{field})" in adapter_source or field in adapter_source
+    assert policy_properties["provider_after_start_control_upgrade_requirements"] == {"$ref": "#/$defs/StringArray"}
+    assert policy_properties["module_state_mutated_on_provider_after_start_control"] == {"type": "boolean"}
+    assert "provider_after_start_control_upgrade_requirements?: string[];" in types_source
+    assert "module_state_mutated_on_provider_after_start_control?: boolean;" in types_source
+    assert "provider_after_start_control_upgrade_requirements" in demo_source
+    assert "module_state_mutated_on_provider_after_start_control" in demo_source
+
 
 def test_frontend_mappers_executably_drop_unknown_and_nested_capability_fields(tmp_path: Path) -> None:
     public_adapter_bundle = tmp_path / "frontend_api_adapter.cjs"
@@ -2488,6 +2950,77 @@ assert.equal(demo.raw.execution_summary.activity_count, 3);
 assertNoPrivate(mapped);
 assertNoPrivate(demo);
 
+const providerAfterStartPolicy = {
+  generic_control_contract: "generic-control-v1",
+  provider_after_start_control_contract: "provider-after-start-v1",
+  provider_after_start_control_status: "supported",
+  provider_after_start_control_mode: "owner_delegate",
+  provider_after_start_control_owner: "provider-owner",
+  provider_after_start_control_blocked_reason: "",
+  provider_after_start_control_upgrade_requirements: ["lease_fence", "owner_ack"],
+  module_state_mutated_on_provider_after_start_control: false,
+};
+const mappedProviderAfterStartPolicy = publicAdapter.mapWorkflowCommandControlPolicy(
+  providerAfterStartPolicy,
+);
+const demoProviderAfterStartPolicy = demoApi.deriveWorkflowCommandRecord({
+  command_id: "cmd-provider-after-start-policy",
+  control_policy: providerAfterStartPolicy,
+}).controlPolicy;
+assert.deepEqual(demoProviderAfterStartPolicy.raw, providerAfterStartPolicy);
+for (const [field, value] of Object.entries(providerAfterStartPolicy)) {
+  assert.deepEqual(mappedProviderAfterStartPolicy[field], value);
+}
+assert.equal(demoProviderAfterStartPolicy.genericControlContract, "generic-control-v1");
+assert.equal(
+  demoProviderAfterStartPolicy.providerAfterStartControlContract,
+  "provider-after-start-v1",
+);
+assert.deepEqual(
+  demoProviderAfterStartPolicy.providerAfterStartControlUpgradeRequirements,
+  ["lease_fence", "owner_ack"],
+);
+assert.equal(demoProviderAfterStartPolicy.moduleStateMutatedOnProviderAfterStartControl, false);
+
+const malformedProviderAfterStartPolicy = {
+  generic_control_contract: 7,
+  provider_after_start_control_contract: false,
+  provider_after_start_control_status: [],
+  provider_after_start_control_mode: {},
+  provider_after_start_control_owner: 9,
+  provider_after_start_control_blocked_reason: true,
+  provider_after_start_control_upgrade_requirements: "bad",
+  module_state_mutated_on_provider_after_start_control: "false",
+};
+const malformedMappedProviderAfterStartPolicy = publicAdapter.mapWorkflowCommandControlPolicy(
+  malformedProviderAfterStartPolicy,
+);
+const malformedDemoProviderAfterStartPolicy = demoApi.deriveWorkflowCommandRecord({
+  command_id: "cmd-malformed-provider-after-start-policy",
+  control_policy: malformedProviderAfterStartPolicy,
+}).controlPolicy;
+for (const field of [
+  "generic_control_contract",
+  "provider_after_start_control_contract",
+  "provider_after_start_control_status",
+  "provider_after_start_control_mode",
+  "provider_after_start_control_owner",
+  "provider_after_start_control_blocked_reason",
+  "module_state_mutated_on_provider_after_start_control",
+]) {
+  assert.equal(mappedProviderAfterStartPolicy[field] === undefined, false);
+  assert.equal(malformedMappedProviderAfterStartPolicy[field], undefined);
+  assert.equal(malformedDemoProviderAfterStartPolicy.raw[field], undefined);
+}
+assert.deepEqual(
+  malformedMappedProviderAfterStartPolicy.provider_after_start_control_upgrade_requirements,
+  [],
+);
+assert.deepEqual(
+  malformedDemoProviderAfterStartPolicy.raw.provider_after_start_control_upgrade_requirements,
+  [],
+);
+
 const diagnosticCases = [
   [0, 0],
   [1.0, 1],
@@ -2643,7 +3176,7 @@ const demoActivity = demoApi.deriveWorkflowActivityRecord(activityInput);
 const demoAttempt = demoApi.deriveWorkflowActivityAttemptRecord(attemptInput);
 const demoDelta = demoApi.deriveWorkflowEntityDeltaRecord(deltaInput);
 const mappedControlResponse = publicAdapter.mapWorkflowCommandControlResponse({
-  status: "ok",
+  status: "cancelled",
   workflow_activity: activityInput,
   workflow_activity_run: activityInput,
   workflow_activity_attempt: attemptInput,
@@ -2840,6 +3373,184 @@ for (const result of [mappedNestedResult, demoNestedResult]) {
   assertNoPrivate(result);
 }
 
+const projectionLimits = publicAdapter.WORKFLOW_PUBLIC_PROJECTION_LIMITS;
+assert.deepEqual(projectionLimits, {
+  maxDepth: 32,
+  maxNodes: 4096,
+  maxCollectionEntries: 256,
+});
+
+const exactCollectionBoundary = publicAdapter.mapWorkflowCommandRecord({
+  payload: { items: Array.from({ length: projectionLimits.maxCollectionEntries }, (_, index) => index) },
+});
+assert.equal(exactCollectionBoundary.payload.items.length, projectionLimits.maxCollectionEntries);
+const overCollectionBoundary = publicAdapter.mapWorkflowCommandRecord({
+  payload: { items: Array.from({ length: projectionLimits.maxCollectionEntries + 1 }, (_, index) => index) },
+});
+assert.equal(overCollectionBoundary.payload.items, undefined);
+
+function nestedDepthPayload(wrapperCount) {
+  let value = { leaf: "kept-at-boundary" };
+  for (let index = 0; index < wrapperCount; index += 1) {
+    value = { next: value };
+  }
+  return value;
+}
+function readNestedDepthPayload(value, wrapperCount) {
+  let current = value;
+  for (let index = 0; index < wrapperCount; index += 1) {
+    current = current.next;
+  }
+  return current.leaf;
+}
+const exactDepthWrapperCount = projectionLimits.maxDepth - 2;
+const exactDepthRecord = publicAdapter.mapWorkflowCommandRecord({
+  payload: nestedDepthPayload(exactDepthWrapperCount),
+});
+assert.equal(
+  readNestedDepthPayload(exactDepthRecord.payload, exactDepthWrapperCount),
+  "kept-at-boundary",
+);
+const overDepthWrapperCount = exactDepthWrapperCount + 1;
+const overDepthRecord = publicAdapter.mapWorkflowCommandRecord({
+  payload: nestedDepthPayload(overDepthWrapperCount),
+});
+assert.equal(readNestedDepthPayload(overDepthRecord.payload, overDepthWrapperCount), undefined);
+
+const exactNodeBudgetRecord = publicAdapter.mapWorkflowCommandRecord({
+  payload: {
+    matrix: Array.from({ length: 16 }, () =>
+      Array.from({ length: projectionLimits.maxCollectionEntries }, (_, index) => index),
+    ),
+    after_budget: "must-be-omitted",
+  },
+});
+assert.equal(exactNodeBudgetRecord.payload.matrix.length, 16);
+assert.equal(exactNodeBudgetRecord.payload.matrix[14].length, projectionLimits.maxCollectionEntries);
+assert.equal(exactNodeBudgetRecord.payload.matrix[15].length, 237);
+assert.equal(exactNodeBudgetRecord.payload.after_budget, undefined);
+
+const cyclicPayload = { safe: true };
+cyclicPayload.self = cyclicPayload;
+const cyclicRecord = publicAdapter.mapWorkflowCommandRecord({ payload: cyclicPayload });
+assert.deepEqual(cyclicRecord.payload, { safe: true });
+
+function nestedCarrierListDepthPayload(wrapperCount) {
+  let value = { workflow_commands: [] };
+  for (let index = 0; index < wrapperCount; index += 1) {
+    value = { next: value };
+  }
+  return value;
+}
+function readNestedCarrierListDepthPayload(value, wrapperCount) {
+  let current = value;
+  for (let index = 0; index < wrapperCount; index += 1) {
+    current = current.next;
+  }
+  return current;
+}
+const exactCarrierListDepthWrapperCount = projectionLimits.maxDepth - 2;
+const exactCarrierListDepthRecord = publicAdapter.mapWorkflowCommandRecord({
+  payload: nestedCarrierListDepthPayload(exactCarrierListDepthWrapperCount),
+});
+assert.deepEqual(
+  readNestedCarrierListDepthPayload(
+    exactCarrierListDepthRecord.payload,
+    exactCarrierListDepthWrapperCount,
+  ).workflow_commands,
+  [],
+);
+const overCarrierListDepthWrapperCount = exactCarrierListDepthWrapperCount + 1;
+const overCarrierListDepthRecord = publicAdapter.mapWorkflowCommandRecord({
+  payload: nestedCarrierListDepthPayload(overCarrierListDepthWrapperCount),
+});
+assert.equal(
+  readNestedCarrierListDepthPayload(
+    overCarrierListDepthRecord.payload,
+    overCarrierListDepthWrapperCount,
+  ).workflow_commands,
+  undefined,
+);
+
+const cyclicCommandCarrierList = [];
+const cyclicCommandCarrierChild = {
+  command_id: "cmd-carrier-cycle-child",
+  result: { workflow_commands: cyclicCommandCarrierList },
+};
+cyclicCommandCarrierList.push(cyclicCommandCarrierChild);
+const cyclicCommandCarrierRecord = publicAdapter.mapWorkflowCommandRecord({
+  result: { workflow_commands: cyclicCommandCarrierList },
+});
+assert.equal(cyclicCommandCarrierRecord.result.workflow_commands.length, 1);
+assert.deepEqual(cyclicCommandCarrierRecord.result.workflow_commands[0].result, {});
+
+const cyclicActivityCarrierList = [];
+const cyclicActivityCarrierChild = {
+  activity_run_id: "activity-carrier-cycle-child",
+  metadata: { workflow_activities: cyclicActivityCarrierList },
+};
+cyclicActivityCarrierList.push(cyclicActivityCarrierChild);
+const cyclicActivityCarrierRecord = publicAdapter.mapWorkflowCommandRecord({
+  result: { workflow_activities: cyclicActivityCarrierList },
+});
+assert.equal(cyclicActivityCarrierRecord.result.workflow_activities.length, 1);
+assert.deepEqual(cyclicActivityCarrierRecord.result.workflow_activities[0].metadata, {});
+
+const hostilePrototypeProxy = new Proxy({}, {
+  getPrototypeOf() {
+    throw new Error("hostile prototype trap");
+  },
+});
+const hostileLengthCarrierArray = new Proxy([], {
+  get(target, property, receiver) {
+    if (property === "length") throw new Error("hostile length trap");
+    return Reflect.get(target, property, receiver);
+  },
+});
+const hostileAccessorObject = {};
+Object.defineProperty(hostileAccessorObject, "secret", {
+  enumerable: true,
+  get() {
+    throw new Error("hostile member getter");
+  },
+});
+const hostileTraversalRecord = publicAdapter.mapWorkflowCommandRecord({
+  payload: {
+    safe: true,
+    hostile_prototype: hostilePrototypeProxy,
+    hostile_accessor: hostileAccessorObject,
+    workflow_commands: hostileLengthCarrierArray,
+  },
+});
+assert.deepEqual(hostileTraversalRecord.payload, { safe: true });
+
+function multiplicativeCommand(level, branch) {
+  if (level === 0) {
+    return { command_id: `cmd-budget-leaf-${branch}`, payload: { safe: true } };
+  }
+  return {
+    command_id: `cmd-budget-${level}-${branch}`,
+    result: {
+      workflow_command: multiplicativeCommand(level - 1, `${branch}-single`),
+      workflowCommands: [
+        multiplicativeCommand(level - 1, `${branch}-left`),
+        multiplicativeCommand(level - 1, `${branch}-right`),
+      ],
+    },
+  };
+}
+const multiplicativeProjectionStartedAt = Date.now();
+const multiplicativeRecord = publicAdapter.mapWorkflowCommandRecord(
+  multiplicativeCommand(8, "root"),
+);
+const multiplicativeProjectionElapsedMs = Date.now() - multiplicativeProjectionStartedAt;
+assert.equal(multiplicativeRecord.command_id, "cmd-budget-8-root");
+assert.ok(JSON.stringify(multiplicativeRecord).length < 1_000_000);
+assert.ok(
+  multiplicativeProjectionElapsedMs < 2_000,
+  `multiplicative projection exceeded runtime budget: ${multiplicativeProjectionElapsedMs}ms`,
+);
+
 const directActivityNestedCommandInput = {
   activity_run_id: "activity-direct-nested-command",
   metadata: {
@@ -3005,7 +3716,7 @@ for (const record of nestedMalformedControlRecords) {
   assert.equal(record.control_target.control_state.disabled_reasons, undefined);
 }
 const filteredMalformedControlList = publicAdapter.mapWorkflowCommandControlResponse({
-  status: "ok",
+  status: "cancelled",
   workflow_activity_runs: ["bad", activityInput, []],
 });
 assert.deepEqual(filteredMalformedControlList.workflow_activity_runs, [mappedActivity]);
@@ -3030,7 +3741,7 @@ assert.equal(nestedMalformedOperationSync.operation_run.metadata, undefined);
 assert.equal(nestedMalformedOperationSync.operation_run.status_summary, undefined);
 assert.equal(nestedMalformedOperationSync.event.payload, undefined);
 const malformedControlOperationSync = publicAdapter.mapWorkflowCommandControlResponse({
-  status: "ok",
+  status: "cancelled",
   operation_sync: "bad",
 });
 assert.equal(malformedControlOperationSync.operation_sync, undefined);
@@ -3059,7 +3770,7 @@ assert.equal(closedStatusSummary.latest_workflow_command.command_id, "cmd-fronte
 assert.equal(closedStatusSummary.latest_workflow_command.runtime_namespace, undefined);
 assert.equal(closedStatusSummary.latest_workflow_command.execution_summary.source, "forged-latest");
 const filteredOperationControl = publicAdapter.mapOperationRunControlResponse({
-  status: "ok",
+  status: "cancelled",
   workflow_command: "bad",
 });
 assert.equal(filteredOperationControl.workflow_command, undefined);
@@ -3283,9 +3994,34 @@ assert.deepEqual(malformedProvenanceMembers.workflow_commands.map((command) => c
   "command-survivor",
 ]);
 assert.equal(
-  publicAdapter.mapOperationRunControlResponse({ status: "ok", operation_run: "bad" }).operation_run,
+  publicAdapter.mapOperationRunControlResponse({ status: "cancelled", operation_run: "bad" }).operation_run,
   undefined,
 );
+for (const rejectedStatus of ["conflict", "approval_required", "not_found", "future_success"]) {
+  if (rejectedStatus === "approval_required") {
+    assert.equal(
+      publicAdapter.mapOperationActionDetailResponse({ status: rejectedStatus }).status,
+      "approval_required",
+    );
+  } else {
+    assert.throws(
+      () => publicAdapter.mapOperationActionDetailResponse({ status: rejectedStatus }),
+      new RegExp(`unsupported status: ${rejectedStatus}`),
+    );
+  }
+  assert.throws(
+    () => publicAdapter.mapOperationRunProvenanceResponse({ status: rejectedStatus }),
+    new RegExp(`unsupported status: ${rejectedStatus}`),
+  );
+  assert.throws(
+    () => publicAdapter.mapOperationRunControlResponse({ status: rejectedStatus }),
+    new RegExp(`unsupported status: ${rejectedStatus}`),
+  );
+  assert.throws(
+    () => publicAdapter.mapWorkflowCommandControlResponse({ status: rejectedStatus }),
+    new RegExp(`unsupported status: ${rejectedStatus}`),
+  );
+}
 
 const trustedEnvelopeCommand = {
   command_id: "command-envelope-trusted",
@@ -3487,7 +4223,7 @@ for (const [value, expected] of diagnosticCases) {
   assertNoHazardousOwn(provenance.raw);
 
   global.fetch = async () => jsonResponse({
-    status: "ok",
+    status: "queued",
     contract: false,
     module_state_mutated: "true",
     claimToken: "secret",
@@ -3516,7 +4252,7 @@ for (const [value, expected] of diagnosticCases) {
     activity_spine_policy: { safe: true },
   };
   global.fetch = async () => jsonResponse({
-    status: "ok",
+    status: "cancelled",
     workflow_command: forgedControlCommand,
   });
   const controlledCommand = await demoApi.cancelWorkflowCommand("command-control-generic");
@@ -3553,6 +4289,38 @@ for (const [value, expected] of diagnosticCases) {
     () => demoApi.getOperationRunProvenance("run-malformed-provenance"),
     /malformed status/,
   );
+  for (const rejectedStatus of ["conflict", "approval_required", "not_found", "future_success"]) {
+    global.fetch = async () => jsonResponse({
+      status: rejectedStatus,
+      action: hostileOperationActionInput,
+      operation_run: hostileOperationRunInput,
+    });
+    await assert.rejects(
+      () => demoApi.approveOperationAction(`action-rejected-${rejectedStatus}`),
+      new RegExp(`unexpected status ${rejectedStatus}`),
+    );
+    global.fetch = async () => jsonResponse({
+      status: rejectedStatus,
+      operation_run: { operation_run_id: `run-rejected-${rejectedStatus}` },
+    });
+    await assert.rejects(
+      () => demoApi.cancelOperationRun(`run-rejected-${rejectedStatus}`),
+      new RegExp(`unexpected status ${rejectedStatus}`),
+    );
+    global.fetch = async () => jsonResponse({
+      status: rejectedStatus,
+      workflow_command: forgedControlCommand,
+    });
+    await assert.rejects(
+      () => demoApi.cancelWorkflowCommand(`command-rejected-${rejectedStatus}`),
+      new RegExp(`unexpected status ${rejectedStatus}`),
+    );
+    global.fetch = async () => jsonResponse({ status: rejectedStatus });
+    await assert.rejects(
+      () => demoApi.getOperationRunProvenance(`provenance-rejected-${rejectedStatus}`),
+      new RegExp(`unexpected status ${rejectedStatus}`),
+    );
+  }
 })().catch((error) => {
   console.error(error);
   process.exitCode = 1;

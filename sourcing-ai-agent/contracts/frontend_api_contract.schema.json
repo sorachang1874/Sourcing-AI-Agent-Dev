@@ -15,6 +15,26 @@
         "type": "string"
       }
     },
+    "NumberRecord": {
+      "type": "object",
+      "additionalProperties": { "type": "number" }
+    },
+    "OperationActionDetailSuccessStatus": {
+      "type": "string",
+      "enum": ["ok", "queued", "approval_required", "rejected"]
+    },
+    "OperationRunProvenanceSuccessStatus": {
+      "type": "string",
+      "enum": ["ok"]
+    },
+    "OperationRunControlAppliedOutcome": {
+      "type": "string",
+      "enum": ["cancelled", "queued", "planned"]
+    },
+    "WorkflowCommandControlAppliedOutcome": {
+      "type": "string",
+      "enum": ["cancelled", "queued"]
+    },
     "ProfileFetchProgress": {
       "type": "object",
       "additionalProperties": true,
@@ -969,6 +989,14 @@
         "schema_version": { "type": "string" },
         "command_type": { "type": "string" },
         "owner": { "type": "string" },
+        "generic_control_contract": { "type": "string" },
+        "provider_after_start_control_contract": { "type": "string" },
+        "provider_after_start_control_status": { "type": "string" },
+        "provider_after_start_control_mode": { "type": "string" },
+        "provider_after_start_control_owner": { "type": "string" },
+        "provider_after_start_control_blocked_reason": { "type": "string" },
+        "provider_after_start_control_upgrade_requirements": { "$ref": "#/$defs/StringArray" },
+        "module_state_mutated_on_provider_after_start_control": { "type": "boolean" },
         "running_control_category": { "type": "string" },
         "running_control_categories": { "$ref": "#/$defs/StringArray" },
         "running_control_maturity": { "type": "string" },
@@ -1264,7 +1292,7 @@
         "operation_phase": { "type": "string" },
         "workflow_command_count": { "type": "number" },
         "operation_event_count": { "type": "number" },
-        "command_status_counts": { "$ref": "#/$defs/JsonObject" },
+        "command_status_counts": { "$ref": "#/$defs/NumberRecord" },
         "latest_event_type": { "type": "string" },
         "latest_event": { "$ref": "#/$defs/OperationEventRecord" },
         "latest_workflow_command": { "$ref": "#/$defs/WorkflowCommandRecord" }
@@ -1288,7 +1316,7 @@
       "additionalProperties": true,
       "required": ["status"],
       "properties": {
-        "status": { "type": "string" },
+        "status": { "$ref": "#/$defs/OperationActionDetailSuccessStatus" },
         "contract": { "type": "string" },
         "action": { "$ref": "#/$defs/OperationActionRecord" },
         "operation_run": { "$ref": "#/$defs/OperationRunRecord" },
@@ -1330,7 +1358,7 @@
       "additionalProperties": true,
       "required": ["status"],
       "properties": {
-        "status": { "type": "string" },
+        "status": { "$ref": "#/$defs/OperationRunProvenanceSuccessStatus" },
         "contract": { "type": "string" },
         "action": { "$ref": "#/$defs/OperationActionRecord" },
         "operation_run": { "$ref": "#/$defs/OperationRunRecord" },
@@ -1358,7 +1386,7 @@
       "additionalProperties": true,
       "required": ["status"],
       "properties": {
-        "status": { "type": "string" },
+        "status": { "$ref": "#/$defs/OperationRunControlAppliedOutcome" },
         "reason": { "type": "string" },
         "contract": { "type": "string" },
         "action": { "$ref": "#/$defs/OperationActionRecord" },
@@ -1399,10 +1427,10 @@
         "activity_count": { "type": "number" },
         "attempt_count": { "type": "number" },
         "entity_delta_count": { "type": "number" },
-        "activity_status_counts": { "$ref": "#/$defs/JsonObject" },
-        "attempt_status_counts": { "$ref": "#/$defs/JsonObject" },
-        "entity_delta_status_counts": { "$ref": "#/$defs/JsonObject" },
-        "entity_delta_kind_counts": { "$ref": "#/$defs/JsonObject" },
+        "activity_status_counts": { "$ref": "#/$defs/NumberRecord" },
+        "attempt_status_counts": { "$ref": "#/$defs/NumberRecord" },
+        "entity_delta_status_counts": { "$ref": "#/$defs/NumberRecord" },
+        "entity_delta_kind_counts": { "$ref": "#/$defs/NumberRecord" },
         "latest_effect_status": { "type": "string" },
         "latest_activity": { "$ref": "#/$defs/WorkflowActivityRecord" },
         "latest_attempt": { "$ref": "#/$defs/WorkflowActivityAttemptRecord" },
@@ -1514,7 +1542,7 @@
       "additionalProperties": true,
       "required": ["status"],
       "properties": {
-        "status": { "type": "string" },
+        "status": { "$ref": "#/$defs/WorkflowCommandControlAppliedOutcome" },
         "reason": { "type": "string" },
         "command_status": { "type": "string" },
         "workflow_command": { "$ref": "#/$defs/WorkflowCommandRecord" },

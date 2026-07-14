@@ -823,6 +823,69 @@ RUNNING_COMMAND_REQUIRES_OWNER_SPECIFIC_CANCEL_REASON = "running_command_require
 RUNNING_COMMAND_REQUIRES_OWNER_SPECIFIC_RESUME_REASON = "running_command_requires_owner_specific_resume"
 WORKFLOW_COMMAND_ACTIVITY_SPINE_CONTRACT = "w11_workflow_command_activity_spine_policy_v1"
 
+# Canonical public value-family registry for ``WorkflowCommandControlPolicy.to_record``.
+# Projection/schema/frontend mirrors must match these producer-owned families rather
+# than treating a newly produced field as an untyped extension.
+WORKFLOW_COMMAND_CONTROL_POLICY_STRING_ARRAY_FIELDS = frozenset(
+    {
+        "running_control_categories",
+        "generic_cancel_statuses",
+        "generic_retry_statuses",
+        "generic_resume_statuses",
+        "running_cancel_statuses",
+        "running_cancel_prerequisites",
+        "running_cancel_upgrade_requirements",
+        "running_resume_statuses",
+        "running_resume_prerequisites",
+        "running_resume_upgrade_requirements",
+        "provider_after_start_control_upgrade_requirements",
+    }
+)
+WORKFLOW_COMMAND_CONTROL_POLICY_BOOLEAN_FIELDS = frozenset(
+    {
+        "running_cancel_supported",
+        "module_state_mutated_on_running_cancel",
+        "running_resume_supported",
+        "module_state_mutated_on_running_resume",
+        "module_state_mutated_on_provider_after_start_control",
+    }
+)
+WORKFLOW_COMMAND_CONTROL_POLICY_STRING_FIELDS = frozenset(
+    {
+        "schema_version",
+        "command_type",
+        "owner",
+        "generic_control_contract",
+        "running_control_category",
+        "running_control_maturity",
+        "running_control_gap_status",
+        "running_control_surface",
+        "running_cancel_owner",
+        "running_cancel_delegate",
+        "running_cancel_blocked_reason",
+        "running_cancel_contract",
+        "unsupported_running_cancel_reason",
+        "running_resume_owner",
+        "running_resume_delegate",
+        "running_resume_blocked_reason",
+        "running_resume_contract",
+        "unsupported_running_resume_reason",
+        "provider_after_start_control_contract",
+        "provider_after_start_control_status",
+        "provider_after_start_control_mode",
+        "provider_after_start_control_owner",
+        "provider_after_start_control_blocked_reason",
+        "control_source_of_truth",
+        "agent_callable_surface",
+        "fallback_status",
+    }
+)
+WORKFLOW_COMMAND_CONTROL_POLICY_PUBLIC_FIELDS = (
+    WORKFLOW_COMMAND_CONTROL_POLICY_STRING_FIELDS
+    | WORKFLOW_COMMAND_CONTROL_POLICY_STRING_ARRAY_FIELDS
+    | WORKFLOW_COMMAND_CONTROL_POLICY_BOOLEAN_FIELDS
+)
+
 
 @dataclass(frozen=True)
 class WorkflowCommandControlPolicy:

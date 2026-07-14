@@ -12,9 +12,13 @@
 > structured Activity refs, `4 singular + 3 served plural` control carriers/derived fields, `8 canonical + normalized aliases` recursive
 > Activity carrier keys, nested workflow-command/operation-sync/direct-Activity closure, hazardous-key rejection,
 > typed malformed-input parity, generic-derived provenance stripping, and compact-observation closure,
-> mathematical safe-integer canonicalization, and lazy-kernel compatibility; those are not
+> and mathematical safe-integer canonicalization; those are not
 > retroactive findings from the invalid artifact and are not formal review evidence. D3c1a final candidate author
-> evidence is recorded in the fixed-forward document; fresh pinned non-author review remains pending;
+> evidence for commit `4cfd1916da8bd98483d1ecfdba1f66639b122da9` is recorded in the fixed-forward document. Its
+> later `20260714T215839Z_*` pinned artifact is itself invalid/advisory because
+> `causal_binding.final_response_item_exact=false`; its substantive text is not formal `NO-GO`. Findings #1/#2/#4-#11
+> are fixed-forwarded in the current follow-up, including replacement of lazy repair with constructor-only
+> `CommandKernel` ownership; #3 remains `R-019`, and fresh validation/review remain pending;
 > this document is retained as the original implementation baseline, not as a current formal verdict.
 
 ## 1. Outcome and impact
@@ -146,6 +150,11 @@ causally bind active settings, exact prompt, final output, and the single comple
 invalid formal evidence: it is neither formal `NO-GO` nor `GO`. Its concrete findings remain direct advisory evidence
 and must be verified/fixed forward before Live/W6/manual/signoff; pending review still does not freeze unrelated
 non-live batches.
+
+The later D3c1a pinned attempt `20260714T215839Z_*` also completed a substantive review but failed the gate at
+`causal_binding.final_response_item_exact=false`. Its printed `NO-GO` is therefore advisory only, not a formal verdict.
+The current D3c1a follow-up records fixed-forward mechanisms for #1/#2/#4-#11; #3 is the still-open `R-019` residual.
+Fresh validation and a fresh scope-matched review are still required for that follow-up.
 
 ## 7. Explicit non-closure
 

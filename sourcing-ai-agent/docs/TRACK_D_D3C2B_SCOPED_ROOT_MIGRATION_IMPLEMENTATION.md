@@ -3,7 +3,8 @@
 > Status: implementation candidate; non-live only. This batch installs only the scoped review-session and OperationRun
 > root fragment of D3b Migration A. It does not activate a scoped-session repository or writer, adopt a legacy row,
 > expose the new columns through public/runtime records, mint authority, close R-019/OB gates, or serve an Agent tool.
-> Author validation and a fresh pinned non-author review are required before promotion.
+> Author validation and a valid scope-local pinned `GO` are recorded below. That `GO` approves only this dormant
+> physical fragment; it does not promote full Migration A, close R-019/OB gates, or authorize runtime/live activation.
 
 ## 1. Outcome and bounded impact
 
@@ -71,7 +72,7 @@ the PG adapter, but public/repository records cannot infer strict scope from the
 There is no `create_or_exact_replay_scoped_plan_review_session`, bootstrap lock, scope digest calculation, exact-copy
 OperationRun writer, authority/receipt, claim CAS, dispatch, provider/model call, or served Agent command in this batch.
 
-## 6. Acceptance evidence
+## 6. Acceptance and review evidence
 
 Author evidence on the final candidate tree:
 
@@ -85,7 +86,18 @@ Author evidence on the final candidate tree:
 - global mypy ratchet: unchanged at **81 errors in 4 files** (26 source files checked);
 - `git diff --check`: clean.
 
-These results are author evidence, not a formal review verdict. A fresh pinned non-author review remains pending.
+These test results are author evidence. The implementation is commit
+`0aa253c7d7e5324f5c0021570e2980f358ea3922`. Fresh pinned non-author review artifact
+`runtime/reviews/20260714T222746Z_Track_D_D3c2b_scoped_root_migration_retry_1.md` is a valid scope-local **GO**:
+
+- base/head: `4cfd1916da8bd98483d1ecfdba1f66639b122da9..0aa253c7d7e5324f5c0021570e2980f358ea3922`;
+- exact nine-file pinned scope;
+- scope digest: `7988dd50814ba1c2cc4a3c5efa7ec40ac7eb47b80cbce901ecc8c04a83a92685`;
+- reviewer process exit `0`, no timeout or model reroute, complete single-turn causal binding;
+- findings: `P0/P1/P2/P3=0/0/0/0`, final `GO`.
+
+The earlier `20260714T221531Z_*` attempt is invalid and is not review evidence. The valid `GO` above does not close
+`R-019` or any of the explicit non-closures in §7.
 
 ## 7. Explicit non-closure and next dependency
 

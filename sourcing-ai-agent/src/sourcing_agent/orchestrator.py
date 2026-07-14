@@ -63,8 +63,12 @@ from .candidate_materialization import (
 )
 from .canonicalization import canonicalize_company_records
 from .command_kernel import (
+    WORKFLOW_ACTIVITY_ATTEMPT_TRUSTED_DERIVED_FIELDS,
+    WORKFLOW_ACTIVITY_RUN_TRUSTED_DERIVED_FIELDS,
     WORKFLOW_COMMAND_CONTROL_PUBLIC_ACTIVITY_CARRIER_FIELDS,
+    WORKFLOW_ENTITY_DELTA_TRUSTED_DERIVED_FIELDS,
     CommandKernel,
+    _sanitize_workflow_command_public_mirror,
     is_workflow_activity_public_carrier_field,
 )
 from .company_asset_completion import CompanyAssetCompletionManager
@@ -872,19 +876,6 @@ def _normalize_candidate_level_function_ids(
 
 
 class SourcingOrchestrator:
-    @property
-    def _command_kernel(self) -> CommandKernel:
-        kernel = self.__dict__.get("_command_kernel_instance")
-        if isinstance(kernel, CommandKernel):
-            return kernel
-        kernel = CommandKernel(self.store)
-        self.__dict__["_command_kernel_instance"] = kernel
-        return kernel
-
-    @_command_kernel.setter
-    def _command_kernel(self, kernel: CommandKernel) -> None:
-        self.__dict__["_command_kernel_instance"] = kernel
-
     def __init__(
         self,
         catalog: AssetCatalog,
@@ -44940,18 +44931,42 @@ class SourcingOrchestrator:
     ) -> dict[str, Any]:
         return self._command_kernel._workflow_command_control_response_policy_records(command)
 
-    def _workflow_activity_control_target_record(self, row: dict[str, Any]) -> dict[str, Any]:
+    def _workflow_activity_linked_evidence(
+        self,
+        row: dict[str, Any],
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
         payload = dict(row or {})
+        activity_run_id = str(payload.get("activity_run_id") or "").strip()
+        activity = self.store.repos.workflow_runtime.get_activity_run(activity_run_id) if activity_run_id else {}
+        if not activity:
+            return {}, {}
+        evidence_activity_run_id = str(activity.get("activity_run_id") or "").strip()
+        if not activity_run_id or evidence_activity_run_id != activity_run_id:
+            return {}, {}
         command_id = str(payload.get("command_id") or "").strip()
-        command = self.store.get_workflow_command(command_id) if command_id else {}
-        command_type = str(payload.get("activity_type") or payload.get("command_type") or "").strip()
-        owner = str(payload.get("owner") or "").strip()
-        if command:
-            command_type = str(command.get("command_type") or command_type).strip()
-            owner = str(command.get("owner") or owner).strip()
-        command_status = str((command or {}).get("status") or "").strip()
-        if not command_id and not command_type:
+        evidence_command_id = str(activity.get("command_id") or "").strip()
+        if not command_id or evidence_command_id != command_id:
+            return {}, {}
+        activity_type = str(activity.get("activity_type") or "").strip()
+        owner = str(activity.get("owner") or "").strip()
+        if not activity_type or not owner:
+            return {}, {}
+        command = self.store.get_workflow_command(command_id)
+        if not command:
+            return activity, {}
+        return activity, command
+
+    def _workflow_activity_control_target_record(
+        self,
+        row: dict[str, Any],
+    ) -> dict[str, Any]:
+        activity, command = self._workflow_activity_linked_evidence(row)
+        if not activity or not command:
             return {}
+        command_id = str(command.get("command_id") or "").strip()
+        command_type = str(command.get("command_type") or "").strip()
+        owner = str(command.get("owner") or "").strip()
+        command_status = str(command.get("status") or "").strip()
         return {
             "target_type": "workflow_command",
             "command_id": command_id,
@@ -44980,6 +44995,15 @@ class SourcingOrchestrator:
 
     def _workflow_activity_api_record(self, activity: dict[str, Any]) -> dict[str, Any]:
         record = dict(activity or {})
+        for field in WORKFLOW_ACTIVITY_RUN_TRUSTED_DERIVED_FIELDS:
+            record.pop(field, None)
+        current_activity, current_command = self._workflow_activity_linked_evidence(record)
+        if current_activity:
+            record["activity_type"] = str(current_activity.get("activity_type") or "").strip()
+            record["owner"] = str(current_activity.get("owner") or "").strip()
+        else:
+            record.pop("activity_type", None)
+            record.pop("owner", None)
         control_target = self._workflow_activity_control_target_record(record)
         if control_target:
             record["control_target"] = control_target
@@ -44992,14 +45016,12 @@ class SourcingOrchestrator:
 
     def _workflow_activity_attempt_api_record(self, attempt: dict[str, Any]) -> dict[str, Any]:
         record = dict(attempt or {})
-        command_type = str(record.get("activity_type") or "").strip()
-        if not command_type:
-            activity_run_id = str(record.get("activity_run_id") or "").strip()
-            activity = self.store.repos.workflow_runtime.get_activity_run(activity_run_id) if activity_run_id else {}
-            if activity:
-                command_type = str(activity.get("activity_type") or "").strip()
-                record.setdefault("activity_type", command_type)
-                record.setdefault("owner", str(activity.get("owner") or "").strip())
+        for field in WORKFLOW_ACTIVITY_ATTEMPT_TRUSTED_DERIVED_FIELDS:
+            record.pop(field, None)
+        activity, command = self._workflow_activity_linked_evidence(record)
+        if activity:
+            record["activity_type"] = str(activity.get("activity_type") or "").strip()
+            record["owner"] = str(activity.get("owner") or "").strip()
         control_target = self._workflow_activity_control_target_record(record)
         if control_target:
             record["control_target"] = control_target
@@ -45012,16 +45034,12 @@ class SourcingOrchestrator:
 
     def _workflow_entity_delta_api_record(self, delta: dict[str, Any]) -> dict[str, Any]:
         record = dict(delta or {})
-        activity_run_id = str(record.get("activity_run_id") or "").strip()
-        command_id = str(record.get("command_id") or "").strip()
-        activity = self.store.repos.workflow_runtime.get_activity_run(activity_run_id) if activity_run_id else {}
+        for field in WORKFLOW_ENTITY_DELTA_TRUSTED_DERIVED_FIELDS:
+            record.pop(field, None)
+        activity, command = self._workflow_activity_linked_evidence(record)
         if activity:
-            if not str(record.get("activity_type") or "").strip():
-                record["activity_type"] = str(activity.get("activity_type") or "").strip()
-            if not str(record.get("owner") or "").strip():
-                record["owner"] = str(activity.get("owner") or "").strip()
-            if not command_id:
-                record["command_id"] = str(activity.get("command_id") or "").strip()
+            record["activity_type"] = str(activity.get("activity_type") or "").strip()
+            record["owner"] = str(activity.get("owner") or "").strip()
         control_target = self._workflow_activity_control_target_record(record)
         if control_target:
             record["control_target"] = control_target
@@ -45033,9 +45051,61 @@ class SourcingOrchestrator:
         )
 
     def _workflow_command_control_public_api_record(self, response: dict[str, Any] | None) -> dict[str, Any]:
-        source = dict(response or {})
         kernel = self._command_kernel
+        sanitized_source = _sanitize_workflow_command_public_mirror(response if type(response) is dict else {})
+        source = sanitized_source if type(sanitized_source) is dict else {}
         record = kernel._workflow_command_public_carrier_api_record(source)
+        canonical_fields = {
+            "status",
+            "reason",
+            "command_status",
+            "workflow_command",
+            "operation_sync",
+            "display_contract",
+            "control_policy",
+            "control_state",
+            "activity_spine_policy",
+            "module_state_mutated",
+            "owner_specific_control",
+            "contract",
+            *WORKFLOW_COMMAND_CONTROL_PUBLIC_ACTIVITY_CARRIER_FIELDS,
+        }
+        for field in canonical_fields:
+            record.pop(field, None)
+        status = source.get("status")
+        normalized_status = status.strip() if type(status) is str else ""
+        valid_status = bool(normalized_status)
+        if valid_status:
+            record["status"] = normalized_status
+        else:
+            record["status"] = "invalid"
+            record["reason"] = "malformed_workflow_command_control_response"
+        for field in ("command_status", "contract"):
+            value = source.get(field)
+            if type(value) is str:
+                record[field] = value
+        reason = source.get("reason")
+        if valid_status and type(reason) is str:
+            record["reason"] = reason
+        for field in ("module_state_mutated", "owner_specific_control"):
+            value = source.get(field)
+            if type(value) is bool:
+                record[field] = value
+        command = source.get("workflow_command")
+        projected_command: dict[str, Any] = {}
+        if type(command) is dict:
+            projected_command = self._workflow_command_api_record(command)
+            if projected_command:
+                record["workflow_command"] = projected_command
+        operation_sync = source.get("operation_sync")
+        if type(operation_sync) is dict:
+            projected_sync = kernel._workflow_command_operation_sync_api_record(operation_sync)
+            # An exact empty object is the durable replay owner's explicit
+            # "no synchronization work" sentinel. Keep it while still
+            # dropping malformed non-object canonical members.
+            record["operation_sync"] = projected_sync
+        if projected_command:
+            record.update(kernel._workflow_command_control_response_policy_records(projected_command))
         served_activity_carriers = frozenset(WORKFLOW_COMMAND_CONTROL_PUBLIC_ACTIVITY_CARRIER_FIELDS)
         for field in tuple(record):
             if is_workflow_activity_public_carrier_field(field) and field not in served_activity_carriers:
@@ -45048,7 +45118,7 @@ class SourcingOrchestrator:
         }
         for field, projector in activity_projectors.items():
             value = source.get(field)
-            if isinstance(value, dict):
+            if type(value) is dict:
                 record[field] = projector(value)
             else:
                 record.pop(field, None)
@@ -45059,8 +45129,8 @@ class SourcingOrchestrator:
         }
         for field, projector in activity_list_projectors.items():
             value = source.get(field)
-            if isinstance(value, list):
-                record[field] = [projector(item) for item in value if isinstance(item, dict)]
+            if type(value) is list:
+                record[field] = [projector(item) for item in value if type(item) is dict]
             else:
                 record.pop(field, None)
         return record
@@ -48674,7 +48744,16 @@ class SourcingOrchestrator:
         return self._command_kernel._operation_event_public_api_record(event)
 
     def _operation_event_api_records(self, events: Any) -> list[dict[str, Any]]:
-        return [self._operation_event_api_record(event) for event in list(events or []) if isinstance(event, dict)]
+        if type(events) is not list:
+            return []
+        records: list[dict[str, Any]] = []
+        for event in events:
+            if type(event) is not dict:
+                continue
+            projected = self._operation_event_api_record(event)
+            if projected:
+                records.append(projected)
+        return records
 
     def _operation_run_display_contract_record(self, operation_run: dict[str, Any]) -> dict[str, Any]:
         record = dict(operation_run or {})
@@ -48753,20 +48832,74 @@ class SourcingOrchestrator:
             )
 
     def _operation_run_control_response_record(self, response: dict[str, Any]) -> dict[str, Any]:
-        record = dict(response or {})
-        action = record.get("action")
-        if isinstance(action, dict) and action:
+        sanitized_source = _sanitize_workflow_command_public_mirror(response if type(response) is dict else {})
+        source = sanitized_source if type(sanitized_source) is dict else {}
+        record = self._command_kernel._workflow_command_public_carrier_api_record(source)
+        canonical_fields = {
+            "status",
+            "reason",
+            "actual_status",
+            "contract",
+            "action_id",
+            "operation_run_id",
+            "action",
+            "operation_run",
+            "parent_operation_run",
+            "display_contract",
+            "control_state",
+            "workflow_command",
+            "event",
+            "events",
+            "module_state_mutated",
+            "request_schema_revalidation_required",
+        }
+        for field in canonical_fields:
+            record.pop(field, None)
+        status = source.get("status")
+        normalized_status = status.strip() if type(status) is str else ""
+        valid_status = bool(normalized_status)
+        if valid_status:
+            record["status"] = normalized_status
+        else:
+            record["status"] = "invalid"
+            record["reason"] = "malformed_operation_control_response"
+        for field in ("actual_status", "contract", "action_id", "operation_run_id"):
+            value = source.get(field)
+            if type(value) is str:
+                record[field] = value
+        reason = source.get("reason")
+        if valid_status and type(reason) is str:
+            record["reason"] = reason
+        for field in ("module_state_mutated", "request_schema_revalidation_required"):
+            value = source.get(field)
+            if type(value) is bool:
+                record[field] = value
+        action = source.get("action")
+        if type(action) is dict and action:
             record["action"] = self._operation_action_api_record(action)
         for key in ("operation_run", "parent_operation_run"):
-            value = record.get(key)
-            if isinstance(value, dict) and value:
+            value = source.get(key)
+            if type(value) is dict and value:
                 record[key] = self._operation_run_api_record_with_status_summary(value)
+        command = source.get("workflow_command")
+        if type(command) is dict:
+            projected_command = self._workflow_command_api_record(command)
+            if projected_command:
+                record["workflow_command"] = projected_command
+        event = source.get("event")
+        if type(event) is dict:
+            projected_event = self._operation_event_api_record(event)
+            if projected_event:
+                record["event"] = projected_event
+        events = source.get("events")
+        if type(events) is list:
+            record["events"] = self._operation_event_api_records(events)
         operation_run = record.get("operation_run")
-        if isinstance(operation_run, dict) and operation_run.get("control_state"):
+        if type(operation_run) is dict and operation_run.get("control_state"):
             record["control_state"] = operation_run["control_state"]
-        if isinstance(operation_run, dict) and operation_run.get("display_contract"):
+        if type(operation_run) is dict and operation_run.get("display_contract"):
             record["display_contract"] = operation_run["display_contract"]
-        elif isinstance(record.get("action"), dict) and record["action"].get("display_contract"):
+        elif type(record.get("action")) is dict and record["action"].get("display_contract"):
             record["display_contract"] = record["action"]["display_contract"]
         projected = self._command_kernel._workflow_command_public_carrier_api_record(record)
         for key in ("operation_run", "parent_operation_run"):

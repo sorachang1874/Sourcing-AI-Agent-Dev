@@ -1,11 +1,13 @@
 # Track D D3c1a — Workflow-command public-projection fixed-forward
 
-> Status: implementation candidate; non-live only. This batch fixed-forwards the five direct findings produced by the
-> invalid D3c1 pinned-review artifact. That artifact could not causally bind the effective reviewer settings, exact
-> prompt, final output, and completed turn, so it is neither a formal `NO-GO` nor a formal `GO`. Author evidence on the
-> final stable candidate tree is complete; a fresh pinned non-author review remains pending. Later precommit adversarial author audits
-> also found and fixed the bounded cross-layer gaps recorded in §3. Those gaps are part of the D3c1a candidate, but they
-> are not retroactively counted among the invalid artifact's five findings and are not independent-review evidence.
+> Status: current fixed-forward candidate; non-live only. This batch first fixed-forwarded the five direct findings from
+> the original invalid D3c1 pinned-review artifact. The later D3c1a artifact
+> `runtime/reviews/20260714T215839Z_Track_D_D3c1a_workflow-command_public_projection_fixed-forward.md` is also
+> **invalid/advisory only**: `reviewer_exit_code=0`, but `causal_binding.final_response_item_exact=false`, so its
+> substantive `NO-GO` text is neither a formal `NO-GO` nor a formal `GO`. Its findings #1, #2, and #4-#11 are
+> fixed-forwarded below; #3 is the accepted `R-019` residual and remains open. Section 9 distinguishes the original
+> `4cfd1916da8bd98483d1ecfdba1f66639b122da9` evidence from the current follow-up evidence. Fresh validation is
+> recorded; a new pinned non-author review for the current follow-up remains pending.
 
 ## 1. Outcome and bounded impact
 
@@ -14,11 +16,12 @@ aliases, prevents generic carriers from publishing caller-supplied execution sum
 `BIGINT` diagnostics lossless within the JavaScript number wire contract. Precommit adversarial author audits further
 closed structured Activity artifact refs, cancel/retry/resume Activity carriers, Activity carriers nested recursively
 inside command results, cross-language mathematical-integer canonicalization, typed value-family parity, recursive
-command closure inside direct Activity evidence, hazardous-object-key rejection, and partially constructed
-orchestrator compatibility. Later passes closed the complete Operation action/event/run and registry mirror families,
+command closure inside direct Activity evidence, and hazardous-object-key rejection. Later passes closed the complete Operation action/event/run and registry mirror families,
 typed trusted execution summaries, normalized response-envelope aliases, and demo `raw`/provenance views. The batch
 also replaces path-filtered review checks with explicit route, owner, alias-dataflow, mutation, schema, adapter, and
-demo gates.
+demo gates. The `20260714T215839Z` advisory follow-up adds the exact-built-in bounded copier, one-budget traversal in
+each backend/frontend boundary, owner-separated current-evidence provenance, strict envelope/outcome and
+numeric/policy families, and the constructor-only `CommandKernel` lifecycle described in §3.1.
 
 The canonical backend owners remain deliberately split:
 
@@ -45,7 +48,33 @@ population.
 These are implementation responses to direct advisory evidence. They do not themselves establish an independent-review
 verdict.
 
-## 3. Additional precommit adversarial author-audit fixes
+## 3. Invalid D3c1a advisory and author-audit closure
+
+### 3.1 `20260714T215839Z` invalid-artifact advisory fixed-forward
+
+The runner appended `INVALID_REVIEW_ARTIFACT` because the persisted rollout response and extracted raw output were not
+exactly equal (`final_response_item_exact=false`). The substantive findings are useful adversarial input, but their
+printed final `NO-GO` is not formal evidence. Its advisory inventory was `P0/P1/P2/P3=0/3/7/1`: #3 is the accepted
+`R-019` residual, while #1/#2/#4-#11 are ten new fixed-forward inputs. The current follow-up maps them as follows:
+
+| Advisory finding | Current fixed-forward mechanism |
+| --- | --- |
+| #1 hostile non-string/stateful keys | `_sanitize_workflow_command_public_mirror(...)` accepts only exact built-in JSON scalar/container types and exact built-in string keys before any normalization; subclasses and arbitrary objects are omitted without invoking caller hooks. Final control envelopes perform every canonical lookup against that copied source, so colliding hostile keys cannot trigger or impersonate `status`. |
+| #2 repeated frontend reprojection | The public adapter carries one `WorkflowPublicProjectionTraversal` through command, Activity, policy, summary, and carrier mapping; depth/node/collection budgets, active-container detection, memoization, and closed-container markers ensure a mapped subtree is not recursively projected again. |
+| #4 cycles, hostile containers, and unbounded iteration | The exact-built-in copier and one non-reentrant backend command/Activity carrier traversal share explicit depth, total-node, per-collection, and active-container budgets. Alternating command-to-Activity chains are linear, and cycles, malformed values, or over-budget carrier members are omitted locally without leaving phantom empty carriers. |
+| #5 loose workflow/Operation envelopes | Backend envelope helpers first copy the source into the exact-built-in trust domain, then reproject every canonical command, operation-sync, action, run, parent-run, event, policy/state/display, boolean, and status member through its typed owner. Malformed status uses a non-overridable fail-closed reason; the exact `operation_sync={}` replay sentinel remains distinct from malformed non-objects. Adapter/demo wrappers reject malformed canonical response members instead of repairing them from aliases. |
+| #6 source-fill Activity provenance | Source-supplied derived fields are removed first. Exact current ActivityRun evidence independently owns descriptor `activity_type`/`owner`, including when the linked command is missing; an exact linked current WorkflowCommand independently owns `control_target`. Planned downstream Activity owners need not equal the source-command owner, while missing/mismatched evidence omits only the fields whose owner cannot be proven. |
+| #7 arbitrary nonempty response status | Contract constants define endpoint/action-specific success or applied-outcome sets; adapter and demo require those exact outcomes for action decisions, provenance, Operation controls, and command cancel/retry/resume, so conflict/not-found/approval/unknown values cannot be treated as applied work. |
+| #8 loose count maps | JSON Schema now owns `$defs.NumberRecord`, TypeScript owns `NumberRecord = Record<string, number>`, and the command status plus four execution-summary count maps use that shared numeric-only family end to end. |
+| #9 policy-field inventory drift | `WorkflowCommandControlPolicy.to_record()` and the three producer-owned field-family sets in `durable_runtime.py` are canonical; backend projection, schema, TypeScript, adapter, demo, and mechanical tests mirror those string/string-array/boolean families rather than accepting producer fields as untyped extensions. |
+| #10 lazy kernel repair path | `SourcingOrchestrator.__init__` is the only production construction path for `CommandKernel`; there is no lazy getter or partial-object repair. Characterization fixtures that bypass `__init__` must inject `_command_kernel` explicitly, and missing injection fails visibly. |
+| #11 stale review wording | Track D docs distinguish recorded author evidence from review evidence and name `20260714T215839Z` as invalid/advisory; they do not promote its substantive text to formal `NO-GO` or `GO`. |
+
+Finding #3 remains `R-019`; this projection follow-up does not implement its generation/token/CAS or fixed-UoW runtime
+requirements. The mechanisms above are present in the current fixed-forward tree; fresh author and scope-local
+advisory evidence is recorded in §9. A scope-matched pinned formal verdict remains pending.
+
+### 3.2 Earlier precommit adversarial author-audit fixes
 
 After implementing the five direct findings, adversarial passes in the author session exposed additional bounded
 cross-layer gaps. They are fixed in the same D3c1a candidate because leaving them open would make the advertised public
@@ -65,26 +94,31 @@ seal internally inconsistent:
    removed at the final control boundary unless the raw key is one of those exact seven served canonical keys.
    Generic command/action/event carriers strip those owner-derived fields instead of trusting source JSON; only direct
    Activity endpoints, trusted summaries, and the exact canonical control carriers reattach current-evidence values.
+   ActivityRun descriptor provenance and WorkflowCommand control-target provenance are verified as separate owner
+   domains; a planned downstream Activity may legitimately differ from its source command.
 3. **Recursive command-result carrier closure.** The generic carrier walker recognizes eight canonical snake carrier keys
    plus their normalized camel/hyphen/space variants
    at every dictionary/list depth: `workflow_activity`, `workflow_activity_run`, `workflow_activity_attempt`,
    `workflow_entity_delta`, `workflow_activities`, `workflow_activity_runs`, `workflow_activity_attempts`, and
    `workflow_entity_deltas`. This includes `workflow_command.result.workflow_activity_run`. Nested Activity records
    receive their exact projector instead of only private-alias redaction, so unknown future columns cannot survive
-   through a command result. The frontend mirrors use the same recursive carrier rule.
+   through a command result. Backend and frontend each use one non-reentrant bounded carrier traversal; an already
+   projected subtree is never sent through the other carrier walker again.
 4. **Mathematical safe-integer canonicalization.** JSON and JavaScript do not distinguish an integer-valued `1.0` from
    `1`, and JavaScript can preserve a negative-zero representation. The cross-language rule therefore accepts bounded
    mathematical integers and emits one canonical integer representation: `1.0 -> 1` and `-0.0`/`-0 -> 0`; booleans,
    fractions, negatives, strings, non-finite values, and overflow remain omitted.
-5. **Lazy `CommandKernel` compatibility.** Normal orchestrator construction still installs one store-bound
-   `CommandKernel` eagerly. A private lazy property now materializes that same per-instance owner for legacy and
-   characterization paths that partially construct `SourcingOrchestrator` and attach only `store`. This is a
-   compatibility guard, not a second owner, singleton, runtime fallback, or authorization path.
+5. **Kernel lifecycle, later corrected by advisory #10.** The precommit candidate added partial-construction
+   compatibility, but the `20260714T215839Z` advisory correctly identified it as a lazy production repair path. The
+   current follow-up instead keeps one constructor-owned `CommandKernel`; characterization paths that bypass
+   `SourcingOrchestrator.__init__` must inject `_command_kernel` explicitly. There is no lazy property, silent repair,
+   second owner, singleton, runtime fallback, or authorization path.
 6. **Recursive workflow-command carrier closure.** Canonical and normalized singular/plural workflow-command carriers
    nested inside any descriptor JSON field now re-enter the same 42-field command projector at every depth. Operation
    sync and each direct ActivityRun/ActivityAttempt/EntityDelta projector use the combined Activity-plus-command
    walker. Normalized caller-supplied `execution_summary` values are removed recursively; only a direct trusted
    command-record root may retain the owner-derived summary before generic carrier projection removes it again.
+   Budget cutoff omits the offending singular/list member rather than publishing an empty canonical carrier.
 7. **Hazardous-key and malformed-input frontend handling.** Python, the adapter, and the demo reject `__proto__`,
    `prototype`, and `constructor` at every arbitrary JSON depth rather than forwarding enumerable hazardous keys.
    Known command/Activity carriers use plain-object guards, malformed scalar/array records are omitted, and a malformed
@@ -256,12 +290,13 @@ containing nested commands/summaries, wire-level hazardous keys with downstream 
 command/operation-sync/Activity/control-target values, malformed command members in four normal adapter entries, and
 closed demo `raw` records. The matrix also proves compact observations cannot bypass the canonical projector and that
 generic Activity carriers lose forged owner-derived fields while trusted direct/control records retain current-evidence
-values. The compatibility gate exercises a partially constructed orchestrator without introducing a second kernel
-owner.
+values. The lifecycle gate proves constructor-only production ownership and requires partially constructed test
+fixtures to inject `_command_kernel` explicitly; absence fails visibly rather than materializing a lazy replacement.
 
 ## 9. Acceptance evidence and review status
 
-Author evidence on the final stable candidate tree:
+Author evidence recorded for pinned commit `4cfd1916da8bd98483d1ecfdba1f66639b122da9`, before the
+`20260714T215839Z` #1/#2/#4-#11 follow-up:
 
 - D3c1a projection contract: **13 passed**;
 - D3a + D3b + D3c1a plus three exact durable-runtime adjacency nodes: **56 passed**
@@ -281,11 +316,30 @@ The repository-wide markdown-status check remains **1 passed / 1 failed** on bot
 archive because the same twenty historical documents lack its required banner; this baseline-identical failure is not
 counted as a D3c1a pass and is not changed by this batch.
 
-The earlier D3c1 review artifact remains invalid formal evidence even though its five direct findings motivated this
-fixed-forward. The additional §3 changes came from precommit adversarial author audits and must not be described as
-that artifact's findings or as independent review. A fresh pinned non-author review must bind the final D3c1a commit
-and remains **pending**. Until a valid scope-matched artifact records a verdict, D3c1a has neither formal `GO` nor
-formal `NO-GO`; live/W6/manual validation, promotion, and milestone signoff remain fail closed for this scope.
+Current follow-up stable-tree evidence, before creating the enclosing commit:
+
+- D3c1a projection contract: **18 passed**;
+- D3a + D3b + D3c1a plus three exact durable-runtime adjacency nodes: **63 passed**;
+- full PG-backed operation runtime: **129 passed**;
+- pre-Agent contract suite: **60 passed**;
+- cancel/resume dispatch plus request-scope owner fencing adjacency: **51 passed**;
+- frontend production build: **81 modules transformed**; the existing `>500 kB` chunk warning remains informational;
+- public mapper inventory: **85 calls / 34 calling functions**, including the two final envelope reprojections;
+- scoped Ruff check and format: clean; `git diff --check`: clean;
+- mypy ceiling: unchanged at **81 errors in 4 files**;
+- fresh dirty-tree non-author backend advisory: **CLEAN**, `P0/P1/P2/P3=0/0/0/0`.
+
+The advisory also exercised hostile hash-collision keys with zero equality-hook calls, alternating carrier depth 40 in
+9 command projections, and a binary depth-10 carrier tree in 99 projections; budget cutoffs omitted the member rather
+than emitting an empty canonical carrier. This is author/advisory evidence, not a formal pinned verdict.
+
+The earlier D3c1 review artifact remains invalid formal evidence even though its five direct findings motivated the
+first D3c1a candidate. The later pinned D3c1a artifact `20260714T215839Z_*` also remains invalid: its process completed,
+but `causal_binding.final_response_item_exact=false`. Its substantive #1/#2/#4-#11 findings are mapped to the current
+fixed-forward mechanisms in §3.1; #3 remains `R-019`. Neither invalid artifact is formal `NO-GO` or `GO`. Fresh targeted
+validation is recorded above; a fresh pinned non-author review must still bind the enclosing commit. Until a valid
+scope-matched artifact exists, live/W6/manual validation, promotion, and milestone signoff remain fail closed for this
+scope.
 
 ## 10. Explicit non-closure
 

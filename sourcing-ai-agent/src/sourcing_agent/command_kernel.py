@@ -17,6 +17,9 @@ from datetime import datetime, timezone
 from typing import Any
 
 from .durable_runtime import (
+    WORKFLOW_COMMAND_CONTROL_POLICY_BOOLEAN_FIELDS,
+    WORKFLOW_COMMAND_CONTROL_POLICY_STRING_ARRAY_FIELDS,
+    WORKFLOW_COMMAND_CONTROL_POLICY_STRING_FIELDS,
     workflow_command_activity_spine_policy,
     workflow_command_control_policy,
     workflow_command_control_state,
@@ -220,6 +223,27 @@ WORKFLOW_COMMAND_PRIVATE_PUBLIC_MIRROR_FIELDS = frozenset(
 )
 _WORKFLOW_COMMAND_PUBLIC_MIRROR_OMIT = object()
 _WORKFLOW_COMMAND_PUBLIC_SAFE_INTEGER_MAX = 9_007_199_254_740_991
+_WORKFLOW_PUBLIC_MIRROR_MAX_DEPTH = 32
+_WORKFLOW_PUBLIC_MIRROR_MAX_NODES = 10_000
+_WORKFLOW_PUBLIC_MIRROR_MAX_COLLECTION_ITEMS = 1_000
+
+
+class _WorkflowPublicProjectionTraversal:
+    """One bounded carrier walk shared by every nested public projector."""
+
+    def __init__(self) -> None:
+        self.remaining_nodes = _WORKFLOW_PUBLIC_MIRROR_MAX_NODES
+        self.active_containers: set[int] = set()
+        self.budget_omissions = 0
+
+    def consume(self, *, depth: int) -> bool:
+        if depth > _WORKFLOW_PUBLIC_MIRROR_MAX_DEPTH or self.remaining_nodes <= 0:
+            self.budget_omissions += 1
+            return False
+        self.remaining_nodes -= 1
+        return True
+
+
 _WORKFLOW_COMMAND_PUBLIC_SAFE_INTEGER_DIAGNOSTICS = frozenset({"claim_generation", "control_epoch"})
 _WORKFLOW_COMMAND_PUBLIC_NUMBER_FIELDS = frozenset({"attempt", "max_attempts"})
 _WORKFLOW_COMMAND_PUBLIC_STRING_ARRAY_FIELDS = frozenset(
@@ -237,52 +261,6 @@ _WORKFLOW_ENTITY_DELTA_PUBLIC_OBJECT_FIELDS = frozenset(
 )
 _WORKFLOW_ACTIVITY_CONTROL_TARGET_PUBLIC_OBJECT_FIELDS = frozenset(
     {"display_contract", "control_policy", "control_state", "activity_spine_policy"}
-)
-_WORKFLOW_COMMAND_CONTROL_POLICY_STRING_ARRAY_FIELDS = frozenset(
-    {
-        "running_control_categories",
-        "generic_cancel_statuses",
-        "generic_retry_statuses",
-        "generic_resume_statuses",
-        "running_cancel_statuses",
-        "running_cancel_prerequisites",
-        "running_cancel_upgrade_requirements",
-        "running_resume_statuses",
-        "running_resume_prerequisites",
-        "running_resume_upgrade_requirements",
-    }
-)
-_WORKFLOW_COMMAND_CONTROL_POLICY_BOOLEAN_FIELDS = frozenset(
-    {
-        "running_cancel_supported",
-        "module_state_mutated_on_running_cancel",
-        "running_resume_supported",
-        "module_state_mutated_on_running_resume",
-    }
-)
-_WORKFLOW_COMMAND_CONTROL_POLICY_STRING_FIELDS = frozenset(
-    {
-        "schema_version",
-        "command_type",
-        "owner",
-        "running_control_category",
-        "running_control_maturity",
-        "running_control_gap_status",
-        "running_control_surface",
-        "running_cancel_owner",
-        "running_cancel_delegate",
-        "running_cancel_blocked_reason",
-        "running_cancel_contract",
-        "unsupported_running_cancel_reason",
-        "running_resume_owner",
-        "running_resume_delegate",
-        "running_resume_blocked_reason",
-        "running_resume_contract",
-        "unsupported_running_resume_reason",
-        "control_source_of_truth",
-        "agent_callable_surface",
-        "fallback_status",
-    }
 )
 _WORKFLOW_COMMAND_CONTROL_STATE_STRING_ARRAY_FIELDS = frozenset(
     {"allowed_actions", "running_cancel_prerequisites", "running_resume_prerequisites"}
@@ -469,13 +447,13 @@ _OPERATION_RUN_STATUS_SUMMARY_BOOLEAN_FIELDS = frozenset({"fallback_used", "modu
 _OPERATION_RUN_STATUS_SUMMARY_NUMBER_FIELDS = frozenset({"workflow_command_count", "operation_event_count"})
 _WORKFLOW_ACTIVITY_PUBLIC_JSON_ARRAY_FIELDS = frozenset({"artifact_refs"})
 _WORKFLOW_ACTIVITY_PUBLIC_BOOLEAN_FIELDS = frozenset({"module_state_mutated"})
-_WORKFLOW_ACTIVITY_RUN_TRUSTED_DERIVED_FIELDS = frozenset(
+WORKFLOW_ACTIVITY_RUN_TRUSTED_DERIVED_FIELDS = frozenset(
     {"control_target", "module_state_mutated", "mutation_contract"}
 )
-_WORKFLOW_ACTIVITY_ATTEMPT_TRUSTED_DERIVED_FIELDS = frozenset(
+WORKFLOW_ACTIVITY_ATTEMPT_TRUSTED_DERIVED_FIELDS = frozenset(
     {"activity_type", "owner", "control_target", "module_state_mutated", "mutation_contract"}
 )
-_WORKFLOW_ENTITY_DELTA_TRUSTED_DERIVED_FIELDS = _WORKFLOW_ACTIVITY_ATTEMPT_TRUSTED_DERIVED_FIELDS
+WORKFLOW_ENTITY_DELTA_TRUSTED_DERIVED_FIELDS = WORKFLOW_ACTIVITY_ATTEMPT_TRUSTED_DERIVED_FIELDS
 _WORKFLOW_ACTIVITY_RUN_PUBLIC_CARRIER_FIELDS = frozenset({"workflow_activity", "workflow_activity_run"})
 _WORKFLOW_ACTIVITY_ATTEMPT_PUBLIC_CARRIER_FIELDS = frozenset({"workflow_activity_attempt"})
 _WORKFLOW_ENTITY_DELTA_PUBLIC_CARRIER_FIELDS = frozenset({"workflow_entity_delta"})
@@ -508,7 +486,9 @@ def _normalized_workflow_public_safe_integer(value: Any) -> int | None:
 
 
 def _normalized_public_mirror_field_name(value: Any) -> str:
-    raw = re.sub(r"[-\s]+", "_", str(value or "").strip())
+    if type(value) is not str:
+        return ""
+    raw = re.sub(r"[-\s]+", "_", value.strip())
     raw = re.sub(r"(?<=[A-Z])(?=[A-Z][a-z])", "_", raw)
     raw = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", raw)
     return re.sub(r"_+", "_", raw).strip("_").lower()
@@ -527,7 +507,7 @@ def _is_private_workflow_command_public_mirror_field(value: Any) -> bool:
 
 
 def _is_hazardous_workflow_public_mirror_field(value: Any) -> bool:
-    return str(value or "").strip().lower() in _WORKFLOW_PUBLIC_HAZARDOUS_MIRROR_FIELDS
+    return type(value) is str and value.strip().lower() in _WORKFLOW_PUBLIC_HAZARDOUS_MIRROR_FIELDS
 
 
 def is_workflow_activity_public_carrier_field(value: Any) -> bool:
@@ -543,23 +523,68 @@ def is_workflow_activity_public_carrier_field(value: Any) -> bool:
 
 
 def _sanitize_workflow_command_public_mirror(value: Any) -> Any:
-    if isinstance(value, dict):
-        sanitized_record: dict[str, Any] = {}
-        for key, item in value.items():
-            if _is_private_workflow_command_public_mirror_field(key) or _is_hazardous_workflow_public_mirror_field(key):
-                continue
-            sanitized_item = _sanitize_workflow_command_public_mirror(item)
-            if sanitized_item is not _WORKFLOW_COMMAND_PUBLIC_MIRROR_OMIT:
-                sanitized_record[str(key)] = sanitized_item
-        return sanitized_record
-    if isinstance(value, (list, tuple)):
-        sanitized_items = [_sanitize_workflow_command_public_mirror(item) for item in value]
-        return [item for item in sanitized_items if item is not _WORKFLOW_COMMAND_PUBLIC_MIRROR_OMIT]
-    if value is None or isinstance(value, (str, bool, int)):
-        return value
-    if isinstance(value, float):
-        return value if math.isfinite(value) else _WORKFLOW_COMMAND_PUBLIC_MIRROR_OMIT
-    return _WORKFLOW_COMMAND_PUBLIC_MIRROR_OMIT
+    """Copy one bounded exact-built-in JSON tree into the public trust domain.
+
+    Exact built-in checks are intentional: mapping/container/scalar subclasses can
+    execute user code from ``items()``, iteration, ``__bool__`` or ``__str__``.
+    Cycles and over-budget members are omitted locally so one malformed extension
+    cannot abort the complete response.
+    """
+
+    remaining_nodes = _WORKFLOW_PUBLIC_MIRROR_MAX_NODES
+    active_containers: set[int] = set()
+
+    def _copy(item: Any, *, depth: int) -> Any:
+        nonlocal remaining_nodes
+        if depth > _WORKFLOW_PUBLIC_MIRROR_MAX_DEPTH or remaining_nodes <= 0:
+            return _WORKFLOW_COMMAND_PUBLIC_MIRROR_OMIT
+        remaining_nodes -= 1
+        item_type = type(item)
+        if item is None or item_type in {str, bool, int}:
+            return item
+        if item_type is float:
+            return item if math.isfinite(item) else _WORKFLOW_COMMAND_PUBLIC_MIRROR_OMIT
+        if item_type is dict:
+            container_id = id(item)
+            if container_id in active_containers:
+                return _WORKFLOW_COMMAND_PUBLIC_MIRROR_OMIT
+            active_containers.add(container_id)
+            try:
+                record: dict[str, Any] = {}
+                for index, (key, member) in enumerate(item.items()):
+                    if index >= _WORKFLOW_PUBLIC_MIRROR_MAX_COLLECTION_ITEMS:
+                        break
+                    if type(key) is not str:
+                        continue
+                    if _is_private_workflow_command_public_mirror_field(key):
+                        continue
+                    if _is_hazardous_workflow_public_mirror_field(key):
+                        continue
+                    copied = _copy(member, depth=depth + 1)
+                    if copied is not _WORKFLOW_COMMAND_PUBLIC_MIRROR_OMIT:
+                        record[key] = copied
+                return record
+            finally:
+                active_containers.remove(container_id)
+        if item_type in {list, tuple}:
+            container_id = id(item)
+            if container_id in active_containers:
+                return _WORKFLOW_COMMAND_PUBLIC_MIRROR_OMIT
+            active_containers.add(container_id)
+            try:
+                result: list[Any] = []
+                for index, member in enumerate(item):
+                    if index >= _WORKFLOW_PUBLIC_MIRROR_MAX_COLLECTION_ITEMS:
+                        break
+                    copied = _copy(member, depth=depth + 1)
+                    if copied is not _WORKFLOW_COMMAND_PUBLIC_MIRROR_OMIT:
+                        result.append(copied)
+                return result
+            finally:
+                active_containers.remove(container_id)
+        return _WORKFLOW_COMMAND_PUBLIC_MIRROR_OMIT
+
+    return _copy(value, depth=0)
 
 
 def _project_workflow_public_mirror_fields(
@@ -573,7 +598,8 @@ def _project_workflow_public_mirror_fields(
     object_fields: frozenset[str] = frozenset(),
     boolean_fields: frozenset[str] = frozenset(),
 ) -> dict[str, Any]:
-    source = dict(value or {})
+    sanitized_source = _sanitize_workflow_command_public_mirror(value if value is not None else {})
+    source = sanitized_source if type(sanitized_source) is dict else {}
     record: dict[str, Any] = {}
     for field in fields:
         if field not in source or source[field] is None:
@@ -592,7 +618,7 @@ def _project_workflow_public_mirror_fields(
             if isinstance(value, (list, tuple)):
                 record[field] = [item for item in value if isinstance(item, str)]
             continue
-        sanitized = _sanitize_workflow_command_public_mirror(value)
+        sanitized = value
         if field in json_array_fields:
             if isinstance(sanitized, list):
                 record[field] = sanitized
@@ -662,9 +688,9 @@ def _project_workflow_public_open_object(
 def _project_workflow_command_control_policy_public_mirror(value: Any) -> dict[str, Any]:
     return _project_workflow_public_open_object(
         value,
-        string_fields=_WORKFLOW_COMMAND_CONTROL_POLICY_STRING_FIELDS,
-        string_array_fields=_WORKFLOW_COMMAND_CONTROL_POLICY_STRING_ARRAY_FIELDS,
-        boolean_fields=_WORKFLOW_COMMAND_CONTROL_POLICY_BOOLEAN_FIELDS,
+        string_fields=WORKFLOW_COMMAND_CONTROL_POLICY_STRING_FIELDS,
+        string_array_fields=WORKFLOW_COMMAND_CONTROL_POLICY_STRING_ARRAY_FIELDS,
+        boolean_fields=WORKFLOW_COMMAND_CONTROL_POLICY_BOOLEAN_FIELDS,
     )
 
 
@@ -808,7 +834,7 @@ class CommandKernel:
         *,
         migration_phase: str,
     ) -> dict[str, Any]:
-        payload = self._workflow_command_api_record(dict(command or {}))
+        payload = self._workflow_command_api_record(command or {})
         record = {
             key: payload.get(key)
             for key in (
@@ -1084,10 +1110,16 @@ class CommandKernel:
             ),
         }
 
-    def _workflow_command_api_record(self, command: dict[str, Any]) -> dict[str, Any]:
-        source = dict(command or {})
+    def _workflow_command_api_record(
+        self,
+        command: dict[str, Any],
+        *,
+        _traversal: _WorkflowPublicProjectionTraversal | None = None,
+        _depth: int = 0,
+    ) -> dict[str, Any]:
+        traversal = _traversal or _WorkflowPublicProjectionTraversal()
         record = _project_workflow_public_mirror_fields(
-            source,
+            command,
             fields=WORKFLOW_COMMAND_PUBLIC_DESCRIPTOR_FIELDS,
             safe_integer_fields=_WORKFLOW_COMMAND_PUBLIC_SAFE_INTEGER_DIAGNOSTICS,
             number_fields=_WORKFLOW_COMMAND_PUBLIC_NUMBER_FIELDS,
@@ -1115,38 +1147,35 @@ class CommandKernel:
             owner=owner,
         )
         sanitized = _sanitize_workflow_command_public_mirror(record)
-        activity_projected = self._workflow_activity_public_carriers_api_record(sanitized)
-        return dict(self._workflow_command_nested_public_carriers_api_record(activity_projected))
+        projected = self._workflow_public_carriers_api_record(
+            sanitized,
+            traversal=traversal,
+            depth=_depth,
+        )
+        return projected if type(projected) is dict else {}
 
-    def _workflow_command_nested_public_carriers_api_record(self, value: Any) -> Any:
-        if isinstance(value, list):
-            return [self._workflow_command_nested_public_carriers_api_record(item) for item in value]
-        if not isinstance(value, dict):
-            return value
-        record: dict[str, Any] = {}
-        for key, item in value.items():
-            normalized_key = _normalized_public_mirror_field_name(key)
-            if normalized_key == "execution_summary":
-                continue
-            if normalized_key in _WORKFLOW_COMMAND_PUBLIC_CARRIER_FIELDS:
-                if isinstance(item, dict):
-                    record[str(key)] = self._workflow_command_api_record(item)
-                continue
-            if normalized_key in _WORKFLOW_COMMAND_PUBLIC_CARRIER_LIST_FIELDS:
-                if isinstance(item, list):
-                    record[str(key)] = [
-                        self._workflow_command_api_record(entry) for entry in item if isinstance(entry, dict)
-                    ]
-                continue
-            record[str(key)] = self._workflow_command_nested_public_carriers_api_record(item)
-        return record
+    def _workflow_command_nested_public_carriers_api_record(
+        self,
+        value: Any,
+        *,
+        _traversal: _WorkflowPublicProjectionTraversal | None = None,
+        _depth: int = 0,
+    ) -> Any:
+        return self._workflow_public_carriers_api_record(
+            value,
+            traversal=_traversal or _WorkflowPublicProjectionTraversal(),
+            depth=_depth,
+        )
 
     def _workflow_activity_public_api_record(
         self,
         activity: dict[str, Any] | None,
         *,
         include_trusted_derived: bool = False,
+        _traversal: _WorkflowPublicProjectionTraversal | None = None,
+        _depth: int = 0,
     ) -> dict[str, Any]:
+        traversal = _traversal or _WorkflowPublicProjectionTraversal()
         record = _project_workflow_public_mirror_fields(
             activity,
             fields=WORKFLOW_ACTIVITY_RUN_PUBLIC_FIELDS,
@@ -1156,17 +1185,24 @@ class CommandKernel:
         )
         record = self._workflow_activity_record_with_closed_control_target(record, source=activity)
         if not include_trusted_derived:
-            for field in _WORKFLOW_ACTIVITY_RUN_TRUSTED_DERIVED_FIELDS:
+            for field in WORKFLOW_ACTIVITY_RUN_TRUSTED_DERIVED_FIELDS:
                 record.pop(field, None)
-        activity_projected = self._workflow_activity_public_carriers_api_record(record)
-        return dict(self._workflow_command_nested_public_carriers_api_record(activity_projected))
+        projected = self._workflow_public_carriers_api_record(
+            record,
+            traversal=traversal,
+            depth=_depth,
+        )
+        return projected if type(projected) is dict else {}
 
     def _workflow_activity_attempt_public_api_record(
         self,
         attempt: dict[str, Any] | None,
         *,
         include_trusted_derived: bool = False,
+        _traversal: _WorkflowPublicProjectionTraversal | None = None,
+        _depth: int = 0,
     ) -> dict[str, Any]:
+        traversal = _traversal or _WorkflowPublicProjectionTraversal()
         record = _project_workflow_public_mirror_fields(
             attempt,
             fields=WORKFLOW_ACTIVITY_ATTEMPT_PUBLIC_FIELDS,
@@ -1177,17 +1213,24 @@ class CommandKernel:
         )
         record = self._workflow_activity_record_with_closed_control_target(record, source=attempt)
         if not include_trusted_derived:
-            for field in _WORKFLOW_ACTIVITY_ATTEMPT_TRUSTED_DERIVED_FIELDS:
+            for field in WORKFLOW_ACTIVITY_ATTEMPT_TRUSTED_DERIVED_FIELDS:
                 record.pop(field, None)
-        activity_projected = self._workflow_activity_public_carriers_api_record(record)
-        return dict(self._workflow_command_nested_public_carriers_api_record(activity_projected))
+        projected = self._workflow_public_carriers_api_record(
+            record,
+            traversal=traversal,
+            depth=_depth,
+        )
+        return projected if type(projected) is dict else {}
 
     def _workflow_entity_delta_public_api_record(
         self,
         delta: dict[str, Any] | None,
         *,
         include_trusted_derived: bool = False,
+        _traversal: _WorkflowPublicProjectionTraversal | None = None,
+        _depth: int = 0,
     ) -> dict[str, Any]:
+        traversal = _traversal or _WorkflowPublicProjectionTraversal()
         record = _project_workflow_public_mirror_fields(
             delta,
             fields=WORKFLOW_ENTITY_DELTA_PUBLIC_FIELDS,
@@ -1197,10 +1240,14 @@ class CommandKernel:
         )
         record = self._workflow_activity_record_with_closed_control_target(record, source=delta)
         if not include_trusted_derived:
-            for field in _WORKFLOW_ENTITY_DELTA_TRUSTED_DERIVED_FIELDS:
+            for field in WORKFLOW_ENTITY_DELTA_TRUSTED_DERIVED_FIELDS:
                 record.pop(field, None)
-        activity_projected = self._workflow_activity_public_carriers_api_record(record)
-        return dict(self._workflow_command_nested_public_carriers_api_record(activity_projected))
+        projected = self._workflow_public_carriers_api_record(
+            record,
+            traversal=traversal,
+            depth=_depth,
+        )
+        return projected if type(projected) is dict else {}
 
     def _workflow_activity_control_target_public_api_record(
         self,
@@ -1229,8 +1276,9 @@ class CommandKernel:
         source: dict[str, Any] | None,
     ) -> dict[str, Any]:
         record.pop("control_target", None)
-        source_control_target = dict(source or {}).get("control_target")
-        if isinstance(source_control_target, dict):
+        sanitized_source = _sanitize_workflow_command_public_mirror(source if source is not None else {})
+        source_control_target = sanitized_source.get("control_target") if type(sanitized_source) is dict else None
+        if type(source_control_target) is dict:
             projected_control_target = self._workflow_activity_control_target_public_api_record(source_control_target)
             if projected_control_target:
                 record["control_target"] = projected_control_target
@@ -1239,8 +1287,15 @@ class CommandKernel:
     def _workflow_command_trusted_execution_summary_api_record(
         self,
         execution_summary: dict[str, Any] | None,
+        *,
+        _traversal: _WorkflowPublicProjectionTraversal | None = None,
+        _depth: int = 0,
     ) -> dict[str, Any]:
-        source = dict(execution_summary or {})
+        traversal = _traversal or _WorkflowPublicProjectionTraversal()
+        sanitized_source = _sanitize_workflow_command_public_mirror(
+            execution_summary if execution_summary is not None else {}
+        )
+        source = sanitized_source if type(sanitized_source) is dict else {}
         projected = _project_workflow_public_open_object(
             source,
             string_fields=_WORKFLOW_COMMAND_EXECUTION_SUMMARY_STRING_FIELDS,
@@ -1249,70 +1304,177 @@ class CommandKernel:
             number_fields=_WORKFLOW_COMMAND_EXECUTION_SUMMARY_NUMBER_FIELDS,
             number_record_fields=_WORKFLOW_COMMAND_EXECUTION_SUMMARY_NUMBER_RECORD_FIELDS,
         )
-        record = self._workflow_activity_public_carriers_api_record(projected)
         latest_projectors = {
             "latest_activity": lambda value: self._workflow_activity_public_api_record(
-                value, include_trusted_derived=True
+                value,
+                include_trusted_derived=True,
+                _traversal=traversal,
+                _depth=_depth + 1,
             ),
             "latest_attempt": lambda value: self._workflow_activity_attempt_public_api_record(
-                value, include_trusted_derived=True
+                value,
+                include_trusted_derived=True,
+                _traversal=traversal,
+                _depth=_depth + 1,
             ),
             "latest_entity_delta": lambda value: self._workflow_entity_delta_public_api_record(
-                value, include_trusted_derived=True
+                value,
+                include_trusted_derived=True,
+                _traversal=traversal,
+                _depth=_depth + 1,
             ),
         }
+        for field in latest_projectors:
+            projected.pop(field, None)
+        traversed = self._workflow_public_carriers_api_record(
+            projected,
+            traversal=traversal,
+            depth=_depth,
+        )
+        record = traversed if type(traversed) is dict else {}
         for field, projector in latest_projectors.items():
             value = source.get(field)
-            if isinstance(value, dict):
+            if type(value) is dict:
                 record[field] = projector(value)
             else:
                 record.pop(field, None)
-        return dict(self._workflow_command_nested_public_carriers_api_record(record))
-
-    def _workflow_activity_public_carriers_api_record(self, value: Any) -> Any:
-        if isinstance(value, list):
-            return [self._workflow_activity_public_carriers_api_record(item) for item in value]
-        if not isinstance(value, dict):
-            return value
-        record: dict[str, Any] = {}
-        for key, item in value.items():
-            normalized_key = _normalized_public_mirror_field_name(key)
-            if normalized_key in _WORKFLOW_ACTIVITY_RUN_PUBLIC_CARRIER_FIELDS:
-                if isinstance(item, dict):
-                    record[str(key)] = self._workflow_activity_public_api_record(item)
-                continue
-            if normalized_key in _WORKFLOW_ACTIVITY_ATTEMPT_PUBLIC_CARRIER_FIELDS:
-                if isinstance(item, dict):
-                    record[str(key)] = self._workflow_activity_attempt_public_api_record(item)
-                continue
-            if normalized_key in _WORKFLOW_ENTITY_DELTA_PUBLIC_CARRIER_FIELDS:
-                if isinstance(item, dict):
-                    record[str(key)] = self._workflow_entity_delta_public_api_record(item)
-                continue
-            if normalized_key in _WORKFLOW_ACTIVITY_RUN_PUBLIC_CARRIER_LIST_FIELDS:
-                if isinstance(item, list):
-                    record[str(key)] = [
-                        self._workflow_activity_public_api_record(entry) for entry in item if isinstance(entry, dict)
-                    ]
-                continue
-            if normalized_key in _WORKFLOW_ACTIVITY_ATTEMPT_PUBLIC_CARRIER_LIST_FIELDS:
-                if isinstance(item, list):
-                    record[str(key)] = [
-                        self._workflow_activity_attempt_public_api_record(entry)
-                        for entry in item
-                        if isinstance(entry, dict)
-                    ]
-                continue
-            if normalized_key in _WORKFLOW_ENTITY_DELTA_PUBLIC_CARRIER_LIST_FIELDS:
-                if isinstance(item, list):
-                    record[str(key)] = [
-                        self._workflow_entity_delta_public_api_record(entry)
-                        for entry in item
-                        if isinstance(entry, dict)
-                    ]
-                continue
-            record[str(key)] = self._workflow_activity_public_carriers_api_record(item)
         return record
+
+    def _workflow_public_carriers_api_record(
+        self,
+        value: Any,
+        *,
+        traversal: _WorkflowPublicProjectionTraversal,
+        depth: int,
+    ) -> Any:
+        """Project command and Activity carriers in one non-reentrant walk."""
+
+        if not traversal.consume(depth=depth):
+            return _WORKFLOW_COMMAND_PUBLIC_MIRROR_OMIT
+        value_type = type(value)
+        if value is None or value_type in {str, bool, int, float}:
+            return value
+        if value_type not in {dict, list}:
+            return _WORKFLOW_COMMAND_PUBLIC_MIRROR_OMIT
+        container_id = id(value)
+        if container_id in traversal.active_containers:
+            return _WORKFLOW_COMMAND_PUBLIC_MIRROR_OMIT
+        traversal.active_containers.add(container_id)
+        try:
+            if value_type is list:
+                result: list[Any] = []
+                for index, item in enumerate(value):
+                    if index >= _WORKFLOW_PUBLIC_MIRROR_MAX_COLLECTION_ITEMS:
+                        break
+                    projected = self._workflow_public_carriers_api_record(
+                        item,
+                        traversal=traversal,
+                        depth=depth + 1,
+                    )
+                    if projected is not _WORKFLOW_COMMAND_PUBLIC_MIRROR_OMIT:
+                        result.append(projected)
+                return result
+
+            record: dict[str, Any] = {}
+            for index, (key, item) in enumerate(value.items()):
+                if index >= _WORKFLOW_PUBLIC_MIRROR_MAX_COLLECTION_ITEMS:
+                    break
+                if type(key) is not str:
+                    continue
+                normalized_key = _normalized_public_mirror_field_name(key)
+                if normalized_key == "execution_summary":
+                    continue
+                if normalized_key in _WORKFLOW_COMMAND_PUBLIC_CARRIER_FIELDS:
+                    if type(item) is dict and traversal.remaining_nodes > 0:
+                        omissions_before = traversal.budget_omissions
+                        projected_command = self._workflow_command_api_record(
+                            item,
+                            _traversal=traversal,
+                            _depth=depth + 1,
+                        )
+                        if projected_command or traversal.budget_omissions == omissions_before:
+                            record[key] = projected_command
+                    continue
+                if normalized_key in _WORKFLOW_COMMAND_PUBLIC_CARRIER_LIST_FIELDS:
+                    if type(item) is list:
+                        members: list[dict[str, Any]] = []
+                        for member in item[:_WORKFLOW_PUBLIC_MIRROR_MAX_COLLECTION_ITEMS]:
+                            if type(member) is not dict or traversal.remaining_nodes <= 0:
+                                continue
+                            omissions_before = traversal.budget_omissions
+                            projected_command = self._workflow_command_api_record(
+                                member,
+                                _traversal=traversal,
+                                _depth=depth + 1,
+                            )
+                            if projected_command or traversal.budget_omissions == omissions_before:
+                                members.append(projected_command)
+                        record[key] = members
+                    continue
+                activity_projector = None
+                if normalized_key in _WORKFLOW_ACTIVITY_RUN_PUBLIC_CARRIER_FIELDS:
+                    activity_projector = self._workflow_activity_public_api_record
+                elif normalized_key in _WORKFLOW_ACTIVITY_ATTEMPT_PUBLIC_CARRIER_FIELDS:
+                    activity_projector = self._workflow_activity_attempt_public_api_record
+                elif normalized_key in _WORKFLOW_ENTITY_DELTA_PUBLIC_CARRIER_FIELDS:
+                    activity_projector = self._workflow_entity_delta_public_api_record
+                if activity_projector is not None:
+                    if type(item) is dict and traversal.remaining_nodes > 0:
+                        omissions_before = traversal.budget_omissions
+                        projected_activity = activity_projector(
+                            item,
+                            _traversal=traversal,
+                            _depth=depth + 1,
+                        )
+                        if projected_activity or traversal.budget_omissions == omissions_before:
+                            record[key] = projected_activity
+                    continue
+                activity_list_projector = None
+                if normalized_key in _WORKFLOW_ACTIVITY_RUN_PUBLIC_CARRIER_LIST_FIELDS:
+                    activity_list_projector = self._workflow_activity_public_api_record
+                elif normalized_key in _WORKFLOW_ACTIVITY_ATTEMPT_PUBLIC_CARRIER_LIST_FIELDS:
+                    activity_list_projector = self._workflow_activity_attempt_public_api_record
+                elif normalized_key in _WORKFLOW_ENTITY_DELTA_PUBLIC_CARRIER_LIST_FIELDS:
+                    activity_list_projector = self._workflow_entity_delta_public_api_record
+                if activity_list_projector is not None:
+                    if type(item) is list:
+                        members = []
+                        for member in item[:_WORKFLOW_PUBLIC_MIRROR_MAX_COLLECTION_ITEMS]:
+                            if type(member) is not dict or traversal.remaining_nodes <= 0:
+                                continue
+                            omissions_before = traversal.budget_omissions
+                            projected_activity = activity_list_projector(
+                                member,
+                                _traversal=traversal,
+                                _depth=depth + 1,
+                            )
+                            if projected_activity or traversal.budget_omissions == omissions_before:
+                                members.append(projected_activity)
+                        record[key] = members
+                    continue
+                projected = self._workflow_public_carriers_api_record(
+                    item,
+                    traversal=traversal,
+                    depth=depth + 1,
+                )
+                if projected is not _WORKFLOW_COMMAND_PUBLIC_MIRROR_OMIT:
+                    record[key] = projected
+            return record
+        finally:
+            traversal.active_containers.remove(container_id)
+
+    def _workflow_activity_public_carriers_api_record(
+        self,
+        value: Any,
+        *,
+        _traversal: _WorkflowPublicProjectionTraversal | None = None,
+        _depth: int = 0,
+    ) -> Any:
+        return self._workflow_public_carriers_api_record(
+            value,
+            traversal=_traversal or _WorkflowPublicProjectionTraversal(),
+            depth=_depth,
+        )
 
     def _operation_action_public_api_record(
         self,
@@ -1335,8 +1497,15 @@ class CommandKernel:
     def _workflow_command_operation_sync_api_record(
         self,
         operation_sync: dict[str, Any] | None,
+        *,
+        _traversal: _WorkflowPublicProjectionTraversal | None = None,
+        _depth: int = 0,
     ) -> dict[str, Any]:
-        source = dict(operation_sync or {})
+        traversal = _traversal or _WorkflowPublicProjectionTraversal()
+        sanitized_source = _sanitize_workflow_command_public_mirror(
+            operation_sync if operation_sync is not None else {}
+        )
+        source = sanitized_source if type(sanitized_source) is dict else {}
         record = _project_workflow_public_mirror_fields(
             source,
             fields=WORKFLOW_COMMAND_OPERATION_SYNC_PUBLIC_FIELDS,
@@ -1346,18 +1515,30 @@ class CommandKernel:
             record["operation_run"] = _project_operation_run_public_mirror(record["operation_run"])
         if isinstance(record.get("event"), dict):
             record["event"] = _project_operation_event_public_mirror(record["event"])
-        command = record.get("workflow_command")
-        if isinstance(command, dict):
-            record["workflow_command"] = self._workflow_command_api_record(command)
-        return self._workflow_command_public_carrier_api_record(record)
+        projected = self._workflow_public_carriers_api_record(
+            record,
+            traversal=traversal,
+            depth=_depth,
+        )
+        return projected if type(projected) is dict else {}
 
     def _workflow_command_public_carrier_api_record(
         self,
         carrier: dict[str, Any] | None,
+        *,
+        _traversal: _WorkflowPublicProjectionTraversal | None = None,
+        _depth: int = 0,
     ) -> dict[str, Any]:
-        sanitized = _sanitize_workflow_command_public_mirror(dict(carrier or {}))
-        activity_projected = self._workflow_activity_public_carriers_api_record(sanitized)
-        return dict(self._workflow_command_nested_public_carriers_api_record(activity_projected))
+        traversal = _traversal or _WorkflowPublicProjectionTraversal()
+        sanitized = _sanitize_workflow_command_public_mirror(carrier if carrier is not None else {})
+        if type(sanitized) is not dict:
+            return {}
+        projected = self._workflow_public_carriers_api_record(
+            sanitized,
+            traversal=traversal,
+            depth=_depth,
+        )
+        return projected if type(projected) is dict else {}
 
     def _workflow_command_control_response_policy_records(
         self,
