@@ -1,6 +1,7 @@
 # Track C C2.6 authenticated canonical-owner fencing
 
-Status: author implementation; independent review still required before promotion.
+Status: scoped review `NO-GO`; fixed-forward implementation is tracked by
+`TRACK_C_C2_7_CONDITIONAL_OWNER_CLOSURE_IMPLEMENTATION.md`.
 
 ## Goal
 
@@ -25,10 +26,12 @@ CRM canonical owners reuse them instead of re-deriving sentinel behavior.
 | Worker interrupt | worker -> `job_id` -> job owner | exact linked job owner | worker link and job owner are both re-read immediately before interrupt |
 | Worker cleanup | explicit `job_id` -> job owner | authenticated callers must supply one exact-owned job | every retirement batch rechecks the job and worker links |
 | Job-scoped service shutdown | `job_id` -> job owner | only the derived job recovery service is allowed | job owner is re-read before each stop request |
-| CRM PATCH/promotion | `crm_records.workspace_id` plus nonblank `owner_user_id` | exact `user-<user>` workspace and consistent owner | CRM writer/owner re-reads immediately before first durable write |
+| CRM PATCH/promotion | `crm_records.workspace_id`; nonblank `owner_user_id` is an additional consistency check | exact `user-<user>` workspace; blank owner is accepted by the ratified C2.5 compatibility rule, otherwise owner must equal the bearer user | CRM writer/owner re-reads immediately before first durable write |
 
-Legacy blank/default ownership is read-compatible where the earlier C2 read
-contract allows it, but never grants authenticated mutation authority.
+An exact user workspace with blank `owner_user_id` remains mutation-compatible
+under the earlier C2.5 contract until its separately owned writer/migration is
+approved. The legacy `default` workspace and a conflicting nonblank owner never
+grant authenticated mutation authority.
 
 ## Public job/worker route registry
 

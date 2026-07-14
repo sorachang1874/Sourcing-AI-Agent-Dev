@@ -252,6 +252,13 @@ class _CrmRaceStore:
         self.upserts.append(payload)
         return payload
 
+    def apply_owned_crm_record_update(self, **kwargs):
+        latest = self.get_crm_record("rec-1")
+        if latest.get("workspace_id") != kwargs["expected_workspace_id"]:
+            return {"status": "not_found", "reason": "crm_record_not_found"}
+        self.upserts.append(kwargs)
+        return {"status": "applied"}
+
 
 def test_crm_writer_rechecks_workspace_owner_before_first_write() -> None:
     store = _CrmRaceStore()
@@ -359,3 +366,98 @@ def test_refinement_retrieval_job_persists_owner_on_running_and_failure_writes()
     assert len(store.saved) == 2
     assert all(item["requester_id"] == "alice" for item in store.saved)
     assert all(item["tenant_id"] == "user-alice" for item in store.saved)
+
+
+def test_stage2_lock_contention_rechecks_owner_before_returning_job_state() -> None:
+    orchestrator = object.__new__(SourcingOrchestrator)
+    store = _SequencedJobStore([_owned_job(job_type="workflow"), _foreign_job()])
+    orchestrator.store = store
+
+    @contextmanager
+    def busy_lock(_job_id):
+        yield None
+
+    orchestrator._job_run_lock = busy_lock
+    result = orchestrator.continue_workflow_stage2(
+        {"job_id": "job-1"},
+        expected_requester_id="alice",
+        expected_tenant_id="user-alice",
+    )
+
+    assert result == {"status": "not_found", "reason": "job_not_found"}
+
+
+def test_authenticated_daemon_status_projects_only_compact_job_scoped_control() -> None:
+    orchestrator = object.__new__(SourcingOrchestrator)
+    orchestrator.store = SimpleNamespace(
+        get_job=lambda _job_id: _owned_job(
+            summary={
+                "runtime_controls": {
+                    "hosted_runtime_watchdog": {"service_status": {"marker": "FOREIGN_HOSTED_DETAIL"}},
+                    "shared_recovery": {"service_status": {"marker": "FOREIGN_SHARED_DETAIL"}},
+                    # A job-scoped signal may nudge the shared daemon. The
+                    # authenticated view must not probe or expose that daemon.
+                    "job_recovery": {
+                        "status": "signaled",
+                        "scope": "job_scoped",
+                        "mode": "signal_only",
+                        "job_id": "job-1",
+                        "service_name": "worker-recovery-daemon",
+                        "wakeup": {"marker": "FOREIGN_SHARED_WAKEUP"},
+                    },
+                    "workflow_runner": {"log_tail": "FOREIGN_LOG"},
+                }
+            }
+        )
+    )
+    orchestrator._build_live_runtime_controls_payload = lambda *_args, **_kwargs: (_ for _ in ()).throw(
+        AssertionError("authenticated status must not build global runtime controls")
+    )
+    orchestrator._read_progress_service_status = lambda *_args, **_kwargs: (_ for _ in ()).throw(
+        AssertionError("shared signal-only service must not be probed")
+    )
+
+    result = orchestrator.get_worker_daemon_status(
+        {"job_id": "job-1", "include_details": True},
+        authenticated_job_scope=True,
+        expected_requester_id="alice",
+        expected_tenant_id="user-alice",
+    )
+
+    assert result == {
+        "job_id": "job-1",
+        "status": "ok",
+        "runtime_controls": {
+            "job_recovery": {
+                "status": "signaled",
+                "scope": "job_scoped",
+                "mode": "signal_only",
+                "job_id": "job-1",
+            }
+        },
+        "recovery_services": {"job_scoped": {}},
+    }
+    assert "FOREIGN" not in str(result)
+
+
+def test_criteria_rerun_rejects_foreign_explicit_baseline_before_results_read() -> None:
+    orchestrator = object.__new__(SourcingOrchestrator)
+    store = SimpleNamespace(
+        get_job=lambda _job_id: _foreign_job() | {"job_id": "job-bob"},
+        get_job_results=lambda _job_id: (_ for _ in ()).throw(AssertionError("foreign results read")),
+    )
+    orchestrator.store = store
+
+    result = orchestrator._rerun_after_recompile_if_requested(
+        {"rerun_retrieval": True, "job_id": "job-bob"},
+        {"feedback_id": 1},
+        {
+            "status": "recompiled",
+            "request": {"target_company": "OpenAI"},
+            "plan": {},
+        },
+        expected_requester_id="alice",
+        expected_tenant_id="user-alice",
+    )
+
+    assert result == {"status": "not_found", "reason": "job_not_found"}

@@ -213,6 +213,7 @@ def _api_bearer_tokens() -> dict[str, str]:
     raw = str(os.getenv("SOURCING_API_BEARER_TOKENS") or "").strip()
     if not raw:
         return {}
+
     class _JSONObjectPairs(list[tuple[str, Any]]):
         """Marker that preserves duplicate object keys during JSON parsing."""
 
@@ -369,6 +370,9 @@ AUTHENTICATED_REQUEST_SCOPE_REGISTRY: dict[tuple[str, str], str] = {
     ("POST", "/api/jobs/{job_id}/candidates/batch"): "owned_job_read_via_post",
     ("POST", "/api/results/refine/compile-instruction"): "exact_job_read_via_post",
     ("POST", "/api/results/refine"): "exact_job_derived_create",
+    ("POST", "/api/criteria/feedback"): "criteria_write_with_optional_exact_job_derived_create",
+    ("POST", "/api/criteria/suggestions/review"): "criteria_write_with_optional_exact_job_derived_create",
+    ("POST", "/api/criteria/recompile"): "criteria_write_with_optional_exact_job_derived_create",
     ("POST", "/api/target-candidates/import-from-job"): "exact_job_write",
     ("POST", "/api/projections/backfill-from-job"): "exact_job_write",
     ("GET", "/api/workers/recoverable"): "exact_job_read_or_global_admin",
@@ -1378,14 +1382,21 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["GET"], "/api/workers/recoverable", get_recoverable_workers)
 
     def get_worker_daemon_status(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
-        if _server_identity(request) is not None:
+        authenticated = _server_identity(request) is not None
+        if authenticated:
             job_id = str(query.get("job_id") or "").strip()
             if not job_id:
                 return _json_response(HTTPStatus.FORBIDDEN, _ADMIN_SCOPE_REQUIRED_BODY)
             denied = _gate_job_write_owner(request, job_id)
             if denied is not None:
                 return denied
-        return _json_response(HTTPStatus.OK, orchestrator.get_worker_daemon_status(query))
+        result = orchestrator.get_worker_daemon_status(
+            query,
+            authenticated_job_scope=authenticated,
+            **_expected_job_owner_kwargs(request),
+        )
+        status = HTTPStatus.NOT_FOUND if result.get("status") == "not_found" else HTTPStatus.OK
+        return _json_response(status, result)
 
     add(["GET"], "/api/workers/daemon/status", get_worker_daemon_status)
 
@@ -2133,7 +2144,9 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["POST"], "/api/intake/excel/continue", post_intake_excel_continue, read_body=True)
 
     def post_criteria_feedback(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
-        return _json_response(HTTPStatus.CREATED, orchestrator.record_criteria_feedback(payload))
+        result = orchestrator.record_criteria_feedback(payload, **_expected_job_owner_kwargs(request))
+        status = HTTPStatus.NOT_FOUND if result.get("status") == "not_found" else HTTPStatus.CREATED
+        return _json_response(status, result)
 
     add(["POST"], "/api/criteria/feedback", post_criteria_feedback, read_body=True)
 
@@ -2196,7 +2209,7 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["POST"], "/api/criteria/confidence-policy", post_criteria_confidence_policy, read_body=True)
 
     def post_criteria_suggestions_review(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
-        result = orchestrator.review_pattern_suggestion(payload)
+        result = orchestrator.review_pattern_suggestion(payload, **_expected_job_owner_kwargs(request))
         status = HTTPStatus.OK if result.get("status") != "not_found" else HTTPStatus.NOT_FOUND
         return _json_response(status, result)
 
@@ -2703,7 +2716,9 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["POST"], "/api/manual-review/synthesize", post_manual_review_synthesize, read_body=True)
 
     def post_criteria_recompile(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
-        return _json_response(HTTPStatus.OK, orchestrator.recompile_criteria(payload))
+        result = orchestrator.recompile_criteria(payload, **_expected_job_owner_kwargs(request))
+        status = HTTPStatus.NOT_FOUND if result.get("status") == "not_found" else HTTPStatus.OK
+        return _json_response(status, result)
 
     add(["POST"], "/api/criteria/recompile", post_criteria_recompile, read_body=True)
 

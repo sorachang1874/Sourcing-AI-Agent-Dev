@@ -88,6 +88,7 @@ def _normalize_job_result_view_source_path(source_path: str) -> str:
             return str(candidate)
     return normalized_source_path
 
+
 _TERMINAL_JOB_STATUSES = {"completed", "failed"}
 _CONTROL_PLANE_POSTGRES_NATIVE_READ_METHODS = {
     "get_agent_trace_span",
@@ -103,6 +104,9 @@ _CONTROL_PLANE_POSTGRES_NATIVE_READ_METHODS = {
 }
 _CONTROL_PLANE_POSTGRES_NATIVE_TABLES = {
     "save_job_row": "jobs",
+    "update_job_row_if_owned": "jobs",
+    "apply_owned_crm_record_update": "crm_records",
+    "upsert_crm_public_web_promotion_if_owned": "crm_public_web_promotions",
     "append_job_event": "job_events",
     "create_agent_runtime_session_row": "agent_runtime_sessions",
     "update_agent_runtime_session_status": "agent_runtime_sessions",
@@ -207,7 +211,6 @@ def _legacy_materialization_write_is_migration(metadata: dict[str, Any] | None, 
     )
 
 
-
 # Extracted to control_plane_serde so the typed repository write path applies the SAME json-safe
 # coercion (re-imported under the legacy private name to keep all internal call sites unchanged).
 _json_safe_payload = _control_plane_json_safe_payload
@@ -248,9 +251,7 @@ def _workflow_command_causality_columns_from_payload(
             _json_safe_payload(list(causality.get("downstream_command_ids") or [])),
             ensure_ascii=False,
         ),
-        "causality_schema_version": str(
-            causality.get("schema_version") or "command_causality_v1"
-        ).strip()
+        "causality_schema_version": str(causality.get("schema_version") or "command_causality_v1").strip()
         or "command_causality_v1",
     }
 
@@ -844,14 +845,17 @@ class ControlPlaneStore:
                         source_job=normalized_source_job,
                         snapshot_dir=normalized_snapshot_dir,
                     ) as lock_evidence:
-                        yield dict(lock_evidence or {
-                            "kind": "pg_try_advisory_xact_lock",
-                            "lock_kind": "pg_try_advisory_xact_lock",
-                            "distributed": True,
-                            "acquired": True,
-                            "busy": False,
-                            "source": "control_plane_live_postgres",
-                        })
+                        yield dict(
+                            lock_evidence
+                            or {
+                                "kind": "pg_try_advisory_xact_lock",
+                                "lock_kind": "pg_try_advisory_xact_lock",
+                                "distributed": True,
+                                "acquired": True,
+                                "busy": False,
+                                "source": "control_plane_live_postgres",
+                            }
+                        )
                     return
                 except Exception as exc:
                     if self._control_plane_postgres_should_skip_sqlite_fallback("linkedin_profile_registry"):
@@ -900,12 +904,15 @@ class ControlPlaneStore:
                         job_id=normalized_job_id,
                         snapshot_id=normalized_snapshot_id,
                     ) as lock_evidence:
-                        yield dict(lock_evidence or {
-                            "kind": "pg_advisory_xact_lock",
-                            "lock_kind": "pg_advisory_xact_lock",
-                            "distributed": True,
-                            "source": "control_plane_live_postgres",
-                        })
+                        yield dict(
+                            lock_evidence
+                            or {
+                                "kind": "pg_advisory_xact_lock",
+                                "lock_kind": "pg_advisory_xact_lock",
+                                "distributed": True,
+                                "source": "control_plane_live_postgres",
+                            }
+                        )
                     return
                 except Exception as exc:
                     if self._control_plane_postgres_should_skip_sqlite_fallback("job_board_visible_patches"):
@@ -945,9 +952,7 @@ class ControlPlaneStore:
         reason: str,
         error: Exception | None = None,
     ) -> None:
-        message = (
-            f"Postgres authoritative write failed for {table_name} via {method_name}: {reason}"
-        )
+        message = f"Postgres authoritative write failed for {table_name} via {method_name}: {reason}"
         if error is not None:
             raise RuntimeError(message) from error
         raise RuntimeError(message)
@@ -960,9 +965,7 @@ class ControlPlaneStore:
         reason: str,
         error: Exception | None = None,
     ) -> None:
-        message = (
-            f"Postgres authoritative read failed for {table_name} via {method_name}: {reason}"
-        )
+        message = f"Postgres authoritative read failed for {table_name} via {method_name}: {reason}"
         if error is not None:
             raise RuntimeError(message) from error
         raise RuntimeError(message)
@@ -975,10 +978,7 @@ class ControlPlaneStore:
             keyword_args=kwargs,
         )
         table_name = self._control_plane_postgres_native_table_name(normalized_method_name, kwargs)
-        strict_no_fallback = bool(
-            table_name
-            and self._control_plane_postgres_should_skip_sqlite_fallback(table_name)
-        )
+        strict_no_fallback = bool(table_name and self._control_plane_postgres_should_skip_sqlite_fallback(table_name))
         native_read = normalized_method_name in _CONTROL_PLANE_POSTGRES_NATIVE_READ_METHODS
         method = getattr(self._control_plane_postgres, method_name, None)
         if method is None:
@@ -1160,7 +1160,11 @@ class ControlPlaneStore:
         evidence: list[EvidenceRecord],
     ) -> None:
         normalized_candidate_ids = _dedupe_preserve_order(
-            [str(candidate_id or "").strip() for candidate_id in list(candidate_ids or []) if str(candidate_id or "").strip()]
+            [
+                str(candidate_id or "").strip()
+                for candidate_id in list(candidate_ids or [])
+                if str(candidate_id or "").strip()
+            ]
         )
         if not normalized_candidate_ids:
             return
@@ -1175,9 +1179,7 @@ class ControlPlaneStore:
             if str(candidate.candidate_id or "").strip()
         }
         filtered_evidence = [
-            item
-            for item in list(evidence or [])
-            if str(item.candidate_id or "").strip() in filtered_candidate_ids
+            item for item in list(evidence or []) if str(item.candidate_id or "").strip() in filtered_candidate_ids
         ]
         if self._replace_candidates_and_evidence_in_postgres(
             current_candidate_rows=self._select_postgres_candidate_rows(
@@ -1472,7 +1474,9 @@ class ControlPlaneStore:
 
     def list_evidence_for_company(self, target_company: str) -> list[dict[str, Any]]:
         company_candidates = self.list_candidates_for_company(target_company)
-        candidate_ids = [candidate.candidate_id for candidate in company_candidates if str(candidate.candidate_id or "").strip()]
+        candidate_ids = [
+            candidate.candidate_id for candidate in company_candidates if str(candidate.candidate_id or "").strip()
+        ]
         postgres_rows: list[dict[str, Any]] = []
         if candidate_ids:
             placeholders = ", ".join("%s" for _ in candidate_ids)
@@ -1481,9 +1485,11 @@ class ControlPlaneStore:
                 params=candidate_ids,
                 limit=0,
             )
-        if postgres_rows or (
-            not candidate_ids and self._control_plane_postgres_should_skip_sqlite_fallback("evidence")
-        ) or self._control_plane_postgres_should_skip_sqlite_fallback("candidates"):
+        if (
+            postgres_rows
+            or (not candidate_ids and self._control_plane_postgres_should_skip_sqlite_fallback("evidence"))
+            or self._control_plane_postgres_should_skip_sqlite_fallback("candidates")
+        ):
             return sorted(
                 [self._evidence_payload_from_row(row, include_candidate_id=True) for row in postgres_rows],
                 key=lambda row: (str(row.get("candidate_id") or ""), str(row.get("title") or "")),
@@ -1505,6 +1511,47 @@ class ControlPlaneStore:
             reason="postgres-only: write returned no confirmation; legacy SQLite mirror tail retired (B4)",
         )
 
+    @staticmethod
+    def _job_storage_row(
+        *,
+        job_id: str,
+        job_type: str,
+        status: str,
+        stage: str,
+        request_payload: dict[str, Any],
+        plan_payload: dict[str, Any] | None = None,
+        execution_bundle_payload: dict[str, Any] | None = None,
+        summary_payload: dict[str, Any] | None = None,
+        artifact_path: str = "",
+        requester_id: str = "",
+        tenant_id: str = "",
+        idempotency_key: str = "",
+    ) -> dict[str, Any]:
+        execution_bundle_value = dict(execution_bundle_payload or {})
+        matching_bundle = _matching_bundle_payload(
+            request_payload,
+            execution_bundle_payload=execution_bundle_value,
+        )
+        return {
+            "job_id": str(job_id or "").strip(),
+            "job_type": str(job_type or "").strip(),
+            "status": str(status or "").strip(),
+            "stage": str(stage or "").strip(),
+            "request_json": json.dumps(_json_safe_payload(request_payload), ensure_ascii=False),
+            "plan_json": json.dumps(_json_safe_payload(plan_payload or {}), ensure_ascii=False),
+            "execution_bundle_json": json.dumps(_json_safe_payload(execution_bundle_value), ensure_ascii=False),
+            "matching_request_json": json.dumps(_json_safe_payload(matching_bundle), ensure_ascii=False),
+            "summary_json": json.dumps(_json_safe_payload(summary_payload or {}), ensure_ascii=False),
+            "artifact_path": str(artifact_path or ""),
+            "request_signature": request_signature(request_payload),
+            "request_family_signature": request_family_signature(request_payload),
+            "matching_request_signature": str(matching_bundle.get("matching_request_signature") or ""),
+            "matching_request_family_signature": str(matching_bundle.get("matching_request_family_signature") or ""),
+            "requester_id": str(requester_id or "").strip(),
+            "tenant_id": str(tenant_id or "").strip(),
+            "idempotency_key": str(idempotency_key or "").strip(),
+        }
+
     def save_job(
         self,
         job_id: str,
@@ -1520,45 +1567,24 @@ class ControlPlaneStore:
         tenant_id: str = "",
         idempotency_key: str = "",
     ) -> None:
-        summary_json = json.dumps(_json_safe_payload(summary_payload or {}), ensure_ascii=False)
-        request_json = json.dumps(_json_safe_payload(request_payload), ensure_ascii=False)
-        plan_json = json.dumps(_json_safe_payload(plan_payload or {}), ensure_ascii=False)
-        execution_bundle_value = dict(execution_bundle_payload or {})
-        execution_bundle_json = json.dumps(_json_safe_payload(execution_bundle_value), ensure_ascii=False)
-        matching_bundle = _matching_bundle_payload(
-            request_payload,
-            execution_bundle_payload=execution_bundle_value,
+        row_payload = self._job_storage_row(
+            job_id=job_id,
+            job_type=job_type,
+            status=status,
+            stage=stage,
+            request_payload=request_payload,
+            plan_payload=plan_payload,
+            execution_bundle_payload=execution_bundle_payload,
+            summary_payload=summary_payload,
+            artifact_path=artifact_path,
+            requester_id=requester_id,
+            tenant_id=tenant_id,
+            idempotency_key=idempotency_key,
         )
-        matching_request_json = json.dumps(_json_safe_payload(matching_bundle), ensure_ascii=False)
-        request_sig = request_signature(request_payload)
-        request_family_sig = request_family_signature(request_payload)
-        matching_request_sig = str(matching_bundle.get("matching_request_signature") or "")
-        matching_request_family_sig = str(matching_bundle.get("matching_request_family_signature") or "")
-        requester_id_value = str(requester_id or "").strip()
-        tenant_id_value = str(tenant_id or "").strip()
-        idempotency_key_value = str(idempotency_key or "").strip()
         if self._control_plane_postgres_should_prefer_read("jobs"):
             row = self._call_control_plane_postgres_native(
                 "save_job_row",
-                row={
-                    "job_id": job_id,
-                    "job_type": job_type,
-                    "status": status,
-                    "stage": stage,
-                    "request_json": request_json,
-                    "plan_json": plan_json,
-                    "execution_bundle_json": execution_bundle_json,
-                    "matching_request_json": matching_request_json,
-                    "summary_json": summary_json,
-                    "artifact_path": artifact_path,
-                    "request_signature": request_sig,
-                    "request_family_signature": request_family_sig,
-                    "matching_request_signature": matching_request_sig,
-                    "matching_request_family_signature": matching_request_family_sig,
-                    "requester_id": requester_id_value,
-                    "tenant_id": tenant_id_value,
-                    "idempotency_key": idempotency_key_value,
-                },
+                row=row_payload,
                 protect_terminal_statuses=True,
                 terminal_statuses=sorted(_TERMINAL_JOB_STATUSES),
             )
@@ -1575,6 +1601,52 @@ class ControlPlaneStore:
             "postgres-only invariant violated for jobs in save_job: should_prefer_read "
             "returned False; legacy SQLite tail retired (B4)"
         )
+
+    def save_job_if_owned(
+        self,
+        *,
+        expected_requester_id: str,
+        expected_tenant_id: str,
+        job_id: str,
+        job_type: str,
+        status: str,
+        stage: str,
+        request_payload: dict[str, Any],
+        plan_payload: dict[str, Any] | None = None,
+        execution_bundle_payload: dict[str, Any] | None = None,
+        summary_payload: dict[str, Any] | None = None,
+        artifact_path: str = "",
+        requester_id: str = "",
+        tenant_id: str = "",
+        idempotency_key: str = "",
+    ) -> bool:
+        """Atomically update an existing job only while its exact owner is unchanged."""
+
+        normalized_requester = str(expected_requester_id or "").strip()
+        normalized_tenant = str(expected_tenant_id or "").strip()
+        if not normalized_requester or not normalized_tenant:
+            return False
+        row_payload = self._job_storage_row(
+            job_id=job_id,
+            job_type=job_type,
+            status=status,
+            stage=stage,
+            request_payload=request_payload,
+            plan_payload=plan_payload,
+            execution_bundle_payload=execution_bundle_payload,
+            summary_payload=summary_payload,
+            artifact_path=artifact_path,
+            requester_id=requester_id,
+            tenant_id=tenant_id,
+            idempotency_key=idempotency_key,
+        )
+        row = self._call_control_plane_postgres_native(
+            "update_job_row_if_owned",
+            row=row_payload,
+            expected_requester_id=normalized_requester,
+            expected_tenant_id=normalized_tenant,
+        )
+        return row is not None
 
     def append_job_event(
         self,
@@ -1826,9 +1898,7 @@ class ControlPlaneStore:
         normalized_candidate_ids = _dedupe_ordered_texts(candidate_ids or [])
         normalized_cumulative_candidate_ids = _dedupe_ordered_texts(cumulative_candidate_ids or [])
         resolved_candidate_count = (
-            max(0, int(candidate_count or 0))
-            if candidate_count is not None
-            else len(normalized_candidate_ids)
+            max(0, int(candidate_count or 0)) if candidate_count is not None else len(normalized_candidate_ids)
         )
         resolved_cumulative_count = (
             max(0, int(cumulative_candidate_count or 0))
@@ -1854,8 +1924,7 @@ class ControlPlaneStore:
             "asset_view": normalized_asset_view,
             "patch_kind": str(patch_kind or "partial_delta_board_visible_patch").strip()
             or "partial_delta_board_visible_patch",
-            "patch_phase": str(patch_phase or "board_visible_delta_applied").strip()
-            or "board_visible_delta_applied",
+            "patch_phase": str(patch_phase or "board_visible_delta_applied").strip() or "board_visible_delta_applied",
             "source": str(source or "").strip(),
             "reason": str(reason or "").strip(),
             "sequence_index": max(1, int(sequence_index or 1)),
@@ -1877,7 +1946,9 @@ class ControlPlaneStore:
             "updated_at": now,
         }
         if self._write_control_plane_row_to_postgres("job_board_visible_patches", row_payload):
-            return self.get_job_board_visible_patch(normalized_patch_id) or self._job_board_visible_patch_from_row(row_payload)
+            return self.get_job_board_visible_patch(normalized_patch_id) or self._job_board_visible_patch_from_row(
+                row_payload
+            )
         self._raise_control_plane_postgres_write_failure(
             table_name="job_board_visible_patches",
             method_name="upsert_job_board_visible_patch",
@@ -2151,9 +2222,7 @@ class ControlPlaneStore:
             postgres_clauses.append("item_kind = %s")
             postgres_params.append(normalized_kind)
         normalized_statuses = [
-            str(status or "").strip().lower()
-            for status in list(statuses or [])
-            if str(status or "").strip()
+            str(status or "").strip().lower() for status in list(statuses or []) if str(status or "").strip()
         ]
         if normalized_statuses:
             postgres_placeholders = ", ".join(["%s"] * len(normalized_statuses))
@@ -2693,9 +2762,15 @@ class ControlPlaneStore:
                         merged[field] = existing.get(field) or merged.get(field) or 0
             else:
                 try:
-                    canonical_served = max(int(existing.get("served_candidate_count") or 0), int(merged.get("served_candidate_count") or 0))
+                    canonical_served = max(
+                        int(existing.get("served_candidate_count") or 0), int(merged.get("served_candidate_count") or 0)
+                    )
                 except (TypeError, ValueError):
-                    canonical_served = int(existing.get("served_candidate_count") or 0) if existing.get("served_candidate_count") else 0
+                    canonical_served = (
+                        int(existing.get("served_candidate_count") or 0)
+                        if existing.get("served_candidate_count")
+                        else 0
+                    )
                 merged["served_candidate_count"] = canonical_served
                 if canonical_served > 0:
                     # Non-delta projections serve a deduped canonical row set.
@@ -2709,7 +2784,9 @@ class ControlPlaneStore:
                             int(merged.get("expected_candidate_count") or 0),
                         )
                     except (TypeError, ValueError):
-                        merged["expected_candidate_count"] = existing.get("expected_candidate_count") or merged.get("expected_candidate_count") or 0
+                        merged["expected_candidate_count"] = (
+                            existing.get("expected_candidate_count") or merged.get("expected_candidate_count") or 0
+                        )
             if existing_metadata_payload:
                 merged_metadata_payload = {
                     **incoming_metadata_payload,
@@ -2718,9 +2795,8 @@ class ControlPlaneStore:
                 merged["metadata"] = merged_metadata_payload
                 incoming_metadata_payload = merged_metadata_payload
 
-        if (
-            bool(existing_metadata_payload.get("delta_profile_denominator_promoted"))
-            or bool(incoming_metadata_payload.get("delta_profile_denominator_promoted"))
+        if bool(existing_metadata_payload.get("delta_profile_denominator_promoted")) or bool(
+            incoming_metadata_payload.get("delta_profile_denominator_promoted")
         ):
             promoted_metadata_payload = {
                 **existing_metadata_payload,
@@ -2807,9 +2883,7 @@ class ControlPlaneStore:
             and incoming_layering_status in nonterminal_layering_statuses
         ):
             existing_layering_snapshot = str(
-                existing.get("current_snapshot_id")
-                or existing.get("projection_source_snapshot_id")
-                or ""
+                existing.get("current_snapshot_id") or existing.get("projection_source_snapshot_id") or ""
             ).strip()
             incoming_layering_snapshot = str(
                 input_fields.get("current_snapshot_id")
@@ -2844,10 +2918,7 @@ class ControlPlaneStore:
             except json.JSONDecodeError:
                 metadata_payload = {}
         metadata_json = json.dumps(_json_safe_payload(metadata_payload or {}), ensure_ascii=False)
-        text_payload = {
-            field: str(merged.get(field) or "").strip()
-            for field in self.JOB_RESULT_LIFECYCLE_TEXT_FIELDS
-        }
+        text_payload = {field: str(merged.get(field) or "").strip() for field in self.JOB_RESULT_LIFECYCLE_TEXT_FIELDS}
         if not text_payload.get("phase"):
             text_payload["phase"] = "planning"
         if not text_payload.get("source_validation_status"):
@@ -2870,27 +2941,32 @@ class ControlPlaneStore:
             **int_payload,
         }
         if self._write_control_plane_row_to_postgres("job_result_lifecycle", row_payload):
-            return self.get_job_result_lifecycle(normalized_job_id) or self._job_result_lifecycle_from_row(row_payload) or {}
+            return (
+                self.get_job_result_lifecycle(normalized_job_id)
+                or self._job_result_lifecycle_from_row(row_payload)
+                or {}
+            )
         self._raise_control_plane_postgres_write_failure(
             table_name="job_result_lifecycle",
             method_name="upsert_job_result_lifecycle",
             reason="postgres-only: write returned no confirmation; legacy SQLite mirror tail retired (B4)",
         )
 
-    def _job_result_lifecycle_from_row(
-        self, row: dict[str, Any] | None
-    ) -> dict[str, Any] | None:
+    def _job_result_lifecycle_from_row(self, row: dict[str, Any] | None) -> dict[str, Any] | None:
         if row is None:
             return None
         if isinstance(row, dict):
+
             def getter(key: str, default: Any = None) -> Any:
                 return row.get(key, default)
         else:
+
             def getter(key: str, default: Any = None) -> Any:
                 try:
                     return row[key]
                 except (IndexError, KeyError):
                     return default
+
         metadata_payload: dict[str, Any] = {}
         try:
             metadata_payload = json.loads(getter("metadata_json") or "{}")
@@ -3091,7 +3167,9 @@ class ControlPlaneStore:
     ) -> list[dict[str, Any]]:
         if not rows:
             return []
-        candidate_ids = [str(row.get("candidate_id") or "").strip() for row in rows if str(row.get("candidate_id") or "").strip()]
+        candidate_ids = [
+            str(row.get("candidate_id") or "").strip() for row in rows if str(row.get("candidate_id") or "").strip()
+        ]
         candidate_rows = []
         if candidate_ids:
             placeholders = ", ".join("%s" for _ in candidate_ids)
@@ -3375,7 +3453,6 @@ class ControlPlaneStore:
             "postgres-only invariant violated for plan_review_sessions in review_plan_session: should_prefer_read "
             "returned False; legacy SQLite tail retired (B4)"
         )
-
 
     def list_candidate_review_records(
         self,
@@ -3695,11 +3772,7 @@ class ControlPlaneStore:
         asset_type: str = "",
         limit: int = 1000,
     ) -> list[dict[str, Any]]:
-        keys = [
-            str(item or "").strip()
-            for item in person_identity_keys
-            if str(item or "").strip()
-        ]
+        keys = [str(item or "").strip() for item in person_identity_keys if str(item or "").strip()]
         if not keys:
             return []
         deduped_keys = list(dict.fromkeys(keys))
@@ -4114,9 +4187,7 @@ class ControlPlaneStore:
         now = _utc_now_timestamp()
         existing = self.get_raw_profile_index(person_identity_key)
         raw_terms = _normalize_search_index_terms(normalized.get("raw_profile_terms"))
-        indexed_text = _normalize_search_index_text(
-            " ".join([str(normalized.get("indexed_text") or ""), *raw_terms])
-        )
+        indexed_text = _normalize_search_index_text(" ".join([str(normalized.get("indexed_text") or ""), *raw_terms]))
         row_payload = {
             "person_identity_key": person_identity_key,
             "indexed_text": indexed_text,
@@ -4356,8 +4427,7 @@ class ControlPlaneStore:
                     {
                         "engagement_id": str(row.get("engagement_id") or "").strip(),
                         "crm_record_id": str(row.get("crm_record_id") or "").strip(),
-                        "pipeline_id": str(row.get("pipeline_id") or "default_sourcing").strip()
-                        or "default_sourcing",
+                        "pipeline_id": str(row.get("pipeline_id") or "default_sourcing").strip() or "default_sourcing",
                         "stage": str(row.get("stage") or "new").strip() or "new",
                         "stage_category": str(
                             row.get("stage_category") or _crm_stage_category(row.get("stage"))
@@ -4476,6 +4546,120 @@ class ControlPlaneStore:
             row_builder=self._crm_record_from_row,
         )
 
+    def apply_owned_crm_record_update(
+        self,
+        *,
+        record_payload: dict[str, Any],
+        engagement_payload: dict[str, Any],
+        event_payload: dict[str, Any],
+        expected_workspace_id: str,
+        expected_owner_user_id: str,
+    ) -> dict[str, Any]:
+        """Commit an authenticated CRM edit under the canonical record row lock."""
+
+        normalized_record = dict(record_payload or {})
+        normalized_engagement = dict(engagement_payload or {})
+        normalized_event = dict(event_payload or {})
+        crm_record_id = str(normalized_record.get("crm_record_id") or normalized_record.get("id") or "").strip()
+        person_identity_key = str(normalized_record.get("person_identity_key") or "").strip()
+        normalized_workspace = str(expected_workspace_id or "").strip()
+        normalized_owner = str(expected_owner_user_id or "").strip()
+        if not crm_record_id or not person_identity_key or not normalized_workspace or not normalized_owner:
+            return {"status": "not_found", "reason": "crm_record_not_found"}
+
+        now = _utc_now_timestamp()
+        expected_crm_version = int(normalized_record.get("crm_version") or 0)
+        engagement_id = str(
+            normalized_engagement.get("engagement_id") or normalized_engagement.get("id") or f"crmeng_{uuid4().hex}"
+        ).strip()
+        event_id = str(
+            normalized_event.get("event_id") or normalized_event.get("id") or f"crmevt_{uuid4().hex}"
+        ).strip()
+        record_row = _crm_core_repo.CRM_RECORDS.to_columns(
+            {
+                **normalized_record,
+                "crm_record_id": crm_record_id,
+                "workspace_id": normalized_workspace,
+                "person_identity_key": person_identity_key,
+                "current_engagement_id": engagement_id,
+                "crm_version": expected_crm_version + 1,
+                "metadata": _normalize_json_object_payload(
+                    normalized_record.get("metadata") or normalized_record.get("metadata_json")
+                ),
+                "created_at": str(normalized_record.get("created_at") or now),
+                "updated_at": now,
+            }
+        )
+        engagement_row = {
+            "engagement_id": engagement_id,
+            "crm_record_id": crm_record_id,
+            "pipeline_id": str(normalized_engagement.get("pipeline_id") or "default_sourcing").strip()
+            or "default_sourcing",
+            "stage": str(normalized_engagement.get("stage") or "new").strip() or "new",
+            "stage_category": str(
+                normalized_engagement.get("stage_category") or _crm_stage_category(normalized_engagement.get("stage"))
+            ).strip()
+            or "open",
+            "priority": str(normalized_engagement.get("priority") or "normal").strip() or "normal",
+            "quality_score": normalized_engagement.get("quality_score"),
+            "next_action_at": str(normalized_engagement.get("next_action_at") or "").strip(),
+            "last_contacted_at": str(normalized_engagement.get("last_contacted_at") or "").strip(),
+            "source_projection_id": str(normalized_engagement.get("source_projection_id") or "").strip(),
+            "source_run_id": str(normalized_engagement.get("source_run_id") or "").strip(),
+            "source_selection_reason": str(normalized_engagement.get("source_selection_reason") or "").strip(),
+            "created_by_actor": str(normalized_engagement.get("created_by_actor") or "").strip(),
+            "metadata_json": json.dumps(
+                _normalize_json_object_payload(
+                    normalized_engagement.get("metadata") or normalized_engagement.get("metadata_json")
+                ),
+                ensure_ascii=False,
+            ),
+            "created_at": str(normalized_engagement.get("created_at") or now),
+            "updated_at": now,
+        }
+        event_row = _crm_core_repo.CRM_EVENTS.to_columns(
+            {
+                **normalized_event,
+                "event_id": event_id,
+                "workspace_id": normalized_workspace,
+                "crm_record_id": crm_record_id,
+                "engagement_id": engagement_id,
+                "person_identity_key": person_identity_key,
+                "payload": _normalize_json_object_payload(
+                    normalized_event.get("payload") or normalized_event.get("payload_json")
+                ),
+                "metadata": _normalize_json_object_payload(
+                    normalized_event.get("metadata") or normalized_event.get("metadata_json")
+                ),
+                "occurred_at": str(normalized_event.get("occurred_at") or now).strip(),
+                "created_at": str(normalized_event.get("created_at") or now),
+            }
+        )
+        result = self._call_control_plane_postgres_native(
+            "apply_owned_crm_record_update",
+            crm_record_id=crm_record_id,
+            expected_workspace_id=normalized_workspace,
+            expected_owner_user_id=normalized_owner,
+            expected_crm_version=expected_crm_version,
+            record_row=record_row,
+            engagement_row=engagement_row,
+            event_row=event_row,
+        )
+        if not isinstance(result, dict):
+            self._raise_control_plane_postgres_write_failure(
+                table_name="crm_records",
+                method_name="apply_owned_crm_record_update",
+                reason="postgres-only: owned CRM update UoW returned no confirmation",
+            )
+        if result.get("status") != "applied":
+            return dict(result)
+        return {
+            "status": "applied",
+            "crm_record": self._crm_record_from_row(dict(result.get("record_row") or {})),
+            "crm_engagement": self._crm_engagement_from_row(dict(result.get("engagement_row") or {})),
+            "crm_event": self._crm_event_from_row(dict(result.get("event_row") or {})),
+        }
+
     def get_crm_record(self, crm_record_id: str) -> dict[str, Any]:
         normalized_record_id = str(crm_record_id or "").strip()
         if not normalized_record_id:
@@ -4517,7 +4701,9 @@ class ControlPlaneStore:
         workspace_id: str = "default",
     ) -> dict[str, dict[str, Any]]:
         normalized_workspace_id = str(workspace_id or "default").strip() or "default"
-        keys = _dedupe_preserve_order([str(key or "").strip() for key in list(person_identity_keys or []) if str(key or "").strip()])
+        keys = _dedupe_preserve_order(
+            [str(key or "").strip() for key in list(person_identity_keys or []) if str(key or "").strip()]
+        )
         if not keys:
             return {}
         ", ".join("?" for _ in keys)
@@ -4576,7 +4762,9 @@ class ControlPlaneStore:
             "crm_record_id": str(normalized.get("crm_record_id") or "").strip(),
             "pipeline_id": str(normalized.get("pipeline_id") or "default_sourcing").strip() or "default_sourcing",
             "stage": str(normalized.get("stage") or "new").strip() or "new",
-            "stage_category": str(normalized.get("stage_category") or _crm_stage_category(normalized.get("stage"))).strip()
+            "stage_category": str(
+                normalized.get("stage_category") or _crm_stage_category(normalized.get("stage"))
+            ).strip()
             or "open",
             "priority": str(normalized.get("priority") or "normal").strip() or "normal",
             "quality_score": normalized.get("quality_score"),
@@ -4744,9 +4932,7 @@ class ControlPlaneStore:
                 "event_id": event_id,
                 "workspace_id": workspace_id,
                 "idempotency_key": idempotency_key,
-                "payload": _normalize_json_object_payload(
-                    normalized.get("payload") or normalized.get("payload_json")
-                ),
+                "payload": _normalize_json_object_payload(normalized.get("payload") or normalized.get("payload_json")),
                 "metadata": _normalize_json_object_payload(
                     normalized.get("metadata") or normalized.get("metadata_json")
                 ),
@@ -4786,10 +4972,9 @@ class ControlPlaneStore:
             {**normalized, "created_at": created_at, "updated_at": now}
         )
         if self._write_control_plane_row_to_postgres("target_candidate_public_web_batches", row_payload):
-            return (
-                self.get_target_candidate_public_web_batch(batch_id=normalized["batch_id"])
-                or self._target_candidate_public_web_batch_from_row(row_payload)
-            )
+            return self.get_target_candidate_public_web_batch(
+                batch_id=normalized["batch_id"]
+            ) or self._target_candidate_public_web_batch_from_row(row_payload)
         self._raise_control_plane_postgres_write_failure(
             table_name="target_candidate_public_web_batches",
             method_name="upsert_target_candidate_public_web_batch",
@@ -4844,10 +5029,9 @@ class ControlPlaneStore:
         now = _utc_now_timestamp()
         row_payload = _target_candidate_public_web_run_row_payload(normalized, existing=existing, now=now)
         if self._write_control_plane_row_to_postgres("target_candidate_public_web_runs", row_payload):
-            return (
-                self.get_target_candidate_public_web_run(run_id=normalized["run_id"])
-                or self._target_candidate_public_web_run_from_row(row_payload)
-            )
+            return self.get_target_candidate_public_web_run(
+                run_id=normalized["run_id"]
+            ) or self._target_candidate_public_web_run_from_row(row_payload)
         self._raise_control_plane_postgres_write_failure(
             table_name="target_candidate_public_web_runs",
             method_name="upsert_target_candidate_public_web_run",
@@ -4863,12 +5047,22 @@ class ControlPlaneStore:
             **existing,
             **dict(patch or {}),
             "run_id": str(run_id or "").strip(),
-            "source_families": patch.get("source_families", existing.get("source_families")) if patch else existing.get("source_families"),
+            "source_families": patch.get("source_families", existing.get("source_families"))
+            if patch
+            else existing.get("source_families"),
             "options": patch.get("options", existing.get("options")) if patch else existing.get("options"),
-            "query_manifest": patch.get("query_manifest", existing.get("query_manifest")) if patch else existing.get("query_manifest"),
-            "search_checkpoint": patch.get("search_checkpoint", existing.get("search_checkpoint")) if patch else existing.get("search_checkpoint"),
-            "fetch_checkpoint": patch.get("fetch_checkpoint", existing.get("fetch_checkpoint")) if patch else existing.get("fetch_checkpoint"),
-            "analysis_checkpoint": patch.get("analysis_checkpoint", existing.get("analysis_checkpoint")) if patch else existing.get("analysis_checkpoint"),
+            "query_manifest": patch.get("query_manifest", existing.get("query_manifest"))
+            if patch
+            else existing.get("query_manifest"),
+            "search_checkpoint": patch.get("search_checkpoint", existing.get("search_checkpoint"))
+            if patch
+            else existing.get("search_checkpoint"),
+            "fetch_checkpoint": patch.get("fetch_checkpoint", existing.get("fetch_checkpoint"))
+            if patch
+            else existing.get("fetch_checkpoint"),
+            "analysis_checkpoint": patch.get("analysis_checkpoint", existing.get("analysis_checkpoint"))
+            if patch
+            else existing.get("analysis_checkpoint"),
             "summary": patch.get("summary", existing.get("summary")) if patch else existing.get("summary"),
         }
         return self.upsert_target_candidate_public_web_run(merged)
@@ -4968,10 +5162,9 @@ class ControlPlaneStore:
         now = _utc_now_timestamp()
         row_payload = _crm_public_web_batch_row_payload(normalized, existing=existing, now=now)
         if self._write_control_plane_row_to_postgres("crm_public_web_batches", row_payload):
-            return (
-                self.get_crm_public_web_batch(batch_id=normalized["batch_id"])
-                or self._crm_public_web_batch_from_row(row_payload)
-            )
+            return self.get_crm_public_web_batch(
+                batch_id=normalized["batch_id"]
+            ) or self._crm_public_web_batch_from_row(row_payload)
         self._raise_control_plane_postgres_write_failure(
             table_name="crm_public_web_batches",
             method_name="upsert_crm_public_web_batch",
@@ -5034,9 +5227,8 @@ class ControlPlaneStore:
         now = _utc_now_timestamp()
         row_payload = _crm_public_web_run_row_payload(normalized, existing=existing, now=now)
         if self._write_control_plane_row_to_postgres("crm_public_web_runs", row_payload):
-            return (
-                self.get_crm_public_web_run(run_id=normalized["run_id"])
-                or self._crm_public_web_run_from_row(row_payload)
+            return self.get_crm_public_web_run(run_id=normalized["run_id"]) or self._crm_public_web_run_from_row(
+                row_payload
             )
         self._raise_control_plane_postgres_write_failure(
             table_name="crm_public_web_runs",
@@ -5052,13 +5244,25 @@ class ControlPlaneStore:
             **existing,
             **dict(patch or {}),
             "run_id": str(run_id or "").strip(),
-            "crm_record_id": str((patch or {}).get("crm_record_id") or existing.get("crm_record_id") or existing.get("record_id") or ""),
-            "source_families": patch.get("source_families", existing.get("source_families")) if patch else existing.get("source_families"),
+            "crm_record_id": str(
+                (patch or {}).get("crm_record_id") or existing.get("crm_record_id") or existing.get("record_id") or ""
+            ),
+            "source_families": patch.get("source_families", existing.get("source_families"))
+            if patch
+            else existing.get("source_families"),
             "options": patch.get("options", existing.get("options")) if patch else existing.get("options"),
-            "query_manifest": patch.get("query_manifest", existing.get("query_manifest")) if patch else existing.get("query_manifest"),
-            "search_checkpoint": patch.get("search_checkpoint", existing.get("search_checkpoint")) if patch else existing.get("search_checkpoint"),
-            "fetch_checkpoint": patch.get("fetch_checkpoint", existing.get("fetch_checkpoint")) if patch else existing.get("fetch_checkpoint"),
-            "analysis_checkpoint": patch.get("analysis_checkpoint", existing.get("analysis_checkpoint")) if patch else existing.get("analysis_checkpoint"),
+            "query_manifest": patch.get("query_manifest", existing.get("query_manifest"))
+            if patch
+            else existing.get("query_manifest"),
+            "search_checkpoint": patch.get("search_checkpoint", existing.get("search_checkpoint"))
+            if patch
+            else existing.get("search_checkpoint"),
+            "fetch_checkpoint": patch.get("fetch_checkpoint", existing.get("fetch_checkpoint"))
+            if patch
+            else existing.get("fetch_checkpoint"),
+            "analysis_checkpoint": patch.get("analysis_checkpoint", existing.get("analysis_checkpoint"))
+            if patch
+            else existing.get("analysis_checkpoint"),
             "summary": patch.get("summary", existing.get("summary")) if patch else existing.get("summary"),
         }
         return self.upsert_crm_public_web_run(merged)
@@ -5176,10 +5380,9 @@ class ControlPlaneStore:
         now = _utc_now_timestamp()
         row_payload = _company_public_web_asset_run_row_payload(normalized, existing=existing, now=now)
         if self._write_control_plane_row_to_postgres("company_public_web_asset_runs", row_payload):
-            return (
-                self.get_company_public_web_asset_run(run_id=normalized["run_id"])
-                or self._company_public_web_asset_run_from_row(row_payload)
-            )
+            return self.get_company_public_web_asset_run(
+                run_id=normalized["run_id"]
+            ) or self._company_public_web_asset_run_from_row(row_payload)
         self._raise_control_plane_postgres_write_failure(
             table_name="company_public_web_asset_runs",
             method_name="upsert_company_public_web_asset_run",
@@ -5281,10 +5484,9 @@ class ControlPlaneStore:
         now = _utc_now_timestamp()
         row_payload = _company_public_web_asset_row_payload(normalized, existing=existing, now=now)
         if self._write_control_plane_row_to_postgres("company_public_web_assets", row_payload):
-            return (
-                self.get_company_public_web_asset(asset_id=normalized["asset_id"])
-                or self._company_public_web_asset_from_row(row_payload)
-            )
+            return self.get_company_public_web_asset(
+                asset_id=normalized["asset_id"]
+            ) or self._company_public_web_asset_from_row(row_payload)
         self._raise_control_plane_postgres_write_failure(
             table_name="company_public_web_assets",
             method_name="upsert_company_public_web_asset",
@@ -5382,10 +5584,9 @@ class ControlPlaneStore:
             {**normalized, "created_at": created_at, "updated_at": now}
         )
         if self._write_control_plane_row_to_postgres("person_public_web_assets", row_payload):
-            return (
-                self.get_person_public_web_asset(asset_id=normalized["asset_id"])
-                or self._person_public_web_asset_from_row(row_payload)
-            )
+            return self.get_person_public_web_asset(
+                asset_id=normalized["asset_id"]
+            ) or self._person_public_web_asset_from_row(row_payload)
         self._raise_control_plane_postgres_write_failure(
             table_name="person_public_web_assets",
             method_name="upsert_person_public_web_asset",
@@ -5411,7 +5612,11 @@ class ControlPlaneStore:
                 normalized_person_identity_key,
             )
         elif normalized_linkedin_url_key:
-            where_sql, _where_sqlite, value = "linkedin_url_key = %s", "linkedin_url_key = ?", normalized_linkedin_url_key
+            where_sql, _where_sqlite, value = (
+                "linkedin_url_key = %s",
+                "linkedin_url_key = ?",
+                normalized_linkedin_url_key,
+            )
         else:
             return None
         postgres_row = self._select_control_plane_row(
@@ -5450,10 +5655,9 @@ class ControlPlaneStore:
         now = _utc_now_timestamp()
         row_payload = _person_public_web_signal_row_payload(normalized, existing=existing, now=now)
         if self._write_control_plane_row_to_postgres("person_public_web_signals", row_payload):
-            return (
-                self.get_person_public_web_signal(signal_id=normalized["signal_id"])
-                or self._person_public_web_signal_from_row(row_payload)
-            )
+            return self.get_person_public_web_signal(
+                signal_id=normalized["signal_id"]
+            ) or self._person_public_web_signal_from_row(row_payload)
         self._raise_control_plane_postgres_write_failure(
             table_name="person_public_web_signals",
             method_name="upsert_person_public_web_signal",
@@ -5566,10 +5770,9 @@ class ControlPlaneStore:
         now = _utc_now_timestamp()
         row_payload = _target_candidate_public_web_promotion_row_payload(normalized, existing=existing, now=now)
         if self._write_control_plane_row_to_postgres("target_candidate_public_web_promotions", row_payload):
-            return (
-                self.get_target_candidate_public_web_promotion(normalized["promotion_id"])
-                or self._target_candidate_public_web_promotion_from_row(row_payload)
-            )
+            return self.get_target_candidate_public_web_promotion(
+                normalized["promotion_id"]
+            ) or self._target_candidate_public_web_promotion_from_row(row_payload)
         self._raise_control_plane_postgres_write_failure(
             table_name="target_candidate_public_web_promotions",
             method_name="upsert_target_candidate_public_web_promotion",
@@ -5636,15 +5839,46 @@ class ControlPlaneStore:
         now = _utc_now_timestamp()
         row_payload = _crm_public_web_promotion_row_payload(normalized, existing=existing, now=now)
         if self._write_control_plane_row_to_postgres("crm_public_web_promotions", row_payload):
-            return (
-                self.get_crm_public_web_promotion(normalized["promotion_id"])
-                or self._crm_public_web_promotion_from_row(row_payload)
-            )
+            return self.get_crm_public_web_promotion(
+                normalized["promotion_id"]
+            ) or self._crm_public_web_promotion_from_row(row_payload)
         self._raise_control_plane_postgres_write_failure(
             table_name="crm_public_web_promotions",
             method_name="upsert_crm_public_web_promotion",
             reason="postgres-only: write returned no confirmation; legacy SQLite mirror tail retired (B4)",
         )
+
+    def upsert_crm_public_web_promotion_if_owned(
+        self,
+        payload: dict[str, Any],
+        *,
+        crm_record_id: str,
+        expected_workspace_id: str,
+        expected_owner_user_id: str,
+    ) -> dict[str, Any]:
+        normalized = _normalize_crm_public_web_promotion_payload(payload)
+        existing = self.get_crm_public_web_promotion(normalized["promotion_id"])
+        row_payload = _crm_public_web_promotion_row_payload(
+            normalized,
+            existing=existing,
+            now=_utc_now_timestamp(),
+        )
+        result = self._call_control_plane_postgres_native(
+            "upsert_crm_public_web_promotion_if_owned",
+            row=row_payload,
+            crm_record_id=str(crm_record_id or "").strip(),
+            expected_workspace_id=str(expected_workspace_id or "").strip(),
+            expected_owner_user_id=str(expected_owner_user_id or "").strip(),
+        )
+        if not isinstance(result, dict):
+            self._raise_control_plane_postgres_write_failure(
+                table_name="crm_public_web_promotions",
+                method_name="upsert_crm_public_web_promotion_if_owned",
+                reason="postgres-only: owner-fenced CRM promotion returned no confirmation",
+            )
+        if result.get("status") != "applied":
+            return dict(result)
+        return self._crm_public_web_promotion_from_row(dict(result.get("row") or {}))
 
     def get_crm_public_web_promotion(self, promotion_id: str) -> dict[str, Any] | None:
         normalized_promotion_id = str(promotion_id or "").strip()
@@ -5865,14 +6099,15 @@ class ControlPlaneStore:
             "promoted_by_job_id": normalized["promoted_by_job_id"],
             "promoted_at": normalized["promoted_at"] or now,
             "metadata_json": json.dumps(_json_safe_payload(normalized["metadata"]), ensure_ascii=False),
-            "created_at": str((self.get_asset_default_pointer(pointer_key=normalized["pointer_key"]) or {}).get("created_at") or now),
+            "created_at": str(
+                (self.get_asset_default_pointer(pointer_key=normalized["pointer_key"]) or {}).get("created_at") or now
+            ),
             "updated_at": now,
         }
         if self._write_control_plane_row_to_postgres("asset_default_pointers", row_payload):
-            return (
-                self.get_asset_default_pointer(pointer_key=normalized["pointer_key"])
-                or self._asset_default_pointer_from_row(row_payload)
-            )
+            return self.get_asset_default_pointer(
+                pointer_key=normalized["pointer_key"]
+            ) or self._asset_default_pointer_from_row(row_payload)
         self._raise_control_plane_postgres_write_failure(
             table_name="asset_default_pointers",
             method_name="_upsert_asset_default_pointer",
@@ -6128,7 +6363,6 @@ class ControlPlaneStore:
         resolved["history_id"] = normalized_history_id
         resolved["source"] = source or "frontend_history_links"
         return resolved
-
 
     def create_agent_runtime_session(
         self,
@@ -6724,7 +6958,9 @@ class ControlPlaneStore:
         if normalized_owner:
             pg_clauses.append("owner = %s")
             pg_params.append(normalized_owner)
-        normalized_statuses = [str(status or "").strip() for status in list(statuses or []) if str(status or "").strip()]
+        normalized_statuses = [
+            str(status or "").strip() for status in list(statuses or []) if str(status or "").strip()
+        ]
         if normalized_statuses:
             pg_placeholders = ", ".join(["%s"] * len(normalized_statuses))
             pg_clauses.append(f"status IN ({pg_placeholders})")
@@ -7263,7 +7499,7 @@ class ControlPlaneStore:
                 "by_stage": by_stage,
                 "by_status_stage": by_status_stage,
             }
-        return {'total': 0, 'by_status': {}, 'by_stage': {}, 'by_status_stage': {}}
+        return {"total": 0, "by_status": {}, "by_stage": {}, "by_status_stage": {}}
 
     def find_latest_completed_job(
         self,
@@ -7272,10 +7508,17 @@ class ControlPlaneStore:
         exclude_job_id: str = "",
         job_types: list[str] | None = None,
         limit: int = 200,
+        requester_id: str = "",
+        tenant_id: str = "",
     ) -> dict[str, Any] | None:
+        normalized_requester_id = str(requester_id or "").strip()
+        normalized_tenant_id = str(tenant_id or "").strip()
+        if bool(normalized_requester_id) != bool(normalized_tenant_id):
+            return None
+        owner_clauses = ["requester_id = %s", "tenant_id = %s"] if normalized_requester_id else []
         postgres_jobs = self._select_control_plane_job_rows(
-            where_sql="status = %s",
-            params=["completed"],
+            where_sql=" AND ".join(["status = %s", *owner_clauses]),
+            params=["completed", *([normalized_requester_id, normalized_tenant_id] if owner_clauses else [])],
             order_by_sql="updated_at DESC, created_at DESC",
             limit=max(1, int(limit or 200)),
         )
@@ -7309,10 +7552,17 @@ class ControlPlaneStore:
         exclude_job_id: str = "",
         job_types: list[str] | None = None,
         limit: int = 200,
+        requester_id: str = "",
+        tenant_id: str = "",
     ) -> dict[str, Any] | None:
+        normalized_requester_id = str(requester_id or "").strip()
+        normalized_tenant_id = str(tenant_id or "").strip()
+        if bool(normalized_requester_id) != bool(normalized_tenant_id):
+            return None
+        owner_clauses = ["requester_id = %s", "tenant_id = %s"] if normalized_requester_id else []
         postgres_jobs = self._select_control_plane_job_rows(
-            where_sql="status = %s",
-            params=["completed"],
+            where_sql=" AND ".join(["status = %s", *owner_clauses]),
+            params=["completed", *([normalized_requester_id, normalized_tenant_id] if owner_clauses else [])],
             order_by_sql="updated_at DESC, created_at DESC",
             limit=max(1, int(limit or 200)),
         )
@@ -7360,6 +7610,8 @@ class ControlPlaneStore:
                 exclude_job_id=exclude_job_id,
                 job_types=job_types,
                 limit=limit,
+                requester_id=normalized_requester_id,
+                tenant_id=normalized_tenant_id,
             )
             if fallback is None:
                 return None
@@ -7900,9 +8152,7 @@ class ControlPlaneStore:
                 "current_lane_effective_candidate_count": int(
                     payload.get("current_lane_effective_candidate_count") or 0
                 ),
-                "former_lane_effective_candidate_count": int(
-                    payload.get("former_lane_effective_candidate_count") or 0
-                ),
+                "former_lane_effective_candidate_count": int(payload.get("former_lane_effective_candidate_count") or 0),
                 "current_lane_effective_ready": 1 if bool(payload.get("current_lane_effective_ready")) else 0,
                 "former_lane_effective_ready": 1 if bool(payload.get("former_lane_effective_ready")) else 0,
                 "source_snapshot_selection_json": json.dumps(
@@ -8050,9 +8300,7 @@ class ControlPlaneStore:
                 "current_lane_effective_candidate_count": int(
                     payload.get("current_lane_effective_candidate_count") or 0
                 ),
-                "former_lane_effective_candidate_count": int(
-                    payload.get("former_lane_effective_candidate_count") or 0
-                ),
+                "former_lane_effective_candidate_count": int(payload.get("former_lane_effective_candidate_count") or 0),
                 "completeness_score": float(payload.get("completeness_score") or 0.0),
                 "completeness_band": _normalized_payload_text(payload, "completeness_band", default="low") or "low",
                 "profile_detail_ratio": float(payload.get("profile_detail_ratio") or 0.0),
@@ -8332,10 +8580,9 @@ class ControlPlaneStore:
                 )
                 keeper_id = int(keeper["registry_id"] or 0)
                 authoritative = any(bool(candidate_row["authoritative"]) for candidate_row in group_rows)
-                keeper_needs_update = (
-                    str(keeper["target_company"] or "") != normalized_target_company
-                    or authoritative != bool(keeper["authoritative"])
-                )
+                keeper_needs_update = str(
+                    keeper["target_company"] or ""
+                ) != normalized_target_company or authoritative != bool(keeper["authoritative"])
                 if keeper_needs_update and keeper_id > 0:
                     if use_postgres:
                         updated_row = self._call_control_plane_postgres_native(
@@ -8556,12 +8803,20 @@ class ControlPlaneStore:
         except (TypeError, ValueError, json.JSONDecodeError):
             metadata_payload = {}
         return {
-            "generation_key": str(row["generation_key"] if "generation_key" in row_keys else dict(row).get("generation_key") or ""),
-            "target_company": str(row["target_company"] if "target_company" in row_keys else dict(row).get("target_company") or ""),
+            "generation_key": str(
+                row["generation_key"] if "generation_key" in row_keys else dict(row).get("generation_key") or ""
+            ),
+            "target_company": str(
+                row["target_company"] if "target_company" in row_keys else dict(row).get("target_company") or ""
+            ),
             "snapshot_id": str(row["snapshot_id"] if "snapshot_id" in row_keys else dict(row).get("snapshot_id") or ""),
             "asset_view": str(row["asset_view"] if "asset_view" in row_keys else dict(row).get("asset_view") or ""),
-            "artifact_kind": str(row["artifact_kind"] if "artifact_kind" in row_keys else dict(row).get("artifact_kind") or ""),
-            "artifact_key": str(row["artifact_key"] if "artifact_key" in row_keys else dict(row).get("artifact_key") or ""),
+            "artifact_kind": str(
+                row["artifact_kind"] if "artifact_kind" in row_keys else dict(row).get("artifact_kind") or ""
+            ),
+            "artifact_key": str(
+                row["artifact_key"] if "artifact_key" in row_keys else dict(row).get("artifact_key") or ""
+            ),
             "lane": str(row["lane"] if "lane" in row_keys else dict(row).get("lane") or ""),
             "employment_scope": str(
                 row["employment_scope"] if "employment_scope" in row_keys else dict(row).get("employment_scope") or ""
@@ -8570,7 +8825,9 @@ class ControlPlaneStore:
             "member_key_kind": str(
                 row["member_key_kind"] if "member_key_kind" in row_keys else dict(row).get("member_key_kind") or ""
             ),
-            "candidate_id": str(row["candidate_id"] if "candidate_id" in row_keys else dict(row).get("candidate_id") or ""),
+            "candidate_id": str(
+                row["candidate_id"] if "candidate_id" in row_keys else dict(row).get("candidate_id") or ""
+            ),
             "profile_url_key": str(
                 row["profile_url_key"] if "profile_url_key" in row_keys else dict(row).get("profile_url_key") or ""
             ),
@@ -9272,7 +9529,12 @@ class ControlPlaneStore:
 
         if self._control_plane_postgres_should_prefer_read("candidate_materialization_state"):
             payload_rows: list[dict[str, Any]] = []
-            for (normalized_target_company, normalized_company_key, normalized_snapshot_id, normalized_asset_view), grouped_rows in grouped_states.items():
+            for (
+                normalized_target_company,
+                normalized_company_key,
+                normalized_snapshot_id,
+                normalized_asset_view,
+            ), grouped_rows in grouped_states.items():
                 postgres_company_scope_clause, postgres_company_scope_params = _company_scope_predicate(
                     normalized_target_company,
                     normalized_company_key,
@@ -9309,7 +9571,9 @@ class ControlPlaneStore:
                             "shard_path": str(grouped_row.get("shard_path") or "").strip(),
                             "list_page": max(0, int(grouped_row.get("list_page") or 0)),
                             "dirty_reason": str(grouped_row.get("dirty_reason") or "").strip(),
-                            "materialized_at": str(grouped_row.get("materialized_at") or datetime.now(timezone.utc).isoformat()),
+                            "materialized_at": str(
+                                grouped_row.get("materialized_at") or datetime.now(timezone.utc).isoformat()
+                            ),
                             "metadata_json": str(grouped_row.get("metadata_json") or "{}"),
                             "created_at": str(existing.get("created_at") or now),
                             "updated_at": now,
@@ -9878,10 +10142,7 @@ class ControlPlaneStore:
                 "budget": normalized_budget,
                 "db_limiter_enabled": True,
             }
-        normalized_token = (
-            str(lease_token or "").strip()
-            or f"lease_{uuid4().hex}"
-        )
+        normalized_token = str(lease_token or "").strip() or f"lease_{uuid4().hex}"
         ttl_seconds = max(5, int(lease_seconds or 0))
         metadata_payload = dict(metadata or {})
         if self._control_plane_postgres_should_prefer_read("runtime_provider_limiter_leases"):
@@ -9897,9 +10158,7 @@ class ControlPlaneStore:
                         metadata=metadata_payload,
                     )
                 except Exception as exc:
-                    if self._control_plane_postgres_should_skip_sqlite_fallback(
-                        "runtime_provider_limiter_leases"
-                    ):
+                    if self._control_plane_postgres_should_skip_sqlite_fallback("runtime_provider_limiter_leases"):
                         self._raise_control_plane_postgres_write_failure(
                             table_name="runtime_provider_limiter_leases",
                             method_name="acquire_runtime_provider_limiter_slot",
@@ -9961,9 +10220,7 @@ class ControlPlaneStore:
                 try:
                     native_payload = native_status(normalized_key, budget=normalized_budget)
                 except Exception as exc:
-                    if self._control_plane_postgres_should_skip_sqlite_fallback(
-                        "runtime_provider_limiter_leases"
-                    ):
+                    if self._control_plane_postgres_should_skip_sqlite_fallback("runtime_provider_limiter_leases"):
                         self._raise_control_plane_postgres_write_failure(
                             table_name="runtime_provider_limiter_leases",
                             method_name="get_runtime_provider_limiter_status",
@@ -10021,9 +10278,7 @@ class ControlPlaneStore:
                         lease_owner=normalized_owner,
                     )
                 except Exception as exc:
-                    if self._control_plane_postgres_should_skip_sqlite_fallback(
-                        "runtime_provider_limiter_leases"
-                    ):
+                    if self._control_plane_postgres_should_skip_sqlite_fallback("runtime_provider_limiter_leases"):
                         self._raise_control_plane_postgres_write_failure(
                             table_name="runtime_provider_limiter_leases",
                             method_name="release_runtime_provider_limiter_slot",
@@ -10397,11 +10652,7 @@ class ControlPlaneStore:
             "former_profile_search_shard_count": int(row["former_profile_search_shard_count"] or 0),
             "company_employee_cap_hit_count": int(row["company_employee_cap_hit_count"] or 0),
             "profile_search_cap_hit_count": int(row["profile_search_cap_hit_count"] or 0),
-            "reason_codes": [
-                _normalize_textual_value(item)
-                for item in reason_codes
-                if _normalize_textual_value(item)
-            ],
+            "reason_codes": [_normalize_textual_value(item) for item in reason_codes if _normalize_textual_value(item)],
             "explanation": explanation,
             "summary": summary,
             "created_at": _normalize_textual_value(row["created_at"]),
@@ -10462,9 +10713,7 @@ class ControlPlaneStore:
             "former_lane_effective_ready": bool(row["former_lane_effective_ready"]),
             "source_snapshot_selection": source_snapshot_selection,
             "selected_snapshot_ids": [
-                _normalize_textual_value(item)
-                for item in selected_snapshot_ids
-                if _normalize_textual_value(item)
+                _normalize_textual_value(item) for item in selected_snapshot_ids if _normalize_textual_value(item)
             ],
             "source_path": _normalize_textual_value(row["source_path"]),
             "source_job_id": _normalize_textual_value(row["source_job_id"]),
@@ -10513,7 +10762,9 @@ class ControlPlaneStore:
             "shard_title": _normalize_textual_value(row["shard_title"]),
             "search_query": _normalize_textual_value(row["search_query"]),
             "query_signature": _normalize_textual_value(row["query_signature"]),
-            "company_scope": [_normalize_textual_value(item) for item in company_scope if _normalize_textual_value(item)],
+            "company_scope": [
+                _normalize_textual_value(item) for item in company_scope if _normalize_textual_value(item)
+            ],
             "locations": [_normalize_textual_value(item) for item in locations if _normalize_textual_value(item)],
             "function_ids": [_normalize_textual_value(item) for item in function_ids if _normalize_textual_value(item)],
             "result_count": int(row["result_count"] or 0),
@@ -10601,7 +10852,6 @@ class ControlPlaneStore:
             "created_at": _normalize_textual_value(row["created_at"]),
             "updated_at": _normalize_textual_value(row["updated_at"]),
         }
-
 
     def _candidate_review_record_from_row(self, row: dict[str, Any]) -> dict[str, Any]:
         return {
@@ -11373,7 +11623,9 @@ def _normalize_target_candidate_public_web_run_payload(payload: dict[str, Any]) 
             ",".join(sorted(source_families)),
             json.dumps(_json_safe_payload(options), sort_keys=True, ensure_ascii=False),
         )
-    run_id = str(normalized.get("run_id") or "").strip() or f"tc-public-web-run-{_public_web_hash_token(idempotency_key)}"
+    run_id = (
+        str(normalized.get("run_id") or "").strip() or f"tc-public-web-run-{_public_web_hash_token(idempotency_key)}"
+    )
     status = _normalize_target_candidate_public_web_status(normalized.get("status"))
     phase = str(normalized.get("phase") or status or "queued").strip().lower()
     started_at = str(normalized.get("started_at") or "").strip()
@@ -11421,7 +11673,9 @@ def _normalize_target_candidate_public_web_run_payload(payload: dict[str, Any]) 
 
 def _normalize_crm_public_web_run_payload(payload: dict[str, Any]) -> dict[str, Any]:
     normalized = dict(payload or {})
-    crm_record_id = str(normalized.get("crm_record_id") or normalized.get("record_id") or normalized.get("id") or "").strip()
+    crm_record_id = str(
+        normalized.get("crm_record_id") or normalized.get("record_id") or normalized.get("id") or ""
+    ).strip()
     linkedin_url = str(normalized.get("linkedin_url") or "").strip()
     linkedin_url_key = str(normalized.get("linkedin_url_key") or "").strip() or _normalize_linkedin_profile_url_key(
         linkedin_url
@@ -11440,7 +11694,9 @@ def _normalize_crm_public_web_run_payload(payload: dict[str, Any]) -> dict[str, 
             ",".join(sorted(source_families)),
             json.dumps(_json_safe_payload(options), sort_keys=True, ensure_ascii=False),
         )
-    run_id = str(normalized.get("run_id") or "").strip() or f"crm-public-web-run-{_public_web_hash_token(idempotency_key)}"
+    run_id = (
+        str(normalized.get("run_id") or "").strip() or f"crm-public-web-run-{_public_web_hash_token(idempotency_key)}"
+    )
     status = _normalize_target_candidate_public_web_status(normalized.get("status"))
     phase = str(normalized.get("phase") or status or "queued").strip().lower()
     started_at = str(normalized.get("started_at") or "").strip()
@@ -11509,7 +11765,10 @@ def _normalize_company_public_web_asset_run_payload(payload: dict[str, Any]) -> 
             str(force_refresh),
             str(normalized.get("refresh_nonce") or normalized.get("nonce") or "") if force_refresh else "",
         )
-    run_id = str(normalized.get("run_id") or "").strip() or f"company-public-web-run-{_public_web_hash_token(idempotency_key)}"
+    run_id = (
+        str(normalized.get("run_id") or "").strip()
+        or f"company-public-web-run-{_public_web_hash_token(idempotency_key)}"
+    )
     status = _normalize_target_candidate_public_web_status(normalized.get("status"))
     phase = str(normalized.get("phase") or status or "queued").strip().lower()
     started_at = str(normalized.get("started_at") or "").strip()
@@ -11548,7 +11807,9 @@ def _company_public_web_asset_run_row_payload(
     now: str,
 ) -> dict[str, Any]:
     created_at = str((existing or {}).get("created_at") or normalized.get("created_at") or "").strip() or now
-    return _public_web_repo.COMPANY_PUBLIC_WEB_ASSET_RUNS.to_columns({**normalized, "created_at": created_at, "updated_at": now})
+    return _public_web_repo.COMPANY_PUBLIC_WEB_ASSET_RUNS.to_columns(
+        {**normalized, "created_at": created_at, "updated_at": now}
+    )
 
 
 def _crm_public_web_batch_row_payload(
@@ -11558,7 +11819,9 @@ def _crm_public_web_batch_row_payload(
     now: str,
 ) -> dict[str, Any]:
     created_at = str((existing or {}).get("created_at") or normalized.get("created_at") or "").strip() or now
-    return _public_web_repo.CRM_PUBLIC_WEB_BATCHES.to_columns({**normalized, "created_at": created_at, "updated_at": now})
+    return _public_web_repo.CRM_PUBLIC_WEB_BATCHES.to_columns(
+        {**normalized, "created_at": created_at, "updated_at": now}
+    )
 
 
 def _crm_public_web_run_row_payload(
@@ -11635,7 +11898,9 @@ def _target_candidate_public_web_run_row_payload(
     now: str,
 ) -> dict[str, Any]:
     created_at = str((existing or {}).get("created_at") or normalized.get("created_at") or "").strip() or now
-    return _public_web_repo.TARGET_CANDIDATE_PUBLIC_WEB_RUNS.to_columns({**normalized, "created_at": created_at, "updated_at": now})
+    return _public_web_repo.TARGET_CANDIDATE_PUBLIC_WEB_RUNS.to_columns(
+        {**normalized, "created_at": created_at, "updated_at": now}
+    )
 
 
 def _normalize_person_public_web_asset_payload(payload: dict[str, Any]) -> dict[str, Any]:
@@ -11738,7 +12003,9 @@ def _person_public_web_signal_row_payload(
     now: str,
 ) -> dict[str, Any]:
     created_at = str((existing or {}).get("created_at") or normalized.get("created_at") or "").strip() or now
-    return _public_web_repo.PERSON_PUBLIC_WEB_SIGNALS.to_columns({**normalized, "created_at": created_at, "updated_at": now})
+    return _public_web_repo.PERSON_PUBLIC_WEB_SIGNALS.to_columns(
+        {**normalized, "created_at": created_at, "updated_at": now}
+    )
 
 
 def _normalize_target_candidate_public_web_promotion_action(value: Any, *, default: str = "promote") -> str:
@@ -11756,7 +12023,9 @@ def _normalize_target_candidate_public_web_promotion_payload(payload: dict[str, 
         promotion_status = "manually_promoted" if action == "promote" else "manually_rejected"
     signal_id = str(normalized.get("signal_id") or "").strip()
     record_id = str(normalized.get("record_id") or "").strip()
-    normalized_value = str(normalized.get("normalized_value") or normalized.get("value") or normalized.get("url") or "").strip()
+    normalized_value = str(
+        normalized.get("normalized_value") or normalized.get("value") or normalized.get("url") or ""
+    ).strip()
     promotion_id = str(normalized.get("promotion_id") or normalized.get("id") or "").strip()
     if not promotion_id:
         promotion_id = "target-candidate-public-web-promotion-" + _public_web_hash_token(
@@ -11817,7 +12086,9 @@ def _normalize_crm_public_web_promotion_payload(payload: dict[str, Any]) -> dict
         promotion_status = "manually_promoted" if action == "promote" else "manually_rejected"
     signal_id = str(normalized.get("signal_id") or "").strip()
     crm_record_id = str(normalized.get("crm_record_id") or normalized.get("record_id") or "").strip()
-    normalized_value = str(normalized.get("normalized_value") or normalized.get("value") or normalized.get("url") or "").strip()
+    normalized_value = str(
+        normalized.get("normalized_value") or normalized.get("value") or normalized.get("url") or ""
+    ).strip()
     promotion_id = str(normalized.get("promotion_id") or normalized.get("id") or "").strip()
     if not promotion_id:
         promotion_id = "crm-public-web-promotion-" + _public_web_hash_token(
@@ -11882,7 +12153,9 @@ def _target_candidate_public_web_promotion_row_payload(
     now: str,
 ) -> dict[str, Any]:
     created_at = str((existing or {}).get("created_at") or normalized.get("created_at") or "").strip() or now
-    return _public_web_repo.TARGET_CANDIDATE_PUBLIC_WEB_PROMOTIONS.to_columns({**normalized, "created_at": created_at, "updated_at": now})
+    return _public_web_repo.TARGET_CANDIDATE_PUBLIC_WEB_PROMOTIONS.to_columns(
+        {**normalized, "created_at": created_at, "updated_at": now}
+    )
 
 
 def _crm_public_web_promotion_row_payload(
@@ -11925,7 +12198,6 @@ def _milliseconds_between(start_value: str, end_value: str) -> int | None:
     if start is None or end is None:
         return None
     return max(0, int((end - start).total_seconds() * 1000))
-
 
 
 def _normalize_dispatch_scope(scope: str, *, requester_id: str = "", tenant_id: str = "") -> str:

@@ -97,9 +97,7 @@ class CRMWriter:
     ) -> dict[str, Any]:
         normalized_projection_id = _require_non_empty(projection_id, "projection_id")
         normalized_candidate_keys = [
-            str(item or "").strip()
-            for item in dict.fromkeys(candidate_identity_keys or ())
-            if str(item or "").strip()
+            str(item or "").strip() for item in dict.fromkeys(candidate_identity_keys or ()) if str(item or "").strip()
         ]
         if not normalized_candidate_keys:
             raise ValueError("candidate_identity_keys is required")
@@ -121,7 +119,11 @@ class CRMWriter:
         if str(snapshot.get("status") or "") != "ready":
             return snapshot
         membership_revision = str(snapshot.get("membership_revision") or "").strip()
-        if not membership_revision or str(dict(snapshot.get("projection") or {}).get("projection_id") or "").strip() != normalized_projection_id:
+        if (
+            not membership_revision
+            or str(dict(snapshot.get("projection") or {}).get("projection_id") or "").strip()
+            != normalized_projection_id
+        ):
             return {
                 "status": "not_ready",
                 "reason": "projection_member_snapshot_invalid",
@@ -243,9 +245,7 @@ class CRMWriter:
                             "lifecycle_status": "active",
                             "visibility_status": "normal",
                             "source_projection_id": normalized_projection_id,
-                            "source_run_id": str(
-                                member.get("source_run_id") or projection.get("source_run_id") or ""
-                            ),
+                            "source_run_id": str(member.get("source_run_id") or projection.get("source_run_id") or ""),
                             "source_collection_id": str(projection.get("collection_id") or ""),
                             "source_reason": source_reason,
                             "current_engagement_id": engagement_id,
@@ -274,9 +274,7 @@ class CRMWriter:
                             "priority": "normal",
                             "quality_score": None,
                             "source_projection_id": normalized_projection_id,
-                            "source_run_id": str(
-                                member.get("source_run_id") or projection.get("source_run_id") or ""
-                            ),
+                            "source_run_id": str(member.get("source_run_id") or projection.get("source_run_id") or ""),
                             "source_selection_reason": source_reason,
                             "created_by_actor": str(actor_type or "user").strip() or "user",
                             "metadata": {
@@ -350,9 +348,7 @@ class CRMWriter:
             str(engagement.get("engagement_id") or ""): engagement
             for engagement in list(applied.get("crm_engagements") or [])
         }
-        events_by_id = {
-            str(event.get("event_id") or ""): event for event in list(applied.get("crm_events") or [])
-        }
+        events_by_id = {str(event.get("event_id") or ""): event for event in list(applied.get("crm_events") or [])}
         results = [
             {
                 **dict(item),
@@ -555,23 +551,25 @@ class CRMWriter:
     ) -> dict[str, Any]:
         normalized_workspace_id = str(workspace_id or "default").strip() or "default"
         normalized_record_id = _require_non_empty(crm_record_id, "crm_record_id")
+        owner_fenced = bool(str(expected_workspace_id or "").strip() or str(expected_owner_user_id or "").strip())
         record = self.store.get_crm_record(normalized_record_id)
         if not record:
+            if owner_fenced:
+                return {"status": "not_found", "reason": "crm_record_not_found"}
             return {"status": "not_found", "reason": "crm_record_not_found", "crm_record_id": normalized_record_id}
-        if str(record.get("workspace_id") or "default").strip() != normalized_workspace_id:
+        if owner_fenced and not exact_crm_owner_matches(
+            record,
+            expected_workspace_id=expected_workspace_id,
+            expected_owner_user_id=expected_owner_user_id,
+        ):
+            return {"status": "not_found", "reason": "crm_record_not_found"}
+        if not owner_fenced and str(record.get("workspace_id") or "default").strip() != normalized_workspace_id:
             return {
                 "status": "not_found",
                 "reason": "crm_record_not_found_in_workspace",
                 "crm_record_id": normalized_record_id,
                 "workspace_id": normalized_workspace_id,
             }
-
-        if not exact_crm_owner_matches(
-            record,
-            expected_workspace_id=expected_workspace_id,
-            expected_owner_user_id=expected_owner_user_id,
-        ):
-            return {"status": "not_found", "reason": "crm_record_not_found"}
 
         current_engagement = self.store.get_crm_engagement(str(record.get("current_engagement_id") or ""))
         current_record_metadata = dict(record.get("metadata") or {})
@@ -610,90 +608,96 @@ class CRMWriter:
             if patch_value:
                 next_record_metadata[metadata_key] = patch_value
 
-        # Canonical last-write fence. The API lookup is intentionally not
-        # authoritative because ownership can change while request work is in
-        # flight.
-        if not exact_crm_owner_matches(
-            self.store.get_crm_record(normalized_record_id),
-            expected_workspace_id=expected_workspace_id,
-            expected_owner_user_id=expected_owner_user_id,
-        ):
-            return {"status": "not_found", "reason": "crm_record_not_found"}
-        updated_record = self.store.upsert_crm_record(
-            {
-                **record,
-                "display_name_cache": _patch_non_empty(
-                    patch.get("candidate_name"),
-                    patch.get("display_name"),
-                    record.get("display_name_cache"),
-                ),
-                "headline_cache": _patch_non_empty(patch.get("headline"), record.get("headline_cache")),
-                "primary_company_cache": _patch_non_empty(
-                    patch.get("current_company"),
-                    record.get("primary_company_cache"),
-                ),
-                "current_engagement_id": str(
-                    current_engagement.get("engagement_id") or record.get("current_engagement_id") or ""
-                ),
-                "metadata": next_record_metadata,
-            }
-        )
-        updated_engagement = self.store.upsert_crm_engagement(
-            {
-                **current_engagement,
-                "crm_record_id": normalized_record_id,
-                "pipeline_id": str(current_engagement.get("pipeline_id") or "default_sourcing").strip()
-                or "default_sourcing",
+        next_record = {
+            **record,
+            "display_name_cache": _patch_non_empty(
+                patch.get("candidate_name"),
+                patch.get("display_name"),
+                record.get("display_name_cache"),
+            ),
+            "headline_cache": _patch_non_empty(patch.get("headline"), record.get("headline_cache")),
+            "primary_company_cache": _patch_non_empty(
+                patch.get("current_company"),
+                record.get("primary_company_cache"),
+            ),
+            "current_engagement_id": str(
+                current_engagement.get("engagement_id") or record.get("current_engagement_id") or ""
+            ),
+            "metadata": next_record_metadata,
+        }
+        next_engagement = {
+            **current_engagement,
+            "crm_record_id": normalized_record_id,
+            "pipeline_id": str(current_engagement.get("pipeline_id") or "default_sourcing").strip()
+            or "default_sourcing",
+            "stage": next_stage,
+            "stage_category": _crm_stage_category(next_stage),
+            "quality_score": parsed_quality_score,
+            "source_projection_id": str(
+                current_engagement.get("source_projection_id") or record.get("source_projection_id") or ""
+            ),
+            "source_run_id": str(current_engagement.get("source_run_id") or record.get("source_run_id") or ""),
+            "source_selection_reason": str(
+                current_engagement.get("source_selection_reason") or record.get("source_reason") or ""
+            ),
+            "created_by_actor": str(current_engagement.get("created_by_actor") or actor_type or "user").strip()
+            or "user",
+            "metadata": next_engagement_metadata,
+        }
+        next_event = {
+            "workspace_id": normalized_workspace_id,
+            "crm_record_id": normalized_record_id,
+            "engagement_id": str(current_engagement.get("engagement_id") or ""),
+            "person_identity_key": str(record.get("person_identity_key") or ""),
+            "event_type": "crm_engagement_updated",
+            "actor_type": str(actor_type or "user").strip() or "user",
+            "actor_id": str(actor_id or "").strip(),
+            "idempotency_key": str(idempotency_key or "").strip(),
+            "payload": {
+                "writer_id": self.writer_id,
                 "stage": next_stage,
-                "stage_category": _crm_stage_category(next_stage),
                 "quality_score": parsed_quality_score,
-                "source_projection_id": str(
-                    current_engagement.get("source_projection_id") or updated_record.get("source_projection_id") or ""
-                ),
-                "source_run_id": str(
-                    current_engagement.get("source_run_id") or updated_record.get("source_run_id") or ""
-                ),
-                "source_selection_reason": str(
-                    current_engagement.get("source_selection_reason") or updated_record.get("source_reason") or ""
-                ),
-                "created_by_actor": str(current_engagement.get("created_by_actor") or actor_type or "user").strip()
-                or "user",
-                "metadata": next_engagement_metadata,
-            }
-        )
-        if not str(updated_record.get("current_engagement_id") or "").strip() and updated_engagement.get(
-            "engagement_id"
-        ):
-            updated_record = self.store.upsert_crm_record(
+                "comment_updated": comment_present,
+                "display_patch_keys": sorted(str(key) for key in patch),
+            },
+            "metadata": {"writer_id": self.writer_id},
+        }
+        if owner_fenced:
+            write_result = self.store.apply_owned_crm_record_update(
+                record_payload=next_record,
+                engagement_payload=next_engagement,
+                event_payload=next_event,
+                expected_workspace_id=str(expected_workspace_id or "").strip(),
+                expected_owner_user_id=str(expected_owner_user_id or "").strip(),
+            )
+            if write_result.get("status") != "applied":
+                return write_result
+            updated_record = dict(write_result.get("crm_record") or {})
+            updated_engagement = dict(write_result.get("crm_engagement") or {})
+            event = dict(write_result.get("crm_event") or {})
+        else:
+            updated_record = self.store.upsert_crm_record(next_record)
+            updated_engagement = self.store.upsert_crm_engagement(next_engagement)
+            if not str(updated_record.get("current_engagement_id") or "").strip() and updated_engagement.get(
+                "engagement_id"
+            ):
+                updated_record = self.store.upsert_crm_record(
+                    {
+                        **updated_record,
+                        "current_engagement_id": str(updated_engagement.get("engagement_id") or ""),
+                        "metadata": {
+                            **dict(updated_record.get("metadata") or {}),
+                            "current_engagement_id_set_by": self.writer_id,
+                        },
+                    }
+                )
+            event = self.store.append_crm_event(
                 {
-                    **updated_record,
-                    "current_engagement_id": str(updated_engagement.get("engagement_id") or ""),
-                    "metadata": {
-                        **dict(updated_record.get("metadata") or {}),
-                        "current_engagement_id_set_by": self.writer_id,
-                    },
+                    **next_event,
+                    "engagement_id": str(updated_engagement.get("engagement_id") or ""),
+                    "person_identity_key": str(updated_record.get("person_identity_key") or ""),
                 }
             )
-        event = self.store.append_crm_event(
-            {
-                "workspace_id": normalized_workspace_id,
-                "crm_record_id": normalized_record_id,
-                "engagement_id": str(updated_engagement.get("engagement_id") or ""),
-                "person_identity_key": str(updated_record.get("person_identity_key") or ""),
-                "event_type": "crm_engagement_updated",
-                "actor_type": str(actor_type or "user").strip() or "user",
-                "actor_id": str(actor_id or "").strip(),
-                "idempotency_key": str(idempotency_key or "").strip(),
-                "payload": {
-                    "writer_id": self.writer_id,
-                    "stage": next_stage,
-                    "quality_score": parsed_quality_score,
-                    "comment_updated": comment_present,
-                    "display_patch_keys": sorted(str(key) for key in patch),
-                },
-                "metadata": {"writer_id": self.writer_id},
-            }
-        )
         return {
             "status": "updated",
             "crm_record": updated_record,

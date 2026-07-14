@@ -3848,6 +3848,7 @@ class SourcingOrchestrator:
     ) -> dict[str, Any]:
         payload = dict(payload or {})
         job_id = str(payload.get("job_id") or "").strip()
+        owner_fenced = bool(str(expected_requester_id or "").strip() or str(expected_tenant_id or "").strip())
         if not job_id:
             return {"status": "invalid", "reason": "job_id is required"}
         job = self.store.get_job(job_id)
@@ -3863,7 +3864,14 @@ class SourcingOrchestrator:
 
         with self._job_run_lock(job_id) as lock_handle:
             if lock_handle is None:
-                latest_job = self.store.get_job(job_id) or {}
+                latest_job = self.store.get_job(job_id)
+                if not _exact_job_owner_matches(
+                    latest_job,
+                    expected_requester_id=expected_requester_id,
+                    expected_tenant_id=expected_tenant_id,
+                ):
+                    return {"status": "not_found", "reason": "job_not_found"}
+                assert latest_job is not None
                 return {
                     "status": "conflict",
                     "reason": "workflow_already_running",
@@ -3918,16 +3926,27 @@ class SourcingOrchestrator:
                 "stage2_transition_state": "queued",
                 "stage1_preview": stage1_preview,
             }
-            self.store.save_job(
-                job_id=job_id,
-                job_type="workflow",
-                status="blocked",
-                stage="retrieving",
-                request_payload=request_payload,
-                plan_payload=dict(job.get("plan") or {}),
-                summary_payload=queued_summary,
-                artifact_path=str(job.get("artifact_path") or ""),
-            )
+            save_kwargs = {
+                "job_id": job_id,
+                "job_type": "workflow",
+                "status": "blocked",
+                "stage": "retrieving",
+                "request_payload": request_payload,
+                "plan_payload": dict(job.get("plan") or {}),
+                "summary_payload": queued_summary,
+                "artifact_path": str(job.get("artifact_path") or ""),
+                "requester_id": str(job.get("requester_id") or ""),
+                "tenant_id": str(job.get("tenant_id") or ""),
+            }
+            if owner_fenced:
+                if not self.store.save_job_if_owned(
+                    **save_kwargs,
+                    expected_requester_id=expected_requester_id,
+                    expected_tenant_id=expected_tenant_id,
+                ):
+                    return {"status": "not_found", "reason": "job_not_found"}
+            else:
+                self.store.save_job(**save_kwargs)
             self.store.append_job_event(
                 job_id,
                 stage="retrieving",
@@ -42280,15 +42299,73 @@ class SourcingOrchestrator:
             "service": summary,
         }
 
-    def get_worker_daemon_status(self, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    def get_worker_daemon_status(
+        self,
+        payload: dict[str, Any] | None = None,
+        *,
+        authenticated_job_scope: bool = False,
+        expected_requester_id: str = "",
+        expected_tenant_id: str = "",
+    ) -> dict[str, Any]:
         payload = dict(payload or {})
         job_id = str(payload.get("job_id") or "").strip()
         service_name = str(payload.get("service_name") or "worker-recovery-daemon")
         include_details = _coerce_bool(payload.get("include_details"), False)
         if job_id:
             job = self.store.get_job(job_id)
+            if authenticated_job_scope and not _exact_job_owner_matches(
+                job,
+                expected_requester_id=expected_requester_id,
+                expected_tenant_id=expected_tenant_id,
+            ):
+                return {"status": "not_found", "reason": "job_not_found"}
             if job is None:
                 return {"job_id": job_id, "status": "not_found"}
+            if authenticated_job_scope:
+                # Do not build the general runtime-controls view here. Besides
+                # returning hosted/shared controls, that builder probes every
+                # referenced service and workflow-runner log before its caller
+                # can project fields away. Authenticated status is a dedicated
+                # job-scoped allowlist instead.
+                stored_control = dict(
+                    dict(dict(job.get("summary") or {}).get("runtime_controls") or {}).get("job_recovery") or {}
+                )
+                job_recovery: dict[str, Any] = {}
+                if str(stored_control.get("scope") or "").strip() == "job_scoped":
+                    for key in ("status", "scope", "mode", "reason"):
+                        value = stored_control.get(key)
+                        if value not in (None, ""):
+                            job_recovery[key] = value
+                    job_recovery["job_id"] = job_id
+
+                    canonical_service_name = str(
+                        _build_job_scoped_recovery_config(job_id, {}).get("service_name") or ""
+                    ).strip()
+                    stored_service_name = str(stored_control.get("service_name") or "").strip()
+                    stored_job_id = str(stored_control.get("job_id") or job_id).strip()
+                    if (
+                        canonical_service_name
+                        and stored_service_name == canonical_service_name
+                        and stored_job_id == job_id
+                    ):
+                        service_status = compact_service_status(
+                            self._read_progress_service_status(canonical_service_name, use_cache=False)
+                        )
+                        job_recovery.update(
+                            {
+                                "service_name": canonical_service_name,
+                                "service_status": service_status,
+                                "service_ready": _service_status_is_ready(service_status),
+                            }
+                        )
+                return {
+                    "job_id": job_id,
+                    "status": "ok",
+                    "runtime_controls": {"job_recovery": job_recovery} if job_recovery else {},
+                    "recovery_services": {
+                        "job_scoped": dict(job_recovery.get("service_status") or {}),
+                    },
+                }
             runtime_controls = self._build_live_runtime_controls_payload(
                 job,
                 include_service_details=include_details,
@@ -42419,9 +42496,9 @@ class SourcingOrchestrator:
         summary["message"] = reason
         summary["cancelled_reason"] = reason
         summary["cancelled_at"] = datetime.now(timezone.utc).isoformat()
-        # Re-fetch immediately before the first write. In authenticated mode
-        # this is the authoritative fence; the API handler's earlier lookup is
-        # only a fast non-enumeration check.
+        # Re-fetch to build the freshest transition payload. In authenticated
+        # mode the repository owner-CAS below is the authoritative fence; all
+        # earlier reads are only fast non-enumeration/state checks.
         latest_job = self.store.get_job(normalized_job_id)
         if not _exact_job_owner_matches(
             latest_job,
@@ -42431,20 +42508,30 @@ class SourcingOrchestrator:
             return {"status": "not_found", "reason": "job_not_found"}
         assert latest_job is not None
         job = latest_job
-        self.store.save_job(
-            job_id=normalized_job_id,
-            job_type="workflow",
-            status="cancelled",
-            stage="completed",
-            request_payload=dict(job.get("request") or {}),
-            plan_payload=dict(job.get("plan") or {}),
-            execution_bundle_payload=dict(job.get("execution_bundle") or {}),
-            summary_payload=summary,
-            artifact_path=str(job.get("artifact_path") or ""),
-            requester_id=str(job.get("requester_id") or ""),
-            tenant_id=str(job.get("tenant_id") or ""),
-            idempotency_key=str(job.get("idempotency_key") or ""),
-        )
+        save_kwargs = {
+            "job_id": normalized_job_id,
+            "job_type": "workflow",
+            "status": "cancelled",
+            "stage": "completed",
+            "request_payload": dict(job.get("request") or {}),
+            "plan_payload": dict(job.get("plan") or {}),
+            "execution_bundle_payload": dict(job.get("execution_bundle") or {}),
+            "summary_payload": summary,
+            "artifact_path": str(job.get("artifact_path") or ""),
+            "requester_id": str(job.get("requester_id") or ""),
+            "tenant_id": str(job.get("tenant_id") or ""),
+            "idempotency_key": str(job.get("idempotency_key") or ""),
+        }
+        owner_fenced = bool(str(expected_requester_id or "").strip() or str(expected_tenant_id or "").strip())
+        if owner_fenced:
+            if not self.store.save_job_if_owned(
+                **save_kwargs,
+                expected_requester_id=expected_requester_id,
+                expected_tenant_id=expected_tenant_id,
+            ):
+                return {"status": "not_found", "reason": "job_not_found"}
+        else:
+            self.store.save_job(**save_kwargs)
         self.store.update_agent_runtime_session_status(normalized_job_id, "cancelled")
         self.store.release_workflow_job_lease(normalized_job_id)
         active_workers = [
@@ -54631,11 +54718,25 @@ class SourcingOrchestrator:
             response["resolution"] = resolution
         return response
 
-    def record_criteria_feedback(self, payload: dict[str, Any]) -> dict[str, Any]:
+    def record_criteria_feedback(
+        self,
+        payload: dict[str, Any],
+        *,
+        expected_requester_id: str = "",
+        expected_tenant_id: str = "",
+    ) -> dict[str, Any]:
         feedback = self.store.repos.criteria_confidence.record_feedback(payload)
         suggestions = self._suggest_patterns_from_feedback(int(feedback.get("feedback_id") or 0))
         recompile = self.criteria_evolution.recompile_after_feedback(payload, int(feedback["feedback_id"]))
-        rerun = self._rerun_after_recompile_if_requested(payload, feedback, recompile)
+        rerun = self._rerun_after_recompile_if_requested(
+            payload,
+            feedback,
+            recompile,
+            expected_requester_id=expected_requester_id,
+            expected_tenant_id=expected_tenant_id,
+        )
+        if rerun.get("status") == "not_found":
+            return rerun
         return {
             "status": "recorded",
             "feedback": feedback,
@@ -54644,10 +54745,24 @@ class SourcingOrchestrator:
             "rerun": rerun,
         }
 
-    def recompile_criteria(self, payload: dict[str, Any]) -> dict[str, Any]:
+    def recompile_criteria(
+        self,
+        payload: dict[str, Any],
+        *,
+        expected_requester_id: str = "",
+        expected_tenant_id: str = "",
+    ) -> dict[str, Any]:
         trigger_feedback_id = int(payload.get("trigger_feedback_id") or 0)
         recompile = self.criteria_evolution.recompile_after_feedback(payload, trigger_feedback_id)
-        rerun = self._rerun_after_recompile_if_requested(payload, {"feedback_id": trigger_feedback_id}, recompile)
+        rerun = self._rerun_after_recompile_if_requested(
+            payload,
+            {"feedback_id": trigger_feedback_id},
+            recompile,
+            expected_requester_id=expected_requester_id,
+            expected_tenant_id=expected_tenant_id,
+        )
+        if rerun.get("status") == "not_found":
+            return rerun
         return {**recompile, "rerun": rerun}
 
     def configure_confidence_policy(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -54707,7 +54822,13 @@ class SourcingOrchestrator:
             return {"status": "configured", "control": control}
         return {"status": "invalid", "reason": "Unknown action. Use freeze_current, override, or clear."}
 
-    def review_pattern_suggestion(self, payload: dict[str, Any]) -> dict[str, Any]:
+    def review_pattern_suggestion(
+        self,
+        payload: dict[str, Any],
+        *,
+        expected_requester_id: str = "",
+        expected_tenant_id: str = "",
+    ) -> dict[str, Any]:
         suggestion_id = int(payload.get("suggestion_id") or 0)
         action = str(payload.get("action") or payload.get("status") or "").strip()
         review = self.store.repos.criteria_confidence.review_suggestion(
@@ -54758,7 +54879,15 @@ class SourcingOrchestrator:
             "subject": recompile_payload.get("subject") or "",
             "value": recompile_payload.get("value") or "",
         }
-        rerun = self._rerun_after_recompile_if_requested(recompile_payload, rerun_feedback, recompile)
+        rerun = self._rerun_after_recompile_if_requested(
+            recompile_payload,
+            rerun_feedback,
+            recompile,
+            expected_requester_id=expected_requester_id,
+            expected_tenant_id=expected_tenant_id,
+        )
+        if rerun.get("status") == "not_found":
+            return rerun
         return {
             **review,
             "decision_status": review.get("status") or "",
@@ -72786,6 +72915,9 @@ class SourcingOrchestrator:
         payload: dict[str, Any],
         feedback: dict[str, Any],
         recompile: dict[str, Any],
+        *,
+        expected_requester_id: str = "",
+        expected_tenant_id: str = "",
     ) -> dict[str, Any]:
         if not payload.get("rerun_retrieval"):
             return {"status": "not_requested"}
@@ -72810,6 +72942,8 @@ class SourcingOrchestrator:
             baseline_job = self.store.find_best_completed_job_match(
                 target_company=target_company,
                 request_payload=request_payload,
+                requester_id=expected_requester_id,
+                tenant_id=expected_tenant_id,
             )
             baseline_job_id = str((baseline_job or {}).get("job_id") or "")
         elif baseline_job_id:
@@ -72826,6 +72960,12 @@ class SourcingOrchestrator:
                 "exact_family_match": True if baseline_job else False,
                 "reasons": ["explicit_job_id"],
             }
+        if baseline_job_id and not _exact_job_owner_matches(
+            baseline_job,
+            expected_requester_id=expected_requester_id,
+            expected_tenant_id=expected_tenant_id,
+        ):
+            return {"status": "not_found", "reason": "job_not_found"}
         if baseline_job and baseline_job.get("baseline_match"):
             baseline_selection = {
                 **dict(baseline_job.get("baseline_match") or {}),
@@ -72856,6 +72996,12 @@ class SourcingOrchestrator:
             "criteria_request_signature": recompile.get("criteria_request_signature", ""),
             "trigger_feedback_id": int(feedback.get("feedback_id") or 0),
         }
+        if baseline_job_id and not _exact_job_owner_matches(
+            self.store.get_job(baseline_job_id),
+            expected_requester_id=expected_requester_id,
+            expected_tenant_id=expected_tenant_id,
+        ):
+            return {"status": "not_found", "reason": "job_not_found"}
         rerun_artifact = self._run_retrieval_job(
             request_payload=request_payload,
             plan_payload=plan_payload,
@@ -72863,6 +73009,8 @@ class SourcingOrchestrator:
             criteria_artifacts=criteria_artifacts,
             runtime_policy=dict(policy.get("runtime_policy") or {}),
             event_detail="Retrieval rerun started after criteria feedback recompile.",
+            requester_id=str((baseline_job or {}).get("requester_id") or expected_requester_id or "").strip(),
+            tenant_id=str((baseline_job or {}).get("tenant_id") or expected_tenant_id or "").strip(),
         )
         rerun_results = self.store.get_job_results(rerun_artifact["job_id"])
         baseline_version_id = int(recompile.get("base_version_id") or 0)

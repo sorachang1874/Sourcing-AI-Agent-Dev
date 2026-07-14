@@ -4199,10 +4199,13 @@ class CrmPublicWebOwner:
         expected_owner_user_id: str = "",
     ) -> dict[str, Any]:
         normalized_record_id = str(crm_record_id or "").strip()
+        owner_fenced = bool(str(expected_workspace_id or "").strip() or str(expected_owner_user_id or "").strip())
         if not normalized_record_id:
             return {"status": "invalid", "reason": "crm_record_id is required"}
         crm_record = self.store.get_crm_record(normalized_record_id)
         if not crm_record:
+            if owner_fenced:
+                return {"status": "not_found", "reason": "crm_record_not_found"}
             return {
                 "status": "not_found",
                 "reason": "crm_record_not_found",
@@ -4370,15 +4373,17 @@ class CrmPublicWebOwner:
                 "owner": "crm_public_web_v1",
             },
         }
-        # Re-check at the canonical writer immediately before the first durable
-        # mutation. A foreign/missing record has the same non-enumerating body.
-        if not exact_crm_owner_matches(
-            self.store.get_crm_record(normalized_record_id),
-            expected_workspace_id=expected_workspace_id,
-            expected_owner_user_id=expected_owner_user_id,
-        ):
-            return {"status": "not_found", "reason": "crm_record_not_found"}
-        promotion = self.store.upsert_crm_public_web_promotion(promotion_payload)
+        if owner_fenced:
+            promotion = self.store.upsert_crm_public_web_promotion_if_owned(
+                promotion_payload,
+                crm_record_id=normalized_record_id,
+                expected_workspace_id=str(expected_workspace_id or "").strip(),
+                expected_owner_user_id=str(expected_owner_user_id or "").strip(),
+            )
+            if promotion.get("status") == "not_found":
+                return {"status": "not_found", "reason": "crm_record_not_found"}
+        else:
+            promotion = self.store.upsert_crm_public_web_promotion(promotion_payload)
         assertion: dict[str, Any] = {}
         assertion_event: dict[str, Any] = {}
         projection_index_rebuild: dict[str, Any] = {}

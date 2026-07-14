@@ -2805,6 +2805,225 @@ class LiveControlPlanePostgresAdapter:
                     raise
                 time.sleep(_control_plane_postgres_retry_delay_seconds(attempt))
 
+    def apply_owned_crm_record_update(
+        self,
+        *,
+        crm_record_id: str,
+        expected_workspace_id: str,
+        expected_owner_user_id: str,
+        expected_crm_version: int,
+        record_row: dict[str, Any] | None,
+        engagement_row: dict[str, Any] | None,
+        event_row: dict[str, Any] | None,
+    ) -> dict[str, Any] | None:
+        """Lock the CRM owner row and commit its record/engagement/event bundle.
+
+        Blank stored ``owner_user_id`` remains the C2.5 compatibility contract,
+        but workspace must still match exactly. The owner check, version check,
+        and all bundle writes share one transaction, so an ownership transfer
+        cannot land between authorization and the first durable mutation.
+        """
+
+        normalized_record_id = str(crm_record_id or "").strip()
+        normalized_workspace = str(expected_workspace_id or "").strip()
+        normalized_owner = str(expected_owner_user_id or "").strip()
+        if not normalized_record_id or not normalized_workspace or not normalized_owner:
+            return None
+        required_tables = ("crm_records", "crm_engagements", "crm_events")
+        if any(not self.should_prefer_read(table_name) for table_name in required_tables):
+            return None
+        self.ensure_bootstrapped()
+        for table_name in required_tables:
+            self._ensure_table_write_schema(table_name)
+
+        normalized_record_rows = self._normalize_bulk_upsert_rows([dict(record_row or {})])
+        normalized_engagement_rows = self._normalize_bulk_upsert_rows([dict(engagement_row or {})])
+        normalized_event_rows = self._normalize_bulk_upsert_rows([dict(event_row or {})])
+        if len(normalized_record_rows) != 1 or len(normalized_engagement_rows) != 1:
+            raise ValueError("owned CRM update requires one record row and one engagement row")
+        next_record = normalized_record_rows[0]
+        next_engagement = normalized_engagement_rows[0]
+        next_event = normalized_event_rows[0] if normalized_event_rows else {}
+        if str(next_record.get("crm_record_id") or "") != normalized_record_id:
+            raise ValueError("owned CRM update record id mismatch")
+        if str(next_engagement.get("crm_record_id") or "") != normalized_record_id:
+            raise ValueError("owned CRM update engagement record id mismatch")
+
+        attempt = 0
+        while True:
+            try:
+                with self._connect() as connection:
+                    with connection.cursor() as cursor:
+                        cursor.execute(
+                            'SELECT * FROM "crm_records" WHERE crm_record_id = %s FOR UPDATE',
+                            (normalized_record_id,),
+                        )
+                        current_record = _fetch_one_dict_row(cursor, cursor.fetchone()) or {}
+                        current_workspace = str(current_record.get("workspace_id") or "").strip()
+                        current_owner = str(current_record.get("owner_user_id") or "").strip()
+                        if (
+                            not current_record
+                            or current_workspace != normalized_workspace
+                            or (current_owner and current_owner != normalized_owner)
+                        ):
+                            connection.commit()
+                            return {"status": "not_found", "reason": "crm_record_not_found"}
+                        current_version = int(current_record.get("crm_version") or 0)
+                        if int(expected_crm_version or 0) > 0 and current_version != int(expected_crm_version):
+                            connection.commit()
+                            return {"status": "conflict", "reason": "crm_record_stale"}
+
+                        # Ownership/identity columns are not writable through this
+                        # update UoW. Blank owner remains blank until its separate
+                        # migration owner is approved.
+                        next_record.update(
+                            {
+                                "crm_record_id": normalized_record_id,
+                                "workspace_id": current_workspace,
+                                "owner_user_id": current_owner,
+                                "person_identity_key": str(current_record.get("person_identity_key") or ""),
+                                "crm_version": current_version + 1,
+                                "created_at": current_record.get("created_at"),
+                            }
+                        )
+                        engagement_id = str(next_engagement.get("engagement_id") or "").strip()
+                        if not engagement_id:
+                            raise ValueError("owned CRM update engagement id is required")
+                        cursor.execute(
+                            'SELECT * FROM "crm_engagements" WHERE engagement_id = %s FOR UPDATE',
+                            (engagement_id,),
+                        )
+                        cursor.fetchone()
+
+                        existing_event: dict[str, Any] = {}
+                        event_idempotency_key = str(next_event.get("idempotency_key") or "").strip()
+                        if event_idempotency_key:
+                            cursor.execute(
+                                'SELECT * FROM "crm_events" '
+                                "WHERE workspace_id = %s AND idempotency_key = %s FOR UPDATE",
+                                (normalized_workspace, event_idempotency_key),
+                            )
+                            existing_event = _fetch_one_dict_row(cursor, cursor.fetchone()) or {}
+
+                        rows_to_write = (
+                            ("crm_records", [next_record]),
+                            ("crm_engagements", [next_engagement]),
+                            ("crm_events", [] if existing_event else ([next_event] if next_event else [])),
+                        )
+                        for table_name, payload_rows in rows_to_write:
+                            plan = self._bulk_upsert_plan(
+                                table_name,
+                                payload_rows,
+                                require_primary_key_values=True,
+                            )
+                            self._bulk_upsert_rows_with_cursor(
+                                cursor,
+                                table_name=table_name,
+                                payload_rows=payload_rows,
+                                plan=plan,
+                            )
+
+                        cursor.execute(
+                            'SELECT * FROM "crm_records" WHERE crm_record_id = %s',
+                            (normalized_record_id,),
+                        )
+                        final_record = _fetch_one_dict_row(cursor, cursor.fetchone()) or {}
+                        cursor.execute(
+                            'SELECT * FROM "crm_engagements" WHERE engagement_id = %s',
+                            (engagement_id,),
+                        )
+                        final_engagement = _fetch_one_dict_row(cursor, cursor.fetchone()) or {}
+                        final_event = existing_event
+                        event_id = str(next_event.get("event_id") or "").strip()
+                        if not final_event and event_id:
+                            cursor.execute(
+                                'SELECT * FROM "crm_events" WHERE event_id = %s',
+                                (event_id,),
+                            )
+                            final_event = _fetch_one_dict_row(cursor, cursor.fetchone()) or {}
+                    connection.commit()
+                return {
+                    "status": "applied",
+                    "record_row": final_record,
+                    "engagement_row": final_engagement,
+                    "event_row": final_event,
+                }
+            except Exception as exc:
+                attempt += 1
+                if not _is_retryable_postgres_exception(exc) or attempt >= _CONTROL_PLANE_POSTGRES_MAX_RETRIES:
+                    raise
+                time.sleep(_control_plane_postgres_retry_delay_seconds(attempt))
+
+    def upsert_crm_public_web_promotion_if_owned(
+        self,
+        *,
+        row: dict[str, Any] | None,
+        crm_record_id: str,
+        expected_workspace_id: str,
+        expected_owner_user_id: str,
+    ) -> dict[str, Any] | None:
+        """Commit the promotion's first durable write under the CRM owner row lock."""
+
+        normalized_record_id = str(crm_record_id or "").strip()
+        normalized_workspace = str(expected_workspace_id or "").strip()
+        normalized_owner = str(expected_owner_user_id or "").strip()
+        payload_rows = self._normalize_bulk_upsert_rows([dict(row or {})])
+        if not normalized_record_id or not normalized_workspace or not normalized_owner or len(payload_rows) != 1:
+            return None
+        if not self.should_prefer_read("crm_records") or not self.should_prefer_read("crm_public_web_promotions"):
+            return None
+        self.ensure_bootstrapped()
+        self._ensure_table_write_schema("crm_records")
+        self._ensure_table_write_schema("crm_public_web_promotions")
+        promotion_row = payload_rows[0]
+        if str(promotion_row.get("crm_record_id") or "").strip() != normalized_record_id:
+            raise ValueError("owner-fenced CRM promotion record id mismatch")
+
+        attempt = 0
+        while True:
+            try:
+                with self._connect() as connection:
+                    with connection.cursor() as cursor:
+                        cursor.execute(
+                            'SELECT * FROM "crm_records" WHERE crm_record_id = %s FOR UPDATE',
+                            (normalized_record_id,),
+                        )
+                        current_record = _fetch_one_dict_row(cursor, cursor.fetchone()) or {}
+                        current_workspace = str(current_record.get("workspace_id") or "").strip()
+                        current_owner = str(current_record.get("owner_user_id") or "").strip()
+                        if (
+                            not current_record
+                            or current_workspace != normalized_workspace
+                            or (current_owner and current_owner != normalized_owner)
+                        ):
+                            connection.commit()
+                            return {"status": "not_found", "reason": "crm_record_not_found"}
+                        promotion_row["workspace_id"] = current_workspace
+                        plan = self._bulk_upsert_plan(
+                            "crm_public_web_promotions",
+                            [promotion_row],
+                            require_primary_key_values=True,
+                        )
+                        self._bulk_upsert_rows_with_cursor(
+                            cursor,
+                            table_name="crm_public_web_promotions",
+                            payload_rows=[promotion_row],
+                            plan=plan,
+                        )
+                        promotion_id = str(promotion_row.get("promotion_id") or "").strip()
+                        cursor.execute(
+                            'SELECT * FROM "crm_public_web_promotions" WHERE promotion_id = %s',
+                            (promotion_id,),
+                        )
+                        final_row = _fetch_one_dict_row(cursor, cursor.fetchone()) or {}
+                    connection.commit()
+                return {"status": "applied", "row": final_row}
+            except Exception as exc:
+                attempt += 1
+                if not _is_retryable_postgres_exception(exc) or attempt >= _CONTROL_PLANE_POSTGRES_MAX_RETRIES:
+                    raise
+                time.sleep(_control_plane_postgres_retry_delay_seconds(attempt))
+
     @staticmethod
     def _normalize_bulk_upsert_rows(
         rows: list[dict[str, Any]] | tuple[dict[str, Any], ...],
@@ -3589,6 +3808,85 @@ class LiveControlPlanePostgresAdapter:
                 str(payload.get("idempotency_key") or ""),
                 str(payload.get("created_at") or now),
                 now,
+            ),
+        )
+
+    def update_job_row_if_owned(
+        self,
+        *,
+        row: dict[str, Any] | None,
+        expected_requester_id: str,
+        expected_tenant_id: str,
+    ) -> dict[str, Any] | None:
+        """Owner-CAS update for an existing job.
+
+        Unlike ``save_job_row`` this path cannot insert a missing row and never
+        rewrites owner columns. The owner predicate and state mutation execute in
+        one PostgreSQL statement, closing the request read-to-write race.
+        """
+
+        if not self.should_prefer_read("jobs"):
+            return None
+        payload = dict(row or {})
+        normalized_job_id = str(payload.get("job_id") or "").strip()
+        normalized_requester = str(expected_requester_id or "").strip()
+        normalized_tenant = str(expected_tenant_id or "").strip()
+        if not normalized_job_id or not normalized_requester or not normalized_tenant:
+            return None
+        self._ensure_control_plane_writer_schema()
+        now = _utc_now_sql_timestamp()
+        return self._execute_returning_one(
+            """
+            UPDATE jobs SET
+                job_type = %s,
+                status = %s,
+                stage = %s,
+                request_json = %s,
+                plan_json = %s,
+                execution_bundle_json = CASE
+                    WHEN %s <> '{}' THEN %s
+                    ELSE jobs.execution_bundle_json
+                END,
+                matching_request_json = CASE
+                    WHEN %s <> '{}' THEN %s
+                    ELSE jobs.matching_request_json
+                END,
+                summary_json = %s,
+                artifact_path = CASE WHEN %s <> '' THEN %s ELSE jobs.artifact_path END,
+                request_signature = %s,
+                request_family_signature = %s,
+                matching_request_signature = %s,
+                matching_request_family_signature = %s,
+                idempotency_key = CASE WHEN %s <> '' THEN %s ELSE jobs.idempotency_key END,
+                updated_at = %s
+            WHERE job_id = %s
+              AND requester_id = %s
+              AND tenant_id = %s
+            RETURNING *
+            """,
+            (
+                str(payload.get("job_type") or "retrieval"),
+                str(payload.get("status") or ""),
+                str(payload.get("stage") or "pending"),
+                str(payload.get("request_json") or "{}"),
+                str(payload.get("plan_json") or "{}"),
+                str(payload.get("execution_bundle_json") or "{}"),
+                str(payload.get("execution_bundle_json") or "{}"),
+                str(payload.get("matching_request_json") or "{}"),
+                str(payload.get("matching_request_json") or "{}"),
+                str(payload.get("summary_json") or "{}"),
+                str(payload.get("artifact_path") or ""),
+                str(payload.get("artifact_path") or ""),
+                str(payload.get("request_signature") or ""),
+                str(payload.get("request_family_signature") or ""),
+                str(payload.get("matching_request_signature") or ""),
+                str(payload.get("matching_request_family_signature") or ""),
+                str(payload.get("idempotency_key") or ""),
+                str(payload.get("idempotency_key") or ""),
+                now,
+                normalized_job_id,
+                normalized_requester,
+                normalized_tenant,
             ),
         )
 

@@ -225,9 +225,46 @@ class _ScopeOrchestrator:
         self._capture("worker_list", dict(payload or {}))
         return {"recoverable_workers": [], "count": 0}
 
-    def get_worker_daemon_status(self, payload=None):
-        self._capture("worker_status", dict(payload or {}))
-        return {"status": "ok"}
+    def get_worker_daemon_status(self, payload=None, **owner):
+        self._capture("worker_status", {**dict(payload or {}), **owner})
+        return {
+            "status": "ok",
+            "runtime_controls": {"job_recovery": {"service_status": {"status": "running"}}},
+            "recovery_services": {"job_scoped": {"status": "running"}},
+        }
+
+    def record_criteria_feedback(self, payload, **owner):
+        self._capture("criteria_feedback", {**dict(payload), **owner})
+        job = self.store.get_job(str(payload.get("job_id") or payload.get("baseline_job_id") or ""))
+        if payload.get("rerun_retrieval") and (
+            not job
+            or job.get("requester_id") != owner.get("expected_requester_id")
+            or job.get("tenant_id") != owner.get("expected_tenant_id")
+        ):
+            return {"status": "not_found", "reason": "job_not_found"}
+        return {"status": "recorded", "rerun": {"status": "not_requested"}}
+
+    def review_pattern_suggestion(self, payload, **owner):
+        self._capture("criteria_suggestion", {**dict(payload), **owner})
+        job = self.store.get_job(str(payload.get("job_id") or payload.get("baseline_job_id") or ""))
+        if payload.get("rerun_retrieval") and (
+            not job
+            or job.get("requester_id") != owner.get("expected_requester_id")
+            or job.get("tenant_id") != owner.get("expected_tenant_id")
+        ):
+            return {"status": "not_found", "reason": "job_not_found"}
+        return {"status": "reviewed", "rerun": {"status": "not_requested"}}
+
+    def recompile_criteria(self, payload, **owner):
+        self._capture("criteria_recompile", {**dict(payload), **owner})
+        job = self.store.get_job(str(payload.get("job_id") or payload.get("baseline_job_id") or ""))
+        if payload.get("rerun_retrieval") and (
+            not job
+            or job.get("requester_id") != owner.get("expected_requester_id")
+            or job.get("tenant_id") != owner.get("expected_tenant_id")
+        ):
+            return {"status": "not_found", "reason": "job_not_found"}
+        return {"status": "recompiled", "rerun": {"status": "not_requested"}}
 
     def list_crm_records_api(self, **kwargs):
         self._capture("crm_records", kwargs)
@@ -526,6 +563,14 @@ class RequestScopeWiringTest(unittest.TestCase):
         for path in ("/api/workers/recoverable", "/api/workers/daemon/status"):
             status, _ = self._request(opener, self._url(base, path, {"job_id": "job-alice"}))
             self.assertEqual(status, 200)
+        status, daemon_status = self._request(
+            opener,
+            self._url(base, "/api/workers/daemon/status", {"job_id": "job-alice", "include_details": "true"}),
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(set(daemon_status["recovery_services"]), {"job_scoped"})
+        self.assertTrue(orchestrator.captured["worker_status"][-1]["authenticated_job_scope"])
+        self.assertEqual(orchestrator.captured["worker_status"][-1]["expected_requester_id"], "alice")
         status, _ = self._request(
             opener,
             f"{base}/api/workers/cleanup",
@@ -565,6 +610,40 @@ class RequestScopeWiringTest(unittest.TestCase):
         self.assertEqual(missing_worker, foreign_worker)
         self.assertEqual(missing_worker, (404, {"status": "not_found", "reason": "job_not_found"}))
 
+    def test_criteria_rerun_routes_propagate_exact_owner_and_hide_foreign_baselines(self) -> None:
+        base, opener, orchestrator = self._start_server()
+        endpoints = (
+            ("/api/criteria/feedback", "criteria_feedback", 201),
+            ("/api/criteria/suggestions/review", "criteria_suggestion", 200),
+            ("/api/criteria/recompile", "criteria_recompile", 200),
+        )
+        for path, capture_name, success_status in endpoints:
+            owned = self._request(
+                opener,
+                f"{base}{path}",
+                method="POST",
+                body={"rerun_retrieval": True, "job_id": "job-alice"},
+            )
+            foreign = self._request(
+                opener,
+                f"{base}{path}",
+                method="POST",
+                body={"rerun_retrieval": True, "job_id": "job-bob"},
+            )
+            missing = self._request(
+                opener,
+                f"{base}{path}",
+                method="POST",
+                body={"rerun_retrieval": True, "job_id": "job-missing"},
+            )
+            self.assertEqual(owned[0], success_status)
+            self.assertEqual(foreign, missing)
+            self.assertEqual(foreign, (404, {"status": "not_found", "reason": "job_not_found"}))
+            self.assertTrue(orchestrator.captured[capture_name])
+            for captured in orchestrator.captured[capture_name]:
+                self.assertEqual(captured["expected_requester_id"], "alice")
+                self.assertEqual(captured["expected_tenant_id"], "user-alice")
+
     def test_request_scope_registry_covers_public_job_and_worker_side_effects(self) -> None:
         expected = {
             ("POST", "/api/workflows"),
@@ -573,6 +652,9 @@ class RequestScopeWiringTest(unittest.TestCase):
             ("POST", "/api/jobs/{job_id}/profile-completion"),
             ("POST", "/api/results/refine/compile-instruction"),
             ("POST", "/api/results/refine"),
+            ("POST", "/api/criteria/feedback"),
+            ("POST", "/api/criteria/suggestions/review"),
+            ("POST", "/api/criteria/recompile"),
             ("POST", "/api/target-candidates/import-from-job"),
             ("POST", "/api/projections/backfill-from-job"),
             ("POST", "/api/workers/interrupt"),
@@ -594,6 +676,12 @@ class RequestScopeWiringTest(unittest.TestCase):
                 path.startswith("/api/workflows")
                 or path.startswith("/api/jobs/")
                 or path.startswith("/api/results/refine")
+                or path
+                in {
+                    "/api/criteria/feedback",
+                    "/api/criteria/suggestions/review",
+                    "/api/criteria/recompile",
+                }
                 or path == "/api/intake/excel/workflow"
                 or path == "/api/target-candidates/import-from-job"
                 or path == "/api/projections/backfill-from-job"
