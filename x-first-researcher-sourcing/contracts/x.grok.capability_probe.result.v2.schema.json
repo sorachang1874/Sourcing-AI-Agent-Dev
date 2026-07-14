@@ -224,7 +224,12 @@
         "access_mode": {"enum": ["x_search", "unavailable"]},
         "model_id": {"const": "grok-4.5"},
         "tool_id": {"const": "x_search"},
-        "provider_request_id": {"type": ["string", "null"]},
+        "provider_request_id": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "maxLength": 160,
+          "pattern": "^[^\\uD800-\\uDFFF]+$"
+        },
         "session_id": {"type": ["string", "null"]},
         "prompt_version": {"const": "x-first-grok-x-native-capability-v1"},
         "prompt_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
@@ -245,7 +250,12 @@
           "type": "array",
           "maxItems": 8,
           "uniqueItems": true,
-          "items": {"type": "string", "minLength": 1, "maxLength": 80}
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "^[^\\uD800-\\uDFFF]+$"
+          }
         },
         "evidence_projection": {
           "type": "object",

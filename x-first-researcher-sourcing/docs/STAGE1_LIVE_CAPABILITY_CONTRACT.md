@@ -163,7 +163,7 @@ the runtime owner, and only then writes a non-sensitive deletion receipt. `runti
 
 ## Adversarial regression closure
 
-The post-`fee3699` reviews reproduced eighteen false-green or non-terminal classes before this hardening:
+The post-`fee3699` reviews reproduced nineteen false-green or non-terminal classes before this hardening:
 
 1. two independent runtime roots could each consume the same approval;
 2. a wrapped update with a post URL and an unrelated author dictionary could claim stable identity;
@@ -185,12 +185,15 @@ The post-`fee3699` reviews reproduced eighteen false-green or non-terminal class
 17. JSON booleans/floats/strings equal to numeric zero could forge an outer-only update-byte receipt; and
 18. an unpaired Unicode surrogate in a provider call id, outer request id, or retained observation excerpt could
     escape strict UTF-8 serialization after approval consumption. Provider-retained strings now require Unicode-scalar
-    UTF-8 encoding, and ASCII-escaped artifact serialization provides a final terminality boundary.
+    UTF-8 encoding, and ASCII-escaped artifact serialization provides a final terminality boundary; and
+19. a rehashed artifact could retain an escaped unpaired surrogate in the provider request id, call id, observed model
+    ids, unexpected-tool list, or evidence-error list and still pass reload validation. The executable result and tool
+    receipt validators, plus their schemas, now enforce the same Unicode-scalar invariant used by the runner.
 
 Each now has a deterministic concurrency, mutation, artifact, or subprocess regression. These tests prove the local
 fail-closed contract only; they are not a live X capability result or an independent-review `GO`.
 
-The fixed-forward checkout discovers 25 focused live-contract tests and 91 repository tests. The reviewed `a6d9e07`
+The fixed-forward checkout discovers 26 focused live-contract tests and 92 repository tests. The reviewed `a6d9e07`
 baseline was 20 focused and 85 repository tests, not 86; the additional repository test before this fixed-forward
 slice belongs to the separately committed profile/Bio lane.
 

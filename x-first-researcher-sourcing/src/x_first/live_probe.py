@@ -2680,8 +2680,10 @@ def validate_live_result(payload: Any, *, request: Any) -> list[str]:
     ):
         errors.append("result prompt binding mismatch")
     provider_request_id = provenance.get("provider_request_id")
-    if provider_request_id is not None and (
-        not isinstance(provider_request_id, str) or not provider_request_id or len(provider_request_id) > 160
+    if provider_request_id is not None and not _is_utf8_scalar_text(
+        provider_request_id,
+        minimum_characters=1,
+        maximum_characters=160,
     ):
         errors.append("result provider request id is invalid")
     session_id = provenance.get("session_id")
@@ -2717,7 +2719,7 @@ def validate_live_result(payload: Any, *, request: Any) -> list[str]:
     if (
         not isinstance(model_ids, list)
         or len(model_ids) > (1 if successful else MAX_VIOLATION_RECEIPT_CALLS)
-        or any(not isinstance(value, str) or not value or len(value) > 80 for value in model_ids)
+        or any(not _is_utf8_scalar_text(value, minimum_characters=1, maximum_characters=80) for value in model_ids)
         or len(set(model_ids)) != len(model_ids)
         or (successful and model_ids != [MODEL_ID])
     ):
@@ -3024,7 +3026,14 @@ def _validate_tool_receipt(receipt: Any, *, result: Mapping[str, Any]) -> list[s
         errors.append("tool receipt session id is invalid")
     if receipt_session_id != provenance.get("session_id"):
         errors.append("tool receipt session binding mismatch")
-    if receipt.get("provider_request_id") != provenance.get("provider_request_id"):
+    receipt_provider_request_id = receipt.get("provider_request_id")
+    if receipt_provider_request_id is not None and not _is_utf8_scalar_text(
+        receipt_provider_request_id,
+        minimum_characters=1,
+        maximum_characters=160,
+    ):
+        errors.append("tool receipt provider request id is invalid")
+    if receipt_provider_request_id != provenance.get("provider_request_id"):
         errors.append("tool receipt request binding mismatch")
     updates_sha256 = receipt.get("session_updates_sha256")
     update_bytes = receipt.get("session_update_bytes")
@@ -3047,7 +3056,9 @@ def _validate_tool_receipt(receipt: Any, *, result: Mapping[str, Any]) -> list[s
     if (
         not isinstance(observed_model_ids, list)
         or len(observed_model_ids) > MAX_VIOLATION_RECEIPT_CALLS
-        or any(not isinstance(value, str) or not value or len(value) > 80 for value in observed_model_ids)
+        or any(
+            not _is_utf8_scalar_text(value, minimum_characters=1, maximum_characters=80) for value in observed_model_ids
+        )
         or len(set(observed_model_ids)) != len(observed_model_ids)
     ):
         errors.append("tool receipt observed-model list is invalid")
@@ -3057,7 +3068,7 @@ def _validate_tool_receipt(receipt: Any, *, result: Mapping[str, Any]) -> list[s
     if (
         not isinstance(unexpected, list)
         or len(unexpected) > MAX_VIOLATION_RECEIPT_CALLS
-        or any(not isinstance(value, str) or not value or len(value) > 160 for value in unexpected)
+        or any(not _is_utf8_scalar_text(value, minimum_characters=1, maximum_characters=160) for value in unexpected)
         or len(set(unexpected)) != len(unexpected)
     ):
         errors.append("tool receipt unexpected-tool list is invalid")
@@ -3067,7 +3078,9 @@ def _validate_tool_receipt(receipt: Any, *, result: Mapping[str, Any]) -> list[s
     if (
         not isinstance(evidence_errors, list)
         or len(evidence_errors) > MAX_VIOLATION_RECEIPT_CALLS
-        or any(not isinstance(value, str) or not value or len(value) > 200 for value in evidence_errors)
+        or any(
+            not _is_utf8_scalar_text(value, minimum_characters=1, maximum_characters=200) for value in evidence_errors
+        )
         or len(set(evidence_errors)) != len(evidence_errors)
     ):
         errors.append("tool receipt evidence-error list is invalid")
@@ -3232,7 +3245,7 @@ def _validate_tool_receipt(receipt: Any, *, result: Mapping[str, Any]) -> list[s
             errors.append("tool-call receipt fields do not match the closed contract")
             continue
         call_id = call.get("call_id")
-        if not isinstance(call_id, str) or not call_id or len(call_id) > 160 or call_id in call_ids:
+        if not _is_utf8_scalar_text(call_id, minimum_characters=1, maximum_characters=160) or call_id in call_ids:
             errors.append("tool-call receipt id is invalid")
         else:
             call_ids.add(call_id)

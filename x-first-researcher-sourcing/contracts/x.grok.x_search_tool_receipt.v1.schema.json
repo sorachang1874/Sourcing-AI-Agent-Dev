@@ -39,7 +39,12 @@
   "properties": {
     "schema_version": {"const": "x.grok.x_search_tool_receipt.v1"},
     "session_id": {"type": "string", "format": "uuid"},
-    "provider_request_id": {"type": ["string", "null"], "minLength": 1, "maxLength": 160},
+    "provider_request_id": {
+      "type": ["string", "null"],
+      "minLength": 1,
+      "maxLength": 160,
+      "pattern": "^[^\\uD800-\\uDFFF]+$"
+    },
     "outer_session_id": {"type": ["string", "null"], "format": "uuid"},
     "outer_stop_reason": {"type": ["string", "null"], "enum": ["EndTurn", "MaxTurns", null]},
     "outer_usage": {
@@ -95,19 +100,34 @@
       "type": "array",
       "maxItems": 8,
       "uniqueItems": true,
-      "items": {"type": "string", "minLength": 1, "maxLength": 80}
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 80,
+        "pattern": "^[^\\uD800-\\uDFFF]+$"
+      }
     },
     "unexpected_tool_calls": {
       "type": "array",
       "maxItems": 8,
       "uniqueItems": true,
-      "items": {"type": "string", "minLength": 1, "maxLength": 160}
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 160,
+        "pattern": "^[^\\uD800-\\uDFFF]+$"
+      }
     },
     "evidence_errors": {
       "type": "array",
       "maxItems": 8,
       "uniqueItems": true,
-      "items": {"type": "string", "minLength": 1, "maxLength": 200}
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200,
+        "pattern": "^[^\\uD800-\\uDFFF]+$"
+      }
     },
     "evidence_projection": {
       "type": "object",
@@ -145,7 +165,12 @@
           "raw_result_author_user_ids"
         ],
         "properties": {
-          "call_id": {"type": "string", "minLength": 1, "maxLength": 160},
+          "call_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160,
+            "pattern": "^[^\\uD800-\\uDFFF]+$"
+          },
           "tool_id": {"const": "x_search"},
           "statuses": {
             "type": "array",

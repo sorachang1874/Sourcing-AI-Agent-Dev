@@ -1477,6 +1477,71 @@ class XFirstLiveCapabilityContractTest(unittest.TestCase):
                 ):
                     assert_rejected(mutate)
 
+    def test_rehashed_artifacts_reject_non_unicode_scalar_provider_strings(self) -> None:
+        surrogate = "\ud800"
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            approval_root = root / "global-approval"
+            with (
+                mock.patch("x_first.live_probe.project_root", return_value=root),
+                mock.patch("x_first.live_probe._global_approval_root", return_value=approval_root),
+            ):
+                bundle, base_result, _, base_tool = _write_valid_bundle(root, approval_root)
+
+                def assert_success_bundle_rejected(mutator: object) -> None:
+                    result = copy.deepcopy(base_result)
+                    tool = copy.deepcopy(base_tool)
+                    mutator(result, tool)  # type: ignore[operator]
+                    result["provenance"]["tool_receipt_sha256"] = live_probe.canonical_sha256(tool)  # type: ignore[index]
+                    live_probe._atomic_write_json(bundle / "tool-receipt.json", tool)
+                    live_probe._atomic_write_json(bundle / "result.json", result)
+                    self.assertTrue(validate_artifact_pair(bundle / "request.json", bundle / "result.json"))
+
+                assert_success_bundle_rejected(
+                    lambda result, tool: (
+                        result["provenance"].update(provider_request_id=surrogate),
+                        tool.update(provider_request_id=surrogate),
+                    )
+                )
+                assert_success_bundle_rejected(lambda _result, tool: tool["calls"][0].update(call_id=surrogate))
+
+        model_result, model_tool, model_bundle = self._run_bounded_provider_events(
+            lambda session_id: _session_events(session_id=session_id, raw_output={"posts": []})
+        )
+        model_result["provenance"]["observed_model_ids"] = [surrogate]  # type: ignore[index]
+        model_tool["observed_model_ids"] = [surrogate]
+        model_result["provenance"]["tool_receipt_sha256"] = live_probe.canonical_sha256(model_tool)  # type: ignore[index]
+        live_probe._atomic_write_json(model_bundle / "tool-receipt.json", model_tool)
+        live_probe._atomic_write_json(model_bundle / "result.json", model_result)
+        self.assertTrue(validate_artifact_pair(model_bundle / "request.json", model_bundle / "result.json"))
+
+        unexpected_result, unexpected_tool, unexpected_bundle = self._run_bounded_provider_events(
+            lambda session_id: _session_events(
+                session_id=session_id,
+                tool_name="provider_tool",
+                call_ids=("unexpected",),
+            )
+        )
+        unexpected_tool["unexpected_tool_calls"] = [surrogate]
+        unexpected_result["provenance"]["tool_receipt_sha256"] = live_probe.canonical_sha256(  # type: ignore[index]
+            unexpected_tool
+        )
+        live_probe._atomic_write_json(unexpected_bundle / "tool-receipt.json", unexpected_tool)
+        live_probe._atomic_write_json(unexpected_bundle / "result.json", unexpected_result)
+        self.assertTrue(validate_artifact_pair(unexpected_bundle / "request.json", unexpected_bundle / "result.json"))
+
+        def evidence_error_events(session_id: str) -> list[dict[str, object]]:
+            events = _session_events(session_id=session_id, call_ids=())
+            events.insert(1, copy.deepcopy(events[0]))
+            return events
+
+        error_result, error_tool, error_bundle = self._run_bounded_provider_events(evidence_error_events)
+        error_tool["evidence_errors"] = [surrogate]
+        error_result["provenance"]["tool_receipt_sha256"] = live_probe.canonical_sha256(error_tool)  # type: ignore[index]
+        live_probe._atomic_write_json(error_bundle / "tool-receipt.json", error_tool)
+        live_probe._atomic_write_json(error_bundle / "result.json", error_result)
+        self.assertTrue(validate_artifact_pair(error_bundle / "request.json", error_bundle / "result.json"))
+
     def test_outer_only_and_receiptless_projections_fail_closed_before_publish(self) -> None:
         outer = _outer_response(_inner_response())
         outer_receipt = live_probe._build_tool_receipt(proof=None, session_id=SESSION_ID, outer=outer)
