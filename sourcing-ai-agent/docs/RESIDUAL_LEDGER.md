@@ -66,6 +66,15 @@
   non-author review remains **pending**. This annotation does not change R-019's status, tripwire,
   26-call ratchet, claim-fence obligations, or `served=0`.
 
+- **R-019 / D3c2b (2026-07-15):** the scoped-root Migration-A fragment adds only the exact dormant
+  `plan_review_sessions` 11-column and `operation_runs` 5-column sentinel shapes plus sixteen `NOT VALID` local checks.
+  A two-table timeout test proves the pending session alteration, blocked OperationRun alteration, and `0004` ledger row
+  roll back together; populated sentinel, malformed-new-write, mapper invisibility, single-apply, and no-op evidence are
+  local migration evidence only. No scoped-session repository, OperationRun exact-copy writer, authority/claim/dispatch
+  path, FK/index/unique, action-root gate, or OB-10.1/10.2/10.3/10.4 owner is implemented. Activity/event/receipt/
+  quarantine Migration-A fragments remain open, so rollout step 3 registries/manifests/factory cannot start. This
+  advances physical shape only and does not change R-019's pending status, 26-call ratchet, or `served=0`.
+
 ## 使用方式
 
 - **批验收**：suite 失败 ⊆ 本台账未 closed 行 = 绿（green-modulo-ledger）；任何不在台账内的失败必须现场 worktree 归因，

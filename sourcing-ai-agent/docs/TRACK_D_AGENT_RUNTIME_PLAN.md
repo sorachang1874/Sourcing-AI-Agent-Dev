@@ -268,6 +268,12 @@ serve、会话/事件层、planner loop），用一个垂直切片证明闭环�
   dispatch 或 served 激活。这只是 Migration A 的 command-table fragment；其余 Migration A、Migration B-D、
   scope issuer/manifests/registries/bootstrap factory+verifier、terminal/race evidence、R-019、action-root gate、
   OB-10.1/10.2/10.3/10.4 与 served=0 全部 open，fresh pinned non-author review pending。
+- D3c2b dormant scoped-root candidate 按 rollout step 2 继续安装 `plan_review_sessions` 精确 11 列与
+  `operation_runs` 精确 5 列，以 empty/zero/NULL brownfield sentinel 和合计 16 个 `NOT VALID` local checks
+  保护新写；5s lock timeout 证明先执行 session DDL、再被 OperationRun writer 阻塞时，两表 columns/checks
+  与 0004 ledger 整笔回滚，恢复后 single apply + no-op。legacy mappers 继续丢弃全部新列，零 scoped
+  repository/exact-copy writer/claim/dispatch/served 激活。Activity/event/receipt/quarantine Migration-A fragments
+  仍 open；完整 Migration A 前不得进入 rollout step 3 的 registries/manifests/factory。
 
 ### D4 — 之后（本文只圈定，不展开）
 
@@ -379,7 +385,9 @@ TD-4 初始路由表已按 owner 2026-07-13 裁决落档（D0 §4）。
    这些 author-audit 项不冒充 invalid review findings 或 formal verdict；两批都不授权 runtime write。
    D3c2a 仅安装
    `workflow_commands` 的 20-column/16-`NOT VALID` dormant command subbatch，descriptor 与 runtime writers 未激活。
-   这不是完整 Migration A：review-session/OperationRun/activity/event/receipt/quarantine roots、Migration B-D、
+   D3c2b 接续安装 `plan_review_sessions` 11-column + `operation_runs` 5-column scoped-root dormant subbatch，
+   legacy mappers 仍封闭，scoped repository 与 exact-copy writer 均未激活。
+   这不是完整 Migration A：activity/event/receipt/quarantine fragments、Migration B-D、
    canonical-id 最终 grammar 与本项以下所有 owner/runtime/acceptance obligations 仍 open。
    canonical coordination lineage 为 `coordination_plan_review_id=plan_review_sessions.review_id`，物理类型同为
    positive `BIGINT`（brownfield `NULL`，strict `>0`，禁止 `TEXT`/empty）；poll-mode 的唯一 scope issuer 是
@@ -520,7 +528,8 @@ TD-4 初始路由表已按 owner 2026-07-13 裁决落档（D0 §4）。
    receipt persistence 拆行，matrix 形状锁为机械非空十列 × **26 data rows**
    `Field/object, Single owner, Physical SOT, Allowed values, Derivation rule, Consumers, Forbidden consumers,
    Fallback/brownfield status, Migration status, Deletion condition`，因此 decision shape complete；它与物理
-   scope/claim identity contract 是 D3c 的开工输入。D3c2a 只落了 dormant command-table fragment；matrix 的
+   scope/claim identity contract 是 D3c 的开工输入。D3c2a/D3c2b 只落了 dormant command-table 与 scoped-root
+   fragments；matrix 的
    physical owner/repository/runtime 与其余 Migration A 仍未实施。没有 owner/runtime/race evidence 仍不得关闭
    §6#7 的 physical implementation。
 8. 文档标签清理（残留「详设 v2」字样等）随下一次文档批处理。

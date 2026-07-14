@@ -9,6 +9,7 @@ from typing import Any
 from sourcing_agent.command_kernel import CommandKernel
 from sourcing_agent.repositories.workflow_runtime import (
     OPERATION_EVENTS,
+    OPERATION_RUNS,
     RUNTIME_OUTBOX,
     WORKFLOW_ACTIVITY_ATTEMPTS,
     WORKFLOW_ACTIVITY_RUNS,
@@ -41,6 +42,8 @@ D3C2A_MIGRATION_PATH = SOURCE_ROOT / "migrations" / "0003_workflow_command_claim
 D3C2A_IMPLEMENTATION_PATH = (
     REPO_ROOT / "docs" / "TRACK_D_D3C2A_WORKFLOW_COMMAND_CLAIM_FENCE_MIGRATION_IMPLEMENTATION.md"
 )
+D3C2B_MIGRATION_PATH = SOURCE_ROOT / "migrations" / "0004_d3_scoped_root_foundation.sql"
+D3C2B_IMPLEMENTATION_PATH = REPO_ROOT / "docs" / "TRACK_D_D3C2B_SCOPED_ROOT_MIGRATION_IMPLEMENTATION.md"
 
 D3C2A_COMMAND_COLUMNS = (
     "runtime_namespace",
@@ -63,6 +66,26 @@ D3C2A_COMMAND_COLUMNS = (
     "last_heartbeat_id",
     "terminal_event_id",
     "terminal_outcome_digest",
+)
+D3C2B_SCOPED_SESSION_COLUMNS = (
+    "runtime_namespace",
+    "provider_mode",
+    "workspace_id",
+    "scope_issuer",
+    "scope_digest",
+    "creation_source_workflow_command_id",
+    "creation_source_event_id",
+    "creation_plan_id",
+    "creation_plan_revision",
+    "creation_plan_bundle_digest",
+    "creation_idempotency_key",
+)
+D3C2B_OPERATION_ROOT_COLUMNS = (
+    "runtime_namespace",
+    "provider_mode",
+    "scope_issuer",
+    "scope_digest",
+    "coordination_plan_review_id",
 )
 
 # D3b is a characterization/decision batch. These CURRENT_* values intentionally
@@ -466,6 +489,50 @@ def test_d3c2a_document_keeps_full_migration_runtime_and_residual_gates_open() -
         "R-019 remain pending",
     )
     _assert_any(document, "serve an Agent tool", "served Agent tool")
+    _assert_any(document, "fresh pinned non-author review", "pinned non-author review")
+
+
+def test_d3c2b_migration_is_exactly_the_dormant_scoped_root_subbatch() -> None:
+    sql = D3C2B_MIGRATION_PATH.read_text(encoding="utf-8")
+    normalized = _normalized(sql)
+    alter_sections = re.findall(
+        r"ALTER TABLE ([a-z0-9_]+)(.*?);",
+        sql,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+
+    assert [table for table, _section in alter_sections] == ["plan_review_sessions", "operation_runs"]
+    session_columns = tuple(re.findall(r"\bADD COLUMN ([a-z0-9_]+)\b", alter_sections[0][1], flags=re.IGNORECASE))
+    operation_columns = tuple(re.findall(r"\bADD COLUMN ([a-z0-9_]+)\b", alter_sections[1][1], flags=re.IGNORECASE))
+    assert session_columns == D3C2B_SCOPED_SESSION_COLUMNS
+    assert operation_columns == D3C2B_OPERATION_ROOT_COLUMNS
+    assert "SET LOCAL lock_timeout = '5s'" in sql
+    assert "SET LOCAL lock_timeout = DEFAULT" in sql
+    assert normalized.count("not valid") == 16
+    assert "validate constraint" not in normalized
+    assert "foreign key" not in normalized
+    assert "create index" not in normalized
+    assert set(D3C2B_OPERATION_ROOT_COLUMNS).isdisjoint(OPERATION_RUNS.column_names())
+
+
+def test_d3c2b_document_keeps_scoped_runtime_and_later_rollout_steps_open() -> None:
+    document = D3C2B_IMPLEMENTATION_PATH.read_text(encoding="utf-8")
+
+    _assert_all(
+        document,
+        "Dormant scoped review-session and OperationRun root foundation",
+        "eleven scope, causal-plan, and idempotency columns",
+        "five scope exact-copy and nullable coordination columns",
+        "sixteen local `CHECK ... NOT VALID` constraints",
+        "both existing runtime mappings remain closed",
+        "ActivityRun/ActivityAttempt",
+        "response/failure receipt",
+        "Registry/policy pins",
+        "cannot precede complete Migration A",
+        "OB-10.1/10.2/10.3/10.4",
+        "R-019",
+    )
+    _assert_any(document, "served Agent tool", "served Agent command")
     _assert_any(document, "fresh pinned non-author review", "pinned non-author review")
 
 
@@ -1736,7 +1803,7 @@ def test_d3b_advisory_rounds_fixed_forward_are_cross_document_consistent() -> No
     )
     _assert_all(
         plan_section_6,
-        "D3c2a 只落了 dormant command-table fragment",
+        "D3c2a/D3c2b 只落了 dormant command-table 与 scoped-root",
         "physical owner/repository/runtime 与其余 Migration A 仍未实施",
     )
     _assert_all(

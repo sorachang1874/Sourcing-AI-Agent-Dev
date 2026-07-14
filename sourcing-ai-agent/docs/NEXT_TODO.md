@@ -348,6 +348,20 @@
   quarantine、canonical-id 最终 grammar、Migration B-D、R-019/action-root/OB-10.1-10.4 与 served=0 全部继续 open。
   author evidence=migration/PG `9 passed + 20 subtests`、D3a+D3b+D3c1+durable adjacency `51`、lint `58 files`、
   mypy `81 errors/4 files`、diff clean；fresh pinned non-author review pending，不能写成 formal GO。
+- [x] D3c2b dormant scoped review-session / OperationRun root foundation（2026-07-15；D3b Migration A root
+  subbatch）：`0004_d3_scoped_root_foundation.sql` 精确新增 `plan_review_sessions` **11** 个 scope/causal-plan/
+  idempotency columns + `operation_runs` **5** 个 scope exact-copy/nullable BIGINT coordination columns，合计
+  **16** 个 `NOT VALID` local checks 与 5s transaction-local lock budget。populated legacy rows保持 empty/zero/NULL
+  sentinel；先执行 session DDL、再被 OperationRun RowExclusive writer 阻塞时，两表 columns/checks + 0004 ledger
+  整笔 rollback，释放后 single apply + no-op。legacy plan-review mapper 与 `OPERATION_RUNS` descriptor 继续丢弃
+  全部新列；零 scoped repository/exact-copy writer/adoption/FK/index/unique/claim/CAS/dispatch/served 激活。
+  author evidence=migration/PG `11 passed + 36 subtests`、scoped-root exact node `1 + 16 subtests`、D3+durable
+  adjacency `58`、operation/plan-review adjacency `3`、lint `58 files` + targeted modified tests green、mypy
+  `81 errors/4 files`（棘轮持平）、diff clean。
+  Activity/event/receipt/quarantine Migration-A fragments、Migration
+  B-D、registry/policy pins、双 population manifests、bootstrap factory+verifier、R-019/action-root/OB-10.1-10.4
+  与 served=0 全部继续 open；完整 Migration A 前不得越序进入 rollout step 3。fresh pinned review pending，
+  不能写成 formal GO。
 - [ ] Track D 后的 user-owned cohort selection contract（Thinking Machines Lab live 前置）：以一个 versioned、
   registry-digest-pinned `CohortSelection` 作为唯一 owner，显式承载 canonical ordered
   `role_bucket_ids[]`（Researcher/Engineer/Product Manager 可自由多选且 registry 可扩展）、

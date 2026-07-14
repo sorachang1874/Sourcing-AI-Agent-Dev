@@ -41,10 +41,12 @@ except ImportError:  # pragma: no cover - exercised via skip path
 _REQUIRE = os.getenv("SOURCING_REQUIRE_PG_STORE_TESTS") == "1"
 _BASELINE_PATH = next(path for version, path in mr.discover_migrations() if version == "0001_baseline")
 _D3_COMMAND_MIGRATION = "0003_workflow_command_claim_fence_foundation"
+_D3_SCOPED_ROOT_MIGRATION = "0004_d3_scoped_root_foundation"
 _ALL_MIGRATIONS = [
     "0001_baseline",
     "0002_action_request_schema_pins",
     _D3_COMMAND_MIGRATION,
+    _D3_SCOPED_ROOT_MIGRATION,
 ]
 _D3_COMMAND_COLUMNS = (
     ("runtime_namespace", "text", "NO", "''::text"),
@@ -110,6 +112,64 @@ _D3_COMMAND_CHECKS = {
         "terminal_outcome_digest IS NOT NULL",
     ),
     "workflow_commands_workspace_id_shape_ck": ("workspace_id", "[^[:space:]]"),
+}
+_D3_SCOPED_SESSION_COLUMNS = (
+    ("runtime_namespace", "text", "NO", "''::text"),
+    ("provider_mode", "text", "NO", "''::text"),
+    ("workspace_id", "text", "NO", "''::text"),
+    ("scope_issuer", "text", "NO", "''::text"),
+    ("scope_digest", "text", "NO", "''::text"),
+    ("creation_source_workflow_command_id", "text", "NO", "''::text"),
+    ("creation_source_event_id", "text", "NO", "''::text"),
+    ("creation_plan_id", "text", "NO", "''::text"),
+    ("creation_plan_revision", "bigint", "NO", "0"),
+    ("creation_plan_bundle_digest", "text", "NO", "''::text"),
+    ("creation_idempotency_key", "text", "NO", "''::text"),
+)
+_D3_OPERATION_ROOT_COLUMNS = (
+    ("runtime_namespace", "text", "NO", "''::text"),
+    ("provider_mode", "text", "NO", "''::text"),
+    ("scope_issuer", "text", "NO", "''::text"),
+    ("scope_digest", "text", "NO", "''::text"),
+    ("coordination_plan_review_id", "bigint", "YES", None),
+)
+_D3_SCOPED_SESSION_CHECKS = {
+    "plan_review_sessions_creation_idempotency_key_shape_ck": ("creation_idempotency_key", "[0-9a-f]{64}"),
+    "plan_review_sessions_creation_plan_bundle_digest_shape_ck": (
+        "creation_plan_bundle_digest",
+        "[0-9a-f]{64}",
+    ),
+    "plan_review_sessions_creation_plan_id_shape_ck": ("creation_plan_id", "[^[:space:]]"),
+    "plan_review_sessions_creation_plan_revision_nonnegative_ck": ("creation_plan_revision", ">= 0"),
+    "plan_review_sessions_creation_source_event_id_shape_ck": ("creation_source_event_id", "[^[:space:]]"),
+    "plan_review_sessions_creation_source_command_id_shape_ck": (
+        "creation_source_workflow_command_id",
+        "[^[:space:]]",
+    ),
+    "plan_review_sessions_provider_mode_shape_ck": (
+        "provider_mode",
+        "live",
+        "simulate",
+        "scripted",
+        "replay",
+    ),
+    "plan_review_sessions_runtime_namespace_shape_ck": ("runtime_namespace", "[^[:space:]]"),
+    "plan_review_sessions_scope_digest_shape_ck": ("scope_digest", "[0-9a-f]{64}"),
+    "plan_review_sessions_scope_issuer_shape_ck": ("scope_issuer", "plan_review_session"),
+    "plan_review_sessions_workspace_id_shape_ck": ("workspace_id", "[^[:space:]]"),
+}
+_D3_OPERATION_ROOT_CHECKS = {
+    "operation_runs_coordination_plan_review_id_shape_ck": ("coordination_plan_review_id", "> 0"),
+    "operation_runs_provider_mode_shape_ck": (
+        "provider_mode",
+        "live",
+        "simulate",
+        "scripted",
+        "replay",
+    ),
+    "operation_runs_runtime_namespace_shape_ck": ("runtime_namespace", "[^[:space:]]"),
+    "operation_runs_scope_digest_shape_ck": ("scope_digest", "[0-9a-f]{64}"),
+    "operation_runs_scope_issuer_shape_ck": ("scope_issuer", "plan_review_session"),
 }
 
 
@@ -250,7 +310,10 @@ class MigrationRunnerTest(unittest.TestCase):
                 cur.execute("SELECT version FROM schema_migrations ORDER BY 1")
                 ledger = [r[0] for r in cur.fetchall()]
         self.assertEqual(result.stamped, ["0001_baseline"])
-        self.assertEqual(result.applied, ["0002_action_request_schema_pins", _D3_COMMAND_MIGRATION])
+        self.assertEqual(
+            result.applied,
+            ["0002_action_request_schema_pins", _D3_COMMAND_MIGRATION, _D3_SCOPED_ROOT_MIGRATION],
+        )
         self.assertEqual(ledger, _ALL_MIGRATIONS)
 
     def test_request_schema_pin_constraints_install_not_valid_and_still_guard_new_writes(self) -> None:
@@ -288,7 +351,10 @@ class MigrationRunnerTest(unittest.TestCase):
                         "WHERE action_id = 'brownfield-action'"
                     )
             conn.rollback()
-        self.assertEqual(result.applied, ["0002_action_request_schema_pins", _D3_COMMAND_MIGRATION])
+        self.assertEqual(
+            result.applied,
+            ["0002_action_request_schema_pins", _D3_COMMAND_MIGRATION, _D3_SCOPED_ROOT_MIGRATION],
+        )
         self.assertEqual(
             constraints,
             [
@@ -500,7 +566,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 )
                 checks = cur.fetchall()
 
-        self.assertEqual(result.applied, [_D3_COMMAND_MIGRATION])
+        self.assertEqual(result.applied, [_D3_COMMAND_MIGRATION, _D3_SCOPED_ROOT_MIGRATION])
         self.assertEqual(columns, list(_D3_COMMAND_COLUMNS))
         self.assertEqual(
             sentinel,
@@ -588,7 +654,7 @@ class MigrationRunnerTest(unittest.TestCase):
                         with self.assertRaises(psycopg.errors.CheckViolation):
                             cur.execute(f"UPDATE workflow_commands SET {assignment} WHERE command_id = 'legacy-cmd'")
 
-    def test_d3_command_foundation_lock_wait_is_bounded_and_rolls_back_only_0003(self) -> None:
+    def test_d3_command_foundation_lock_wait_is_bounded_and_rolls_back_0003_and_later(self) -> None:
         schema = self._fresh_schema("d3_lock_budget")
         quoted = quote_control_plane_postgres_identifier(schema)
         blocker_ready = threading.Event()
@@ -661,7 +727,274 @@ class MigrationRunnerTest(unittest.TestCase):
         with psycopg.connect(self.dsn, client_encoding="utf8") as conn:
             recovered = mr.apply_pending_migrations(conn, schema=schema)
             again = mr.apply_pending_migrations(conn, schema=schema)
-        self.assertEqual(recovered.applied, [_D3_COMMAND_MIGRATION])
+        self.assertEqual(recovered.applied, [_D3_COMMAND_MIGRATION, _D3_SCOPED_ROOT_MIGRATION])
+        self.assertEqual(again.applied, [])
+        self.assertEqual(again.already_applied, _ALL_MIGRATIONS)
+
+    def test_d3_scoped_root_foundation_installs_on_populated_tables_and_guards_new_writes(self) -> None:
+        schema = self._fresh_schema("d3_scoped_root")
+        quoted = quote_control_plane_postgres_identifier(schema)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            migrations_dir = Path(temp_dir)
+            _copy_migrations_through(migrations_dir, 3)
+            with psycopg.connect(self.dsn, client_encoding="utf8") as conn:
+                prefix_result = mr.apply_pending_migrations(
+                    conn,
+                    schema=schema,
+                    migrations_dir=migrations_dir,
+                )
+                with conn.cursor() as cur:
+                    cur.execute(f"SET search_path TO {quoted}")
+                    cur.execute(
+                        "INSERT INTO plan_review_sessions "
+                        "(target_company, status, risk_level, required_before_execution, request_json, plan_json, "
+                        "gate_json, execution_bundle_json, matching_request_json) VALUES "
+                        "('Legacy Co', 'pending', 'medium', 1, '{}', '{}', '{}', '{}', '{}') RETURNING review_id"
+                    )
+                    legacy_review_id = cur.fetchone()[0]
+                    cur.execute(
+                        "INSERT INTO operation_runs "
+                        "(operation_run_id, action_id, owner_module, operation_type, idempotency_key) "
+                        "VALUES ('legacy-root-run', 'legacy-action', 'legacy-owner', 'legacy-operation', "
+                        "'legacy-root-run')"
+                    )
+                conn.commit()
+
+        self.assertEqual(prefix_result.applied, _ALL_MIGRATIONS[:3])
+        with psycopg.connect(self.dsn, client_encoding="utf8") as conn:
+            result = mr.apply_pending_migrations(conn, schema=schema)
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns "
+                    "WHERE table_schema = %s AND table_name = 'plan_review_sessions' "
+                    "AND column_name = ANY(%s) ORDER BY ordinal_position",
+                    (schema, [name for name, _data_type, _nullable, _default in _D3_SCOPED_SESSION_COLUMNS]),
+                )
+                session_columns = cur.fetchall()
+                cur.execute(
+                    "SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns "
+                    "WHERE table_schema = %s AND table_name = 'operation_runs' "
+                    "AND column_name = ANY(%s) ORDER BY ordinal_position",
+                    (schema, [name for name, _data_type, _nullable, _default in _D3_OPERATION_ROOT_COLUMNS]),
+                )
+                operation_columns = cur.fetchall()
+                cur.execute(f"SET search_path TO {quoted}")
+                cur.execute(
+                    "SELECT runtime_namespace, provider_mode, workspace_id, scope_issuer, scope_digest, "
+                    "creation_source_workflow_command_id, creation_source_event_id, creation_plan_id, "
+                    "creation_plan_revision, creation_plan_bundle_digest, creation_idempotency_key "
+                    "FROM plan_review_sessions WHERE review_id = %s",
+                    (legacy_review_id,),
+                )
+                session_sentinel = cur.fetchone()
+                cur.execute(
+                    "SELECT runtime_namespace, provider_mode, scope_issuer, scope_digest, "
+                    "coordination_plan_review_id FROM operation_runs "
+                    "WHERE operation_run_id = 'legacy-root-run'"
+                )
+                operation_sentinel = cur.fetchone()
+                cur.execute(
+                    "SELECT t.relname, conname, convalidated, pg_get_constraintdef(c.oid) "
+                    "FROM pg_constraint c JOIN pg_class t ON t.oid = c.conrelid "
+                    "JOIN pg_namespace n ON n.oid = t.relnamespace "
+                    "WHERE n.nspname = %s AND conname = ANY(%s) ORDER BY t.relname, conname",
+                    (
+                        schema,
+                        [*_D3_SCOPED_SESSION_CHECKS, *_D3_OPERATION_ROOT_CHECKS],
+                    ),
+                )
+                checks = cur.fetchall()
+
+        self.assertEqual(result.applied, [_D3_SCOPED_ROOT_MIGRATION])
+        self.assertEqual(session_columns, list(_D3_SCOPED_SESSION_COLUMNS))
+        self.assertEqual(operation_columns, list(_D3_OPERATION_ROOT_COLUMNS))
+        self.assertEqual(session_sentinel, ("", "", "", "", "", "", "", "", 0, "", ""))
+        self.assertEqual(operation_sentinel, ("", "", "", "", None))
+        expected_checks = {
+            **{("plan_review_sessions", name): fragments for name, fragments in _D3_SCOPED_SESSION_CHECKS.items()},
+            **{("operation_runs", name): fragments for name, fragments in _D3_OPERATION_ROOT_CHECKS.items()},
+        }
+        self.assertEqual(
+            [(table, name, validated) for table, name, validated, _definition in checks],
+            [(table, name, False) for table, name in sorted(expected_checks)],
+        )
+        for table, name, _validated, definition in checks:
+            normalized_definition = " ".join(str(definition).split()).casefold()
+            for required_fragment in expected_checks[(table, name)]:
+                self.assertIn(required_fragment.casefold(), normalized_definition, (name, definition))
+
+        digest_a = "a" * 64
+        digest_b = "b" * 64
+        digest_c = "c" * 64
+        with psycopg.connect(self.dsn, autocommit=True, client_encoding="utf8") as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"SET search_path TO {quoted}")
+                cur.execute(
+                    "UPDATE plan_review_sessions SET runtime_namespace = 'runtime-a', provider_mode = 'scripted', "
+                    "workspace_id = 'workspace-a', scope_issuer = 'plan_review_session', scope_digest = %s, "
+                    "creation_source_workflow_command_id = 'source-command-a', "
+                    "creation_source_event_id = 'source-event-a', creation_plan_id = 'plan-a', "
+                    "creation_plan_revision = 1, creation_plan_bundle_digest = %s, creation_idempotency_key = %s "
+                    "WHERE review_id = %s",
+                    (digest_a, digest_b, digest_c, legacy_review_id),
+                )
+                cur.execute(
+                    "UPDATE operation_runs SET runtime_namespace = 'runtime-a', provider_mode = 'scripted', "
+                    "scope_issuer = 'plan_review_session', scope_digest = %s, coordination_plan_review_id = %s "
+                    "WHERE operation_run_id = 'legacy-root-run'",
+                    (digest_a, legacy_review_id),
+                )
+                cur.execute("SELECT * FROM plan_review_sessions WHERE review_id = %s", (legacy_review_id,))
+                raw_session = dict(zip([column.name for column in cur.description], cur.fetchone(), strict=True))
+                cur.execute("SELECT * FROM operation_runs WHERE operation_run_id = 'legacy-root-run'")
+                raw_operation = dict(zip([column.name for column in cur.description], cur.fetchone(), strict=True))
+
+        from sourcing_agent.repositories.workflow_runtime import OPERATION_RUNS
+        from sourcing_agent.storage import ControlPlaneStore
+
+        public_session = ControlPlaneStore._plan_review_session_from_row(
+            ControlPlaneStore.__new__(ControlPlaneStore), raw_session
+        )
+        public_operation = OPERATION_RUNS.from_row(raw_operation)
+        for field_name, _data_type, _nullable, _default in _D3_SCOPED_SESSION_COLUMNS:
+            self.assertNotIn(field_name, public_session)
+        for field_name, _data_type, _nullable, _default in _D3_OPERATION_ROOT_COLUMNS:
+            self.assertNotIn(field_name, public_operation)
+
+        invalid_updates = (
+            ("plan_review_sessions", "runtime_namespace = '   '", "review_id = %s", (legacy_review_id,)),
+            ("plan_review_sessions", "provider_mode = 'fake'", "review_id = %s", (legacy_review_id,)),
+            ("plan_review_sessions", "workspace_id = '   '", "review_id = %s", (legacy_review_id,)),
+            ("plan_review_sessions", "scope_issuer = 'operation_run'", "review_id = %s", (legacy_review_id,)),
+            ("plan_review_sessions", "scope_digest = 'BAD'", "review_id = %s", (legacy_review_id,)),
+            (
+                "plan_review_sessions",
+                "creation_source_workflow_command_id = '   '",
+                "review_id = %s",
+                (legacy_review_id,),
+            ),
+            ("plan_review_sessions", "creation_source_event_id = '   '", "review_id = %s", (legacy_review_id,)),
+            ("plan_review_sessions", "creation_plan_id = '   '", "review_id = %s", (legacy_review_id,)),
+            ("plan_review_sessions", "creation_plan_revision = -1", "review_id = %s", (legacy_review_id,)),
+            (
+                "plan_review_sessions",
+                "creation_plan_bundle_digest = 'BAD'",
+                "review_id = %s",
+                (legacy_review_id,),
+            ),
+            (
+                "plan_review_sessions",
+                "creation_idempotency_key = 'BAD'",
+                "review_id = %s",
+                (legacy_review_id,),
+            ),
+            (
+                "operation_runs",
+                "runtime_namespace = '   '",
+                "operation_run_id = %s",
+                ("legacy-root-run",),
+            ),
+            ("operation_runs", "provider_mode = 'fake'", "operation_run_id = %s", ("legacy-root-run",)),
+            (
+                "operation_runs",
+                "scope_issuer = 'operation_run'",
+                "operation_run_id = %s",
+                ("legacy-root-run",),
+            ),
+            ("operation_runs", "scope_digest = 'BAD'", "operation_run_id = %s", ("legacy-root-run",)),
+            (
+                "operation_runs",
+                "coordination_plan_review_id = 0",
+                "operation_run_id = %s",
+                ("legacy-root-run",),
+            ),
+        )
+        for table_name, assignment, where_sql, params in invalid_updates:
+            with self.subTest(table=table_name, assignment=assignment):
+                with psycopg.connect(self.dsn, autocommit=True, client_encoding="utf8") as conn:
+                    with conn.cursor() as cur:
+                        cur.execute(f"SET search_path TO {quoted}")
+                        with self.assertRaises(psycopg.errors.CheckViolation):
+                            cur.execute(f"UPDATE {table_name} SET {assignment} WHERE {where_sql}", params)
+
+    def test_d3_scoped_root_foundation_lock_wait_is_bounded_and_rolls_back_both_tables(self) -> None:
+        schema = self._fresh_schema("d3_scoped_root_lock")
+        quoted = quote_control_plane_postgres_identifier(schema)
+        blocker_ready = threading.Event()
+        release_blocker = threading.Event()
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            migrations_dir = Path(temp_dir)
+            _copy_migrations_through(migrations_dir, 3)
+            with psycopg.connect(self.dsn, client_encoding="utf8") as setup:
+                prefix_result = mr.apply_pending_migrations(
+                    setup,
+                    schema=schema,
+                    migrations_dir=migrations_dir,
+                )
+        self.assertEqual(prefix_result.applied, _ALL_MIGRATIONS[:3])
+
+        def hold_operation_run_write() -> None:
+            with psycopg.connect(self.dsn, client_encoding="utf8") as blocker:
+                with blocker.cursor() as cur:
+                    cur.execute(f"SET search_path TO {quoted}")
+                    cur.execute(
+                        "INSERT INTO operation_runs "
+                        "(operation_run_id, action_id, owner_module, operation_type, idempotency_key) "
+                        "VALUES ('lock-root-run', 'lock-action', 'lock-owner', 'lock-operation', 'lock-root-run')"
+                    )
+                    blocker_ready.set()
+                    release_blocker.wait(timeout=15)
+                blocker.rollback()
+
+        thread = threading.Thread(target=hold_operation_run_write, daemon=True)
+        thread.start()
+        self.assertTrue(blocker_ready.wait(timeout=5), "blocking OperationRun writer did not start")
+        started = time.monotonic()
+        try:
+            with psycopg.connect(self.dsn, client_encoding="utf8") as conn:
+                with self.assertRaises(psycopg.errors.LockNotAvailable):
+                    mr.apply_pending_migrations(conn, schema=schema)
+        finally:
+            release_blocker.set()
+            thread.join(timeout=5)
+        elapsed = time.monotonic() - started
+        self.assertFalse(thread.is_alive(), "blocking OperationRun writer did not exit")
+        self.assertGreaterEqual(elapsed, 4.0)
+        self.assertLess(elapsed, 8.0)
+
+        with psycopg.connect(self.dsn, autocommit=True, client_encoding="utf8") as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"SET search_path TO {quoted}")
+                cur.execute("SELECT version FROM schema_migrations ORDER BY version")
+                ledger = [row[0] for row in cur.fetchall()]
+                cur.execute(
+                    "SELECT table_name, column_name FROM information_schema.columns "
+                    "WHERE table_schema = %s AND ((table_name = 'plan_review_sessions' AND column_name = ANY(%s)) "
+                    "OR (table_name = 'operation_runs' AND column_name = ANY(%s))) ORDER BY 1, 2",
+                    (
+                        schema,
+                        [name for name, _data_type, _nullable, _default in _D3_SCOPED_SESSION_COLUMNS],
+                        [name for name, _data_type, _nullable, _default in _D3_OPERATION_ROOT_COLUMNS],
+                    ),
+                )
+                columns = cur.fetchall()
+                cur.execute(
+                    "SELECT conname FROM pg_constraint c JOIN pg_namespace n ON n.oid = c.connamespace "
+                    "WHERE n.nspname = %s AND conname = ANY(%s) ORDER BY conname",
+                    (schema, [*_D3_SCOPED_SESSION_CHECKS, *_D3_OPERATION_ROOT_CHECKS]),
+                )
+                checks = cur.fetchall()
+
+        self.assertEqual(ledger, _ALL_MIGRATIONS[:3])
+        self.assertEqual(columns, [], "0004 timeout must roll back both tables' columns")
+        self.assertEqual(checks, [], "0004 timeout must roll back both tables' checks")
+
+        with psycopg.connect(self.dsn, client_encoding="utf8") as conn:
+            recovered = mr.apply_pending_migrations(conn, schema=schema)
+            again = mr.apply_pending_migrations(conn, schema=schema)
+        self.assertEqual(recovered.applied, [_D3_SCOPED_ROOT_MIGRATION])
         self.assertEqual(again.applied, [])
         self.assertEqual(again.already_applied, _ALL_MIGRATIONS)
 

@@ -102,10 +102,11 @@ These are author results, not independent-review evidence. A fresh pinned non-au
 
 ## 7. Explicit non-closure and next dependency
 
-Full D3b Migration A still requires scoped review-session and OperationRun roots, both activity tables, workflow/event
-lineage, transport response/failure receipts, late-result quarantine, their owner-specific constraints, and the exact
-activity DDL that was not individually locked by D3b. Migration B/C/D backfill, FKs/indexes, active-population guards,
-constraint validation, and sentinel-deletion eligibility also remain open.
+The later D3c2b candidate advances the scoped review-session and OperationRun root fragment without changing this
+batch's command-only boundary. Full D3b Migration A still requires both activity tables, workflow/event lineage,
+transport response/failure receipts, late-result quarantine, their owner-specific constraints, and the exact activity
+DDL that was not individually locked by D3b. Migration B/C/D backfill, FKs/indexes, active-population guards, constraint
+validation, and sentinel-deletion eligibility also remain open.
 
 Runtime scope issuer, bootstrap/strict-D3 population manifests, authority/receipt factory and verifier, Stage A/B,
 generation/token/epoch CAS consumers, heartbeat occurrence, business evaluator, terminal provenance, quarantine,
