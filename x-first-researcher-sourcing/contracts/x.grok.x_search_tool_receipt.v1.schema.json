@@ -20,8 +20,22 @@
     "observed_model_ids",
     "unexpected_tool_calls",
     "evidence_errors",
+    "evidence_projection",
     "calls"
   ],
+  "$defs": {
+    "evidence_projection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["observed", "relation", "retained", "truncated"],
+      "properties": {
+        "observed": {"type": "integer", "minimum": 0, "maximum": 26},
+        "relation": {"enum": ["exact", "at_least"]},
+        "retained": {"type": "integer", "minimum": 0, "maximum": 25},
+        "truncated": {"type": "boolean"}
+      }
+    }
+  },
   "properties": {
     "schema_version": {"const": "x.grok.x_search_tool_receipt.v1"},
     "session_id": {"type": "string", "format": "uuid"},
@@ -94,6 +108,28 @@
       "maxItems": 8,
       "uniqueItems": true,
       "items": {"type": "string", "minLength": 1, "maxLength": 200}
+    },
+    "evidence_projection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "x_search_calls",
+        "completed_x_search_calls",
+        "raw_result_posts",
+        "raw_result_author_user_ids",
+        "observed_model_ids",
+        "unexpected_tool_calls",
+        "evidence_errors"
+      ],
+      "properties": {
+        "x_search_calls": {"$ref": "#/$defs/evidence_projection"},
+        "completed_x_search_calls": {"$ref": "#/$defs/evidence_projection"},
+        "raw_result_posts": {"$ref": "#/$defs/evidence_projection"},
+        "raw_result_author_user_ids": {"$ref": "#/$defs/evidence_projection"},
+        "observed_model_ids": {"$ref": "#/$defs/evidence_projection"},
+        "unexpected_tool_calls": {"$ref": "#/$defs/evidence_projection"},
+        "evidence_errors": {"$ref": "#/$defs/evidence_projection"}
+      }
     },
     "calls": {
       "type": "array",

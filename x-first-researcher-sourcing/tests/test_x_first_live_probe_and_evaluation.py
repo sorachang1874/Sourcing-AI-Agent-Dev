@@ -329,6 +329,52 @@ class XFirstLiveCapabilityContractTest(unittest.TestCase):
     def setUp(self) -> None:
         self.request = build_live_request()
 
+    def _run_bounded_provider_events(
+        self,
+        events_factory: object,
+    ) -> tuple[dict[str, object], dict[str, object], Path]:
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        root = Path(temporary.name)
+        approval_root = root / "global-approval"
+        binary = root / "grok"
+        binary.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+        binary.chmod(stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
+        auth = root / "auth.json"
+        auth.write_text('{"private":"credential-material"}', encoding="utf-8")
+        auth.chmod(0o600)
+        binary_digest = hashlib.sha256(binary.read_bytes()).hexdigest()
+
+        def fake_run(command: list[str], **kwargs: object) -> BoundedCommandResult:
+            session_id = command[command.index("--session-id") + 1]
+            updates = Path(kwargs["updates_path"])
+            events = events_factory(session_id)  # type: ignore[operator]
+            _write_events(updates, events)
+            invalid_inner = {**_inner_response(), "unexpected": "field"}
+            return BoundedCommandResult(
+                returncode=0,
+                stdout=json.dumps(_outer_response(invalid_inner, session_id=session_id)).encode(),
+                stderr=b"",
+                stop_reason=None,
+            )
+
+        with (
+            mock.patch("x_first.live_probe._run_bounded_command", side_effect=fake_run),
+            mock.patch("x_first.live_probe.project_root", return_value=root),
+            mock.patch("x_first.live_probe._global_approval_root", return_value=approval_root),
+            mock.patch("x_first.live_probe.PINNED_GROK_BINARY_SHA256", binary_digest),
+        ):
+            result, artifact_root = run_live_probe(execute_live=True, grok_binary=binary, auth_path=auth)
+            self.assertEqual(
+                validate_artifact_pair(artifact_root / "request.json", artifact_root / "result.json"),
+                [],
+            )
+        tool_receipt = json.loads((artifact_root / "tool-receipt.json").read_text(encoding="utf-8"))
+        runtime_root = root / "runtime/live-probes"
+        self.assertEqual(len(list(runtime_root.glob("xprobe_run_*"))), 1)
+        self.assertEqual(list(runtime_root.glob(".*.tmp")), [])
+        return result, tool_receipt, artifact_root
+
     def test_live_request_and_declarative_contracts_are_closed(self) -> None:
         self.assertEqual(validate_live_request(self.request), [])
         request_schema = json.loads(
@@ -803,6 +849,196 @@ class XFirstLiveCapabilityContractTest(unittest.TestCase):
         self.assertEqual(validate_live_result(overrun_failure, request=self.request), [])
         self.assertEqual(live_probe._validate_tool_receipt(overrun_receipt, result=overrun_failure), [])
 
+    def test_provider_collection_overflow_persists_one_truthful_failure_bundle(self) -> None:
+        def user_event(session_id: str, model_id: str = "grok-4.5", timestamp: int = 1) -> dict[str, object]:
+            return _event(
+                {
+                    "_meta": {"modelId": model_id, "promptIndex": timestamp - 1},
+                    "content": {},
+                    "sessionUpdate": "user_message_chunk",
+                },
+                session_id=session_id,
+                timestamp=timestamp,
+            )
+
+        def mixed_calls(session_id: str) -> list[dict[str, object]]:
+            events = [user_event(session_id)]
+            for index in range(9):
+                call_id = f"mixed-{index}"
+                events.append(_tool_call(call_id, session_id=session_id))
+                if index < 5:
+                    events.append(_tool_result(call_id, raw_output={"posts": []}, session_id=session_id))
+            events.append(_terminal_event(session_id=session_id))
+            return events
+
+        mixed_result, mixed_receipt, _ = self._run_bounded_provider_events(mixed_calls)
+        self.assertEqual(
+            mixed_result["usage"]["evidence_projection"],  # type: ignore[index]
+            {
+                "x_search_calls": {"observed": 9, "relation": "exact", "retained": 8, "truncated": True},
+                "result_sets": {"observed": 5, "relation": "exact", "retained": 5, "truncated": False},
+            },
+        )
+        self.assertEqual(len(mixed_receipt["calls"]), 8)
+        self.assertEqual(sum("completed" in call["statuses"] for call in mixed_receipt["calls"]), 5)
+
+        def completed_overflow(session_id: str) -> list[dict[str, object]]:
+            events = [user_event(session_id)]
+            for index in range(10):
+                call_id = f"completed-{index}"
+                events.append(_tool_call(call_id, session_id=session_id))
+                events.append(
+                    _tool_result(
+                        call_id,
+                        raw_output=_raw_x_output() if index == 9 else {"posts": []},
+                        session_id=session_id,
+                    )
+                )
+            events.append(_terminal_event(session_id=session_id))
+            return events
+
+        completed_result, completed_receipt, _ = self._run_bounded_provider_events(completed_overflow)
+        self.assertEqual(
+            completed_result["usage"]["evidence_projection"],  # type: ignore[index]
+            {
+                "x_search_calls": {"observed": 9, "relation": "at_least", "retained": 8, "truncated": True},
+                "result_sets": {"observed": 9, "relation": "at_least", "retained": 8, "truncated": True},
+            },
+        )
+        self.assertEqual(len(completed_receipt["calls"]), 8)
+        self.assertEqual(
+            completed_receipt["evidence_projection"]["raw_result_posts"],
+            {"observed": 0, "relation": "at_least", "retained": 0, "truncated": True},
+        )
+        self.assertEqual(
+            completed_receipt["evidence_projection"]["raw_result_author_user_ids"],
+            {"observed": 0, "relation": "at_least", "retained": 0, "truncated": True},
+        )
+
+        def model_overflow(session_id: str) -> list[dict[str, object]]:
+            return [
+                *(user_event(session_id, f"provider-model-{index}", index + 1) for index in range(9)),
+                _terminal_event(session_id=session_id),
+            ]
+
+        model_result, model_receipt, _ = self._run_bounded_provider_events(model_overflow)
+        self.assertEqual(len(model_result["provenance"]["observed_model_ids"]), 8)  # type: ignore[index]
+        self.assertEqual(
+            model_receipt["evidence_projection"]["observed_model_ids"],
+            {"observed": 9, "relation": "exact", "retained": 8, "truncated": True},
+        )
+
+        def author_overflow(session_id: str) -> list[dict[str, object]]:
+            posts = []
+            for index in range(9):
+                object_id = str(1900000000000001000 + index)
+                posts.append(
+                    {
+                        "id": object_id,
+                        "canonical_url": f"https://x.com/OpenAI/status/{object_id}",
+                        "author_info": {
+                            "legacy": {"screen_name": "OpenAI"},
+                            "rest_id": str(4398626200 + index),
+                        },
+                    }
+                )
+            return _session_events(session_id=session_id, raw_output={"posts": posts})
+
+        author_result, author_receipt, _ = self._run_bounded_provider_events(author_overflow)
+        self.assertEqual(len(author_result["provenance"]["raw_result_author_user_ids"]), 8)  # type: ignore[index]
+        self.assertEqual(
+            author_receipt["evidence_projection"]["raw_result_author_user_ids"],
+            {"observed": 9, "relation": "exact", "retained": 8, "truncated": True},
+        )
+
+        def post_overflow(session_id: str) -> list[dict[str, object]]:
+            event_values = [user_event(session_id)]
+            for batch in range(2):
+                posts = []
+                for offset in range(25):
+                    index = batch * 25 + offset
+                    object_id = str(1900000000000002000 + index)
+                    posts.append({"id": object_id, "canonical_url": f"https://x.com/OpenAI/status/{object_id}"})
+                call_id = f"posts-{batch}"
+                event_values.extend(
+                    [
+                        _tool_call(call_id, session_id=session_id),
+                        _tool_result(call_id, raw_output={"posts": posts}, session_id=session_id),
+                    ]
+                )
+            event_values.append(_terminal_event(session_id=session_id))
+            return event_values
+
+        post_result, post_receipt, _ = self._run_bounded_provider_events(post_overflow)
+        self.assertEqual(len(post_result["provenance"]["raw_result_post_ids"]), 25)  # type: ignore[index]
+        self.assertEqual(
+            post_receipt["evidence_projection"]["raw_result_posts"],
+            {"observed": 26, "relation": "at_least", "retained": 25, "truncated": True},
+        )
+
+        def unexpected_overflow(session_id: str) -> list[dict[str, object]]:
+            return [
+                user_event(session_id),
+                *(
+                    _tool_call(f"unexpected-{index}", tool_name=f"provider_tool_{index}", session_id=session_id)
+                    for index in range(9)
+                ),
+                _terminal_event(session_id=session_id),
+            ]
+
+        _, unexpected_receipt, _ = self._run_bounded_provider_events(unexpected_overflow)
+        self.assertEqual(len(unexpected_receipt["unexpected_tool_calls"]), 8)
+        self.assertEqual(
+            unexpected_receipt["evidence_projection"]["unexpected_tool_calls"],
+            {"observed": 9, "relation": "exact", "retained": 8, "truncated": True},
+        )
+
+        def evidence_error_overflow(session_id: str) -> list[dict[str, object]]:
+            missing_model = user_event(session_id)
+            missing_model["params"]["update"]["_meta"] = {}  # type: ignore[index]
+            invalid_status = _tool_result("error-call", raw_output={"posts": []}, session_id=session_id)
+            invalid_status["params"]["update"]["status"] = "broken"  # type: ignore[index]
+            unsupported = _event({"sessionUpdate": "provider_unknown"}, session_id=session_id, timestamp=8)
+            invalid_timestamp = user_event(session_id, timestamp=6)
+            invalid_timestamp["timestamp"] = True
+            invalid_params = user_event(session_id, timestamp=7)
+            invalid_params["params"]["unexpected"] = True  # type: ignore[index]
+            invalid_method = user_event(session_id, timestamp=9)
+            invalid_method["method"] = "_x.ai/session/update"
+            return [
+                missing_model,
+                user_event(session_id, timestamp=2),
+                user_event(session_id, timestamp=3),
+                _tool_call("error-call", session_id=session_id),
+                invalid_status,
+                invalid_timestamp,
+                invalid_params,
+                invalid_method,
+                unsupported,
+                _terminal_event(session_id=session_id, stop_reason="max_turns", model_turns=5),
+                unsupported,
+                _terminal_event(session_id=session_id),
+            ]
+
+        _, error_receipt, _ = self._run_bounded_provider_events(evidence_error_overflow)
+        self.assertEqual(len(error_receipt["evidence_errors"]), 8)
+        self.assertEqual(
+            error_receipt["evidence_projection"]["evidence_errors"],
+            {"observed": 9, "relation": "at_least", "retained": 8, "truncated": True},
+        )
+
+        def oversized_scalar_evidence(session_id: str) -> list[dict[str, object]]:
+            return [
+                user_event(session_id, "model-" + "x" * 1000),
+                _tool_call("oversized-tool", tool_name="tool-" + "y" * 1000, session_id=session_id),
+                _terminal_event(session_id=session_id, stop_reason="stop-" + "z" * 1000),
+            ]
+
+        _, oversized_receipt, _ = self._run_bounded_provider_events(oversized_scalar_evidence)
+        self.assertLessEqual(max(map(len, oversized_receipt["observed_model_ids"])), 80)
+        self.assertLessEqual(max(map(len, oversized_receipt["unexpected_tool_calls"])), 160)
+        self.assertIsNone(oversized_receipt["terminal_stop_reason"])
+
         deadline_failure = live_probe._build_failure_result(
             request=self.request,
             run_id=RUN_ID,
@@ -1206,6 +1442,98 @@ class XFirstLiveCapabilityContractTest(unittest.TestCase):
                     lambda value: value.update(extra="field"),
                 ):
                     assert_rejected(mutate)
+
+    def test_outer_only_and_receiptless_projections_fail_closed_before_publish(self) -> None:
+        outer = _outer_response(_inner_response())
+        outer_receipt = live_probe._build_tool_receipt(proof=None, session_id=SESSION_ID, outer=outer)
+        outer_failure = live_probe._build_failure_result(
+            request=self.request,
+            run_id=RUN_ID,
+            started_at=STARTED_AT,
+            completed_at=COMPLETED_AT,
+            elapsed_ms=1000,
+            code="invalid_provider_evidence",
+            message="Structured update evidence was unavailable.",
+            approval_receipt_sha256="b" * 64,
+            grok_binary_sha256=PINNED_GROK_BINARY_SHA256,
+            tool_receipt_sha256=live_probe.canonical_sha256(outer_receipt),
+            session_id=SESSION_ID,
+            proof=None,
+            outer=outer,
+        )
+        self.assertEqual(validate_live_result(outer_failure, request=self.request), [])
+        self.assertEqual(live_probe._validate_tool_receipt(outer_receipt, result=outer_failure), [])
+        for forged_zero in (False, 0.0, "0"):
+            mutated_receipt = copy.deepcopy(outer_receipt)
+            mutated_result = copy.deepcopy(outer_failure)
+            mutated_receipt["session_update_bytes"] = forged_zero
+            mutated_result["provenance"]["tool_receipt_sha256"] = live_probe.canonical_sha256(mutated_receipt)
+            self.assertTrue(live_probe._validate_tool_receipt(mutated_receipt, result=mutated_result))
+
+        receiptless = live_probe._build_failure_result(
+            request=self.request,
+            run_id=RUN_ID,
+            started_at=STARTED_AT,
+            completed_at=COMPLETED_AT,
+            elapsed_ms=1000,
+            code="process_spawn_failed",
+            message="The process did not expose provider evidence.",
+            approval_receipt_sha256="b" * 64,
+            grok_binary_sha256=PINNED_GROK_BINARY_SHA256,
+        )
+        self.assertEqual(validate_live_result(receiptless, request=self.request), [])
+        forged_calls = copy.deepcopy(receiptless)
+        forged_calls["usage"]["x_search_calls"] = 1
+        forged_calls["usage"]["evidence_projection"]["x_search_calls"] = {
+            "observed": 1,
+            "relation": "exact",
+            "retained": 1,
+            "truncated": False,
+        }
+        self.assertTrue(validate_live_result(forged_calls, request=self.request))
+        forged_posts = copy.deepcopy(receiptless)
+        forged_posts["provenance"]["raw_result_post_ids"] = [POST_ID]
+        forged_posts["provenance"]["evidence_projection"]["raw_result_posts"] = {
+            "observed": 1,
+            "relation": "exact",
+            "retained": 1,
+            "truncated": False,
+        }
+        self.assertTrue(validate_live_result(forged_posts, request=self.request))
+
+        proof = _proof()
+        tool_receipt = live_probe._build_tool_receipt(proof=proof, session_id=SESSION_ID, outer=outer)
+        approval = _approval_receipt(self.request)
+        result = build_live_result(
+            request=self.request,
+            run_id=RUN_ID,
+            session_id=SESSION_ID,
+            started_at=STARTED_AT,
+            completed_at=COMPLETED_AT,
+            elapsed_ms=1000,
+            outer=outer,
+            inner=_inner_response(),
+            proof=proof,
+            approval_receipt_sha256=live_probe.canonical_sha256(approval),
+            grok_binary_sha256=PINNED_GROK_BINARY_SHA256,
+            tool_receipt_sha256=live_probe.canonical_sha256(tool_receipt),
+        )
+        forged_tool = copy.deepcopy(tool_receipt)
+        forged_tool["session_update_bytes"] = False
+        result["provenance"]["tool_receipt_sha256"] = live_probe.canonical_sha256(forged_tool)
+        with tempfile.TemporaryDirectory() as directory:
+            runtime_root = Path(directory) / "live-probes"
+            runtime_root.mkdir(mode=0o700)
+            with self.assertRaises(RuntimeError):
+                live_probe._write_artifact_bundle(
+                    runtime_root,
+                    run_id=RUN_ID,
+                    request=self.request,
+                    result=result,
+                    approval_receipt=approval,
+                    tool_receipt=forged_tool,
+                )
+            self.assertEqual(list(runtime_root.iterdir()), [])
 
     def test_runner_uses_global_approval_strict_evidence_and_private_bundle(self) -> None:
         with self.assertRaises(PermissionError):

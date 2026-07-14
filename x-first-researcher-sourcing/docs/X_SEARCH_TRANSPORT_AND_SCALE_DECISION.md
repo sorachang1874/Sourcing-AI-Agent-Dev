@@ -50,6 +50,14 @@ iterative depth/node budget. If structured updates are missing or malformed but 
 outer-only receipt keeps its request id, command/outer session ids, token usage, turns, and reported cost while
 recording a null update digest, zero update bytes, and zero calls.
 
+Failure evidence is terminal-total without becoming unbounded. Each capped provider collection carries a closed
+`observed/relation/retained/truncated` projection shared by result usage/provenance and the tool receipt. The parser
+retains the reviewed sample cap plus one in-memory overflow sentinel, publishes only deterministic bounded samples,
+and uses `at_least` when the sentinel cannot prove an exact total. Consequently parallel-call, model-id, author-id,
+post, unexpected-tool, and evidence-error overruns still publish one valid failed audit bundle after approval
+consumption; they cannot disappear, claim the retained cap is the total, or become capability proof. The bundle is
+validated while private staging still owns it and is renamed into the runtime only after that validation passes.
+
 The current Stage 1 result retains a 280-character excerpt and deliberately rejects full-body persistence. It does not
 probe or make any claim about profile/Bio availability. That requires an independently owner-approved later
 field-capability probe with its own request/result schema, field-level source receipts, TTL, deletion receipt, and

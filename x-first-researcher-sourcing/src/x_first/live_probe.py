@@ -14,6 +14,7 @@ import time
 import uuid
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from dataclasses import field as dataclass_field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -209,6 +210,63 @@ class ToolCallReceipt:
 
 
 @dataclass(frozen=True)
+class EvidenceProjection:
+    observed: int
+    relation: str
+    retained: int
+    truncated: bool
+
+    def payload(self) -> dict[str, Any]:
+        return {
+            "observed": self.observed,
+            "relation": self.relation,
+            "retained": self.retained,
+            "truncated": self.truncated,
+        }
+
+
+class _BoundedDistinct:
+    """Keep one overflow sentinel while retaining deterministic first-seen evidence."""
+
+    def __init__(self, retained_limit: int) -> None:
+        self.retained_limit = retained_limit
+        self.values: list[str] = []
+        self._seen: set[str] = set()
+        self._overflow = False
+
+    def add(self, value: str) -> bool:
+        if value in self._seen:
+            return False
+        if len(self.values) < self.retained_limit + 1:
+            self.values.append(value)
+            self._seen.add(value)
+            return True
+        self._overflow = True
+        return False
+
+    def mark_overflow(self) -> None:
+        self._overflow = True
+
+    def contains(self, value: str) -> bool:
+        return value in self._seen
+
+    @property
+    def retained_values(self) -> tuple[str, ...]:
+        return tuple(self.values[: self.retained_limit])
+
+    def projection(self, *, retained: int | None = None) -> EvidenceProjection:
+        observed = len(self.values)
+        retained_count = min(observed, self.retained_limit) if retained is None else retained
+        relation = "at_least" if self._overflow else "exact"
+        return EvidenceProjection(
+            observed=observed,
+            relation=relation,
+            retained=retained_count,
+            truncated=self._overflow or retained_count != observed,
+        )
+
+
+@dataclass(frozen=True)
 class ToolProof:
     session_id: str
     x_search_calls: int
@@ -222,6 +280,29 @@ class ToolProof:
     terminal_stop_reason: str | None
     terminal_usage: ProviderUsageReceipt | None
     evidence_errors: tuple[str, ...]
+    evidence_projection: Mapping[str, EvidenceProjection] = dataclass_field(default_factory=dict)
+
+    def projection(self, name: str) -> EvidenceProjection:
+        projection = self.evidence_projection.get(name)
+        if projection is not None:
+            return projection
+        exact_counts = {
+            "x_search_calls": (self.x_search_calls, len(self.call_receipts)),
+            "completed_x_search_calls": (
+                self.x_search_completed_calls,
+                sum(1 for call in self.call_receipts if "completed" in call.statuses),
+            ),
+            "raw_result_posts": (len(self.raw_result_posts), len(self.raw_result_posts)),
+            "raw_result_author_user_ids": (
+                len(self.raw_result_author_user_ids),
+                len(self.raw_result_author_user_ids),
+            ),
+            "observed_model_ids": (len(self.observed_model_ids), len(self.observed_model_ids)),
+            "unexpected_tool_calls": (len(self.unexpected_tool_calls), len(self.unexpected_tool_calls)),
+            "evidence_errors": (len(self.evidence_errors), len(self.evidence_errors)),
+        }
+        observed, retained = exact_counts[name]
+        return EvidenceProjection(observed, "exact", retained, observed != retained)
 
     @property
     def raw_result_post_pairs(self) -> tuple[tuple[str, str], ...]:
@@ -229,7 +310,15 @@ class ToolProof:
 
     @property
     def raw_result_author_user_ids(self) -> tuple[str, ...]:
-        return tuple(sorted({post.platform_user_id for post in self.raw_result_posts if post.platform_user_id}))
+        author_ids: list[str] = []
+        seen: set[str] = set()
+        for post in self.raw_result_posts:
+            if post.platform_user_id and post.platform_user_id not in seen:
+                seen.add(post.platform_user_id)
+                author_ids.append(post.platform_user_id)
+            if len(author_ids) == MAX_VIOLATION_RECEIPT_CALLS:
+                break
+        return tuple(author_ids)
 
 
 @dataclass(frozen=True)
@@ -416,7 +505,10 @@ def _normalize_tool_name(value: Any) -> str | None:
         "web_fetch": "web_fetch",
         "webfetch": "web_fetch",
     }
-    return aliases.get(normalized, normalized or None)
+    resolved = aliases.get(normalized, normalized or None)
+    if resolved is not None and len(resolved) > 160:
+        return f"tool_sha256_{hashlib.sha256(value.encode('utf-8', errors='surrogatepass')).hexdigest()}"
+    return resolved
 
 
 def _tool_identity(update: Mapping[str, Any]) -> str | None:
@@ -508,17 +600,17 @@ def _structured_post_record(
     return (object_id, canonical_url), author_id, tuple(sorted(errors))
 
 
-def _raw_x_posts(value: Any) -> tuple[tuple[RawXPostReceipt, ...], tuple[str, ...]]:
+def _raw_x_posts(value: Any) -> tuple[tuple[RawXPostReceipt, ...], tuple[str, ...], bool]:
     """Read only the closed registered ``rawOutput.posts[*]`` provider path."""
     if not isinstance(value, Mapping) or not isinstance(value.get("posts"), list):
-        return (), ("invalid_raw_output_shape",)
+        return (), ("invalid_raw_output_shape",), False
     raw_posts = value["posts"]
     binding_errors: set[str] = set()
     if len(raw_posts) > MAX_VIOLATION_RECEIPT_POSTS:
         binding_errors.add("raw_post_receipt_budget_exceeded")
     bound_ids: dict[tuple[str, str], set[str]] = {}
     seen_pairs: set[tuple[str, str]] = set()
-    for raw_post in raw_posts[:MAX_VIOLATION_RECEIPT_POSTS]:
+    for raw_post in raw_posts[: MAX_VIOLATION_RECEIPT_POSTS + 1]:
         pair, author_id, record_errors = _structured_post_record(raw_post)
         binding_errors.update(record_errors)
         if pair is None:
@@ -537,9 +629,9 @@ def _raw_x_posts(value: Any) -> tuple[tuple[RawXPostReceipt, ...], tuple[str, ..
             canonical_url=canonical_url,
             platform_user_id=next(iter(author_ids)) if len(author_ids) == 1 else None,
         )
-        for (object_id, canonical_url), author_ids in sorted(bound_ids.items())
+        for (object_id, canonical_url), author_ids in bound_ids.items()
     )
-    return posts, tuple(sorted(binding_errors))
+    return posts, tuple(sorted(binding_errors)), len(raw_posts) > MAX_VIOLATION_RECEIPT_POSTS + 1
 
 
 def _parse_provider_usage(value: Any) -> ProviderUsageReceipt:
@@ -622,24 +714,19 @@ def _parse_update_envelope(
     return kind, update, params
 
 
-def _merge_raw_posts(
-    target: dict[tuple[str, str], set[str]],
-    posts: Iterable[RawXPostReceipt],
-) -> None:
-    for post in posts:
-        values = target.setdefault((post.platform_object_id, post.canonical_url), set())
-        if post.platform_user_id is not None:
-            values.add(post.platform_user_id)
-
-
-def _receipts_from_bindings(bindings: Mapping[tuple[str, str], set[str]]) -> tuple[RawXPostReceipt, ...]:
+def _receipts_from_order(
+    order: Iterable[tuple[str, str]],
+    bindings: Mapping[tuple[str, str], set[str]],
+) -> tuple[RawXPostReceipt, ...]:
     return tuple(
         RawXPostReceipt(
             platform_object_id=object_id,
             canonical_url=canonical_url,
-            platform_user_id=next(iter(author_ids)) if len(author_ids) == 1 else None,
+            platform_user_id=next(iter(bindings.get((object_id, canonical_url), set())))
+            if len(bindings.get((object_id, canonical_url), set())) == 1
+            else None,
         )
-        for (object_id, canonical_url), author_ids in sorted(bindings.items())
+        for object_id, canonical_url in order
     )
 
 
@@ -654,13 +741,18 @@ def _parse_update_stream(
         uuid.UUID(expected_session_id)
     except (ValueError, AttributeError) as error:
         raise ValueError("expected command session id is invalid") from error
+    tool_call_ids = _BoundedDistinct(MAX_VIOLATION_RECEIPT_CALLS)
     tool_calls: dict[str, str] = {}
+    x_call_ids = _BoundedDistinct(MAX_VIOLATION_RECEIPT_CALLS)
     x_calls: dict[str, set[str]] = {}
     receipt_bindings: dict[str, dict[tuple[str, str], set[str]]] = {}
+    all_post_order: list[tuple[str, str]] = []
     all_bindings: dict[tuple[str, str], set[str]] = {}
-    unexpected: set[str] = set()
-    model_ids: set[str] = set()
-    evidence_errors: set[str] = set()
+    raw_posts_overflow = False
+    author_ids = _BoundedDistinct(MAX_VIOLATION_RECEIPT_CALLS)
+    unexpected = _BoundedDistinct(MAX_VIOLATION_RECEIPT_CALLS)
+    model_ids = _BoundedDistinct(MAX_VIOLATION_RECEIPT_CALLS)
+    evidence_errors = _BoundedDistinct(MAX_VIOLATION_RECEIPT_CALLS)
     terminal_stop_reason: str | None = None
     terminal_usage: ProviderUsageReceipt | None = None
     terminal_index: int | None = None
@@ -694,30 +786,46 @@ def _parse_update_stream(
             if not isinstance(model_id, str) or not model_id:
                 evidence_errors.add("session user event lacks the effective model id")
             else:
-                if model_id in model_ids:
+                bounded_model_id = (
+                    model_id
+                    if model_id == MODEL_ID
+                    else f"model_sha256_{hashlib.sha256(model_id.encode('utf-8', errors='surrogatepass')).hexdigest()}"
+                )
+                if bounded_model_id != model_id:
+                    evidence_errors.add("session effective model identity is invalid")
+                if model_ids.contains(bounded_model_id):
                     evidence_errors.add("session model identity evidence is duplicated")
-                model_ids.add(model_id)
+                model_ids.add(bounded_model_id)
         elif kind == "tool_call":
             call_id = update.get("toolCallId")
             if not isinstance(call_id, str) or not call_id or len(call_id) > 160:
                 evidence_errors.add("tool call id is invalid")
                 continue
-            if call_id in tool_calls:
+            if tool_call_ids.contains(call_id) or x_call_ids.contains(call_id):
                 unexpected.add("duplicate_tool_call_id")
                 continue
             tool_name = _tool_identity(update)
-            tool_calls[call_id] = tool_name or "unknown"
+            retained_call = tool_call_ids.add(call_id)
+            if retained_call:
+                tool_calls[call_id] = tool_name or "unknown"
             if tool_name == TOOL_ID:
-                x_calls.setdefault(call_id, set()).add("in_progress")
-                receipt_bindings.setdefault(call_id, {})
+                retained_x_call = x_call_ids.add(call_id)
+                if retained_x_call:
+                    x_calls.setdefault(call_id, set()).add("in_progress")
+                    receipt_bindings.setdefault(call_id, {})
+                else:
+                    # An omitted call can later carry posts/authors that this bounded parser
+                    # cannot safely bind. Preserve that uncertainty instead of claiming zero.
+                    raw_posts_overflow = True
+                    author_ids.mark_overflow()
             else:
                 unexpected.add(tool_name or "unknown")
         elif kind == "tool_call_update":
             call_id = update.get("toolCallId")
-            if not isinstance(call_id, str) or call_id not in tool_calls:
+            if not isinstance(call_id, str) or (call_id not in tool_calls and call_id not in x_calls):
                 unexpected.add("unknown_tool_call_update")
                 continue
-            resolved_tool = tool_calls[call_id]
+            resolved_tool = tool_calls.get(call_id, TOOL_ID)
             update_tool = _tool_identity(update)
             if update_tool is not None and update_tool != resolved_tool:
                 unexpected.add("tool_identity_drift")
@@ -736,13 +844,31 @@ def _parse_update_stream(
                         x_calls.setdefault(call_id, set()).add(normalized_status)
             raw_output = update.get("rawOutput")
             if raw_output is not None:
-                posts, binding_errors = _raw_x_posts(raw_output)
-                unexpected.update(binding_errors)
+                posts, binding_errors, omitted_posts = _raw_x_posts(raw_output)
+                for binding_error in binding_errors:
+                    unexpected.add(binding_error)
+                if omitted_posts:
+                    raw_posts_overflow = True
+                    author_ids.mark_overflow()
                 call_bindings = receipt_bindings.setdefault(call_id, {})
                 if any((post.platform_object_id, post.canonical_url) in call_bindings for post in posts):
                     unexpected.add("duplicate_raw_post_record")
-                _merge_raw_posts(call_bindings, posts)
-                _merge_raw_posts(all_bindings, posts)
+                for post in posts:
+                    pair = (post.platform_object_id, post.canonical_url)
+                    if pair not in all_bindings:
+                        if len(all_post_order) >= MAX_VIOLATION_RECEIPT_POSTS + 1:
+                            raw_posts_overflow = True
+                            author_ids.mark_overflow()
+                            continue
+                        all_post_order.append(pair)
+                        all_bindings[pair] = set()
+                    if post.platform_user_id is not None:
+                        all_bindings[pair].add(post.platform_user_id)
+                        author_ids.add(post.platform_user_id)
+                    if pair in all_post_order[:MAX_VIOLATION_RECEIPT_POSTS]:
+                        values = call_bindings.setdefault(pair, set())
+                        if post.platform_user_id is not None:
+                            values.add(post.platform_user_id)
         elif kind == "turn_completed":
             if terminal_index is not None:
                 evidence_errors.add("session updates contain multiple terminal events")
@@ -750,7 +876,12 @@ def _parse_update_stream(
             terminal_index = index
             if set(update) != {"prompt_id", "sessionUpdate", "stop_reason", "usage"}:
                 evidence_errors.add("terminal event fields do not match Grok 0.2.99")
-            terminal_stop_reason = update.get("stop_reason") if isinstance(update.get("stop_reason"), str) else None
+            observed_stop_reason = update.get("stop_reason")
+            if observed_stop_reason in {"end_turn", "max_turns"}:
+                terminal_stop_reason = observed_stop_reason
+            else:
+                terminal_stop_reason = None
+                evidence_errors.add("session terminal stop reason is invalid")
             try:
                 terminal_usage = _parse_provider_usage(update.get("usage"))
             except ValueError as error:
@@ -769,37 +900,77 @@ def _parse_update_stream(
             evidence_errors.add("session terminal stop reason is not end_turn")
         if terminal_usage is None:
             evidence_errors.add("session terminal usage is unavailable")
-        if model_ids != {MODEL_ID}:
+        if model_ids.projection().relation != "exact" or model_ids.retained_values != (MODEL_ID,):
             evidence_errors.add("session effective model identity is invalid")
         if user_event_count != 1:
             evidence_errors.add("session updates do not contain exactly one user event")
     for bindings in (*receipt_bindings.values(), all_bindings):
         if any(len(author_ids) > 1 for author_ids in bindings.values()):
             unexpected.add("conflicting_raw_post_author_binding")
-    completed_states = {"completed"}
-    completed = sum(1 for statuses in x_calls.values() if statuses & completed_states)
+    completed = sum(1 for call_id in x_call_ids.values if "completed" in x_calls.get(call_id, set()))
+    retained_call_ids = tuple(
+        [call_id for call_id in x_call_ids.values if "completed" in x_calls.get(call_id, set())]
+        + [call_id for call_id in x_call_ids.values if "completed" not in x_calls.get(call_id, set())]
+    )[:MAX_VIOLATION_RECEIPT_CALLS]
+    retained_completed = sum(1 for call_id in retained_call_ids if "completed" in x_calls.get(call_id, set()))
+    x_call_projection = x_call_ids.projection()
+    completed_projection = EvidenceProjection(
+        observed=completed,
+        relation=x_call_projection.relation,
+        retained=retained_completed,
+        truncated=x_call_projection.relation != "exact" or completed != retained_completed,
+    )
     call_receipts = tuple(
         ToolCallReceipt(
             call_id=call_id,
             tool_id=TOOL_ID,
             statuses=tuple(sorted(statuses)),
-            raw_result_posts=_receipts_from_bindings(receipt_bindings.get(call_id, {})),
+            raw_result_posts=_receipts_from_order(
+                tuple(receipt_bindings.get(call_id, {})),
+                receipt_bindings.get(call_id, {}),
+            ),
         )
-        for call_id, statuses in sorted(x_calls.items())
+        for call_id in retained_call_ids
+        for statuses in (x_calls.get(call_id, set()),)
+    )
+    retained_posts = _receipts_from_order(
+        all_post_order[:MAX_VIOLATION_RECEIPT_POSTS],
+        all_bindings,
+    )
+    raw_post_projection = EvidenceProjection(
+        observed=len(all_post_order),
+        relation="at_least" if raw_posts_overflow else "exact",
+        retained=len(retained_posts),
+        truncated=raw_posts_overflow or len(all_post_order) != len(retained_posts),
+    )
+    author_projection = author_ids.projection(
+        retained=min(
+            len({post.platform_user_id for post in retained_posts if post.platform_user_id}),
+            MAX_VIOLATION_RECEIPT_CALLS,
+        )
     )
     return ToolProof(
         session_id=expected_session_id,
-        x_search_calls=len(x_calls),
+        x_search_calls=x_call_projection.observed,
         x_search_completed_calls=completed,
-        unexpected_tool_calls=tuple(sorted(unexpected)),
-        raw_result_posts=_receipts_from_bindings(all_bindings),
-        observed_model_ids=tuple(sorted(model_ids)),
+        unexpected_tool_calls=unexpected.retained_values,
+        raw_result_posts=retained_posts,
+        observed_model_ids=model_ids.retained_values,
         call_receipts=call_receipts,
         updates_sha256=hashlib.sha256(raw).hexdigest(),
         update_bytes=len(raw),
         terminal_stop_reason=terminal_stop_reason,
         terminal_usage=terminal_usage,
-        evidence_errors=tuple(sorted(evidence_errors)),
+        evidence_errors=evidence_errors.retained_values,
+        evidence_projection={
+            "x_search_calls": x_call_projection,
+            "completed_x_search_calls": completed_projection,
+            "raw_result_posts": raw_post_projection,
+            "raw_result_author_user_ids": author_projection,
+            "observed_model_ids": model_ids.projection(),
+            "unexpected_tool_calls": unexpected.projection(),
+            "evidence_errors": evidence_errors.projection(),
+        },
     )
 
 
@@ -1213,6 +1384,7 @@ def _build_failure_result(
             "raw_result_post_ids": sorted(object_id for object_id, _ in raw_result_pairs),
             "raw_result_author_user_ids": list(proof.raw_result_author_user_ids) if proof is not None else [],
             "observed_model_ids": list(proof.observed_model_ids) if proof is not None else [],
+            "evidence_projection": _result_provenance_projection(proof),
             "approval_receipt_sha256": approval_receipt_sha256,
             "tool_receipt_sha256": tool_receipt_sha256,
             "grok_binary_sha256": grok_binary_sha256,
@@ -1221,6 +1393,7 @@ def _build_failure_result(
             "executions": 1,
             "x_search_calls": proof.x_search_calls if proof is not None else 0,
             "result_sets": proof.x_search_completed_calls if proof is not None else 0,
+            "evidence_projection": _result_usage_projection(proof),
             "observations": 0,
             "model_turns": model_turns,
             "cost_status": cost_status,
@@ -1448,6 +1621,36 @@ def _provider_usage_payload(usage: ProviderUsageReceipt | None) -> dict[str, int
     }
 
 
+def _bounded_post_author_ids(posts: Iterable[RawXPostReceipt]) -> list[str]:
+    values: list[str] = []
+    seen: set[str] = set()
+    for post in posts:
+        if post.platform_user_id is not None and post.platform_user_id not in seen:
+            seen.add(post.platform_user_id)
+            values.append(post.platform_user_id)
+        if len(values) == MAX_VIOLATION_RECEIPT_CALLS:
+            break
+    return values
+
+
+def _proof_projection(proof: ToolProof | None, name: str) -> EvidenceProjection:
+    return proof.projection(name) if proof is not None else EvidenceProjection(0, "exact", 0, False)
+
+
+def _result_usage_projection(proof: ToolProof | None) -> dict[str, dict[str, Any]]:
+    return {
+        "x_search_calls": _proof_projection(proof, "x_search_calls").payload(),
+        "result_sets": _proof_projection(proof, "completed_x_search_calls").payload(),
+    }
+
+
+def _result_provenance_projection(proof: ToolProof | None) -> dict[str, dict[str, Any]]:
+    return {
+        name: _proof_projection(proof, name).payload()
+        for name in ("raw_result_posts", "raw_result_author_user_ids", "observed_model_ids")
+    }
+
+
 def _build_tool_receipt(
     *,
     proof: ToolProof | None,
@@ -1455,13 +1658,42 @@ def _build_tool_receipt(
     outer: Mapping[str, Any] | None,
 ) -> dict[str, Any]:
     outer_evidence, outer_errors = _outer_evidence_projection(outer)
+    bounded_errors = _BoundedDistinct(MAX_VIOLATION_RECEIPT_CALLS)
     proof_errors = proof.evidence_errors if proof is not None else ()
-    evidence_errors = sorted({*proof_errors, *outer_errors})
-    if len(evidence_errors) > MAX_VIOLATION_RECEIPT_CALLS:
-        evidence_errors = [
-            *evidence_errors[: MAX_VIOLATION_RECEIPT_CALLS - 1],
-            "evidence_error_receipt_overflow",
-        ]
+    for error in proof_errors:
+        bounded_errors.add(error)
+    proof_error_projection = _proof_projection(proof, "evidence_errors")
+    if proof_error_projection.relation == "at_least":
+        bounded_errors.mark_overflow()
+    for error in outer_errors:
+        bounded_errors.add(error)
+    projections = {
+        name: _proof_projection(proof, name).payload()
+        for name in (
+            "x_search_calls",
+            "completed_x_search_calls",
+            "raw_result_posts",
+            "raw_result_author_user_ids",
+            "observed_model_ids",
+            "unexpected_tool_calls",
+        )
+    }
+    bounded_error_projection = bounded_errors.projection()
+    combined_error_relation = (
+        "at_least"
+        if proof_error_projection.relation == "at_least"
+        or bounded_error_projection.relation == "at_least"
+        or (proof_error_projection.observed > len(proof_errors) and bool(outer_errors))
+        else "exact"
+    )
+    combined_error_observed = max(proof_error_projection.observed, bounded_error_projection.observed)
+    projections["evidence_errors"] = EvidenceProjection(
+        observed=combined_error_observed,
+        relation=combined_error_relation,
+        retained=len(bounded_errors.retained_values),
+        truncated=combined_error_relation == "at_least"
+        or combined_error_observed != len(bounded_errors.retained_values),
+    ).payload()
     return {
         "schema_version": TOOL_RECEIPT_SCHEMA_VERSION,
         "session_id": session_id,
@@ -1477,7 +1709,8 @@ def _build_tool_receipt(
         "terminal_usage": _provider_usage_payload(proof.terminal_usage) if proof is not None else None,
         "observed_model_ids": list(proof.observed_model_ids) if proof is not None else [],
         "unexpected_tool_calls": list(proof.unexpected_tool_calls) if proof is not None else [],
-        "evidence_errors": evidence_errors,
+        "evidence_errors": list(bounded_errors.retained_values),
+        "evidence_projection": projections,
         "calls": [
             {
                 "call_id": call.call_id,
@@ -1491,9 +1724,7 @@ def _build_tool_receipt(
                     }
                     for post in call.raw_result_posts
                 ],
-                "raw_result_author_user_ids": sorted(
-                    {post.platform_user_id for post in call.raw_result_posts if post.platform_user_id}
-                ),
+                "raw_result_author_user_ids": _bounded_post_author_ids(call.raw_result_posts),
             }
             for call in (proof.call_receipts if proof is not None else ())
         ],
@@ -1761,6 +1992,36 @@ def _expiry_timestamp(completed_at: str) -> str:
     return (completed + timedelta(hours=24)).astimezone(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
+def _validate_bundle_payloads(
+    *,
+    request: Any,
+    result: Any,
+    approval_receipt: Any,
+    tool_receipt: Any | None,
+) -> list[str]:
+    if not isinstance(request, dict) or not isinstance(result, dict):
+        return [f"{LIVE_DIAGNOSTIC_CODE}: staged bundle payloads must be objects"]
+    errors = [
+        *validate_live_request(request),
+        *validate_live_result(result, request=request),
+        *(
+            f"{LIVE_DIAGNOSTIC_CODE}: {error}"
+            for error in _validate_approval_receipt(approval_receipt, request=request, result=result)
+        ),
+    ]
+    provenance = result.get("provenance") if isinstance(result.get("provenance"), dict) else {}
+    if provenance.get("tool_receipt_sha256") is None:
+        if tool_receipt is not None:
+            errors.append(f"{LIVE_DIAGNOSTIC_CODE}: staged bundle contains an unbound tool receipt")
+    elif tool_receipt is None:
+        errors.append(f"{LIVE_DIAGNOSTIC_CODE}: staged bundle lacks its bound tool receipt")
+    else:
+        errors.extend(
+            f"{LIVE_DIAGNOSTIC_CODE}: {error}" for error in _validate_tool_receipt(tool_receipt, result=result)
+        )
+    return sorted(set(errors))
+
+
 def _write_artifact_bundle(
     runtime_root: Path,
     *,
@@ -1781,6 +2042,17 @@ def _write_artifact_bundle(
         _atomic_write_json(staging_root / "approval-receipt.json", approval_receipt)
         if tool_receipt is not None:
             _atomic_write_json(staging_root / "tool-receipt.json", tool_receipt)
+        staged_request = _read_private_json(staging_root / "request.json")
+        staged_result = _read_private_json(staging_root / "result.json")
+        staged_approval = _read_private_json(staging_root / "approval-receipt.json")
+        staged_tool = _read_private_json(staging_root / "tool-receipt.json") if tool_receipt is not None else None
+        if _validate_bundle_payloads(
+            request=staged_request,
+            result=staged_result,
+            approval_receipt=staged_approval,
+            tool_receipt=staged_tool,
+        ):
+            raise RuntimeError("staged live artifact bundle failed the executable contract")
         os.replace(staging_root, final_root)
         parent_descriptor = os.open(runtime_root, os.O_RDONLY)
         try:
@@ -2056,6 +2328,18 @@ def build_live_result(
         and access_mode == "x_search"
         and proof.x_search_calls == 1
         and proof.x_search_completed_calls == 1
+        and proof.projection("x_search_calls") == EvidenceProjection(1, "exact", 1, False)
+        and proof.projection("completed_x_search_calls") == EvidenceProjection(1, "exact", 1, False)
+        and all(
+            proof.projection(name).relation == "exact" and not proof.projection(name).truncated
+            for name in (
+                "raw_result_posts",
+                "raw_result_author_user_ids",
+                "observed_model_ids",
+                "unexpected_tool_calls",
+                "evidence_errors",
+            )
+        )
         and not proof.unexpected_tool_calls
         and proof.observed_model_ids == (MODEL_ID,)
         and proof.terminal_stop_reason == "end_turn"
@@ -2072,7 +2356,8 @@ def build_live_result(
         or model_turns > MAX_TURNS
         or (cost_usd is not None and cost_usd > MAX_REPORTED_COST_USD)
         or proof.x_search_calls > 1
-        or len(raw_result_pairs) > MAX_VIOLATION_RECEIPT_POSTS
+        or proof.projection("x_search_calls").relation != "exact"
+        or proof.projection("raw_result_posts").truncated
         or len(observations) > MAX_OBSERVATIONS
     )
     if budget_exceeded:
@@ -2135,6 +2420,7 @@ def build_live_result(
             "raw_result_post_ids": sorted(object_id for object_id, _ in raw_result_pairs),
             "raw_result_author_user_ids": list(proof.raw_result_author_user_ids),
             "observed_model_ids": list(proof.observed_model_ids),
+            "evidence_projection": _result_provenance_projection(proof),
             "approval_receipt_sha256": approval_receipt_sha256,
             "tool_receipt_sha256": tool_receipt_sha256,
             "grok_binary_sha256": grok_binary_sha256,
@@ -2143,6 +2429,7 @@ def build_live_result(
             "executions": 1,
             "x_search_calls": proof.x_search_calls,
             "result_sets": proof.x_search_completed_calls,
+            "evidence_projection": _result_usage_projection(proof),
             "observations": len(observations),
             "model_turns": model_turns,
             "cost_status": cost_status,
@@ -2170,6 +2457,37 @@ def build_live_result(
             "researcher_mapping_authorized": False,
         },
     }
+
+
+def _validate_evidence_projection(
+    value: Any,
+    *,
+    retained_limit: int,
+    actual_retained: int,
+    location: str,
+    errors: list[str],
+) -> dict[str, Any]:
+    expected_fields = {"observed", "relation", "retained", "truncated"}
+    if not isinstance(value, dict) or set(value) != expected_fields:
+        errors.append(f"{location} fields do not match the closed contract")
+        return {}
+    observed = value.get("observed")
+    retained = value.get("retained")
+    relation = value.get("relation")
+    truncated = value.get("truncated")
+    if (
+        type(observed) is not int
+        or not 0 <= observed <= retained_limit + 1
+        or type(retained) is not int
+        or not 0 <= retained <= retained_limit
+        or retained > observed
+        or retained != actual_retained
+        or relation not in {"exact", "at_least"}
+        or type(truncated) is not bool
+        or truncated is not (relation == "at_least" or retained != observed)
+    ):
+        errors.append(f"{location} does not reconcile with its bounded retained evidence")
+    return value
 
 
 def validate_live_result(payload: Any, *, request: Any) -> list[str]:
@@ -2225,6 +2543,7 @@ def validate_live_result(payload: Any, *, request: Any) -> list[str]:
                 "raw_result_post_ids",
                 "raw_result_author_user_ids",
                 "observed_model_ids",
+                "evidence_projection",
                 "approval_receipt_sha256",
                 "tool_receipt_sha256",
                 "grok_binary_sha256",
@@ -2376,6 +2695,44 @@ def validate_live_result(payload: Any, *, request: Any) -> list[str]:
     ):
         errors.append("result effective-model receipt is invalid")
         model_ids = []
+    provenance_projection = provenance.get("evidence_projection")
+    expected_provenance_projection_fields = {
+        "raw_result_posts",
+        "raw_result_author_user_ids",
+        "observed_model_ids",
+    }
+    if (
+        not isinstance(provenance_projection, dict)
+        or set(provenance_projection) != expected_provenance_projection_fields
+    ):
+        errors.append("result provenance projection fields do not match the closed contract")
+        provenance_projection = {}
+    raw_post_projection = _validate_evidence_projection(
+        provenance_projection.get("raw_result_posts"),
+        retained_limit=MAX_VIOLATION_RECEIPT_POSTS,
+        actual_retained=len(raw_post_ids),
+        location="result.provenance.evidence_projection.raw_result_posts",
+        errors=errors,
+    )
+    raw_author_projection = _validate_evidence_projection(
+        provenance_projection.get("raw_result_author_user_ids"),
+        retained_limit=MAX_VIOLATION_RECEIPT_CALLS,
+        actual_retained=len(raw_author_ids),
+        location="result.provenance.evidence_projection.raw_result_author_user_ids",
+        errors=errors,
+    )
+    model_projection = _validate_evidence_projection(
+        provenance_projection.get("observed_model_ids"),
+        retained_limit=MAX_VIOLATION_RECEIPT_CALLS,
+        actual_retained=len(model_ids),
+        location="result.provenance.evidence_projection.observed_model_ids",
+        errors=errors,
+    )
+    if successful and any(
+        projection.get("relation") != "exact" or projection.get("truncated") is not False
+        for projection in (raw_post_projection, raw_author_projection, model_projection)
+    ):
+        errors.append("successful result contains truncated provider evidence")
     observation_ids = [item.get("platform_object_id") for item in observations if isinstance(item, dict)]
     if successful and (not set(observation_ids) <= set(raw_post_ids) or model_ids != [MODEL_ID]):
         errors.append("result observations are not bound to raw X tool/model receipts")
@@ -2410,6 +2767,7 @@ def validate_live_result(payload: Any, *, request: Any) -> list[str]:
                 "executions",
                 "x_search_calls",
                 "result_sets",
+                "evidence_projection",
                 "observations",
                 "model_turns",
                 "cost_status",
@@ -2426,13 +2784,56 @@ def validate_live_result(payload: Any, *, request: Any) -> list[str]:
     maximum_elapsed_ms = MAX_ELAPSED_MS if successful else MAX_FAILURE_WALL_ELAPSED_MS
     if (
         usage.get("executions") != 1
-        or usage.get("x_search_calls", 0) > (1 if successful else MAX_VIOLATION_RECEIPT_CALLS)
-        or usage.get("result_sets", 0) > (1 if successful else MAX_VIOLATION_RECEIPT_CALLS)
+        or usage.get("x_search_calls", 0) > (1 if successful else MAX_VIOLATION_RECEIPT_CALLS + 1)
+        or usage.get("result_sets", 0) > (1 if successful else MAX_VIOLATION_RECEIPT_CALLS + 1)
         or usage.get("elapsed_ms", 0) > maximum_elapsed_ms
     ):
         errors.append("result execution evidence exceeds the bounded failure-receipt contract")
     if successful and (usage.get("x_search_calls") != 1 or usage.get("result_sets") != 1):
         errors.append("successful result must prove exactly one X call/result set")
+    usage_projection = usage.get("evidence_projection")
+    if not isinstance(usage_projection, dict) or set(usage_projection) != {"x_search_calls", "result_sets"}:
+        errors.append("result usage projection fields do not match the closed contract")
+        usage_projection = {}
+    call_projection = _validate_evidence_projection(
+        usage_projection.get("x_search_calls"),
+        retained_limit=MAX_VIOLATION_RECEIPT_CALLS,
+        actual_retained=min(usage.get("x_search_calls", 0), MAX_VIOLATION_RECEIPT_CALLS)
+        if type(usage.get("x_search_calls")) is int
+        else 0,
+        location="result.usage.evidence_projection.x_search_calls",
+        errors=errors,
+    )
+    result_set_projection = _validate_evidence_projection(
+        usage_projection.get("result_sets"),
+        retained_limit=MAX_VIOLATION_RECEIPT_CALLS,
+        actual_retained=min(usage.get("result_sets", 0), MAX_VIOLATION_RECEIPT_CALLS)
+        if type(usage.get("result_sets")) is int
+        else 0,
+        location="result.usage.evidence_projection.result_sets",
+        errors=errors,
+    )
+    if call_projection.get("observed") != usage.get("x_search_calls"):
+        errors.append("result X-call projection does not bind the usage counter")
+    if result_set_projection.get("observed") != usage.get("result_sets"):
+        errors.append("result result-set projection does not bind the usage counter")
+    if successful and any(
+        projection != {"observed": 1, "relation": "exact", "retained": 1, "truncated": False}
+        for projection in (call_projection, result_set_projection)
+    ):
+        errors.append("successful result must contain exact untruncated call projections")
+    zero_projection = {"observed": 0, "relation": "exact", "retained": 0, "truncated": False}
+    if tool_digest is None and (
+        usage.get("x_search_calls") != 0
+        or usage.get("result_sets") != 0
+        or call_projection != zero_projection
+        or result_set_projection != zero_projection
+        or any(provenance_projection.get(name) != zero_projection for name in expected_provenance_projection_fields)
+        or raw_post_ids
+        or raw_author_ids
+        or model_ids
+    ):
+        errors.append("result without a tool receipt must contain exact zero provider evidence")
     maximum_model_turns = MAX_TURNS if successful else MAX_VIOLATION_MODEL_TURNS
     if usage.get("observations") != len(observations) or usage.get("model_turns", 0) > maximum_model_turns:
         errors.append("result usage does not reconcile")
@@ -2574,6 +2975,7 @@ def _validate_tool_receipt(receipt: Any, *, result: Mapping[str, Any]) -> list[s
         "observed_model_ids",
         "unexpected_tool_calls",
         "evidence_errors",
+        "evidence_projection",
         "calls",
     }
     if not isinstance(receipt, dict) or set(receipt) != expected_fields:
@@ -2602,7 +3004,7 @@ def _validate_tool_receipt(receipt: Any, *, result: Mapping[str, Any]) -> list[s
     if outer_only:
         if provenance.get("session_updates_sha256") is not None:
             errors.append("outer-only tool receipt contradicts result update provenance")
-        if update_bytes != 0:
+        if type(update_bytes) is not int or update_bytes != 0:
             errors.append("outer-only tool receipt must record zero update bytes")
     else:
         if (
@@ -2643,6 +3045,40 @@ def _validate_tool_receipt(receipt: Any, *, result: Mapping[str, Any]) -> list[s
         errors.append("tool receipt evidence-error list is invalid")
     if successful and evidence_errors:
         errors.append("successful tool receipt contains provider-evidence errors")
+    evidence_projection = receipt.get("evidence_projection")
+    expected_projection_fields = {
+        "x_search_calls",
+        "completed_x_search_calls",
+        "raw_result_posts",
+        "raw_result_author_user_ids",
+        "observed_model_ids",
+        "unexpected_tool_calls",
+        "evidence_errors",
+    }
+    if not isinstance(evidence_projection, dict) or set(evidence_projection) != expected_projection_fields:
+        errors.append("tool receipt evidence-projection fields do not match the closed contract")
+        evidence_projection = {}
+    model_projection = _validate_evidence_projection(
+        evidence_projection.get("observed_model_ids"),
+        retained_limit=MAX_VIOLATION_RECEIPT_CALLS,
+        actual_retained=len(observed_model_ids) if isinstance(observed_model_ids, list) else 0,
+        location="tool_receipt.evidence_projection.observed_model_ids",
+        errors=errors,
+    )
+    unexpected_projection = _validate_evidence_projection(
+        evidence_projection.get("unexpected_tool_calls"),
+        retained_limit=MAX_VIOLATION_RECEIPT_CALLS,
+        actual_retained=len(unexpected) if isinstance(unexpected, list) else 0,
+        location="tool_receipt.evidence_projection.unexpected_tool_calls",
+        errors=errors,
+    )
+    error_projection = _validate_evidence_projection(
+        evidence_projection.get("evidence_errors"),
+        retained_limit=MAX_VIOLATION_RECEIPT_CALLS,
+        actual_retained=len(evidence_errors) if isinstance(evidence_errors, list) else 0,
+        location="tool_receipt.evidence_projection.evidence_errors",
+        errors=errors,
+    )
     normalized_usage_fields = {
         "input_tokens",
         "output_tokens",
@@ -2753,7 +3189,8 @@ def _validate_tool_receipt(receipt: Any, *, result: Mapping[str, Any]) -> list[s
         errors.append("outer-only tool receipt contains unsupported session-update evidence")
     call_ids: set[str] = set()
     post_pairs: set[tuple[str, str]] = set()
-    author_ids: set[str] = set()
+    author_ids: list[str] = []
+    seen_author_ids: set[str] = set()
     post_bindings: dict[tuple[str, str], str | None] = {}
     completed_calls = 0
     for call in calls:
@@ -2824,8 +3261,13 @@ def _validate_tool_receipt(receipt: Any, *, result: Mapping[str, Any]) -> list[s
                 errors.append("tool-call raw post has conflicting author bindings")
             post_bindings[pair] = platform_user_id
             post_pairs.add(pair)
-            if platform_user_id is not None:
-                author_ids.add(platform_user_id)
+            if (
+                platform_user_id is not None
+                and platform_user_id not in seen_author_ids
+                and len(author_ids) < MAX_VIOLATION_RECEIPT_CALLS
+            ):
+                seen_author_ids.add(platform_user_id)
+                author_ids.append(platform_user_id)
         ids = call.get("raw_result_author_user_ids")
         if (
             not isinstance(ids, list)
@@ -2834,12 +3276,15 @@ def _validate_tool_receipt(receipt: Any, *, result: Mapping[str, Any]) -> list[s
             or len(set(ids)) != len(ids)
         ):
             errors.append("tool-call raw author ids are invalid")
-        elif sorted(ids) != sorted(
-            {
-                post.get("platform_user_id")
-                for post in posts
-                if isinstance(post, dict) and post.get("platform_user_id") is not None
-            }
+        elif (
+            ids
+            != list(
+                dict.fromkeys(
+                    post.get("platform_user_id")
+                    for post in posts
+                    if isinstance(post, dict) and post.get("platform_user_id") is not None
+                )
+            )[:MAX_VIOLATION_RECEIPT_CALLS]
         ):
             errors.append("tool-call raw author ids are not derived from bound post records")
     expected_pairs = {
@@ -2857,12 +3302,82 @@ def _validate_tool_receipt(receipt: Any, *, result: Mapping[str, Any]) -> list[s
             if post_bindings.get(pair) != observation.get("platform_user_id"):
                 errors.append("retained observation author is not bound on its raw X post record")
                 break
-    if result_usage.get("x_search_calls") != len(calls) or result_usage.get("result_sets") != completed_calls:
-        errors.append("tool receipt calls/result sets do not match result usage")
+    call_projection = _validate_evidence_projection(
+        evidence_projection.get("x_search_calls"),
+        retained_limit=MAX_VIOLATION_RECEIPT_CALLS,
+        actual_retained=len(calls),
+        location="tool_receipt.evidence_projection.x_search_calls",
+        errors=errors,
+    )
+    completed_projection = _validate_evidence_projection(
+        evidence_projection.get("completed_x_search_calls"),
+        retained_limit=MAX_VIOLATION_RECEIPT_CALLS,
+        actual_retained=completed_calls,
+        location="tool_receipt.evidence_projection.completed_x_search_calls",
+        errors=errors,
+    )
+    raw_post_projection = _validate_evidence_projection(
+        evidence_projection.get("raw_result_posts"),
+        retained_limit=MAX_VIOLATION_RECEIPT_POSTS,
+        actual_retained=len(post_pairs),
+        location="tool_receipt.evidence_projection.raw_result_posts",
+        errors=errors,
+    )
+    author_projection = _validate_evidence_projection(
+        evidence_projection.get("raw_result_author_user_ids"),
+        retained_limit=MAX_VIOLATION_RECEIPT_CALLS,
+        actual_retained=len(author_ids),
+        location="tool_receipt.evidence_projection.raw_result_author_user_ids",
+        errors=errors,
+    )
+    result_usage_projection = (
+        result_usage.get("evidence_projection") if isinstance(result_usage.get("evidence_projection"), dict) else {}
+    )
+    if (
+        result_usage.get("x_search_calls") != call_projection.get("observed")
+        or result_usage.get("result_sets") != completed_projection.get("observed")
+        or result_usage_projection.get("x_search_calls") != call_projection
+        or result_usage_projection.get("result_sets") != completed_projection
+    ):
+        errors.append("tool receipt calls/result sets do not match result usage projection")
+    provenance_projection = (
+        provenance.get("evidence_projection") if isinstance(provenance.get("evidence_projection"), dict) else {}
+    )
+    if (
+        provenance_projection.get("raw_result_posts") != raw_post_projection
+        or provenance_projection.get("raw_result_author_user_ids") != author_projection
+        or provenance_projection.get("observed_model_ids") != model_projection
+    ):
+        errors.append("tool receipt evidence projections do not match result provenance")
     if sorted(object_id for object_id, _ in post_pairs) != provenance.get("raw_result_post_ids"):
         errors.append("tool receipt raw post ids do not match result provenance")
-    if sorted(author_ids) != provenance.get("raw_result_author_user_ids"):
+    if author_ids != provenance.get("raw_result_author_user_ids"):
         errors.append("tool receipt raw author ids do not match result provenance")
+    if outer_only and any(
+        projection != {"observed": 0, "relation": "exact", "retained": 0, "truncated": False}
+        for projection in (
+            call_projection,
+            completed_projection,
+            raw_post_projection,
+            author_projection,
+            model_projection,
+            unexpected_projection,
+        )
+    ):
+        errors.append("outer-only tool receipt contains nonzero session evidence projection")
+    if successful and any(
+        projection.get("relation") != "exact" or projection.get("truncated") is not False
+        for projection in (
+            call_projection,
+            completed_projection,
+            raw_post_projection,
+            author_projection,
+            model_projection,
+            unexpected_projection,
+            error_projection,
+        )
+    ):
+        errors.append("successful tool receipt contains truncated provider evidence")
     if provenance.get("tool_receipt_sha256") != canonical_sha256(receipt):
         errors.append("result does not bind the tool receipt")
     return errors

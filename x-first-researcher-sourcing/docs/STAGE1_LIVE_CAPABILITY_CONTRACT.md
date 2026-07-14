@@ -97,6 +97,22 @@ post-id field and the exactly matching canonical URL. A stable author id additio
 `author_info`/`author`/`user` child path to be complete and yield one consistent target handle/numeric id. Unread
 provider fields beside `posts`, beside registered post fields, or beside registered author child paths are tolerated;
 they never become evidence.
+
+Every provider-owned bounded collection uses one closed projection in the result and tool receipt:
+`{observed, relation, retained, truncated}`. `relation=exact` means the parser saw the complete distinct count;
+`relation=at_least` means `observed` is a proved lower bound after the single overflow sentinel. Retained samples are
+deterministic and bounded (completed calls first, then other calls, preserving first-observed order within each group;
+first-observed order for posts, authors, models, unexpected tools, and evidence errors). Calls/models/authors/tools and
+errors retain at most eight values; raw posts retain at most 25. The parser stores at most one additional sentinel and
+never relabels the retained count as the total. Usage call/result-set counters bind the same projections, and raw
+post/author/model projections bind result provenance to the tool receipt (result post ids use a canonical sort of the
+same retained set). A receiptless failure must carry exact-zero,
+untruncated provider projections. The complete staged 3/4-file bundle is re-read and validated before its directory is
+atomically published; an invalid staged bundle is removed.
+If an X call itself falls beyond the single retained sentinel, post and author projections become
+`at_least`/`truncated` even when their retained arrays are empty; the parser cannot claim exact zero for evidence an
+omitted call might have returned. Non-canonical model identities and oversized tool identities are retained only as
+bounded SHA-256 labels, and an unrecognized terminal stop reason becomes null plus a fixed evidence error.
 Only then does the
 parser bind the command session to the headless envelope and every Grok 0.2.99 `session/update` wrapper. It requires
 one final `_x.ai/session/update`/`turn_completed`, reconciles both
@@ -163,12 +179,15 @@ The post-`fee3699` reviews reproduced fifteen false-green or non-terminal classe
 12. a target author container plus a conflicting account container still produced stable identity;
 13. duplicate raw post records were set-collapsed before runtime/schema validation;
 14. a 10,000-level stdout or updates JSON value escaped with `RecursionError` after consuming approval and wrote no bundle; and
-15. a valid outer envelope without updates lost its session and token-usage audit fields.
+15. a valid outer envelope without updates lost its session and token-usage audit fields;
+16. the ninth distinct call/model/author/unexpected tool, more than 25 aggregate posts, or more than eight evidence
+    errors could consume approval and leave no valid failure bundle; and
+17. JSON booleans/floats/strings equal to numeric zero could forge an outer-only update-byte receipt.
 
 Each now has a deterministic concurrency, mutation, artifact, or subprocess regression. These tests prove the local
 fail-closed contract only; they are not a live X capability result or an independent-review `GO`.
 
-The fixed-forward checkout discovers 22 focused live-contract tests and 88 repository tests. The reviewed `a6d9e07`
+The fixed-forward checkout discovers 24 focused live-contract tests and 90 repository tests. The reviewed `a6d9e07`
 baseline was 20 focused and 85 repository tests, not 86; the additional repository test before this fixed-forward
 slice belongs to the separately committed profile/Bio lane.
 
