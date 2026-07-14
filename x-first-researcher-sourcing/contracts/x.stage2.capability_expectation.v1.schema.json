@@ -53,10 +53,11 @@
               "exact_profile_and_same_account_post",
               "conflicting_platform_user_ids",
               "handle_rename_requires_review",
-              "metadata_only_source_payload_unavailable"
+              "metadata_only_source_payload_unavailable",
+              "post_only_profile_source_unavailable"
             ]
           },
-          "expected_terminal_status": {"enum": ["completed", "quarantined", "failed"]},
+          "expected_terminal_status": {"enum": ["completed", "completed_post_only", "quarantined", "failed"]},
           "expected_error_codes": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
           "expected_quarantine_reason": {"type": ["string", "null"]},
           "expected_field_states": {
@@ -64,7 +65,15 @@
             "minItems": 14,
             "maxItems": 14,
             "uniqueItems": true,
-            "items": {"type": "object"}
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["field_id", "state"],
+              "properties": {
+                "field_id": {"type": "string"},
+                "state": {"enum": ["present_exact", "present_bounded", "absent", "unverified"]}
+              }
+            }
           },
           "expected_profile_count": {"type": "integer", "minimum": 0, "maximum": 1},
           "expected_post_count": {"type": "integer", "minimum": 0, "maximum": 1},
@@ -76,6 +85,18 @@
         }
       }
     },
-    "authority": {"type": "object"}
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["live_x_capability_claimed", "canonical_person_or_employment_confirmed", "automatic_identity_merge_performed", "discovery_or_ranking_authorized", "canonical_write_authorized", "outreach_authorized"],
+      "properties": {
+        "live_x_capability_claimed": {"type": "boolean", "const": false},
+        "canonical_person_or_employment_confirmed": {"type": "boolean", "const": false},
+        "automatic_identity_merge_performed": {"type": "boolean", "const": false},
+        "discovery_or_ranking_authorized": {"type": "boolean", "const": false},
+        "canonical_write_authorized": {"type": "boolean", "const": false},
+        "outreach_authorized": {"type": "boolean", "const": false}
+      }
+    }
   }
 }

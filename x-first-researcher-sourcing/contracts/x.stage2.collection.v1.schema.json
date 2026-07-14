@@ -2,110 +2,203 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://contracts.invalid/x.stage2.collection.v1.schema.json",
   "title": "X-first Stage 2A field-capability collection v1",
-  "description": "Closed outer envelope. collection_id binds every material field except itself; runtime mechanically derives field states, terminal reasons, temporal closure and source consumption.",
+  "description": "Deeply typed offline fixture collection with closed raw shapes and provenance.",
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "schema_version",
-    "execution_mode",
-    "collection_id",
-    "experiment_id",
-    "request_sha256",
-    "field_registry",
-    "terminal_summary",
-    "task_rows",
-    "call_receipts",
-    "source_records",
-    "profiles",
-    "posts",
-    "quarantine",
-    "incidents",
-    "retention",
-    "assertions",
-    "canonical_writes",
-    "outreach_actions",
-    "authority"
-  ],
+  "required": ["schema_version", "execution_mode", "collection_id", "experiment_id", "request_sha256", "field_registry", "terminal_summary", "task_rows", "call_receipts", "source_records", "profiles", "posts", "quarantine", "incidents", "retention", "assertions", "canonical_writes", "outreach_actions", "authority"],
   "properties": {
     "schema_version": {"const": "x.stage2.collection.v1"},
     "execution_mode": {"const": "offline_fixture"},
     "collection_id": {"type": "string", "pattern": "^xstage2collection_[0-9a-f]{24}$"},
     "experiment_id": {"type": "string", "pattern": "^xstage2exp_[0-9a-f]{24}$"},
     "request_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-    "field_registry": {"type": "object"},
-    "terminal_summary": {"type": "object"},
-    "task_rows": {"type": "array", "minItems": 1, "maxItems": 10000, "items": {"type": "object"}},
-    "call_receipts": {"type": "array", "maxItems": 10000, "items": {"type": "object"}},
-    "source_records": {"type": "array", "maxItems": 100000, "items": {"type": "object"}},
-    "profiles": {"type": "array", "maxItems": 10000, "items": {"type": "object"}},
-    "posts": {
-      "type": "array",
-      "maxItems": 100000,
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "post_id",
-          "task_id",
-          "source_record_id",
-          "canonical_post_id",
-          "canonical_post_url",
-          "post_author_platform_user_id",
-          "post_author_handle",
-          "post_authored_at",
-          "bounded_excerpt",
-          "thread_relation",
-          "field_states",
-          "source_binding_status",
-          "authority"
-        ],
-        "properties": {
-          "post_id": {"type": "string", "pattern": "^xstage2post_[0-9a-f]{24}$"},
-          "task_id": {"type": "string", "pattern": "^xstage2task_[0-9a-f]{24}$"},
-          "source_record_id": {"type": "string", "pattern": "^xstage2src_[0-9a-f]{24}$"},
-          "canonical_post_id": {},
-          "canonical_post_url": {},
-          "post_author_platform_user_id": {},
-          "post_author_handle": {},
-          "post_authored_at": {},
-          "bounded_excerpt": {},
-          "thread_relation": {},
-          "field_states": {
-            "type": "array",
-            "minItems": 7,
-            "maxItems": 7,
-            "uniqueItems": true,
-            "items": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": ["field_id", "state"],
-              "properties": {
-                "field_id": {
-                  "enum": [
-                    "canonical_post_id",
-                    "canonical_post_url",
-                    "post_author_platform_user_id",
-                    "post_author_handle",
-                    "post_authored_at",
-                    "bounded_excerpt",
-                    "thread_relation"
-                  ]
-                },
-                "state": {"enum": ["present_exact", "present_bounded", "absent", "unverified"]}
-              }
-            }
-          },
-          "source_binding_status": {"const": "replay_bound_exact"},
-          "authority": {"type": "object"}
-        }
-      }
-    },
-    "quarantine": {"type": "array", "maxItems": 10000, "items": {"type": "object"}},
-    "incidents": {"type": "array", "maxItems": 10000, "items": {"type": "object"}},
-    "retention": {"type": "object"},
+    "field_registry": {"$ref": "#/$defs/field_registry_binding"},
+    "terminal_summary": {"$ref": "#/$defs/terminal_summary"},
+    "task_rows": {"type": "array", "minItems": 1, "maxItems": 10000, "items": {"$ref": "#/$defs/task_row"}},
+    "call_receipts": {"type": "array", "minItems": 1, "maxItems": 10000, "items": {"$ref": "#/$defs/call_receipt"}},
+    "source_records": {"type": "array", "minItems": 1, "maxItems": 100000, "items": {"oneOf": [{"$ref": "#/$defs/profile_source"}, {"$ref": "#/$defs/post_source"}, {"$ref": "#/$defs/metadata_source"}]}},
+    "profiles": {"type": "array", "maxItems": 10000, "items": {"$ref": "#/$defs/profile"}},
+    "posts": {"type": "array", "maxItems": 100000, "items": {"$ref": "#/$defs/post"}},
+    "quarantine": {"type": "array", "maxItems": 10000, "items": {"$ref": "#/$defs/quarantine"}},
+    "incidents": {"type": "array", "maxItems": 10000, "items": {"$ref": "#/$defs/incident"}},
+    "retention": {"$ref": "#/$defs/retention"},
     "assertions": {"type": "array", "maxItems": 0},
     "canonical_writes": {"type": "array", "maxItems": 0},
     "outreach_actions": {"type": "array", "maxItems": 0},
-    "authority": {"type": "object"}
+    "authority": {"$ref": "#/$defs/output_authority"}
+  },
+  "$defs": {
+    "sha": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "task_id": {"type": "string", "pattern": "^xstage2task_[0-9a-f]{24}$"},
+    "source_id": {"type": "string", "pattern": "^xstage2src_[0-9a-f]{24}$"},
+    "field_registry_binding": {
+      "type": "object", "additionalProperties": false,
+      "required": ["registry_version", "registry_sha256"],
+      "properties": {"registry_version": {"const": "x-stage2-field-registry-v1"}, "registry_sha256": {"$ref": "#/$defs/sha"}}
+    },
+    "field_state": {
+      "type": "object", "additionalProperties": false,
+      "required": ["field_id", "state"],
+      "properties": {"field_id": {"type": "string"}, "state": {"enum": ["present_exact", "present_bounded", "absent", "unverified"]}}
+    },
+    "output_authority": {
+      "type": "object", "additionalProperties": false,
+      "required": ["live_x_capability_claimed", "canonical_person_or_employment_confirmed", "automatic_identity_merge_performed", "discovery_or_ranking_authorized", "canonical_write_authorized", "outreach_authorized"],
+      "properties": {
+        "live_x_capability_claimed": {"type": "boolean", "const": false},
+        "canonical_person_or_employment_confirmed": {"type": "boolean", "const": false},
+        "automatic_identity_merge_performed": {"type": "boolean", "const": false},
+        "discovery_or_ranking_authorized": {"type": "boolean", "const": false},
+        "canonical_write_authorized": {"type": "boolean", "const": false},
+        "outreach_authorized": {"type": "boolean", "const": false}
+      }
+    },
+    "terminal_summary": {
+      "type": "object", "additionalProperties": false,
+      "required": ["denominator", "terminal", "completed", "completed_post_only", "quarantined", "failed", "status"],
+      "properties": {
+        "denominator": {"type": "integer", "minimum": 1}, "terminal": {"type": "integer", "minimum": 0},
+        "completed": {"type": "integer", "minimum": 0}, "completed_post_only": {"type": "integer", "minimum": 0},
+        "quarantined": {"type": "integer", "minimum": 0}, "failed": {"type": "integer", "minimum": 0},
+        "status": {"enum": ["terminal", "incomplete"]}
+      }
+    },
+    "task_row": {
+      "type": "object", "additionalProperties": false,
+      "required": ["task_id", "opaque_lead_ref", "candidate_row_sha256", "lookup_handle", "status", "call_receipt_ids", "source_record_ids", "profile_snapshot_ids", "post_ids", "quarantine_ids", "incident_ids", "field_states", "error_codes"],
+      "properties": {
+        "task_id": {"$ref": "#/$defs/task_id"}, "opaque_lead_ref": {"type": "string", "pattern": "^xlead_[0-9a-f]{24}$"},
+        "candidate_row_sha256": {"$ref": "#/$defs/sha"}, "lookup_handle": {"type": "string", "pattern": "^[A-Za-z0-9_]{1,15}$"},
+        "status": {"enum": ["completed", "completed_post_only", "quarantined", "failed"]},
+        "call_receipt_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^xstage2call_[0-9a-f]{24}$"}},
+        "source_record_ids": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/source_id"}},
+        "profile_snapshot_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^xstage2profile_[0-9a-f]{24}$"}},
+        "post_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^xstage2post_[0-9a-f]{24}$"}},
+        "quarantine_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^xstage2quarantine_[0-9a-f]{24}$"}},
+        "incident_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^xstage2incident_[0-9a-f]{24}$"}},
+        "field_states": {"type": "array", "minItems": 14, "maxItems": 14, "uniqueItems": true, "items": {"$ref": "#/$defs/field_state"}},
+        "error_codes": {"type": "array", "uniqueItems": true, "items": {"type": "string"}}
+      }
+    },
+    "call_receipt": {
+      "type": "object", "additionalProperties": false,
+      "required": ["receipt_id", "task_id", "tool_name", "provider_transport", "result_contract", "status", "external_call_count", "source_record_ids", "started_at", "completed_at", "cost_status", "fallback_used"],
+      "properties": {
+        "receipt_id": {"type": "string", "pattern": "^xstage2call_[0-9a-f]{24}$"}, "task_id": {"$ref": "#/$defs/task_id"},
+        "tool_name": {"enum": ["x_user_search", "x_thread_fetch"]}, "provider_transport": {"const": "offline_native_x_fixture_replay_v1"},
+        "result_contract": {"const": "x.stage2.closed_source_result.v1"}, "status": {"const": "fixture_replayed"},
+        "external_call_count": {"type": "integer", "const": 0}, "source_record_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/source_id"}},
+        "started_at": {"type": "string"}, "completed_at": {"type": "string"}, "cost_status": {"const": "not_applicable_offline_fixture"},
+        "fallback_used": {"type": "boolean", "const": false}
+      }
+    },
+    "provenance_profile": {"$ref": "#/$defs/provenance_profile_body"},
+    "provenance_profile_body": {
+      "type": "object", "additionalProperties": false,
+      "required": ["transport", "result_contract", "result_type", "result_ordinal"],
+      "properties": {"transport": {"const": "offline_native_x_fixture_replay_v1"}, "result_contract": {"const": "x.stage2.closed_source_result.v1"}, "result_type": {"const": "x_user_profile"}, "result_ordinal": {"type": "integer", "minimum": 0}}
+    },
+    "provenance_post": {
+      "type": "object", "additionalProperties": false,
+      "required": ["transport", "result_contract", "result_type", "result_ordinal"],
+      "properties": {"transport": {"const": "offline_native_x_fixture_replay_v1"}, "result_contract": {"const": "x.stage2.closed_source_result.v1"}, "result_type": {"const": "x_post"}, "result_ordinal": {"type": "integer", "minimum": 0}}
+    },
+    "provenance_metadata": {
+      "type": "object", "additionalProperties": false,
+      "required": ["transport", "result_contract", "result_type", "result_ordinal"],
+      "properties": {"transport": {"const": "offline_native_x_fixture_replay_v1"}, "result_contract": {"const": "x.stage2.closed_source_result.v1"}, "result_type": {"const": "x_search_tool_call_metadata"}, "result_ordinal": {"type": "integer", "minimum": 0}}
+    },
+    "profile_raw": {
+      "type": "object", "additionalProperties": false,
+      "required": ["platform_user_ids", "current_handle", "profile_url", "bio_text", "bio_observed_at", "bio_content_version", "post_fields_explicitly_absent"],
+      "properties": {
+        "platform_user_ids": {"type": "array", "minItems": 1, "maxItems": 10, "uniqueItems": true, "items": {"type": "string", "pattern": "^[1-9][0-9]{1,23}$"}},
+        "current_handle": {"type": "string", "pattern": "^[A-Za-z0-9_]{1,15}$"}, "profile_url": {"type": "string", "pattern": "^https://profiles\\.invalid/x/[a-z0-9_]{1,15}$"},
+        "bio_text": {"type": ["string", "null"], "maxLength": 100000}, "bio_observed_at": {"type": "string"},
+        "bio_content_version": {"type": ["string", "null"], "maxLength": 200}, "post_fields_explicitly_absent": {"type": "boolean"}
+      }
+    },
+    "post_raw": {
+      "type": "object", "additionalProperties": false,
+      "required": ["canonical_post_id", "canonical_post_url", "post_author_platform_user_id", "post_author_handle", "post_authored_at", "bounded_excerpt", "thread_relation"],
+      "properties": {
+        "canonical_post_id": {"type": "string", "pattern": "^[1-9][0-9]{1,23}$"}, "canonical_post_url": {"type": "string", "pattern": "^https://posts\\.invalid/x/[a-z0-9_]{1,15}/status/[1-9][0-9]{1,23}$"},
+        "post_author_platform_user_id": {"type": "string", "pattern": "^[1-9][0-9]{1,23}$"}, "post_author_handle": {"type": "string", "pattern": "^[A-Za-z0-9_]{1,15}$"},
+        "post_authored_at": {"type": "string"}, "bounded_excerpt": {"type": "string", "minLength": 1, "maxLength": 280},
+        "thread_relation": {"enum": ["self_post", "reply", "quote", "thread_root", "thread_reply"]}
+      }
+    },
+    "metadata_raw": {
+      "type": "object", "additionalProperties": false,
+      "required": ["call_id", "id", "input", "name"],
+      "properties": {
+        "call_id": {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,128}$"}, "id": {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,128}$"},
+        "input": {"type": "object", "additionalProperties": false, "required": ["handle"], "properties": {"handle": {"type": "string", "pattern": "^[A-Za-z0-9_]{1,15}$"}}},
+        "name": {"enum": ["x_user_search", "x_thread_fetch"]}
+      }
+    },
+    "profile_source": {"$ref": "#/$defs/profile_source_body"},
+    "profile_source_body": {
+      "type": "object", "additionalProperties": false,
+      "required": ["source_record_id", "task_id", "call_receipt_id", "record_kind", "provider_provenance", "payload_visibility", "replayable", "raw_record", "raw_record_sha256", "observed_at"],
+      "properties": {"source_record_id": {"$ref": "#/$defs/source_id"}, "task_id": {"$ref": "#/$defs/task_id"}, "call_receipt_id": {"type": "string", "pattern": "^xstage2call_[0-9a-f]{24}$"}, "record_kind": {"const": "profile"}, "provider_provenance": {"$ref": "#/$defs/provenance_profile"}, "payload_visibility": {"const": "full_fixture_payload"}, "replayable": {"type": "boolean", "const": true}, "raw_record": {"$ref": "#/$defs/profile_raw"}, "raw_record_sha256": {"$ref": "#/$defs/sha"}, "observed_at": {"type": "string"}}
+    },
+    "post_source": {
+      "type": "object", "additionalProperties": false,
+      "required": ["source_record_id", "task_id", "call_receipt_id", "record_kind", "provider_provenance", "payload_visibility", "replayable", "raw_record", "raw_record_sha256", "observed_at"],
+      "properties": {"source_record_id": {"$ref": "#/$defs/source_id"}, "task_id": {"$ref": "#/$defs/task_id"}, "call_receipt_id": {"type": "string", "pattern": "^xstage2call_[0-9a-f]{24}$"}, "record_kind": {"const": "post"}, "provider_provenance": {"$ref": "#/$defs/provenance_post"}, "payload_visibility": {"const": "full_fixture_payload"}, "replayable": {"type": "boolean", "const": true}, "raw_record": {"$ref": "#/$defs/post_raw"}, "raw_record_sha256": {"$ref": "#/$defs/sha"}, "observed_at": {"type": "string"}}
+    },
+    "metadata_source": {
+      "type": "object", "additionalProperties": false,
+      "required": ["source_record_id", "task_id", "call_receipt_id", "record_kind", "provider_provenance", "payload_visibility", "replayable", "raw_record", "raw_record_sha256", "observed_at"],
+      "properties": {"source_record_id": {"$ref": "#/$defs/source_id"}, "task_id": {"$ref": "#/$defs/task_id"}, "call_receipt_id": {"type": "string", "pattern": "^xstage2call_[0-9a-f]{24}$"}, "record_kind": {"const": "tool_metadata_only"}, "provider_provenance": {"$ref": "#/$defs/provenance_metadata"}, "payload_visibility": {"const": "metadata_only"}, "replayable": {"type": "boolean", "const": false}, "raw_record": {"$ref": "#/$defs/metadata_raw"}, "raw_record_sha256": {"$ref": "#/$defs/sha"}, "observed_at": {"type": "string"}}
+    },
+    "profile": {
+      "type": "object", "additionalProperties": false,
+      "required": ["profile_snapshot_id", "task_id", "source_record_id", "platform_user_id", "current_handle", "profile_url", "bio_text", "bio_sha256", "bio_observed_at", "bio_content_version", "source_binding_status", "reported_platform_user_id_diagnostic", "authority"],
+      "properties": {
+        "profile_snapshot_id": {"type": "string", "pattern": "^xstage2profile_[0-9a-f]{24}$"}, "task_id": {"$ref": "#/$defs/task_id"}, "source_record_id": {"$ref": "#/$defs/source_id"},
+        "platform_user_id": {"type": "string", "pattern": "^[1-9][0-9]{1,23}$"}, "current_handle": {"type": "string", "pattern": "^[A-Za-z0-9_]{1,15}$"}, "profile_url": {"type": "string", "pattern": "^https://profiles\\.invalid/x/[a-z0-9_]{1,15}$"},
+        "bio_text": {"type": ["string", "null"], "maxLength": 100000}, "bio_sha256": {"type": ["string", "null"]}, "bio_observed_at": {"type": "string"}, "bio_content_version": {"type": ["string", "null"]},
+        "source_binding_status": {"const": "replay_bound_exact"},
+        "reported_platform_user_id_diagnostic": {
+          "type": "object", "additionalProperties": false,
+          "required": ["value", "status", "comparison", "identity_authority"],
+          "properties": {"value": {"type": ["string", "null"]}, "status": {"enum": ["absent", "model_mediated_unverified"]}, "comparison": {"enum": ["absent", "same_diagnostic_only", "different_diagnostic_only"]}, "identity_authority": {"type": "boolean", "const": false}}
+        },
+        "authority": {"$ref": "#/$defs/output_authority"}
+      }
+    },
+    "post": {
+      "type": "object", "additionalProperties": false,
+      "required": ["post_id", "task_id", "source_record_id", "canonical_post_id", "canonical_post_url", "post_author_platform_user_id", "post_author_handle", "post_authored_at", "bounded_excerpt", "thread_relation", "field_states", "source_binding_status", "authority"],
+      "properties": {
+        "post_id": {"type": "string", "pattern": "^xstage2post_[0-9a-f]{24}$"}, "task_id": {"$ref": "#/$defs/task_id"}, "source_record_id": {"$ref": "#/$defs/source_id"},
+        "canonical_post_id": {"type": "string", "pattern": "^[1-9][0-9]{1,23}$"}, "canonical_post_url": {"type": "string", "pattern": "^https://posts\\.invalid/x/[a-z0-9_]{1,15}/status/[1-9][0-9]{1,23}$"},
+        "post_author_platform_user_id": {"type": "string", "pattern": "^[1-9][0-9]{1,23}$"}, "post_author_handle": {"type": "string", "pattern": "^[A-Za-z0-9_]{1,15}$"},
+        "post_authored_at": {"type": "string"}, "bounded_excerpt": {"type": "string", "minLength": 1, "maxLength": 280}, "thread_relation": {"enum": ["self_post", "reply", "quote", "thread_root", "thread_reply"]},
+        "field_states": {"type": "array", "minItems": 7, "maxItems": 7, "uniqueItems": true, "items": {"$ref": "#/$defs/field_state"}},
+        "source_binding_status": {"const": "replay_bound_exact"}, "authority": {"$ref": "#/$defs/output_authority"}
+      }
+    },
+    "quarantine": {
+      "type": "object", "additionalProperties": false,
+      "required": ["quarantine_id", "task_id", "reason_code", "source_record_ids", "field_ids", "resolution"],
+      "properties": {"quarantine_id": {"type": "string", "pattern": "^xstage2quarantine_[0-9a-f]{24}$"}, "task_id": {"$ref": "#/$defs/task_id"}, "reason_code": {"type": "string"}, "source_record_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/source_id"}}, "field_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string"}}, "resolution": {"const": "human_review_required"}}
+    },
+    "incident": {
+      "type": "object", "additionalProperties": false,
+      "required": ["incident_id", "task_id", "code", "severity", "disposition", "source_record_ids"],
+      "properties": {"incident_id": {"type": "string", "pattern": "^xstage2incident_[0-9a-f]{24}$"}, "task_id": {"$ref": "#/$defs/task_id"}, "code": {"type": "string"}, "severity": {"const": "guardrail"}, "disposition": {"enum": ["terminal_failed", "retained_post_only", "quarantined"]}, "source_record_ids": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/source_id"}}}
+    },
+    "retention": {
+      "type": "object", "additionalProperties": false,
+      "required": ["storage_class", "directory_mode", "file_mode", "ttl_seconds", "created_at", "delete_after", "deletion_status", "deletion_receipt_sha256", "raw_evidence_manifest_sha256", "incident_on_expiry", "retention_scope", "live_reuse_allowed", "promotion_eligible", "expiry_behavior"],
+      "properties": {
+        "storage_class": {"const": "private_owner_only_fixture_simulation"}, "directory_mode": {"const": "0700"}, "file_mode": {"const": "0600"}, "ttl_seconds": {"type": "integer", "const": 86400},
+        "created_at": {"type": "string"}, "delete_after": {"type": "string"}, "deletion_status": {"const": "pending"}, "deletion_receipt_sha256": {"type": "null"}, "raw_evidence_manifest_sha256": {"$ref": "#/$defs/sha"},
+        "incident_on_expiry": {"type": "boolean", "const": true}, "retention_scope": {"const": "synthetic_fixture_simulation_only"}, "live_reuse_allowed": {"type": "boolean", "const": false}, "promotion_eligible": {"type": "boolean", "const": false}, "expiry_behavior": {"const": "never_promote_fixture_evidence"}
+      }
+    }
   }
 }

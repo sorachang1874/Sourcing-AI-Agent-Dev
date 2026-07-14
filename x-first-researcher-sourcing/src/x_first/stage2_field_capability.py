@@ -42,8 +42,17 @@ SCHEMA_FILENAMES = {
 
 EXECUTION_MODE = "offline_fixture"
 NORMALIZATION_VERSION = "x.stage2.field_normalization.v1"
+TASK_SCOPE_VERSION = "x.stage2.task_scope.v1"
+PROVIDER_TRANSPORT = "offline_native_x_fixture_replay_v1"
+PROVIDER_RESULT_CONTRACT = "x.stage2.closed_source_result.v1"
+PROVIDER_RESULT_TYPES = {
+    "profile": "x_user_profile",
+    "post": "x_post",
+    "tool_metadata_only": "x_search_tool_call_metadata",
+}
 FIELD_STATES = ("present_exact", "present_bounded", "absent", "unverified")
-TERMINAL_STATUSES = ("completed", "quarantined", "failed")
+POST_ONLY_CODE = "profile_source_unavailable_post_retained"
+TERMINAL_STATUSES = ("completed", "completed_post_only", "quarantined", "failed")
 PROFILE_REQUIRED_FIELDS = (
     "platform_user_id",
     "current_handle",
@@ -86,6 +95,7 @@ FIXTURE_SCENARIO_IDS = (
     "conflicting_platform_user_ids",
     "handle_rename_requires_review",
     "metadata_only_source_payload_unavailable",
+    "post_only_profile_source_unavailable",
 )
 QUARANTINE_REASON_CODES = (
     "multiple_profile_sources",
@@ -94,7 +104,7 @@ QUARANTINE_REASON_CODES = (
     "platform_user_id_handle_conflict",
     "cross_account_evidence",
 )
-ERROR_CODES = (*QUARANTINE_REASON_CODES, "source_payload_unavailable")
+ERROR_CODES = (*QUARANTINE_REASON_CODES, "source_payload_unavailable", POST_ONLY_CODE)
 TECHNICAL_LIMITS = {
     "max_tasks": 10_000,
     "max_source_records": 100_000,
@@ -103,6 +113,16 @@ TECHNICAL_LIMITS = {
     "max_validation_depth": 64,
     "max_validation_nodes": 500_000,
     "raw_evidence_ttl_seconds": 86_400,
+}
+RETENTION_POLICY = {
+    "raw_evidence_storage": "private_owner_only",
+    "retention_scope": "synthetic_fixture_simulation_only",
+    "directory_mode": "0700",
+    "file_mode": "0600",
+    "ttl_seconds": TECHNICAL_LIMITS["raw_evidence_ttl_seconds"],
+    "deletion_receipt_required": True,
+    "live_reuse_allowed": False,
+    "promotion_eligible": False,
 }
 REQUEST_AUTHORITY = {
     "provider_or_network_allowed": False,
@@ -125,6 +145,11 @@ _SHA_RE = re.compile(r"[0-9a-f]{64}")
 _HANDLE_RE = re.compile(r"[A-Za-z0-9_]{1,15}")
 _NUMERIC_ID_RE = re.compile(r"[1-9][0-9]{1,23}")
 _TIMESTAMP_RE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z")
+_URL_RE = re.compile(r"https?://[^\s<>\]\[\"']+", re.IGNORECASE)
+_SENSITIVE_TEXT_RE = re.compile(
+    r"(?:api[_ -]?key|access[_ -]?token|refresh[_ -]?token|authorization\s*:|bearer\s+|sk-[A-Za-z0-9_-]{8,})",
+    re.IGNORECASE,
+)
 _ID_PATTERNS = {
     "experiment_id": re.compile(r"xstage2exp_[0-9a-f]{24}"),
     "task_id": re.compile(r"xstage2task_[0-9a-f]{24}"),
@@ -213,6 +238,34 @@ def _exact_keys(value: Any, keys: set[str], path: str, errors: list[str]) -> boo
     if extra:
         errors.append(f"{path}: unexpected keys {extra}")
     return not missing and not extra
+
+
+def _canonical_equal(left: Any, right: Any) -> bool:
+    """Compare JSON values without Python's bool/int equality aliasing."""
+
+    return canonical_json(left) == canonical_json(right)
+
+
+def _exact_boolean_mapping(value: Any, expected: Mapping[str, bool], path: str, errors: list[str]) -> bool:
+    if not _exact_keys(value, set(expected), path, errors):
+        return False
+    valid = True
+    for key, expected_value in expected.items():
+        if type(value[key]) is not bool or value[key] is not expected_value:
+            errors.append(f"{path}.{key}: exact boolean required")
+            valid = False
+    return valid
+
+
+def _exact_integer_mapping(value: Any, expected: Mapping[str, int], path: str, errors: list[str]) -> bool:
+    if not _exact_keys(value, set(expected), path, errors):
+        return False
+    valid = True
+    for key, expected_value in expected.items():
+        if type(value[key]) is not int or value[key] != expected_value:
+            errors.append(f"{path}.{key}: exact integer required")
+            valid = False
+    return valid
 
 
 def _scan_json(value: Any, *, max_depth: int, max_nodes: int) -> list[str]:
@@ -328,14 +381,18 @@ def validate_field_registry(registry: Any) -> list[str]:
         errors.append("$.source_bound_profile_rule: unsupported")
     if registry["source_bound_profile_absence_rule"] != "bio_text_bio_sha256_bio_content_version_all_absent":
         errors.append("$.source_bound_profile_absence_rule: unsupported")
-    if registry["authority"] != {
-        "identity_merge_authorized": False,
-        "employment_confirmation_authorized": False,
-        "discovery_or_ranking_authorized": False,
-        "canonical_write_authorized": False,
-        "outreach_authorized": False,
-    }:
-        errors.append("$.authority: zero authority required")
+    _exact_boolean_mapping(
+        registry["authority"],
+        {
+            "identity_merge_authorized": False,
+            "employment_confirmation_authorized": False,
+            "discovery_or_ranking_authorized": False,
+            "canonical_write_authorized": False,
+            "outreach_authorized": False,
+        },
+        "$.authority",
+        errors,
+    )
     return errors
 
 
@@ -347,8 +404,34 @@ def _task_identity(task: Mapping[str, Any]) -> dict[str, Any]:
     return {key: copy.deepcopy(task[key]) for key in task if key != "task_id"}
 
 
-def _task_id(task: Mapping[str, Any]) -> str:
-    return _id("xstage2task", _task_identity(task))
+def _task_scope(
+    *,
+    target: Mapping[str, Any],
+    registry_binding: Mapping[str, Any],
+    source_manifest: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Bind task retries to every experiment-level interpretation input."""
+
+    return {
+        "task_scope_version": TASK_SCOPE_VERSION,
+        "target": copy.deepcopy(target),
+        "field_registry": copy.deepcopy(registry_binding),
+        "normalization_contract_version": NORMALIZATION_VERSION,
+        "selection_manifest_version": source_manifest["selection_manifest_version"],
+        "selection_manifest_sha256": source_manifest["selection_manifest_sha256"],
+        "selection_id": source_manifest["selection_id"],
+        "scenario_manifest_version": SCENARIO_MANIFEST_VERSION,
+        "technical_limits_sha256": canonical_sha256(TECHNICAL_LIMITS),
+        "retention_policy_sha256": canonical_sha256(RETENTION_POLICY),
+        "request_authority_sha256": canonical_sha256(REQUEST_AUTHORITY),
+    }
+
+
+def _task_id(task: Mapping[str, Any], *, experiment_scope: Mapping[str, Any]) -> str:
+    return _id(
+        "xstage2task",
+        {"experiment_scope": copy.deepcopy(experiment_scope), "task": _task_identity(task)},
+    )
 
 
 def _field_state_map(states: Sequence[Mapping[str, Any]]) -> dict[str, str]:
@@ -369,7 +452,14 @@ def _collection_id(collection: Mapping[str, Any]) -> str:
     return _id("xstage2collection", _collection_identity_payload(collection))
 
 
-def _validate_task(task: Any, *, registry_fields: tuple[str, ...], path: str, errors: list[str]) -> None:
+def _validate_task(
+    task: Any,
+    *,
+    registry_fields: tuple[str, ...],
+    experiment_scope: Mapping[str, Any],
+    path: str,
+    errors: list[str],
+) -> None:
     keys = {
         "task_id",
         "opaque_lead_ref",
@@ -377,6 +467,7 @@ def _validate_task(task: Any, *, registry_fields: tuple[str, ...], path: str, er
         "lookup_handle",
         "reported_platform_user_id",
         "reported_platform_user_id_status",
+        "fixture_scenario_id",
         "requested_field_ids",
         "tool_policy",
         "source_receipt_required",
@@ -386,7 +477,7 @@ def _validate_task(task: Any, *, registry_fields: tuple[str, ...], path: str, er
         return
     if not isinstance(task["task_id"], str) or _ID_PATTERNS["task_id"].fullmatch(task["task_id"]) is None:
         errors.append(f"{path}.task_id: invalid")
-    elif task["task_id"] != _task_id(task):
+    elif task["task_id"] != _task_id(task, experiment_scope=experiment_scope):
         errors.append(f"{path}.task_id: identity mismatch")
     if (
         not isinstance(task["opaque_lead_ref"], str)
@@ -410,13 +501,19 @@ def _validate_task(task: Any, *, registry_fields: tuple[str, ...], path: str, er
         errors.append(f"{path}.reported_platform_user_id: diagnostic binding invalid")
     if task["requested_field_ids"] != list(registry_fields):
         errors.append(f"{path}.requested_field_ids: must equal registry order")
+    if task["fixture_scenario_id"] not in FIXTURE_SCENARIO_IDS:
+        errors.append(f"{path}.fixture_scenario_id: closed value required")
     tool_policy = task["tool_policy"]
     if not _exact_keys(tool_policy, {"allowed_tools", "fallback_allowed"}, f"{path}.tool_policy", errors):
         pass
-    elif tool_policy != {"allowed_tools": ["x_user_search", "x_thread_fetch"], "fallback_allowed": False}:
+    elif not _canonical_equal(
+        tool_policy,
+        {"allowed_tools": ["x_user_search", "x_thread_fetch"], "fallback_allowed": False},
+    ):
         errors.append(f"{path}.tool_policy: closed native-X policy required")
-    if task["source_receipt_required"] is not True or task["authority"] != REQUEST_AUTHORITY:
+    if task["source_receipt_required"] is not True:
         errors.append(f"{path}.authority: source receipt and zero authority required")
+    _exact_boolean_mapping(task["authority"], REQUEST_AUTHORITY, f"{path}.authority", errors)
 
 
 def validate_selection_manifest(manifest: Any) -> list[str]:
@@ -500,6 +597,9 @@ def _scenario_semantics(
     rename_states = {field: "absent" for field in registry_fields}
     for field in PROFILE_REQUIRED_FIELDS:
         rename_states[field] = "present_exact"
+    post_only_states = {field: "unverified" for field in registry_fields}
+    for field in _post_fields(registry_fields):
+        post_only_states[field] = "present_bounded" if field == "bounded_excerpt" else "present_exact"
     specifications = {
         "exact_profile_and_same_account_post": {
             "expected_terminal_status": "completed",
@@ -540,6 +640,15 @@ def _scenario_semantics(
             "expected_post_count": 0,
             "expected_source_record_kinds": ["tool_metadata_only"],
         },
+        "post_only_profile_source_unavailable": {
+            "expected_terminal_status": "completed_post_only",
+            "expected_error_codes": [POST_ONLY_CODE],
+            "expected_quarantine_reason": None,
+            "expected_field_states": _field_states(registry_fields, post_only_states),
+            "expected_profile_count": 0,
+            "expected_post_count": 1,
+            "expected_source_record_kinds": ["post"],
+        },
     }
     if scenario_id not in specifications:
         raise ValueError("fixture_scenario_id_invalid")
@@ -556,7 +665,7 @@ def _build_scenario_manifest(
 ) -> dict[str, Any]:
     if not tasks:
         raise ValueError("fixture_scenario_denominator_invalid")
-    scenario_ids = [FIXTURE_SCENARIO_IDS[index % len(FIXTURE_SCENARIO_IDS)] for index in range(len(tasks))]
+    scenario_ids = [task["fixture_scenario_id"] for task in tasks]
     rows = [
         _scenario_semantics(task, scenario_id, registry_fields)
         for task, scenario_id in zip(tasks, scenario_ids, strict=True)
@@ -617,6 +726,8 @@ def _validate_scenario_manifest(
         if not isinstance(scenario_id, str) or scenario_id not in FIXTURE_SCENARIO_IDS:
             errors.append(f"{row_path}.scenario_id: closed value required")
             continue
+        if scenario_id != task_map[task_id]["fixture_scenario_id"]:
+            errors.append(f"{row_path}.scenario_id: task identity binding mismatch")
         expected = _scenario_semantics(task_map[task_id], scenario_id, registry_fields)
         if canonical_json(row) != canonical_json(expected):
             errors.append(f"{row_path}: scenario semantics mismatch")
@@ -632,8 +743,14 @@ def validate_experiment_request(request: Any, *, registry: Any, selection_manife
     if errors:
         return [f"$.validation: {error}" for error in errors]
     schema_errors = _schema_preflight(request, EXPERIMENT_SCHEMA_VERSION)
-    if schema_errors:
+    if (
+        schema_errors
+        and isinstance(request, dict)
+        and isinstance(request.get("tasks"), list)
+        and len(request["tasks"]) > TECHNICAL_LIMITS["max_tasks"]
+    ):
         return schema_errors
+    errors.extend(schema_errors)
     if validate_field_registry(registry):
         return ["$.field_registry: invalid"]
     if validate_selection_manifest(selection_manifest):
@@ -677,12 +794,23 @@ def validate_experiment_request(request: Any, *, registry: Any, selection_manife
     if not tasks or len(tasks) > TECHNICAL_LIMITS["max_tasks"]:
         errors.append("$.tasks: technical task boundary violated")
     registry_fields = _registry_fields(registry)
+    experiment_scope = _task_scope(
+        target=target,
+        registry_binding=registry_binding,
+        source_manifest=request["source_manifest"],
+    )
     seen_tasks: set[str] = set()
     seen_leads: set[str] = set()
     seen_candidate_rows: set[str] = set()
     seen_handles: set[str] = set()
     for index, task in enumerate(tasks):
-        _validate_task(task, registry_fields=registry_fields, path=f"$.tasks[{index}]", errors=errors)
+        _validate_task(
+            task,
+            registry_fields=registry_fields,
+            experiment_scope=experiment_scope,
+            path=f"$.tasks[{index}]",
+            errors=errors,
+        )
         if isinstance(task, dict):
             if task.get("task_id") in seen_tasks:
                 errors.append(f"$.tasks[{index}].task_id: duplicate")
@@ -738,21 +866,10 @@ def validate_experiment_request(request: Any, *, registry: Any, selection_manife
     )
     if request["experiment_id"] != expected_experiment_id:
         errors.append("$.experiment_id: identity mismatch")
-    if request["technical_limits"] != TECHNICAL_LIMITS:
-        errors.append("$.technical_limits: immutable technical ceilings required")
-    if request["retention_policy"] != {
-        "raw_evidence_storage": "private_owner_only",
-        "retention_scope": "synthetic_fixture_simulation_only",
-        "directory_mode": "0700",
-        "file_mode": "0600",
-        "ttl_seconds": TECHNICAL_LIMITS["raw_evidence_ttl_seconds"],
-        "deletion_receipt_required": True,
-        "live_reuse_allowed": False,
-        "promotion_eligible": False,
-    }:
+    _exact_integer_mapping(request["technical_limits"], TECHNICAL_LIMITS, "$.technical_limits", errors)
+    if not _canonical_equal(request["retention_policy"], RETENTION_POLICY):
         errors.append("$.retention_policy: owner-only TTL contract required")
-    if request["authority"] != REQUEST_AUTHORITY:
-        errors.append("$.authority: zero authority required")
+    _exact_boolean_mapping(request["authority"], REQUEST_AUTHORITY, "$.authority", errors)
     return errors
 
 
@@ -784,6 +901,140 @@ def _validate_field_states(
     return values
 
 
+def _provider_provenance(record_kind: str, result_ordinal: int) -> dict[str, Any]:
+    return {
+        "transport": PROVIDER_TRANSPORT,
+        "result_contract": PROVIDER_RESULT_CONTRACT,
+        "result_type": PROVIDER_RESULT_TYPES[record_kind],
+        "result_ordinal": result_ordinal,
+    }
+
+
+def _raw_privacy_errors(value: Any, *, path: str) -> list[str]:
+    errors: list[str] = []
+    pending: list[tuple[Any, str]] = [(value, path)]
+    while pending:
+        item, item_path = pending.pop()
+        if isinstance(item, dict):
+            pending.extend((child, f"{item_path}.{key}") for key, child in item.items())
+        elif isinstance(item, list):
+            pending.extend((child, f"{item_path}[{index}]") for index, child in enumerate(item))
+        elif isinstance(item, str):
+            if _SENSITIVE_TEXT_RE.search(item):
+                errors.append(f"{item_path}: credential-like/private text forbidden")
+            for match in _URL_RE.finditer(item):
+                host_match = re.match(
+                    r"https?://([^/:?#]+)",
+                    match.group(0).rstrip(".,;:!?)"),
+                    re.IGNORECASE,
+                )
+                hostname = host_match.group(1).casefold() if host_match is not None else None
+                if hostname is None or not (hostname == "invalid" or hostname.endswith(".invalid")):
+                    errors.append(f"{item_path}: live/non-reserved URL forbidden")
+    return errors
+
+
+def _profile_raw_errors(raw: Any, *, observed_at: Any) -> list[str]:
+    errors: list[str] = []
+    keys = {
+        "platform_user_ids",
+        "current_handle",
+        "profile_url",
+        "bio_text",
+        "bio_observed_at",
+        "bio_content_version",
+        "post_fields_explicitly_absent",
+    }
+    if not _exact_keys(raw, keys, "$.raw_record", errors):
+        return errors
+    platform_ids = raw["platform_user_ids"]
+    if (
+        not isinstance(platform_ids, list)
+        or not 1 <= len(platform_ids) <= 10
+        or len(platform_ids) != len(set(platform_ids))
+        or any(not isinstance(value, str) or _NUMERIC_ID_RE.fullmatch(value) is None for value in platform_ids)
+    ):
+        errors.append("$.raw_record.platform_user_ids: unique numeric strings required")
+    handle = raw["current_handle"]
+    if not isinstance(handle, str) or _HANDLE_RE.fullmatch(handle) is None:
+        errors.append("$.raw_record.current_handle: invalid")
+    expected_url = f"https://profiles.invalid/x/{handle.casefold()}" if isinstance(handle, str) else None
+    if raw["profile_url"] != expected_url:
+        errors.append("$.raw_record.profile_url: canonical reserved fixture URL required")
+    if not _is_timestamp(raw["bio_observed_at"]) or raw["bio_observed_at"] != observed_at:
+        errors.append("$.raw_record.bio_observed_at: valid source-equal timestamp required")
+    if type(raw["post_fields_explicitly_absent"]) is not bool:
+        errors.append("$.raw_record.post_fields_explicitly_absent: exact boolean required")
+    bio = raw["bio_text"]
+    version = raw["bio_content_version"]
+    if bio is not None and not _is_scalar_text(bio, maximum=100_000):
+        errors.append("$.raw_record.bio_text: bounded UTF-8 text or null required")
+    if version is not None and not _is_scalar_text(version, minimum=1, maximum=200):
+        errors.append("$.raw_record.bio_content_version: bounded text or null required")
+    if (bio is None) != (version is None):
+        errors.append("$.raw_record: Bio text/version absence must be atomic")
+    errors.extend(_raw_privacy_errors(raw, path="$.raw_record"))
+    return errors
+
+
+def _post_raw_errors(raw: Any, *, observed_at: Any) -> list[str]:
+    errors: list[str] = []
+    keys = {
+        "canonical_post_id",
+        "canonical_post_url",
+        "post_author_platform_user_id",
+        "post_author_handle",
+        "post_authored_at",
+        "bounded_excerpt",
+        "thread_relation",
+    }
+    if not _exact_keys(raw, keys, "$.raw_record", errors):
+        return errors
+    post_id = raw["canonical_post_id"]
+    author_id = raw["post_author_platform_user_id"]
+    handle = raw["post_author_handle"]
+    if not isinstance(post_id, str) or _NUMERIC_ID_RE.fullmatch(post_id) is None:
+        errors.append("$.raw_record.canonical_post_id: numeric string required")
+    if not isinstance(author_id, str) or _NUMERIC_ID_RE.fullmatch(author_id) is None:
+        errors.append("$.raw_record.post_author_platform_user_id: numeric string required")
+    if not isinstance(handle, str) or _HANDLE_RE.fullmatch(handle) is None:
+        errors.append("$.raw_record.post_author_handle: invalid")
+    expected_url = (
+        f"https://posts.invalid/x/{handle.casefold()}/status/{post_id}"
+        if isinstance(handle, str) and isinstance(post_id, str)
+        else None
+    )
+    if raw["canonical_post_url"] != expected_url:
+        errors.append("$.raw_record.canonical_post_url: canonical reserved fixture URL required")
+    if not _is_timestamp(raw["post_authored_at"]) or (
+        _is_timestamp(observed_at) and raw["post_authored_at"] > observed_at
+    ):
+        errors.append("$.raw_record.post_authored_at: valid timestamp not after observation required")
+    if not _is_scalar_text(raw["bounded_excerpt"], minimum=1, maximum=280):
+        errors.append("$.raw_record.bounded_excerpt: bounded UTF-8 text required")
+    if raw["thread_relation"] not in THREAD_RELATIONS:
+        errors.append("$.raw_record.thread_relation: closed relation required")
+    errors.extend(_raw_privacy_errors(raw, path="$.raw_record"))
+    return errors
+
+
+def _metadata_raw_errors(raw: Any) -> list[str]:
+    errors: list[str] = []
+    if not _exact_keys(raw, {"call_id", "id", "input", "name"}, "$.raw_record", errors):
+        return errors
+    for key in ("call_id", "id"):
+        if not isinstance(raw[key], str) or re.fullmatch(r"[A-Za-z0-9_-]{1,128}", raw[key]) is None:
+            errors.append(f"$.raw_record.{key}: bounded opaque fixture id required")
+    if raw["name"] not in {"x_user_search", "x_thread_fetch"}:
+        errors.append("$.raw_record.name: closed native-X tool required")
+    if _exact_keys(raw["input"], {"handle"}, "$.raw_record.input", errors):
+        handle = raw["input"]["handle"]
+        if not isinstance(handle, str) or _HANDLE_RE.fullmatch(handle) is None:
+            errors.append("$.raw_record.input.handle: invalid")
+    errors.extend(_raw_privacy_errors(raw, path="$.raw_record"))
+    return errors
+
+
 def _source_record_errors(record: Any, *, task_ids: set[str]) -> list[str]:
     errors: list[str] = []
     keys = {
@@ -791,7 +1042,7 @@ def _source_record_errors(record: Any, *, task_ids: set[str]) -> list[str]:
         "task_id",
         "call_receipt_id",
         "record_kind",
-        "provider_path",
+        "provider_provenance",
         "payload_visibility",
         "replayable",
         "raw_record",
@@ -811,10 +1062,24 @@ def _source_record_errors(record: Any, *, task_ids: set[str]) -> list[str]:
         errors.append("$.record_kind: unsupported")
     if record["payload_visibility"] not in {"full_fixture_payload", "metadata_only"}:
         errors.append("$.payload_visibility: unsupported")
-    if not isinstance(record["replayable"], bool):
+    if type(record["replayable"]) is not bool:
         errors.append("$.replayable: must be boolean")
-    if not _is_scalar_text(record["provider_path"], minimum=1, maximum=200):
-        errors.append("$.provider_path: invalid")
+    provenance = record["provider_provenance"]
+    if _exact_keys(
+        provenance,
+        {"transport", "result_contract", "result_type", "result_ordinal"},
+        "$.provider_provenance",
+        errors,
+    ):
+        expected_result_type = PROVIDER_RESULT_TYPES.get(record["record_kind"])
+        if (
+            provenance["transport"] != PROVIDER_TRANSPORT
+            or provenance["result_contract"] != PROVIDER_RESULT_CONTRACT
+            or provenance["result_type"] != expected_result_type
+            or type(provenance["result_ordinal"]) is not int
+            or provenance["result_ordinal"] < 0
+        ):
+            errors.append("$.provider_provenance: closed transport/result descriptor required")
     if not _is_timestamp(record["observed_at"]):
         errors.append("$.observed_at: invalid")
     if not isinstance(record["raw_record"], dict) or record["raw_record_sha256"] != canonical_sha256(
@@ -823,12 +1088,18 @@ def _source_record_errors(record: Any, *, task_ids: set[str]) -> list[str]:
         errors.append("$.raw_record_sha256: mismatch")
     if len(canonical_json(record["raw_record"]).encode("utf-8")) > TECHNICAL_LIMITS["max_raw_record_bytes"]:
         errors.append("$.raw_record: byte ceiling exceeded")
+    if record["record_kind"] == "profile":
+        errors.extend(_profile_raw_errors(record["raw_record"], observed_at=record["observed_at"]))
+    elif record["record_kind"] == "post":
+        errors.extend(_post_raw_errors(record["raw_record"], observed_at=record["observed_at"]))
+    elif record["record_kind"] == "tool_metadata_only":
+        errors.extend(_metadata_raw_errors(record["raw_record"]))
     expected_source_id = _id(
         "xstage2src",
         {
             "task_id": record["task_id"],
             "record_kind": record["record_kind"],
-            "provider_path": record["provider_path"],
+            "provider_provenance": record["provider_provenance"],
             "raw_record_sha256": record["raw_record_sha256"],
         },
     )
@@ -930,6 +1201,25 @@ def _derived_task_guardrail(
         return "source_payload_unavailable", []
     profiles = [source for source in full_sources if source.get("record_kind") == "profile"]
     posts = [source for source in full_sources if source.get("record_kind") == "post"]
+    if not profiles and posts:
+        post_authors = {
+            (
+                source.get("raw_record", {}).get("post_author_platform_user_id"),
+                source.get("raw_record", {}).get("post_author_handle", "").casefold()
+                if isinstance(source.get("raw_record", {}).get("post_author_handle"), str)
+                else None,
+            )
+            for source in posts
+            if isinstance(source.get("raw_record"), dict)
+        }
+        lookup_handle = task.get("lookup_handle")
+        if (
+            len(post_authors) != 1
+            or not isinstance(lookup_handle, str)
+            or next(iter(post_authors))[1] != lookup_handle.casefold()
+        ):
+            return "cross_account_evidence", ["post_author_platform_user_id", "post_author_handle"]
+        return POST_ONLY_CODE, []
     if not profiles or not isinstance(profiles[0].get("raw_record"), dict):
         return "source_payload_unavailable", []
     if len(profiles) > 1:
@@ -1081,10 +1371,9 @@ def _profile_source_errors(
         else "different_diagnostic_only",
         "identity_authority": False,
     }
-    if diagnostic != expected_diagnostic:
+    if not _canonical_equal(diagnostic, expected_diagnostic):
         errors.append("$.reported_platform_user_id_diagnostic: must remain diagnostic")
-    if profile["authority"] != OUTPUT_AUTHORITY:
-        errors.append("$.authority: zero authority required")
+    _exact_boolean_mapping(profile["authority"], OUTPUT_AUTHORITY, "$.authority", errors)
     expected_id = _id(
         "xstage2profile",
         {
@@ -1110,10 +1399,48 @@ def validate_profile_source_binding(
     """Validate one profile snapshot without granting identity or product authority."""
 
     try:
+        source_errors = _source_record_errors(source, task_ids={task["task_id"]})
+        if source_errors:
+            return [f"$.source{error[1:]}" for error in source_errors]
         states = _field_state_map(field_states)
         return _profile_source_errors(profile, task=task, source=source, states=states)
     except (AttributeError, IndexError, KeyError, OverflowError, RecursionError, TypeError, UnicodeError, ValueError):
         return ["$: malformed_profile_source_binding"]
+
+
+def _retention_contract_violations(collection: Mapping[str, Any]) -> list[str]:
+    """Derive retention violations from every timestamp carried by retained evidence."""
+
+    retention = collection.get("retention")
+    if not isinstance(retention, Mapping):
+        return ["retention_record_missing"]
+    created_at = retention.get("created_at")
+    delete_after = retention.get("delete_after")
+    if not _is_timestamp(created_at) or not _is_timestamp(delete_after):
+        return ["retention_interval_invalid"]
+    evidence_timestamps: list[tuple[str, Any]] = []
+    for index, receipt in enumerate(collection.get("call_receipts", [])):
+        if isinstance(receipt, Mapping):
+            evidence_timestamps.extend(
+                (
+                    (f"call_receipts[{index}].started_at", receipt.get("started_at")),
+                    (f"call_receipts[{index}].completed_at", receipt.get("completed_at")),
+                )
+            )
+    for index, source in enumerate(collection.get("source_records", [])):
+        if isinstance(source, Mapping):
+            evidence_timestamps.append((f"source_records[{index}].observed_at", source.get("observed_at")))
+    for index, profile in enumerate(collection.get("profiles", [])):
+        if isinstance(profile, Mapping):
+            evidence_timestamps.append((f"profiles[{index}].bio_observed_at", profile.get("bio_observed_at")))
+    for index, post in enumerate(collection.get("posts", [])):
+        if isinstance(post, Mapping):
+            evidence_timestamps.append((f"posts[{index}].post_authored_at", post.get("post_authored_at")))
+    violations: list[str] = []
+    for path, timestamp in evidence_timestamps:
+        if not _is_timestamp(timestamp) or not (created_at <= timestamp <= delete_after):
+            violations.append(f"{path}_outside_retention_interval")
+    return violations
 
 
 def validate_collection(collection: Any, *, request: Any, registry: Any, selection_manifest: Any) -> list[str]:
@@ -1121,8 +1448,22 @@ def validate_collection(collection: Any, *, request: Any, registry: Any, selecti
     if errors:
         return [f"$.validation: {error}" for error in errors]
     schema_errors = _schema_preflight(collection, COLLECTION_SCHEMA_VERSION)
-    if schema_errors:
-        return schema_errors
+    if schema_errors and isinstance(collection, dict):
+        array_ceilings = {
+            "task_rows": TECHNICAL_LIMITS["max_tasks"],
+            "call_receipts": TECHNICAL_LIMITS["max_tasks"],
+            "source_records": TECHNICAL_LIMITS["max_source_records"],
+            "profiles": TECHNICAL_LIMITS["max_tasks"],
+            "posts": TECHNICAL_LIMITS["max_source_records"],
+            "quarantine": TECHNICAL_LIMITS["max_tasks"],
+            "incidents": TECHNICAL_LIMITS["max_tasks"],
+        }
+        if any(
+            isinstance(collection.get(field), list) and len(collection[field]) > ceiling
+            for field, ceiling in array_ceilings.items()
+        ):
+            return schema_errors
+    errors.extend(schema_errors)
     if validate_experiment_request(request, registry=registry, selection_manifest=selection_manifest):
         return ["$.request: invalid"]
     keys = {
@@ -1212,6 +1553,8 @@ def validate_collection(collection: Any, *, request: Any, registry: Any, selecti
         "receipt_id",
         "task_id",
         "tool_name",
+        "provider_transport",
+        "result_contract",
         "status",
         "external_call_count",
         "source_record_ids",
@@ -1233,17 +1576,35 @@ def validate_collection(collection: Any, *, request: Any, registry: Any, selecti
             errors.append(f"{path}.receipt_id: invalid or duplicate")
         else:
             receipt_map[receipt_id] = receipt
-        if receipt["task_id"] not in tasks or receipt["tool_name"] not in {"x_user_search", "x_thread_fetch"}:
+        task = tasks.get(receipt["task_id"])
+        if (
+            task is None
+            or receipt["tool_name"] not in {"x_user_search", "x_thread_fetch"}
+            or receipt["tool_name"] not in task["tool_policy"]["allowed_tools"]
+        ):
             errors.append(f"{path}: task/tool invalid")
+        if (
+            receipt["provider_transport"] != PROVIDER_TRANSPORT
+            or receipt["result_contract"] != PROVIDER_RESULT_CONTRACT
+        ):
+            errors.append(f"{path}: closed provider transport/result contract required")
         if (
             not isinstance(receipt["source_record_ids"], list)
             or not receipt["source_record_ids"]
             or len(receipt["source_record_ids"]) != len(set(receipt["source_record_ids"]))
         ):
             errors.append(f"{path}.source_record_ids: non-empty unique list required")
-        if receipt["status"] != "fixture_replayed" or receipt["external_call_count"] != 0:
+        if (
+            receipt["status"] != "fixture_replayed"
+            or type(receipt["external_call_count"]) is not int
+            or receipt["external_call_count"] != 0
+        ):
             errors.append(f"{path}: fixture call receipt cannot claim external execution")
-        if receipt["cost_status"] != "not_applicable_offline_fixture" or receipt["fallback_used"] is not False:
+        if (
+            receipt["cost_status"] != "not_applicable_offline_fixture"
+            or type(receipt["fallback_used"]) is not bool
+            or receipt["fallback_used"] is not False
+        ):
             errors.append(f"{path}: cost/fallback invalid")
         if not _is_timestamp(receipt["started_at"]) or not _is_timestamp(receipt["completed_at"]):
             errors.append(f"{path}: invalid timestamps")
@@ -1254,6 +1615,8 @@ def validate_collection(collection: Any, *, request: Any, registry: Any, selecti
             {
                 "task_id": receipt["task_id"],
                 "tool_name": receipt["tool_name"],
+                "provider_transport": receipt["provider_transport"],
+                "result_contract": receipt["result_contract"],
                 "source_record_ids": receipt["source_record_ids"],
             },
         )
@@ -1263,6 +1626,7 @@ def validate_collection(collection: Any, *, request: Any, registry: Any, selecti
     if len(source_records) > TECHNICAL_LIMITS["max_source_records"]:
         errors.append("$.source_records: technical ceiling exceeded")
     source_map: dict[str, Mapping[str, Any]] = {}
+    provider_result_slots: set[tuple[str, str, int]] = set()
     for index, record in enumerate(source_records):
         path = f"$.source_records[{index}]"
         record_errors = _source_record_errors(record, task_ids=set(tasks))
@@ -1271,6 +1635,16 @@ def validate_collection(collection: Any, *, request: Any, registry: Any, selecti
             if record["source_record_id"] in source_map:
                 errors.append(f"{path}.source_record_id: duplicate")
             source_map[record["source_record_id"]] = record
+            provenance = record.get("provider_provenance")
+            if isinstance(provenance, dict) and type(provenance.get("result_ordinal")) is int:
+                result_slot = (
+                    str(record.get("call_receipt_id")),
+                    str(provenance.get("result_type")),
+                    provenance["result_ordinal"],
+                )
+                if result_slot in provider_result_slots:
+                    errors.append(f"{path}.provider_provenance: duplicate receipt result slot")
+                provider_result_slots.add(result_slot)
             receipt = receipt_map.get(record.get("call_receipt_id"))
             if (
                 receipt is None
@@ -1278,8 +1652,23 @@ def validate_collection(collection: Any, *, request: Any, registry: Any, selecti
                 or record["source_record_id"] not in receipt.get("source_record_ids", [])
             ):
                 errors.append(f"{path}: call receipt binding missing")
-            elif not (receipt["started_at"] <= record.get("observed_at", "") <= receipt["completed_at"]):
-                errors.append(f"{path}.observed_at: outside call receipt window")
+            else:
+                provenance = record.get("provider_provenance", {})
+                raw = record.get("raw_record")
+                if (
+                    provenance.get("transport") != receipt.get("provider_transport")
+                    or provenance.get("result_contract") != receipt.get("result_contract")
+                    or PROVIDER_RESULT_TYPES.get(record.get("record_kind")) != provenance.get("result_type")
+                    or receipt.get("tool_name") not in tasks[record["task_id"]]["tool_policy"]["allowed_tools"]
+                    or (
+                        record.get("record_kind") == "tool_metadata_only"
+                        and isinstance(raw, dict)
+                        and raw.get("name") != receipt.get("tool_name")
+                    )
+                ):
+                    errors.append(f"{path}.provider_provenance: receipt/request binding mismatch")
+                if not (receipt["started_at"] <= record.get("observed_at", "") <= receipt["completed_at"]):
+                    errors.append(f"{path}.observed_at: outside call receipt window")
             raw = record.get("raw_record")
             if isinstance(raw, dict) and record.get("record_kind") == "profile":
                 if raw.get("bio_observed_at") != record.get("observed_at"):
@@ -1347,6 +1736,7 @@ def validate_collection(collection: Any, *, request: Any, registry: Any, selecti
         source = source_map.get(post["source_record_id"])
         task = tasks.get(post["task_id"])
         profile = next((item for item in profiles if item["task_id"] == post["task_id"]), None)
+        task_row = rows.get(post["task_id"])
         if (
             source is None
             or task is None
@@ -1403,10 +1793,16 @@ def validate_collection(collection: Any, *, request: Any, registry: Any, selecti
             errors.append(f"{path}: post values do not replay source")
         if not post_shape_valid:
             continue
-        if profile is None or (
+        profile_binding_invalid = profile is not None and (
             post["post_author_platform_user_id"] != profile["platform_user_id"]
             or post["post_author_handle"].casefold() != profile["current_handle"].casefold()
-        ):
+        )
+        profile_absence_invalid = profile is None and (
+            task_row is None
+            or task_row.get("status") != "completed_post_only"
+            or post["post_author_handle"].casefold() != task["lookup_handle"].casefold()
+        )
+        if profile_binding_invalid or profile_absence_invalid:
             errors.append(f"{path}: cross-account Post evidence")
         expected_post_fields = _post_fields(requested_fields)
         post_states = _validate_field_states(
@@ -1420,8 +1816,9 @@ def validate_collection(collection: Any, *, request: Any, registry: Any, selecti
             for field in expected_post_fields
         ):
             errors.append(f"{path}.field_states: exact/bounded semantics invalid")
-        if post["source_binding_status"] != "replay_bound_exact" or post["authority"] != OUTPUT_AUTHORITY:
+        if post["source_binding_status"] != "replay_bound_exact":
             errors.append(f"{path}: binding/authority invalid")
+        _exact_boolean_mapping(post["authority"], OUTPUT_AUTHORITY, f"{path}.authority", errors)
         expected_post_id = _id(
             "xstage2post",
             {
@@ -1506,6 +1903,10 @@ def validate_collection(collection: Any, *, request: Any, registry: Any, selecti
             errors.append(f"$.task_rows[{task_id}]: quarantine closure mismatch")
         if row["status"] == "completed" and (len(row["profile_snapshot_ids"]) != 1 or row["quarantine_ids"]):
             errors.append(f"$.task_rows[{task_id}]: completed row requires one exact profile")
+        if row["status"] == "completed_post_only" and (
+            row["profile_snapshot_ids"] or not row["post_ids"] or row["quarantine_ids"]
+        ):
+            errors.append(f"$.task_rows[{task_id}]: Post-only completion requires bound Posts and no profile")
         if row["status"] == "quarantined" and not row["quarantine_ids"]:
             errors.append(f"$.task_rows[{task_id}]: quarantine missing")
         if row["status"] == "failed" and not row["error_codes"]:
@@ -1550,7 +1951,13 @@ def validate_collection(collection: Any, *, request: Any, registry: Any, selecti
         )
         if not source_ids_valid:
             errors.append(f"{path}.source_record_ids: invalid task-bound source set")
-        expected_disposition = "terminal_failed" if incident["code"] == "source_payload_unavailable" else "quarantined"
+        expected_disposition = (
+            "terminal_failed"
+            if incident["code"] == "source_payload_unavailable"
+            else "retained_post_only"
+            if incident["code"] == POST_ONLY_CODE
+            else "quarantined"
+        )
         if incident["disposition"] != expected_disposition:
             errors.append(f"{path}.disposition: state mismatch")
         expected_incident_id = _id("xstage2incident", {key: incident[key] for key in incident if key != "incident_id"})
@@ -1578,6 +1985,17 @@ def validate_collection(collection: Any, *, request: Any, registry: Any, selecti
         if row["status"] == "completed":
             if row["error_codes"] or task_quarantine or task_incidents:
                 errors.append(f"$.task_rows[{task_id}]: completed state carries terminal artifacts")
+        elif row["status"] == "completed_post_only":
+            if (
+                row["error_codes"] != [POST_ONLY_CODE]
+                or task_quarantine
+                or len(task_incidents) != 1
+                or task_incidents[0]["code"] != POST_ONLY_CODE
+                or row["profile_snapshot_ids"]
+                or not row["post_ids"]
+                or any(state_maps.get(task_id, {}).get(field) != "unverified" for field in PROFILE_REQUIRED_FIELDS)
+            ):
+                errors.append(f"$.task_rows[{task_id}]: typed Post-only state mismatch")
         elif row["status"] == "quarantined":
             if (
                 len(task_quarantine) != 1
@@ -1610,25 +2028,49 @@ def validate_collection(collection: Any, *, request: Any, registry: Any, selecti
         if source["payload_visibility"] == "full_fixture_payload" and source_id not in consumed_source_ids:
             errors.append(f"$.source_records[{source_id}]: full replayable source is unconsumed")
 
-    account_observations: dict[str, list[tuple[str, str]]] = {}
+    account_observations: dict[str, list[tuple[str, str, str]]] = {}
+    handle_observations: dict[str, list[tuple[str, str, str]]] = {}
     for source in source_map.values():
         raw = source["raw_record"]
-        if source["record_kind"] != "profile" or not isinstance(raw, dict):
+        if not isinstance(raw, dict):
             continue
-        platform_ids = raw.get("platform_user_ids")
-        handle = raw.get("current_handle")
+        if source["record_kind"] == "profile":
+            platform_ids = raw.get("platform_user_ids")
+            handle = raw.get("current_handle")
+        elif source["record_kind"] == "post":
+            platform_ids = [raw.get("post_author_platform_user_id")]
+            handle = raw.get("post_author_handle")
+        else:
+            continue
         if not isinstance(platform_ids, list) or not isinstance(handle, str):
             continue
         for platform_id in platform_ids:
             if isinstance(platform_id, str) and _NUMERIC_ID_RE.fullmatch(platform_id):
-                account_observations.setdefault(platform_id, []).append((source["task_id"], handle.casefold()))
+                observation = (source["task_id"], handle.casefold(), source.get("observed_at", ""))
+                account_observations.setdefault(platform_id, []).append(observation)
+                handle_observations.setdefault(handle.casefold(), []).append(
+                    (source["task_id"], platform_id, source.get("observed_at", ""))
+                )
     cross_handle_conflict_task_ids: set[str] = set()
-    for platform_id, observations in account_observations.items():
-        handles = {handle for _, handle in observations}
+    for observations in account_observations.values():
+        handles = {handle for _, handle, _ in observations}
         if len(handles) <= 1:
             continue
-        affected_task_ids = {task_id for task_id, _ in observations}
+        affected_task_ids = {task_id for task_id, _, _ in observations}
         cross_handle_conflict_task_ids.update(affected_task_ids)
+    for observations in handle_observations.values():
+        platform_ids = {platform_id for _, platform_id, _ in observations}
+        if len(platform_ids) <= 1:
+            continue
+        # Same-time reverse ownership is impossible. Different-time reassignment is
+        # also quarantined until a future contract supplies explicit history intervals.
+        by_observed_at: dict[str, set[str]] = {}
+        for _, platform_id, observed_at in observations:
+            by_observed_at.setdefault(observed_at, set()).add(platform_id)
+        simultaneous_conflict = any(len(ids) > 1 for ids in by_observed_at.values())
+        history_interval_missing = len(platform_ids) > 1
+        if simultaneous_conflict or history_interval_missing:
+            cross_handle_conflict_task_ids.update(task_id for task_id, _, _ in observations)
 
     for task_id, task in tasks.items():
         row = rows.get(task_id)
@@ -1646,6 +2088,19 @@ def validate_collection(collection: Any, *, request: Any, registry: Any, selecti
         if reason is None:
             if row["status"] != "completed" or row["error_codes"] or task_quarantine or task_incidents:
                 errors.append(f"$.task_rows[{task_id}]: source-derived completed state mismatch")
+            continue
+        if reason == POST_ONLY_CODE:
+            if (
+                row["status"] != "completed_post_only"
+                or row["error_codes"] != [reason]
+                or task_quarantine
+                or len(task_incidents) != 1
+                or task_incidents[0]["code"] != reason
+                or task_incidents[0]["source_record_ids"] != task_source_ids
+                or row["profile_snapshot_ids"]
+                or not row["post_ids"]
+            ):
+                errors.append(f"$.task_rows[{task_id}]: source-derived Post-only outcome mismatch")
             continue
         if reason == "source_payload_unavailable":
             if (
@@ -1675,11 +2130,12 @@ def validate_collection(collection: Any, *, request: Any, registry: Any, selecti
         "denominator": len(tasks),
         "terminal": len(task_rows),
         "completed": counts["completed"],
+        "completed_post_only": counts["completed_post_only"],
         "quarantined": counts["quarantined"],
         "failed": counts["failed"],
         "status": "terminal" if len(task_rows) == len(tasks) else "incomplete",
     }
-    if collection["terminal_summary"] != expected_summary:
+    if not _canonical_equal(collection["terminal_summary"], expected_summary):
         errors.append("$.terminal_summary: arithmetic mismatch")
     retention = collection["retention"]
     retention_keys = {
@@ -1710,7 +2166,10 @@ def validate_collection(collection: Any, *, request: Any, registry: Any, selecti
             errors.append("$.retention: fixture simulation cannot be reused or promoted")
         if retention["directory_mode"] != "0700" or retention["file_mode"] != "0600":
             errors.append("$.retention: owner-only modes required")
-        if retention["ttl_seconds"] != TECHNICAL_LIMITS["raw_evidence_ttl_seconds"]:
+        if (
+            type(retention["ttl_seconds"]) is not int
+            or retention["ttl_seconds"] != TECHNICAL_LIMITS["raw_evidence_ttl_seconds"]
+        ):
             errors.append("$.retention.ttl_seconds: mismatch")
         if not _is_timestamp(retention["created_at"]) or not _is_timestamp(retention["delete_after"]):
             errors.append("$.retention: invalid timestamps")
@@ -1723,12 +2182,12 @@ def validate_collection(collection: Any, *, request: Any, registry: Any, selecti
             errors.append("$.retention: fixture must truthfully remain pending")
         if retention["raw_evidence_manifest_sha256"] != canonical_sha256(source_records):
             errors.append("$.retention.raw_evidence_manifest_sha256: mismatch")
-        if retention["incident_on_expiry"] is not True:
+        if type(retention["incident_on_expiry"]) is not bool or retention["incident_on_expiry"] is not True:
             errors.append("$.retention.incident_on_expiry: required")
+    errors.extend(f"$.retention: {violation}" for violation in _retention_contract_violations(collection))
     if collection["assertions"] or collection["canonical_writes"] or collection["outreach_actions"]:
         errors.append("$: product authority arrays must be empty")
-    if collection["authority"] != OUTPUT_AUTHORITY:
-        errors.append("$.authority: zero authority required")
+    _exact_boolean_mapping(collection["authority"], OUTPUT_AUTHORITY, "$.authority", errors)
     expected_collection_id = _collection_id(collection)
     if collection["collection_id"] != expected_collection_id:
         errors.append("$.collection_id: identity mismatch")
@@ -1746,8 +2205,14 @@ def validate_capability_expectation(
     if errors:
         return [f"$.validation: {error}" for error in errors]
     schema_errors = _schema_preflight(expectation, EXPECTATION_SCHEMA_VERSION)
-    if schema_errors:
+    if (
+        schema_errors
+        and isinstance(expectation, dict)
+        and isinstance(expectation.get("rows"), list)
+        and len(expectation["rows"]) > TECHNICAL_LIMITS["max_tasks"]
+    ):
         return schema_errors
+    errors.extend(schema_errors)
     if validate_experiment_request(request, registry=registry, selection_manifest=selection_manifest):
         return ["$.request: invalid"]
     keys = {
@@ -1824,6 +2289,14 @@ def validate_capability_expectation(
         )
         if status == "completed" and (error_codes or quarantine_reason is not None):
             errors.append(f"{path}: completed expectation cannot carry errors/quarantine")
+        if status == "completed_post_only" and (
+            error_codes != [POST_ONLY_CODE]
+            or quarantine_reason is not None
+            or any(states.get(field) != "unverified" for field in PROFILE_REQUIRED_FIELDS)
+            or row["expected_profile_count"] != 0
+            or row["expected_post_count"] < 1
+        ):
+            errors.append(f"{path}: Post-only expectation semantics mismatch")
         if status == "quarantined" and (quarantine_reason is None or error_codes != [quarantine_reason]):
             errors.append(f"{path}: quarantine expectation state mismatch")
         if status == "failed" and (
@@ -1867,8 +2340,7 @@ def validate_capability_expectation(
     )
     if expectation["manifest_id"] != expected_manifest_id:
         errors.append("$.manifest_id: identity mismatch")
-    if expectation["authority"] != OUTPUT_AUTHORITY:
-        errors.append("$.authority: zero authority required")
+    _exact_boolean_mapping(expectation["authority"], OUTPUT_AUTHORITY, "$.authority", errors)
     return errors
 
 
@@ -1943,7 +2415,7 @@ def evaluate_field_capability(
         "nonterminal_task": len(request["tasks"]) - collection["terminal_summary"]["terminal"],
         "product_write": len(collection["canonical_writes"]),
         "outreach_action": len(collection["outreach_actions"]),
-        "retention_contract_violation": 0,
+        "retention_contract_violation": len(_retention_contract_violations(collection)),
     }
     evaluation_seed = {
         "experiment_id": request["experiment_id"],
@@ -1975,6 +2447,7 @@ def evaluate_field_capability(
             "denominator": len(request["tasks"]),
             "terminal": len(collection["task_rows"]),
             "completed": status_counts["completed"],
+            "completed_post_only": status_counts["completed_post_only"],
             "quarantined": status_counts["quarantined"],
             "failed": status_counts["failed"],
             "replay_bound_profiles": len(collection["profiles"]),
@@ -2006,8 +2479,7 @@ def validate_evaluation(
     if errors:
         return [f"$.validation: {error}" for error in errors]
     schema_errors = _schema_preflight(evaluation, EVALUATION_SCHEMA_VERSION)
-    if schema_errors:
-        return schema_errors
+    errors.extend(schema_errors)
     keys = {
         "schema_version",
         "execution_mode",
@@ -2051,6 +2523,7 @@ def _build_selection_manifest() -> dict[str, Any]:
         ("2" * 24, "fixture_b", None, "absent"),
         ("3" * 24, "fixture_c", "8" * 18, "model_mediated_unverified"),
         ("4" * 24, "fixture_d", None, "absent"),
+        ("5" * 24, "fixture_e", None, "absent"),
     ]
     selected_leads = [
         {
@@ -2079,18 +2552,12 @@ def _build_selection_manifest() -> dict[str, Any]:
 
 def _build_request(registry: Mapping[str, Any], selection_manifest: Mapping[str, Any]) -> dict[str, Any]:
     fields = list(_registry_fields(registry))
-    tasks: list[dict[str, Any]] = []
-    for selected in selection_manifest["selected_leads"]:
-        task = {
-            "task_id": "",
-            **copy.deepcopy(selected),
-            "requested_field_ids": fields,
-            "tool_policy": {"allowed_tools": ["x_user_search", "x_thread_fetch"], "fallback_allowed": False},
-            "source_receipt_required": True,
-            "authority": copy.deepcopy(REQUEST_AUTHORITY),
-        }
-        task["task_id"] = _task_id(task)
-        tasks.append(task)
+    target = {
+        "lab_id": "synthetic_lab",
+        "frozen_from": "2026-07-01T00:00:00.000Z",
+        "frozen_to": "2026-07-02T00:00:00.000Z",
+    }
+    registry_binding = {"registry_version": FIELD_REGISTRY_VERSION, "registry_sha256": canonical_sha256(registry)}
     selected_fields = (
         "opaque_lead_ref",
         "candidate_row_sha256",
@@ -2098,20 +2565,35 @@ def _build_request(registry: Mapping[str, Any], selection_manifest: Mapping[str,
         "reported_platform_user_id",
         "reported_platform_user_id_status",
     )
-    selected = [{field: task[field] for field in selected_fields} for task in tasks]
+    selected = [
+        {field: selected_lead[field] for field in selected_fields}
+        for selected_lead in selection_manifest["selected_leads"]
+    ]
     source_manifest = {
         "selection_manifest_version": SELECTION_MANIFEST_VERSION,
         "selection_manifest_sha256": canonical_sha256(selection_manifest),
         "selection_id": selection_manifest["selection_id"],
-        "selected_lead_count": len(tasks),
+        "selected_lead_count": len(selected),
         "selected_leads_sha256": canonical_sha256(selected),
     }
-    target = {
-        "lab_id": "synthetic_lab",
-        "frozen_from": "2026-07-01T00:00:00.000Z",
-        "frozen_to": "2026-07-02T00:00:00.000Z",
-    }
-    registry_binding = {"registry_version": FIELD_REGISTRY_VERSION, "registry_sha256": canonical_sha256(registry)}
+    experiment_scope = _task_scope(
+        target=target,
+        registry_binding=registry_binding,
+        source_manifest=source_manifest,
+    )
+    tasks: list[dict[str, Any]] = []
+    for index, selected in enumerate(selection_manifest["selected_leads"]):
+        task = {
+            "task_id": "",
+            **copy.deepcopy(selected),
+            "fixture_scenario_id": FIXTURE_SCENARIO_IDS[index % len(FIXTURE_SCENARIO_IDS)],
+            "requested_field_ids": fields,
+            "tool_policy": {"allowed_tools": ["x_user_search", "x_thread_fetch"], "fallback_allowed": False},
+            "source_receipt_required": True,
+            "authority": copy.deepcopy(REQUEST_AUTHORITY),
+        }
+        task["task_id"] = _task_id(task, experiment_scope=experiment_scope)
+        tasks.append(task)
     fixture_scenario_manifest = _build_scenario_manifest(tasks, fields)
     experiment_identity = {
         "target": target,
@@ -2132,16 +2614,7 @@ def _build_request(registry: Mapping[str, Any], selection_manifest: Mapping[str,
         "fixture_scenario_manifest": fixture_scenario_manifest,
         "tasks": tasks,
         "technical_limits": copy.deepcopy(TECHNICAL_LIMITS),
-        "retention_policy": {
-            "raw_evidence_storage": "private_owner_only",
-            "retention_scope": "synthetic_fixture_simulation_only",
-            "directory_mode": "0700",
-            "file_mode": "0600",
-            "ttl_seconds": TECHNICAL_LIMITS["raw_evidence_ttl_seconds"],
-            "deletion_receipt_required": True,
-            "live_reuse_allowed": False,
-            "promotion_eligible": False,
-        },
+        "retention_policy": copy.deepcopy(RETENTION_POLICY),
         "authority": copy.deepcopy(REQUEST_AUTHORITY),
     }
 
@@ -2150,7 +2623,7 @@ def _build_collection(request: Mapping[str, Any], registry: Mapping[str, Any]) -
     tasks = request["tasks"]
     registry_fields = _registry_fields(registry)
     timestamps = ("2026-07-14T01:00:00.000Z", "2026-07-14T01:00:01.000Z")
-    source_specs: list[tuple[Mapping[str, Any], str, str, Mapping[str, Any]]] = []
+    source_specs: list[tuple[Mapping[str, Any], str, int, Mapping[str, Any]]] = []
 
     good_profile_raw = {
         "platform_user_ids": ["900000000000000001"],
@@ -2194,13 +2667,23 @@ def _build_collection(request: Mapping[str, Any], registry: Mapping[str, Any]) -
         "input": {"handle": "fixture_d"},
         "name": "x_user_search",
     }
+    post_only_raw = {
+        "canonical_post_id": "222222",
+        "canonical_post_url": "https://posts.invalid/x/fixture_e/status/222222",
+        "post_author_platform_user_id": "900000000000000005",
+        "post_author_handle": "fixture_e",
+        "post_authored_at": timestamps[1],
+        "bounded_excerpt": "Synthetic source-bound Post with no profile payload.",
+        "thread_relation": "self_post",
+    }
     source_specs.extend(
         [
-            (tasks[0], "profile", "rawOutput.users[0]", good_profile_raw),
-            (tasks[0], "post", "rawOutput.posts[0]", good_post_raw),
-            (tasks[1], "profile", "rawOutput.users[0]", conflict_profile_raw),
-            (tasks[2], "profile", "rawOutput.users[0]", renamed_profile_raw),
-            (tasks[3], "tool_metadata_only", "tool_call_update", metadata_only_raw),
+            (tasks[0], "profile", 0, good_profile_raw),
+            (tasks[0], "post", 0, good_post_raw),
+            (tasks[1], "profile", 0, conflict_profile_raw),
+            (tasks[2], "profile", 0, renamed_profile_raw),
+            (tasks[3], "tool_metadata_only", 0, metadata_only_raw),
+            (tasks[4], "post", 0, post_only_raw),
         ]
     )
     source_records: list[dict[str, Any]] = []
@@ -2213,21 +2696,29 @@ def _build_collection(request: Mapping[str, Any], registry: Mapping[str, Any]) -
                 {
                     "task_id": task["task_id"],
                     "record_kind": kind,
-                    "provider_path": path,
+                    "provider_provenance": _provider_provenance(kind, ordinal),
                     "raw_record_sha256": canonical_sha256(raw),
                 },
             )
-            for _, kind, path, raw in task_specs
+            for _, kind, ordinal, raw in task_specs
         ]
         receipt_id = _id(
             "xstage2call",
-            {"task_id": task["task_id"], "tool_name": "x_user_search", "source_record_ids": final_ids},
+            {
+                "task_id": task["task_id"],
+                "tool_name": "x_user_search",
+                "provider_transport": PROVIDER_TRANSPORT,
+                "result_contract": PROVIDER_RESULT_CONTRACT,
+                "source_record_ids": final_ids,
+            },
         )
         call_receipts.append(
             {
                 "receipt_id": receipt_id,
                 "task_id": task["task_id"],
                 "tool_name": "x_user_search",
+                "provider_transport": PROVIDER_TRANSPORT,
+                "result_contract": PROVIDER_RESULT_CONTRACT,
                 "status": "fixture_replayed",
                 "external_call_count": 0,
                 "source_record_ids": final_ids,
@@ -2237,14 +2728,14 @@ def _build_collection(request: Mapping[str, Any], registry: Mapping[str, Any]) -
                 "fallback_used": False,
             }
         )
-        for source_id, (_, kind, path, raw) in zip(final_ids, task_specs, strict=True):
+        for source_id, (_, kind, ordinal, raw) in zip(final_ids, task_specs, strict=True):
             source_records.append(
                 {
                     "source_record_id": source_id,
                     "task_id": task["task_id"],
                     "call_receipt_id": receipt_id,
                     "record_kind": kind,
-                    "provider_path": path,
+                    "provider_provenance": _provider_provenance(kind, ordinal),
                     "payload_visibility": "metadata_only" if kind == "tool_metadata_only" else "full_fixture_payload",
                     "replayable": kind != "tool_metadata_only",
                     "raw_record": copy.deepcopy(raw),
@@ -2315,6 +2806,35 @@ def _build_collection(request: Mapping[str, Any], registry: Mapping[str, Any]) -
             "authority": copy.deepcopy(OUTPUT_AUTHORITY),
         }
     ]
+    post_only_source = next(
+        record
+        for record in source_records
+        if record["task_id"] == tasks[4]["task_id"] and record["record_kind"] == "post"
+    )
+    posts.append(
+        {
+            "post_id": _id(
+                "xstage2post",
+                {
+                    "task_id": tasks[4]["task_id"],
+                    "source_record_id": post_only_source["source_record_id"],
+                    "canonical_post_id": post_only_raw["canonical_post_id"],
+                },
+            ),
+            "task_id": tasks[4]["task_id"],
+            "source_record_id": post_only_source["source_record_id"],
+            **copy.deepcopy(post_only_raw),
+            "field_states": [
+                {
+                    "field_id": field_id,
+                    "state": "present_bounded" if field_id == "bounded_excerpt" else "present_exact",
+                }
+                for field_id in post_field_ids
+            ],
+            "source_binding_status": "replay_bound_exact",
+            "authority": copy.deepcopy(OUTPUT_AUTHORITY),
+        }
+    )
     quarantine: list[dict[str, Any]] = []
     incidents: list[dict[str, Any]] = []
     derived_guardrails: dict[str, tuple[str | None, list[str]]] = {}
@@ -2323,7 +2843,7 @@ def _build_collection(request: Mapping[str, Any], registry: Mapping[str, Any]) -
         reason, field_ids = _derived_task_guardrail(task, task_sources, cross_handle_conflict=False)
         derived_guardrails[task["task_id"]] = (reason, field_ids)
         record_ids = [record["source_record_id"] for record in task_sources]
-        if reason is not None and reason != "source_payload_unavailable":
+        if reason is not None and reason not in {"source_payload_unavailable", POST_ONLY_CODE}:
             quarantine_identity = {
                 "task_id": task["task_id"],
                 "reason_code": reason,
@@ -2344,7 +2864,13 @@ def _build_collection(request: Mapping[str, Any], registry: Mapping[str, Any]) -
                 "task_id": task["task_id"],
                 "code": reason,
                 "severity": "guardrail",
-                "disposition": "terminal_failed" if reason == "source_payload_unavailable" else "quarantined",
+                "disposition": (
+                    "terminal_failed"
+                    if reason == "source_payload_unavailable"
+                    else "retained_post_only"
+                    if reason == POST_ONLY_CODE
+                    else "quarantined"
+                ),
                 "source_record_ids": record_ids,
             }
             incidents.append({"incident_id": _id("xstage2incident", incident_body), **incident_body})
@@ -2358,7 +2884,13 @@ def _build_collection(request: Mapping[str, Any], registry: Mapping[str, Any]) -
         task_incidents = [item for item in incidents if item["task_id"] == task["task_id"]]
         reason, _ = derived_guardrails[task["task_id"]]
         status = (
-            "completed" if reason is None else "failed" if reason == "source_payload_unavailable" else "quarantined"
+            "completed"
+            if reason is None
+            else "failed"
+            if reason == "source_payload_unavailable"
+            else "completed_post_only"
+            if reason == POST_ONLY_CODE
+            else "quarantined"
         )
         error_codes = [] if reason is None else [reason]
         task_rows.append(
@@ -2385,6 +2917,7 @@ def _build_collection(request: Mapping[str, Any], registry: Mapping[str, Any]) -
         "denominator": len(tasks),
         "terminal": len(task_rows),
         "completed": counts["completed"],
+        "completed_post_only": counts["completed_post_only"],
         "quarantined": counts["quarantined"],
         "failed": counts["failed"],
         "status": "terminal",

@@ -2,44 +2,50 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://contracts.invalid/x.stage2.evaluation.v1.schema.json",
   "title": "X-first Stage 2A field-capability evaluation v1",
-  "description": "Closed outer envelope. The executable owner recomputes this artifact byte-for-byte from the bound request, collection, pre-collection capability expectation, and field registry. This is fixture conformance, not search-quality accuracy.",
+  "description": "Deeply typed deterministic fixture evaluation.",
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "schema_version",
-    "execution_mode",
-    "evaluation_id",
-    "experiment_id",
-    "request_sha256",
-    "collection_sha256",
-    "expectation_sha256",
-    "terminal_metrics",
-    "field_metrics",
-    "expectation_metrics",
-    "guardrails",
-    "decision",
-    "reason_codes",
-    "authority"
-  ],
+  "required": ["schema_version", "execution_mode", "evaluation_id", "experiment_id", "request_sha256", "collection_sha256", "expectation_sha256", "terminal_metrics", "field_metrics", "expectation_metrics", "guardrails", "decision", "reason_codes", "authority"],
   "properties": {
     "schema_version": {"const": "x.stage2.evaluation.v1"},
     "execution_mode": {"const": "offline_fixture"},
     "evaluation_id": {"type": "string", "pattern": "^xstage2eval_[0-9a-f]{24}$"},
     "experiment_id": {"type": "string", "pattern": "^xstage2exp_[0-9a-f]{24}$"},
-    "request_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-    "collection_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-    "expectation_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-    "terminal_metrics": {"type": "object"},
-    "field_metrics": {"type": "array", "minItems": 1, "items": {"type": "object"}},
-    "expectation_metrics": {"type": "object"},
-    "guardrails": {"type": "object"},
-    "decision": {
-      "enum": [
-        "offline_fixture_expectation_conformant",
-        "offline_fixture_expectation_mismatch"
-      ]
+    "request_sha256": {"$ref": "#/$defs/sha"}, "collection_sha256": {"$ref": "#/$defs/sha"}, "expectation_sha256": {"$ref": "#/$defs/sha"},
+    "terminal_metrics": {
+      "type": "object", "additionalProperties": false,
+      "required": ["denominator", "terminal", "completed", "completed_post_only", "quarantined", "failed", "replay_bound_profiles"],
+      "properties": {"denominator": {"$ref": "#/$defs/count"}, "terminal": {"$ref": "#/$defs/count"}, "completed": {"$ref": "#/$defs/count"}, "completed_post_only": {"$ref": "#/$defs/count"}, "quarantined": {"$ref": "#/$defs/count"}, "failed": {"$ref": "#/$defs/count"}, "replay_bound_profiles": {"$ref": "#/$defs/count"}}
     },
+    "field_metrics": {
+      "type": "array", "minItems": 1, "maxItems": 14,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["field_id", "denominator", "present_exact", "present_bounded", "absent", "unverified"],
+        "properties": {"field_id": {"type": "string"}, "denominator": {"$ref": "#/$defs/count"}, "present_exact": {"$ref": "#/$defs/count"}, "present_bounded": {"$ref": "#/$defs/count"}, "absent": {"$ref": "#/$defs/count"}, "unverified": {"$ref": "#/$defs/count"}}
+      }
+    },
+    "expectation_metrics": {
+      "type": "object", "additionalProperties": false,
+      "required": ["denominator", "matched", "mismatched", "mismatch_task_ids"],
+      "properties": {"denominator": {"$ref": "#/$defs/count"}, "matched": {"$ref": "#/$defs/count"}, "mismatched": {"$ref": "#/$defs/count"}, "mismatch_task_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^xstage2task_[0-9a-f]{24}$"}}}
+    },
+    "guardrails": {
+      "type": "object", "additionalProperties": false,
+      "required": ["accepted_unbound_profile", "unquarantined_identity_conflict", "cross_account_post_evidence", "model_reported_id_used_as_identity", "nonterminal_task", "product_write", "outreach_action", "retention_contract_violation"],
+      "properties": {"accepted_unbound_profile": {"$ref": "#/$defs/count"}, "unquarantined_identity_conflict": {"$ref": "#/$defs/count"}, "cross_account_post_evidence": {"$ref": "#/$defs/count"}, "model_reported_id_used_as_identity": {"$ref": "#/$defs/count"}, "nonterminal_task": {"$ref": "#/$defs/count"}, "product_write": {"$ref": "#/$defs/count"}, "outreach_action": {"$ref": "#/$defs/count"}, "retention_contract_violation": {"$ref": "#/$defs/count"}}
+    },
+    "decision": {"enum": ["offline_fixture_expectation_conformant", "offline_fixture_expectation_mismatch"]},
     "reason_codes": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string"}},
-    "authority": {"type": "object"}
+    "authority": {"$ref": "#/$defs/output_authority"}
+  },
+  "$defs": {
+    "sha": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "count": {"type": "integer", "minimum": 0},
+    "output_authority": {
+      "type": "object", "additionalProperties": false,
+      "required": ["live_x_capability_claimed", "canonical_person_or_employment_confirmed", "automatic_identity_merge_performed", "discovery_or_ranking_authorized", "canonical_write_authorized", "outreach_authorized"],
+      "properties": {"live_x_capability_claimed": {"type": "boolean", "const": false}, "canonical_person_or_employment_confirmed": {"type": "boolean", "const": false}, "automatic_identity_merge_performed": {"type": "boolean", "const": false}, "discovery_or_ranking_authorized": {"type": "boolean", "const": false}, "canonical_write_authorized": {"type": "boolean", "const": false}, "outreach_authorized": {"type": "boolean", "const": false}}
+    }
   }
 }

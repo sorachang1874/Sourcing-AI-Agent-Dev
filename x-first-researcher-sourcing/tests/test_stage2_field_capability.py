@@ -23,6 +23,9 @@ from x_first.stage2_field_capability import (  # noqa: E402
     _build_collection,
     _build_expectation,
     _collection_id,
+    _retention_contract_violations,
+    _task_id,
+    _task_scope,
     build_fixture_bundle,
     canonical_sha256,
     evaluate_field_capability,
@@ -76,6 +79,36 @@ class Stage2FieldCapabilityTest(unittest.TestCase):
         collection["retention"]["raw_evidence_manifest_sha256"] = canonical_sha256(collection["source_records"])
         collection["collection_id"] = _collection_id(collection)
 
+    @staticmethod
+    def rehash_source(source: dict[str, object]) -> None:
+        source["raw_record_sha256"] = canonical_sha256(source["raw_record"])
+        source["source_record_id"] = (
+            "xstage2src_"
+            + canonical_sha256(
+                {
+                    "task_id": source["task_id"],
+                    "record_kind": source["record_kind"],
+                    "provider_provenance": source["provider_provenance"],
+                    "raw_record_sha256": source["raw_record_sha256"],
+                }
+            )[:24]
+        )
+
+    @staticmethod
+    def rehash_receipt(receipt: dict[str, object]) -> None:
+        receipt["receipt_id"] = (
+            "xstage2call_"
+            + canonical_sha256(
+                {
+                    "task_id": receipt["task_id"],
+                    "tool_name": receipt["tool_name"],
+                    "provider_transport": receipt["provider_transport"],
+                    "result_contract": receipt["result_contract"],
+                    "source_record_ids": receipt["source_record_ids"],
+                }
+            )[:24]
+        )
+
     def completed_profile_only_collection(self) -> dict[str, object]:
         collection = copy.deepcopy(self.fixture["collection"])
         row = next(item for item in collection["task_rows"] if item["status"] == "completed")
@@ -93,30 +126,10 @@ class Stage2FieldCapabilityTest(unittest.TestCase):
         )
         receipt = next(item for item in collection["call_receipts"] if item["task_id"] == task_id)
         profile_source["raw_record"]["post_fields_explicitly_absent"] = True
-        profile_source["raw_record_sha256"] = canonical_sha256(profile_source["raw_record"])
-        profile_source["source_record_id"] = (
-            "xstage2src_"
-            + canonical_sha256(
-                {
-                    "task_id": task_id,
-                    "record_kind": profile_source["record_kind"],
-                    "provider_path": profile_source["provider_path"],
-                    "raw_record_sha256": profile_source["raw_record_sha256"],
-                }
-            )[:24]
-        )
+        self.rehash_source(profile_source)
         collection["source_records"].remove(post_source)
         receipt["source_record_ids"] = [profile_source["source_record_id"]]
-        receipt["receipt_id"] = (
-            "xstage2call_"
-            + canonical_sha256(
-                {
-                    "task_id": task_id,
-                    "tool_name": receipt["tool_name"],
-                    "source_record_ids": receipt["source_record_ids"],
-                }
-            )[:24]
-        )
+        self.rehash_receipt(receipt)
         profile_source["call_receipt_id"] = receipt["receipt_id"]
         profile["source_record_id"] = profile_source["source_record_id"]
         profile["profile_snapshot_id"] = (
@@ -224,7 +237,7 @@ class Stage2FieldCapabilityTest(unittest.TestCase):
         )
         self.assertEqual(
             self.fixture["evaluation"]["expectation_metrics"],
-            {"denominator": 4, "matched": 4, "mismatched": 0, "mismatch_task_ids": []},
+            {"denominator": 5, "matched": 5, "mismatched": 0, "mismatch_task_ids": []},
         )
         self.assertEqual(
             validate_evaluation(
@@ -242,7 +255,7 @@ class Stage2FieldCapabilityTest(unittest.TestCase):
         handles = {task["lookup_handle"] for task in self.fixture["request"]["tasks"]} | {
             profile["current_handle"] for profile in self.fixture["collection"]["profiles"]
         }
-        self.assertEqual(handles, {"fixture_a", "fixture_b", "fixture_c", "fixture_d"})
+        self.assertEqual(handles, {"fixture_a", "fixture_b", "fixture_c", "fixture_d", "fixture_e"})
         for item in walk(self.fixture):
             if isinstance(item, str) and item.startswith("https://"):
                 hostname = urlparse(item).hostname
@@ -256,14 +269,23 @@ class Stage2FieldCapabilityTest(unittest.TestCase):
         collection = self.fixture["collection"]
         self.assertEqual(
             collection["terminal_summary"],
-            {"denominator": 4, "terminal": 4, "completed": 1, "quarantined": 2, "failed": 1, "status": "terminal"},
+            {
+                "denominator": 5,
+                "terminal": 5,
+                "completed": 1,
+                "completed_post_only": 1,
+                "quarantined": 2,
+                "failed": 1,
+                "status": "terminal",
+            },
         )
         self.assertEqual(
             self.fixture["evaluation"]["terminal_metrics"],
             {
-                "denominator": 4,
-                "terminal": 4,
+                "denominator": 5,
+                "terminal": 5,
                 "completed": 1,
+                "completed_post_only": 1,
                 "quarantined": 2,
                 "failed": 1,
                 "replay_bound_profiles": 1,
@@ -310,10 +332,11 @@ class Stage2FieldCapabilityTest(unittest.TestCase):
         field_states = copy.deepcopy(row["field_states"])
         source["raw_record"]["bio_text"] = None
         source["raw_record"]["bio_content_version"] = None
-        source["raw_record_sha256"] = canonical_sha256(source["raw_record"])
+        self.rehash_source(source)
         profile["bio_text"] = None
         profile["bio_sha256"] = None
         profile["bio_content_version"] = None
+        profile["source_record_id"] = source["source_record_id"]
         for field_state in field_states:
             if field_state["field_id"] in PROFILE_OPTIONAL_BIO_FIELDS:
                 field_state["state"] = "absent"
@@ -501,18 +524,8 @@ class Stage2FieldCapabilityTest(unittest.TestCase):
             source = copy.deepcopy(
                 next(item for item in collection["source_records"] if item["record_kind"] == "profile")
             )
-            source["provider_path"] = "rawOutput.users[99]"
-            source["source_record_id"] = (
-                "xstage2src_"
-                + canonical_sha256(
-                    {
-                        "task_id": source["task_id"],
-                        "record_kind": source["record_kind"],
-                        "provider_path": source["provider_path"],
-                        "raw_record_sha256": source["raw_record_sha256"],
-                    }
-                )[:24]
-            )
+            source["provider_provenance"]["result_ordinal"] = 99
+            self.rehash_source(source)
             collection["source_records"].append(source)
             row = next(item for item in collection["task_rows"] if item["task_id"] == source["task_id"])
             row["source_record_ids"].append(source["source_record_id"])
@@ -576,34 +589,15 @@ class Stage2FieldCapabilityTest(unittest.TestCase):
             if item["task_id"] == task_id and item["record_kind"] == "profile"
         )
         duplicate_profile_source = copy.deepcopy(original_profile_source)
-        duplicate_profile_source["provider_path"] = "rawOutput.users[1]"
-        duplicate_profile_source["source_record_id"] = (
-            "xstage2src_"
-            + canonical_sha256(
-                {
-                    "task_id": task_id,
-                    "record_kind": duplicate_profile_source["record_kind"],
-                    "provider_path": duplicate_profile_source["provider_path"],
-                    "raw_record_sha256": duplicate_profile_source["raw_record_sha256"],
-                }
-            )[:24]
-        )
+        duplicate_profile_source["provider_provenance"]["result_ordinal"] = 1
+        self.rehash_source(duplicate_profile_source)
         collection["source_records"].append(duplicate_profile_source)
 
         task_sources = [item for item in collection["source_records"] if item["task_id"] == task_id]
         source_ids = [item["source_record_id"] for item in task_sources]
         receipt = next(item for item in collection["call_receipts"] if item["task_id"] == task_id)
         receipt["source_record_ids"] = source_ids
-        receipt["receipt_id"] = (
-            "xstage2call_"
-            + canonical_sha256(
-                {
-                    "task_id": task_id,
-                    "tool_name": receipt["tool_name"],
-                    "source_record_ids": source_ids,
-                }
-            )[:24]
-        )
+        self.rehash_receipt(receipt)
         for source in task_sources:
             source["call_receipt_id"] = receipt["receipt_id"]
 
@@ -684,30 +678,10 @@ class Stage2FieldCapabilityTest(unittest.TestCase):
         )
         task_id = renamed_source["task_id"]
         renamed_source["raw_record"]["platform_user_ids"] = [shared_id]
-        renamed_source["raw_record_sha256"] = canonical_sha256(renamed_source["raw_record"])
-        renamed_source["source_record_id"] = (
-            "xstage2src_"
-            + canonical_sha256(
-                {
-                    "task_id": task_id,
-                    "record_kind": renamed_source["record_kind"],
-                    "provider_path": renamed_source["provider_path"],
-                    "raw_record_sha256": renamed_source["raw_record_sha256"],
-                }
-            )[:24]
-        )
+        self.rehash_source(renamed_source)
         receipt = next(item for item in collection["call_receipts"] if item["task_id"] == task_id)
         receipt["source_record_ids"] = [renamed_source["source_record_id"]]
-        receipt["receipt_id"] = (
-            "xstage2call_"
-            + canonical_sha256(
-                {
-                    "task_id": task_id,
-                    "tool_name": receipt["tool_name"],
-                    "source_record_ids": receipt["source_record_ids"],
-                }
-            )[:24]
-        )
+        self.rehash_receipt(receipt)
         renamed_source["call_receipt_id"] = receipt["receipt_id"]
 
         quarantine = next(item for item in collection["quarantine"] if item["task_id"] == task_id)
@@ -1055,31 +1029,12 @@ class Stage2FieldCapabilityTest(unittest.TestCase):
         collection = copy.deepcopy(self.fixture["collection"])
         original_source = next(item for item in collection["source_records"] if item["record_kind"] == "post")
         duplicate_source = copy.deepcopy(original_source)
-        duplicate_source["provider_path"] = "rawOutput.posts[1]"
-        duplicate_source["source_record_id"] = (
-            "xstage2src_"
-            + canonical_sha256(
-                {
-                    "task_id": duplicate_source["task_id"],
-                    "record_kind": duplicate_source["record_kind"],
-                    "provider_path": duplicate_source["provider_path"],
-                    "raw_record_sha256": duplicate_source["raw_record_sha256"],
-                }
-            )[:24]
-        )
+        duplicate_source["provider_provenance"]["result_ordinal"] = 1
+        self.rehash_source(duplicate_source)
         collection["source_records"].append(duplicate_source)
         receipt = next(item for item in collection["call_receipts"] if item["task_id"] == duplicate_source["task_id"])
         receipt["source_record_ids"].append(duplicate_source["source_record_id"])
-        receipt["receipt_id"] = (
-            "xstage2call_"
-            + canonical_sha256(
-                {
-                    "task_id": receipt["task_id"],
-                    "tool_name": receipt["tool_name"],
-                    "source_record_ids": receipt["source_record_ids"],
-                }
-            )[:24]
-        )
+        self.rehash_receipt(receipt)
         for source in collection["source_records"]:
             if source["task_id"] == receipt["task_id"]:
                 source["call_receipt_id"] = receipt["receipt_id"]
@@ -1214,6 +1169,178 @@ class Stage2FieldCapabilityTest(unittest.TestCase):
         mutated = copy.deepcopy(original)
         mutated["retention"]["delete_after"] = "2026-07-15T02:00:00.000Z"
         self.assertNotEqual(_collection_id(mutated), original["collection_id"])
+
+    def test_raw_shapes_reject_metadata_secrets_and_quarantined_live_urls(self) -> None:
+        def add_metadata_secret(collection: dict[str, object]) -> None:
+            source = next(item for item in collection["source_records"] if item["record_kind"] == "tool_metadata_only")
+            source["raw_record"]["api_key"] = "sk-synthetic-secret-like-value"
+            self.rehash_source(source)
+
+        self.assert_collection_rejected(add_metadata_secret, contains="unexpected keys")
+
+        def add_quarantined_live_url(collection: dict[str, object]) -> None:
+            source = next(
+                item
+                for item in collection["source_records"]
+                if item["record_kind"] == "profile" and len(item["raw_record"]["platform_user_ids"]) == 2
+            )
+            source["raw_record"]["profile_url"] = "https://x.com/live_account"
+            self.rehash_source(source)
+
+        self.assert_collection_rejected(add_quarantined_live_url, contains="canonical reserved fixture URL")
+
+    def test_provider_provenance_is_closed_and_receipt_bound(self) -> None:
+        def relabel_generic_web(collection: dict[str, object]) -> None:
+            source = next(item for item in collection["source_records"] if item["record_kind"] == "profile")
+            source["provider_provenance"]["transport"] = "generic_web"
+            self.rehash_source(source)
+
+        self.assert_collection_rejected(relabel_generic_web, contains="closed transport/result descriptor")
+
+        def mismatch_result_type(collection: dict[str, object]) -> None:
+            source = next(item for item in collection["source_records"] if item["record_kind"] == "post")
+            source["provider_provenance"]["result_type"] = "x_user_profile"
+            self.rehash_source(source)
+
+        self.assert_collection_rejected(mismatch_result_type, contains="closed transport/result descriptor")
+
+        self.assert_collection_rejected(
+            lambda collection: collection["call_receipts"][0].update({"provider_transport": "generic_web"}),
+            contains="closed provider transport/result contract",
+        )
+
+    def test_post_only_source_has_typed_terminal_and_retains_exact_post(self) -> None:
+        collection = self.fixture["collection"]
+        row = next(item for item in collection["task_rows"] if item["status"] == "completed_post_only")
+        self.assertEqual(row["error_codes"], ["profile_source_unavailable_post_retained"])
+        self.assertEqual(row["profile_snapshot_ids"], [])
+        self.assertEqual(len(row["post_ids"]), 1)
+        states = {item["field_id"]: item["state"] for item in row["field_states"]}
+        self.assertTrue(all(states[field] == "unverified" for field in PROFILE_REQUIRED_FIELDS))
+        self.assertEqual(states["canonical_post_id"], "present_exact")
+        incident = next(item for item in collection["incidents"] if item["task_id"] == row["task_id"])
+        self.assertEqual(incident["disposition"], "retained_post_only")
+
+        def swap_post_only_author(mutated: dict[str, object]) -> None:
+            source = next(
+                item
+                for item in mutated["source_records"]
+                if item["task_id"] == row["task_id"] and item["record_kind"] == "post"
+            )
+            source["raw_record"].update(
+                {
+                    "post_author_handle": "fixture_z",
+                    "canonical_post_url": "https://posts.invalid/x/fixture_z/status/222222",
+                }
+            )
+
+        self.assert_collection_rejected(
+            swap_post_only_author,
+            contains="source-derived quarantine reason mismatch",
+        )
+
+    def test_same_time_handle_to_multiple_ids_marks_every_owner_conflicted(self) -> None:
+        collection = copy.deepcopy(self.fixture["collection"])
+        completed = next(item for item in collection["task_rows"] if item["status"] == "completed")
+        renamed = next(
+            item
+            for item in collection["source_records"]
+            if item["record_kind"] == "profile" and item["raw_record"]["current_handle"] == "renamed_c"
+        )
+        renamed["raw_record"]["current_handle"] = "fixture_a"
+        renamed["raw_record"]["profile_url"] = "https://profiles.invalid/x/fixture_a"
+        errors = validate_collection(
+            collection,
+            request=self.fixture["request"],
+            registry=self.registry,
+            selection_manifest=self.fixture["selection_manifest"],
+        )
+        conflict_errors = [error for error in errors if "source-derived quarantine reason mismatch" in error]
+        self.assertTrue(any(completed["task_id"] in error for error in conflict_errors), conflict_errors)
+        self.assertTrue(any(renamed["task_id"] in error for error in conflict_errors), conflict_errors)
+
+    def test_retention_bounds_every_evidence_timestamp_and_guardrail_is_derived(self) -> None:
+        collection = copy.deepcopy(self.fixture["collection"])
+        collection["retention"].update(
+            {"created_at": "2020-01-01T00:00:00.000Z", "delete_after": "2020-01-02T00:00:00.000Z"}
+        )
+        self.rehash_collection(collection)
+        violations = _retention_contract_violations(collection)
+        self.assertGreater(len(violations), 0)
+        errors = validate_collection(
+            collection,
+            request=self.fixture["request"],
+            registry=self.registry,
+            selection_manifest=self.fixture["selection_manifest"],
+        )
+        self.assertTrue(any("outside_retention_interval" in error for error in errors), errors)
+        self.assertEqual(self.fixture["evaluation"]["guardrails"]["retention_contract_violation"], 0)
+        self.assertIn("_retention_contract_violations", inspect.getsource(evaluate_field_capability))
+
+    def test_task_identity_binds_target_window_and_contract_digests(self) -> None:
+        request = self.fixture["request"]
+        task = request["tasks"][0]
+        scope = _task_scope(
+            target=request["target"],
+            registry_binding=request["field_registry"],
+            source_manifest=request["source_manifest"],
+        )
+        changed_target = copy.deepcopy(request["target"])
+        changed_target["lab_id"] = "another_lab"
+        changed_scope = _task_scope(
+            target=changed_target,
+            registry_binding=request["field_registry"],
+            source_manifest=request["source_manifest"],
+        )
+        self.assertEqual(_task_id(task, experiment_scope=scope), task["task_id"])
+        self.assertNotEqual(_task_id(task, experiment_scope=scope), _task_id(task, experiment_scope=changed_scope))
+        changed_task = copy.deepcopy(task)
+        changed_task["fixture_scenario_id"] = "post_only_profile_source_unavailable"
+        self.assertNotEqual(
+            _task_id(task, experiment_scope=scope),
+            _task_id(changed_task, experiment_scope=scope),
+        )
+
+    def test_nested_booleans_and_integers_are_not_python_equal_aliases(self) -> None:
+        request = copy.deepcopy(self.fixture["request"])
+        request["technical_limits"]["max_tasks"] = True
+        request_errors = validate_experiment_request(
+            request,
+            registry=self.registry,
+            selection_manifest=self.fixture["selection_manifest"],
+        )
+        self.assertTrue(any("exact integer required" in error for error in request_errors), request_errors)
+
+        self.assert_collection_rejected(
+            lambda collection: collection["authority"].update({"canonical_write_authorized": 0}),
+            contains="exact boolean required",
+        )
+        self.assert_collection_rejected(
+            lambda collection: collection["terminal_summary"].update({"denominator": True}),
+            contains="arithmetic mismatch",
+        )
+
+    def test_profile_helper_rejects_stale_source_identity(self) -> None:
+        collection = self.fixture["collection"]
+        profile = copy.deepcopy(collection["profiles"][0])
+        source = copy.deepcopy(
+            next(
+                item for item in collection["source_records"] if item["source_record_id"] == profile["source_record_id"]
+            )
+        )
+        task = next(item for item in self.fixture["request"]["tasks"] if item["task_id"] == profile["task_id"])
+        row = next(item for item in collection["task_rows"] if item["task_id"] == profile["task_id"])
+        source["raw_record"]["bio_text"] = "Changed synthetic Bio"
+        source["raw_record_sha256"] = canonical_sha256(source["raw_record"])
+        profile["bio_text"] = source["raw_record"]["bio_text"]
+        profile["bio_sha256"] = text_sha256(profile["bio_text"])
+        errors = validate_profile_source_binding(
+            profile,
+            task=task,
+            source=source,
+            field_states=row["field_states"],
+        )
+        self.assertTrue(any("source_record_id: identity mismatch" in error for error in errors), errors)
 
     def test_runtime_module_has_no_provider_or_network_import(self) -> None:
         source = (ROOT / "src/x_first/stage2_field_capability.py").read_text(encoding="utf-8")

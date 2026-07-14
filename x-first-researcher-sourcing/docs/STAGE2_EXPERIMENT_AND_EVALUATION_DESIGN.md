@@ -1,7 +1,8 @@
 # Stage 2 experiment and evaluation design
 
-> Status: design plus exploration evidence and one bounded Stage 2A offline field-capability implementation, not a
-> promotion approval. Seven later Grok CLI sessions proved native-X
+> Status: design plus exploration evidence and one bounded Stage 2A offline field-capability remediation candidate
+> after the pinned `2700d10` `NO-GO`, not a promotion approval or replacement review `GO`. Seven later Grok CLI
+> sessions proved native-X
 > keyword, semantic, user, and thread search plus adaptive recall expansion, but did not prove replayable Post bodies
 > or complete profile fields. No
 > Stage 2 provider adapter, reviewed live profile probe, Batch runner, durable task ledger, search-quality evaluator,
@@ -67,7 +68,7 @@ JSON Schema; deep replay, digest, terminal, retention, and authority rules are e
 provider adapter, live runner, search-quality experiment, or Batch scheduler. See
 `STAGE2_FIELD_CAPABILITY_CONTRACT.md`.
 
-A separately supplied `x.stage2.external_selection.fixture.v1` manifest owns the unique four-row fixture selection.
+A separately supplied `x.stage2.external_selection.fixture.v1` manifest owns the unique five-row fixture selection.
 It is not a fifth result envelope and does not self-prove search output: the request binds its id, version, digest,
 selected count, and selected-row digest and must cover the same lead/candidate/account denominator exactly once. The
 comparison covers each row's opaque lead ref, full candidate SHA-256, lookup handle, reported numeric-id value, and
@@ -98,23 +99,18 @@ Integration remains a versioned artifact adapter. This sibling must not import `
 
 ## Deterministic task identity
 
-A normalized task is the retry, dedupe, progress, cost, and evaluation grain. Its idempotency key must bind all fields
-that can change the external request or its interpretation:
-
-```text
-lab_id
-query_family_id + query_family_version
-query_text_digest + prompt_version + prompt_digest
-model_id + provider_transport + tool_policy_digest
-frozen_from + frozen_to
-allowed/excluded handle sets
-source_cap + turn_cap + observation_cap
-field_capability_version + normalization_contract_version
-```
+A normalized task is the retry, dedupe, progress, cost, and evaluation grain. Stage 2A now hashes each task-local
+lookup contract together with `x.stage2.task_scope.v1`: target lab and frozen window, field-registry version/digest,
+normalization-contract version, and external selection-manifest version/id/digest. Tool policy, requested fields,
+lookup identity, candidate digest, reported-id diagnostic, fixture scenario, receipt requirement, and zero authority
+remain task-local
+identity inputs. Every receipt/source/profile/Post identity descends from that task id. Changing the lab, window, or
+any interpretation digest (including technical-limit, retention-policy, and request-authority digests) therefore
+cannot reuse old task or child ids.
 
 Retry attempt, Batch id, worker id, queue position, latency, and execution timestamp are facts, not identity inputs.
-One logical task keeps one idempotency key across retries. A retry cannot be counted as new yield, and an exact duplicate
-external call is a hard violation.
+One logical task keeps one idempotency key across retries. A future live query task must extend the scope with its
+query/prompt/model/budget versions rather than reusing this offline task version.
 
 ## Field-capability contract
 
@@ -137,12 +133,19 @@ Task-row field states are derived from retained raw records and their normalized
 caller summaries. A replayable full profile/Post payload must be consumed by normalization or its derived
 quarantine/incident; a metadata-only trace is non-replayable and leaves fields `unverified`. A present Post can never
 be reported `absent`. With no Post payload, Post fields are `absent` only when a replayable profile response explicitly
-records their absence; otherwise they remain `unverified`.
+records their absence; otherwise they remain `unverified`. A valid Post without a profile uses the typed
+`completed_post_only/profile_source_unavailable_post_retained` terminal: Post fields remain source-bound while all
+profile fields stay `unverified`, and no profile/person identity is synthesized.
 
 Receipt, source, task, profile and Post identities close bidirectionally. Source observation timestamps stay inside
 their receipt window, a profile Bio timestamp equals its source observation, and a Post cannot be authored after it
 was observed. Numeric canonical Post ids are unique collection-wide. Quarantine/incident reason codes are derived
 from actual retained conflicts, so a caller cannot swap one valid code for another and merely rehash ids.
+
+Raw profile, Post, and metadata records are exact closed shapes before field-state derivation, even when their task
+later quarantines. All URLs are canonical reserved `.invalid` URLs; extra credential-like/private text or live URLs
+reject. Provider provenance is not a free path string: source transport/result-contract/result-type/ordinal are
+closed, receipt-bound, request-tool-bound, and unique within each receipt result slot.
 
 ### Raw evidence and retention
 
@@ -155,13 +158,17 @@ raw-evidence lane with:
 - a minimized durable artifact that survives raw deletion without claiming fields it no longer proves.
 
 Unknown retention state, an unverified deletion, or a full body in the normal collection artifact is `no_go`.
+For the offline simulation, `created_at` and `delete_after` must bound every retained receipt start/completion, source
+observation, profile Bio observation, and Post authored timestamp. The evaluator derives the retention-violation
+guardrail from that same function; it is not a hardcoded zero.
 
 ## Stage 2A offline fixture slice
 
-The first bounded field-capability slice is author-complete offline. Its deterministic four-task fixture covers an
+The first bounded field-capability slice is author-complete offline. Its deterministic five-task fixture covers an
 exact profile/same-account bounded Post, conflicting numeric ids, handle rename, metadata-only tool trace, unbound
-Bio, cross-account Post, missing terminal rows, retention drift, and zero-authority violations. The exact state result
-is `4 terminal = 1 completed + 2 quarantined + 1 failed`. A metadata-only trace cannot promote any field above
+Bio, a source-bound Post with no profile, cross-account Post, missing terminal rows, retention drift, and zero-authority
+violations. The exact state result is
+`5 terminal = 1 completed + 1 completed_post_only + 2 quarantined + 1 failed`. A metadata-only trace cannot promote any field above
 `unverified`.
 
 The broader Stage 2 program still requires the following separate fixtures before search-quality or Batch promotion:
@@ -185,15 +192,21 @@ interval, population segment result, or human-adjudication result. Its decision 
 `offline_fixture_expectation_conformant` only for zero mismatches and
 `offline_fixture_expectation_mismatch` otherwise.
 
-Validation performs a bounded byte/depth/node scan before JSON Schema traversal. `collection_id` hashes every
+Validation performs a bounded byte/depth/node scan before JSON Schema traversal. Deep JSON Schemas plus explicit
+runtime checks keep booleans and integers type-strict rather than accepting Python equality aliases. `collection_id` hashes every
 material collection field except itself, including rows, receipts, raw and normalized evidence, quarantine,
 incidents, retention, empty authority-write arrays, and authority; rehashing only a convenient subset cannot hide a
 mutation.
 
-Source-conflict precedence is total: zero profile payloads fail as unavailable, multiple replayable profile payloads
+Source-conflict precedence is total: zero profile payloads with no Post fail as unavailable; Post-only payloads retain
+their source-bound Post under the typed Post-only outcome; multiple replayable profile payloads
 quarantine as `multiple_profile_sources`, malformed/multiple numeric ids take precedence over collection-wide
 id/handle conflict, then lookup-handle rename and cross-account Post evidence follow. This prevents present payloads
 from being erased as unavailable and gives combined multi-id/cross-handle evidence one legal terminal state.
+
+The collection-wide account reducer is bidirectional: one id under multiple handles and one handle under multiple ids
+both quarantine every affected task. Same-time reverse ownership is always a conflict. Different-time reassignment
+also remains quarantined until a future schema supplies explicit handle-history intervals.
 
 ## Stage 2B bounded canary — future design only
 

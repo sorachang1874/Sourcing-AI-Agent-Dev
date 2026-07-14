@@ -1,6 +1,8 @@
 # Stage 2A field-capability contract
 
-> Status: offline fixture implementation, not live X capability, promotion, formal review, or product-write `GO`.
+> Status: offline fixture remediation candidate after the pinned `2700d10` `NO-GO`; the rejected v1 candidate was
+> never promoted. This is not live X capability, promotion, a replacement independent-review `GO`, or product-write
+> authority.
 
 ## Outcome and boundary
 
@@ -36,6 +38,13 @@ to a known id. The capability expectation copies those exact rows, adds row iden
 and repeats both request-owned digests. This avoids an impossible circular full-artifact hash while making the binding
 bidirectional: request -> expectation semantics, expectation -> exact request.
 
+Each task id hashes the task-local lookup contract together with an explicit experiment scope: target lab and frozen
+window, field-registry digest, normalization version, and external selection-manifest version/id/digest. Changing a
+lab, window, registry, normalization contract, selection snapshot, task scenario, technical-limit digest, retention
+policy digest, or request-authority digest therefore changes every task id and, because
+all receipt/source/profile/Post ids descend from task id, every child identity. Cross-experiment child collisions are
+not legal retries.
+
 ## Why model-mediated text is not a fixture hydration result
 
 `model_mediated_unverified` means a model reported a handle, numeric id, Bio, Post, or other field, but the retained
@@ -65,19 +74,24 @@ Every requested field receives exactly one terminal state in registry order:
 | `absent` | A replayable payload explicitly lacks the requested field. |
 | `unverified` | The retained transport cannot prove either presence or absence. |
 
-Every task ends in exactly one of `completed`, `quarantined`, or `failed`. The synthetic fixture exercises:
+Every task ends in exactly one of `completed`, `completed_post_only`, `quarantined`, or `failed`. The synthetic
+fixture exercises:
 
 - one exact profile plus same-account bounded Post: `completed`;
 - conflicting numeric platform user ids: `quarantined`;
 - a handle rename without an already-bound stable account: `quarantined`;
-- metadata-only tool trace with no result payload: `failed`.
+- metadata-only tool trace with no result payload: `failed`;
+- one replayable Post with no profile result: `completed_post_only/profile_source_unavailable_post_retained`.
 
-The exact fixture total is `4 terminal = 1 completed + 2 quarantined + 1 failed`.
+The exact fixture total is
+`5 terminal = 1 completed + 1 completed_post_only + 2 quarantined + 1 failed`.
 
 The terminal state machine is closed. A completed row has no error, quarantine, or incident ids. A quarantined row
 has one typed quarantine and one matching incident. A failed row has no normalized profile/Post or quarantine and
-has exactly one `source_payload_unavailable` incident. Zero call receipts or zero source records can never establish
-`absent`; that shape is terminal `failed` and all 14 fields remain `unverified`.
+has exactly one `source_payload_unavailable` incident. A `completed_post_only` row has one or more normalized,
+source-bound Posts, no profile, no quarantine, and a typed `retained_post_only` incident; all profile fields remain
+`unverified` while proven Post fields remain exact/bounded. Zero call receipts or zero source records can never
+establish `absent`; that shape is terminal `failed` and all 14 fields remain `unverified`.
 
 Task-row states are never caller-owned summaries. The validator recomputes every profile and Post state from the
 consumed full raw records, validates any normalized profile/Post against those records, and requires exact registry
@@ -108,24 +122,36 @@ it matches; when it differs, it cannot replace the source id. Multiple ids, hand
 closed.
 
 A Post must replay one raw Post record with numeric Post and author ids, a canonical reserved fixture URL, handle,
-authored timestamp, bounded excerpt, and one closed thread relation. Its author numeric id and handle must match the
-source-bound profile in the same task. Cross-account Post evidence is rejected. `bounded_excerpt` is deliberately
-`present_bounded`; the fixture does not claim a full Post body.
+authored timestamp, bounded excerpt, and one closed thread relation. When a profile exists, its author numeric id and
+handle must match that source-bound profile. When no profile result exists, the Post can remain source-bound only in
+the explicit `completed_post_only` outcome; it does not synthesize a profile or confirm a person identity.
+Cross-account Post evidence is rejected. `bounded_excerpt` is deliberately `present_bounded`; the fixture does not
+claim a full Post body.
 
 Source observation time must fall inside its call-receipt window. Profile `bio_observed_at` equals the enclosing
 source observation exactly, and a Post authored time cannot be later than its source observation. Post source, Post,
 task and receipt task ids close in both directions. Numeric `canonical_post_id` is unique collection-wide across raw
 Post sources; canonical URL and author bindings are checked from the same source record.
 
-Source-record identity binds task, record kind, provider path, and raw-record SHA-256. Call-receipt identity then
-binds the ordered source-record ids. Every full replayable source must be consumed by a normalized profile/Post or a
-typed quarantine/incident; selected sources cannot be silently dropped or cherry-picked. Profile/Post, quarantine,
-and incident ids are unique and bidirectionally closed through their task rows. This avoids a circular
-receipt/source id while preserving closure.
+Source-record identity binds task, record kind, a closed provider-provenance object, and raw-record SHA-256. The
+provenance object is exactly transport + result contract + result type + result ordinal. Its transport/result
+contract must equal the call receipt, its result type must equal the raw-record kind, its tool must be allowed by the
+request task, and receipt result slots are unique. Free-text paths and generic-web relabelling are not legal
+provenance. Call-receipt identity binds task, tool, transport, result contract, and ordered source-record ids. Every
+full replayable source must be consumed by a normalized profile/Post or a typed quarantine/incident; selected sources
+cannot be silently dropped or cherry-picked. Profile/Post, quarantine, and incident ids are unique and
+bidirectionally closed through their task rows. This avoids a circular receipt/source id while preserving closure.
 
-The same numeric platform user id observed under multiple case-insensitive handles is a collection-wide identity
-conflict. Every affected task must quarantine with `platform_user_id_handle_conflict`; two such rows cannot both
-complete.
+All three raw kinds are exact closed shapes before field derivation, including rows that later quarantine or fail.
+Profile and Post URLs must be canonical reserved `.invalid` URLs; metadata input contains only one handle. Extra
+credential-like fields/text and live URLs reject before persistence. A quarantined record does not bypass raw-shape,
+privacy, URL, hash, or provenance validation.
+
+The account graph is checked in both directions. The same numeric platform user id under multiple case-insensitive
+handles, or the same handle under multiple numeric ids, is a collection-wide identity conflict. Same-observation-time
+reverse ownership quarantines every affected task with `platform_user_id_handle_conflict`. Different-time handle
+reassignment also remains quarantined until a future version supplies explicit non-overlapping handle-history
+intervals; two conflicting rows cannot both complete.
 
 Quarantine and incident codes are derived from retained source facts under one precedence: multiple replayable
 profile payloads, malformed/multiple profile ids, collection-wide id/handle conflict, lookup-handle rename, then
@@ -148,12 +174,13 @@ task source set must all reproduce that result; swapping a valid closed code and
 | Post author/object | Exact raw Post record and same-account profile | evaluator | Cross-account evidence rejects |
 | Terminal task counts | Collection rows | deterministic evaluator | Missing/nonterminal row rejects |
 | Fixture capability expectation | Request-bound closed scenario manifest built before collection | deterministic conformance evaluator | Collection output cannot create or relabel expectations; not accuracy gold or human adjudication |
-| Retention simulation | Request policy plus collection retention record | fixture validator only | `live_reuse_allowed=false`, `promotion_eligible=false`, expiry never promotes fixture evidence; a future live version needs a real purge owner and receipt |
+| Retention simulation | Request policy plus collection retention record | fixture validator and deterministic evaluator | `created_at <=` every receipt/source/profile/Post evidence timestamp `<= delete_after`; guardrail count is mechanically derived; `live_reuse_allowed=false`, `promotion_eligible=false`; a future live version needs a real purge owner and receipt |
 | Product authority | Closed false/empty fields | all consumers | No fallback; identity merge, discovery/ranking, writes, and outreach remain forbidden |
 
 An iterative byte/depth/node scan runs before JSON Schema traversal, so hostile nested values cannot make schema
-validation the first unbounded walk. The JSON schemas then own the closed outer envelopes and array ceilings. The
-Python validator owns deep semantics and recomputes the evaluation byte-for-byte from its bound
+validation the first unbounded walk. The JSON schemas own deep nested types, closed raw shapes, boolean/integer
+strictness, outer envelopes, and array ceilings. Python repeats security-relevant boolean/integer checks without
+Python's `False == 0` / `True == 1` aliasing and owns cross-object semantics. It recomputes the evaluation byte-for-byte from its bound
 request, collection, pre-collection capability expectation, and registry. The evaluation reports terminal counts,
 per-field states, fixture-expectation matches, and guardrails only; it makes no precision, recall, interval, segment,
 or search-quality claim. Its decision is mechanically `offline_fixture_expectation_conformant` only when mismatch
@@ -178,14 +205,14 @@ PYTHONPATH=src ../sourcing-ai-agent/.venv/bin/python scripts/generate_stage2_fie
 PYTHONPATH=src ../sourcing-ai-agent/.venv/bin/python -m unittest tests.test_stage2_field_capability -v
 ```
 
-The focused suite contains 37 tests: the 12 specified second-round mutation regressions plus two post-audit combined
-state-machine regressions. It verifies deterministic
+The focused suite contains 45 tests. It verifies deterministic
 generation, complete external selection binding, closed request/expectation scenario semantics, both evaluation
 decisions, all four envelope owners,
 bounded-first/schema ceilings, exact registry order/descriptors, `.invalid`-only fixture content, terminal-total arithmetic,
 single-record profile binding, diagnostic-only model ids, metadata-only/zero-source fail-closed behavior, complete
-source consumption, conflicting ids across and within handles, handle rename, unbound Bio, deep same-account Post
-semantics, unique/closed normalized and incident ids, simulation-only retention, zero authority, and absence of
+source consumption, closed raw privacy/provenance, bidirectional account conflicts, handle rename, stale source
+identity, unbound Bio, profile-free source-bound Post semantics, deep same-account Post semantics, evidence-bounded
+retention, strict bool/int handling, unique/closed normalized and incident ids, zero authority, and absence of
 provider/network imports. Malformed nested values return a closed validation error list rather than escaping
 `TypeError` or `AttributeError`.
 
