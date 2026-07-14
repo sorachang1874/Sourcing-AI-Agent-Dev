@@ -1,0 +1,51 @@
+{
+  "schema_version": "x.profile.bio_semantic.request.v2",
+  "request_id": "xbsv2r_111111111111111111111111",
+  "profile_source_mode": "offline_fixture",
+  "model_execution_mode": "offline_fake",
+  "subject": {
+    "provisional_person_id": "pp_x_01J00000000000000000000000",
+    "platform_user_id": "900000000000000001"
+  },
+  "profile_snapshot": {
+    "snapshot_id": "xbsv2s_222222222222222222222222",
+    "platform_user_id": "900000000000000001",
+    "profile_url": "https://profiles.invalid/x/semanticfixture",
+    "current_handle": "semanticfixture",
+    "bio_text": "在新加坡从事模型训练研究。\nHead of growth @synthetic_hub\nPrev @synth_listen\n小红书同名四万粉丝，公众号 SyntheticFounder（长文首发）\n分享中文 AI 工程实践。",
+    "bio_sha256": "7848b585c337dfd7ff611afb6990846335b7cd7a28fe97a88dd277349b462400",
+    "observed_at": "2026-07-14T00:00:00.000Z",
+    "content_version": "semantic-fixture-v2"
+  },
+  "model_policy": {
+    "provider": "openai_compatible_responses",
+    "model_id": "gpt-5.6-luna",
+    "reasoning_effort": "low",
+    "prompt_version": "profile-bio-semantic-prompt-v2.0",
+    "prompt_sha256": "fb401860f83d834e56ad3fec555d2eed30ebb97a79a3b6333fb281a77fdddc98",
+    "output_schema_version": "x.profile.bio_semantic.model_output.v2",
+    "output_schema_sha256": "f0aa50c7d2b7b052c8f422ebec3a18b7eb95f71d2d6de6775845e1ce66231b58",
+    "strict_structured_output": true,
+    "fallback_model": null
+  },
+  "budgets": {
+    "max_external_calls": 1,
+    "max_proposals": 12,
+    "max_model_output_characters": 12000,
+    "max_input_tokens": 4000,
+    "max_output_tokens": 1600,
+    "max_total_tokens": 5600,
+    "timeout_ms": 30000,
+    "max_validation_depth": 64,
+    "max_validation_nodes": 4096
+  },
+  "authority": {
+    "external_facts_allowed": false,
+    "protected_identity_inference_allowed": false,
+    "discovery_or_ranking_allowed": false,
+    "eligibility_decision_allowed": false,
+    "canonical_employment_allowed": false,
+    "canonical_write_allowed": false,
+    "fallback_allowed": false
+  }
+}

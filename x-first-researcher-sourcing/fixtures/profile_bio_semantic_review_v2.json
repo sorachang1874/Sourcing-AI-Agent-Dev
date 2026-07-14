@@ -1,0 +1,155 @@
+{
+  "schema_version": "x.profile.bio_semantic.review.v2",
+  "status": "completed",
+  "request_id": "xbsv2r_111111111111111111111111",
+  "request_sha256": "cc732a15ff629a556a59ebd55e4ec8f70169eb03d8b095ab83234741aba1517e",
+  "profile_snapshot_id": "xbsv2s_222222222222222222222222",
+  "platform_user_id": "900000000000000001",
+  "bio_sha256": "7848b585c337dfd7ff611afb6990846335b7cd7a28fe97a88dd277349b462400",
+  "execution": {
+    "mode": "offline_fake",
+    "transport_id": "offline_fake_responses",
+    "execute_live": false,
+    "provider_external_calls": 0,
+    "fallback_used": false
+  },
+  "model_receipt": {
+    "response_id": "resp_fixture_semantic_v2",
+    "response_status": "completed",
+    "model_id": "gpt-5.6-luna",
+    "prompt_version": "profile-bio-semantic-prompt-v2.0",
+    "prompt_sha256": "fb401860f83d834e56ad3fec555d2eed30ebb97a79a3b6333fb281a77fdddc98",
+    "output_schema_version": "x.profile.bio_semantic.model_output.v2",
+    "output_schema_sha256": "f0aa50c7d2b7b052c8f422ebec3a18b7eb95f71d2d6de6775845e1ce66231b58",
+    "raw_response_sha256": "5fff074aaaba69b92fd14e4a838fc3336ab92757b7afce2cf4702b0827577f2b",
+    "model_output_sha256": "50aa6783dfca0cec4db7a0459d657eee89ed90fbce351680f061cee3238a06c2"
+  },
+  "usage": {
+    "input_tokens": 600,
+    "output_tokens": 300,
+    "total_tokens": 900,
+    "source": "offline_fake",
+    "billable": false
+  },
+  "verdict": "proposals_available",
+  "proposals": [
+    {
+      "proposal_id": "xbsv2p_d110280dab6e4d0fcf368882",
+      "proposal_type": "professional_region_experience",
+      "relation_state": "not_applicable",
+      "span_start": 0,
+      "span_end": 13,
+      "excerpt": "在新加坡从事模型训练研究。",
+      "excerpt_sha256": "0ae28cff1757cc1c7ddbe066359a470c3a05a8f7ed24fcfe4336f28439899891",
+      "reason_codes": [
+        "explicit_professional_region_experience"
+      ],
+      "reason": "Bio explicitly states professional work in 新加坡.",
+      "reason_source": "model_proposed",
+      "confidence": "high",
+      "evidence_basis": "profile_bio_only",
+      "requires_independent_verification": true,
+      "verification_status": "unverified_professional_context_proposal"
+    },
+    {
+      "proposal_id": "xbsv2p_0a65fea42c75f366826533be",
+      "proposal_type": "professional_affiliation",
+      "relation_state": "current_claimed",
+      "span_start": 14,
+      "span_end": 43,
+      "excerpt": "Head of growth @synthetic_hub",
+      "excerpt_sha256": "2a1b6c99491d557b39c5a03e2b0afb0cd0ef0a11044b0f9085df1a982d5809c0",
+      "reason_codes": [
+        "explicit_current_organization_claim"
+      ],
+      "reason": "Bio explicitly states a current role at @synthetic_hub.",
+      "reason_source": "model_proposed",
+      "confidence": "high",
+      "evidence_basis": "profile_bio_only",
+      "requires_independent_verification": true,
+      "verification_status": "unverified_professional_context_proposal"
+    },
+    {
+      "proposal_id": "xbsv2p_f5287052f68e0a96a8cce621",
+      "proposal_type": "professional_affiliation",
+      "relation_state": "previous_claimed",
+      "span_start": 44,
+      "span_end": 62,
+      "excerpt": "Prev @synth_listen",
+      "excerpt_sha256": "28dfcdc260fe80f02d3fca2bd5dfa47398d4484137912cdec66dd51c52030585",
+      "reason_codes": [
+        "explicit_previous_organization_claim"
+      ],
+      "reason": "Bio explicitly marks @synth_listen as a previous organization.",
+      "reason_source": "model_proposed",
+      "confidence": "high",
+      "evidence_basis": "profile_bio_only",
+      "requires_independent_verification": true,
+      "verification_status": "unverified_professional_context_proposal"
+    },
+    {
+      "proposal_id": "xbsv2p_2cc9af862951ead5ab892e1e",
+      "proposal_type": "professional_china_digital_ecosystem",
+      "relation_state": "not_applicable",
+      "span_start": 63,
+      "span_end": 72,
+      "excerpt": "小红书同名四万粉丝",
+      "excerpt_sha256": "d4bb0d7cbbcd75338dd77803b2565d9f7f2a7496909e6c6134a8ce28b4b63c54",
+      "reason_codes": [
+        "explicit_china_digital_ecosystem_activity"
+      ],
+      "reason": "Bio explicitly names 小红书 professional activity.",
+      "reason_source": "model_proposed",
+      "confidence": "high",
+      "evidence_basis": "profile_bio_only",
+      "requires_independent_verification": true,
+      "verification_status": "unverified_professional_context_proposal"
+    },
+    {
+      "proposal_id": "xbsv2p_a30817e146b378797195d9fe",
+      "proposal_type": "professional_china_digital_ecosystem",
+      "relation_state": "not_applicable",
+      "span_start": 73,
+      "span_end": 99,
+      "excerpt": "公众号 SyntheticFounder（长文首发）",
+      "excerpt_sha256": "b8523bafb60b9c3a15cde246bea959063a6589165d1c2380d0fc54a9bbc5439c",
+      "reason_codes": [
+        "explicit_china_digital_ecosystem_activity"
+      ],
+      "reason": "Bio explicitly names SyntheticFounder as a professional account.",
+      "reason_source": "model_proposed",
+      "confidence": "high",
+      "evidence_basis": "profile_bio_only",
+      "requires_independent_verification": true,
+      "verification_status": "unverified_professional_context_proposal"
+    },
+    {
+      "proposal_id": "xbsv2p_2ad42bb2819ea524995efd25",
+      "proposal_type": "observed_chinese_professional_content",
+      "relation_state": "not_applicable",
+      "span_start": 100,
+      "span_end": 113,
+      "excerpt": "分享中文 AI 工程实践。",
+      "excerpt_sha256": "e3a89d6df1e88f45ef7d87fa166d2ce206491a7defc4f6c18dce614324c6983b",
+      "reason_codes": [
+        "observed_chinese_professional_content"
+      ],
+      "reason": "Bio contains observed Chinese language and AI engineering content.",
+      "reason_source": "model_proposed",
+      "confidence": "high",
+      "evidence_basis": "profile_bio_only",
+      "requires_independent_verification": true,
+      "verification_status": "unverified_professional_context_proposal"
+    }
+  ],
+  "error_codes": [],
+  "authority": {
+    "external_facts_accepted": false,
+    "protected_identity_inferred": false,
+    "discovery_or_ranking_authorized": false,
+    "eligibility_decided": false,
+    "canonical_employment_confirmed": false,
+    "canonical_write_authorized": false,
+    "outreach_authorized": false
+  }
+}
