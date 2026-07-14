@@ -202,7 +202,7 @@ def test_all_29_production_claim_callers_are_mechanically_frozen() -> None:
     assert sum(callers.values()) == 29
 
 
-def test_descriptor_to_api_path_is_currently_an_unredacted_dict_pass_through() -> None:
+def test_descriptor_to_api_path_uses_the_d3c1_closed_public_projection() -> None:
     synthetic_identity = {
         "claim_generation": 7,
         "claim_token": "synthetic-secret-token",
@@ -214,6 +214,11 @@ def test_descriptor_to_api_path_is_currently_an_unredacted_dict_pass_through() -
         "command_type": "characterization.only",
         "owner": "test-owner",
         "status": "claimed",
+        "payload": {
+            "business_value": "preserved",
+            "nested": {"claimTokenDigest": "synthetic-private-verifier"},
+        },
+        "future_unknown_descriptor": "must-not-project",
         **synthetic_identity,
     }
     probe = SimpleNamespace(
@@ -224,29 +229,35 @@ def test_descriptor_to_api_path_is_currently_an_unredacted_dict_pass_through() -
         _workflow_command_activity_spine_policy_record=lambda **_kwargs: {},
     )
     api_record = CommandKernel._workflow_command_api_record(probe, command)  # type: ignore[arg-type]
-    assert {key: api_record[key] for key in synthetic_identity} == synthetic_identity
+    assert api_record["claim_generation"] == 7
+    assert api_record["control_epoch"] == 11
+    assert api_record["payload"] == {"business_value": "preserved", "nested": {}}
+    assert "claim_token" not in api_record
+    assert "lease_token" not in api_record
+    assert "future_unknown_descriptor" not in api_record
 
     schema = json.loads(FRONTEND_SCHEMA_PATH.read_text(encoding="utf-8"))
     workflow_command_schema = schema["$defs"]["WorkflowCommandRecord"]
-    assert workflow_command_schema["additionalProperties"] is True
-    assert ABSENT_CLAIM_IDENTITY_COLUMNS.isdisjoint(workflow_command_schema["properties"])
+    assert workflow_command_schema["additionalProperties"] is False
+    assert {"claim_generation", "control_epoch"} <= set(workflow_command_schema["properties"])
+    assert {"claim_token", "lease_token"}.isdisjoint(workflow_command_schema["properties"])
 
     frontend_contract = FRONTEND_CONTRACT_PATH.read_text(encoding="utf-8")
-    assert "export interface WorkflowCommandRecord extends JsonObject" in frontend_contract
+    assert "export interface WorkflowCommandRecord extends JsonObject" not in frontend_contract
 
     adapter_source = _typescript_function_source(
         FRONTEND_ADAPTER_PATH,
         "export function mapWorkflowCommandRecord",
         "export function mapWorkflowCommandListResponse",
     )
-    assert "...(source as JsonObject)" in adapter_source
+    assert "...(source as JsonObject)" not in adapter_source
 
     demo_source = _typescript_function_source(
         FRONTEND_DEMO_API_PATH,
         "function deriveWorkflowCommandRecord",
         "function deriveWorkflowActivityRecord",
     )
-    assert "raw: record" in demo_source
+    assert "raw: record" not in demo_source
 
     _, list_source = _class_method(ORCHESTRATOR_PATH, "SourcingOrchestrator", "list_workflow_commands_api")
     _, provenance_source = _class_method(

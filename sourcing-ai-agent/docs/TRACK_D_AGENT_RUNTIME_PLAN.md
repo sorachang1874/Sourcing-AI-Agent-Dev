@@ -233,6 +233,14 @@ serve、会话/事件层、planner loop），用一个垂直切片证明闭环�
   evidence=`32/49/58/81` + diff clean；fresh non-author local re-review 与 pinned formal review
   pending，仅对 Live/signoff fail closed，不冻结后续 non-live batch；served
   Agent tool population=`0`，R-019、action-root gate 与 OB-10.1/10.2/10.3/10.4 继续 open。
+- D3c1 public projection implementation candidate 已把 command public shape 锁成 33 descriptor + 2 safe
+  diagnostics + 7 derived = **42** 个 optional fields，把 `operation_sync` 锁成 **9** fields，并明确
+  `WorkflowCommandRecord` schema refs=`6 existing + 1 typed nested = 7`；七个 raw nested return 已降为 **0**，
+  carrier inventory 修正为 **16 routes/17 method-route variants**。递归 sanitizer 覆盖 command、operation
+  action/run/event、provenance 与 execution summary，frontend adapter/demo 不再保留 raw command dict。author
+  evidence=`7/45/14`、frontend build `81 modules`、lint `58 files`、mypy `81/4` + diff clean；fresh pinned
+  non-author review pending。该批零 migration/claim/CAS/Stage A/B/dispatch/served，故 R-019、action-root gate、
+  OB-10.1/10.2/10.3/10.4 和 served=0 均不变。
 
 ### D4 — 之后（本文只圈定，不展开）
 

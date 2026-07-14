@@ -300,11 +300,14 @@
   pending，不能写成 formal GO，并仅对 Live/signoff fail closed。current author evidence=D3b `32 passed`、D3a+D3b
   characterization `49 passed`、lint `58 files`、mypy `81 errors/4 files`（棘轮持平）、diff clean；这些仍不是 formal GO，
   且不阻断 owner 已授权的下一 non-live bounded implementation。
-- [ ] D3c1 public workflow-command projection seal（由 D3b §10/rollout step 1 推导；零 migration、零 claim/CAS）：
+- [x] D3c1 public workflow-command projection seal（2026-07-15；由 D3b §10/rollout step 1 推导；零 migration、零 claim/CAS）：
   `CommandKernel._workflow_command_api_record` 改 checked-in closed allowlist，保留 33 个既有 descriptor +
   `claim_generation/control_epoch` 两个只读 diagnostic + 7 derived fields；递归移除 payload/result capability，
-  消除 **7** 个 nested raw command returns，令 14 carrier routes/15 method-route variants、6 schema refs、typed
-  `operation_sync`、frontend adapter/demo raw 全部收敛到同一 projector。Scope issuer/ClaimAuthority/29 callers/
+  消除 **7** 个 nested raw command returns，令修正后的 **16 carrier routes/17 method-route variants**、
+  `6 existing + 1 typed nested = 7` schema refs、9-field typed `operation_sync`、frontend adapter/demo raw 全部
+  收敛到同一 projector。author evidence=`7` D3c1、`45` D3a+D3b+D3c1、operation/control adjacency `14`、
+  frontend build `81 modules`、lint `58 files`、mypy `81 errors/4 files`（棘轮持平）、diff clean；fresh pinned
+  non-author review pending，不能写成 formal GO。Scope issuer/ClaimAuthority/29 callers/
   Stage A/B/dispatch/migration/action-root durable-scope gate/R-019/OB-10.1-10.4 与 served=0 全部继续 carry；
   不得借 projection seal 宣称 fence 闭合。
 - [ ] Track D 后的 user-owned cohort selection contract（Thinking Machines Lab live 前置）：以一个 versioned、

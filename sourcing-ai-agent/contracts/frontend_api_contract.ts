@@ -1104,7 +1104,7 @@ export interface OperationActionRecord extends JsonObject {
   updated_at?: string;
 }
 
-export interface OperationRunRecord extends JsonObject {
+export interface OperationRunRecord {
   operation_run_id?: string;
   workspace_id?: string;
   action_id?: string;
@@ -1125,6 +1125,7 @@ export interface OperationRunRecord extends JsonObject {
   completed_at?: string;
   created_at?: string;
   updated_at?: string;
+  [key: string]: unknown;
 }
 
 export interface OperationRunControlState extends JsonObject {
@@ -1143,7 +1144,7 @@ export interface OperationRunControlState extends JsonObject {
   schema_version?: string;
 }
 
-export interface OperationRunStatusSummary extends JsonObject {
+export interface OperationRunStatusSummary {
   source?: string;
   fallback_status?: string;
   fallback_used?: boolean;
@@ -1156,6 +1157,7 @@ export interface OperationRunStatusSummary extends JsonObject {
   latest_event_type?: string;
   latest_event?: OperationEventRecord;
   latest_workflow_command?: WorkflowCommandRecord;
+  [key: string]: unknown;
 }
 
 export interface OperationActionListResponse {
@@ -1171,14 +1173,14 @@ export interface OperationActionDetailResponse {
   action?: OperationActionRecord;
   operation_run?: OperationRunRecord;
   events?: OperationEventRecord[];
-  [key: string]: JsonValue | undefined;
+  [key: string]: unknown;
 }
 
 export interface OperationRunListResponse {
   status?: string;
   contract?: string;
   operation_runs: OperationRunRecord[];
-  [key: string]: JsonValue | undefined;
+  [key: string]: unknown;
 }
 
 export interface OperationRunDetailResponse {
@@ -1186,7 +1188,7 @@ export interface OperationRunDetailResponse {
   contract?: string;
   operation_run?: OperationRunRecord;
   events?: OperationEventRecord[];
-  [key: string]: JsonValue | undefined;
+  [key: string]: unknown;
 }
 
 export interface OperationRunProvenanceResponse {
@@ -1199,7 +1201,7 @@ export interface OperationRunProvenanceResponse {
   event_timeline?: OperationEventRecord[];
   workflow_commands?: WorkflowCommandRecord[];
   module_state_mutated?: boolean;
-  [key: string]: JsonValue | undefined;
+  [key: string]: unknown;
 }
 
 export interface OperationRunControlResponse {
@@ -1214,7 +1216,7 @@ export interface OperationRunControlResponse {
   workflow_command?: WorkflowCommandRecord;
   events?: OperationEventRecord[];
   module_state_mutated?: boolean;
-  [key: string]: JsonValue | undefined;
+  [key: string]: unknown;
 }
 
 export interface WorkflowCommandRegistryResponse {
@@ -1225,22 +1227,61 @@ export interface WorkflowCommandRegistryResponse {
   [key: string]: JsonValue | undefined;
 }
 
-export interface WorkflowCommandRecord extends JsonObject {
+export interface WorkflowCommandRecord {
   command_id?: string;
   workflow_run_id?: string;
   operation_id?: string;
   command_type?: string;
   owner?: string;
-  agent_exposure_status?: string;
-  agent_exposure_gate?: string;
-  status?: string;
   stage_id?: string;
+  causal_group_id?: string;
+  parent_command_id?: string;
+  source_event_id?: string;
+  source_event_type?: string;
+  input_artifact_refs?: string[];
+  output_artifact_refs?: string[];
+  produced_entity_counts?: JsonObject;
+  no_op_reason?: string;
   readiness_effect?: string;
+  downstream_command_ids?: string[];
+  causality_schema_version?: string;
+  status?: string;
+  idempotency_key?: string;
+  payload?: JsonObject;
+  artifact_refs?: string[];
+  not_before_at?: string;
+  attempt?: number;
+  max_attempts?: number;
+  retry_policy?: JsonObject;
+  lease_owner?: string;
+  lease_expires_at?: string;
+  heartbeat_at?: string;
+  last_error?: string;
+  result?: JsonObject;
+  schema_version?: string;
+  created_at?: string;
+  updated_at?: string;
+  claim_generation?: number;
+  control_epoch?: number;
+  agent_exposure_gate?: string;
+  agent_exposure_status?: string;
   display_contract?: WorkflowCommandDisplayContract;
   control_policy?: WorkflowCommandControlPolicy;
   control_state?: WorkflowCommandControlState;
   activity_spine_policy?: WorkflowCommandActivitySpinePolicy;
   execution_summary?: WorkflowCommandExecutionSummary;
+}
+
+export interface WorkflowCommandOperationSync {
+  status?: string;
+  reason?: string;
+  operation_run_id?: string;
+  operation_status?: string;
+  control_action?: string;
+  command_status?: string;
+  operation_run?: OperationRunRecord;
+  event?: OperationEventRecord;
+  workflow_command?: WorkflowCommandRecord;
 }
 
 export interface WorkflowCommandExecutionSummary extends JsonObject {
@@ -1267,14 +1308,14 @@ export interface WorkflowCommandListResponse {
   status?: string;
   contract?: string;
   workflow_commands: WorkflowCommandRecord[];
-  [key: string]: JsonValue | undefined;
+  [key: string]: unknown;
 }
 
 export interface WorkflowCommandDetailResponse {
   status: string;
   contract?: string;
   workflow_command?: WorkflowCommandRecord;
-  [key: string]: JsonValue | undefined;
+  [key: string]: unknown;
 }
 
 export interface WorkflowCommandControlResponse {
@@ -1282,7 +1323,7 @@ export interface WorkflowCommandControlResponse {
   reason?: string;
   command_status?: string;
   workflow_command?: WorkflowCommandRecord;
-  operation_sync?: JsonObject;
+  operation_sync?: WorkflowCommandOperationSync;
   display_contract?: WorkflowCommandDisplayContract;
   control_policy?: WorkflowCommandControlPolicy;
   control_state?: WorkflowCommandControlState;
@@ -1290,7 +1331,7 @@ export interface WorkflowCommandControlResponse {
   module_state_mutated?: boolean;
   owner_specific_control?: boolean;
   contract?: string;
-  [key: string]: JsonValue | undefined;
+  [key: string]: unknown;
 }
 
 export interface WorkflowActivityControlTarget {

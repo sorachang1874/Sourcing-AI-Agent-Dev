@@ -38814,7 +38814,7 @@ class SourcingOrchestrator:
             "status_counts": {key: int(value) for key, value in sorted(status_counts.items()) if key},
             "kind_counts": {key: int(value) for key, value in sorted(kind_counts.items()) if key},
             "workflow_commands": [
-                _compact_public_workflow_command_payload(dict(command))
+                _compact_public_workflow_command_payload(self._workflow_command_api_record(dict(command)))
                 for command in workflow_commands
                 if isinstance(command, dict)
             ],
@@ -44906,7 +44906,7 @@ class SourcingOrchestrator:
     ) -> dict[str, Any]:
         record = self._workflow_command_api_record(command)
         record["execution_summary"] = self._workflow_command_execution_summary(command)
-        return record
+        return self._command_kernel._workflow_command_public_carrier_api_record(record)
 
     def _workflow_command_control_response_policy_records(
         self,
@@ -48266,7 +48266,7 @@ class SourcingOrchestrator:
             "operation_run": (
                 self._operation_run_api_record_with_status_summary(result.operation_run) if result.operation_run else {}
             ),
-            "events": list(result.events),
+            "events": self._operation_event_api_records(result.events),
             "module_state_mutated": False,
             "contract": "w9_operation_action_submit_v1",
         }
@@ -48476,7 +48476,9 @@ class SourcingOrchestrator:
         return {
             "status": "ok",
             "action": self._operation_action_api_record(action),
-            "events": self.store.repos.workflow_runtime.list_operation_events(action["action_id"]),
+            "events": self._operation_event_api_records(
+                self.store.repos.workflow_runtime.list_operation_events(action["action_id"])
+            ),
             "module_state_mutated": False,
             "contract": "w9_operation_action_query_v1",
         }
@@ -48488,7 +48490,9 @@ class SourcingOrchestrator:
         return {
             "status": "ok",
             "operation_run": self._operation_run_api_record_with_status_summary(operation_run),
-            "events": self.store.repos.workflow_runtime.list_operation_events(operation_run["operation_run_id"]),
+            "events": self._operation_event_api_records(
+                self.store.repos.workflow_runtime.list_operation_events(operation_run["operation_run_id"])
+            ),
             "module_state_mutated": False,
             "contract": "w9_operation_run_query_v1",
         }
@@ -48524,7 +48528,7 @@ class SourcingOrchestrator:
         for command in commands:
             status = str(command.get("status") or "").strip() or "unknown"
             command_status_counts[status] = command_status_counts.get(status, 0) + 1
-        latest_event = events[-1] if events else {}
+        latest_event = self._operation_event_api_record(events[-1]) if events else {}
         latest_command = commands[0] if commands else {}
         progress = dict(record.get("progress") or {})
         return {
@@ -48569,7 +48573,13 @@ class SourcingOrchestrator:
         record = dict(action or {})
         if record:
             record["display_contract"] = self._operation_action_display_contract_record(record)
-        return record
+        return self._command_kernel._workflow_command_public_carrier_api_record(record)
+
+    def _operation_event_api_record(self, event: dict[str, Any]) -> dict[str, Any]:
+        return self._command_kernel._workflow_command_public_carrier_api_record(event)
+
+    def _operation_event_api_records(self, events: Any) -> list[dict[str, Any]]:
+        return [self._operation_event_api_record(event) for event in list(events or []) if isinstance(event, dict)]
 
     def _operation_run_display_contract_record(self, operation_run: dict[str, Any]) -> dict[str, Any]:
         record = dict(operation_run or {})
@@ -48624,7 +48634,7 @@ class SourcingOrchestrator:
         record = dict(operation_run or {})
         record["display_contract"] = self._operation_run_display_contract_record(operation_run)
         record["control_state"] = self._operation_run_control_state_record(operation_run)
-        return record
+        return self._command_kernel._workflow_command_public_carrier_api_record(record)
 
     def _operation_run_control_response_record(self, response: dict[str, Any]) -> dict[str, Any]:
         record = dict(response or {})
@@ -48642,7 +48652,7 @@ class SourcingOrchestrator:
             record["display_contract"] = operation_run["display_contract"]
         elif isinstance(record.get("action"), dict) and record["action"].get("display_contract"):
             record["display_contract"] = record["action"]["display_contract"]
-        return record
+        return self._command_kernel._workflow_command_public_carrier_api_record(record)
 
     def _operation_run_api_record_with_status_summary(
         self,
@@ -48650,7 +48660,7 @@ class SourcingOrchestrator:
     ) -> dict[str, Any]:
         record = self._operation_run_api_record(operation_run)
         record["status_summary"] = self._operation_run_status_summary(operation_run)
-        return record
+        return self._command_kernel._workflow_command_public_carrier_api_record(record)
 
     def get_operation_run_provenance_api(self, operation_run_id: str) -> dict[str, Any]:
         operation_run = self.store.repos.workflow_runtime.get_operation(operation_run_id)
@@ -48671,14 +48681,18 @@ class SourcingOrchestrator:
             "status": "ok",
             "action": self._operation_action_api_record(action) if action else {},
             "operation_run": self._operation_run_api_record_with_status_summary(operation_run),
-            "action_events": self.store.repos.workflow_runtime.list_operation_events(str(action.get("action_id") or ""))
+            "action_events": self._operation_event_api_records(
+                self.store.repos.workflow_runtime.list_operation_events(str(action.get("action_id") or ""))
+            )
             if action
             else [],
-            "operation_events": self.store.repos.workflow_runtime.list_operation_events(
-                operation_run["operation_run_id"]
+            "operation_events": self._operation_event_api_records(
+                self.store.repos.workflow_runtime.list_operation_events(operation_run["operation_run_id"])
             ),
-            "event_timeline": self.store.repos.workflow_runtime.list_operation_events_for_action(
-                str(operation_run.get("action_id") or "")
+            "event_timeline": self._operation_event_api_records(
+                self.store.repos.workflow_runtime.list_operation_events_for_action(
+                    str(operation_run.get("action_id") or "")
+                )
             ),
             "workflow_commands": [
                 self._workflow_command_api_record_with_execution_summary(command) for command in commands
@@ -48706,8 +48720,10 @@ class SourcingOrchestrator:
                 "reason": exc.reason,
                 "actual_status": str(exc.record.get("status") or "").strip(),
                 "action": self._operation_action_api_record(exc.record),
-                "events": self.store.repos.workflow_runtime.list_operation_events(
-                    str(exc.record.get("action_id") or action_id)
+                "events": self._operation_event_api_records(
+                    self.store.repos.workflow_runtime.list_operation_events(
+                        str(exc.record.get("action_id") or action_id)
+                    )
                 ),
                 "module_state_mutated": False,
                 "contract": "w9_operation_action_approval_v1",
@@ -48716,7 +48732,7 @@ class SourcingOrchestrator:
             "status": "queued",
             "action": self._operation_action_api_record(result.action),
             "operation_run": self._operation_run_api_record_with_status_summary(result.operation_run),
-            "events": list(result.events),
+            "events": self._operation_event_api_records(result.events),
             "module_state_mutated": False,
             "contract": "w9_operation_action_approval_v1",
         }
@@ -48741,7 +48757,9 @@ class SourcingOrchestrator:
             "reason": "" if rejected else "operation_action_rejection_conflict",
             "actual_status": str(action.get("status") or "").strip(),
             "action": self._operation_action_api_record(action),
-            "events": self.store.repos.workflow_runtime.list_operation_events(action["action_id"]),
+            "events": self._operation_event_api_records(
+                self.store.repos.workflow_runtime.list_operation_events(action["action_id"])
+            ),
             "module_state_mutated": False,
             "contract": "w9_operation_action_rejection_v1",
         }
@@ -48763,7 +48781,9 @@ class SourcingOrchestrator:
             "reason": "" if cancelled else "operation_run_cancel_conflict",
             "actual_status": str(operation_run.get("status") or "").strip(),
             "operation_run": self._operation_run_api_record_with_status_summary(operation_run),
-            "events": self.store.repos.workflow_runtime.list_operation_events(operation_run["operation_run_id"]),
+            "events": self._operation_event_api_records(
+                self.store.repos.workflow_runtime.list_operation_events(operation_run["operation_run_id"])
+            ),
             "module_state_mutated": False,
             "contract": "w9_operation_run_cancel_v1",
         }
@@ -48795,7 +48815,7 @@ class SourcingOrchestrator:
             "status": "queued",
             "parent_operation_run": self._operation_run_api_record_with_status_summary(result["parent_operation_run"]),
             "operation_run": self._operation_run_api_record_with_status_summary(result["operation_run"]),
-            "events": list(result["events"]),
+            "events": self._operation_event_api_records(result["events"]),
             "module_state_mutated": False,
             "contract": "w9_operation_run_retry_v1",
         }
@@ -48819,8 +48839,10 @@ class SourcingOrchestrator:
                 "reason": exc.reason,
                 "actual_status": str(exc.record.get("status") or "").strip(),
                 "operation_run": self._operation_run_api_record_with_status_summary(exc.record),
-                "events": self.store.repos.workflow_runtime.list_operation_events(
-                    str(exc.record.get("operation_run_id") or operation_run_id)
+                "events": self._operation_event_api_records(
+                    self.store.repos.workflow_runtime.list_operation_events(
+                        str(exc.record.get("operation_run_id") or operation_run_id)
+                    )
                 ),
                 "module_state_mutated": False,
                 "contract": "w9_operation_run_resume_v1",
@@ -48828,7 +48850,7 @@ class SourcingOrchestrator:
         return {
             "status": "queued",
             "operation_run": self._operation_run_api_record_with_status_summary(result["operation_run"]),
-            "events": list(result["events"]),
+            "events": self._operation_event_api_records(result["events"]),
             "module_state_mutated": False,
             "contract": "w9_operation_run_resume_v1",
         }
@@ -51089,14 +51111,16 @@ class SourcingOrchestrator:
             }
         current_operation_status = str(operation_run.get("status") or "").strip()
         if current_operation_status in {"completed", "failed", "cancelled"} and current_operation_status != next_status:
-            return {
-                "status": "skipped",
-                "reason": "terminal_operation_run_not_revived_by_command_control",
-                "operation_run_id": operation_run_id,
-                "operation_status": current_operation_status,
-                "control_action": normalized_action,
-                "workflow_command": command_payload,
-            }
+            return self._command_kernel._workflow_command_operation_sync_api_record(
+                {
+                    "status": "skipped",
+                    "reason": "terminal_operation_run_not_revived_by_command_control",
+                    "operation_run_id": operation_run_id,
+                    "operation_status": current_operation_status,
+                    "control_action": normalized_action,
+                    "workflow_command": self._workflow_command_api_record(command_payload),
+                }
+            )
         workflow_ref = {
             "workflow_run_id": str(command_payload.get("workflow_run_id") or ""),
             "command_id": command_id,
@@ -51162,12 +51186,14 @@ class SourcingOrchestrator:
                 "module_state_mutated": False,
             },
         )
-        return {
-            "status": next_status,
-            "operation_run": operation_patch,
-            "event": event,
-            "workflow_command": command_payload,
-        }
+        return self._command_kernel._workflow_command_operation_sync_api_record(
+            {
+                "status": next_status,
+                "operation_run": operation_patch,
+                "event": event,
+                "workflow_command": self._workflow_command_api_record(command_payload),
+            }
+        )
 
     def _run_crm_writer_command(
         self,

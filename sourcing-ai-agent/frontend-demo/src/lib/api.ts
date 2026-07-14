@@ -201,6 +201,189 @@ export interface WorkflowCommandControlPolicy {
   raw: Record<string, unknown>;
 }
 
+const WORKFLOW_COMMAND_PUBLIC_WIRE_FIELDS = [
+  "command_id",
+  "workflow_run_id",
+  "operation_id",
+  "command_type",
+  "owner",
+  "stage_id",
+  "causal_group_id",
+  "parent_command_id",
+  "source_event_id",
+  "source_event_type",
+  "input_artifact_refs",
+  "output_artifact_refs",
+  "produced_entity_counts",
+  "no_op_reason",
+  "readiness_effect",
+  "downstream_command_ids",
+  "causality_schema_version",
+  "status",
+  "idempotency_key",
+  "payload",
+  "artifact_refs",
+  "not_before_at",
+  "attempt",
+  "max_attempts",
+  "retry_policy",
+  "lease_owner",
+  "lease_expires_at",
+  "heartbeat_at",
+  "last_error",
+  "result",
+  "schema_version",
+  "created_at",
+  "updated_at",
+  "claim_generation",
+  "control_epoch",
+  "agent_exposure_gate",
+  "agent_exposure_status",
+  "display_contract",
+  "control_policy",
+  "control_state",
+  "activity_spine_policy",
+  "execution_summary",
+] as const;
+
+const WORKFLOW_COMMAND_PUBLIC_NUMBER_FIELDS = new Set([
+  "attempt",
+  "max_attempts",
+  "claim_generation",
+  "control_epoch",
+]);
+
+const WORKFLOW_COMMAND_PUBLIC_STRING_ARRAY_FIELDS = new Set([
+  "input_artifact_refs",
+  "output_artifact_refs",
+  "downstream_command_ids",
+  "artifact_refs",
+]);
+
+const WORKFLOW_COMMAND_PUBLIC_OBJECT_FIELDS = new Set([
+  "produced_entity_counts",
+  "payload",
+  "retry_policy",
+  "result",
+  "display_contract",
+  "control_policy",
+  "control_state",
+  "activity_spine_policy",
+  "execution_summary",
+]);
+
+const WORKFLOW_COMMAND_PRIVATE_PUBLIC_MIRROR_FIELDS = new Set([
+  "authority_id",
+  "authority_seal",
+  "bootstrap_authority",
+  "bootstrap_authority_id",
+  "bootstrap_authority_digest",
+  "bootstrap_receipt",
+  "claim_authority",
+  "claim_authority_id",
+  "claim_authority_seal",
+  "claim_authority_spec_digest",
+  "claim_capability",
+  "claim_identity",
+  "claim_receipt",
+  "claim_secret",
+  "claim_selection_generation",
+  "claim_token",
+  "claim_token_digest",
+  "consumed_claim_authority_id",
+  "issuer_digest",
+  "issuer_revision",
+  "last_heartbeat_id",
+  "lease_identity",
+  "lease_token",
+  "scoped_review_session_bootstrap_authority",
+  "scoped_review_session_bootstrap_receipt",
+]);
+
+function normalizeWorkflowCommandPublicMirrorFieldName(value: unknown): string {
+  return String(value ?? "")
+    .trim()
+    .replace(/-/g, "_")
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .toLowerCase();
+}
+
+function isPrivateWorkflowCommandPublicMirrorField(value: unknown): boolean {
+  const normalized = normalizeWorkflowCommandPublicMirrorFieldName(value);
+  return (
+    WORKFLOW_COMMAND_PRIVATE_PUBLIC_MIRROR_FIELDS.has(normalized) ||
+    normalized.startsWith("bootstrap_authority_") ||
+    normalized.startsWith("claim_authority_") ||
+    normalized.startsWith("claim_token_") ||
+    normalized.startsWith("scoped_review_session_bootstrap_")
+  );
+}
+
+function sanitizeWorkflowCommandPublicMirrorValue(value: unknown): unknown {
+  if (value === null || typeof value === "string" || typeof value === "boolean") {
+    return value;
+  }
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : undefined;
+  }
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => sanitizeWorkflowCommandPublicMirrorValue(item))
+      .filter((item) => item !== undefined);
+  }
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) {
+    return undefined;
+  }
+  const result: Record<string, unknown> = {};
+  for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+    if (isPrivateWorkflowCommandPublicMirrorField(key)) {
+      continue;
+    }
+    const sanitized = sanitizeWorkflowCommandPublicMirrorValue(item);
+    if (sanitized !== undefined) {
+      result[key] = sanitized;
+    }
+  }
+  return result;
+}
+
+function projectWorkflowCommandPublicRecord(record: Record<string, unknown>): Record<string, unknown> {
+  const sanitized = asObjectRecord(sanitizeWorkflowCommandPublicMirrorValue(record));
+  const projected: Record<string, unknown> = {};
+  for (const field of WORKFLOW_COMMAND_PUBLIC_WIRE_FIELDS) {
+    if (!Object.prototype.hasOwnProperty.call(sanitized, field)) {
+      continue;
+    }
+    const value = sanitized[field];
+    if (WORKFLOW_COMMAND_PUBLIC_NUMBER_FIELDS.has(field)) {
+      if (typeof value === "number" && Number.isFinite(value)) {
+        projected[field] = value;
+      }
+      continue;
+    }
+    if (WORKFLOW_COMMAND_PUBLIC_STRING_ARRAY_FIELDS.has(field)) {
+      if (Array.isArray(value)) {
+        projected[field] = value.filter((item): item is string => typeof item === "string");
+      }
+      continue;
+    }
+    if (WORKFLOW_COMMAND_PUBLIC_OBJECT_FIELDS.has(field)) {
+      if (value && typeof value === "object" && !Array.isArray(value)) {
+        projected[field] = value;
+      }
+      continue;
+    }
+    if (typeof value === "string") {
+      projected[field] = value;
+    }
+  }
+  return projected;
+}
+
 export interface WorkflowCommandRecord {
   commandId: string;
   workflowRunId: string;
@@ -210,6 +393,8 @@ export interface WorkflowCommandRecord {
   agentExposureStatus: string;
   agentExposureGate: string;
   status: string;
+  claimGeneration?: number;
+  controlEpoch?: number;
   displayContract: Record<string, unknown>;
   controlPolicy: WorkflowCommandControlPolicy;
   controlState: Record<string, unknown>;
@@ -960,26 +1145,29 @@ function deriveWorkflowCommandControlPolicy(record: Record<string, unknown>): Wo
   };
 }
 
-function deriveWorkflowCommandRecord(record: Record<string, unknown>): WorkflowCommandRecord {
-  const executionSummary = asObjectRecord(record.execution_summary);
-  const controlPolicy = asObjectRecord(record.control_policy);
+export function deriveWorkflowCommandRecord(record: Record<string, unknown>): WorkflowCommandRecord {
+  const publicRecord = projectWorkflowCommandPublicRecord(record);
+  const executionSummary = asObjectRecord(publicRecord.execution_summary);
+  const controlPolicy = asObjectRecord(publicRecord.control_policy);
   return {
-    commandId: asString(record.command_id),
-    workflowRunId: asString(record.workflow_run_id),
-    operationId: asString(record.operation_id),
-    commandType: asString(record.command_type),
-    owner: asString(record.owner),
-    agentExposureStatus: asString(record.agent_exposure_status),
-    agentExposureGate: asString(record.agent_exposure_gate),
-    status: asString(record.status),
-    displayContract: asObjectRecord(record.display_contract),
+    commandId: asString(publicRecord.command_id),
+    workflowRunId: asString(publicRecord.workflow_run_id),
+    operationId: asString(publicRecord.operation_id),
+    commandType: asString(publicRecord.command_type),
+    owner: asString(publicRecord.owner),
+    agentExposureStatus: asString(publicRecord.agent_exposure_status),
+    agentExposureGate: asString(publicRecord.agent_exposure_gate),
+    status: asString(publicRecord.status),
+    claimGeneration: asNumber(publicRecord.claim_generation) ?? undefined,
+    controlEpoch: asNumber(publicRecord.control_epoch) ?? undefined,
+    displayContract: asObjectRecord(publicRecord.display_contract),
     controlPolicy: deriveWorkflowCommandControlPolicy(controlPolicy),
-    controlState: asObjectRecord(record.control_state),
-    activitySpinePolicy: asObjectRecord(record.activity_spine_policy),
+    controlState: asObjectRecord(publicRecord.control_state),
+    activitySpinePolicy: asObjectRecord(publicRecord.activity_spine_policy),
     executionSummary: Object.keys(executionSummary).length
       ? deriveWorkflowCommandExecutionSummary(executionSummary)
       : undefined,
-    raw: record,
+    raw: publicRecord,
   };
 }
 

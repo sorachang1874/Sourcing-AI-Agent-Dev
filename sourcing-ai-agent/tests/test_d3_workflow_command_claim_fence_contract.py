@@ -43,13 +43,13 @@ BASELINE_MIGRATION_PATH = SOURCE_ROOT / "migrations" / "0001_baseline.sql"
 # describe the debt at its pinned baseline; D3c must replace the assertions when
 # it installs the physical fence and public projection boundary.
 CURRENT_WORKFLOW_COMMAND_COLUMN_COUNT = 33
-CURRENT_PUBLIC_MAPPER_CALL_COUNT = 80
-CURRENT_PUBLIC_MAPPER_CALLING_FUNCTION_COUNT = 30
+CURRENT_PUBLIC_MAPPER_CALL_COUNT = 83
+CURRENT_PUBLIC_MAPPER_CALLING_FUNCTION_COUNT = 32
 CURRENT_CONTROL_SYNC_CALL_COUNT = 27
 CURRENT_CONTROL_SYNC_CALLING_FUNCTION_COUNT = 26
 CURRENT_CONTROL_SYNC_FILE_COUNT = 5
-CURRENT_RAW_COMMAND_RETURN_COUNT = 7
-CURRENT_FRONTEND_WORKFLOW_COMMAND_REF_COUNT = 6
+CURRENT_RAW_COMMAND_RETURN_COUNT = 0
+CURRENT_FRONTEND_WORKFLOW_COMMAND_REF_COUNT = 7
 CURRENT_COMMAND_EFFECT_CALL_COUNTS = {
     "append_event_and_reduce": 62,
     "claim_workflow_command": 29,
@@ -138,7 +138,9 @@ EXPECTED_PUBLIC_COMMAND_CARRIER_ROUTES = frozenset(
         "/api/operations/runs/{run_id}",
         "/api/operations/runs/{run_id}/provenance",
         "/api/operations/actions",
+        "/api/operations/actions/{action_id}",
         "/api/operations/actions/{action_id}/approve",
+        "/api/operations/actions/{action_id}/reject",
         "/api/operations/runs/{run_id}/cancel",
         "/api/operations/runs/{run_id}/retry",
         "/api/operations/runs/{run_id}/resume",
@@ -1431,7 +1433,7 @@ def test_d3b_advisory_rounds_fixed_forward_are_cross_document_consistent() -> No
     todo_d3b = _document_section(
         todo,
         "- [x] D3b workflow-command claim-fence contract + effect/CAS consumer characterization",
-        "- [ ] D3c1 public workflow-command projection seal",
+        "- [x] D3c1 public workflow-command projection seal",
     )
     ledger_r019 = _unique_line(ledger, "| R-019 |")
     index_d3b = _unique_line(index, "TRACK_D_D3B_WORKFLOW_COMMAND_CLAIM_FENCE_CONTRACT.md")
@@ -2677,7 +2679,7 @@ def test_current_command_effect_and_r019_populations_are_mechanically_frozen() -
     assert sum(state_sync_counts.values()) == 26
 
 
-def test_current_public_mapper_pass_through_is_explicit_d3c_debt() -> None:
+def test_d3c1_public_mapper_is_closed_and_preserves_only_safe_diagnostics() -> None:
     command = {
         "command_id": "cmd-d3b-characterization",
         "command_type": "d3b.characterization.only",
@@ -2694,7 +2696,9 @@ def test_current_public_mapper_pass_through_is_explicit_d3c_debt() -> None:
     )
 
     public_record = CommandKernel._workflow_command_api_record(probe, command)  # type: ignore[arg-type]
-    assert {key: public_record[key] for key in CURRENT_SYNTHETIC_IDENTITY} == CURRENT_SYNTHETIC_IDENTITY
+    assert public_record["claim_generation"] == CURRENT_SYNTHETIC_IDENTITY["claim_generation"]
+    assert public_record["control_epoch"] == CURRENT_SYNTHETIC_IDENTITY["control_epoch"]
+    assert PRIVATE_CAPABILITY_FIELDS.isdisjoint(public_record)
 
     calls, owners = _call_population(
         ORCHESTRATOR_PATH,
@@ -2704,8 +2708,8 @@ def test_current_public_mapper_pass_through_is_explicit_d3c_debt() -> None:
     assert len(owners) == CURRENT_PUBLIC_MAPPER_CALLING_FUNCTION_COUNT
 
     document = D3B_CONTRACT_PATH.read_text(encoding="utf-8")
-    _assert_any(document, "characterized baseline", "currently flows", "current debt", "current-state debt", "现状债务")
-    _assert_any(document, "later implementation", "future migration", "D3c target", "D3c implementation target")
+    _assert_any(document, "public allowlist", "explicit public projection boundary")
+    _assert_any(document, "never expose", "must not contain token or digest material")
 
 
 def test_current_api_carriers_and_nested_raw_bypass_are_mechanically_frozen() -> None:
@@ -2715,7 +2719,7 @@ def test_current_api_carriers_and_nested_raw_bypass_are_mechanically_frozen() ->
         for node in ast.walk(api_tree)
         if isinstance(node, ast.Constant) and isinstance(node.value, str) and node.value.startswith("/api/")
     }
-    assert len(EXPECTED_PUBLIC_COMMAND_CARRIER_ROUTES) == 14
+    assert len(EXPECTED_PUBLIC_COMMAND_CARRIER_ROUTES) == 16
     assert EXPECTED_PUBLIC_COMMAND_CARRIER_ROUTES <= routes
     assert len(EXPECTED_ACTIVITY_EVIDENCE_ROUTES) == 6
     assert EXPECTED_ACTIVITY_EVIDENCE_ROUTES <= routes
@@ -2727,20 +2731,20 @@ def test_current_api_carriers_and_nested_raw_bypass_are_mechanically_frozen() ->
 
     raw_returns, raw_return_files = _raw_command_return_population()
     assert raw_returns == CURRENT_RAW_COMMAND_RETURN_COUNT
-    assert raw_return_files == {"acquisition_command_owner.py", "command_kernel.py", "orchestrator.py"}
+    assert raw_return_files == set()
     assert D3C_TARGET_RAW_COMMAND_RETURN_COUNT == 0
 
 
-def test_current_frontend_contract_is_permissive_but_names_no_private_capability() -> None:
+def test_d3c1_frontend_contract_is_closed_and_names_only_safe_diagnostics() -> None:
     schema = json.loads(FRONTEND_SCHEMA_PATH.read_text(encoding="utf-8"))
     definitions = schema["$defs"]
     workflow_command = definitions["WorkflowCommandRecord"]
 
-    assert workflow_command["additionalProperties"] is True
-    assert len(workflow_command["properties"]) == 15
+    assert workflow_command["additionalProperties"] is False
+    assert len(workflow_command["properties"]) == 42
     assert PRIVATE_CAPABILITY_FIELDS.isdisjoint(workflow_command["properties"])
     assert D3C_TARGET_PRIVATE_CAPABILITY_PUBLIC_OCCURRENCES == 0
-    assert PUBLIC_DIAGNOSTIC_FIELDS.isdisjoint(workflow_command["properties"])
+    assert PUBLIC_DIAGNOSTIC_FIELDS <= set(workflow_command["properties"])
     assert _schema_ref_count(schema, "#/$defs/WorkflowCommandRecord") == CURRENT_FRONTEND_WORKFLOW_COMMAND_REF_COUNT
     for definition_name in (
         "WorkflowCommandExecutionSummary",
@@ -2772,11 +2776,11 @@ def test_current_frontend_contract_is_permissive_but_names_no_private_capability
         )
     ]
 
-    assert "export interface WorkflowCommandRecord extends JsonObject" in contract_source
-    assert "operation_sync?: JsonObject" in contract_source
-    assert "...(source as JsonObject)" in mapper_source
-    assert "operation_sync: source.operation_sync ? asJsonObject(source.operation_sync)" in control_mapper_source
-    assert "raw: record" in demo_mapper_source
+    assert "export interface WorkflowCommandRecord extends JsonObject" not in contract_source
+    assert "operation_sync?: WorkflowCommandOperationSync" in contract_source
+    assert "...(source as JsonObject)" not in mapper_source
+    assert "mapWorkflowCommandOperationSync(source.operation_sync)" in control_mapper_source
+    assert "raw: record" not in demo_mapper_source
 
 
 def test_current_event_sync_never_names_capability_but_generic_payload_debt_stays_open() -> None:
@@ -2796,7 +2800,7 @@ def test_current_event_sync_never_names_capability_but_generic_payload_debt_stay
         assert private_field not in sync_source
     assert '"workflow_command_result": command_result' in sync_source
     assert '"command_result": command_result' in sync_source
-    assert '"workflow_command": command_payload' in sync_source
+    assert '"workflow_command": self._workflow_command_api_record(command_payload)' in sync_source
 
     repository_source = WORKFLOW_RUNTIME_REPOSITORY_PATH.read_text(encoding="utf-8")
     for private_field in PRIVATE_CAPABILITY_FIELDS:

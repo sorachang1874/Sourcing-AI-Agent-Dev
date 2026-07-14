@@ -11,6 +11,8 @@ delegating wrappers with identical signatures.
 from __future__ import annotations
 
 import hashlib
+import math
+import re
 from datetime import datetime, timezone
 from typing import Any
 
@@ -25,6 +27,132 @@ from .operation_runtime import (
     WORKFLOW_COMMAND_EXPOSURE_GATE_SOURCE,
     WORKFLOW_COMMAND_EXPOSURE_STATUS_ALLOWLISTED,
 )
+
+# Public WorkflowCommand records are a security boundary. Keep this tuple
+# literal and reviewable: new storage columns must not become public merely
+# because a repository descriptor or row dictionary grew.
+WORKFLOW_COMMAND_PUBLIC_DESCRIPTOR_FIELDS = (
+    "command_id",
+    "workflow_run_id",
+    "operation_id",
+    "command_type",
+    "owner",
+    "stage_id",
+    "causal_group_id",
+    "parent_command_id",
+    "source_event_id",
+    "source_event_type",
+    "input_artifact_refs",
+    "output_artifact_refs",
+    "produced_entity_counts",
+    "no_op_reason",
+    "readiness_effect",
+    "downstream_command_ids",
+    "causality_schema_version",
+    "status",
+    "idempotency_key",
+    "payload",
+    "artifact_refs",
+    "not_before_at",
+    "attempt",
+    "max_attempts",
+    "retry_policy",
+    "lease_owner",
+    "lease_expires_at",
+    "heartbeat_at",
+    "last_error",
+    "result",
+    "schema_version",
+    "created_at",
+    "updated_at",
+    "claim_generation",
+    "control_epoch",
+)
+
+WORKFLOW_COMMAND_PUBLIC_DERIVED_FIELDS = (
+    "agent_exposure_gate",
+    "agent_exposure_status",
+    "display_contract",
+    "control_policy",
+    "control_state",
+    "activity_spine_policy",
+    "execution_summary",
+)
+
+WORKFLOW_COMMAND_OPERATION_SYNC_PUBLIC_FIELDS = (
+    "status",
+    "reason",
+    "operation_run_id",
+    "operation_status",
+    "control_action",
+    "command_status",
+    "operation_run",
+    "event",
+    "workflow_command",
+)
+
+WORKFLOW_COMMAND_PRIVATE_PUBLIC_MIRROR_FIELDS = frozenset(
+    {
+        "authority_id",
+        "authority_seal",
+        "bootstrap_authority",
+        "bootstrap_authority_id",
+        "bootstrap_authority_digest",
+        "bootstrap_receipt",
+        "claim_authority",
+        "claim_authority_id",
+        "claim_authority_seal",
+        "claim_authority_spec_digest",
+        "claim_capability",
+        "claim_identity",
+        "claim_receipt",
+        "claim_secret",
+        "claim_selection_generation",
+        "claim_token",
+        "claim_token_digest",
+        "consumed_claim_authority_id",
+        "issuer_digest",
+        "issuer_revision",
+        "last_heartbeat_id",
+        "lease_identity",
+        "lease_token",
+        "scoped_review_session_bootstrap_authority",
+        "scoped_review_session_bootstrap_receipt",
+    }
+)
+_WORKFLOW_COMMAND_PUBLIC_MIRROR_OMIT = object()
+
+
+def _normalized_public_mirror_field_name(value: Any) -> str:
+    raw = str(value or "").strip().replace("-", "_")
+    return re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", raw).lower()
+
+
+def _is_private_workflow_command_public_mirror_field(value: Any) -> bool:
+    normalized = _normalized_public_mirror_field_name(value)
+    return normalized in WORKFLOW_COMMAND_PRIVATE_PUBLIC_MIRROR_FIELDS or normalized.startswith(
+        ("bootstrap_authority_", "claim_authority_", "claim_token_", "scoped_review_session_bootstrap_")
+    )
+
+
+def _sanitize_workflow_command_public_mirror(value: Any) -> Any:
+    if isinstance(value, dict):
+        sanitized_record: dict[str, Any] = {}
+        for key, item in value.items():
+            if _is_private_workflow_command_public_mirror_field(key):
+                continue
+            sanitized_item = _sanitize_workflow_command_public_mirror(item)
+            if sanitized_item is not _WORKFLOW_COMMAND_PUBLIC_MIRROR_OMIT:
+                sanitized_record[str(key)] = sanitized_item
+        return sanitized_record
+    if isinstance(value, (list, tuple)):
+        sanitized_items = [_sanitize_workflow_command_public_mirror(item) for item in value]
+        return [item for item in sanitized_items if item is not _WORKFLOW_COMMAND_PUBLIC_MIRROR_OMIT]
+    if value is None or isinstance(value, (str, bool, int)):
+        return value
+    if isinstance(value, float):
+        return value if math.isfinite(value) else _WORKFLOW_COMMAND_PUBLIC_MIRROR_OMIT
+    return _WORKFLOW_COMMAND_PUBLIC_MIRROR_OMIT
 
 
 # NOTE: the three helpers below duplicate module-level helpers in
@@ -354,7 +482,12 @@ class CommandKernel:
         }
 
     def _workflow_command_api_record(self, command: dict[str, Any]) -> dict[str, Any]:
-        record = dict(command or {})
+        source = dict(command or {})
+        record = {
+            field: _sanitize_workflow_command_public_mirror(source[field])
+            for field in WORKFLOW_COMMAND_PUBLIC_DESCRIPTOR_FIELDS
+            if field in source and source[field] is not None
+        }
         command_type = str(record.get("command_type") or "").strip()
         owner = str(record.get("owner") or "").strip()
         record.update(self._workflow_command_agent_exposure_record(command_type))
@@ -375,7 +508,57 @@ class CommandKernel:
             command_type=command_type,
             owner=owner,
         )
-        return record
+        return dict(_sanitize_workflow_command_public_mirror(record))
+
+    def _workflow_command_operation_sync_api_record(
+        self,
+        operation_sync: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        source = dict(operation_sync or {})
+        record = {
+            field: source[field]
+            for field in WORKFLOW_COMMAND_OPERATION_SYNC_PUBLIC_FIELDS
+            if field in source and source[field] is not None
+        }
+        command = record.get("workflow_command")
+        if isinstance(command, dict):
+            record["workflow_command"] = self._workflow_command_api_record(command)
+        return dict(_sanitize_workflow_command_public_mirror(record))
+
+    def _workflow_command_public_carrier_api_record(
+        self,
+        carrier: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        sanitized = _sanitize_workflow_command_public_mirror(dict(carrier or {}))
+
+        def _project_command(value: dict[str, Any]) -> dict[str, Any]:
+            command_record = self._workflow_command_api_record(value)
+            summary = value.get("execution_summary")
+            if isinstance(summary, dict):
+                sanitized_summary = _sanitize_workflow_command_public_mirror(summary)
+                if isinstance(sanitized_summary, dict):
+                    command_record["execution_summary"] = sanitized_summary
+            return command_record
+
+        def _project_nested_commands(value: Any) -> Any:
+            if isinstance(value, dict):
+                record: dict[str, Any] = {}
+                for key, item in value.items():
+                    normalized_key = _normalized_public_mirror_field_name(key)
+                    if normalized_key in {"workflow_command", "latest_workflow_command"} and isinstance(item, dict):
+                        record[str(key)] = _project_command(item)
+                    elif normalized_key == "workflow_commands" and isinstance(item, list):
+                        record[str(key)] = [
+                            _project_command(command) if isinstance(command, dict) else command for command in item
+                        ]
+                    else:
+                        record[str(key)] = _project_nested_commands(item)
+                return record
+            if isinstance(value, list):
+                return [_project_nested_commands(item) for item in value]
+            return value
+
+        return dict(_project_nested_commands(sanitized))
 
     def _workflow_command_control_response_policy_records(
         self,
@@ -537,12 +720,14 @@ class CommandKernel:
                 "module_state_mutated": False,
             },
         )
-        return {
-            "status": next_status,
-            "operation_run": operation_patch,
-            "event": event,
-            "workflow_command": command_payload,
-        }
+        return self._workflow_command_operation_sync_api_record(
+            {
+                "status": next_status,
+                "operation_run": operation_patch,
+                "event": event,
+                "workflow_command": self._workflow_command_api_record(command_payload),
+            }
+        )
 
     def _record_command_activity_entity_delta(
         self,

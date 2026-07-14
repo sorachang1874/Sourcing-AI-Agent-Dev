@@ -73,12 +73,14 @@ import type {
   WorkflowCommandActivitySpinePolicy,
   WorkflowCommandContract,
   WorkflowCommandControlResponse,
+  WorkflowCommandControlSummary,
   WorkflowCommandControlPolicy,
   WorkflowCommandControlState,
   WorkflowCommandDetailResponse,
   WorkflowCommandDisplayContract,
   WorkflowCommandExecutionSummary,
   WorkflowCommandListResponse,
+  WorkflowCommandOperationSync,
   WorkflowCommandRecord,
   WorkflowCommandRegistryResponse,
   WorkflowEntityDeltaDetailResponse,
@@ -1005,7 +1007,7 @@ export function mapWorkflowCommandRegistryResponse(payload: unknown): WorkflowCo
 }
 
 export function mapWorkflowCommandExecutionSummary(payload: unknown): WorkflowCommandExecutionSummary {
-  const source = asObject(payload ?? {}, "WorkflowCommandExecutionSummary");
+  const source = asWorkflowCommandPublicMirrorSource(payload ?? {}, "WorkflowCommandExecutionSummary");
   return {
     ...(source as JsonObject),
     source: asOptionalString(source.source),
@@ -1029,19 +1031,45 @@ export function mapWorkflowCommandExecutionSummary(payload: unknown): WorkflowCo
 }
 
 export function mapWorkflowCommandRecord(payload: unknown): WorkflowCommandRecord {
-  const source = asObject(payload, "WorkflowCommandRecord");
+  const source = asWorkflowCommandPublicMirrorSource(payload, "WorkflowCommandRecord");
   return {
-    ...(source as JsonObject),
     command_id: asOptionalString(source.command_id),
     workflow_run_id: asOptionalString(source.workflow_run_id),
     operation_id: asOptionalString(source.operation_id),
     command_type: asOptionalString(source.command_type),
     owner: asOptionalString(source.owner),
-    agent_exposure_status: asOptionalString(source.agent_exposure_status),
-    agent_exposure_gate: asOptionalString(source.agent_exposure_gate),
-    status: asOptionalString(source.status),
     stage_id: asOptionalString(source.stage_id),
+    causal_group_id: asOptionalString(source.causal_group_id),
+    parent_command_id: asOptionalString(source.parent_command_id),
+    source_event_id: asOptionalString(source.source_event_id),
+    source_event_type: asOptionalString(source.source_event_type),
+    input_artifact_refs: asOptionalWorkflowCommandStringArray(source.input_artifact_refs),
+    output_artifact_refs: asOptionalWorkflowCommandStringArray(source.output_artifact_refs),
+    produced_entity_counts: asOptionalWorkflowCommandPublicMirrorObject(source.produced_entity_counts),
+    no_op_reason: asOptionalString(source.no_op_reason),
     readiness_effect: asOptionalString(source.readiness_effect),
+    downstream_command_ids: asOptionalWorkflowCommandStringArray(source.downstream_command_ids),
+    causality_schema_version: asOptionalString(source.causality_schema_version),
+    status: asOptionalString(source.status),
+    idempotency_key: asOptionalString(source.idempotency_key),
+    payload: asOptionalWorkflowCommandPublicMirrorObject(source.payload),
+    artifact_refs: asOptionalWorkflowCommandStringArray(source.artifact_refs),
+    not_before_at: asOptionalString(source.not_before_at),
+    attempt: asOptionalNumber(source.attempt),
+    max_attempts: asOptionalNumber(source.max_attempts),
+    retry_policy: asOptionalWorkflowCommandPublicMirrorObject(source.retry_policy),
+    lease_owner: asOptionalString(source.lease_owner),
+    lease_expires_at: asOptionalString(source.lease_expires_at),
+    heartbeat_at: asOptionalString(source.heartbeat_at),
+    last_error: asOptionalString(source.last_error),
+    result: asOptionalWorkflowCommandPublicMirrorObject(source.result),
+    schema_version: asOptionalString(source.schema_version),
+    created_at: asOptionalString(source.created_at),
+    updated_at: asOptionalString(source.updated_at),
+    claim_generation: asOptionalNumber(source.claim_generation),
+    control_epoch: asOptionalNumber(source.control_epoch),
+    agent_exposure_gate: asOptionalString(source.agent_exposure_gate),
+    agent_exposure_status: asOptionalString(source.agent_exposure_status),
     display_contract: source.display_contract
       ? mapWorkflowCommandDisplayContract(source.display_contract)
       : undefined,
@@ -1053,6 +1081,21 @@ export function mapWorkflowCommandRecord(payload: unknown): WorkflowCommandRecor
     execution_summary: source.execution_summary
       ? mapWorkflowCommandExecutionSummary(source.execution_summary)
       : undefined,
+  };
+}
+
+export function mapWorkflowCommandOperationSync(payload: unknown): WorkflowCommandOperationSync {
+  const source = asWorkflowCommandPublicMirrorSource(payload ?? {}, "WorkflowCommandOperationSync");
+  return {
+    status: asOptionalString(source.status),
+    reason: asOptionalString(source.reason),
+    operation_run_id: asOptionalString(source.operation_run_id),
+    operation_status: asOptionalString(source.operation_status),
+    control_action: asOptionalString(source.control_action),
+    command_status: asOptionalString(source.command_status),
+    operation_run: source.operation_run ? mapOperationRunRecord(source.operation_run) : undefined,
+    event: source.event ? mapOperationEventRecord(source.event) : undefined,
+    workflow_command: source.workflow_command ? mapWorkflowCommandRecord(source.workflow_command) : undefined,
   };
 }
 
@@ -1077,14 +1120,14 @@ export function mapWorkflowCommandDetailResponse(payload: unknown): WorkflowComm
 }
 
 export function mapWorkflowCommandControlResponse(payload: unknown): WorkflowCommandControlResponse {
-  const source = asObject(payload, "WorkflowCommandControlResponse");
+  const source = asWorkflowCommandPublicMirrorSource(payload, "WorkflowCommandControlResponse");
   return {
     ...(source as JsonObject),
     status: asString(source.status),
     reason: asOptionalString(source.reason),
     command_status: asOptionalString(source.command_status),
     workflow_command: source.workflow_command ? mapWorkflowCommandRecord(source.workflow_command) : undefined,
-    operation_sync: source.operation_sync ? asJsonObject(source.operation_sync) : undefined,
+    operation_sync: source.operation_sync ? mapWorkflowCommandOperationSync(source.operation_sync) : undefined,
     display_contract: source.display_contract
       ? mapWorkflowCommandDisplayContract(source.display_contract)
       : undefined,
@@ -2231,6 +2274,116 @@ function toHeaderRecord(headers: HeadersInit): Record<string, string> {
     return Object.fromEntries(headers);
   }
   return { ...headers };
+}
+
+const WORKFLOW_COMMAND_PRIVATE_PUBLIC_MIRROR_FIELDS = new Set([
+  "authority_id",
+  "authority_seal",
+  "bootstrap_authority",
+  "bootstrap_authority_id",
+  "bootstrap_authority_digest",
+  "bootstrap_receipt",
+  "claim_authority",
+  "claim_authority_id",
+  "claim_authority_seal",
+  "claim_authority_spec_digest",
+  "claim_capability",
+  "claim_identity",
+  "claim_receipt",
+  "claim_secret",
+  "claim_selection_generation",
+  "claim_token",
+  "claim_token_digest",
+  "consumed_claim_authority_id",
+  "issuer_digest",
+  "issuer_revision",
+  "last_heartbeat_id",
+  "lease_identity",
+  "lease_token",
+  "scoped_review_session_bootstrap_authority",
+  "scoped_review_session_bootstrap_receipt",
+]);
+
+function normalizeWorkflowCommandPublicMirrorFieldName(value: unknown): string {
+  return String(value ?? "")
+    .trim()
+    .replace(/-/g, "_")
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .toLowerCase();
+}
+
+function isPrivateWorkflowCommandPublicMirrorField(value: unknown): boolean {
+  const normalized = normalizeWorkflowCommandPublicMirrorFieldName(value);
+  return (
+    WORKFLOW_COMMAND_PRIVATE_PUBLIC_MIRROR_FIELDS.has(normalized) ||
+    normalized.startsWith("bootstrap_authority_") ||
+    normalized.startsWith("claim_authority_") ||
+    normalized.startsWith("claim_token_") ||
+    normalized.startsWith("scoped_review_session_bootstrap_")
+  );
+}
+
+function sanitizeWorkflowCommandPublicMirrorValue(value: unknown): JsonValue | undefined {
+  if (value === null) {
+    return null;
+  }
+  if (typeof value === "string" || typeof value === "boolean") {
+    return value;
+  }
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : undefined;
+  }
+  if (Array.isArray(value)) {
+    const result: JsonValue[] = [];
+    for (const item of value) {
+      const sanitized = sanitizeWorkflowCommandPublicMirrorValue(item);
+      if (sanitized !== undefined) {
+        result.push(sanitized);
+      }
+    }
+    return result;
+  }
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) {
+    return undefined;
+  }
+  const result: JsonObject = {};
+  for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+    if (isPrivateWorkflowCommandPublicMirrorField(key)) {
+      continue;
+    }
+    const sanitized = sanitizeWorkflowCommandPublicMirrorValue(item);
+    if (sanitized !== undefined) {
+      result[key] = sanitized;
+    }
+  }
+  return result;
+}
+
+function asWorkflowCommandPublicMirrorSource(value: unknown, label: string): Record<string, unknown> {
+  const source = asObject(value, label);
+  const sanitized = sanitizeWorkflowCommandPublicMirrorValue(source);
+  if (!sanitized || typeof sanitized !== "object" || Array.isArray(sanitized)) {
+    throw new Error(`${label} must be a JSON object`);
+  }
+  return sanitized as Record<string, unknown>;
+}
+
+function asOptionalWorkflowCommandPublicMirrorObject(value: unknown): JsonObject | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  const sanitized = sanitizeWorkflowCommandPublicMirrorValue(value);
+  return sanitized && typeof sanitized === "object" && !Array.isArray(sanitized)
+    ? (sanitized as JsonObject)
+    : undefined;
+}
+
+function asOptionalWorkflowCommandStringArray(value: unknown): string[] | undefined {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : undefined;
 }
 
 function asObject(value: unknown, label: string): Record<string, unknown> {

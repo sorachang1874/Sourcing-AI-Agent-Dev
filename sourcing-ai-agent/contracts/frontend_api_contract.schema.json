@@ -1413,23 +1413,77 @@
     },
     "WorkflowCommandRecord": {
       "type": "object",
-      "additionalProperties": true,
+      "additionalProperties": false,
       "properties": {
         "command_id": { "type": "string" },
         "workflow_run_id": { "type": "string" },
         "operation_id": { "type": "string" },
         "command_type": { "type": "string" },
         "owner": { "type": "string" },
-        "agent_exposure_status": { "type": "string" },
-        "agent_exposure_gate": { "type": "string" },
-        "status": { "type": "string" },
         "stage_id": { "type": "string" },
+        "causal_group_id": { "type": "string" },
+        "parent_command_id": { "type": "string" },
+        "source_event_id": { "type": "string" },
+        "source_event_type": { "type": "string" },
+        "input_artifact_refs": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "output_artifact_refs": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "produced_entity_counts": { "$ref": "#/$defs/JsonObject" },
+        "no_op_reason": { "type": "string" },
         "readiness_effect": { "type": "string" },
+        "downstream_command_ids": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "causality_schema_version": { "type": "string" },
+        "status": { "type": "string" },
+        "idempotency_key": { "type": "string" },
+        "payload": { "$ref": "#/$defs/JsonObject" },
+        "artifact_refs": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "not_before_at": { "type": "string" },
+        "attempt": { "type": "number" },
+        "max_attempts": { "type": "number" },
+        "retry_policy": { "$ref": "#/$defs/JsonObject" },
+        "lease_owner": { "type": "string" },
+        "lease_expires_at": { "type": "string" },
+        "heartbeat_at": { "type": "string" },
+        "last_error": { "type": "string" },
+        "result": { "$ref": "#/$defs/JsonObject" },
+        "schema_version": { "type": "string" },
+        "created_at": { "type": "string" },
+        "updated_at": { "type": "string" },
+        "claim_generation": { "type": "number" },
+        "control_epoch": { "type": "number" },
+        "agent_exposure_gate": { "type": "string" },
+        "agent_exposure_status": { "type": "string" },
         "display_contract": { "$ref": "#/$defs/WorkflowCommandDisplayContract" },
         "control_policy": { "$ref": "#/$defs/WorkflowCommandControlPolicy" },
         "control_state": { "$ref": "#/$defs/WorkflowCommandControlState" },
         "activity_spine_policy": { "$ref": "#/$defs/WorkflowCommandActivitySpinePolicy" },
         "execution_summary": { "$ref": "#/$defs/WorkflowCommandExecutionSummary" }
+      }
+    },
+    "WorkflowCommandOperationSync": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "status": { "type": "string" },
+        "reason": { "type": "string" },
+        "operation_run_id": { "type": "string" },
+        "operation_status": { "type": "string" },
+        "control_action": { "type": "string" },
+        "command_status": { "type": "string" },
+        "operation_run": { "$ref": "#/$defs/OperationRunRecord" },
+        "event": { "$ref": "#/$defs/OperationEventRecord" },
+        "workflow_command": { "$ref": "#/$defs/WorkflowCommandRecord" }
       }
     },
     "WorkflowCommandListResponse": {
@@ -1464,7 +1518,7 @@
         "reason": { "type": "string" },
         "command_status": { "type": "string" },
         "workflow_command": { "$ref": "#/$defs/WorkflowCommandRecord" },
-        "operation_sync": { "$ref": "#/$defs/JsonObject" },
+        "operation_sync": { "$ref": "#/$defs/WorkflowCommandOperationSync" },
         "display_contract": { "$ref": "#/$defs/WorkflowCommandDisplayContract" },
         "control_policy": { "$ref": "#/$defs/WorkflowCommandControlPolicy" },
         "control_state": { "$ref": "#/$defs/WorkflowCommandControlState" },

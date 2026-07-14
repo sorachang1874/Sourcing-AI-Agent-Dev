@@ -938,12 +938,14 @@ class AcquisitionCommandOwner:
                 "requires_plan_review": bool(acquisition_plan.get("requires_plan_review")),
             },
         )
-        return {
-            "status": "running",
-            "operation_run": operation_patch,
-            "event": event,
-            "workflow_command": command_payload,
-        }
+        return self._kernel._workflow_command_operation_sync_api_record(
+            {
+                "status": "running",
+                "operation_run": operation_patch,
+                "event": event,
+                "workflow_command": self._kernel._workflow_command_api_record(command_payload),
+            }
+        )
 
     def _execute_acquisition_plan_build_command_payload(
         self,
@@ -1332,12 +1334,14 @@ class AcquisitionCommandOwner:
                 "requires_plan_review": True,
             },
         )
-        return {
-            "status": "running",
-            "operation_run": operation_patch,
-            "event": event,
-            "workflow_command": command_payload,
-        }
+        return self._kernel._workflow_command_operation_sync_api_record(
+            {
+                "status": "running",
+                "operation_run": operation_patch,
+                "event": event,
+                "workflow_command": self._kernel._workflow_command_api_record(command_payload),
+            }
+        )
 
     def _execute_acquisition_plan_review_request_command_payload(
         self,
@@ -1837,12 +1841,14 @@ class AcquisitionCommandOwner:
                 "next_phase": "W11c_acquisition_probe_scale",
             },
         )
-        return {
-            "status": "running",
-            "operation_run": operation_patch,
-            "event": event,
-            "workflow_command": command_payload,
-        }
+        return self._kernel._workflow_command_operation_sync_api_record(
+            {
+                "status": "running",
+                "operation_run": operation_patch,
+                "event": event,
+                "workflow_command": self._kernel._workflow_command_api_record(command_payload),
+            }
+        )
 
     def _execute_acquisition_plan_commit_command_payload(
         self,
@@ -2214,12 +2220,14 @@ class AcquisitionCommandOwner:
                 "module_state_mutated": True,
             },
         )
-        return {
-            "status": "running",
-            "operation_run": operation_patch,
-            "event": event,
-            "workflow_command": command_payload,
-        }
+        return self._kernel._workflow_command_operation_sync_api_record(
+            {
+                "status": "running",
+                "operation_run": operation_patch,
+                "event": event,
+                "workflow_command": self._kernel._workflow_command_api_record(command_payload),
+            }
+        )
 
     def _execute_acquisition_probe_submit_command_payload(
         self,
