@@ -240,6 +240,133 @@ def _dispatch_handler_assignment_values(tree: ast.AST) -> list[ast.AST]:
     return values
 
 
+_EXPECTED_DISPATCH_SELECTOR_SOURCE = """
+def _dispatch_operation_run_from_records(
+    self,
+    *,
+    operation_run: dict[str, Any],
+    action: dict[str, Any],
+    actor: str,
+) -> dict[str, Any]:
+    action_type = str(action.get("action_type") or "").strip()
+    try:
+        action_spec = DEFAULT_ACTION_REGISTRY.spec_for(action_type)
+    except KeyError:
+        action_spec = None
+    dispatch_adapter = str(action_spec.dispatch_adapter or "").strip() if action_spec is not None else ""
+    dispatch_handler = self._operation_dispatch_adapter_bindings().get(dispatch_adapter)
+    if dispatch_handler is not None:
+        return self._operation_run_control_response_record(
+            dispatch_handler(
+                operation_run=operation_run,
+                action=action,
+                actor=actor,
+            )
+        )
+    return self._operation_run_control_response_record(
+        {
+            "status": "unsupported",
+            "reason": f"operation action {action_type!r} has no W9b owner adapter",
+            "operation_run": operation_run,
+            "action": action,
+            "module_state_mutated": False,
+            "contract": "w9_operation_run_dispatch_v1",
+        }
+    )
+"""
+
+_EXPECTED_DISPATCH_BINDING_SOURCE = """
+def _operation_dispatch_adapter_bindings(self) -> dict[str, Callable[..., dict[str, Any]]]:
+    return {
+        DISPATCH_ADAPTER_PROJECTION_READ: self._dispatch_projection_read_operation,
+        DISPATCH_ADAPTER_PERSON_PUBLIC_WEB: self._dispatch_person_public_web_enrichment_operation,
+        DISPATCH_ADAPTER_EXPORT: self._dispatch_export_candidates_operation,
+        DISPATCH_ADAPTER_AGENT_CALLABLE_WORKFLOW_COMMAND: (
+            self._dispatch_agent_callable_workflow_command_operation
+        ),
+        DISPATCH_ADAPTER_CRM_WRITER: self._dispatch_crm_writer_operation,
+    }
+"""
+
+_EXPECTED_SELECTOR_BODY_DEPENDENCIES = frozenset(
+    {
+        "DEFAULT_ACTION_REGISTRY",
+        "KeyError",
+        "action",
+        "action_spec",
+        "action_type",
+        "actor",
+        "dispatch_adapter",
+        "dispatch_handler",
+        "operation_run",
+        "self",
+        "str",
+    }
+)
+_EXPECTED_BINDING_BODY_DEPENDENCIES = frozenset(
+    {
+        "DISPATCH_ADAPTER_AGENT_CALLABLE_WORKFLOW_COMMAND",
+        "DISPATCH_ADAPTER_CRM_WRITER",
+        "DISPATCH_ADAPTER_EXPORT",
+        "DISPATCH_ADAPTER_PERSON_PUBLIC_WEB",
+        "DISPATCH_ADAPTER_PROJECTION_READ",
+        "self",
+    }
+)
+
+
+def _named_function(tree: ast.AST, function_name: str) -> ast.FunctionDef | None:
+    matches = [node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef) and node.name == function_name]
+    return matches[0] if len(matches) == 1 else None
+
+
+def _matches_canonical_function_shape(
+    tree: ast.AST,
+    *,
+    function_name: str,
+    expected_source: str,
+) -> bool:
+    actual = _named_function(tree, function_name)
+    expected = _named_function(ast.parse(textwrap.dedent(expected_source)), function_name)
+    if actual is None or expected is None:
+        return False
+    return ast.dump(actual, include_attributes=False) == ast.dump(expected, include_attributes=False)
+
+
+def _function_body_dependencies(tree: ast.AST, function_name: str) -> frozenset[str]:
+    function = _named_function(tree, function_name)
+    if function is None:
+        return frozenset()
+    body_tree = ast.Module(body=function.body, type_ignores=[])
+    return frozenset(
+        node.id for node in ast.walk(body_tree) if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load)
+    )
+
+
+def _selector_is_canonical(tree: ast.AST) -> bool:
+    return (
+        _matches_canonical_function_shape(
+            tree,
+            function_name="_dispatch_operation_run_from_records",
+            expected_source=_EXPECTED_DISPATCH_SELECTOR_SOURCE,
+        )
+        and _function_body_dependencies(tree, "_dispatch_operation_run_from_records")
+        == _EXPECTED_SELECTOR_BODY_DEPENDENCIES
+    )
+
+
+def _binding_is_canonical(tree: ast.AST) -> bool:
+    return (
+        _matches_canonical_function_shape(
+            tree,
+            function_name="_operation_dispatch_adapter_bindings",
+            expected_source=_EXPECTED_DISPATCH_BINDING_SOURCE,
+        )
+        and _function_body_dependencies(tree, "_operation_dispatch_adapter_bindings")
+        == _EXPECTED_BINDING_BODY_DEPENDENCIES
+    )
+
+
 def test_dispatch_adapter_registry_is_closed_and_normalized() -> None:
     with pytest.raises(ValueError, match="unregistered dispatch adapter"):
         ActionRegistry(
@@ -282,6 +409,8 @@ def test_dispatch_bindings_are_explicit_total_and_do_not_use_getattr_or_action_b
         type_ignores=[],
     )
     registered_action_types = set(DEFAULT_ACTION_REGISTRY.to_record(include_command_contracts=False))
+    assert _selector_is_canonical(dispatch_tree)
+    assert _binding_is_canonical(binding_tree)
     assert not _action_constant_references(dispatch_tree)
     assert not _registered_action_literals(dispatch_tree, registered_action_types)
     assert not _action_type_control_flow_nodes(dispatch_tree)
@@ -301,6 +430,7 @@ def test_dispatch_bindings_are_explicit_total_and_do_not_use_getattr_or_action_b
     )
     assert literal_branch_mutation != dispatch_source
     literal_branch_tree = ast.parse(literal_branch_mutation)
+    assert not _selector_is_canonical(literal_branch_tree)
     assert _registered_action_literals(literal_branch_tree, registered_action_types) == {"search_projection"}
     assert _action_type_control_flow_nodes(literal_branch_tree)
 
@@ -311,7 +441,9 @@ def test_dispatch_bindings_are_explicit_total_and_do_not_use_getattr_or_action_b
         1,
     )
     assert qualified_action_mutation != dispatch_source
-    assert _action_constant_references(ast.parse(qualified_action_mutation)) == {"ACTION_ADD_CRM_NOTE"}
+    qualified_action_tree = ast.parse(qualified_action_mutation)
+    assert not _selector_is_canonical(qualified_action_tree)
+    assert _action_constant_references(qualified_action_tree) == {"ACTION_ADD_CRM_NOTE"}
 
     raw_action_control_mutation = dispatch_source.replace(
         '    action_type = str(action.get("action_type") or "").strip()\n',
@@ -321,7 +453,38 @@ def test_dispatch_bindings_are_explicit_total_and_do_not_use_getattr_or_action_b
         1,
     )
     assert raw_action_control_mutation != dispatch_source
-    assert _action_type_control_flow_nodes(ast.parse(raw_action_control_mutation))
+    raw_action_control_tree = ast.parse(raw_action_control_mutation)
+    assert not _selector_is_canonical(raw_action_control_tree)
+    assert _action_type_control_flow_nodes(raw_action_control_tree)
+
+    action_alias_mutations = {
+        "module_and_local_alias": (
+            "    routed_action_type = action_type\n"
+            "    if routed_action_type == _D1B_HIDDEN_ACTION:\n"
+            "        operation_run = {**operation_run}\n"
+        ),
+        "multi_hop_local_alias": (
+            "    first_action_alias = action_type\n"
+            "    second_action_alias = first_action_alias\n"
+            "    if second_action_alias == _D1B_HIDDEN_ACTION:\n"
+            "        operation_run = {**operation_run}\n"
+        ),
+    }
+    for mutation_name, insertion in action_alias_mutations.items():
+        mutation = dispatch_source.replace(
+            '    action_type = str(action.get("action_type") or "").strip()\n',
+            '    action_type = str(action.get("action_type") or "").strip()\n' + insertion,
+            1,
+        )
+        assert mutation != dispatch_source, mutation_name
+        mutation_tree = ast.parse(mutation)
+        assert not _selector_is_canonical(mutation_tree), mutation_name
+        assert not _action_constant_references(mutation_tree), mutation_name
+        assert not _registered_action_literals(mutation_tree, registered_action_types), mutation_name
+        assert not _action_type_control_flow_nodes(mutation_tree), mutation_name
+        assert not _function_body_dependencies(mutation_tree, "_dispatch_operation_run_from_records").issubset(
+            _EXPECTED_SELECTOR_BODY_DEPENDENCIES
+        ), mutation_name
 
     handler_lookup_line = "    dispatch_handler = self._operation_dispatch_adapter_bindings().get(dispatch_adapter)\n"
     dynamic_lookup_mutations = {
@@ -329,20 +492,30 @@ def test_dispatch_bindings_are_explicit_total_and_do_not_use_getattr_or_action_b
         "assignment_alias": (
             "    resolve_handler = getattr\n    dispatch_handler = resolve_handler(self, dispatch_adapter)\n"
         ),
+        "assignment_alias_chain": (
+            "    first_resolver = getattr\n"
+            "    second_resolver = first_resolver\n"
+            "    dispatch_handler = second_resolver(self, dispatch_adapter)\n"
+        ),
         "local_import_alias": (
             "    from builtins import getattr as resolve_handler\n"
             "    dispatch_handler = resolve_handler(self, dispatch_adapter)\n"
         ),
         "dunder_getattribute": "    dispatch_handler = self.__getattribute__(dispatch_adapter)\n",
+        "qualified_attrgetter": "    dispatch_handler = operator.attrgetter(dispatch_adapter)(self)\n",
+        "qualified_getattr_static": ("    dispatch_handler = inspect.getattr_static(self, dispatch_adapter)\n"),
         "vars_subscript": "    dispatch_handler = vars(self)[dispatch_adapter]\n",
         "vars_namespace_alias": (
             "    attribute_namespace = vars(self)\n    dispatch_handler = attribute_namespace[dispatch_adapter]\n"
         ),
+        "dunder_dict_subscript": "    dispatch_handler = self.__dict__[dispatch_adapter]\n",
     }
     for mutation_name, replacement in dynamic_lookup_mutations.items():
         mutation = dispatch_source.replace(handler_lookup_line, replacement, 1)
         assert mutation != dispatch_source, mutation_name
-        assert _dynamic_attribute_lookup_nodes(ast.parse(mutation), binding_tree), mutation_name
+        mutation_tree = ast.parse(mutation)
+        assert not _selector_is_canonical(mutation_tree), mutation_name
+        assert _dynamic_attribute_lookup_nodes(mutation_tree, binding_tree), mutation_name
 
     module_alias_mutation = dispatch_source.replace(
         handler_lookup_line,
@@ -351,11 +524,55 @@ def test_dispatch_bindings_are_explicit_total_and_do_not_use_getattr_or_action_b
     )
     imported_alias_tree = ast.parse("from builtins import getattr as imported_handler_lookup\n")
     assert module_alias_mutation != dispatch_source
+    module_alias_mutation_tree = ast.parse(module_alias_mutation)
+    assert not _selector_is_canonical(module_alias_mutation_tree)
     assert _dynamic_attribute_lookup_nodes(
-        ast.parse(module_alias_mutation),
+        module_alias_mutation_tree,
         binding_tree,
         alias_trees=(imported_alias_tree,),
     )
+
+    binding_method_references = {
+        "self._dispatch_projection_read_operation": 'hidden_resolver(self, "_dispatch_projection_read_operation")',
+        "self._dispatch_person_public_web_enrichment_operation": (
+            'hidden_resolver(self, "_dispatch_person_public_web_enrichment_operation")'
+        ),
+        "self._dispatch_export_candidates_operation": (
+            'hidden_resolver(self, "_dispatch_export_candidates_operation")'
+        ),
+        "self._dispatch_agent_callable_workflow_command_operation": (
+            'hidden_resolver(self, "_dispatch_agent_callable_workflow_command_operation")'
+        ),
+        "self._dispatch_crm_writer_operation": 'hidden_resolver(self, "_dispatch_crm_writer_operation")',
+    }
+    helper_binding_source = binding_source
+    for direct_reference, hidden_reference in binding_method_references.items():
+        helper_binding_source = helper_binding_source.replace(direct_reference, hidden_reference)
+    assert helper_binding_source != binding_source
+    helper_binding_tree = ast.parse(helper_binding_source)
+    assert not _binding_is_canonical(helper_binding_tree)
+    assert _function_body_dependencies(
+        helper_binding_tree, "_operation_dispatch_adapter_bindings"
+    ) - _EXPECTED_BINDING_BODY_DEPENDENCIES == {"hidden_resolver"}
+
+    helper_indirection_modules = {
+        "top_level_getattr_helper": (
+            "def hidden_resolver(instance, name):\n    return getattr(instance, name)\n\n" + helper_binding_source
+        ),
+        "top_level_helper_chain": (
+            "def first_resolver(instance, name):\n"
+            "    return getattr(instance, name)\n\n"
+            "def hidden_resolver(instance, name):\n"
+            "    return first_resolver(instance, name)\n\n" + helper_binding_source
+        ),
+        "module_callable_alias": ("hidden_resolver = getattr\n\n" + helper_binding_source),
+    }
+    for mutation_name, module_source in helper_indirection_modules.items():
+        module_tree = ast.parse(module_source)
+        assert not _binding_is_canonical(module_tree), mutation_name
+        assert not _function_body_dependencies(module_tree, "_operation_dispatch_adapter_bindings").issubset(
+            _EXPECTED_BINDING_BODY_DEPENDENCIES
+        ), mutation_name
 
     ordinary_mapping_lookup = ast.parse(
         "def select_handler(bindings, dispatch_adapter):\n    return bindings.get(dispatch_adapter)\n"

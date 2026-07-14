@@ -9,8 +9,10 @@
 > parameterizes the mutation across all 15 actions and adds a self-proving AST literal/control-flow rejection check.
 > A fresh pinned re-review of `528ba81` then found a second false-green: the `getattr` check recognized only a direct
 > `getattr(...)` call, so qualified or aliased dynamic attribute resolution could pass the AST oracle while all 15
-> registry mutations and the missing-binding probe stayed green. The current author follow-up closes that detector gap;
-> a new non-author re-review remains pending.
+> registry mutations and the missing-binding probe stayed green. The pinned re-review of `becc60e` found two deeper
+> false-greens: a module helper could hide `getattr`, and a module action alias plus a local `action_type` alias could
+> hide a hard-coded action branch. The current author follow-up replaces symbol-name detection as the primary gate with
+> canonical selector/binding AST shapes and exact body dependency closures; a new non-author re-review remains pending.
 
 ## 1. Outcome and scope
 
@@ -79,17 +81,21 @@ runtime. Immutable request-schema version/digest pins are outside D1b and must n
 
 1. unknown and whitespace-padded adapter identifiers reject registry construction;
 2. the runtime binding map is total over the five closed adapter identifiers;
-3. AST inspection rejects direct or qualified action constants, registered action-name string literals, direct or raw
-   `action_type` control-flow branches, and dynamic attribute lookup in selector/binding code. The lookup detector
-   covers direct, qualified, imported-alias, and assignment-alias `getattr`; `__getattribute__`/`attrgetter`; and
-   `vars(...)`/`__dict__` namespace selection while an explicit negative control preserves ordinary static-dictionary
-   `.get(dispatch_adapter)`;
+3. canonical AST inspection freezes the complete selector shape and the exact five adapter-key-to-`self.method`
+   binding entries. Separate exact body-dependency closures allow only the registry, adapter/handler locals, closed
+   adapter constants, and five direct bound methods; any helper call, module alias, new local alias, or extra control
+   flow fails even when it avoids a known dangerous symbol name;
 4. parameterized in-memory registry mutations reroute every one of the 15 actions to a different legal adapter,
    proving dispatch follows registry data for supported and empty-adapter actions rather than a hidden action-name
    branch;
-5. deleting the export binding fails closed without invoking another owner;
-6. the exact three empty-adapter actions remain unsupported;
-7. public registry records expose neither the internal adapter nor request schema, model-safe result schema,
+5. self-proving mutations cover direct, qualified, imported, multi-hop assignment, and module-helper `getattr`;
+   `__getattribute__`, `attrgetter`, `getattr_static`, `vars(...)`, and `__dict__`; qualified action constants; raw
+   `action_type`; and module/local multi-hop action aliases. The prior module-helper and aliased-action-branch
+   counterexamples now fail the canonical/dependency gate, while an ordinary static-dictionary `.get(...)` remains a
+   negative control for the supplemental dangerous-symbol detector;
+6. deleting the export binding fails closed without invoking another owner;
+7. the exact three empty-adapter actions remain unsupported;
+8. public registry records expose neither the internal adapter nor request schema, model-safe result schema,
    `agent_tool_enabled`, or served status.
 
 The probes use local dictionaries and methods only. They create no PG rows, files, network traffic, provider requests,
@@ -171,3 +177,11 @@ scoped whitespace diff check passed. Independent mutation probes produced zero f
 at least one finding each for qualified `builtins.getattr`, an assignment alias, `__getattribute__`, and
 `vars(self)[name]`, and zero findings for an ordinary dictionary `.get(name)`. This follow-up changes only the D1b test
 and this document; its results are author evidence, and a fresh non-author review is still required.
+
+Third false-green follow-up author validation on the final stable worktree: D1a+D1b passed 25 tests; 15 PG-backed
+registry/dispatch/adjacent exposure nodes passed; the command-spec suite passed 16 tests; focused mypy reported no
+issues in three checked files; and Ruff check, Ruff format, and scoped whitespace diff check passed. The canonical AST
+and dependency-closure mutations reject the exact two re-review counterexamples—top-level helper `getattr` and
+module/local aliased action branch—plus multi-hop helper/action aliases, while the unchanged production selector and
+exact five-entry direct binding map pass. This follow-up changes only the D1b test and this document; its evidence
+remains author evidence, and a fresh non-author review is required.
