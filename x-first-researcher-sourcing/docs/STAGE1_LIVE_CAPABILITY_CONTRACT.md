@@ -163,7 +163,7 @@ the runtime owner, and only then writes a non-sensitive deletion receipt. `runti
 
 ## Adversarial regression closure
 
-The post-`fee3699` reviews reproduced fifteen false-green or non-terminal classes before this hardening:
+The post-`fee3699` reviews reproduced eighteen false-green or non-terminal classes before this hardening:
 
 1. two independent runtime roots could each consume the same approval;
 2. a wrapped update with a post URL and an unrelated author dictionary could claim stable identity;
@@ -182,12 +182,15 @@ The post-`fee3699` reviews reproduced fifteen false-green or non-terminal classe
 15. a valid outer envelope without updates lost its session and token-usage audit fields;
 16. the ninth distinct call/model/author/unexpected tool, more than 25 aggregate posts, or more than eight evidence
     errors could consume approval and leave no valid failure bundle; and
-17. JSON booleans/floats/strings equal to numeric zero could forge an outer-only update-byte receipt.
+17. JSON booleans/floats/strings equal to numeric zero could forge an outer-only update-byte receipt; and
+18. an unpaired Unicode surrogate in a provider call id, outer request id, or retained observation excerpt could
+    escape strict UTF-8 serialization after approval consumption. Provider-retained strings now require Unicode-scalar
+    UTF-8 encoding, and ASCII-escaped artifact serialization provides a final terminality boundary.
 
 Each now has a deterministic concurrency, mutation, artifact, or subprocess regression. These tests prove the local
 fail-closed contract only; they are not a live X capability result or an independent-review `GO`.
 
-The fixed-forward checkout discovers 24 focused live-contract tests and 90 repository tests. The reviewed `a6d9e07`
+The fixed-forward checkout discovers 25 focused live-contract tests and 91 repository tests. The reviewed `a6d9e07`
 baseline was 20 focused and 85 repository tests, not 86; the additional repository test before this fixed-forward
 slice belongs to the separately committed profile/Bio lane.
 

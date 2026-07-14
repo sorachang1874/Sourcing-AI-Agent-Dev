@@ -373,6 +373,25 @@ def _strict_json_loads(value: str | bytes) -> Any:
     return payload
 
 
+def _is_utf8_scalar_text(
+    value: Any,
+    *,
+    minimum_characters: int = 0,
+    maximum_characters: int | None = None,
+    maximum_bytes: int | None = None,
+) -> bool:
+    """Return whether an untrusted provider string is safe to retain as UTF-8 JSON."""
+    if not isinstance(value, str) or len(value) < minimum_characters:
+        return False
+    if maximum_characters is not None and len(value) > maximum_characters:
+        return False
+    try:
+        encoded = value.encode("utf-8", errors="strict")
+    except UnicodeEncodeError:
+        return False
+    return maximum_bytes is None or len(encoded) <= maximum_bytes
+
+
 def _live_content_errors(value: Any) -> list[str]:
     errors: list[str] = []
     for path, child in _iter_values(value):
@@ -798,7 +817,7 @@ def _parse_update_stream(
                 model_ids.add(bounded_model_id)
         elif kind == "tool_call":
             call_id = update.get("toolCallId")
-            if not isinstance(call_id, str) or not call_id or len(call_id) > 160:
+            if not _is_utf8_scalar_text(call_id, minimum_characters=1, maximum_characters=160):
                 evidence_errors.add("tool call id is invalid")
                 continue
             if tool_call_ids.contains(call_id) or x_call_ids.contains(call_id):
@@ -822,7 +841,9 @@ def _parse_update_stream(
                 unexpected.add(tool_name or "unknown")
         elif kind == "tool_call_update":
             call_id = update.get("toolCallId")
-            if not isinstance(call_id, str) or (call_id not in tool_calls and call_id not in x_calls):
+            if not _is_utf8_scalar_text(call_id, minimum_characters=1, maximum_characters=160) or (
+                call_id not in tool_calls and call_id not in x_calls
+            ):
                 unexpected.add("unknown_tool_call_update")
                 continue
             resolved_tool = tool_calls.get(call_id, TOOL_ID)
@@ -1085,7 +1106,7 @@ def _canonical_observation(value: Any, *, observed_at: str) -> dict[str, Any] | 
         return None
     if authored.tzinfo is None or authored > observed:
         return None
-    if not isinstance(excerpt, str) or not 1 <= len(excerpt) <= 280:
+    if not _is_utf8_scalar_text(excerpt, minimum_characters=1, maximum_characters=280):
         return None
     if value.get("full_body_stored") is not False:
         return None
@@ -1120,7 +1141,7 @@ def _outer_response_errors(
     if outer.get("sessionId") != expected_session_id:
         errors.append("Grok headless envelope session does not match the command session")
     request_id = outer.get("requestId")
-    if not isinstance(request_id, str) or not request_id or len(request_id) > 160:
+    if not _is_utf8_scalar_text(request_id, minimum_characters=1, maximum_characters=160):
         errors.append("Grok headless envelope request id is invalid")
     model_turns = outer.get("num_turns")
     if type(model_turns) is not int or not 1 <= model_turns <= MAX_TURNS:
@@ -1182,7 +1203,7 @@ def _parse_outer_response(stdout: bytes, *, expected_session_id: str) -> tuple[d
     if _outer_response_errors(outer, expected_session_id=expected_session_id, proof=None):
         raise ValueError("Grok headless envelope failed the strict contract")
     text = outer.get("text")
-    if not isinstance(text, str) or len(text.encode("utf-8")) > MAX_STDOUT_BYTES:
+    if not _is_utf8_scalar_text(text, minimum_characters=1, maximum_bytes=MAX_STDOUT_BYTES):
         raise ValueError("Grok response text is missing or oversized")
     try:
         inner = _strict_json_loads(text)
@@ -1279,7 +1300,11 @@ def _outer_evidence_projection(outer: Mapping[str, Any] | None) -> tuple[dict[st
     if source and (not required_fields <= set(source) or not set(source) <= allowed_fields):
         errors.add("outer_envelope_fields_are_invalid")
     request_id = source.get("requestId")
-    if request_id is not None and (not isinstance(request_id, str) or not request_id or len(request_id) > 160):
+    if request_id is not None and not _is_utf8_scalar_text(
+        request_id,
+        minimum_characters=1,
+        maximum_characters=160,
+    ):
         request_id = None
         errors.add("outer_provider_request_id_is_invalid")
     outer_session_id = source.get("sessionId")
@@ -1971,7 +1996,10 @@ def _atomic_write_json(path: Path, payload: Mapping[str, Any]) -> None:
     path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     if path.parent.is_symlink() or path.is_symlink():
         raise ValueError("live probe artifact path must not be a symlink")
-    serialized = (json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True, allow_nan=False) + "\n").encode(
+    # ASCII escaping is a final terminality boundary. Provider strings are
+    # rejected before retention, but an overlooked surrogate must never make
+    # artifact serialization escape after the one-shot approval is consumed.
+    serialized = (json.dumps(payload, ensure_ascii=True, indent=2, sort_keys=True, allow_nan=False) + "\n").encode(
         "utf-8"
     )
     descriptor, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)

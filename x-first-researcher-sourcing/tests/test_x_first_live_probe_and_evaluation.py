@@ -332,6 +332,9 @@ class XFirstLiveCapabilityContractTest(unittest.TestCase):
     def _run_bounded_provider_events(
         self,
         events_factory: object,
+        *,
+        inner_mutator: object | None = None,
+        outer_mutator: object | None = None,
     ) -> tuple[dict[str, object], dict[str, object], Path]:
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
@@ -351,9 +354,14 @@ class XFirstLiveCapabilityContractTest(unittest.TestCase):
             events = events_factory(session_id)  # type: ignore[operator]
             _write_events(updates, events)
             invalid_inner = {**_inner_response(), "unexpected": "field"}
+            if inner_mutator is not None:
+                inner_mutator(invalid_inner)  # type: ignore[operator]
+            outer = _outer_response(invalid_inner, session_id=session_id)
+            if outer_mutator is not None:
+                outer_mutator(outer)  # type: ignore[operator]
             return BoundedCommandResult(
                 returncode=0,
-                stdout=json.dumps(_outer_response(invalid_inner, session_id=session_id)).encode(),
+                stdout=json.dumps(outer).encode(),
                 stderr=b"",
                 stop_reason=None,
             )
@@ -1056,6 +1064,32 @@ class XFirstLiveCapabilityContractTest(unittest.TestCase):
         over_cleanup_budget["usage"]["elapsed_ms"] = 201000
         over_cleanup_budget["retention"]["delete_after"] = "2026-07-15T09:03:21.000Z"
         self.assertTrue(validate_live_result(over_cleanup_budget, request=self.request))
+
+    def test_provider_unpaired_surrogates_persist_one_terminal_failure_bundle(self) -> None:
+        surrogate = "\ud800"
+
+        call_result, call_receipt, _ = self._run_bounded_provider_events(
+            lambda session_id: _session_events(session_id=session_id, call_ids=(f"x-{surrogate}",))
+        )
+        self.assertEqual(call_result["run"]["status"], "failed")  # type: ignore[index]
+        self.assertEqual(call_receipt["calls"], [])
+        self.assertIn("tool call id is invalid", call_receipt["evidence_errors"])
+
+        outer_result, outer_receipt, _ = self._run_bounded_provider_events(
+            lambda session_id: _session_events(session_id=session_id, raw_output={"posts": []}),
+            outer_mutator=lambda outer: outer.update(requestId=f"req-{surrogate}"),
+        )
+        self.assertIsNone(outer_result["provenance"]["provider_request_id"])  # type: ignore[index]
+        self.assertIsNone(outer_receipt["provider_request_id"])
+        self.assertIn("outer_provider_request_id_is_invalid", outer_receipt["evidence_errors"])
+
+        excerpt_result, excerpt_receipt, _ = self._run_bounded_provider_events(
+            lambda session_id: _session_events(session_id=session_id, raw_output=_raw_x_output()),
+            inner_mutator=lambda inner: inner["observations"][0].update(excerpt=f"bad-{surrogate}"),  # type: ignore[index]
+        )
+        self.assertEqual(excerpt_result["run"]["status"], "failed")  # type: ignore[index]
+        self.assertEqual(excerpt_result["observations"], [])
+        self.assertEqual(excerpt_receipt["calls"][0]["raw_result_posts"][0]["platform_object_id"], POST_ID)
 
     def test_generic_unknown_duplicate_and_local_tools_fail_closed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
