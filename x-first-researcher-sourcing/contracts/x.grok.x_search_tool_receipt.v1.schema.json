@@ -45,8 +45,8 @@
     },
     "outer_model_turns": {"type": ["integer", "null"], "minimum": 1, "maximum": 8},
     "outer_total_cost_usd": {"type": ["number", "null"], "minimum": 0},
-    "session_updates_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-    "session_update_bytes": {"type": "integer", "minimum": 1, "maximum": 5000000},
+    "session_updates_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+    "session_update_bytes": {"type": "integer", "minimum": 0, "maximum": 5000000},
     "terminal_stop_reason": {"type": ["string", "null"], "enum": ["end_turn", "max_turns", null]},
     "terminal_usage": {
       "oneOf": [
@@ -144,5 +144,24 @@
         }
       }
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "required": ["session_updates_sha256"],
+        "properties": {"session_updates_sha256": {"type": "null"}}
+      },
+      "then": {
+        "properties": {
+          "session_update_bytes": {"const": 0},
+          "terminal_stop_reason": {"type": "null"},
+          "terminal_usage": {"type": "null"},
+          "observed_model_ids": {"maxItems": 0},
+          "unexpected_tool_calls": {"maxItems": 0},
+          "calls": {"maxItems": 0}
+        }
+      },
+      "else": {"properties": {"session_update_bytes": {"minimum": 1}}}
+    }
+  ]
 }

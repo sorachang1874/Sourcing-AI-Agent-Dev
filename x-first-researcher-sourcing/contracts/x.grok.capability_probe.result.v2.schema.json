@@ -97,6 +97,30 @@
           }
         }
       }
+    },
+    {
+      "if": {
+        "required": ["provenance"],
+        "properties": {
+          "provenance": {
+            "required": ["tool_receipt_sha256"],
+            "properties": {"tool_receipt_sha256": {"type": "string"}}
+          }
+        }
+      },
+      "then": {
+        "properties": {"provenance": {"properties": {"session_id": {"type": "string"}}}}
+      },
+      "else": {
+        "properties": {
+          "provenance": {
+            "properties": {
+              "session_id": {"type": "null"},
+              "session_updates_sha256": {"type": "null"}
+            }
+          }
+        }
+      }
     }
   ],
   "$defs": {

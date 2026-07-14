@@ -87,7 +87,11 @@ exact raw-result-to-observation reconciliation; any ambiguity is a failed probe.
 Only a minimized provider-evidence receipt is retained. Before evaluating return code, stop reason, stderr, inner JSON,
 or terminal success, the failure path independently snapshots bounded partial updates and structurally parses the
 outer envelope. Therefore an already observed request id, call/completed-result count, raw id, turn count, or reported
-cost is not rewritten to zero/null merely because inner validation or process-group verification failed. A raw post is
+cost is not rewritten to zero/null merely because inner validation or process-group verification failed. All JSON
+entrypoints translate decoder recursion into a typed parse failure, then apply an iterative maximum depth of 64 and
+maximum node count of 50,000 before any recursive content inspection. A valid outer envelope still produces a bound
+outer-only tool receipt when updates are missing or invalid: its update digest is null, update bytes/calls are zero,
+and request/session/token usage/turn/cost fields remain auditable without inventing an X call. A raw post is
 accepted only from the direct `rawOutput.posts[*]` path when one closed reviewed record co-locates exactly one numeric
 post-id field and the exactly matching canonical URL. A stable author id additionally requires every present registered
 `author_info`/`author`/`user` child path to be complete and yield one consistent target handle/numeric id. Unread
@@ -134,7 +138,8 @@ call/completed-result counts, terminal and outer turn counts, raw ids, model ids
 over-budget reported cost remains visible in the failed receipt instead of being rewritten as unreported.
 
 Request/result/approval/tool files are written to a private staging directory and renamed as one atomic bundle. A
-successful bundle has exactly four files; a failure without structured tool evidence has exactly three. Validation
+successful bundle has exactly four files. A failure has four when either bounded updates or an outer envelope can be
+retained, and three only when neither evidence surface parsed. Validation
 rejects extra transcripts, renamed directories, non-private files, a run-id mismatch, an absent global ledger, invalid
 calendar timestamps, and any expiry other than exactly completion plus 24 hours. `--purge-expired` detects unexpected
 or renamed paths instead of silently skipping them, deletes a validated expired bundle, verifies it is gone, fsyncs
@@ -142,7 +147,7 @@ the runtime owner, and only then writes a non-sensitive deletion receipt. `runti
 
 ## Adversarial regression closure
 
-The post-`fee3699` reviews reproduced thirteen false-green or non-terminal classes before this hardening:
+The post-`fee3699` reviews reproduced fifteen false-green or non-terminal classes before this hardening:
 
 1. two independent runtime roots could each consume the same approval;
 2. a wrapped update with a post URL and an unrelated author dictionary could claim stable identity;
@@ -155,11 +160,17 @@ The post-`fee3699` reviews reproduced thirteen false-green or non-terminal class
 9. a cleanup-verification exception erased an already completed X call from the failure receipt;
 10. an invalid inner JSON body erased an already observed outer request id, turn count, and reported cost;
 11. a nested diagnostic/request-echo object with `id + canonical_url` produced a false post;
-12. a target author container plus a conflicting account container still produced stable identity; and
-13. duplicate raw post records were set-collapsed before runtime/schema validation.
+12. a target author container plus a conflicting account container still produced stable identity;
+13. duplicate raw post records were set-collapsed before runtime/schema validation;
+14. a 10,000-level stdout or updates JSON value escaped with `RecursionError` after consuming approval and wrote no bundle; and
+15. a valid outer envelope without updates lost its session and token-usage audit fields.
 
 Each now has a deterministic concurrency, mutation, artifact, or subprocess regression. These tests prove the local
 fail-closed contract only; they are not a live X capability result or an independent-review `GO`.
+
+The fixed-forward checkout discovers 22 focused live-contract tests and 88 repository tests. The reviewed `a6d9e07`
+baseline was 20 focused and 85 repository tests, not 86; the additional repository test before this fixed-forward
+slice belongs to the separately committed profile/Bio lane.
 
 An additional read-only compatibility check parsed one already-existing, completed, no-tool local session from pinned
 Grok CLI 0.2.99: command/session metadata, `grok-4.5`, `end_turn`, and terminal usage reconciled with zero evidence

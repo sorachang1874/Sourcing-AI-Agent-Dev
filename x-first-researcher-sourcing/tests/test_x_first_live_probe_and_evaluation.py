@@ -351,6 +351,15 @@ class XFirstLiveCapabilityContractTest(unittest.TestCase):
         self.assertEqual(success_usage["model_turns"]["maximum"], 4)
         self.assertEqual(success_usage["elapsed_ms"]["maximum"], 180000)
         self.assertNotIn("maximum", result_schema["$defs"]["usage"]["properties"]["cost_usd"])
+        receipt_binding = result_schema["allOf"][1]
+        self.assertEqual(
+            receipt_binding["then"]["properties"]["provenance"]["properties"]["session_id"]["type"],
+            "string",
+        )
+        self.assertEqual(
+            receipt_binding["else"]["properties"]["provenance"]["properties"]["session_updates_sha256"]["type"],
+            "null",
+        )
         self.assertIn("owner_id", approval_schema["required"])
         self.assertEqual(approval_schema["properties"]["owner_id"]["const"], GLOBAL_APPROVAL_OWNER_ID)
         self.assertEqual(
@@ -368,6 +377,16 @@ class XFirstLiveCapabilityContractTest(unittest.TestCase):
             tool_schema["properties"]["terminal_usage"]["oneOf"][1]["properties"]["model_turns"]["maximum"],
             8,
         )
+        self.assertEqual(tool_schema["properties"]["session_updates_sha256"]["type"], ["string", "null"])
+        self.assertEqual(tool_schema["properties"]["session_update_bytes"]["minimum"], 0)
+        outer_only_receipt = live_probe._build_tool_receipt(
+            proof=None,
+            session_id=SESSION_ID,
+            outer=_outer_response(_inner_response()),
+        )
+        self.assertIsNone(outer_only_receipt["session_updates_sha256"])
+        self.assertEqual(outer_only_receipt["session_update_bytes"], 0)
+        self.assertEqual(outer_only_receipt["calls"], [])
         stage1_contract = (ROOT / "docs/STAGE1_LIVE_CAPABILITY_CONTRACT.md").read_text(encoding="utf-8")
         transport_decision = (ROOT / "docs/X_SEARCH_TRANSPORT_AND_SCALE_DECISION.md").read_text(encoding="utf-8")
         self.assertIn("bounded stdio/process-group monitor", stage1_contract)
@@ -1347,6 +1366,136 @@ class XFirstLiveCapabilityContractTest(unittest.TestCase):
                     validate_artifact_pair(artifact_root / "request.json", artifact_root / "result.json"),
                     [],
                 )
+
+    def test_deep_provider_json_is_bounded_and_still_persists_one_failure_bundle(self) -> None:
+        too_deep = (
+            "[" * (live_probe.MAX_JSON_STRUCTURE_DEPTH + 1) + "0" + "]" * (live_probe.MAX_JSON_STRUCTURE_DEPTH + 1)
+        )
+        too_many_nodes = "[" + ",".join("0" for _ in range(live_probe.MAX_JSON_STRUCTURE_NODES)) + "]"
+        with self.assertRaises(ValueError):
+            live_probe._strict_json_loads(too_deep)
+        with self.assertRaises(ValueError):
+            live_probe._strict_json_loads(too_many_nodes)
+
+        nested_json = b"[" * 10_000 + b"0" + b"]" * 10_000
+        for malformed_source in ("stdout", "updates"):
+            with self.subTest(malformed_source=malformed_source), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                approval_root = root / "global-approval"
+                binary = root / "grok"
+                binary.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+                binary.chmod(stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
+                auth = root / "auth.json"
+                auth.write_text('{"private":"credential-material"}', encoding="utf-8")
+                auth.chmod(0o600)
+                binary_digest = hashlib.sha256(binary.read_bytes()).hexdigest()
+
+                def fake_run(command: list[str], **kwargs: object) -> BoundedCommandResult:
+                    session_id = command[command.index("--session-id") + 1]
+                    stdout = nested_json
+                    if malformed_source == "updates":
+                        updates = Path(kwargs["updates_path"])
+                        updates.parent.mkdir(mode=0o700, parents=True)
+                        updates.write_bytes(nested_json + b"\n")
+                        stdout = json.dumps(_outer_response(_inner_response(), session_id=session_id)).encode()
+                    return BoundedCommandResult(returncode=0, stdout=stdout, stderr=b"", stop_reason=None)
+
+                with (
+                    mock.patch("x_first.live_probe._run_bounded_command", side_effect=fake_run),
+                    mock.patch("x_first.live_probe.project_root", return_value=root),
+                    mock.patch("x_first.live_probe._global_approval_root", return_value=approval_root),
+                    mock.patch("x_first.live_probe.PINNED_GROK_BINARY_SHA256", binary_digest),
+                ):
+                    result, artifact_root = run_live_probe(execute_live=True, grok_binary=binary, auth_path=auth)
+                self.assertEqual(result["run"]["status"], "failed")
+                self.assertEqual(result["task"]["stop_reason"], "invalid_provider_evidence")
+                self.assertEqual(len(list((root / "runtime/live-probes").glob("xprobe_run_*"))), 1)
+                approval = json.loads((approval_root / f"{self.request['probe_id']}.json").read_text(encoding="utf-8"))
+                self.assertEqual(approval["state"], "consumed_before_spawn")
+                self.assertEqual(approval["run_id"], result["run"]["run_id"])
+                with (
+                    mock.patch("x_first.live_probe.project_root", return_value=root),
+                    mock.patch("x_first.live_probe._global_approval_root", return_value=approval_root),
+                    mock.patch("x_first.live_probe.PINNED_GROK_BINARY_SHA256", binary_digest),
+                ):
+                    artifact_errors = validate_artifact_pair(
+                        artifact_root / "request.json",
+                        artifact_root / "result.json",
+                    )
+                self.assertEqual(
+                    artifact_errors,
+                    [],
+                )
+
+    def test_runner_retains_outer_only_request_session_tokens_turns_and_cost(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            approval_root = root / "global-approval"
+            binary = root / "grok"
+            binary.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+            binary.chmod(stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
+            auth = root / "auth.json"
+            auth.write_text('{"private":"credential-material"}', encoding="utf-8")
+            auth.chmod(0o600)
+            binary_digest = hashlib.sha256(binary.read_bytes()).hexdigest()
+
+            def fake_run(command: list[str], **_: object) -> BoundedCommandResult:
+                session_id = command[command.index("--session-id") + 1]
+                outer = _outer_response(_inner_response(), session_id=session_id, cost=0.03)
+                return BoundedCommandResult(
+                    returncode=0,
+                    stdout=json.dumps(outer).encode(),
+                    stderr=b"",
+                    stop_reason=None,
+                )
+
+            with (
+                mock.patch("x_first.live_probe._run_bounded_command", side_effect=fake_run),
+                mock.patch("x_first.live_probe.project_root", return_value=root),
+                mock.patch("x_first.live_probe._global_approval_root", return_value=approval_root),
+                mock.patch("x_first.live_probe.PINNED_GROK_BINARY_SHA256", binary_digest),
+            ):
+                result, artifact_root = run_live_probe(execute_live=True, grok_binary=binary, auth_path=auth)
+            tool_receipt = json.loads((artifact_root / "tool-receipt.json").read_text(encoding="utf-8"))
+            self.assertEqual(
+                sorted(path.name for path in artifact_root.iterdir()),
+                [
+                    "approval-receipt.json",
+                    "request.json",
+                    "result.json",
+                    "tool-receipt.json",
+                ],
+            )
+            self.assertEqual(result["task"]["stop_reason"], "invalid_provider_evidence")
+            self.assertEqual(result["provenance"]["provider_request_id"], "provider-request")
+            self.assertEqual(result["provenance"]["session_id"], tool_receipt["session_id"])
+            self.assertEqual(tool_receipt["outer_session_id"], tool_receipt["session_id"])
+            self.assertEqual(
+                tool_receipt["outer_usage"],
+                {"input_tokens": 100, "output_tokens": 50, "total_tokens": 150},
+            )
+            self.assertEqual(tool_receipt["outer_model_turns"], 2)
+            self.assertEqual(tool_receipt["outer_total_cost_usd"], 0.03)
+            self.assertIsNone(tool_receipt["session_updates_sha256"])
+            self.assertEqual(tool_receipt["session_update_bytes"], 0)
+            self.assertEqual(tool_receipt["calls"], [])
+            self.assertEqual(result["usage"]["x_search_calls"], 0)
+            self.assertEqual(result["usage"]["result_sets"], 0)
+            self.assertEqual(result["usage"]["model_turns"], 2)
+            self.assertEqual(result["usage"]["cost_usd"], 0.03)
+            with (
+                mock.patch("x_first.live_probe.project_root", return_value=root),
+                mock.patch("x_first.live_probe._global_approval_root", return_value=approval_root),
+                mock.patch("x_first.live_probe.PINNED_GROK_BINARY_SHA256", binary_digest),
+            ):
+                artifact_errors = validate_artifact_pair(
+                    artifact_root / "request.json",
+                    artifact_root / "result.json",
+                )
+            self.assertEqual(
+                artifact_errors,
+                [],
+            )
 
 
 if __name__ == "__main__":

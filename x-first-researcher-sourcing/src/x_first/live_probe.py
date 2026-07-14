@@ -54,6 +54,8 @@ MAX_STDOUT_BYTES = 256_000
 MAX_STDERR_BYTES = 256_000
 MAX_SESSION_UPDATES_BYTES = 5_000_000
 MAX_UPDATE_LINE_BYTES = 1_000_000
+MAX_JSON_STRUCTURE_DEPTH = 64
+MAX_JSON_STRUCTURE_NODES = 50_000
 MAX_AUTH_BYTES = 64_000
 MAX_BINARY_BYTES = 300_000_000
 MAX_VIOLATION_RECEIPT_CALLS = 8
@@ -258,7 +260,28 @@ def _reject_json_constant(value: str) -> None:
 
 
 def _strict_json_loads(value: str | bytes) -> Any:
-    return json.loads(value, parse_constant=_reject_json_constant)
+    try:
+        payload = json.loads(value, parse_constant=_reject_json_constant)
+    except RecursionError as error:
+        raise ValueError("JSON nesting exceeds the bounded parser depth") from error
+    stack: list[tuple[Any, int]] = [(payload, 0)]
+    nodes = 0
+    while stack:
+        current, depth = stack.pop()
+        nodes += 1
+        if nodes > MAX_JSON_STRUCTURE_NODES:
+            raise ValueError("JSON structure exceeds the bounded parser node count")
+        if depth > MAX_JSON_STRUCTURE_DEPTH:
+            raise ValueError("JSON structure exceeds the bounded parser depth")
+        if isinstance(current, dict):
+            if nodes + len(stack) + len(current) > MAX_JSON_STRUCTURE_NODES:
+                raise ValueError("JSON structure exceeds the bounded parser node count")
+            stack.extend((child, depth + 1) for child in current.values())
+        elif isinstance(current, list):
+            if nodes + len(stack) + len(current) > MAX_JSON_STRUCTURE_NODES:
+                raise ValueError("JSON structure exceeds the bounded parser node count")
+            stack.extend((child, depth + 1) for child in current)
+    return payload
 
 
 def _live_content_errors(value: Any) -> list[str]:
@@ -1183,7 +1206,7 @@ def _build_failure_result(
             "model_id": MODEL_ID,
             "tool_id": TOOL_ID,
             "provider_request_id": provider_request_id,
-            "session_id": session_id if proof is not None else None,
+            "session_id": session_id if tool_receipt_sha256 is not None else None,
             "prompt_version": PROMPT_VERSION,
             "prompt_sha256": canonical_sha256({"prompt": build_grok_prompt(request)}),
             "session_updates_sha256": proof.updates_sha256 if proof is not None else None,
@@ -1427,12 +1450,13 @@ def _provider_usage_payload(usage: ProviderUsageReceipt | None) -> dict[str, int
 
 def _build_tool_receipt(
     *,
-    proof: ToolProof,
+    proof: ToolProof | None,
     session_id: str,
     outer: Mapping[str, Any] | None,
 ) -> dict[str, Any]:
     outer_evidence, outer_errors = _outer_evidence_projection(outer)
-    evidence_errors = sorted({*proof.evidence_errors, *outer_errors})
+    proof_errors = proof.evidence_errors if proof is not None else ()
+    evidence_errors = sorted({*proof_errors, *outer_errors})
     if len(evidence_errors) > MAX_VIOLATION_RECEIPT_CALLS:
         evidence_errors = [
             *evidence_errors[: MAX_VIOLATION_RECEIPT_CALLS - 1],
@@ -1447,12 +1471,12 @@ def _build_tool_receipt(
         "outer_usage": outer_evidence["usage"],
         "outer_model_turns": outer_evidence["num_turns"],
         "outer_total_cost_usd": outer_evidence["total_cost_usd"],
-        "session_updates_sha256": proof.updates_sha256,
-        "session_update_bytes": proof.update_bytes,
-        "terminal_stop_reason": proof.terminal_stop_reason,
-        "terminal_usage": _provider_usage_payload(proof.terminal_usage),
-        "observed_model_ids": list(proof.observed_model_ids),
-        "unexpected_tool_calls": list(proof.unexpected_tool_calls),
+        "session_updates_sha256": proof.updates_sha256 if proof is not None else None,
+        "session_update_bytes": proof.update_bytes if proof is not None else 0,
+        "terminal_stop_reason": proof.terminal_stop_reason if proof is not None else None,
+        "terminal_usage": _provider_usage_payload(proof.terminal_usage) if proof is not None else None,
+        "observed_model_ids": list(proof.observed_model_ids) if proof is not None else [],
+        "unexpected_tool_calls": list(proof.unexpected_tool_calls) if proof is not None else [],
         "evidence_errors": evidence_errors,
         "calls": [
             {
@@ -1471,9 +1495,36 @@ def _build_tool_receipt(
                     {post.platform_user_id for post in call.raw_result_posts if post.platform_user_id}
                 ),
             }
-            for call in proof.call_receipts
+            for call in (proof.call_receipts if proof is not None else ())
         ],
     }
+
+
+def _best_effort_failure_evidence(
+    *,
+    stdout: bytes | None,
+    updates_path: Path,
+    session_id: str,
+) -> tuple[dict[str, Any] | None, ToolProof | None, dict[str, Any] | None]:
+    """Collapse all provider-owned parse failures while retaining independently valid evidence."""
+    outer: dict[str, Any] | None = None
+    proof: ToolProof | None = None
+    try:
+        if stdout is not None:
+            outer = _try_parse_outer_envelope(stdout)
+    except Exception:
+        outer = None
+    try:
+        proof = _try_extract_failure_tool_proof(updates_path, expected_session_id=session_id)
+    except Exception:
+        proof = None
+    tool_receipt: dict[str, Any] | None = None
+    if outer is not None or proof is not None:
+        try:
+            tool_receipt = _build_tool_receipt(proof=proof, session_id=session_id, outer=outer)
+        except Exception:
+            tool_receipt = None
+    return outer, proof, tool_receipt
 
 
 def _isolated_environment(grok_home: Path) -> dict[str, str]:
@@ -1828,9 +1879,11 @@ def run_live_probe(
         except Exception:
             completed_at = _utc_now()
             elapsed_ms = round((time.monotonic() - started_monotonic) * 1000)
-            proof = _try_extract_failure_tool_proof(updates_path, expected_session_id=session_id)
-            if proof is not None:
-                tool_receipt = _build_tool_receipt(proof=proof, session_id=session_id, outer=None)
+            outer, proof, tool_receipt = _best_effort_failure_evidence(
+                stdout=None,
+                updates_path=updates_path,
+                session_id=session_id,
+            )
             result = _build_failure_result(
                 request=live_request,
                 run_id=run_id,
@@ -1850,10 +1903,11 @@ def run_live_probe(
             elapsed_ms = round((time.monotonic() - started_monotonic) * 1000)
             # Parse provider-owned evidence before evaluating any outcome flag. This preserves
             # completed calls and a structurally valid outer receipt on every later failure path.
-            outer = _try_parse_outer_envelope(completed.stdout)
-            proof = _try_extract_failure_tool_proof(updates_path, expected_session_id=session_id)
-            if proof is not None:
-                tool_receipt = _build_tool_receipt(proof=proof, session_id=session_id, outer=outer)
+            outer, proof, tool_receipt = _best_effort_failure_evidence(
+                stdout=completed.stdout,
+                updates_path=updates_path,
+                session_id=session_id,
+            )
             try:
                 if completed.execution_error is not None:
                     raise RuntimeError(completed.execution_error)
@@ -1884,10 +1938,11 @@ def run_live_probe(
                     tool_receipt_sha256=tool_receipt_sha256,
                 )
             except Exception:
-                if proof is None:
-                    proof = _try_extract_failure_tool_proof(updates_path, expected_session_id=session_id)
-                if proof is not None:
-                    tool_receipt = _build_tool_receipt(proof=proof, session_id=session_id, outer=outer)
+                outer, proof, tool_receipt = _best_effort_failure_evidence(
+                    stdout=completed.stdout,
+                    updates_path=updates_path,
+                    session_id=session_id,
+                )
                 tool_receipt_sha256 = canonical_sha256(tool_receipt) if tool_receipt is not None else None
                 stop_reason = completed.execution_error or completed.cleanup_error or completed.stop_reason
                 error_code = stop_reason or "invalid_provider_evidence"
@@ -2341,6 +2396,11 @@ def validate_live_result(payload: Any, *, request: Any) -> list[str]:
         and (not isinstance(tool_digest, str) or re.fullmatch(r"[0-9a-f]{64}", tool_digest) is None)
     ):
         errors.append("failed result tool receipt is invalid")
+    if tool_digest is None:
+        if session_id is not None or updates_sha256 is not None:
+            errors.append("result session/update provenance lacks a bound tool receipt")
+    elif session_id is None:
+        errors.append("result tool receipt lacks its command-session binding")
     if binary_digest != PINNED_GROK_BINARY_SHA256:
         errors.append("result Grok binary digest does not match the reviewed pin")
     usage = _exact_object(
@@ -2525,20 +2585,34 @@ def _validate_tool_receipt(receipt: Any, *, result: Mapping[str, Any]) -> list[s
     successful = capability.get("verdict") in {"x_native_identity_ready", "post_retrieval_only"}
     if receipt.get("schema_version") != TOOL_RECEIPT_SCHEMA_VERSION:
         errors.append("tool receipt schema version mismatch")
-    if receipt.get("session_id") != provenance.get("session_id"):
+    receipt_session_id = receipt.get("session_id")
+    try:
+        if not isinstance(receipt_session_id, str):
+            raise ValueError("tool receipt session id is not a string")
+        uuid.UUID(receipt_session_id)
+    except (ValueError, AttributeError):
+        errors.append("tool receipt session id is invalid")
+    if receipt_session_id != provenance.get("session_id"):
         errors.append("tool receipt session binding mismatch")
     if receipt.get("provider_request_id") != provenance.get("provider_request_id"):
         errors.append("tool receipt request binding mismatch")
     updates_sha256 = receipt.get("session_updates_sha256")
-    if (
-        not isinstance(updates_sha256, str)
-        or re.fullmatch(r"[0-9a-f]{64}", updates_sha256) is None
-        or updates_sha256 != provenance.get("session_updates_sha256")
-    ):
-        errors.append("tool receipt update digest mismatch")
     update_bytes = receipt.get("session_update_bytes")
-    if type(update_bytes) is not int or not 0 < update_bytes <= MAX_SESSION_UPDATES_BYTES:
-        errors.append("tool receipt update size is invalid")
+    outer_only = updates_sha256 is None
+    if outer_only:
+        if provenance.get("session_updates_sha256") is not None:
+            errors.append("outer-only tool receipt contradicts result update provenance")
+        if update_bytes != 0:
+            errors.append("outer-only tool receipt must record zero update bytes")
+    else:
+        if (
+            not isinstance(updates_sha256, str)
+            or re.fullmatch(r"[0-9a-f]{64}", updates_sha256) is None
+            or updates_sha256 != provenance.get("session_updates_sha256")
+        ):
+            errors.append("tool receipt update digest mismatch")
+        if type(update_bytes) is not int or not 0 < update_bytes <= MAX_SESSION_UPDATES_BYTES:
+            errors.append("tool receipt update size is invalid")
     observed_model_ids = receipt.get("observed_model_ids")
     if (
         not isinstance(observed_model_ids, list)
@@ -2668,6 +2742,15 @@ def _validate_tool_receipt(receipt: Any, *, result: Mapping[str, Any]) -> list[s
         calls = []
     if successful and len(calls) != 1:
         errors.append("successful result lacks exactly one X Search receipt")
+    if outer_only and (
+        successful
+        or terminal_stop_reason is not None
+        or terminal_usage is not None
+        or observed_model_ids
+        or unexpected
+        or calls
+    ):
+        errors.append("outer-only tool receipt contains unsupported session-update evidence")
     call_ids: set[str] = set()
     post_pairs: set[tuple[str, str]] = set()
     author_ids: set[str] = set()

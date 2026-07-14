@@ -45,7 +45,10 @@ Stage 1 recognizes provider post evidence only at the versioned closed, direct `
 provider metadata is tolerated but cannot become evidence. Nested diagnostic/request-echo objects, prose URLs,
 incomplete registered child paths, duplicate records, and ambiguous author containers are not alternative evidence
 paths. Process/inner failures still retain any separately parsed bounded outer request, turn, usage, cost, and partial
-tool-call receipt; those failure receipts never become capability proof.
+tool-call receipt; those failure receipts never become capability proof. Provider JSON is admitted only after an
+iterative depth/node budget. If structured updates are missing or malformed but the outer envelope is valid, an
+outer-only receipt keeps its request id, command/outer session ids, token usage, turns, and reported cost while
+recording a null update digest, zero update bytes, and zero calls.
 
 The current Stage 1 result retains a 280-character excerpt and deliberately rejects full-body persistence. It does not
 probe or make any claim about profile/Bio availability. That requires an independently owner-approved later
