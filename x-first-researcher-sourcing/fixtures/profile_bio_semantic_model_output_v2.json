@@ -1,5 +1,5 @@
 {
-  "schema_version": "x.profile.bio_semantic.model_output.v2",
+  "schema_version": "x.profile.bio_semantic.model_output.v2.1",
   "request_id": "xbsv2r_111111111111111111111111",
   "profile_snapshot_id": "xbsv2s_222222222222222222222222",
   "platform_user_id": "900000000000000001",
@@ -16,7 +16,7 @@
         "explicit_professional_region_experience"
       ],
       "reason": "Bio explicitly states professional work in 新加坡.",
-      "reason_source": "model_proposed",
+      "reason_source": "model_proposed_untrusted_narrative",
       "confidence": "high",
       "evidence_basis": "profile_bio_only",
       "requires_independent_verification": true
@@ -31,7 +31,7 @@
         "explicit_current_organization_claim"
       ],
       "reason": "Bio explicitly states a current role at @synthetic_hub.",
-      "reason_source": "model_proposed",
+      "reason_source": "model_proposed_untrusted_narrative",
       "confidence": "high",
       "evidence_basis": "profile_bio_only",
       "requires_independent_verification": true
@@ -46,7 +46,7 @@
         "explicit_previous_organization_claim"
       ],
       "reason": "Bio explicitly marks @synth_listen as a previous organization.",
-      "reason_source": "model_proposed",
+      "reason_source": "model_proposed_untrusted_narrative",
       "confidence": "high",
       "evidence_basis": "profile_bio_only",
       "requires_independent_verification": true
@@ -61,7 +61,7 @@
         "explicit_china_digital_ecosystem_activity"
       ],
       "reason": "Bio explicitly names 小红书 professional activity.",
-      "reason_source": "model_proposed",
+      "reason_source": "model_proposed_untrusted_narrative",
       "confidence": "high",
       "evidence_basis": "profile_bio_only",
       "requires_independent_verification": true
@@ -76,7 +76,7 @@
         "explicit_china_digital_ecosystem_activity"
       ],
       "reason": "Bio explicitly names SyntheticFounder as a professional account.",
-      "reason_source": "model_proposed",
+      "reason_source": "model_proposed_untrusted_narrative",
       "confidence": "high",
       "evidence_basis": "profile_bio_only",
       "requires_independent_verification": true
@@ -91,7 +91,7 @@
         "observed_chinese_professional_content"
       ],
       "reason": "Bio contains observed Chinese language and AI engineering content.",
-      "reason_source": "model_proposed",
+      "reason_source": "model_proposed_untrusted_narrative",
       "confidence": "high",
       "evidence_basis": "profile_bio_only",
       "requires_independent_verification": true

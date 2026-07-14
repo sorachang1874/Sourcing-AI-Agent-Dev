@@ -21,17 +21,18 @@ from pathlib import Path
 from typing import Any, Protocol
 from urllib.parse import urlsplit
 
-REQUEST_SCHEMA_VERSION = "x.profile.bio_semantic.request.v2"
-PROMPT_SCHEMA_VERSION = "x.profile.bio_semantic.prompt.v2"
-PROMPT_VERSION = "profile-bio-semantic-prompt-v2.0"
-MODEL_OUTPUT_SCHEMA_VERSION = "x.profile.bio_semantic.model_output.v2"
-REVIEW_SCHEMA_VERSION = "x.profile.bio_semantic.review.v2"
+REQUEST_SCHEMA_VERSION = "x.profile.bio_semantic.request.v2.1"
+PROMPT_SCHEMA_VERSION = "x.profile.bio_semantic.prompt.v2.1"
+PROMPT_VERSION = "profile-bio-semantic-prompt-v2.1"
+MODEL_OUTPUT_SCHEMA_VERSION = "x.profile.bio_semantic.model_output.v2.1"
+REVIEW_SCHEMA_VERSION = "x.profile.bio_semantic.review.v2.1"
 MODEL_ID = "gpt-5.6-luna"
 PROVIDER_ID = "openai_compatible_responses"
+REASON_SOURCE = "model_proposed_untrusted_narrative"
 
 # Replaced after the new prompt and strict-output schema are finalized.
-CANONICAL_PROMPT_SHA256 = "fb401860f83d834e56ad3fec555d2eed30ebb97a79a3b6333fb281a77fdddc98"
-CANONICAL_OUTPUT_SCHEMA_SHA256 = "f0aa50c7d2b7b052c8f422ebec3a18b7eb95f71d2d6de6775845e1ce66231b58"
+CANONICAL_PROMPT_SHA256 = "458463f2252e3384ca72c4cbc6f9fdaadced817c4a7bd77499337f37d8b109c6"
+CANONICAL_OUTPUT_SCHEMA_SHA256 = "f3a059f09160e4fd2e3181c9bac2f26385f9321464a56ca40fabbd2b36c465a4"
 
 REQUEST_AUTHORITY = {
     "external_facts_allowed": False,
@@ -69,6 +70,12 @@ BUDGETS = {
     "timeout_ms": 30000,
     "max_validation_depth": 64,
     "max_validation_nodes": 4096,
+    "max_json_string_characters": 12000,
+    "max_json_string_bytes": 48000,
+    "max_raw_response_canonical_bytes": 262144,
+    "max_reasoning_summary_items": 4,
+    "max_reasoning_summary_characters": 2000,
+    "max_reasoning_summary_bytes": 8000,
 }
 
 PROPOSAL_TYPES = frozenset(
@@ -84,6 +91,20 @@ RELATION_STATES = frozenset(
 )
 VERDICTS = frozenset({"proposals_available", "no_supported_professional_context", "abstained"})
 CONFIDENCE_STATES = frozenset({"high", "medium", "low"})
+ERROR_CODES = frozenset(
+    {
+        "request_invalid",
+        "prompt_invalid",
+        "output_schema_invalid",
+        "execute_live_required",
+        "request_mode_mismatch",
+        "execution_contract_invalid",
+        "transport_failed",
+        "response_invalid",
+        "model_output_invalid",
+        "budget_exceeded",
+    }
+)
 REASON_CODES = frozenset(
     {
         "explicit_professional_region_experience",
@@ -94,21 +115,18 @@ REASON_CODES = frozenset(
         "ambiguous_professional_context_requires_review",
     }
 )
-REASON_CODES_BY_TYPE = {
-    "professional_region_experience": frozenset(
-        {"explicit_professional_region_experience", "ambiguous_professional_context_requires_review"}
+REASON_CODES_BY_SEMANTIC_STATE = {
+    ("professional_region_experience", "not_applicable"): frozenset({"explicit_professional_region_experience"}),
+    ("professional_china_digital_ecosystem", "not_applicable"): frozenset(
+        {"explicit_china_digital_ecosystem_activity"}
     ),
-    "professional_china_digital_ecosystem": frozenset(
-        {"explicit_china_digital_ecosystem_activity", "ambiguous_professional_context_requires_review"}
+    ("professional_affiliation", "current_claimed"): frozenset({"explicit_current_organization_claim"}),
+    ("professional_affiliation", "previous_claimed"): frozenset({"explicit_previous_organization_claim"}),
+    ("professional_affiliation", "future_or_aspirational"): frozenset(
+        {"ambiguous_professional_context_requires_review"}
     ),
-    "professional_affiliation": frozenset(
-        {
-            "explicit_current_organization_claim",
-            "explicit_previous_organization_claim",
-            "ambiguous_professional_context_requires_review",
-        }
-    ),
-    "observed_chinese_professional_content": frozenset({"observed_chinese_professional_content"}),
+    ("professional_affiliation", "unspecified"): frozenset({"ambiguous_professional_context_requires_review"}),
+    ("observed_chinese_professional_content", "not_applicable"): frozenset({"observed_chinese_professional_content"}),
 }
 
 _REQUEST_KEYS = {
@@ -168,17 +186,41 @@ _MODEL_PROPOSAL_KEYS = {
     "evidence_basis",
     "requires_independent_verification",
 }
+_REVIEW_KEYS = {
+    "schema_version",
+    "status",
+    "request_id",
+    "request_sha256",
+    "profile_snapshot_id",
+    "platform_user_id",
+    "bio_sha256",
+    "execution",
+    "model_receipt",
+    "usage",
+    "verdict",
+    "proposals",
+    "error_codes",
+    "authority",
+}
+_EXECUTION_KEYS = {"mode", "transport_id", "execute_live", "provider_external_calls", "fallback_used"}
+_MESSAGE_KEYS = {"id", "type", "status", "role", "content"}
+_OUTPUT_TEXT_KEYS = {"type", "text", "annotations"}
+_REASONING_KEYS = {"id", "type", "status", "summary"}
+_REASONING_SUMMARY_KEYS = {"type", "text"}
 
 _SHA256_RE = re.compile(r"[0-9a-f]{64}")
 _PLATFORM_USER_ID_RE = re.compile(r"[1-9][0-9]{1,24}")
 _HANDLE_RE = re.compile(r"[A-Za-z0-9_]{1,15}")
 _PROVISIONAL_PERSON_RE = re.compile(r"pp_x_[0-9A-HJKMNP-TV-Z]{26}")
 _RESPONSE_ID_RE = re.compile(r"resp_[A-Za-z0-9_-]{8,120}")
+_MESSAGE_ID_RE = re.compile(r"msg_[A-Za-z0-9_-]{8,120}")
 _REASONING_ID_RE = re.compile(r"rs_[A-Za-z0-9_-]{8,120}")
 _CANONICAL_TIME_RE = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z")
 _URL_RE = re.compile(r"(?i)(?:https?://|www\.)")
 _HANDLE_MENTION_RE = re.compile(r"(?<![A-Za-z0-9_])@[A-Za-z0-9_]{1,15}(?![A-Za-z0-9_])")
-_NUMBER_TOKEN_RE = re.compile(r"(?<![A-Za-z0-9_])\d+(?:\.\d+)?(?:[KkMm]|万|千|%)?(?![A-Za-z0-9_])")
+_NUMBER_TOKEN_RE = re.compile(
+    r"(?<![A-Za-z0-9_])(?:\d+(?:\.\d+)?(?:[KkMm]|万|千|%)?|[零〇一二两三四五六七八九十百千万亿]+)(?![A-Za-z0-9_])"
+)
 _PROHIBITED_REASON_TERMS = (
     "ethnicity",
     "nationality",
@@ -302,31 +344,94 @@ def _exact_keys(value: Any, expected: set[str], *, path: str, errors: list[str])
     return True
 
 
-def _scan_json(value: Any, *, max_depth: int, max_nodes: int) -> list[str]:
-    """Iteratively reject attacker-sized/deep JSON before recursive operations."""
+def _scan_json(
+    value: Any,
+    *,
+    max_depth: int,
+    max_nodes: int,
+    max_string_characters: int = BUDGETS["max_json_string_characters"],
+    max_string_bytes: int = BUDGETS["max_json_string_bytes"],
+) -> list[str]:
+    """Bound every JSON node, key, and string before recursion or hashing."""
 
     errors: set[str] = set()
     stack: list[tuple[Any, int]] = [(value, 0)]
     visited = 0
-    exhausted = False
-    while stack and not exhausted:
+    while stack:
         node, depth = stack.pop()
         visited += 1
         if visited > max_nodes:
             errors.add("nested_node_budget_exceeded")
             break
-        if isinstance(node, (dict, list)) and node and depth >= max_depth:
-            errors.add("nested_depth_budget_exceeded")
+        if isinstance(node, str):
+            if not _is_utf8_scalar_text(node, maximum=len(node)):
+                errors.add("non_unicode_scalar_text")
+                continue
+            if len(node) > max_string_characters:
+                errors.add("string_character_budget_exceeded")
+            if len(node.encode("utf-8")) > max_string_bytes:
+                errors.add("string_byte_budget_exceeded")
             continue
-        children = node.values() if isinstance(node, dict) else node if isinstance(node, list) else ()
-        for child in children:
-            if visited + len(stack) >= max_nodes:
-                errors.add("nested_node_budget_exceeded")
-                stack.clear()
-                exhausted = True
-                break
-            stack.append((child, depth + 1))
+        if isinstance(node, dict):
+            if node and depth >= max_depth:
+                errors.add("nested_depth_budget_exceeded")
+                continue
+            for key, child in node.items():
+                if not isinstance(key, str):
+                    errors.add("non_string_json_key")
+                elif not _is_utf8_scalar_text(key, maximum=len(key)):
+                    errors.add("non_unicode_scalar_text")
+                elif len(key) > max_string_characters:
+                    errors.add("string_character_budget_exceeded")
+                elif len(key.encode("utf-8")) > max_string_bytes:
+                    errors.add("string_byte_budget_exceeded")
+                stack.append((child, depth + 1))
+            continue
+        if isinstance(node, list):
+            if node and depth >= max_depth:
+                errors.add("nested_depth_budget_exceeded")
+                continue
+            stack.extend((child, depth + 1) for child in node)
     return sorted(errors)
+
+
+def _canonical_size_status(value: Any, *, maximum_bytes: int) -> str:
+    """Stream canonical encoding and stop before materializing an oversized form."""
+
+    total = 0
+    try:
+        chunks = json.JSONEncoder(
+            allow_nan=False,
+            ensure_ascii=True,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).iterencode(value)
+        for chunk in chunks:
+            total += len(chunk.encode("utf-8"))
+            if total > maximum_bytes:
+                return "budget"
+    except (TypeError, ValueError, UnicodeEncodeError, RecursionError):
+        return "invalid"
+    return "ok"
+
+
+def _valid_transport_pair(*, is_live: Any, transport_id: Any) -> bool:
+    return (is_live is False and transport_id == "offline_fake_responses") or (
+        is_live is True and transport_id == "openai_compatible_responses"
+    )
+
+
+def _semantic_identity(proposal: Mapping[str, Any]) -> dict[str, Any]:
+    """Return the only fields allowed to own a proposal's machine identity."""
+
+    return {
+        "proposal_type": proposal.get("proposal_type"),
+        "relation_state": proposal.get("relation_state"),
+        "span_start": proposal.get("span_start"),
+        "span_end": proposal.get("span_end"),
+        "excerpt": proposal.get("excerpt"),
+        "reason_codes": sorted(proposal.get("reason_codes", [])),
+    }
 
 
 def _canonical_time(value: Any) -> bool:
@@ -560,7 +665,7 @@ def build_responses_request(request: Any, *, prompt: Any, output_schema: Any) ->
     }
 
 
-def _reason_is_source_bound(reason: Any, excerpt: str) -> bool:
+def _reason_is_safe_untrusted_narrative(reason: Any, excerpt: str) -> bool:
     if not _is_utf8_scalar_text(reason, minimum=1, maximum=240) or not reason.strip():
         return False
     folded = reason.casefold()
@@ -571,11 +676,9 @@ def _reason_is_source_bound(reason: Any, excerpt: str) -> bool:
     excerpt_folded = excerpt.casefold()
     if any(mention.casefold() not in excerpt_folded for mention in _HANDLE_MENTION_RE.findall(reason)):
         return False
-    # Natural-language explanations are advisory model prose, not an evidence
-    # source. Do not turn an English/CJK vocabulary list into the primary
-    # semantic classifier. Stable handles and quantitative facts are the two
-    # machine-checkable fact classes that must still be copied from the cited
-    # Bio span; the closed reason code plus exact excerpt own the judgment.
+    # Narrative prose is untrusted display-only context. It cannot add machine
+    # authority. URLs, protected-trait claims, external-fact markers, foreign
+    # handles, and quantitative claims remain hard safety/integrity failures.
     if any(number.casefold() not in excerpt_folded for number in _NUMBER_TOKEN_RE.findall(reason)):
         return False
     return True
@@ -646,29 +749,23 @@ def validate_model_output(model_output: Any, *, request: Any) -> list[str]:
         reason_codes = proposal["reason_codes"]
         if (
             not isinstance(reason_codes, list)
-            or not 1 <= len(reason_codes) <= 2
+            or len(reason_codes) != 1
             or any(not isinstance(code, str) or code not in REASON_CODES for code in reason_codes)
             or len(set(reason_codes)) != len(reason_codes)
         ):
-            _append(errors, f"{path}.reason_codes", "must be a unique closed reason-code array")
+            _append(errors, f"{path}.reason_codes", "must contain exactly one closed reason code")
             reason_codes = []
-        allowed_codes = REASON_CODES_BY_TYPE.get(str(proposal_type), frozenset())
-        if any(code not in allowed_codes for code in reason_codes):
-            _append(errors, f"{path}.reason_codes", "does not match proposal_type")
-        relation_reason = {
-            "current_claimed": "explicit_current_organization_claim",
-            "previous_claimed": "explicit_previous_organization_claim",
-            "future_or_aspirational": "ambiguous_professional_context_requires_review",
-            "unspecified": "ambiguous_professional_context_requires_review",
-        }.get(str(relation))
-        if relation_reason is not None and relation_reason not in reason_codes:
-            _append(errors, f"{path}.reason_codes", "does not match relation_state")
-        if not _is_utf8_scalar_text(proposal["reason"], minimum=1, maximum=240) or not _reason_is_source_bound(
-            proposal["reason"], excerpt
-        ):
-            _append(errors, f"{path}.reason", "must be bounded, model-proposed, and supported only by the excerpt")
-        if proposal["reason_source"] != "model_proposed":
-            _append(errors, f"{path}.reason_source", "must remain model_proposed")
+        expected_codes = REASON_CODES_BY_SEMANTIC_STATE.get((str(proposal_type), str(relation)), frozenset())
+        if frozenset(reason_codes) != expected_codes:
+            _append(errors, f"{path}.reason_codes", "must exactly match proposal_type and relation_state")
+        if not _reason_is_safe_untrusted_narrative(proposal["reason"], excerpt):
+            _append(
+                errors,
+                f"{path}.reason",
+                "must be bounded untrusted narrative without prohibited claims",
+            )
+        if proposal["reason_source"] != REASON_SOURCE:
+            _append(errors, f"{path}.reason_source", f"must remain {REASON_SOURCE}")
         if proposal["confidence"] not in CONFIDENCE_STATES:
             _append(errors, f"{path}.confidence", "unsupported")
         if proposal["evidence_basis"] != "profile_bio_only":
@@ -676,7 +773,7 @@ def validate_model_output(model_output: Any, *, request: Any) -> list[str]:
         if proposal["requires_independent_verification"] is not True:
             _append(errors, f"{path}.requires_independent_verification", "must be true")
         try:
-            signature = canonical_json(proposal)
+            signature = canonical_json(_semantic_identity(proposal))
         except (TypeError, ValueError, RecursionError):
             _append(errors, path, "must be canonical JSON")
         else:
@@ -694,11 +791,14 @@ def _bound_request_identity(request: Any) -> tuple[str, str, str, str, str] | No
     if not isinstance(request, dict) or _scan_json(request, max_depth=64, max_nodes=4096):
         return None
     request_id = request.get("request_id")
+    subject = request.get("subject")
     profile = request.get("profile_snapshot")
-    if not isinstance(profile, dict):
+    if not isinstance(subject, dict) or not isinstance(profile, dict):
         return None
+    subject_platform_user_id = subject.get("platform_user_id")
     snapshot_id = profile.get("snapshot_id")
     platform_user_id = profile.get("platform_user_id")
+    bio_text = profile.get("bio_text")
     bio_sha256 = profile.get("bio_sha256")
     if (
         not isinstance(request_id, str)
@@ -707,8 +807,12 @@ def _bound_request_identity(request: Any) -> tuple[str, str, str, str, str] | No
         or re.fullmatch(r"xbsv2s_[0-9a-f]{24}", snapshot_id) is None
         or not isinstance(platform_user_id, str)
         or _PLATFORM_USER_ID_RE.fullmatch(platform_user_id) is None
+        or subject_platform_user_id != platform_user_id
+        or not _is_utf8_scalar_text(bio_text, minimum=1, maximum=2000)
+        or not bio_text.strip()
         or not isinstance(bio_sha256, str)
         or _SHA256_RE.fullmatch(bio_sha256) is None
+        or text_sha256(bio_text) != bio_sha256
     ):
         return None
     try:
@@ -732,13 +836,15 @@ def _terminal_result(
     if bindings is None:
         raise ValueError("request_binding_invalid")
     request_id, request_sha256, snapshot_id, platform_user_id, bio_sha256 = bindings
-    normalized_transport = (
-        transport_id
-        if transport_id in {"offline_fake_responses", "openai_compatible_responses"}
-        else "openai_compatible_responses"
-        if is_live
-        else "offline_fake_responses"
-    )
+    if error_code == "execution_contract_invalid" and transport_id in {
+        "offline_fake_responses",
+        "openai_compatible_responses",
+    }:
+        normalized_transport = transport_id
+        normalized_execute_live = bool(execute_live)
+    else:
+        normalized_transport = "openai_compatible_responses" if is_live else "offline_fake_responses"
+        normalized_execute_live = bool(execute_live) if is_live else False
     return {
         "schema_version": REVIEW_SCHEMA_VERSION,
         "status": status,
@@ -750,7 +856,7 @@ def _terminal_result(
         "execution": {
             "mode": "live" if is_live else "offline_fake",
             "transport_id": normalized_transport,
-            "execute_live": bool(execute_live),
+            "execute_live": normalized_execute_live,
             "provider_external_calls": provider_external_calls,
             "fallback_used": False,
         },
@@ -769,10 +875,26 @@ def _response_text_and_usage(response: Any, *, request: Mapping[str, Any]) -> tu
         response,
         max_depth=budgets["max_validation_depth"],
         max_nodes=budgets["max_validation_nodes"],
+        max_string_characters=budgets["max_json_string_characters"],
+        max_string_bytes=budgets["max_json_string_bytes"],
     )
     if traversal:
-        raise _ReviewError("budget_exceeded")
+        budget_errors = {
+            "nested_node_budget_exceeded",
+            "nested_depth_budget_exceeded",
+            "string_character_budget_exceeded",
+            "string_byte_budget_exceeded",
+        }
+        raise _ReviewError("budget_exceeded" if budget_errors.intersection(traversal) else "response_invalid")
     if not isinstance(response, dict):
+        raise _ReviewError("response_invalid")
+    size_status = _canonical_size_status(
+        response,
+        maximum_bytes=budgets["max_raw_response_canonical_bytes"],
+    )
+    if size_status == "budget":
+        raise _ReviewError("budget_exceeded")
+    if size_status != "ok":
         raise _ReviewError("response_invalid")
     try:
         raw_response_sha256 = canonical_sha256(response)
@@ -784,6 +906,8 @@ def _response_text_and_usage(response: Any, *, request: Mapping[str, Any]) -> tu
         or response.get("model") != MODEL_ID
         or not isinstance(response.get("id"), str)
         or _RESPONSE_ID_RE.fullmatch(response["id"]) is None
+        or response.get("incomplete_details") not in (None, "")
+        or response.get("error") not in (None, "")
     ):
         raise _ReviewError("response_invalid")
     output = response.get("output")
@@ -801,12 +925,31 @@ def _response_text_and_usage(response: Any, *, request: Mapping[str, Any]) -> tu
             reasoning_items += 1
             if (
                 reasoning_items > 1
+                or set(item) != _REASONING_KEYS
                 or not isinstance(item.get("id"), str)
                 or _REASONING_ID_RE.fullmatch(item["id"]) is None
-                or item.get("status") not in {None, "completed"}
+                or item.get("status") != "completed"
                 or not isinstance(item.get("summary"), list)
+                or len(item["summary"]) > budgets["max_reasoning_summary_items"]
             ):
                 raise _ReviewError("response_invalid")
+            summary_characters = 0
+            summary_bytes = 0
+            for summary in item["summary"]:
+                if (
+                    not isinstance(summary, dict)
+                    or set(summary) != _REASONING_SUMMARY_KEYS
+                    or summary.get("type") != "summary_text"
+                    or not _is_utf8_scalar_text(summary.get("text"), maximum=budgets["max_json_string_characters"])
+                ):
+                    raise _ReviewError("response_invalid")
+                summary_characters += len(summary["text"])
+                summary_bytes += len(summary["text"].encode("utf-8"))
+            if (
+                summary_characters > budgets["max_reasoning_summary_characters"]
+                or summary_bytes > budgets["max_reasoning_summary_bytes"]
+            ):
+                raise _ReviewError("budget_exceeded")
             continue
         # Tools are disabled in the request, so every tool/call/unknown output
         # item is a contract violation even when a message is also present.
@@ -814,14 +957,26 @@ def _response_text_and_usage(response: Any, *, request: Mapping[str, Any]) -> tu
     if len(messages) != 1:
         raise _ReviewError("response_invalid")
     message = messages[0]
-    if message.get("type") != "message" or message.get("role") != "assistant":
+    if (
+        set(message) != _MESSAGE_KEYS
+        or message.get("type") != "message"
+        or message.get("status") != "completed"
+        or message.get("role") != "assistant"
+        or not isinstance(message.get("id"), str)
+        or _MESSAGE_ID_RE.fullmatch(message["id"]) is None
+    ):
         raise _ReviewError("response_invalid")
     content = message.get("content")
     if not isinstance(content, list) or len(content) != 1 or not isinstance(content[0], dict):
         raise _ReviewError("response_invalid")
     output_text = content[0]
     text = output_text.get("text")
-    if output_text.get("type") != "output_text" or not isinstance(text, str):
+    if (
+        set(output_text) != _OUTPUT_TEXT_KEYS
+        or output_text.get("type") != "output_text"
+        or output_text.get("annotations") != []
+        or not isinstance(text, str)
+    ):
         raise _ReviewError("response_invalid")
     if not isinstance(text, str) or not _is_utf8_scalar_text(text, maximum=len(text)):
         raise _ReviewError("model_output_invalid")
@@ -854,6 +1009,13 @@ def _completed_result(
     transport_id: str,
     execute_live: bool,
 ) -> dict[str, Any]:
+    expected_mode = "live_canary" if is_live else "offline_fake"
+    if (
+        not _valid_transport_pair(is_live=is_live, transport_id=transport_id)
+        or execute_live is not is_live
+        or request.get("model_execution_mode") != expected_mode
+    ):
+        raise _ReviewError("execution_contract_invalid")
     text, usage_values, raw_response_sha256 = _response_text_and_usage(response, request=request)
     try:
         model_output = _strict_json_loads(text)
@@ -864,7 +1026,12 @@ def _completed_result(
         raise _ReviewError("model_output_invalid")
     proposals = []
     for proposal in model_output["proposals"]:
-        proposal_id = "xbsv2p_" + canonical_sha256({"request_id": request["request_id"], "proposal": proposal})[:24]
+        proposal_id = (
+            "xbsv2p_"
+            + canonical_sha256(
+                {"request_id": request["request_id"], "semantic_identity": _semantic_identity(proposal)}
+            )[:24]
+        )
         proposals.append(
             {
                 "proposal_id": proposal_id,
@@ -876,7 +1043,7 @@ def _completed_result(
                 "excerpt_sha256": text_sha256(proposal["excerpt"]),
                 "reason_codes": list(proposal["reason_codes"]),
                 "reason": proposal["reason"],
-                "reason_source": "model_proposed",
+                "reason_source": REASON_SOURCE,
                 "confidence": proposal["confidence"],
                 "evidence_basis": "profile_bio_only",
                 "requires_independent_verification": True,
@@ -982,14 +1149,23 @@ def run_semantic_review(
             transport_id=str(transport_id),
             execute_live=execute_live,
         )
-    if is_live and not execute_live:
+    if not _valid_transport_pair(is_live=is_live, transport_id=transport_id):
         return _terminal_result(
             request,
-            status="blocked",
-            error_code="execute_live_required",
-            is_live=True,
+            status="failed",
+            error_code="execution_contract_invalid",
+            is_live=is_live,
             transport_id=transport_id,
-            execute_live=False,
+            execute_live=execute_live,
+        )
+    if is_live is False and execute_live:
+        return _terminal_result(
+            request,
+            status="failed",
+            error_code="execution_contract_invalid",
+            is_live=False,
+            transport_id=transport_id,
+            execute_live=execute_live,
         )
     expected_execution_mode = "live_canary" if is_live else "offline_fake"
     if request["model_execution_mode"] != expected_execution_mode:
@@ -1000,6 +1176,15 @@ def run_semantic_review(
             is_live=is_live,
             transport_id=transport_id,
             execute_live=execute_live,
+        )
+    if is_live and not execute_live:
+        return _terminal_result(
+            request,
+            status="blocked",
+            error_code="execute_live_required",
+            is_live=True,
+            transport_id=transport_id,
+            execute_live=False,
         )
     payload = build_responses_request(request, prompt=prompt, output_schema=output_schema)
     try:
@@ -1044,51 +1229,181 @@ def validate_review(
     output_schema: Any,
     raw_response: Any,
 ) -> list[str]:
-    """Recompute a completed review from the source request and raw response."""
+    """Recompute every terminal status from bounded source objects."""
 
     traversal = _scan_json(review, max_depth=64, max_nodes=4096)
     if traversal:
         return [f"$.validation: {error}" for error in traversal]
-    request_errors = validate_request(request, prompt=prompt, output_schema=output_schema)
-    if request_errors:
-        return [f"request {error}" for error in request_errors]
-    if not isinstance(review, dict) or review.get("status") != "completed":
-        return ["$: only completed reviews can be deterministically recomputed"]
-    profile = request["profile_snapshot"]
-    if (
-        review.get("request_id") != request["request_id"]
-        or review.get("request_sha256") != canonical_sha256(request)
-        or review.get("profile_snapshot_id") != profile["snapshot_id"]
-        or review.get("platform_user_id") != profile["platform_user_id"]
-        or review.get("bio_sha256") != profile["bio_sha256"]
-    ):
-        return ["$: review identity/source binding does not exactly match request"]
-    execution = review.get("execution")
-    if not isinstance(execution, dict):
-        return ["$.execution: must be an object"]
-    is_live = execution.get("mode") == "live"
-    expected_transport = "openai_compatible_responses" if is_live else "offline_fake_responses"
-    if (
-        request["model_execution_mode"] != ("live_canary" if is_live else "offline_fake")
-        or request["profile_source_mode"] != "offline_fixture"
-        or execution.get("transport_id") != expected_transport
-        or execution.get("execute_live") is not is_live
-        or execution.get("provider_external_calls") != (1 if is_live else 0)
-        or execution.get("fallback_used") is not False
-    ):
-        return ["$.execution: invalid completed execution binding"]
-    try:
-        expected = _completed_result(
+    errors: list[str] = []
+    if not _exact_keys(review, _REVIEW_KEYS, path="$", errors=errors):
+        return errors
+    bindings = _bound_request_identity(request)
+    if bindings is None:
+        return ["request: request_binding_invalid"]
+    request_id, request_sha256, snapshot_id, platform_user_id, bio_sha256 = bindings
+    expected_bindings = {
+        "schema_version": REVIEW_SCHEMA_VERSION,
+        "request_id": request_id,
+        "request_sha256": request_sha256,
+        "profile_snapshot_id": snapshot_id,
+        "platform_user_id": platform_user_id,
+        "bio_sha256": bio_sha256,
+    }
+    for field_name, expected_value in expected_bindings.items():
+        if review[field_name] != expected_value:
+            _append(errors, f"$.{field_name}", "does not exactly bind the request")
+    if review["authority"] != REVIEW_AUTHORITY:
+        _append(errors, "$.authority", "all review authority must remain false")
+    execution = review["execution"]
+    if not _exact_keys(execution, _EXECUTION_KEYS, path="$.execution", errors=errors):
+        return errors
+    mode = execution.get("mode")
+    is_live = mode == "live"
+    if mode not in {"offline_fake", "live"}:
+        _append(errors, "$.execution.mode", "unsupported")
+    transport_pair_valid = _valid_transport_pair(is_live=is_live, transport_id=execution.get("transport_id"))
+    contract_failure_claimed = review.get("status") == "failed" and review.get("error_codes") == [
+        "execution_contract_invalid"
+    ]
+    if not transport_pair_valid and not contract_failure_claimed:
+        _append(errors, "$.execution.transport_id", "must exactly match execution mode")
+    if type(execution.get("execute_live")) is not bool:
+        _append(errors, "$.execution.execute_live", "must be boolean")
+    if not _is_int(execution.get("provider_external_calls")) or execution["provider_external_calls"] not in {0, 1}:
+        _append(errors, "$.execution.provider_external_calls", "must be zero or one")
+    if execution.get("fallback_used") is not False:
+        _append(errors, "$.execution.fallback_used", "must be false")
+    if errors:
+        return errors
+
+    status = review["status"]
+    if status == "completed":
+        request_errors = validate_request(request, prompt=prompt, output_schema=output_schema)
+        if request_errors:
+            return [f"request {error}" for error in request_errors]
+        expected_transport = "openai_compatible_responses" if is_live else "offline_fake_responses"
+        if (
+            request["model_execution_mode"] != ("live_canary" if is_live else "offline_fake")
+            or execution["execute_live"] is not is_live
+            or execution["provider_external_calls"] != (1 if is_live else 0)
+            or review["error_codes"] != []
+            or not isinstance(review["model_receipt"], dict)
+            or not isinstance(review["usage"], dict)
+        ):
+            return ["$: incoherent completed review"]
+        try:
+            expected = _completed_result(
+                request,
+                prompt=prompt,
+                output_schema=output_schema,
+                response=raw_response,
+                is_live=is_live,
+                transport_id=expected_transport,
+                execute_live=is_live,
+            )
+        except _ReviewError as exc:
+            return [f"raw_response: {exc.code}"]
+    elif status == "blocked":
+        if (
+            validate_prompt(prompt)
+            or validate_output_schema(output_schema)
+            or validate_request(request, prompt=prompt, output_schema=output_schema)
+        ):
+            return ["$: blocked review requires valid prompt, schema, and request"]
+        if (
+            raw_response is not None
+            or request["model_execution_mode"] != "live_canary"
+            or execution
+            != {
+                "mode": "live",
+                "transport_id": "openai_compatible_responses",
+                "execute_live": False,
+                "provider_external_calls": 0,
+                "fallback_used": False,
+            }
+            or review["model_receipt"] is not None
+            or review["usage"] is not None
+            or review["verdict"] != "abstained"
+            or review["proposals"] != []
+            or review["error_codes"] != ["execute_live_required"]
+        ):
+            return ["$: incoherent blocked review"]
+        expected = _terminal_result(
             request,
-            prompt=prompt,
-            output_schema=output_schema,
-            response=raw_response,
-            is_live=is_live,
-            transport_id=expected_transport,
-            execute_live=is_live,
+            status="blocked",
+            error_code="execute_live_required",
+            is_live=True,
+            transport_id="openai_compatible_responses",
+            execute_live=False,
         )
-    except _ReviewError as exc:
-        return [f"raw_response: {exc.code}"]
+    elif status == "failed":
+        error_codes = review["error_codes"]
+        if (
+            review["model_receipt"] is not None
+            or review["usage"] is not None
+            or review["verdict"] != "abstained"
+            or review["proposals"] != []
+            or not isinstance(error_codes, list)
+            or len(error_codes) != 1
+            or error_codes[0] not in ERROR_CODES - {"execute_live_required"}
+        ):
+            return ["$: incoherent failed review"]
+        error_code = error_codes[0]
+        prompt_errors = validate_prompt(prompt)
+        schema_errors = validate_output_schema(output_schema)
+        request_errors = validate_request(request, prompt=prompt, output_schema=output_schema)
+        execution_mode_mismatch = request.get("model_execution_mode") != ("live_canary" if is_live else "offline_fake")
+        if prompt_errors:
+            recomputed_code = "prompt_invalid"
+        elif schema_errors:
+            recomputed_code = "output_schema_invalid"
+        elif request_errors:
+            recomputed_code = "request_invalid"
+        elif execution_mode_mismatch and error_code != "execution_contract_invalid":
+            # Runtime checks this boundary before any provider call, so a
+            # later failure cannot truthfully mask the earlier terminal state.
+            recomputed_code = "request_mode_mismatch"
+        elif error_code == "request_mode_mismatch":
+            recomputed_code = "request_mode_mismatch" if execution_mode_mismatch else ""
+        elif error_code == "execution_contract_invalid":
+            invalid_attempt = not transport_pair_valid or (not is_live and execution["execute_live"])
+            recomputed_code = (
+                "execution_contract_invalid"
+                if raw_response is None and execution["provider_external_calls"] == 0 and invalid_attempt
+                else ""
+            )
+        elif error_code == "transport_failed":
+            recomputed_code = "transport_failed" if raw_response is None else ""
+        elif error_code in {"response_invalid", "model_output_invalid", "budget_exceeded"}:
+            try:
+                _completed_result(
+                    request,
+                    prompt=prompt,
+                    output_schema=output_schema,
+                    response=raw_response,
+                    is_live=is_live,
+                    transport_id=execution["transport_id"],
+                    execute_live=execution["execute_live"],
+                )
+            except _ReviewError as exc:
+                recomputed_code = exc.code
+            else:
+                recomputed_code = ""
+        else:
+            recomputed_code = ""
+        if recomputed_code != error_code:
+            return ["$: failed error code does not match deterministic recomputation"]
+        expected = _terminal_result(
+            request,
+            status="failed",
+            error_code=error_code,
+            is_live=is_live,
+            transport_id=execution["transport_id"],
+            execute_live=execution["execute_live"],
+            provider_external_calls=execution["provider_external_calls"],
+        )
+    else:
+        return ["$.status: unsupported"]
     try:
         matches = review == expected
     except RecursionError:

@@ -1,4 +1,4 @@
-# Luna-native profile Bio semantic review v2
+# Luna-native profile Bio semantic review v2.1
 
 > Status: offline, fixture-only, advisory proposal contract. No OpenAI-compatible endpoint, Luna model, X profile,
 > credential, live provider, fallback, product writer, discovery/ranking path, or outreach path was called in this
@@ -18,7 +18,7 @@ The result is only an `unverified_professional_context_proposal`. It cannot:
 - confirm employment, merge identities, establish external facts, or write canonical/product state;
 - call another model, tool, web search, X search, or fallback transport.
 
-The deterministic v1.2 rule lane remains a champion/guardrail baseline for synthetic comparison. It is not the v2
+The deterministic v1.4 rule lane remains a champion/guardrail baseline for synthetic comparison. It is not the v2
 primary recall classifier and must not grow into an alias/marker registry that duplicates semantic review.
 
 ## Source trust and model execution are separate
@@ -38,15 +38,20 @@ Any transport declaring `is_live=true` is blocked before invocation unless `exec
 the request must say `model_execution_mode=live_canary`; the profile remains `offline_fixture`. This slice provides no
 HTTP relay or credential loader, and its tests never exercise a provider call.
 
+Invocation is closed to two exact tuples: `offline_fake + offline_fake_responses + execute_live=false +
+model_execution_mode=offline_fake`, or `live + openai_compatible_responses + execute_live=true +
+model_execution_mode=live_canary`. A valid live tuple without the explicit execution flag is the sole blocked form.
+Every other flag, transport, or mode combination fails before the injected transport is called.
+
 ## Contract stack and ownership
 
 | Artifact | Source of truth | What it owns | What it cannot own |
 | --- | --- | --- | --- |
-| `x.profile.bio_semantic.request.v2` | Caller plus source snapshot | Exact subject/account/snapshot/Bio binding, model policy, authority and budgets | Provider result or semantic verdict |
-| `x.profile.bio_semantic.prompt.v2` | Versioned prompt config | Closed task instruction and safety boundary | Runtime override or fallback |
-| `x.profile.bio_semantic.model_output.v2` | Strict Responses `text.format` schema | Untrusted verdict, proposals, model-proposed reasons and exact spans | External facts or downstream authority |
-| `x.profile.bio_semantic.review.v2` | Deterministic validator | Recomputed spans/hashes/IDs, response and usage binding, terminal result | Canonical employment, ranking, eligibility or writes |
-| v1.2 rule lane | Champion/guardrail fixture baseline | Regression comparison and obvious safety guards | Primary semantic recall classification |
+| `x.profile.bio_semantic.request.v2.1` | Caller plus source snapshot | Exact subject/account/snapshot/Bio binding, model policy, authority and budgets | Provider result or semantic verdict |
+| `x.profile.bio_semantic.prompt.v2.1` | Versioned prompt config | Closed task instruction and safety boundary | Runtime override or fallback |
+| `x.profile.bio_semantic.model_output.v2.1` | Strict Responses `text.format` schema | Untrusted verdict, proposals, display-only narrative and exact spans | External facts or downstream authority |
+| `x.profile.bio_semantic.review.v2.1` | Deterministic validator | Recomputed spans/hashes/IDs, response and usage binding, every terminal result | Canonical employment, ranking, eligibility or writes |
+| v1.4 rule lane | Champion/guardrail fixture baseline | Regression comparison and obvious safety guards | Primary semantic recall classification |
 
 The prompt and strict output schema are canonical-SHA-pinned. The request binds both digests, `gpt-5.6-luna`,
 `reasoning_effort=low`, `strict_structured_output=true`, and `fallback_model=null`. The Responses payload repeats those
@@ -70,15 +75,16 @@ Four proposal types remain separate:
 Every proposal includes:
 
 - Unicode code-point `span_start`/`span_end` and an exact Bio `excerpt`;
-- one or two closed `reason_codes` compatible with type and relation;
-- a bounded human-readable `reason` and `reason_source=model_proposed`;
+- exactly one closed `reason_code` owned by the `(proposal_type, relation_state)` pair;
+- a bounded human-readable `reason` and `reason_source=model_proposed_untrusted_narrative`;
 - `evidence_basis=profile_bio_only`, a confidence label, and mandatory independent verification.
 
 The validator re-slices the Bio, recomputes excerpt SHA-256 and deterministic proposal ID, and rejects duplicate or
-misbound proposals. Reasons reject URLs, protected-identity claims, external-fact markers, and `@handles` or numeric
-facts absent from the cited excerpt. Natural explanatory wording is deliberately not restricted to an English/CJK
-keyword registry: the closed reason code and exact source span own the machine-readable judgment, while `reason`
-remains explicitly untrusted, model-proposed prose and cannot contribute another fact or downstream authority.
+misbound proposals. Semantic identity and duplicate detection use only type, relation, exact span/excerpt and the one
+reason code; confidence and narrative cannot create another proposal. Reasons reject URLs, protected-identity claims,
+external-fact markers, and `@handles` or Arabic/Chinese numeric claims absent from the cited excerpt. Natural wording
+is deliberately not treated as deterministically fact-complete: the closed reason code and exact source span own the
+machine-readable judgment. `reason` remains untrusted display-only prose and cannot add facts, evidence or authority.
 
 ## Responses and terminal behavior
 
@@ -101,15 +107,19 @@ one message; it never adopts or exposes the reasoning content. Every tool/call/u
 reasoning item, refusal, reroute, missing usage, duplicate JSON key, non-finite number, invalid JSON, schema drift,
 budget overrun or source mismatch fails closed. There is no retry or fallback.
 
-Closed terminal review states are `completed`, `blocked`, and `failed`. A valid request always preserves its exact
+Closed terminal review states are `completed`, `blocked`, and `failed`. The review schema has status-conditional
+receipt, usage, proposal, error and execution shapes, and the validator recomputes all three states rather than merely
+accepting a plausible envelope. A valid request always preserves its exact
 numeric platform user ID in every terminal artifact. An object without enough valid request/profile identity to bind
 an artifact raises the typed `request_binding_invalid` boundary and produces no review artifact; it never writes an
 `unknown` or invented identity.
 
 Hard budgets are versioned as one call, 12 proposals, 12,000 model-output characters, 4,000 input tokens, 1,600 output
-tokens, 5,600 total tokens, 30 seconds, 64 validation levels and 4,096 JSON nodes. Iterative traversal runs before
-recursive hashing/equality. Bio, output text, excerpt and reason must be valid UTF-8 scalar text; unpaired surrogates,
-1,500-level objects and 5,000-node values return bounded terminal failures without traceback or content echo.
+tokens, 5,600 total tokens, 30 seconds, 64 validation levels, 4,096 JSON nodes, 12,000 characters/48,000 UTF-8 bytes
+per JSON string, 262,144 canonical response bytes, and a reasoning summary capped at four items, 2,000 characters and
+8,000 UTF-8 bytes. Full-tree key/value Unicode and leaf budgets run before canonical hashing; this includes ignored
+provider metadata and intermediate request fields. Unpaired surrogates, 1,500-level objects, 5,000-node values and
+oversized reasoning/diagnostic leaves return bounded terminal failures without traceback or content echo.
 
 ## Fixture evaluation
 
@@ -126,7 +136,7 @@ The offline fake transport covers eight synthetic Bios:
 | Chinese AI-engineering content | weak observed-language professional context only |
 | generic AI systems text | no supported proposal |
 
-Future Luna canary evaluation compares semantic v2 against the frozen v1.2 baseline and human labels. Report per-type
+Future Luna canary evaluation compares semantic v2 against the frozen v1.4 baseline and human labels. Report per-type
 precision/recall, abstention, source-span validity, reason support, review minutes, latency and usage. The weak-language
 type is reported separately and cannot contribute to discovery/ranking/eligibility. A model challenger may improve
 recall only while identity/source/authority/write/fallback guardrails remain zero.

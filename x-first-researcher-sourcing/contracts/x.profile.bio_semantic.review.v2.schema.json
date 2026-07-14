@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://contracts.invalid/x.profile.bio_semantic.review.v2.schema.json",
-  "title": "Validated X profile Bio semantic review v2",
+  "$id": "https://contracts.invalid/x.profile.bio_semantic.review.v2.1.schema.json",
+  "title": "Validated X profile Bio semantic review v2.1",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -22,7 +22,7 @@
   ],
   "properties": {
     "schema_version": {
-      "const": "x.profile.bio_semantic.review.v2"
+      "const": "x.profile.bio_semantic.review.v2.1"
     },
     "status": {
       "enum": [
@@ -116,14 +116,14 @@
           "const": "gpt-5.6-luna"
         },
         "prompt_version": {
-          "const": "profile-bio-semantic-prompt-v2.0"
+          "const": "profile-bio-semantic-prompt-v2.1"
         },
         "prompt_sha256": {
           "type": "string",
           "pattern": "^[0-9a-f]{64}$"
         },
         "output_schema_version": {
-          "const": "x.profile.bio_semantic.model_output.v2"
+          "const": "x.profile.bio_semantic.model_output.v2.1"
         },
         "output_schema_sha256": {
           "type": "string",
@@ -249,7 +249,8 @@
           "reason_codes": {
             "type": "array",
             "minItems": 1,
-            "maxItems": 2,
+            "maxItems": 1,
+            "description": "Exactly one code is allowed and is owned by proposal_type plus relation_state.",
             "items": {
               "enum": [
                 "explicit_professional_region_experience",
@@ -264,10 +265,11 @@
           "reason": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 240
+            "maxLength": 240,
+            "description": "Untrusted display-only model narrative with no fact or machine-judgment authority."
           },
           "reason_source": {
-            "const": "model_proposed"
+            "const": "model_proposed_untrusted_narrative"
           },
           "confidence": {
             "enum": [
@@ -298,6 +300,7 @@
           "output_schema_invalid",
           "execute_live_required",
           "request_mode_mismatch",
+          "execution_contract_invalid",
           "transport_failed",
           "response_invalid",
           "model_output_invalid",
@@ -316,5 +319,137 @@
         "outreach_authorized": false
       }
     }
-  }
+  },
+  "allOf": [
+    {
+      "oneOf": [
+        {
+          "properties": {
+            "status": {"const": "completed"},
+            "model_receipt": {"type": "object"},
+            "usage": {"type": "object"},
+            "error_codes": {"maxItems": 0},
+            "execution": {
+              "oneOf": [
+                {
+                  "const": {
+                    "mode": "offline_fake",
+                    "transport_id": "offline_fake_responses",
+                    "execute_live": false,
+                    "provider_external_calls": 0,
+                    "fallback_used": false
+                  }
+                },
+                {
+                  "const": {
+                    "mode": "live",
+                    "transport_id": "openai_compatible_responses",
+                    "execute_live": true,
+                    "provider_external_calls": 1,
+                    "fallback_used": false
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "properties": {
+            "status": {"const": "blocked"},
+            "model_receipt": {"const": null},
+            "usage": {"const": null},
+            "verdict": {"const": "abstained"},
+            "proposals": {"maxItems": 0},
+            "error_codes": {"const": ["execute_live_required"]},
+            "execution": {
+              "const": {
+                "mode": "live",
+                "transport_id": "openai_compatible_responses",
+                "execute_live": false,
+                "provider_external_calls": 0,
+                "fallback_used": false
+              }
+            }
+          }
+        },
+        {
+          "properties": {
+            "status": {"const": "failed"},
+            "model_receipt": {"const": null},
+            "usage": {"const": null},
+            "verdict": {"const": "abstained"},
+            "proposals": {"maxItems": 0},
+            "error_codes": {
+              "minItems": 1,
+              "maxItems": 1,
+              "items": {
+                "enum": [
+                  "request_invalid",
+                  "prompt_invalid",
+                  "output_schema_invalid",
+                  "request_mode_mismatch",
+                  "transport_failed",
+                  "response_invalid",
+                  "model_output_invalid",
+                  "budget_exceeded"
+                ]
+              }
+            },
+            "execution": {
+              "oneOf": [
+                {
+                  "properties": {
+                    "mode": {"const": "offline_fake"},
+                    "transport_id": {"const": "offline_fake_responses"}
+                  }
+                },
+                {
+                  "properties": {
+                    "mode": {"const": "live"},
+                    "transport_id": {"const": "openai_compatible_responses"}
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "properties": {
+            "status": {"const": "failed"},
+            "model_receipt": {"const": null},
+            "usage": {"const": null},
+            "verdict": {"const": "abstained"},
+            "proposals": {"maxItems": 0},
+            "error_codes": {"const": ["execution_contract_invalid"]},
+            "execution": {
+              "oneOf": [
+                {
+                  "properties": {
+                    "mode": {"const": "offline_fake"},
+                    "transport_id": {"const": "openai_compatible_responses"},
+                    "provider_external_calls": {"const": 0}
+                  }
+                },
+                {
+                  "properties": {
+                    "mode": {"const": "live"},
+                    "transport_id": {"const": "offline_fake_responses"},
+                    "provider_external_calls": {"const": 0}
+                  }
+                },
+                {
+                  "properties": {
+                    "mode": {"const": "offline_fake"},
+                    "transport_id": {"const": "offline_fake_responses"},
+                    "execute_live": {"const": true},
+                    "provider_external_calls": {"const": 0}
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
 }

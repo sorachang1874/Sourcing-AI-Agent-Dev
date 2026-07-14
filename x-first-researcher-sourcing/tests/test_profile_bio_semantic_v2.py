@@ -19,6 +19,7 @@ from x_first.profile_bio_semantic_v2 import (  # noqa: E402
     MODEL_AUTHORITY,
     MODEL_ID,
     MODEL_OUTPUT_SCHEMA_VERSION,
+    REASON_SOURCE,
     OfflineFakeResponsesTransport,
     build_responses_request,
     canonical_json,
@@ -39,6 +40,12 @@ def _schema_errors(instance: Any, schema: Any, *, path: str = "$") -> list[str]:
     if not isinstance(schema, dict):
         return [f"{path}: invalid schema"]
     errors: list[str] = []
+    for sub_schema in schema.get("allOf", []):
+        errors.extend(_schema_errors(instance, sub_schema, path=path))
+    if "oneOf" in schema:
+        matches = sum(not _schema_errors(instance, option, path=path) for option in schema["oneOf"])
+        if matches != 1:
+            errors.append(f"{path}: oneOf mismatch")
     if "const" in schema and instance != schema["const"]:
         errors.append(f"{path}: const mismatch")
     if "enum" in schema and instance not in schema["enum"]:
@@ -87,6 +94,10 @@ def _schema_errors(instance: Any, schema: Any, *, path: str = "$") -> list[str]:
             errors.append(f"{path}: too few items")
         if "maxItems" in schema and len(instance) > schema["maxItems"]:
             errors.append(f"{path}: too many items")
+        if schema.get("uniqueItems") is True:
+            identities = [canonical_json(value) for value in instance]
+            if len(set(identities)) != len(identities):
+                errors.append(f"{path}: duplicate items")
         for index, value in enumerate(instance):
             if "items" in schema:
                 errors.extend(_schema_errors(value, schema["items"], path=f"{path}[{index}]"))
@@ -116,6 +127,7 @@ def _fake_response(model_output: Any, *, usage: dict[str, int] | None = None) ->
             {
                 "id": "msg_fixture_semantic_v2",
                 "type": "message",
+                "status": "completed",
                 "role": "assistant",
                 "content": [
                     {
@@ -188,7 +200,7 @@ class ProfileBioSemanticV2Test(unittest.TestCase):
             "excerpt": bio,
             "reason_codes": [reason_code],
             "reason": reason,
-            "reason_source": "model_proposed",
+            "reason_source": REASON_SOURCE,
             "confidence": "high",
             "evidence_basis": "profile_bio_only",
             "requires_independent_verification": True,
@@ -250,7 +262,7 @@ class ProfileBioSemanticV2Test(unittest.TestCase):
                 "id": "rs_fixture_semantic_v2",
                 "type": "reasoning",
                 "status": "completed",
-                "summary": [],
+                "summary": [{"type": "summary_text", "text": "Bounded provider summary."}],
             },
         )
         reasoning_result = run_semantic_review(
@@ -260,6 +272,54 @@ class ProfileBioSemanticV2Test(unittest.TestCase):
             transport=OfflineFakeResponsesTransport(reasoning_response),
         )
         self.assertEqual(reasoning_result["status"], "completed")
+
+        parser_mutations = []
+        message_incomplete = copy.deepcopy(self.raw_response)
+        message_incomplete["output"][0]["status"] = "incomplete"
+        parser_mutations.append(message_incomplete)
+        message_without_id = copy.deepcopy(self.raw_response)
+        del message_without_id["output"][0]["id"]
+        parser_mutations.append(message_without_id)
+        response_incomplete = copy.deepcopy(self.raw_response)
+        response_incomplete["status"] = "incomplete"
+        parser_mutations.append(response_incomplete)
+        incomplete_details = copy.deepcopy(self.raw_response)
+        incomplete_details["incomplete_details"] = {"reason": "max_output_tokens"}
+        parser_mutations.append(incomplete_details)
+        reasoning_without_status = copy.deepcopy(reasoning_response)
+        del reasoning_without_status["output"][0]["status"]
+        parser_mutations.append(reasoning_without_status)
+        reasoning_without_id = copy.deepcopy(reasoning_response)
+        del reasoning_without_id["output"][0]["id"]
+        parser_mutations.append(reasoning_without_id)
+        malformed_summary = copy.deepcopy(reasoning_response)
+        malformed_summary["output"][0]["summary"] = ["not-a-summary-object"]
+        parser_mutations.append(malformed_summary)
+        refusal = copy.deepcopy(self.raw_response)
+        refusal["output"][0]["content"][0] = {"type": "refusal", "refusal": "No."}
+        parser_mutations.append(refusal)
+        rerouted = copy.deepcopy(self.raw_response)
+        rerouted["model"] = "gpt-5.6-sol"
+        parser_mutations.append(rerouted)
+        for raw_response in parser_mutations:
+            with self.subTest(parser_case=canonical_sha256(raw_response)):
+                result = run_semantic_review(
+                    self.request,
+                    prompt=self.prompt,
+                    output_schema=self.model_output_schema,
+                    transport=OfflineFakeResponsesTransport(raw_response),
+                )
+                self.assertEqual(result["error_codes"], ["response_invalid"])
+                self.assertEqual(
+                    validate_review(
+                        result,
+                        request=self.request,
+                        prompt=self.prompt,
+                        output_schema=self.model_output_schema,
+                        raw_response=raw_response,
+                    ),
+                    [],
+                )
 
         tool_response = copy.deepcopy(reasoning_response)
         tool_response["output"][0] = {"type": "function_call", "name": "forbidden_tool"}
@@ -387,7 +447,7 @@ class ProfileBioSemanticV2Test(unittest.TestCase):
                     observed = result["proposals"][0]
                     self.assertEqual(observed["proposal_type"], proposal_type)
                     self.assertEqual(observed["excerpt_sha256"], text_sha256(bio))
-                    self.assertEqual(observed["reason_source"], "model_proposed")
+                    self.assertEqual(observed["reason_source"], REASON_SOURCE)
                     self.assertEqual(observed["verification_status"], "unverified_professional_context_proposal")
 
     def test_model_output_rejects_unbound_spans_reasons_authority_and_verdicts(self) -> None:
@@ -407,6 +467,9 @@ class ProfileBioSemanticV2Test(unittest.TestCase):
         unsupported_number = copy.deepcopy(self.model_output)
         unsupported_number["proposals"][3]["reason"] = "Bio states 100K professional activity."
         mutations.append(unsupported_number)
+        unsupported_chinese_number = copy.deepcopy(self.model_output)
+        unsupported_chinese_number["proposals"][3]["reason"] = "Bio states 五万 professional followers."
+        mutations.append(unsupported_chinese_number)
         protected_identity = copy.deepcopy(self.model_output)
         protected_identity["proposals"][5]["reason"] = "Bio proves Chinese researcher ethnicity."
         mutations.append(protected_identity)
@@ -422,6 +485,22 @@ class ProfileBioSemanticV2Test(unittest.TestCase):
         duplicate = copy.deepcopy(self.model_output)
         duplicate["proposals"].append(copy.deepcopy(duplicate["proposals"][0]))
         mutations.append(duplicate)
+        semantic_duplicate = copy.deepcopy(self.model_output)
+        duplicate_with_new_prose = copy.deepcopy(semantic_duplicate["proposals"][0])
+        duplicate_with_new_prose["reason"] = "Different untrusted display narrative."
+        duplicate_with_new_prose["confidence"] = "low"
+        semantic_duplicate["proposals"].append(duplicate_with_new_prose)
+        mutations.append(semantic_duplicate)
+        contradictory_relation_codes = copy.deepcopy(self.model_output)
+        contradictory_relation_codes["proposals"][1]["reason_codes"] = [
+            "explicit_current_organization_claim",
+            "explicit_previous_organization_claim",
+        ]
+        self.assertTrue(_schema_errors(contradictory_relation_codes, self.model_output_schema))
+        mutations.append(contradictory_relation_codes)
+        wrong_relation_code = copy.deepcopy(self.model_output)
+        wrong_relation_code["proposals"][1]["reason_codes"] = ["explicit_previous_organization_claim"]
+        mutations.append(wrong_relation_code)
 
         for model_output in mutations:
             with self.subTest(digest=canonical_sha256(model_output)):
@@ -435,12 +514,47 @@ class ProfileBioSemanticV2Test(unittest.TestCase):
                 self.assertEqual(result["status"], "failed")
                 self.assertEqual(result["error_codes"], ["model_output_invalid"])
                 self.assertEqual(result["proposals"], [])
+                self.assertEqual(
+                    validate_review(
+                        result,
+                        request=self.request,
+                        prompt=self.prompt,
+                        output_schema=self.model_output_schema,
+                        raw_response=_fake_response(model_output),
+                    ),
+                    [],
+                )
 
         natural_paraphrase = copy.deepcopy(self.model_output)
         natural_paraphrase["proposals"][0]["reason"] = (
             "The cited Bio passage directly supports this professional-context proposal; verify it independently."
         )
         self.assertEqual(validate_model_output(natural_paraphrase, request=self.request), [])
+
+        invented_narrative = copy.deepcopy(self.model_output)
+        invented_narrative["proposals"][0]["reason"] = "Anthropic in Canada."
+        self.assertEqual(validate_model_output(invented_narrative, request=self.request), [])
+        invented_raw_response = _fake_response(invented_narrative)
+        invented_review = run_semantic_review(
+            self.request,
+            prompt=self.prompt,
+            output_schema=self.model_output_schema,
+            transport=OfflineFakeResponsesTransport(invented_raw_response),
+        )
+        self.assertEqual(invented_review["status"], "completed")
+        self.assertEqual(invented_review["proposals"][0]["proposal_id"], self.review["proposals"][0]["proposal_id"])
+        self.assertEqual(invented_review["proposals"][0]["reason_source"], REASON_SOURCE)
+        self.assertTrue(all(value is False for value in invented_review["authority"].values()))
+        self.assertEqual(
+            validate_review(
+                invented_review,
+                request=self.request,
+                prompt=self.prompt,
+                output_schema=self.model_output_schema,
+                raw_response=invented_raw_response,
+            ),
+            [],
+        )
 
     def test_live_gate_splits_fixture_source_from_model_execution_and_never_calls(self) -> None:
         class NeverLiveTransport:
@@ -466,6 +580,16 @@ class ProfileBioSemanticV2Test(unittest.TestCase):
         self.assertEqual(blocked["status"], "blocked")
         self.assertEqual(blocked["error_codes"], ["execute_live_required"])
         self.assertEqual(transport.calls, 0)
+        self.assertEqual(
+            validate_review(
+                blocked,
+                request=live_request,
+                prompt=self.prompt,
+                output_schema=self.model_output_schema,
+                raw_response=None,
+            ),
+            [],
+        )
         self.assertEqual(live_request["profile_source_mode"], "offline_fixture")
         self.assertTrue(live_request["profile_snapshot"]["profile_url"].startswith("https://profiles.invalid/"))
 
@@ -478,6 +602,65 @@ class ProfileBioSemanticV2Test(unittest.TestCase):
         )
         self.assertEqual(mismatch["error_codes"], ["request_mode_mismatch"])
         self.assertEqual(transport.calls, 0)
+        forged_transport_failure = copy.deepcopy(mismatch)
+        forged_transport_failure["error_codes"] = ["transport_failed"]
+        self.assertTrue(
+            validate_review(
+                forged_transport_failure,
+                request=self.request,
+                prompt=self.prompt,
+                output_schema=self.model_output_schema,
+                raw_response=None,
+            )
+        )
+
+        offline_execute_transport = OfflineFakeResponsesTransport(self.raw_response)
+        offline_execute = run_semantic_review(
+            self.request,
+            prompt=self.prompt,
+            output_schema=self.model_output_schema,
+            transport=offline_execute_transport,
+            execute_live=True,
+        )
+        self.assertEqual(offline_execute["error_codes"], ["execution_contract_invalid"])
+        self.assertEqual(_schema_errors(offline_execute, self.review_schema), [])
+        self.assertEqual(offline_execute_transport.calls, 0)
+
+        class InvalidPairTransport:
+            def __init__(self, *, is_live: bool, transport_id: str) -> None:
+                self.is_live = is_live
+                self.transport_id = transport_id
+                self.calls = 0
+
+            def create_response(self, payload: Any, *, timeout_ms: int) -> dict[str, Any]:
+                self.calls += 1
+                return self.raw_response  # type: ignore[attr-defined]
+
+        invalid_pairs = (
+            (self.request, InvalidPairTransport(is_live=False, transport_id="openai_compatible_responses"), False),
+            (live_request, InvalidPairTransport(is_live=True, transport_id="offline_fake_responses"), True),
+        )
+        for request, invalid_transport, execute_live in invalid_pairs:
+            result = run_semantic_review(
+                request,
+                prompt=self.prompt,
+                output_schema=self.model_output_schema,
+                transport=invalid_transport,
+                execute_live=execute_live,
+            )
+            self.assertEqual(result["error_codes"], ["execution_contract_invalid"])
+            self.assertEqual(_schema_errors(result, self.review_schema), [])
+            self.assertEqual(invalid_transport.calls, 0)
+            self.assertEqual(
+                validate_review(
+                    result,
+                    request=request,
+                    prompt=self.prompt,
+                    output_schema=self.model_output_schema,
+                    raw_response=None,
+                ),
+                [],
+            )
         native_source = copy.deepcopy(live_request)
         native_source["profile_source_mode"] = "native_x"
         native_source["profile_snapshot"]["profile_url"] = "https://x.com/semanticfixture"
@@ -496,14 +679,35 @@ class ProfileBioSemanticV2Test(unittest.TestCase):
         unpaired_bio = copy.deepcopy(self.request)
         unpaired_bio["profile_snapshot"]["bio_text"] = "\ud800"
         self.assertTrue(validate_request(unpaired_bio, prompt=self.prompt, output_schema=self.model_output_schema))
-        invalid_request_result = run_semantic_review(
-            unpaired_bio,
-            prompt=self.prompt,
-            output_schema=self.model_output_schema,
-            transport=OfflineFakeResponsesTransport(self.raw_response),
-        )
-        self.assertEqual(invalid_request_result["status"], "failed")
-        self.assertEqual(invalid_request_result["platform_user_id"], "900000000000000001")
+        with self.assertRaisesRegex(ValueError, "request_binding_invalid"):
+            run_semantic_review(
+                unpaired_bio,
+                prompt=self.prompt,
+                output_schema=self.model_output_schema,
+                transport=OfflineFakeResponsesTransport(self.raw_response),
+            )
+        for field_name in ("profile_url", "content_version"):
+            invalid_scalar = copy.deepcopy(self.request)
+            invalid_scalar["profile_snapshot"][field_name] = "prefix\ud800suffix"
+            self.assertTrue(
+                validate_request(invalid_scalar, prompt=self.prompt, output_schema=self.model_output_schema)
+            )
+            with self.assertRaisesRegex(ValueError, "request_binding_invalid"):
+                run_semantic_review(
+                    invalid_scalar,
+                    prompt=self.prompt,
+                    output_schema=self.model_output_schema,
+                    transport=OfflineFakeResponsesTransport(self.raw_response),
+                )
+        invalid_key = copy.deepcopy(self.request)
+        invalid_key["profile_snapshot"]["bad\ud800key"] = "value"
+        with self.assertRaisesRegex(ValueError, "request_binding_invalid"):
+            run_semantic_review(
+                invalid_key,
+                prompt=self.prompt,
+                output_schema=self.model_output_schema,
+                transport=OfflineFakeResponsesTransport(self.raw_response),
+            )
 
         unpaired_reason = copy.deepcopy(self.model_output)
         unpaired_reason["proposals"][0]["reason"] = "\ud800"
@@ -523,7 +727,54 @@ class ProfileBioSemanticV2Test(unittest.TestCase):
             output_schema=self.model_output_schema,
             transport=OfflineFakeResponsesTransport(raw_unpaired),
         )
-        self.assertEqual(raw_unpaired_result["error_codes"], ["model_output_invalid"])
+        self.assertEqual(raw_unpaired_result["error_codes"], ["response_invalid"])
+        raw_unpaired_key = copy.deepcopy(self.raw_response)
+        raw_unpaired_key["bad\ud800key"] = "value"
+        raw_unpaired_key_result = run_semantic_review(
+            self.request,
+            prompt=self.prompt,
+            output_schema=self.model_output_schema,
+            transport=OfflineFakeResponsesTransport(raw_unpaired_key),
+        )
+        self.assertEqual(raw_unpaired_key_result["error_codes"], ["response_invalid"])
+
+        oversized_reasoning = copy.deepcopy(self.raw_response)
+        oversized_reasoning["output"].insert(
+            0,
+            {
+                "id": "rs_fixture_semantic_v2",
+                "type": "reasoning",
+                "status": "completed",
+                "summary": [{"type": "summary_text", "text": "x" * 100_000}],
+            },
+        )
+        oversized_reasoning_result = run_semantic_review(
+            self.request,
+            prompt=self.prompt,
+            output_schema=self.model_output_schema,
+            transport=OfflineFakeResponsesTransport(oversized_reasoning),
+        )
+        self.assertEqual(oversized_reasoning_result["error_codes"], ["budget_exceeded"])
+
+        oversized_diagnostic = copy.deepcopy(self.raw_response)
+        oversized_diagnostic["diagnostic"] = "x" * 100_000
+        oversized_diagnostic_result = run_semantic_review(
+            self.request,
+            prompt=self.prompt,
+            output_schema=self.model_output_schema,
+            transport=OfflineFakeResponsesTransport(oversized_diagnostic),
+        )
+        self.assertEqual(oversized_diagnostic_result["error_codes"], ["budget_exceeded"])
+
+        oversized_canonical = copy.deepcopy(self.raw_response)
+        oversized_canonical["diagnostic"] = ["x" * 10_000 for _ in range(30)]
+        oversized_canonical_result = run_semantic_review(
+            self.request,
+            prompt=self.prompt,
+            output_schema=self.model_output_schema,
+            transport=OfflineFakeResponsesTransport(oversized_canonical),
+        )
+        self.assertEqual(oversized_canonical_result["error_codes"], ["budget_exceeded"])
 
         deep: Any = None
         for _ in range(1500):
@@ -574,7 +825,11 @@ class ProfileBioSemanticV2Test(unittest.TestCase):
 
     def test_request_without_exact_binding_produces_no_review_artifact(self) -> None:
         transport = OfflineFakeResponsesTransport(self.raw_response)
-        for request in (None, {}, {"request_id": "bad"}):
+        subject_conflict = copy.deepcopy(self.request)
+        subject_conflict["subject"]["platform_user_id"] = "900000000000000099"
+        bio_hash_conflict = copy.deepcopy(self.request)
+        bio_hash_conflict["profile_snapshot"]["bio_sha256"] = "0" * 64
+        for request in (None, {}, {"request_id": "bad"}, subject_conflict, bio_hash_conflict):
             with self.subTest(request=request), self.assertRaisesRegex(ValueError, "request_binding_invalid"):
                 run_semantic_review(
                     request,
@@ -612,6 +867,69 @@ class ProfileBioSemanticV2Test(unittest.TestCase):
                         raw_response=self.raw_response,
                     )
                 )
+
+    def test_terminal_status_schema_and_recomputation_are_total(self) -> None:
+        live_request = copy.deepcopy(self.request)
+        live_request["model_execution_mode"] = "live_canary"
+
+        class NeverLiveTransport:
+            is_live = True
+            transport_id = "openai_compatible_responses"
+
+            def create_response(self, payload: Any, *, timeout_ms: int) -> dict[str, Any]:
+                raise AssertionError("blocked before call")
+
+        blocked = run_semantic_review(
+            live_request,
+            prompt=self.prompt,
+            output_schema=self.model_output_schema,
+            transport=NeverLiveTransport(),
+        )
+        self.assertEqual(_schema_errors(blocked, self.review_schema), [])
+        self.assertEqual(
+            validate_review(
+                blocked,
+                request=live_request,
+                prompt=self.prompt,
+                output_schema=self.model_output_schema,
+                raw_response=None,
+            ),
+            [],
+        )
+
+        bad_raw_response = copy.deepcopy(self.raw_response)
+        bad_raw_response["output"][0]["status"] = "incomplete"
+        failed = run_semantic_review(
+            self.request,
+            prompt=self.prompt,
+            output_schema=self.model_output_schema,
+            transport=OfflineFakeResponsesTransport(bad_raw_response),
+        )
+        self.assertEqual(_schema_errors(failed, self.review_schema), [])
+        self.assertEqual(
+            validate_review(
+                failed,
+                request=self.request,
+                prompt=self.prompt,
+                output_schema=self.model_output_schema,
+                raw_response=bad_raw_response,
+            ),
+            [],
+        )
+
+        incoherent_failed = copy.deepcopy(self.review)
+        incoherent_failed["status"] = "failed"
+        incoherent_failed["error_codes"] = []
+        self.assertTrue(_schema_errors(incoherent_failed, self.review_schema))
+        self.assertTrue(
+            validate_review(
+                incoherent_failed,
+                request=self.request,
+                prompt=self.prompt,
+                output_schema=self.model_output_schema,
+                raw_response=self.raw_response,
+            )
+        )
 
     def test_schema_and_runtime_close_extra_fields_and_policy_mutations(self) -> None:
         request_extra = copy.deepcopy(self.request)
