@@ -29,11 +29,18 @@ HYDRATION_TASK_VERSION = "x.grok_cli.candidate_hydration.task.v1"
 SUPPORTED_RECEIPT_VERSION = "x.grok_cli.exploration.tool_receipt.v1"
 QUERY_POLICY_SCHEMA_VERSION = "x.grok_cli.exploration.query_policy_descriptor.v2"
 QUERY_POLICY_REGISTRY_SCHEMA_VERSION = "x.grok_cli.exploration.query_policy_registry.v2"
+QUERY_COMMITMENT_ISSUANCE_HISTORY_SCHEMA_VERSION = (
+    "x.grok_cli.exploration.query_commitment_issuance_history.v1"
+)
+QUERY_COMMITMENT_ISSUANCE_HISTORY_VERSION = "approved-query-commitment-issuances-v1"
 CANDIDATE_VALUE_POLICY_SCHEMA_VERSION = "x.grok_cli.candidate_value_segment_policy.v1"
 CANDIDATE_VALUE_POLICY_CANONICAL_SHA256 = "78800fd8ae6977e49301aaf1c6ee3663d74639d7969d829354a7e1676a917d91"
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_QUERY_POLICY_REGISTRY_VERSION = "approved-query-policies-v2"
 QUERY_POLICY_REGISTRY_DIRECTORY = PROJECT_ROOT / "configs/grok_cli_exploration_query_policy_registries"
+QUERY_COMMITMENT_ISSUANCE_HISTORY_RELATIVE_PATH = Path(
+    "configs/grok_cli_exploration_query_commitment_issuance_history.v1.json"
+)
 CANDIDATE_VALUE_POLICY_PATH = PROJECT_ROOT / "configs/candidate_value_segment_policy.v1.json"
 
 ALLOWED_TOOL_NAMES = frozenset(
@@ -178,6 +185,11 @@ _QUERY_POLICY_REGISTRY_KEYS = {
     "registry_version",
     "commitment_issuance_lineage",
     "policies",
+}
+_QUERY_COMMITMENT_ISSUANCE_HISTORY_KEYS = {
+    "schema_version",
+    "history_version",
+    "issuances",
 }
 _QUERY_POLICY_REGISTRY_ROW_KEYS = {
     "policy_version",
@@ -372,7 +384,7 @@ _RAW_SESSION_BINDING_KEYS = {
     "tool_disable_flags_verified",
     "owner_only_permissions",
 }
-PROTECTED_CATEGORY_BOUNDARY_VERSION = "base-discovery-protected-category-boundary-v1"
+PROTECTED_CATEGORY_BOUNDARY_VERSION = "base-discovery-protected-category-boundary-v2"
 
 # This is a governed value registry, not a growing identity-value regex.  A
 # reviewed code/version change is required to add a category or value.  The
@@ -381,15 +393,88 @@ PROTECTED_CATEGORY_BOUNDARY_VERSION = "base-discovery-protected-category-boundar
 # remains a separate lane: country/region place names such as ``China`` and
 # ``Asia`` are deliberately not identity values here.
 _PROTECTED_CATEGORY_MARKERS = {
+    "age": ("age", "age group", "年龄", "年齡", "âge", "edad", "年齢", "나이"),
     "ancestry": ("ancestry", "血统", "血緣", "ascendance", "ascendencia", "祖先"),
     "citizenship": ("citizenship", "公民身份", "citoyenneté", "ciudadanía", "市民権", "시민권"),
+    "disability": (
+        "disability",
+        "disability status",
+        "残障",
+        "殘障",
+        "残疾",
+        "handicap",
+        "discapacidad",
+        "障害",
+        "장애",
+    ),
     "ethnicity": ("ethnicity", "ethnic origin", "族裔", "族群", "origine ethnique", "etnia", "民族"),
-    "gender": ("gender identity", "性别认同", "性別認同", "identité de genre", "identidad de género"),
+    "gender": (
+        "gender",
+        "gender identity",
+        "sex",
+        "性别",
+        "性別",
+        "性别认同",
+        "性別認同",
+        "genre",
+        "identité de genre",
+        "género",
+        "identidad de género",
+        "性別認同",
+        "성별",
+    ),
     "nationality": ("nationality", "国籍", "國籍", "nationalité", "nacionalidad", "国籍", "국적"),
-    "race": ("racial identity", "种族", "種族", "identité raciale", "identidad racial", "人種", "인종"),
+    "race": ("race", "racial identity", "种族", "種族", "identité raciale", "identidad racial", "人種", "인종"),
     "religion": ("religion", "religious identity", "宗教", "宗教信仰", "religión", "宗教的アイデンティティ"),
+    "sexual_orientation": (
+        "sexual orientation",
+        "性取向",
+        "性傾向",
+        "orientation sexuelle",
+        "orientación sexual",
+        "性的指向",
+        "성적 지향",
+    ),
 }
 _PROTECTED_IDENTITY_VALUES = {
+    "age": (
+        "young",
+        "younger",
+        "old",
+        "older",
+        "under 40",
+        "over 40",
+        "青年",
+        "年轻",
+        "年輕",
+        "老年",
+    ),
+    "disability": (
+        "disabled",
+        "neurodivergent",
+        "deaf",
+        "blind",
+        "残障人士",
+        "殘障人士",
+        "残疾人",
+    ),
+    "gender": (
+        "woman",
+        "women",
+        "female",
+        "man",
+        "men",
+        "male",
+        "nonbinary",
+        "non-binary",
+        "transgender",
+        "trans woman",
+        "trans man",
+        "女性",
+        "男性",
+        "女人",
+        "男人",
+    ),
     "nationality_or_ethnicity": (
         "american",
         "indian",
@@ -423,6 +508,16 @@ _PROTECTED_IDENTITY_VALUES = {
         "중국인",
         "아시아인",
     ),
+    "race": (
+        "black",
+        "white",
+        "african american",
+        "latino",
+        "latina",
+        "hispanic",
+        "黑人",
+        "白人",
+    ),
     "religion": (
         "muslim",
         "jewish",
@@ -440,6 +535,20 @@ _PROTECTED_IDENTITY_VALUES = {
         "musulmán",
         "イスラム教徒",
         "무슬림",
+    ),
+    "sexual_orientation": (
+        "gay",
+        "lesbian",
+        "bisexual",
+        "queer",
+        "straight",
+        "homosexual",
+        "男同性恋",
+        "男同性戀",
+        "女同性恋",
+        "女同性戀",
+        "双性恋",
+        "雙性戀",
     ),
 }
 _PROTECTED_FIELD_TOKENS = frozenset(_PROTECTED_CATEGORY_MARKERS)
@@ -753,10 +862,22 @@ def _tool_subject(arguments: Mapping[str, Any], tool_name: str) -> str | None:
     return present[0] if len(present) == 1 else None
 
 
-def _tool_arguments_valid(arguments: Mapping[str, Any], tool_name: str) -> bool:
+def base_discovery_tool_subject_allowed(arguments: Mapping[str, Any], tool_name: str) -> bool:
+    """Apply the shared protected-category boundary to one native-X operand.
+
+    This deliberately validates only the base-discovery subject.  Each caller
+    still owns its transport-specific argument shape and numeric ceilings.
+    """
+
     subject = _tool_subject(arguments, tool_name)
-    if subject is None or len(subject) > 2_000 or _protected_category_or_value_present(subject):
+    return subject is not None and len(subject) <= 2_000 and not _protected_category_or_value_present(subject)
+
+
+def _tool_arguments_valid(arguments: Mapping[str, Any], tool_name: str) -> bool:
+    if not base_discovery_tool_subject_allowed(arguments, tool_name):
         return False
+    subject = _tool_subject(arguments, tool_name)
+    assert subject is not None
     if tool_name == "x_keyword_search":
         if set(arguments) != {"query", "limit", "mode"} or arguments["mode"] not in {"Latest", "Top"}:
             return False
@@ -879,6 +1000,85 @@ def _query_policy_registry_path(registry_version: str | None) -> tuple[str, Path
     return selected_version, unresolved_path
 
 
+def _query_commitment_issuance_history(
+    *,
+    deadline_monotonic: float | None = None,
+) -> list[Mapping[str, Any]]:
+    """Load the single append-only owner for issuance identity across snapshots."""
+
+    unresolved_path = PROJECT_ROOT / QUERY_COMMITMENT_ISSUANCE_HISTORY_RELATIVE_PATH
+    cursor = PROJECT_ROOT
+    for component in QUERY_COMMITMENT_ISSUANCE_HISTORY_RELATIVE_PATH.parts:
+        cursor /= component
+        if cursor.is_symlink():
+            raise ExplorationValidationError("query_commitment_issuance_history_path_invalid")
+    try:
+        unresolved_path.resolve().relative_to(PROJECT_ROOT.resolve())
+    except ValueError as exc:
+        raise ExplorationValidationError("query_commitment_issuance_history_path_invalid") from exc
+    history = _load_closed_json(
+        unresolved_path,
+        maximum_bytes=MAX_INPUT_CANONICAL_BYTES,
+        error="query_commitment_issuance_history_file_invalid",
+    )
+    _assert_technical_envelope(
+        history,
+        error="query_commitment_issuance_history_technical_envelope_exceeded",
+        deadline_monotonic=deadline_monotonic,
+    )
+    if (
+        not isinstance(history, dict)
+        or set(history) != _QUERY_COMMITMENT_ISSUANCE_HISTORY_KEYS
+        or history.get("schema_version") != QUERY_COMMITMENT_ISSUANCE_HISTORY_SCHEMA_VERSION
+        or history.get("history_version") != QUERY_COMMITMENT_ISSUANCE_HISTORY_VERSION
+    ):
+        raise ExplorationValidationError("query_commitment_issuance_history_schema_invalid")
+    issuances = history.get("issuances")
+    if not isinstance(issuances, list) or not issuances:
+        raise ExplorationValidationError("query_commitment_issuance_history_invalid")
+    seen_issuance_ids: set[str] = set()
+    seen_policy_versions: set[str] = set()
+    seen_runs: set[str] = set()
+    seen_key_ids: set[str] = set()
+    seen_nonce_ids: set[str] = set()
+    for position, issuance in enumerate(issuances):
+        if deadline_monotonic is not None:
+            _check_deadline(deadline_monotonic)
+        if not isinstance(issuance, dict) or set(issuance) != _QUERY_COMMITMENT_ISSUANCE_KEYS:
+            raise ExplorationValidationError("query_commitment_issuance_history_invalid")
+        issuance_id = issuance.get("issuance_id")
+        policy_version = issuance.get("policy_version")
+        run_commitment = issuance.get("run_binding_commitment")
+        key_id = issuance.get("commitment_key_id")
+        nonce_id = issuance.get("commitment_nonce_id")
+        if (
+            type(issuance.get("lineage_position")) is not int
+            or issuance["lineage_position"] != position
+            or not isinstance(issuance_id, str)
+            or re.fullmatch(r"qci_[0-9a-f]{24}", issuance_id) is None
+            or issuance_id in seen_issuance_ids
+            or not isinstance(policy_version, str)
+            or _POLICY_VERSION_RE.fullmatch(policy_version) is None
+            or policy_version in seen_policy_versions
+            or not isinstance(run_commitment, str)
+            or _SHA256_RE.fullmatch(run_commitment) is None
+            or run_commitment in seen_runs
+            or not isinstance(key_id, str)
+            or _SHA256_RE.fullmatch(key_id) is None
+            or key_id in seen_key_ids
+            or not isinstance(nonce_id, str)
+            or _SHA256_RE.fullmatch(nonce_id) is None
+            or nonce_id in seen_nonce_ids
+        ):
+            raise ExplorationValidationError("query_commitment_issuance_history_invalid")
+        seen_issuance_ids.add(issuance_id)
+        seen_policy_versions.add(policy_version)
+        seen_runs.add(run_commitment)
+        seen_key_ids.add(key_id)
+        seen_nonce_ids.add(nonce_id)
+    return issuances
+
+
 def _approved_query_policy_record(
     run_binding: Mapping[str, Any],
     *,
@@ -911,6 +1111,11 @@ def _approved_query_policy_record(
     lineage = registry.get("commitment_issuance_lineage")
     if not isinstance(lineage, list) or not lineage:
         raise ExplorationValidationError("query_commitment_issuance_lineage_invalid")
+    issuance_history = _query_commitment_issuance_history(deadline_monotonic=deadline_monotonic)
+    if len(lineage) > len(issuance_history) or canonical_json(lineage) != canonical_json(
+        issuance_history[: len(lineage)]
+    ):
+        raise ExplorationValidationError("query_commitment_issuance_history_prefix_invalid")
     issuance_by_id: dict[str, Mapping[str, Any]] = {}
     seen_issuance_policy_versions: set[str] = set()
     seen_issuance_runs: set[str] = set()

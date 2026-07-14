@@ -16,7 +16,7 @@
   ],
   "professional_experience_proxy_query_allowed": false,
   "protected_identity_query_allowed": false,
-  "protected_category_boundary_version": "base-discovery-protected-category-boundary-v1",
+  "protected_category_boundary_version": "base-discovery-protected-category-boundary-v2",
   "query_manifest": [
     {"sequence": 0, "tool_name": "x_keyword_search", "call_commitment": "239f012451680d45ccd65921d8113897bec512a7ac146871dd53dfd162c4fed6"},
     {"sequence": 1, "tool_name": "x_semantic_search", "call_commitment": "06aa8bce9a585022ed9256319dce7049e1432458bcd81711b941424f15d35562"},

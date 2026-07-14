@@ -46,7 +46,7 @@
     },
     "professional_experience_proxy_query_allowed": {"const": false},
     "protected_identity_query_allowed": {"const": false},
-    "protected_category_boundary_version": {"const": "base-discovery-protected-category-boundary-v1"},
+    "protected_category_boundary_version": {"const": "base-discovery-protected-category-boundary-v2"},
     "query_manifest": {
       "type": "array",
       "minItems": 1,

@@ -210,6 +210,12 @@ def _public_query_policy_registry() -> dict[str, Any]:
     )
 
 
+def _public_query_commitment_issuance_history() -> dict[str, Any]:
+    return json.loads(
+        (ROOT / "configs/grok_cli_exploration_query_commitment_issuance_history.v1.json").read_text()
+    )
+
+
 def _pre_migration_evaluation_fixture() -> dict[str, Any]:
     return json.loads((ROOT / "fixtures/grok_cli_exploration_pre_migration_evaluation.v1.json").read_text())
 
@@ -285,7 +291,7 @@ def _canonical_policy() -> dict[str, Any]:
         ],
         "professional_experience_proxy_query_allowed": False,
         "protected_identity_query_allowed": False,
-        "protected_category_boundary_version": "base-discovery-protected-category-boundary-v1",
+        "protected_category_boundary_version": "base-discovery-protected-category-boundary-v2",
         "query_manifest": [
             {
                 "sequence": index,
@@ -333,6 +339,28 @@ def _query_policy_registry() -> dict[str, Any]:
             }
         ],
     }
+
+
+def _query_commitment_issuance_history(
+    issuances: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    return {
+        "schema_version": "x.grok_cli.exploration.query_commitment_issuance_history.v1",
+        "history_version": "approved-query-commitment-issuances-v1",
+        "issuances": copy.deepcopy(
+            issuances if issuances is not None else _query_policy_registry()["commitment_issuance_lineage"]
+        ),
+    }
+
+
+def _write_query_commitment_issuance_history(
+    configs: Path,
+    issuances: list[dict[str, Any]] | None = None,
+) -> None:
+    (configs / "grok_cli_exploration_query_commitment_issuance_history.v1.json").write_text(
+        json.dumps(_query_commitment_issuance_history(issuances)),
+        encoding="utf-8",
+    )
 
 
 def _receipt(
@@ -519,6 +547,7 @@ class GrokCliExplorationTest(unittest.TestCase):
         registry_directory.mkdir(parents=True)
         (configs / "grok_cli_exploration_query_policy_descriptor.v2.json").write_text(json.dumps(_canonical_policy()))
         (registry_directory / "approved-query-policies-v2.json").write_text(json.dumps(_query_policy_registry()))
+        _write_query_commitment_issuance_history(configs)
         cls._root_patch = mock.patch.object(exploration_module, "PROJECT_ROOT", project_root)
         cls._registry_patch = mock.patch.object(
             exploration_module,
@@ -549,6 +578,12 @@ class GrokCliExplorationTest(unittest.TestCase):
         )
         registry_schema = json.loads(
             (ROOT / "contracts/x.grok_cli.exploration.query_policy_registry.v2.schema.json").read_text()
+        )
+        issuance_history_schema = json.loads(
+            (
+                ROOT
+                / "contracts/x.grok_cli.exploration.query_commitment_issuance_history.v1.schema.json"
+            ).read_text()
         )
 
         def assert_closed_objects(value: Any, path: str = "$") -> None:
@@ -585,8 +620,10 @@ class GrokCliExplorationTest(unittest.TestCase):
         _mini_schema_validate(_candidate_value_policy(), candidate_policy_schema)
         _mini_schema_validate(_canonical_policy(), query_policy_schema)
         _mini_schema_validate(_query_policy_registry(), registry_schema)
+        _mini_schema_validate(_query_commitment_issuance_history(), issuance_history_schema)
         _mini_schema_validate(_public_policy(), query_policy_schema)
         _mini_schema_validate(_public_query_policy_registry(), registry_schema)
+        _mini_schema_validate(_public_query_commitment_issuance_history(), issuance_history_schema)
 
         duplicate_segment_policy = copy.deepcopy(_candidate_value_policy())
         duplicate_segment_policy["segments"][-1] = copy.deepcopy(duplicate_segment_policy["segments"][0])
@@ -760,6 +797,7 @@ class GrokCliExplorationTest(unittest.TestCase):
             registry_directory.mkdir(parents=True)
             (configs / "grok_cli_exploration_query_policy_descriptor.v2.json").write_text(json.dumps(policy))
             (registry_directory / "approved-query-policies-v2.json").write_text(json.dumps(registry))
+            _write_query_commitment_issuance_history(configs)
             with (
                 mock.patch.object(exploration_module, "PROJECT_ROOT", project_root),
                 mock.patch.object(exploration_module, "QUERY_POLICY_REGISTRY_DIRECTORY", registry_directory),
@@ -919,13 +957,16 @@ class GrokCliExplorationTest(unittest.TestCase):
     def test_public_policy_files_use_keyed_commitments_and_expose_no_dictionary_or_key_material(self) -> None:
         policy = _public_policy()
         registry = _public_query_policy_registry()
-        serialized = canonical_json({"policy": policy, "registry": registry})
+        history = _public_query_commitment_issuance_history()
+        serialized = canonical_json({"policy": policy, "registry": registry, "history": history})
 
         intended_public_migration_files = [
             ROOT / "configs/grok_cli_exploration_query_policy_descriptor.v2.json",
             ROOT / "configs/grok_cli_exploration_query_policy_registries/approved-query-policies-v2.json",
+            ROOT / "configs/grok_cli_exploration_query_commitment_issuance_history.v1.json",
             ROOT / "contracts/x.grok_cli.exploration.query_policy_descriptor.v2.schema.json",
             ROOT / "contracts/x.grok_cli.exploration.query_policy_registry.v2.schema.json",
+            ROOT / "contracts/x.grok_cli.exploration.query_commitment_issuance_history.v1.schema.json",
             ROOT / "contracts/x.grok_cli.exploration.evaluation.v1.schema.json",
             ROOT / "contracts/x.grok_cli.candidate_hydration.task.v1.schema.json",
             ROOT / "fixtures/grok_cli_exploration_pre_migration_evaluation.v1.json",
@@ -1059,6 +1100,7 @@ class GrokCliExplorationTest(unittest.TestCase):
                 registry_directory.mkdir(parents=True)
                 (configs / "grok_cli_exploration_query_policy_descriptor.v2.json").write_text(json.dumps(policy))
                 (registry_directory / "approved-query-policies-v2.json").write_text(json.dumps(registry))
+                _write_query_commitment_issuance_history(configs)
                 with (
                     mock.patch.object(exploration_module, "PROJECT_ROOT", project_root),
                     mock.patch.object(
@@ -1236,6 +1278,7 @@ class GrokCliExplorationTest(unittest.TestCase):
             }
             registry_path = registry_directory / "approved-query-policies-v3.json"
             registry_path.write_text(json.dumps(registry))
+            _write_query_commitment_issuance_history(configs, registry["commitment_issuance_lineage"])
             receipt = _receipt(calls=calls)
             receipt["session_id"] = session_id
             receipt["request_id"] = request_id
@@ -1279,6 +1322,7 @@ class GrokCliExplorationTest(unittest.TestCase):
             registry_directory = configs / "grok_cli_exploration_query_policy_registries"
             registry_directory.mkdir()
             registry_path = registry_directory / "approved-query-policies-v2.json"
+            _write_query_commitment_issuance_history(configs)
 
             for reused_field in ("commitment_key_id", "commitment_nonce_id"):
                 registry = copy.deepcopy(canonical_registry)
@@ -1294,6 +1338,10 @@ class GrokCliExplorationTest(unittest.TestCase):
                 extra[reused_field] = registry["commitment_issuance_lineage"][0][reused_field]
                 registry["commitment_issuance_lineage"].append(extra)
                 registry_path.write_text(json.dumps(registry))
+                _write_query_commitment_issuance_history(
+                    configs,
+                    registry["commitment_issuance_lineage"],
+                )
                 with (
                     self.subTest(reused_field=reused_field),
                     mock.patch.object(exploration_module, "PROJECT_ROOT", project_root),
@@ -1304,10 +1352,52 @@ class GrokCliExplorationTest(unittest.TestCase):
                     ),
                     self.assertRaisesRegex(
                         ExplorationValidationError,
-                        "query_commitment_issuance_lineage_invalid",
+                        "query_commitment_issuance_history_invalid",
                     ),
                 ):
                     evaluate_exploration(_result(), _receipt())
+
+    def test_registry_snapshot_must_be_exact_prefix_of_all_history_owner(self) -> None:
+        registry = copy.deepcopy(_query_policy_registry())
+        registry["registry_version"] = "approved-query-policies-v3"
+        forged = copy.deepcopy(registry["commitment_issuance_lineage"][0])
+        forged.update(
+            issuance_id="qci_" + "a" * 24,
+            policy_version="anthropic-pretrain-base-discovery-fixture-v1",
+            run_binding_commitment="a" * 64,
+            commitment_nonce_id="b" * 64,
+        )
+        # Reusing the v2 key in a standalone v3 snapshot used to evade the
+        # per-file uniqueness check.  The all-history owner must reject it
+        # before the policy body can be selected.
+        registry["commitment_issuance_lineage"] = [forged]
+        with tempfile.TemporaryDirectory() as directory:
+            project_root = Path(directory)
+            configs = project_root / "configs"
+            registry_directory = configs / "grok_cli_exploration_query_policy_registries"
+            registry_directory.mkdir(parents=True)
+            (configs / "grok_cli_exploration_query_policy_descriptor.v2.json").write_text(
+                json.dumps(_canonical_policy())
+            )
+            (registry_directory / "approved-query-policies-v3.json").write_text(json.dumps(registry))
+            _write_query_commitment_issuance_history(configs)
+            with (
+                mock.patch.object(exploration_module, "PROJECT_ROOT", project_root),
+                mock.patch.object(
+                    exploration_module,
+                    "QUERY_POLICY_REGISTRY_DIRECTORY",
+                    registry_directory,
+                ),
+                self.assertRaisesRegex(
+                    ExplorationValidationError,
+                    "query_commitment_issuance_history_prefix_invalid",
+                ),
+            ):
+                evaluate_exploration(
+                    _result(),
+                    _receipt(),
+                    query_policy_registry_version="approved-query-policies-v3",
+                )
 
     def test_one_absolute_deadline_is_forwarded_through_hydration_and_shape(self) -> None:
         observed_deadlines: list[float] = []
@@ -1339,6 +1429,7 @@ class GrokCliExplorationTest(unittest.TestCase):
             registry_directory = configs / "grok_cli_exploration_query_policy_registries"
             registry_directory.mkdir()
             registry_path = registry_directory / "approved-query-policies-v2.json"
+            _write_query_commitment_issuance_history(configs)
 
             def evaluate_registry(registry: dict[str, Any]) -> None:
                 registry_path.write_text(json.dumps(registry))
@@ -1424,6 +1515,11 @@ class GrokCliExplorationTest(unittest.TestCase):
             "OpenAI American pretraining researcher",
             "OpenAI Indian pretraining engineer",
             "OpenAI Muslim pretraining scientist",
+            "OpenAI women pretraining researchers",
+            "OpenAI female pretraining engineer",
+            "OpenAI Black pretraining researcher",
+            "OpenAI disabled pretraining scientist",
+            "OpenAI gay pretraining researcher",
             "OpenAI 美国人 预训练 researcher",
             "OpenAI chercheur musulman préentraînement",
             "OpenAI investigador estadounidense preentrenamiento",
@@ -1843,6 +1939,9 @@ class GrokCliExplorationTest(unittest.TestCase):
             (
                 project_root / "configs/grok_cli_exploration_query_policy_registries/approved-query-policies-v2.json"
             ).write_text(json.dumps(_query_policy_registry()))
+            (
+                project_root / "configs/grok_cli_exploration_query_commitment_issuance_history.v1.json"
+            ).write_text(json.dumps(_query_commitment_issuance_history()))
             result_path = root / "result.json"
             receipt_path = root / "receipt.json"
             output_path = root / "evaluation.json"

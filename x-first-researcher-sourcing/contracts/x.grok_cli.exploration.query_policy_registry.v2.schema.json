@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://contracts.invalid/x.grok_cli.exploration.query_policy_registry.v2.schema.json",
   "title": "Grok CLI approved public query-policy descriptor registry v2",
-  "description": "One immutable version-named snapshot. Each row binds the intended-public descriptor and only keyed commitments derived with an owner-only run-bound key. Additions create a new snapshot file and registry_version.",
+  "description": "One immutable version-named snapshot. Its issuance lineage must be an exact prefix of the canonical append-only query commitment issuance history. Each row binds the intended-public descriptor and only keyed commitments derived with an owner-only run-bound key. Additions create a new snapshot file and registry_version.",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema_version", "registry_version", "commitment_issuance_lineage", "policies"],
@@ -48,7 +48,7 @@
           "policy_schema_version": {"const": "x.grok_cli.exploration.query_policy_descriptor.v2"},
           "purpose": {"const": "base_researcher_discovery"},
           "lab_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"},
-          "protected_category_boundary_version": {"const": "base-discovery-protected-category-boundary-v1"},
+          "protected_category_boundary_version": {"const": "base-discovery-protected-category-boundary-v2"},
           "run_binding_commitment": {"$ref": "#/$defs/sha256"},
           "enabled": {"type": "boolean"}
         }

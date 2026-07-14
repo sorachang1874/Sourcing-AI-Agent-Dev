@@ -19,6 +19,7 @@ import x_first.grok_cli_exploration as exploration  # noqa: E402
 from tests.test_grok_cli_exploration import (  # noqa: E402
     COMMITMENT_KEY_HEX,
     COMMITMENT_NONCE_HEX,
+    _query_commitment_issuance_history,
     _receipt,
     _result,
     _synthetic_legacy_full_policy,
@@ -97,6 +98,14 @@ class GrokCliQueryCommitmentMigrationTest(unittest.TestCase):
         )
         (registry_directory / "approved-query-policies-v2.json").write_text(
             json.dumps(artifacts["registry"]), encoding="utf-8"
+        )
+        (configs / "grok_cli_exploration_query_commitment_issuance_history.v1.json").write_text(
+            json.dumps(
+                _query_commitment_issuance_history(
+                    artifacts["registry"]["commitment_issuance_lineage"]
+                )
+            ),
+            encoding="utf-8",
         )
         return temporary, project_root, registry_directory
 

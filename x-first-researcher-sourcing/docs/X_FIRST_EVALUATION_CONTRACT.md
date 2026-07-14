@@ -260,9 +260,13 @@ Query-policy v2 generates a fresh random 256-bit HMAC key and independent 256-bi
 owner-only `0600` tool receipt retains `key_hex`, `nonce_hex`, raw run identifiers, and query arguments. The intended-
 public descriptor/registry, evaluation, and hydration tasks retain only `key_id`, `nonce_id`, a deterministic opaque
 `commitment_issuance_id`, the domain-separated HMAC commitments, and descriptor/registry/issuance-row hashes. Every
-immutable version-named registry snapshot carries an append-only issuance lineage. Runtime rejects reuse of either a
-key id or nonce id by any other run, even if the lab or policy version differs; a new lab therefore requires fresh key
-and nonce material. The key and nonce live exactly as long as the private receipt: they are
+immutable version-named registry snapshot carries an issuance lineage that must equal an exact prefix of the single
+append-only owner `configs/grok_cli_exploration_query_commitment_issuance_history.v1.json`. The corresponding closed
+schema is `contracts/x.grok_cli.exploration.query_commitment_issuance_history.v1.schema.json`. Runtime validates the
+entire owner before selecting any snapshot and rejects duplicate issuance ids, policy versions, run commitments, key
+ids, or nonce ids across all snapshots. A standalone newer snapshot cannot discard its predecessor rows or reuse an
+older key under a fresh nonce. A new lab therefore requires a new all-history row, a fresh key and nonce, and a new
+registry snapshot whose lineage is the resulting exact prefix. The key and nonce live exactly as long as the private receipt: they are
 needed for offline source replay, are never copied into tracked files or terminal summaries, and are deleted with that
 receipt under the run's private retention/purge policy. A replay after deletion is intentionally impossible. Key/nonce
 reuse across runs is forbidden. `scripts/migrate_grok_cli_query_commitments_v2.py` is the bounded one-time migration,
@@ -322,7 +326,7 @@ state closed set, four complete temporal combinations, segment priority, Recall 
 and hydration triggers. Its executable schema requires four unique closed rows, while runtime validation proves the
 exact state-pair/segment bijection. Query-policy registries are immutable version-named snapshots under
 `configs/grok_cli_exploration_query_policy_registries/`; each public snapshot binds an approved experiment through an
-opaque run commitment, append-only issuance row, descriptor hash, legacy full-policy commitment, and exact ordered call commitments without
+opaque run commitment, exact all-history issuance prefix, descriptor hash, legacy full-policy commitment, and exact ordered call commitments without
 publishing query operands. These are domain-separated HMAC values under the private run key and nonce, not unsalted
 operand hashes. Adding another lab creates a new reviewed descriptor snapshot instead of editing the snapshot named by an
 existing evaluation, so historical artifacts remain replayable. It must not require adding a new candidate field or
@@ -330,8 +334,8 @@ changing segment code.
 
 Candidate inclusion/exclusion and caveats are closed reason-code fields. Free-form text is permitted only as bounded
 source evidence. Descriptor and registry rows bind `protected_category_boundary_version`; the current reviewed value is
-`base-discovery-protected-category-boundary-v1`. That versioned, code-governed protected-category/value boundary scans each exact query/supporting span;
-possible protected targeting or claims such as American, Indian, Muslim, 华人, or multilingual equivalents cannot
+`base-discovery-protected-category-boundary-v2`. That versioned, code-governed protected-category/value boundary scans each exact query/supporting span;
+possible protected targeting or claims such as American, Indian, Muslim, women, Black, disabled, gay, 华人, or multilingual equivalents cannot
 support a base lab/pretraining axis. This is a data-driven phrase registry, not an expanding identity regex. China/
 Asia professional-experience proxy interpretation remains a separate governed Bio-semantic lane and cannot modify
 base discovery, exclusion, Recall, Precision, or ordering decisions here. If the same non-null reported numeric X ID

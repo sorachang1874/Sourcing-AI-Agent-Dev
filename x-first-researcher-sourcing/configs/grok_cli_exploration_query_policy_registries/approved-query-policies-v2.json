@@ -15,7 +15,7 @@
     {
       "policy_version": "openai-pretrain-base-discovery-2026-07-14-v1",
       "policy_path": "configs/grok_cli_exploration_query_policy_descriptor.v2.json",
-      "policy_sha256": "d9f8dd98b537b76299d22307dea6dcd1b8837b389b744d84695e6829ca610d2b",
+      "policy_sha256": "966a0fd91fba8acf0b7771d408b37a9fa10cd29625054180a503961677b7b442",
       "commitment_scheme": "hmac-sha256-v1",
       "commitment_issuance_id": "qci_3b5939ca3949f15a0494b20a",
       "commitment_key_id": "f8eb1635d042945e64ff2ca25098894638b70a69a6151f57bd6eabbe1ef5f3bb",
@@ -24,7 +24,7 @@
       "policy_schema_version": "x.grok_cli.exploration.query_policy_descriptor.v2",
       "purpose": "base_researcher_discovery",
       "lab_id": "openai",
-      "protected_category_boundary_version": "base-discovery-protected-category-boundary-v1",
+      "protected_category_boundary_version": "base-discovery-protected-category-boundary-v2",
       "run_binding_commitment": "d6f54c517e46a434d9b249aa7320be77b7920cb3d21d2e7e2e5d44390e672db9",
       "enabled": true
     }
