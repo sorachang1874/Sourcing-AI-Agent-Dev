@@ -51,16 +51,13 @@
       ],
       "properties": {
         "retrieval_mode": {
-          "enum": [
-            "offline_fixture",
-            "grok_x_native"
-          ]
+          "const": "offline_fixture"
         },
         "stable_account_identity": {
-          "const": "source_bound"
+          "const": "fixture_only_not_live_proven"
         },
         "bio_text": {
-          "const": "present"
+          "const": "fixture_present_not_live_proven"
         },
         "display_alias_role": {
           "const": "raw_alias_only"

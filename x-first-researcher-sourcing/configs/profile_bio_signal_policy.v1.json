@@ -14,12 +14,16 @@
         "Xiaohongshu",
         "REDnote"
       ],
-      "subject_claim_markers": [
-        "同名",
-        "我的",
-        "本人",
-        "账号",
-        "粉丝"
+      "subject_claim_templates": [
+        "同名{alias}",
+        "我的{alias}",
+        "本人运营{alias}",
+        "我运营{alias}",
+        "我在{alias}发布",
+        "my {alias} account",
+        "i run {alias}",
+        "i publish on {alias}",
+        "same-name {alias}"
       ]
     },
     {
@@ -29,12 +33,16 @@
         "微信公众号",
         "WeChat Official Account"
       ],
-      "subject_claim_markers": [
-        "同名",
-        "我的",
-        "本人",
-        "首发",
-        "长文"
+      "subject_claim_templates": [
+        "同名{alias}",
+        "我的{alias}",
+        "本人运营{alias}",
+        "我运营{alias}",
+        "我在{alias}发布",
+        "my {alias} account",
+        "i run {alias}",
+        "i publish on {alias}",
+        "same-name {alias}"
       ]
     }
   ],
@@ -59,7 +67,8 @@
         "Formerly",
         "Former",
         "曾任",
-        "前"
+        "前任职于",
+        "此前任职于"
       ]
     },
     {

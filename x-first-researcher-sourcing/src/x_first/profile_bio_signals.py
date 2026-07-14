@@ -19,6 +19,7 @@ from urllib.parse import urlsplit
 
 POLICY_SCHEMA_VERSION = "x.profile.bio_signal.policy.v1"
 POLICY_VERSION = "profile-bio-signal-v1"
+CANONICAL_POLICY_SHA256 = "d4d74823f1cd8cb202afbf92c5065fbf591069496f262bea1d35eb016aa1e4f2"
 BUNDLE_SCHEMA_VERSION = "x.profile.bio_evidence.bundle.v1"
 ANALYSIS_SCHEMA_VERSION = "x.profile.bio_signal.analysis.v1"
 
@@ -28,7 +29,7 @@ PROPOSAL_KINDS = (
     "organization_mention",
 )
 AFFILIATION_RELATIONS = ("current", "previous", "unspecified")
-EXTRACTOR_MODES = ("offline_fixture", "grok_x_native")
+EXTRACTOR_MODES = ("offline_fixture",)
 
 _ULID = r"[0-9A-HJKMNP-TV-Z]{26}"
 _SUBJECT_REF_RE = re.compile(rf"pp_x_{_ULID}")
@@ -36,10 +37,11 @@ _SNAPSHOT_ID_RE = re.compile(rf"xps_{_ULID}")
 _PROPOSAL_ID_RE = re.compile(rf"xbp_{_ULID}")
 _PLATFORM_USER_ID_RE = re.compile(r"[1-9][0-9]{1,24}")
 _HANDLE_RE = re.compile(r"[A-Za-z0-9_]{1,15}")
-_TOOL_CALL_ID_RE = re.compile(r"xcall_[0-9a-f]{24}")
 _SHA256_RE = re.compile(r"[0-9a-f]{64}")
 _CANONICAL_TIME_RE = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z")
 _HAN_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]")
+_STATEMENT_SPLIT_RE = re.compile(r"[\r\n。！？!?；;]+")
+_RELATION_CLAUSE_SPLIT_RE = re.compile(r"[\r\n。！？!?；;，,]+")
 
 _TOP_LEVEL_KEYS = {
     "schema_version",
@@ -165,7 +167,48 @@ def _contains_marker(text: str, marker: str) -> bool:
     return normalized_marker in normalized_text
 
 
-def _valid_profile_url(value: Any, *, retrieval_mode: str) -> bool:
+def _statements(value: str) -> list[str]:
+    return [statement.strip() for statement in _STATEMENT_SPLIT_RE.split(value) if statement.strip()]
+
+
+def _contains_handle(value: str, handle: str) -> bool:
+    return re.search(rf"(?<![A-Za-z0-9_])@{re.escape(handle)}(?![A-Za-z0-9_])", value, re.IGNORECASE) is not None
+
+
+def _handle_statements(value: str, handle: str) -> list[str]:
+    return [statement for statement in _statements(value) if _contains_handle(statement, handle)]
+
+
+def _handle_relation_clauses(value: str, handle: str) -> list[str]:
+    clauses = [clause.strip() for clause in _RELATION_CLAUSE_SPLIT_RE.split(value) if clause.strip()]
+    return [clause for clause in clauses if _contains_handle(clause, handle)]
+
+
+def _contains_closed_subject_claim(value: str, ecosystem: dict[str, Any]) -> bool:
+    for statement in _statements(value):
+        for alias in ecosystem["aliases"]:
+            for template in ecosystem["subject_claim_templates"]:
+                rendered = template.replace("{alias}", alias)
+                if _contains_marker(statement, rendered):
+                    return True
+    return False
+
+
+def _relations_for_handle(
+    value: str,
+    handle: str,
+    relation_markers: dict[str, list[str]],
+) -> set[str]:
+    detected: set[str] = set()
+    for clause in _handle_relation_clauses(value, handle):
+        if any(_contains_marker(clause, marker) for marker in relation_markers["previous"]):
+            detected.add("previous")
+        elif any(_contains_marker(clause, marker) for marker in relation_markers["current"]):
+            detected.add("current")
+    return detected
+
+
+def _valid_profile_url(value: Any, *, current_handle: Any) -> bool:
     if not isinstance(value, str) or len(value) > 300:
         return False
     try:
@@ -183,13 +226,16 @@ def _valid_profile_url(value: Any, *, retrieval_mode: str) -> bool:
         or parsed.fragment
     ):
         return False
-    host = parsed.hostname.casefold()
-    if retrieval_mode == "offline_fixture":
-        return host.endswith(".invalid") and parsed.path.startswith("/")
-    if host not in {"x.com", "www.x.com"}:
+    if not isinstance(current_handle, str) or _HANDLE_RE.fullmatch(current_handle) is None:
         return False
+    host = parsed.hostname.casefold()
     parts = [part for part in parsed.path.split("/") if part]
-    return len(parts) == 1 and _HANDLE_RE.fullmatch(parts[0]) is not None
+    return (
+        host.endswith(".invalid")
+        and bool(parts)
+        and all(re.fullmatch(r"[A-Za-z0-9_-]+", part) is not None for part in parts)
+        and parts[-1].casefold() == current_handle.casefold()
+    )
 
 
 def _forbidden_key_hits(value: Any, forbidden: set[str], *, path: str = "$") -> list[str]:
@@ -219,6 +265,14 @@ def validate_policy(policy: Any) -> list[str]:
     }
     if not _exact_keys(policy, expected_keys, path="$", errors=errors):
         return errors
+    try:
+        policy_sha256 = canonical_sha256(policy)
+    except (TypeError, ValueError):
+        _append(errors, "$", "must be canonical JSON")
+        return errors
+    if policy_sha256 != CANONICAL_POLICY_SHA256:
+        _append(errors, "$", "must exactly match the pinned profile-bio-signal-v1 policy")
+        return errors
     if policy["schema_version"] != POLICY_SCHEMA_VERSION:
         _append(errors, "$.schema_version", "unsupported")
     if policy["policy_version"] != POLICY_VERSION:
@@ -233,7 +287,7 @@ def validate_policy(policy: Any) -> list[str]:
     ecosystem_ids: set[str] = set()
     for index, item in enumerate(ecosystems):
         item_path = f"$.china_ecosystems[{index}]"
-        if not _exact_keys(item, {"ecosystem_id", "aliases", "subject_claim_markers"}, path=item_path, errors=errors):
+        if not _exact_keys(item, {"ecosystem_id", "aliases", "subject_claim_templates"}, path=item_path, errors=errors):
             continue
         ecosystem_id = item["ecosystem_id"]
         if not isinstance(ecosystem_id, str) or re.fullmatch(r"[a-z][a-z0-9_]{1,63}", ecosystem_id) is None:
@@ -241,7 +295,7 @@ def validate_policy(policy: Any) -> list[str]:
         elif ecosystem_id in ecosystem_ids:
             _append(errors, f"{item_path}.ecosystem_id", "duplicate")
         ecosystem_ids.add(str(ecosystem_id))
-        for field in ("aliases", "subject_claim_markers"):
+        for field in ("aliases", "subject_claim_templates"):
             values = item[field]
             if (
                 not isinstance(values, list)
@@ -250,6 +304,11 @@ def validate_policy(policy: Any) -> list[str]:
                 or len({_normalize_text(value) for value in values}) != len(values)
             ):
                 _append(errors, f"{item_path}.{field}", "must contain unique non-empty strings")
+        templates = item["subject_claim_templates"]
+        if isinstance(templates, list) and any(
+            template.count("{alias}") != 1 for template in templates if isinstance(template, str)
+        ):
+            _append(errors, f"{item_path}.subject_claim_templates", "each template must contain one {alias}")
 
     relations = policy["affiliation_relations"]
     if not isinstance(relations, list) or [
@@ -338,10 +397,11 @@ def validate_evidence_bundle(bundle: Any, *, policy: Any) -> list[str]:
         retrieval_mode = profile["retrieval_mode"]
         if retrieval_mode not in EXTRACTOR_MODES:
             _append(errors, "$.profile_snapshot.retrieval_mode", "unsupported")
-        if not _valid_profile_url(profile["profile_url"], retrieval_mode=str(retrieval_mode)):
-            _append(errors, "$.profile_snapshot.profile_url", "not a canonical source URL for retrieval mode")
-        if not isinstance(profile["current_handle"], str) or _HANDLE_RE.fullmatch(profile["current_handle"]) is None:
+        current_handle = profile["current_handle"]
+        if not isinstance(current_handle, str) or _HANDLE_RE.fullmatch(current_handle) is None:
             _append(errors, "$.profile_snapshot.current_handle", "invalid")
+        if not _valid_profile_url(profile["profile_url"], current_handle=current_handle):
+            _append(errors, "$.profile_snapshot.profile_url", "must be a fixture URL bound to current_handle")
         display_alias = profile["display_alias"]
         if not isinstance(display_alias, str) or len(display_alias) > policy["limits"]["max_display_alias_characters"]:
             _append(errors, "$.profile_snapshot.display_alias", "invalid")
@@ -365,12 +425,10 @@ def validate_evidence_bundle(bundle: Any, *, policy: Any) -> list[str]:
         if profile["content_sha256"] != text_sha256(bio_text):
             _append(errors, "$.profile_snapshot.content_sha256", "mismatch")
         receipt = profile["native_profile_receipt_ref"]
-        if retrieval_mode == "offline_fixture" and receipt is not None:
-            _append(errors, "$.profile_snapshot.native_profile_receipt_ref", "fixture receipt must be null")
-        if retrieval_mode == "grok_x_native" and (
-            not isinstance(receipt, str) or _TOOL_CALL_ID_RE.fullmatch(receipt) is None
-        ):
-            _append(errors, "$.profile_snapshot.native_profile_receipt_ref", "native mode requires receipt")
+        if receipt is not None:
+            _append(
+                errors, "$.profile_snapshot.native_profile_receipt_ref", "v1 is fixture-only and receipt must be null"
+            )
         capabilities = profile["field_capabilities"]
         if _exact_keys(
             capabilities,
@@ -430,12 +488,8 @@ def validate_evidence_bundle(bundle: Any, *, policy: Any) -> list[str]:
                 _append(errors, f"{path}.extractor.mode", "must match snapshot retrieval mode")
             if not isinstance(extractor["version"], str) or not extractor["version"].strip():
                 _append(errors, f"{path}.extractor.version", "invalid")
-            if retrieval_mode == "offline_fixture" and extractor["tool_call_id"] is not None:
-                _append(errors, f"{path}.extractor.tool_call_id", "fixture tool call must be null")
-            if retrieval_mode == "grok_x_native" and extractor["tool_call_id"] != profile.get(
-                "native_profile_receipt_ref"
-            ):
-                _append(errors, f"{path}.extractor.tool_call_id", "must bind the native profile receipt")
+            if extractor["tool_call_id"] is not None:
+                _append(errors, f"{path}.extractor.tool_call_id", "v1 fixture tool call must be null")
 
         details = proposal["details"]
         if not _exact_keys(details, _DETAIL_KEYS, path=f"{path}.details", errors=errors):
@@ -472,10 +526,8 @@ def validate_evidence_bundle(bundle: Any, *, policy: Any) -> list[str]:
             if ecosystem is None:
                 _append(errors, f"{path}.details.ecosystem_id", "unregistered")
             else:
-                if not any(_contains_marker(excerpt, alias) for alias in ecosystem["aliases"]):
-                    _append(errors, f"{path}.excerpt", "missing the registered ecosystem alias")
-                if not any(_contains_marker(excerpt, marker) for marker in ecosystem["subject_claim_markers"]):
-                    _append(errors, f"{path}.excerpt", "missing an explicit subject-claim marker")
+                if not _contains_closed_subject_claim(excerpt, ecosystem):
+                    _append(errors, f"{path}.excerpt", "does not match a closed same-statement subject-claim grammar")
         elif kind == "organization_mention":
             relation = details["affiliation_relation"]
             handle = details["organization_handle"]
@@ -484,7 +536,7 @@ def validate_evidence_bundle(bundle: Any, *, policy: Any) -> list[str]:
                 _append(errors, f"{path}.details.affiliation_relation", "unsupported")
             if not isinstance(handle, str) or _HANDLE_RE.fullmatch(handle) is None:
                 _append(errors, f"{path}.details.organization_handle", "invalid")
-            elif re.search(rf"(?<![A-Za-z0-9_])@{re.escape(handle)}(?![A-Za-z0-9_])", excerpt, re.IGNORECASE) is None:
+            elif not _contains_handle(excerpt, handle):
                 _append(errors, f"{path}.excerpt", "does not contain the exact organization mention")
             if details["organization_platform_user_id"] is not None:
                 _append(
@@ -496,13 +548,14 @@ def validate_evidence_bundle(bundle: Any, *, policy: Any) -> list[str]:
                 not isinstance(role_text, str)
                 or not role_text.strip()
                 or len(role_text) > policy["limits"]["max_role_text_characters"]
-                or not _contains_marker(excerpt, role_text)
+                or not any(_contains_marker(statement, role_text) for statement in _handle_statements(excerpt, handle))
             ):
-                _append(errors, f"{path}.details.role_text", "must be a bounded exact marker in the excerpt")
-            if relation in {"current", "previous"} and not any(
-                _contains_marker(excerpt, marker) for marker in relation_markers[relation]
-            ):
-                _append(errors, f"{path}.excerpt", "missing the declared affiliation-relation marker")
+                _append(errors, f"{path}.details.role_text", "must be a bounded marker in the handle statement")
+            if isinstance(handle, str) and _HANDLE_RE.fullmatch(handle) is not None:
+                detected_relations = _relations_for_handle(excerpt, handle, relation_markers)
+                expected_relations = {relation} if relation in {"current", "previous"} else set()
+                if detected_relations != expected_relations:
+                    _append(errors, f"{path}.excerpt", "handle clause must contain only the declared relation")
             signature = (str(relation), str(handle).casefold())
             if signature in affiliation_signatures:
                 _append(errors, f"{path}.details", "duplicate relation/organization proposal")
@@ -604,8 +657,8 @@ def analyze_profile_bio_signals(bundle: Any, *, policy: Any) -> dict[str, Any]:
         "subject": dict(bundle["subject"]),
         "profile_capability": {
             "retrieval_mode": bundle["profile_snapshot"]["retrieval_mode"],
-            "stable_account_identity": "source_bound",
-            "bio_text": "present",
+            "stable_account_identity": "fixture_only_not_live_proven",
+            "bio_text": "fixture_present_not_live_proven",
             "display_alias_role": "raw_alias_only",
         },
         "signals": signals,

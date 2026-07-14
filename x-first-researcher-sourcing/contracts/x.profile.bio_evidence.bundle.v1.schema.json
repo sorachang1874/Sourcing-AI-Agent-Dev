@@ -96,7 +96,7 @@
           "type": "string",
           "format": "uri",
           "maxLength": 300,
-          "pattern": "^https://(?:[A-Za-z0-9.-]+\\.invalid/[A-Za-z0-9/_-]+|(?:www\\.)?x\\.com/[A-Za-z0-9_]{1,15})$"
+          "pattern": "^https://[A-Za-z0-9.-]+\\.invalid/[A-Za-z0-9/_-]+$"
         },
         "current_handle": {
           "type": "string",
@@ -125,16 +125,10 @@
           "pattern": "^[0-9a-f]{64}$"
         },
         "retrieval_mode": {
-          "enum": [
-            "offline_fixture",
-            "grok_x_native"
-          ]
+          "const": "offline_fixture"
         },
         "native_profile_receipt_ref": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "const": null
         },
         "field_capabilities": {
           "const": {
@@ -156,10 +150,7 @@
       ],
       "properties": {
         "mode": {
-          "enum": [
-            "offline_fixture",
-            "grok_x_native"
-          ]
+          "const": "offline_fixture"
         },
         "version": {
           "type": "string",
@@ -167,10 +158,7 @@
           "maxLength": 100
         },
         "tool_call_id": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "const": null
         }
       }
     },

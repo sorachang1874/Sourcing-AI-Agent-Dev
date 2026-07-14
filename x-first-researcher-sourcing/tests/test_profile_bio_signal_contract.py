@@ -18,15 +18,48 @@ sys.path.insert(0, str(ROOT / "src"))
 from x_first.profile_bio_signals import (  # noqa: E402
     ANALYSIS_SCHEMA_VERSION,
     BUNDLE_SCHEMA_VERSION,
+    CANONICAL_POLICY_SHA256,
     POLICY_SCHEMA_VERSION,
     POLICY_VERSION,
     analyze_profile_bio_signals,
+    canonical_sha256,
     load_json,
     text_sha256,
     validate_analysis,
     validate_evidence_bundle,
     validate_policy,
 )
+
+FORBIDDEN_RUNTIME_IMPORTS = {
+    "aiohttp",
+    "grok",
+    "httpx",
+    "openai",
+    "requests",
+    "socket",
+    "subprocess",
+    "urllib.request",
+    "urllib3",
+    "xai",
+}
+
+
+def _imported_modules(source: str) -> set[str]:
+    modules: set[str] = set()
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Import):
+            modules.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            modules.add(node.module)
+    return modules
+
+
+def _forbidden_runtime_imports(source: str) -> set[str]:
+    return {
+        module
+        for module in _imported_modules(source)
+        if any(module == forbidden or module.startswith(f"{forbidden}.") for forbidden in FORBIDDEN_RUNTIME_IMPORTS)
+    }
 
 
 def _schema_errors(instance: Any, schema: Any, *, root: dict[str, Any] | None = None, path: str = "$") -> list[str]:
@@ -148,6 +181,7 @@ class ProfileBioSignalContractTest(unittest.TestCase):
         self.assertEqual(self.bundle["schema_version"], BUNDLE_SCHEMA_VERSION)
         self.assertEqual(self.analysis["schema_version"], ANALYSIS_SCHEMA_VERSION)
         self.assertEqual(validate_policy(self.policy), [])
+        self.assertEqual(canonical_sha256(self.policy), CANONICAL_POLICY_SHA256)
         self.assertEqual(validate_evidence_bundle(self.bundle, policy=self.policy), [])
         self.assertEqual(validate_analysis(self.analysis, evidence_bundle=self.bundle, policy=self.policy), [])
         self.assertEqual(_schema_errors(self.policy, self.policy_schema), [])
@@ -156,6 +190,25 @@ class ProfileBioSignalContractTest(unittest.TestCase):
         self.assertEqual(self.policy_schema["const"], self.policy)
         for schema in (self.policy_schema, self.bundle_schema, self.analysis_schema):
             self.assertIs(schema["additionalProperties"], False)
+
+    def test_policy_version_is_exactly_bound_to_the_closed_registry(self) -> None:
+        mutations = []
+        alias = copy.deepcopy(self.policy)
+        alias["china_ecosystems"][0]["aliases"].append("UnversionedNetwork")
+        mutations.append(alias)
+        grammar = copy.deepcopy(self.policy)
+        grammar["china_ecosystems"][0]["subject_claim_templates"].append("I browse {alias}")
+        mutations.append(grammar)
+        relation = copy.deepcopy(self.policy)
+        relation["affiliation_relations"][1]["markers"].append("前")
+        mutations.append(relation)
+        limits = copy.deepcopy(self.policy)
+        limits["limits"]["max_proposals"] += 1
+        mutations.append(limits)
+        for payload in mutations:
+            with self.subTest(payload=canonical_sha256(payload)):
+                self.assertTrue(validate_policy(payload))
+                self.assertTrue(_schema_errors(payload, self.policy_schema))
 
     def test_fixture_recomputes_and_separates_alias_language_ecosystem_and_affiliation(self) -> None:
         self.assertEqual(analyze_profile_bio_signals(self.bundle, policy=self.policy), self.analysis)
@@ -180,6 +233,8 @@ class ProfileBioSignalContractTest(unittest.TestCase):
         self.assertEqual(self.analysis["experience_leads"]["china_digital_ecosystem"]["status"], "supported")
         self.assertEqual(self.analysis["experience_leads"]["physical_region_experience"]["status"], "not_evaluated")
         self.assertEqual(self.analysis["profile_capability"]["display_alias_role"], "raw_alias_only")
+        self.assertEqual(self.analysis["profile_capability"]["stable_account_identity"], "fixture_only_not_live_proven")
+        self.assertEqual(self.analysis["profile_capability"]["bio_text"], "fixture_present_not_live_proven")
         self.assertTrue(all(value is False for value in self.analysis["claims"].values()))
 
     def test_display_alias_changes_no_signal_or_relationship_semantics(self) -> None:
@@ -191,15 +246,27 @@ class ProfileBioSignalContractTest(unittest.TestCase):
         self.assertNotEqual(changed_analysis["input_sha256"], self.analysis["input_sha256"])
         self.assertNotEqual(changed_analysis["analysis_id"], self.analysis["analysis_id"])
 
-    def test_ecosystem_requires_explicit_subject_claim_not_a_platform_topic_mention(self) -> None:
-        payload = self._single_proposal_bundle(
-            self.bundle,
-            4,
-            excerpt="看到小红书行业讨论",
+    def test_ecosystem_requires_closed_same_statement_ownership_grammar(self) -> None:
+        negatives = (
+            "看到小红书行业讨论",
+            "小红书用户有很多粉丝",
+            "同名个人博客。小红书用户有很多粉丝",
         )
-        self.assert_bundle_rejected(payload)
-        errors = validate_evidence_bundle(payload, policy=self.policy)
-        self.assertTrue(any("subject-claim marker" in error for error in errors))
+        for excerpt in negatives:
+            payload = self._single_proposal_bundle(self.bundle, 4, excerpt=excerpt)
+            with self.subTest(excerpt=excerpt):
+                self.assert_bundle_rejected(payload)
+                errors = validate_evidence_bundle(payload, policy=self.policy)
+                self.assertTrue(any("closed same-statement subject-claim grammar" in error for error in errors))
+
+        positive_xiaohongshu = self._single_proposal_bundle(self.bundle, 4, excerpt="同名小红书四万粉丝")
+        positive_wechat = self._single_proposal_bundle(
+            self.bundle,
+            5,
+            excerpt="我的公众号 SyntheticFounder（长文首发）",
+        )
+        self.assertEqual(validate_evidence_bundle(positive_xiaohongshu, policy=self.policy), [])
+        self.assertEqual(validate_evidence_bundle(positive_wechat, policy=self.policy), [])
 
     def test_organization_mentions_are_handle_bound_proposals_not_confirmed_employment(self) -> None:
         missing_marker = self._single_proposal_bundle(
@@ -208,6 +275,28 @@ class ProfileBioSignalContractTest(unittest.TestCase):
             excerpt="Discussing growth with @synthetic_hub",
         )
         self.assert_bundle_rejected(missing_marker)
+        frontier_not_previous = self._single_proposal_bundle(
+            self.bundle,
+            2,
+            excerpt="前沿研究讨论 @synth_listen",
+        )
+        self.assert_bundle_rejected(frontier_not_previous)
+        cross_statement = self._single_proposal_bundle(
+            self.bundle,
+            2,
+            excerpt="Prev role elsewhere。Discussing @synth_listen",
+        )
+        self.assert_bundle_rejected(cross_statement)
+        ambiguous_relation = self._single_proposal_bundle(
+            self.bundle,
+            2,
+            excerpt="Head of @synth_listen, Prev @another_org",
+        )
+        self.assert_bundle_rejected(ambiguous_relation)
+        for excerpt in ("曾任 @synth_listen", "前任职于 @synth_listen"):
+            with self.subTest(excerpt=excerpt):
+                chinese_previous = self._single_proposal_bundle(self.bundle, 2, excerpt=excerpt)
+                self.assertEqual(validate_evidence_bundle(chinese_previous, policy=self.policy), [])
         resolved_without_owner = copy.deepcopy(self.bundle)
         resolved_without_owner["proposals"][1]["details"]["organization_platform_user_id"] = "900000000000000002"
         self.assert_bundle_rejected(resolved_without_owner)
@@ -250,17 +339,19 @@ class ProfileBioSignalContractTest(unittest.TestCase):
         authority["claims"]["affiliation_confirmed"] = True
         self.assert_bundle_rejected(authority, schema_too=True)
 
-    def test_native_extractor_path_requires_canonical_profile_receipt_and_exact_tool_binding(self) -> None:
+    def test_v1_is_fixture_only_and_rejects_native_relabel_or_handle_mismatch(self) -> None:
         payload = copy.deepcopy(self.bundle)
         payload["profile_snapshot"]["retrieval_mode"] = "grok_x_native"
-        payload["profile_snapshot"]["profile_url"] = "https://x.com/syntheticbuild"
+        payload["profile_snapshot"]["profile_url"] = "https://x.com/other_account"
         payload["profile_snapshot"]["native_profile_receipt_ref"] = "xcall_0123456789abcdef01234567"
         for proposal in payload["proposals"]:
             proposal["extractor"]["mode"] = "grok_x_native"
             proposal["extractor"]["tool_call_id"] = "xcall_0123456789abcdef01234567"
-        self.assertEqual(validate_evidence_bundle(payload, policy=self.policy), [])
-        payload["proposals"][0]["extractor"]["tool_call_id"] = "xcall_fedcba9876543210fedcba98"
-        self.assert_bundle_rejected(payload)
+        self.assert_bundle_rejected(payload, schema_too=True)
+
+        mismatched_fixture_url = copy.deepcopy(self.bundle)
+        mismatched_fixture_url["profile_snapshot"]["profile_url"] = "https://profiles.invalid/x/other_account"
+        self.assert_bundle_rejected(mismatched_fixture_url)
 
     def test_schema_runtime_mutation_corpus_and_malformed_types_are_terminal_total(self) -> None:
         structural_mutations = []
@@ -314,15 +405,19 @@ class ProfileBioSignalContractTest(unittest.TestCase):
         self.assertEqual(json.loads(completed.stdout), {"errors": [], "status": "valid"})
 
         source = (ROOT / "src/x_first/profile_bio_signals.py").read_text(encoding="utf-8")
-        tree = ast.parse(source)
-        imported_roots = {
-            alias.name.split(".", 1)[0]
-            for node in ast.walk(tree)
-            if isinstance(node, (ast.Import, ast.ImportFrom))
-            for alias in node.names
-        }
-        self.assertTrue(imported_roots.isdisjoint({"httpx", "requests", "subprocess", "socket", "urllib3"}))
+        self.assertEqual(_forbidden_runtime_imports(source), set())
         self.assertNotIn("sourcing_agent", source)
+
+        synthetic_forbidden_imports = """
+from httpx import Client
+from requests.sessions import Session
+from urllib.request import urlopen
+import socket
+"""
+        self.assertEqual(
+            _forbidden_runtime_imports(synthetic_forbidden_imports),
+            {"httpx", "requests.sessions", "socket", "urllib.request"},
+        )
 
 
 if __name__ == "__main__":

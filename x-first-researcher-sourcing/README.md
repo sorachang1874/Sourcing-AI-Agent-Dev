@@ -46,7 +46,7 @@ not import `sourcing_agent`, and fixture output cannot write canonical person/ev
 | --- | --- |
 | AI-native Grok/X retrieval | Intended transport is hosted `x_search`; installed CLI support is evidenced offline, live access is not yet proven |
 | Full Post metadata | Stage 1 requests stable post id, URL, author id, timestamp and a bounded excerpt; it deliberately does not retain a full body |
-| Bio and mention enrichment | Offline source-span-bound fixture now separates observed Chinese content, China-ecosystem leads, organization proposals and graph edges; no live collector or confirmation flow exists yet |
+| Bio and mention enrichment | Fixture-only v1 separates observed Chinese content, closed-grammar China-ecosystem leads, organization proposals and graph edges; it rejects every native/live mode until a separately reviewed profile-capability v2 trust root exists |
 | Region-experience classification | Hardened evidence-backed classifier is committed; non-author follow-up review is still pending |
 | Multiple query tasks | Synthetic Stage 2 fixtures cover eight query families; no live scheduler exists yet |
 | Large asynchronous search | Not implemented. Official xAI Batch/Responses APIs are the planned scale transport and require supported API credentials |
@@ -56,6 +56,8 @@ subject-authored Bio may produce separate proposed evidence: explicit role/organ
 mentions, observed language, and China-ecosystem activity such as a declared public channel. Only explicit physical
 work/education/research/residence evidence can support a physical region-experience label; ecosystem/language evidence
 remains a verification lead and is measured separately for incremental recall and false positives.
+The executable Bio v1 accepts only `.invalid` fixture profiles, null tool receipts, and a canonical version-pinned
+policy. It cannot be relabelled as proof that Grok returned a Bio or stable account identity.
 See `docs/X_SEARCH_TRANSPORT_AND_SCALE_DECISION.md` for the CLI/API split, Bio/mention evidence model, batch topology,
 and scale gates. See `docs/PROFILE_BIO_SIGNAL_CONTRACT.md` for the executable offline Bio proposal boundary.
 
