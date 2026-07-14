@@ -380,62 +380,46 @@ class CriteriaConfidenceRepository(Repository):
         action: str,
         reviewer: str = "",
         notes: str = "",
+        expected_requester_id: str = "",
+        expected_tenant_id: str = "",
+        additional_job_ids: tuple[str, ...] = (),
     ) -> dict[str, Any] | None:
-        suggestion = self.get_suggestion(suggestion_id)
-        if suggestion is None:
-            return None
         normalized_action = str(action or "").strip().lower()
-        if normalized_action in {"approve", "approved", "apply", "applied"}:
-            status = "applied"
-        elif normalized_action in {"reject", "rejected"}:
-            status = "rejected"
-        else:
-            status = "suggested"
-        applied_pattern = None
-        applied_pattern_id = 0
-        if status == "applied":
-            metadata = dict(suggestion.get("metadata") or {})
-            metadata.update(
-                {
-                    "source_suggestion_id": suggestion_id,
-                    "reviewed_by": reviewer,
-                    "review_notes": notes,
-                    "suggestion_status": "applied",
-                }
-            )
-            applied_pattern = self.upsert_pattern(
-                target_company=str(suggestion.get("target_company") or ""),
-                pattern_type=str(suggestion.get("pattern_type") or ""),
-                subject=str(suggestion.get("subject") or ""),
-                value=str(suggestion.get("value") or ""),
-                status="active",
-                confidence=str(suggestion.get("confidence") or "medium"),
-                source_feedback_id=int(suggestion.get("source_feedback_id") or 0),
-                metadata=metadata,
-            )
-            applied_pattern_id = int((applied_pattern or {}).get("pattern_id") or 0)
-        reviewed: dict[str, Any] | None = None
         if self._should_prefer_read("criteria_pattern_suggestions"):
-            updated_row = self._call_native_write(
-                "update_row_returning",
+            result = self._call_native_write(
+                "review_criteria_suggestion_if_owned",
                 table_name="criteria_pattern_suggestions",
-                id_column="suggestion_id",
-                id_value=suggestion_id,
-                row={
-                    "status": status,
-                    "reviewed_by": reviewer,
-                    "review_notes": notes,
-                    "applied_pattern_id": applied_pattern_id or None,
-                    "reviewed_at": utc_now_timestamp(),
-                    "updated_at": utc_now_timestamp(),
-                },
+                suggestion_id=suggestion_id,
+                action=normalized_action,
+                reviewer=reviewer,
+                notes=notes,
+                expected_requester_id=expected_requester_id,
+                expected_tenant_id=expected_tenant_id,
+                additional_job_ids=additional_job_ids,
             )
-            if updated_row is not None:
-                reviewed = self._criteria_pattern_suggestion_from_row(updated_row)
-            # update_row_returning None == suggestion row absent; surface {"suggestion": None}
-            # (the retired SQLite tail's re-read would find nothing under postgres-only either).
+            if result is None:
+                self._raise_write_failure(
+                    table_name="criteria_pattern_suggestions",
+                    method_name="review_criteria_suggestion_if_owned",
+                    reason="native review returned no result under postgres_only",
+                )
+            if result.get("status") in {"owner_miss", "suggestion_not_found"}:
+                return dict(result)
+            reviewed = self._criteria_pattern_suggestion_from_row(result.get("suggestion"))
+            source_feedback = (
+                self._criteria_feedback_from_row(result.get("source_feedback"))
+                if result.get("source_feedback") is not None
+                else None
+            )
+            applied_pattern = (
+                self._criteria_pattern_from_row(result.get("applied_pattern"))
+                if result.get("applied_pattern") is not None
+                else None
+            )
+            status = str(result.get("review_status") or "suggested")
             return {
                 "suggestion": reviewed,
+                "source_feedback": source_feedback,
                 "applied_pattern": applied_pattern,
                 "action": normalized_action or status,
                 "status": status,

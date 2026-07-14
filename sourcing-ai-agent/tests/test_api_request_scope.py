@@ -235,38 +235,41 @@ class _ScopeOrchestrator:
 
     def record_criteria_feedback(self, payload, **owner):
         self._capture("criteria_feedback", {**dict(payload), **owner})
-        job_id = str(payload.get("job_id") or payload.get("baseline_job_id") or "")
-        job = self.store.get_job(job_id)
-        if job_id and (
-            not job
-            or job.get("requester_id") != owner.get("expected_requester_id")
-            or job.get("tenant_id") != owner.get("expected_tenant_id")
-        ):
-            return {"status": "not_found", "reason": "job_not_found"}
+        for raw_job_id in (payload.get("job_id"), payload.get("baseline_job_id")):
+            job_id = str(raw_job_id or "").strip()
+            job = self.store.get_job(job_id)
+            if job_id and (
+                not job
+                or job.get("requester_id") != owner.get("expected_requester_id")
+                or job.get("tenant_id") != owner.get("expected_tenant_id")
+            ):
+                return {"status": "not_found", "reason": "job_not_found"}
         return {"status": "recorded", "rerun": {"status": "not_requested"}}
 
     def review_pattern_suggestion(self, payload, **owner):
         self._capture("criteria_suggestion", {**dict(payload), **owner})
-        job_id = str(payload.get("job_id") or payload.get("baseline_job_id") or "")
-        job = self.store.get_job(job_id)
-        if job_id and (
-            not job
-            or job.get("requester_id") != owner.get("expected_requester_id")
-            or job.get("tenant_id") != owner.get("expected_tenant_id")
-        ):
-            return {"status": "not_found", "reason": "job_not_found"}
+        for raw_job_id in (payload.get("job_id"), payload.get("baseline_job_id")):
+            job_id = str(raw_job_id or "").strip()
+            job = self.store.get_job(job_id)
+            if job_id and (
+                not job
+                or job.get("requester_id") != owner.get("expected_requester_id")
+                or job.get("tenant_id") != owner.get("expected_tenant_id")
+            ):
+                return {"status": "not_found", "reason": "job_not_found"}
         return {"status": "reviewed", "rerun": {"status": "not_requested"}}
 
     def recompile_criteria(self, payload, **owner):
         self._capture("criteria_recompile", {**dict(payload), **owner})
-        job_id = str(payload.get("job_id") or payload.get("baseline_job_id") or "")
-        job = self.store.get_job(job_id)
-        if job_id and (
-            not job
-            or job.get("requester_id") != owner.get("expected_requester_id")
-            or job.get("tenant_id") != owner.get("expected_tenant_id")
-        ):
-            return {"status": "not_found", "reason": "job_not_found"}
+        for raw_job_id in (payload.get("job_id"), payload.get("baseline_job_id")):
+            job_id = str(raw_job_id or "").strip()
+            job = self.store.get_job(job_id)
+            if job_id and (
+                not job
+                or job.get("requester_id") != owner.get("expected_requester_id")
+                or job.get("tenant_id") != owner.get("expected_tenant_id")
+            ):
+                return {"status": "not_found", "reason": "job_not_found"}
         return {"status": "recompiled", "rerun": {"status": "not_requested"}}
 
     def list_crm_records_api(self, **kwargs):
@@ -621,7 +624,7 @@ class RequestScopeWiringTest(unittest.TestCase):
             ("/api/criteria/recompile", "criteria_recompile", 200),
         )
         for path, capture_name, success_status in endpoints:
-            for rerun_payload in ({}, {"rerun_retrieval": False}):
+            for rerun_payload in ({}, {"rerun_retrieval": False}, {"rerun_retrieval": True}):
                 owned = self._request(
                     opener,
                     f"{base}{path}",
@@ -647,6 +650,22 @@ class RequestScopeWiringTest(unittest.TestCase):
             for captured in orchestrator.captured[capture_name]:
                 self.assertEqual(captured["expected_requester_id"], "alice")
                 self.assertEqual(captured["expected_tenant_id"], "user-alice")
+
+        for path, _capture_name, _success_status in endpoints:
+            foreign = self._request(
+                opener,
+                f"{base}{path}",
+                method="POST",
+                body={"job_id": "job-alice", "baseline_job_id": "job-bob"},
+            )
+            missing = self._request(
+                opener,
+                f"{base}{path}",
+                method="POST",
+                body={"job_id": "job-alice", "baseline_job_id": "job-missing"},
+            )
+            self.assertEqual(foreign, missing)
+            self.assertEqual(foreign, (404, {"status": "not_found", "reason": "job_not_found"}))
 
     def test_request_scope_registry_covers_public_job_and_worker_side_effects(self) -> None:
         expected = {

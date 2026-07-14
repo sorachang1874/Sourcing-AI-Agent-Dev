@@ -1228,6 +1228,178 @@ class LiveControlPlanePostgresAdapter:
         )
         return self._execute_returning_one(sql, (*payload.values(), id_value))
 
+    def review_criteria_suggestion_if_owned(
+        self,
+        *,
+        table_name: str = "criteria_pattern_suggestions",
+        suggestion_id: int,
+        action: str,
+        reviewer: str,
+        notes: str,
+        expected_requester_id: str,
+        expected_tenant_id: str,
+        additional_job_ids: list[str] | tuple[str, ...] = (),
+    ) -> dict[str, Any] | None:
+        """Authorize every suggestion job source and commit its review atomically.
+
+        The locked suggestion and feedback rows are the frozen source snapshot
+        returned to the caller. Every distinct non-blank direct, feedback, or
+        caller-supplied job reference is locked and exact-owner checked before
+        either the applied pattern or review row can be written.
+        """
+
+        if _normalize_postgres_identifier(table_name) != "criteria_pattern_suggestions":
+            raise ValueError("review_criteria_suggestion_if_owned requires criteria_pattern_suggestions")
+        normalized_suggestion_id = int(suggestion_id or 0)
+        if normalized_suggestion_id <= 0:
+            return {"status": "suggestion_not_found"}
+        required_tables = ("criteria_pattern_suggestions", "criteria_feedback", "criteria_patterns", "jobs")
+        if any(not self.should_prefer_read(required_table) for required_table in required_tables):
+            return None
+        self.ensure_bootstrapped()
+        for required_table in required_tables:
+            self._ensure_table_write_schema(required_table)
+
+        normalized_requester = str(expected_requester_id or "").strip()
+        normalized_tenant = str(expected_tenant_id or "").strip()
+        normalized_action = str(action or "").strip().lower()
+        if normalized_action in {"approve", "approved", "apply", "applied"}:
+            review_status = "applied"
+        elif normalized_action in {"reject", "rejected"}:
+            review_status = "rejected"
+        else:
+            review_status = "suggested"
+
+        attempt = 0
+        while True:
+            try:
+                with self._connect() as connection:
+                    with connection.cursor() as cursor:
+                        cursor.execute(
+                            'SELECT * FROM "criteria_pattern_suggestions" WHERE suggestion_id = %s FOR UPDATE',
+                            (normalized_suggestion_id,),
+                        )
+                        suggestion = _fetch_one_dict_row(cursor, cursor.fetchone())
+                        if suggestion is None:
+                            connection.commit()
+                            return {"status": "suggestion_not_found"}
+
+                        source_feedback: dict[str, Any] | None = None
+                        source_feedback_id = int(suggestion.get("source_feedback_id") or 0)
+                        if source_feedback_id:
+                            cursor.execute(
+                                'SELECT * FROM "criteria_feedback" WHERE feedback_id = %s FOR UPDATE',
+                                (source_feedback_id,),
+                            )
+                            source_feedback = _fetch_one_dict_row(cursor, cursor.fetchone())
+
+                        job_ids: list[str] = []
+                        for raw_job_id in (
+                            suggestion.get("source_job_id"),
+                            (source_feedback or {}).get("job_id"),
+                            *additional_job_ids,
+                        ):
+                            job_id = str(raw_job_id or "").strip()
+                            if job_id and job_id not in job_ids:
+                                job_ids.append(job_id)
+                        for job_id in sorted(job_ids):
+                            cursor.execute('SELECT * FROM "jobs" WHERE job_id = %s FOR SHARE', (job_id,))
+                            job = _fetch_one_dict_row(cursor, cursor.fetchone())
+                            owner_matches = job is not None
+                            if normalized_requester or normalized_tenant:
+                                owner_matches = bool(
+                                    normalized_requester
+                                    and normalized_tenant
+                                    and job is not None
+                                    and str(job.get("requester_id") or "").strip() == normalized_requester
+                                    and str(job.get("tenant_id") or "").strip() == normalized_tenant
+                                )
+                            if not owner_matches:
+                                connection.commit()
+                                return {"status": "owner_miss"}
+
+                        now = _utc_now_sql_timestamp()
+                        applied_pattern: dict[str, Any] | None = None
+                        applied_pattern_id = 0
+                        if review_status == "applied":
+                            metadata = _json_load_dict(suggestion.get("metadata_json"))
+                            metadata.update(
+                                {
+                                    "source_suggestion_id": normalized_suggestion_id,
+                                    "reviewed_by": str(reviewer or "").strip(),
+                                    "review_notes": str(notes or "").strip(),
+                                    "suggestion_status": "applied",
+                                }
+                            )
+                            cursor.execute(
+                                """
+                                INSERT INTO criteria_patterns (
+                                    pattern_id, target_company, pattern_type, subject, value, status,
+                                    confidence, source_feedback_id, metadata_json, created_at, updated_at
+                                ) VALUES (
+                                    nextval('criteria_patterns_pattern_id_seq'::regclass), %s, %s, %s, %s,
+                                    'active', %s, %s, %s, %s, %s
+                                )
+                                ON CONFLICT (target_company, pattern_type, subject, value) DO UPDATE SET
+                                    status = EXCLUDED.status,
+                                    confidence = EXCLUDED.confidence,
+                                    source_feedback_id = EXCLUDED.source_feedback_id,
+                                    metadata_json = EXCLUDED.metadata_json,
+                                    updated_at = EXCLUDED.updated_at
+                                RETURNING *
+                                """,
+                                (
+                                    str(suggestion.get("target_company") or ""),
+                                    str(suggestion.get("pattern_type") or ""),
+                                    str(suggestion.get("subject") or ""),
+                                    str(suggestion.get("value") or ""),
+                                    str(suggestion.get("confidence") or "medium"),
+                                    source_feedback_id or None,
+                                    json.dumps(metadata, ensure_ascii=False),
+                                    now,
+                                    now,
+                                ),
+                            )
+                            applied_pattern = _fetch_one_dict_row(cursor, cursor.fetchone())
+                            applied_pattern_id = int((applied_pattern or {}).get("pattern_id") or 0)
+
+                        cursor.execute(
+                            """
+                            UPDATE criteria_pattern_suggestions SET
+                                status = %s,
+                                reviewed_by = %s,
+                                review_notes = %s,
+                                applied_pattern_id = %s,
+                                reviewed_at = %s,
+                                updated_at = %s
+                            WHERE suggestion_id = %s
+                            RETURNING *
+                            """,
+                            (
+                                review_status,
+                                str(reviewer or "").strip(),
+                                str(notes or "").strip(),
+                                applied_pattern_id or None,
+                                now,
+                                now,
+                                normalized_suggestion_id,
+                            ),
+                        )
+                        reviewed_suggestion = _fetch_one_dict_row(cursor, cursor.fetchone())
+                    connection.commit()
+                return {
+                    "status": "applied",
+                    "review_status": review_status,
+                    "suggestion": reviewed_suggestion,
+                    "source_feedback": source_feedback,
+                    "applied_pattern": applied_pattern,
+                }
+            except Exception as exc:
+                attempt += 1
+                if not _is_retryable_postgres_exception(exc) or attempt >= _CONTROL_PLANE_POSTGRES_MAX_RETRIES:
+                    raise
+                time.sleep(_control_plane_postgres_retry_delay_seconds(attempt))
+
     def delete_rows(
         self,
         *,

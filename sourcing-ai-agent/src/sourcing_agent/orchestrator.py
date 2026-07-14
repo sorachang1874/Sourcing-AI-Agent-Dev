@@ -54915,14 +54915,22 @@ class SourcingOrchestrator:
         source_feedback = (
             self.store.repos.criteria_confidence.get_feedback(source_feedback_id) if source_feedback_id else {}
         )
-        source_job_id = str(
-            preflight_suggestion.get("source_job_id") or (source_feedback or {}).get("job_id") or ""
-        ).strip()
+        source_job_ids = tuple(
+            job_id
+            for job_id in dict.fromkeys(
+                str(raw_job_id or "").strip()
+                for raw_job_id in (
+                    preflight_suggestion.get("source_job_id"),
+                    (source_feedback or {}).get("job_id"),
+                )
+            )
+            if job_id
+        )
         preflight = self._preflight_criteria_job_ownership(
             payload,
             expected_requester_id=expected_requester_id,
             expected_tenant_id=expected_tenant_id,
-            additional_job_ids=(source_job_id,),
+            additional_job_ids=source_job_ids,
         )
         if preflight.get("status") == "not_found":
             return preflight
@@ -54931,9 +54939,19 @@ class SourcingOrchestrator:
             action=action,
             reviewer=str(payload.get("reviewer") or "").strip(),
             notes=str(payload.get("notes") or "").strip(),
+            expected_requester_id=expected_requester_id,
+            expected_tenant_id=expected_tenant_id,
+            additional_job_ids=tuple(
+                str(raw_job_id or "").strip()
+                for raw_job_id in (payload.get("job_id"), payload.get("baseline_job_id"))
+                if str(raw_job_id or "").strip()
+            ),
         )
-        if review is None:
+        if review is None or review.get("status") == "suggestion_not_found":
             return {"status": "not_found", "suggestion_id": suggestion_id}
+        if review.get("status") == "owner_miss":
+            return {"status": "not_found", "reason": "job_not_found"}
+        source_feedback = dict(review.get("source_feedback") or source_feedback or {})
         if str(review.get("status") or "") != "applied":
             return {
                 **review,
@@ -54945,14 +54963,15 @@ class SourcingOrchestrator:
 
         suggestion = dict(review.get("suggestion") or {})
         source_feedback_id = int(suggestion.get("source_feedback_id") or source_feedback_id)
+        source_job_id = str(suggestion.get("source_job_id") or "").strip()
+        feedback_source_job_id = str(source_feedback.get("job_id") or "").strip()
         recompile_payload = {
             "target_company": str(suggestion.get("target_company") or payload.get("target_company") or ""),
             "job_id": str(
-                suggestion.get("source_job_id")
-                or source_job_id
-                or payload.get("job_id")
-                or payload.get("baseline_job_id")
-                or ""
+                source_job_id
+                or feedback_source_job_id
+                or str(payload.get("job_id") or "").strip()
+                or str(payload.get("baseline_job_id") or "").strip()
             ),
             "request_payload": dict(((source_feedback or {}).get("metadata") or {}).get("request_payload") or {}),
             "criteria_version_id": int(payload.get("criteria_version_id") or 0),
@@ -73067,7 +73086,9 @@ class SourcingOrchestrator:
             request_payload.update(override_payload)
         plan_payload = dict(recompile.get("plan") or {})
         target_company = str(request_payload.get("target_company") or payload.get("target_company") or "").strip()
-        baseline_job_id = str(payload.get("job_id") or payload.get("baseline_job_id") or "").strip()
+        explicit_job_id = str(payload.get("job_id") or "").strip()
+        explicit_baseline_job_id = str(payload.get("baseline_job_id") or "").strip()
+        baseline_job_id = explicit_job_id or explicit_baseline_job_id
         baseline_job: dict[str, Any] | None = None
         baseline_selection = {
             "selected_via": "none",

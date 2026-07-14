@@ -1,6 +1,7 @@
 # Track C C2.8 criteria owner-preflight totality
 
-Status: author implementation; fresh pinned independent review required before
+Status: author fixed-forward after an invalid fresh review run surfaced two
+substantive findings; a new pinned independent review is required before
 live/manual/product/milestone signoff.
 
 ## Goal and root cause
@@ -24,6 +25,18 @@ Authorization and rerun policy are now separate contracts:
 - automatic baseline selection remains requester+tenant scoped and the selected
   owner is re-read before retrieval execution.
 
+The first fresh review attempt after commit `254b7c9` was not valid formal
+evidence because its durable artifact failed causal binding, despite a zero
+reviewer process exit. Its substantive output was still treated as engineering
+input and fixed forward:
+
+- suggestion review now locks the suggestion, linked feedback, and every
+  distinct direct/feedback/caller job reference, exact-owner checks them in the
+  same PostgreSQL transaction as pattern + review writes, and returns the
+  authorized frozen suggestion/feedback snapshot to the compiler;
+- `job_id` and `baseline_job_id` are normalized independently before rerun
+  precedence, so whitespace in the first alias cannot mask the second.
+
 ## Implementation boundary
 
 The shared helper is renamed from rerun-specific
@@ -32,8 +45,9 @@ The shared helper is renamed from rerun-specific
 
 1. `record_criteria_feedback` before feedback and suggestion writes;
 2. `recompile_criteria` before criteria version/compiler writes;
-3. `review_pattern_suggestion` after read-only suggestion/source discovery but
-   before review, recompile, result, or derived-job writes.
+3. `review_pattern_suggestion` after read-only suggestion/source discovery and
+   again inside the locked PostgreSQL review UoW before pattern/review writes;
+   compiler and rerun consume only the UoW's frozen authorized snapshot.
 
 No schema, provider/model behavior, promotion, typed-CAS, CRM, daemon allowlist,
 or live-provider gate changes are included.
@@ -44,14 +58,22 @@ The fast owner-fencing lane covers `rerun_retrieval` missing/false crossed with
 foreign/missing jobs for feedback, both explicit recompile id spellings, and
 suggestion source jobs. Every cell requires the job read and prohibits all
 criteria-domain writes. Positive coverage preserves same-owner, no-ref, and
-open-mode behavior. API request-scope coverage repeats missing/false
-non-enumeration for all three public routes and verifies bearer-derived owner
-propagation.
+open-mode behavior. It also covers whitespace alias precedence, distinct direct
+and feedback suggestion sources, and a locked recheck owner miss before compiler
+writes. API request-scope coverage repeats missing/false/true non-enumeration,
+checks both explicit aliases independently, and verifies bearer-derived owner
+propagation. PostgreSQL regressions prove dual-source and concurrent source-swap
+owner misses leave pattern/review at zero writes, while whitespace direct source
+plus same-owner feedback source applies from a frozen snapshot.
 
 ## Author validation
 
-- fast owner/request-scope/transport lane: `74 passed + 61 subtests`;
-- PostgreSQL owner-fencing adjacency: `9 passed`;
+- stable fast owner/request-scope/transport + native-write adjacency:
+  `78 passed + 61 subtests`;
+- PostgreSQL owner-fencing adjacency: `12 passed`;
+- `make lint`: `58 files already formatted`, all checks passed;
+- `make typecheck`: expected nonzero, unchanged at `81 errors / 4 files`;
+- five touched source modules `py_compile` and scoped `git diff --check`: clean;
 - `make lint`: `58 files already formatted`, all checks passed;
 - `make typecheck`: expected nonzero, unchanged at `81 errors / 4 files`;
 - touched orchestrator `py_compile` and exact-file `git diff --check`: clean;

@@ -1,9 +1,162 @@
-"""C2.7 permanent PostgreSQL owner-CAS race regressions."""
+"""C2.7/C2.8 permanent PostgreSQL owner-CAS race regressions."""
+
+import threading
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
 from sourcing_agent.crm_writer import CRMWriter
 from tests.pg_store_fixture import pg_backed_control_plane_store
+
+
+def _seed_criteria_suggestion(
+    store,
+    *,
+    suggestion_id: int,
+    source_job_id: str,
+    feedback_job_id: str,
+) -> None:
+    adapter = store._control_plane_postgres  # noqa: SLF001
+    adapter.execute_non_query(
+        """
+        INSERT INTO criteria_feedback (
+            feedback_id, job_id, feedback_type, payload_json, created_at
+        ) VALUES (%s, %s, 'missed', '{}', '2026-07-14T00:00:00Z')
+        """,
+        (suggestion_id, feedback_job_id),
+    )
+    adapter.execute_non_query(
+        """
+        INSERT INTO criteria_pattern_suggestions (
+            suggestion_id, target_company, source_feedback_id, source_job_id,
+            candidate_id, pattern_type, subject, value, status, confidence,
+            evidence_json, metadata_json, created_at, updated_at
+        ) VALUES (
+            %s, 'OpenAI', %s, %s, 'candidate-1', 'include', 'role', 'engineer',
+            'suggested', 'high', '{}', '{}', '2026-07-14T00:00:00Z', '2026-07-14T00:00:00Z'
+        )
+        """,
+        (suggestion_id, suggestion_id, source_job_id),
+    )
+
+
+def test_postgres_criteria_review_checks_every_source_before_writes() -> None:
+    with pg_backed_control_plane_store(schema_label="c2_8_criteria_dual_source") as store:
+        for job_id, requester_id, tenant_id in (
+            ("job-owned", "alice", "user-alice"),
+            ("job-foreign", "bob", "user-bob"),
+        ):
+            store.save_job(
+                job_id=job_id,
+                job_type="workflow",
+                status="completed",
+                stage="completed",
+                request_payload={"target_company": "OpenAI"},
+                requester_id=requester_id,
+                tenant_id=tenant_id,
+            )
+        _seed_criteria_suggestion(
+            store,
+            suggestion_id=701,
+            source_job_id="job-owned",
+            feedback_job_id="job-foreign",
+        )
+
+        result = store.repos.criteria_confidence.review_suggestion(
+            suggestion_id=701,
+            action="apply",
+            expected_requester_id="alice",
+            expected_tenant_id="user-alice",
+        )
+
+        assert result == {"status": "owner_miss"}
+        assert store.repos.criteria_confidence.list_patterns(target_company="OpenAI") == []
+        assert store.repos.criteria_confidence.get_suggestion(701)["status"] == "suggested"
+
+
+def test_postgres_criteria_review_normalizes_whitespace_source_and_returns_frozen_feedback() -> None:
+    with pg_backed_control_plane_store(schema_label="c2_8_criteria_whitespace_source") as store:
+        store.save_job(
+            job_id="job-owned",
+            job_type="workflow",
+            status="completed",
+            stage="completed",
+            request_payload={"target_company": "OpenAI"},
+            requester_id="alice",
+            tenant_id="user-alice",
+        )
+        _seed_criteria_suggestion(
+            store,
+            suggestion_id=702,
+            source_job_id="   ",
+            feedback_job_id="job-owned",
+        )
+
+        result = store.repos.criteria_confidence.review_suggestion(
+            suggestion_id=702,
+            action="apply",
+            expected_requester_id="alice",
+            expected_tenant_id="user-alice",
+        )
+
+        assert result["status"] == "applied"
+        assert result["source_feedback"]["job_id"] == "job-owned"
+        assert result["suggestion"]["status"] == "applied"
+        assert len(store.repos.criteria_confidence.list_patterns(target_company="OpenAI")) == 1
+
+
+def test_postgres_criteria_review_rechecks_source_swap_under_row_lock() -> None:
+    with pg_backed_control_plane_store(schema_label="c2_8_criteria_source_swap") as store:
+        for job_id, requester_id, tenant_id in (
+            ("job-owned", "alice", "user-alice"),
+            ("job-foreign", "bob", "user-bob"),
+        ):
+            store.save_job(
+                job_id=job_id,
+                job_type="workflow",
+                status="completed",
+                stage="completed",
+                request_payload={"target_company": "OpenAI"},
+                requester_id=requester_id,
+                tenant_id=tenant_id,
+            )
+        _seed_criteria_suggestion(
+            store,
+            suggestion_id=703,
+            source_job_id="job-owned",
+            feedback_job_id="job-owned",
+        )
+        started = threading.Event()
+
+        def review_after_preflight():
+            started.set()
+            return store.repos.criteria_confidence.review_suggestion(
+                suggestion_id=703,
+                action="apply",
+                expected_requester_id="alice",
+                expected_tenant_id="user-alice",
+            )
+
+        adapter = store._control_plane_postgres  # noqa: SLF001
+        with adapter._connect() as connection:  # noqa: SLF001
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT suggestion_id FROM criteria_pattern_suggestions WHERE suggestion_id = %s FOR UPDATE",
+                    (703,),
+                )
+                cursor.execute(
+                    "UPDATE criteria_pattern_suggestions SET source_job_id = %s WHERE suggestion_id = %s",
+                    ("job-foreign", 703),
+                )
+                with ThreadPoolExecutor(max_workers=1) as executor:
+                    future = executor.submit(review_after_preflight)
+                    assert started.wait(timeout=5)
+                    connection.commit()
+                    result = future.result(timeout=10)
+
+        assert result == {"status": "owner_miss"}
+        assert store.repos.criteria_confidence.list_patterns(target_company="OpenAI") == []
+        assert store.repos.criteria_confidence.get_suggestion(703)["status"] == "suggested"
 
 
 def _crm_record_payload(record_id: str, *, workspace: str, owner: str) -> dict[str, str]:

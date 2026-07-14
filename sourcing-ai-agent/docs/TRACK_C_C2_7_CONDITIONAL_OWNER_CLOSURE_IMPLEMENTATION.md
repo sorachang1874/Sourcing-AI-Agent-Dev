@@ -58,7 +58,7 @@ the first durable write through a PostgreSQL owner predicate or row-lock UoW.
 | Operation | Source of truth | Atomic boundary | Failure projection |
 | --- | --- | --- | --- |
 | Existing job queued/cancel write | locked `jobs` owner + operation-specific state | typed PostgreSQL owner/state CAS | job not found; authorized business-state projection |
-| Criteria rerun baseline | explicit/source baseline `jobs` row | shared zero-write preflight; owner-scoped automatic selection; final canonical re-read | job not found |
+| Criteria referenced job | explicit/source `jobs` rows | shared zero-write preflight; locked suggestion-review UoW; owner-scoped automatic selection; final rerun re-read | job not found |
 | Authenticated worker status | exact-owned `jobs` row | read-only job-scoped projection; raw/global details suppressed | job not found |
 | CRM PATCH | locked `crm_records` row | record + engagement + event transaction | CRM record not found; same-owner stale version is HTTP 409 |
 | CRM Public-Web promotion | locked `crm_records` row + immutable promotion id | record -> advisory promotion id -> promotion row; exact replay only | CRM record not found; idempotency conflict is HTTP 409 |

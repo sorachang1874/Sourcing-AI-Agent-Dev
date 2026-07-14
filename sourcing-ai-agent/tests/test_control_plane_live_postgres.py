@@ -594,6 +594,92 @@ class _FakeLiveControlPlanePostgresAdapter:
             return dict(updated_row)
         return None
 
+    def review_criteria_suggestion_if_owned(
+        self,
+        *,
+        table_name: str,
+        suggestion_id: int,
+        action: str,
+        reviewer: str,
+        notes: str,
+        expected_requester_id: str,
+        expected_tenant_id: str,
+        additional_job_ids: list[str] | tuple[str, ...] = (),
+    ) -> dict[str, object] | None:
+        rows = list(self.generic_rows.get(table_name, []))
+        suggestion = next(
+            (row for row in rows if int(row.get("suggestion_id") or 0) == int(suggestion_id or 0)),
+            None,
+        )
+        if suggestion is None:
+            return {"status": "suggestion_not_found"}
+        feedback_id = int(suggestion.get("source_feedback_id") or 0)
+        source_feedback = next(
+            (
+                row
+                for row in self.generic_rows.get("criteria_feedback", [])
+                if int(row.get("feedback_id") or 0) == feedback_id
+            ),
+            None,
+        )
+        job_ids = {
+            str(raw_job_id or "").strip()
+            for raw_job_id in (
+                suggestion.get("source_job_id"),
+                (source_feedback or {}).get("job_id"),
+                *additional_job_ids,
+            )
+            if str(raw_job_id or "").strip()
+        }
+        jobs = list(self.native_rows.get("jobs", []))
+        for job_id in job_ids:
+            job = next((row for row in jobs if str(row.get("job_id") or "") == job_id), None)
+            if job is None:
+                return {"status": "owner_miss"}
+            if (expected_requester_id or expected_tenant_id) and (
+                not expected_requester_id
+                or not expected_tenant_id
+                or str(job.get("requester_id") or "") != expected_requester_id
+                or str(job.get("tenant_id") or "") != expected_tenant_id
+            ):
+                return {"status": "owner_miss"}
+        normalized_action = str(action or "").strip().lower()
+        review_status = "applied" if normalized_action in {"approve", "approved", "apply", "applied"} else "rejected"
+        applied_pattern = None
+        if review_status == "applied":
+            applied_pattern = self.upsert_row_with_generated_id(
+                table_name="criteria_patterns",
+                conflict_columns=["target_company", "pattern_type", "subject", "value"],
+                row={
+                    "target_company": suggestion.get("target_company"),
+                    "pattern_type": suggestion.get("pattern_type"),
+                    "subject": suggestion.get("subject"),
+                    "value": suggestion.get("value"),
+                    "status": "active",
+                    "confidence": suggestion.get("confidence"),
+                    "source_feedback_id": feedback_id or None,
+                    "metadata_json": suggestion.get("metadata_json") or "{}",
+                },
+            )
+        reviewed = self.update_row_returning(
+            table_name=table_name,
+            id_column="suggestion_id",
+            id_value=suggestion_id,
+            row={
+                "status": review_status,
+                "reviewed_by": reviewer,
+                "review_notes": notes,
+                "applied_pattern_id": int((applied_pattern or {}).get("pattern_id") or 0) or None,
+            },
+        )
+        return {
+            "status": "applied",
+            "review_status": review_status,
+            "suggestion": reviewed,
+            "source_feedback": source_feedback,
+            "applied_pattern": applied_pattern,
+        }
+
     def delete_rows(
         self,
         *,
@@ -3385,6 +3471,13 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
             status="completed",
             scoped_companies=["Acme Native"],
             summary={"source": "postgres_native"},
+        )
+        store.save_job(
+            job_id="job-native",
+            job_type="workflow",
+            status="completed",
+            stage="completed",
+            request_payload={"target_company": "Acme Native"},
         )
         feedback = store.repos.criteria_confidence.record_feedback(
             {
