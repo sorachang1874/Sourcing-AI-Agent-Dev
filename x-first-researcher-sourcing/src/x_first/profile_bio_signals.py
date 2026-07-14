@@ -18,8 +18,8 @@ from typing import Any
 from urllib.parse import urlsplit
 
 POLICY_SCHEMA_VERSION = "x.profile.bio_signal.policy.v1"
-POLICY_VERSION = "profile-bio-signal-v1.1"
-CANONICAL_POLICY_SHA256 = "167176f76450fe3e36ff78c31f51b4b4da5476d6f046a79d3c9decde4abc9a2d"
+POLICY_VERSION = "profile-bio-signal-v1.2"
+CANONICAL_POLICY_SHA256 = "02a57dd779a5838090a5d841403f3be7809089a6a12fa0e3c84873e74d807fe7"
 BUNDLE_SCHEMA_VERSION = "x.profile.bio_evidence.bundle.v1"
 ANALYSIS_SCHEMA_VERSION = "x.profile.bio_signal.analysis.v1"
 
@@ -37,10 +37,11 @@ _SNAPSHOT_ID_RE = re.compile(rf"xps_{_ULID}")
 _PROPOSAL_ID_RE = re.compile(rf"xbp_{_ULID}")
 _PLATFORM_USER_ID_RE = re.compile(r"[1-9][0-9]{1,24}")
 _HANDLE_RE = re.compile(r"[A-Za-z0-9_]{1,15}")
+_HANDLE_MENTION_RE = re.compile(r"(?<![A-Za-z0-9_])@([A-Za-z0-9_]{1,15})(?![A-Za-z0-9_])")
+_BARE_ACCOUNT_IDENTIFIER_RE = re.compile(r"[a-z0-9_][a-z0-9_.-]{1,79}")
 _SHA256_RE = re.compile(r"[0-9a-f]{64}")
 _CANONICAL_TIME_RE = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z")
 _HAN_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]")
-_STATEMENT_SPLIT_RE = re.compile(r"[\r\n。！？!?；;]+")
 _RELATION_CLAUSE_SPLIT_RE = re.compile(r"[\r\n。！？!?；;，,]+")
 
 _TOP_LEVEL_KEYS = {
@@ -167,21 +168,28 @@ def _contains_marker(text: str, marker: str) -> bool:
     return normalized_marker in normalized_text
 
 
-def _statements(value: str) -> list[str]:
-    return [statement.strip() for statement in _STATEMENT_SPLIT_RE.split(value) if statement.strip()]
-
-
 def _contains_handle(value: str, handle: str) -> bool:
     return re.search(rf"(?<![A-Za-z0-9_])@{re.escape(handle)}(?![A-Za-z0-9_])", value, re.IGNORECASE) is not None
-
-
-def _handle_statements(value: str, handle: str) -> list[str]:
-    return [statement for statement in _statements(value) if _contains_handle(statement, handle)]
 
 
 def _handle_relation_clauses(value: str, handle: str) -> list[str]:
     clauses = [clause.strip() for clause in _RELATION_CLAUSE_SPLIT_RE.split(value) if clause.strip()]
     return [clause for clause in clauses if _contains_handle(clause, handle)]
+
+
+def _clause_handles(value: str) -> set[str]:
+    return {match.group(1).casefold() for match in _HANDLE_MENTION_RE.finditer(value)}
+
+
+def _claim_continuation_allowed(continuation: str, claim_guards: dict[str, list[str]]) -> bool:
+    if any(
+        _contains_marker(continuation, marker)
+        for field in ("post_claim_negation_markers", "third_party_operation_markers")
+        for marker in claim_guards[field]
+    ):
+        return False
+    blocked_continuations = [_normalize_text(prefix) for prefix in claim_guards["non_ownership_continuation_prefixes"]]
+    return not any(continuation.startswith(prefix) for prefix in blocked_continuations)
 
 
 def _contains_closed_subject_claim(
@@ -191,7 +199,6 @@ def _contains_closed_subject_claim(
 ) -> bool:
     clauses = [clause.strip() for clause in _RELATION_CLAUSE_SPLIT_RE.split(value) if clause.strip()]
     negation_prefixes = [_normalize_text(prefix) for prefix in claim_guards["negation_prefixes"]]
-    blocked_continuations = [_normalize_text(prefix) for prefix in claim_guards["non_ownership_continuation_prefixes"]]
     for clause in clauses:
         normalized_clause = _normalize_text(clause)
         if any(normalized_clause.startswith(prefix) for prefix in negation_prefixes):
@@ -202,10 +209,28 @@ def _contains_closed_subject_claim(
                 if not normalized_clause.startswith(rendered):
                     continue
                 continuation = normalized_clause[len(rendered) :].lstrip()
-                if any(continuation.startswith(prefix) for prefix in blocked_continuations):
+                if not _claim_continuation_allowed(continuation, claim_guards):
                     continue
                 return True
+            if not ecosystem["bare_alias_identifier_claim"]:
+                continue
+            rendered_alias = _normalize_text(alias)
+            if not normalized_clause.startswith(rendered_alias):
+                continue
+            continuation = normalized_clause[len(rendered_alias) :].lstrip()
+            if _BARE_ACCOUNT_IDENTIFIER_RE.match(continuation) is None:
+                continue
+            if _claim_continuation_allowed(continuation, claim_guards):
+                return True
     return False
+
+
+def _relations_in_clause(clause: str, relation_markers: dict[str, list[str]]) -> set[str]:
+    if any(_contains_marker(clause, marker) for marker in relation_markers["previous"]):
+        return {"previous"}
+    if any(_contains_marker(clause, marker) for marker in relation_markers["current"]):
+        return {"current"}
+    return set()
 
 
 def _relations_for_handle(
@@ -215,10 +240,7 @@ def _relations_for_handle(
 ) -> set[str]:
     detected: set[str] = set()
     for clause in _handle_relation_clauses(value, handle):
-        if any(_contains_marker(clause, marker) for marker in relation_markers["previous"]):
-            detected.add("previous")
-        elif any(_contains_marker(clause, marker) for marker in relation_markers["current"]):
-            detected.add("current")
+        detected.update(_relations_in_clause(clause, relation_markers))
     return detected
 
 
@@ -260,18 +282,49 @@ def _valid_profile_url(value: Any, *, current_handle: Any) -> bool:
     )
 
 
-def _forbidden_key_hits(value: Any, forbidden: set[str], *, path: str = "$") -> list[str]:
+def _forbidden_key_hits(
+    value: Any,
+    forbidden: set[str],
+    *,
+    max_depth: int,
+    max_nodes: int,
+    path: str = "$",
+) -> tuple[list[str], list[str]]:
     hits: list[str] = []
-    if isinstance(value, dict):
-        for key, child in value.items():
-            folded = re.sub(r"[^a-z0-9]", "", unicodedata.normalize("NFKC", str(key)).casefold())
-            if folded in forbidden:
-                hits.append(f"{path}.{key}")
-            hits.extend(_forbidden_key_hits(child, forbidden, path=f"{path}.{key}"))
-    elif isinstance(value, list):
-        for index, child in enumerate(value):
-            hits.extend(_forbidden_key_hits(child, forbidden, path=f"{path}[{index}]"))
-    return hits
+    budget_errors: set[str] = set()
+    stack: list[tuple[Any, str, int]] = [(value, path, 0)]
+    visited = 0
+    exhausted = False
+    while stack and not exhausted:
+        node, node_path, depth = stack.pop()
+        visited += 1
+        if visited > max_nodes:
+            budget_errors.add("nested_node_budget_exceeded")
+            break
+        if isinstance(node, (dict, list)) and node and depth >= max_depth:
+            budget_errors.add("nested_depth_budget_exceeded")
+            continue
+        if isinstance(node, dict):
+            children = node.items()
+        elif isinstance(node, list):
+            children = enumerate(node)
+        else:
+            continue
+        for key, child in children:
+            if visited + len(stack) >= max_nodes:
+                budget_errors.add("nested_node_budget_exceeded")
+                stack.clear()
+                exhausted = True
+                break
+            if isinstance(node, dict):
+                folded = re.sub(r"[^a-z0-9]", "", unicodedata.normalize("NFKC", str(key)).casefold())
+                child_path = f"{node_path}.{key}"
+                if folded in forbidden:
+                    hits.append(child_path)
+            else:
+                child_path = f"{node_path}[{key}]"
+            stack.append((child, child_path, depth + 1))
+    return hits, sorted(budget_errors)
 
 
 def validate_policy(policy: Any) -> list[str]:
@@ -291,7 +344,7 @@ def validate_policy(policy: Any) -> list[str]:
         return errors
     try:
         policy_sha256 = canonical_sha256(policy)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, RecursionError):
         _append(errors, "$", "must be canonical JSON")
         return errors
     if policy_sha256 != CANONICAL_POLICY_SHA256:
@@ -311,7 +364,12 @@ def validate_policy(policy: Any) -> list[str]:
     ecosystem_ids: set[str] = set()
     for index, item in enumerate(ecosystems):
         item_path = f"$.china_ecosystems[{index}]"
-        if not _exact_keys(item, {"ecosystem_id", "aliases", "subject_claim_templates"}, path=item_path, errors=errors):
+        if not _exact_keys(
+            item,
+            {"ecosystem_id", "aliases", "subject_claim_templates", "bare_alias_identifier_claim"},
+            path=item_path,
+            errors=errors,
+        ):
             continue
         ecosystem_id = item["ecosystem_id"]
         if not isinstance(ecosystem_id, str) or re.fullmatch(r"[a-z][a-z0-9_]{1,63}", ecosystem_id) is None:
@@ -333,15 +391,27 @@ def validate_policy(policy: Any) -> list[str]:
             template.count("{alias}") != 1 for template in templates if isinstance(template, str)
         ):
             _append(errors, f"{item_path}.subject_claim_templates", "each template must contain one {alias}")
+        if not isinstance(item["bare_alias_identifier_claim"], bool):
+            _append(errors, f"{item_path}.bare_alias_identifier_claim", "must be boolean")
 
     claim_guards = policy["ownership_claim_guards"]
     if _exact_keys(
         claim_guards,
-        {"negation_prefixes", "non_ownership_continuation_prefixes"},
+        {
+            "negation_prefixes",
+            "non_ownership_continuation_prefixes",
+            "post_claim_negation_markers",
+            "third_party_operation_markers",
+        },
         path="$.ownership_claim_guards",
         errors=errors,
     ):
-        for field in ("negation_prefixes", "non_ownership_continuation_prefixes"):
+        for field in (
+            "negation_prefixes",
+            "non_ownership_continuation_prefixes",
+            "post_claim_negation_markers",
+            "third_party_operation_markers",
+        ):
             values = claim_guards[field]
             if (
                 not isinstance(values, list)
@@ -387,6 +457,8 @@ def validate_policy(policy: Any) -> list[str]:
         "max_proposals",
         "max_excerpt_characters",
         "max_role_text_characters",
+        "max_nested_validation_depth",
+        "max_nested_validation_nodes",
     }
     if _exact_keys(limits, limit_keys, path="$.limits", errors=errors):
         if any(not _is_int(value) or value <= 0 for value in limits.values()):
@@ -415,8 +487,18 @@ def validate_evidence_bundle(bundle: Any, *, policy: Any) -> list[str]:
         _append(errors, "$.policy_version", "mismatch")
 
     forbidden = {re.sub(r"[^a-z0-9]", "", value.casefold()) for value in policy["forbidden_proposal_fields"]}
-    for hit in _forbidden_key_hits(bundle, forbidden):
+    forbidden_hits, traversal_errors = _forbidden_key_hits(
+        bundle,
+        forbidden,
+        max_depth=policy["limits"]["max_nested_validation_depth"],
+        max_nodes=policy["limits"]["max_nested_validation_nodes"],
+    )
+    for hit in forbidden_hits:
         _append(errors, hit, "forbidden protected-identity or real-name field")
+    for traversal_error in traversal_errors:
+        _append(errors, "$.validation", traversal_error)
+    if traversal_errors:
+        return errors
 
     subject = bundle["subject"]
     if _exact_keys(subject, _SUBJECT_KEYS, path="$.subject", errors=errors):
@@ -606,12 +688,26 @@ def validate_evidence_bundle(bundle: Any, *, policy: Any) -> list[str]:
                     and bool(role_text.strip())
                     and len(role_text) <= policy["limits"]["max_role_text_characters"]
                 )
-                if not role_text_is_valid or not handle_is_valid:
-                    _append(errors, f"{path}.details.role_text", "must be a bounded marker in the handle statement")
-                elif not any(
-                    _contains_marker(statement, role_text) for statement in _handle_statements(excerpt, handle)
-                ):
-                    _append(errors, f"{path}.details.role_text", "must be a bounded marker in the handle statement")
+                if not role_text_is_valid or not handle_is_valid or not relation_is_valid or relation == "unspecified":
+                    _append(
+                        errors,
+                        f"{path}.details.role_text",
+                        "requires a specific relation and a bounded same-clause role/handle binding",
+                    )
+                else:
+                    expected_role_relation = {relation}
+                    role_bound = any(
+                        _contains_marker(clause, role_text)
+                        and _relations_in_clause(clause, relation_markers) == expected_role_relation
+                        and _clause_handles(clause) == {handle.casefold()}
+                        for clause in _handle_relation_clauses(excerpt, handle)
+                    )
+                    if not role_bound:
+                        _append(
+                            errors,
+                            f"{path}.details.role_text",
+                            "role, relation marker, and sole target handle must share one clause",
+                        )
             if handle_is_valid:
                 detected_relations = _relations_for_handle(excerpt, handle, relation_markers)
                 expected_relations = {relation} if relation_is_valid and relation in ("current", "previous") else set()
@@ -748,8 +844,20 @@ def validate_analysis(analysis: Any, *, evidence_bundle: Any, policy: Any) -> li
         return [f"evidence {error}" for error in errors]
     if not isinstance(analysis, dict):
         return ["$: must be an object"]
+    _, traversal_errors = _forbidden_key_hits(
+        analysis,
+        set(),
+        max_depth=policy["limits"]["max_nested_validation_depth"],
+        max_nodes=policy["limits"]["max_nested_validation_nodes"],
+    )
+    if traversal_errors:
+        return [f"$.validation: {error}" for error in traversal_errors]
     expected = analyze_profile_bio_signals(evidence_bundle, policy=policy)
-    if analysis != expected:
+    try:
+        matches_expected = analysis == expected
+    except RecursionError:
+        return ["$.validation: nested_depth_budget_exceeded"]
+    if not matches_expected:
         return ["$: analysis does not equal deterministic recomputation"]
     return []
 
@@ -764,7 +872,7 @@ def main() -> int:
         policy = load_json(args.policy)
         errors = validate_evidence_bundle(bundle, policy=policy)
         payload = {"status": "valid", "errors": []} if not errors else {"status": "invalid", "errors": errors}
-    except (OSError, json.JSONDecodeError, TypeError, ValueError):
+    except (OSError, json.JSONDecodeError, TypeError, ValueError, RecursionError):
         payload = {"status": "invalid", "errors": ["input_unreadable_or_invalid"]}
     print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
     return 0 if payload["status"] == "valid" else 1

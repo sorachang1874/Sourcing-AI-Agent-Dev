@@ -17,7 +17,7 @@
   ],
   "const": {
     "schema_version": "x.profile.bio_signal.policy.v1",
-    "policy_version": "profile-bio-signal-v1.1",
+    "policy_version": "profile-bio-signal-v1.2",
     "proposal_kinds": [
       "observed_chinese_content",
       "china_ecosystem_self_claim",
@@ -33,6 +33,7 @@
         ],
         "subject_claim_templates": [
           "同名{alias}",
+          "{alias}同名",
           "我的{alias}",
           "本人运营{alias}",
           "我运营{alias}",
@@ -41,7 +42,8 @@
           "i run {alias}",
           "i publish on {alias}",
           "same-name {alias}"
-        ]
+        ],
+        "bare_alias_identifier_claim": false
       },
       {
         "ecosystem_id": "wechat_official_account",
@@ -52,6 +54,7 @@
         ],
         "subject_claim_templates": [
           "同名{alias}",
+          "{alias}同名",
           "我的{alias}",
           "本人运营{alias}",
           "我运营{alias}",
@@ -60,7 +63,8 @@
           "i run {alias}",
           "i publish on {alias}",
           "same-name {alias}"
-        ]
+        ],
+        "bare_alias_identifier_claim": true
       }
     ],
     "ownership_claim_guards": {
@@ -76,16 +80,47 @@
       ],
       "non_ownership_continuation_prefixes": [
         "用户画像",
-        "用户",
+        "用户研究",
+        "用户行为",
+        "用户列表",
+        "用户群",
+        "用户有",
         "好友",
+        "关注列表",
+        "收藏列表",
         "研究",
         "推荐",
+        "列表",
         "users",
-        "user",
+        "user research",
         "friends",
-        "friend",
+        "following list",
+        "watchlist",
         "research",
         "recommendation"
+      ],
+      "post_claim_negation_markers": [
+        "不是",
+        "并非",
+        "没有",
+        "非本人",
+        "not",
+        "never",
+        "is not",
+        "isn't",
+        "isnt"
+      ],
+      "third_party_operation_markers": [
+        "由朋友运营",
+        "朋友运营",
+        "由他人运营",
+        "他人运营",
+        "由团队运营",
+        "团队运营",
+        "代运营",
+        "operated by",
+        "run by",
+        "managed by"
       ]
     },
     "affiliation_relations": [
@@ -124,6 +159,12 @@
       "looking for",
       "hiring",
       "seeking",
+      "Ex",
+      "Was",
+      "Past",
+      "Aspiring",
+      "Incoming",
+      "Future",
       "不是",
       "并非",
       "没有",
@@ -137,7 +178,9 @@
       "max_display_alias_characters": 100,
       "max_proposals": 32,
       "max_excerpt_characters": 500,
-      "max_role_text_characters": 120
+      "max_role_text_characters": 120,
+      "max_nested_validation_depth": 64,
+      "max_nested_validation_nodes": 4096
     },
     "forbidden_proposal_fields": [
       "ancestry",
@@ -155,7 +198,7 @@
       "const": "x.profile.bio_signal.policy.v1"
     },
     "policy_version": {
-      "const": "profile-bio-signal-v1.1"
+      "const": "profile-bio-signal-v1.2"
     },
     "proposal_kinds": {
       "type": "array"

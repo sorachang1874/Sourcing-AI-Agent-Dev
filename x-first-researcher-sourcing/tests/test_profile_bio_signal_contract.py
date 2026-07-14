@@ -7,6 +7,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
@@ -201,18 +202,27 @@ class ProfileBioSignalContractTest(unittest.TestCase):
         grammar = copy.deepcopy(self.policy)
         grammar["china_ecosystems"][0]["subject_claim_templates"].append("I browse {alias}")
         mutations.append(grammar)
+        bare_identifier = copy.deepcopy(self.policy)
+        bare_identifier["china_ecosystems"][0]["bare_alias_identifier_claim"] = True
+        mutations.append(bare_identifier)
         relation = copy.deepcopy(self.policy)
         relation["affiliation_relations"][1]["markers"].append("前")
         mutations.append(relation)
         ownership_guard = copy.deepcopy(self.policy)
         ownership_guard["ownership_claim_guards"]["negation_prefixes"].append("hardly")
         mutations.append(ownership_guard)
+        post_claim_guard = copy.deepcopy(self.policy)
+        post_claim_guard["ownership_claim_guards"]["post_claim_negation_markers"].append("disclaimed")
+        mutations.append(post_claim_guard)
         affiliation_guard = copy.deepcopy(self.policy)
         affiliation_guard["affiliation_blocked_context_markers"].append("interviewing for")
         mutations.append(affiliation_guard)
         limits = copy.deepcopy(self.policy)
         limits["limits"]["max_proposals"] += 1
         mutations.append(limits)
+        traversal_budget = copy.deepcopy(self.policy)
+        traversal_budget["limits"]["max_nested_validation_depth"] += 1
+        mutations.append(traversal_budget)
         for payload in mutations:
             with self.subTest(payload=canonical_sha256(payload)):
                 self.assertTrue(validate_policy(payload))
@@ -224,6 +234,8 @@ class ProfileBioSignalContractTest(unittest.TestCase):
             [signal["signal_type"] for signal in self.analysis["signals"]],
             [
                 "observed_chinese_content",
+                "china_ecosystem_experience_lead",
+                "china_ecosystem_experience_lead",
                 "china_ecosystem_experience_lead",
                 "china_ecosystem_experience_lead",
             ],
@@ -264,6 +276,10 @@ class ProfileBioSignalContractTest(unittest.TestCase):
             "并非同名小红书账号",
             "我的小红书用户画像研究",
             "推荐我的小红书好友",
+            "我的小红书不是我的账号",
+            "同名小红书并非本人运营",
+            "我的小红书账号由朋友运营",
+            "我的小红书关注列表",
         )
         for excerpt in negatives:
             payload = self._single_proposal_bundle(self.bundle, 4, excerpt=excerpt)
@@ -272,14 +288,24 @@ class ProfileBioSignalContractTest(unittest.TestCase):
                 errors = validate_evidence_bundle(payload, policy=self.policy)
                 self.assertTrue(any("anchored same-clause subject-claim grammar" in error for error in errors))
 
-        positive_xiaohongshu = self._single_proposal_bundle(self.bundle, 4, excerpt="同名小红书四万粉丝")
-        positive_wechat = self._single_proposal_bundle(
-            self.bundle,
-            5,
-            excerpt="我的公众号 SyntheticFounder（长文首发）",
+        positives = (
+            (4, "同名小红书四万粉丝", "xiaohongshu"),
+            (4, "小红书同名四万粉丝", "xiaohongshu"),
+            (4, "我的小红书用户数四万", "xiaohongshu"),
+            (7, "我的公众号 SyntheticFounder（长文首发）", "wechat_official_account"),
+            (7, "公众号 SyntheticFounder（长文首发）", "wechat_official_account"),
         )
-        self.assertEqual(validate_evidence_bundle(positive_xiaohongshu, policy=self.policy), [])
-        self.assertEqual(validate_evidence_bundle(positive_wechat, policy=self.policy), [])
+        for proposal_index, excerpt, ecosystem_id in positives:
+            with self.subTest(excerpt=excerpt):
+                payload = self._single_proposal_bundle(self.bundle, proposal_index, excerpt=excerpt)
+                self.assertEqual(validate_evidence_bundle(payload, policy=self.policy), [])
+                analysis = analyze_profile_bio_signals(payload, policy=self.policy)
+                self.assertEqual(analysis["signals"][0]["value"], ecosystem_id)
+                self.assertEqual(
+                    analysis["experience_leads"]["physical_region_experience"],
+                    {"status": "not_evaluated", "evidence_refs": []},
+                )
+                self.assertIs(analysis["claims"]["ethnicity_inferred"], False)
 
     def test_organization_mentions_are_handle_bound_proposals_not_confirmed_employment(self) -> None:
         missing_marker = self._single_proposal_bundle(
@@ -318,6 +344,32 @@ class ProfileBioSignalContractTest(unittest.TestCase):
                 self.assert_bundle_rejected(blocked)
                 errors = validate_evidence_bundle(blocked, policy=self.policy)
                 self.assertTrue(any("blocked negation or recruiting context" in error for error in errors))
+        for excerpt in (
+            "Ex-Head of @synthetic_hub",
+            "Was Head of @synthetic_hub",
+            "Past Head of @synthetic_hub",
+            "Aspiring Head of @synthetic_hub",
+            "Incoming Head of @synthetic_hub",
+            "Future Head of @synthetic_hub",
+        ):
+            with self.subTest(excerpt=excerpt):
+                blocked = self._single_proposal_bundle(self.bundle, 1, excerpt=excerpt)
+                blocked["proposals"][0]["details"]["role_text"] = "Head of"
+                self.assert_bundle_rejected(blocked)
+                errors = validate_evidence_bundle(blocked, policy=self.policy)
+                self.assertTrue(any("blocked negation or recruiting context" in error for error in errors))
+        role_binding_mutations = (
+            ("Head of growth @synthetic_hub, advisor", "advisor"),
+            ("Head of growth @synthetic_hub @another_org", "Head of growth"),
+            ("Head of @synthetic_hub, advisor @synthetic_hub", "advisor"),
+        )
+        for excerpt, role_text in role_binding_mutations:
+            with self.subTest(excerpt=excerpt, role_text=role_text):
+                payload = self._single_proposal_bundle(self.bundle, 1, excerpt=excerpt)
+                payload["proposals"][0]["details"]["role_text"] = role_text
+                self.assert_bundle_rejected(payload)
+                errors = validate_evidence_bundle(payload, policy=self.policy)
+                self.assertTrue(any("sole target handle" in error for error in errors))
         for excerpt in ("曾任 @synth_listen", "前任职于 @synth_listen"):
             with self.subTest(excerpt=excerpt):
                 chinese_previous = self._single_proposal_bundle(self.bundle, 2, excerpt=excerpt)
@@ -345,7 +397,7 @@ class ProfileBioSignalContractTest(unittest.TestCase):
         mutations.append(duplicate)
         duplicate_affiliation = copy.deepcopy(self.bundle)
         cloned = copy.deepcopy(duplicate_affiliation["proposals"][1])
-        cloned["proposal_id"] = "xbp_01J00000000000000000000008"
+        cloned["proposal_id"] = "xbp_01J0000000000000000000000A"
         duplicate_affiliation["proposals"].append(cloned)
         mutations.append(duplicate_affiliation)
         for payload in mutations:
@@ -408,6 +460,29 @@ class ProfileBioSignalContractTest(unittest.TestCase):
         nested_malformed["proposals"] = [None, [], "proposal", 1, True]
         self.assert_bundle_rejected(nested_malformed)
 
+        deep_value: Any = None
+        for _ in range(1500):
+            deep_value = {"child": deep_value}
+        deep_root = copy.deepcopy(self.bundle)
+        deep_root["subject"] = deep_value
+        deep_root_errors = validate_evidence_bundle(deep_root, policy=self.policy)
+        self.assertIn("$.validation: nested_depth_budget_exceeded", deep_root_errors)
+        deep_valid_shape_leaf = copy.deepcopy(self.bundle)
+        deep_valid_shape_leaf["proposals"][4]["details"]["ecosystem_id"] = deep_value
+        deep_leaf_errors = validate_evidence_bundle(deep_valid_shape_leaf, policy=self.policy)
+        self.assertIn("$.validation: nested_depth_budget_exceeded", deep_leaf_errors)
+        wide = copy.deepcopy(self.bundle)
+        wide["claims"] = {"items": [None] * 5000}
+        wide_errors = validate_evidence_bundle(wide, policy=self.policy)
+        self.assertIn("$.validation: nested_node_budget_exceeded", wide_errors)
+
+        deep_analysis = copy.deepcopy(self.analysis)
+        deep_analysis["claims"] = deep_value
+        self.assertEqual(
+            validate_analysis(deep_analysis, evidence_bundle=self.bundle, policy=self.policy),
+            ["$.validation: nested_depth_budget_exceeded"],
+        )
+
         def descendants(value: Any, path: tuple[str | int, ...] = ()) -> list[tuple[tuple[str | int, ...], Any]]:
             found: list[tuple[tuple[str | int, ...], Any]] = []
             if isinstance(value, dict):
@@ -439,7 +514,7 @@ class ProfileBioSignalContractTest(unittest.TestCase):
                 with self.subTest(path=path, replacement=repr(replacement)):
                     self.assertTrue(validate_evidence_bundle(payload, policy=self.policy))
                 mutation_count += 1
-        self.assertEqual(mutation_count, 1007)
+        self.assertEqual(mutation_count, 1275)
 
     def test_cli_and_source_boundary_are_offline_and_terminal(self) -> None:
         command = [
@@ -461,6 +536,37 @@ class ProfileBioSignalContractTest(unittest.TestCase):
         )
         self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
         self.assertEqual(json.loads(completed.stdout), {"errors": [], "status": "valid"})
+
+        deep_subject = '{"child":' * 1500 + "null" + "}" * 1500
+        deep_raw = (
+            '{"schema_version":"x.profile.bio_evidence.bundle.v1",'
+            '"policy_version":"profile-bio-signal-v1.2","subject":'
+            + deep_subject
+            + ',"profile_snapshot":{},"proposals":[],"claims":{}}'
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            deep_path = Path(temp_dir) / "deep.json"
+            deep_path.write_text(deep_raw, encoding="utf-8")
+            deep_completed = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "x_first.profile_bio_signals",
+                    str(deep_path),
+                    "--policy",
+                    str(ROOT / "configs/profile_bio_signal_policy.v1.json"),
+                ],
+                cwd=ROOT,
+                env={**os.environ, "PYTHONPATH": "src"},
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+        self.assertEqual(deep_completed.returncode, 1)
+        self.assertEqual(deep_completed.stderr, "")
+        self.assertEqual(json.loads(deep_completed.stdout)["status"], "invalid")
+        self.assertNotIn("Traceback", deep_completed.stdout)
 
         source = (ROOT / "src/x_first/profile_bio_signals.py").read_text(encoding="utf-8")
         self.assertEqual(_forbidden_runtime_imports(source), set())

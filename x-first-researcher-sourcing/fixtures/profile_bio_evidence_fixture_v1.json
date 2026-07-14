@@ -1,6 +1,6 @@
 {
   "schema_version": "x.profile.bio_evidence.bundle.v1",
-  "policy_version": "profile-bio-signal-v1.1",
+  "policy_version": "profile-bio-signal-v1.2",
   "subject": {
     "provisional_person_id": "pp_x_01J00000000000000000000000",
     "platform_user_id": "900000000000000001"
@@ -11,10 +11,10 @@
     "profile_url": "https://profiles.invalid/x/syntheticbuild",
     "current_handle": "syntheticbuild",
     "display_alias": "Synthetic Builder",
-    "bio_text": "本科辍学创业，分享 AI 工程实践。\nHead of growth @synthetic_hub\nPrev @synth_listen @synth_int\n同名小红书四万粉丝，我的公众号 SyntheticFounder（长文首发）\n观点仅代表个人，欢迎 DM。",
+    "bio_text": "本科辍学创业，分享 AI 工程实践。\nHead of growth @synthetic_hub\nPrev @synth_listen @synth_int\n同名小红书四万粉丝\n小红书同名四万粉丝\n我的小红书用户数四万\n公众号 SyntheticFounder（长文首发）\n观点仅代表个人，欢迎 DM。",
     "observed_at": "2026-07-14T00:00:00.000Z",
     "content_version": "fixture-v1",
-    "content_sha256": "2ad99839e94a867826a62e82d6f5a5e9c102345735dbd4e788248e1ed4036db4",
+    "content_sha256": "91235aaf675b6c37c1bc45a3c8ee9267ac8634565cef3cb38fe1039e940241ee",
     "retrieval_mode": "offline_fixture",
     "native_profile_receipt_ref": null,
     "field_capabilities": {
@@ -130,9 +130,9 @@
       "kind": "china_ecosystem_self_claim",
       "source_field": "bio_text",
       "span_start": 79,
-      "span_end": 117,
-      "excerpt": "同名小红书四万粉丝，我的公众号 SyntheticFounder（长文首发）",
-      "excerpt_sha256": "974441bdf17e1308eb9d4fe5e14967772e39361d757345da62f8290240b638c1",
+      "span_end": 88,
+      "excerpt": "同名小红书四万粉丝",
+      "excerpt_sha256": "ea2744fa511c3b4a62c46d8e673ac8fdbcf5cbc172309cd81af21b6f718af397",
       "proposal_status": "proposed",
       "extractor": {
         "mode": "offline_fixture",
@@ -154,10 +154,60 @@
       "proposal_id": "xbp_01J00000000000000000000007",
       "kind": "china_ecosystem_self_claim",
       "source_field": "bio_text",
-      "span_start": 79,
-      "span_end": 117,
-      "excerpt": "同名小红书四万粉丝，我的公众号 SyntheticFounder（长文首发）",
-      "excerpt_sha256": "974441bdf17e1308eb9d4fe5e14967772e39361d757345da62f8290240b638c1",
+      "span_start": 89,
+      "span_end": 98,
+      "excerpt": "小红书同名四万粉丝",
+      "excerpt_sha256": "d4bb0d7cbbcd75338dd77803b2565d9f7f2a7496909e6c6134a8ce28b4b63c54",
+      "proposal_status": "proposed",
+      "extractor": {
+        "mode": "offline_fixture",
+        "version": "profile-bio-fixture-v1",
+        "tool_call_id": null
+      },
+      "details": {
+        "script": null,
+        "language_candidate": null,
+        "ecosystem_id": "xiaohongshu",
+        "affiliation_relation": null,
+        "organization_handle": null,
+        "organization_platform_user_id": null,
+        "role_text": null,
+        "resolution_status": "subject_claimed"
+      }
+    },
+    {
+      "proposal_id": "xbp_01J00000000000000000000008",
+      "kind": "china_ecosystem_self_claim",
+      "source_field": "bio_text",
+      "span_start": 99,
+      "span_end": 109,
+      "excerpt": "我的小红书用户数四万",
+      "excerpt_sha256": "37c04a910dcc21305f0b0078316347864c2549698c25de9dbf9cca43c94a0fb4",
+      "proposal_status": "proposed",
+      "extractor": {
+        "mode": "offline_fixture",
+        "version": "profile-bio-fixture-v1",
+        "tool_call_id": null
+      },
+      "details": {
+        "script": null,
+        "language_candidate": null,
+        "ecosystem_id": "xiaohongshu",
+        "affiliation_relation": null,
+        "organization_handle": null,
+        "organization_platform_user_id": null,
+        "role_text": null,
+        "resolution_status": "subject_claimed"
+      }
+    },
+    {
+      "proposal_id": "xbp_01J00000000000000000000009",
+      "kind": "china_ecosystem_self_claim",
+      "source_field": "bio_text",
+      "span_start": 110,
+      "span_end": 136,
+      "excerpt": "公众号 SyntheticFounder（长文首发）",
+      "excerpt_sha256": "b8523bafb60b9c3a15cde246bea959063a6589165d1c2380d0fc54a9bbc5439c",
       "proposal_status": "proposed",
       "extractor": {
         "mode": "offline_fixture",
