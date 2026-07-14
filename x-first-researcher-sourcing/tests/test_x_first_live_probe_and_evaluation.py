@@ -130,10 +130,7 @@ def _raw_x_output(*, stable_user_id: str | None = USER_ID) -> dict[str, object]:
 
 
 def _unbound_raw_x_output() -> dict[str, object]:
-    return {
-        "posts": [{"id": POST_ID, "canonical_url": POST_URL}],
-        "unrelated": {"author": {"screen_name": "OpenAI", "id": USER_ID}},
-    }
+    return {"posts": [{"id": POST_ID, "canonical_url": POST_URL}]}
 
 
 def _event(
@@ -212,6 +209,7 @@ def _session_events(
     tool_name: str = "x_search",
     call_ids: tuple[str, ...] = ("x-call",),
     terminal_stop_reason: str = "end_turn",
+    model_turns: int = 2,
 ) -> list[dict[str, object]]:
     events = [
         _event(
@@ -229,7 +227,7 @@ def _session_events(
         if raw_output is not None:
             events.append(_tool_result(call_id, raw_output=raw_output, session_id=session_id))
         events[-1]["timestamp"] = 2 + index  # type: ignore[index]
-    events.append(_terminal_event(session_id=session_id, stop_reason=terminal_stop_reason))
+    events.append(_terminal_event(session_id=session_id, stop_reason=terminal_stop_reason, model_turns=model_turns))
     return events
 
 
@@ -348,6 +346,10 @@ class XFirstLiveCapabilityContractTest(unittest.TestCase):
         self.assertEqual(set(request_schema["required"]), set(self.request))
         self.assertEqual(result_schema["properties"]["schema_version"]["const"], LIVE_RESULT_SCHEMA_VERSION)
         self.assertEqual(result_schema["$defs"]["usage"]["properties"]["elapsed_ms"]["maximum"], 200000)
+        self.assertEqual(result_schema["$defs"]["usage"]["properties"]["model_turns"]["maximum"], 8)
+        success_usage = result_schema["allOf"][0]["then"]["properties"]["usage"]["properties"]
+        self.assertEqual(success_usage["model_turns"]["maximum"], 4)
+        self.assertEqual(success_usage["elapsed_ms"]["maximum"], 180000)
         self.assertNotIn("maximum", result_schema["$defs"]["usage"]["properties"]["cost_usd"])
         self.assertIn("owner_id", approval_schema["required"])
         self.assertEqual(approval_schema["properties"]["owner_id"]["const"], GLOBAL_APPROVAL_OWNER_ID)
@@ -360,6 +362,11 @@ class XFirstLiveCapabilityContractTest(unittest.TestCase):
                     outer=_outer_response(_inner_response()),
                 )
             ),
+        )
+        self.assertEqual(tool_schema["properties"]["outer_model_turns"]["maximum"], 8)
+        self.assertEqual(
+            tool_schema["properties"]["terminal_usage"]["oneOf"][1]["properties"]["model_turns"]["maximum"],
+            8,
         )
         stage1_contract = (ROOT / "docs/STAGE1_LIVE_CAPABILITY_CONTRACT.md").read_text(encoding="utf-8")
         transport_decision = (ROOT / "docs/X_SEARCH_TRANSPORT_AND_SCALE_DECISION.md").read_text(encoding="utf-8")
@@ -424,6 +431,7 @@ class XFirstLiveCapabilityContractTest(unittest.TestCase):
             )
             diagnostic_proof = extract_tool_proof(diagnostic, expected_session_id=SESSION_ID)
             self.assertEqual(diagnostic_proof.raw_result_post_pairs, ())
+            self.assertIn("invalid_raw_output_shape", diagnostic_proof.unexpected_tool_calls)
             result = build_live_result(
                 request=self.request,
                 run_id=RUN_ID,
@@ -467,6 +475,182 @@ class XFirstLiveCapabilityContractTest(unittest.TestCase):
             conflicting_proof = extract_tool_proof(conflicting_ids, expected_session_id=SESSION_ID)
             self.assertEqual(conflicting_proof.raw_result_post_pairs, ())
             self.assertIn("invalid_raw_post_record_binding", conflicting_proof.unexpected_tool_calls)
+
+            structured_diagnostic = root / "structured-diagnostic.jsonl"
+            _write_events(
+                structured_diagnostic,
+                _session_events(
+                    raw_output={
+                        "diagnostic": {
+                            "kind": "request_echo",
+                            "id": POST_ID,
+                            "canonical_url": POST_URL,
+                            "author_info": {
+                                "legacy": {"screen_name": "OpenAI"},
+                                "rest_id": USER_ID,
+                            },
+                        }
+                    }
+                ),
+            )
+            structured_diagnostic_proof = extract_tool_proof(
+                structured_diagnostic,
+                expected_session_id=SESSION_ID,
+            )
+            self.assertEqual(structured_diagnostic_proof.raw_result_post_pairs, ())
+            self.assertEqual(structured_diagnostic_proof.raw_result_author_user_ids, ())
+            self.assertIn("invalid_raw_output_shape", structured_diagnostic_proof.unexpected_tool_calls)
+
+            conflicting_author = root / "conflicting-author.jsonl"
+            _write_events(
+                conflicting_author,
+                _session_events(
+                    raw_output={
+                        "posts": [
+                            {
+                                "id": POST_ID,
+                                "canonical_url": POST_URL,
+                                "author_info": {
+                                    "legacy": {"screen_name": "OpenAI"},
+                                    "rest_id": USER_ID,
+                                },
+                                "author": {"username": "DifferentAccount", "id": "9999999999"},
+                            }
+                        ]
+                    }
+                ),
+            )
+            conflicting_author_proof = extract_tool_proof(conflicting_author, expected_session_id=SESSION_ID)
+            self.assertEqual(conflicting_author_proof.raw_result_post_pairs, ((POST_ID, POST_URL),))
+            self.assertEqual(conflicting_author_proof.raw_result_author_user_ids, ())
+            self.assertIn("conflicting_raw_post_author_binding", conflicting_author_proof.unexpected_tool_calls)
+
+            duplicate_author = root / "duplicate-author.jsonl"
+            _write_events(
+                duplicate_author,
+                _session_events(
+                    raw_output={
+                        "posts": [
+                            {
+                                "id": POST_ID,
+                                "canonical_url": POST_URL,
+                                "author_info": {
+                                    "legacy": {"screen_name": "OpenAI"},
+                                    "rest_id": USER_ID,
+                                },
+                                "author": {"username": "OpenAI", "id": USER_ID},
+                            }
+                        ]
+                    }
+                ),
+            )
+            duplicate_author_proof = extract_tool_proof(duplicate_author, expected_session_id=SESSION_ID)
+            self.assertEqual(duplicate_author_proof.raw_result_author_user_ids, ())
+            self.assertIn("duplicate_raw_post_author_identity", duplicate_author_proof.unexpected_tool_calls)
+
+            duplicate_posts = root / "duplicate-posts.jsonl"
+            duplicate_record = {"id": POST_ID, "canonical_url": POST_URL}
+            _write_events(
+                duplicate_posts,
+                _session_events(raw_output={"posts": [duplicate_record, copy.deepcopy(duplicate_record)]}),
+            )
+            duplicate_proof = extract_tool_proof(duplicate_posts, expected_session_id=SESSION_ID)
+            self.assertEqual(duplicate_proof.raw_result_post_pairs, ((POST_ID, POST_URL),))
+            self.assertIn("duplicate_raw_post_record", duplicate_proof.unexpected_tool_calls)
+
+            duplicate_updates = root / "duplicate-post-updates.jsonl"
+            repeated_events = _session_events(raw_output=_unbound_raw_x_output())
+            repeated_events.insert(-1, _tool_result("x-call", raw_output=_unbound_raw_x_output()))
+            _write_events(duplicate_updates, repeated_events)
+            duplicate_update_proof = extract_tool_proof(duplicate_updates, expected_session_id=SESSION_ID)
+            self.assertIn("duplicate_raw_post_record", duplicate_update_proof.unexpected_tool_calls)
+
+    def test_raw_post_registry_ignores_unread_provider_fields_without_recursive_adoption(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            extended = root / "extended-provider-record.jsonl"
+            _write_events(
+                extended,
+                _session_events(
+                    raw_output={
+                        "metadata": {
+                            "cursor": "provider-cursor",
+                            "request_echo": {
+                                "id": "1900000000000000999",
+                                "canonical_url": "https://x.com/DifferentAccount/status/1900000000000000999",
+                            },
+                        },
+                        "posts": [
+                            {
+                                "id": POST_ID,
+                                "canonical_url": POST_URL,
+                                "text": "An official technical update.",
+                                "created_at": "2026-07-14T09:00:00.000Z",
+                                "author_info": {
+                                    "rest_id": USER_ID,
+                                    "legacy": {
+                                        "screen_name": "OpenAI",
+                                        "name": "OpenAI",
+                                        "description": "Unreviewed provider metadata",
+                                    },
+                                    "is_blue_verified": True,
+                                },
+                                "diagnostic": {"author": {"username": "DifferentAccount", "id": "9999999999"}},
+                            }
+                        ],
+                    }
+                ),
+            )
+            extended_proof = extract_tool_proof(extended, expected_session_id=SESSION_ID)
+            self.assertEqual(extended_proof.raw_result_post_pairs, ((POST_ID, POST_URL),))
+            self.assertEqual(extended_proof.raw_result_author_user_ids, (USER_ID,))
+            self.assertEqual(extended_proof.unexpected_tool_calls, ())
+
+            nested_only = root / "nested-request-echo.jsonl"
+            _write_events(
+                nested_only,
+                _session_events(
+                    raw_output={
+                        "posts": [],
+                        "metadata": {
+                            "request_echo": {
+                                "posts": [
+                                    {
+                                        "id": POST_ID,
+                                        "canonical_url": POST_URL,
+                                        "author_info": {
+                                            "rest_id": USER_ID,
+                                            "legacy": {"screen_name": "OpenAI"},
+                                        },
+                                    }
+                                ]
+                            }
+                        },
+                    }
+                ),
+            )
+            nested_only_proof = extract_tool_proof(nested_only, expected_session_id=SESSION_ID)
+            self.assertEqual(nested_only_proof.raw_result_post_pairs, ())
+            self.assertEqual(nested_only_proof.raw_result_author_user_ids, ())
+
+            incomplete_author = root / "incomplete-author-path.jsonl"
+            _write_events(
+                incomplete_author,
+                _session_events(
+                    raw_output={
+                        "posts": [
+                            {
+                                "id": POST_ID,
+                                "canonical_url": POST_URL,
+                                "author": {"screen_name": "OpenAI", "display_name": "OpenAI"},
+                            }
+                        ]
+                    }
+                ),
+            )
+            incomplete_proof = extract_tool_proof(incomplete_author, expected_session_id=SESSION_ID)
+            self.assertEqual(incomplete_proof.raw_result_author_user_ids, ())
+            self.assertIn("invalid_raw_post_author_shape", incomplete_proof.unexpected_tool_calls)
 
     def test_raw_post_author_binding_is_per_post_not_global(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -515,6 +699,7 @@ class XFirstLiveCapabilityContractTest(unittest.TestCase):
             nested_proof = extract_tool_proof(nested_unrelated, expected_session_id=SESSION_ID)
         self.assertEqual(nested_proof.raw_result_post_pairs, ((POST_ID, POST_URL),))
         self.assertEqual(nested_proof.raw_result_author_user_ids, ())
+        self.assertIn("invalid_raw_post_author_shape", nested_proof.unexpected_tool_calls)
         nested_result = build_live_result(
             request=self.request,
             run_id=RUN_ID,
@@ -529,7 +714,8 @@ class XFirstLiveCapabilityContractTest(unittest.TestCase):
             grok_binary_sha256=PINNED_GROK_BINARY_SHA256,
             tool_receipt_sha256="c" * 64,
         )
-        self.assertEqual(nested_result["capability"]["verdict"], "post_retrieval_only")
+        self.assertEqual(nested_result["capability"]["verdict"], "capability_unavailable")
+        self.assertEqual(nested_result["observations"], [])
         self.assertFalse(nested_result["capability"]["stable_account_id_proven"])
 
     def test_failure_receipts_reconcile_post_call_evidence_cost_and_cleanup_wall_time(self) -> None:
@@ -558,6 +744,45 @@ class XFirstLiveCapabilityContractTest(unittest.TestCase):
         self.assertEqual(failure["usage"]["cost_usd"], 0.30)
         self.assertEqual(validate_live_result(failure, request=self.request), [])
         self.assertEqual(live_probe._validate_tool_receipt(tool_receipt, result=failure), [])
+
+        with tempfile.TemporaryDirectory() as directory:
+            overrun_updates = Path(directory) / "model-turn-overrun.jsonl"
+            _write_events(
+                overrun_updates,
+                _session_events(raw_output=_raw_x_output(), model_turns=5),
+            )
+            overrun_proof = live_probe._extract_partial_tool_proof(
+                overrun_updates,
+                expected_session_id=SESSION_ID,
+                tolerate_trailing_partial=False,
+            )
+        self.assertEqual(overrun_proof.terminal_usage, _usage_receipt(model_turns=5))
+        self.assertIn("session terminal model-turn budget is exceeded", overrun_proof.evidence_errors)
+        overrun_outer = _outer_response(_inner_response(), model_turns=5, cost=0.30)
+        overrun_receipt = live_probe._build_tool_receipt(
+            proof=overrun_proof,
+            session_id=SESSION_ID,
+            outer=overrun_outer,
+        )
+        overrun_failure = live_probe._build_failure_result(
+            request=self.request,
+            run_id=RUN_ID,
+            started_at=STARTED_AT,
+            completed_at=COMPLETED_AT,
+            elapsed_ms=1000,
+            code="invalid_provider_evidence",
+            message="The provider exceeded the reviewed model-turn budget.",
+            approval_receipt_sha256="b" * 64,
+            grok_binary_sha256=PINNED_GROK_BINARY_SHA256,
+            tool_receipt_sha256=live_probe.canonical_sha256(overrun_receipt),
+            session_id=SESSION_ID,
+            proof=overrun_proof,
+            outer=overrun_outer,
+        )
+        self.assertEqual(overrun_failure["usage"]["model_turns"], 5)
+        self.assertEqual(overrun_failure["usage"]["cost_usd"], 0.30)
+        self.assertEqual(validate_live_result(overrun_failure, request=self.request), [])
+        self.assertEqual(live_probe._validate_tool_receipt(overrun_receipt, result=overrun_failure), [])
 
         deadline_failure = live_probe._build_failure_result(
             request=self.request,
@@ -615,6 +840,20 @@ class XFirstLiveCapabilityContractTest(unittest.TestCase):
             _write_events(unknown, events)
             proof = extract_tool_proof(unknown, expected_session_id=SESSION_ID)
             self.assertIn("unknown_tool_call_update", proof.unexpected_tool_calls)
+
+            duplicate_model = root / "duplicate-model.jsonl"
+            duplicate_model_events = _session_events(raw_output=_raw_x_output())
+            duplicate_model_events.insert(1, copy.deepcopy(duplicate_model_events[0]))
+            _write_events(duplicate_model, duplicate_model_events)
+            duplicate_model_proof = live_probe._extract_partial_tool_proof(
+                duplicate_model,
+                expected_session_id=SESSION_ID,
+                tolerate_trailing_partial=False,
+            )
+            self.assertIn(
+                "session model identity evidence is duplicated",
+                duplicate_model_proof.evidence_errors,
+            )
 
     def test_outer_envelope_session_stop_and_usage_must_match_terminal(self) -> None:
         proof = _proof()
@@ -765,6 +1004,74 @@ class XFirstLiveCapabilityContractTest(unittest.TestCase):
                 text=True,
             ).stdout.strip()
         self.assertEqual(completed.returncode, 0)
+        self.assertEqual(child_alive, "")
+
+    def test_monitor_exception_is_typed_and_cannot_bypass_process_group_cleanup(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            updates = root / "updates.jsonl"
+            updates.write_text("{}\n", encoding="utf-8")
+            captured_pids: list[int] = []
+            real_popen = subprocess.Popen
+
+            def recording_popen(*args: object, **kwargs: object) -> subprocess.Popen[bytes]:
+                process = real_popen(*args, **kwargs)
+                captured_pids.append(process.pid)
+                return process
+
+            with (
+                mock.patch("x_first.live_probe.subprocess.Popen", side_effect=recording_popen),
+                mock.patch(
+                    "x_first.live_probe._extract_partial_tool_proof",
+                    side_effect=OSError("simulated provider-evidence read race"),
+                ),
+            ):
+                completed = _run_bounded_command(
+                    [sys.executable, "-c", "import time; time.sleep(30)"],
+                    cwd=root,
+                    environment={"PATH": "/usr/bin:/bin", "HOME": str(root)},
+                    updates_path=updates,
+                    expected_session_id=SESSION_ID,
+                )
+            alive = subprocess.run(
+                ["/bin/ps", "-p", str(captured_pids[0]), "-o", "pid="],
+                check=False,
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+        self.assertEqual(completed.execution_error, "monitor_failed")
+        self.assertEqual(completed.stop_reason, "monitor_failed")
+        self.assertEqual(alive, "")
+
+    def test_cleanup_verification_exception_is_typed_after_descendant_kill(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            child_pid_path = root / "cleanup-child.pid"
+            code = (
+                "import subprocess,sys; "
+                "p=subprocess.Popen([sys.executable,'-c','import time; time.sleep(30)']); "
+                "open(sys.argv[1],'w').write(str(p.pid))"
+            )
+            with mock.patch(
+                "x_first.live_probe._wait_for_process_group_exit",
+                side_effect=RuntimeError("simulated cleanup verification failure"),
+            ):
+                completed = _run_bounded_command(
+                    [sys.executable, "-c", code, str(child_pid_path)],
+                    cwd=root,
+                    environment={"PATH": "/usr/bin:/bin", "HOME": str(root)},
+                    updates_path=root / "missing.jsonl",
+                    expected_session_id=SESSION_ID,
+                )
+            child_pid = int(child_pid_path.read_text())
+            child_alive = subprocess.run(
+                ["/bin/ps", "-p", str(child_pid), "-o", "pid="],
+                check=False,
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+        self.assertEqual(completed.cleanup_error, "process_group_cleanup_failed")
+        self.assertEqual(completed.stop_reason, "process_group_cleanup_failed")
         self.assertEqual(child_alive, "")
 
     def test_artifact_validation_rejects_forgery_inventory_rename_and_impossible_time(self) -> None:
@@ -988,6 +1295,53 @@ class XFirstLiveCapabilityContractTest(unittest.TestCase):
                 self.assertEqual(result["task"]["stop_reason"], "invalid_provider_evidence")
                 self.assertEqual(result["usage"]["x_search_calls"], 1)
                 self.assertEqual(result["usage"]["result_sets"], 1)
+                self.assertEqual(result["usage"]["cost_usd"], 0.30)
+                self.assertEqual(
+                    validate_artifact_pair(artifact_root / "request.json", artifact_root / "result.json"),
+                    [],
+                )
+
+    def test_runner_preserves_calls_and_outer_receipt_on_typed_monitor_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            approval_root = root / "global-approval"
+            binary = root / "grok"
+            binary.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+            binary.chmod(stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
+            auth = root / "auth.json"
+            auth.write_text('{"private":"credential-material"}', encoding="utf-8")
+            auth.chmod(0o600)
+            binary_digest = hashlib.sha256(binary.read_bytes()).hexdigest()
+
+            def fake_run(command: list[str], **kwargs: object) -> BoundedCommandResult:
+                session_id = command[command.index("--session-id") + 1]
+                updates = Path(kwargs["updates_path"])
+                _write_events(updates, _session_events(session_id=session_id, raw_output=_raw_x_output()))
+                outer = _outer_response(_inner_response(), session_id=session_id, cost=0.30)
+                outer["text"] = "{not-json"
+                outer["unexpected"] = "field"
+                return BoundedCommandResult(
+                    returncode=-9,
+                    stdout=json.dumps(outer).encode(),
+                    stderr=b"",
+                    stop_reason="monitor_failed",
+                    execution_error="monitor_failed",
+                )
+
+            with (
+                mock.patch("x_first.live_probe._run_bounded_command", side_effect=fake_run),
+                mock.patch("x_first.live_probe.project_root", return_value=root),
+                mock.patch("x_first.live_probe._global_approval_root", return_value=approval_root),
+                mock.patch("x_first.live_probe.PINNED_GROK_BINARY_SHA256", binary_digest),
+            ):
+                result, artifact_root = run_live_probe(execute_live=True, grok_binary=binary, auth_path=auth)
+                self.assertEqual(result["task"]["stop_reason"], "monitor_failed")
+                self.assertEqual(result["provenance"]["provider_request_id"], "provider-request")
+                self.assertEqual(result["provenance"]["raw_result_post_ids"], [POST_ID])
+                self.assertEqual(result["usage"]["x_search_calls"], 1)
+                self.assertEqual(result["usage"]["result_sets"], 1)
+                self.assertEqual(result["usage"]["model_turns"], 2)
+                self.assertEqual(result["usage"]["cost_status"], "reported")
                 self.assertEqual(result["usage"]["cost_usd"], 0.30)
                 self.assertEqual(
                     validate_artifact_pair(artifact_root / "request.json", artifact_root / "result.json"),

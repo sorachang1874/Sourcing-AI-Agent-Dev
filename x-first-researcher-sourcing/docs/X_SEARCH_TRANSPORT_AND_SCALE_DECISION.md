@@ -41,6 +41,12 @@ Stage 1 therefore asks for only five official-account posts and separately disti
 - stable external-account identity;
 - explicit source/call receipts.
 
+Stage 1 recognizes provider post evidence only at the versioned closed, direct `rawOutput.posts[*]` path. Unread
+provider metadata is tolerated but cannot become evidence. Nested diagnostic/request-echo objects, prose URLs,
+incomplete registered child paths, duplicate records, and ambiguous author containers are not alternative evidence
+paths. Process/inner failures still retain any separately parsed bounded outer request, turn, usage, cost, and partial
+tool-call receipt; those failure receipts never become capability proof.
+
 The current Stage 1 result retains a 280-character excerpt and deliberately rejects full-body persistence. It does not
 probe or make any claim about profile/Bio availability. That requires an independently owner-approved later
 field-capability probe with its own request/result schema, field-level source receipts, TTL, deletion receipt, and

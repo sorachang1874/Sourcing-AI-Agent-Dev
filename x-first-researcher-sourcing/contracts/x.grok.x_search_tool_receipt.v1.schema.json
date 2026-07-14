@@ -27,7 +27,7 @@
     "session_id": {"type": "string", "format": "uuid"},
     "provider_request_id": {"type": ["string", "null"], "minLength": 1, "maxLength": 160},
     "outer_session_id": {"type": ["string", "null"], "format": "uuid"},
-    "outer_stop_reason": {"type": ["string", "null"], "enum": ["EndTurn", null]},
+    "outer_stop_reason": {"type": ["string", "null"], "enum": ["EndTurn", "MaxTurns", null]},
     "outer_usage": {
       "oneOf": [
         {"type": "null"},
@@ -43,7 +43,7 @@
         }
       ]
     },
-    "outer_model_turns": {"type": ["integer", "null"], "minimum": 1, "maximum": 4},
+    "outer_model_turns": {"type": ["integer", "null"], "minimum": 1, "maximum": 8},
     "outer_total_cost_usd": {"type": ["number", "null"], "minimum": 0},
     "session_updates_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "session_update_bytes": {"type": "integer", "minimum": 1, "maximum": 5000000},
@@ -72,7 +72,7 @@
             "reasoning_tokens": {"type": "integer", "minimum": 0},
             "model_calls": {"type": "integer", "minimum": 1},
             "api_duration_ms": {"type": "integer", "minimum": 0},
-            "model_turns": {"type": "integer", "minimum": 1, "maximum": 4}
+            "model_turns": {"type": "integer", "minimum": 1, "maximum": 8}
           }
         }
       ]

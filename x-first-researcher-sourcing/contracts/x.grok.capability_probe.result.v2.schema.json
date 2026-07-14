@@ -72,6 +72,33 @@
       }
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "required": ["capability"],
+        "properties": {
+          "capability": {
+            "required": ["verdict"],
+            "properties": {
+              "verdict": {"enum": ["x_native_identity_ready", "post_retrieval_only"]}
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "usage": {
+            "properties": {
+              "x_search_calls": {"const": 1},
+              "result_sets": {"const": 1},
+              "model_turns": {"maximum": 4},
+              "elapsed_ms": {"maximum": 180000}
+            }
+          }
+        }
+      }
+    }
+  ],
   "$defs": {
     "run": {
       "type": "object",
@@ -110,6 +137,10 @@
             "invalid_provider_evidence",
             "result_validation_failed",
             "process_spawn_failed",
+            "monitor_failed",
+            "runner_io_failed",
+            "process_group_cleanup_failed",
+            "runner_cleanup_failed",
             "output_budget_exceeded",
             "provider_evidence_budget_exceeded",
             "tool_kill_switch_tripped"
@@ -214,7 +245,7 @@
         "x_search_calls": {"type": "integer", "minimum": 0, "maximum": 8},
         "result_sets": {"type": "integer", "minimum": 0, "maximum": 8},
         "observations": {"type": "integer", "minimum": 0, "maximum": 5},
-        "model_turns": {"type": "integer", "minimum": 0, "maximum": 4},
+        "model_turns": {"type": "integer", "minimum": 0, "maximum": 8},
         "cost_status": {"enum": ["reported", "unreported"]},
         "cost_usd": {"type": ["number", "null"], "minimum": 0},
         "elapsed_ms": {"type": "integer", "minimum": 0, "maximum": 200000}

@@ -26,10 +26,10 @@ transition.
 | Legal/privacy basis | request `owner_decisions.legal_privacy` | Public-professional, minimized official-account evidence | Private content, protected identity, full-body retention |
 | Access mode | runner command + structured Grok session updates | Pinned Grok CLI digest, `grok-4.5`, OAuth, successful artifact requires exactly one completed `x_search` call | `web_search`, `web_fetch`, model memory, Apify, another provider |
 | Request identity | canonical sorted-JSON SHA-256 | Result binds exact closed request | Mutable prompt-only approval |
-| Tool proof | ephemeral `updates.jsonl` parser + minimized provider-evidence receipt | Exact Grok 0.2.99 envelope/session, one final terminal event, reconciled usage, structured call/update, exact tool/model, and co-located post/author bindings from a closed shape registry | Recursive string/key search, global URL/author unions, prompt prose, or model-declared provenance |
+| Tool proof | ephemeral `updates.jsonl` parser + minimized provider-evidence receipt | Exact Grok 0.2.99 envelope/session, one final terminal event, reconciled usage, structured call/update, exact tool/model, and co-located post/author bindings only from the closed `rawOutput.posts[*]` registry | Recursive object/string/key search, diagnostic/request-echo objects, global URL/author unions, prompt prose, or model-declared provenance |
 | External account | X platform | Numeric `platform_user_id` plus handle history | Handle/name as canonical person identity |
 | Post identity | X platform | Numeric post id and exact `https://x.com/OpenAI/status/{id}` | Snippet URL, search-result redirect, reconstructed id |
-| Usage | reconciled headless envelope + structured terminal + monotonic/wall clock + live process monitor | Session ids, normal stop reasons, token totals and turns must agree; success is at most 180s, while a failed receipt may use at most 200s only to truthfully include bounded process-group cleanup | Missing cost represented as `$0`, an over-budget reported cost erased, `MaxTurns` accepted as success, or a detected second call treated as success |
+| Usage | reconciled headless envelope + structured terminal + monotonic/wall clock + live process monitor | Session ids, normal stop reasons, token totals and turns must agree; success is at most four turns/180s, while a failed receipt may retain up to eight observed violation turns and use at most 200s only to truthfully include bounded process-group cleanup | Missing cost represented as `$0`, an over-budget reported cost/turn count erased, `MaxTurns` accepted as success, or a detected second call treated as success |
 | Retention | exact private ignored atomic artifact bundle | Directory name equals run id; exact 3/4-file inventory; real UTC time and exact 24h expiry; deletion receipt only after verified removal | Renamed/extra-file bundle, impossible calendar time, null expiry, or prewritten deletion receipt |
 | Product state | existing product owners | All candidate/link/assertion/write arrays empty | PersonAsset, CRM, projection, export, outreach |
 
@@ -78,13 +78,22 @@ does not pass `--tools x_search` and treats
 that mapping as unproven until the one Stage 1 execution. It instead watches the private structured session artifact
 and kills the entire dedicated process group when it observes an unknown/non-X tool, a
 second X call, malformed completed evidence, oversized output/evidence, or the deadline. The cleanup runs even when
-the direct parent reports a clean exit, preventing a same-process-group child from surviving the runner. This limits
+the direct parent reports a clean exit. From the instant `Popen` succeeds, a non-skippable `finally` owns kill, reap,
+and process-group verification; monitor/stat/parser and cleanup exceptions become typed failed outcomes rather than
+bypassing cleanup. This prevents a same-process-group child from surviving the runner. This limits
 further work but cannot prove that a second
 server-side call was stopped before transport. A successful artifact still requires exactly one completed call and
 exact raw-result-to-observation reconciliation; any ambiguity is a failed probe. The temporary transcript is deleted.
-Only a minimized provider-evidence receipt is retained. A raw post is accepted only when one reviewed structured
-record co-locates a numeric post id and the exactly matching canonical URL. A stable author id additionally requires a
-reviewed author shape with the target handle and numeric author id at exact registered paths. Only then does the
+Only a minimized provider-evidence receipt is retained. Before evaluating return code, stop reason, stderr, inner JSON,
+or terminal success, the failure path independently snapshots bounded partial updates and structurally parses the
+outer envelope. Therefore an already observed request id, call/completed-result count, raw id, turn count, or reported
+cost is not rewritten to zero/null merely because inner validation or process-group verification failed. A raw post is
+accepted only from the direct `rawOutput.posts[*]` path when one closed reviewed record co-locates exactly one numeric
+post-id field and the exactly matching canonical URL. A stable author id additionally requires every present registered
+`author_info`/`author`/`user` child path to be complete and yield one consistent target handle/numeric id. Unread
+provider fields beside `posts`, beside registered post fields, or beside registered author child paths are tolerated;
+they never become evidence.
+Only then does the
 parser bind the command session to the headless envelope and every Grok 0.2.99 `session/update` wrapper. It requires
 one final `_x.ai/session/update`/`turn_completed`, reconciles both
 usage views, and stores author ids only on the exact source records that carried their author dictionaries. Retained
@@ -92,11 +101,13 @@ Stage 1 observations remain minimized model output mechanically bound to those s
 they are not represented as verbatim raw provider output. A URL in one subtree and an author id elsewhere can prove at
 most post retrieval; it cannot prove stable account identity.
 
-The v1 raw-record registry accepts `canonical_url` co-located with one matching `id`, `id_str`, or `rest_id`. Author
+The v1 raw-record registry reads only a direct root `posts` list, and each post accepts `canonical_url` co-located with
+exactly one matching `id`, `id_str`, or `rest_id`. Author
 identity is accepted only from `author_info.rest_id + author_info.legacy.screen_name`,
 `author.id_str + author.screen_name`, `author.id + author.username`, or the corresponding two exact `user` shapes.
-Unknown shapes remain post-retrieval-only or unavailable;
-the parser never searches arbitrary prose or recursively adopts another nested object's generic `id`.
+Incomplete or malformed registered paths, competing author containers, repeated author identities, duplicate post
+records, and conflicting handles/ids fail the probe. Unread extra fields are ignored. The parser never searches
+arbitrary prose or recursively adopts another nested object's generic `id`, `posts`, or author dictionary.
 
 ## Budgets and kill switch
 
@@ -105,6 +116,7 @@ the parser never searches arbitrary prose or recursively adopts another nested o
 - one completed native-search result set (derived from the structured call receipt, not model prose);
 - at most five observations;
 - at most four model turns;
+- a failed audit receipt may retain up to eight actually observed turns solely to prove a turn-budget violation;
 - 180-second subprocess deadline;
 - at most 20 additional seconds in a failed wall-clock receipt for bounded kill/wait verification; never for success;
 - reported monetary cost at most `$0.25`;
@@ -130,15 +142,21 @@ the runtime owner, and only then writes a non-sensitive deletion receipt. `runti
 
 ## Adversarial regression closure
 
-The post-`fee3699` non-author review reproduced seven false-green classes before this hardening:
+The post-`fee3699` reviews reproduced thirteen false-green or non-terminal classes before this hardening:
 
 1. two independent runtime roots could each consume the same approval;
 2. a wrapped update with a post URL and an unrelated author dictionary could claim stable identity;
 3. `MaxTurns` plus a different outer session id could validate;
 4. a locally forged, renamed bundle with an extra transcript and an impossible February 31/null-expiry timeline could validate;
 5. rename caused purge to skip the bundle, while a failed `rmtree` still left a `deleted` receipt;
-6. a 30-second same-process-group child survived after its direct parent exited; and
-7. malformed JSONL hid two observed X calls from the monitor.
+6. a 30-second same-process-group child survived after its direct parent exited;
+7. malformed JSONL hid two observed X calls from the monitor;
+8. a monitor/read exception escaped before process-group cleanup;
+9. a cleanup-verification exception erased an already completed X call from the failure receipt;
+10. an invalid inner JSON body erased an already observed outer request id, turn count, and reported cost;
+11. a nested diagnostic/request-echo object with `id + canonical_url` produced a false post;
+12. a target author container plus a conflicting account container still produced stable identity; and
+13. duplicate raw post records were set-collapsed before runtime/schema validation.
 
 Each now has a deterministic concurrency, mutation, artifact, or subprocess regression. These tests prove the local
 fail-closed contract only; they are not a live X capability result or an independent-review `GO`.

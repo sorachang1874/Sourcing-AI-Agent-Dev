@@ -46,6 +46,7 @@ TARGET_HANDLE = "OpenAI"
 MAX_OBSERVATIONS = 5
 MAX_ERRORS = 1
 MAX_TURNS = 4
+MAX_VIOLATION_MODEL_TURNS = 8
 MAX_ELAPSED_MS = 180_000
 MAX_FAILURE_WALL_ELAPSED_MS = 200_000
 MAX_REPORTED_COST_USD = 0.25
@@ -231,10 +232,12 @@ class ToolProof:
 
 @dataclass(frozen=True)
 class BoundedCommandResult:
-    returncode: int
+    returncode: int | None
     stdout: bytes
     stderr: bytes
     stop_reason: str | None
+    execution_error: str | None = None
+    cleanup_error: str | None = None
 
 
 def _utc_now() -> str:
@@ -393,16 +396,6 @@ def _normalize_tool_name(value: Any) -> str | None:
     return aliases.get(normalized, normalized or None)
 
 
-def _walk_dicts(value: Any) -> Iterable[dict[str, Any]]:
-    if isinstance(value, dict):
-        yield value
-        for child in value.values():
-            yield from _walk_dicts(child)
-    elif isinstance(value, list):
-        for child in value:
-            yield from _walk_dicts(child)
-
-
 def _tool_identity(update: Mapping[str, Any]) -> str | None:
     metadata = update.get("_meta")
     if isinstance(metadata, dict):
@@ -417,90 +410,113 @@ def _tool_identity(update: Mapping[str, Any]) -> str | None:
     return None
 
 
-def _path_value(value: Mapping[str, Any], path: tuple[str, ...]) -> Any:
-    current: Any = value
-    for key in path:
-        if not isinstance(current, Mapping) or key not in current:
-            return None
-        current = current[key]
-    return current
-
-
-def _structured_post_pair(value: Mapping[str, Any]) -> tuple[tuple[str, str] | None, bool]:
-    """Return one co-located post id/URL pair from the closed reviewed record shapes."""
-    canonical_url = value.get("canonical_url")
-    if canonical_url is None:
-        return None, False
-    id_keys = ("id", "id_str", "rest_id")
-    identifiers = [value[id_key] for id_key in id_keys if id_key in value]
-    if (
-        not isinstance(canonical_url, str)
-        or not identifiers
-        or any(not isinstance(identifier, str) for identifier in identifiers)
-        or len(set(identifiers)) != 1
-    ):
-        return None, True
-    object_id = identifiers[0]
-    if re.fullmatch(r"[0-9]{5,32}", object_id) is None:
-        return None, True
-    expected_url = f"https://x.com/{TARGET_HANDLE}/status/{object_id}"
-    if canonical_url != expected_url:
-        return None, True
-    return (object_id, canonical_url), False
-
-
-def _author_ids_for_post_record(value: Mapping[str, Any]) -> set[str]:
-    """Read author identity only from exact, co-located reviewed author shapes."""
-    shapes = (
-        ("author_info", ("legacy", "screen_name"), ("rest_id",)),
-        ("author", ("screen_name",), ("id_str",)),
-        ("author", ("username",), ("id",)),
-        ("user", ("screen_name",), ("id_str",)),
-        ("user", ("username",), ("id",)),
-    )
-    identifiers: set[str] = set()
-    for author_key, handle_path, id_path in shapes:
-        author = value.get(author_key)
-        if not isinstance(author, Mapping):
-            continue
-        handle = _path_value(author, handle_path)
-        identifier = _path_value(author, id_path)
+def _registered_author_identities(
+    container_name: str,
+    value: Any,
+) -> tuple[tuple[tuple[str, str], ...], tuple[str, ...]]:
+    """Read only registered direct author paths while tolerating unrelated provider fields."""
+    if not isinstance(value, Mapping):
+        return (), ("invalid_raw_post_author_shape",)
+    pairs: list[tuple[Any, Any]] = []
+    errors: set[str] = set()
+    if container_name == "author_info":
+        legacy = value.get("legacy")
+        if not isinstance(legacy, Mapping) or "screen_name" not in legacy or "rest_id" not in value:
+            errors.add("invalid_raw_post_author_shape")
+        else:
+            pairs.append((legacy.get("screen_name"), value.get("rest_id")))
+    else:
+        registered_pairs = (("screen_name", "id_str"), ("username", "id"))
+        for handle_key, id_key in registered_pairs:
+            present = (handle_key in value, id_key in value)
+            if any(present) and not all(present):
+                errors.add("invalid_raw_post_author_shape")
+            elif all(present):
+                pairs.append((value.get(handle_key), value.get(id_key)))
+        if not pairs:
+            errors.add("invalid_raw_post_author_shape")
+    identities: list[tuple[str, str]] = []
+    for handle, identifier in pairs:
         if (
-            isinstance(handle, str)
-            and handle.strip().lstrip("@").casefold() == TARGET_HANDLE.casefold()
-            and isinstance(identifier, str)
-            and re.fullmatch(r"[0-9]{3,32}", identifier)
+            not isinstance(handle, str)
+            or not handle.strip().lstrip("@")
+            or not isinstance(identifier, str)
+            or re.fullmatch(r"[0-9]{3,32}", identifier) is None
         ):
-            identifiers.add(identifier)
-    return identifiers
+            errors.add("invalid_raw_post_author_shape")
+            continue
+        identities.append((handle.strip().lstrip("@").casefold(), identifier))
+    return tuple(identities), tuple(sorted(errors))
+
+
+def _structured_post_record(
+    value: Any,
+) -> tuple[tuple[str, str] | None, str | None, tuple[str, ...]]:
+    """Parse one exact ``rawOutput.posts[*]`` record from the reviewed v1 registry."""
+    if not isinstance(value, Mapping):
+        return None, None, ("invalid_raw_post_record_binding",)
+    id_keys = tuple(key for key in ("id", "id_str", "rest_id") if key in value)
+    author_keys = tuple(key for key in ("author_info", "author", "user") if key in value)
+    if len(id_keys) != 1 or "canonical_url" not in value:
+        return None, None, ("invalid_raw_post_record_binding",)
+    object_id = value.get(id_keys[0])
+    canonical_url = value.get("canonical_url")
+    if (
+        not isinstance(object_id, str)
+        or re.fullmatch(r"[0-9]{5,32}", object_id) is None
+        or canonical_url != f"https://x.com/{TARGET_HANDLE}/status/{object_id}"
+    ):
+        return None, None, ("invalid_raw_post_record_binding",)
+    identities: list[tuple[str, str]] = []
+    errors: set[str] = set()
+    for author_key in author_keys:
+        container_identities, container_errors = _registered_author_identities(author_key, value.get(author_key))
+        identities.extend(container_identities)
+        errors.update(container_errors)
+    if len(identities) != len(set(identities)):
+        errors.add("duplicate_raw_post_author_identity")
+    handles = {handle for handle, _ in identities}
+    identifiers = {identifier for _, identifier in identities}
+    if handles and handles != {TARGET_HANDLE.casefold()}:
+        errors.add("conflicting_raw_post_author_binding")
+    if len(identifiers) > 1:
+        errors.add("conflicting_raw_post_author_binding")
+    author_id = next(iter(identifiers)) if not errors and len(identifiers) == 1 else None
+    return (object_id, canonical_url), author_id, tuple(sorted(errors))
 
 
 def _raw_x_posts(value: Any) -> tuple[tuple[RawXPostReceipt, ...], tuple[str, ...]]:
+    """Read only the closed registered ``rawOutput.posts[*]`` provider path."""
+    if not isinstance(value, Mapping) or not isinstance(value.get("posts"), list):
+        return (), ("invalid_raw_output_shape",)
+    raw_posts = value["posts"]
+    binding_errors: set[str] = set()
+    if len(raw_posts) > MAX_VIOLATION_RECEIPT_POSTS:
+        binding_errors.add("raw_post_receipt_budget_exceeded")
     bound_ids: dict[tuple[str, str], set[str]] = {}
-    invalid_record = False
-    for node in _walk_dicts(value):
-        pair, malformed = _structured_post_pair(node)
-        invalid_record = invalid_record or malformed
+    seen_pairs: set[tuple[str, str]] = set()
+    for raw_post in raw_posts[:MAX_VIOLATION_RECEIPT_POSTS]:
+        pair, author_id, record_errors = _structured_post_record(raw_post)
+        binding_errors.update(record_errors)
         if pair is None:
             continue
-        author_ids = _author_ids_for_post_record(node)
-        bound_ids.setdefault(pair, set()).update(author_ids)
-    binding_errors: list[str] = []
-    if invalid_record:
-        binding_errors.append("invalid_raw_post_record_binding")
+        if pair in seen_pairs:
+            binding_errors.add("duplicate_raw_post_record")
+        seen_pairs.add(pair)
+        values = bound_ids.setdefault(pair, set())
+        if author_id is not None:
+            values.add(author_id)
     if any(len(values) > 1 for values in bound_ids.values()):
-        binding_errors.append("conflicting_raw_post_author_binding")
+        binding_errors.add("conflicting_raw_post_author_binding")
     posts = tuple(
         RawXPostReceipt(
             platform_object_id=object_id,
             canonical_url=canonical_url,
-            platform_user_id=next(iter(bound_ids[(object_id, canonical_url)]))
-            if len(bound_ids[(object_id, canonical_url)]) == 1
-            else None,
+            platform_user_id=next(iter(author_ids)) if len(author_ids) == 1 else None,
         )
-        for object_id, canonical_url in sorted(bound_ids)
+        for (object_id, canonical_url), author_ids in sorted(bound_ids.items())
     )
-    return posts, tuple(binding_errors)
+    return posts, tuple(sorted(binding_errors))
 
 
 def _parse_provider_usage(value: Any) -> ProviderUsageReceipt:
@@ -521,7 +537,7 @@ def _parse_provider_usage(value: Any) -> ProviderUsageReceipt:
     scalar_fields = expected_fields - {"modelUsage"}
     if any(type(value.get(field)) is not int or value[field] < 0 for field in scalar_fields):
         raise ValueError("terminal usage counters are invalid")
-    if value["modelCalls"] < 1 or not 1 <= value["numTurns"] <= MAX_TURNS:
+    if value["modelCalls"] < 1 or not 1 <= value["numTurns"] <= MAX_VIOLATION_MODEL_TURNS:
         raise ValueError("terminal usage call/turn counts are invalid")
     if value["totalTokens"] != value["inputTokens"] + value["outputTokens"]:
         raise ValueError("terminal token totals do not reconcile")
@@ -655,6 +671,8 @@ def _parse_update_stream(
             if not isinstance(model_id, str) or not model_id:
                 evidence_errors.add("session user event lacks the effective model id")
             else:
+                if model_id in model_ids:
+                    evidence_errors.add("session model identity evidence is duplicated")
                 model_ids.add(model_id)
         elif kind == "tool_call":
             call_id = update.get("toolCallId")
@@ -697,7 +715,10 @@ def _parse_update_stream(
             if raw_output is not None:
                 posts, binding_errors = _raw_x_posts(raw_output)
                 unexpected.update(binding_errors)
-                _merge_raw_posts(receipt_bindings.setdefault(call_id, {}), posts)
+                call_bindings = receipt_bindings.setdefault(call_id, {})
+                if any((post.platform_object_id, post.canonical_url) in call_bindings for post in posts):
+                    unexpected.add("duplicate_raw_post_record")
+                _merge_raw_posts(call_bindings, posts)
                 _merge_raw_posts(all_bindings, posts)
         elif kind == "turn_completed":
             if terminal_index is not None:
@@ -711,6 +732,9 @@ def _parse_update_stream(
                 terminal_usage = _parse_provider_usage(update.get("usage"))
             except ValueError as error:
                 evidence_errors.add(str(error))
+            else:
+                if terminal_usage.model_turns > MAX_TURNS:
+                    evidence_errors.add("session terminal model-turn budget is exceeded")
         elif kind not in {"agent_thought_chunk", "agent_message_chunk"}:
             evidence_errors.add("session updates contain an unsupported event kind")
     if require_terminal:
@@ -802,6 +826,19 @@ def extract_tool_proof(updates_path: Path, *, expected_session_id: str) -> ToolP
     if proof.evidence_errors:
         raise ValueError("session updates failed the strict Grok 0.2.99 evidence contract")
     return proof
+
+
+def _try_extract_failure_tool_proof(updates_path: Path, *, expected_session_id: str) -> ToolProof | None:
+    try:
+        if not updates_path.exists() or updates_path.is_symlink():
+            return None
+        return _extract_partial_tool_proof(
+            updates_path,
+            expected_session_id=expected_session_id,
+            tolerate_trailing_partial=False,
+        )
+    except (OSError, ValueError):
+        return None
 
 
 def _session_updates_path(grok_home: Path, cwd: Path, session_id: str) -> Path:
@@ -921,15 +958,33 @@ def _outer_response_errors(
     return sorted(set(errors))
 
 
-def _parse_outer_response(stdout: bytes, *, expected_session_id: str) -> tuple[dict[str, Any], dict[str, Any]]:
+def _parse_outer_envelope(stdout: bytes) -> dict[str, Any]:
+    """Parse only the bounded headless envelope so failure evidence survives inner drift."""
     if len(stdout) > MAX_STDOUT_BYTES:
         raise ValueError("Grok output exceeds the bounded parser size")
     try:
         outer = _strict_json_loads(stdout)
     except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
         raise ValueError("Grok output is not one JSON object") from error
-    if not isinstance(outer, dict) or outer.get("type") == "error":
-        raise ValueError("Grok did not return a successful headless envelope")
+    required_fields = {"text", "stopReason", "sessionId", "requestId", "num_turns", "usage"}
+    allowed_fields = required_fields | {"total_cost_usd"}
+    if not isinstance(outer, dict) or not required_fields <= set(outer) or not set(outer) <= allowed_fields:
+        raise ValueError("Grok headless envelope fields do not match the closed contract")
+    return outer
+
+
+def _try_parse_outer_envelope(stdout: bytes) -> dict[str, Any] | None:
+    if len(stdout) > MAX_STDOUT_BYTES:
+        return None
+    try:
+        outer = _strict_json_loads(stdout)
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError):
+        return None
+    return outer if isinstance(outer, dict) else None
+
+
+def _parse_outer_response(stdout: bytes, *, expected_session_id: str) -> tuple[dict[str, Any], dict[str, Any]]:
+    outer = _parse_outer_envelope(stdout)
     if _outer_response_errors(outer, expected_session_id=expected_session_id, proof=None):
         raise ValueError("Grok headless envelope failed the strict contract")
     text = outer.get("text")
@@ -1021,6 +1076,65 @@ def _cost_projection(outer: Mapping[str, Any]) -> tuple[str, float | None]:
     return "reported", cost
 
 
+def _outer_evidence_projection(outer: Mapping[str, Any] | None) -> tuple[dict[str, Any], tuple[str, ...]]:
+    """Minimize an observed outer envelope while recording invalid fields explicitly."""
+    source = outer if isinstance(outer, Mapping) else {}
+    errors: set[str] = set()
+    required_fields = {"text", "stopReason", "sessionId", "requestId", "num_turns", "usage"}
+    allowed_fields = required_fields | {"total_cost_usd"}
+    if source and (not required_fields <= set(source) or not set(source) <= allowed_fields):
+        errors.add("outer_envelope_fields_are_invalid")
+    request_id = source.get("requestId")
+    if request_id is not None and (not isinstance(request_id, str) or not request_id or len(request_id) > 160):
+        request_id = None
+        errors.add("outer_provider_request_id_is_invalid")
+    outer_session_id = source.get("sessionId")
+    if outer_session_id is not None:
+        try:
+            if not isinstance(outer_session_id, str):
+                raise ValueError("outer session id is not a string")
+            uuid.UUID(outer_session_id)
+        except (ValueError, AttributeError):
+            outer_session_id = None
+            errors.add("outer_session_id_is_invalid")
+    stop_reason = source.get("stopReason")
+    if stop_reason not in {None, "EndTurn", "MaxTurns"}:
+        stop_reason = None
+        errors.add("outer_stop_reason_is_invalid")
+    outer_usage = source.get("usage")
+    if outer_usage is not None:
+        if (
+            not isinstance(outer_usage, Mapping)
+            or set(outer_usage) != {"input_tokens", "output_tokens", "total_tokens"}
+            or any(type(outer_usage.get(field)) is not int or outer_usage[field] < 0 for field in outer_usage)
+            or outer_usage["total_tokens"] != outer_usage["input_tokens"] + outer_usage["output_tokens"]
+        ):
+            outer_usage = None
+            errors.add("outer_usage_is_invalid")
+        else:
+            outer_usage = dict(outer_usage)
+    outer_model_turns = source.get("num_turns")
+    if outer_model_turns is not None and (
+        type(outer_model_turns) is not int or not 1 <= outer_model_turns <= MAX_VIOLATION_MODEL_TURNS
+    ):
+        outer_model_turns = None
+        errors.add("outer_model_turns_are_invalid")
+    cost_status, outer_cost = _cost_projection(source)
+    if "total_cost_usd" in source and cost_status == "invalid":
+        errors.add("outer_total_cost_is_invalid")
+    return (
+        {
+            "requestId": request_id,
+            "sessionId": outer_session_id,
+            "stopReason": stop_reason,
+            "usage": outer_usage,
+            "num_turns": outer_model_turns,
+            "total_cost_usd": outer_cost,
+        },
+        tuple(sorted(errors)),
+    )
+
+
 def _build_failure_result(
     *,
     request: Mapping[str, Any],
@@ -1038,20 +1152,17 @@ def _build_failure_result(
     outer: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     raw_result_pairs = set(proof.raw_result_post_pairs) if proof is not None else set()
-    outer_mapping = outer if isinstance(outer, Mapping) else {}
-    provider_request_id = outer_mapping.get("requestId")
-    if not isinstance(provider_request_id, str) or not provider_request_id:
-        provider_request_id = None
+    outer_mapping, _ = _outer_evidence_projection(outer)
+    provider_request_id = outer_mapping["requestId"]
     observed_turns = []
     outer_turns = outer_mapping.get("num_turns")
-    if type(outer_turns) is int and outer_turns >= 0:
+    if type(outer_turns) is int:
         observed_turns.append(outer_turns)
     if proof is not None and proof.terminal_usage is not None:
         observed_turns.append(proof.terminal_usage.model_turns)
     model_turns = max(observed_turns, default=0)
-    cost_status, cost_usd = _cost_projection(outer_mapping)
-    if cost_status == "invalid":
-        cost_status, cost_usd = "unreported", None
+    cost_usd = outer_mapping["total_cost_usd"]
+    cost_status = "reported" if cost_usd is not None else "unreported"
     return {
         "schema_version": LIVE_RESULT_SCHEMA_VERSION,
         "probe_id": request["probe_id"],
@@ -1320,25 +1431,29 @@ def _build_tool_receipt(
     session_id: str,
     outer: Mapping[str, Any] | None,
 ) -> dict[str, Any]:
-    outer_usage = outer.get("usage") if isinstance(outer, Mapping) else None
-    outer_model_turns = outer.get("num_turns") if isinstance(outer, Mapping) else None
-    outer_cost = outer.get("total_cost_usd") if isinstance(outer, Mapping) else None
+    outer_evidence, outer_errors = _outer_evidence_projection(outer)
+    evidence_errors = sorted({*proof.evidence_errors, *outer_errors})
+    if len(evidence_errors) > MAX_VIOLATION_RECEIPT_CALLS:
+        evidence_errors = [
+            *evidence_errors[: MAX_VIOLATION_RECEIPT_CALLS - 1],
+            "evidence_error_receipt_overflow",
+        ]
     return {
         "schema_version": TOOL_RECEIPT_SCHEMA_VERSION,
         "session_id": session_id,
-        "provider_request_id": outer.get("requestId") if isinstance(outer, Mapping) else None,
-        "outer_session_id": outer.get("sessionId") if isinstance(outer, Mapping) else None,
-        "outer_stop_reason": outer.get("stopReason") if isinstance(outer, Mapping) else None,
-        "outer_usage": dict(outer_usage) if isinstance(outer_usage, Mapping) else None,
-        "outer_model_turns": outer_model_turns if type(outer_model_turns) is int else None,
-        "outer_total_cost_usd": outer_cost if type(outer_cost) in {int, float} else None,
+        "provider_request_id": outer_evidence["requestId"],
+        "outer_session_id": outer_evidence["sessionId"],
+        "outer_stop_reason": outer_evidence["stopReason"],
+        "outer_usage": outer_evidence["usage"],
+        "outer_model_turns": outer_evidence["num_turns"],
+        "outer_total_cost_usd": outer_evidence["total_cost_usd"],
         "session_updates_sha256": proof.updates_sha256,
         "session_update_bytes": proof.update_bytes,
         "terminal_stop_reason": proof.terminal_stop_reason,
         "terminal_usage": _provider_usage_payload(proof.terminal_usage),
         "observed_model_ids": list(proof.observed_model_ids),
         "unexpected_tool_calls": list(proof.unexpected_tool_calls),
-        "evidence_errors": list(proof.evidence_errors),
+        "evidence_errors": evidence_errors,
         "calls": [
             {
                 "call_id": call.call_id,
@@ -1401,6 +1516,7 @@ def _wait_for_process_group_exit(process_group_id: int) -> None:
             check=False,
             capture_output=True,
             text=True,
+            timeout=1,
         )
         if process_rows.returncode != 0:
             raise RuntimeError("bounded Grok process group could not be verified after termination")
@@ -1418,6 +1534,46 @@ def _wait_for_process_group_exit(process_group_id: int) -> None:
         time.sleep(PROCESS_POLL_SECONDS)
 
 
+def _fallback_kill_process_group(process: subprocess.Popen[bytes]) -> None:
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except Exception:
+        try:
+            process.kill()
+        except Exception:
+            pass
+
+
+def _close_bounded_process_group(process: subprocess.Popen[bytes]) -> tuple[int | None, str | None]:
+    """Best-effort kill, reap, and verify that never raises past the process owner."""
+    cleanup_failed = False
+    try:
+        _terminate_process_group(process)
+    except Exception:
+        cleanup_failed = True
+        _fallback_kill_process_group(process)
+    try:
+        returncode = process.wait(timeout=5)
+    except Exception:
+        cleanup_failed = True
+        _fallback_kill_process_group(process)
+        try:
+            returncode = process.wait(timeout=5)
+        except Exception:
+            returncode = process.returncode
+    try:
+        _wait_for_process_group_exit(process.pid)
+    except Exception:
+        cleanup_failed = True
+        _fallback_kill_process_group(process)
+    return returncode, "process_group_cleanup_failed" if cleanup_failed else None
+
+
+def _read_bounded_stdio(path: Path, maximum_bytes: int) -> bytes:
+    with path.open("rb") as stream:
+        return stream.read(maximum_bytes)
+
+
 def _run_bounded_command(
     command: list[str],
     *,
@@ -1426,11 +1582,23 @@ def _run_bounded_command(
     updates_path: Path,
     expected_session_id: str,
 ) -> BoundedCommandResult:
-    with tempfile.TemporaryDirectory(prefix="x-first-grok-stdio-") as stdio_name:
-        stdio_root = Path(stdio_name)
-        stdout_path = stdio_root / "stdout"
-        stderr_path = stdio_root / "stderr"
-        with stdout_path.open("wb") as stdout_stream, stderr_path.open("wb") as stderr_stream:
+    stdio_root = Path(tempfile.mkdtemp(prefix="x-first-grok-stdio-"))
+    stdout_path = stdio_root / "stdout"
+    stderr_path = stdio_root / "stderr"
+    process: subprocess.Popen[bytes] | None = None
+    stdout_stream: Any = None
+    stderr_stream: Any = None
+    stdout = b""
+    stderr = b""
+    returncode: int | None = None
+    stop_reason: str | None = None
+    execution_error: str | None = None
+    cleanup_error: str | None = None
+    spawn_error: Exception | None = None
+    try:
+        try:
+            stdout_stream = stdout_path.open("wb")
+            stderr_stream = stderr_path.open("wb")
             process = subprocess.Popen(
                 command,
                 cwd=cwd,
@@ -1440,53 +1608,81 @@ def _run_bounded_command(
                 stderr=stderr_stream,
                 start_new_session=True,
             )
+        except Exception as error:
+            spawn_error = error
+        if process is not None:
             deadline = time.monotonic() + MAX_ELAPSED_MS / 1000
-            stop_reason: str | None = None
-            while process.poll() is None:
-                if time.monotonic() >= deadline:
-                    stop_reason = "deadline_exceeded"
-                elif stdout_path.stat().st_size > MAX_STDOUT_BYTES or stderr_path.stat().st_size > MAX_STDERR_BYTES:
-                    stop_reason = "output_budget_exceeded"
-                elif updates_path.exists():
-                    if updates_path.is_symlink() or updates_path.stat().st_size > MAX_SESSION_UPDATES_BYTES:
-                        stop_reason = "provider_evidence_budget_exceeded"
-                    else:
-                        try:
-                            proof = _extract_partial_tool_proof(
-                                updates_path,
-                                expected_session_id=expected_session_id,
-                                tolerate_trailing_partial=True,
-                            )
-                        except ValueError:
-                            proof = None
-                        if proof is not None and (proof.x_search_calls > 1 or proof.unexpected_tool_calls):
-                            stop_reason = "tool_kill_switch_tripped"
-                        elif proof is not None and proof.evidence_errors:
-                            stop_reason = "invalid_provider_evidence"
-                if stop_reason is not None:
-                    break
-                time.sleep(PROCESS_POLL_SECONDS)
-            # A headless parent can exit while leaving same-session descendants behind. Always kill the
-            # dedicated process group, including on an apparently clean parent exit.
-            _terminate_process_group(process)
             try:
-                returncode = process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                _terminate_process_group(process)
-                returncode = process.wait(timeout=5)
-            _wait_for_process_group_exit(process.pid)
-        stdout = stdout_path.read_bytes()
-        stderr = stderr_path.read_bytes()
-        if len(stdout) > MAX_STDOUT_BYTES:
-            stdout = stdout[:MAX_STDOUT_BYTES]
-        if len(stderr) > MAX_STDERR_BYTES:
-            stderr = stderr[:MAX_STDERR_BYTES]
-        return BoundedCommandResult(
-            returncode=returncode,
-            stdout=stdout,
-            stderr=stderr,
-            stop_reason=stop_reason,
-        )
+                while process.poll() is None:
+                    if time.monotonic() >= deadline:
+                        stop_reason = "deadline_exceeded"
+                    elif stdout_path.stat().st_size > MAX_STDOUT_BYTES or stderr_path.stat().st_size > MAX_STDERR_BYTES:
+                        stop_reason = "output_budget_exceeded"
+                    elif updates_path.exists():
+                        if updates_path.is_symlink() or updates_path.stat().st_size > MAX_SESSION_UPDATES_BYTES:
+                            stop_reason = "provider_evidence_budget_exceeded"
+                        else:
+                            try:
+                                proof = _extract_partial_tool_proof(
+                                    updates_path,
+                                    expected_session_id=expected_session_id,
+                                    tolerate_trailing_partial=True,
+                                )
+                            except ValueError:
+                                stop_reason = "invalid_provider_evidence"
+                            else:
+                                if proof.x_search_calls > 1 or proof.unexpected_tool_calls:
+                                    stop_reason = "tool_kill_switch_tripped"
+                                elif proof.evidence_errors:
+                                    stop_reason = "invalid_provider_evidence"
+                    if stop_reason is not None:
+                        break
+                    time.sleep(PROCESS_POLL_SECONDS)
+            except Exception:
+                execution_error = "monitor_failed"
+                stop_reason = stop_reason or execution_error
+            finally:
+                # This finally owns every post-Popen exit. No monitor/stat/parser exception can
+                # bypass the dedicated process-group kill, reap, and verification attempt.
+                returncode, cleanup_error = _close_bounded_process_group(process)
+                if cleanup_error is not None and stop_reason is None:
+                    stop_reason = cleanup_error
+    finally:
+        for stream in (stderr_stream, stdout_stream):
+            if stream is not None:
+                try:
+                    stream.close()
+                except Exception:
+                    if process is not None:
+                        execution_error = execution_error or "runner_io_failed"
+                        stop_reason = stop_reason or execution_error
+        if process is not None:
+            try:
+                stdout = _read_bounded_stdio(stdout_path, MAX_STDOUT_BYTES)
+                stderr = _read_bounded_stdio(stderr_path, MAX_STDERR_BYTES)
+            except Exception:
+                execution_error = execution_error or "runner_io_failed"
+                stop_reason = stop_reason or execution_error
+                stdout = b""
+                stderr = b""
+        try:
+            shutil.rmtree(stdio_root)
+        except Exception:
+            if process is not None:
+                cleanup_error = cleanup_error or "runner_cleanup_failed"
+                stop_reason = stop_reason or cleanup_error
+    if spawn_error is not None:
+        raise spawn_error
+    if process is None:
+        raise RuntimeError("bounded process did not start")
+    return BoundedCommandResult(
+        returncode=returncode,
+        stdout=stdout,
+        stderr=stderr,
+        stop_reason=stop_reason,
+        execution_error=execution_error,
+        cleanup_error=cleanup_error,
+    )
 
 
 def _atomic_write_json(path: Path, payload: Mapping[str, Any]) -> None:
@@ -1632,6 +1828,9 @@ def run_live_probe(
         except Exception:
             completed_at = _utc_now()
             elapsed_ms = round((time.monotonic() - started_monotonic) * 1000)
+            proof = _try_extract_failure_tool_proof(updates_path, expected_session_id=session_id)
+            if proof is not None:
+                tool_receipt = _build_tool_receipt(proof=proof, session_id=session_id, outer=None)
             result = _build_failure_result(
                 request=live_request,
                 run_id=run_id,
@@ -1642,17 +1841,31 @@ def run_live_probe(
                 message="The bounded Grok capability process could not be started safely.",
                 approval_receipt_sha256=approval_receipt_sha256,
                 grok_binary_sha256=binary_sha256,
+                tool_receipt_sha256=canonical_sha256(tool_receipt) if tool_receipt is not None else None,
+                session_id=session_id,
+                proof=proof,
             )
         else:
             completed_at = _utc_now()
             elapsed_ms = round((time.monotonic() - started_monotonic) * 1000)
+            # Parse provider-owned evidence before evaluating any outcome flag. This preserves
+            # completed calls and a structurally valid outer receipt on every later failure path.
+            outer = _try_parse_outer_envelope(completed.stdout)
+            proof = _try_extract_failure_tool_proof(updates_path, expected_session_id=session_id)
+            if proof is not None:
+                tool_receipt = _build_tool_receipt(proof=proof, session_id=session_id, outer=outer)
             try:
+                if completed.execution_error is not None:
+                    raise RuntimeError(completed.execution_error)
+                if completed.cleanup_error is not None:
+                    raise RuntimeError(completed.cleanup_error)
                 if completed.stop_reason is not None:
                     raise RuntimeError(completed.stop_reason)
-                if completed.returncode != 0:
+                if completed.returncode is None or completed.returncode != 0:
                     raise ValueError("Grok exited without a successful response")
                 _validate_grok_stderr(completed.stderr)
-                outer, inner = _parse_outer_response(completed.stdout, expected_session_id=session_id)
+                strict_outer, inner = _parse_outer_response(completed.stdout, expected_session_id=session_id)
+                outer = strict_outer
                 proof = extract_tool_proof(updates_path, expected_session_id=session_id)
                 tool_receipt = _build_tool_receipt(proof=proof, session_id=session_id, outer=outer)
                 tool_receipt_sha256 = canonical_sha256(tool_receipt)
@@ -1671,22 +1884,12 @@ def run_live_probe(
                     tool_receipt_sha256=tool_receipt_sha256,
                 )
             except Exception:
-                if tool_receipt is None and updates_path.exists():
-                    try:
-                        proof = _extract_partial_tool_proof(
-                            updates_path,
-                            expected_session_id=session_id,
-                            tolerate_trailing_partial=False,
-                        )
-                        tool_receipt = _build_tool_receipt(
-                            proof=proof,
-                            session_id=session_id,
-                            outer=outer,
-                        )
-                    except ValueError:
-                        tool_receipt = None
+                if proof is None:
+                    proof = _try_extract_failure_tool_proof(updates_path, expected_session_id=session_id)
+                if proof is not None:
+                    tool_receipt = _build_tool_receipt(proof=proof, session_id=session_id, outer=outer)
                 tool_receipt_sha256 = canonical_sha256(tool_receipt) if tool_receipt is not None else None
-                stop_reason = completed.stop_reason
+                stop_reason = completed.execution_error or completed.cleanup_error or completed.stop_reason
                 error_code = stop_reason or "invalid_provider_evidence"
                 error_message = (
                     "The bounded Grok process was stopped by an executable budget or tool kill switch."
@@ -2002,6 +2205,10 @@ def validate_live_result(payload: Any, *, request: Any) -> list[str]:
             "invalid_provider_evidence",
             "result_validation_failed",
             "process_spawn_failed",
+            "monitor_failed",
+            "runner_io_failed",
+            "process_group_cleanup_failed",
+            "runner_cleanup_failed",
             "output_budget_exceeded",
             "provider_evidence_budget_exceeded",
             "tool_kill_switch_tripped",
@@ -2166,7 +2373,8 @@ def validate_live_result(payload: Any, *, request: Any) -> list[str]:
         errors.append("result execution evidence exceeds the bounded failure-receipt contract")
     if successful and (usage.get("x_search_calls") != 1 or usage.get("result_sets") != 1):
         errors.append("successful result must prove exactly one X call/result set")
-    if usage.get("observations") != len(observations) or usage.get("model_turns", 0) > MAX_TURNS:
+    maximum_model_turns = MAX_TURNS if successful else MAX_VIOLATION_MODEL_TURNS
+    if usage.get("observations") != len(observations) or usage.get("model_turns", 0) > maximum_model_turns:
         errors.append("result usage does not reconcile")
     if run_duration_ms is not None and (
         run_duration_ms > maximum_elapsed_ms
@@ -2382,14 +2590,14 @@ def _validate_tool_receipt(receipt: Any, *, result: Mapping[str, Any]) -> list[s
         except (ValueError, AttributeError):
             errors.append("tool receipt outer session id is invalid")
     outer_stop_reason = receipt.get("outer_stop_reason")
-    if outer_stop_reason not in {None, "EndTurn"}:
+    if outer_stop_reason not in {None, "EndTurn", "MaxTurns"}:
         errors.append("tool receipt outer stop reason is invalid")
     terminal_stop_reason = receipt.get("terminal_stop_reason")
     if terminal_stop_reason not in {None, "end_turn", "max_turns"}:
         errors.append("tool receipt terminal stop reason is invalid")
     outer_model_turns = receipt.get("outer_model_turns")
     if outer_model_turns is not None and (
-        type(outer_model_turns) is not int or not 1 <= outer_model_turns <= MAX_TURNS
+        type(outer_model_turns) is not int or not 1 <= outer_model_turns <= MAX_VIOLATION_MODEL_TURNS
     ):
         errors.append("tool receipt outer model turns are invalid")
         outer_model_turns = None
@@ -2423,7 +2631,7 @@ def _validate_tool_receipt(receipt: Any, *, result: Mapping[str, Any]) -> list[s
             terminal_usage["total_tokens"] != terminal_usage["input_tokens"] + terminal_usage["output_tokens"]
             or terminal_usage["cached_read_tokens"] > terminal_usage["input_tokens"]
             or terminal_usage["reasoning_tokens"] > terminal_usage["output_tokens"]
-            or not 1 <= terminal_usage["model_turns"] <= MAX_TURNS
+            or not 1 <= terminal_usage["model_turns"] <= MAX_VIOLATION_MODEL_TURNS
             or terminal_usage["model_calls"] < 1
         ):
             errors.append("tool receipt terminal usage does not reconcile")
@@ -2452,6 +2660,8 @@ def _validate_tool_receipt(receipt: Any, *, result: Mapping[str, Any]) -> list[s
             outer_usage.get(field) != terminal_usage.get(field) for field in outer_usage
         ) or outer_model_turns != terminal_usage.get("model_turns"):
             errors.append("tool receipt outer and terminal usage do not reconcile")
+        if outer_model_turns is not None and outer_model_turns > MAX_TURNS:
+            errors.append("successful tool receipt exceeds the model-turn budget")
     calls = receipt.get("calls")
     if not isinstance(calls, list) or len(calls) > (1 if successful else MAX_VIOLATION_RECEIPT_CALLS):
         errors.append("tool receipt exceeds the bounded call-receipt contract")
