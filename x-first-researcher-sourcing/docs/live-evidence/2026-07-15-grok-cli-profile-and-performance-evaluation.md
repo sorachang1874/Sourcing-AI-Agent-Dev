@@ -12,11 +12,13 @@ extractor and not as its own accounting authority.
 The champion workflow is now:
 
 1. run a diverse, lab-neutral broad-discovery wave;
-2. hydrate each novel handle once with the exact bare handle via `x_user_search`;
-3. run a cheap two-call screen per handle;
-4. escalate only ambiguous or role-adjacent rows to semantic/thread evidence search;
-5. let Luna judge the resulting Bio/evidence semantics, not retrieve X data;
-6. use another source only for profile fields that Grok CLI demonstrably does not expose.
+2. hydrate each novel handle once with the exact bare handle via `x_user_search`, then cache that observation;
+3. evaluate affiliation from the cached Bio separately from a handle-scoped, technical-only wide-OR Post query;
+4. promote direct dual-dimension evidence, deprioritize only explicit non-pretraining functions with no qualifying
+   evidence, and escalate everything else;
+5. use semantic/thread search only for the escalation set;
+6. let Luna judge the resulting open-form Bio/evidence semantics, not retrieve X data;
+7. use another source only for profile fields that Grok CLI demonstrably does not expose.
 
 Do not pass `--tools x_keyword_search,...` to Grok CLI 0.2.99. Those hosted tool names are not mapped by the CLI
 allowlist. In a blind A/B, adding that flag produced zero native-X calls; removing it exposed native `x_user_search`
@@ -24,11 +26,12 @@ immediately. Keep `--disable-web-search`, local-tool denial, and raw session rec
 
 ## Dataset and grain
 
-The evaluation uses three grains:
+The evaluation uses four grains:
 
 - one known X account (`@lilianweng`) for field capability, compared to the supplied X screenshots as ground truth;
 - thirteen OpenAI handles previously labelled `current/current` for evidence-qualified precision;
-- independent Thinking Machines Lab broad-recall and precision-first campaigns.
+- independent Thinking Machines Lab broad-recall and precision-first campaigns;
+- a 41-handle deep cascade plus a blind two-call Stage A v2 A/B against that frozen result.
 
 Every call count below is replayed from completed `tool_call_update` rows in the local Grok session ledger. Model-
 reported counts are diagnostic only.
@@ -44,6 +47,8 @@ reported counts are diagnostic only.
 | Lean OpenAI two-call audit | `43a09967-3370-446b-a429-c2f79fd91263` | 59.1s | 26 | 7/13 evidence-qualified |
 | Thinking Machines broad recall | `eb9782e9-d9eb-4a44-890f-ccca4470da91` | 251.4s | 132 | 41 actual unique candidates |
 | Thinking Machines precision challenger | `286217c1-7566-44f9-8ede-4093b9a4d828` | 122.5s | 88 | 6 gate-complete candidates |
+| Thinking Machines Stage A v1 + deep cascade | `019f61b2-e0cc-7ad0-983f-e76abcedd023` | 254.2s | 138 | 16 qualified, 22 negative, 3 unresolved |
+| Thinking Machines technical-only Stage A v2 | `019f61b8-1a2c-7981-bb59-2882cee748ec` | 117.5s | 82 | 13 promote, 8 deprioritize, 20 escalate |
 
 The corresponding `updates.jsonl` SHA-256 values are, in table order:
 
@@ -55,6 +60,8 @@ c2375ca15914d9a2d23a910e2dbdbc789ff77bc6e545e0f9b717d53198b92f4c
 a1aa9b48d9bd748c574b86b8c7921026f7d416f48f1f049c522b669e32feacc8
 0fd26ea9751fcfc1ff139cabce0e30471d0b322d6d516ae70920a64acaf9d1ea
 24ef7c79709c6ebbe044b45929178631981c4112ade18a07a98b27fb8c450c97
+324bb8d70a2df9cd5f7069cccc2e13736ba9d549d83fee7c02e5b60b4822278d
+580d6481a178ea6eb682d73b832f8a64b3cabfe416f16d9e6f6d5b7f05d6bdba
 ```
 
 ## Profile-field capability
@@ -152,7 +159,62 @@ pool and none novel:
 It spent 88 raw calls to rediscover those six (`0.068` candidate/call). Even this list contains medium-confidence
 boundary cases in training systems or generative-model scaling. The independent precision prompt is therefore useful
 as an audit, but inefficient as the primary discovery method. Broad discovery plus targeted validation is the better
-recall/precision frontier.
+recall/precision frontier. Against the later frozen cascade labels, all six were qualified, but they covered only
+`6/16 = 37.5%` of qualified rows and cost `88/6 = 14.67` calls per qualified row.
+
+### Cascade A/B
+
+The first full cascade used one profile lookup and one query that required the same Post to contain both a Thinking
+Machines phrase and a technical phrase. All `41/41` rows escalated: 82 Stage A calls plus 56 Stage B calls. It found 16
+evidence-qualified rows, 22 not-qualifying rows, and 3 unresolved rows. The value was high recall, but the route saved
+no calls because the Stage A query returned no dual-dimension hit for 40/41 handles. These frozen labels are a deeper
+native-X model audit used as an A/B reference, not human-adjudicated gold or source-replayable provider truth.
+
+The 16 provisional qualified rows were:
+
+| Handle | Lab / pretraining state | Best technical X evidence | Compact reason |
+| --- | --- | --- | --- |
+| `@lilianweng` | current / current | [scaling laws](https://x.com/lilianweng/status/2070237256070389897) | compute-optimal data/model allocation for large runs |
+| `@cHHillee` | current / current | [distributed training](https://x.com/cHHillee/status/1992917875607343259) | FSDP/TP/CP systems for large-model training |
+| `@druv_pai` | current / current | [scaling research](https://x.com/druv_pai/status/1975592590063092013) | scaling laws and training dynamics for generative models |
+| `@soumithchintala` | current / historical | [foundation-model systems](https://x.com/soumithchintala/status/1986503070734557568) | PyTorch/exascale training infrastructure |
+| `@stephenroller` | current / historical | [explicit pretraining roles](https://x.com/stephenroller/status/1801436697449648249) | prior pretraining at DeepMind, Character and Meta |
+| `@rown` | current / historical | [MERLOT Reserve](https://x.com/rown/status/1504123989857251329) | large-scale multimodal self-supervised pretraining |
+| `@liliyu_lili` | current / historical | [multimodal scaling](https://x.com/liliyu_lili/status/1867628503916786128) | Chameleon/Transfusion/Megabyte/BLT work |
+| `@YueYangAI` | current / historical | [Molmo pretraining](https://x.com/YueYangAI/status/1894438255560687709) | multimodal VLM data and setup |
+| `@shizhediao` | current / historical | [ClimbMix](https://x.com/shizhediao/status/2029370289461575741) | LLM pretraining data mixture and efficiency |
+| `@weiyaow1` | current / historical | [SAM 3D](https://x.com/weiyaow1/status/1991187630596260151) | multimodal foundation-model work |
+| `@VictoriaLinML` | current / historical | [MoT pretraining](https://x.com/VictoriaLinML/status/1855374577066786902) | multimodal architecture and pretraining efficiency |
+| `@alex_h_liu` | current / historical | [speech pretraining](https://x.com/alex_h_liu/status/1788297749433049193) | generative speech foundation-model pretraining |
+| `@ziqiao_ma` | current / historical | [NEPA](https://x.com/ziqiao_ma/status/2002096476437295392) | generative pretraining and visual SSL objective |
+| `@barret_zoph` | historical / historical | [training/scaling](https://x.com/barret_zoph/status/1371855594743767040) | architecture, scaling and dual-loss pretraining |
+| `@Luke_Metz` | historical / historical | [learned optimizers](https://x.com/Luke_Metz/status/1508604508993208328) | VeLO and training-optimization research |
+| `@dchaplot` | historical / historical | [Mistral base model](https://x.com/dchaplot/status/1772489690341605472) | historical base-model release work |
+
+Three additional rows remained deliberately unresolved: `@LiyuanLucas`, `@pz_ai1`, and `@sschoenholz`. They had
+optimization or distributed-training adjacency, but the audit could not bind it cleanly to qualifying pretraining.
+
+The blind Stage A v2 kept the same 41 handles and 82-call treatment but separated the dimensions: the user card owned
+affiliation, while the Post query contained only a wide OR of technical concepts. Against the frozen cascade labels:
+
+- promote precision: `13/13 = 100%`;
+- positive recall at Stage A: `13/16 = 81.25%`;
+- observed deprioritize precision: `7/8 = 87.5%`;
+- non-escalated routing accuracy: `20/21 = 95.2%`;
+- escalation rate: `20/41 = 48.8%`.
+
+The one dangerous Stage A false negative was `@lilianweng`: the broad query surfaced an inference-optimization Post
+instead of her scaling-law evidence. The policy correction is therefore semantic, not another keyword exception:
+`deprioritize` requires an explicit non-pretraining function or explicit post-training/product-only scope. A technical
+or research Bio with an empty/non-qualifying first query must escalate. Applied counterfactually to the same output,
+that produces 13 safe promotes, 7 safe deprioritizations, and 21 escalations with zero auto-route errors against the
+frozen labels.
+
+The broad wave had already hydrated 40/41 Bios, so a production cascade should not repeat 41 `x_user_search` calls.
+Reusing the cached observation leaves 41 technical Stage A calls. At the observed Stage B rate of `56/41 = 1.37`
+calls per escalated handle, the corrected 21-row escalation set projects about 29 further calls, or roughly 70 total
+validation calls. That is a measured-input projection, not yet a live result: it would reduce validation calls by
+about 49% versus 138, and broad-discovery-plus-validation calls from 270 to about 202.
 
 ## Data-quality findings
 
@@ -173,10 +235,18 @@ Both the OpenAI and Thinking Machines runs promoted role adjacency, post-trainin
 evidence into pretraining states. Preserve those rows in recall, but require an evidence gate for the precision
 tranche.
 
+### High — combining affiliation and technical proof in one Post query destroys Stage A routing
+
+The first cascade's query required one authored Post to mention both the target lab and pretraining-related work. That
+is not how professional evidence is distributed on X: affiliation is commonly in the Bio or a join Post, while
+technical work appears in a different Post. Forty of 41 Stage A queries therefore returned no dual-dimension hit and
+every row escalated. The two dimensions must be retrieved and judged separately.
+
 ### Medium — repeated profile-query variants waste calls
 
 Three exact identifier forms returned the same compact card, while name-plus-organization failed. Hydration should
-use one canonical bare handle and cache its result for the observation window.
+use one canonical bare handle and cache its result for the observation window. A later validation stage must consume
+that cached observation instead of paying for another profile lookup.
 
 ### Medium — several desired X fields are outside the CLI card
 
@@ -188,9 +258,11 @@ five exact-account user-search calls. Re-prompting cannot recover fields that th
 ```text
 diverse broad native-X discovery
         -> casefold handle union
-        -> one exact bare-handle x_user_search hydration
-        -> lab + technical-role + pretraining lean screen
-        -> ambiguity/adjacency escalation with semantic/thread search
+        -> one exact bare-handle x_user_search hydration + cache
+        -> cached Bio affiliation judgment
+        -> separate handle-scoped technical-only wide-OR search
+        -> direct-evidence promote / explicit non-pretraining deprioritize
+        -> all other rows escalate with semantic/thread search
         -> Luna semantic review over Bio + evidence bundle
         -> missing profile-field enrichment from another source
         -> human-reviewed precision tranche + retained recall queue
@@ -206,6 +278,8 @@ Primary experiment metrics:
 - model-vs-ledger count discrepancy;
 - reviewer minutes per additional confirmed handle.
 
-The next bounded experiment should apply the lean-then-escalate cascade to the 41-row Thinking Machines pool and
-compare it with the six-candidate independent precision run. The goal is to recover additional true historical
-pretraining candidates without repeating 88 calls or admitting the broad pool's role/adjacency false positives.
+The next performance test should run this cache-reuse cascade on a different configured lab, not tune more terms to
+Thinking Machines. It should precommit the broad-wave profile-observation keys, make no duplicate user lookup, run one
+technical-only query per handle, and escalate under the conservative semantic route. Success is live-measured recall
+against a frozen reviewed subset plus fewer raw calls per qualified handle; the projected 70-call result is not itself
+accepted evidence until reproduced.

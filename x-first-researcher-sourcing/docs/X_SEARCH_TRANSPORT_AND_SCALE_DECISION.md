@@ -72,6 +72,16 @@ to return six already-present handles and no novel account. Broad discovery foll
 deep validation is the champion; independent precision-first discovery remains an audit lane. See
 `docs/live-evidence/2026-07-15-grok-cli-profile-and-performance-evaluation.md` for exact sessions and metrics.
 
+The first 41-handle validation cascade found 16 evidence-qualified accounts but escalated every row and used 138 calls.
+Its Stage A query incorrectly required one Post to contain both target-lab and technical evidence. A blind corrected
+Stage A separated those dimensions: cached Bio/user evidence owns affiliation, and one handle-scoped wide-OR technical
+query owns pretraining evidence. It produced 13/13 precise promotes and recovered 13/16 of the frozen positives without
+deep search. Its one false-negative deprioritization was a research Bio whose first query surfaced only inference work,
+so automatic deprioritization is now restricted to explicit non-pretraining functions or explicit
+post-training/product-only scope; every other non-promote escalates. The broad wave's profile hydration must be reused
+rather than repeated. Based on the observed 56-call deep treatment, this projects roughly 70 validation calls instead
+of 138, but that projection remains unpromoted until reproduced on another configured lab.
+
 Stage 1 recognizes provider post evidence only at the versioned closed, direct `rawOutput.posts[*]` path. Unread
 provider metadata is tolerated but cannot become evidence. Nested diagnostic/request-echo objects, prose URLs,
 incomplete registered child paths, duplicate records, and ambiguous author containers are not alternative evidence
