@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import ast
+import functools
 import inspect
 import textwrap
 from dataclasses import replace
+from types import FunctionType
 from typing import Any, Callable
 
 import pytest
@@ -367,6 +369,46 @@ def _binding_is_canonical(tree: ast.AST) -> bool:
     )
 
 
+_RUNTIME_METHOD_QUALNAMES = {
+    "_dispatch_operation_run_from_records": ("SourcingOrchestrator._dispatch_operation_run_from_records"),
+    "_operation_dispatch_adapter_bindings": ("SourcingOrchestrator._operation_dispatch_adapter_bindings"),
+}
+
+
+def _runtime_method_source(method_name: str) -> str | None:
+    method = SourcingOrchestrator.__dict__.get(method_name)
+    if not isinstance(method, FunctionType):
+        return None
+    if method.__name__ != method_name:
+        return None
+    if method.__qualname__ != _RUNTIME_METHOD_QUALNAMES.get(method_name):
+        return None
+    if method.__module__ != orchestrator_module.__name__:
+        return None
+    if method.__globals__ is not vars(orchestrator_module):
+        return None
+    if method.__closure__ is not None or method.__defaults__ is not None or method.__kwdefaults__ is not None:
+        return None
+    if "__wrapped__" in vars(method):
+        return None
+    if method.__code__.co_filename != orchestrator_module.__file__:
+        return None
+    try:
+        return textwrap.dedent(inspect.getsource(method.__code__))
+    except (OSError, TypeError):
+        return None
+
+
+def _runtime_selector_is_canonical() -> bool:
+    source = _runtime_method_source("_dispatch_operation_run_from_records")
+    return source is not None and _selector_is_canonical(ast.parse(source))
+
+
+def _runtime_binding_is_canonical() -> bool:
+    source = _runtime_method_source("_operation_dispatch_adapter_bindings")
+    return source is not None and _binding_is_canonical(ast.parse(source))
+
+
 def test_dispatch_adapter_registry_is_closed_and_normalized() -> None:
     with pytest.raises(ValueError, match="unregistered dispatch adapter"):
         ActionRegistry(
@@ -395,8 +437,10 @@ def test_dispatch_bindings_are_explicit_total_and_do_not_use_getattr_or_action_b
     assert set(bindings) == ACTION_DISPATCH_ADAPTERS
     assert len(set(bindings.values())) == len(ACTION_DISPATCH_ADAPTERS)
 
-    dispatch_source = textwrap.dedent(inspect.getsource(SourcingOrchestrator._dispatch_operation_run_from_records))
-    binding_source = textwrap.dedent(inspect.getsource(SourcingOrchestrator._operation_dispatch_adapter_bindings))
+    dispatch_source = _runtime_method_source("_dispatch_operation_run_from_records")
+    binding_source = _runtime_method_source("_operation_dispatch_adapter_bindings")
+    assert dispatch_source is not None
+    assert binding_source is not None
     dispatch_tree = ast.parse(dispatch_source)
     binding_tree = ast.parse(binding_source)
     orchestrator_tree = ast.parse(inspect.getsource(orchestrator_module))
@@ -409,8 +453,8 @@ def test_dispatch_bindings_are_explicit_total_and_do_not_use_getattr_or_action_b
         type_ignores=[],
     )
     registered_action_types = set(DEFAULT_ACTION_REGISTRY.to_record(include_command_contracts=False))
-    assert _selector_is_canonical(dispatch_tree)
-    assert _binding_is_canonical(binding_tree)
+    assert _runtime_selector_is_canonical()
+    assert _runtime_binding_is_canonical()
     assert not _action_constant_references(dispatch_tree)
     assert not _registered_action_literals(dispatch_tree, registered_action_types)
     assert not _action_type_control_flow_nodes(dispatch_tree)
@@ -578,6 +622,45 @@ def test_dispatch_bindings_are_explicit_total_and_do_not_use_getattr_or_action_b
         "def select_handler(bindings, dispatch_adapter):\n    return bindings.get(dispatch_adapter)\n"
     )
     assert not _dynamic_attribute_lookup_nodes(ordinary_mapping_lookup)
+
+
+@pytest.mark.parametrize(
+    ("method_name", "legacy_shape_check", "runtime_shape_check"),
+    [
+        (
+            "_dispatch_operation_run_from_records",
+            _selector_is_canonical,
+            _runtime_selector_is_canonical,
+        ),
+        (
+            "_operation_dispatch_adapter_bindings",
+            _binding_is_canonical,
+            _runtime_binding_is_canonical,
+        ),
+    ],
+)
+def test_runtime_wrapped_dispatch_methods_cannot_hide_rebinding(
+    method_name: str,
+    legacy_shape_check: Callable[[ast.AST], bool],
+    runtime_shape_check: Callable[[], bool],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original = SourcingOrchestrator.__dict__.get(method_name)
+    assert isinstance(original, FunctionType)
+
+    @functools.wraps(original)
+    def passthrough(*args: Any, **kwargs: Any) -> Any:
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(SourcingOrchestrator, method_name, passthrough)
+    rebound = SourcingOrchestrator.__dict__.get(method_name)
+    assert rebound is passthrough
+    assert getattr(rebound, "__wrapped__", None) is original
+
+    legacy_source = textwrap.dedent(inspect.getsource(getattr(SourcingOrchestrator, method_name)))
+    assert legacy_shape_check(ast.parse(legacy_source))
+    assert _runtime_method_source(method_name) is None
+    assert not runtime_shape_check()
 
 
 @pytest.mark.parametrize(

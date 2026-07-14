@@ -12,7 +12,12 @@
 > registry mutations and the missing-binding probe stayed green. The pinned re-review of `becc60e` found two deeper
 > false-greens: a module helper could hide `getattr`, and a module action alias plus a local `action_type` alias could
 > hide a hard-coded action branch. The current author follow-up replaces symbol-name detection as the primary gate with
-> canonical selector/binding AST shapes and exact body dependency closures; a new non-author re-review remains pending.
+> canonical selector/binding AST shapes and exact body dependency closures. The pinned re-review of `0a5e844` then
+> found a runtime/source identity false-green: `inspect.getsource(function)` follows `function.__wrapped__`, so a normal
+> `functools.wraps` wrapper plus class-method rebinding could execute outside the canonical body while the source oracle,
+> all 15 adjacent operation-runtime nodes, and command-spec tests stayed green. The current author follow-up reads the
+> raw class-dictionary function and its code object, rejects wrapper/rebinding identity drift, and adds selector and
+> binding regressions; a new non-author re-review remains pending.
 
 ## 1. Outcome and scope
 
@@ -81,21 +86,25 @@ runtime. Immutable request-schema version/digest pins are outside D1b and must n
 
 1. unknown and whitespace-padded adapter identifiers reject registry construction;
 2. the runtime binding map is total over the five closed adapter identifiers;
-3. canonical AST inspection freezes the complete selector shape and the exact five adapter-key-to-`self.method`
+3. runtime identity inspection requires each selector/binding member to remain a direct class-dictionary function from
+   `sourcing_agent.orchestrator`, with the canonical name/qualname, module globals, code filename, no closure/defaults,
+   and no `__wrapped__` chain. Source inspection uses the raw code object rather than an implicitly unwrapped function;
+4. canonical AST inspection freezes the complete selector shape and the exact five adapter-key-to-`self.method`
    binding entries. Separate exact body-dependency closures allow only the registry, adapter/handler locals, closed
    adapter constants, and five direct bound methods; any helper call, module alias, new local alias, or extra control
    flow fails even when it avoids a known dangerous symbol name;
-4. parameterized in-memory registry mutations reroute every one of the 15 actions to a different legal adapter,
+5. parameterized in-memory registry mutations reroute every one of the 15 actions to a different legal adapter,
    proving dispatch follows registry data for supported and empty-adapter actions rather than a hidden action-name
    branch;
-5. self-proving mutations cover direct, qualified, imported, multi-hop assignment, and module-helper `getattr`;
+6. self-proving mutations cover direct, qualified, imported, multi-hop assignment, and module-helper `getattr`;
    `__getattribute__`, `attrgetter`, `getattr_static`, `vars(...)`, and `__dict__`; qualified action constants; raw
-   `action_type`; and module/local multi-hop action aliases. The prior module-helper and aliased-action-branch
-   counterexamples now fail the canonical/dependency gate, while an ordinary static-dictionary `.get(...)` remains a
-   negative control for the supplemental dangerous-symbol detector;
-6. deleting the export binding fails closed without invoking another owner;
-7. the exact three empty-adapter actions remain unsupported;
-8. public registry records expose neither the internal adapter nor request schema, model-safe result schema,
+   `action_type`; module/local multi-hop action aliases; and `functools.wraps` rebinding of both runtime methods. The
+   prior module-helper and aliased-action-branch counterexamples fail the canonical/dependency gate; wrappers fail the
+   raw runtime-identity gate even though the legacy `inspect.getsource(function)` view still appears canonical. An
+   ordinary static-dictionary `.get(...)` remains a negative control for the supplemental dangerous-symbol detector;
+7. deleting the export binding fails closed without invoking another owner;
+8. the exact three empty-adapter actions remain unsupported;
+9. public registry records expose neither the internal adapter nor request schema, model-safe result schema,
    `agent_tool_enabled`, or served status.
 
 The probes use local dictionaries and methods only. They create no PG rows, files, network traffic, provider requests,
@@ -131,12 +140,15 @@ PYTHONPATH=src .venv/bin/python -m pytest -q \
   tests/test_operation_runtime.py::OperationRuntimeTest::test_approval_required_action_does_not_create_operation_run_before_approval \
   tests/test_operation_runtime.py::OperationRuntimeTest::test_budget_required_action_requires_explicit_budget \
   tests/test_operation_runtime.py::OperationRuntimeTest::test_start_acquisition_operation_plans_root_acquisition_run_command_only \
-  tests/test_operation_runtime.py::OperationRuntimeTest::test_continue_acquisition_rejects_commands_outside_action_registry_allowlist
+  tests/test_operation_runtime.py::OperationRuntimeTest::test_continue_acquisition_rejects_commands_outside_action_registry_allowlist \
+  tests/test_operation_runtime.py::OperationRuntimeTest::test_workflow_command_api_exposure_is_action_registry_allowlist_owned
 PYTHONPATH=src .venv/bin/python -m pytest -q \
   tests/test_operation_runtime.py::OperationRuntimeTest::test_export_operation_dispatch_plans_projection_export_command_without_running_owner \
   tests/test_operation_runtime.py::OperationRuntimeTest::test_public_web_enrichment_operation_dispatch_leaves_batch_creation_to_command_owner \
   tests/test_operation_runtime.py::OperationRuntimeTest::test_add_to_crm_operation_dispatch_leaves_crm_writes_to_command_owner \
-  tests/test_operation_runtime.py::OperationRuntimeTest::test_company_public_web_operation_refreshes_company_assets_only_in_command_owner
+  tests/test_operation_runtime.py::OperationRuntimeTest::test_company_public_web_operation_refreshes_company_assets_only_in_command_owner \
+  tests/test_operation_runtime.py::OperationRuntimeTest::test_projection_bound_operations_fail_closed_when_membership_changes_before_dispatch \
+  tests/test_operation_runtime.py::OperationRuntimeTest::test_projection_filter_operation_dispatch_completes_read_only_without_workflow_command
 PYTHONPATH=src .venv/bin/python -m pytest -q tests/test_command_type_specs.py
 .venv/bin/ruff check \
   src/sourcing_agent/operation_runtime.py \
@@ -185,3 +197,10 @@ and dependency-closure mutations reject the exact two re-review counterexamplesâ
 module/local aliased action branchâ€”plus multi-hop helper/action aliases, while the unchanged production selector and
 exact five-entry direct binding map pass. This follow-up changes only the D1b test and this document; its evidence
 remains author evidence, and a fresh non-author review is required.
+
+Fourth false-green follow-up author validation on the final stable worktree: D1a+D1b passed 27 tests; the documented
+15 PG-backed registry/dispatch/adjacent exposure nodes passed; the command-spec suite passed 16 tests; focused mypy
+reported no issues in three checked files; and Ruff check, Ruff format, and scoped whitespace diff check passed. The
+two new regressions prove that `functools.wraps` keeps the legacy source view canonical for both selector and binding
+rebindings while the raw runtime-identity gate rejects both. This follow-up changes only the D1b test and this document;
+its evidence remains author evidence, and a fresh non-author re-review is required.
