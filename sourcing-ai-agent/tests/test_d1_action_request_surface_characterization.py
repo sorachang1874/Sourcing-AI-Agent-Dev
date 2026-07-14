@@ -71,6 +71,24 @@ EXPECTED_ACTION_DEFAULT_COMMANDS = {
     "external_intake": "excel.intake.run",
 }
 
+EXPECTED_ACTION_DISPATCH_ADAPTERS = {
+    "plan_acquisition": "",
+    "start_acquisition_run": operation_runtime.DISPATCH_ADAPTER_AGENT_CALLABLE_WORKFLOW_COMMAND,
+    "fetch_profile_sample": operation_runtime.DISPATCH_ADAPTER_AGENT_CALLABLE_WORKFLOW_COMMAND,
+    "continue_acquisition_run": operation_runtime.DISPATCH_ADAPTER_AGENT_CALLABLE_WORKFLOW_COMMAND,
+    "search_projection": operation_runtime.DISPATCH_ADAPTER_PROJECTION_READ,
+    "filter_projection": operation_runtime.DISPATCH_ADAPTER_PROJECTION_READ,
+    "add_to_crm": operation_runtime.DISPATCH_ADAPTER_CRM_WRITER,
+    "set_crm_stage": operation_runtime.DISPATCH_ADAPTER_CRM_WRITER,
+    "add_crm_note": operation_runtime.DISPATCH_ADAPTER_CRM_WRITER,
+    "create_crm_task": operation_runtime.DISPATCH_ADAPTER_CRM_WRITER,
+    "enrich_person_public_web": operation_runtime.DISPATCH_ADAPTER_PERSON_PUBLIC_WEB,
+    "refresh_company_public_web_assets": operation_runtime.DISPATCH_ADAPTER_AGENT_CALLABLE_WORKFLOW_COMMAND,
+    "promote_person_assertion": "",
+    "export_candidates": operation_runtime.DISPATCH_ADAPTER_EXPORT,
+    "external_intake": "",
+}
+
 SUBMIT_ACTION_CALL_INVENTORY_SHA256 = "9d9a79d8bfc49e742a81f959080cf1e2ccf8be5952b3bbb202aef49a8138ddbe"
 
 
@@ -233,6 +251,8 @@ class _FailClosedOperationRuntimeWriter(OperationRuntimeWriter):
 
 
 class _DispatchProbe:
+    _operation_dispatch_adapter_bindings = SourcingOrchestrator._operation_dispatch_adapter_bindings
+
     @staticmethod
     def _operation_run_control_response_record(record: dict[str, Any]) -> dict[str, Any]:
         return record
@@ -272,6 +292,7 @@ def test_action_spec_and_registry_record_freeze_the_pre_request_schema_surface()
         "action_type",
         "owner_module",
         "operation_type",
+        "dispatch_adapter",
         "approval_policy",
         "budget_required",
         "description",
@@ -291,6 +312,9 @@ def test_action_spec_and_registry_record_freeze_the_pre_request_schema_surface()
     assert {
         action_type: record["default_workflow_command_type"] for action_type, record in records.items()
     } == EXPECTED_ACTION_DEFAULT_COMMANDS
+    assert {
+        action_type: DEFAULT_ACTION_REGISTRY.spec_for(action_type).dispatch_adapter for action_type in records
+    } == EXPECTED_ACTION_DISPATCH_ADAPTERS
 
     base_record_keys = {
         "owner_module",
@@ -314,6 +338,8 @@ def test_action_spec_and_registry_record_freeze_the_pre_request_schema_surface()
             "request_schema_digest",
             "dispatch_adapter",
             "model_safe_result_schema",
+            "agent_tool_enabled",
+            "served_tool_status",
         } & set(record)
 
     inventory = _surface_inventory()
@@ -479,26 +505,17 @@ def test_submit_action_preserves_current_validation_and_non_dispatch_baseline() 
 
 def test_runtime_dispatch_inventory_distinguishes_registration_from_adapter_support() -> None:
     expected_adapters = {
-        operation_runtime.ACTION_FILTER_PROJECTION: "projection_read",
-        operation_runtime.ACTION_SEARCH_PROJECTION: "projection_read",
-        operation_runtime.ACTION_ENRICH_PERSON_PUBLIC_WEB: "person_public_web",
-        operation_runtime.ACTION_EXPORT_CANDIDATES: "export",
-        operation_runtime.ACTION_START_ACQUISITION_RUN: "agent_callable_workflow_command",
-        operation_runtime.ACTION_FETCH_PROFILE_SAMPLE: "agent_callable_workflow_command",
-        operation_runtime.ACTION_CONTINUE_ACQUISITION_RUN: "agent_callable_workflow_command",
-        operation_runtime.ACTION_REFRESH_COMPANY_PUBLIC_WEB: "agent_callable_workflow_command",
-        operation_runtime.ACTION_ADD_TO_CRM: "crm_writer",
-        operation_runtime.ACTION_SET_CRM_STAGE: "crm_writer",
-        operation_runtime.ACTION_ADD_CRM_NOTE: "crm_writer",
-        operation_runtime.ACTION_CREATE_CRM_TASK: "crm_writer",
+        action_type: adapter for action_type, adapter in EXPECTED_ACTION_DISPATCH_ADAPTERS.items() if adapter
     }
     expected_unsupported = {
-        operation_runtime.ACTION_PLAN_ACQUISITION,
-        operation_runtime.ACTION_PROMOTE_PERSON_ASSERTION,
-        operation_runtime.ACTION_EXTERNAL_INTAKE,
+        action_type for action_type, adapter in EXPECTED_ACTION_DISPATCH_ADAPTERS.items() if not adapter
     }
     inventory = _surface_inventory()
     assert inventory["action_types"] == frozenset(expected_adapters) | expected_unsupported
+    assert {
+        action_type: DEFAULT_ACTION_REGISTRY.spec_for(action_type).dispatch_adapter
+        for action_type in inventory["action_types"]
+    } == EXPECTED_ACTION_DISPATCH_ADAPTERS
 
     probe = _DispatchProbe()
     for action_type in sorted(inventory["action_types"]):

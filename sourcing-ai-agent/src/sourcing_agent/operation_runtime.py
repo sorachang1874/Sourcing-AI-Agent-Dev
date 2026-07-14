@@ -54,6 +54,20 @@ OPERATION_RUN_TERMINAL_STATUSES = {"completed", "failed", "cancelled"}
 OPERATION_ACTION_TERMINAL_STATUSES = {"completed", "failed", "cancelled", "rejected"}
 WORKFLOW_COMMAND_EXPOSURE_GATE_SOURCE = "operation_runtime.ActionRegistry.allowed_workflow_command_types"
 WORKFLOW_COMMAND_EXPOSURE_STATUS_ALLOWLISTED = "action_registry_allowlisted"
+DISPATCH_ADAPTER_PROJECTION_READ = "projection_read"
+DISPATCH_ADAPTER_PERSON_PUBLIC_WEB = "person_public_web"
+DISPATCH_ADAPTER_EXPORT = "export"
+DISPATCH_ADAPTER_AGENT_CALLABLE_WORKFLOW_COMMAND = "agent_callable_workflow_command"
+DISPATCH_ADAPTER_CRM_WRITER = "crm_writer"
+ACTION_DISPATCH_ADAPTERS = frozenset(
+    {
+        DISPATCH_ADAPTER_PROJECTION_READ,
+        DISPATCH_ADAPTER_PERSON_PUBLIC_WEB,
+        DISPATCH_ADAPTER_EXPORT,
+        DISPATCH_ADAPTER_AGENT_CALLABLE_WORKFLOW_COMMAND,
+        DISPATCH_ADAPTER_CRM_WRITER,
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -61,6 +75,7 @@ class ActionSpec:
     action_type: str
     owner_module: str
     operation_type: str
+    dispatch_adapter: str = ""
     approval_policy: str = APPROVAL_NOT_REQUIRED
     budget_required: bool = False
     description: str = ""
@@ -114,6 +129,13 @@ class ActionRegistry:
             raise ValueError("action_type must match ActionSpec.action_type")
         if not spec.owner_module or not spec.operation_type:
             raise ValueError("owner_module and operation_type are required")
+        dispatch_adapter = str(spec.dispatch_adapter or "").strip()
+        if dispatch_adapter != spec.dispatch_adapter:
+            raise ValueError(f"action_type {normalized_type!r} dispatch_adapter must be normalized")
+        if dispatch_adapter and dispatch_adapter not in ACTION_DISPATCH_ADAPTERS:
+            raise ValueError(
+                f"action_type {normalized_type!r} references unregistered dispatch adapter: {dispatch_adapter}"
+            )
         command_types = tuple(str(command_type or "").strip() for command_type in spec.allowed_workflow_command_types)
         if len(set(command_types)) != len(command_types):
             raise ValueError(f"action_type {normalized_type!r} has duplicate workflow command types")
@@ -286,6 +308,7 @@ DEFAULT_ACTION_REGISTRY = ActionRegistry(
             action_type=ACTION_PLAN_ACQUISITION,
             owner_module="planner",
             operation_type="acquisition_plan",
+            dispatch_adapter="",
             description="Draft an acquisition plan without executing provider or workflow side effects.",
             display_label="Plan acquisition",
             display_category="acquisition",
@@ -294,6 +317,7 @@ DEFAULT_ACTION_REGISTRY = ActionRegistry(
             action_type=ACTION_START_ACQUISITION_RUN,
             owner_module="acquisition_run_writer",
             operation_type="acquisition_run",
+            dispatch_adapter=DISPATCH_ADAPTER_AGENT_CALLABLE_WORKFLOW_COMMAND,
             approval_policy=APPROVAL_REQUIRED,
             budget_required=True,
             description="Create the durable root for a reviewed acquisition run.",
@@ -306,6 +330,7 @@ DEFAULT_ACTION_REGISTRY = ActionRegistry(
             action_type=ACTION_FETCH_PROFILE_SAMPLE,
             owner_module="profile_scheduler",
             operation_type="profile_sample",
+            dispatch_adapter=DISPATCH_ADAPTER_AGENT_CALLABLE_WORKFLOW_COMMAND,
             approval_policy=APPROVAL_REQUIRED,
             budget_required=True,
             description="Fetch or plan a bounded sample of LinkedIn profiles for review.",
@@ -318,6 +343,7 @@ DEFAULT_ACTION_REGISTRY = ActionRegistry(
             action_type=ACTION_CONTINUE_ACQUISITION_RUN,
             owner_module="acquisition_run_writer",
             operation_type="acquisition_run",
+            dispatch_adapter=DISPATCH_ADAPTER_AGENT_CALLABLE_WORKFLOW_COMMAND,
             approval_policy=APPROVAL_REQUIRED,
             budget_required=True,
             description="Continue an existing acquisition run through an explicitly allowed typed command.",
@@ -337,6 +363,7 @@ DEFAULT_ACTION_REGISTRY = ActionRegistry(
             action_type=ACTION_SEARCH_PROJECTION,
             owner_module="projection_search_service",
             operation_type="projection_search",
+            dispatch_adapter=DISPATCH_ADAPTER_PROJECTION_READ,
             description="Run a read-only search over a canonical serving projection.",
             display_label="Search projection",
             display_category="projection",
@@ -345,6 +372,7 @@ DEFAULT_ACTION_REGISTRY = ActionRegistry(
             action_type=ACTION_FILTER_PROJECTION,
             owner_module="projection_search_service",
             operation_type="projection_filter",
+            dispatch_adapter=DISPATCH_ADAPTER_PROJECTION_READ,
             description="Apply read-only filters against a canonical serving projection.",
             display_label="Filter projection",
             display_category="projection",
@@ -353,6 +381,7 @@ DEFAULT_ACTION_REGISTRY = ActionRegistry(
             action_type=ACTION_ADD_TO_CRM,
             owner_module="crm_writer",
             operation_type="crm_update",
+            dispatch_adapter=DISPATCH_ADAPTER_CRM_WRITER,
             description="Add selected projection people to the person-first CRM through the CRM writer owner.",
             display_label="Add to CRM",
             display_category="crm",
@@ -363,6 +392,7 @@ DEFAULT_ACTION_REGISTRY = ActionRegistry(
             action_type=ACTION_SET_CRM_STAGE,
             owner_module="crm_writer",
             operation_type="crm_update",
+            dispatch_adapter=DISPATCH_ADAPTER_CRM_WRITER,
             description="Update CRM stage or record flags through the CRM writer owner.",
             display_label="Set CRM stage",
             display_category="crm",
@@ -373,6 +403,7 @@ DEFAULT_ACTION_REGISTRY = ActionRegistry(
             action_type=ACTION_ADD_CRM_NOTE,
             owner_module="crm_writer",
             operation_type="crm_update",
+            dispatch_adapter=DISPATCH_ADAPTER_CRM_WRITER,
             description="Append a CRM note as an auditable CRM event.",
             display_label="Add CRM note",
             display_category="crm",
@@ -383,6 +414,7 @@ DEFAULT_ACTION_REGISTRY = ActionRegistry(
             action_type=ACTION_CREATE_CRM_TASK,
             owner_module="crm_writer",
             operation_type="crm_update",
+            dispatch_adapter=DISPATCH_ADAPTER_CRM_WRITER,
             description="Create a CRM follow-up task backed by CRM task current state and audit events.",
             display_label="Create CRM task",
             display_category="crm",
@@ -393,6 +425,7 @@ DEFAULT_ACTION_REGISTRY = ActionRegistry(
             action_type=ACTION_ENRICH_PERSON_PUBLIC_WEB,
             owner_module="person_evidence_ingestion",
             operation_type="person_enrichment",
+            dispatch_adapter=DISPATCH_ADAPTER_PERSON_PUBLIC_WEB,
             approval_policy=APPROVAL_REQUIRED,
             budget_required=True,
             description="Queue CRM-owned Public Web enrichment for selected people.",
@@ -405,6 +438,7 @@ DEFAULT_ACTION_REGISTRY = ActionRegistry(
             action_type=ACTION_REFRESH_COMPANY_PUBLIC_WEB,
             owner_module="company_public_web_owner",
             operation_type="company_enrichment",
+            dispatch_adapter=DISPATCH_ADAPTER_AGENT_CALLABLE_WORKFLOW_COMMAND,
             approval_policy=APPROVAL_REQUIRED,
             budget_required=True,
             description="Refresh company-level Public Web assets through the company Public Web owner.",
@@ -417,6 +451,7 @@ DEFAULT_ACTION_REGISTRY = ActionRegistry(
             action_type=ACTION_PROMOTE_PERSON_ASSERTION,
             owner_module="person_assertion_writer",
             operation_type="person_assertion_promotion",
+            dispatch_adapter="",
             description="Promote reviewed evidence into a selected PersonAssertion.",
             display_label="Promote person assertion",
             display_category="person_asset",
@@ -425,6 +460,7 @@ DEFAULT_ACTION_REGISTRY = ActionRegistry(
             action_type=ACTION_EXPORT_CANDIDATES,
             owner_module="export_service",
             operation_type="export",
+            dispatch_adapter=DISPATCH_ADAPTER_EXPORT,
             approval_policy=APPROVAL_REQUIRED,
             description="Generate an export artifact through the appropriate export command owner.",
             display_label="Export candidates",
@@ -439,6 +475,7 @@ DEFAULT_ACTION_REGISTRY = ActionRegistry(
             action_type=ACTION_EXTERNAL_INTAKE,
             owner_module="intake_service",
             operation_type="external_intake",
+            dispatch_adapter="",
             description="Ingest an external file through the Excel intake command owner.",
             display_label="Run external intake",
             display_category="intake",

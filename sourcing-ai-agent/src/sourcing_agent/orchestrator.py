@@ -191,17 +191,16 @@ from .model_provider import DeterministicModelClient, ModelClient
 from .operation_runtime import (
     ACTION_ADD_CRM_NOTE,
     ACTION_ADD_TO_CRM,
-    ACTION_CONTINUE_ACQUISITION_RUN,
     ACTION_CREATE_CRM_TASK,
-    ACTION_ENRICH_PERSON_PUBLIC_WEB,
     ACTION_EXPORT_CANDIDATES,
-    ACTION_FETCH_PROFILE_SAMPLE,
-    ACTION_FILTER_PROJECTION,
-    ACTION_REFRESH_COMPANY_PUBLIC_WEB,
     ACTION_SEARCH_PROJECTION,
     ACTION_SET_CRM_STAGE,
-    ACTION_START_ACQUISITION_RUN,
     DEFAULT_ACTION_REGISTRY,
+    DISPATCH_ADAPTER_AGENT_CALLABLE_WORKFLOW_COMMAND,
+    DISPATCH_ADAPTER_CRM_WRITER,
+    DISPATCH_ADAPTER_EXPORT,
+    DISPATCH_ADAPTER_PERSON_PUBLIC_WEB,
+    DISPATCH_ADAPTER_PROJECTION_READ,
     OperationRuntimeStateConflict,
     OperationRuntimeWriter,
     operation_run_control_state,
@@ -48542,46 +48541,15 @@ class SourcingOrchestrator:
         actor: str,
     ) -> dict[str, Any]:
         action_type = str(action.get("action_type") or "").strip()
-        if action_type in {ACTION_FILTER_PROJECTION, ACTION_SEARCH_PROJECTION}:
+        try:
+            action_spec = DEFAULT_ACTION_REGISTRY.spec_for(action_type)
+        except KeyError:
+            action_spec = None
+        dispatch_adapter = str(action_spec.dispatch_adapter or "").strip() if action_spec is not None else ""
+        dispatch_handler = self._operation_dispatch_adapter_bindings().get(dispatch_adapter)
+        if dispatch_handler is not None:
             return self._operation_run_control_response_record(
-                self._dispatch_projection_read_operation(
-                    operation_run=operation_run,
-                    action=action,
-                    actor=actor,
-                )
-            )
-        if action_type == ACTION_ENRICH_PERSON_PUBLIC_WEB:
-            return self._operation_run_control_response_record(
-                self._dispatch_person_public_web_enrichment_operation(
-                    operation_run=operation_run,
-                    action=action,
-                    actor=actor,
-                )
-            )
-        if action_type == ACTION_EXPORT_CANDIDATES:
-            return self._operation_run_control_response_record(
-                self._dispatch_export_candidates_operation(
-                    operation_run=operation_run,
-                    action=action,
-                    actor=actor,
-                )
-            )
-        if action_type in {
-            ACTION_START_ACQUISITION_RUN,
-            ACTION_FETCH_PROFILE_SAMPLE,
-            ACTION_CONTINUE_ACQUISITION_RUN,
-            ACTION_REFRESH_COMPANY_PUBLIC_WEB,
-        }:
-            return self._operation_run_control_response_record(
-                self._dispatch_agent_callable_workflow_command_operation(
-                    operation_run=operation_run,
-                    action=action,
-                    actor=actor,
-                )
-            )
-        if action_type in {ACTION_ADD_TO_CRM, ACTION_SET_CRM_STAGE, ACTION_ADD_CRM_NOTE, ACTION_CREATE_CRM_TASK}:
-            return self._operation_run_control_response_record(
-                self._dispatch_crm_writer_operation(
+                dispatch_handler(
                     operation_run=operation_run,
                     action=action,
                     actor=actor,
@@ -48597,6 +48565,17 @@ class SourcingOrchestrator:
                 "contract": "w9_operation_run_dispatch_v1",
             }
         )
+
+    def _operation_dispatch_adapter_bindings(self) -> dict[str, Callable[..., dict[str, Any]]]:
+        return {
+            DISPATCH_ADAPTER_PROJECTION_READ: self._dispatch_projection_read_operation,
+            DISPATCH_ADAPTER_PERSON_PUBLIC_WEB: self._dispatch_person_public_web_enrichment_operation,
+            DISPATCH_ADAPTER_EXPORT: self._dispatch_export_candidates_operation,
+            DISPATCH_ADAPTER_AGENT_CALLABLE_WORKFLOW_COMMAND: (
+                self._dispatch_agent_callable_workflow_command_operation
+            ),
+            DISPATCH_ADAPTER_CRM_WRITER: self._dispatch_crm_writer_operation,
+        }
 
     def _dispatch_agent_callable_workflow_command_operation(
         self,

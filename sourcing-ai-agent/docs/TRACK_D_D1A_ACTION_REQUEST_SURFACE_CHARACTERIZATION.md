@@ -5,10 +5,14 @@
 > re-review returned `GO` (P0/P1/P2=0/0/0). Formal review remains pending. This is a zero-product-code, non-live
 > baseline for the later `ActionRequestSpec` implementation. It is not a D1 completion claim, formal independent-review
 > `GO`, live-provider approval, or Agent tool activation.
+>
+> D1b follow-up: the bounded non-live implementation recorded in
+> `TRACK_D_D1B_DISPATCH_ADAPTER_REGISTRY_IMPLEMENTATION.md` intentionally replaces only the hard-coded dispatch
+> classification characterized here. The remaining pre-request-schema observations stay in force.
 
 ## 1. Outcome and boundary
 
-D1a freezes the action/request/dispatch surface that exists immediately before D1 adds a versioned request schema.
+D1a freezes the action/request/dispatch surface that existed immediately before D1 adds a versioned request schema.
 The batch adds one AST/runtime characterization suite and this record; it does not modify
 `ActionSpec`, `ActionRegistry`, `OperationRuntimeWriter`, `SourcingOrchestrator`, a command owner, storage, migration,
 API, provider/model transport, or frontend behavior.
@@ -28,18 +32,19 @@ sets, so a new action or command cannot silently preserve a stale `12/15` assert
 The current `external_intake` fact is narrower than the older shorthand: it is a registered action with default and
 allowed command `excel.intake.run`; that command has a registered owner, required Agent-callable Activity spine, and
 fail-closed owner-specific control policy. However, `external_intake` itself is not selected by
-`_dispatch_operation_run_from_records`, so a submitted operation currently returns `unsupported`. Command metadata
-readiness therefore does not prove an action dispatch adapter exists. D1 must make that relation explicit rather than
-inferring it from registration or from `allowed_workflow_command_types`.
+`_dispatch_operation_run_from_records`, so a submitted operation returns `unsupported`. Command metadata readiness
+therefore does not prove an action dispatch adapter exists. D1b now records that relation explicitly on `ActionSpec`
+rather than inferring it from registration or from `allowed_workflow_command_types`; `external_intake` retains an empty
+adapter and remains unsupported.
 
 ## 2. Characterized contracts
 
 | Surface | Current owner | D1a freezes | Known D1 debt |
 |---|---|---|---|
-| Action metadata | `operation_runtime.ActionSpec` | exact ten-field dataclass surface: identity/owner/operation, approval/budget, display, allowed/default command types | no `request_schema`, version/digest, dispatch adapter, or model-safe result schema |
-| Registry serialization | `operation_runtime.ActionRegistry.to_record()` | action constant↔registry parity; exact compact record keys; optional command contract projection | request shape is not serialized or pinned |
+| Action metadata | `operation_runtime.ActionSpec` | D1a froze the exact ten-field pre-schema surface | D1b adds only the eleventh `dispatch_adapter` field; no request schema, version/digest, or model-safe result schema |
+| Registry serialization | `operation_runtime.ActionRegistry.to_record()` | action constant↔registry parity; exact compact record keys; optional command contract projection | D1b keeps adapter internal to `spec_for()` so the public action-registry payload remains unchanged; request shape is not serialized or pinned |
 | Submission | `OperationRuntimeWriter.submit_action` | exact complete signature/decorators; complete structural `ast.Call` inventory; unknown action and required-budget fail-closed gates; payload identity replay fence; action/event/run write order; approval-required actions stop before run creation; unexpected writer/store/repository callback or outbox access fails the runtime probe | `target_ref` and `input_payload` currently pass through without structural request-schema validation |
-| Dispatch | `SourcingOrchestrator._dispatch_operation_run_from_records` | runtime branch classification for every discovered registered action; unsupported response for the three current gaps | adapter ownership is a hard-coded branch, not registry metadata |
+| Dispatch | `ActionRegistry` declaration + `SourcingOrchestrator` adapter bindings | D1a froze the old branch classification for every discovered action; D1b preserves the same 12 supported/three unsupported result | request validation and served-tool predicates remain deferred |
 | Command exposure mirror | `_agent_callable_workflow_command_types_for_action` | exact set projection of `ActionSpec.allowed_workflow_command_types`; unknown action returns empty | no served-tool predicate or result-schema gate |
 | Command plan selection | `_build_agent_callable_workflow_command_plan` | command selection is `input.command_type` → `target.command_type` → registry default; a present but disallowed higher-priority value fails closed instead of falling back | input and target remain dual behavior-driving sources pending D1 normalization |
 | Command execution contracts | command owner registry + Activity/control policy registries | every exposed command resolves to the same owner; Activity policy is Agent-callable and non-legacy; Activity and control records are fail-closed | this proves command readiness only, not action adapter or model-safe output readiness |
@@ -69,7 +74,7 @@ synthetic unknown nested fields and proves they are preserved byte-for-structure
 that permissive-baseline assertion must be intentionally replaced by positive and negative schema cases; weakening it
 without installing the new owner would hide an intermediate contract gap.
 
-The runtime dispatch inventory is:
+The D1a runtime dispatch inventory, now represented by `ActionSpec.dispatch_adapter`, is:
 
 - projection read adapter: `search_projection`, `filter_projection`;
 - person Public Web adapter: `enrich_person_public_web`;
@@ -79,15 +84,17 @@ The runtime dispatch inventory is:
 - CRM writer adapter: `add_to_crm`, `set_crm_stage`, `add_crm_note`, `create_crm_task`;
 - unsupported: `plan_acquisition`, `promote_person_assertion`, `external_intake`.
 
-This list is asserted against the complete auto-discovered registry population. A newly registered action therefore
-fails the suite until its intended adapter/unsupported disposition is reviewed.
+This list is asserted against the complete auto-discovered registry population. D1b makes the registry value the
+runtime selector and keeps a separate explicit five-entry adapter-to-bound-method map. A newly registered action
+therefore fails the suite until its intended adapter/unsupported disposition is reviewed; an unknown adapter is
+rejected during registry construction, and a missing runtime binding fails closed as `unsupported`.
 
 ## 4. Mutation sensitivity
 
 The suite fails when any of these current facts drift without an intentional D1 update:
 
-1. an `ACTION_*` constant and the runtime registry stop matching, or the pre-schema `ActionSpec`/compact-record fields
-   change;
+1. an `ACTION_*` constant and the runtime registry stop matching, or the pre-request-schema
+   `ActionSpec`/compact-record fields change;
 2. a registered command loses its owner, becomes legacy/non-Agent-callable on the Activity spine, or stops exposing a
    fail-closed control record;
 3. `submit_action` changes any positional-only/positional/vararg/keyword-only/kwarg parameter or annotation/default,
@@ -95,8 +102,9 @@ The suite fails when any of these current facts drift without an intentional D1 
    approval boundary, or starts a callback/outbox/dispatch/planning hook. In-memory mutations add `**kwargs` and an
    indirect `runner(action)` call; both are rejected. Fail-closed runtime namespaces also reject unexpected writer,
    store, or repository/outbox access;
-4. a registered action moves between adapter families, including accidentally treating `external_intake` command
-   metadata as an executable action adapter;
+4. a registered action moves between adapter families, a registry adapter has no explicit runtime binding, dispatch
+   regresses to action-name branches or arbitrary `getattr`, or `external_intake` command metadata is accidentally
+   treated as an executable action adapter;
 5. command-type precedence changes. An in-memory source mutation swaps input/target order and proves the AST oracle
    rejects the mutation; a second mutation swaps `input.raw_user_request` with `target_ref.query` and is likewise
    rejected; no product source is edited;
@@ -113,8 +121,8 @@ D1a does not introduce `ActionRequestSpec` or decide its final schema. The next 
 - establish the single versioned request schema and immutable pin at every actual durable creation point;
 - define owner-bound `target_ref` versus caller/model-provided `input_payload`, reject duplicate/alias override paths,
   and remove the characterized dual-source ambiguity;
-- add an explicit registry-owned dispatch adapter and derive the served subset from schema + adapter + Activity +
-  revisioned model-safe result schema + simulate preflight;
+- use the D1b registry-owned adapter as one necessary served-subset input, then derive the served subset only after
+  schema + Activity + revisioned model-safe result schema + simulate preflight also exist;
 - preserve approval/budget/idempotency/tenant fences while updating submit, approve, retry-child, dispatch, API, tests,
   and docs in one bounded slice;
 - remain non-live until the typed model-turn owner, cost/budget/result-slot obligations, and a scope-matched independent
