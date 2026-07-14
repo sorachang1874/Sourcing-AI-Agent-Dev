@@ -128,7 +128,12 @@ Author evidence on the final candidate tree:
 Review evidence: a local precommit adversarial pass first found bootstrap authority/receipt alias leakage and non-finite
 backend-number drift (`P0/P1/P2/P3=0/1/1/0`). The three implementations and independent fixtures were fixed forward;
 the fresh local advisory recheck is clean (`0/0/0/0`). This remains author-session advisory evidence, not formal `GO`;
-a fresh pinned non-author review is pending.
+a fresh pinned non-author review was attempted against exact commit `2e3e7d9a`. The reviewer completed substantive
+output with five new findings (`P0/P1/P2/P3=0/2/3/0`), but the runner rejected the artifact because it could not
+causally bind active settings, exact prompt, final output, and the single completed turn. The artifact is therefore
+invalid formal evidence: it is neither formal `NO-GO` nor `GO`. Its concrete findings remain direct advisory evidence
+and must be verified/fixed forward before Live/W6/manual/signoff; pending review still does not freeze unrelated
+non-live batches.
 
 ## 7. Explicit non-closure
 

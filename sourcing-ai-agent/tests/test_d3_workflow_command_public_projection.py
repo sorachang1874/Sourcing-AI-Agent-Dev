@@ -30,6 +30,26 @@ FRONTEND_DEMO_API_PATH = REPO_ROOT / "frontend-demo" / "src" / "lib" / "api.ts"
 ESBUILD_MODULE_PATH = REPO_ROOT / "frontend-demo" / "node_modules" / "esbuild" / "lib" / "main.js"
 
 SAFE_DIAGNOSTIC_FIELDS = ("claim_generation", "control_epoch")
+D3C2A_DORMANT_INTERNAL_FIELDS = (
+    "runtime_namespace",
+    "provider_mode",
+    "workspace_id",
+    "scope_digest",
+    "coordination_plan_review_id",
+    "claim_authority_spec_digest",
+    "expected_predecessor_intent_id",
+    "expected_predecessor_phase_generation",
+    "expected_predecessor_source_control_epoch",
+    "expected_predecessor_decision_source_event_id",
+    "d3_business_fence_digest",
+    "claim_selection_generation",
+    "consumed_claim_authority_id",
+    "claim_token_digest",
+    "heartbeat_sequence",
+    "last_heartbeat_id",
+    "terminal_event_id",
+    "terminal_outcome_digest",
+)
 D3B_PRIVATE_BOOTSTRAP_CAPABILITY_FIELDS = (
     "bootstrap_authority",
     "bootstrap_authority_id",
@@ -199,6 +219,7 @@ def test_backend_projector_is_sparse_closed_recursive_and_non_mutating() -> None
     command.update(
         {
             "unknown_future_column": "must-not-project",
+            **{field: f"d3c2a-{field}" for field in D3C2A_DORMANT_INTERNAL_FIELDS},
             "claim_token": "top-level-secret",
             "payload": {
                 "business_value": "preserved",
@@ -236,6 +257,7 @@ def test_backend_projector_is_sparse_closed_recursive_and_non_mutating() -> None
     assert command == original
     assert "unknown_future_column" not in projected
     assert "claim_token" not in projected
+    assert set(D3C2A_DORMANT_INTERNAL_FIELDS).isdisjoint(projected)
     assert projected["claim_generation"] == 3
     assert projected["control_epoch"] == 3
     assert projected["payload"]["business_value"] == "preserved"
@@ -257,6 +279,25 @@ def test_backend_projector_is_sparse_closed_recursive_and_non_mutating() -> None
     assert "status" not in sparse
     assert "payload" not in sparse
     assert "claim_generation" not in sparse
+
+
+def test_d3c2a_raw_postgres_columns_remain_dormant_behind_the_closed_descriptor() -> None:
+    raw_row = {column: None for column in WORKFLOW_COMMANDS.column_names()}
+    raw_row.update(
+        {
+            **{field: f"d3c2a-{field}" for field in D3C2A_DORMANT_INTERNAL_FIELDS},
+            "claim_generation": 7,
+            "control_epoch": 11,
+        }
+    )
+
+    mapped = WORKFLOW_COMMANDS.from_row(raw_row)
+    descriptor_fields = tuple(column.key for column in WORKFLOW_COMMANDS.columns)
+
+    assert set(mapped) == set(descriptor_fields)
+    assert set(D3C2A_DORMANT_INTERNAL_FIELDS).isdisjoint(mapped)
+    assert set(SAFE_DIAGNOSTIC_FIELDS).isdisjoint(mapped)
+    assert len(descriptor_fields) == 33
 
 
 def test_operation_sync_and_recursive_public_carriers_share_the_same_sanitizer() -> None:

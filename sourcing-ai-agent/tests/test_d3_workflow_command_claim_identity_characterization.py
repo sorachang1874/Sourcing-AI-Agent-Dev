@@ -23,12 +23,38 @@ FRONTEND_ADAPTER_PATH = REPO_ROOT / "contracts" / "frontend_api_adapter.ts"
 FRONTEND_DEMO_API_PATH = REPO_ROOT / "frontend-demo" / "src" / "lib" / "api.ts"
 CHARACTERIZATION_DOC_PATH = REPO_ROOT / "docs" / "TRACK_D_D3A_WORKFLOW_COMMAND_CLAIM_IDENTITY_CHARACTERIZATION.md"
 
-ABSENT_CLAIM_IDENTITY_COLUMNS = frozenset(
+UNIMPLEMENTED_RUNTIME_CLAIM_FIELDS = frozenset(
     {
         "claim_generation",
         "claim_token",
         "lease_token",
         "control_epoch",
+    }
+)
+DORMANT_PHYSICAL_CLAIM_FIELDS = frozenset({"claim_generation", "control_epoch"})
+FORBIDDEN_RAW_CAPABILITY_COLUMNS = frozenset({"claim_token", "lease_token"})
+D3C2A_DORMANT_COMMAND_COLUMNS = frozenset(
+    {
+        "runtime_namespace",
+        "provider_mode",
+        "workspace_id",
+        "scope_digest",
+        "coordination_plan_review_id",
+        "claim_authority_spec_digest",
+        "expected_predecessor_intent_id",
+        "expected_predecessor_phase_generation",
+        "expected_predecessor_source_control_epoch",
+        "expected_predecessor_decision_source_event_id",
+        "d3_business_fence_digest",
+        "claim_selection_generation",
+        "consumed_claim_authority_id",
+        "claim_generation",
+        "claim_token_digest",
+        "control_epoch",
+        "heartbeat_sequence",
+        "last_heartbeat_id",
+        "terminal_event_id",
+        "terminal_outcome_digest",
     }
 )
 
@@ -106,6 +132,27 @@ def _physical_claim_writer_methods() -> tuple[tuple[str, str, str], ...]:
     return tuple(matches)
 
 
+def _physical_workflow_command_mutator_sql_literals() -> tuple[tuple[str, str], ...]:
+    matches: list[tuple[str, str]] = []
+    for path in sorted(SOURCE_ROOT.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Constant) or not isinstance(node.value, str):
+                continue
+            normalized = _normalized_source(node.value).lower()
+            if not any(
+                statement in normalized
+                for statement in (
+                    "insert into workflow_commands",
+                    "update workflow_commands",
+                    "delete from workflow_commands",
+                )
+            ):
+                continue
+            matches.append((path.relative_to(SOURCE_ROOT).as_posix(), normalized))
+    return tuple(matches)
+
+
 def _production_claim_callers() -> Counter[str]:
     callers: Counter[str] = Counter()
     for path in sorted(SOURCE_ROOT.rglob("*.py")):
@@ -131,20 +178,37 @@ def _typescript_function_source(path: Path, signature: str, next_signature: str)
     return source[start:end]
 
 
-def test_workflow_command_schema_and_descriptor_have_no_physical_claim_identity() -> None:
+def test_d3c2a_physical_claim_fields_are_dormant_and_raw_capabilities_remain_absent() -> None:
     migration_statements = _migration_workflow_command_schema_statements()
     bootstrap_statements = _bootstrap_workflow_command_schema_literals()
 
     assert migration_statements
     assert bootstrap_statements
+    baseline_create = next(surface for surface in migration_statements if "create table workflow_commands" in surface)
+    d3c2a_alter = next(
+        surface
+        for surface in migration_statements
+        if "alter table workflow_commands" in surface and "claim_generation" in surface
+    )
+    assert "attempt" in baseline_create
+    assert DORMANT_PHYSICAL_CLAIM_FIELDS.isdisjoint(set(re.findall(r"[a-z_]+", baseline_create)))
+    assert DORMANT_PHYSICAL_CLAIM_FIELDS <= set(re.findall(r"[a-z_]+", d3c2a_alter))
     for surface in (*migration_statements, *bootstrap_statements):
-        assert not (ABSENT_CLAIM_IDENTITY_COLUMNS & set(re.findall(r"[a-z_]+", surface)))
-    assert any("create table workflow_commands" in surface and "attempt" in surface for surface in migration_statements)
+        assert FORBIDDEN_RAW_CAPABILITY_COLUMNS.isdisjoint(set(re.findall(r"[a-z_]+", surface)))
+    for surface in bootstrap_statements:
+        assert DORMANT_PHYSICAL_CLAIM_FIELDS.isdisjoint(set(re.findall(r"[a-z_]+", surface)))
     assert any("create table" in surface and "attempt" in surface for surface in bootstrap_statements)
 
     descriptor_columns = frozenset(WORKFLOW_COMMANDS.column_names())
     assert {"attempt", "lease_owner", "lease_expires_at"} <= descriptor_columns
-    assert ABSENT_CLAIM_IDENTITY_COLUMNS.isdisjoint(descriptor_columns)
+    assert UNIMPLEMENTED_RUNTIME_CLAIM_FIELDS.isdisjoint(descriptor_columns)
+    assert D3C2A_DORMANT_COMMAND_COLUMNS.isdisjoint(descriptor_columns)
+
+    mutator_sql_literals = _physical_workflow_command_mutator_sql_literals()
+    assert mutator_sql_literals
+    for path, sql in mutator_sql_literals:
+        observed_tokens = set(re.findall(r"[a-z0-9_]+", sql))
+        assert D3C2A_DORMANT_COMMAND_COLUMNS.isdisjoint(observed_tokens), path
 
 
 def test_attempt_is_resettable_retry_accounting_not_a_monotonic_claim_generation() -> None:
@@ -155,7 +219,8 @@ def test_attempt_is_resettable_retry_accounting_not_a_monotonic_claim_generation
     )
     assert "attempt = attempt + 1" in _normalized_source(claim_source)
     assert (
-        not {node.id for node in ast.walk(claim_method) if isinstance(node, ast.Name)} & ABSENT_CLAIM_IDENTITY_COLUMNS
+        not {node.id for node in ast.walk(claim_method) if isinstance(node, ast.Name)}
+        & UNIMPLEMENTED_RUNTIME_CLAIM_FIELDS
     )
 
     for method_name in (
@@ -277,7 +342,7 @@ def test_characterization_document_keeps_r019_and_next_decisions_open() -> None:
         "29 direct production claim call sites",
         "R-019 remains pending remediation",
         "does not close or waive R-019",
-        "## 6. Decisions required before implementation",
+        "## 6. Historical decisions required before implementation",
         "API exposure and redaction",
         "claim + ActivityAttempt",
     ):

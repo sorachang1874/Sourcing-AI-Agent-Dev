@@ -38,6 +38,33 @@ NEXT_TODO_PATH = REPO_ROOT / "docs" / "NEXT_TODO.md"
 RESIDUAL_LEDGER_PATH = REPO_ROOT / "docs" / "RESIDUAL_LEDGER.md"
 DOCS_INDEX_PATH = REPO_ROOT / "docs" / "INDEX.md"
 BASELINE_MIGRATION_PATH = SOURCE_ROOT / "migrations" / "0001_baseline.sql"
+D3C2A_MIGRATION_PATH = SOURCE_ROOT / "migrations" / "0003_workflow_command_claim_fence_foundation.sql"
+D3C2A_IMPLEMENTATION_PATH = (
+    REPO_ROOT / "docs" / "TRACK_D_D3C2A_WORKFLOW_COMMAND_CLAIM_FENCE_MIGRATION_IMPLEMENTATION.md"
+)
+
+D3C2A_COMMAND_COLUMNS = (
+    "runtime_namespace",
+    "provider_mode",
+    "workspace_id",
+    "scope_digest",
+    "coordination_plan_review_id",
+    "claim_authority_spec_digest",
+    "expected_predecessor_intent_id",
+    "expected_predecessor_phase_generation",
+    "expected_predecessor_source_control_epoch",
+    "expected_predecessor_decision_source_event_id",
+    "d3_business_fence_digest",
+    "claim_selection_generation",
+    "consumed_claim_authority_id",
+    "claim_generation",
+    "claim_token_digest",
+    "control_epoch",
+    "heartbeat_sequence",
+    "last_heartbeat_id",
+    "terminal_event_id",
+    "terminal_outcome_digest",
+)
 
 # D3b is a characterization/decision batch. These CURRENT_* values intentionally
 # describe the debt at its pinned baseline; D3c must replace the assertions when
@@ -204,10 +231,7 @@ def _unique_line(document: str, marker: str) -> str:
 def _markdown_table(section: str) -> tuple[list[str], list[list[str]]]:
     lines = [line for line in section.splitlines() if line.startswith("|")]
     assert len(lines) >= 3
-    parsed = [
-        [cell.replace(r"\|", "|").strip() for cell in re.split(r"(?<!\\)\|", line.strip("|"))]
-        for line in lines
-    ]
+    parsed = [[cell.replace(r"\|", "|").strip() for cell in re.split(r"(?<!\\)\|", line.strip("|"))] for line in lines]
     assert all(re.fullmatch(r":?-{3,}:?", cell) for cell in parsed[1])
     return parsed[0], parsed[2:]
 
@@ -406,6 +430,44 @@ def test_d3b_document_declares_characterization_scope_and_open_gates() -> None:
         "fresh pinned non-author review is required",
         "正式 review pending",
     )
+
+
+def test_d3c2a_migration_is_exactly_the_dormant_command_subbatch() -> None:
+    sql = D3C2A_MIGRATION_PATH.read_text(encoding="utf-8")
+    normalized = _normalized(sql)
+    added_columns = tuple(re.findall(r"\bADD COLUMN ([a-z0-9_]+)\b", sql, flags=re.IGNORECASE))
+
+    assert added_columns == D3C2A_COMMAND_COLUMNS
+    assert len(added_columns) == 20
+    assert "operation_run_id" not in added_columns
+    assert "SET LOCAL lock_timeout = '5s'" in sql
+    assert "SET LOCAL lock_timeout = DEFAULT" in sql
+    assert normalized.count("not valid") == 16
+    assert "validate constraint" not in normalized
+    assert "foreign key" not in normalized
+    assert "create index" not in normalized
+    assert "claim_token " not in normalized
+    assert "lease_token" not in normalized
+    assert set(D3C2A_COMMAND_COLUMNS).isdisjoint(WORKFLOW_COMMANDS.column_names())
+
+
+def test_d3c2a_document_keeps_full_migration_runtime_and_residual_gates_open() -> None:
+    document = D3C2A_IMPLEMENTATION_PATH.read_text(encoding="utf-8")
+
+    _assert_all(
+        document,
+        "only the `workflow_commands` command subbatch",
+        "does not complete Migration A",
+        "twenty command columns",
+        "sixteen local `CHECK ... NOT VALID` constraints",
+        "33-column `WORKFLOW_COMMANDS` descriptor",
+        "No command insert, selection, claim, heartbeat, control, terminal, retry, resume, dispatch",
+        "Full D3b Migration A still requires",
+        "OB-10.1/10.2/10.3/10.4",
+        "R-019 remain pending",
+    )
+    _assert_any(document, "serve an Agent tool", "served Agent tool")
+    _assert_any(document, "fresh pinned non-author review", "pinned non-author review")
 
 
 def test_d3b_document_pins_owner_sot_and_three_part_identity() -> None:
@@ -1167,12 +1229,12 @@ def test_d3b_terminal_digest_event_and_source_binding_share_one_uow() -> None:
     assert "cannot create a replacement event" in terminal
     _assert_all(
         terminal,
-            "transport-response-occurrence-v1 + scope_digest + dispatch_exposure_id + canonical_delivery_identity",
-            "Redelivery therefore returns the same receipt",
-            "transport_response_receipt_collision",
-            "checked-in typed `NoExposureTerminalSpec`",
-            "complete-none `no_exposure` variant",
-        )
+        "transport-response-occurrence-v1 + scope_digest + dispatch_exposure_id + canonical_delivery_identity",
+        "Redelivery therefore returns the same receipt",
+        "transport_response_receipt_collision",
+        "checked-in typed `NoExposureTerminalSpec`",
+        "complete-none `no_exposure` variant",
+    )
 
 
 def test_d3b_late_result_quarantine_is_durable_and_never_authorizable() -> None:
@@ -1530,7 +1592,7 @@ def test_d3b_advisory_rounds_fixed_forward_are_cross_document_consistent() -> No
     )
     _assert_all(
         design_claim,
-            "record 命令 owner 的 terminal-UoW specialization",
+        "record 命令 owner 的 terminal-UoW specialization",
         "固定顺序锁 source + record command",
         "claim generation + control epoch + post-claim command attempt + terminal status + terminal event id + canonical outcome digest",
     )
@@ -1673,7 +1735,11 @@ def test_d3b_advisory_rounds_fixed_forward_are_cross_document_consistent() -> No
         "`TRACK_D_D3B_WORKFLOW_COMMAND_CLAIM_FENCE_CONTRACT.md`",
         "物理 migration/产品码仍未落地",
     )
-    _assert_all(plan_section_6, "未落 migration 前仍为 NOT IMPLEMENTED")
+    _assert_all(
+        plan_section_6,
+        "D3c2a 只落了 dormant command-table fragment",
+        "physical owner/repository/runtime 与其余 Migration A 仍未实施",
+    )
     _assert_all(
         todo_d3b,
         "零产品码",
@@ -1719,11 +1785,13 @@ def test_d3b_advisory_rounds_fixed_forward_are_cross_document_consistent() -> No
         "`0/4/2/0`",
         "round8 semantic `0/1/0/0`",
         "broad `0/6/1/0`",
-        "current author `32/49/58/81`",
+        "current D3b author `32/49/58/81`",
         "fixed-forward",
         "operator usage limit",
         "没有 verdict",
-        "fresh non-author re-review/pinned formal review 仍 pending",
+        "causal-binding artifact invalid",
+        "D3c2a author=migration/PG `9 passed + 20 subtests`",
+        "fresh pinned review pending",
         "仅对 Live/signoff fail closed",
     )
     _assert_all(
@@ -1749,7 +1817,9 @@ def test_d3b_round5_physical_columns_and_bigint_lineage_are_mechanically_exact()
     plan = TRACK_D_PLAN_PATH.read_text(encoding="utf-8")
     todo = NEXT_TODO_PATH.read_text(encoding="utf-8")
     ledger_r019 = _unique_line(RESIDUAL_LEDGER_PATH.read_text(encoding="utf-8"), "| R-019 |")
-    index_d3b = _unique_line(DOCS_INDEX_PATH.read_text(encoding="utf-8"), "TRACK_D_D3B_WORKFLOW_COMMAND_CLAIM_FENCE_CONTRACT.md")
+    index_d3b = _unique_line(
+        DOCS_INDEX_PATH.read_text(encoding="utf-8"), "TRACK_D_D3B_WORKFLOW_COMMAND_CLAIM_FENCE_CONTRACT.md"
+    )
     columns = _document_section(
         contract,
         "## 5. Exact physical command identity contract",
@@ -1790,9 +1860,10 @@ def test_d3b_round5_physical_columns_and_bigint_lineage_are_mechanically_exact()
     ]
     assert len(physical_names[1:]) == 20
     assert physical_declarations["coordination_plan_review_id"][0] == "`coordination_plan_review_id BIGINT NULL`"
-    assert "type-compatible with canonical BIGINT `plan_review_sessions.review_id`" in physical_declarations[
-        "coordination_plan_review_id"
-    ][1]
+    assert (
+        "type-compatible with canonical BIGINT `plan_review_sessions.review_id`"
+        in physical_declarations["coordination_plan_review_id"][1]
+    )
     predecessor_types = {
         "expected_predecessor_intent_id": "TEXT NULL",
         "expected_predecessor_phase_generation": "BIGINT NULL",
@@ -1934,9 +2005,7 @@ def test_d3b_round5_closed_context_union_global_order_and_control_inventory_are_
     assert phases == ["stage_b", "terminal", "record", "dispatch", "resume_after_grant", "control"]
 
     operation_inventory = "terminal/cancel/retry/requeue/resume/reset/rebuild/recovery"
-    participating_commands = (
-        "source/record/resume/supersession/current owner/idempotency target"
-    )
+    participating_commands = "source/record/resume/supersession/current owner/idempotency target"
     documents = [
         D3_DESIGN_PATH.read_text(encoding="utf-8"),
         TRACK_D_PLAN_PATH.read_text(encoding="utf-8"),
@@ -2351,10 +2420,7 @@ def test_d3b_round8_bootstrap_and_terminal_provenance_fixed_forward_are_exact() 
         flags=re.DOTALL,
     )
     assert bootstrap_key_match is not None
-    bootstrap_key_fields = tuple(
-        part.strip()
-        for part in re.sub(r"\s+", " ", bootstrap_key_match.group(1)).split(",")
-    )
+    bootstrap_key_fields = tuple(part.strip() for part in re.sub(r"\s+", " ", bootstrap_key_match.group(1)).split(","))
     assert bootstrap_key_fields == (
         "runtime_namespace",
         "provider_mode",
@@ -2411,10 +2477,7 @@ def test_d3b_round8_bootstrap_and_terminal_provenance_fixed_forward_are_exact() 
         "claim-bound ActivityRun/ActivityAttempt",
         "credential-free replay",
     )
-    assert (
-        "OperationRun/command/ActivityAttempt，要求 current ClaimAuthority+ClaimReceipt"
-        not in design
-    )
+    assert "OperationRun/command/ActivityAttempt，要求 current ClaimAuthority+ClaimReceipt" not in design
     authority = _document_section(
         contract,
         "### 5.1 Canonical registry-issued pre-claim `ClaimAuthority`",
@@ -2638,7 +2701,9 @@ def test_d3b_round8_bootstrap_and_terminal_provenance_fixed_forward_are_exact() 
         "no_exposure",
     )
     _assert_all(
-        _document_section(contract, "## 14. R-019 bounded subclosure", "## 15. Served, migration, and activation boundary"),
+        _document_section(
+            contract, "## 14. R-019 bounded subclosure", "## 15. Served, migration, and activation boundary"
+        ),
         "response receipt",
         "attempt-failure receipt",
         "registered no-exposure variant",

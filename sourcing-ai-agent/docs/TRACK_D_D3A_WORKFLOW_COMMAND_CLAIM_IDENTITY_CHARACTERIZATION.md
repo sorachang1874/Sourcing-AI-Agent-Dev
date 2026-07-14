@@ -1,14 +1,15 @@
 # Track D D3a — Workflow-command claim identity characterization
 
-> Status: Author characterization-only batch (2026-07-14). This is a zero-product-code, zero-migration, non-live
-> freeze of the existing `workflow_commands` claim surface before the Track D D3 claim-fencing implementation.
+> Status: historical author characterization-only baseline (2026-07-14), intentionally advanced by D3c1 and the D3c2a candidate on
+> 2026-07-15. D3a itself remains a zero-product-code, zero-migration, non-live freeze of the then-existing
+> `workflow_commands` claim surface before the Track D D3 claim-fencing implementation.
 > It is not D3 implementation, an R-019 remediation claim, formal independent-review `GO`, live-provider approval,
 > or product/milestone signoff. The exact enclosing commit and any later implementation commit must be pinned
 > separately by the author handoff and review request.
 
 ## 1. Outcome and boundary
 
-D3a records what the repository actually provides before Plan §6 item 6 adds a never-reset workflow-command claim
+D3a records what the repository actually provided at its pinned baseline before Plan §6 item 6 adds a never-reset workflow-command claim
 generation/token. It mechanically freezes schema, descriptor, writer, caller, retry-control, and API projection facts;
 it does not choose the new schema or change runtime behavior.
 
@@ -20,7 +21,7 @@ provider/model behavior. It creates no durable product row and performs no live 
 
 The characterized result is fail-closed:
 
-- `workflow_commands` has `attempt`, `lease_owner`, and `lease_expires_at`, but no physical `claim_generation`,
+- at the D3a baseline, `workflow_commands` had `attempt`, `lease_owner`, and `lease_expires_at`, but no physical `claim_generation`,
   claim-scoped token (`claim_token` or `lease_token`), or `control_epoch`;
 - `attempt` increments on claim but can also be decremented or reset to zero by generic control paths, so it cannot
   identify a claim generation or prevent ABA;
@@ -33,10 +34,15 @@ These are dated observations and mutation-sensitive characterization oracles, no
 implementation must intentionally replace the relevant assertions rather than weakening them while leaving ownership
 ambiguous.
 
+Current amendment: D3c1 replaced the characterized public pass-through with a closed projector. The D3c2a candidate installs dormant
+physical `claim_generation`/`control_epoch` and the other eighteen D3b command columns, but deliberately leaves the
+33-column descriptor and every runtime writer/consumer unchanged. Raw `claim_token`/`lease_token` columns remain
+absent, and the runtime is still unfenced.
+
 ## 2. Physical row and claim writer
 
-The baseline migration, runtime bootstrap DDL, and `repositories.workflow_runtime.WORKFLOW_COMMANDS` descriptor agree on
-the current identity-adjacent fields:
+At the pinned D3a baseline, the baseline migration, runtime bootstrap DDL, and
+`repositories.workflow_runtime.WORKFLOW_COMMANDS` descriptor agreed on the then-current identity-adjacent fields:
 
 | Current field | Current behavior | Why it is not the missing fence |
 |---|---|---|
@@ -90,9 +96,9 @@ The count is the complete recognized direct-syntax population rather than a sele
 direct SQL claim, second facade, or moved call fails the characterization until claim-identity propagation and
 ownership are reviewed; nonstandard indirection must explicitly extend the oracle.
 
-## 5. Descriptor and selected API dict pass-through risk
+## 5. Descriptor and selected API dict pass-through risk (historical, D3c1 sealed)
 
-The current path has a two-sided migration risk:
+The D3a path had a two-sided migration risk:
 
 1. `WORKFLOW_COMMANDS` is an explicit-column descriptor. Adding only migration/writer columns would omit the new
    identity from returned command dictionaries, so callers could claim successfully without receiving the fence they
@@ -107,10 +113,14 @@ The characterization uses synthetic keys to prove this pass-through without pers
 exposing a token. A public diagnostic generation and a private authorization capability may need different fields and
 different projections; that decision is intentionally open.
 
-## 6. Decisions required before implementation
+D3c1 has since closed the public projection. The D3c2a candidate chooses the safe half of the physical rollout: it adds the columns
+but does not extend the descriptor, so neither the internal Store record nor the public projector receives them yet.
 
-The next D3 implementation batch must resolve these points from Plan §6 and the OB-ID/invariant obligations rather than
-guessing a schema:
+## 6. Historical decisions required before implementation
+
+At the D3a baseline these questions were intentionally open. D3b resolved their decision shape, and D3c1 later resolved
+the public-projection prerequisite. D3c batches must continue to implement the remaining physical/owner obligations from
+Plan §6 and the OB-ID/invariant obligations rather than guessing or treating this characterization as current authority:
 
 1. **Physical shape and owner:** whether the durable contract is a monotonic `claim_generation`, an unguessable
    claim-scoped token, or both; exact names, types, defaults, constraints, mint owner, and overflow/rotation behavior.
@@ -140,21 +150,24 @@ and invalidation transition must be explicit first.
 touch dispatch/retry/completion behavior, mint a child command/ActivityAttempt, or alter a transaction-lock caller. It
 therefore does not close or waive R-019.
 
-Adding claim generation/token later would close only the stale-claim identity portion if every effectful consumer uses
-the stored fence with tested zero-write stale outcomes. It would not by itself make operation + action + event/command
+Activating a repository-minted claim generation/private-token verifier plus effectful CAS later would close only the
+stale-claim identity portion if every effectful consumer uses the stored fence with tested zero-write stale outcomes.
+Dormant physical columns alone close none of it. That later activation would not by itself make operation + action + event/command
 writes one UoW, prevent every phantom child, synchronize linked OperationRun/AgentAction state, make reducer writes
 atomic, or add a monotonic total acquisition budget to transaction-lock callers. Those claims require their own
 implementation and evidence.
 
-The trigger remains fail-closed: because D3's next batch touches `workflow_commands`, it must reconcile its bounded
-scope with R-019 before implementation and before any live/W6/manual/product signoff. Characterization tests and author
-evidence are not an independent review verdict.
+The D3c2a candidate reconciles only the dormant command-table physical subset; it changes neither the 26-call ratchet
+nor any effect authorization predicate, so R-019 remains pending. The next owner/runtime batch that reads or writes
+these fields must reconcile its exact R-019 subproblem before activation and before any live/W6/manual/product signoff.
+Characterization tests and author evidence are not an independent review verdict.
 
 ## 8. Mutation sensitivity and validation
 
 The suite fails when these recognized direct lexical surfaces change:
 
-- a migration, runtime bootstrap DDL, or descriptor silently gains a characterized claim-identity field;
+- the D3c2a physical migration drifts from its explicit dormant contract, or a runtime bootstrap/descriptor silently
+  gains a claim-identity field before its owner cutover;
 - `attempt` stops exposing the current decrement/reset behavior without an intentional contract update;
 - a second direct SQL claim writer using the current table/status shape appears, or the Postgres-only facade stops
   delegating to the canonical writer;

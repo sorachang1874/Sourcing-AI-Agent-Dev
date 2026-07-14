@@ -306,10 +306,21 @@
   消除 **7** 个 nested raw command returns，令修正后的 **16 carrier routes/17 method-route variants**、
   `6 existing + 1 typed nested = 7` schema refs、9-field typed `operation_sync`、frontend adapter/demo raw 全部
   收敛到同一 projector。author evidence=`7` D3c1、`45` D3a+D3b+D3c1、operation/control adjacency `14`、
-  frontend build `81 modules`、lint `58 files`、mypy `81 errors/4 files`（棘轮持平）、diff clean；fresh pinned
-  non-author review pending，不能写成 formal GO。Scope issuer/ClaimAuthority/29 callers/
+  frontend build `81 modules`、lint `58 files`、mypy `81 errors/4 files`（棘轮持平）、diff clean。首个 pinned formal
+  attempt 的 reviewer substantive output=`0/2/3/0`，但 runner 因 active settings/prompt/final/single-turn causal
+  binding 失败将 artifact 标记 invalid；因此既不是 formal NO-GO 也不是 GO，五项 direct findings 作为
+  fixed-forward 输入，fresh valid re-review 仍 pending。Scope issuer/ClaimAuthority/29 callers/
   Stage A/B/dispatch/migration/action-root durable-scope gate/R-019/OB-10.1-10.4 与 served=0 全部继续 carry；
   不得借 projection seal 宣称 fence 闭合。
+- [x] D3c2a dormant workflow-command claim-fence migration foundation（2026-07-15；仅 D3b Migration A 的 command
+  subbatch）：`0003_workflow_command_claim_fence_foundation.sql` 精确新增 20 列 + 16 个 `NOT VALID` local checks，
+  5s transaction-local lock budget；populated
+  legacy row 保持 empty/zero/NULL sentinel，新写 shape 仍受约束，0003-only lock timeout 证明 columns/checks/ledger
+  全回滚且释放后 single apply + no-op。`WORKFLOW_COMMANDS` descriptor 仍为 33 列，20 个 raw PG fields 全部 dormant，
+  零 runtime writer/reader/claim/CAS/dispatch 激活。完整 Migration A 的 session/operation/activity/event/receipt/
+  quarantine、canonical-id 最终 grammar、Migration B-D、R-019/action-root/OB-10.1-10.4 与 served=0 全部继续 open。
+  author evidence=migration/PG `9 passed + 20 subtests`、D3a+D3b+D3c1+durable adjacency `51`、lint `58 files`、
+  mypy `81 errors/4 files`、diff clean；fresh pinned non-author review pending，不能写成 formal GO。
 - [ ] Track D 后的 user-owned cohort selection contract（Thinking Machines Lab live 前置）：以一个 versioned、
   registry-digest-pinned `CohortSelection` 作为唯一 owner，显式承载 canonical ordered
   `role_bucket_ids[]`（Researcher/Engineer/Product Manager 可自由多选且 registry 可扩展）、

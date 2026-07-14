@@ -18,9 +18,12 @@ Skips without a local PG DSN; SOURCING_REQUIRE_PG_STORE_TESTS=1 turns the skip i
 from __future__ import annotations
 
 import os
+import shutil
+import tempfile
 import threading
 import time
 import unittest
+from pathlib import Path
 from uuid import uuid4
 
 from sourcing_agent import migration_runner as mr
@@ -37,6 +40,83 @@ except ImportError:  # pragma: no cover - exercised via skip path
 
 _REQUIRE = os.getenv("SOURCING_REQUIRE_PG_STORE_TESTS") == "1"
 _BASELINE_PATH = next(path for version, path in mr.discover_migrations() if version == "0001_baseline")
+_D3_COMMAND_MIGRATION = "0003_workflow_command_claim_fence_foundation"
+_ALL_MIGRATIONS = [
+    "0001_baseline",
+    "0002_action_request_schema_pins",
+    _D3_COMMAND_MIGRATION,
+]
+_D3_COMMAND_COLUMNS = (
+    ("runtime_namespace", "text", "NO", "''::text"),
+    ("provider_mode", "text", "NO", "''::text"),
+    ("workspace_id", "text", "NO", "''::text"),
+    ("scope_digest", "text", "NO", "''::text"),
+    ("coordination_plan_review_id", "bigint", "YES", None),
+    ("claim_authority_spec_digest", "text", "NO", "''::text"),
+    ("expected_predecessor_intent_id", "text", "YES", None),
+    ("expected_predecessor_phase_generation", "bigint", "YES", None),
+    ("expected_predecessor_source_control_epoch", "bigint", "YES", None),
+    ("expected_predecessor_decision_source_event_id", "text", "YES", None),
+    ("d3_business_fence_digest", "text", "NO", "''::text"),
+    ("claim_selection_generation", "bigint", "NO", "0"),
+    ("consumed_claim_authority_id", "text", "NO", "''::text"),
+    ("claim_generation", "bigint", "NO", "0"),
+    ("claim_token_digest", "text", "NO", "''::text"),
+    ("control_epoch", "bigint", "NO", "0"),
+    ("heartbeat_sequence", "bigint", "NO", "0"),
+    ("last_heartbeat_id", "text", "NO", "''::text"),
+    ("terminal_event_id", "text", "YES", None),
+    ("terminal_outcome_digest", "text", "YES", None),
+)
+_D3_COMMAND_CHECKS = {
+    "workflow_commands_claim_authority_spec_digest_shape_ck": (
+        "claim_authority_spec_digest",
+        "[0-9a-f]{64}",
+    ),
+    "workflow_commands_claim_generation_nonnegative_ck": ("claim_generation", ">= 0"),
+    "workflow_commands_claim_selection_generation_nonnegative_ck": ("claim_selection_generation", ">= 0"),
+    "workflow_commands_claim_token_digest_shape_ck": ("claim_token_digest", "[0-9a-f]{64}"),
+    "workflow_commands_consumed_claim_authority_id_shape_ck": (
+        "consumed_claim_authority_id",
+        "[^[:space:]]",
+    ),
+    "workflow_commands_control_epoch_nonnegative_ck": ("control_epoch", ">= 0"),
+    "workflow_commands_coordination_plan_review_id_shape_ck": ("coordination_plan_review_id", "> 0"),
+    "workflow_commands_d3_business_fence_digest_shape_ck": ("d3_business_fence_digest", "[0-9a-f]{64}"),
+    "workflow_commands_expected_predecessor_shape_ck": (
+        "expected_predecessor_intent_id",
+        "expected_predecessor_phase_generation",
+        "expected_predecessor_source_control_epoch",
+        "expected_predecessor_decision_source_event_id",
+        "[^[:space:]]",
+        "> 0",
+        ">= 0",
+    ),
+    "workflow_commands_heartbeat_sequence_nonnegative_ck": ("heartbeat_sequence", ">= 0"),
+    "workflow_commands_provider_mode_shape_ck": (
+        "provider_mode",
+        "live",
+        "simulate",
+        "scripted",
+        "replay",
+    ),
+    "workflow_commands_runtime_namespace_shape_ck": ("runtime_namespace", "[^[:space:]]"),
+    "workflow_commands_scope_digest_shape_ck": ("scope_digest", "[0-9a-f]{64}"),
+    "workflow_commands_terminal_outcome_digest_shape_ck": ("terminal_outcome_digest", "[0-9a-f]{64}"),
+    "workflow_commands_terminal_pair_shape_ck": (
+        "terminal_event_id IS NULL",
+        "terminal_outcome_digest IS NULL",
+        "terminal_event_id IS NOT NULL",
+        "terminal_outcome_digest IS NOT NULL",
+    ),
+    "workflow_commands_workspace_id_shape_ck": ("workspace_id", "[^[:space:]]"),
+}
+
+
+def _copy_migrations_through(directory: Path, through: int) -> None:
+    for version, path in mr.discover_migrations():
+        if int(version[:4]) <= through:
+            shutil.copy2(path, directory / path.name)
 
 
 def _resolve_dsn() -> str | None:
@@ -128,7 +208,7 @@ class MigrationRunnerTest(unittest.TestCase):
             with conn.cursor() as cur:
                 runner_fp = _fingerprint(cur, runner_schema)
 
-        self.assertEqual(result.applied, ["0001_baseline", "0002_action_request_schema_pins"])
+        self.assertEqual(result.applied, _ALL_MIGRATIONS)
         self.assertEqual(result.stamped, [])
         self.assertEqual(
             runner_fp["tables"], live_fp["tables"], "table set: schema created outside the migration ledger"
@@ -144,12 +224,12 @@ class MigrationRunnerTest(unittest.TestCase):
         with psycopg.connect(self.dsn, client_encoding="utf8") as conn:
             first = mr.apply_pending_migrations(conn, schema=schema)
             second = mr.apply_pending_migrations(conn, schema=schema)
-        self.assertEqual(first.applied, ["0001_baseline", "0002_action_request_schema_pins"])
+        self.assertEqual(first.applied, _ALL_MIGRATIONS)
         self.assertEqual(second.applied, [])
         self.assertEqual(second.stamped, [])
         self.assertEqual(
             second.already_applied,
-            ["0001_baseline", "0002_action_request_schema_pins"],
+            _ALL_MIGRATIONS,
         )
 
     def test_brownfield_schema_is_stamped_not_recreated(self) -> None:
@@ -170,8 +250,8 @@ class MigrationRunnerTest(unittest.TestCase):
                 cur.execute("SELECT version FROM schema_migrations ORDER BY 1")
                 ledger = [r[0] for r in cur.fetchall()]
         self.assertEqual(result.stamped, ["0001_baseline"])
-        self.assertEqual(result.applied, ["0002_action_request_schema_pins"])
-        self.assertEqual(ledger, ["0001_baseline", "0002_action_request_schema_pins"])
+        self.assertEqual(result.applied, ["0002_action_request_schema_pins", _D3_COMMAND_MIGRATION])
+        self.assertEqual(ledger, _ALL_MIGRATIONS)
 
     def test_request_schema_pin_constraints_install_not_valid_and_still_guard_new_writes(self) -> None:
         schema = self._fresh_schema("pin_not_valid")
@@ -208,7 +288,7 @@ class MigrationRunnerTest(unittest.TestCase):
                         "WHERE action_id = 'brownfield-action'"
                     )
             conn.rollback()
-        self.assertEqual(result.applied, ["0002_action_request_schema_pins"])
+        self.assertEqual(result.applied, ["0002_action_request_schema_pins", _D3_COMMAND_MIGRATION])
         self.assertEqual(
             constraints,
             [
@@ -344,9 +424,246 @@ class MigrationRunnerTest(unittest.TestCase):
                     (schema,),
                 )
                 pin_constraints = cur.fetchall()
+                cur.execute(
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_schema = %s AND table_name = 'workflow_commands' "
+                    "AND column_name = ANY(%s) ORDER BY column_name",
+                    (schema, [name for name, _data_type, _nullable, _default in _D3_COMMAND_COLUMNS]),
+                )
+                d3_command_columns = cur.fetchall()
+                cur.execute(
+                    "SELECT conname FROM pg_constraint c "
+                    "JOIN pg_namespace n ON n.oid = c.connamespace "
+                    "WHERE n.nspname = %s AND conname = ANY(%s) ORDER BY conname",
+                    (schema, list(_D3_COMMAND_CHECKS)),
+                )
+                d3_command_constraints = cur.fetchall()
         self.assertIsNone(migration_ledger, "failed migration must roll back the ledger DDL and rows")
         self.assertEqual(pin_columns, [], "failed migration must roll back both physical pin columns")
         self.assertEqual(pin_constraints, [], "failed migration must roll back both pin constraints")
+        self.assertEqual(d3_command_columns, [], "0002 failure must not partially apply later D3 columns")
+        self.assertEqual(d3_command_constraints, [], "0002 failure must not partially apply later D3 checks")
+
+    def test_d3_command_foundation_installs_on_populated_table_and_guards_new_writes(self) -> None:
+        schema = self._fresh_schema("d3_foundation")
+        quoted = quote_control_plane_postgres_identifier(schema)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            migrations_dir = Path(temp_dir)
+            _copy_migrations_through(migrations_dir, 2)
+            with psycopg.connect(self.dsn, client_encoding="utf8") as conn:
+                prefix_result = mr.apply_pending_migrations(
+                    conn,
+                    schema=schema,
+                    migrations_dir=migrations_dir,
+                )
+                with conn.cursor() as cur:
+                    cur.execute(f"SET search_path TO {quoted}")
+                    cur.execute(
+                        "INSERT INTO workflow_commands "
+                        "(command_id, workflow_run_id, command_type, owner, idempotency_key) "
+                        "VALUES ('legacy-cmd', 'workflow-legacy', 'legacy', 'legacy', 'legacy-cmd')"
+                    )
+                conn.commit()
+
+        self.assertEqual(prefix_result.applied, _ALL_MIGRATIONS[:2])
+        with psycopg.connect(self.dsn, client_encoding="utf8") as conn:
+            result = mr.apply_pending_migrations(conn, schema=schema)
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns "
+                    "WHERE table_schema = %s AND table_name = 'workflow_commands' "
+                    "AND column_name = ANY(%s) ORDER BY ordinal_position",
+                    (schema, [name for name, _data_type, _nullable, _default in _D3_COMMAND_COLUMNS]),
+                )
+                columns = cur.fetchall()
+                cur.execute(f"SET search_path TO {quoted}")
+                cur.execute(
+                    "SELECT runtime_namespace, provider_mode, workspace_id, scope_digest, "
+                    "coordination_plan_review_id, claim_authority_spec_digest, "
+                    "expected_predecessor_intent_id, expected_predecessor_phase_generation, "
+                    "expected_predecessor_source_control_epoch, "
+                    "expected_predecessor_decision_source_event_id, d3_business_fence_digest, "
+                    "claim_selection_generation, consumed_claim_authority_id, claim_generation, "
+                    "claim_token_digest, control_epoch, heartbeat_sequence, last_heartbeat_id, "
+                    "terminal_event_id, terminal_outcome_digest "
+                    "FROM workflow_commands WHERE command_id = 'legacy-cmd'"
+                )
+                sentinel = cur.fetchone()
+                cur.execute(
+                    "SELECT conname, convalidated, pg_get_constraintdef(c.oid) FROM pg_constraint c "
+                    "JOIN pg_class t ON t.oid = c.conrelid "
+                    "JOIN pg_namespace n ON n.oid = t.relnamespace "
+                    "WHERE n.nspname = %s AND t.relname = 'workflow_commands' "
+                    "AND conname = ANY(%s) ORDER BY conname",
+                    (schema, list(_D3_COMMAND_CHECKS)),
+                )
+                checks = cur.fetchall()
+
+        self.assertEqual(result.applied, [_D3_COMMAND_MIGRATION])
+        self.assertEqual(columns, list(_D3_COMMAND_COLUMNS))
+        self.assertEqual(
+            sentinel,
+            ("", "", "", "", None, "", None, None, None, None, "", 0, "", 0, "", 0, 0, "", None, None),
+        )
+        self.assertEqual(
+            [(name, validated) for name, validated, _definition in checks],
+            [(name, False) for name in sorted(_D3_COMMAND_CHECKS)],
+        )
+        for name, _validated, definition in checks:
+            normalized_definition = " ".join(str(definition).split()).casefold()
+            for required_fragment in _D3_COMMAND_CHECKS[name]:
+                self.assertIn(required_fragment.casefold(), normalized_definition, (name, definition))
+
+        with psycopg.connect(self.dsn, autocommit=True, client_encoding="utf8") as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"SET search_path TO {quoted}")
+                cur.execute(
+                    "INSERT INTO workflow_commands "
+                    "(command_id, workflow_run_id, command_type, owner, idempotency_key) "
+                    "VALUES ('fresh-cmd', 'workflow-fresh', 'legacy', 'legacy', 'fresh-cmd')"
+                )
+                cur.execute(
+                    "SELECT runtime_namespace, provider_mode, workspace_id, scope_digest, "
+                    "coordination_plan_review_id, claim_authority_spec_digest, "
+                    "expected_predecessor_intent_id, expected_predecessor_phase_generation, "
+                    "expected_predecessor_source_control_epoch, "
+                    "expected_predecessor_decision_source_event_id, d3_business_fence_digest, "
+                    "claim_selection_generation, consumed_claim_authority_id, claim_generation, "
+                    "claim_token_digest, control_epoch, heartbeat_sequence, last_heartbeat_id, "
+                    "terminal_event_id, terminal_outcome_digest "
+                    "FROM workflow_commands WHERE command_id = 'fresh-cmd'"
+                )
+                fresh_sentinel = cur.fetchone()
+        self.assertEqual(fresh_sentinel, sentinel)
+
+        digest_a = "a" * 64
+        digest_b = "b" * 64
+        digest_c = "c" * 64
+        digest_d = "d" * 64
+        with psycopg.connect(self.dsn, autocommit=True, client_encoding="utf8") as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"SET search_path TO {quoted}")
+                cur.execute(
+                    "UPDATE workflow_commands SET runtime_namespace = 'runtime-a', provider_mode = 'scripted', "
+                    "workspace_id = 'workspace-a', scope_digest = %s, coordination_plan_review_id = 1, "
+                    "claim_authority_spec_digest = %s, expected_predecessor_intent_id = 'intent-a', "
+                    "expected_predecessor_phase_generation = 1, expected_predecessor_source_control_epoch = 0, "
+                    "expected_predecessor_decision_source_event_id = 'event-source-a', "
+                    "d3_business_fence_digest = %s, claim_selection_generation = 1, "
+                    "consumed_claim_authority_id = 'authority-a', claim_generation = 1, "
+                    "claim_token_digest = %s, control_epoch = 2, heartbeat_sequence = 1, "
+                    "last_heartbeat_id = 'heartbeat-a', terminal_event_id = 'terminal-event-a', "
+                    "terminal_outcome_digest = %s WHERE command_id = 'legacy-cmd'",
+                    (digest_a, digest_b, digest_c, digest_d, digest_a),
+                )
+
+        invalid_updates = (
+            "provider_mode = 'invalid'",
+            "claim_generation = -1",
+            "scope_digest = 'BAD'",
+            "runtime_namespace = '   '",
+            "workspace_id = '   '",
+            "coordination_plan_review_id = 0",
+            "claim_authority_spec_digest = 'BAD'",
+            "d3_business_fence_digest = 'BAD'",
+            "claim_selection_generation = -1",
+            "consumed_claim_authority_id = '   '",
+            "claim_token_digest = 'BAD'",
+            "control_epoch = -1",
+            "heartbeat_sequence = -1",
+            "expected_predecessor_intent_id = NULL",
+            "expected_predecessor_intent_id = '   '",
+            "expected_predecessor_phase_generation = 0",
+            "expected_predecessor_source_control_epoch = -1",
+            "expected_predecessor_decision_source_event_id = '   '",
+            "terminal_event_id = NULL",
+            "terminal_outcome_digest = 'BAD'",
+        )
+        for assignment in invalid_updates:
+            with self.subTest(assignment=assignment):
+                with psycopg.connect(self.dsn, autocommit=True, client_encoding="utf8") as conn:
+                    with conn.cursor() as cur:
+                        cur.execute(f"SET search_path TO {quoted}")
+                        with self.assertRaises(psycopg.errors.CheckViolation):
+                            cur.execute(f"UPDATE workflow_commands SET {assignment} WHERE command_id = 'legacy-cmd'")
+
+    def test_d3_command_foundation_lock_wait_is_bounded_and_rolls_back_only_0003(self) -> None:
+        schema = self._fresh_schema("d3_lock_budget")
+        quoted = quote_control_plane_postgres_identifier(schema)
+        blocker_ready = threading.Event()
+        release_blocker = threading.Event()
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            migrations_dir = Path(temp_dir)
+            _copy_migrations_through(migrations_dir, 2)
+            with psycopg.connect(self.dsn, client_encoding="utf8") as setup:
+                prefix_result = mr.apply_pending_migrations(
+                    setup,
+                    schema=schema,
+                    migrations_dir=migrations_dir,
+                )
+        self.assertEqual(prefix_result.applied, _ALL_MIGRATIONS[:2])
+
+        def hold_workflow_command_write() -> None:
+            with psycopg.connect(self.dsn, client_encoding="utf8") as blocker:
+                with blocker.cursor() as cur:
+                    cur.execute(f"SET search_path TO {quoted}")
+                    cur.execute(
+                        "INSERT INTO workflow_commands "
+                        "(command_id, workflow_run_id, command_type, owner, idempotency_key) "
+                        "VALUES ('lock-cmd', 'workflow-lock', 'legacy', 'legacy', 'lock-cmd')"
+                    )
+                    blocker_ready.set()
+                    release_blocker.wait(timeout=15)
+                blocker.rollback()
+
+        thread = threading.Thread(target=hold_workflow_command_write, daemon=True)
+        thread.start()
+        self.assertTrue(blocker_ready.wait(timeout=5), "blocking workflow-command writer did not start")
+        started = time.monotonic()
+        try:
+            with psycopg.connect(self.dsn, client_encoding="utf8") as conn:
+                with self.assertRaises(psycopg.errors.LockNotAvailable):
+                    mr.apply_pending_migrations(conn, schema=schema)
+        finally:
+            release_blocker.set()
+            thread.join(timeout=5)
+        elapsed = time.monotonic() - started
+        self.assertFalse(thread.is_alive(), "blocking workflow-command writer did not exit")
+        self.assertGreaterEqual(elapsed, 4.0)
+        self.assertLess(elapsed, 8.0)
+
+        with psycopg.connect(self.dsn, autocommit=True, client_encoding="utf8") as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"SET search_path TO {quoted}")
+                cur.execute("SELECT version FROM schema_migrations ORDER BY version")
+                ledger = [row[0] for row in cur.fetchall()]
+                cur.execute(
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_schema = %s AND table_name = 'workflow_commands' "
+                    "AND column_name = ANY(%s) ORDER BY column_name",
+                    (schema, [name for name, _data_type, _nullable, _default in _D3_COMMAND_COLUMNS]),
+                )
+                columns = cur.fetchall()
+                cur.execute(
+                    "SELECT conname FROM pg_constraint c "
+                    "JOIN pg_namespace n ON n.oid = c.connamespace "
+                    "WHERE n.nspname = %s AND conname = ANY(%s) ORDER BY conname",
+                    (schema, list(_D3_COMMAND_CHECKS)),
+                )
+                checks = cur.fetchall()
+
+        self.assertEqual(ledger, _ALL_MIGRATIONS[:2])
+        self.assertEqual(columns, [])
+        self.assertEqual(checks, [])
+
+        with psycopg.connect(self.dsn, client_encoding="utf8") as conn:
+            recovered = mr.apply_pending_migrations(conn, schema=schema)
+            again = mr.apply_pending_migrations(conn, schema=schema)
+        self.assertEqual(recovered.applied, [_D3_COMMAND_MIGRATION])
+        self.assertEqual(again.applied, [])
+        self.assertEqual(again.already_applied, _ALL_MIGRATIONS)
 
     def test_applied_migration_checksum_change_fails_closed(self) -> None:
         schema = self._fresh_schema("checksum")

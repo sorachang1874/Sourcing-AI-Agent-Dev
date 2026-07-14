@@ -238,9 +238,17 @@ serve、会话/事件层、planner loop），用一个垂直切片证明闭环�
   `WorkflowCommandRecord` schema refs=`6 existing + 1 typed nested = 7`；七个 raw nested return 已降为 **0**，
   carrier inventory 修正为 **16 routes/17 method-route variants**。递归 sanitizer 覆盖 command、operation
   action/run/event、provenance 与 execution summary，frontend adapter/demo 不再保留 raw command dict。author
-  evidence=`7/45/14`、frontend build `81 modules`、lint `58 files`、mypy `81/4` + diff clean；fresh pinned
-  non-author review pending。该批零 migration/claim/CAS/Stage A/B/dispatch/served，故 R-019、action-root gate、
+  evidence=`7/45/14`、frontend build `81 modules`、lint `58 files`、mypy `81/4` + diff clean。首个 pinned formal
+  attempt 的 substantive output=`0/2/3/0`，但 causal-binding verifier 将 artifact 判 invalid；它没有 formal
+  verdict，五项 direct findings 进入 fixed-forward，fresh valid re-review pending。该批零
+  migration/claim/CAS/Stage A/B/dispatch/served，故 R-019、action-root gate、
   OB-10.1/10.2/10.3/10.4 和 served=0 均不变。
+- D3c2a dormant migration candidate 仅安装 `workflow_commands` 的精确 20 columns + 16 个 `NOT VALID` local
+  checks，使用 5s transaction-local lock budget；populated legacy sentinel、0003-only timeout 全回滚、恢复后 single
+  apply + no-op 已纳入 PG acceptance。descriptor 仍为 33 columns，零 runtime read/write、claim/CAS、Stage A/B、
+  dispatch 或 served 激活。这只是 Migration A 的 command-table fragment；其余 Migration A、Migration B-D、
+  scope issuer/manifests/registries/bootstrap factory+verifier、terminal/race evidence、R-019、action-root gate、
+  OB-10.1/10.2/10.3/10.4 与 served=0 全部 open，fresh pinned non-author review pending。
 
 ### D4 — 之后（本文只圈定，不展开）
 
@@ -340,6 +348,10 @@ TD-4 初始路由表已按 owner 2026-07-13 裁决落档（D0 §4）。
 5. `judge_call_key` 追加 workspace/intent generation/有效路由/schema/policy revision 维度；
    「official domain 归属」的服务端证明规则成文（D3 批）。
 6. workflow command claim-fence（migration，D3 批前置；本项没有 OB-ID）：review session 必须先创建，
+   **Implementation status (2026-07-15):** D3c1 已先封闭 public projection；D3c2a 仅安装
+   `workflow_commands` 的 20-column/16-`NOT VALID` dormant command subbatch，descriptor 与 runtime writers 未激活。
+   这不是完整 Migration A：review-session/OperationRun/activity/event/receipt/quarantine roots、Migration B-D、
+   canonical-id 最终 grammar 与本项以下所有 owner/runtime/acceptance obligations 仍 open。
    canonical coordination lineage 为 `coordination_plan_review_id=plan_review_sessions.review_id`，物理类型同为
    positive `BIGINT`（brownfield `NULL`，strict `>0`，禁止 `TEXT`/empty）；poll-mode 的唯一 scope issuer 是
    private scoped review-session repository：它从 server-owned runtime context + authenticated workspace
@@ -479,8 +491,9 @@ TD-4 初始路由表已按 owner 2026-07-13 裁决落档（D0 §4）。
    receipt persistence 拆行，matrix 形状锁为机械非空十列 × **26 data rows**
    `Field/object, Single owner, Physical SOT, Allowed values, Derivation rule, Consumers, Forbidden consumers,
    Fallback/brownfield status, Migration status, Deletion condition`，因此 decision shape complete；它与物理
-   scope/claim identity contract 是 D3c 的开工输入，但 owner/migration/repository/runtime 仍未实施；未落
-   migration 前仍为 NOT IMPLEMENTED，且没有运行证据也不得关闭 §6#7 的 physical implementation。
+   scope/claim identity contract 是 D3c 的开工输入。D3c2a 只落了 dormant command-table fragment；matrix 的
+   physical owner/repository/runtime 与其余 Migration A 仍未实施。没有 owner/runtime/race evidence 仍不得关闭
+   §6#7 的 physical implementation。
 8. 文档标签清理（残留「详设 v2」字样等）随下一次文档批处理。
 
 ## 7. v1 评审 findings 处置总索引
