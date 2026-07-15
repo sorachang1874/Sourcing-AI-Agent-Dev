@@ -17,6 +17,7 @@ D0F_PATH = REPO_ROOT / "docs" / "TRACK_D_D0F_DURABLE_MODEL_INVOCATION_ENVELOPE_I
 D3C2G_PATH = REPO_ROOT / "docs" / "TRACK_D_D3C2G_COST_LEDGER_DISPATCH_EXPOSURE_DECISION_LOCK.md"
 D3C2H0_PATH = REPO_ROOT / "docs" / "TRACK_D_D3C2H0_EVIDENCE_CROSS_CONTRACT_RATIFICATION.md"
 CHECKLIST_PATH = REPO_ROOT / "docs" / "DESIGN_INVARIANT_CHECKLIST.md"
+D3C2A_COMMAND_MIGRATION_PATH = MIGRATIONS_ROOT / "0003_workflow_command_claim_fence_foundation.sql"
 
 
 def _expected_rows(raw: str) -> tuple[tuple[str, ...], ...]:
@@ -885,7 +886,20 @@ def test_combined_relations_foreign_keys_indexes_and_parent_blockers_are_exact()
     header, rows = _table(upstream)
     assert header == ("Order", "Name", "Kind", "Exact columns / target")
     assert _rows_without_code_ticks(rows) == EXPECTED_UPSTREAM_CONSTRAINTS
-    assert "D3b's ratified `workflow_commands.workspace_id`" in upstream
+    normalized_upstream = _normalized(upstream)
+    assert "Migration `0003_workflow_command_claim_fence_foundation.sql` already installs" in normalized_upstream
+    assert "must adopt and validate that existing column/check" in normalized_upstream
+    assert "preserve empty-string brownfield sentinels" in normalized_upstream
+    assert "must not add, drop, rewrite, or reinterpret it" in normalized_upstream
+    assert "must first add D3b's ratified" not in upstream
+
+    command_migration = D3C2A_COMMAND_MIGRATION_PATH.read_text(encoding="utf-8")
+    assert "ADD COLUMN workspace_id text DEFAULT ''::text NOT NULL" in command_migration
+    assert (
+        "ADD CONSTRAINT workflow_commands_workspace_id_shape_ck CHECK (\n"
+        "        workspace_id = '' OR workspace_id ~ '[^[:space:]]'\n"
+        "    ) NOT VALID"
+    ) in command_migration
 
     seven = _section(section, "### 9.2 Ratified seven-table", "### 9.3 Exact combined index")
     header, rows = _table(seven)
@@ -1344,7 +1358,8 @@ def test_nonclosure_and_validation_command_are_honest() -> None:
     for marker in (
         "closes no migration, repository, runtime, rollout, formal-review, provider, live, W6, manual, product",
         "does not authorize SQL by itself",
-        "fresh pinned non-author review of this repaired decision lock",
+        "fresh pinned non-author re-review of this repaired decision lock",
+        "NO-GO 0/0/1/0",
         "formal `NO-GO 0/3/3/0`",
         "failed closed as `invalid_transport`",
         "advisory only and cannot be promoted into a formal verdict",

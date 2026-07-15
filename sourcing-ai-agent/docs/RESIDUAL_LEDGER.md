@@ -150,7 +150,12 @@
   `CHECK` `UNKNOWN`, and defines an executable 17-action create/attach plus 16-action rollback DAG with all six internal
   forward/cycle FKs attached only after their targets exist. D3c2i now separately ratifies the typed plan/review/gate and
   OB-10.2 Tier-2 grant parent decisions; matching pinned non-author `GO` artifacts for this repair and D3c2i remain hard
-  predecessors, so no dormant migration is authorized. Fresh pinned review of this repair is pending. This annotation
+  predecessors, so no dormant migration is authorized. Pinned `af4db419...` fresh scope-local advisory=
+  `NO-GO 0/0/1/0`; its sole P2 found that the document told a future migration to add
+  `workflow_commands.workspace_id` even though migration `0003` already installs `TEXT DEFAULT '' NOT NULL` plus its
+  named `NOT VALID` check. The current fixed-forward requires adopt/validate, preserves the empty-string brownfield
+  sentinel, forbids add/drop/rewrite/reinterpret, and makes the oracle read `0003` directly. Fresh pinned re-review is
+  pending; the advisory is not formal `GO`. This annotation
   changes neither R-019's pending state nor its 26-call ratchet, and it does not alter or claim closure of R-027, R-023,
   R-028, R-029, action-root, served=0, provider/live, Migration A-D, or any other residual.
 

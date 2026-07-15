@@ -440,9 +440,12 @@ serve、会话/事件层、planner loop），用一个垂直切片证明闭环�
   Tier-2 grant parent 的物理 owner/key 当时仍是两个 hard prerequisites；后续 D3c2i 已独立 ratify exact parent
   decision，但 D3c2h1 repair 与 D3c2i 都须 matching pinned non-author `GO`，禁止以无 FK 绕过。initial v1 仍仅
   `model_tool_v1` + live/simulate/scripted，replay zero-write，Harvest/provider-search deferred。
-  该批仍为 `decision_locked_not_implemented`：零 SQL/descriptor/repository/runtime/provider/live，第二轮 repair 仍须
-  fresh pinned formal non-author review；即使 repair `GO`，也须先 separate parent-owner decision lock + review，才可
-  申请 dormant combined migration。
+  Pinned `af4db419...` fresh scope-local advisory=`NO-GO 0/0/1/0`；唯一 P2 是误称 future migration 必须新增
+  migration `0003` 已安装的 `workflow_commands.workspace_id`。Current fixed-forward 要求 adopt/validate 既有
+  `TEXT DEFAULT '' NOT NULL` + named `NOT VALID` check，保留 brownfield empty sentinel，禁止 add/drop/rewrite/
+  reinterpret；oracle 直接读取 `0003`。该批仍为 `decision_locked_not_implemented`：零 SQL/descriptor/repository/
+  runtime/provider/live，fresh pinned re-review pending，formal review 仍未取得；即使 repair `GO`，也须先
+  separate parent-owner decision lock + review，才可申请 dormant combined migration。
 - D3c2i decision-only parent lock 将上述两个 symbolic prerequisite 收口到 sole future
   `PlanReviewAuthorityRepository` / `store.repos.plan_review_authority` aggregate：immutable
   `plan_review_gate_authority_versions`（32 columns）为 exposure 19–25 的历史 typed parent，
@@ -731,7 +734,9 @@ TD-4 初始路由表已按 owner 2026-07-13 裁决落档（D0 §4）。
    与 combined 19/18 DAG 独立锁为 `decision_locked_not_implemented`；Plan §6 item 6/R-019 与 item 7/
    OB-1.1/OB-4.1/OB-9.1/OB-10.2 的实现仍未关闭。D3c2h1 repair 与 D3c2i 必须各有 matching pinned non-author `GO`；
    不得猜 schema、用 JSON/application-only proof 或省略 FK，因此当前 decisions 仍不授权 migration、runtime 或
-   provider activation。
+   provider activation。`af4db419...` advisory 的唯一 P2 已 fixed-forward：future combined migration 只可
+   adopt/validate migration `0003` 已安装的 `workflow_commands.workspace_id` 与 named `NOT VALID` check，保留
+   empty sentinel，禁止重新 add/drop/rewrite/reinterpret；fresh pinned re-review 仍 pending。
    strict-D3 首次 `succeeded|failed_terminal` result command+event 取 common lock，在同一 UoW 写
    canonical nullable outcome digest/event pair；pair 在 result-terminal 期间不可变，仅 registered reopen 可在
    requeue 前清除；event composite unique + command `MATCH SIMPLE DEFERRABLE` FK + local both-null/both-non-null

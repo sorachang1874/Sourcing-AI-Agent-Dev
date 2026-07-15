@@ -3,7 +3,10 @@
 > Status: **decision-lock repair only** (2026-07-15). The first pinned highest-effort non-author review of commit
 > `1c4a2d9177dcb3470117700086b12fd533898bb7` returned formal `NO-GO 0/3/3/0`. A later Ultra review attempt of
 > `f0a0069c83b7ec582682ad79f7a278e604cdd4a0` produced substantive advisory findings but failed closed as
-> `invalid_transport`; it is not formal review evidence. This second fixed-forward author candidate repairs the executable
+> `invalid_transport`; it is not formal review evidence. The fresh scope-local advisory against
+> `af4db419bddb9b18dd61f6dcca6191bb70f4733c` returned `NO-GO 0/0/1/0`: its sole P2 found stale wording that told a
+> future migration to add `workflow_commands.workspace_id` even though migration `0003` already installed it. This
+> fixed-forward author candidate repairs that installed-parent adoption contract in addition to the executable
 > DDL DAG, PostgreSQL identifier limit, attempt-8 access path, nullable timestamp checks, and exact oracle coverage in
 > addition to the first six lifecycle/relation/index/check repairs. It still adds no SQL, migration, descriptor,
 > repository, runtime writer, provider/model/Harvest call, served Agent tool, live activation, or product gate. D0f is
@@ -510,8 +513,12 @@ activate a strict-D3 row or reinterpret a brownfield sentinel.
 | 12 | `workflow_events_d3_attempt_fk` | FK_STD | `(PFX, operation_id, command_id, activity_run_id, activity_attempt_id)` -> `workflow_activity_attempts(PFX, operation_run_id, command_id, activity_run_id, attempt_id)` |
 | 13 | `model_invocation_envelopes_ref_digest_uk` | existing UNIQUE | `(PFX, model_invocation_envelope_ref, envelope_digest)` |
 
-The future upstream migration must first add D3b's ratified `workflow_commands.workspace_id`, adopt only strict rows,
-validate the complete full-PFX chain, build these uniques without weakening column order, and only then attach the FKs.
+Migration `0003_workflow_command_claim_fence_foundation.sql` already installs D3b's ratified
+`workflow_commands.workspace_id` as `TEXT DEFAULT '' NOT NULL` with the named
+`workflow_commands_workspace_id_shape_ck` constraint `NOT VALID`. The future combined migration must adopt and
+validate that existing column/check, preserve empty-string brownfield sentinels, and must not add, drop, rewrite, or
+reinterpret it. It then validates the complete full-PFX strict-row chain, builds these uniques without weakening column
+order, and only then attaches the FKs.
 
 ### 9.2 Ratified seven-table constraints — exactly 52, including 29 FKs
 
@@ -979,15 +986,19 @@ review approval.
 - the complete 11×10 matrix and current physical absence of all seven future tables/owners;
 - actual D0f durable owner/migration presence at `539c689`, including the exact TIMESTAMPTZ substrate, without claiming
   a Decimal cost substrate.
+- migration `0003`'s already-installed `workflow_commands.workspace_id` exact default/nullability and named `NOT VALID`
+  shape check, plus the future combined migration's adopt/validate/no-add-or-drop contract.
 
 D3c2h1's first pinned `gpt-5.6-sol / ultra / priority` non-author review of `1c4a2d9177dcb3470117700086b12fd533898bb7`
 was formal `NO-GO 0/3/3/0`. The later Ultra attempt against `f0a0069c83b7ec582682ad79f7a278e604cdd4a0`
 failed closed as `invalid_transport`; its substantive output is advisory only and cannot be promoted into a formal verdict.
-This candidate is a second fixed-forward author repair, not a review result. It closes no migration, repository, runtime,
+The fresh scope-local advisory against `af4db419bddb9b18dd61f6dcca6191bb70f4733c` returned
+`NO-GO 0/0/1/0`; its sole P2 was the stale `workspace_id` installation wording now fixed above. This candidate is an
+author repair, not a review result. It closes no migration, repository, runtime,
 rollout, formal-review, provider, live, W6, manual, product, Migration A–D, served-action, or residual gate and does not
 authorize SQL by itself. The next bounded order is:
 
-1. fresh pinned non-author review of this repaired decision lock;
+1. fresh pinned non-author re-review of this repaired decision lock;
 2. separate typed plan/review/gate-parent and Tier-2 grant-parent owner decision lock, then its own pinned review;
 3. only after both scopes have matching formal `GO`, a dormant combined migration with real-PG
    constraint/index/rollback/race/plan/lock acceptance;
@@ -995,7 +1006,7 @@ authorize SQL by itself. The next bounded order is:
 5. strict writers and fake/simulate/scripted E2E;
 6. separately reviewed provider-search variant and only then a separately gated bounded live canary.
 
-Current second-repair author evidence is exact H1 `13 passed`, the five-file related battery `139 passed`, Ruff
+Current P2-repair author evidence is exact H1 `13 passed`, the five-file related battery `139 passed`, Ruff
 check/format clean, and `git diff --check` clean. It uses no provider/model credentials and remains author evidence only:
 
 ```bash
