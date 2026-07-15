@@ -273,7 +273,28 @@ remains `R-019`, non-enumerable `raw` remains `R-030`, revoked-Proxy availabilit
 endpoint-specific snapshot parameterization remains regression-depth follow-up. A fresh pinned Ultra review must bind
 the enclosing fixed-forward commit; author tests and a successful frontend build are not a verdict.
 
-### 3.6 Earlier precommit adversarial author-audit fixes
+### 3.6 Third valid Ultra review fixed-forward
+
+The next isolated-home review bound
+`f5c33b0a28bb82f6a979d928dcb21eb907836fde..46af086692b230eae1d0455f03d791cf0008adf7`
+and produced the valid artifact
+`runtime/reviews/20260715T041856Z_Track_D_D3c1a_second_Ultra_fixed-forward_46af086.md` with formal **NO-GO**,
+P0/P1/P2/P3=`0/0/2/2`. It independently confirmed that the same-list exact-cap and exact 256-object-cap fixes are
+correct. Its two P2 mechanisms are fixed-forwarded in this candidate:
+
+1. Sanitized object fields now expose the recursive `WorkflowPublicJsonObject` / `WorkflowPublicJsonValue` contract,
+   and every public nested/list endpoint uses `WorkflowPublicFrozenArray`. The array view explicitly removes all nine
+   mutators. A value-specific `Array.isArray` overload preserves that opaque frozen-array view instead of widening a
+   trusted JSON value back to mutable `any[]`. The compile oracle rejects second-level object assignment and both
+   `push` and `splice` after ordinary `Array.isArray` narrowing, in addition to its existing root/raw/list assertions.
+2. The R-030 retirement task now follows the ledger's governing audit rule: the row is retained, exact retirement
+   evidence is appended, and its status transitions from `accepted` to `closed`; the task no longer deletes history.
+
+The two P3 findings remain the already accepted `R-019` streaming-allocation and `R-030` non-enumerable compatibility
+boundaries. They are not promoted into this bounded compile-contract/document correction. A fresh pinned Ultra review
+must bind the new enclosing commit; this formal NO-GO remains controlling until that re-review returns GO.
+
+### 3.7 Earlier precommit adversarial author-audit fixes
 
 After implementing the five direct findings, adversarial passes in the author session exposed additional bounded
 cross-layer gaps. They are fixed in the same D3c1a candidate because leaving them open would make the advertised public
@@ -597,6 +618,19 @@ Second Ultra-review fixed-forward evidence, before creating its enclosing commit
 - fresh formal pinned re-review of the new enclosing commit remains pending. These author results do not override the
   recorded NO-GO.
 
+Third Ultra-review fixed-forward evidence, before creating its enclosing commit:
+
+- valid formal review artifact against `46af086`: **NO-GO**, P0/P1/P2/P3=`0/0/2/2`;
+- combined D3 claim-fence + D3c1a projection + pre-Agent contract lane: **119 passed in 84.73s**;
+- frontend production build: **82 modules transformed**, `551.65 kB` / gzip `164.40 kB`; the existing `>500 kB`
+  chunk warning remains informational;
+- the compile-only contract now rejects second-level ordinary-object mutation plus index assignment, `push`, and
+  `splice` after `Array.isArray` narrowing, while preserving typed JSON reads;
+- R-030 remains `accepted` and auditable until its full retirement task passes, after which the same row becomes
+  `closed`;
+- fresh formal pinned re-review of the new enclosing commit remains pending. These author results do not override the
+  recorded NO-GO.
+
 The advisory also exercised hostile hash-collision keys with zero equality-hook calls, alternating carrier depth 40 in
 9 command projections, and a binary depth-10 carrier tree in 99 projections; budget cutoffs omitted the member rather
 than emitting an empty canonical carrier. This is author/advisory evidence, not a formal pinned verdict.
@@ -610,8 +644,9 @@ recorded above. The two valid medium-effort reviews of `4919990` are advisory `N
 in §3.3. The valid `gpt-5.6-sol / ultra / priority` artifact for `b54ef9c...` is formal **NO-GO** and its five P2
 findings are fixed-forwarded in §3.4; `R-019` and `R-030` remain explicit P3 residuals. A fresh formal pinned re-review
 for `f5c33b0...` is also formal **NO-GO**, with its four P2 findings fixed-forwarded in §3.5. A fresh formal pinned
-re-review must bind the enclosing commit. Until that scope-matched artifact returns GO, live/W6/manual validation, promotion,
-and milestone signoff remain fail closed for this scope.
+re-review for `46af086...` is formal **NO-GO**, with its two P2 findings fixed-forwarded in §3.6. A fresh formal pinned
+re-review must bind the enclosing commit. Until that scope-matched artifact returns GO, live/W6/manual validation,
+promotion, and milestone signoff remain fail closed for this scope.
 
 ## 10. Explicit non-closure
 

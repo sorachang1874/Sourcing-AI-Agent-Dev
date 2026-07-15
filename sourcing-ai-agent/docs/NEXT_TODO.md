@@ -380,7 +380,8 @@
   `WorkflowCommandRecord`、Activity/Attempt/Delta、Operation Action/Run/Event/Provenance 的全部 `raw` 读者，给每个
   读者迁移到既有 typed DTO field 或一个单独命名且独立有界的 wire snapshot；迁移期间禁止 `raw` enumerable、
   spread/`Object.assign`、Response body/cache key/transport serializer 使用。所有读者清零后，在同一有界批删除
-  `attachDemoRaw`、全部 exported `raw` interface members 与 compatibility projection，并删除 `R-030` ledger row。
+  `attachDemoRaw`、全部 exported `raw` interface members 与 compatibility projection；保留 `R-030` ledger row，
+  追加 exact exit evidence 并把状态从 `accepted` 转为 `closed`，不得删除审计历史。
   exit evidence 必须包含：静态 consumer inventory `>0 -> 0`、frontend type/build、全部 workflow/operation endpoint
   snapshot regressions、无 `raw` public serializer 的 source scan，以及 scope-matched independent review GO。在这些
   条件满足前 R-030 保持 accepted residual，不阻断与该 compatibility surface 无关的 non-live Track D 开发。

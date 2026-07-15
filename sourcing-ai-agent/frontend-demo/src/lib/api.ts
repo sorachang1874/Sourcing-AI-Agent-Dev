@@ -196,9 +196,9 @@ export interface WorkflowCommandExecutionSummary {
   readonly entityDeltaStatusCounts: Readonly<Record<string, number>>;
   readonly entityDeltaKindCounts: Readonly<Record<string, number>>;
   readonly latestEffectStatus: string;
-  readonly latestActivity: Readonly<Record<string, unknown>>;
-  readonly latestAttempt: Readonly<Record<string, unknown>>;
-  readonly latestEntityDelta: Readonly<Record<string, unknown>>;
+  readonly latestActivity: WorkflowPublicJsonObject;
+  readonly latestAttempt: WorkflowPublicJsonObject;
+  readonly latestEntityDelta: WorkflowPublicJsonObject;
   readonly sampleLimit: number;
   readonly sampleTruncated: boolean;
 }
@@ -222,7 +222,7 @@ export interface WorkflowCommandControlPolicy {
   readonly runningCancelBlockedReason: string;
   readonly runningResumeBlockedReason: string;
   readonly fallbackStatus: string;
-  readonly raw: Readonly<Record<string, unknown>>;
+  readonly raw: WorkflowPublicJsonObject;
 }
 
 const WORKFLOW_COMMAND_PUBLIC_WIRE_FIELDS = [
@@ -299,22 +299,49 @@ const WORKFLOW_COMMAND_PUBLIC_OBJECT_FIELDS = new Set([
   "execution_summary",
 ]);
 
-export type WorkflowPublicDeepReadonly<T> =
-  T extends (...args: never[]) => unknown
-    ? T
-    : T extends readonly (infer TItem)[]
-      ? readonly WorkflowPublicDeepReadonly<TItem>[]
-      : T extends object
-        ? { readonly [TKey in keyof T]: WorkflowPublicDeepReadonly<T[TKey]> }
-        : T;
+export interface WorkflowPublicFrozenArray<T> extends ReadonlyArray<T> {
+  readonly copyWithin: never;
+  readonly fill: never;
+  readonly pop: never;
+  readonly push: never;
+  readonly reverse: never;
+  readonly shift: never;
+  readonly sort: never;
+  readonly splice: never;
+  readonly unshift: never;
+}
 
-type WorkflowPublicJsonValue =
+export type WorkflowPublicJsonObject = {
+  readonly [key: string]: WorkflowPublicJsonValue;
+};
+
+export interface WorkflowPublicJsonArray
+  extends WorkflowPublicFrozenArray<WorkflowPublicJsonValue> {}
+
+export type WorkflowPublicJsonValue =
   | string
   | number
   | boolean
   | null
-  | { readonly [key: string]: WorkflowPublicJsonValue }
-  | readonly WorkflowPublicJsonValue[];
+  | WorkflowPublicJsonObject
+  | WorkflowPublicJsonArray;
+
+declare global {
+  interface ArrayConstructor {
+    isArray(value: WorkflowPublicJsonValue): value is WorkflowPublicJsonArray;
+  }
+}
+
+export type WorkflowPublicDeepReadonly<T> =
+  unknown extends T
+    ? WorkflowPublicJsonValue
+    : T extends (...args: never[]) => unknown
+      ? T
+      : T extends readonly (infer TItem)[]
+        ? WorkflowPublicFrozenArray<WorkflowPublicDeepReadonly<TItem>>
+        : T extends object
+          ? { readonly [TKey in keyof T]: WorkflowPublicDeepReadonly<T[TKey]> }
+          : T;
 
 const WORKFLOW_ACTIVITY_CONTROL_TARGET_PUBLIC_WIRE_FIELDS = [
   "target_type",
@@ -2305,12 +2332,12 @@ export interface WorkflowCommandRecord {
   readonly status: string;
   readonly claimGeneration?: number;
   readonly controlEpoch?: number;
-  readonly displayContract: Readonly<Record<string, unknown>>;
+  readonly displayContract: WorkflowPublicJsonObject;
   readonly controlPolicy: WorkflowCommandControlPolicy;
-  readonly controlState: Readonly<Record<string, unknown>>;
-  readonly activitySpinePolicy: Readonly<Record<string, unknown>>;
+  readonly controlState: WorkflowPublicJsonObject;
+  readonly activitySpinePolicy: WorkflowPublicJsonObject;
   readonly executionSummary?: WorkflowCommandExecutionSummary;
-  readonly raw: Readonly<Record<string, unknown>>;
+  readonly raw: WorkflowPublicJsonObject;
 }
 
 export interface WorkflowActivityControlTarget {
@@ -2319,12 +2346,12 @@ export interface WorkflowActivityControlTarget {
   readonly commandType: string;
   readonly owner: string;
   readonly commandStatus: string;
-  readonly displayContract: Readonly<Record<string, unknown>>;
-  readonly controlPolicy: Readonly<Record<string, unknown>>;
-  readonly controlState: Readonly<Record<string, unknown>>;
-  readonly activitySpinePolicy: Readonly<Record<string, unknown>>;
+  readonly displayContract: WorkflowPublicJsonObject;
+  readonly controlPolicy: WorkflowPublicJsonObject;
+  readonly controlState: WorkflowPublicJsonObject;
+  readonly activitySpinePolicy: WorkflowPublicJsonObject;
   readonly fallbackStatus: string;
-  readonly raw: Readonly<Record<string, unknown>>;
+  readonly raw: WorkflowPublicJsonObject;
 }
 
 export interface WorkflowActivityRecord {
@@ -2340,18 +2367,18 @@ export interface WorkflowActivityRecord {
   readonly status: string;
   readonly phase: string;
   readonly idempotencyKey: string;
-  readonly providerRef: Readonly<Record<string, unknown>>;
-  readonly input: Readonly<Record<string, unknown>>;
-  readonly output: Readonly<Record<string, unknown>>;
-  readonly artifactRefs: readonly WorkflowPublicJsonValue[];
-  readonly entityCounts: Readonly<Record<string, unknown>>;
-  readonly metadata: Readonly<Record<string, unknown>>;
+  readonly providerRef: WorkflowPublicJsonObject;
+  readonly input: WorkflowPublicJsonObject;
+  readonly output: WorkflowPublicJsonObject;
+  readonly artifactRefs: WorkflowPublicJsonArray;
+  readonly entityCounts: WorkflowPublicJsonObject;
+  readonly metadata: WorkflowPublicJsonObject;
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly mutationContract: string;
   readonly moduleStateMutated: boolean;
   readonly controlTarget?: WorkflowActivityControlTarget;
-  readonly raw: Readonly<Record<string, unknown>>;
+  readonly raw: WorkflowPublicJsonObject;
 }
 
 export interface WorkflowActivityAttemptRecord {
@@ -2370,19 +2397,19 @@ export interface WorkflowActivityAttemptRecord {
   readonly startedAt: string;
   readonly completedAt: string;
   readonly nextRetryAt: string;
-  readonly rateLimitRef: Readonly<Record<string, unknown>>;
-  readonly error: Readonly<Record<string, unknown>>;
-  readonly input: Readonly<Record<string, unknown>>;
-  readonly output: Readonly<Record<string, unknown>>;
-  readonly artifactRefs: readonly WorkflowPublicJsonValue[];
+  readonly rateLimitRef: WorkflowPublicJsonObject;
+  readonly error: WorkflowPublicJsonObject;
+  readonly input: WorkflowPublicJsonObject;
+  readonly output: WorkflowPublicJsonObject;
+  readonly artifactRefs: WorkflowPublicJsonArray;
   readonly idempotencyKey: string;
-  readonly metadata: Readonly<Record<string, unknown>>;
+  readonly metadata: WorkflowPublicJsonObject;
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly mutationContract: string;
   readonly moduleStateMutated: boolean;
   readonly controlTarget?: WorkflowActivityControlTarget;
-  readonly raw: Readonly<Record<string, unknown>>;
+  readonly raw: WorkflowPublicJsonObject;
 }
 
 export interface WorkflowEntityDeltaRecord {
@@ -2401,18 +2428,18 @@ export interface WorkflowEntityDeltaRecord {
   readonly deltaKind: string;
   readonly status: string;
   readonly reason: string;
-  readonly sourceRef: Readonly<Record<string, unknown>>;
-  readonly entityPayload: Readonly<Record<string, unknown>>;
-  readonly projectionEffect: Readonly<Record<string, unknown>>;
-  readonly artifactRefs: readonly WorkflowPublicJsonValue[];
+  readonly sourceRef: WorkflowPublicJsonObject;
+  readonly entityPayload: WorkflowPublicJsonObject;
+  readonly projectionEffect: WorkflowPublicJsonObject;
+  readonly artifactRefs: WorkflowPublicJsonArray;
   readonly idempotencyKey: string;
-  readonly metadata: Readonly<Record<string, unknown>>;
+  readonly metadata: WorkflowPublicJsonObject;
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly mutationContract: string;
   readonly moduleStateMutated: boolean;
   readonly controlTarget?: WorkflowActivityControlTarget;
-  readonly raw: Readonly<Record<string, unknown>>;
+  readonly raw: WorkflowPublicJsonObject;
 }
 
 export interface OperationRunStatusSummary {
@@ -2442,7 +2469,7 @@ export interface OperationRunControlState {
   readonly controlSourceOfTruth: string;
   readonly fallbackStatus: string;
   readonly moduleStateMutatedOnControl: boolean;
-  readonly raw: Readonly<Record<string, unknown>>;
+  readonly raw: WorkflowPublicJsonObject;
 }
 
 export interface OperationRunRecord {
@@ -2450,16 +2477,16 @@ export interface OperationRunRecord {
   readonly actionId: string;
   readonly ownerModule: string;
   readonly operationType: string;
-  readonly displayContract: Readonly<Record<string, unknown>>;
+  readonly displayContract: WorkflowPublicJsonObject;
   readonly status: string;
-  readonly progress: Readonly<Record<string, unknown>>;
-  readonly workflowRef: Readonly<Record<string, unknown>>;
-  readonly resultRef: Readonly<Record<string, unknown>>;
+  readonly progress: WorkflowPublicJsonObject;
+  readonly workflowRef: WorkflowPublicJsonObject;
+  readonly resultRef: WorkflowPublicJsonObject;
   readonly requestSchemaVersion?: string;
   readonly requestSchemaDigest?: string;
   readonly controlState?: OperationRunControlState;
   readonly statusSummary?: OperationRunStatusSummary;
-  readonly raw: Readonly<Record<string, unknown>>;
+  readonly raw: WorkflowPublicJsonObject;
 }
 
 export interface OperationActionRecord {
@@ -2467,17 +2494,17 @@ export interface OperationActionRecord {
   readonly actionType: string;
   readonly ownerModule: string;
   readonly operationType: string;
-  readonly displayContract: Readonly<Record<string, unknown>>;
+  readonly displayContract: WorkflowPublicJsonObject;
   readonly approvalStatus: string;
   readonly approvalPolicy: string;
   readonly status: string;
-  readonly targetRef: Readonly<Record<string, unknown>>;
-  readonly input: Readonly<Record<string, unknown>>;
+  readonly targetRef: WorkflowPublicJsonObject;
+  readonly input: WorkflowPublicJsonObject;
   readonly requestSchemaVersion?: string;
   readonly requestSchemaDigest?: string;
   readonly createdAt: string;
   readonly updatedAt: string;
-  readonly raw: Readonly<Record<string, unknown>>;
+  readonly raw: WorkflowPublicJsonObject;
 }
 
 export interface OperationActionDecisionResult<
@@ -2486,7 +2513,7 @@ export interface OperationActionDecisionResult<
   readonly status: (typeof OPERATION_ACTION_DECISION_APPLIED_OUTCOMES)[TDecision][number];
   readonly action: OperationActionRecord | null;
   readonly operationRun: OperationRunRecord | null;
-  readonly raw: Readonly<Record<string, unknown>>;
+  readonly raw: WorkflowPublicJsonObject;
 }
 
 export interface OperationEventRecord {
@@ -2495,20 +2522,20 @@ export interface OperationEventRecord {
   readonly sequenceNumber: number;
   readonly actor: string;
   readonly source: string;
-  readonly payload: Readonly<Record<string, unknown>>;
+  readonly payload: WorkflowPublicJsonObject;
   readonly recordedAt: string;
-  readonly raw: Readonly<Record<string, unknown>>;
+  readonly raw: WorkflowPublicJsonObject;
 }
 
 export interface OperationRunProvenance {
   readonly status: OperationRunProvenanceSuccessStatus;
   readonly action: OperationActionRecord | null;
   readonly operationRun: OperationRunRecord | null;
-  readonly actionEvents: readonly OperationEventRecord[];
-  readonly operationEvents: readonly OperationEventRecord[];
-  readonly eventTimeline: readonly OperationEventRecord[];
-  readonly workflowCommands: readonly WorkflowCommandRecord[];
-  readonly raw: Readonly<Record<string, unknown>>;
+  readonly actionEvents: WorkflowPublicFrozenArray<OperationEventRecord>;
+  readonly operationEvents: WorkflowPublicFrozenArray<OperationEventRecord>;
+  readonly eventTimeline: WorkflowPublicFrozenArray<OperationEventRecord>;
+  readonly workflowCommands: WorkflowPublicFrozenArray<WorkflowCommandRecord>;
+  readonly raw: WorkflowPublicJsonObject;
 }
 
 export { dashboardHasRenderableCandidates } from "./dashboardHydration";
@@ -3138,17 +3165,17 @@ function deriveWorkflowCommandExecutionSummary(
       asObjectRecord(record.latest_activity),
       traversal,
       depth + 1,
-    ),
+    ) as WorkflowPublicDeepReadonly<Record<string, unknown>>,
     latestAttempt: projectWorkflowActivityAttemptPublicRecord(
       asObjectRecord(record.latest_attempt),
       traversal,
       depth + 1,
-    ),
+    ) as WorkflowPublicDeepReadonly<Record<string, unknown>>,
     latestEntityDelta: projectWorkflowEntityDeltaPublicRecord(
       asObjectRecord(record.latest_entity_delta),
       traversal,
       depth + 1,
-    ),
+    ) as WorkflowPublicDeepReadonly<Record<string, unknown>>,
     sampleLimit: asNumber(record.sample_limit) ?? 0,
     sampleTruncated: asBoolean(record.sample_truncated) === true,
   };
@@ -3276,7 +3303,7 @@ export function deriveWorkflowActivityRecord(
     providerRef: asObjectRecord(publicRecord.provider_ref),
     input: asObjectRecord(publicRecord.input),
     output: asObjectRecord(publicRecord.output),
-    artifactRefs: asArray(publicRecord.artifact_refs) as WorkflowPublicJsonValue[],
+    artifactRefs: asArray(publicRecord.artifact_refs),
     entityCounts: asObjectRecord(publicRecord.entity_counts),
     metadata: asObjectRecord(publicRecord.metadata),
     createdAt: asString(publicRecord.created_at),
@@ -3316,7 +3343,7 @@ export function deriveWorkflowActivityAttemptRecord(
     error: asObjectRecord(publicRecord.error),
     input: asObjectRecord(publicRecord.input),
     output: asObjectRecord(publicRecord.output),
-    artifactRefs: asArray(publicRecord.artifact_refs) as WorkflowPublicJsonValue[],
+    artifactRefs: asArray(publicRecord.artifact_refs),
     idempotencyKey: asString(publicRecord.idempotency_key),
     metadata: asObjectRecord(publicRecord.metadata),
     createdAt: asString(publicRecord.created_at),
@@ -3355,7 +3382,7 @@ export function deriveWorkflowEntityDeltaRecord(
     sourceRef: asObjectRecord(publicRecord.source_ref),
     entityPayload: asObjectRecord(publicRecord.entity_payload),
     projectionEffect: asObjectRecord(publicRecord.projection_effect),
-    artifactRefs: asArray(publicRecord.artifact_refs) as WorkflowPublicJsonValue[],
+    artifactRefs: asArray(publicRecord.artifact_refs),
     idempotencyKey: asString(publicRecord.idempotency_key),
     metadata: asObjectRecord(publicRecord.metadata),
     createdAt: asString(publicRecord.created_at),
@@ -3499,7 +3526,7 @@ export async function listOperationRuns(options?: {
   actionId?: string;
   limit?: number;
   includeStatusSummary?: boolean;
-}): Promise<readonly OperationRunRecord[]> {
+}): Promise<WorkflowPublicFrozenArray<OperationRunRecord>> {
   const payload = await fetchWorkflowPublicJson<Record<string, unknown>>(
     `/api/operations/runs${buildApiQueryString({
       status: options?.status,
@@ -3532,7 +3559,7 @@ export async function listOperationActions(options?: {
   ownerModule?: string;
   conversationId?: string;
   limit?: number;
-}): Promise<readonly OperationActionRecord[]> {
+}): Promise<WorkflowPublicFrozenArray<OperationActionRecord>> {
   const payload = await fetchWorkflowPublicJson<Record<string, unknown>>(
     `/api/operations/actions${buildApiQueryString({
       status: options?.status,
@@ -3624,7 +3651,7 @@ async function postOperationActionDecision<TDecision extends OperationActionDeci
     status,
     action: derivedAction,
     operationRun: derivedOperationRun,
-  }, publicResponse);
+  }, publicResponse) as OperationActionDecisionResult<TDecision>;
 }
 
 export function approveOperationAction(
@@ -3677,7 +3704,7 @@ export async function getOperationRunProvenance(operationRunId: string): Promise
   const operationEvents: OperationEventRecord[] = [];
   const eventTimeline: OperationEventRecord[] = [];
   const workflowCommands: WorkflowCommandRecord[] = [];
-  const provenanceValue: Omit<OperationRunProvenance, "raw"> = {
+  const provenanceValue = {
     status,
     action,
     operationRun,
@@ -3852,7 +3879,7 @@ export async function listWorkflowActivities(filters: {
   operationRunId?: string;
   workflowRunId?: string;
   limit?: number;
-}): Promise<readonly WorkflowActivityRecord[]> {
+}): Promise<WorkflowPublicFrozenArray<WorkflowActivityRecord>> {
   const payload = await fetchWorkflowPublicJson<Record<string, unknown>>(
     `/api/workflow/activities${buildApiQueryString({
       command_id: filters.commandId,
@@ -3883,7 +3910,7 @@ export async function listWorkflowActivityAttempts(filters: {
   activityRunId?: string;
   workflowRunId?: string;
   limit?: number;
-}): Promise<readonly WorkflowActivityAttemptRecord[]> {
+}): Promise<WorkflowPublicFrozenArray<WorkflowActivityAttemptRecord>> {
   const payload = await fetchWorkflowPublicJson<Record<string, unknown>>(
     `/api/workflow/activity-attempts${buildApiQueryString({
       command_id: filters.commandId,
@@ -3916,7 +3943,7 @@ export async function listWorkflowEntityDeltas(filters: {
   operationRunId?: string;
   workflowRunId?: string;
   limit?: number;
-}): Promise<readonly WorkflowEntityDeltaRecord[]> {
+}): Promise<WorkflowPublicFrozenArray<WorkflowEntityDeltaRecord>> {
   const payload = await fetchWorkflowPublicJson<Record<string, unknown>>(
     `/api/workflow/entity-deltas${buildApiQueryString({
       command_id: filters.commandId,

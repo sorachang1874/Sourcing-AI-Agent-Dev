@@ -29,4 +29,22 @@ activity.artifactRefs.push("forged");
 // @ts-expect-error Every list endpoint exposes a readonly result.
 activities[0] = activity;
 
+const nestedProgress = operationRun.progress.nested;
+if (
+  nestedProgress !== null &&
+  typeof nestedProgress === "object" &&
+  !Array.isArray(nestedProgress)
+) {
+  // @ts-expect-error Ordinary-object narrowing must preserve second-level immutability.
+  nestedProgress.status = "forged";
+}
+if (Array.isArray(nestedProgress)) {
+  // @ts-expect-error Array.isArray narrowing must preserve readonly indices.
+  nestedProgress[0] = "forged";
+  // @ts-expect-error Array.isArray narrowing must not restore mutating methods.
+  nestedProgress.push("forged");
+  // @ts-expect-error Array.isArray narrowing must not restore structural mutation.
+  nestedProgress.splice(0, 1);
+}
+
 export {};
