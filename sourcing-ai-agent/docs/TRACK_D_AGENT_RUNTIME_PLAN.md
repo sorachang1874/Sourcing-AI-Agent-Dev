@@ -318,8 +318,11 @@ serve、会话/事件层、planner loop），用一个垂直切片证明闭环�
   checks**，复用 existing `operation_id`/`command_id`/`activity_attempt_id`，禁止 event-side
   `operation_run_id`/`source_*`/`source_command_attempt` aliases；post-claim command attempt 仍由 linked
   ActivityAttempt 拥有并由 verification intent 单独 exact-copy。transport provenance、intent/receipt/exposure/
-  quarantine、index/FK/population/adoption/runtime UoW 全部显式 deferred；零 SQL/descriptor/runtime。D3c2f 才可
-  安装 dormant event core，R-019/R-023/R-027/R-029、action-root、OB-10.1-10.4 与 served=0 不变。
+  quarantine、index/FK/population/adoption/runtime UoW 全部显式 deferred；零 SQL/descriptor/runtime。D3c2f 随后
+  仅以 `0006_d3_workflow_event_terminal_lineage_foundation.sql` 安装该 dormant event core：one-table 11 columns/
+  11 local checks/5s rollback，17-column descriptor 与 current writer 继续封闭。下一批只能先 Scout/ratify
+  remaining Migration-A evidence surfaces。D3c2e commit `1fb052fe...` fresh pinned medium advisory=`GO 0/0/0/0`，
+  不是 formal GO；R-019/R-023/R-027/R-029、action-root、OB-10.1-10.4 与 served=0 不变。
 
 ### D4 — 之后（本文只圈定，不展开）
 
@@ -453,7 +456,9 @@ TD-4 初始路由表已按 owner 2026-07-13 裁决落档（D0 §4）。
    因此 rollout step 3 仍须等待 workflow-event 与 intent/receipt/quarantine 等其余 Migration-A fragments。
    D3c2e 接着仅 ratify WorkflowEvent exact 11-column core、11 个 local checks 与 existing-link/no-alias mapping；
    transport provenance、verification intent、receipt/exposure/quarantine、index/FK/adoption/runtime 均留在
-   D3c2e-D1..D10，零 SQL。D3c2f 才能安装 dormant event-core substrate，仍不允许 rollout step 3。
+   D3c2e-D1..D10，零 SQL。D3c2f 已据此仅安装 one-table dormant event-core substrate，descriptor/runtime 未切换，
+   仍不允许 rollout step 3；remaining intent/exposure/receipt/quarantine batch 必须先完成 owner-ratified Scout/
+   decision lock，不能从 D3b prose 猜 schema。
    canonical coordination lineage 为 `coordination_plan_review_id=plan_review_sessions.review_id`，物理类型同为
    positive `BIGINT`（brownfield `NULL`，strict `>0`，禁止 `TEXT`/empty）；poll-mode 的唯一 scope issuer 是
    private scoped review-session repository：它从 server-owned runtime context + authenticated workspace

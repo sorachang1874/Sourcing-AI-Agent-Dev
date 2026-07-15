@@ -43,12 +43,14 @@ _BASELINE_PATH = next(path for version, path in mr.discover_migrations() if vers
 _D3_COMMAND_MIGRATION = "0003_workflow_command_claim_fence_foundation"
 _D3_SCOPED_ROOT_MIGRATION = "0004_d3_scoped_root_foundation"
 _D3_ACTIVITY_MIGRATION = "0005_d3_activity_claim_chain_foundation"
+_D3_EVENT_MIGRATION = "0006_d3_workflow_event_terminal_lineage_foundation"
 _ALL_MIGRATIONS = [
     "0001_baseline",
     "0002_action_request_schema_pins",
     _D3_COMMAND_MIGRATION,
     _D3_SCOPED_ROOT_MIGRATION,
     _D3_ACTIVITY_MIGRATION,
+    _D3_EVENT_MIGRATION,
 ]
 _D3_COMMAND_COLUMNS = (
     ("runtime_namespace", "text", "NO", "''::text"),
@@ -245,6 +247,50 @@ _D3_ACTIVITY_ATTEMPT_CHECKS = {
     "workflow_activity_attempts_scope_digest_shape_ck": ("scope_digest", "[0-9a-f]{64}"),
     "workflow_activity_attempts_workspace_id_shape_ck": ("workspace_id", "[^[:space:]]"),
 }
+_D3_EVENT_COLUMNS = (
+    ("runtime_namespace", "text", "NO", "''::text"),
+    ("provider_mode", "text", "NO", "''::text"),
+    ("workspace_id", "text", "NO", "''::text"),
+    ("scope_digest", "text", "NO", "''::text"),
+    ("coordination_plan_review_id", "bigint", "YES", None),
+    ("activity_run_id", "text", "NO", "''::text"),
+    ("claim_generation", "bigint", "NO", "0"),
+    ("control_epoch", "bigint", "NO", "0"),
+    ("claim_authority_spec_digest", "text", "NO", "''::text"),
+    ("d3_business_fence_digest", "text", "NO", "''::text"),
+    ("terminal_outcome_digest", "text", "YES", None),
+)
+_D3_EVENT_CHECKS = {
+    "workflow_events_activity_run_id_shape_ck": ("activity_run_id", "[^[:space:]]"),
+    "workflow_events_claim_authority_spec_digest_shape_ck": (
+        "claim_authority_spec_digest",
+        "[0-9a-f]{64}",
+    ),
+    "workflow_events_claim_generation_nonnegative_ck": ("claim_generation", ">= 0"),
+    "workflow_events_control_epoch_nonnegative_ck": ("control_epoch", ">= 0"),
+    "workflow_events_coordination_plan_review_id_shape_ck": (
+        "coordination_plan_review_id",
+        "> 0",
+    ),
+    "workflow_events_d3_business_fence_digest_shape_ck": (
+        "d3_business_fence_digest",
+        "[0-9a-f]{64}",
+    ),
+    "workflow_events_provider_mode_shape_ck": (
+        "provider_mode",
+        "live",
+        "simulate",
+        "scripted",
+        "replay",
+    ),
+    "workflow_events_runtime_namespace_shape_ck": ("runtime_namespace", "[^[:space:]]"),
+    "workflow_events_scope_digest_shape_ck": ("scope_digest", "[0-9a-f]{64}"),
+    "workflow_events_terminal_outcome_digest_shape_ck": (
+        "terminal_outcome_digest",
+        "[0-9a-f]{64}",
+    ),
+    "workflow_events_workspace_id_shape_ck": ("workspace_id", "[^[:space:]]"),
+}
 
 
 def _copy_migrations_through(directory: Path, through: int) -> None:
@@ -391,6 +437,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 _D3_COMMAND_MIGRATION,
                 _D3_SCOPED_ROOT_MIGRATION,
                 _D3_ACTIVITY_MIGRATION,
+                _D3_EVENT_MIGRATION,
             ],
         )
         self.assertEqual(ledger, _ALL_MIGRATIONS)
@@ -437,6 +484,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 _D3_COMMAND_MIGRATION,
                 _D3_SCOPED_ROOT_MIGRATION,
                 _D3_ACTIVITY_MIGRATION,
+                _D3_EVENT_MIGRATION,
             ],
         )
         self.assertEqual(
@@ -652,7 +700,7 @@ class MigrationRunnerTest(unittest.TestCase):
 
         self.assertEqual(
             result.applied,
-            [_D3_COMMAND_MIGRATION, _D3_SCOPED_ROOT_MIGRATION, _D3_ACTIVITY_MIGRATION],
+            [_D3_COMMAND_MIGRATION, _D3_SCOPED_ROOT_MIGRATION, _D3_ACTIVITY_MIGRATION, _D3_EVENT_MIGRATION],
         )
         self.assertEqual(columns, list(_D3_COMMAND_COLUMNS))
         self.assertEqual(
@@ -816,7 +864,7 @@ class MigrationRunnerTest(unittest.TestCase):
             again = mr.apply_pending_migrations(conn, schema=schema)
         self.assertEqual(
             recovered.applied,
-            [_D3_COMMAND_MIGRATION, _D3_SCOPED_ROOT_MIGRATION, _D3_ACTIVITY_MIGRATION],
+            [_D3_COMMAND_MIGRATION, _D3_SCOPED_ROOT_MIGRATION, _D3_ACTIVITY_MIGRATION, _D3_EVENT_MIGRATION],
         )
         self.assertEqual(again.applied, [])
         self.assertEqual(again.already_applied, _ALL_MIGRATIONS)
@@ -896,7 +944,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 )
                 checks = cur.fetchall()
 
-        self.assertEqual(result.applied, [_D3_SCOPED_ROOT_MIGRATION, _D3_ACTIVITY_MIGRATION])
+        self.assertEqual(result.applied, [_D3_SCOPED_ROOT_MIGRATION, _D3_ACTIVITY_MIGRATION, _D3_EVENT_MIGRATION])
         self.assertEqual(session_columns, list(_D3_SCOPED_SESSION_COLUMNS))
         self.assertEqual(operation_columns, list(_D3_OPERATION_ROOT_COLUMNS))
         self.assertEqual(session_sentinel, ("", "", "", "", "", "", "", "", 0, "", ""))
@@ -1084,7 +1132,10 @@ class MigrationRunnerTest(unittest.TestCase):
         with psycopg.connect(self.dsn, client_encoding="utf8") as conn:
             recovered = mr.apply_pending_migrations(conn, schema=schema)
             again = mr.apply_pending_migrations(conn, schema=schema)
-        self.assertEqual(recovered.applied, [_D3_SCOPED_ROOT_MIGRATION, _D3_ACTIVITY_MIGRATION])
+        self.assertEqual(
+            recovered.applied,
+            [_D3_SCOPED_ROOT_MIGRATION, _D3_ACTIVITY_MIGRATION, _D3_EVENT_MIGRATION],
+        )
         self.assertEqual(again.applied, [])
         self.assertEqual(again.already_applied, _ALL_MIGRATIONS)
 
@@ -1163,7 +1214,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 )
                 checks = cur.fetchall()
 
-        self.assertEqual(result.applied, [_D3_ACTIVITY_MIGRATION])
+        self.assertEqual(result.applied, [_D3_ACTIVITY_MIGRATION, _D3_EVENT_MIGRATION])
         self.assertEqual(run_columns, list(_D3_ACTIVITY_RUN_COLUMNS))
         self.assertEqual(attempt_columns, list(_D3_ACTIVITY_ATTEMPT_COLUMNS))
         self.assertEqual(run_sentinel, ("", "", "", None, "", ""))
@@ -1365,7 +1416,209 @@ class MigrationRunnerTest(unittest.TestCase):
         with psycopg.connect(self.dsn, client_encoding="utf8") as conn:
             recovered = mr.apply_pending_migrations(conn, schema=schema)
             again = mr.apply_pending_migrations(conn, schema=schema)
-        self.assertEqual(recovered.applied, [_D3_ACTIVITY_MIGRATION])
+        self.assertEqual(recovered.applied, [_D3_ACTIVITY_MIGRATION, _D3_EVENT_MIGRATION])
+        self.assertEqual(again.applied, [])
+        self.assertEqual(again.already_applied, _ALL_MIGRATIONS)
+
+    def test_d3_event_terminal_lineage_foundation_installs_on_populated_table_and_guards_new_writes(self) -> None:
+        schema = self._fresh_schema("d3_event_lineage")
+        quoted = quote_control_plane_postgres_identifier(schema)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            migrations_dir = Path(temp_dir)
+            _copy_migrations_through(migrations_dir, 5)
+            with psycopg.connect(self.dsn, client_encoding="utf8") as conn:
+                prefix_result = mr.apply_pending_migrations(
+                    conn,
+                    schema=schema,
+                    migrations_dir=migrations_dir,
+                )
+                with conn.cursor() as cur:
+                    cur.execute(f"SET search_path TO {quoted}")
+                    cur.execute(
+                        "INSERT INTO workflow_events "
+                        "(event_id, workflow_run_id, event_family, event_type, idempotency_key) "
+                        "VALUES ('legacy-event', 'workflow-a', 'activity', 'activity_completed', "
+                        "'legacy-event')"
+                    )
+                conn.commit()
+
+        self.assertEqual(prefix_result.applied, _ALL_MIGRATIONS[:5])
+        with psycopg.connect(self.dsn, client_encoding="utf8") as conn:
+            result = mr.apply_pending_migrations(conn, schema=schema)
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns "
+                    "WHERE table_schema = %s AND table_name = 'workflow_events' "
+                    "AND column_name = ANY(%s) ORDER BY ordinal_position",
+                    (schema, [name for name, _data_type, _nullable, _default in _D3_EVENT_COLUMNS]),
+                )
+                columns = cur.fetchall()
+                cur.execute(f"SET search_path TO {quoted}")
+                cur.execute(
+                    "SELECT runtime_namespace, provider_mode, workspace_id, scope_digest, "
+                    "coordination_plan_review_id, activity_run_id, claim_generation, control_epoch, "
+                    "claim_authority_spec_digest, d3_business_fence_digest, terminal_outcome_digest "
+                    "FROM workflow_events WHERE event_id = 'legacy-event'"
+                )
+                legacy_sentinel = cur.fetchone()
+                cur.execute(
+                    "INSERT INTO workflow_events "
+                    "(event_id, workflow_run_id, event_family, event_type, idempotency_key) "
+                    "VALUES ('current-shape-event', 'workflow-b', 'activity', 'activity_completed', "
+                    "'current-shape-event')"
+                )
+                cur.execute(
+                    "SELECT runtime_namespace, provider_mode, workspace_id, scope_digest, "
+                    "coordination_plan_review_id, activity_run_id, claim_generation, control_epoch, "
+                    "claim_authority_spec_digest, d3_business_fence_digest, terminal_outcome_digest "
+                    "FROM workflow_events WHERE event_id = 'current-shape-event'"
+                )
+                current_writer_sentinel = cur.fetchone()
+                cur.execute(
+                    "SELECT conname, convalidated, pg_get_constraintdef(c.oid) FROM pg_constraint c "
+                    "JOIN pg_class t ON t.oid = c.conrelid "
+                    "JOIN pg_namespace n ON n.oid = t.relnamespace "
+                    "WHERE n.nspname = %s AND t.relname = 'workflow_events' "
+                    "AND conname = ANY(%s) ORDER BY conname",
+                    (schema, list(_D3_EVENT_CHECKS)),
+                )
+                checks = cur.fetchall()
+            conn.commit()
+
+        sentinel = ("", "", "", "", None, "", 0, 0, "", "", None)
+        self.assertEqual(result.applied, [_D3_EVENT_MIGRATION])
+        self.assertEqual(columns, list(_D3_EVENT_COLUMNS))
+        self.assertEqual(legacy_sentinel, sentinel)
+        self.assertEqual(current_writer_sentinel, sentinel)
+        self.assertEqual(
+            [(name, validated) for name, validated, _definition in checks],
+            [(name, False) for name in sorted(_D3_EVENT_CHECKS)],
+        )
+        for name, _validated, definition in checks:
+            normalized_definition = " ".join(str(definition).split()).casefold()
+            for required_fragment in _D3_EVENT_CHECKS[name]:
+                self.assertIn(required_fragment.casefold(), normalized_definition, (name, definition))
+
+        digest_a = "a" * 64
+        digest_b = "b" * 64
+        digest_c = "c" * 64
+        digest_d = "d" * 64
+        with psycopg.connect(self.dsn, autocommit=True, client_encoding="utf8") as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"SET search_path TO {quoted}")
+                cur.execute(
+                    "UPDATE workflow_events SET runtime_namespace = 'runtime-a', provider_mode = 'scripted', "
+                    "workspace_id = 'workspace-a', scope_digest = %s, coordination_plan_review_id = 1, "
+                    "activity_run_id = 'activity-a', claim_generation = 2, control_epoch = 3, "
+                    "claim_authority_spec_digest = %s, d3_business_fence_digest = %s, "
+                    "terminal_outcome_digest = %s WHERE event_id = 'legacy-event'",
+                    (digest_a, digest_b, digest_c, digest_d),
+                )
+                cur.execute("SELECT * FROM workflow_events WHERE event_id = 'legacy-event'")
+                raw_event = dict(zip([column.name for column in cur.description], cur.fetchone(), strict=True))
+
+        from sourcing_agent.repositories.workflow_runtime import WORKFLOW_EVENTS
+
+        mapped_event = WORKFLOW_EVENTS.from_row(raw_event)
+        self.assertEqual(len(WORKFLOW_EVENTS.columns), 17)
+        for field_name, _data_type, _nullable, _default in _D3_EVENT_COLUMNS:
+            self.assertNotIn(field_name, mapped_event)
+
+        invalid_updates = (
+            "runtime_namespace = '   '",
+            "provider_mode = 'fake'",
+            "workspace_id = '   '",
+            "scope_digest = 'BAD'",
+            "coordination_plan_review_id = 0",
+            "activity_run_id = '   '",
+            "claim_generation = -1",
+            "control_epoch = -1",
+            "claim_authority_spec_digest = 'BAD'",
+            "d3_business_fence_digest = 'BAD'",
+            "terminal_outcome_digest = 'BAD'",
+        )
+        for assignment in invalid_updates:
+            with self.subTest(assignment=assignment):
+                with psycopg.connect(self.dsn, autocommit=True, client_encoding="utf8") as conn:
+                    with conn.cursor() as cur:
+                        cur.execute(f"SET search_path TO {quoted}")
+                        with self.assertRaises(psycopg.errors.CheckViolation):
+                            cur.execute(f"UPDATE workflow_events SET {assignment} WHERE event_id = 'legacy-event'")
+
+    def test_d3_event_terminal_lineage_lock_wait_rolls_back_ledger_and_recovers_once(self) -> None:
+        schema = self._fresh_schema("d3_event_lineage_lock")
+        quoted = quote_control_plane_postgres_identifier(schema)
+        blocker_ready = threading.Event()
+        release_blocker = threading.Event()
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            migrations_dir = Path(temp_dir)
+            _copy_migrations_through(migrations_dir, 5)
+            with psycopg.connect(self.dsn, client_encoding="utf8") as setup:
+                prefix_result = mr.apply_pending_migrations(
+                    setup,
+                    schema=schema,
+                    migrations_dir=migrations_dir,
+                )
+        self.assertEqual(prefix_result.applied, _ALL_MIGRATIONS[:5])
+
+        def hold_workflow_event_write() -> None:
+            with psycopg.connect(self.dsn, client_encoding="utf8") as blocker:
+                with blocker.cursor() as cur:
+                    cur.execute(f"SET search_path TO {quoted}")
+                    cur.execute(
+                        "INSERT INTO workflow_events "
+                        "(event_id, workflow_run_id, event_family, event_type, idempotency_key) "
+                        "VALUES ('lock-event', 'workflow-lock', 'activity', 'activity_completed', 'lock-event')"
+                    )
+                    blocker_ready.set()
+                    release_blocker.wait(timeout=15)
+                blocker.rollback()
+
+        thread = threading.Thread(target=hold_workflow_event_write, daemon=True)
+        thread.start()
+        self.assertTrue(blocker_ready.wait(timeout=5), "blocking WorkflowEvent writer did not start")
+        started = time.monotonic()
+        try:
+            with psycopg.connect(self.dsn, client_encoding="utf8") as conn:
+                with self.assertRaises(psycopg.errors.LockNotAvailable):
+                    mr.apply_pending_migrations(conn, schema=schema)
+        finally:
+            release_blocker.set()
+            thread.join(timeout=5)
+        elapsed = time.monotonic() - started
+        self.assertFalse(thread.is_alive(), "blocking WorkflowEvent writer did not exit")
+        self.assertGreaterEqual(elapsed, 4.0)
+        self.assertLess(elapsed, 8.0)
+
+        with psycopg.connect(self.dsn, autocommit=True, client_encoding="utf8") as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"SET search_path TO {quoted}")
+                cur.execute("SELECT version FROM schema_migrations ORDER BY version")
+                ledger = [row[0] for row in cur.fetchall()]
+                cur.execute(
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_schema = %s AND table_name = 'workflow_events' "
+                    "AND column_name = ANY(%s) ORDER BY column_name",
+                    (schema, [name for name, _data_type, _nullable, _default in _D3_EVENT_COLUMNS]),
+                )
+                columns = cur.fetchall()
+                cur.execute(
+                    "SELECT conname FROM pg_constraint c JOIN pg_namespace n ON n.oid = c.connamespace "
+                    "WHERE n.nspname = %s AND conname = ANY(%s) ORDER BY conname",
+                    (schema, list(_D3_EVENT_CHECKS)),
+                )
+                checks = cur.fetchall()
+
+        self.assertEqual(ledger, _ALL_MIGRATIONS[:5])
+        self.assertEqual(columns, [], "0006 timeout must roll back all WorkflowEvent columns")
+        self.assertEqual(checks, [], "0006 timeout must roll back all WorkflowEvent checks")
+
+        with psycopg.connect(self.dsn, client_encoding="utf8") as conn:
+            recovered = mr.apply_pending_migrations(conn, schema=schema)
+            again = mr.apply_pending_migrations(conn, schema=schema)
+        self.assertEqual(recovered.applied, [_D3_EVENT_MIGRATION])
         self.assertEqual(again.applied, [])
         self.assertEqual(again.already_applied, _ALL_MIGRATIONS)
 

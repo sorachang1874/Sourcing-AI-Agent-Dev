@@ -423,11 +423,19 @@
   receipt/exposure/quarantine、完整 verification-intent DDL、index/FK/population checks、adoption 与 runtime UoW。
   mechanism×10 invariant matrix 与 executable oracle 见
   `TRACK_D_D3C2E_WORKFLOW_EVENT_TERMINAL_LINEAGE_DECISION_LOCK.md`；R-019/R-023/R-027/R-029、action-root、
-  OB-10.1-10.4、完整 Migration A 与 served=0 不变。
-- [ ] D3c2f dormant WorkflowEvent terminal-lineage foundation：只允许 one-table `workflow_events` ALTER、exact
-  11 columns + 11 `NOT VALID` checks、5s lock budget、populated sentinel/malformed-write/timeout full rollback/
-  ledger rollback/recovery-once/no-op real-PG proof。descriptor 保持 17 columns，current INSERT 继续省略新字段；
-  禁止 index/FK/validation/backfill/runtime/provenance/receipt/exposure/intent/quarantine/served 激活。
+  OB-10.1-10.4、完整 Migration A 与 served=0 不变。commit `1fb052fe...` fresh pinned medium-effort non-author
+  advisory=`GO 0/0/0/0`；formal highest-effort review 仍 pending。
+- [x] D3c2f dormant WorkflowEvent terminal-lineage foundation（2026-07-15；implementation candidate）：one-table
+  `workflow_events` ALTER 安装 exact 11 columns + 11 `NOT VALID` checks 与 5s lock budget；real-PG acceptance 覆盖
+  populated/current-writer sentinel、逐字段 malformed update、timeout 后 columns/checks/ledger 全回滚、释放后
+  recovery-once/no-op。descriptor 保持 17 columns，current explicit INSERT 继续省略新字段；无 index/FK/
+  validation/backfill/runtime/provenance/receipt/exposure/intent/quarantine/served 激活。完整记录见
+  `TRACK_D_D3C2F_WORKFLOW_EVENT_TERMINAL_LINEAGE_MIGRATION_IMPLEMENTATION.md`；author validation/fresh pinned review
+  待记录。
+- [ ] D3c2g remaining Migration-A evidence-surface decision/Scout：从 D3b §6/§11、Plan §6 与 OB-10.1-10.4
+  机械推导 verification intent、durable dispatch exposure、response/failure receipts、late quarantine 的完整
+  owner/DDL/key/type/check/CAS/retention inventory；dispatch-exposure owner/table 或任一 receipt/intent/quarantine
+  identity 未 ratify 前零 SQL，禁止猜 schema 或提前进入 rollout step 3。
 - [ ] Track D 后的 user-owned cohort selection contract（Thinking Machines Lab live 前置）：以一个 versioned、
   registry-digest-pinned `CohortSelection` 作为唯一 owner，显式承载 canonical ordered
   `role_bucket_ids[]`（Researcher/Engineer/Product Manager 可自由多选且 registry 可扩展）、

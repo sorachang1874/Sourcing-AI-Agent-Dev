@@ -171,6 +171,10 @@ core, its eleven local check names, and the no-alias physical mapping while expl
 verification intent, receipts, exposure, quarantine, indexes, FKs, adoption, and runtime UoW. It installs no SQL. Only
 after that decision lock may D3c2f install the dormant event-core fragment.
 
+D3c2f now installs exactly that bounded one-table fragment; see
+`TRACK_D_D3C2F_WORKFLOW_EVENT_TERMINAL_LINEAGE_MIGRATION_IMPLEMENTATION.md`. The remaining third-order item still
+requires its own owner-ratified physical Scout/decision before any SQL.
+
 This order does not authorize the later items and does not move registry/manifests/bootstrap factory work ahead of a
 complete Migration A. Event terminal-UoW design, verification-intent owner/CAS, response/failure receipt owner, late
 quarantine gateways, terminal registry, and durable dispatch-exposure table/owner all remain decisions for their

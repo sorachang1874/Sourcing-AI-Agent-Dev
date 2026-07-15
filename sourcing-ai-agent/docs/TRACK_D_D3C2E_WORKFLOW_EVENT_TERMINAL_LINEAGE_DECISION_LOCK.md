@@ -167,6 +167,10 @@ carried by a named D3c2e deferral. No new OB-ID is created: this batch remains u
 - the exact ten-item deferral inventory and complete ten-invariant matrix;
 - Plan/TODO/ledger/index synchronization, explicit non-closure, and the D3c2f-only next boundary.
 
+Post-decision transition: D3c2f subsequently installs only the ratified `0006` dormant substrate. The executable oracle
+therefore continues to freeze the 17-column descriptor and closed writer while permitting that separately documented
+migration; it does not reinterpret D3c2e as implementation evidence.
+
 Stable-tree author evidence:
 
 - D3c2e decision-lock oracle: **7 passed**;
@@ -175,6 +179,11 @@ Stable-tree author evidence:
 - `git diff --check`: clean.
 
 This is author evidence only. It is not independent-review evidence and does not authorize D3c2f or any live path.
+
+Pinned review record: commit `1fb052fe561875b648ae5dc9d4d17fd417d820a5` received a fresh non-author
+medium-effort **ADVISORY GO** with P0/P1/P2/P3=`0/0/0/0` after exact 9-file scope verification, `7 + 46` tests,
+Ruff, and diff checks. Medium effort is not the operator-owned highest-effort formal gate, so formal review remains
+pending and no live/signoff authority is implied.
 
 ## 9. Explicit non-closure and next batch
 
@@ -194,3 +203,7 @@ real-PG populated-sentinel / malformed-write / timeout-rollback / ledger-rollbac
 The descriptor must remain 17 columns, and the current explicit INSERT must continue to omit the new fields so database
 defaults produce only dormant sentinels. D3c2f may not add indexes, FKs, validation, backfill, descriptor/runtime reads,
 strict writers, transport provenance, receipt/exposure/intent/quarantine schema, or any provider/model/served path.
+
+D3c2f now implements exactly that bounded substrate; see
+`TRACK_D_D3C2F_WORKFLOW_EVENT_TERMINAL_LINEAGE_MIGRATION_IMPLEMENTATION.md`. The next batch remains decision/Scout work
+for the still-unratified Migration-A evidence surfaces and may not infer physical DDL from this event-core decision.

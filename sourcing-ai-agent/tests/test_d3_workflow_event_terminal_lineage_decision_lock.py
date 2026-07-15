@@ -13,6 +13,7 @@ DECISION_DOC_PATH = REPO_ROOT / "docs" / "TRACK_D_D3C2E_WORKFLOW_EVENT_TERMINAL_
 D3B_CONTRACT_PATH = REPO_ROOT / "docs" / "TRACK_D_D3B_WORKFLOW_COMMAND_CLAIM_FENCE_CONTRACT.md"
 D3C2C_DOC_PATH = REPO_ROOT / "docs" / "TRACK_D_D3C2C_ACTIVITY_TERMINAL_EVIDENCE_CHARACTERIZATION.md"
 D3C2D_DOC_PATH = REPO_ROOT / "docs" / "TRACK_D_D3C2D_ACTIVITY_CLAIM_CHAIN_MIGRATION_IMPLEMENTATION.md"
+D3C2F_DOC_PATH = REPO_ROOT / "docs" / "TRACK_D_D3C2F_WORKFLOW_EVENT_TERMINAL_LINEAGE_MIGRATION_IMPLEMENTATION.md"
 PLAN_PATH = REPO_ROOT / "docs" / "TRACK_D_AGENT_RUNTIME_PLAN.md"
 TODO_PATH = REPO_ROOT / "docs" / "NEXT_TODO.md"
 LEDGER_PATH = REPO_ROOT / "docs" / "RESIDUAL_LEDGER.md"
@@ -168,10 +169,10 @@ def _class_method_source(path: Path, class_name: str, method_name: str) -> str:
     return segment
 
 
-def test_current_event_descriptor_and_writer_remain_dormant() -> None:
+def test_current_event_descriptor_and_writer_remain_dormant_after_foundation_install() -> None:
     assert tuple(WORKFLOW_EVENTS.column_names()) == EXPECTED_CURRENT_EVENT_COLUMNS
     assert set(EXPECTED_EVENT_CORE_COLUMNS).isdisjoint(WORKFLOW_EVENTS.column_names())
-    assert NEXT_MIGRATION_PATH.exists() is False
+    assert NEXT_MIGRATION_PATH.exists() is True
 
     writer = _class_method_source(
         CONTROL_PLANE_PATH,
@@ -309,6 +310,7 @@ def test_trackers_preserve_exact_nonclosure_and_bound_d3c2f_to_dormant_ddl() -> 
         INDEX_PATH: ("TRACK_D_D3C2E_WORKFLOW_EVENT_TERMINAL_LINEAGE_DECISION_LOCK.md", "D3c2f"),
         D3C2C_DOC_PATH: ("D3c2e", "D3c2f"),
         D3C2D_DOC_PATH: ("D3c2e", "D3c2f"),
+        D3C2F_DOC_PATH: ("D3c2e", "D3c2f", "17-column descriptor"),
     }
     for path, markers in tracker_requirements.items():
         source = path.read_text(encoding="utf-8")

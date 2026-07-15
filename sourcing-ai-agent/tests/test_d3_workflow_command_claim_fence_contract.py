@@ -46,6 +46,10 @@ D3C2B_MIGRATION_PATH = SOURCE_ROOT / "migrations" / "0004_d3_scoped_root_foundat
 D3C2B_IMPLEMENTATION_PATH = REPO_ROOT / "docs" / "TRACK_D_D3C2B_SCOPED_ROOT_MIGRATION_IMPLEMENTATION.md"
 D3C2D_MIGRATION_PATH = SOURCE_ROOT / "migrations" / "0005_d3_activity_claim_chain_foundation.sql"
 D3C2D_IMPLEMENTATION_PATH = REPO_ROOT / "docs" / "TRACK_D_D3C2D_ACTIVITY_CLAIM_CHAIN_MIGRATION_IMPLEMENTATION.md"
+D3C2F_MIGRATION_PATH = SOURCE_ROOT / "migrations" / "0006_d3_workflow_event_terminal_lineage_foundation.sql"
+D3C2F_IMPLEMENTATION_PATH = (
+    REPO_ROOT / "docs" / "TRACK_D_D3C2F_WORKFLOW_EVENT_TERMINAL_LINEAGE_MIGRATION_IMPLEMENTATION.md"
+)
 
 D3C2A_COMMAND_COLUMNS = (
     "runtime_namespace",
@@ -108,6 +112,19 @@ D3C2D_ACTIVITY_ATTEMPT_COLUMNS = (
     "claim_generation",
     "command_attempt",
     "control_epoch",
+)
+D3C2F_EVENT_COLUMNS = (
+    "runtime_namespace",
+    "provider_mode",
+    "workspace_id",
+    "scope_digest",
+    "coordination_plan_review_id",
+    "activity_run_id",
+    "claim_generation",
+    "control_epoch",
+    "claim_authority_spec_digest",
+    "d3_business_fence_digest",
+    "terminal_outcome_digest",
 )
 
 # D3b is a characterization/decision batch. These CURRENT_* values intentionally
@@ -603,6 +620,58 @@ def test_d3c2d_document_keeps_activity_runtime_and_later_migration_fragments_ope
         "command_attempt",
         "workflow-event fragment",
         "response/failure receipt",
+        "OB-10.1/10.2/10.3/10.4",
+        "R-019",
+    )
+    _assert_any(document, "served Agent tool", "served Agent command")
+    _assert_any(document, "fresh pinned non-author review", "pinned non-author review")
+
+
+def test_d3c2f_migration_is_exactly_the_dormant_workflow_event_core_subbatch() -> None:
+    sql = D3C2F_MIGRATION_PATH.read_text(encoding="utf-8")
+    normalized = _normalized(sql)
+    alter_sections = re.findall(
+        r"ALTER TABLE ([a-z0-9_]+)(.*?);",
+        sql,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+
+    assert [table for table, _section in alter_sections] == ["workflow_events"]
+    event_columns = tuple(re.findall(r"\bADD COLUMN ([a-z0-9_]+)\b", alter_sections[0][1], flags=re.IGNORECASE))
+    assert event_columns == D3C2F_EVENT_COLUMNS
+    assert len(event_columns) == 11
+    assert "SET LOCAL lock_timeout = '5s'" in sql
+    assert "SET LOCAL lock_timeout = DEFAULT" in sql
+    assert normalized.count("not valid") == 11
+    assert "validate constraint" not in normalized
+    assert "foreign key" not in normalized
+    assert "create index" not in normalized
+    for forbidden_alias in (
+        "operation_run_id",
+        "source_verification_command_id",
+        "source_activity_attempt_id",
+        "source_command_attempt",
+    ):
+        assert forbidden_alias not in event_columns
+    assert set(D3C2F_EVENT_COLUMNS).isdisjoint(WORKFLOW_EVENTS.column_names())
+    assert len(WORKFLOW_EVENTS.columns) == 17
+
+
+def test_d3c2f_document_keeps_event_runtime_and_remaining_migration_a_fragments_open() -> None:
+    document = D3C2F_IMPLEMENTATION_PATH.read_text(encoding="utf-8")
+
+    _assert_all(
+        document,
+        "Dormant WorkflowEvent terminal-lineage foundation",
+        "eleven WorkflowEvent columns",
+        "eleven local `CHECK ... NOT VALID` constraints",
+        "17-column descriptor",
+        "current explicit INSERT",
+        "transport provenance",
+        "verification intent",
+        "response/failure receipts",
+        "dispatch exposure",
+        "late quarantine",
         "OB-10.1/10.2/10.3/10.4",
         "R-019",
     )

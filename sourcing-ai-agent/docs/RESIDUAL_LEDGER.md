@@ -49,12 +49,23 @@
 
 ## Active candidate annotations
 
+- **R-019 / D3c2f (2026-07-15):** the event-core Migration-A fragment adds only the dormant `workflow_events`
+  eleven-column scope/claim/terminal-outcome shape plus eleven `NOT VALID` local checks. The 5s one-table timeout,
+  populated/current-writer sentinel, malformed-new-write, descriptor invisibility, ledger rollback, exact-once recovery,
+  and no-op proofs are migration-local only. The 17-column descriptor and current explicit writer remain closed to the
+  new fields. Transport provenance, verification intent, durable dispatch exposure, response/failure receipts, late
+  quarantine, terminal UoW, registries/manifests/factory, Migration B-D, action-root, OB-10.1/10.2/10.3/10.4, and served
+  population remain open. This candidate changes neither R-019 status nor the 26-call ratchet and authorizes no
+  runtime/live path; its exact implementation commit and fresh pinned review are recorded only after final validation.
+
 - **R-019 / D3c2e (2026-07-15):** decision-only batch ratifies the exact WorkflowEvent terminal-lineage core as
   **11 columns + 11 local `NOT VALID` checks**, reuses existing operation/command/attempt links, and forbids redundant
   event-side `operation_run_id`/`source_*`/`source_command_attempt` aliases. D3c2e-D1..D10 explicitly retain transport
   provenance, verification-intent/receipt/exposure/quarantine physical ownership, indexes/FKs/population checks,
   adoption, and the terminal command/attempt/event/source-intent one-PG UoW. D3c2f may install only the dormant core;
-  this annotation does not change R-019, R-023, R-027, R-029, action-root, OB-10.1-10.4, or served=0.
+  commit `1fb052fe...` has a fresh pinned medium-effort non-author **ADVISORY GO** with P0-P3=`0/0/0/0`, not a formal
+  highest-effort verdict. This annotation does not change R-019, R-023, R-027, R-029, action-root, OB-10.1-10.4, or
+  served=0.
 
 - **R-019 / D3c1a (2026-07-15):** the row's D3c1a summary includes the five direct findings from the invalid D3c1
   artifact. The later `20260714T215839Z` artifact also remains **invalid/advisory** because

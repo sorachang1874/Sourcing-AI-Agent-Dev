@@ -114,3 +114,7 @@ served population remain open or zero. The next bounded Track D slice is the wor
 dormant migration fragment; it must not guess the still-unratified dispatch-exposure or receipt/quarantine schema.
 D3c2e is that decision lock and changes no SQL. It ratifies only the exact eleven-column event core and eleven local
 checks while carrying every transport/intent/evidence deferral. D3c2f is the subsequent dormant migration batch.
+
+D3c2f now installs only that ratified event-core substrate; see
+`TRACK_D_D3C2F_WORKFLOW_EVENT_TERMINAL_LINEAGE_MIGRATION_IMPLEMENTATION.md`. All later evidence-surface physical
+decisions remain unratified and must not be inferred from this activity migration.
