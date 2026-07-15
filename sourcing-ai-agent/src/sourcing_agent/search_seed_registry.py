@@ -28,9 +28,13 @@ def cohort_publication_commit_digest_from_candidate_documents(snapshot_dir: Path
 
 def cohort_publication_is_committed(snapshot_dir: Path, summary_payload: dict[str, Any] | None) -> bool:
     expected_digest = str(dict(summary_payload or {}).get(COHORT_PUBLICATION_DIGEST_FIELD) or "").strip()
+    committed_digest = cohort_publication_commit_digest_from_candidate_documents(snapshot_dir)
     if not expected_digest:
-        return True
-    return cohort_publication_commit_digest_from_candidate_documents(snapshot_dir) == expected_digest
+        # Legacy generations have neither side of the marker. A candidate-side
+        # marker without its compiler-owned summary digest is a damaged Cohort
+        # publication, not a legacy generation that may be repaired in place.
+        return not committed_digest
+    return committed_digest == expected_digest
 
 
 def dedupe_search_seed_entries(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:

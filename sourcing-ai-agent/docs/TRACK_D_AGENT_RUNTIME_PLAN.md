@@ -359,7 +359,8 @@ serve、会话/事件层、planner loop），用一个垂直切片证明闭环�
   只允许 pending→confirmed|uncertain。post-network 分成两条 UoW：pure exposure-first 仅 exposure lock→receipt→
   exposure terminalization、quarantine permission=0；response-classification 必须先持 `d3-dispatch-v2` 并锁/验
   complete global owner-row prefix、从 stored current state 判 current/stale，才可在 exposure tail optional quarantine，
-  且进入 exposure 后不得回头。caller flag/callback/stale `ClaimReceipt` 不具分类权；pending classification
+  且进入 exposure 后不得回头；pure exposure-first 路径不授权 send/apply。caller flag/callback/stale
+  `ClaimReceipt` 不具分类权；pending classification
   retry/recovery/idempotency 留 D3c2h1。current `ModelInvocationEnvelopeV1` 继续独占 canonical shape；D0f 已关闭 sole
   durable ref owner hard prerequisite，但 D3c2h1 仍须 ratify exact manifests。initial v1 仅 `model_tool_v1` +
   live/simulate/scripted；non-live zero-cost evidence 可达，replay zero-write，Harvest/provider-search 另需
@@ -383,11 +384,23 @@ serve、会话/事件层、planner loop），用一个垂直切片证明闭环�
   CHECK 名称 UTF-8 不超过 PostgreSQL 63 bytes；pending index 同时承载 `<8` claim 与 `=8` convergence；六个
   forward/cycle FK 仅在 target 存在后 attach，形成 exact 17-step forward + 16-step rollback DAG；三条 nullable
   timestamp CHECK 以 required `IS NOT NULL` + whole-predicate `IS TRUE` 拒绝 `UNKNOWN`。typed plan/review/gate parent 与
-  Tier-2 grant parent 的物理 owner/key 尚未 ratify，显式成为两个 hard prerequisites，禁止猜 schema 或以无 FK
-  绕过。initial v1 仍仅 `model_tool_v1` + live/simulate/scripted，replay zero-write，Harvest/provider-search deferred。
+  Tier-2 grant parent 的物理 owner/key 当时仍是两个 hard prerequisites；后续 D3c2i 已独立 ratify exact parent
+  decision，但 D3c2h1 repair 与 D3c2i 都须 matching pinned non-author `GO`，禁止以无 FK 绕过。initial v1 仍仅
+  `model_tool_v1` + live/simulate/scripted，replay zero-write，Harvest/provider-search deferred。
   该批仍为 `decision_locked_not_implemented`：零 SQL/descriptor/repository/runtime/provider/live，第二轮 repair 仍须
   fresh pinned formal non-author review；即使 repair `GO`，也须先 separate parent-owner decision lock + review，才可
   申请 dormant combined migration。
+- D3c2i decision-only parent lock 将上述两个 symbolic prerequisite 收口到 sole future
+  `PlanReviewAuthorityRepository` / `store.repos.plan_review_authority` aggregate：immutable
+  `plan_review_gate_authority_versions`（32 columns）为 exposure 19–25 的历史 typed parent，
+  `identity_search_budget_grants`（37）+ immutable `identity_search_budget_consumptions`（22）为 Tier-2 issuance/
+  pre-transport debit owner，legacy `plan_json/gate_json/decision_json` 永不授权。exact new boundary=`25 structural
+  constraints/16 FKs + 40 local checks + 4 indexes/5 access paths + 11 CAS methods`；supersede-with-transfer 原样继承四维
+  remaining balance，terminal grant 不复活；`human_transition_pending` 以 8-attempt due scan 收敛且始终 fail closed。
+  combined D3 evidence schema 因而 decision-lock 为 10 relations/77 constraints/45 FKs/15 indexes、19-step forward +
+  18-step rollback。该批仅令 Plan §6 item 6/7、OB-1.1/OB-4.1/OB-9.1/OB-10.2 的本 slice 变为
+  `decision_locked_not_implemented`；author evidence 不是 formal `GO`，零 SQL/migration/repository/runtime/provider/
+  live，R-019/R-023/R-027/R-028/R-029、action-root、其余 OB 与 served=0 不变。
 
 ### D4 — 之后（本文只圈定，不展开）
 
@@ -653,9 +666,12 @@ TD-4 初始路由表已按 owner 2026-07-13 裁决落档（D0 §4）。
    跨网络。D3c2h1/D3c2g 的 combined boundary 为 complete exact 13 upstream constraint tuples + 52 seven-table
    constraint tuples（29 FKs）+ 11 index tuples + 12 admitted access tuples + 17-step create/attach DAG + 16-step
    rollback；identifier 必须 <=63 UTF-8 bytes，pending attempt 8 有同一 pending-state index 上的独立收敛路径，
-   nullable timestamp CHECK 不得让 `UNKNOWN` 通过。typed plan/review/gate parent 与 Tier-2 grant parent 的物理表/键
-   仍是 Plan §6 item 6/R-019 与 OB-10.2/item 7 的 separately reviewed owner-decision prerequisites。不得猜 schema、
-   用 JSON/application-only proof 或省略 FK；因此当前 decision repair 仍不授权 migration、runtime 或 provider activation。
+   nullable timestamp CHECK 不得让 `UNKNOWN` 通过。D3c2i 现已把 typed plan/review/gate parent 与 Tier-2 grant parent
+   的物理 owner/tables/keys/revisions/CAS、exposure parent uniques/FKs、human convergence、grant balance/single-writer
+   与 combined 19/18 DAG 独立锁为 `decision_locked_not_implemented`；Plan §6 item 6/R-019 与 item 7/
+   OB-1.1/OB-4.1/OB-9.1/OB-10.2 的实现仍未关闭。D3c2h1 repair 与 D3c2i 必须各有 matching pinned non-author `GO`；
+   不得猜 schema、用 JSON/application-only proof 或省略 FK，因此当前 decisions 仍不授权 migration、runtime 或
+   provider activation。
    strict-D3 首次 `succeeded|failed_terminal` result command+event 取 common lock，在同一 UoW 写
    canonical nullable outcome digest/event pair；pair 在 result-terminal 期间不可变，仅 registered reopen 可在
    requeue 前清除；event composite unique + command `MATCH SIMPLE DEFERRABLE` FK + local both-null/both-non-null

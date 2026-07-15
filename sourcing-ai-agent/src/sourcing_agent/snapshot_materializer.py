@@ -29,7 +29,12 @@ from .profile_timeline import profile_snapshot_from_source_path as _profile_snap
 from .profile_timeline import timeline_has_complete_profile_detail as _timeline_has_complete_profile_detail
 from .repositories import linkedin_profile_registry_repo
 from .runtime_tuning import resolved_materialization_global_writer_budget, runtime_inflight_slot
-from .search_seed_registry import cohort_publication_is_committed, project_search_seed_snapshot_to_candidate_documents
+from .search_seed_registry import (
+    COHORT_PUBLICATION_DIGEST_FIELD,
+    cohort_publication_commit_digest_from_candidate_documents,
+    cohort_publication_is_committed,
+    project_search_seed_snapshot_to_candidate_documents,
+)
 from .seed_discovery import SearchSeedSnapshot
 from .snapshot_state import (
     company_identity_from_record as _company_identity_from_record,
@@ -76,8 +81,17 @@ class SnapshotMaterializer:
             return {"status": "skipped", "reason": "search_seed_summary_missing"}
 
         existing_summary = _read_json_dict(summary_path)
-        if not cohort_publication_is_committed(snapshot_dir, existing_summary):
-            return {"status": "skipped", "reason": "cohort_publication_uncommitted"}
+        cohort_publication_digest = str(
+            existing_summary.get(COHORT_PUBLICATION_DIGEST_FIELD) or ""
+        ).strip()
+        committed_cohort_digest = cohort_publication_commit_digest_from_candidate_documents(snapshot_dir)
+        if cohort_publication_digest or committed_cohort_digest:
+            if not cohort_publication_is_committed(snapshot_dir, existing_summary):
+                return {"status": "skipped", "reason": "cohort_publication_uncommitted"}
+            # A committed Cohort generation is immutable outside the compiler
+            # publication transaction. Legacy worker reconciliation must not
+            # rewrite its entries/summary or project a marker-less replacement.
+            return {"status": "skipped", "reason": "cohort_publication_immutable"}
         existing_entries = _read_json_list(entries_path)
         original_entry_count = len(existing_entries)
         existing_query_summaries = [

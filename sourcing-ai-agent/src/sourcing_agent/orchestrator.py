@@ -498,7 +498,11 @@ from .runtime_tuning import (
 )
 from .scoring import score_candidates
 from .search_provider import build_search_provider
-from .search_seed_registry import COHORT_PUBLICATION_DIGEST_FIELD, load_search_seed_snapshot_from_snapshot_dir
+from .search_seed_registry import (
+    COHORT_PUBLICATION_DIGEST_FIELD,
+    cohort_publication_commit_digest_from_candidate_documents,
+    load_search_seed_snapshot_from_snapshot_dir,
+)
 from .seed_discovery import (
     SearchSeedSnapshot,
     _search_seed_discovery_query_item_id,
@@ -76993,9 +76997,24 @@ def _restore_search_seed_snapshot(payload: dict[str, Any]) -> SearchSeedSnapshot
     summary_path = Path(summary_path_value).expanduser()
     entries_path_value = str(payload.get("entries_path") or "").strip()
     entries_path = Path(entries_path_value).expanduser() if entries_path_value else summary_path.parent / "entries.json"
+    summary_payload = _read_json_dict(summary_path)
+    if str(summary_payload.get(COHORT_PUBLICATION_DIGEST_FIELD) or "").strip() or (
+        cohort_publication_commit_digest_from_candidate_documents(snapshot_dir)
+    ):
+        # Cohort generations are compiler-owned publications. Persisted
+        # ``latest_state`` records intentionally contain only file references,
+        # so recovery must re-enter the canonical publication verifier instead
+        # of rebuilding a readable snapshot directly from summary/entries.
+        try:
+            return load_search_seed_snapshot_from_snapshot_dir(
+                snapshot_dir,
+                identity=identity,
+                auto_backfill_lanes=False,
+            )
+        except Exception:
+            return None
     if not entries_path.exists():
         return None
-    summary_payload = _read_json_dict(summary_path)
     entries = _read_json_list(entries_path)
     return SearchSeedSnapshot(
         snapshot_id=str(payload.get("snapshot_id") or snapshot_dir.name),

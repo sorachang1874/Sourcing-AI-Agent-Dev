@@ -505,9 +505,23 @@
   targets 存在后才 attach；identifier 全部 <=63 UTF-8 bytes；pending-state index 明确服务 `<8` claim 与 `=8`
   convergence；三条 nullable timestamp CHECK 以 `IS NOT NULL` + `IS TRUE` 拒绝 `UNKNOWN`；oracle exact-compare
   relation/index/access/race/DAG 全 tuple。typed plan/review/gate parent 与 Tier-2 grant parent 的物理
-  table/key/unique target 尚未 ratify，必须另做 owner decision lock + pinned review；不得猜 schema、用
-  JSON/application-only proof 或无 FK 绕过。当前仍为 `decision_locked_not_implemented`，零 migration/repository/
-  runtime/provider/live；第二轮 repair 须 fresh pinned non-author review，且即使 `GO` 也不单独授权 dormant migration。
+  table/key/unique target 当时尚未 ratify；后续 D3c2i 已独立锁定 exact owner decision，但 D3c2h1 repair 与 D3c2i
+  均须 matching pinned non-author `GO`，不得猜 schema、用 JSON/application-only proof 或无 FK 绕过。当前仍为
+  `decision_locked_not_implemented`，零 migration/repository/runtime/provider/live；即使本 repair `GO` 也不单独授权
+  dormant migration。
+- [x] D3c2i typed plan/review/gate + Tier-2 grant parent decision lock（2026-07-15；decision-only）：sole future
+  `PlanReviewAuthorityRepository` / `store.repos.plan_review_authority` owns exact immutable
+  `plan_review_gate_authority_versions`（32 columns）、`identity_search_budget_grants`（37）与
+  `identity_search_budget_consumptions`（22）。exposure 19–25 exact-FK 到历史 typed authority unique；Tier-2
+  columns 41–43 exact-FK 到 full-PFX immutable grant issuance，Tier-1 all-NULL 保持合法。grant 四维 balance、
+  pre-transport debit exact replay、revoke/exhaust/supersede-with-transfer/reconcile、terminal no-revive 与 field-level
+  single writer 闭合 OB-1.1/OB-10.2 decision；`human_transition_pending` 8-attempt due convergence 闭合 OB-4.1/
+  OB-9.1 decision。exact boundary=`25 structural constraints/16 FKs + 40 local checks + 4 indexes/5 access paths +
+  11 CAS methods`；combined future schema=`10 relations/77 constraints/45 FKs/15 indexes + 19 forward/18 rollback`。
+  legacy `plan_json/gate_json/decision_json` 永不作 authority/backfill。此项只把 Plan §6 item 6/7 与上述 OB slice
+  标成 `decision_locked_not_implemented`；author evidence only、fresh pinned non-author review pending，零 migration/
+  repository/runtime/provider/live。R-019/R-023/R-027/R-028/R-029、action-root、其余 OB、served=0 均不变。
+  Matching D3c2h1 + D3c2i pinned `GO` 前，no dormant migration is authorized。
 - [x] Cohort CS1/CS2 foundation（Thinking Machines Lab live 前置）：versioned、registry-digest-pinned
   `CohortSelection` 已成为 request/plan-review/provider compiler 的唯一 owner；Researcher/Engineer/Product Manager
   等 role bucket 与 current/former 支持有序自由多选，`role_match=any|all`，用户显式选择优先于 raw text/model

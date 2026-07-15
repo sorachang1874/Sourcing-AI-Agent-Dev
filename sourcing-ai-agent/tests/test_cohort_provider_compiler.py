@@ -4,6 +4,7 @@ import copy
 import json
 import tempfile
 import unittest
+from contextlib import nullcontext
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -37,7 +38,12 @@ from sourcing_agent.harvest_connectors import (
     parse_harvest_search_rows,
 )
 from sourcing_agent.model_provider import DeterministicModelClient
-from sourcing_agent.orchestrator import _restore_search_seed_snapshot_from_snapshot_dir
+from sourcing_agent.orchestrator import (
+    SourcingOrchestrator,
+    _deserialize_acquisition_state_payload,
+    _restore_search_seed_snapshot,
+    _restore_search_seed_snapshot_from_snapshot_dir,
+)
 from sourcing_agent.planning import build_sourcing_plan, hydrate_sourcing_plan
 from sourcing_agent.runtime_environment import RuntimeEnvironment
 from sourcing_agent.search_seed_registry import load_search_seed_snapshot_from_snapshot_dir
@@ -1573,6 +1579,205 @@ class CohortAcquisitionRuntimeTest(unittest.TestCase):
                     if path.is_file()
                 },
                 partial_files_before_recovery,
+            )
+
+    def test_cohort_publication_fences_persisted_restore_and_legacy_worker_reconcile(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            snapshot_dir = Path(tempdir) / "company_assets" / "acme" / "snap-cohort-immutable"
+            discovery_dir = snapshot_dir / "search_seed_discovery"
+            discovery_dir.mkdir(parents=True)
+            identity = CompanyIdentity(
+                requested_name="Acme",
+                canonical_name="Acme",
+                company_key="acme",
+                linkedin_slug="acme",
+                linkedin_company_url="https://www.linkedin.com/company/acme/",
+            )
+            publication_digest = "a" * 64
+            summary_path = discovery_dir / "summary.json"
+            entries_path = discovery_dir / "entries.json"
+            summary_path.write_text(
+                json.dumps(
+                    {
+                        "snapshot_id": snapshot_dir.name,
+                        "target_company": "Acme",
+                        "company_identity": identity.to_record(),
+                        "query_summaries": [],
+                        "accounts_used": [],
+                        "errors": [],
+                        "stop_reason": "cohort_provider_completed",
+                        "cohort_publication_digest": publication_digest,
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            entries_path.write_text(
+                json.dumps(
+                    [
+                        {
+                            "full_name": "Ada Researcher",
+                            "profile_url": "https://www.linkedin.com/in/ada-researcher/",
+                        }
+                    ],
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            persisted_snapshot = {
+                "snapshot_id": snapshot_dir.name,
+                "target_company": "Acme",
+                "company_identity": identity.to_record(),
+                "snapshot_dir": str(snapshot_dir),
+                "summary_path": str(summary_path),
+                "entries_path": str(entries_path),
+            }
+
+            # A persisted latest_state reference cannot make a partial Cohort
+            # generation readable to restore or progress accounting.
+            self.assertIsNone(_restore_search_seed_snapshot(persisted_snapshot))
+            self.assertNotIn(
+                "search_seed_snapshot",
+                _deserialize_acquisition_state_payload({"search_seed_snapshot": persisted_snapshot}),
+            )
+            progress_probe = object.__new__(SourcingOrchestrator)
+            self.assertEqual(
+                SourcingOrchestrator._search_seed_entries_for_progress(
+                    progress_probe,
+                    job={
+                        "summary": {
+                            "acquisition_progress": {
+                                "latest_state": {
+                                    "snapshot_dir": str(snapshot_dir),
+                                    "company_identity": identity.to_record(),
+                                    "search_seed_snapshot": persisted_snapshot,
+                                }
+                            }
+                        }
+                    },
+                    workers=[],
+                ),
+                [],
+            )
+
+            (snapshot_dir / "candidate_documents.json").write_text(
+                json.dumps(
+                    {
+                        "acquisition_sources": {
+                            "search_seed_snapshot": {
+                                "cohort_publication_digest": publication_digest,
+                            }
+                        }
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            restored = _restore_search_seed_snapshot(persisted_snapshot)
+            self.assertIsNotNone(restored)
+            assert restored is not None
+            self.assertEqual(restored.summary_payload["cohort_publication_digest"], publication_digest)
+
+            committed_files = {
+                str(path.relative_to(snapshot_dir)): path.read_bytes()
+                for path in snapshot_dir.rglob("*")
+                if path.is_file()
+            }
+            pending_worker = {
+                "worker_id": 17,
+                "updated_at": "2026-07-15T00:00:00Z",
+                "output": {
+                    "entries": [
+                        {
+                            "full_name": "Must Not Merge",
+                            "profile_url": "https://www.linkedin.com/in/must-not-merge/",
+                        }
+                    ]
+                },
+            }
+            materializer = object.__new__(SnapshotMaterializer)
+            self.assertEqual(
+                materializer.apply_search_seed_workers_to_snapshot(
+                    snapshot_dir=snapshot_dir,
+                    pending_workers=[pending_worker],
+                ),
+                {"status": "skipped", "reason": "cohort_publication_immutable"},
+            )
+            self.assertEqual(
+                {
+                    str(path.relative_to(snapshot_dir)): path.read_bytes()
+                    for path in snapshot_dir.rglob("*")
+                    if path.is_file()
+                },
+                committed_files,
+            )
+
+            damaged_summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            damaged_summary.pop("cohort_publication_digest")
+            summary_path.write_text(json.dumps(damaged_summary, ensure_ascii=False), encoding="utf-8")
+            damaged_files = {
+                str(path.relative_to(snapshot_dir)): path.read_bytes()
+                for path in snapshot_dir.rglob("*")
+                if path.is_file()
+            }
+            self.assertIsNone(_restore_search_seed_snapshot(persisted_snapshot))
+            self.assertEqual(
+                materializer.apply_search_seed_workers_to_snapshot(
+                    snapshot_dir=snapshot_dir,
+                    pending_workers=[pending_worker],
+                ),
+                {"status": "skipped", "reason": "cohort_publication_uncommitted"},
+            )
+            self.assertEqual(
+                {
+                    str(path.relative_to(snapshot_dir)): path.read_bytes()
+                    for path in snapshot_dir.rglob("*")
+                    if path.is_file()
+                },
+                damaged_files,
+            )
+            summary_path.write_bytes(committed_files["search_seed_discovery/summary.json"])
+
+            # The real running-job caller returns at the failed apply boundary;
+            # it cannot pass a compiler-owned snapshot into profile prefetch.
+            reconcile_probe = object.__new__(SourcingOrchestrator)
+            reconcile_probe._collect_inline_incremental_worker_batch = (  # type: ignore[method-assign]
+                lambda **_kwargs: ([pending_worker], [])
+            )
+            reconcile_probe._inline_incremental_writer_lock_scope = (  # type: ignore[method-assign]
+                lambda *_args, **_kwargs: nullcontext({})
+            )
+            reconcile_probe._worker_inline_incremental_apply_complete_for_snapshot = (  # type: ignore[method-assign]
+                lambda **_kwargs: False
+            )
+            reconcile_probe._apply_background_search_seed_workers_to_snapshot = (  # type: ignore[method-assign]
+                lambda **kwargs: materializer.apply_search_seed_workers_to_snapshot(
+                    snapshot_dir=kwargs["snapshot_dir"],
+                    pending_workers=kwargs["pending_workers"],
+                )
+            )
+            with patch.object(
+                reconcile_probe,
+                "_queue_background_profile_prefetch_from_search_seed_snapshot",
+            ) as prefetch:
+                result = SourcingOrchestrator._process_inline_incremental_worker_batch(
+                    reconcile_probe,
+                    job={"job_id": "job-cohort-immutable", "status": "running"},
+                    request=JobRequest.from_payload({"target_company": "Acme"}),
+                    plan_payload={},
+                    snapshot_dir=snapshot_dir,
+                    worker_kind="search_seed",
+                )
+            self.assertEqual(result["status"], "skipped")
+            self.assertEqual(result["reason"], "cohort_publication_immutable")
+            prefetch.assert_not_called()
+            self.assertEqual(
+                {
+                    str(path.relative_to(snapshot_dir)): path.read_bytes()
+                    for path in snapshot_dir.rglob("*")
+                    if path.is_file()
+                },
+                committed_files,
             )
 
     def test_scripted_runtime_executes_real_harvest_boundary_without_live_submission(self) -> None:

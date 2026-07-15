@@ -50,6 +50,21 @@
 
 ## Active candidate annotations
 
+- **R-019 / D3c2i (2026-07-15):** decision-only parent lock ratifies one future plan-review-owner aggregate:
+  `PlanReviewAuthorityRepository` owns immutable `plan_review_gate_authority_versions` plus
+  `identity_search_budget_grants` and immutable `identity_search_budget_consumptions`. The 32/37/22-column manifests,
+  full PFX, historical seven-pin exposure parent unique/FK, Tier-2 issuance parent unique/FK, four-dimensional balance,
+  pre-transport debit CAS, terminal-no-revive and exact supersede-with-transfer lifecycle are fixed; legacy JSON
+  (`plan_json`, `gate_json`, `decision_json`) is explicitly non-authoritative and is never a strict-D3 backfill source.
+  The same owner persists and recovers `human_transition_pending` through an eight-attempt due path that remains
+  fail-closed. Exact new boundary is 25 structural constraints/16 FKs, 40 local checks, 4 indexes/5 access paths and 11
+  CAS methods; it expands the future combined D3 evidence boundary to 10 relations/77 constraints/45 FKs/15 indexes,
+  19 forward and 18 rollback actions. This advances only the Plan §6 item 6/7 and OB-1.1/OB-4.1/OB-9.1/OB-10.2
+  *decisions* to `decision_locked_not_implemented`: all three tables/repository/runtime remain physically absent, author
+  evidence is not formal `GO`, and D3c2h1 plus D3c2i matching pinned reviews remain prerequisites for dormant migration.
+  R-019's status and ratchet remain open; R-023, R-027, R-028, R-029, action-root, other OB gates, served=0,
+  provider/live, and Migration A-D are unchanged.
+
 - **R-019 / D3c2h1 fixed-forward (2026-07-15):** the first pinned highest-effort non-author review of
   `1c4a2d9177dcb3470117700086b12fd533898bb7` returned formal `NO-GO 0/3/3/0`. The author repair addresses all six
   findings without SQL/runtime: classification now has nonterminal `current_pending_apply` plus a fresh normal-terminal
@@ -61,11 +76,11 @@
   race/DAG tuple, shortens the sole over-limit identifier below PostgreSQL's 63-byte ceiling, gives both pending `<8`
   claim and pending `=8` convergence admitted access through the same pending-state index, rejects nullable timestamp
   `CHECK` `UNKNOWN`, and defines an executable 17-action create/attach plus 16-action rollback DAG with all six internal
-  forward/cycle FKs attached only after their targets exist. The typed plan/review/gate parent and the
-  OB-10.2 Tier-2 grant parent still lack ratified physical table/key/unique targets, so a separately reviewed owner
-  decision remains a hard predecessor and no dormant migration is authorized. Fresh pinned review of this repair is
-  pending. This annotation changes neither R-019's pending state nor its 26-call ratchet, and it does not alter or claim
-  closure of R-027, R-023, R-029, action-root, served=0, provider/live, Migration A-D, or any other residual.
+  forward/cycle FKs attached only after their targets exist. D3c2i now separately ratifies the typed plan/review/gate and
+  OB-10.2 Tier-2 grant parent decisions; matching pinned non-author `GO` artifacts for this repair and D3c2i remain hard
+  predecessors, so no dormant migration is authorized. Fresh pinned review of this repair is pending. This annotation
+  changes neither R-019's pending state nor its 26-call ratchet, and it does not alter or claim closure of R-027, R-023,
+  R-028, R-029, action-root, served=0, provider/live, Migration A-D, or any other residual.
 
 - **R-019 / D3c2g (2026-07-15):** decision-only cost-ledger/dispatch-exposure lock ratifies the sole future
   `CostLedgerRepository` aggregate and its exact parent/child `21/75` manifests, keys/indexes/checks, immutable
