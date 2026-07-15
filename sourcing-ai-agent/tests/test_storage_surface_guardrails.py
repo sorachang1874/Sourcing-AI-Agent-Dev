@@ -1255,10 +1255,42 @@ def test_workflow_evidence_batch_readers_are_bounded_single_query_and_request_or
     adapter.calls.clear()
     assert repository.list_activity_runs_by_ids([]) == []
     assert store.list_workflow_commands_by_ids(()) == []
+    duplicate_activities = repository.list_activity_runs_by_ids([" activity-1 "] * 500)
+    duplicate_commands = store.list_workflow_commands_by_ids((" command-1 ",) * 500)
+    assert [row["activity_run_id"] for row in duplicate_activities] == ["activity-1"]
+    assert [row["command_id"] for row in duplicate_commands] == ["command-1"]
+    assert adapter.calls == [
+        (
+            "workflow_activity_runs",
+            {
+                "where_sql": "activity_run_id IN (%s)",
+                "params": ["activity-1"],
+                "order_by_sql": "",
+                "limit": 1,
+                "offset": 0,
+            },
+        ),
+        (
+            "workflow_commands",
+            {
+                "where_sql": "command_id IN (%s)",
+                "params": ["command-1"],
+                "order_by_sql": "",
+                "limit": 1,
+                "offset": 0,
+            },
+        ),
+    ]
+
+    adapter.calls.clear()
     with pytest.raises(ValueError, match="activity_run_ids supports at most 500 identifiers per batch"):
         repository.list_activity_runs_by_ids([f"activity-{index}" for index in range(501)])
     with pytest.raises(ValueError, match="command_ids supports at most 500 identifiers per batch"):
         store.list_workflow_commands_by_ids([f"command-{index}" for index in range(501)])
+    with pytest.raises(ValueError, match="activity_run_ids supports at most 500 identifiers per batch"):
+        repository.list_activity_runs_by_ids(["activity-1"] * 501)
+    with pytest.raises(ValueError, match="command_ids supports at most 500 identifiers per batch"):
+        store.list_workflow_commands_by_ids(("command-1",) * 501)
     assert adapter.calls == []
 
 

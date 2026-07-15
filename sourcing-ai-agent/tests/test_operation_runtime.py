@@ -986,7 +986,20 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         orchestrator = self._build_r020_orchestrator()
         adapter = self.store._control_plane_postgres
 
-        with mock.patch.object(adapter, "select_many", wraps=adapter.select_many) as select_many:
+        with (
+            mock.patch.object(adapter, "select_many", wraps=adapter.select_many) as select_many,
+            mock.patch.object(adapter, "select_one", wraps=adapter.select_one) as select_one,
+            mock.patch.object(
+                repository,
+                "get_activity_run",
+                wraps=repository.get_activity_run,
+            ) as get_activity,
+            mock.patch.object(
+                self.store,
+                "get_workflow_command",
+                wraps=self.store.get_workflow_command,
+            ) as get_command,
+        ):
             activity_by_id, command_by_id = orchestrator._workflow_activity_linked_evidence_prefetch(  # noqa: SLF001
                 activities
             )
@@ -1018,6 +1031,9 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         command_queries = [
             call for call in select_many.call_args_list if call.args and call.args[0] == "workflow_commands"
         ]
+        self.assertEqual(select_one.call_count, 0)
+        self.assertEqual(get_activity.call_count, 0)
+        self.assertEqual(get_command.call_count, 0)
         self.assertEqual(len(activity_queries), 1)
         self.assertEqual(len(command_queries), 1)
         self.assertEqual(activity_queries[0].kwargs["where_sql"].count("%s"), 500)

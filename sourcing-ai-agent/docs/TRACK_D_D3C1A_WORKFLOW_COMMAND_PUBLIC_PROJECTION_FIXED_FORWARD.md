@@ -155,6 +155,35 @@ When `Content-Length` is absent or malformed, Fetch still exposes only `response
 the 4 MiB UTF-8 check occurs after buffering. A true read-before-allocation cap requires a separate bounded streaming
 reader and remains an explicit transport residual; it does not weaken projection/output admission after decoding.
 
+That streaming residual also covers an untrusted or understated/mismatched `Content-Length` and compressed responses
+whose wire length does not bound the decoded body returned by Fetch. The decoded-body check still rejects an oversized
+value before JSON parsing or projection, but it cannot prevent the browser/runtime from allocating that decoded value.
+The demo DTO's non-enumerable `raw` compatibility property is intentionally readable by current repository callers; an
+unknown external caller that relies on `Object.keys`, object spread, `Object.assign`, or `JSON.stringify` including
+`raw` must migrate to direct `.raw` access. TypeScript cannot express that enumerability distinction.
+
+#### Fresh pinned advisory against `36c17dc`
+
+Two independent non-author sessions reviewed pinned Git objects for base `4919990...` and head `36c17dc...`; both used
+the operator-owned medium reasoning effort, so their verdicts are scope-local advisories rather than formal
+highest-effort review artifacts.
+
+- Backend/PG evidence review: **ADVISORY NO-GO**, P0/P1/P2/P3=`0/0/2/0`. Product batch readers were confirmed to issue
+  one real-PG `select_many` per owner and project all 500 rows, but the exact-500 oracle did not forbid hidden point
+  reads. The 501 guard also used only unique identifiers, so it did not mechanically preserve the raw-input-before-
+  dedupe limit for duplicate-heavy inputs.
+- Frontend review: **ADVISORY NO-GO**, P0/P1/P2/P3=`0/0/2/2`. Raw projection admission was bounded, but derived demo DTO
+  fields could expand the final enumerable serialization beyond the same node/byte budget. The 4 MiB reader had also
+  been attached to shared fetch helpers, unintentionally changing unrelated jobs/assets/CRM response contracts. The
+  two P3 items are the complete streaming/header residual and the non-enumerable-`raw` compatibility boundary recorded
+  above.
+
+The enclosing fixed-forward implements all four required corrections: the real-PG oracle now forbids hidden point
+reads; both readers prove the raw 500/501 bound before dedupe; every returned enumerable demo DTO is admitted against
+the canonical final JSON node/byte budget; and the transport-body cap is limited to the exact D3c1a public
+operation/workflow variants. The prior `36c17dc...` object remains a historical pinned advisory `NO-GO`; the enclosing
+candidate requires a fresh pinned non-author review and is not a live or milestone gate until that review succeeds.
+
 ### 3.4 Earlier precommit adversarial author-audit fixes
 
 After implementing the five direct findings, adversarial passes in the author session exposed additional bounded
@@ -432,7 +461,7 @@ Current `4919990` pinned-review fixed-forward evidence, before creating its encl
 - isolated real-PG evidence matrix: **6 passed + 500 subtests**, including exact 500-row/two-owner projection,
   request-ordered dedupe/bounds, acquisition mismatch, command-operation mismatch, and lineage controls;
 - 501-identifier storage guard: **1 passed**;
-- frontend production build: **82 modules transformed**, `547.08 kB` / gzip `163.06 kB`; the existing `>500 kB`
+- frontend production build: **82 modules transformed**, `550.32 kB` / gzip `164.02 kB`; the existing `>500 kB`
   chunk warning remains informational;
 - scoped Ruff check/format and `git diff --check`: clean;
 - mypy ceiling: unchanged at **81 errors in 4 files**.

@@ -3468,6 +3468,56 @@ assert.deepEqual(projectionLimits, {
   maxTransportBodyBytes: 4194304,
 });
 assert.deepEqual(runtimeContract.WORKFLOW_PUBLIC_PROJECTION_LIMITS, projectionLimits);
+let finalFootprintAccessorReads = 0;
+const finalFootprintAccessor = {};
+Object.defineProperty(finalFootprintAccessor, "value", {
+  enumerable: true,
+  get() {
+    finalFootprintAccessorReads += 1;
+    return "must-not-run";
+  },
+});
+assert.equal(runtimeContract.workflowPublicFinalJsonFootprint(finalFootprintAccessor), undefined);
+assert.equal(finalFootprintAccessorReads, 0);
+
+const finalFootprintProxyReads = {
+  get: 0,
+  getPrototypeOf: 0,
+  ownKeys: 0,
+  getOwnPropertyDescriptor: 0,
+};
+const finalFootprintSharedProxy = new Proxy(
+  { safe: "shared" },
+  {
+    get(target, key, receiver) {
+      finalFootprintProxyReads.get += 1;
+      return Reflect.get(target, key, receiver);
+    },
+    getPrototypeOf(target) {
+      finalFootprintProxyReads.getPrototypeOf += 1;
+      return Reflect.getPrototypeOf(target);
+    },
+    ownKeys(target) {
+      finalFootprintProxyReads.ownKeys += 1;
+      return Reflect.ownKeys(target);
+    },
+    getOwnPropertyDescriptor(target, key) {
+      finalFootprintProxyReads.getOwnPropertyDescriptor += 1;
+      return Reflect.getOwnPropertyDescriptor(target, key);
+    },
+  },
+);
+const finalAliasFootprint = runtimeContract.workflowPublicFinalJsonFootprint({
+  first: finalFootprintSharedProxy,
+  second: finalFootprintSharedProxy,
+});
+assert.ok(finalAliasFootprint);
+assert.deepEqual(finalFootprintProxyReads, {
+  get: 0,
+  getPrototypeOf: 1,
+  ownKeys: 1,
+  getOwnPropertyDescriptor: 1,
+});
 assert.deepEqual(runtimeContract.OPERATION_ACTION_DECISION_APPLIED_OUTCOMES, {
   approve: ["queued"],
   reject: ["rejected"],
@@ -3496,6 +3546,48 @@ assert.equal(
 assert.equal(
   runtimeContract.workflowPublicTransportContentLengthIsOverLimit("not-a-length"),
   false,
+);
+
+function finalDtoBoundaryCommand(stringLength) {
+  const value = "x".repeat(stringLength);
+  return {
+    command_id: value,
+    workflow_run_id: value,
+    operation_id: value,
+    command_type: value,
+    owner: value,
+    agent_exposure_status: value,
+    agent_exposure_gate: value,
+    status: value,
+    control_policy: {
+      command_type: value,
+      owner: value,
+      generic_control_contract: value,
+      provider_after_start_control_contract: value,
+      provider_after_start_control_status: value,
+      provider_after_start_control_mode: value,
+      provider_after_start_control_owner: value,
+      provider_after_start_control_blocked_reason: value,
+    },
+  };
+}
+const admittedFinalDto = demoApi.deriveWorkflowCommandRecord(finalDtoBoundaryCommand(65_480));
+const admittedFinalDtoFootprint = runtimeContract.workflowPublicFinalJsonFootprint(admittedFinalDto);
+assert.ok(admittedFinalDtoFootprint);
+assert.equal(
+  admittedFinalDtoFootprint.bytes,
+  runtimeContract.workflowPublicUtf8ByteLength(JSON.stringify(admittedFinalDto)),
+);
+const rawNearBoundaryCommand = publicAdapter.mapWorkflowCommandRecord(
+  finalDtoBoundaryCommand(65_500),
+);
+assert.ok(
+  runtimeContract.workflowPublicUtf8ByteLength(JSON.stringify(rawNearBoundaryCommand)) <=
+    projectionLimits.maxOccurrenceBytes,
+);
+assert.throws(
+  () => demoApi.deriveWorkflowCommandRecord(finalDtoBoundaryCommand(65_500)),
+  /final public DTO budget/,
 );
 
 const oversizedStringSharedLeaf = { blob: "x".repeat(100_000) };
@@ -4681,23 +4773,109 @@ for (const [value, expected] of diagnosticCases) {
     }),
     text: async () => {
       oversizedHeaderBodyReads += 1;
-      return '{"status":"ok"}';
+      return '{"status":"ok","action_registry":{},"command_registry":{}}';
     },
   });
   const oversizedHeaderClient = new publicAdapter.SourcingAgentApiClient({
     baseUrl: "https://api.test",
     fetchImpl: async () => oversizedHeaderResponse(),
   });
-  await assert.rejects(
+  const adapterWorkflowPublicBodyBudgetCalls = [
+    () => oversizedHeaderClient.listOperationActions(),
+    () => oversizedHeaderClient.submitOperationAction({}),
     () => oversizedHeaderClient.getOperationAction("oversized-header"),
+    () => oversizedHeaderClient.approveOperationAction("oversized-header"),
+    () => oversizedHeaderClient.rejectOperationAction("oversized-header"),
+    () => oversizedHeaderClient.listOperationRuns(),
+    () => oversizedHeaderClient.getOperationRun("oversized-header"),
+    () => oversizedHeaderClient.getOperationRunProvenance("oversized-header"),
+    () => oversizedHeaderClient.cancelOperationRun("oversized-header"),
+    () => oversizedHeaderClient.retryOperationRun("oversized-header"),
+    () => oversizedHeaderClient.resumeOperationRun("oversized-header"),
+    () => oversizedHeaderClient.dispatchOperationRun("oversized-header"),
+    () => oversizedHeaderClient.listWorkflowCommands(),
+    () => oversizedHeaderClient.getWorkflowCommand("oversized-header"),
+    () => oversizedHeaderClient.cancelWorkflowCommand("oversized-header"),
+    () => oversizedHeaderClient.retryWorkflowCommand("oversized-header"),
+    () => oversizedHeaderClient.resumeWorkflowCommand("oversized-header"),
+    () => oversizedHeaderClient.listWorkflowActivities(),
+    () => oversizedHeaderClient.getWorkflowActivity("oversized-header"),
+    () => oversizedHeaderClient.listWorkflowActivityAttempts(),
+    () => oversizedHeaderClient.getWorkflowActivityAttempt("oversized-header"),
+    () => oversizedHeaderClient.listWorkflowEntityDeltas(),
+    () => oversizedHeaderClient.getWorkflowEntityDelta("oversized-header"),
+  ];
+  assert.equal(adapterWorkflowPublicBodyBudgetCalls.length, 23);
+  for (const invoke of adapterWorkflowPublicBodyBudgetCalls) {
+    await assert.rejects(invoke, /transport body budget/);
+  }
+  global.fetch = async () => oversizedHeaderResponse();
+  const demoWorkflowPublicBodyBudgetCalls = [
+    () => demoApi.listOperationRuns(),
+    () => demoApi.listOperationActions(),
+    () => demoApi.approveOperationAction("oversized-header"),
+    () => demoApi.rejectOperationAction("oversized-header"),
+    () => demoApi.getOperationRunProvenance("oversized-header"),
+    () => demoApi.cancelOperationRun("oversized-header"),
+    () => demoApi.retryOperationRun("oversized-header"),
+    () => demoApi.resumeOperationRun("oversized-header"),
+    () => demoApi.dispatchOperationRun("oversized-header"),
+    () => demoApi.cancelWorkflowCommand("oversized-header"),
+    () => demoApi.retryWorkflowCommand("oversized-header"),
+    () => demoApi.resumeWorkflowCommand("oversized-header"),
+    () => demoApi.listWorkflowActivities({}),
+    () => demoApi.listWorkflowActivityAttempts({}),
+    () => demoApi.listWorkflowEntityDeltas({}),
+  ];
+  assert.equal(demoWorkflowPublicBodyBudgetCalls.length, 15);
+  for (const invoke of demoWorkflowPublicBodyBudgetCalls) {
+    await assert.rejects(invoke, /transport body budget/);
+  }
+  assert.equal(oversizedHeaderBodyReads, 0);
+
+  assert.equal((await oversizedHeaderClient.startWorkflow({})).status, "ok");
+  assert.equal((await oversizedHeaderClient.getOperationActionRegistry()).status, "ok");
+  assert.equal((await oversizedHeaderClient.getWorkflowCommandRegistry()).status, "ok");
+  global.fetch = async () => oversizedHeaderResponse();
+  assert.equal((await demoApi.approvePlanReview("1")).status, "ok");
+  assert.equal(oversizedHeaderBodyReads, 4);
+
+  const oversizedDecodedBody = JSON.stringify({
+    status: "ok",
+    padding: "x".repeat(projectionLimits.maxTransportBodyBytes),
+  });
+  assert.ok(
+    runtimeContract.workflowPublicUtf8ByteLength(oversizedDecodedBody) >
+      projectionLimits.maxTransportBodyBytes,
+  );
+  let oversizedDecodedBodyReads = 0;
+  const oversizedDecodedBodyResponse = () => ({
+    ok: true,
+    status: 200,
+    statusText: "OK",
+    headers: new Headers({ "Content-Type": "application/json" }),
+    text: async () => {
+      oversizedDecodedBodyReads += 1;
+      return oversizedDecodedBody;
+    },
+  });
+  const oversizedDecodedBodyClient = new publicAdapter.SourcingAgentApiClient({
+    baseUrl: "https://api.test",
+    fetchImpl: async () => oversizedDecodedBodyResponse(),
+  });
+  await assert.rejects(
+    () => oversizedDecodedBodyClient.getOperationAction("oversized-decoded-body"),
     /transport body budget/,
   );
-  global.fetch = async () => oversizedHeaderResponse();
+  assert.equal((await oversizedDecodedBodyClient.startWorkflow({})).status, "ok");
+  global.fetch = async () => oversizedDecodedBodyResponse();
   await assert.rejects(
     () => demoApi.listWorkflowActivities({}),
     /transport body budget/,
   );
-  assert.equal(oversizedHeaderBodyReads, 0);
+  global.fetch = async () => oversizedDecodedBodyResponse();
+  assert.equal((await demoApi.approvePlanReview("1")).status, "ok");
+  assert.equal(oversizedDecodedBodyReads, 4);
   const clientOutcomeCases = [
     {
       label: "action-submit",
@@ -4830,6 +5008,97 @@ for (const [value, expected] of diagnosticCases) {
   );
   assert.ok(countProjectedJsonNodes(demoNodeBudgetProvenance) <= projectionLimits.maxNodes);
 
+  const sparseFinalDtoCommands = Array.from(
+    { length: projectionLimits.maxCollectionEntries },
+    (_, index) => ({ command_id: `final-dto-command-${index}` }),
+  );
+  global.fetch = async () => jsonResponse({
+    status: "ok",
+    workflow_commands: sparseFinalDtoCommands,
+  });
+  const sparseFinalDtoProvenance = await demoApi.getOperationRunProvenance(
+    "operation-run-final-dto-budget",
+  );
+  assert.ok(sparseFinalDtoProvenance.workflowCommands.length > 0);
+  assert.ok(
+    sparseFinalDtoProvenance.workflowCommands.length < projectionLimits.maxCollectionEntries,
+  );
+  assert.equal(
+    sparseFinalDtoProvenance.raw.workflow_commands.length,
+    sparseFinalDtoProvenance.workflowCommands.length,
+  );
+  const sparseFinalDtoFootprint = runtimeContract.workflowPublicFinalJsonFootprint(
+    sparseFinalDtoProvenance,
+  );
+  assert.ok(sparseFinalDtoFootprint);
+  assert.equal(
+    sparseFinalDtoFootprint.nodes,
+    countProjectedJsonNodes(sparseFinalDtoProvenance),
+  );
+  assert.equal(
+    sparseFinalDtoFootprint.bytes,
+    runtimeContract.workflowPublicUtf8ByteLength(JSON.stringify(sparseFinalDtoProvenance)),
+  );
+
+  const unreadTailProxyTraps = {
+    get: 0,
+    getPrototypeOf: 0,
+    ownKeys: 0,
+    getOwnPropertyDescriptor: 0,
+  };
+  const unreadTailProxy = new Proxy(
+    { command_id: "must-not-be-read-after-final-budget-failure" },
+    {
+      get(target, key, receiver) {
+        unreadTailProxyTraps.get += 1;
+        return Reflect.get(target, key, receiver);
+      },
+      getPrototypeOf(target) {
+        unreadTailProxyTraps.getPrototypeOf += 1;
+        return Reflect.getPrototypeOf(target);
+      },
+      ownKeys(target) {
+        unreadTailProxyTraps.ownKeys += 1;
+        return Reflect.ownKeys(target);
+      },
+      getOwnPropertyDescriptor(target, key) {
+        unreadTailProxyTraps.getOwnPropertyDescriptor += 1;
+        return Reflect.getOwnPropertyDescriptor(target, key);
+      },
+    },
+  );
+  const finalBudgetPrefixPayload = {
+    status: "ok",
+    workflow_commands: [
+      finalDtoBoundaryCommand(65_500),
+      unreadTailProxy,
+    ],
+  };
+  const originalJsonParse = JSON.parse;
+  JSON.parse = (input, reviver) => input === "__FINAL_DTO_PREFIX_PAYLOAD__"
+    ? finalBudgetPrefixPayload
+    : originalJsonParse(input, reviver);
+  global.fetch = async () => ({
+    ok: true,
+    status: 200,
+    headers: new Headers({ "Content-Type": "application/json" }),
+    text: async () => "__FINAL_DTO_PREFIX_PAYLOAD__",
+  });
+  try {
+    const prefixClosedProvenance = await demoApi.getOperationRunProvenance(
+      "operation-run-final-prefix-closed",
+    );
+    assert.deepEqual(prefixClosedProvenance.workflowCommands, []);
+    assert.deepEqual(unreadTailProxyTraps, {
+      get: 0,
+      getPrototypeOf: 0,
+      ownKeys: 0,
+      getOwnPropertyDescriptor: 0,
+    });
+  } finally {
+    JSON.parse = originalJsonParse;
+  }
+
   global.fetch = async () => jsonResponse({
     workflow_activities: Array.from(
       { length: projectionLimits.maxCollectionEntries + 1 },
@@ -4837,6 +5106,17 @@ for (const [value, expected] of diagnosticCases) {
     ),
   });
   assert.deepEqual(await demoApi.listWorkflowActivities({}), []);
+
+  global.fetch = async () => jsonResponse({
+    workflow_activities: Array.from(
+      { length: projectionLimits.maxCollectionEntries },
+      (_, index) => ({ activity_run_id: `demo-final-activity-${index}` }),
+    ),
+  });
+  const finalBudgetActivities = await demoApi.listWorkflowActivities({});
+  assert.ok(finalBudgetActivities.length > 0);
+  assert.ok(finalBudgetActivities.length < projectionLimits.maxCollectionEntries);
+  assert.ok(runtimeContract.workflowPublicFinalJsonFootprint(finalBudgetActivities));
 
   global.fetch = async () => jsonResponse({
     status: "ok",

@@ -12,6 +12,7 @@ import {
   OPERATION_RUN_PROVENANCE_SUCCESS_STATUSES,
   WORKFLOW_COMMAND_CONTROL_APPLIED_OUTCOMES,
   WORKFLOW_PUBLIC_PROJECTION_LIMITS,
+  workflowPublicFinalJsonFootprint,
   workflowPublicJsonStringByteLength,
   workflowPublicTransportBodyIsOverLimit,
   workflowPublicTransportContentLengthIsOverLimit,
@@ -1072,6 +1073,13 @@ function captureDemoWorkflowPublicEnvelope(
   };
 }
 
+class DemoWorkflowPublicFinalBudgetError extends Error {
+  constructor(label: string) {
+    super(`${label} exceeds or violates the final public DTO budget`);
+    this.name = "DemoWorkflowPublicFinalBudgetError";
+  }
+}
+
 function projectDemoCapturedPlainWorkflowPublicObject<T>(
   value: unknown,
   projector: (
@@ -1087,12 +1095,75 @@ function projectDemoCapturedPlainWorkflowPublicObject<T>(
   }
   try {
     return projector(value, traversal, depth);
-  } catch {
+  } catch (error) {
+    if (error instanceof DemoWorkflowPublicFinalBudgetError) {
+      throw error;
+    }
     return undefined;
   }
 }
 
-function projectDemoCapturedPlainWorkflowPublicObjectArray<T>(
+interface DemoWorkflowPublicFinalAggregateBudget {
+  nodes: number;
+  bytes: number;
+  blocked: boolean;
+}
+
+function requireDemoWorkflowPublicFinalFootprint(
+  value: unknown,
+  label: string,
+): DemoWorkflowPublicFinalAggregateBudget {
+  const footprint = workflowPublicFinalJsonFootprint(value);
+  if (!footprint) {
+    throw new DemoWorkflowPublicFinalBudgetError(label);
+  }
+  return { nodes: footprint.nodes, bytes: footprint.bytes, blocked: false };
+}
+
+function admitDemoWorkflowPublicFinalListItem<T extends object>(
+  target: T[],
+  item: T,
+  budget: DemoWorkflowPublicFinalAggregateBudget,
+): boolean {
+  if (budget.blocked) {
+    return false;
+  }
+  const footprint = workflowPublicFinalJsonFootprint(item);
+  if (!footprint) {
+    budget.blocked = true;
+    return false;
+  }
+  const nextNodes = budget.nodes + footprint.nodes;
+  const nextBytes = budget.bytes + footprint.bytes + (target.length > 0 ? 1 : 0);
+  if (
+    nextNodes > WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxNodes ||
+    nextBytes > WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxOccurrenceBytes
+  ) {
+    budget.blocked = true;
+    return false;
+  }
+  target.push(item);
+  budget.nodes = nextNodes;
+  budget.bytes = nextBytes;
+  return true;
+}
+
+function admitDemoWorkflowPublicFinalList<T extends object>(
+  target: T[],
+  items: readonly T[],
+  budget: DemoWorkflowPublicFinalAggregateBudget,
+): void {
+  if (budget.blocked) {
+    return;
+  }
+  for (const item of items) {
+    if (!admitDemoWorkflowPublicFinalListItem(target, item, budget)) {
+      break;
+    }
+  }
+}
+
+function projectDemoCapturedPlainWorkflowPublicObjectArray<T extends object>(
   value: unknown,
   projector: (
     record: Record<string, unknown>,
@@ -1117,15 +1188,28 @@ function projectDemoCapturedPlainWorkflowPublicObjectArray<T>(
     return undefined;
   }
   const result: T[] = [];
+  const finalBudget = requireDemoWorkflowPublicFinalFootprint(
+    result,
+    "Demo workflow public list",
+  );
   traversal.activeContainers.add(value);
   try {
     for (const item of items) {
-      const projected = projectDemoCapturedPlainWorkflowPublicObject(
-        item,
-        projector,
-        traversal,
-        depth + 1,
-      );
+      let projected: T | undefined;
+      try {
+        projected = projectDemoCapturedPlainWorkflowPublicObject(
+          item,
+          projector,
+          traversal,
+          depth + 1,
+        );
+      } catch (error) {
+        if (error instanceof DemoWorkflowPublicFinalBudgetError) {
+          finalBudget.blocked = true;
+          break;
+        }
+        throw error;
+      }
       if (
         projected !== undefined &&
         (!isPlainWorkflowPublicObject(projected) ||
@@ -1133,7 +1217,9 @@ function projectDemoCapturedPlainWorkflowPublicObjectArray<T>(
             ? hasDemoWorkflowPublicSerializableFields(projected.raw)
             : hasDemoWorkflowPublicSerializableFields(projected)))
       ) {
-        result.push(projected);
+        if (!admitDemoWorkflowPublicFinalListItem(result, projected, finalBudget)) {
+          break;
+        }
       }
     }
   } finally {
@@ -2711,7 +2797,14 @@ async function readDemoWorkflowPublicResponseText(response: Response): Promise<s
   return responseText;
 }
 
-async function fetchJson<T>(path: string, options?: RequestInit, timeoutMs = DEFAULT_API_TIMEOUT_MS): Promise<T> {
+type DemoApiResponseBodyBudget = "unbounded" | "workflow-public";
+
+async function fetchJson<T>(
+  path: string,
+  options?: RequestInit,
+  timeoutMs = DEFAULT_API_TIMEOUT_MS,
+  bodyBudget: DemoApiResponseBodyBudget = "unbounded",
+): Promise<T> {
   const apiBaseUrl = getConfiguredApiBaseUrl();
   if (!apiBaseUrl) {
     throw new Error(
@@ -2732,7 +2825,9 @@ async function fetchJson<T>(path: string, options?: RequestInit, timeoutMs = DEF
         headers: requestHeaders,
         signal: controller.signal,
       });
-      const responseText = await readDemoWorkflowPublicResponseText(response);
+      const responseText = bodyBudget === "workflow-public"
+        ? await readDemoWorkflowPublicResponseText(response)
+        : await response.text();
       const responseContentType = response.headers.get("Content-Type") || "";
       if (!response.ok) {
         if (
@@ -2879,6 +2974,14 @@ async function fetchBinary(
   }
 }
 
+async function fetchWorkflowPublicJson<T>(
+  path: string,
+  options?: RequestInit,
+  timeoutMs = DEFAULT_API_TIMEOUT_MS,
+): Promise<T> {
+  return fetchJson<T>(path, options, timeoutMs, "workflow-public");
+}
+
 async function fetchPublicJson<T>(path: string): Promise<T> {
   const response = await fetch(path);
   if (!response.ok) {
@@ -2977,6 +3080,7 @@ function attachDemoRaw<T extends object>(
     configurable: false,
     writable: false,
   });
+  requireDemoWorkflowPublicFinalFootprint(value, "Demo workflow public DTO");
   return value as T & { raw: Record<string, unknown> };
 }
 
@@ -3310,7 +3414,7 @@ export async function listOperationRuns(options?: {
   limit?: number;
   includeStatusSummary?: boolean;
 }): Promise<OperationRunRecord[]> {
-  const payload = await fetchJson<Record<string, unknown>>(
+  const payload = await fetchWorkflowPublicJson<Record<string, unknown>>(
     `/api/operations/runs${buildApiQueryString({
       status: options?.status,
       owner_module: options?.ownerModule,
@@ -3339,7 +3443,7 @@ export async function listOperationActions(options?: {
   conversationId?: string;
   limit?: number;
 }): Promise<OperationActionRecord[]> {
-  const payload = await fetchJson<Record<string, unknown>>(
+  const payload = await fetchWorkflowPublicJson<Record<string, unknown>>(
     `/api/operations/actions${buildApiQueryString({
       status: options?.status,
       action_type: options?.actionType,
@@ -3366,7 +3470,7 @@ async function postOperationActionDecision<TDecision extends OperationActionDeci
   decision: TDecision,
   payload?: Record<string, unknown>,
 ): Promise<OperationActionDecisionResult<TDecision>> {
-  const response = await fetchJson<Record<string, unknown>>(
+  const response = await fetchWorkflowPublicJson<Record<string, unknown>>(
     `/api/operations/actions/${encodeURIComponent(actionId)}/${decision}`,
     {
       method: "POST",
@@ -3443,7 +3547,7 @@ export function rejectOperationAction(
 }
 
 export async function getOperationRunProvenance(operationRunId: string): Promise<OperationRunProvenance> {
-  const payload = await fetchJson<Record<string, unknown>>(
+  const payload = await fetchWorkflowPublicJson<Record<string, unknown>>(
     `/api/operations/runs/${encodeURIComponent(operationRunId)}/provenance`,
   );
   const { source, canonical, traversal, depth } = captureDemoWorkflowPublicEnvelope(
@@ -3475,53 +3579,79 @@ export async function getOperationRunProvenance(operationRunId: string): Promise
     traversal,
     depth + 1,
   ) ?? null;
-  const actionEvents = projectDemoCapturedPlainWorkflowPublicObjectArray(
+  const projectedActionEvents = projectDemoCapturedPlainWorkflowPublicObjectArray(
     canonical.action_events,
     deriveOperationEventRecord,
     traversal,
     depth + 1,
   ) ?? [];
-  const operationEvents = projectDemoCapturedPlainWorkflowPublicObjectArray(
+  const projectedOperationEvents = projectDemoCapturedPlainWorkflowPublicObjectArray(
     canonical.operation_events,
     deriveOperationEventRecord,
     traversal,
     depth + 1,
   ) ?? [];
-  const eventTimeline = projectDemoCapturedPlainWorkflowPublicObjectArray(
+  const projectedEventTimeline = projectDemoCapturedPlainWorkflowPublicObjectArray(
     canonical.event_timeline,
     deriveOperationEventRecord,
     traversal,
     depth + 1,
   ) ?? [];
-  const workflowCommands = projectDemoCapturedPlainWorkflowPublicObjectArray(
+  const projectedWorkflowCommands = projectDemoCapturedPlainWorkflowPublicObjectArray(
     canonical.workflow_commands,
     deriveWorkflowCommandRecord,
     traversal,
     depth + 1,
   ) ?? [];
+  const provenanceValue: Omit<OperationRunProvenance, "raw"> = {
+    status,
+    action,
+    operationRun,
+    actionEvents: [],
+    operationEvents: [],
+    eventTimeline: [],
+    workflowCommands: [],
+  };
+  const finalBudget = requireDemoWorkflowPublicFinalFootprint(
+    provenanceValue,
+    "Operation run provenance",
+  );
+  admitDemoWorkflowPublicFinalList(
+    provenanceValue.actionEvents,
+    projectedActionEvents,
+    finalBudget,
+  );
+  admitDemoWorkflowPublicFinalList(
+    provenanceValue.operationEvents,
+    projectedOperationEvents,
+    finalBudget,
+  );
+  admitDemoWorkflowPublicFinalList(
+    provenanceValue.eventTimeline,
+    projectedEventTimeline,
+    finalBudget,
+  );
+  admitDemoWorkflowPublicFinalList(
+    provenanceValue.workflowCommands,
+    projectedWorkflowCommands,
+    finalBudget,
+  );
+
   const publicPayload = projectOperationResponsePublicEnvelope(source, traversal, depth);
   publicPayload.status = status;
   if (action) publicPayload.action = action.raw;
   else delete publicPayload.action;
   if (operationRun) publicPayload.operation_run = operationRun.raw;
   else delete publicPayload.operation_run;
-  publicPayload.action_events = actionEvents.map((event) => event.raw);
-  publicPayload.operation_events = operationEvents.map((event) => event.raw);
-  publicPayload.event_timeline = eventTimeline.map((event) => event.raw);
-  publicPayload.workflow_commands = workflowCommands.map((command) => command.raw);
-  return attachDemoRaw({
-    status,
-    action,
-    operationRun,
-    actionEvents,
-    operationEvents,
-    eventTimeline,
-    workflowCommands,
-  }, publicPayload);
+  publicPayload.action_events = provenanceValue.actionEvents.map((event) => event.raw);
+  publicPayload.operation_events = provenanceValue.operationEvents.map((event) => event.raw);
+  publicPayload.event_timeline = provenanceValue.eventTimeline.map((event) => event.raw);
+  publicPayload.workflow_commands = provenanceValue.workflowCommands.map((command) => command.raw);
+  return attachDemoRaw(provenanceValue, publicPayload);
 }
 
 async function postOperationRunControl(operationRunId: string, action: "cancel" | "retry" | "resume" | "dispatch"): Promise<OperationRunRecord | null> {
-  const payload = await fetchJson<Record<string, unknown>>(
+  const payload = await fetchWorkflowPublicJson<Record<string, unknown>>(
     `/api/operations/runs/${encodeURIComponent(operationRunId)}/${action}`,
     {
       method: "POST",
@@ -3584,7 +3714,7 @@ async function postWorkflowCommandControl(
   commandId: string,
   action: "cancel" | "retry" | "resume",
 ): Promise<WorkflowCommandRecord | null> {
-  const payload = await fetchJson<Record<string, unknown>>(
+  const payload = await fetchWorkflowPublicJson<Record<string, unknown>>(
     `/api/workflow/commands/${encodeURIComponent(commandId)}/${action}`,
     {
       method: "POST",
@@ -3637,7 +3767,7 @@ export async function listWorkflowActivities(filters: {
   workflowRunId?: string;
   limit?: number;
 }): Promise<WorkflowActivityRecord[]> {
-  const payload = await fetchJson<Record<string, unknown>>(
+  const payload = await fetchWorkflowPublicJson<Record<string, unknown>>(
     `/api/workflow/activities${buildApiQueryString({
       command_id: filters.commandId,
       operation_run_id: filters.operationRunId,
@@ -3664,7 +3794,7 @@ export async function listWorkflowActivityAttempts(filters: {
   workflowRunId?: string;
   limit?: number;
 }): Promise<WorkflowActivityAttemptRecord[]> {
-  const payload = await fetchJson<Record<string, unknown>>(
+  const payload = await fetchWorkflowPublicJson<Record<string, unknown>>(
     `/api/workflow/activity-attempts${buildApiQueryString({
       command_id: filters.commandId,
       activity_run_id: filters.activityRunId,
@@ -3693,7 +3823,7 @@ export async function listWorkflowEntityDeltas(filters: {
   workflowRunId?: string;
   limit?: number;
 }): Promise<WorkflowEntityDeltaRecord[]> {
-  const payload = await fetchJson<Record<string, unknown>>(
+  const payload = await fetchWorkflowPublicJson<Record<string, unknown>>(
     `/api/workflow/entity-deltas${buildApiQueryString({
       command_id: filters.commandId,
       activity_run_id: filters.activityRunId,

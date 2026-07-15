@@ -246,11 +246,11 @@ export class SourcingAgentApiClient {
 
   async listOperationActions(filters: JsonObject = {}): Promise<OperationActionListResponse> {
     const query = buildQueryString(filters);
-    return this.get(`/api/operations/actions${query}`, mapOperationActionListResponse);
+    return this.getWorkflowPublic(`/api/operations/actions${query}`, mapOperationActionListResponse);
   }
 
   async submitOperationAction(payload: JsonObject): Promise<OperationActionSubmitResponse> {
-    return this.post(
+    return this.postWorkflowPublic(
       "/api/operations/actions",
       payload,
       (response) => mapPublicResponseForStatuses(
@@ -263,7 +263,7 @@ export class SourcingAgentApiClient {
   }
 
   async getOperationAction(actionId: string): Promise<OperationActionQueryResponse> {
-    return this.get(
+    return this.getWorkflowPublic(
       `/api/operations/actions/${encodeURIComponent(actionId)}`,
       (response) => mapPublicResponseForStatuses(
         response,
@@ -278,7 +278,7 @@ export class SourcingAgentApiClient {
     actionId: string,
     payload: JsonObject = {},
   ): Promise<OperationActionDecisionResponse<"approve">> {
-    return this.post(
+    return this.postWorkflowPublic(
       `/api/operations/actions/${encodeURIComponent(actionId)}/approve`,
       payload,
       (response) => mapPublicResponseForStatuses(
@@ -294,7 +294,7 @@ export class SourcingAgentApiClient {
     actionId: string,
     payload: JsonObject = {},
   ): Promise<OperationActionDecisionResponse<"reject">> {
-    return this.post(
+    return this.postWorkflowPublic(
       `/api/operations/actions/${encodeURIComponent(actionId)}/reject`,
       payload,
       (response) => mapPublicResponseForStatuses(
@@ -308,15 +308,18 @@ export class SourcingAgentApiClient {
 
   async listOperationRuns(filters: JsonObject = {}): Promise<OperationRunListResponse> {
     const query = buildQueryString(filters);
-    return this.get(`/api/operations/runs${query}`, mapOperationRunListResponse);
+    return this.getWorkflowPublic(`/api/operations/runs${query}`, mapOperationRunListResponse);
   }
 
   async getOperationRun(operationRunId: string): Promise<OperationRunDetailResponse> {
-    return this.get(`/api/operations/runs/${encodeURIComponent(operationRunId)}`, mapOperationRunDetailResponse);
+    return this.getWorkflowPublic(
+      `/api/operations/runs/${encodeURIComponent(operationRunId)}`,
+      mapOperationRunDetailResponse,
+    );
   }
 
   async getOperationRunProvenance(operationRunId: string): Promise<OperationRunProvenanceResponse> {
-    return this.get(
+    return this.getWorkflowPublic(
       `/api/operations/runs/${encodeURIComponent(operationRunId)}/provenance`,
       mapOperationRunProvenanceResponse,
     );
@@ -326,7 +329,7 @@ export class SourcingAgentApiClient {
     operationRunId: string,
     payload: JsonObject = {},
   ): Promise<OperationRunControlResponseFor<"cancel">> {
-    return this.post(
+    return this.postWorkflowPublic(
       `/api/operations/runs/${encodeURIComponent(operationRunId)}/cancel`,
       payload,
       (response) => mapPublicResponseForStatuses(
@@ -342,7 +345,7 @@ export class SourcingAgentApiClient {
     operationRunId: string,
     payload: JsonObject = {},
   ): Promise<OperationRunControlResponseFor<"retry">> {
-    return this.post(
+    return this.postWorkflowPublic(
       `/api/operations/runs/${encodeURIComponent(operationRunId)}/retry`,
       payload,
       (response) => mapPublicResponseForStatuses(
@@ -358,7 +361,7 @@ export class SourcingAgentApiClient {
     operationRunId: string,
     payload: JsonObject = {},
   ): Promise<OperationRunControlResponseFor<"resume">> {
-    return this.post(
+    return this.postWorkflowPublic(
       `/api/operations/runs/${encodeURIComponent(operationRunId)}/resume`,
       payload,
       (response) => mapPublicResponseForStatuses(
@@ -374,7 +377,7 @@ export class SourcingAgentApiClient {
     operationRunId: string,
     payload: JsonObject = {},
   ): Promise<OperationRunControlResponseFor<"dispatch">> {
-    return this.post(
+    return this.postWorkflowPublic(
       `/api/operations/runs/${encodeURIComponent(operationRunId)}/dispatch`,
       payload,
       (response) => mapPublicResponseForStatuses(
@@ -392,18 +395,21 @@ export class SourcingAgentApiClient {
 
   async listWorkflowCommands(filters: JsonObject = {}): Promise<WorkflowCommandListResponse> {
     const query = buildQueryString(filters);
-    return this.get(`/api/workflow/commands${query}`, mapWorkflowCommandListResponse);
+    return this.getWorkflowPublic(`/api/workflow/commands${query}`, mapWorkflowCommandListResponse);
   }
 
   async getWorkflowCommand(commandId: string): Promise<WorkflowCommandDetailResponse> {
-    return this.get(`/api/workflow/commands/${encodeURIComponent(commandId)}`, mapWorkflowCommandDetailResponse);
+    return this.getWorkflowPublic(
+      `/api/workflow/commands/${encodeURIComponent(commandId)}`,
+      mapWorkflowCommandDetailResponse,
+    );
   }
 
   async cancelWorkflowCommand(
     commandId: string,
     payload: JsonObject = {},
   ): Promise<WorkflowCommandControlResponseFor<"cancel">> {
-    return this.post(
+    return this.postWorkflowPublic(
       `/api/workflow/commands/${encodeURIComponent(commandId)}/cancel`,
       payload,
       (response) => mapPublicResponseForStatuses(
@@ -419,7 +425,7 @@ export class SourcingAgentApiClient {
     commandId: string,
     payload: JsonObject = {},
   ): Promise<WorkflowCommandControlResponseFor<"retry">> {
-    return this.post(
+    return this.postWorkflowPublic(
       `/api/workflow/commands/${encodeURIComponent(commandId)}/retry`,
       payload,
       (response) => mapPublicResponseForStatuses(
@@ -435,7 +441,7 @@ export class SourcingAgentApiClient {
     commandId: string,
     payload: JsonObject = {},
   ): Promise<WorkflowCommandControlResponseFor<"resume">> {
-    return this.post(
+    return this.postWorkflowPublic(
       `/api/workflow/commands/${encodeURIComponent(commandId)}/resume`,
       payload,
       (response) => mapPublicResponseForStatuses(
@@ -449,20 +455,26 @@ export class SourcingAgentApiClient {
 
   async listWorkflowActivities(filters: JsonObject = {}): Promise<WorkflowActivityListResponse> {
     const query = buildQueryString(filters);
-    return this.get(`/api/workflow/activities${query}`, mapWorkflowActivityListResponse);
+    return this.getWorkflowPublic(`/api/workflow/activities${query}`, mapWorkflowActivityListResponse);
   }
 
   async getWorkflowActivity(activityRunId: string): Promise<WorkflowActivityDetailResponse> {
-    return this.get(`/api/workflow/activities/${encodeURIComponent(activityRunId)}`, mapWorkflowActivityDetailResponse);
+    return this.getWorkflowPublic(
+      `/api/workflow/activities/${encodeURIComponent(activityRunId)}`,
+      mapWorkflowActivityDetailResponse,
+    );
   }
 
   async listWorkflowActivityAttempts(filters: JsonObject = {}): Promise<WorkflowActivityAttemptListResponse> {
     const query = buildQueryString(filters);
-    return this.get(`/api/workflow/activity-attempts${query}`, mapWorkflowActivityAttemptListResponse);
+    return this.getWorkflowPublic(
+      `/api/workflow/activity-attempts${query}`,
+      mapWorkflowActivityAttemptListResponse,
+    );
   }
 
   async getWorkflowActivityAttempt(attemptId: string): Promise<WorkflowActivityAttemptDetailResponse> {
-    return this.get(
+    return this.getWorkflowPublic(
       `/api/workflow/activity-attempts/${encodeURIComponent(attemptId)}`,
       mapWorkflowActivityAttemptDetailResponse,
     );
@@ -470,11 +482,11 @@ export class SourcingAgentApiClient {
 
   async listWorkflowEntityDeltas(filters: JsonObject = {}): Promise<WorkflowEntityDeltaListResponse> {
     const query = buildQueryString(filters);
-    return this.get(`/api/workflow/entity-deltas${query}`, mapWorkflowEntityDeltaListResponse);
+    return this.getWorkflowPublic(`/api/workflow/entity-deltas${query}`, mapWorkflowEntityDeltaListResponse);
   }
 
   async getWorkflowEntityDelta(deltaId: string): Promise<WorkflowEntityDeltaDetailResponse> {
-    return this.get(
+    return this.getWorkflowPublic(
       `/api/workflow/entity-deltas/${encodeURIComponent(deltaId)}`,
       mapWorkflowEntityDeltaDetailResponse,
     );
@@ -537,7 +549,7 @@ export class SourcingAgentApiClient {
       method: "GET",
       headers: this.defaultHeaders,
     });
-    return parseResponse(response, mapper);
+    return parseResponse(response, mapper, "unbounded");
   }
 
   private async post<T>(path: string, payload: JsonObject, mapper: (payload: unknown) => T): Promise<T> {
@@ -550,7 +562,35 @@ export class SourcingAgentApiClient {
       headers,
       body: JSON.stringify(payload),
     });
-    return parseResponse(response, mapper);
+    return parseResponse(response, mapper, "unbounded");
+  }
+
+  private async getWorkflowPublic<T>(
+    path: string,
+    mapper: (payload: unknown) => T,
+  ): Promise<T> {
+    const response = await this.fetchImpl(buildUrl(this.baseUrl, path), {
+      method: "GET",
+      headers: this.defaultHeaders,
+    });
+    return parseResponse(response, mapper, "workflow-public");
+  }
+
+  private async postWorkflowPublic<T>(
+    path: string,
+    payload: JsonObject,
+    mapper: (payload: unknown) => T,
+  ): Promise<T> {
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+      ...toHeaderRecord(this.defaultHeaders),
+    };
+    const response = await this.fetchImpl(buildUrl(this.baseUrl, path), {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload),
+    });
+    return parseResponse(response, mapper, "workflow-public");
   }
 }
 
@@ -3079,8 +3119,16 @@ async function readWorkflowPublicResponseText(response: Response): Promise<strin
   return bodyText;
 }
 
-async function parseResponse<T>(response: Response, mapper: (payload: unknown) => T): Promise<T> {
-  const bodyText = await readWorkflowPublicResponseText(response);
+type SourcingAgentResponseBodyBudget = "unbounded" | "workflow-public";
+
+async function parseResponse<T>(
+  response: Response,
+  mapper: (payload: unknown) => T,
+  bodyBudget: SourcingAgentResponseBodyBudget,
+): Promise<T> {
+  const bodyText = bodyBudget === "workflow-public"
+    ? await readWorkflowPublicResponseText(response)
+    : await response.text();
   const payload = bodyText ? safeJsonParse(bodyText) : {};
   if (!response.ok) {
     throw new SourcingAgentApiError({
