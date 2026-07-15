@@ -3,31 +3,11 @@ from __future__ import annotations
 from hashlib import sha1
 from typing import Any
 
+from .crm_contract import CRM_STAGE_CATEGORIES, TARGET_FOLLOW_UP_TO_CRM_STAGE
 from .person_identity import build_person_summary_view, resolve_person_identity_key
 from .request_ownership import exact_crm_owner_matches
 from .serving_projection_reader import ServingProjectionReader
 from .storage import ControlPlaneStore
-
-_CRM_STAGE_CATEGORIES = {
-    "new": "open",
-    "researching": "open",
-    "outreach_ready": "open",
-    "contacted_waiting": "waiting",
-    "responded": "open",
-    "interview_completed": "terminal_success",
-    "accepted": "terminal_success",
-    "rejected": "terminal_loss",
-    "do_not_contact": "blocked",
-    "archived": "archived",
-}
-
-_TARGET_FOLLOW_UP_TO_CRM_STAGE = {
-    "pending_outreach": "outreach_ready",
-    "contacted_waiting": "contacted_waiting",
-    "interview_completed": "interview_completed",
-    "accepted": "accepted",
-    "rejected": "rejected",
-}
 
 
 class CRMWriter:
@@ -886,20 +866,20 @@ def _require_non_empty(value: Any, field_name: str) -> str:
 
 def _crm_stage_from_target_follow_up(value: Any) -> str:
     normalized = str(value or "").strip().lower()
-    return _TARGET_FOLLOW_UP_TO_CRM_STAGE.get(normalized, "")
+    return TARGET_FOLLOW_UP_TO_CRM_STAGE.get(normalized, "")
 
 
 def _normalize_crm_stage(value: Any) -> str:
     normalized = str(value or "new").strip().lower() or "new"
-    if normalized in _TARGET_FOLLOW_UP_TO_CRM_STAGE:
-        return _TARGET_FOLLOW_UP_TO_CRM_STAGE[normalized]
-    if normalized in _CRM_STAGE_CATEGORIES:
+    if normalized in TARGET_FOLLOW_UP_TO_CRM_STAGE:
+        return TARGET_FOLLOW_UP_TO_CRM_STAGE[normalized]
+    if normalized in CRM_STAGE_CATEGORIES:
         return normalized
     return "new"
 
 
 def _crm_stage_category(value: Any) -> str:
-    return _CRM_STAGE_CATEGORIES.get(_normalize_crm_stage(value), "open")
+    return CRM_STAGE_CATEGORIES.get(_normalize_crm_stage(value), "open")
 
 
 def _coerce_quality_score(value: Any) -> float | None:

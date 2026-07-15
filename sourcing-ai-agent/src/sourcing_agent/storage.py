@@ -37,6 +37,7 @@ from .control_plane_time import (
 from .control_plane_time import (
     parse_sqlite_timestamp as _parse_sqlite_timestamp,
 )
+from .crm_contract import CRM_STAGE_CATEGORIES
 from .domain import Candidate, EvidenceRecord, JobRequest, normalize_candidate
 from .linkedin_url_normalization import (
     normalize_linkedin_profile_url_key as _normalize_linkedin_profile_url_key,
@@ -11392,23 +11393,9 @@ def _normalize_target_candidate_follow_up_status(value: Any) -> str:
     return "pending_outreach"
 
 
-_CRM_STAGE_CATEGORIES = {
-    "new": "open",
-    "researching": "open",
-    "outreach_ready": "open",
-    "contacted_waiting": "waiting",
-    "responded": "open",
-    "interview_completed": "terminal_success",
-    "accepted": "terminal_success",
-    "rejected": "terminal_loss",
-    "do_not_contact": "blocked",
-    "archived": "archived",
-}
-
-
 def _crm_stage_category(value: Any) -> str:
     normalized = str(value or "new").strip().lower() or "new"
-    return _CRM_STAGE_CATEGORIES.get(normalized, "open")
+    return CRM_STAGE_CATEGORIES.get(normalized, "open")
 
 
 def _normalize_target_candidate_payload(payload: dict[str, Any]) -> dict[str, Any]:

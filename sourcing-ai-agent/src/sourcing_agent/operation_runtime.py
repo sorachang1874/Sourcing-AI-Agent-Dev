@@ -7,6 +7,8 @@ from hashlib import sha1
 from types import MappingProxyType
 from typing import Any, Mapping
 
+from sourcing_agent.action_request_schema import DEFAULT_ACTION_REQUEST_SCHEMA_BUILDER
+from sourcing_agent.crm_contract import CRM_STAGE_VALUES
 from sourcing_agent.durable_runtime import (
     ACQUISITION_RUN_CREATE_COMMAND_TYPE,
     ACTIVITY_SPINE_LEGACY_INTERNAL,
@@ -97,16 +99,99 @@ REQUEST_SCHEMA_COMPATIBILITY_OBSERVATIONS = frozenset(
 _REQUEST_SCHEMA_VERSION_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}")
 
 
-class ActionRequestValidationError(ValueError):
-    """Raised before persistence when an action request violates its checked-in contract."""
-
-
 def _freeze_action_request_json(value: Any) -> Any:
     if isinstance(value, dict):
         return MappingProxyType({key: _freeze_action_request_json(child) for key, child in value.items()})
     if isinstance(value, list):
         return tuple(_freeze_action_request_json(child) for child in value)
     return value
+
+
+_CRM_RECORD_TARGET_PROPERTIES: dict[str, dict[str, Any]] = {
+    "crm_record_id": {"type": "string", "minLength": 1, "maxLength": 200, "pattern": r"\S"},
+    "workspace_id": {"type": "string", "minLength": 1, "maxLength": 200, "pattern": r"\S"},
+    "owner_user_id": {"type": "string", "maxLength": 200},
+    "crm_version": {"type": "integer", "minimum": 1},
+}
+_CRM_RECORD_TARGET_REQUIRED = tuple(_CRM_RECORD_TARGET_PROPERTIES)
+_CRM_RECORD_TARGET_ALIASES = (
+    ("crm_record_id", ("record_id", "crm_record_ids", "record_ids")),
+    ("workspace_id", ("tenant_id",)),
+    ("owner_user_id", ("requester_id", "user_id")),
+    ("crm_version", ("record_version",)),
+)
+
+
+def _crm_record_action_request_schema(
+    *,
+    input_properties: Mapping[str, Mapping[str, Any]],
+    input_required: tuple[str, ...],
+) -> dict[str, Any]:
+    return DEFAULT_ACTION_REQUEST_SCHEMA_BUILDER.build(
+        input_properties=input_properties,
+        input_required=input_required,
+        target_properties=_CRM_RECORD_TARGET_PROPERTIES,
+        target_required=_CRM_RECORD_TARGET_REQUIRED,
+    )
+
+
+# D1e declaration owner. Activation is deliberately separate: these entries
+# must be copied into DEFAULT_ACTION_REGISTRY only in the same atomic batch that
+# wires the HTTP/orchestrator binder and execution-side snapshot revalidation.
+CRM_EXISTING_RECORD_ACTION_REQUEST_CONTRACTS: Mapping[str, Mapping[str, Any]] = MappingProxyType(
+    {
+        ACTION_SET_CRM_STAGE: MappingProxyType(
+            {
+                "request_schema": _freeze_action_request_json(
+                    _crm_record_action_request_schema(
+                        input_properties={
+                            "stage": {"type": "string", "enum": list(CRM_STAGE_VALUES)},
+                            "quality_score": {"type": "number", "minimum": 0, "maximum": 100},
+                            "comment": {"type": "string", "maxLength": 20_000},
+                        },
+                        input_required=("stage",),
+                    )
+                ),
+                "request_schema_version": "crm_set_stage_request_v1",
+                "target_ref_field_aliases": _CRM_RECORD_TARGET_ALIASES,
+            }
+        ),
+        ACTION_ADD_CRM_NOTE: MappingProxyType(
+            {
+                "request_schema": _freeze_action_request_json(
+                    _crm_record_action_request_schema(
+                        input_properties={
+                            "note": {"type": "string", "minLength": 1, "maxLength": 20_000, "pattern": r"\S"},
+                        },
+                        input_required=("note",),
+                    )
+                ),
+                "request_schema_version": "crm_add_note_request_v1",
+                "target_ref_field_aliases": _CRM_RECORD_TARGET_ALIASES,
+            }
+        ),
+        ACTION_CREATE_CRM_TASK: MappingProxyType(
+            {
+                "request_schema": _freeze_action_request_json(
+                    _crm_record_action_request_schema(
+                        input_properties={
+                            "title": {"type": "string", "minLength": 1, "maxLength": 500, "pattern": r"\S"},
+                            "description": {"type": "string", "maxLength": 20_000},
+                            "due_at": {"type": "string", "maxLength": 128},
+                        },
+                        input_required=("title",),
+                    )
+                ),
+                "request_schema_version": "crm_create_task_request_v1",
+                "target_ref_field_aliases": _CRM_RECORD_TARGET_ALIASES,
+            }
+        ),
+    }
+)
+
+
+class ActionRequestValidationError(ValueError):
+    """Raised before persistence when an action request violates its checked-in contract."""
 
 
 @dataclass(frozen=True)
