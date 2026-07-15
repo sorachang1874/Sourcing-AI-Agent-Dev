@@ -5,10 +5,11 @@
 > A review attempt against the earlier candidate terminated without a valid verdict, but supplied three reproducible
 > findings: shared-workflow command leakage, malformed foreign-workspace event leakage, and mutable planned-command
 > references. Pinned `646e596` advisory then returned `NO-GO 0/0/1/1`: valid planned replay bypassed persisted request
-> validation and approval, while post-D1h schema-count wording drifted. The current fixed-forward closes both findings;
-> neither author evidence nor an advisory is a formal verdict.
-> Author validation is not an independent verdict; a fresh pinned non-author review must bind the enclosing commit
-> before hosted/live multi-user Operation exposure or product/milestone signoff. No provider, model, or live
+> validation and approval, while post-D1h schema-count wording drifted. Pinned `c7d2e24` then returned
+> `NO-GO 0/0/1/0` for a planned approval branch that wrote action/run/event before returning its queued command.
+> Commit `ebe7ed0` closes that boundary and has a fresh pinned non-author scope-local **ADVISORY GO 0/0/0/0**;
+> neither author evidence nor that advisory is a formal verdict. Formal highest-effort review remains required before
+> hosted/live multi-user Operation exposure or product/milestone signoff. No provider, model, or live
 > environment is used by this batch.
 
 ## 1. Outcome and bounded scope
@@ -118,8 +119,8 @@ not run the normal first-plan approval writer against a separately claimable com
 
 ## 5. Compatibility and residual boundaries
 
-- R-031 is remediated by this candidate, but remains review-pending until a fresh pinned non-author artifact binds the
-  enclosing commit. That pending review blocks hosted/live multi-user Operation exposure and product/milestone
+- R-031 is remediated by `ebe7ed0` and has a fresh pinned non-author scope-local advisory GO, but remains formal-review
+  pending. That formal gate blocks hosted/live multi-user Operation exposure and product/milestone
   signoff, not unrelated bounded non-live work.
 - R-019 remains open. D1g adds authorization-only read preflights and a lock-internal recheck, but no state mutator,
   no `_connect_with_transaction_lock` caller, and no claim/terminal/UoW implementation. The production state-sync
@@ -188,6 +189,6 @@ Evidence confirmed so far on the current candidate tree:
 - `make lint`: **58 files**, green;
 - global mypy: accepted baseline unchanged at **81 errors / 4 files**.
 
-The full Operation runtime and final diff check are green. The enclosing commit id and fresh pinned review status must
-be appended by the enclosing author closeout. No author or local advisory evidence may be represented as a formal
-`GO`.
+The full Operation runtime and final diff check are green. Commit `ebe7ed0` fresh pinned non-author review returned
+scope-local **ADVISORY GO 0/0/0/0** after the `29+107` matrix, a dedicated full-table diagnostic, regression-sensitivity
+check against its parent, lint/format/compile, and SQL predicate audit. It is not a formal `GO`.

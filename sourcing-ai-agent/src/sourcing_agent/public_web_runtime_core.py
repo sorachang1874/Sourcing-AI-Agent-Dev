@@ -60,6 +60,10 @@ TARGET_CANDIDATE_PUBLIC_WEB_EXECUTION_BACKEND = "target_candidate_public_web_v1"
 PUBLIC_WEB_WORKER_LANE = "exploration_specialist"
 PUBLIC_WEB_WORKER_RECOVERY_KIND = "target_candidate_public_web_search"
 CRM_PUBLIC_WEB_WORKER_RECOVERY_KIND = "crm_public_web_search"
+# One row above the 1,000-record admission ceiling is intentionally read so
+# exact-authority callers can detect a hidden surplus row instead of accepting
+# a truncated prefix as the complete batch.
+CRM_PUBLIC_WEB_EXACT_BATCH_RUN_LIMIT = 1001
 PUBLIC_WEB_TERMINAL_STATUSES = {
     "completed",
     "completed_with_errors",
@@ -185,7 +189,12 @@ def start_crm_public_web_batch(
     payload: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     request_payload = dict(payload or {})
-    options = normalize_public_web_product_options(request_payload)
+    raw_nested_options = request_payload.get("options")
+    options = (
+        normalize_public_web_product_options(request_payload)
+        if isinstance(raw_nested_options, dict) and raw_nested_options
+        else public_web_options_from_record(request_payload)
+    )
     force_refresh = bool(request_payload.get("force_refresh"))
     caller_refresh_nonce = str(request_payload.get("refresh_nonce") or request_payload.get("nonce") or "").strip()
     refresh_nonce = caller_refresh_nonce
@@ -212,6 +221,7 @@ def start_crm_public_web_batch(
             runs = store.list_crm_public_web_runs(
                 batch_id=str(existing.get("batch_id") or ""),
                 workspace_id=workspace_id,
+                limit=crm_public_web_exact_batch_run_limit(len(requested_record_ids)),
             )
             return {
                 "status": "joined",
@@ -362,7 +372,19 @@ def sync_crm_public_web_batch_summary(store: Any, batch_id: str, *, workspace_id
     batch = store.get_crm_public_web_batch(batch_id=batch_id)
     if batch is None:
         return {"status": "not_found", "batch_id": batch_id}
-    runs = store.list_crm_public_web_runs(batch_id=batch_id, workspace_id=workspace_id)
+    requested_record_ids = {
+        str(record_id or "").strip()
+        for record_id in list(batch.get("requested_crm_record_ids") or [])
+        if str(record_id or "").strip()
+    }
+    expected_run_count = len(requested_record_ids) or len(
+        {str(run_id or "").strip() for run_id in list(batch.get("run_ids") or []) if str(run_id or "").strip()}
+    )
+    runs = store.list_crm_public_web_runs(
+        batch_id=batch_id,
+        workspace_id=workspace_id,
+        limit=crm_public_web_exact_batch_run_limit(expected_run_count),
+    )
     summary = {
         **summarize_public_web_runs(runs),
         "owner": CRM_PUBLIC_WEB_OWNER.storage_owner,
@@ -1734,6 +1756,16 @@ def build_crm_public_web_batch_idempotency_key(
         "nonce": str(nonce or "") if force_refresh else "",
     }
     return "crm-public-web-batch:" + short_hash(json.dumps(payload, sort_keys=True, ensure_ascii=False))
+
+
+def crm_public_web_exact_batch_run_limit(expected_record_count: int) -> int:
+    """Return the bounded exact-read size, including one surplus-row sentinel."""
+
+    try:
+        normalized_count = int(expected_record_count or 0)
+    except (TypeError, ValueError):
+        normalized_count = 0
+    return min(CRM_PUBLIC_WEB_EXACT_BATCH_RUN_LIMIT, max(1, normalized_count + 1))
 
 
 def crm_public_web_batch_id_for_idempotency_key(idempotency_key: str) -> str:

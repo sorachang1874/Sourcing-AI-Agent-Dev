@@ -136,6 +136,22 @@ class D1hCRMPublicWebActionActivationPGTest(PGDurableRuntimeTestMixin, unittest.
                     state[table_name] = tuple(sorted(str(row[0]) for row in cursor.fetchall()))
         return state
 
+    def _execute_pg(self, sql: str, params: tuple[Any, ...] = ()) -> None:
+        fixture = self._pg_durable_runtime_fixture
+        self.assertIsNotNone(fixture)
+        self.assertIsNotNone(psycopg)
+        assert fixture is not None
+        assert psycopg is not None
+        quoted_schema = quote_control_plane_postgres_identifier(fixture.schema)
+        with psycopg.connect(
+            fixture.dsn,
+            autocommit=True,
+            connect_timeout=5,
+            client_encoding="utf8",
+        ) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(sql.format(schema=quoted_schema), params)
+
     def _submit(
         self,
         *,
@@ -172,6 +188,28 @@ class D1hCRMPublicWebActionActivationPGTest(PGDurableRuntimeTestMixin, unittest.
             submission["action"]["action_id"],
             {"actor": "alice"},
         )
+
+    def _plan_action_command(
+        self,
+        record_id: str,
+        *,
+        input_payload: dict[str, Any] | None = None,
+        idempotency_key: str,
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        submission = self._submit(
+            selector={"crm_record_id": record_id},
+            input_payload=input_payload,
+            idempotency_key=idempotency_key,
+        )
+        approved = self._approve(submission)
+        dispatched = self.orchestrator.dispatch_operation_run_api(
+            approved["operation_run"]["operation_run_id"],
+            {"actor": "alice"},
+        )
+        self.assertEqual(dispatched.get("status"), "planned", dispatched)
+        command = self.store.get_workflow_command(dispatched["workflow_command"]["command_id"])
+        self.assertIsNotNone(command)
+        return dispatched, dict(command or {})
 
     def test_authenticated_missing_foreign_mixed_and_malformed_selectors_are_zero_write(self) -> None:
         self._seed_record("owned-a")
@@ -592,6 +630,351 @@ class D1hCRMPublicWebActionActivationPGTest(PGDurableRuntimeTestMixin, unittest.
         )
         self.assertEqual(self._table_state(guarded_tables), before_owner_field)
 
+    def test_action_materialization_rejects_generic_batch_and_overlapping_run_collisions(self) -> None:
+        generic_record = self._seed_record("collision-generic")
+        generic_dispatched, generic_command = self._plan_action_command(
+            generic_record["crm_record_id"],
+            input_payload={"fetch_content": False, "ai_extraction": "off"},
+            idempotency_key="collision:generic-batch",
+        )
+        generic_command_payload = dict(generic_command.get("payload") or {})
+        generic_request_payload = {
+            **dict(generic_command_payload.get("request_payload") or {}),
+            "requested_by": "generic-operator",
+        }
+        generic_materialization = start_crm_public_web_batch(
+            store=self.store,
+            crm_records=[self.orchestrator._crm_public_web_owner._public_crm_record_payload(generic_record)],  # noqa: SLF001
+            runtime_dir=self.runtime_dir,
+            payload=generic_request_payload,
+        )
+        self.assertEqual(generic_materialization["batch"]["requested_by"], "generic-operator")
+        guarded_tables = ("crm_public_web_batches", "crm_public_web_runs", "jobs", "workflow_entity_deltas")
+        before_generic = self._table_state(guarded_tables)
+        generic_command_ids = {
+            item["command_id"]
+            for item in self.store.list_workflow_commands(
+                workflow_run_id=generic_command["workflow_run_id"],
+                limit=100,
+            )
+        }
+        generic_drain = self.orchestrator._drain_crm_public_web_queue_batch_commands(  # noqa: SLF001
+            {"workflow_run_id": generic_dispatched["workflow_command"]["workflow_run_id"], "command_limit": 1}
+        )
+        self.assertEqual(generic_drain.get("completed_count"), 0, generic_drain)
+        self.assertEqual(
+            generic_drain["items"][0].get("reason"),
+            "crm_record_batch_command_materialization_invalid",
+        )
+        self.assertEqual(self._table_state(guarded_tables), before_generic)
+        self.assertEqual(
+            {
+                item["command_id"]
+                for item in self.store.list_workflow_commands(
+                    workflow_run_id=generic_command["workflow_run_id"],
+                    limit=100,
+                )
+            },
+            generic_command_ids,
+        )
+
+        overlap_record = self._seed_record("collision-overlap")
+        overlap_dispatched, overlap_command = self._plan_action_command(
+            overlap_record["crm_record_id"],
+            input_payload={"fetch_content": False},
+            idempotency_key="collision:overlap-run",
+        )
+        overlap_payload = dict(overlap_command.get("payload") or {})
+        expectation = (
+            self.orchestrator._crm_public_web_owner._crm_public_web_operation_action_materialization_expectation(  # noqa: SLF001
+                overlap_payload,
+                crm_records=[overlap_record],
+            )
+        )
+        self.assertEqual(expectation.get("status"), "ready", expectation)
+        expected_run = dict(expectation["expected_runs_by_record_id"][overlap_record["crm_record_id"]])
+        public_record = self.orchestrator._crm_public_web_owner._public_crm_record_payload(overlap_record)  # noqa: SLF001
+        foreign_run = self.store.upsert_crm_public_web_run(
+            {
+                **expected_run,
+                "batch_id": "foreign-batch",
+                "candidate_id": public_record["candidate_id"],
+                "candidate_name": public_record["candidate_name"],
+                "current_company": public_record["current_company"],
+                "linkedin_url": public_record["linkedin_url"],
+                "status": "queued",
+                "phase": "queued",
+                "source_families": list(expectation["expected_source_families"]),
+                "options": dict(expectation["expected_options"]),
+                "query_manifest": [],
+                "artifact_root": str(self.runtime_dir / "foreign-overlap-run"),
+                "summary": {"owner": "crm_public_web_v1"},
+                "search_checkpoint": {},
+                "metadata": {"owner": "crm_public_web_v1"},
+                "execution_backend": "crm_public_web_v1",
+                "source_target_run_id": "",
+            }
+        )
+        self.assertEqual(foreign_run["batch_id"], "foreign-batch")
+        before_overlap = self._table_state(guarded_tables)
+        overlap_drain = self.orchestrator._drain_crm_public_web_queue_batch_commands(  # noqa: SLF001
+            {"workflow_run_id": overlap_dispatched["workflow_command"]["workflow_run_id"], "command_limit": 1}
+        )
+        self.assertEqual(overlap_drain.get("completed_count"), 0, overlap_drain)
+        self.assertEqual(
+            overlap_drain["items"][0].get("reason"),
+            "crm_record_batch_command_materialization_invalid",
+        )
+        self.assertEqual(self._table_state(guarded_tables), before_overlap)
+        self.assertIsNone(self.store.get_crm_public_web_batch(batch_id=str(expectation.get("batch_id") or "")))
+
+        attached_record = self._seed_record("collision-attached")
+        attached_dispatched, attached_command = self._plan_action_command(
+            attached_record["crm_record_id"],
+            input_payload={"fetch_content": False},
+            idempotency_key="collision:foreign-attached-run",
+        )
+        attached_expectation = (
+            self.orchestrator._crm_public_web_owner._crm_public_web_operation_action_materialization_expectation(  # noqa: SLF001
+                dict(attached_command.get("payload") or {}),
+                crm_records=[attached_record],
+            )
+        )
+        self.assertEqual(attached_expectation.get("status"), "ready", attached_expectation)
+        expected_attached_batch_id = str(attached_expectation["batch_id"])
+        foreign_attached_run = self.store.upsert_crm_public_web_run(
+            {
+                "run_id": "foreign-attached-run",
+                "batch_id": expected_attached_batch_id,
+                "crm_record_id": "foreign-attached-record",
+                "workspace_id": "foreign-workspace",
+                "candidate_id": "foreign-candidate",
+                "candidate_name": "Foreign Candidate",
+                "current_company": "Foreign Company",
+                "linkedin_url": "https://www.linkedin.com/in/foreign-attached/",
+                "linkedin_url_key": "linkedin.com/in/foreign-attached",
+                "person_identity_key": "person::foreign-attached",
+                "status": "queued",
+                "phase": "queued",
+                "source_families": ["official_bio"],
+                "options": {"fetch_content": False},
+                "query_manifest": [],
+                "artifact_root": str(self.runtime_dir / "foreign-attached-run"),
+                "summary": {"owner": "foreign"},
+                "search_checkpoint": {},
+                "metadata": {"owner": "foreign"},
+                "idempotency_key": "foreign-attached-idempotency",
+                "worker_key": "foreign-attached-worker",
+                "execution_backend": "crm_public_web_v1",
+                "source_target_run_id": "",
+            }
+        )
+        self.assertEqual(foreign_attached_run["batch_id"], expected_attached_batch_id)
+        before_attached = self._table_state(guarded_tables)
+        attached_drain = self.orchestrator._drain_crm_public_web_queue_batch_commands(  # noqa: SLF001
+            {"workflow_run_id": attached_dispatched["workflow_command"]["workflow_run_id"], "command_limit": 1}
+        )
+        self.assertEqual(attached_drain.get("completed_count"), 0, attached_drain)
+        self.assertEqual(
+            attached_drain["items"][0].get("reason"),
+            "crm_record_batch_command_materialization_invalid",
+        )
+        self.assertEqual(self._table_state(guarded_tables), before_attached)
+        self.assertIsNone(self.store.get_crm_public_web_batch(batch_id=expected_attached_batch_id))
+
+    def test_fresh_action_rejects_deterministic_job_collision_before_batch_or_run_writes(self) -> None:
+        record = self._seed_record("collision-job")
+        dispatched, command = self._plan_action_command(
+            record["crm_record_id"],
+            input_payload={"fetch_content": False, "ai_extraction": "off"},
+            idempotency_key="collision:deterministic-job",
+        )
+        expectation = (
+            self.orchestrator._crm_public_web_owner._crm_public_web_operation_action_materialization_expectation(  # noqa: SLF001
+                dict(command.get("payload") or {}),
+                crm_records=[record],
+            )
+        )
+        self.assertEqual(expectation.get("status"), "ready", expectation)
+        expected_batch_id = str(expectation["batch_id"])
+        expected_job_id = f"crm-public-web-{expected_batch_id}"
+        self.store.save_job(
+            expected_job_id,
+            "foreign_job_type",
+            "running",
+            "foreign_stage",
+            {"owner": "foreign"},
+            plan_payload={"batch_id": "foreign-batch"},
+            summary_payload={"owner": "foreign"},
+            requester_id="mallory",
+            tenant_id="foreign",
+            idempotency_key="foreign-idempotency",
+        )
+        guarded_tables = ("crm_public_web_batches", "crm_public_web_runs", "jobs", "workflow_entity_deltas")
+        before = self._table_state(guarded_tables)
+
+        drain = self.orchestrator._drain_crm_public_web_queue_batch_commands(  # noqa: SLF001
+            {"workflow_run_id": dispatched["workflow_command"]["workflow_run_id"], "command_limit": 1}
+        )
+
+        self.assertEqual(drain.get("completed_count"), 0, drain)
+        self.assertEqual(drain["items"][0].get("reason"), "crm_record_batch_command_job_invalid")
+        self.assertEqual(self._table_state(guarded_tables), before)
+        self.assertIsNone(self.store.get_crm_public_web_batch(batch_id=expected_batch_id))
+
+    def test_action_continuation_requires_exact_persisted_job_before_phase_links(self) -> None:
+        variants = ("missing", "foreign_owner", "mutated", "terminal")
+        guarded_tables = ("crm_public_web_batches", "crm_public_web_runs", "jobs", "workflow_entity_deltas")
+        for variant in variants:
+            with self.subTest(variant=variant):
+                record = self._seed_record(f"job-{variant}")
+                dispatched, command = self._plan_action_command(
+                    record["crm_record_id"],
+                    input_payload={"fetch_content": False},
+                    idempotency_key=f"job-continuation:{variant}",
+                )
+                command_payload = dict(command.get("payload") or {})
+                request_payload = dict(command_payload.get("request_payload") or {})
+                materialization = start_crm_public_web_batch(
+                    store=self.store,
+                    crm_records=[self.orchestrator._crm_public_web_owner._public_crm_record_payload(record)],  # noqa: SLF001
+                    runtime_dir=self.runtime_dir,
+                    payload=request_payload,
+                )
+                batch_id = str(materialization["batch"]["batch_id"])
+                batch = self.store.get_crm_public_web_batch(batch_id=batch_id)
+                runs = self.store.list_crm_public_web_runs(
+                    batch_id=batch_id,
+                    workspace_id="user-alice",
+                    limit=1,
+                )
+                job_payload = self.orchestrator._crm_public_web_owner._crm_public_web_job_payload(  # noqa: SLF001
+                    batch=dict(batch or {}),
+                    runs=[dict(run) for run in runs],
+                    request_payload=request_payload,
+                )
+                if variant != "missing":
+                    self.store.save_job(
+                        str(job_payload["job_id"]),
+                        "foreign_job_type" if variant == "mutated" else str(job_payload["job_type"]),
+                        "completed" if variant == "terminal" else str(job_payload["status"]),
+                        str(job_payload["stage"]),
+                        dict(job_payload["request"]),
+                        plan_payload=(
+                            {**dict(job_payload["plan"]), "batch_id": "mutated"}
+                            if variant == "mutated"
+                            else dict(job_payload["plan"])
+                        ),
+                        execution_bundle_payload=dict(job_payload["execution_bundle"]),
+                        summary_payload=dict(job_payload["summary"]),
+                        artifact_path=str(job_payload["artifact_path"]),
+                        requester_id="mallory" if variant == "foreign_owner" else "",
+                        tenant_id="foreign" if variant == "foreign_owner" else "",
+                        idempotency_key=(
+                            "foreign-idempotency" if variant == "mutated" else str(job_payload["idempotency_key"])
+                        ),
+                    )
+                continuation_payload = {
+                    **command_payload,
+                    "batch_id": batch_id,
+                    "job_payload": job_payload,
+                    "operation_planning_status": str(materialization.get("status") or "queued"),
+                    "run_ids": [str(run["run_id"]) for run in runs],
+                    "runs": [dict(run) for run in runs],
+                }
+                self.store.update_workflow_command_payload(
+                    command["command_id"],
+                    payload=continuation_payload,
+                )
+                before = self._table_state(guarded_tables)
+                command_ids_before = {
+                    item["command_id"]
+                    for item in self.store.list_workflow_commands(
+                        workflow_run_id=command["workflow_run_id"],
+                        limit=100,
+                    )
+                }
+                drain = self.orchestrator._drain_crm_public_web_queue_batch_commands(  # noqa: SLF001
+                    {"workflow_run_id": dispatched["workflow_command"]["workflow_run_id"], "command_limit": 1}
+                )
+                self.assertEqual(drain.get("completed_count"), 0, drain)
+                self.assertEqual(
+                    drain["items"][0].get("reason"),
+                    "crm_record_batch_command_continuation_invalid",
+                )
+                self.assertEqual(self._table_state(guarded_tables), before)
+                self.assertEqual(
+                    {
+                        item["command_id"]
+                        for item in self.store.list_workflow_commands(
+                            workflow_run_id=command["workflow_run_id"],
+                            limit=100,
+                        )
+                    },
+                    command_ids_before,
+                )
+                for run in self.store.list_crm_public_web_runs(
+                    batch_id=batch_id,
+                    workspace_id="user-alice",
+                    limit=1,
+                ):
+                    self.assertNotIn("queue_command_id", dict(run.get("analysis_checkpoint") or {}))
+
+    def test_expired_lease_recovery_uses_persisted_checkpoint_before_phase_links(self) -> None:
+        record = self._seed_record("checkpoint-recovery")
+        dispatched, command = self._plan_action_command(
+            record["crm_record_id"],
+            input_payload={"fetch_content": False, "ai_extraction": "off"},
+            idempotency_key="checkpoint:recovery",
+        )
+        original_upsert_batch = self.store.upsert_crm_public_web_batch
+
+        def crash_before_phase_link(payload: dict[str, Any]) -> dict[str, Any]:
+            if str(dict(payload.get("metadata") or {}).get("queue_command_id") or "").strip():
+                raise RuntimeError("injected crash after durable continuation checkpoint")
+            return original_upsert_batch(payload)
+
+        self.store.upsert_crm_public_web_batch = crash_before_phase_link  # type: ignore[method-assign]
+        try:
+            with self.assertRaisesRegex(RuntimeError, "after durable continuation checkpoint"):
+                self.orchestrator._crm_public_web_owner._run_crm_public_web_queue_batch_command(command)  # noqa: SLF001
+        finally:
+            self.store.upsert_crm_public_web_batch = original_upsert_batch  # type: ignore[method-assign]
+
+        checkpointed = self.store.get_workflow_command(command["command_id"])
+        self.assertEqual(checkpointed["status"], "running")
+        checkpoint_payload = dict(checkpointed.get("payload") or {})
+        self.assertTrue(checkpoint_payload.get("batch_id"))
+        self.assertTrue(checkpoint_payload.get("job_payload"))
+        self.assertEqual(len(checkpoint_payload.get("run_ids") or []), 1)
+        batch_id = str(checkpoint_payload["batch_id"])
+        self.assertEqual(dict(checkpoint_payload["job_payload"])["summary"]["status"], "queued")
+        checkpointed_batch = self.store.get_crm_public_web_batch(batch_id=batch_id)
+        self.assertIsNotNone(checkpointed_batch)
+        self.store.upsert_crm_public_web_batch({**dict(checkpointed_batch or {}), "status": "searching"})
+        self.assertEqual(self.store.get_crm_public_web_batch(batch_id=batch_id)["status"], "searching")
+        batch_count_before = len(self.store.list_crm_public_web_batches(workspace_id="user-alice"))
+        run_count_before = len(
+            self.store.list_crm_public_web_runs(batch_id=batch_id, workspace_id="user-alice", limit=1)
+        )
+        self._execute_pg(
+            "UPDATE {schema}.workflow_commands SET lease_expires_at = %s WHERE command_id = %s",
+            ("2000-01-01 00:00:00", command["command_id"]),
+        )
+
+        recovered = self.orchestrator._drain_crm_public_web_queue_batch_commands(  # noqa: SLF001
+            {"workflow_run_id": dispatched["workflow_command"]["workflow_run_id"], "command_limit": 1}
+        )
+        self.assertEqual(recovered.get("completed_count"), 1, recovered)
+        self.assertEqual(len(self.store.list_crm_public_web_batches(workspace_id="user-alice")), batch_count_before)
+        self.assertEqual(
+            len(self.store.list_crm_public_web_runs(batch_id=batch_id, workspace_id="user-alice", limit=1)),
+            run_count_before,
+        )
+        completed = self.store.get_workflow_command(command["command_id"])
+        self.assertEqual(completed["status"], "succeeded")
+        self.assertEqual(dict(completed.get("payload") or {}), checkpoint_payload)
+
     def test_same_owner_dispatch_plans_and_queue_owner_materializes_only_after_revalidation(self) -> None:
         self._seed_record("positive-a")
         self._seed_record("positive-b")
@@ -623,11 +1006,32 @@ class D1hCRMPublicWebActionActivationPGTest(PGDurableRuntimeTestMixin, unittest.
         batches = self.store.list_crm_public_web_batches(workspace_id="user-alice")
         self.assertEqual(len(batches), 1)
         self.assertEqual(batches[0]["requested_by"], CRM_PUBLIC_WEB_QUEUE_BATCH_OWNER)
+        self.assertFalse(batches[0]["options"]["fetch_content"])
+        self.assertEqual(batches[0]["options"]["ai_extraction"], "off")
         runs = self.store.list_crm_public_web_runs(batch_id=batches[0]["batch_id"], workspace_id="user-alice")
         self.assertEqual(sorted(run["crm_record_id"] for run in runs), ["positive-a", "positive-b"])
         completed_command = self.store.get_workflow_command(dispatched["workflow_command"]["command_id"])
+        completed_payload = dict(completed_command.get("payload") or {})
+        self.assertEqual(
+            {
+                "batch_id",
+                "job_payload",
+                "operation_planning_status",
+                "run_ids",
+                "runs",
+            }
+            - set(completed_payload),
+            set(),
+        )
+        persisted_job = self.store.get_job(str(dict(completed_payload["job_payload"]).get("job_id") or ""))
+        self.assertTrue(
+            self.orchestrator._crm_public_web_owner._crm_public_web_persisted_job_matches(  # noqa: SLF001
+                job=persisted_job,
+                job_payload=dict(completed_payload["job_payload"]),
+            )
+        )
         continuation = self.orchestrator._crm_public_web_owner._revalidate_crm_public_web_operation_action_continuation(  # noqa: SLF001
-            dict(completed_command.get("payload") or {})
+            completed_payload
         )
         self.assertEqual(continuation.get("status"), "ready", continuation)
 

@@ -203,8 +203,8 @@
   positives 与三个 stale characterization probes 已补，current exact=`7+35 subtests`、request+D1g=`29+107`、
   registry/probe adjacency=`25`。Pinned `c7d2e24` advisory=`NO-GO 0/0/1/0` 进一步发现 planned sensitive-CRM
   approval 分支在返回 captured plan 前写 action/run/event，触发 R-019 next-mutation tripwire；current fixed-forward
-  对 existing-plan approval requirement 只读返回，并把回归扩为全 D1g 表零写。Fresh pinned re-review pending，
-  R-031 仍 review-pending。D1g checkpoint 不迁移当时其余
+  对 existing-plan approval requirement 只读返回，并把回归扩为全 D1g 表零写。Commit `ebe7ed0` fresh pinned
+  non-author scope-local advisory=`GO 0/0/0/0`，但不是 formal GO；R-031 仍 formal-review pending。D1g checkpoint 不迁移当时其余
   12 个 schema-less action；post-D1h current 为 11，不改 served=0、不授权 live/provider。
 - [x] D1h CRM Public Web action activation current author candidate（2026-07-16）：将
   `enrich_person_public_web` 作为第 4 个 schema-defined action 激活，当前 **4 schema-defined / 11 schema-less /
@@ -214,13 +214,20 @@
   写新 plan 前与 queue-command owner 建 batch/run 前分别 revalidate；后者发生在既有 claim/running 后，失败会
   terminalize command，故只主张 batch/run/EntityDelta 零写，不宣称 command/Operation 全域零写。`force_refresh=true`
   且 caller 未给 nonce 时，planning 从 operation/action identity 铸稳定 `operation-...` nonce 并持久化，重试不随机
-  重建批。当前 author evidence=`5` PG、D1 adjacency `116+188 subtests`、exact adjacent Operation/transport
-  `4+4 subtests`、full operation `136+503 subtests`、CRM Public Web boundary `34`、lint `58`、mypy `81/4`。
+  重建批。
   Pinned `a36333b` advisory=`NO-GO 0/1/2/1`；fixed-forward 现令 selector-only input 正确保留空 input、input
   selector 与 target 严格互斥、`requested_by` 由 queue service principal 固定拥有，并把显式 continuation
   exact-bind 到 canonical request 派生 batch + persisted options/nonce/runs/job，拒绝 partial/foreign owner fields
-  且 action path 不回退 mutable payload runs/job。新增 D1h exact evidence=`6+3 subtests`；broader adjacency 与 fresh
-  pinned review 待 final stable commit 刷新。R-019/R-028/R-029/R-031 均不因本批关闭；无 provider/model/live。
+  且 action path 不回退 mutable payload runs/job。Pinned `6742130` advisory=`NO-GO 0/3/1/0`；current fixed-forward
+  增加 action-only generic batch/run collision preflight + post-start PG reread、跨 workspace attached-run 与
+  no-batch deterministic-job 预检、exact expected+1 surplus sentinel（1000→1001）、persisted job ensure+reread，
+  以及 running-command exact lease checkpoint CAS。Recovery 对 frozen job status 与 current immutable linkage
+  分别校验，合法 batch status 推进后仍可恢复；native PG error 不再伪装 CAS conflict。Top-level action options
+  不再被 runtime defaults 覆盖。Current evidence=action/boundary/checkpoint `20+7 subtests`、exact
+  Operation/transport/retry `5+11 subtests`、CRM Public Web boundary `34`、combined D1
+  `121+202 subtests`、final stable-tree Operation `136+503 subtests`、lint `58 files`、global mypy `81/4`、
+  compile/diff clean；fresh pinned review pending。
+  R-019/R-028/R-029/R-031 均不因本批关闭；无 provider/model/live。
 - [ ] R-029：宽松 action-schema bridge 仅可在 production action 尚无 reviewed schema/owner binder 期间存在；
   删除条件 = 全部 API-submittable actions（不是只看 served subset）连续一个 release window durable hit=0。
   observation epoch 必须每个 release window bump，且 `NOT VALID` checks 的既有行 validation 在独立部署完成；
@@ -232,7 +239,8 @@
   limit 前过滤，planned CRM/export command ref exact-bind 当前 run 且失败在所有写前。并补 foreign/missing
   transport parity、全路径零写、same-owner 与 open-mode 矩阵。Pinned `646e596` advisory 的 invalid-reference
   部分通过；positive planned replay 现先经过 schema/request validator 与 approval/target guard，并复用一次捕获
-  的 exact-current response，避免 mutable ref 双读。该 fixed-forward 的 fresh pinned review pending。有效
+  的 exact-current response，避免 mutable ref 双读。Commit `ebe7ed0` fresh pinned non-author scope-local
+  advisory=`GO 0/0/0/0`，含 parent-regression sensitivity；formal highest-effort artifact 仍 pending。有效 formal
   scope-matched artifact 前继续阻断 hosted/live multi-user Operation exposure、
   served-registry promotion及 manual/product/milestone signoff，但不阻断 bounded non-live implementation、
   fake/scripted 或 local open-mode testing。

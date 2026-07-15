@@ -38,8 +38,10 @@
   **81 errors / 4 files**. Pinned `c7d2e24` advisory=`NO-GO 0/0/1/0`: valid planned sensitive-CRM replay ran the
   existing approval state/event writer before returning its captured command, crossing R-019's next-mutation tripwire.
   The current fixed-forward returns the same approval requirement read-only when a captured plan already exists, and
-  the regression now snapshots every D1g table. Fresh pinned re-review remains pending. R-019's **26**-caller ratchet
-  and R-028 remain unchanged. No provider/model/live path is authorized.
+  the regression now snapshots every D1g table. Commit `ebe7ed0` fresh pinned non-author review returned scope-local
+  **ADVISORY GO 0/0/0/0** with the `29+107` matrix, full-table diagnostic, and parent-regression sensitivity green;
+  this is not formal GO. R-019's **26**-caller ratchet and R-028 remain unchanged. No provider/model/live path is
+  authorized.
 
 ### Track D D1h CRM Public Web action activation
 
@@ -58,17 +60,23 @@
   attributes queue requests to the stable service principal, and validates the complete explicit continuation against
   the canonical request's deterministic batch id plus persisted options/nonce/runs/job. Partial/foreign owner fields
   fail closed, and action-bound continuation never falls back to mutable payload runs/job.
+- Pinned `6742130` advisory=`NO-GO 0/3/1/0`. The current fixed-forward rejects generic-principal batch collisions and
+  orphan/foreign-batch run reuse before start, plus any cross-workspace row already attached to the deterministic batch
+  and any no-batch deterministic job collision; then it PG-rereads exact batch/run authority before phase links. Exact
+  authority reads use expected+1, including 1000→1001, so a hidden surplus row cannot masquerade as the full batch.
+  Jobs require ensure+reread exact parity; recovery freezes the checkpoint job status while re-deriving every immutable
+  linkage from current authoritative rows. A running command persists its complete continuation through an exact-owner,
+  unexpired-lease CAS before any phase link, and native PG errors surface rather than becoming false CAS conflicts.
+  Expired-lease recovery consumes that checkpoint after legitimate batch progress without duplicating rows.
 - The current production partition is **4 schema-defined / 11 schema-less / served=0**. Confirmed author evidence is
-  D1h fixed-forward PG **6 passed + 3 subtests**, exact Operation/transport **4 passed + 11 subtests**, generic retry
-  **1 passed**, CRM Public Web boundary **34 passed**, and mypy **81 errors / 4 files**. The combined D1 run reached
-  prior **117 passed + 198 subtests** run exposed two D1g characterization-probe seams (missing planned helper /
-  keyword owner response). The D1g fixed-forward updates those frozen probes without weakening their contracts; the
-  same combined D1 scope is now green at **117 passed + 198 subtests**, and full Operation runtime is green at
-  **136 passed + 503 subtests**. D1h's fresh pinned review remains pending; this is not a formal `GO` and authorizes no
-  provider/model/live path.
+  D1h action/boundary/checkpoint **20 passed + 7 subtests**, exact Operation/transport/generic retry
+  **5 passed + 11 subtests**, CRM Public Web boundary **34 passed**, combined D1 **121 passed + 202 subtests**, and
+  final stable-tree Operation **136 passed + 503 subtests**. Lint is green across **58 files**; global mypy remains
+  exactly **81 errors / 4 files**; compile and diff checks are green. D1h's fresh pinned review remains pending; this
+  is not a formal `GO` and authorizes no provider/model/live path.
 - R-019/R-028/R-029 remain open. The command-owner rejection happens after its existing claim/running transition, so
   D1h claims only batch/run/EntityDelta zero-write there, not a cross-table UoW or exactly-once closure. R-031 remains
-  the separately review-pending D1g boundary.
+  formal-review pending despite D1g's scope-local advisory GO.
 
 ## 2026-07-15 (Asia/Singapore)
 

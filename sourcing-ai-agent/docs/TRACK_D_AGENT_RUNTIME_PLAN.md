@@ -139,14 +139,20 @@ serve、会话/事件层、planner loop），用一个垂直切片证明闭环�
   捕获一次并继续经过 schema/request validator 与 approval/target guard，同时跳过 compatibility write，避免
   mutable ref 双读。Pinned `c7d2e24` advisory=`NO-GO 0/0/1/0` 发现 captured-plan CRM approval 仍写
   action/run/event；current fixed-forward 在 existing-plan 分支只读返回 approval requirement，并以全表快照
-  锁定零写。Exact=`7+35 subtests`、request+D1g=`29+107`、registry/probe=`25`；fresh pinned re-review pending。Reviewed artifact 前不得据此宣称
+  锁定零写。Exact=`7+35 subtests`、request+D1g=`29+107`、registry/probe=`25`；commit `ebe7ed0` fresh pinned
+  non-author scope-local advisory=`GO 0/0/0/0`，不是 formal GO。Formal reviewed artifact 前不得据此宣称
   hosted/live multi-user signoff。D1h current author candidate 随后将
   `enrich_person_public_web` 作为第 4 个 schema-defined action 激活：authenticated exact-owner CRM batch binder
   生成 per-record workspace/owner/version snapshot，dispatch 写新 plan 前与 queue-command owner 建 batch/run 前
   分别 revalidate；command-owner 拒绝发生在既有 claim/running 后，故只主张 batch/run/EntityDelta 零写，不主张
   全域零写或 UoW 闭合。Pinned `a36333b` advisory=`NO-GO 0/1/2/1`；D1h fixed-forward 现闭合 selector-only
   alias/target strictness、稳定 service-principal attribution 与 deterministic batch/run/job continuation authority，
-  exact matrix=`6+3 subtests`，fresh pinned review pending。当前 registry=**4 schema-defined / 11 schema-less /
+  pinned `6742130` advisory=`NO-GO 0/3/1/0`；current fixed-forward 再增加 generic batch/run collision fail-closed、
+  cross-workspace attached-run/no-batch deterministic-job preflight、post-start PG exact reread、expected+1
+  surplus sentinel（1000→1001）、persisted-job frozen-status/current-linkage exact authority、running-command
+  lease-fenced checkpoint/recovery 与 strict native-error propagation。Exact action/boundary/checkpoint=`20+7 subtests`、
+  adjacent=`5+11 subtests`、CRM boundary=`34`、combined D1=`121+202 subtests`、final stable-tree Operation=`136+503 subtests`、lint=`58 files`、
+  mypy=`81/4`、compile/diff clean；fresh pinned review pending。当前 registry=**4 schema-defined / 11 schema-less /
   served=0**；R-019/R-028/R-029 仍 open，且不授权 provider/model/live。
 
 ### D2 — Agent 会话与事件层（与 C4/C5 合流）

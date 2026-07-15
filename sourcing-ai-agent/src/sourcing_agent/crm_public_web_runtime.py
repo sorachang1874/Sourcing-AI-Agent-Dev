@@ -9,6 +9,7 @@ compatibility facade and must not be a normal execution owner.
 from __future__ import annotations
 
 from .public_web_runtime_core import (
+    CRM_PUBLIC_WEB_EXACT_BATCH_RUN_LIMIT,
     CRM_PUBLIC_WEB_EXECUTION_BACKEND,
     CRM_PUBLIC_WEB_JOB_TYPE,
     CRM_PUBLIC_WEB_OWNER,
@@ -17,8 +18,10 @@ from .public_web_runtime_core import (
     PUBLIC_WEB_TERMINAL_STATUSES,
     PUBLIC_WEB_WORKER_LANE,
     build_crm_public_web_batch_idempotency_key,
+    build_crm_public_web_run_idempotency_key,
     cancel_crm_public_web_run,
     crm_public_web_batch_id_for_idempotency_key,
+    crm_public_web_exact_batch_run_limit,
     execute_crm_public_web_run_once,
     execute_crm_public_web_run_to_local_idle,
     public_web_options_from_record,
@@ -31,6 +34,7 @@ from .public_web_runtime_core import (
 
 __all__ = [
     "CRM_PUBLIC_WEB_EXECUTION_BACKEND",
+    "CRM_PUBLIC_WEB_EXACT_BATCH_RUN_LIMIT",
     "CRM_PUBLIC_WEB_JOB_TYPE",
     "CRM_PUBLIC_WEB_OWNER",
     "CRM_PUBLIC_WEB_WORKER_RECOVERY_KIND",
@@ -38,7 +42,9 @@ __all__ = [
     "PUBLIC_WEB_TERMINAL_STATUSES",
     "PUBLIC_WEB_WORKER_LANE",
     "build_crm_public_web_batch_idempotency_key",
+    "build_crm_public_web_run_idempotency_key",
     "crm_public_web_batch_id_for_idempotency_key",
+    "crm_public_web_exact_batch_run_limit",
     "cancel_crm_public_web_run",
     "execute_crm_public_web_run_once",
     "execute_crm_public_web_run_to_local_idle",

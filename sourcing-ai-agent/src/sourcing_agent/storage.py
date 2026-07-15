@@ -132,6 +132,7 @@ _CONTROL_PLANE_POSTGRES_NATIVE_TABLES = {
     "supersede_workflow_runtime_state": "agent_worker_runs",
     "upsert_workflow_command": "workflow_commands",
     "update_workflow_command_payload": "workflow_commands",
+    "checkpoint_running_workflow_command_payload": "workflow_commands",
     "claim_workflow_command": "workflow_commands",
     "mark_workflow_command_running": "workflow_commands",
     "mark_workflow_command_succeeded": "workflow_commands",
@@ -5371,6 +5372,27 @@ class ControlPlaneStore:
             return postgres_rows
         return []
 
+    def list_crm_public_web_runs_for_exact_batch_authority(
+        self,
+        *,
+        batch_id: str,
+        limit: int,
+    ) -> list[dict[str, Any]]:
+        """Read one batch across workspaces; the caller must exact-validate every row."""
+
+        normalized_batch_id = str(batch_id or "").strip()
+        if not normalized_batch_id:
+            return []
+        postgres_rows = self._select_control_plane_rows(
+            "crm_public_web_runs",
+            row_builder=self._crm_public_web_run_from_row,
+            where_sql="batch_id = %s",
+            params=[normalized_batch_id],
+            order_by_sql="updated_at DESC, created_at DESC, run_id DESC",
+            limit=max(1, int(limit or 1)),
+        )
+        return list(postgres_rows or [])
+
     def list_latest_crm_public_web_runs_by_record_ids(
         self,
         crm_record_ids: list[str] | tuple[str, ...],
@@ -6988,6 +7010,33 @@ class ControlPlaneStore:
         raise RuntimeError(
             "postgres-only invariant violated for workflow_commands in update_workflow_command_payload: should_prefer_read "
             "returned False; legacy SQLite tail retired (B4)"
+        )
+
+    def checkpoint_running_workflow_command_payload(
+        self,
+        command_id: str,
+        *,
+        lease_owner: str,
+        payload: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        self._require_postgres_for_durable_runtime("workflow_commands")
+        normalized_command_id = str(command_id or "").strip()
+        normalized_lease_owner = str(lease_owner or "").strip()
+        if not normalized_command_id or not normalized_lease_owner:
+            return {}
+        safe_payload = dict(_json_safe_payload(payload or {}))
+        if self._control_plane_postgres_should_prefer_read("workflow_commands"):
+            row = self._call_control_plane_postgres_native(
+                "checkpoint_running_workflow_command_payload",
+                normalized_command_id,
+                lease_owner=normalized_lease_owner,
+                payload=safe_payload,
+            )
+            return self._workflow_command_from_row(row) if row is not None else {}
+        raise RuntimeError(
+            "postgres-only invariant violated for workflow_commands in "
+            "checkpoint_running_workflow_command_payload: should_prefer_read returned False; "
+            "legacy SQLite tail retired (B4)"
         )
 
     def list_workflow_commands(

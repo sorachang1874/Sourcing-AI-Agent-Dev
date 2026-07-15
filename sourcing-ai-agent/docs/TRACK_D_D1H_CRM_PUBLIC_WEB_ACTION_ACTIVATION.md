@@ -3,9 +3,13 @@
 > Status: Current author implementation candidate (2026-07-16). This bounded non-live batch activates a closed
 > request schema and CRM batch target binder for exactly `enrich_person_public_web`. The production partition becomes
 > **4 schema-defined / 11 schema-less / served=0**. A pinned non-author advisory against `a36333b` returned
-> `NO-GO 0/1/2/1`; the current fixed-forward closes its four findings and requires a fresh pinned review against the
-> enclosing commit. Neither advisory nor author evidence is a formal verdict. No provider, model, credential, or live
-> environment is used by this batch.
+> `NO-GO 0/1/2/1`; fixed-forward `6742130` closed those four findings, then its pinned advisory returned
+> `NO-GO 0/3/1/0` for action adoption of generic batch/run authority, a non-persisted running-command checkpoint,
+> 500-row truncation, and command-only job authority. Pre-commit adversarial audit then found the symmetric attached-run
+> and deterministic-job collisions, mutable batch-status recovery drift, and swallowed native checkpoint failures.
+> The current fixed-forward closes those paths; its final pre-commit audit is `0/0/0/0` and a fresh pinned review must
+> bind the enclosing commit. Neither advisory nor author evidence is a formal verdict. No
+> provider, model, credential, or live environment is used by this batch.
 
 ## 1. Outcome and bounded scope
 
@@ -70,6 +74,9 @@ persistence. When `force_refresh=true` and the caller omits `refresh_nonce`, com
 `operation-...` nonce from `operation_run_id + action_id` and persists it as both the canonical `refresh_nonce` and the
 existing owner-compatible `nonce`. A retry of the same operation therefore reuses the same forced-refresh identity
 instead of minting a timestamp/random nonce and duplicating the batch. An explicit caller `refresh_nonce` is preserved.
+The queue-batch runtime now normalizes these closed top-level action options as the actual Public Web options when no
+legacy nested `options` object exists; nested generic API requests retain their existing precedence. Thus values such
+as `fetch_content=false` and `ai_extraction=off` are no longer silently replaced by runtime defaults.
 
 The stable request identity uses only `crm_record_ids + workspace_id`. Per-record `owner_user_id` and `crm_version`
 remain authorization/concurrency snapshots: they are persisted and revalidated, but do not turn owner/version drift
@@ -122,8 +129,29 @@ existing queue owner materializes a CRM Public Web batch or per-record runs for 
 6. `requested_by` is the stable queue-batch service principal, never the mutable submit/dispatch actor;
 7. an explicit continuation carries the complete owner field set and its `batch_id` is the deterministic derivative of
    the canonical request. Persisted batch workspace, records, options, nonce, idempotency key, service principal,
-   runs, run identity carriers, and derived job payload must all agree. Missing/partial/foreign owner fields fail
-   closed; the action-bound path never falls back to mutable payload runs or job data.
+   runs, run identity carriers, and derived job payload must all agree;
+8. before generic start/reuse, the action owner rejects any existing deterministic batch that is not exact-attributed
+   to the stable service principal and operation/action metadata, any deterministic run already attached to a
+   different batch, any row in any workspace already attached to an otherwise absent deterministic batch, and any
+   deterministic job collision while that batch is absent. After start it rereads batch/runs from PG and exact-checks
+   the same identity before phase links;
+9. every exact-authority batch read requests canonical expected count + one surplus sentinel, bounded at 1001, rather
+   than the paginated 500-row default. Thus all admitted 1–1000 records remain visible and a hidden extra row fails
+   exact validation. Join, summary sync, continuation, action-owner fallback, API response, and owner-specific cancel
+   no longer truncate 501–1000 rows;
+10. the derived job is created only when absent, then reread and exact-checked for id/type/state/stage/request/plan/
+    summary/artifact/idempotency and blank owner fields. An explicit continuation requires that persisted row; a
+    command copy cannot stand in for a missing, foreign, mutated, or terminal job. Recovery preserves the frozen
+    checkpoint job-summary status while re-deriving all immutable job linkage from current batch/runs, so legitimate
+    batch progress does not invalidate the checkpoint.
+
+For a fresh action command, the durable order is target revalidation → collision preflight → generic materialization →
+PG batch/run reread → job ensure+reread → lease-fenced running-command checkpoint → phase links. The checkpoint CAS
+requires the exact current lease owner and an unexpired lease, atomically stores payload plus typed causality, and must
+return the persisted command before phase writes. Recovery after lease expiry reclaims that complete checkpoint;
+generic queued/retry payload updates remain unchanged and cannot update a running command. The native checkpoint writer
+is registered as a strict `workflow_commands` PG mutation, so schema/transport failures raise instead of being
+misreported as an ordinary lease-CAS conflict.
 
 The queue-owner preflight occurs after its existing command claim/running transition. A failed preflight therefore
 terminalizes the command and may synchronize its linked OperationRun; it is deliberately **not** described as a
@@ -131,7 +159,7 @@ full-table zero-write path. The bounded guarantee is that no `crm_public_web_bat
 `workflow_entity_deltas` rows are created. On an exact positive, the existing owner creates one batch and one run per
 canonical CRM record only after this preflight. A valid persisted continuation rehydrates those domain rows from the
 store only after the deterministic binding check; command-owned copies cannot redirect the owner to an unrelated
-same-workspace batch.
+same-workspace batch. A checkpoint lease conflict returns without changing the command or linked Operation state.
 
 ## 5. Owner/source-of-truth matrix
 
@@ -147,6 +175,10 @@ same-workspace batch.
 | Public Web option shape | closed v1 input schema | existing planner/queue owner | unknown option or permissive extra field | active |
 | forced-refresh retry identity | operation planner from explicit `refresh_nonce` or stable operation/action hash | command payload and existing queue owner | random/timestamp nonce minted on command retry | stable and persisted |
 | action command carrier | persisted action input/target plus physical `:operation:` prefix and dedicated planning mode | queue-command owner preflight | mutable label, record alias, nested option, nonce, actor attribution, batch/run, or job copy | exact-copy checked before materialization/continuation |
+| action materialization authority | action-derived deterministic batch/run ids plus cross-workspace PG exact rows attributed to service principal and operation/action metadata | action queue owner and recovery | generic same-idempotency batch, orphan/foreign/attached run, start return object | pre-start collision check + post-start PG reread |
+| exact batch membership | canonical requested count + one sentinel, admitted records 1–1000 | join, summary, continuation, cancel, API response | paginated default 500 or expected-count prefix | explicit 2–1001 exact read |
+| action job authority | deterministic frozen job payload plus exact persisted `jobs` row and current immutable linkage | fresh ensure and continuation recovery | command-only job copy, mutable batch status re-derivation, or terminal-protection no-op | preflight + ensure/reread or fail closed |
+| continuation checkpoint | running `workflow_commands` row under exact live lease and strict PG native-writer mapping | crash/takeover recovery before phase links | generic queued/retry updater, swallowed PG exception, or in-memory payload | lease-fenced CAS required |
 | batch/run materialization | existing CRM Public Web queue-command owner | non-live owner drain; future runtime | preflight described as effect/UoW closure | R-019/R-028 open |
 | served tool predicate | future full D1 predicate | future tool registry/planner | schema, adapter, or command presence alone | zero |
 
@@ -163,11 +195,12 @@ same-workspace batch.
   mutable legacy owner fields are not accepted as execution authority.
 - R-019 remains open. Submit/dispatch/queue-owner checks are bounded preflights; action approval, command planning,
   claim/running/failure, batch/run effects, terminal state, EntityDelta, and linked Operation synchronization are not
-  one PG UoW with one total lock budget.
+  one PG UoW with one total lock budget. A concurrent job insert between preflight and generic save remains within this
+  recorded multi-commit TOCTOU residual; the sequential pre-existing collision is now zero-domain-write.
 - R-028 remains open. D1h exposes no new domain writer, but the existing batch/run materialization can still race a
   post-preflight owner/version change and is not transactionally joined to command terminal and Operation completion.
-- R-031 remains the separately review-pending D1g boundary. D1h does not inherit a formal verdict for authenticated
-  downstream Operation reads/controls.
+- R-031 has a scope-local D1g advisory GO but remains formal-review pending. D1h does not inherit a formal verdict for
+  authenticated downstream Operation reads/controls.
 - Served population remains zero. Fake/scripted and local open-mode evidence do not authorize live/provider use.
 
 ## 7. Verification and review handoff
@@ -177,7 +210,9 @@ Run from `sourcing-ai-agent/` with the local PG fixture:
 ```bash
 make local-pg-up
 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src .venv/bin/python -m pytest -q \
-  tests/test_d1h_crm_public_web_action_activation.py
+  tests/test_d1h_crm_public_web_action_activation.py \
+  tests/test_d1h_crm_public_web_batch_boundaries.py \
+  tests/test_workflow_command_running_payload_checkpoint.py
 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src .venv/bin/python -m pytest -q \
   tests/test_api_request_scope.py \
   tests/test_d1_action_request_contract.py \
@@ -199,34 +234,38 @@ PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src .venv/bin/python -m pytest -q \
 .venv/bin/ruff check \
   src/sourcing_agent/action_target_binding.py \
   src/sourcing_agent/api.py \
+  src/sourcing_agent/control_plane_live_postgres.py \
   src/sourcing_agent/crm_public_web_owner.py \
   src/sourcing_agent/crm_public_web_runtime.py \
   src/sourcing_agent/operation_runtime.py \
   src/sourcing_agent/orchestrator.py \
   src/sourcing_agent/public_web_runtime_core.py \
-  tests/test_d1h_crm_public_web_action_activation.py
+  src/sourcing_agent/storage.py \
+  tests/test_d1h_crm_public_web_action_activation.py \
+  tests/test_d1h_crm_public_web_batch_boundaries.py \
+  tests/test_workflow_command_running_payload_checkpoint.py
 .venv/bin/ruff format --check \
   src/sourcing_agent/action_target_binding.py \
   src/sourcing_agent/api.py \
+  src/sourcing_agent/control_plane_live_postgres.py \
   src/sourcing_agent/crm_public_web_owner.py \
   src/sourcing_agent/crm_public_web_runtime.py \
   src/sourcing_agent/operation_runtime.py \
   src/sourcing_agent/orchestrator.py \
   src/sourcing_agent/public_web_runtime_core.py \
-  tests/test_d1h_crm_public_web_action_activation.py
+  src/sourcing_agent/storage.py \
+  tests/test_d1h_crm_public_web_action_activation.py \
+  tests/test_d1h_crm_public_web_batch_boundaries.py \
+  tests/test_workflow_command_running_payload_checkpoint.py
 make typecheck PYTHON_BIN=.venv/bin/python
 git diff --check
 ```
 
-Current fixed-forward evidence is **6 passed + 3 subtests** for the D1h PG matrix, **4 passed + 11 subtests** for the
-exact adjacent Operation/transport nodes, **1 passed** for the pre-D1h generic retry node, and **34 passed** for the CRM
-Public Web boundary file. The listed combined D1 run reached **117 passed + 198 subtests** but exposed two D1g
-characterization-probe failures: the committed probes do not yet implement the planned-command helper / keyword-only
-owner response seam. Those are tracked with the separate D1g approval-order fixed-forward and are not hidden as D1h
-green evidence. The pre-review candidate's full Operation runtime was **136 passed + 503 subtests**. Scoped lint,
-format, compile, and diff checks are green; global mypy remains at the accepted **81 errors / 4 files** ceiling. Final diff, commit,
-and fresh pinned review status must be appended against the stable enclosing candidate. The `a36333b` pinned advisory
-was `NO-GO 0/1/2/1` for continuation authority, selector alias/target strictness, and mutable requester attribution;
-the current fixed-forward is not a verdict. The pre-D1h generic
-API-start/retry compatibility node also passes independently. Author evidence or any local advisory output must not
-be represented as a formal `GO`.
+Current fixed-forward evidence is **20 passed + 7 subtests** for D1h action, 501/1000, and running-checkpoint matrices;
+**5 passed + 11 subtests** for exact adjacent Operation/transport/generic-retry nodes; and **34 passed** for the CRM
+Public Web boundary file. The current combined D1 run is **121 passed + 202 subtests**; final stable-tree Operation is
+**136 passed + 503 subtests**. Lint/format is green across **58 files**, compile and diff checks are green, and global
+mypy remains at the accepted **81 errors / 4 files** ceiling. Final commit and fresh pinned review status must be appended against
+the stable enclosing candidate. The `a36333b` pinned advisory was `NO-GO 0/1/2/1`; the `6742130` pinned advisory was
+`NO-GO 0/3/1/0`; the current fixed-forward is not a verdict. Author evidence or any local advisory output must not be
+represented as a formal `GO`.

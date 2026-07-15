@@ -7407,6 +7407,66 @@ class LiveControlPlanePostgresAdapter:
             ),
         )
 
+    def checkpoint_running_workflow_command_payload(
+        self,
+        command_id: str,
+        *,
+        lease_owner: str,
+        payload: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
+        if not self.should_prefer_read("workflow_commands"):
+            return None
+        normalized_command_id = str(command_id or "").strip()
+        normalized_lease_owner = str(lease_owner or "").strip()
+        if not normalized_command_id or not normalized_lease_owner:
+            return None
+        self._ensure_runtime_coordination_schema()
+        now = _utc_now_sql_timestamp()
+        causality_columns = _workflow_command_causality_columns_from_payload(payload or {})
+        return self._execute_returning_one(
+            """
+            UPDATE workflow_commands
+            SET payload_json = %s,
+                stage_id = %s,
+                causal_group_id = %s,
+                parent_command_id = %s,
+                source_event_id = %s,
+                source_event_type = %s,
+                input_artifact_refs_json = %s,
+                output_artifact_refs_json = %s,
+                produced_entity_counts_json = %s,
+                no_op_reason = %s,
+                readiness_effect = %s,
+                downstream_command_ids_json = %s,
+                causality_schema_version = %s,
+                updated_at = %s
+            WHERE command_id = %s
+              AND status = 'running'
+              AND lease_owner = %s
+              AND (lease_expires_at = '' OR lease_expires_at > %s)
+            RETURNING *
+            """,
+            (
+                _json_dump(payload or {}),
+                causality_columns["stage_id"],
+                causality_columns["causal_group_id"],
+                causality_columns["parent_command_id"],
+                causality_columns["source_event_id"],
+                causality_columns["source_event_type"],
+                causality_columns["input_artifact_refs_json"],
+                causality_columns["output_artifact_refs_json"],
+                causality_columns["produced_entity_counts_json"],
+                causality_columns["no_op_reason"],
+                causality_columns["readiness_effect"],
+                causality_columns["downstream_command_ids_json"],
+                causality_columns["causality_schema_version"],
+                now,
+                normalized_command_id,
+                normalized_lease_owner,
+                now,
+            ),
+        )
+
     def claim_workflow_command(
         self,
         command_id: str,
