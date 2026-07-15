@@ -536,7 +536,9 @@
   从 exact public headline 证明的 required roles；capability 现绑定 validated isolated runtime namespace + provider mode，connector
   在任何目录/cache/provider work 前重新推导 exact-match；Cohort raw cache 按 mode+runtime namespace 隔离并核 provenance，
   server-owned canonical LinkedIn URL 贯穿 snapshot/candidate/prefetch。新计划只发一个全 manifest task；legacy former task
-  只能复用 exact committed full-manifest result。fixed-forward components=`17e1607` + `c6c0fcd`。
+  只能复用 exact committed full-manifest result。publication fixed-forward components=`17e1607` + `c6c0fcd` + `d7cb306`
+  + `fd50a84` 的 Cohort path scope；persisted-state restore 必须重入 canonical loader，summary/candidate marker 任一侧
+  缺失或不匹配均 fail closed，exact committed generation 对 legacy materializer immutable。
 - [x] Cohort CS4 user interaction：frontend picker 默认关闭，旧请求不发送 `cohort_selection`；options/labels/order/default
   全部来自 public endpoint，role 与 current/former 可有序多选，initial submit、revision、history recovery、plan review
   exact round-trip。已提交 explicit cohort 在 review 锁定，legacy plan 可显式升级。author evidence：frontend build
@@ -550,7 +552,8 @@
   submit hard-fail sentinel 覆盖 joined background work；public API/run projection/profile readiness、scripted-only invocations、
   contamination clean、queued→terminal reconcile 均有 assertion。mandatory-PG E2E=`1 passed`，fast=`85 + 69 subtests`，
   exact pipeline adjacency=`2`；planning adjacency=`164 + 69 subtests` 后唯一失败已在 clean `af4db41` 同节点复现。
-  `60e7e67` 的有效 Ultra formal review=`NO-GO 0/6/4/0`；当前 fixed-forward 尚待 fresh pinned non-author review，
+  `60e7e67` 的有效 Ultra formal review=`NO-GO 0/6/4/0`；`04dd41c`/`d7cb306` pinned advisory 分别为
+  `NO-GO 0/2/2/0`、`NO-GO 0/1/1/0`；当前 `fd50a84` Cohort path scope fixed-forward 尚待 fresh pinned non-author review，
   reviewer-exclusive `gpt-5.6-sol/ultra/priority` 后续因 `usageLimitExceeded` fail-closed，绝不写成 formal GO。
 - [x] Cohort CS5a criteria-write provenance fixed-forward：`feedback`、`confidence-policy`、`recompile` 的
   `request|request_payload|metadata.request_payload` 统一由 external Cohort owner 验证并 exact canonical merge；caller

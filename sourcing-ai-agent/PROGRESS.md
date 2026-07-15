@@ -29,6 +29,22 @@
 - This remains author fixed-forward evidence until a fresh pinned non-author review covers the enclosing commit. The
   reviewer-exclusive home proved `gpt-5.6-sol/ultra/priority`, but the subsequent request hit `usageLimitExceeded` and
   is invalid transport, not a verdict. Unrelated non-live Track D work continues asynchronously.
+- A pinned local advisory of `04dd41c` then re-raised `P0/P1/P2/P3=0/2/2/0`: compatibility former work could write
+  before manifest preflight, normal recovery/supplement could bypass the publication marker, actual-boundary coverage
+  missed those paths, and CS5 did not assert the durable serving proof. `d7cb306` fixes forward all four: manifest
+  authorization precedes every load/backfill/merge; valid reuse is read-only; every normal Cohort restore/materializer/
+  supplement path rejects an uncommitted digest; canonical identity reaches candidate documents and prefetch; and the
+  mandatory-PG E2E exact-matches `serving_finalized` state to its `CompletionProofRecorded` event.
+- Second fixed-forward evidence is **51 passed + 11 subtests**, full supplement adjacency **9 passed**, exact legacy
+  recovery **1 passed**, mandatory-PG CS5 **1 passed**, and request-free product contract **357 passed + 503 subtests**.
+  The pinned re-review of `d7cb306` closed three of four prior families but returned `ADVISORY NO-GO 0/1/1/0`:
+  persisted `latest_state` could still bypass the marker, and legacy materialization could rewrite a committed Cohort
+  generation before profile prefetch. The Cohort path-filtered portion of combined commit `fd50a84` fixes both: persisted
+  restore re-enters the canonical loader; summary/candidate marker loss or mismatch fails closed; and committed Cohort
+  generations are immutable to legacy worker reconciliation. The new actual-boundary regression proves restore/progress/
+  materializer/prefetch zero-read-or-write behavior and committed byte stability. Current focused evidence is **43 passed
+  + 11 subtests**, exact legacy recovery **1 passed**, mandatory-PG CS5 **1 passed**; Ruff/compile/diff are green and mypy
+  remains **81 errors / 4 files**. Fresh pinned review remains outstanding; no paid provider/model or live environment was used.
 
 ## 2026-07-14 (Asia/Singapore)
 
