@@ -36,11 +36,13 @@ pre-policy bundle. Performance review found that at least 72/101 calls were spen
 converged, while Boolean scope made all 40 intended handle-level Post/Reply queries ineligible for mechanical coverage
 credit. The next reviewed challenger is therefore discovery-only; exact per-person Post/Reply hydration will be a
 separate operator-generated stage. Its effective-prompt entry binds a session-query policy that rejects `from:` and
-handle-like single-token queries during replay; `x_user_search` additionally uses a closed target-lab plus professional-
-context token grammar. Discovery-only projection never applies the hydration surface gate and always remains partial:
+punctuation-wrapped handle-like single-token queries during replay; `x_user_search` additionally uses an NFKC, full-
+consumption target-lab plus professional-context grammar. Discovery-only projection never applies the hydration surface
+gate and always overwrites model OK/PARTIAL status text with the operator-owned unproven reason:
 raw arguments can prove strategy cells were attempted, but not per-query yield or population convergence. Every
 operator normalization/projection is also rechecked against the request-frozen JSON byte and structure ceilings before
-publication.
+publication. The current command-policy digest binds that post-transform serializer and exact transcript-terminal
+limit replay; normalization-only result-v3 bundles remain replay-only under their recorded digest.
 
 The first vertical slice covers OpenAI with:
 

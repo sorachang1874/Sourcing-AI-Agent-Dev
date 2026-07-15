@@ -598,7 +598,12 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
                 {"query": "Known Person Google DeepMind researcher", "count": "50"},
                 "x_user_search",
             ),
+            ({"query": "李飞飞 Google DeepMind researcher", "count": "50"}, "x_user_search"),
+            ({"query": "デミス Google DeepMind researcher", "count": "50"}, "x_user_search"),
             ({"query": "@TargetPerson", "limit": "50"}, "x_semantic_search"),
+            ({"query": "\"TargetPerson\"", "limit": "50", "mode": "Latest"}, "x_keyword_search"),
+            ({"query": "(@TargetPerson)", "limit": "50"}, "x_semantic_search"),
+            ({"query": "TargetPerson.", "limit": "50"}, "x_semantic_search"),
         )
         for arguments, tool_name in allowed:
             self.assertTrue(
@@ -922,12 +927,22 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
                         "x_keyword_search",
                         {"query": "from:TargetPerson pretraining", "limit": "100", "mode": "Latest"},
                     ),
+                    (
+                        "quoted-handle-query",
+                        "x_keyword_search",
+                        {"query": "\"TargetPerson\"", "limit": "100", "mode": "Latest"},
+                    ),
                     ("bare-user-query", "x_user_search", {"query": "TargetPerson", "count": "50"}),
                     ("exact-name-user-query", "x_user_search", {"query": "Known Person", "count": "50"}),
                     (
                         "disguised-name-user-query",
                         "x_user_search",
                         {"query": "Known Person synthetic researcher", "count": "50"},
+                    ),
+                    (
+                        "unicode-name-user-query",
+                        "x_user_search",
+                        {"query": "李飞飞 synthetic researcher", "count": "50"},
                     ),
                 )
                 for case_id, tool_name, arguments in forbidden_cases:
@@ -2096,6 +2111,22 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
         self.assertFalse(any("authored Post/Reply" in row for row in discovery["limitations"]))
         self.assertEqual(validate_model_result(discovery, live_mode=True), [])
 
+        model_partial = copy.deepcopy(result)
+        model_partial["status"] = "X_SEARCH_PARTIAL"
+        model_partial["status_reason"] = "Discovery converged after three zero-yield expansions."
+        projected_partial = runner._operator_project_model_result(
+            model_partial,
+            session_proof=proof_with_surfaces(()),
+            fixture=False,
+            session_query_policy_id=runner.DISCOVERY_ONLY_SESSION_QUERY_POLICY_ID,
+        )
+        self.assertEqual(projected_partial["status"], "X_SEARCH_PARTIAL")
+        self.assertEqual(
+            projected_partial["status_reason"],
+            runner._DISCOVERY_CONVERGENCE_UNPROVEN_REASON,
+        )
+        self.assertNotIn("converged after", projected_partial["status_reason"].casefold())
+
         blocked = _empty_result()
         blocked["status"] = "X_SEARCH_BLOCKED"
         blocked["status_reason"] = "Synthetic provider blocked the search."
@@ -2208,6 +2239,34 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             self.assertEqual(new_sanitized["candidates"][0]["evidence"][0]["relationship"], "third_party")
             self.assertIn(runner._RELATIONSHIP_DOWNGRADE_CAVEAT, new_sanitized["candidates"][0]["caveats"])
             self.assertEqual(validate_operator_bundle(new_run_root, approval_root=new_approvals), [])
+
+    def test_normalization_only_result_v3_bundle_remains_replayable_after_artifact_policy_cutover(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with mock.patch.object(
+                runner,
+                "command_policy_sha256",
+                side_effect=runner._legacy_normalization_only_result_v3_command_policy_sha256,
+            ):
+                run_root, approvals = _completed_live_run(
+                    root,
+                    model_result=_relationship_mismatch_result(),
+                )
+
+            receipt = json.loads((run_root / "operator-receipt.json").read_text())
+            request = json.loads((run_root / "operator-request.json").read_text())
+            sanitized = json.loads((run_root / "sanitized.json").read_text())
+            self.assertEqual(receipt["status"], "completed")
+            self.assertEqual(
+                receipt["command_binding"]["command_policy_sha256"],
+                runner._legacy_normalization_only_result_v3_command_policy_sha256(request),
+            )
+            self.assertNotEqual(
+                receipt["command_binding"]["command_policy_sha256"],
+                runner.command_policy_sha256(request),
+            )
+            self.assertEqual(sanitized["candidates"][0]["evidence"][0]["relationship"], "third_party")
+            self.assertEqual(validate_operator_bundle(run_root, approval_root=approvals), [])
 
     def test_campaign_bridge_is_source_bound_but_always_blocked_without_native_payloads(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -2728,6 +2787,133 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
         )
         self.assertIsNone(serialized)
         self.assertEqual(limit_kind, "json_structure")
+
+    def test_terminal_technical_limit_kind_is_rederived_under_current_artifact_policy(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            os.chmod(root, 0o700)
+            binary, auth, binary_sha = _live_material(root)
+            request, request_path = _build_request(root, binary_sha=binary_sha)
+            terminal_result = _relationship_mismatch_result()
+
+            def json_node_count(value: Any) -> int:
+                stack = [value]
+                count = 0
+                while stack:
+                    current = stack.pop()
+                    count += 1
+                    if isinstance(current, dict):
+                        stack.extend(current.keys())
+                        stack.extend(current.values())
+                    elif isinstance(current, list):
+                        stack.extend(current)
+                return count
+
+            terminal_result["limitations"].extend(
+                f"node-padding-{index:05d}"
+                for index in range(10_000 - json_node_count(terminal_result))
+            )
+            self.assertEqual(json_node_count(terminal_result), 10_000)
+            terminal_text = canonical_json(terminal_result)
+            request["technical_limits"]["max_json_nodes"] = 10_000
+            _write_private(request_path, (canonical_json(request) + "\n").encode())
+            approvals = root / "approvals"
+            issue_live_grant(
+                request_path=request_path,
+                grant_root=approvals,
+                auth_source=auth,
+                wall_clock=lambda: FIXED_TIME,
+            )
+
+            interim_text = canonical_json(_empty_result())
+
+            def retain_only_terminal_message(updates: list[dict[str, Any]]) -> None:
+                progress = copy.deepcopy(updates[-2])
+                progress["params"]["update"]["content"]["text"] = interim_text
+                updates.insert(1, progress)
+                updates[-2]["params"]["update"]["content"]["text"] = terminal_text
+
+            fake = FakeExecutor(
+                MutableClock(),
+                (interim_text + terminal_text).encode(),
+                spawn=True,
+                session_mutator=retain_only_terminal_message,
+                headless_extended_diagnostics=True,
+            )
+            receipt, run_root = _run_adaptive_wave(
+                request=request,
+                execution_mode="live",
+                runtime_root=root / "runtime",
+                approval_root=approvals,
+                binary=binary,
+                auth_source=auth,
+                executor=fake,
+                monotonic=fake.clock,
+                wall_clock=lambda: FIXED_TIME,
+            )
+
+            self.assertEqual(receipt["status"], "technical_limit_exceeded")
+            self.assertEqual(receipt["process"]["technical_limit_kind"], "json_structure")
+            self.assertEqual(validate_operator_bundle(run_root, approval_root=approvals), [])
+
+            forged = copy.deepcopy(receipt)
+            forged["process"]["technical_limit_kind"] = "json_bytes"
+            self.assertEqual(validate_operator_receipt(forged), [])
+            self.assertIn(
+                "structured_technical_limit_mismatch",
+                validate_operator_bundle(
+                    run_root,
+                    approval_root=approvals,
+                    receipt_override=forged,
+                ),
+            )
+
+    def test_process_limit_cannot_be_relabelled_as_json_limit_under_current_artifact_policy(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            os.chmod(root, 0o700)
+            binary, auth, binary_sha = _live_material(root)
+            request, request_path = _build_request(root, binary_sha=binary_sha)
+            approvals = root / "approvals"
+            issue_live_grant(
+                request_path=request_path,
+                grant_root=approvals,
+                auth_source=auth,
+                wall_clock=lambda: FIXED_TIME,
+            )
+            fake = FakeExecutor(
+                MutableClock(),
+                (canonical_json(_empty_result()) + "\n").encode(),
+                spawn=True,
+                technical_limit_kind="stdout_bytes",
+            )
+            receipt, run_root = _run_adaptive_wave(
+                request=request,
+                execution_mode="live",
+                runtime_root=root / "runtime",
+                approval_root=approvals,
+                binary=binary,
+                auth_source=auth,
+                executor=fake,
+                monotonic=fake.clock,
+                wall_clock=lambda: FIXED_TIME,
+            )
+
+            self.assertEqual(receipt["status"], "technical_limit_exceeded")
+            self.assertEqual(receipt["process"]["technical_limit_kind"], "stdout_bytes")
+            self.assertEqual(validate_operator_bundle(run_root, approval_root=approvals), [])
+
+            forged = copy.deepcopy(receipt)
+            forged["process"]["technical_limit_kind"] = "json_bytes"
+            self.assertEqual(validate_operator_receipt(forged), [])
+            self.assertIn(
+                "structured_technical_limit_mismatch",
+                validate_operator_bundle(
+                    run_root,
+                    approval_root=approvals,
+                    receipt_override=forged,
+                ),
+            )
 
     def test_prompt_and_prior_inputs_enforce_byte_depth_and_node_ceilings(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

@@ -140,7 +140,7 @@
       "source_prompt_sha256": "9b9bf931bb3cc27d12c10eda65a98b5d070ef136a4d7d8735dd61a48580c85f2",
       "authority": "live_authorized",
       "session_query_policy_id": "discovery_only_no_person_hydration_v1",
-      "session_query_policy_sha256": "db36a3566b424388ba968b566f7f020eb5ba23ae1dacbfb310bdb903fba0c7a2"
+      "session_query_policy_sha256": "94d32396f147d924835c8212a39a05f5e16c105d20d811c6368589be6169e094"
     },
     {
       "policy_entry_id": "google_deepmind_pretraining_recall_wave3.v1",

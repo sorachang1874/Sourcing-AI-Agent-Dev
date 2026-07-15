@@ -446,10 +446,10 @@ the operator will generate a separate hydration stage with exact, independently 
 queries rather than asking one long model prompt to self-schedule both phases.
 
 The selected effective-prompt entry now binds `discovery_only_no_person_hydration_v1`. Transcript replay rejects every
-positive or negated `from:` form and every handle-like single-token query across the native-X query tools, so a provider
+positive or negated `from:` form and every bare or punctuation-wrapped handle-like single-token query across the native-X query tools, so a provider
 cannot repeat the mechanically visible hydration pattern and still produce a verified session proof. User search also
-uses a closed grammar: a query needs both a target-lab token and a professional-context token, and no token outside the
-versioned allowlist is accepted. Multiword person intent in keyword/semantic search remains an explicit manual audit
+uses an NFKC, full-consumption closed grammar: a query needs both a target-lab token and a professional-context token,
+and no unrecognized character or token is accepted. Multiword person intent in keyword/semantic search remains an explicit manual audit
 residual. The phase/query/projection semantics have their own digest inside the effective-entry binding. The v4 prompt
 SHA-256 is
 `9b9bf931bb3cc27d12c10eda65a98b5d070ef136a4d7d8735dd61a48580c85f2`.
@@ -464,7 +464,11 @@ stage's per-handle Post/Reply surface downgrade. That status is expected and is 
 Normalization, transcript-terminal recovery, and phase projection are all reserialized under the request-frozen JSON
 byte/depth/node envelope before `sanitized.json` publication. An operator-added audit string that crosses a ceiling now
 produces a replayable technical-limit bundle rather than an oversized terminal artifact. Crash recovery records the
-same exact JSON limit kind instead of silently dropping it.
+same exact JSON limit kind instead of silently dropping it. The current command-policy digest additionally binds
+`post-transform-json-envelope-and-terminal-limit-replay-v1`; live replay of a current-policy technical terminal
+rederives the transcript-owned limit kind and rejects a receipt that swaps `json_bytes` and `json_structure`, or
+relabels a process-owned limit as a JSON limit when replay derives none.
+Normalization-only result-v3 bundles remain replayable under their old digest but cannot authorize this v4 run.
 
 The current command policy adds a versioned, monotonic operator normalization for the isolated relationship error:
 only a non-Bio `self` row whose author differs from the candidate may be downgraded to `third_party`; raw stdout stays

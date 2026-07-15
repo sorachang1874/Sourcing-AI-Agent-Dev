@@ -24,9 +24,11 @@ import selectors
 import shutil
 import signal
 import stat
+import string
 import subprocess
 import sys
 import time
+import unicodedata
 import uuid
 from collections.abc import Callable, Mapping, Sequence
 from contextlib import contextmanager
@@ -94,10 +96,10 @@ SESSION_QUERY_POLICY_SEMANTICS = {
     DISCOVERY_ONLY_SESSION_QUERY_POLICY_ID: {
         "policy_id": DISCOVERY_ONLY_SESSION_QUERY_POLICY_ID,
         "from_query": "forbidden_case_insensitive_v1",
-        "handle_like_single_token_query": "forbidden_x_handle_grammar_v1",
-        "x_user_search": "closed_target_lab_and_professional_context_token_allowlist_v1",
+        "handle_like_single_token_query": "forbidden_punctuation_unwrapped_x_handle_grammar_v2",
+        "x_user_search": "unicode_nfkc_full_consumption_target_and_professional_allowlist_v2",
         "multiword_keyword_or_semantic_person_intent": "post_run_audit_residual_v1",
-        "result_projection": "force_partial_without_hydration_surface_gate_v1",
+        "result_projection": "force_partial_and_operator_reason_without_hydration_surface_gate_v2",
     },
 }
 _DISCOVERY_USER_SEARCH_PROFESSIONAL_TERMS = frozenset(
@@ -131,6 +133,7 @@ _DISCOVERY_USER_SEARCH_PROFESSIONAL_TERMS = frozenset(
     }
 )
 _DISCOVERY_USER_SEARCH_CONNECTOR_TERMS = frozenset({"ai", "and", "at", "lab", "labs", "or"})
+_DISCOVERY_USER_SEARCH_CLOSED_SYNTAX_RE = re.compile(r"[a-z0-9\s@\"'()_./-]+")
 ALLOWED_DISCOVERY_DIMENSIONS = (
     "target_lab_affiliation",
     "professional_role_or_function",
@@ -173,6 +176,7 @@ _DISCOVERY_CONVERGENCE_UNPROVEN_REASON = (
     "have not been mechanically proven from the retained native-X arguments."
 )
 RESULT_NORMALIZATION_POLICY_VERSION = "mechanical-evidence-relationship-downgrade-v1"
+OPERATOR_RESULT_ARTIFACT_POLICY_VERSION = "post-transform-json-envelope-and-terminal-limit-replay-v1"
 _RELATIONSHIP_DOWNGRADE_CAVEAT = (
     "Operator normalized a mechanically impossible self relationship to third_party because the evidence author "
     "did not match the candidate handle; the raw model output is retained and this evidence requires source review."
@@ -558,6 +562,7 @@ _TECHNICAL_LIMIT_KINDS = {
     "session_tree_unexpected_socket",
     "session_tree_scan_deadline",
 }
+_JSON_TECHNICAL_LIMIT_KINDS = frozenset({"json_bytes", "json_structure"})
 
 
 class AdaptiveWaveValidationError(ValueError):
@@ -1505,9 +1510,8 @@ def _operator_project_model_result(
         and session_query_policy_id == DISCOVERY_ONLY_SESSION_QUERY_POLICY_ID
         and projected.get("status") in {"X_SEARCH_OK", "X_SEARCH_PARTIAL"}
     ):
-        if projected["status"] == "X_SEARCH_OK":
-            projected["status"] = "X_SEARCH_PARTIAL"
-            projected["status_reason"] = _DISCOVERY_CONVERGENCE_UNPROVEN_REASON
+        projected["status"] = "X_SEARCH_PARTIAL"
+        projected["status_reason"] = _DISCOVERY_CONVERGENCE_UNPROVEN_REASON
         limitations = projected.get("limitations")
         if isinstance(limitations, list) and _DISCOVERY_CONVERGENCE_UNPROVEN_REASON not in limitations:
             limitations.append(_DISCOVERY_CONVERGENCE_UNPROVEN_REASON)
@@ -1946,7 +1950,9 @@ def _command_policy(
     )
 
 
-def _current_result_normalization_command_policy_sha256(request: Mapping[str, Any]) -> str:
+def _legacy_normalization_only_result_v3_command_policy_sha256(request: Mapping[str, Any]) -> str:
+    """Replay-only digest for result-v3 bundles sealed before artifact-policy binding."""
+
     return canonical_sha256(
         {
             "argv_template": _command_policy(request),
@@ -1955,8 +1961,18 @@ def _current_result_normalization_command_policy_sha256(request: Mapping[str, An
     )
 
 
+def _current_operator_result_command_policy_sha256(request: Mapping[str, Any]) -> str:
+    return canonical_sha256(
+        {
+            "argv_template": _command_policy(request),
+            "result_normalization_policy_version": RESULT_NORMALIZATION_POLICY_VERSION,
+            "operator_result_artifact_policy_version": OPERATOR_RESULT_ARTIFACT_POLICY_VERSION,
+        }
+    )
+
+
 def command_policy_sha256(request: Mapping[str, Any]) -> str:
-    return _current_result_normalization_command_policy_sha256(request)
+    return _current_operator_result_command_policy_sha256(request)
 
 
 def _legacy_pre_normalization_result_v3_command_policy_sha256(request: Mapping[str, Any]) -> str:
@@ -1983,6 +1999,7 @@ def _redacted_policy_from_bindings(
     *,
     legacy_plain: bool = False,
     legacy_result_v2: bool = False,
+    legacy_normalization_only_result_v3: bool = False,
     legacy_pre_normalization_result_v3: bool = False,
 ) -> list[str] | dict[str, Any]:
     del input_binding
@@ -2000,10 +2017,13 @@ def _redacted_policy_from_bindings(
     )
     if legacy_plain or legacy_result_v2 or legacy_pre_normalization_result_v3:
         return argv_template
-    return {
+    policy = {
         "argv_template": argv_template,
         "result_normalization_policy_version": RESULT_NORMALIZATION_POLICY_VERSION,
     }
+    if not legacy_normalization_only_result_v3:
+        policy["operator_result_artifact_policy_version"] = OPERATOR_RESULT_ARTIFACT_POLICY_VERSION
+    return policy
 
 
 def _redacted_environment_policy() -> dict[str, str]:
@@ -3580,16 +3600,23 @@ def _session_query_phase_arguments_allowed(
     if not isinstance(query, str):
         return True
     normalized_query = query.strip()
+    punctuation_unwrapped_query = normalized_query.strip(string.punctuation).strip()
     if (
         _PERSON_SCOPED_FROM_RE.search(normalized_query) is not None
-        or _BARE_HANDLE_LIKE_QUERY_RE.fullmatch(normalized_query) is not None
+        or _BARE_HANDLE_LIKE_QUERY_RE.fullmatch(punctuation_unwrapped_query) is not None
     ):
         return False
     if tool_name != "x_user_search":
         return True
     if not isinstance(discovery_target_lab_id, str) or _ID_RE.fullmatch(discovery_target_lab_id) is None:
         return False
-    query_tokens = frozenset(re.findall(r"[a-z0-9]+", normalized_query.casefold()))
+    normalized_user_query = unicodedata.normalize("NFKC", normalized_query).casefold()
+    if (
+        not normalized_user_query.isascii()
+        or _DISCOVERY_USER_SEARCH_CLOSED_SYNTAX_RE.fullmatch(normalized_user_query) is None
+    ):
+        return False
+    query_tokens = frozenset(re.findall(r"[a-z0-9]+", normalized_user_query))
     target_tokens = frozenset(
         token
         for token in re.findall(r"[a-z0-9]+", discovery_target_lab_id.casefold())
@@ -4428,9 +4455,10 @@ def _run_adaptive_wave(
             command=command,
             effective_prompt_policy=effective_prompt_policy,
         )
-        apply_result_normalization = command_binding["command_policy_sha256"] == (
-            _current_result_normalization_command_policy_sha256(request)
-        )
+        apply_result_normalization = command_binding["command_policy_sha256"] in {
+            _current_operator_result_command_policy_sha256(request),
+            _legacy_normalization_only_result_v3_command_policy_sha256(request),
+        }
         started_at = _timestamp(started_clock)
         intent_approval = _approval_binding(
             request,
@@ -5398,6 +5426,13 @@ def validate_operator_receipt(receipt: Any) -> list[str]:
         current_schema_sha = result_schema_sha256()
         legacy_schema_sha = result_schema_sha256(legacy_v2=True)
         current_policy = canonical_sha256(_redacted_policy_from_bindings(input_binding, command_binding))
+        normalization_only_result_v3_policy = canonical_sha256(
+            _redacted_policy_from_bindings(
+                input_binding,
+                command_binding,
+                legacy_normalization_only_result_v3=True,
+            )
+        )
         pre_normalization_result_v3_policy = canonical_sha256(
             _redacted_policy_from_bindings(
                 input_binding,
@@ -5416,7 +5451,12 @@ def validate_operator_receipt(receipt: Any) -> list[str]:
         recorded_policy = command_binding["command_policy_sha256"]
         schema_policy_pair_valid = (
             recorded_schema_sha == current_schema_sha
-            and recorded_policy in {current_policy, pre_normalization_result_v3_policy}
+            and recorded_policy
+            in {
+                current_policy,
+                normalization_only_result_v3_policy,
+                pre_normalization_result_v3_policy,
+            }
         ) or (
             recorded_schema_sha == legacy_schema_sha
             and recorded_policy in {legacy_plain_policy, legacy_result_policy}
@@ -5645,18 +5685,22 @@ def validate_operator_bundle(
     command_binding = receipt.get("command_binding", {})
     input_binding = receipt.get("input_binding", {})
     new_command_policy = command_policy_sha256(request)
+    normalization_only_result_v3_policy = _legacy_normalization_only_result_v3_command_policy_sha256(request)
     pre_normalization_result_v3_policy = _legacy_pre_normalization_result_v3_command_policy_sha256(request)
     legacy_command_policy = _legacy_command_policy_sha256(request)
     legacy_result_command_policy = _legacy_structured_result_command_policy_sha256(request)
     recorded_command_policy = (
         command_binding.get("command_policy_sha256") if isinstance(command_binding, dict) else None
     )
-    current_normalization_replay = recorded_command_policy == new_command_policy
+    current_operator_result_replay = recorded_command_policy == new_command_policy
+    normalization_only_result_v3_replay = recorded_command_policy == normalization_only_result_v3_policy
+    apply_result_normalization = current_operator_result_replay or normalization_only_result_v3_replay
     pre_normalization_result_v3_replay = recorded_command_policy == pre_normalization_result_v3_policy
     legacy_plain_replay = recorded_command_policy == legacy_command_policy
     legacy_result_policy_replay = recorded_command_policy == legacy_result_command_policy
     if recorded_command_policy not in {
         new_command_policy,
+        normalization_only_result_v3_policy,
         pre_normalization_result_v3_policy,
         legacy_command_policy,
         legacy_result_command_policy,
@@ -5667,7 +5711,11 @@ def validate_operator_bundle(
         and not (legacy_plain_replay or legacy_result_policy_replay)
     ) or (
         not legacy_result_schema_replay
-        and not (current_normalization_replay or pre_normalization_result_v3_replay)
+        and not (
+            current_operator_result_replay
+            or normalization_only_result_v3_replay
+            or pre_normalization_result_v3_replay
+        )
     ):
         errors.append("result_schema_command_policy_mismatch")
     session_id = command_binding.get("session_id") if isinstance(command_binding, dict) else None
@@ -5725,6 +5773,8 @@ def validate_operator_bundle(
                 if legacy_result_policy_replay
                 else pre_normalization_result_v3_policy
                 if pre_normalization_result_v3_replay
+                else normalization_only_result_v3_policy
+                if normalization_only_result_v3_replay
                 else new_command_policy
             ),
             "environment_policy_sha256": canonical_sha256(_redacted_environment_policy()),
@@ -5787,6 +5837,8 @@ def validate_operator_bundle(
                                 if legacy_result_policy_replay
                                 else pre_normalization_result_v3_policy
                                 if pre_normalization_result_v3_replay
+                                else normalization_only_result_v3_policy
+                                if normalization_only_result_v3_replay
                                 else new_command_policy
                             ),
                             replay_result_schema_sha256=(
@@ -5911,7 +5963,7 @@ def validate_operator_bundle(
         expected_model_id=request.get("transport", {}).get("model_id"),
         max_turns=request["emergency"]["max_turns"],
         allow_legacy_plain=mode == "fixture" or legacy_plain_replay,
-        apply_result_normalization=current_normalization_replay,
+        apply_result_normalization=apply_result_normalization,
     )
     if receipt.get("status") != "crash_recovered":
         if artifacts.get("non_json_prefix_bytes") != prefix or artifacts.get("non_json_suffix_bytes") != suffix:
@@ -5969,10 +6021,18 @@ def validate_operator_bundle(
         session_proof=session_proof,
         technical_limits=limits,
         prior_candidates=prior_candidates,
-        # Preserve replay of already-sealed rejected bundles.  Current runs
-        # can only seal `completed` after terminal-message recovery succeeds.
-        allow_recovery=mode == "live" and receipt.get("status") == "completed",
-        apply_result_normalization=current_normalization_replay,
+        # Preserve replay of already-sealed rejected bundles while making the
+        # current artifact policy rederive an exact terminal technical-limit
+        # kind instead of trusting the receipt-owned label.
+        allow_recovery=mode == "live"
+        and (
+            receipt.get("status") == "completed"
+            or (
+                current_operator_result_replay
+                and receipt.get("status") == "technical_limit_exceeded"
+            )
+        ),
+        apply_result_normalization=apply_result_normalization,
     )
     limit_kind = limit_kind or recovery_limit_kind
     if contract_valid and isinstance(parsed_result, dict) and (mode == "fixture" or session_proof is not None):
@@ -6000,6 +6060,12 @@ def validate_operator_bundle(
             limit_kind = limit_kind or projection_limit_kind
     recorded_limit = process.get("technical_limit_kind") if isinstance(process, dict) else None
     if receipt.get("status") == "crash_recovered":
+        if recorded_limit != limit_kind:
+            errors.append("structured_technical_limit_mismatch")
+    elif current_operator_result_replay and (
+        recorded_limit in _JSON_TECHNICAL_LIMIT_KINDS
+        or limit_kind in _JSON_TECHNICAL_LIMIT_KINDS
+    ):
         if recorded_limit != limit_kind:
             errors.append("structured_technical_limit_mismatch")
     elif limit_kind is not None and recorded_limit != limit_kind:
@@ -6050,6 +6116,7 @@ def validate_operator_bundle(
             errors.append("structured_output_schema_hash_mismatch")
         if command_binding["command_policy_sha256"] not in {
             command_policy_sha256(request),
+            _legacy_normalization_only_result_v3_command_policy_sha256(request),
             _legacy_pre_normalization_result_v3_command_policy_sha256(request),
             _legacy_command_policy_sha256(request),
             _legacy_structured_result_command_policy_sha256(request),
@@ -6377,9 +6444,10 @@ def _recover_incomplete_run_locked(
     recovery_legacy_plain = intent["command_binding"].get("command_policy_sha256") == _legacy_command_policy_sha256(
         request
     )
-    recovery_current_normalization = (
-        intent["command_binding"].get("command_policy_sha256") == command_policy_sha256(request)
-    )
+    recovery_current_normalization = intent["command_binding"].get("command_policy_sha256") in {
+        command_policy_sha256(request),
+        _legacy_normalization_only_result_v3_command_policy_sha256(request),
+    }
     (
         parsed_result,
         sanitized,
