@@ -60,6 +60,8 @@ FRONTEND_ADAPTER_PATH = REPO_ROOT / "contracts" / "frontend_api_adapter.ts"
 FRONTEND_RUNTIME_CONTRACT_PATH = REPO_ROOT / "contracts" / "frontend_api_runtime_contract.ts"
 FRONTEND_DEMO_API_PATH = REPO_ROOT / "frontend-demo" / "src" / "lib" / "api.ts"
 ESBUILD_MODULE_PATH = REPO_ROOT / "frontend-demo" / "node_modules" / "esbuild" / "lib" / "main.js"
+TYPESCRIPT_COMPILER_PATH = REPO_ROOT / "frontend-demo" / "node_modules" / "typescript" / "bin" / "tsc"
+FRONTEND_ACTION_STATUS_TYPES_PATH = REPO_ROOT / "tests" / "frontend_api_action_status_types.test.ts"
 
 SAFE_DIAGNOSTIC_FIELDS = ("claim_generation", "control_epoch")
 MAX_SAFE_DIAGNOSTIC_INTEGER = 9_007_199_254_740_991
@@ -2800,7 +2802,10 @@ def test_frontend_schema_and_mappers_are_closed_and_operation_sync_is_typed() ->
         assert "defaultMemo: new WeakMap<object" in projector_source
         assert "executionSummaryMemo: new WeakMap<object" in projector_source
         assert "PublicProjectionOccurrence" in projector_source
-        assert "occurrenceNodes > remainingNodes" in projector_source
+        assert "entry.nodes, entry.bytes" in projector_source
+        assert "entry.blocked = true" in projector_source
+        assert "Object.getOwnPropertyDescriptor" in projector_source
+        assert "Reflect.ownKeys" in projector_source
     demo_status_validator = _typescript_segment(
         demo_source,
         "function requirePublicResponseStatus",
@@ -2829,6 +2834,35 @@ def test_frontend_schema_and_mappers_are_closed_and_operation_sync_is_typed() ->
     assert "module_state_mutated_on_provider_after_start_control?: boolean;" in types_source
     assert "provider_after_start_control_upgrade_requirements" in demo_source
     assert "module_state_mutated_on_provider_after_start_control" in demo_source
+
+
+def test_frontend_action_methods_compile_with_exact_status_outcomes() -> None:
+    compile_result = subprocess.run(
+        [
+            "node",
+            str(TYPESCRIPT_COMPILER_PATH),
+            "--noEmit",
+            "--skipLibCheck",
+            "--strict",
+            "false",
+            "--target",
+            "ES2022",
+            "--module",
+            "ESNext",
+            "--moduleResolution",
+            "Bundler",
+            "--lib",
+            "ES2022,DOM,DOM.Iterable",
+            "--types",
+            "vite/client",
+            str(FRONTEND_ACTION_STATUS_TYPES_PATH),
+        ],
+        cwd=REPO_ROOT / "frontend-demo",
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert compile_result.returncode == 0, compile_result.stdout + compile_result.stderr
 
 
 def test_frontend_mappers_executably_drop_unknown_and_nested_capability_fields(tmp_path: Path) -> None:
@@ -3428,6 +3462,10 @@ assert.deepEqual(projectionLimits, {
   maxDepth: 32,
   maxNodes: 4096,
   maxCollectionEntries: 256,
+  maxKeyBytes: 1024,
+  maxStringBytes: 65536,
+  maxOccurrenceBytes: 1048576,
+  maxTransportBodyBytes: 4194304,
 });
 assert.deepEqual(runtimeContract.WORKFLOW_PUBLIC_PROJECTION_LIMITS, projectionLimits);
 assert.deepEqual(runtimeContract.OPERATION_ACTION_DECISION_APPLIED_OUTCOMES, {
@@ -3445,6 +3483,55 @@ assert.deepEqual(runtimeContract.WORKFLOW_COMMAND_CONTROL_APPLIED_OUTCOMES, {
   retry: ["queued"],
   resume: ["queued"],
 });
+assert.equal(
+  runtimeContract.workflowPublicTransportBodyIsOverLimit(
+    "x".repeat(projectionLimits.maxTransportBodyBytes + 1),
+  ),
+  true,
+);
+assert.equal(
+  runtimeContract.workflowPublicTransportContentLengthIsOverLimit("9".repeat(100)),
+  true,
+);
+assert.equal(
+  runtimeContract.workflowPublicTransportContentLengthIsOverLimit("not-a-length"),
+  false,
+);
+
+const oversizedStringSharedLeaf = { blob: "x".repeat(100_000) };
+const oversizedStringAliasInput = {
+  payload: {
+    aliases: Array.from(
+      { length: projectionLimits.maxCollectionEntries },
+      () => oversizedStringSharedLeaf,
+    ),
+  },
+};
+const oversizedStringAliasRecord = publicAdapter.mapWorkflowCommandRecord(
+  oversizedStringAliasInput,
+);
+const oversizedStringAliasDemo = demoApi.deriveWorkflowCommandRecord(
+  oversizedStringAliasInput,
+);
+assert.deepEqual(oversizedStringAliasRecord.payload.aliases, []);
+assert.deepEqual(oversizedStringAliasDemo.raw.payload.aliases, []);
+assert.equal(Object.prototype.propertyIsEnumerable.call(oversizedStringAliasDemo, "raw"), false);
+
+const nearLimitSharedLeaf = { blob: "x".repeat(60_000) };
+const nearLimitAliasRecord = publicAdapter.mapWorkflowCommandRecord({
+  payload: {
+    aliases: Array.from(
+      { length: projectionLimits.maxCollectionEntries },
+      () => nearLimitSharedLeaf,
+    ),
+  },
+});
+assert.ok(nearLimitAliasRecord.payload.aliases.length > 0);
+assert.ok(nearLimitAliasRecord.payload.aliases.length < projectionLimits.maxCollectionEntries);
+assert.ok(
+  runtimeContract.workflowPublicUtf8ByteLength(JSON.stringify(nearLimitAliasRecord)) <=
+    projectionLimits.maxOccurrenceBytes,
+);
 
 const exactCollectionBoundary = publicAdapter.mapWorkflowCommandRecord({
   payload: { items: Array.from({ length: projectionLimits.maxCollectionEntries }, (_, index) => index) },
@@ -3630,16 +3717,19 @@ const hostilePrototypeProxy = new Proxy({}, {
     throw new Error("hostile prototype trap");
   },
 });
+let hostileLengthReads = 0;
 const hostileLengthCarrierArray = new Proxy([], {
   get(target, property, receiver) {
-    if (property === "length") throw new Error("hostile length trap");
+    if (property === "length") hostileLengthReads += 1;
     return Reflect.get(target, property, receiver);
   },
 });
+let hostileAccessorReads = 0;
 const hostileAccessorObject = {};
 Object.defineProperty(hostileAccessorObject, "secret", {
   enumerable: true,
   get() {
+    hostileAccessorReads += 1;
     throw new Error("hostile member getter");
   },
 });
@@ -3651,7 +3741,7 @@ const hostileTraversalRecord = publicAdapter.mapWorkflowCommandRecord({
     workflow_commands: hostileLengthCarrierArray,
   },
 });
-assert.deepEqual(hostileTraversalRecord.payload, { safe: true });
+assert.deepEqual(hostileTraversalRecord.payload, { safe: true, workflow_commands: [] });
 const hostileDemoTraversalRecord = demoApi.deriveWorkflowCommandRecord({
   payload: {
     safe: true,
@@ -3660,7 +3750,51 @@ const hostileDemoTraversalRecord = demoApi.deriveWorkflowCommandRecord({
     workflow_commands: hostileLengthCarrierArray,
   },
 }).raw;
-assert.deepEqual(hostileDemoTraversalRecord.payload, { safe: true });
+assert.deepEqual(hostileDemoTraversalRecord.payload, { safe: true, workflow_commands: [] });
+assert.equal(hostileAccessorReads, 0);
+assert.equal(hostileLengthReads, 0);
+
+let privateAccessorReads = 0;
+const privateAccessorObject = { safe: "preserved" };
+Object.defineProperty(privateAccessorObject, "claim_token", {
+  enumerable: true,
+  get() {
+    privateAccessorReads += 1;
+    return "secret";
+  },
+});
+assert.deepEqual(
+  publicAdapter.mapWorkflowCommandRecord({ payload: privateAccessorObject }).payload,
+  { safe: "preserved" },
+);
+assert.deepEqual(
+  demoApi.deriveWorkflowCommandRecord({ payload: privateAccessorObject }).raw.payload,
+  { safe: "preserved" },
+);
+assert.equal(privateAccessorReads, 0);
+
+let overWidthGetterReads = 0;
+const overWidthGetterObject = {};
+for (let index = 0; index < projectionLimits.maxCollectionEntries + 1; index += 1) {
+  Object.defineProperty(overWidthGetterObject, `field_${index}`, {
+    enumerable: true,
+    get() {
+      overWidthGetterReads += 1;
+      return index;
+    },
+  });
+}
+assert.equal(
+  publicAdapter.mapWorkflowCommandRecord({ payload: { over_width: overWidthGetterObject } })
+    .payload.over_width,
+  undefined,
+);
+assert.equal(
+  demoApi.deriveWorkflowCommandRecord({ payload: { over_width: overWidthGetterObject } })
+    .raw.payload.over_width,
+  undefined,
+);
+assert.equal(overWidthGetterReads, 0);
 
 function multiplicativeCommand(level, branch) {
   if (level === 0) {
@@ -3874,9 +4008,21 @@ const malformedOperationSync = publicAdapter.mapWorkflowCommandOperationSync({
   event: [],
   workflow_command: "bad",
 });
-assert.equal(malformedOperationSync.operation_run, undefined);
-assert.equal(malformedOperationSync.event, undefined);
-assert.equal(malformedOperationSync.workflow_command, undefined);
+assert.equal(malformedOperationSync, undefined);
+assert.throws(
+  () => publicAdapter.mapWorkflowCommandOperationSync(null),
+  /must be an object/,
+);
+const hiddenOperationSyncTarget = { claim_token: "private" };
+const hiddenOperationSyncProxy = new Proxy(hiddenOperationSyncTarget, {
+  ownKeys() {
+    return [];
+  },
+});
+assert.equal(
+  publicAdapter.mapWorkflowCommandOperationSync(hiddenOperationSyncProxy),
+  undefined,
+);
 const nestedMalformedOperationSync = publicAdapter.mapWorkflowCommandOperationSync({
   status: "running",
   operation_run: {
@@ -3936,10 +4082,9 @@ const capturedOnceControlOperationSync = publicAdapter.mapWorkflowCommandControl
   status: "cancelled",
   operation_sync: mutableOperationSync,
 });
-assert.equal(mutableOperationSyncStatusReads, 1);
-assert.deepEqual(capturedOnceControlOperationSync.operation_sync, {
-  status: "captured-status",
-});
+assert.equal(mutableOperationSyncStatusReads, 0);
+assert.equal(capturedOnceControlOperationSync.operation_sync, undefined);
+assert.equal(Object.hasOwn(capturedOnceControlOperationSync, "operation_sync"), false);
 const minimallyValidCommand = { command_id: "cmd-malformed-member-survivor" };
 const filteredCommandList = publicAdapter.mapWorkflowCommandListResponse({
   workflow_commands: ["bad", minimallyValidCommand, []],
@@ -4254,6 +4399,11 @@ const nodeBudgetWrapperResult = publicAdapter.mapWorkflowCommandListResponse({
 });
 assert.ok(nodeBudgetWrapperResult.workflow_commands.length > 0);
 assert.ok(nodeBudgetWrapperResult.workflow_commands.length < projectionLimits.maxCollectionEntries);
+assert.ok(
+  nodeBudgetWrapperResult.workflow_commands.every(
+    (command) => JSON.stringify(command) !== "{}",
+  ),
+);
 function countProjectedJsonNodes(value) {
   if (value === undefined) return 0;
   if (!value || typeof value !== "object") return 1;
@@ -4349,11 +4499,8 @@ Object.defineProperty(mutableActivityCarrierEnvelope, "workflow_activity", {
 const capturedOnceActivityResponse = publicAdapter.mapWorkflowCommandControlResponse(
   mutableActivityCarrierEnvelope,
 );
-assert.equal(mutableActivityCarrierReads, 1);
-assert.equal(capturedOnceActivityResponse.workflow_activity.activity_run_id, "activity-captured-once");
-assert.equal(capturedOnceActivityResponse.workflow_activity.owner, "trusted-owner");
-assert.equal(capturedOnceActivityResponse.workflow_activity.control_target.owner, "trusted-owner");
-assert.equal(capturedOnceActivityResponse.workflow_activity.module_state_mutated, false);
+assert.equal(mutableActivityCarrierReads, 0);
+assert.equal(capturedOnceActivityResponse.workflow_activity, undefined);
 
 const trustedEnvelopeCommand = {
   command_id: "command-envelope-trusted",
@@ -4523,6 +4670,34 @@ for (const [value, expected] of diagnosticCases) {
     headers: new Headers({ "Content-Type": "application/json" }),
     text: async () => JSON.stringify(payload),
   });
+  let oversizedHeaderBodyReads = 0;
+  const oversizedHeaderResponse = () => ({
+    ok: true,
+    status: 200,
+    statusText: "OK",
+    headers: new Headers({
+      "Content-Type": "application/json",
+      "Content-Length": String(projectionLimits.maxTransportBodyBytes + 1),
+    }),
+    text: async () => {
+      oversizedHeaderBodyReads += 1;
+      return '{"status":"ok"}';
+    },
+  });
+  const oversizedHeaderClient = new publicAdapter.SourcingAgentApiClient({
+    baseUrl: "https://api.test",
+    fetchImpl: async () => oversizedHeaderResponse(),
+  });
+  await assert.rejects(
+    () => oversizedHeaderClient.getOperationAction("oversized-header"),
+    /transport body budget/,
+  );
+  global.fetch = async () => oversizedHeaderResponse();
+  await assert.rejects(
+    () => demoApi.listWorkflowActivities({}),
+    /transport body budget/,
+  );
+  assert.equal(oversizedHeaderBodyReads, 0);
   const clientOutcomeCases = [
     {
       label: "action-submit",
@@ -4640,6 +4815,20 @@ for (const [value, expected] of diagnosticCases) {
   assert.ok(
     demoNodeBudgetProvenance.workflowCommands.length < projectionLimits.maxCollectionEntries,
   );
+  assert.ok(
+    demoNodeBudgetProvenance.workflowCommands.every(
+      (command) => JSON.stringify(command.raw) !== "{}",
+    ),
+  );
+  assert.equal(
+    Object.prototype.propertyIsEnumerable.call(demoNodeBudgetProvenance, "raw"),
+    false,
+  );
+  assert.ok(
+    runtimeContract.workflowPublicUtf8ByteLength(JSON.stringify(demoNodeBudgetProvenance)) <=
+      projectionLimits.maxOccurrenceBytes,
+  );
+  assert.ok(countProjectedJsonNodes(demoNodeBudgetProvenance) <= projectionLimits.maxNodes);
 
   global.fetch = async () => jsonResponse({
     workflow_activities: Array.from(
@@ -4665,15 +4854,13 @@ for (const [value, expected] of diagnosticCases) {
   assert.deepEqual(provenance.workflowCommands.map((command) => command.commandId), [
     "command-envelope-trusted",
   ]);
-  assert.equal(provenance.actionEvents.length, 1);
+  assert.equal(provenance.actionEvents.length, 0);
   assert.equal(provenance.operationEvents.length, 1);
   assert.equal(provenance.eventTimeline.length, 1);
   assert.equal(provenance.raw.claimToken, undefined);
   assert.equal(provenance.raw.contract, undefined);
   assert.equal(provenance.raw.module_state_mutated, undefined);
-  assert.equal(provenance.raw.action_events[0].event_id, undefined);
-  assert.equal(provenance.raw.action_events[0].sequence_number, undefined);
-  assert.equal(provenance.raw.action_events[0].payload, undefined);
+  assert.deepEqual(provenance.raw.action_events, []);
   assert.equal(provenance.raw.action.claimToken, undefined);
   assert.equal(provenance.raw.operation_run.claimToken, undefined);
   assert.equal(provenance.raw.workflow_commands[0].execution_summary.source, "trusted-envelope");
@@ -4693,9 +4880,7 @@ for (const [value, expected] of diagnosticCases) {
   assert.equal(decision.raw.claimToken, undefined);
   assert.equal(decision.raw.contract, undefined);
   assert.equal(decision.raw.module_state_mutated, undefined);
-  assert.equal(decision.raw.events[0].event_id, undefined);
-  assert.equal(decision.raw.events[0].sequence_number, undefined);
-  assert.equal(decision.raw.events[0].payload, undefined);
+  assert.deepEqual(decision.raw.events, []);
   assert.equal(decision.raw.action.claimToken, undefined);
   assert.equal(decision.raw.operation_run.claimToken, undefined);
   assertNoPrivate(decision.raw);

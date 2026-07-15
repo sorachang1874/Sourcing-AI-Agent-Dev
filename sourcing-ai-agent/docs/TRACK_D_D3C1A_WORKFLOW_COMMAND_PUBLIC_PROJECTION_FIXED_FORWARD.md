@@ -11,7 +11,10 @@
 > so its printed `NO-GO` is advisory only. Its seven actionable findings are fixed-forwarded in §3.2; `R-019` remains
 > open. Section 9 distinguishes the original
 > `4cfd1916da8bd98483d1ecfdba1f66639b122da9` evidence from the current follow-up evidence. Fresh validation is
-> recorded; a new pinned non-author review for the current follow-up remains pending.
+> recorded. Commit `491999040d163ef9c49e707fb830cdce319b7c2a` subsequently received two fresh pinned
+> medium-effort non-author advisory reviews; their findings and current fixed-forward are recorded in §3.3. A new
+> pinned re-review for the current follow-up remains pending, and no medium-effort result is a formal highest-effort
+> verdict.
 
 ## 1. Outcome and bounded impact
 
@@ -97,7 +100,7 @@ verdict. The actionable evidence is fixed-forwarded as follows:
 | response wrappers reset collection/node budgets and reread canonical members | Every wrapper captures each own canonical member once, excludes it from the open envelope, and maps it with the same traversal used by the envelope. Exact/over-limit, total-node, depth, cycle, hostile array/Proxy/getter, and capture-once fixtures run against the adapter. |
 | the demo projector was unbounded and cycle-unsafe | The demo imports the same canonical limits and owns an equivalent depth/node/collection, active-container, memo, and closed-container traversal. The same adversarial budget/cycle fixtures run through the actual demo bundle. |
 | the demo duplicated endpoint outcome policy | Outcome values, action maps, and projection budgets are imported from one runtime manifest and mechanically compared; the demo no longer declares a second table. |
-| Activity provenance introduced hosted-PG N+1 reads | Public pages use one bounded request-ordered ActivityRun batch read and one WorkflowCommand batch read for up to 500 unique ids, with zero point reads. Activity list reuses its selected rows, empty input issues zero SQL, duplicates are deduplicated, missing rows stay absent, and the real PG adapter query spy proves one `select_many` per required owner. Compatibility point reads exist only when an incomplete test double omits the batch method. |
+| Activity provenance introduced hosted-PG N+1 reads | Public pages use one bounded request-ordered ActivityRun batch read and one WorkflowCommand batch read for at most 500 raw input identifiers, with zero point reads. Duplicates inside that bounded input are deduplicated before SQL, Activity list reuses its selected rows, empty input issues zero SQL, and missing rows stay absent. Real-PG exact-500 and adapter query-spy coverage proves one `select_many` per required owner. Compatibility point reads exist only when an incomplete test double omits the batch method. |
 | malformed operation sync could impersonate `{}` replay | The backend records whether the original exact built-in `operation_sync` member was truly an empty dict. A nonempty value that projects empty is omitted; only the genuine empty source preserves the no-sync replay sentinel. Hostile-key and partially valid fixtures prove the distinction. |
 | canonical Activity provenance was reread from mutable input | Canonical Activity values are captured once and projected only from that snapshot under the shared traversal; getter/Proxy fixtures prove no second read. |
 | validation wording was stale | This document, the original D3c1 baseline, Plan, TODO, ledger, and index now distinguish recorded author evidence, invalid/advisory artifacts, and the still-pending highest-effort pinned review. |
@@ -127,7 +130,32 @@ review of exact range `4dac471..eea26e3` is advisory `GO`, `P0/P1/P2/P3=0/0/0/0`
 `medium`, so this is not a formal gate artifact. The app-server final item, rollout `agent_message`, and
 `task_complete` remain exact raw-output bindings. Runner evidence is separate from this product scope.
 
-### 3.3 Earlier precommit adversarial author-audit fixes
+### 3.3 Valid pinned advisory findings against `4919990` and fixed-forward
+
+Two independent read-only reviews pinned base `045267d...` and head
+`491999040d163ef9c49e707fb830cdce319b7c2a`; neither read the mutable working tree. The backend review returned
+medium-effort **ADVISORY NO-GO** with P0/P1/P2/P3=`0/0/2/1`; the frontend review returned medium-effort
+**ADVISORY NO-GO** with P0/P1/P2/P3=`0/0/5/2`. They are legitimate scope-local findings, but medium effort is not the
+operator-owned highest-effort formal gate.
+
+| Pinned finding | Current fixed-forward |
+| --- | --- |
+| Backend evidence called a two-row PG probe a 500-ID proof | A real isolated-PG test now creates and projects exactly 500 ActivityRuns plus 500 linked WorkflowCommands and asserts exactly one 500-parameter `select_many` call per owner, zero point reads, and 500 complete projections. |
+| Acquisition lineage and ActivityRun-to-WorkflowCommand operation lineage lacked independent mismatch controls | Separate positive-control/mismatch tests prove acquisition mismatch removes all Activity-derived provenance, while command-operation mismatch preserves independently owned Activity type/owner but omits only the foreign control target. |
+| Documentation described 500 unique IDs although the guard bounds raw input before dedupe | The contract now says at most 500 raw input identifiers; duplicates inside that bounded population are deduplicated before SQL. |
+| Projection budgets omitted key, string, occurrence-byte, and transport-body bounds | One runtime manifest adds UTF-8 key/string, serialized occurrence, and response-body limits. Adapter and demo charge keys/primitives plus memoized subtree node/byte weight, reject a trustworthy oversized `Content-Length` before body read, and reject the decoded body by UTF-8 size. Arbitrarily large valid decimal headers are compared without unsafe-number coercion. |
+| Memoized aliases rescanned subtrees and could amplify output | Each memo entry stores projected node/byte weight; every alias consumes that weight in O(1), and the first failed admission permanently blocks later occurrences in the same monotonic traversal. |
+| Demo DTO serialized both derived fields and a duplicate enumerable `raw` tree | Derived records retain direct `raw` access for current callers, but attach it as a non-enumerable immutable property; JSON serialization therefore emits one bounded tree. |
+| `Object.entries` invoked accessors before filtering and width admission | Descriptor-first capture checks total own-key width, key byte size, privacy/hazard rules, enumerability, and data-descriptor shape before reading a value. Getter and hostile array-length traps execute zero times. |
+| Budget exhaustion emitted phantom empty list records | Command/Activity/Operation list projectors omit projected records with no serializable field; node/byte exhaustion cannot append `{}`. |
+| Runtime action outcome checks were exact but adapter return types remained broad | All eleven `SourcingAgentApiClient` action/control methods expose action-specific status literal unions; demo approve/reject return decision-specific result types. Positive and `@ts-expect-error` assignments compile in a checked TypeScript fixture. |
+| Operation-sync null and own-key-hiding Proxy could collapse to the exact-empty replay sentinel | `null` is rejected, a hostile Proxy cannot establish exact emptiness, and only a structured-cloneable exact empty plain object preserves `{}`; malformed/nonempty projected-empty values are omitted. |
+
+When `Content-Length` is absent or malformed, Fetch still exposes only `response.text()` in the current abstraction, so
+the 4 MiB UTF-8 check occurs after buffering. A true read-before-allocation cap requires a separate bounded streaming
+reader and remains an explicit transport residual; it does not weaken projection/output admission after decoding.
+
+### 3.4 Earlier precommit adversarial author-audit fixes
 
 After implementing the five direct findings, adversarial passes in the author session exposed additional bounded
 cross-layer gaps. They are fixed in the same D3c1a candidate because leaving them open would make the advertised public
@@ -397,6 +425,18 @@ Second invalid-artifact fixed-forward focused evidence, before creating its encl
 - mypy ceiling: unchanged at **81 errors in 4 files**;
 - stable-tree non-author audit: advisory **GO/CLEAN**, `P0/P1/P2/P3=0/0/0/0`.
 
+Current `4919990` pinned-review fixed-forward evidence, before creating its enclosing commit:
+
+- combined D3 claim-fence + D3c1a projection + pre-Agent contract lane: **119 passed**;
+- D3c1a projection contract alone: **19 passed**, including the focused TypeScript literal-status compile gate;
+- isolated real-PG evidence matrix: **6 passed + 500 subtests**, including exact 500-row/two-owner projection,
+  request-ordered dedupe/bounds, acquisition mismatch, command-operation mismatch, and lineage controls;
+- 501-identifier storage guard: **1 passed**;
+- frontend production build: **82 modules transformed**, `547.08 kB` / gzip `163.06 kB`; the existing `>500 kB`
+  chunk warning remains informational;
+- scoped Ruff check/format and `git diff --check`: clean;
+- mypy ceiling: unchanged at **81 errors in 4 files**.
+
 The advisory also exercised hostile hash-collision keys with zero equality-hook calls, alternating carrier depth 40 in
 9 command projections, and a binary depth-10 carrier tree in 99 projections; budget cutoffs omitted the member rather
 than emitting an empty canonical carrier. This is author/advisory evidence, not a formal pinned verdict.
@@ -406,10 +446,10 @@ first D3c1a candidate. The later pinned D3c1a artifacts `20260714T215839Z_*` and
 invalid: both processes completed, but `causal_binding.final_response_item_exact=false`. The first artifact's
 substantive #1/#2/#4-#11 findings are mapped to §3.1; the second artifact's actionable findings are mapped to §3.2;
 accepted residual `R-019` remains open. No invalid artifact is formal `NO-GO` or `GO`. Fresh targeted validation is
-recorded above; a fresh pinned non-author product review must still bind the enclosing commit at the operator-owned
-highest supported reasoning effort. Until a valid
-scope-matched artifact exists, live/W6/manual validation, promotion, and milestone signoff remain fail closed for this
-scope.
+recorded above. The two valid medium-effort reviews of `4919990` are advisory `NO-GO` inputs and are fixed-forwarded
+in §3.3; a fresh pinned re-review must bind the enclosing commit. A formal review still requires the operator-owned
+highest supported reasoning effort. Until a valid formal scope-matched artifact exists, live/W6/manual validation,
+promotion, and milestone signoff remain fail closed for this scope.
 
 ## 10. Explicit non-closure
 

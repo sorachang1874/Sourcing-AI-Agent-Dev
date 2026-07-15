@@ -93,9 +93,13 @@
   provenance. Final integration audit additionally closes nonempty projected-empty frontend sync, memoized DAG alias
   output amplification, foreign workspace/run provenance, and whitespace-wrapped outcomes. Focused evidence is
   `18+38+6(+3 subtests)+2+60+60`, frontend build `82 modules`, Ruff/diff clean, mypy `81/4`, and dirty-tree non-author
-  advisory `0/0/0/0 CLEAN`. A fresh
-  highest-effort pinned non-author review is still **pending**. No invalid
-  artifact is a formal `NO-GO` or `GO`. This
+  advisory `0/0/0/0 CLEAN`. Commit `4919990...` then received valid exact-object medium pinned advisories:
+  backend `NO-GO 0/0/2/1`, frontend `NO-GO 0/0/5/2`. Their findings are fixed-forwarded by real-PG exact-500 and
+  independent lineage-mismatch evidence plus bounded descriptor-first frontend projection, O(1) alias charging,
+  single-serialized demo DTOs, phantom-empty omission, literal action return types, and exact-empty fail-closed rules.
+  Current evidence is `119 + 19 + PG 6/500 subtests + 501 guard 1`, frontend `82 modules`, Ruff/diff clean, mypy
+  `81/4`; absent-Content-Length read-before-allocation remains a streaming-reader residual. Fresh pinned re-review and
+  highest-effort formal review are still **pending**. No invalid artifact is a formal `NO-GO` or `GO`. This
   annotation does not change R-019's status, tripwire, 26-call ratchet, claim-fence obligations, or `served=0`.
 
 - **R-019 / D3c2b (2026-07-15):** the scoped-root Migration-A fragment adds only the exact dormant

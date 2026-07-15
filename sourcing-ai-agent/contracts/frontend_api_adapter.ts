@@ -7,6 +7,10 @@ import {
   OPERATION_RUN_PROVENANCE_SUCCESS_STATUSES,
   WORKFLOW_COMMAND_CONTROL_APPLIED_OUTCOMES,
   WORKFLOW_PUBLIC_PROJECTION_LIMITS,
+  workflowPublicJsonStringByteLength,
+  workflowPublicTransportBodyIsOverLimit,
+  workflowPublicTransportContentLengthIsOverLimit,
+  workflowPublicUtf8ByteLength,
 } from "./frontend_api_runtime_contract";
 import type {
   AcquisitionDiscoveryLaneDetailResponse,
@@ -104,6 +108,38 @@ import type {
 } from "./frontend_api_contract";
 
 export type FetchLike = typeof fetch;
+
+export type PublicResponseForStatuses<
+  TResponse extends { status: string },
+  TStatuses extends readonly string[],
+> = Omit<TResponse, "status"> & { status: TStatuses[number] };
+
+export type OperationActionSubmitResponse = PublicResponseForStatuses<
+  OperationActionDetailResponse,
+  typeof OPERATION_ACTION_SUBMIT_APPLIED_OUTCOMES
+>;
+export type OperationActionQueryResponse = PublicResponseForStatuses<
+  OperationActionDetailResponse,
+  typeof OPERATION_ACTION_QUERY_SUCCESS_STATUSES
+>;
+export type OperationActionDecisionResponse<
+  TDecision extends keyof typeof OPERATION_ACTION_DECISION_APPLIED_OUTCOMES,
+> = PublicResponseForStatuses<
+  OperationActionDetailResponse,
+  (typeof OPERATION_ACTION_DECISION_APPLIED_OUTCOMES)[TDecision]
+>;
+export type OperationRunControlResponseFor<
+  TAction extends keyof typeof OPERATION_RUN_CONTROL_APPLIED_OUTCOMES,
+> = PublicResponseForStatuses<
+  OperationRunControlResponse,
+  (typeof OPERATION_RUN_CONTROL_APPLIED_OUTCOMES)[TAction]
+>;
+export type WorkflowCommandControlResponseFor<
+  TAction extends keyof typeof WORKFLOW_COMMAND_CONTROL_APPLIED_OUTCOMES,
+> = PublicResponseForStatuses<
+  WorkflowCommandControlResponse,
+  (typeof WORKFLOW_COMMAND_CONTROL_APPLIED_OUTCOMES)[TAction]
+>;
 
 export interface SourcingAgentApiClientOptions {
   baseUrl?: string;
@@ -213,7 +249,7 @@ export class SourcingAgentApiClient {
     return this.get(`/api/operations/actions${query}`, mapOperationActionListResponse);
   }
 
-  async submitOperationAction(payload: JsonObject): Promise<OperationActionDetailResponse> {
+  async submitOperationAction(payload: JsonObject): Promise<OperationActionSubmitResponse> {
     return this.post(
       "/api/operations/actions",
       payload,
@@ -226,7 +262,7 @@ export class SourcingAgentApiClient {
     );
   }
 
-  async getOperationAction(actionId: string): Promise<OperationActionDetailResponse> {
+  async getOperationAction(actionId: string): Promise<OperationActionQueryResponse> {
     return this.get(
       `/api/operations/actions/${encodeURIComponent(actionId)}`,
       (response) => mapPublicResponseForStatuses(
@@ -238,7 +274,10 @@ export class SourcingAgentApiClient {
     );
   }
 
-  async approveOperationAction(actionId: string, payload: JsonObject = {}): Promise<OperationActionDetailResponse> {
+  async approveOperationAction(
+    actionId: string,
+    payload: JsonObject = {},
+  ): Promise<OperationActionDecisionResponse<"approve">> {
     return this.post(
       `/api/operations/actions/${encodeURIComponent(actionId)}/approve`,
       payload,
@@ -251,7 +290,10 @@ export class SourcingAgentApiClient {
     );
   }
 
-  async rejectOperationAction(actionId: string, payload: JsonObject = {}): Promise<OperationActionDetailResponse> {
+  async rejectOperationAction(
+    actionId: string,
+    payload: JsonObject = {},
+  ): Promise<OperationActionDecisionResponse<"reject">> {
     return this.post(
       `/api/operations/actions/${encodeURIComponent(actionId)}/reject`,
       payload,
@@ -280,7 +322,10 @@ export class SourcingAgentApiClient {
     );
   }
 
-  async cancelOperationRun(operationRunId: string, payload: JsonObject = {}): Promise<OperationRunControlResponse> {
+  async cancelOperationRun(
+    operationRunId: string,
+    payload: JsonObject = {},
+  ): Promise<OperationRunControlResponseFor<"cancel">> {
     return this.post(
       `/api/operations/runs/${encodeURIComponent(operationRunId)}/cancel`,
       payload,
@@ -293,7 +338,10 @@ export class SourcingAgentApiClient {
     );
   }
 
-  async retryOperationRun(operationRunId: string, payload: JsonObject = {}): Promise<OperationRunControlResponse> {
+  async retryOperationRun(
+    operationRunId: string,
+    payload: JsonObject = {},
+  ): Promise<OperationRunControlResponseFor<"retry">> {
     return this.post(
       `/api/operations/runs/${encodeURIComponent(operationRunId)}/retry`,
       payload,
@@ -306,7 +354,10 @@ export class SourcingAgentApiClient {
     );
   }
 
-  async resumeOperationRun(operationRunId: string, payload: JsonObject = {}): Promise<OperationRunControlResponse> {
+  async resumeOperationRun(
+    operationRunId: string,
+    payload: JsonObject = {},
+  ): Promise<OperationRunControlResponseFor<"resume">> {
     return this.post(
       `/api/operations/runs/${encodeURIComponent(operationRunId)}/resume`,
       payload,
@@ -319,7 +370,10 @@ export class SourcingAgentApiClient {
     );
   }
 
-  async dispatchOperationRun(operationRunId: string, payload: JsonObject = {}): Promise<OperationRunControlResponse> {
+  async dispatchOperationRun(
+    operationRunId: string,
+    payload: JsonObject = {},
+  ): Promise<OperationRunControlResponseFor<"dispatch">> {
     return this.post(
       `/api/operations/runs/${encodeURIComponent(operationRunId)}/dispatch`,
       payload,
@@ -345,7 +399,10 @@ export class SourcingAgentApiClient {
     return this.get(`/api/workflow/commands/${encodeURIComponent(commandId)}`, mapWorkflowCommandDetailResponse);
   }
 
-  async cancelWorkflowCommand(commandId: string, payload: JsonObject = {}): Promise<WorkflowCommandControlResponse> {
+  async cancelWorkflowCommand(
+    commandId: string,
+    payload: JsonObject = {},
+  ): Promise<WorkflowCommandControlResponseFor<"cancel">> {
     return this.post(
       `/api/workflow/commands/${encodeURIComponent(commandId)}/cancel`,
       payload,
@@ -358,7 +415,10 @@ export class SourcingAgentApiClient {
     );
   }
 
-  async retryWorkflowCommand(commandId: string, payload: JsonObject = {}): Promise<WorkflowCommandControlResponse> {
+  async retryWorkflowCommand(
+    commandId: string,
+    payload: JsonObject = {},
+  ): Promise<WorkflowCommandControlResponseFor<"retry">> {
     return this.post(
       `/api/workflow/commands/${encodeURIComponent(commandId)}/retry`,
       payload,
@@ -371,7 +431,10 @@ export class SourcingAgentApiClient {
     );
   }
 
-  async resumeWorkflowCommand(commandId: string, payload: JsonObject = {}): Promise<WorkflowCommandControlResponse> {
+  async resumeWorkflowCommand(
+    commandId: string,
+    payload: JsonObject = {},
+  ): Promise<WorkflowCommandControlResponseFor<"resume">> {
     return this.post(
       `/api/workflow/commands/${encodeURIComponent(commandId)}/resume`,
       payload,
@@ -1585,8 +1648,11 @@ export function mapWorkflowCommandOperationSync(
   payload: unknown,
   traversal: WorkflowPublicProjectionTraversal = createWorkflowPublicProjectionTraversal(),
   depth = 0,
-): WorkflowCommandOperationSync {
-  return projectWorkflowCommandOperationSync(payload, traversal, depth).value;
+): WorkflowCommandOperationSync | undefined {
+  const projection = projectWorkflowCommandOperationSync(payload, traversal, depth);
+  return projection.payloadWasExactEmpty || Object.keys(projection.value).length > 0
+    ? projection.value
+    : undefined;
 }
 
 interface WorkflowCommandOperationSyncProjection {
@@ -1600,7 +1666,7 @@ function projectWorkflowCommandOperationSync(
   depth: number,
 ): WorkflowCommandOperationSyncProjection {
   const { source, canonical, payloadWasExactEmpty } = captureWorkflowPublicEnvelope(
-    payload ?? {},
+    payload,
     "WorkflowCommandOperationSync",
     ["operation_run", "event", "workflow_command"],
     traversal,
@@ -2990,8 +3056,31 @@ export function mapQueryDispatchRecord(payload: unknown): QueryDispatchRecord {
   };
 }
 
-async function parseResponse<T>(response: Response, mapper: (payload: unknown) => T): Promise<T> {
+function workflowPublicResponseContentLength(response: Response): string | null {
+  try {
+    return response.headers?.get("Content-Length") ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function readWorkflowPublicResponseText(response: Response): Promise<string> {
+  if (
+    workflowPublicTransportContentLengthIsOverLimit(
+      workflowPublicResponseContentLength(response),
+    )
+  ) {
+    throw new Error("SourcingAgent API response exceeds the public transport body budget");
+  }
   const bodyText = await response.text();
+  if (workflowPublicTransportBodyIsOverLimit(bodyText)) {
+    throw new Error("SourcingAgent API response exceeds the public transport body budget");
+  }
+  return bodyText;
+}
+
+async function parseResponse<T>(response: Response, mapper: (payload: unknown) => T): Promise<T> {
+  const bodyText = await readWorkflowPublicResponseText(response);
   const payload = bodyText ? safeJsonParse(bodyText) : {};
   if (!response.ok) {
     throw new SourcingAgentApiError({
@@ -3309,15 +3398,33 @@ function defineWorkflowPublicOwnField(
   });
 }
 
+function hasWorkflowPublicSerializableFields(value: Record<string, unknown>): boolean {
+  return Object.values(value).some((item) => item !== undefined);
+}
+
 export { WORKFLOW_PUBLIC_PROJECTION_LIMITS } from "./frontend_api_runtime_contract";
 
 interface WorkflowPublicProjectionTraversal {
   visitedNodes: number;
+  visitedBytes: number;
   readonly activeContainers: WeakSet<object>;
   readonly defaultClosedContainers: WeakSet<object>;
   readonly executionSummaryClosedContainers: WeakSet<object>;
-  readonly defaultMemo: WeakMap<object, JsonValue | undefined>;
-  readonly executionSummaryMemo: WeakMap<object, JsonValue | undefined>;
+  readonly defaultMemo: WeakMap<object, WorkflowPublicProjectionMemoEntry>;
+  readonly executionSummaryMemo: WeakMap<object, WorkflowPublicProjectionMemoEntry>;
+}
+
+interface WorkflowPublicProjectionMemoEntry {
+  readonly value: JsonValue | undefined;
+  readonly nodes: number;
+  readonly bytes: number;
+  blocked: boolean;
+}
+
+interface WorkflowPublicOwnDataEntries {
+  readonly entries: readonly [string, unknown][];
+  readonly ownKeyCount: number;
+  readonly hadRejectedDataProperty: boolean;
 }
 
 interface WorkflowPublicEnvelopeSnapshot {
@@ -3331,29 +3438,144 @@ interface WorkflowPublicEnvelopeSnapshot {
 function createWorkflowPublicProjectionTraversal(): WorkflowPublicProjectionTraversal {
   return {
     visitedNodes: 0,
+    visitedBytes: 0,
     activeContainers: new WeakSet<object>(),
     defaultClosedContainers: new WeakSet<object>(),
     executionSummaryClosedContainers: new WeakSet<object>(),
-    defaultMemo: new WeakMap<object, JsonValue | undefined>(),
-    executionSummaryMemo: new WeakMap<object, JsonValue | undefined>(),
+    defaultMemo: new WeakMap<object, WorkflowPublicProjectionMemoEntry>(),
+    executionSummaryMemo: new WeakMap<object, WorkflowPublicProjectionMemoEntry>(),
   };
+}
+
+function consumeWorkflowPublicProjectionCost(
+  traversal: WorkflowPublicProjectionTraversal,
+  nodes: number,
+  bytes: number,
+): boolean {
+  if (
+    traversal.visitedNodes + nodes > WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxNodes ||
+    traversal.visitedBytes + bytes > WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxOccurrenceBytes
+  ) {
+    return false;
+  }
+  traversal.visitedNodes += nodes;
+  traversal.visitedBytes += bytes;
+  return true;
 }
 
 function consumeWorkflowPublicProjectionNode(
   traversal: WorkflowPublicProjectionTraversal,
+  bytes = 2,
 ): boolean {
-  if (traversal.visitedNodes >= WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxNodes) {
-    return false;
-  }
-  traversal.visitedNodes += 1;
-  return true;
+  return consumeWorkflowPublicProjectionCost(traversal, 1, bytes);
 }
 
-function workflowPublicProjectionArrayLength(value: unknown[]): number | undefined {
+function consumeWorkflowPublicProjectionKey(
+  traversal: WorkflowPublicProjectionTraversal,
+  key: string,
+): boolean {
+  return consumeWorkflowPublicProjectionCost(
+    traversal,
+    0,
+    workflowPublicJsonStringByteLength(key) + 2,
+  );
+}
+
+function workflowPublicPrimitiveByteLength(value: string | number | boolean | null): number {
+  if (typeof value === "string") {
+    return workflowPublicJsonStringByteLength(value) + 1;
+  }
+  return workflowPublicUtf8ByteLength(JSON.stringify(value)) + 1;
+}
+
+function captureWorkflowPublicOwnDataEntries(
+  value: Record<string, unknown>,
+): WorkflowPublicOwnDataEntries | undefined {
+  let ownKeys: readonly PropertyKey[];
   try {
-    return value.length;
+    ownKeys = Reflect.ownKeys(value);
   } catch {
     return undefined;
+  }
+  if (ownKeys.length > WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxCollectionEntries) {
+    return undefined;
+  }
+  const entries: [string, unknown][] = [];
+  let hadRejectedDataProperty = false;
+  for (const key of ownKeys) {
+    if (typeof key !== "string") {
+      hadRejectedDataProperty = true;
+      continue;
+    }
+    if (workflowPublicUtf8ByteLength(key) > WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxKeyBytes) {
+      hadRejectedDataProperty = true;
+      continue;
+    }
+    if (
+      isPrivateWorkflowCommandPublicMirrorField(key) ||
+      isHazardousWorkflowPublicMirrorField(key)
+    ) {
+      continue;
+    }
+    let descriptor: PropertyDescriptor | undefined;
+    try {
+      descriptor = Object.getOwnPropertyDescriptor(value, key);
+    } catch {
+      return undefined;
+    }
+    if (!descriptor || !descriptor.enumerable || !("value" in descriptor)) {
+      hadRejectedDataProperty = true;
+      continue;
+    }
+    entries.push([key, descriptor.value]);
+  }
+  return { entries, ownKeyCount: ownKeys.length, hadRejectedDataProperty };
+}
+
+function captureWorkflowPublicArrayItems(value: unknown[]): readonly unknown[] | undefined {
+  let lengthDescriptor: PropertyDescriptor | undefined;
+  try {
+    lengthDescriptor = Object.getOwnPropertyDescriptor(value, "length");
+  } catch {
+    return undefined;
+  }
+  if (
+    !lengthDescriptor ||
+    !("value" in lengthDescriptor) ||
+    !Number.isSafeInteger(lengthDescriptor.value) ||
+    lengthDescriptor.value < 0 ||
+    lengthDescriptor.value > WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxCollectionEntries
+  ) {
+    return undefined;
+  }
+  const items: unknown[] = [];
+  for (let index = 0; index < lengthDescriptor.value; index += 1) {
+    let descriptor: PropertyDescriptor | undefined;
+    try {
+      descriptor = Object.getOwnPropertyDescriptor(value, String(index));
+    } catch {
+      return undefined;
+    }
+    if (!descriptor || !descriptor.enumerable || !("value" in descriptor)) {
+      continue;
+    }
+    items.push(descriptor.value);
+  }
+  return items;
+}
+
+function isExactEmptyWorkflowPublicDataObject(
+  value: Record<string, unknown>,
+  captured: WorkflowPublicOwnDataEntries,
+): boolean {
+  if (captured.ownKeyCount !== 0 || typeof structuredClone !== "function") {
+    return false;
+  }
+  try {
+    const cloned = structuredClone(value);
+    return isPlainWorkflowPublicObject(cloned) && Reflect.ownKeys(cloned).length === 0;
+  } catch {
+    return false;
   }
 }
 
@@ -3368,19 +3590,14 @@ function captureWorkflowPublicEnvelope(
   if (!isPlainWorkflowPublicObject(rawSource)) {
     throw new Error(`${label} must be a plain object`);
   }
-  let entries: [string, unknown][];
-  try {
-    entries = Object.entries(rawSource);
-  } catch {
-    throw new Error(`${label} could not be captured`);
-  }
-  if (entries.length > WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxCollectionEntries) {
+  const captured = captureWorkflowPublicOwnDataEntries(rawSource);
+  if (!captured) {
     throw new Error(`${label} exceeds the public projection collection budget`);
   }
   const canonicalFieldSet = new Set(canonicalFields);
   const envelopeSource: Record<string, unknown> = {};
   const canonical: Record<string, unknown> = {};
-  for (const [key, value] of entries) {
+  for (const [key, value] of captured.entries) {
     defineWorkflowPublicOwnField(
       canonicalFieldSet.has(key) ? canonical : envelopeSource,
       key,
@@ -3398,7 +3615,7 @@ function captureWorkflowPublicEnvelope(
     canonical,
     traversal,
     depth,
-    payloadWasExactEmpty: entries.length === 0,
+    payloadWasExactEmpty: isExactEmptyWorkflowPublicDataObject(rawSource, captured),
   };
 }
 
@@ -3438,34 +3655,28 @@ function mapCapturedPlainWorkflowPublicObjectArray<T>(
   if (
     depth > WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxDepth ||
     traversal.activeContainers.has(value) ||
-    !consumeWorkflowPublicProjectionNode(traversal)
+    !consumeWorkflowPublicProjectionNode(traversal, 2)
   ) {
     return undefined;
   }
-  const arrayLength = workflowPublicProjectionArrayLength(value);
-  if (
-    arrayLength === undefined ||
-    arrayLength > WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxCollectionEntries
-  ) {
+  const items = captureWorkflowPublicArrayItems(value);
+  if (!items) {
     return undefined;
   }
   const result: T[] = [];
   traversal.activeContainers.add(value);
   try {
-    for (let index = 0; index < arrayLength; index += 1) {
-      let item: unknown;
-      try {
-        item = value[index];
-      } catch {
-        continue;
-      }
+    for (const item of items) {
       const mapped = mapCapturedPlainWorkflowPublicObject(
         item,
         mapper,
         traversal,
         depth + 1,
       );
-      if (mapped !== undefined) {
+      if (
+        mapped !== undefined &&
+        (!isPlainWorkflowPublicObject(mapped) || hasWorkflowPublicSerializableFields(mapped))
+      ) {
         result.push(mapped);
       }
     }
@@ -3502,7 +3713,7 @@ function isWorkflowPublicProjectionClosed(
 function workflowPublicProjectionMemo(
   traversal: WorkflowPublicProjectionTraversal,
   allowExecutionSummaryAtCurrentLevel: boolean,
-): WeakMap<object, JsonValue | undefined> {
+): WeakMap<object, WorkflowPublicProjectionMemoEntry> {
   return allowExecutionSummaryAtCurrentLevel
     ? traversal.executionSummaryMemo
     : traversal.defaultMemo;
@@ -3510,30 +3721,15 @@ function workflowPublicProjectionMemo(
 
 function consumeWorkflowPublicProjectionOccurrence(
   traversal: WorkflowPublicProjectionTraversal,
-  value: JsonValue,
+  entry: WorkflowPublicProjectionMemoEntry,
 ): boolean {
-  const remainingNodes = WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxNodes - traversal.visitedNodes;
-  const pending: unknown[] = [value];
-  let occurrenceNodes = 0;
-  while (pending.length > 0) {
-    const item = pending.pop();
-    if (item === undefined) {
-      continue;
-    }
-    occurrenceNodes += 1;
-    if (occurrenceNodes > remainingNodes) {
-      return false;
-    }
-    if (!item || typeof item !== "object") {
-      continue;
-    }
-    if (Array.isArray(item)) {
-      pending.push(...item);
-    } else {
-      pending.push(...Object.values(item));
-    }
+  if (entry.blocked) {
+    return false;
   }
-  traversal.visitedNodes += occurrenceNodes;
+  if (!consumeWorkflowPublicProjectionCost(traversal, entry.nodes, entry.bytes)) {
+    entry.blocked = true;
+    return false;
+  }
   return true;
 }
 
@@ -3573,32 +3769,26 @@ function sanitizeWorkflowCommandPublicCarrier(
   if (
     depth > WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxDepth ||
     traversal.activeContainers.has(value) ||
-    !consumeWorkflowPublicProjectionNode(traversal)
+    !consumeWorkflowPublicProjectionNode(traversal, 2)
   ) {
     return { matched: true };
   }
-  const arrayLength = workflowPublicProjectionArrayLength(value);
-  if (
-    arrayLength === undefined ||
-    arrayLength > WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxCollectionEntries
-  ) {
+  const items = captureWorkflowPublicArrayItems(value);
+  if (!items) {
     return { matched: true };
   }
   const projected: JsonValue[] = [];
   traversal.activeContainers.add(value);
   try {
-    for (let index = 0; index < arrayLength; index += 1) {
-      let item: unknown;
-      try {
-        item = value[index];
-      } catch {
-        continue;
-      }
+    for (const item of items) {
       if (!isPlainWorkflowPublicObject(item)) {
         continue;
       }
       const sanitized = projectCommand(item, depth + 1);
-      if (sanitized !== undefined) {
+      if (
+        sanitized !== undefined &&
+        (!isPlainWorkflowPublicObject(sanitized) || hasWorkflowPublicSerializableFields(sanitized))
+      ) {
         projected.push(sanitized);
       }
     }
@@ -3685,27 +3875,18 @@ function sanitizeWorkflowActivityPublicCarrier(
   if (
     depth > WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxDepth ||
     traversal.activeContainers.has(value) ||
-    !consumeWorkflowPublicProjectionNode(traversal)
+    !consumeWorkflowPublicProjectionNode(traversal, 2)
   ) {
     return { matched: true };
   }
-  const arrayLength = workflowPublicProjectionArrayLength(value);
-  if (
-    arrayLength === undefined ||
-    arrayLength > WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxCollectionEntries
-  ) {
+  const items = captureWorkflowPublicArrayItems(value);
+  if (!items) {
     return { matched: true };
   }
   const projected: JsonValue[] = [];
   traversal.activeContainers.add(value);
   try {
-    for (let index = 0; index < arrayLength; index += 1) {
-      let item: unknown;
-      try {
-        item = value[index];
-      } catch {
-        continue;
-      }
+    for (const item of items) {
       if (!isPlainWorkflowPublicObject(item)) {
         continue;
       }
@@ -3719,7 +3900,9 @@ function sanitizeWorkflowActivityPublicCarrier(
         delete mapped[field];
       }
       markWorkflowPublicProjectionClosed(mapped, traversal);
-      projected.push(mapped as JsonValue);
+      if (hasWorkflowPublicSerializableFields(mapped)) {
+        projected.push(mapped as JsonValue);
+      }
     }
   } finally {
     traversal.activeContainers.delete(value);
@@ -3738,15 +3921,31 @@ function sanitizeWorkflowCommandPublicMirrorValue(
     return undefined;
   }
   if (value === null) {
-    return consumeWorkflowPublicProjectionNode(traversal) ? null : undefined;
+    return consumeWorkflowPublicProjectionNode(
+      traversal,
+      workflowPublicPrimitiveByteLength(null),
+    ) ? null : undefined;
   }
-  if (typeof value === "string" || typeof value === "boolean") {
-    return consumeWorkflowPublicProjectionNode(traversal) ? value : undefined;
+  if (typeof value === "string") {
+    if (workflowPublicUtf8ByteLength(value) > WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxStringBytes) {
+      return undefined;
+    }
+    return consumeWorkflowPublicProjectionNode(
+      traversal,
+      workflowPublicPrimitiveByteLength(value),
+    ) ? value : undefined;
+  }
+  if (typeof value === "boolean") {
+    return consumeWorkflowPublicProjectionNode(
+      traversal,
+      workflowPublicPrimitiveByteLength(value),
+    ) ? value : undefined;
   }
   if (typeof value === "number") {
-    return consumeWorkflowPublicProjectionNode(traversal) && Number.isFinite(value)
-      ? value
-      : undefined;
+    return Number.isFinite(value) && consumeWorkflowPublicProjectionNode(
+      traversal,
+      workflowPublicPrimitiveByteLength(value),
+    ) ? value : undefined;
   }
   if (!value || typeof value !== "object") {
     return undefined;
@@ -3768,41 +3967,37 @@ function sanitizeWorkflowCommandPublicMirrorValue(
     allowExecutionSummaryAtCurrentLevel,
   );
   if (memo.has(value)) {
-    const cached = memo.get(value);
-    return cached !== undefined && consumeWorkflowPublicProjectionOccurrence(traversal, cached)
-      ? cached
+    const cached = memo.get(value)!;
+    return cached.value !== undefined && consumeWorkflowPublicProjectionOccurrence(traversal, cached)
+      ? cached.value
       : undefined;
   }
-  if (!consumeWorkflowPublicProjectionNode(traversal)) {
-    memo.set(value, undefined);
+  const memoStartNodes = traversal.visitedNodes;
+  const memoStartBytes = traversal.visitedBytes;
+  if (!consumeWorkflowPublicProjectionNode(traversal, 2)) {
+    memo.set(value, { value: undefined, nodes: 0, bytes: 0, blocked: true });
     return undefined;
   }
   if (Array.isArray(value)) {
-    const arrayLength = workflowPublicProjectionArrayLength(value);
-    if (
-      arrayLength === undefined ||
-      arrayLength > WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxCollectionEntries
-    ) {
-      memo.set(value, undefined);
+    const items = captureWorkflowPublicArrayItems(value);
+    if (!items) {
+      memo.set(value, { value: undefined, nodes: 0, bytes: 0, blocked: true });
       return undefined;
     }
     const result: JsonValue[] = [];
     traversal.activeContainers.add(value);
     try {
-      for (let index = 0; index < arrayLength; index += 1) {
-        let item: unknown;
-        try {
-          item = value[index];
-        } catch {
-          continue;
-        }
+      for (const item of items) {
         const sanitized = sanitizeWorkflowCommandPublicMirrorValue(
           item,
           false,
           traversal,
           depth + 1,
         );
-        if (sanitized !== undefined) {
+        if (
+          sanitized !== undefined &&
+          (!isPlainWorkflowPublicObject(sanitized) || hasWorkflowPublicSerializableFields(sanitized))
+        ) {
           result.push(sanitized);
         }
       }
@@ -3810,35 +4005,34 @@ function sanitizeWorkflowCommandPublicMirrorValue(
       traversal.activeContainers.delete(value);
     }
     markWorkflowPublicProjectionClosed(result, traversal);
-    memo.set(value, result);
+    memo.set(value, {
+      value: result,
+      nodes: traversal.visitedNodes - memoStartNodes,
+      bytes: traversal.visitedBytes - memoStartBytes,
+      blocked: false,
+    });
     return result;
   }
   let prototype: object | null;
   try {
     prototype = Object.getPrototypeOf(value);
   } catch {
-    memo.set(value, undefined);
+    memo.set(value, { value: undefined, nodes: 0, bytes: 0, blocked: true });
     return undefined;
   }
   if (prototype !== Object.prototype && prototype !== null) {
-    memo.set(value, undefined);
+    memo.set(value, { value: undefined, nodes: 0, bytes: 0, blocked: true });
     return undefined;
   }
-  let entries: [string, unknown][];
-  try {
-    entries = Object.entries(value as Record<string, unknown>);
-  } catch {
-    memo.set(value, undefined);
-    return undefined;
-  }
-  if (entries.length > WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxCollectionEntries) {
-    memo.set(value, undefined);
+  const captured = captureWorkflowPublicOwnDataEntries(value as Record<string, unknown>);
+  if (!captured) {
+    memo.set(value, { value: undefined, nodes: 0, bytes: 0, blocked: true });
     return undefined;
   }
   const result: JsonObject = {};
   traversal.activeContainers.add(value);
   try {
-    for (const [key, item] of entries) {
+    for (const [key, item] of captured.entries) {
       const normalizedKey = normalizeWorkflowCommandPublicMirrorFieldName(key);
       if (
         isPrivateWorkflowCommandPublicMirrorField(key) ||
@@ -3846,6 +4040,9 @@ function sanitizeWorkflowCommandPublicMirrorValue(
         (normalizedKey === "execution_summary" && !allowExecutionSummaryAtCurrentLevel)
       ) {
         continue;
+      }
+      if (!consumeWorkflowPublicProjectionKey(traversal, key)) {
+        break;
       }
       const commandCarrier = sanitizeWorkflowCommandPublicCarrier(
         key,
@@ -3889,8 +4086,16 @@ function sanitizeWorkflowCommandPublicMirrorValue(
     traversal,
     allowExecutionSummaryAtCurrentLevel,
   );
-  memo.set(value, result);
-  return result;
+  const publicResult = captured.hadRejectedDataProperty && Object.keys(result).length === 0
+    ? undefined
+    : result;
+  memo.set(value, {
+    value: publicResult,
+    nodes: traversal.visitedNodes - memoStartNodes,
+    bytes: traversal.visitedBytes - memoStartBytes,
+    blocked: false,
+  });
+  return publicResult;
 }
 
 function asWorkflowCommandPublicMirrorSource(
@@ -3993,10 +4198,10 @@ function mapPublicResponseForStatuses<
   mapper: (value: unknown) => TResponse,
   allowedStatuses: TStatuses,
   label: string,
-): TResponse {
+): PublicResponseForStatuses<TResponse, TStatuses> {
   const response = mapper(payload);
   asAllowedPublicResponseStatus(response.status, allowedStatuses, label);
-  return response;
+  return response as PublicResponseForStatuses<TResponse, TStatuses>;
 }
 
 function asOptionalString(value: unknown): string | undefined {

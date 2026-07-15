@@ -956,6 +956,185 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         )
         self.assertEqual(command_queries[0].kwargs["limit"], 2)
 
+    def test_workflow_evidence_batch_readers_project_exact_500_pg_rows_with_one_query_per_owner(self) -> None:
+        repository = self.store.repos.workflow_runtime
+        commands = [
+            self.store.upsert_workflow_command(
+                command_id=f"cmd-evidence-batch-pg-{index}",
+                workflow_run_id="wf-evidence-batch-pg",
+                command_type=LINKEDIN_DISCOVERY_QUERY_RUN_COMMAND_TYPE,
+                owner=LINKEDIN_DISCOVERY_QUERY_RUN_OWNER,
+                idempotency_key=f"workflow-command:evidence-batch-pg:{index}",
+            )
+            for index in range(500)
+        ]
+        activities = [
+            repository.upsert_activity_run(
+                {
+                    "activity_run_id": f"actrun-evidence-batch-pg-{index}",
+                    "workspace_id": "default",
+                    "workflow_run_id": "wf-evidence-batch-pg",
+                    "command_id": commands[index]["command_id"],
+                    "activity_type": "downstream.activity",
+                    "owner": "downstream-owner",
+                    "status": "running",
+                    "idempotency_key": f"workflow-activity:evidence-batch-pg:{index}",
+                }
+            )
+            for index in range(500)
+        ]
+        orchestrator = self._build_r020_orchestrator()
+        adapter = self.store._control_plane_postgres
+
+        with mock.patch.object(adapter, "select_many", wraps=adapter.select_many) as select_many:
+            activity_by_id, command_by_id = orchestrator._workflow_activity_linked_evidence_prefetch(  # noqa: SLF001
+                activities
+            )
+            projected_rows = [
+                orchestrator._workflow_activity_api_record(  # noqa: SLF001
+                    activity,
+                    _activity_by_id=activity_by_id,
+                    _command_by_id=command_by_id,
+                )
+                for activity in activities
+            ]
+
+        activity_run_ids = sorted(activity["activity_run_id"] for activity in activities)
+        command_ids = sorted(command["command_id"] for command in commands)
+        self.assertEqual(sorted(activity_by_id), activity_run_ids)
+        self.assertEqual(sorted(command_by_id), command_ids)
+        self.assertTrue(all(activity_by_id[activity_run_id] for activity_run_id in activity_run_ids))
+        self.assertTrue(all(command_by_id[command_id] for command_id in command_ids))
+        self.assertEqual(len(projected_rows), 500)
+        for index, projected in enumerate(projected_rows):
+            with self.subTest(index=index):
+                self.assertEqual(projected["activity_run_id"], activities[index]["activity_run_id"])
+                self.assertEqual(projected["activity_type"], "downstream.activity")
+                self.assertEqual(projected["owner"], "downstream-owner")
+                self.assertEqual(projected["control_target"]["command_id"], commands[index]["command_id"])
+        activity_queries = [
+            call for call in select_many.call_args_list if call.args and call.args[0] == "workflow_activity_runs"
+        ]
+        command_queries = [
+            call for call in select_many.call_args_list if call.args and call.args[0] == "workflow_commands"
+        ]
+        self.assertEqual(len(activity_queries), 1)
+        self.assertEqual(len(command_queries), 1)
+        self.assertEqual(activity_queries[0].kwargs["where_sql"].count("%s"), 500)
+        self.assertEqual(activity_queries[0].kwargs["params"], activity_run_ids)
+        self.assertEqual(activity_queries[0].kwargs["limit"], 500)
+        self.assertEqual(command_queries[0].kwargs["where_sql"].count("%s"), 500)
+        self.assertEqual(command_queries[0].kwargs["params"], command_ids)
+        self.assertEqual(command_queries[0].kwargs["limit"], 500)
+
+    def test_activity_public_provenance_rejects_acquisition_mismatch_when_operation_matches(self) -> None:
+        orchestrator = self._build_r020_orchestrator()
+        activity = {
+            "activity_run_id": "actrun-acquisition-lineage",
+            "workspace_id": "workspace-lineage",
+            "workflow_run_id": "workflow-lineage",
+            "operation_run_id": "operation-lineage",
+            "acquisition_run_id": "acquisition-lineage",
+            "command_id": "command-lineage",
+            "activity_type": "canonical.activity",
+            "owner": "canonical-owner",
+            "status": "running",
+        }
+        command = {
+            "command_id": activity["command_id"],
+            "workflow_run_id": activity["workflow_run_id"],
+            "operation_id": activity["operation_run_id"],
+            "command_type": LINKEDIN_DISCOVERY_QUERY_RUN_COMMAND_TYPE,
+            "owner": LINKEDIN_DISCOVERY_QUERY_RUN_OWNER,
+            "status": "running",
+        }
+        exact_attempt = {
+            "attempt_id": "attempt-acquisition-lineage",
+            "workspace_id": activity["workspace_id"],
+            "workflow_run_id": activity["workflow_run_id"],
+            "operation_run_id": activity["operation_run_id"],
+            "acquisition_run_id": activity["acquisition_run_id"],
+            "activity_run_id": activity["activity_run_id"],
+            "command_id": activity["command_id"],
+            "attempt_number": 1,
+            "status": "running",
+        }
+        evidence = {
+            "_activity_by_id": {activity["activity_run_id"]: activity},
+            "_command_by_id": {command["command_id"]: command},
+        }
+
+        projected_exact = orchestrator._workflow_activity_attempt_api_record(  # noqa: SLF001
+            exact_attempt,
+            **evidence,
+        )
+        self.assertEqual(projected_exact["activity_type"], activity["activity_type"])
+        self.assertEqual(projected_exact["control_target"]["command_id"], command["command_id"])
+
+        acquisition_mismatch = {
+            **exact_attempt,
+            "acquisition_run_id": "acquisition-other",
+        }
+        projected_mismatch = orchestrator._workflow_activity_attempt_api_record(  # noqa: SLF001
+            acquisition_mismatch,
+            **evidence,
+        )
+        self.assertNotIn("activity_type", projected_mismatch)
+        self.assertNotIn("owner", projected_mismatch)
+        self.assertNotIn("control_target", projected_mismatch)
+
+    def test_activity_public_provenance_rejects_command_operation_mismatch_when_workflow_matches(self) -> None:
+        orchestrator = self._build_r020_orchestrator()
+        activity = {
+            "activity_run_id": "actrun-command-operation-lineage",
+            "workspace_id": "workspace-lineage",
+            "workflow_run_id": "workflow-lineage",
+            "operation_run_id": "operation-lineage",
+            "command_id": "command-operation-lineage",
+            "activity_type": "canonical.activity",
+            "owner": "canonical-owner",
+            "status": "running",
+        }
+        attempt = {
+            "attempt_id": "attempt-command-operation-lineage",
+            "workspace_id": activity["workspace_id"],
+            "workflow_run_id": activity["workflow_run_id"],
+            "activity_run_id": activity["activity_run_id"],
+            "command_id": activity["command_id"],
+            "attempt_number": 1,
+            "status": "running",
+        }
+        exact_command = {
+            "command_id": activity["command_id"],
+            "workflow_run_id": activity["workflow_run_id"],
+            "operation_id": activity["operation_run_id"],
+            "command_type": LINKEDIN_DISCOVERY_QUERY_RUN_COMMAND_TYPE,
+            "owner": LINKEDIN_DISCOVERY_QUERY_RUN_OWNER,
+            "status": "running",
+        }
+        activity_by_id = {activity["activity_run_id"]: activity}
+
+        projected_exact = orchestrator._workflow_activity_attempt_api_record(  # noqa: SLF001
+            attempt,
+            _activity_by_id=activity_by_id,
+            _command_by_id={exact_command["command_id"]: exact_command},
+        )
+        self.assertEqual(projected_exact["activity_type"], activity["activity_type"])
+        self.assertEqual(projected_exact["control_target"]["command_id"], exact_command["command_id"])
+
+        operation_mismatch_command = {
+            **exact_command,
+            "operation_id": "operation-other",
+        }
+        projected_mismatch = orchestrator._workflow_activity_attempt_api_record(  # noqa: SLF001
+            attempt,
+            _activity_by_id=activity_by_id,
+            _command_by_id={operation_mismatch_command["command_id"]: operation_mismatch_command},
+        )
+        self.assertEqual(projected_mismatch["activity_type"], activity["activity_type"])
+        self.assertEqual(projected_mismatch["owner"], activity["owner"])
+        self.assertNotIn("control_target", projected_mismatch)
+
     def test_activity_public_provenance_requires_exact_workspace_and_run_lineage(self) -> None:
         orchestrator = self._build_r020_orchestrator()
         runtime_repository = self.store.repos.workflow_runtime

@@ -275,8 +275,13 @@ serve、会话/事件层、planner loop），用一个垂直切片证明闭环�
   已 fixed-forward；final integration audit 又闭合 frontend nonempty-projected-empty sync、memoized DAG alias output
   放大、foreign workspace/run provenance 与 whitespace-wrapped outcome。focused evidence=`18 projection + 38
   claim-fence + 6 backend/3 subtests + 2 real-PG + 60 storage + 60 pre-Agent`、frontend build `82 modules`、mypy
-  `81/4`、Ruff/diff clean，dirty-tree non-author advisory=`0/0/0/0 CLEAN`。fresh highest-effort pinned review 仍
-  pending。该批零
+  `81/4`、Ruff/diff clean，dirty-tree non-author advisory=`0/0/0/0 CLEAN`。commit `4919990...` 的 exact-object
+  medium pinned backend/frontend advisories 分别为 `NO-GO 0/0/2/1` 与 `NO-GO 0/0/5/2`；real-PG exact-500、两项
+  independent lineage mismatch、raw-input bound wording，以及 frontend key/string/occurrence/body budgets、O(1)
+  memo、single serialized DTO、zero-getter capture、no phantom empty、literal status types、null/Proxy exact-empty
+  已 fixed-forward。current evidence=`119 + projection 19 + PG 6/500 subtests + 501 guard 1`、frontend `82 modules`、
+  Ruff/diff clean、mypy `81/4`；无 Content-Length 的 read-before-allocation cap 保留为 explicit streaming residual。
+  fresh pinned re-review 与 formal highest-effort review pending。该批零
   migration/claim/CAS/Stage A/B/dispatch/served，故 R-019、action-root gate、
   OB-10.1/10.2/10.3/10.4 和 served=0 均不变。
 - D3c2a dormant migration candidate 仅安装 `workflow_commands` 的精确 20 columns + 16 个 `NOT VALID` local
@@ -446,7 +451,9 @@ TD-4 初始路由表已按 owner 2026-07-13 裁决落档（D0 §4）。
    evidence 已通过 canonical outcome/budget manifest、action-specific matrix、once-captured wrapper traversal、bounded
    demo、真实 PG bounded batch、exact-empty sentinel 与 Activity capture-once fixed-forward；final integration audit
    进一步闭合 alias occurrence charging、frontend sync sentinel、foreign lineage 与 exact-string outcome。当前
-   targeted validation 已记录；fresh highest-effort pinned review 尚未完成。两批都不授权 runtime write。
+   targeted validation 已记录。commit `4919990...` 的 valid medium pinned backend/frontend advisories 分别为
+   `NO-GO 0/0/2/1` 与 `NO-GO 0/0/5/2`；其 findings 已按上文 fixed-forward，fresh pinned re-review 与 formal
+   highest-effort review 尚未完成。两批都不授权 runtime write。
    D3c2a 仅安装
    `workflow_commands` 的 20-column/16-`NOT VALID` dormant command subbatch，descriptor 与 runtime writers 未激活。
    D3c2b 接续安装 `plan_review_sessions` 11-column + `operation_runs` 5-column scoped-root dormant subbatch，

@@ -354,8 +354,14 @@
   projection `18`、claim-fence `38`、backend exact matrix `6 + 3 subtests`、real-PG `2`、storage guardrails `60`、
   pre-Agent `60`、frontend build `82 modules`、mypy `81/4`、Ruff/diff clean。final integration audit 还闭合
   frontend nonempty-projected-empty sync、DAG alias output amplification、foreign workspace/run provenance 与
-  whitespace-wrapped outcome，dirty-tree non-author advisory=`0/0/0/0 CLEAN`；fresh highest-effort pinned review 仍
-  pending。
+  whitespace-wrapped outcome，dirty-tree non-author advisory=`0/0/0/0 CLEAN`。commit `4919990...` 后取得两份
+  exact-object medium pinned advisory：backend=`NO-GO 0/0/2/1`、frontend=`NO-GO 0/0/5/2`。其唯一 findings 已
+  fixed-forward 为 real-PG exact-500 + acquisition/command-operation independent mismatch controls + raw-input bound
+  wording，以及 key/string/occurrence/body byte budgets、O(1) memo weight、non-enumerable demo raw、descriptor-first
+  zero-getter capture、phantom-empty omission、action-specific TypeScript return types、null/Proxy exact-empty
+  fail-closed。current evidence=`119` combined、projection `19`、real-PG `6 + 500 subtests`、501 guard `1`、frontend
+  `82 modules`、Ruff/diff clean、mypy `81/4`；无可靠 Content-Length 时 read-before-allocation streaming cap 仍为
+  explicit residual。fresh pinned re-review 与 formal highest-effort review 均 pending。
   因此在 valid scope-matched artifact 前既无 formal GO 也无 formal NO-GO，Live/W6/manual/promotion/
   signoff fail closed，但不冻结无关 non-live batch。该批零 storage/runtime write、migration、claim/CAS、Stage A/B、
   dispatch 或 served 激活；完整非闭合边界见

@@ -12,9 +12,13 @@ import {
   OPERATION_RUN_PROVENANCE_SUCCESS_STATUSES,
   WORKFLOW_COMMAND_CONTROL_APPLIED_OUTCOMES,
   WORKFLOW_PUBLIC_PROJECTION_LIMITS,
+  workflowPublicJsonStringByteLength,
+  workflowPublicTransportBodyIsOverLimit,
+  workflowPublicTransportContentLengthIsOverLimit,
+  workflowPublicUtf8ByteLength,
 } from "../../../contracts/frontend_api_runtime_contract";
 import type {
-  OperationActionDecisionAppliedOutcome,
+  OperationActionDecision,
   OperationRunProvenanceSuccessStatus,
 } from "../../../contracts/frontend_api_runtime_contract";
 import type {
@@ -802,42 +806,160 @@ function defineWorkflowPublicOwnField(
   });
 }
 
+function hasDemoWorkflowPublicSerializableFields(value: Record<string, unknown>): boolean {
+  return Object.values(value).some((item) => item !== undefined);
+}
+
 interface DemoWorkflowPublicProjectionTraversal {
   visitedNodes: number;
+  visitedBytes: number;
   readonly activeContainers: WeakSet<object>;
   readonly defaultClosedContainers: WeakSet<object>;
   readonly executionSummaryClosedContainers: WeakSet<object>;
-  readonly defaultMemo: WeakMap<object, unknown>;
-  readonly executionSummaryMemo: WeakMap<object, unknown>;
+  readonly defaultMemo: WeakMap<object, DemoWorkflowPublicProjectionMemoEntry>;
+  readonly executionSummaryMemo: WeakMap<object, DemoWorkflowPublicProjectionMemoEntry>;
+}
+
+interface DemoWorkflowPublicProjectionMemoEntry {
+  readonly value: unknown;
+  readonly nodes: number;
+  readonly bytes: number;
+  blocked: boolean;
+}
+
+interface DemoWorkflowPublicOwnDataEntries {
+  readonly entries: readonly [string, unknown][];
+  readonly ownKeyCount: number;
+  readonly hadRejectedDataProperty: boolean;
 }
 
 function createDemoWorkflowPublicProjectionTraversal(): DemoWorkflowPublicProjectionTraversal {
   return {
     visitedNodes: 0,
+    visitedBytes: 0,
     activeContainers: new WeakSet<object>(),
     defaultClosedContainers: new WeakSet<object>(),
     executionSummaryClosedContainers: new WeakSet<object>(),
-    defaultMemo: new WeakMap<object, unknown>(),
-    executionSummaryMemo: new WeakMap<object, unknown>(),
+    defaultMemo: new WeakMap<object, DemoWorkflowPublicProjectionMemoEntry>(),
+    executionSummaryMemo: new WeakMap<object, DemoWorkflowPublicProjectionMemoEntry>(),
   };
+}
+
+function consumeDemoWorkflowPublicProjectionCost(
+  traversal: DemoWorkflowPublicProjectionTraversal,
+  nodes: number,
+  bytes: number,
+): boolean {
+  if (
+    traversal.visitedNodes + nodes > WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxNodes ||
+    traversal.visitedBytes + bytes > WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxOccurrenceBytes
+  ) {
+    return false;
+  }
+  traversal.visitedNodes += nodes;
+  traversal.visitedBytes += bytes;
+  return true;
 }
 
 function consumeDemoWorkflowPublicProjectionNode(
   traversal: DemoWorkflowPublicProjectionTraversal,
+  bytes = 2,
 ): boolean {
-  if (traversal.visitedNodes >= WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxNodes) {
-    return false;
-  }
-  traversal.visitedNodes += 1;
-  return true;
+  return consumeDemoWorkflowPublicProjectionCost(traversal, 1, bytes);
 }
 
-function demoWorkflowPublicProjectionArrayLength(value: unknown[]): number | undefined {
+function consumeDemoWorkflowPublicProjectionKey(
+  traversal: DemoWorkflowPublicProjectionTraversal,
+  key: string,
+): boolean {
+  return consumeDemoWorkflowPublicProjectionCost(
+    traversal,
+    0,
+    workflowPublicJsonStringByteLength(key) + 2,
+  );
+}
+
+function demoWorkflowPublicPrimitiveByteLength(value: string | number | boolean | null): number {
+  if (typeof value === "string") {
+    return workflowPublicJsonStringByteLength(value) + 1;
+  }
+  return workflowPublicUtf8ByteLength(JSON.stringify(value)) + 1;
+}
+
+function captureDemoWorkflowPublicOwnDataEntries(
+  value: Record<string, unknown>,
+): DemoWorkflowPublicOwnDataEntries | undefined {
+  let ownKeys: readonly PropertyKey[];
   try {
-    return value.length;
+    ownKeys = Reflect.ownKeys(value);
   } catch {
     return undefined;
   }
+  if (ownKeys.length > WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxCollectionEntries) {
+    return undefined;
+  }
+  const entries: [string, unknown][] = [];
+  let hadRejectedDataProperty = false;
+  for (const key of ownKeys) {
+    if (typeof key !== "string") {
+      hadRejectedDataProperty = true;
+      continue;
+    }
+    if (workflowPublicUtf8ByteLength(key) > WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxKeyBytes) {
+      hadRejectedDataProperty = true;
+      continue;
+    }
+    if (
+      isPrivateWorkflowCommandPublicMirrorField(key) ||
+      isHazardousWorkflowPublicMirrorField(key)
+    ) {
+      continue;
+    }
+    let descriptor: PropertyDescriptor | undefined;
+    try {
+      descriptor = Object.getOwnPropertyDescriptor(value, key);
+    } catch {
+      return undefined;
+    }
+    if (!descriptor || !descriptor.enumerable || !("value" in descriptor)) {
+      hadRejectedDataProperty = true;
+      continue;
+    }
+    entries.push([key, descriptor.value]);
+  }
+  return { entries, ownKeyCount: ownKeys.length, hadRejectedDataProperty };
+}
+
+function captureDemoWorkflowPublicArrayItems(value: unknown[]): readonly unknown[] | undefined {
+  let lengthDescriptor: PropertyDescriptor | undefined;
+  try {
+    lengthDescriptor = Object.getOwnPropertyDescriptor(value, "length");
+  } catch {
+    return undefined;
+  }
+  if (
+    !lengthDescriptor ||
+    !("value" in lengthDescriptor) ||
+    !Number.isSafeInteger(lengthDescriptor.value) ||
+    lengthDescriptor.value < 0 ||
+    lengthDescriptor.value > WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxCollectionEntries
+  ) {
+    return undefined;
+  }
+  const items: unknown[] = [];
+  for (let index = 0; index < lengthDescriptor.value; index += 1) {
+    let descriptor: PropertyDescriptor | undefined;
+    try {
+      descriptor = Object.getOwnPropertyDescriptor(value, String(index));
+    } catch {
+      return undefined;
+    }
+    if (!descriptor || !descriptor.enumerable || !("value" in descriptor)) {
+      continue;
+    }
+    items.push(descriptor.value);
+  }
+  return items;
 }
 
 function markDemoWorkflowPublicProjectionClosed(
@@ -866,7 +988,7 @@ function isDemoWorkflowPublicProjectionClosed(
 function demoWorkflowPublicProjectionMemo(
   traversal: DemoWorkflowPublicProjectionTraversal,
   allowExecutionSummaryAtCurrentLevel: boolean,
-): WeakMap<object, unknown> {
+): WeakMap<object, DemoWorkflowPublicProjectionMemoEntry> {
   return allowExecutionSummaryAtCurrentLevel
     ? traversal.executionSummaryMemo
     : traversal.defaultMemo;
@@ -874,30 +996,15 @@ function demoWorkflowPublicProjectionMemo(
 
 function consumeDemoWorkflowPublicProjectionOccurrence(
   traversal: DemoWorkflowPublicProjectionTraversal,
-  value: unknown,
+  entry: DemoWorkflowPublicProjectionMemoEntry,
 ): boolean {
-  const remainingNodes = WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxNodes - traversal.visitedNodes;
-  const pending: unknown[] = [value];
-  let occurrenceNodes = 0;
-  while (pending.length > 0) {
-    const item = pending.pop();
-    if (item === undefined) {
-      continue;
-    }
-    occurrenceNodes += 1;
-    if (occurrenceNodes > remainingNodes) {
-      return false;
-    }
-    if (!item || typeof item !== "object") {
-      continue;
-    }
-    if (Array.isArray(item)) {
-      pending.push(...item);
-    } else {
-      pending.push(...Object.values(item));
-    }
+  if (entry.blocked) {
+    return false;
   }
-  traversal.visitedNodes += occurrenceNodes;
+  if (!consumeDemoWorkflowPublicProjectionCost(traversal, entry.nodes, entry.bytes)) {
+    entry.blocked = true;
+    return false;
+  }
   return true;
 }
 
@@ -937,19 +1044,14 @@ function captureDemoWorkflowPublicEnvelope(
   if (!isPlainWorkflowPublicObject(payload)) {
     throw new Error(`${label} must be a plain object`);
   }
-  let entries: [string, unknown][];
-  try {
-    entries = Object.entries(payload);
-  } catch {
-    throw new Error(`${label} could not be captured`);
-  }
-  if (entries.length > WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxCollectionEntries) {
+  const captured = captureDemoWorkflowPublicOwnDataEntries(payload);
+  if (!captured) {
     throw new Error(`${label} exceeds the public projection collection budget`);
   }
   const canonicalFieldSet = new Set(canonicalFields);
   const envelopeSource: Record<string, unknown> = {};
   const canonical: Record<string, unknown> = {};
-  for (const [key, value] of entries) {
+  for (const [key, value] of captured.entries) {
     defineWorkflowPublicOwnField(
       canonicalFieldSet.has(key) ? canonical : envelopeSource,
       key,
@@ -1006,34 +1108,31 @@ function projectDemoCapturedPlainWorkflowPublicObjectArray<T>(
   if (
     depth > WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxDepth ||
     traversal.activeContainers.has(value) ||
-    !consumeDemoWorkflowPublicProjectionNode(traversal)
+    !consumeDemoWorkflowPublicProjectionNode(traversal, 2)
   ) {
     return undefined;
   }
-  const arrayLength = demoWorkflowPublicProjectionArrayLength(value);
-  if (
-    arrayLength === undefined ||
-    arrayLength > WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxCollectionEntries
-  ) {
+  const items = captureDemoWorkflowPublicArrayItems(value);
+  if (!items) {
     return undefined;
   }
   const result: T[] = [];
   traversal.activeContainers.add(value);
   try {
-    for (let index = 0; index < arrayLength; index += 1) {
-      let item: unknown;
-      try {
-        item = value[index];
-      } catch {
-        continue;
-      }
+    for (const item of items) {
       const projected = projectDemoCapturedPlainWorkflowPublicObject(
         item,
         projector,
         traversal,
         depth + 1,
       );
-      if (projected !== undefined) {
+      if (
+        projected !== undefined &&
+        (!isPlainWorkflowPublicObject(projected) ||
+          (isPlainWorkflowPublicObject(projected.raw)
+            ? hasDemoWorkflowPublicSerializableFields(projected.raw)
+            : hasDemoWorkflowPublicSerializableFields(projected)))
+      ) {
         result.push(projected);
       }
     }
@@ -1068,34 +1167,26 @@ function projectWorkflowCommandPublicCarrier(
   if (
     depth > WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxDepth ||
     traversal.activeContainers.has(value) ||
-    !consumeDemoWorkflowPublicProjectionNode(traversal)
+    !consumeDemoWorkflowPublicProjectionNode(traversal, 2)
   ) {
     return { matched: true };
   }
-  const arrayLength = demoWorkflowPublicProjectionArrayLength(value);
-  if (
-    arrayLength === undefined ||
-    arrayLength > WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxCollectionEntries
-  ) {
+  const items = captureDemoWorkflowPublicArrayItems(value);
+  if (!items) {
     return { matched: true };
   }
   const projected: Record<string, unknown>[] = [];
   traversal.activeContainers.add(value);
   try {
-    for (let index = 0; index < arrayLength; index += 1) {
-      let item: unknown;
-      try {
-        item = value[index];
-      } catch {
-        continue;
-      }
+    for (const item of items) {
       if (!isPlainWorkflowPublicObject(item)) {
         continue;
       }
       try {
-        projected.push(
-          projectWorkflowCommandGenericCarrierRecord(item, traversal, depth + 1),
-        );
+        const record = projectWorkflowCommandGenericCarrierRecord(item, traversal, depth + 1);
+        if (hasDemoWorkflowPublicSerializableFields(record)) {
+          projected.push(record);
+        }
       } catch {
         continue;
       }
@@ -1194,27 +1285,18 @@ function projectWorkflowActivityPublicCarrier(
   if (
     depth > WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxDepth ||
     traversal.activeContainers.has(value) ||
-    !consumeDemoWorkflowPublicProjectionNode(traversal)
+    !consumeDemoWorkflowPublicProjectionNode(traversal, 2)
   ) {
     return { matched: true };
   }
-  const arrayLength = demoWorkflowPublicProjectionArrayLength(value);
-  if (
-    arrayLength === undefined ||
-    arrayLength > WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxCollectionEntries
-  ) {
+  const items = captureDemoWorkflowPublicArrayItems(value);
+  if (!items) {
     return { matched: true };
   }
   const projectedItems: Record<string, unknown>[] = [];
   traversal.activeContainers.add(value);
   try {
-    for (let index = 0; index < arrayLength; index += 1) {
-      let item: unknown;
-      try {
-        item = value[index];
-      } catch {
-        continue;
-      }
+    for (const item of items) {
       if (!isPlainWorkflowPublicObject(item)) {
         continue;
       }
@@ -1228,7 +1310,9 @@ function projectWorkflowActivityPublicCarrier(
         delete projected[field];
       }
       markDemoWorkflowPublicProjectionClosed(projected, traversal);
-      projectedItems.push(projected);
+      if (hasDemoWorkflowPublicSerializableFields(projected)) {
+        projectedItems.push(projected);
+      }
     }
   } finally {
     traversal.activeContainers.delete(value);
@@ -1249,13 +1333,32 @@ function sanitizeWorkflowCommandPublicMirrorValue(
   if (depth > WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxDepth) {
     return undefined;
   }
-  if (value === null || typeof value === "string" || typeof value === "boolean") {
-    return consumeDemoWorkflowPublicProjectionNode(traversal) ? value : undefined;
+  if (value === null) {
+    return consumeDemoWorkflowPublicProjectionNode(
+      traversal,
+      demoWorkflowPublicPrimitiveByteLength(null),
+    ) ? value : undefined;
+  }
+  if (typeof value === "string") {
+    if (workflowPublicUtf8ByteLength(value) > WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxStringBytes) {
+      return undefined;
+    }
+    return consumeDemoWorkflowPublicProjectionNode(
+      traversal,
+      demoWorkflowPublicPrimitiveByteLength(value),
+    ) ? value : undefined;
+  }
+  if (typeof value === "boolean") {
+    return consumeDemoWorkflowPublicProjectionNode(
+      traversal,
+      demoWorkflowPublicPrimitiveByteLength(value),
+    ) ? value : undefined;
   }
   if (typeof value === "number") {
-    return consumeDemoWorkflowPublicProjectionNode(traversal) && Number.isFinite(value)
-      ? value
-      : undefined;
+    return Number.isFinite(value) && consumeDemoWorkflowPublicProjectionNode(
+      traversal,
+      demoWorkflowPublicPrimitiveByteLength(value),
+    ) ? value : undefined;
   }
   if (!value || typeof value !== "object") {
     return undefined;
@@ -1277,41 +1380,38 @@ function sanitizeWorkflowCommandPublicMirrorValue(
     allowExecutionSummaryAtCurrentLevel,
   );
   if (memo.has(value)) {
-    const cached = memo.get(value);
-    return cached !== undefined && consumeDemoWorkflowPublicProjectionOccurrence(traversal, cached)
-      ? cached
+    const cached = memo.get(value)!;
+    return cached.value !== undefined && consumeDemoWorkflowPublicProjectionOccurrence(traversal, cached)
+      ? cached.value
       : undefined;
   }
-  if (!consumeDemoWorkflowPublicProjectionNode(traversal)) {
-    memo.set(value, undefined);
+  const memoStartNodes = traversal.visitedNodes;
+  const memoStartBytes = traversal.visitedBytes;
+  if (!consumeDemoWorkflowPublicProjectionNode(traversal, 2)) {
+    memo.set(value, { value: undefined, nodes: 0, bytes: 0, blocked: true });
     return undefined;
   }
   if (Array.isArray(value)) {
-    const arrayLength = demoWorkflowPublicProjectionArrayLength(value);
-    if (
-      arrayLength === undefined ||
-      arrayLength > WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxCollectionEntries
-    ) {
-      memo.set(value, undefined);
+    const items = captureDemoWorkflowPublicArrayItems(value);
+    if (!items) {
+      memo.set(value, { value: undefined, nodes: 0, bytes: 0, blocked: true });
       return undefined;
     }
     const result: unknown[] = [];
     traversal.activeContainers.add(value);
     try {
-      for (let index = 0; index < arrayLength; index += 1) {
-        let item: unknown;
-        try {
-          item = value[index];
-        } catch {
-          continue;
-        }
+      for (const item of items) {
         const sanitized = sanitizeWorkflowCommandPublicMirrorValue(
           item,
           false,
           traversal,
           depth + 1,
         );
-        if (sanitized !== undefined) {
+        if (
+          sanitized !== undefined &&
+          (!isPlainWorkflowPublicObject(sanitized) ||
+            hasDemoWorkflowPublicSerializableFields(sanitized))
+        ) {
           result.push(sanitized);
         }
       }
@@ -1319,35 +1419,34 @@ function sanitizeWorkflowCommandPublicMirrorValue(
       traversal.activeContainers.delete(value);
     }
     markDemoWorkflowPublicProjectionClosed(result, traversal);
-    memo.set(value, result);
+    memo.set(value, {
+      value: result,
+      nodes: traversal.visitedNodes - memoStartNodes,
+      bytes: traversal.visitedBytes - memoStartBytes,
+      blocked: false,
+    });
     return result;
   }
   let prototype: object | null;
   try {
     prototype = Object.getPrototypeOf(value);
   } catch {
-    memo.set(value, undefined);
+    memo.set(value, { value: undefined, nodes: 0, bytes: 0, blocked: true });
     return undefined;
   }
   if (prototype !== Object.prototype && prototype !== null) {
-    memo.set(value, undefined);
+    memo.set(value, { value: undefined, nodes: 0, bytes: 0, blocked: true });
     return undefined;
   }
-  let entries: [string, unknown][];
-  try {
-    entries = Object.entries(value as Record<string, unknown>);
-  } catch {
-    memo.set(value, undefined);
-    return undefined;
-  }
-  if (entries.length > WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxCollectionEntries) {
-    memo.set(value, undefined);
+  const captured = captureDemoWorkflowPublicOwnDataEntries(value as Record<string, unknown>);
+  if (!captured) {
+    memo.set(value, { value: undefined, nodes: 0, bytes: 0, blocked: true });
     return undefined;
   }
   const result: Record<string, unknown> = {};
   traversal.activeContainers.add(value);
   try {
-    for (const [key, item] of entries) {
+    for (const [key, item] of captured.entries) {
       const normalizedKey = normalizeWorkflowCommandPublicMirrorFieldName(key);
       if (
         isPrivateWorkflowCommandPublicMirrorField(key) ||
@@ -1355,6 +1454,9 @@ function sanitizeWorkflowCommandPublicMirrorValue(
         (normalizedKey === "execution_summary" && !allowExecutionSummaryAtCurrentLevel)
       ) {
         continue;
+      }
+      if (!consumeDemoWorkflowPublicProjectionKey(traversal, key)) {
+        break;
       }
       const commandCarrier = projectWorkflowCommandPublicCarrier(
         key,
@@ -1398,8 +1500,16 @@ function sanitizeWorkflowCommandPublicMirrorValue(
     traversal,
     allowExecutionSummaryAtCurrentLevel,
   );
-  memo.set(value, result);
-  return result;
+  const publicResult = captured.hadRejectedDataProperty && Object.keys(result).length === 0
+    ? undefined
+    : result;
+  memo.set(value, {
+    value: publicResult,
+    nodes: traversal.visitedNodes - memoStartNodes,
+    bytes: traversal.visitedBytes - memoStartBytes,
+    blocked: false,
+  });
+  return publicResult;
 }
 
 function projectWorkflowCommandPublicRecord(
@@ -2200,8 +2310,10 @@ export interface OperationActionRecord {
   raw: Record<string, unknown>;
 }
 
-export interface OperationActionDecisionResult {
-  status: OperationActionDecisionAppliedOutcome;
+export interface OperationActionDecisionResult<
+  TDecision extends OperationActionDecision = OperationActionDecision,
+> {
+  status: (typeof OPERATION_ACTION_DECISION_APPLIED_OUTCOMES)[TDecision][number];
   action: OperationActionRecord | null;
   operationRun: OperationRunRecord | null;
   raw: Record<string, unknown>;
@@ -2576,6 +2688,29 @@ function extractDownloadFilename(contentDisposition: string | null, fallback: st
   return fallback;
 }
 
+function demoWorkflowPublicResponseContentLength(response: Response): string | null {
+  try {
+    return response.headers?.get("Content-Length") ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function readDemoWorkflowPublicResponseText(response: Response): Promise<string> {
+  if (
+    workflowPublicTransportContentLengthIsOverLimit(
+      demoWorkflowPublicResponseContentLength(response),
+    )
+  ) {
+    throw new Error("API response exceeds the public transport body budget");
+  }
+  const responseText = await response.text();
+  if (workflowPublicTransportBodyIsOverLimit(responseText)) {
+    throw new Error("API response exceeds the public transport body budget");
+  }
+  return responseText;
+}
+
 async function fetchJson<T>(path: string, options?: RequestInit, timeoutMs = DEFAULT_API_TIMEOUT_MS): Promise<T> {
   const apiBaseUrl = getConfiguredApiBaseUrl();
   if (!apiBaseUrl) {
@@ -2597,7 +2732,7 @@ async function fetchJson<T>(path: string, options?: RequestInit, timeoutMs = DEF
         headers: requestHeaders,
         signal: controller.signal,
       });
-      const responseText = await response.text();
+      const responseText = await readDemoWorkflowPublicResponseText(response);
       const responseContentType = response.headers.get("Content-Type") || "";
       if (!response.ok) {
         if (
@@ -2832,8 +2967,21 @@ function deriveWorkflowCommandExecutionSummary(
   };
 }
 
+function attachDemoRaw<T extends object>(
+  value: T,
+  raw: Record<string, unknown>,
+): T & { raw: Record<string, unknown> } {
+  Object.defineProperty(value, "raw", {
+    value: raw,
+    enumerable: false,
+    configurable: false,
+    writable: false,
+  });
+  return value as T & { raw: Record<string, unknown> };
+}
+
 function deriveWorkflowCommandControlPolicy(record: Record<string, unknown>): WorkflowCommandControlPolicy {
-  return {
+  return attachDemoRaw({
     commandType: asString(record.command_type),
     owner: asString(record.owner),
     genericControlContract: asString(record.generic_control_contract),
@@ -2859,8 +3007,7 @@ function deriveWorkflowCommandControlPolicy(record: Record<string, unknown>): Wo
     runningCancelBlockedReason: asString(record.running_cancel_blocked_reason),
     runningResumeBlockedReason: asString(record.running_resume_blocked_reason),
     fallbackStatus: asString(record.fallback_status),
-    raw: record,
-  };
+  }, record);
 }
 
 export function deriveWorkflowCommandRecord(
@@ -2871,7 +3018,7 @@ export function deriveWorkflowCommandRecord(
   const publicRecord = projectWorkflowCommandPublicRecord(record, traversal, depth);
   const executionSummary = asObjectRecord(publicRecord.execution_summary);
   const controlPolicy = asObjectRecord(publicRecord.control_policy);
-  return {
+  return attachDemoRaw({
     commandId: asString(publicRecord.command_id),
     workflowRunId: asString(publicRecord.workflow_run_id),
     operationId: asString(publicRecord.operation_id),
@@ -2889,8 +3036,7 @@ export function deriveWorkflowCommandRecord(
     executionSummary: Object.keys(executionSummary).length
       ? deriveWorkflowCommandExecutionSummary(executionSummary, traversal, depth + 1)
       : undefined,
-    raw: publicRecord,
-  };
+  }, publicRecord);
 }
 
 function deriveWorkflowActivityControlTarget(
@@ -2903,7 +3049,7 @@ function deriveWorkflowActivityControlTarget(
     traversal,
     depth,
   );
-  return {
+  return attachDemoRaw({
     targetType: asString(publicRecord.target_type),
     commandId: asString(publicRecord.command_id),
     commandType: asString(publicRecord.command_type),
@@ -2914,8 +3060,7 @@ function deriveWorkflowActivityControlTarget(
     controlState: asObjectRecord(publicRecord.control_state),
     activitySpinePolicy: asObjectRecord(publicRecord.activity_spine_policy),
     fallbackStatus: asString(publicRecord.fallback_status),
-    raw: publicRecord,
-  };
+  }, publicRecord);
 }
 
 export function deriveWorkflowActivityRecord(
@@ -2925,7 +3070,7 @@ export function deriveWorkflowActivityRecord(
 ): WorkflowActivityRecord {
   const publicRecord = projectWorkflowActivityPublicRecord(record, traversal, depth);
   const controlTarget = asObjectRecord(publicRecord.control_target);
-  return {
+  return attachDemoRaw({
     activityRunId: asString(publicRecord.activity_run_id),
     workspaceId: asString(publicRecord.workspace_id),
     workflowRunId: asString(publicRecord.workflow_run_id),
@@ -2951,8 +3096,7 @@ export function deriveWorkflowActivityRecord(
     controlTarget: Object.keys(controlTarget).length
       ? deriveWorkflowActivityControlTarget(controlTarget, traversal, depth + 1)
       : undefined,
-    raw: publicRecord,
-  };
+  }, publicRecord);
 }
 
 export function deriveWorkflowActivityAttemptRecord(
@@ -2962,7 +3106,7 @@ export function deriveWorkflowActivityAttemptRecord(
 ): WorkflowActivityAttemptRecord {
   const publicRecord = projectWorkflowActivityAttemptPublicRecord(record, traversal, depth);
   const controlTarget = asObjectRecord(publicRecord.control_target);
-  return {
+  return attachDemoRaw({
     attemptId: asString(publicRecord.attempt_id),
     workspaceId: asString(publicRecord.workspace_id),
     activityRunId: asString(publicRecord.activity_run_id),
@@ -2992,8 +3136,7 @@ export function deriveWorkflowActivityAttemptRecord(
     controlTarget: Object.keys(controlTarget).length
       ? deriveWorkflowActivityControlTarget(controlTarget, traversal, depth + 1)
       : undefined,
-    raw: publicRecord,
-  };
+  }, publicRecord);
 }
 
 export function deriveWorkflowEntityDeltaRecord(
@@ -3003,7 +3146,7 @@ export function deriveWorkflowEntityDeltaRecord(
 ): WorkflowEntityDeltaRecord {
   const publicRecord = projectWorkflowEntityDeltaPublicRecord(record, traversal, depth);
   const controlTarget = asObjectRecord(publicRecord.control_target);
-  return {
+  return attachDemoRaw({
     deltaId: asString(publicRecord.delta_id),
     workspaceId: asString(publicRecord.workspace_id),
     workflowRunId: asString(publicRecord.workflow_run_id),
@@ -3032,8 +3175,7 @@ export function deriveWorkflowEntityDeltaRecord(
     controlTarget: Object.keys(controlTarget).length
       ? deriveWorkflowActivityControlTarget(controlTarget, traversal, depth + 1)
       : undefined,
-    raw: publicRecord,
-  };
+  }, publicRecord);
 }
 
 function deriveOperationRunStatusSummary(
@@ -3047,7 +3189,7 @@ function deriveOperationRunStatusSummary(
     depth,
   );
   const latestCommand = asObjectRecord(publicRecord.latest_workflow_command);
-  return {
+  return attachDemoRaw({
     source: asString(publicRecord.source),
     fallbackStatus: asString(publicRecord.fallback_status),
     fallbackUsed: asBoolean(publicRecord.fallback_used) === true,
@@ -3061,7 +3203,7 @@ function deriveOperationRunStatusSummary(
     latestWorkflowCommand: Object.keys(latestCommand).length
       ? deriveWorkflowCommandRecord(latestCommand, traversal, depth + 1)
       : undefined,
-  };
+  }, publicRecord);
 }
 
 function deriveOperationRunControlState(
@@ -3071,7 +3213,7 @@ function deriveOperationRunControlState(
 ): OperationRunControlState {
   const publicRecord = projectOperationRunControlStatePublicRecord(record, traversal, depth);
   const disabledReasons = asObjectRecord(publicRecord.disabled_reasons);
-  return {
+  return attachDemoRaw({
     operationStatus: asString(publicRecord.operation_status),
     actionStatus: asString(publicRecord.action_status),
     operationPhase: asString(publicRecord.operation_phase),
@@ -3088,8 +3230,7 @@ function deriveOperationRunControlState(
     fallbackStatus: asString(publicRecord.fallback_status),
     moduleStateMutatedOnControl:
       asBoolean(publicRecord.module_state_mutated_on_control) === true,
-    raw: publicRecord,
-  };
+  }, publicRecord);
 }
 
 export function deriveOperationRunRecord(
@@ -3100,7 +3241,7 @@ export function deriveOperationRunRecord(
   const publicRecord = projectOperationRunPublicRecord(record, traversal, depth);
   const statusSummary = asObjectRecord(publicRecord.status_summary);
   const controlState = asObjectRecord(publicRecord.control_state);
-  return {
+  return attachDemoRaw({
     operationRunId: asString(publicRecord.operation_run_id),
     actionId: asString(publicRecord.action_id),
     ownerModule: asString(publicRecord.owner_module),
@@ -3118,8 +3259,7 @@ export function deriveOperationRunRecord(
     statusSummary: Object.keys(statusSummary).length
       ? deriveOperationRunStatusSummary(statusSummary, traversal, depth + 1)
       : undefined,
-    raw: publicRecord,
-  };
+  }, publicRecord);
 }
 
 export function deriveOperationActionRecord(
@@ -3128,7 +3268,7 @@ export function deriveOperationActionRecord(
   depth = 0,
 ): OperationActionRecord {
   const publicRecord = projectOperationActionPublicRecord(record, traversal, depth);
-  return {
+  return attachDemoRaw({
     actionId: asString(publicRecord.action_id),
     actionType: asString(publicRecord.action_type),
     ownerModule: asString(publicRecord.owner_module),
@@ -3143,8 +3283,7 @@ export function deriveOperationActionRecord(
     requestSchemaDigest: asOptionalString(publicRecord.request_schema_digest),
     createdAt: asString(publicRecord.created_at),
     updatedAt: asString(publicRecord.updated_at),
-    raw: publicRecord,
-  };
+  }, publicRecord);
 }
 
 export function deriveOperationEventRecord(
@@ -3153,7 +3292,7 @@ export function deriveOperationEventRecord(
   depth = 0,
 ): OperationEventRecord {
   const publicRecord = projectOperationEventPublicRecord(record, traversal, depth);
-  return {
+  return attachDemoRaw({
     eventId: asString(publicRecord.event_id),
     eventType: asString(publicRecord.event_type),
     sequenceNumber: asNumber(publicRecord.sequence_number) ?? 0,
@@ -3161,8 +3300,7 @@ export function deriveOperationEventRecord(
     source: asString(publicRecord.source),
     payload: asObjectRecord(publicRecord.payload),
     recordedAt: asString(publicRecord.recorded_at),
-    raw: publicRecord,
-  };
+  }, publicRecord);
 }
 
 export async function listOperationRuns(options?: {
@@ -3223,11 +3361,11 @@ export async function listOperationActions(options?: {
   ) ?? []).filter((item) => item.actionId);
 }
 
-async function postOperationActionDecision(
+async function postOperationActionDecision<TDecision extends OperationActionDecision>(
   actionId: string,
-  decision: "approve" | "reject",
+  decision: TDecision,
   payload?: Record<string, unknown>,
-): Promise<OperationActionDecisionResult> {
+): Promise<OperationActionDecisionResult<TDecision>> {
   const response = await fetchJson<Record<string, unknown>>(
     `/api/operations/actions/${encodeURIComponent(actionId)}/${decision}`,
     {
@@ -3284,19 +3422,23 @@ async function postOperationActionDecision(
     delete publicResponse.operation_run;
   }
   publicResponse.events = events.map((event) => event.raw);
-  return {
+  return attachDemoRaw({
     status,
     action: derivedAction,
     operationRun: derivedOperationRun,
-    raw: publicResponse,
-  };
+  }, publicResponse);
 }
 
-export function approveOperationAction(actionId: string): Promise<OperationActionDecisionResult> {
+export function approveOperationAction(
+  actionId: string,
+): Promise<OperationActionDecisionResult<"approve">> {
   return postOperationActionDecision(actionId, "approve");
 }
 
-export function rejectOperationAction(actionId: string, reason = "rejected_from_operation_queue"): Promise<OperationActionDecisionResult> {
+export function rejectOperationAction(
+  actionId: string,
+  reason = "rejected_from_operation_queue",
+): Promise<OperationActionDecisionResult<"reject">> {
   return postOperationActionDecision(actionId, "reject", { reason });
 }
 
@@ -3367,7 +3509,7 @@ export async function getOperationRunProvenance(operationRunId: string): Promise
   publicPayload.operation_events = operationEvents.map((event) => event.raw);
   publicPayload.event_timeline = eventTimeline.map((event) => event.raw);
   publicPayload.workflow_commands = workflowCommands.map((command) => command.raw);
-  return {
+  return attachDemoRaw({
     status,
     action,
     operationRun,
@@ -3375,8 +3517,7 @@ export async function getOperationRunProvenance(operationRunId: string): Promise
     operationEvents,
     eventTimeline,
     workflowCommands,
-    raw: publicPayload,
-  };
+  }, publicPayload);
 }
 
 async function postOperationRunControl(operationRunId: string, action: "cancel" | "retry" | "resume" | "dispatch"): Promise<OperationRunRecord | null> {
