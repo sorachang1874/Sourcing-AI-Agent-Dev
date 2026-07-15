@@ -437,7 +437,8 @@
   `CHECK ... NOT VALID` 的提取器仍接受第 12 个 validating constraint；现已追加 every-`ADD CONSTRAINT`
   ordered-name/total exact assertion。`68c901a...` re-review 再报 medium `NO-GO 0/0/1/0`：quoted name 或 alternate
   whitespace 仍可绕过 name extractor；现已把所有 `ADD`/`CONSTRAINT` token 与 name/predicate extraction 独立计数
-  并 exact-compare，migration/runtime 不变，fresh re-review pending；formal highest-effort 仍 pending。
+  并 exact-compare。commit `e7db34e...` fresh pinned medium re-review=`GO 0/0/0/0`，五种第 12 constraint mutation
+  均 fail closed；migration/runtime 不变，formal highest-effort 仍 pending。
 - [ ] D3c2g remaining Migration-A evidence-surface decision/Scout：从 D3b §6/§11、Plan §6 与 OB-10.1-10.4
   机械推导 verification intent、durable dispatch exposure、response/failure receipts、late quarantine 的完整
   owner/DDL/key/type/check/CAS/retention inventory；dispatch-exposure owner/table 或任一 receipt/intent/quarantine

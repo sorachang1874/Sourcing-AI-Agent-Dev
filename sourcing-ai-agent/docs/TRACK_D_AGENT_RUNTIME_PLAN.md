@@ -328,8 +328,9 @@ serve、会话/事件层、planner loop），用一个垂直切片证明闭环�
   validating constraint；every-`ADD CONSTRAINT` ordered-name/total exact assertion 已继续 fixed-forward，
   `68c901a...` re-review 又以 medium `NO-GO 0/0/1/0` 证明 quoted name/alternate whitespace 可绕过 extractor；
   所有 `ADD`/`CONSTRAINT` token 现与 whitespace-tolerant name/full-predicate extraction 独立计数并 exact-compare，
-  migration/runtime 不变，fresh re-review pending。R-019/R-023/R-027/R-029、action-root、OB-10.1-10.4 与 served=0
-  不变。
+  commit `e7db34e...` fresh pinned medium re-review=`GO 0/0/0/0`，五种 mutation 均 fail closed；
+  migration/runtime 不变，formal highest-effort pending。R-019/R-023/R-027/R-029、action-root、OB-10.1-10.4 与
+  served=0 不变。
 
 ### D4 — 之后（本文只圈定，不展开）
 

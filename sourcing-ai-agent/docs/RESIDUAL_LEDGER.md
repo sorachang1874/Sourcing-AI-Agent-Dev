@@ -64,7 +64,9 @@
   fresh re-review pending. Commit `68c901a...` re-review returned medium advisory `NO-GO 0/0/1/0` because quoted-name
   or alternate-whitespace constraints still escaped the extractor; independent total counts for every `ADD` and
   `CONSTRAINT` token now precede whitespace-tolerant exact name and full-predicate comparisons, with migration/runtime
-  still unchanged and another fresh re-review pending. This does not change any residual status.
+  still unchanged. Commit `e7db34e...` fresh pinned medium re-review returned advisory `GO 0/0/0/0`, including five
+  twelfth-constraint mutation variants; formal highest-effort review remains pending. This does not change any residual
+  status.
 
 - **R-019 / D3c2e (2026-07-15):** decision-only batch ratifies the exact WorkflowEvent terminal-lineage core as
   **11 columns + 11 local `NOT VALID` checks**, reuses existing operation/command/attempt links, and forbids redundant

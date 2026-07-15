@@ -118,8 +118,10 @@ fresh pinned re-review is required. That `68c901a...` re-review returned another
 P0/P1/P2/P3=`0/0/1/0`: an extra constraint with a quoted name or alternate whitespace still escaped the single-space,
 unquoted-name extractor. The next fixed-forward counts every `ADD` and `CONSTRAINT` token independently of name and
 predicate extraction, then exact-compares the whitespace-tolerant unquoted name grammar and full predicate grammar;
-migration/runtime blobs remain unchanged and a fresh pinned re-review is required. These advisories are not formal
-highest-effort verdicts and authorize no live/signoff path.
+migration/runtime blobs remain unchanged. Commit `e7db34e1758589a6e6867971b973c2922ff539cc` received a fresh pinned
+medium-effort **ADVISORY GO** with P0/P1/P2/P3=`0/0/0/0`: unquoted, quoted, newline, alternate-space, and
+comment-separated twelfth-constraint mutations all fail closed, while the original migration still passes. This is
+not a formal highest-effort verdict and authorizes no live/signoff path.
 
 ## 7. Explicit non-closure and next bounded decision
 
