@@ -55580,10 +55580,17 @@ class SourcingOrchestrator:
             return rerun
         return {**recompile, "rerun": rerun}
 
-    def configure_confidence_policy(self, payload: dict[str, Any]) -> dict[str, Any]:
+    def configure_confidence_policy(
+        self,
+        payload: dict[str, Any],
+        *,
+        expected_requester_id: str = "",
+        expected_tenant_id: str = "",
+    ) -> dict[str, Any]:
         payload, preparation = self._prepare_criteria_write_payload(
             payload,
-            bind_referenced_job=False,
+            expected_requester_id=expected_requester_id,
+            expected_tenant_id=expected_tenant_id,
         )
         if preparation.get("status") != "ready":
             return preparation

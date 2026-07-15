@@ -61,11 +61,12 @@ def test_owned_job_rejects_conflicting_caller_provenance(
     assert result["reason"] == expected_reason
 
 
-def test_owned_job_emits_only_stored_request_and_derived_signatures() -> None:
+@pytest.mark.parametrize("job_reference_field", ["job_id", "baseline_job_id", "source_job_id"])
+def test_owned_job_emits_only_stored_request_and_derived_signatures(job_reference_field: str) -> None:
     stored_request = _cohort_request("research")
 
     prepared, result = prepare_criteria_write_payload(
-        {"job_id": "job-1", "metadata": {"note": "keep"}},
+        {job_reference_field: "job-1", "metadata": {"note": "keep"}},
         job_lookup=lambda _job_id: _job(stored_request),
         expected_requester_id="alice",
         expected_tenant_id="user-alice",

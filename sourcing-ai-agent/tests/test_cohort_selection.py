@@ -1633,7 +1633,7 @@ class CohortSelectionApiTest(unittest.TestCase):
                 self.received_payloads["criteria_feedback"] = dict(payload)
                 return {"status": "recorded"}
 
-            def configure_confidence_policy(self, payload):
+            def configure_confidence_policy(self, payload, **_owner):
                 self.calls["criteria_confidence"] += 1
                 self.received_payloads["criteria_confidence"] = dict(payload)
                 return {"status": "configured"}

@@ -6,6 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 import pytest
 
 from sourcing_agent.crm_writer import CRMWriter
+from sourcing_agent.orchestrator import SourcingOrchestrator
 from tests.pg_store_fixture import pg_backed_control_plane_store
 
 
@@ -157,6 +158,63 @@ def test_postgres_criteria_review_rechecks_source_swap_under_row_lock() -> None:
         assert result == {"status": "owner_miss"}
         assert store.repos.criteria_confidence.list_patterns(target_company="OpenAI") == []
         assert store.repos.criteria_confidence.get_suggestion(703)["status"] == "suggested"
+
+
+def test_postgres_confidence_policy_fences_source_job_before_policy_write() -> None:
+    with pg_backed_control_plane_store(schema_label="criteria_confidence_source_owner") as store:
+        request_payload = {
+            "target_company": "OpenAI",
+            "cohort_selection": {
+                "schema_version": "cohort_selection.v1",
+                "role_bucket_ids": ["research"],
+                "employment_statuses": ["current"],
+                "role_match": "any",
+                "source": "user_explicit",
+            },
+        }
+        for job_id, requester_id, tenant_id in (
+            ("job-owned", "alice", "user-alice"),
+            ("job-foreign", "bob", "user-bob"),
+        ):
+            store.save_job(
+                job_id=job_id,
+                job_type="workflow",
+                status="completed",
+                stage="completed",
+                request_payload=request_payload,
+                requester_id=requester_id,
+                tenant_id=tenant_id,
+            )
+        orchestrator = object.__new__(SourcingOrchestrator)
+        orchestrator.store = store
+
+        rejected = orchestrator.configure_confidence_policy(
+            {
+                "action": "override",
+                "target_company": "OpenAI",
+                "source_job_id": "job-foreign",
+            },
+            expected_requester_id="alice",
+            expected_tenant_id="user-alice",
+        )
+
+        assert rejected == {"status": "not_found", "reason": "job_not_found"}
+        assert store.repos.criteria_confidence.list_policy_controls(target_company="OpenAI") == []
+
+        accepted = orchestrator.configure_confidence_policy(
+            {
+                "action": "override",
+                "target_company": "OpenAI",
+                "source_job_id": "job-owned",
+            },
+            expected_requester_id="alice",
+            expected_tenant_id="user-alice",
+        )
+
+        assert accepted["status"] == "configured"
+        controls = store.repos.criteria_confidence.list_policy_controls(target_company="OpenAI")
+        assert len(controls) == 1
+        assert controls[0]["matching_request_family_signature"]
 
 
 def _crm_record_payload(record_id: str, *, workspace: str, owner: str) -> dict[str, str]:

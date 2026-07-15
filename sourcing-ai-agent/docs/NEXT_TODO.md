@@ -528,13 +528,16 @@
   selection、manifest 与 versioned role proof。全程 live Harvest submit hard-fail sentinel 未触发；exact test=`1 passed`。
 - [x] Cohort CS5a criteria-write provenance fixed-forward：`feedback`、`confidence-policy`、`recompile` 的
   `request|request_payload|metadata.request_payload` 统一由 external Cohort owner 验证并 exact canonical merge；caller
-  `inferred|legacy_adapter`、malformed mirror 或 alias conflict 在 HTTP/orchestrator 两层均零写 fail-closed。feedback/recompile
-  的所有显式 job refs 先 exact-owner preflight，再以 re-read stored job request/plan 作为唯一 request/signature owner；
+  `inferred|legacy_adapter`、malformed mirror 或 alias conflict 在 HTTP/orchestrator 两层均零写 fail-closed。feedback、
+  confidence-policy、recompile 的显式 `job_id|baseline_job_id|source_job_id` 全部先 exact-owner preflight，再以 re-read
+  stored job request/plan 作为唯一 request/signature owner；
   A-job+B-cohort、forged matching/signature、stored request/plan conflict 均在 feedback/compiler/result/derived-job 前拒绝。
   `rerun_retrieval` 只控制 rerun；no-ref 与 open-mode server-owned provenance 正向保持。该项修复首轮 advisory review
   的 criteria provenance/external-ingress findings。author evidence=`106 + 60 subtests`、adjacent=`50 + 66 subtests`、
   PG=`12`、Ruff/format/compile/diff green、global mypy=`81/4`；regression-matrix 唯一 inventory failure 已在 clean
-  `48c43e1` identical reproduce。fresh pinned non-author review pending，不得据此宣称 formal GO。
+  `48c43e1` identical reproduce。confidence-policy owner fixed-forward focused=`174 + 126 subtests`、PG owner adjacency=`13`；
+  reviewer-exclusive app-server 已在 `thread/start` 验证 `gpt-5.6-sol/ultra/priority`，随后因 `usageLimitExceeded` fail-closed，
+  故 fresh pinned formal review 仍 pending，不得据此宣称 formal GO。
 - [ ] Cohort CS6 live checkpoint：runtime 必须把 manifest/lane identity 与 durable submission state + provider run id
   绑定，闭合 ambiguous-submit、resume、exact replay、terminal reuse，避免进程重启重复付费；再补 live-boundary
   partial failure/zero result/retry 与 cost audit。CS3/CS5 fresh pinned review 仍 pending；有效 GO 前不做 paid canary。

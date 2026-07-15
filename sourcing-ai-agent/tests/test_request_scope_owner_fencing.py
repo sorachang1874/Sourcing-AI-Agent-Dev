@@ -734,6 +734,134 @@ def _explicit_cohort_request(role_bucket_id: str) -> dict[str, object]:
     ).to_record()
 
 
+@pytest.mark.parametrize("rerun_value", [pytest.param(None, id="missing"), pytest.param(False, id="false")])
+@pytest.mark.parametrize("job_state", ["foreign", "missing"])
+@pytest.mark.parametrize("job_field", ["job_id", "baseline_job_id", "source_job_id"])
+def test_confidence_policy_preflights_every_explicit_job_before_any_write(
+    rerun_value: bool | None,
+    job_state: str,
+    job_field: str,
+) -> None:
+    events: list[str] = []
+    criteria_repo = SimpleNamespace(
+        create_policy_control=lambda **_kwargs: events.append("write:policy"),
+        deactivate_policy_control=lambda **_kwargs: events.append("write:policy"),
+        create_version=lambda **_kwargs: events.append("write:version"),
+        record_compiler_run=lambda **_kwargs: events.append("write:compiler"),
+        record_result_diff=lambda **_kwargs: events.append("write:result"),
+    )
+    orchestrator = object.__new__(SourcingOrchestrator)
+    orchestrator.store = SimpleNamespace(
+        repos=SimpleNamespace(criteria_confidence=criteria_repo),
+        get_job=lambda job_id: (
+            events.append(f"read:job:{job_id}") or (_foreign_job() if job_state == "foreign" else None)
+        ),
+        save_job=lambda **_kwargs: events.append("write:derived-job"),
+    )
+    payload: dict[str, object] = {
+        "action": "override",
+        "target_company": "OpenAI",
+        job_field: f"job-{job_state}",
+    }
+    if rerun_value is not None:
+        payload["rerun_retrieval"] = rerun_value
+
+    result = orchestrator.configure_confidence_policy(
+        payload,
+        expected_requester_id="alice",
+        expected_tenant_id="user-alice",
+    )
+
+    assert result == {"status": "not_found", "reason": "job_not_found"}
+    assert events == [f"read:job:job-{job_state}"]
+    assert not [event for event in events if event.startswith("write:")]
+
+
+def test_confidence_policy_checks_distinct_references_without_fallback_masking() -> None:
+    events: list[str] = []
+    orchestrator = object.__new__(SourcingOrchestrator)
+    orchestrator.store = SimpleNamespace(
+        get_job=lambda job_id: (
+            events.append(f"read:job:{job_id}") or (_owned_job() if job_id == "job-owned" else _foreign_job())
+        ),
+        repos=SimpleNamespace(
+            criteria_confidence=SimpleNamespace(create_policy_control=lambda **_kwargs: events.append("write:policy"))
+        ),
+    )
+
+    result = orchestrator.configure_confidence_policy(
+        {
+            "action": "override",
+            "target_company": "OpenAI",
+            "job_id": "job-owned",
+            "baseline_job_id": "  job-owned  ",
+            "source_job_id": "job-foreign",
+        },
+        expected_requester_id="alice",
+        expected_tenant_id="user-alice",
+    )
+
+    assert result == {"status": "not_found", "reason": "job_not_found"}
+    assert events == ["read:job:job-owned", "read:job:job-foreign"]
+
+
+@pytest.mark.parametrize("case", ["same-owner", "no-ref", "open-mode"])
+def test_confidence_policy_preserves_owner_and_legacy_positive_paths(case: str) -> None:
+    stored_request = _explicit_cohort_request("research")
+    if case == "open-mode":
+        stored_request = JobRequest.from_payload(
+            {
+                **stored_request,
+                "cohort_selection": {
+                    **dict(stored_request["cohort_selection"]),
+                    "source": "inferred",
+                },
+            }
+        ).to_record()
+    reads: list[str] = []
+    captured: dict[str, object] = {}
+    orchestrator = object.__new__(SourcingOrchestrator)
+    orchestrator.store = SimpleNamespace(
+        get_job=lambda job_id: (
+            reads.append(job_id)
+            or _owned_job(
+                requester_id="" if case == "open-mode" else "alice",
+                tenant_id="" if case == "open-mode" else "user-alice",
+                request=stored_request,
+                plan={"target_company": "OpenAI"},
+            )
+        ),
+        repos=SimpleNamespace(
+            criteria_confidence=SimpleNamespace(
+                create_policy_control=lambda **kwargs: captured.update(kwargs) or {"control_id": 7}
+            )
+        ),
+    )
+    payload: dict[str, object] = {"action": "override", "target_company": "OpenAI"}
+    owner_kwargs: dict[str, str] = {
+        "expected_requester_id": "alice",
+        "expected_tenant_id": "user-alice",
+    }
+    if case == "same-owner":
+        payload["source_job_id"] = "job-owned"
+    elif case == "open-mode":
+        payload["job_id"] = "job-open"
+        owner_kwargs = {}
+
+    result = orchestrator.configure_confidence_policy(payload, **owner_kwargs)
+
+    assert result == {"status": "configured", "control": {"control_id": 7}}
+    if case == "no-ref":
+        assert reads == []
+        assert captured["request_payload"] == {}
+    else:
+        expected_job_id = "job-owned" if case == "same-owner" else "job-open"
+        assert reads == [expected_job_id, expected_job_id]
+        assert dict(captured["request_payload"])["cohort_selection"]["role_bucket_ids"] == ["research"]
+        expected_source = "inferred" if case == "open-mode" else "user_explicit"
+        assert dict(captured["request_payload"])["cohort_selection"]["source"] == expected_source
+
+
 @pytest.mark.parametrize("operation", ["feedback", "recompile"])
 @pytest.mark.parametrize("conflict_kind", ["request", "signature"])
 def test_owned_job_criteria_context_rejects_caller_provenance_before_any_write(

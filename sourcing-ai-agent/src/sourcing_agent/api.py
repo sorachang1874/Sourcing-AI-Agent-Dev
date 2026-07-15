@@ -377,6 +377,7 @@ AUTHENTICATED_REQUEST_SCOPE_REGISTRY: dict[tuple[str, str], str] = {
     ("POST", "/api/results/refine/compile-instruction"): "exact_job_read_via_post",
     ("POST", "/api/results/refine"): "exact_job_derived_create",
     ("POST", "/api/criteria/feedback"): "criteria_write_with_optional_exact_job_derived_create",
+    ("POST", "/api/criteria/confidence-policy"): "criteria_write_with_optional_exact_job_reference",
     ("POST", "/api/criteria/suggestions/review"): "criteria_write_with_optional_exact_job_derived_create",
     ("POST", "/api/criteria/recompile"): "criteria_write_with_optional_exact_job_derived_create",
     ("POST", "/api/target-candidates/import-from-job"): "exact_job_write",
@@ -2258,8 +2259,12 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
         invalid = _invalid_external_criteria_request(payload)
         if invalid is not None:
             return invalid
-        result = orchestrator.configure_confidence_policy(payload)
-        status = HTTPStatus.OK if result.get("status") != "invalid" else HTTPStatus.BAD_REQUEST
+        result = orchestrator.configure_confidence_policy(payload, **_expected_job_owner_kwargs(request))
+        status = HTTPStatus.OK
+        if result.get("status") == "not_found":
+            status = HTTPStatus.NOT_FOUND
+        elif result.get("status") == "invalid":
+            status = HTTPStatus.BAD_REQUEST
         return _json_response(status, result)
 
     add(["POST"], "/api/criteria/confidence-policy", post_criteria_confidence_policy, read_body=True)

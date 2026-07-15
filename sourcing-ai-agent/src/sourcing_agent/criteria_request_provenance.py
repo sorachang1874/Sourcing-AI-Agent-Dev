@@ -13,6 +13,8 @@ from .domain import JobRequest
 from .request_matching import request_signature_context
 from .request_ownership import exact_job_owner_matches
 
+_CRITERIA_JOB_REFERENCE_FIELDS = ("job_id", "baseline_job_id", "source_job_id")
+
 
 def prepare_criteria_write_payload(
     payload: dict[str, Any],
@@ -53,10 +55,9 @@ def prepare_criteria_write_payload(
     except CohortSelectionValidationError as exc:
         return {}, exc.to_result()
 
-    source_job_id = ""
     source_job: dict[str, Any] | None = None
     if bind_referenced_job:
-        source_job_id = str(prepared.get("job_id") or "").strip() or str(prepared.get("baseline_job_id") or "").strip()
+        source_job_id = next(iter(_distinct_referenced_job_ids(prepared)), "")
         if source_job_id:
             source_job = job_lookup(source_job_id)
             if not exact_job_owner_matches(
@@ -144,7 +145,8 @@ def prepare_criteria_write_payload(
 
 def _distinct_referenced_job_ids(payload: dict[str, Any]) -> tuple[str, ...]:
     job_ids: list[str] = []
-    for raw_job_id in (payload.get("job_id"), payload.get("baseline_job_id")):
+    for field in _CRITERIA_JOB_REFERENCE_FIELDS:
+        raw_job_id = payload.get(field)
         job_id = str(raw_job_id or "").strip()
         if job_id and job_id not in job_ids:
             job_ids.append(job_id)
