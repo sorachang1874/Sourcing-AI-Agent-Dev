@@ -14,7 +14,7 @@ from x_first.native_x_evidence_contract import SUPPORT_DIMENSIONS, TEMPORAL_STAT
 from x_first.recall_pool_schema import MiniDraft202012Error, assert_schema_valid
 
 KPI_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.kpi_summary.v1"
-RESULT_SCHEMA_FILE = "x.grok.adaptive_recall_wave.result.v2.schema.json"
+RESULT_SCHEMA_FILE = runner.RESULT_SCHEMA_FILE
 SUPPORTED_RECEIPT_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.operator_receipt.v3"
 
 EVIDENCE_KINDS = ("bio", "mention", "post", "thread")

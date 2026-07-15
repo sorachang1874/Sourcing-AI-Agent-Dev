@@ -464,6 +464,10 @@
           ],
           "minimum": 0
         },
+        "cache_read_input_tokens": {
+          "type": "integer",
+          "minimum": 0
+        },
         "output_tokens": {
           "type": [
             "integer",

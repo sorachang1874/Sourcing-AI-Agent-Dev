@@ -347,6 +347,60 @@ the candidate, evidence, and provider-call business level; the external deadline
 operator-owned. The next accepted comparison requires a schema-valid, ledger-reconciled receipt and reports discovery
 calls separately from person-scoped hydration calls.
 
+### Discovery-first live diagnostic and v3 correction
+
+The first wave2-v2 execution finished the provider process normally but sealed `result_contract_invalid`, so it is
+still diagnostic rather than an accepted KPI run. The exact operator facts were:
+
+| Measure | Diagnostic value |
+| --- | ---: |
+| Provider process | exit 0; no timeout, kill, fallback, or technical-limit breach |
+| Elapsed | 201.797 seconds |
+| Session events / model turns | 216 / 3 |
+| Completed native-X calls | 100 |
+| Tool mix | keyword 56 / user 39 / semantic 5 / thread 0 |
+| Tokens | 275,994 input / 18,017 output / 3,497,467 total including cache reads |
+| Legacy estimate / corrected conservative estimate | $0.660090 / $7.067002 |
+| Model-retained candidates | 34 |
+| Model-reported observations / evidence rows | 412 / 71 |
+
+The retained transcript now replays the 100 native-X calls after recognizing two exact paired internal
+`grok_build/update_goal` progress events. The terminal assistant message is a separate strict JSON document with 34
+candidate rows, but Grok 0.2.101 concatenated an earlier zero-candidate progress document and the terminal document in
+outer `text`. More importantly, the result-v2 evidence `oneOf` caused the provider structured-output adapter to retain
+only branch-local `kind/thread_relation` fields in all 71 evidence rows. The runner correctly rejected the result;
+none of the 34 rows is promoted as evidence-complete candidate truth.
+
+The legacy estimate counted only uncached input plus output. Grok's outer total also contained 3,203,456 cache-read
+tokens. The corrected operator contract records that delta explicitly and, because this request has no separate cache
+price, conservatively charges it at the full configured input rate; the diagnostic estimate is therefore $7.067002,
+still below the $50 emergency ceiling.
+
+The invalid payload nevertheless supplies bounded method diagnostics. Candidate yield was `34/100 = 0.340`, versus
+wave1's rejected `18/94 = 0.191`, an approximately 78% directional increase. Retrieval diversification improved to
+eight `Top` keyword calls, 48 `Latest` calls, three historical shards, and the first handle-scoped keyword call at
+ordinal 20. The remaining topology gap is material: there was only one positive Reply query, zero thread fetches,
+21 mechanically classified authored-Post searches, and zero handle-scoped authored-Reply searches. The model-level
+state matrix was 3 current/current, 6 current/ambiguous, 15 current/unsupported, 7 historical/ambiguous, 1
+historical/historical, and 2 historical/unsupported; those counts are diagnostic because their evidence objects were
+schema-damaged.
+
+The corrective v3 slice therefore does four bounded things:
+
+1. result schema v3 removes the provider-incompatible evidence `oneOf` while runtime validation retains the complete
+   Bio/Post/Reply cross-field rules; result v2 remains replay-only;
+2. the outer parser accepts the exact extended 0.2.101 usage/model-diagnostic envelope and selects only the contiguous
+   terminal assistant message after the final tool;
+3. the session parser accepts only exact paired `UpdateGoal` progress events and excludes them from native-X counts;
+4. extended cache reads are reconciled into total-token and conservative cost ceilings instead of being silently
+   omitted from receipt validation;
+5. the wave2-v3 prompt makes both handle-scoped authored-Post and authored-Reply queries mandatory before an unresolved
+   pretraining lead is finalized, unless the external deadline is truthfully recorded.
+
+The v3 prompt SHA-256 is `7f2ef099019f20a74f62e2ad6e0e1893518ec813afcdf2350771b8d7ace38888`.
+No retry is authorized by this diagnostic alone; a fresh request, one-shot grant, and pinned non-author review remain
+required.
+
 ### Native-result attribution limit
 
 Grok CLI 0.2.101 stores native-X tool names and input arguments but not the returned X result bodies in its local

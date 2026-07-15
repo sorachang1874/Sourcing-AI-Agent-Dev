@@ -179,7 +179,7 @@ The relevant policy is:
 
 ```text
 --output-format json
---json-schema <exact result-v2 schema>
+--json-schema <exact result-v3 schema>
 --disable-web-search
 --disallowed-tools run_terminal_cmd,grep,read_file,search_replace,list_dir,web_search,web_fetch,todo_write,task,Agent
 --no-subagents
@@ -197,16 +197,33 @@ file tool. Grok CLI does **not** map the hosted `x_keyword_search`, `x_semantic_
 when those names were passed and immediately exposed `x_user_search` when the flag was removed. The command therefore
 does not pass `--tools`. `--disable-web-search` plus the local-tool denylist constrain the launch surface, and the
 retained session proof accepts only the four registered native-X tool names and their closed argument profiles before
-the result can complete. The registry digest explicitly binds both `cli_native_x_allowlist_enforced=false` and
+the result can complete. Grok 0.2.101 may additionally emit a paired internal `UpdateGoal` progress event. The parser
+accepts only its exact versioned `grok_build/update_goal` metadata and start/completion shapes, excludes it from every
+native-X count, and still rejects every other non-X tool event. The registry digest explicitly binds both
+`cli_native_x_allowlist_enforced=false` and
 `native_x_session_proof_required=true` so replay cannot silently restore the broken flag or weaken evidence checks.
 
 Grok 0.2.101 is invoked with `--output-format json --json-schema <exact schema>`. Stdout must be one strict headless
-envelope matching `contracts/x.grok.adaptive_recall_wave.headless_envelope.v1.schema.json`; its `text` is then parsed
-as the result-v2 object. The outer `sessionId`, `EndTurn`, turns, and usage are the terminal authority and must bind the
-command session. Session updates own native-X starts, completions, names, arguments, and query-surface attempts. They
-may contain a closed pre-user `_x.ai/session/update` `retry_state`, progress `agent_message_chunk` events interleaved
-with later tool calls, and no `turn_completed`; the final assistant suffix must exactly equal outer `text`. If a
-legacy `turn_completed` exists, its terminal/usage must agree with the outer envelope.
+envelope matching `contracts/x.grok.adaptive_recall_wave.headless_envelope.v1.schema.json`. The outer `sessionId`,
+`EndTurn`, turns, and usage are the terminal authority and must bind the command session. Session updates own native-X
+starts, completions, names, arguments, and query-surface attempts. They may contain a closed pre-user
+`_x.ai/session/update` `retry_state`, progress `agent_message_chunk` events interleaved with later tool calls, and no
+`turn_completed`; an exact assistant-message suffix must equal outer `text`. If outer `text` is one strict result-v3
+document, that is the model result. Grok may instead concatenate a structured progress message and the structured
+terminal message. In that exact case the runner does not scan for a convenient JSON object: it clears terminal-message
+state whenever a later native-X tool starts, selects only the contiguous assistant message after the final completed
+tool, requires that message to be one strict result-v3 document, and binds the entire transcript by hash. If a legacy
+`turn_completed` exists, its terminal/usage must agree with the outer envelope. Already-sealed rejected receipts replay
+under their original parser behavior until their 24-hour retention purge; this compatibility path cannot authorize a
+new run or convert a rejected receipt into `completed`.
+
+The result schema keeps every evidence field in one closed object and intentionally does not use a nested `oneOf` for
+the Bio-versus-Post `kind/thread_relation` dependency. A real Grok 0.2.101 structured-output run projected only the
+branch-local fields and dropped the shared evidence properties when that redundant `oneOf` was present. The runtime
+validator remains authoritative for the same dependency: Bio requires `thread_relation=null` and profile binding;
+Post/mention/thread evidence requires one of the five non-null thread relations plus author, post, URL, timestamp,
+subject, excerpt, and typed support binding. Removing the provider-incompatible schema branch does not weaken that
+semantic validation.
 
 Retained pre-headless bundles remain replayable under an explicit replay-only legacy plain command-policy digest and
 their original self-reconciliation semantics. New grant issuance and execution accept only the structured command
@@ -265,12 +282,12 @@ execution-scope field invalidates the grant. The durable grant, consumption and 
 
 ## Result and prior-wave semantics
 
-`contracts/x.grok.adaptive_recall_wave.result.v2.schema.json` keeps target-lab affiliation and pretraining experience
+`contracts/x.grok.adaptive_recall_wave.result.v3.schema.json` keeps target-lab affiliation and pretraining experience
 as two independent temporal dimensions: `current`, `historical`, `ambiguous`, or `unsupported`. Current lab plus
 historical pretraining, historical lab plus historical pretraining, and other combinations remain representable;
 downstream precision views may select a subset without deleting the broader recall pool.
 
-Each v2 support is a typed `{dimension, asserted_value}` proposal. A current/historical candidate state requires an
+Each v3 support is a typed `{dimension, asserted_value}` proposal. A current/historical candidate state requires an
 evidence claim with the same dimension and temporal value; a dimension-only label is accepted only while reading a
 retained v1 prior wave and is never assigned an invented value. Every evidence row carries a
 `subject_handle` equal to the candidate. For posts, mentions, and threads, the URL author and status ID must equal
@@ -294,10 +311,22 @@ proof validates, the operator writes `sanitized.json` with `counts.candidates_re
 session calls. The reported provenance fields remain diagnostic so KPI analysis can expose, rather than erase, model
 versus-ledger discrepancies.
 
+Result schema v2 remains byte-for-byte available only for replay of previously sealed bundles. New command policies,
+compiled prompts, grants, and executions bind v3. Bundle replay selects v2 only when the recorded schema digest and
+replay-only structured-v2 command-policy digest agree; either digest alone is insufficient, and v2 cannot authorize a
+new grant.
+
 A live `completed` state additionally requires the headless envelope and raw Grok session transcript to prove the
 effective model, one closed set of native-X tool starts/completions, exact parsed arguments, a unique prompt chain,
 outer terminal `end_turn`, model turns, token usage, and estimated cost. Post bodies remain model-mediated
 (`provider_post_bodies_replayable=false`); transcript proof authenticates execution facts, not every quoted X payload.
+
+Grok 0.2.101 extended usage owns three independent counters: uncached `input_tokens`, `output_tokens`, and
+`cache_read_input_tokens`; outer `total_tokens` must equal their exact sum. The receipt keeps
+`cache_read_input_tokens` as an optional additive v3 field so retained pre-extension receipts remain replayable. Its
+absence is valid only when `total_tokens=input_tokens+output_tokens`; a positive cache delta must be explicit. The
+request currently has no distinct cache-price field, so the emergency estimate conservatively charges cache reads at
+the full configured input-token rate. Both the token ceiling and bundle replay use the provider-inclusive total.
 
 `contracts/x.grok.adaptive_recall_wave.operator_receipt.v3.schema.json` additionally records unique mechanically
 classified keyword-query attempts in `session_proof.candidate_surface_attempts`. Reconciliation projects those exact
@@ -306,6 +335,13 @@ reply query, a query containing more than one `from:` handle, or any non-keyword
 coverage. Bundle replay reparses the retained transcript and recomputes both structures, so editing both receipt
 copies consistently still fails. This proves that a scoped search was attempted; it does not prove exhaustive X
 results or turn model excerpts into source-bound evidence.
+
+For result status ownership, the model may propose `X_SEARCH_OK`, `X_SEARCH_PARTIAL`, or `X_SEARCH_BLOCKED`; the
+operator owns a single monotonic downgrade. If any retained candidate has `pretraining_experience_state` ambiguous or
+unsupported and lacks either mechanically classified per-handle authored-Post or authored-Reply attempt, an OK result
+is projected to PARTIAL and a counted coverage limitation is appended. The operator never upgrades status, removes a
+candidate, or treats a broad Reply query as per-handle coverage. Raw stdout retains the model proposal, while
+`sanitized.json`, the receipt coverage matrix, and bundle replay expose the operator-owned final state.
 
 ## Recall-campaign bridge is fail-closed
 

@@ -50,7 +50,9 @@ from x_first.native_x_evidence_contract import (
 )
 
 REQUEST_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.request.v2"
-RESULT_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.result.v2"
+RESULT_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.result.v3"
+RESULT_SCHEMA_FILE = "x.grok.adaptive_recall_wave.result.v3.schema.json"
+LEGACY_RESULT_SCHEMA_FILE = "x.grok.adaptive_recall_wave.result.v2.schema.json"
 INTENT_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.intent.v2"
 RECEIPT_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.operator_receipt.v3"
 GRANT_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.live_grant.v2"
@@ -102,6 +104,18 @@ NATIVE_X_TOOLS = (
     "x_semantic_search",
     "x_user_search",
     "x_thread_fetch",
+)
+_AUXILIARY_GOAL_TOOL_METADATA = {
+    "version": 1,
+    "name": "update_goal",
+    "kind": "goal_update",
+    "namespace": "grok_build",
+    "label": "Update Goal",
+    "read_only": False,
+}
+_SURFACE_COVERAGE_DOWNGRADE_REASON = (
+    "Operator downgraded the result to partial because required per-handle authored Post/Reply coverage "
+    "is incomplete for unresolved pretraining leads."
 )
 AUTHORITY = {
     "canonical_identity_write_authorized": False,
@@ -189,8 +203,16 @@ _RESULT_KEYS = {
 _PROVENANCE_KEYS = {"tools_reported", "tool_calls_reported", "queries", "generic_web_used"}
 _COUNT_KEYS = {"observations_inspected_reported", "candidates_retained"}
 _HEADLESS_ENVELOPE_KEYS = {"text", "stopReason", "sessionId", "requestId", "num_turns", "usage"}
-_HEADLESS_OPTIONAL_KEYS = {"total_cost_usd"}
+_HEADLESS_OPTIONAL_KEYS = {
+    "modelUsage",
+    "structuredOutput",
+    "structuredOutputError",
+    "thought",
+    "total_cost_usd",
+}
 _HEADLESS_USAGE_KEYS = {"input_tokens", "output_tokens", "total_tokens"}
+_HEADLESS_EXTENDED_USAGE_KEYS = _HEADLESS_USAGE_KEYS | {"cache_read_input_tokens", "reasoning_tokens"}
+_HEADLESS_MODEL_USAGE_KEYS = {"cacheReadInputTokens", "inputTokens", "modelCalls", "outputTokens"}
 _CANDIDATE_KEYS = {
     "handle",
     "profile_url",
@@ -346,6 +368,7 @@ _SESSION_PROOF_KEYS = {
     "model_turns",
     "estimated_cost_usd_micros",
 }
+_SESSION_PROOF_OPTIONAL_KEYS = {"cache_read_input_tokens"}
 _RETENTION_RECEIPT_KEYS = {
     "policy_id",
     "ttl_seconds",
@@ -522,6 +545,15 @@ class SessionProof:
     total_tokens: int
     model_turns: int
     estimated_cost_usd_micros: int
+    # Grok 0.2.101 reports cache reads outside input_tokens but includes them
+    # in total_tokens.  Older retained receipts omit this wire-compatible
+    # optional field; an absent value is valid only when the derived delta is
+    # exactly zero.
+    cache_read_input_tokens: int = 0
+    # Private in-memory material used only to select the terminal structured
+    # result.  The durable session-updates hash binds these bytes; receipt
+    # projection intentionally never exposes the provider text.
+    terminal_assistant_text: str = ""
 
 
 @dataclass(frozen=True)
@@ -534,6 +566,7 @@ class HeadlessEnvelope:
     terminal_stop_reason: str
     input_tokens: int
     output_tokens: int
+    cache_read_input_tokens: int
     total_tokens: int
     model_turns: int
 
@@ -1317,6 +1350,33 @@ def _operator_project_model_result(
         "tool_calls_completed": completed_tool_calls,
         "tool_counts": tool_counts,
     }
+    if not fixture and session_proof is not None:
+        attempted_surfaces = {
+            (attempt["handle_key"], attempt["surface"])
+            for attempt in session_proof.candidate_surface_attempts
+        }
+        unresolved_gap_count = sum(
+            1
+            for candidate in candidates
+            if isinstance(candidate, dict)
+            and candidate.get("pretraining_experience_state") in {"ambiguous", "unsupported"}
+            and isinstance(candidate.get("handle"), str)
+            and any(
+                (candidate["handle"].casefold(), surface) not in attempted_surfaces
+                for surface in ("authored_post", "authored_reply")
+            )
+        )
+        if unresolved_gap_count and projected.get("status") in {"X_SEARCH_OK", "X_SEARCH_PARTIAL"}:
+            if projected["status"] == "X_SEARCH_OK":
+                projected["status"] = "X_SEARCH_PARTIAL"
+                projected["status_reason"] = _SURFACE_COVERAGE_DOWNGRADE_REASON
+            limitations = projected.get("limitations")
+            limitation = (
+                f"{_SURFACE_COVERAGE_DOWNGRADE_REASON} "
+                f"Unresolved candidate count with a missing surface: {unresolved_gap_count}."
+            )
+            if isinstance(limitations, list) and limitation not in limitations:
+                limitations.append(limitation)
     return projected
 
 
@@ -1551,8 +1611,9 @@ def compile_prompt(
     )
 
 
-def result_schema_sha256() -> str:
-    path = Path(__file__).resolve().parents[2] / "contracts/x.grok.adaptive_recall_wave.result.v2.schema.json"
+def result_schema_sha256(*, legacy_v2: bool = False) -> str:
+    filename = LEGACY_RESULT_SCHEMA_FILE if legacy_v2 else RESULT_SCHEMA_FILE
+    path = Path(__file__).resolve().parents[2] / "contracts" / filename
     return bytes_sha256(_read_regular_owned_bounded(path, maximum_bytes=MAX_CONTRACT_SCHEMA_BYTES))
 
 
@@ -1685,7 +1746,12 @@ def _approved_effective_prompt_binding(request: Mapping[str, Any]) -> EffectiveP
     )
 
 
-def _command_policy(request: Mapping[str, Any], *, legacy_plain: bool = False) -> list[str]:
+def _command_policy(
+    request: Mapping[str, Any],
+    *,
+    legacy_plain: bool = False,
+    legacy_result_v2: bool = False,
+) -> list[str]:
     """Build the approved argv template through the one canonical argv builder."""
 
     builder = _build_legacy_plain_grok_command if legacy_plain else build_grok_command
@@ -1696,7 +1762,7 @@ def _command_policy(request: Mapping[str, Any], *, legacy_plain: bool = False) -
         prompt_file=Path("<compiled-prompt:sha256-bound>"),
         leader_socket=Path("<isolated-leader-socket>"),
         session_id="<operator-session-id>",
-        result_schema={"$operator_bound_schema_sha256": result_schema_sha256()},
+        result_schema={"$operator_bound_schema_sha256": result_schema_sha256(legacy_v2=legacy_result_v2)},
     )
 
 
@@ -1710,11 +1776,18 @@ def _legacy_command_policy_sha256(request: Mapping[str, Any]) -> str:
     return canonical_sha256(_command_policy(request, legacy_plain=True))
 
 
+def _legacy_structured_result_command_policy_sha256(request: Mapping[str, Any]) -> str:
+    """Replay-only digest for retained structured-result-v2 bundles."""
+
+    return canonical_sha256(_command_policy(request, legacy_result_v2=True))
+
+
 def _redacted_policy_from_bindings(
     input_binding: Mapping[str, Any],
     command_binding: Mapping[str, Any],
     *,
     legacy_plain: bool = False,
+    legacy_result_v2: bool = False,
 ) -> list[str]:
     del input_binding
     synthetic_request = {
@@ -1724,7 +1797,11 @@ def _redacted_policy_from_bindings(
         },
         "emergency": {"max_turns": command_binding["max_turns"]},
     }
-    return _command_policy(synthetic_request, legacy_plain=legacy_plain)
+    return _command_policy(
+        synthetic_request,
+        legacy_plain=legacy_plain,
+        legacy_result_v2=legacy_result_v2,
+    )
 
 
 def _redacted_environment_policy() -> dict[str, str]:
@@ -2685,8 +2762,9 @@ def _copy_private_auth(source: Path, ephemeral_home: Path) -> Path:
     return destination
 
 
-def _load_result_schema() -> dict[str, Any]:
-    path = Path(__file__).resolve().parents[2] / "contracts/x.grok.adaptive_recall_wave.result.v2.schema.json"
+def _load_result_schema(*, legacy_v2: bool = False) -> dict[str, Any]:
+    filename = LEGACY_RESULT_SCHEMA_FILE if legacy_v2 else RESULT_SCHEMA_FILE
+    path = Path(__file__).resolve().parents[2] / "contracts" / filename
     try:
         schema = strict_json_loads(_read_regular_owned_bounded(path, maximum_bytes=MAX_CONTRACT_SCHEMA_BYTES))
     except (OSError, UnicodeError, ValueError) as exc:
@@ -2721,6 +2799,7 @@ def _parse_headless_envelope(
     payload: Any,
     *,
     expected_session_id: str,
+    expected_model_id: str,
     max_turns: int,
     max_inner_bytes: int,
 ) -> HeadlessEnvelope:
@@ -2735,6 +2814,15 @@ def _parse_headless_envelope(
     usage = payload.get("usage")
     model_turns = payload.get("num_turns")
     cost = payload.get("total_cost_usd")
+    usage_keys = set(usage) if isinstance(usage, dict) else set()
+    extended_usage = usage_keys == _HEADLESS_EXTENDED_USAGE_KEYS
+    cache_read_tokens = usage.get("cache_read_input_tokens", 0) if isinstance(usage, dict) else None
+    reasoning_tokens = usage.get("reasoning_tokens", 0) if isinstance(usage, dict) else None
+    model_usage = payload.get("modelUsage")
+    model_usage_row = model_usage.get(expected_model_id) if isinstance(model_usage, dict) else None
+    thought = payload.get("thought")
+    structured_output = payload.get("structuredOutput")
+    structured_output_error = payload.get("structuredOutputError")
     if (
         not isinstance(inner_text, str)
         or not inner_text.strip()
@@ -2746,9 +2834,41 @@ def _parse_headless_envelope(
         or not _is_int(model_turns)
         or not 1 <= model_turns <= max_turns
         or not isinstance(usage, dict)
-        or set(usage) != _HEADLESS_USAGE_KEYS
+        or usage_keys not in (_HEADLESS_USAGE_KEYS, _HEADLESS_EXTENDED_USAGE_KEYS)
         or any(not _validate_nonnegative_int(usage.get(key)) for key in usage)
-        or usage.get("total_tokens") != usage.get("input_tokens", 0) + usage.get("output_tokens", 0)
+        or usage.get("total_tokens")
+        != usage.get("input_tokens", 0) + usage.get("output_tokens", 0) + cache_read_tokens
+        or (extended_usage and reasoning_tokens > usage.get("output_tokens", 0))
+        or (
+            model_usage is not None
+            and (
+                not extended_usage
+                or not isinstance(model_usage, dict)
+                or set(model_usage) != {expected_model_id}
+                or not isinstance(model_usage_row, dict)
+                or set(model_usage_row) != _HEADLESS_MODEL_USAGE_KEYS
+                or any(not _validate_nonnegative_int(model_usage_row.get(key)) for key in model_usage_row)
+                or model_usage_row.get("cacheReadInputTokens") != cache_read_tokens
+                or model_usage_row.get("inputTokens") != usage.get("input_tokens")
+                or model_usage_row.get("outputTokens") != usage.get("output_tokens")
+                or model_usage_row.get("modelCalls") != model_turns
+            )
+        )
+        or (thought is not None and (not isinstance(thought, str) or len(thought.encode()) > max_inner_bytes))
+        or (
+            structured_output_error is not None
+            and (
+                not isinstance(structured_output_error, str)
+                or len(structured_output_error.encode()) > 20_000
+            )
+        )
+        or (
+            structured_output is not None
+            and (
+                not isinstance(structured_output, dict)
+                or not _structure_within_limits(structured_output, max_depth=64, max_nodes=250_000)
+            )
+        )
         or (
             cost is not None
             and (
@@ -2766,6 +2886,7 @@ def _parse_headless_envelope(
         terminal_stop_reason="end_turn",
         input_tokens=usage["input_tokens"],
         output_tokens=usage["output_tokens"],
+        cache_read_input_tokens=cache_read_tokens,
         total_tokens=usage["total_tokens"],
         model_turns=model_turns,
     )
@@ -2778,6 +2899,7 @@ def _parse_structured_stdout(
     prior_candidates: Mapping[str, PriorCandidateFacts],
     live_mode: bool,
     expected_session_id: str | None = None,
+    expected_model_id: str | None = None,
     max_turns: int = 512,
     allow_legacy_plain: bool = False,
 ) -> tuple[Any | None, bytes | None, int, int, bool, bool, str | None, HeadlessEnvelope | None]:
@@ -2812,12 +2934,13 @@ def _parse_structured_stdout(
     model_payload: Any = payload
     headless: HeadlessEnvelope | None = None
     if live_mode:
-        if expected_session_id is None:
+        if expected_session_id is None or expected_model_id is None:
             return payload, None, prefix_bytes, suffix_bytes, syntax_compliant, False, None, None
         try:
             headless = _parse_headless_envelope(
                 payload,
                 expected_session_id=expected_session_id,
+                expected_model_id=expected_model_id,
                 max_turns=max_turns,
                 max_inner_bytes=technical_limits["max_json_bytes"],
             )
@@ -2829,7 +2952,11 @@ def _parse_structured_stdout(
             )
         except (AdaptiveWaveValidationError, UnicodeError, ValueError, RecursionError):
             if not allow_legacy_plain or set(payload) != _RESULT_KEYS:
-                return payload, None, prefix_bytes, suffix_bytes, syntax_compliant, False, None, None
+                # Keep the verified outer envelope available even when Grok's
+                # `text` concatenates an interim structured message with the
+                # terminal structured message.  The live lane may recover only
+                # the transcript-proven terminal assistant message later.
+                return payload, None, prefix_bytes, suffix_bytes, syntax_compliant, False, None, headless
             model_payload = payload
     if not isinstance(model_payload, dict):
         return model_payload, None, prefix_bytes, suffix_bytes, syntax_compliant, False, None, headless
@@ -2909,6 +3036,7 @@ def _validate_grant(
     *,
     now: datetime,
     replay_command_policy_sha256: str | None = None,
+    replay_result_schema_sha256: str | None = None,
 ) -> list[str]:
     if not isinstance(grant, dict) or set(grant) != _GRANT_KEYS:
         return ["grant_shape_invalid"]
@@ -2931,7 +3059,8 @@ def _validate_grant(
         or grant.get("grok_binary_sha256") != request["transport"]["grok_binary_sha256"]
         or grant.get("operator_account_ref_sha256") != expected_account_hash
         or grant.get("oauth_auth_sha256") != request["transport"]["oauth_auth_sha256"]
-        or grant.get("result_schema_sha256") != result_schema_sha256()
+        or grant.get("result_schema_sha256")
+        != (replay_result_schema_sha256 or result_schema_sha256())
         or grant.get("command_policy_sha256")
         != (replay_command_policy_sha256 or command_policy_sha256(request))
         or grant.get("tool_registry_sha256") != tool_registry_sha256()
@@ -3205,6 +3334,8 @@ def _parse_session_proof(
     lines = raw.splitlines()
     started: set[str] = set()
     completed: set[str] = set()
+    auxiliary_started: set[str] = set()
+    auxiliary_completed: set[str] = set()
     provider_call_ids: set[str] = set()
     tool_counts: dict[str, int] = {}
     query_hashes: list[str] = []
@@ -3212,6 +3343,7 @@ def _parse_session_proof(
     prompt_ids: set[str] = set()
     model_ids: list[str] = []
     assistant_chunks: list[str] = []
+    terminal_assistant_chunks: list[str] = []
     retry_attempts: list[int] = []
     retry_maximum: int | None = None
     user_events = 0
@@ -3302,14 +3434,61 @@ def _parse_session_proof(
                 or not _is_text(call_id, maximum=256)
                 or call_id in started
                 or call_id in completed
+                or call_id in auxiliary_started
                 or update.get("status") not in {None, "in_progress"}
             ):
                 raise AdaptiveWaveValidationError("session_tool_start_invalid")
+            # Any assistant text followed by another tool call was progress,
+            # not the terminal result.  Only the contiguous assistant message
+            # after the last native-X tool is eligible for result selection.
+            terminal_assistant_chunks.clear()
             started.add(call_id)
         elif kind == "tool_call_update":
             call_id = update.get("toolCallId")
             raw_output = update.get("rawOutput")
-            if (
+            auxiliary_start = "rawInput" in update
+            auxiliary_finish = isinstance(raw_output, dict) and raw_output.get("type") == "UpdateGoal"
+            if auxiliary_start:
+                raw_input = update.get("rawInput")
+                update_metadata = update.get("_meta")
+                if (
+                    set(update)
+                    != {"_meta", "kind", "locations", "rawInput", "sessionUpdate", "title", "toolCallId"}
+                    or not _is_text(call_id, maximum=256)
+                    or call_id not in started
+                    or call_id in completed
+                    or call_id in auxiliary_started
+                    or update.get("kind") != "other"
+                    or update.get("locations") != []
+                    or not _is_text(update.get("title"), maximum=20_000)
+                    or not isinstance(update_metadata, dict)
+                    or set(update_metadata) != {"x.ai/tool"}
+                    or update_metadata.get("x.ai/tool") != _AUXILIARY_GOAL_TOOL_METADATA
+                    or not isinstance(raw_input, dict)
+                    or set(raw_input) != {"blocked_reason", "completed", "message", "variant"}
+                    or raw_input.get("variant") != "UpdateGoal"
+                    or raw_input.get("blocked_reason") is not None
+                    or raw_input.get("completed") is not None
+                    or not _is_text(raw_input.get("message"), maximum=20_000)
+                ):
+                    raise AdaptiveWaveValidationError("session_auxiliary_goal_start_invalid")
+                terminal_assistant_chunks.clear()
+                started.remove(call_id)
+                auxiliary_started.add(call_id)
+            elif auxiliary_finish:
+                if (
+                    set(update) != {"rawOutput", "sessionUpdate", "status", "toolCallId"}
+                    or not isinstance(call_id, str)
+                    or call_id not in auxiliary_started
+                    or call_id in auxiliary_completed
+                    or update.get("status") != "completed"
+                    or set(raw_output) != {"success", "summary", "type"}
+                    or raw_output.get("success") is not True
+                    or not _is_text(raw_output.get("summary"), maximum=20_000)
+                ):
+                    raise AdaptiveWaveValidationError("session_auxiliary_goal_completion_invalid")
+                auxiliary_completed.add(call_id)
+            elif (
                 not isinstance(call_id, str)
                 or call_id not in started
                 or call_id in completed
@@ -3323,6 +3502,8 @@ def _parse_session_proof(
                 or raw_output["call_id"] in provider_call_ids
             ):
                 raise AdaptiveWaveValidationError("session_tool_completion_invalid")
+            if auxiliary_start or auxiliary_finish:
+                continue
             try:
                 arguments = strict_json_loads_bounded(
                     raw_output["input"],
@@ -3352,11 +3533,13 @@ def _parse_session_proof(
                 raise AdaptiveWaveValidationError("session_assistant_causality_invalid")
             content = update.get("content")
             if isinstance(content, dict) and content.get("type") == "text" and isinstance(content.get("text"), str):
-                assistant_chunks.append(content["text"])
+                assistant_text = content["text"]
             elif isinstance(content, str):
-                assistant_chunks.append(content)
+                assistant_text = content
             else:
                 raise AdaptiveWaveValidationError("session_assistant_chunk_invalid")
+            assistant_chunks.append(assistant_text)
+            terminal_assistant_chunks.append(assistant_text)
         elif kind == "turn_completed":
             if index != len(lines) - 1 or user_events != 1 or not assistant_chunks or started != completed:
                 raise AdaptiveWaveValidationError("session_terminal_not_final")
@@ -3370,26 +3553,34 @@ def _parse_session_proof(
             terminal = ("end_turn", usage)
         elif kind != "agent_thought_chunk":
             raise AdaptiveWaveValidationError("session_event_kind_invalid")
-    if user_events != 1 or model_ids != [expected_model_id] or not started or started != completed:
+    if (
+        user_events != 1
+        or model_ids != [expected_model_id]
+        or not started
+        or started != completed
+        or auxiliary_started != auxiliary_completed
+    ):
         raise AdaptiveWaveValidationError("session_causality_invalid")
-    if len(prompt_ids) != 1 or not assistant_chunks:
+    if len(prompt_ids) != 1 or not assistant_chunks or not terminal_assistant_chunks:
         raise AdaptiveWaveValidationError("session_causality_invalid")
     if headless_envelope is None:
         if terminal is None or "".join(assistant_chunks).strip().encode() != expected_stdout.strip():
             raise AdaptiveWaveValidationError("session_causality_invalid")
         input_tokens, output_tokens, total_tokens, model_turns = terminal[1]
+        cache_read_input_tokens = 0
     else:
         expected_text = headless_envelope.inner_text.strip()
+        terminal_assistant_text = "".join(terminal_assistant_chunks).strip()
         if not any(
             "".join(assistant_chunks[index:]).strip() == expected_text
             for index in range(len(assistant_chunks))
-        ):
+        ) or not expected_text.endswith(terminal_assistant_text):
             raise AdaptiveWaveValidationError("session_headless_text_mismatch")
         if terminal is None:
             if last_kind != "agent_message_chunk":
                 raise AdaptiveWaveValidationError("session_headless_final_event_invalid")
         elif terminal[1] != (
-            headless_envelope.input_tokens,
+            headless_envelope.input_tokens + headless_envelope.cache_read_input_tokens,
             headless_envelope.output_tokens,
             headless_envelope.total_tokens,
             headless_envelope.model_turns,
@@ -3397,9 +3588,17 @@ def _parse_session_proof(
             raise AdaptiveWaveValidationError("session_headless_usage_mismatch")
         input_tokens = headless_envelope.input_tokens
         output_tokens = headless_envelope.output_tokens
+        cache_read_input_tokens = headless_envelope.cache_read_input_tokens
         total_tokens = headless_envelope.total_tokens
         model_turns = headless_envelope.model_turns
-    estimated_cost = _estimated_cost_usd_micros(input_tokens, output_tokens, budget)
+    # The request currently owns one conservative input rate rather than a
+    # distinct provider cache-read rate.  Charge cache reads at that full
+    # input rate so the emergency cost ceiling cannot be understated.
+    estimated_cost = _estimated_cost_usd_micros(
+        input_tokens + cache_read_input_tokens,
+        output_tokens,
+        budget,
+    )
     if (
         model_turns > max_turns
         or total_tokens > budget["max_total_tokens"]
@@ -3430,7 +3629,70 @@ def _parse_session_proof(
         total_tokens=total_tokens,
         model_turns=model_turns,
         estimated_cost_usd_micros=estimated_cost,
+        cache_read_input_tokens=cache_read_input_tokens,
+        terminal_assistant_text="".join(terminal_assistant_chunks).strip(),
     )
+
+
+def _terminal_session_model_result(
+    session_proof: SessionProof,
+    *,
+    technical_limits: Mapping[str, Any],
+    prior_candidates: Mapping[str, PriorCandidateFacts],
+) -> dict[str, Any] | None:
+    """Return only a transcript-proven terminal structured model result.
+
+    Grok CLI 0.2.101 can concatenate an interim structured assistant message
+    and the final structured assistant message in the headless envelope's
+    `text`.  We never scan that concatenation for a convenient JSON object.
+    Instead, the session state machine identifies the contiguous assistant
+    message after the last completed native-X tool, and this helper admits it
+    only when it is one complete strict result document.
+    """
+
+    terminal_text = session_proof.terminal_assistant_text
+    if not terminal_text:
+        return None
+    try:
+        payload = strict_json_loads_bounded(
+            terminal_text,
+            max_bytes=technical_limits["max_json_bytes"],
+            max_depth=technical_limits["max_json_depth"],
+            max_nodes=technical_limits["max_json_nodes"],
+        )
+    except (AdaptiveWaveValidationError, UnicodeError, ValueError, RecursionError):
+        return None
+    if not isinstance(payload, dict) or validate_model_result(
+        payload,
+        prior_candidates=prior_candidates,
+        live_mode=True,
+        require_operator_projection=False,
+    ):
+        return None
+    return payload
+
+
+def _recover_transcript_terminal_result(
+    parsed_result: Any | None,
+    sanitized: bytes | None,
+    contract_valid: bool,
+    *,
+    headless_envelope: HeadlessEnvelope | None,
+    session_proof: SessionProof | None,
+    technical_limits: Mapping[str, Any],
+    prior_candidates: Mapping[str, PriorCandidateFacts],
+    allow_recovery: bool,
+) -> tuple[Any | None, bytes | None, bool]:
+    if contract_valid or not allow_recovery or headless_envelope is None or session_proof is None:
+        return parsed_result, sanitized, contract_valid
+    recovered = _terminal_session_model_result(
+        session_proof,
+        technical_limits=technical_limits,
+        prior_candidates=prior_candidates,
+    )
+    if recovered is None:
+        return parsed_result, sanitized, contract_valid
+    return recovered, (canonical_json(recovered) + "\n").encode(), True
 
 
 def _session_proof_payload(proof: SessionProof | None, *, status: str, raw: bytes | None) -> dict[str, Any]:
@@ -3454,7 +3716,7 @@ def _session_proof_payload(proof: SessionProof | None, *, status: str, raw: byte
             "model_turns": None,
             "estimated_cost_usd_micros": None,
         }
-    return {
+    payload = {
         "status": "verified",
         "updates_sha256": proof.updates_sha256,
         "update_bytes": proof.update_bytes,
@@ -3473,6 +3735,9 @@ def _session_proof_payload(proof: SessionProof | None, *, status: str, raw: byte
         "model_turns": proof.model_turns,
         "estimated_cost_usd_micros": proof.estimated_cost_usd_micros,
     }
+    if proof.cache_read_input_tokens:
+        payload["cache_read_input_tokens"] = proof.cache_read_input_tokens
+    return payload
 
 
 def _build_static_bindings(
@@ -4029,6 +4294,7 @@ def _run_adaptive_wave(
             prior_candidates=prior_candidates,
             live_mode=execution_mode == "live",
             expected_session_id=actual_session_id,
+            expected_model_id=transport["model_id"],
             max_turns=request["emergency"]["max_turns"],
             allow_legacy_plain=execution_mode == "fixture",
         )
@@ -4055,6 +4321,16 @@ def _run_adaptive_wave(
         elif execution_mode == "live" and session_capture_status == "invalid":
             session_proof_status = "invalid"
 
+        parsed_result, sanitized, contract_valid = _recover_transcript_terminal_result(
+            parsed_result,
+            sanitized,
+            contract_valid,
+            headless_envelope=headless_envelope,
+            session_proof=session_proof,
+            technical_limits=request["technical_limits"],
+            prior_candidates=prior_candidates,
+            allow_recovery=execution_mode == "live",
+        )
         if contract_valid and isinstance(parsed_result, dict) and (
             execution_mode == "fixture" or session_proof is not None
         ):
@@ -4474,13 +4750,19 @@ def _process_ledger_valid(value: Any) -> bool:
 
 
 def _session_proof_valid(value: Any, execution_mode: Any) -> bool:
-    if not isinstance(value, dict) or set(value) != _SESSION_PROOF_KEYS:
+    if (
+        not isinstance(value, dict)
+        or not _SESSION_PROOF_KEYS <= set(value)
+        or not set(value) <= _SESSION_PROOF_KEYS | _SESSION_PROOF_OPTIONAL_KEYS
+    ):
         return False
     status = value.get("status")
     if status not in {"not_applicable", "missing", "invalid", "verified"}:
         return False
     if execution_mode == "fixture":
         return (
+            "cache_read_input_tokens" not in value
+            and
             status == "not_applicable"
             and value.get("updates_sha256") is None
             and value.get("update_bytes") == 0
@@ -4508,7 +4790,8 @@ def _session_proof_valid(value: Any, execution_mode: Any) -> bool:
         return False
     if status != "verified":
         return (
-            (value.get("updates_sha256") is None or _is_sha(value["updates_sha256"]))
+            "cache_read_input_tokens" not in value
+            and (value.get("updates_sha256") is None or _is_sha(value["updates_sha256"]))
             and _validate_nonnegative_int(value.get("update_bytes"))
             and value.get("event_count") == 0
             and value.get("provider_prompt_id_sha256") is None
@@ -4532,6 +4815,7 @@ def _session_proof_valid(value: Any, execution_mode: Any) -> bool:
         )
     tool_counts = value.get("tool_counts")
     query_hashes = value.get("query_argument_sha256s")
+    cache_read_input_tokens = value.get("cache_read_input_tokens", 0)
     return (
         _is_sha(value.get("updates_sha256"))
         and _validate_nonnegative_int(value.get("update_bytes"))
@@ -4565,7 +4849,9 @@ def _session_proof_valid(value: Any, execution_mode: Any) -> bool:
                 "estimated_cost_usd_micros",
             )
         )
-        and value["total_tokens"] == value["input_tokens"] + value["output_tokens"]
+        and _validate_nonnegative_int(cache_read_input_tokens)
+        and value["total_tokens"]
+        == value["input_tokens"] + value["output_tokens"] + cache_read_input_tokens
         and value["model_turns"] > 0
     )
 
@@ -4761,15 +5047,26 @@ def validate_operator_receipt(receipt: Any) -> list[str]:
         errors.append("receipt_authority_invalid")
 
     if _input_binding_valid(input_binding) and _command_binding_valid(command_binding):
-        if command_binding["structured_output_schema_sha256"] != result_schema_sha256():
+        recorded_schema_sha = command_binding["structured_output_schema_sha256"]
+        current_schema_sha = result_schema_sha256()
+        legacy_schema_sha = result_schema_sha256(legacy_v2=True)
+        current_policy = canonical_sha256(_redacted_policy_from_bindings(input_binding, command_binding))
+        legacy_plain_policy = canonical_sha256(
+            _redacted_policy_from_bindings(input_binding, command_binding, legacy_plain=True)
+        )
+        legacy_result_policy = canonical_sha256(
+            _redacted_policy_from_bindings(input_binding, command_binding, legacy_result_v2=True)
+        )
+        if recorded_schema_sha not in {current_schema_sha, legacy_schema_sha}:
             errors.append("receipt_result_schema_hash_invalid")
-        accepted_command_policies = {
-            canonical_sha256(_redacted_policy_from_bindings(input_binding, command_binding)),
-            canonical_sha256(
-                _redacted_policy_from_bindings(input_binding, command_binding, legacy_plain=True)
-            ),
-        }
-        if command_binding["command_policy_sha256"] not in accepted_command_policies:
+        recorded_policy = command_binding["command_policy_sha256"]
+        schema_policy_pair_valid = (
+            recorded_schema_sha == current_schema_sha and recorded_policy == current_policy
+        ) or (
+            recorded_schema_sha == legacy_schema_sha
+            and recorded_policy in {legacy_plain_policy, legacy_result_policy}
+        )
+        if not schema_policy_pair_valid:
             errors.append("receipt_command_policy_hash_invalid")
         if command_binding["environment_policy_sha256"] != canonical_sha256(_redacted_environment_policy()):
             errors.append("receipt_environment_policy_hash_invalid")
@@ -4893,6 +5190,13 @@ def validate_operator_bundle(
         return errors + ["bundle_object_invalid"]
     if request_contract_errors:
         return errors
+    recorded_binding = receipt.get("command_binding")
+    recorded_schema_sha = (
+        recorded_binding.get("structured_output_schema_sha256")
+        if isinstance(recorded_binding, dict)
+        else None
+    )
+    legacy_result_schema_replay = recorded_schema_sha == result_schema_sha256(legacy_v2=True)
     request_sha = canonical_sha256(request)
     if request_sha != receipt.get("request_sha256") or request_sha != intent.get("request_sha256"):
         errors.append("request_binding_hash_mismatch")
@@ -4955,7 +5259,7 @@ def validate_operator_bundle(
                 prompt_raw.decode("utf-8"),
                 request["target"],
                 prior_handles,
-                result_schema=_load_result_schema(),
+                result_schema=_load_result_schema(legacy_v2=legacy_result_schema_replay),
             ).encode()
             if len(compiled_expected) > request["technical_limits"]["max_compiled_prompt_bytes"]:
                 raise AdaptiveWaveValidationError("compiled_prompt_byte_ceiling_exceeded")
@@ -4985,12 +5289,23 @@ def validate_operator_bundle(
     input_binding = receipt.get("input_binding", {})
     new_command_policy = command_policy_sha256(request)
     legacy_command_policy = _legacy_command_policy_sha256(request)
+    legacy_result_command_policy = _legacy_structured_result_command_policy_sha256(request)
     recorded_command_policy = (
         command_binding.get("command_policy_sha256") if isinstance(command_binding, dict) else None
     )
     legacy_plain_replay = recorded_command_policy == legacy_command_policy
-    if recorded_command_policy not in {new_command_policy, legacy_command_policy}:
+    legacy_result_policy_replay = recorded_command_policy == legacy_result_command_policy
+    if recorded_command_policy not in {
+        new_command_policy,
+        legacy_command_policy,
+        legacy_result_command_policy,
+    }:
         errors.append("command_policy_version_unrecognized")
+    if (
+        legacy_result_schema_replay
+        and not (legacy_plain_replay or legacy_result_policy_replay)
+    ) or (not legacy_result_schema_replay and legacy_result_policy_replay):
+        errors.append("result_schema_command_policy_mismatch")
     session_id = command_binding.get("session_id") if isinstance(command_binding, dict) else None
     expected_binary_sha: str | None = None
     if mode == "live":
@@ -5019,7 +5334,7 @@ def validate_operator_bundle(
             prompt_file=run_root / runtime_layout.get("compiled_prompt_name", "compiled-prompt.txt"),
             leader_socket=ephemeral_home / "leader.sock",
             session_id=session_id,
-            result_schema=_load_result_schema(),
+            result_schema=_load_result_schema(legacy_v2=legacy_result_schema_replay),
         )
         account_ref = request["transport"]["operator_account_ref"]
         try:
@@ -5033,9 +5348,19 @@ def validate_operator_bundle(
             "reasoning_effort": request["transport"]["reasoning_effort"],
             "session_id": session_id,
             "grok_binary_sha256": expected_binary_sha,
-            "structured_output_schema_sha256": result_schema_sha256(),
+            "structured_output_schema_sha256": (
+                result_schema_sha256(legacy_v2=True)
+                if legacy_result_schema_replay
+                else result_schema_sha256()
+            ),
             "argv_sha256": canonical_sha256(actual_command),
-            "command_policy_sha256": legacy_command_policy if legacy_plain_replay else new_command_policy,
+            "command_policy_sha256": (
+                legacy_command_policy
+                if legacy_plain_replay
+                else legacy_result_command_policy
+                if legacy_result_policy_replay
+                else new_command_policy
+            ),
             "environment_policy_sha256": canonical_sha256(_redacted_environment_policy()),
             "tool_registry_sha256": tool_registry_sha256(),
             "effective_prompt_policy_sha256": (
@@ -5090,7 +5415,16 @@ def validate_operator_bundle(
                             request,
                             now=consumed_clock,
                             replay_command_policy_sha256=(
-                                legacy_command_policy if legacy_plain_replay else new_command_policy
+                                legacy_command_policy
+                                if legacy_plain_replay
+                                else legacy_result_command_policy
+                                if legacy_result_policy_replay
+                                else new_command_policy
+                            ),
+                            replay_result_schema_sha256=(
+                                result_schema_sha256(legacy_v2=True)
+                                if legacy_result_schema_replay
+                                else result_schema_sha256()
                             ),
                         ):
                             errors.append("grant_replay_invalid")
@@ -5206,6 +5540,7 @@ def validate_operator_bundle(
         prior_candidates=prior_candidates,
         live_mode=mode == "live",
         expected_session_id=command_binding.get("session_id") if isinstance(command_binding, dict) else None,
+        expected_model_id=request.get("transport", {}).get("model_id"),
         max_turns=request["emergency"]["max_turns"],
         allow_legacy_plain=mode == "fixture" or legacy_plain_replay,
     )
@@ -5228,12 +5563,24 @@ def validate_operator_bundle(
                 maximum_bytes=limits["max_session_updates_bytes"],
                 required_mode=0o600,
             )
+            replay_headless_envelope = headless_envelope
+            if (
+                legacy_result_schema_replay
+                and not contract_valid
+                and receipt.get("status") != "completed"
+                and isinstance(receipt.get("session_proof"), dict)
+                and receipt["session_proof"].get("status") == "invalid"
+            ):
+                # A sealed rejected receipt predating terminal-message
+                # selection must replay under the parser behavior that sealed
+                # it.  Its 24-hour retention purge is the removal condition.
+                replay_headless_envelope = None
             session_proof = _parse_session_proof(
                 session_raw,
                 expected_session_id=command_binding["session_id"],
                 expected_model_id=request["transport"]["model_id"],
                 expected_stdout=raw,
-                headless_envelope=headless_envelope,
+                headless_envelope=replay_headless_envelope,
                 max_line_bytes=limits["max_session_update_line_bytes"],
                 max_turns=request["emergency"]["max_turns"],
                 budget=request["budget"],
@@ -5242,6 +5589,18 @@ def validate_operator_bundle(
         except (AdaptiveWaveValidationError, KeyError, UnicodeError, ValueError):
             session_proof = None
             session_status = "invalid"
+    parsed_result, sanitized, contract_valid = _recover_transcript_terminal_result(
+        parsed_result,
+        sanitized,
+        contract_valid,
+        headless_envelope=headless_envelope,
+        session_proof=session_proof,
+        technical_limits=limits,
+        prior_candidates=prior_candidates,
+        # Preserve replay of already-sealed rejected bundles.  Current runs
+        # can only seal `completed` after terminal-message recovery succeeds.
+        allow_recovery=mode == "live" and receipt.get("status") == "completed",
+    )
     if contract_valid and isinstance(parsed_result, dict) and (mode == "fixture" or session_proof is not None):
         parsed_result = _operator_project_model_result(
             parsed_result,
@@ -5293,11 +5652,15 @@ def validate_operator_bundle(
             if sanitized_actual != sanitized or bytes_sha256(sanitized) != artifacts.get("sanitized_output_sha256"):
                 errors.append("sanitized_artifact_hash_mismatch")
     if _command_binding_valid(command_binding) and _input_binding_valid(input_binding):
-        if command_binding["structured_output_schema_sha256"] != result_schema_sha256():
+        if command_binding["structured_output_schema_sha256"] not in {
+            result_schema_sha256(),
+            result_schema_sha256(legacy_v2=True),
+        }:
             errors.append("structured_output_schema_hash_mismatch")
         if command_binding["command_policy_sha256"] not in {
             command_policy_sha256(request),
             _legacy_command_policy_sha256(request),
+            _legacy_structured_result_command_policy_sha256(request),
         }:
             errors.append("command_policy_hash_mismatch")
         if command_binding["environment_policy_sha256"] != canonical_sha256(_redacted_environment_policy()):
@@ -5618,6 +5981,7 @@ def _recover_incomplete_run_locked(
         prior_candidates=prior_candidates,
         live_mode=intent["execution_mode"] == "live",
         expected_session_id=intent["command_binding"]["session_id"],
+        expected_model_id=request["transport"]["model_id"],
         max_turns=intent["emergency"]["max_turns"],
         allow_legacy_plain=intent["execution_mode"] == "fixture" or recovery_legacy_plain,
     )

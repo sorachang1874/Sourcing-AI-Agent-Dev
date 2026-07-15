@@ -234,6 +234,8 @@ class FakeExecutor:
         session_tree_mutator: Any = None,
         extra_session_bytes: int = 0,
         headless_total_cost_usd: int | float = 0.0002,
+        headless_extended_diagnostics: bool = False,
+        headless_cache_read_input_tokens: int = 0,
     ) -> None:
         self.clock = clock
         self.raw = raw
@@ -249,6 +251,8 @@ class FakeExecutor:
         self.session_tree_mutator = session_tree_mutator
         self.extra_session_bytes = extra_session_bytes
         self.headless_total_cost_usd = headless_total_cost_usd
+        self.headless_extended_diagnostics = headless_extended_diagnostics
+        self.headless_cache_read_input_tokens = headless_cache_read_input_tokens
         self.commands: list[list[str]] = []
         self.environments: list[dict[str, str]] = []
         self.deadlines: list[float] = []
@@ -309,10 +313,10 @@ class FakeExecutor:
             prompt_id = "synthetic-prompt-1"
             common = {"sessionId": session_id, "_meta": {"promptId": prompt_id}}
             usage_scalars = {
-                "inputTokens": 100,
+                "inputTokens": 100 + self.headless_cache_read_input_tokens,
                 "outputTokens": 50,
-                "totalTokens": 150,
-                "cachedReadTokens": 0,
+                "totalTokens": 150 + self.headless_cache_read_input_tokens,
+                "cachedReadTokens": self.headless_cache_read_input_tokens,
                 "reasoningTokens": 10,
                 "modelCalls": 1,
                 "apiDurationMs": 1_000,
@@ -328,6 +332,29 @@ class FakeExecutor:
                     "usage": {"input_tokens": 100, "output_tokens": 50, "total_tokens": 150},
                     "total_cost_usd": self.headless_total_cost_usd,
                 }
+                if self.headless_extended_diagnostics:
+                    outer.update(
+                        {
+                            "usage": {
+                                "cache_read_input_tokens": self.headless_cache_read_input_tokens,
+                                "input_tokens": 100,
+                                "output_tokens": 50,
+                                "reasoning_tokens": 10,
+                                "total_tokens": 150 + self.headless_cache_read_input_tokens,
+                            },
+                            "modelUsage": {
+                                model_id: {
+                                    "cacheReadInputTokens": self.headless_cache_read_input_tokens,
+                                    "inputTokens": 100,
+                                    "modelCalls": 1,
+                                    "outputTokens": 50,
+                                }
+                            },
+                            "structuredOutput": None,
+                            "structuredOutputError": "Synthetic concatenated structured messages.",
+                            "thought": "Synthetic bounded diagnostic thought.",
+                        }
+                    )
                 emitted_stdout = (canonical_json(outer) + "\n").encode()
             updates = [
                 {
@@ -490,6 +517,7 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
         schema_names = (
             "x.grok.adaptive_recall_wave.request.v2.schema.json",
             "x.grok.adaptive_recall_wave.result.v2.schema.json",
+            "x.grok.adaptive_recall_wave.result.v3.schema.json",
             "x.grok.adaptive_recall_wave.intent.v2.schema.json",
             "x.grok.adaptive_recall_wave.operator_receipt.v3.schema.json",
             "x.grok.adaptive_recall_wave.live_grant.v2.schema.json",
@@ -512,6 +540,7 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
         mappings = {
             "x.grok.adaptive_recall_wave.request.v2.schema.json": runner._REQUEST_KEYS,
             "x.grok.adaptive_recall_wave.result.v2.schema.json": runner._RESULT_KEYS,
+            "x.grok.adaptive_recall_wave.result.v3.schema.json": runner._RESULT_KEYS,
             "x.grok.adaptive_recall_wave.intent.v2.schema.json": runner._INTENT_KEYS,
             "x.grok.adaptive_recall_wave.operator_receipt.v3.schema.json": runner._RECEIPT_KEYS,
             "x.grok.adaptive_recall_wave.live_grant.v2.schema.json": runner._GRANT_KEYS,
@@ -534,11 +563,16 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
         self.assertEqual(set(receipt_v2_schema["properties"]["process"]["required"]), runner._PROCESS_KEYS)
         self.assertEqual(set(receipt_schema["properties"]["session_proof"]["required"]), runner._SESSION_PROOF_KEYS)
         self.assertEqual(
+            set(receipt_schema["properties"]["session_proof"]["properties"]),
+            runner._SESSION_PROOF_KEYS | runner._SESSION_PROOF_OPTIONAL_KEYS,
+        )
+        self.assertEqual(
             set(receipt_schema["$defs"]["reconciliation"]["required"]),
             runner._RECONCILIATION_RECEIPT_KEYS,
         )
-        result_schema = json.loads((ROOT / "contracts/x.grok.adaptive_recall_wave.result.v2.schema.json").read_text())
+        result_schema = json.loads((ROOT / "contracts/x.grok.adaptive_recall_wave.result.v3.schema.json").read_text())
         self.assertEqual(set(result_schema["$defs"]["evidence"]["required"]), runner._EVIDENCE_KEYS)
+        self.assertNotIn("oneOf", result_schema["$defs"]["evidence"])
         self.assertEqual(set(result_schema["$defs"]["support_claim"]["required"]), runner._SUPPORT_CLAIM_KEYS)
         request_schema = json.loads((ROOT / "contracts/x.grok.adaptive_recall_wave.request.v2.schema.json").read_text())
         self.assertEqual(
@@ -556,6 +590,10 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
         self.assertEqual(
             set(headless_schema["properties"]["usage"]["required"]),
             runner._HEADLESS_USAGE_KEYS,
+        )
+        self.assertEqual(
+            set(headless_schema["properties"]["usage"]["properties"]),
+            runner._HEADLESS_EXTENDED_USAGE_KEYS,
         )
 
     def test_production_effective_prompt_policy_owns_exact_openai_and_google_deepmind_waves(self) -> None:
@@ -592,8 +630,8 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             entry for entry in live_entries if entry["target"]["lab_id"] == "google_deepmind"
         ]
         self.assertEqual(len(openai_entries), len(openai_prompt_paths), 7)
-        self.assertEqual(len(google_deepmind_entries), len(google_deepmind_prompt_paths), 4)
-        self.assertEqual(len(live_entries), 11)
+        self.assertEqual(len(google_deepmind_entries), len(google_deepmind_prompt_paths), 5)
+        self.assertEqual(len(live_entries), 12)
         self.assertEqual({canonical_json(entry["target"]) for entry in openai_entries}, {canonical_json(openai_target)})
         self.assertEqual(
             {canonical_json(entry["target"]) for entry in google_deepmind_entries},
@@ -842,11 +880,15 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             }
         )
         self.assertEqual(validate_model_result(result), [])
-        assert_schema_valid(result, "x.grok.adaptive_recall_wave.result.v2.schema.json")
+        assert_schema_valid(result, "x.grok.adaptive_recall_wave.result.v3.schema.json")
         candidate["evidence"][0]["thread_relation"] = "self_post"
         self.assertIn("evidence_value_invalid:0:0", validate_model_result(result))
+        # The provider-facing schema deliberately avoids the xAI-incompatible
+        # oneOf; the runtime remains authoritative for the cross-field rule.
+        assert_schema_valid(result, "x.grok.adaptive_recall_wave.result.v3.schema.json")
+        candidate["evidence"][0]["thread_relation"] = "not_a_relation"
         with self.assertRaises(MiniDraft202012Error):
-            assert_schema_valid(result, "x.grok.adaptive_recall_wave.result.v2.schema.json")
+            assert_schema_valid(result, "x.grok.adaptive_recall_wave.result.v3.schema.json")
 
     def test_prior_overlap_requires_mechanically_new_evidence_or_temporal_state(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -1136,7 +1178,7 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             self.assertIn("--json-schema", command)
             self.assertEqual(
                 json.loads(command[command.index("--json-schema") + 1]),
-                json.loads((ROOT / "contracts/x.grok.adaptive_recall_wave.result.v2.schema.json").read_text()),
+                json.loads((ROOT / "contracts/x.grok.adaptive_recall_wave.result.v3.schema.json").read_text()),
             )
             self.assertNotIn("Find a broad", " ".join(command))
             self.assertTrue(Path(command[0]).is_relative_to(run_root / "executable"))
@@ -1313,9 +1355,211 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
                 runner._parse_headless_envelope(
                     invalid_cost_outer,
                     expected_session_id=raw_outer["sessionId"],
+                    expected_model_id="grok-4.5",
                     max_turns=64,
                     max_inner_bytes=16_777_216,
                 )
+
+    def test_headless_concatenated_progress_selects_only_post_tool_terminal_result(self) -> None:
+        interim_result = _empty_result()
+        interim_result["status_reason"] = "Synthetic pre-tool progress result."
+        terminal_result = _empty_result()
+        terminal_result["status_reason"] = "Synthetic terminal result."
+        interim_text = canonical_json(interim_result)
+        terminal_text = canonical_json(terminal_result)
+
+        def split_structured_messages(
+            updates: list[dict[str, Any]],
+            *,
+            selected_terminal_text: str = terminal_text,
+        ) -> None:
+            user, first_start, first_complete, final_message, terminal = updates
+            progress = copy.deepcopy(final_message)
+            progress["params"]["update"]["content"]["text"] = interim_text
+            final_message["params"]["update"]["content"]["text"] = selected_terminal_text
+            goal_call = copy.deepcopy(first_start)
+            goal_call["params"]["update"]["toolCallId"] = "goal-tool-1"
+            goal_start = {
+                "params": {
+                    "sessionId": user["params"]["sessionId"],
+                    "_meta": {},
+                    "update": {
+                        "sessionUpdate": "tool_call_update",
+                        "toolCallId": "goal-tool-1",
+                        "title": "Goal: synthetic discovery progress.",
+                        "kind": "other",
+                        "locations": [],
+                        "rawInput": {
+                            "blocked_reason": None,
+                            "completed": None,
+                            "message": "Synthetic discovery progress.",
+                            "variant": "UpdateGoal",
+                        },
+                        "_meta": {"x.ai/tool": copy.deepcopy(runner._AUXILIARY_GOAL_TOOL_METADATA)},
+                    },
+                }
+            }
+            goal_complete = {
+                "params": {
+                    "sessionId": user["params"]["sessionId"],
+                    "_meta": {},
+                    "update": {
+                        "sessionUpdate": "tool_call_update",
+                        "toolCallId": "goal-tool-1",
+                        "status": "completed",
+                        "rawOutput": {
+                            "success": True,
+                            "summary": "Synthetic discovery progress.",
+                            "type": "UpdateGoal",
+                        },
+                    },
+                }
+            }
+            updates[:] = [
+                user,
+                progress,
+                goal_call,
+                goal_start,
+                goal_complete,
+                first_start,
+                first_complete,
+                final_message,
+                terminal,
+            ]
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            os.chmod(root, 0o700)
+            binary, auth, binary_sha = _live_material(root)
+            request, request_path = _build_request(root, binary_sha=binary_sha)
+            approvals = root / "approvals"
+            issue_live_grant(
+                request_path=request_path,
+                grant_root=approvals,
+                auth_source=auth,
+                wall_clock=lambda: FIXED_TIME,
+            )
+            fake = FakeExecutor(
+                MutableClock(),
+                (interim_text + terminal_text).encode(),
+                spawn=True,
+                session_mutator=split_structured_messages,
+                headless_extended_diagnostics=True,
+                headless_cache_read_input_tokens=200,
+            )
+            receipt, run_root = _run_adaptive_wave(
+                request=request,
+                execution_mode="live",
+                runtime_root=root / "runtime",
+                approval_root=approvals,
+                binary=binary,
+                auth_source=auth,
+                executor=fake,
+                monotonic=fake.clock,
+                wall_clock=lambda: FIXED_TIME,
+            )
+
+            self.assertEqual(receipt["status"], "completed")
+            assert_schema_valid(receipt, "x.grok.adaptive_recall_wave.operator_receipt.v3.schema.json")
+            raw_outer = json.loads((run_root / "raw.stdout").read_text())
+            assert_schema_valid(raw_outer, "x.grok.adaptive_recall_wave.headless_envelope.v1.schema.json")
+            with self.assertRaises(json.JSONDecodeError):
+                json.loads(raw_outer["text"])
+            sanitized = json.loads((run_root / "sanitized.json").read_text())
+            self.assertEqual(sanitized["status_reason"], "Synthetic terminal result.")
+            self.assertEqual(receipt["session_proof"]["completed_tool_calls"], 1)
+            self.assertEqual(receipt["session_proof"]["tool_counts"], {"x_keyword_search": 1})
+            self.assertEqual(receipt["session_proof"]["cache_read_input_tokens"], 200)
+            self.assertEqual(receipt["session_proof"]["total_tokens"], 350)
+            # The emergency estimate charges cached reads at the full request
+            # input rate because the request has no separate cache-price field.
+            self.assertEqual(receipt["session_proof"]["estimated_cost_usd_micros"], 400)
+            self.assertEqual(validate_operator_bundle(run_root, approval_root=approvals), [])
+
+        invalid_terminal = copy.deepcopy(terminal_result)
+        invalid_terminal.pop("limitations")
+        invalid_terminal_text = canonical_json(invalid_terminal)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            os.chmod(root, 0o700)
+            binary, auth, binary_sha = _live_material(root)
+            request, request_path = _build_request(root, binary_sha=binary_sha)
+            approvals = root / "approvals"
+            issue_live_grant(
+                request_path=request_path,
+                grant_root=approvals,
+                auth_source=auth,
+                wall_clock=lambda: FIXED_TIME,
+            )
+            fake = FakeExecutor(
+                MutableClock(),
+                (interim_text + invalid_terminal_text).encode(),
+                spawn=True,
+                session_mutator=lambda updates: split_structured_messages(
+                    updates,
+                    selected_terminal_text=invalid_terminal_text,
+                ),
+                headless_extended_diagnostics=True,
+                headless_cache_read_input_tokens=200,
+            )
+            receipt, run_root = _run_adaptive_wave(
+                request=request,
+                execution_mode="live",
+                runtime_root=root / "runtime",
+                approval_root=approvals,
+                binary=binary,
+                auth_source=auth,
+                executor=fake,
+                monotonic=fake.clock,
+                wall_clock=lambda: FIXED_TIME,
+            )
+
+            self.assertEqual(receipt["status"], "result_contract_invalid")
+            self.assertEqual(receipt["session_proof"]["status"], "verified")
+            self.assertEqual(validate_operator_bundle(run_root, approval_root=approvals), [])
+
+        # A v2 result bundle sealed by the current parser can also carry a
+        # verified proof.  Only the exact retained pre-fix v2/invalid-proof
+        # shape may fall back to the old rejected-bundle parser on replay.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            os.chmod(root, 0o700)
+            binary, auth, binary_sha = _live_material(root)
+            request, request_path = _build_request(root, binary_sha=binary_sha)
+            approvals = root / "approvals"
+            with mock.patch.object(runner, "RESULT_SCHEMA_FILE", runner.LEGACY_RESULT_SCHEMA_FILE):
+                issue_live_grant(
+                    request_path=request_path,
+                    grant_root=approvals,
+                    auth_source=auth,
+                    wall_clock=lambda: FIXED_TIME,
+                )
+                fake = FakeExecutor(
+                    MutableClock(),
+                    (interim_text + invalid_terminal_text).encode(),
+                    spawn=True,
+                    session_mutator=lambda updates: split_structured_messages(
+                        updates,
+                        selected_terminal_text=invalid_terminal_text,
+                    ),
+                    headless_extended_diagnostics=True,
+                    headless_cache_read_input_tokens=200,
+                )
+                receipt, run_root = _run_adaptive_wave(
+                    request=request,
+                    execution_mode="live",
+                    runtime_root=root / "runtime",
+                    approval_root=approvals,
+                    binary=binary,
+                    auth_source=auth,
+                    executor=fake,
+                    monotonic=fake.clock,
+                    wall_clock=lambda: FIXED_TIME,
+                )
+
+            self.assertEqual(receipt["status"], "result_contract_invalid")
+            self.assertEqual(receipt["session_proof"]["status"], "verified")
+            self.assertEqual(validate_operator_bundle(run_root, approval_root=approvals), [])
 
     def test_operator_projection_accepts_exact_observed_model_ledger_disagreement(self) -> None:
         model_result = _empty_result()
@@ -1394,15 +1638,77 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
         self.assertEqual(projected["native_x_tool_provenance"]["tool_calls_reported"], 97)
         self.assertEqual(len(projected["native_x_tool_provenance"]["queries"]), 94)
 
+    def test_operator_downgrades_ok_when_unresolved_candidate_lacks_post_or_reply_attempt(self) -> None:
+        result = _empty_result()
+        result["status"] = "X_SEARCH_OK"
+        result["status_reason"] = "Synthetic model claimed complete coverage."
+        result["candidates"] = [_candidate("TargetPerson", profile_host="x.com")]
+        result["counts"]["candidates_retained"] = 1
+
+        def proof_with_surfaces(surfaces: tuple[str, ...]) -> runner.SessionProof:
+            call_count = max(1, len(surfaces))
+            query_hashes = tuple(f"{index + 1:064x}" for index in range(call_count))
+            attempts = tuple(
+                {
+                    "handle_key": "targetperson",
+                    "surface": surface,
+                    "query_argument_sha256": query_hashes[index],
+                }
+                for index, surface in enumerate(surfaces)
+            )
+            return runner.SessionProof(
+                updates_sha256="a" * 64,
+                update_bytes=1,
+                event_count=1,
+                provider_prompt_id_sha256="b" * 64,
+                effective_model_id="grok-4.5",
+                started_tool_calls=call_count,
+                completed_tool_calls=call_count,
+                tool_counts={"x_keyword_search": call_count},
+                query_argument_sha256s=query_hashes,
+                candidate_surface_attempts=attempts,
+                terminal_stop_reason="end_turn",
+                input_tokens=1,
+                output_tokens=1,
+                total_tokens=2,
+                model_turns=1,
+                estimated_cost_usd_micros=1,
+            )
+
+        missing_reply = runner._operator_project_model_result(
+            result,
+            session_proof=proof_with_surfaces(("authored_post",)),
+            fixture=False,
+        )
+        self.assertEqual(missing_reply["status"], "X_SEARCH_PARTIAL")
+        self.assertEqual(missing_reply["status_reason"], runner._SURFACE_COVERAGE_DOWNGRADE_REASON)
+        self.assertTrue(
+            any("Unresolved candidate count with a missing surface: 1." in row for row in missing_reply["limitations"])
+        )
+        self.assertEqual(validate_model_result(missing_reply, live_mode=True), [])
+
+        complete = runner._operator_project_model_result(
+            result,
+            session_proof=proof_with_surfaces(("authored_post", "authored_reply")),
+            fixture=False,
+        )
+        self.assertEqual(complete["status"], "X_SEARCH_OK")
+        self.assertEqual(complete["status_reason"], "Synthetic model claimed complete coverage.")
+        self.assertFalse(
+            any("Unresolved candidate count with a missing surface" in row for row in complete["limitations"])
+        )
+        self.assertEqual(validate_model_result(complete, live_mode=True), [])
+
     def test_legacy_plain_fixture_bundle_remains_replayable(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             os.chmod(root, 0o700)
             request, request_path = _build_request(root)
-            receipt, run_root = run_adaptive_grok_wave_fixture(
-                request_path=request_path,
-                runtime_root=root / "runtime",
-            )
+            with mock.patch.object(runner, "RESULT_SCHEMA_FILE", runner.LEGACY_RESULT_SCHEMA_FILE):
+                receipt, run_root = run_adaptive_grok_wave_fixture(
+                    request_path=request_path,
+                    runtime_root=root / "runtime",
+                )
             intent_path = run_root / "operator-intent.json"
             receipt_path = run_root / "operator-receipt.json"
             intent = json.loads(intent_path.read_text())
@@ -1413,7 +1719,7 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
                 prompt_file=run_root / "compiled-prompt.txt",
                 leader_socket=run_root / "ephemeral-home/leader.sock",
                 session_id=intent["command_binding"]["session_id"],
-                result_schema=runner._load_result_schema(),
+                result_schema=runner._load_result_schema(legacy_v2=True),
             )
             legacy_policy_sha = runner._legacy_command_policy_sha256(request)
             for artifact in (intent, receipt):
@@ -1426,6 +1732,25 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             relative_run_root = Path(os.path.relpath(run_root, Path.cwd()))
             self.assertFalse(relative_run_root.is_absolute())
             self.assertEqual(validate_operator_bundle(relative_run_root), [])
+
+    def test_structured_result_v2_bundle_remains_replayable_after_v3_cutover(self) -> None:
+        self.assertEqual(
+            runner.result_schema_sha256(legacy_v2=True),
+            "aec374dd452e79d8580208b234cdd50ec0dc88134251a1c0a020b820d33fae72",
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with mock.patch.object(runner, "RESULT_SCHEMA_FILE", runner.LEGACY_RESULT_SCHEMA_FILE):
+                run_root, approvals = _completed_live_run(root)
+            receipt = json.loads((run_root / "operator-receipt.json").read_text())
+            self.assertEqual(
+                receipt["command_binding"]["structured_output_schema_sha256"],
+                runner.result_schema_sha256(legacy_v2=True),
+            )
+            forged_pair = copy.deepcopy(receipt)
+            forged_pair["command_binding"]["structured_output_schema_sha256"] = runner.result_schema_sha256()
+            self.assertIn("receipt_command_policy_hash_invalid", validate_operator_receipt(forged_pair))
+            self.assertEqual(validate_operator_bundle(run_root, approval_root=approvals), [])
 
     def test_campaign_bridge_is_source_bound_but_always_blocked_without_native_payloads(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
