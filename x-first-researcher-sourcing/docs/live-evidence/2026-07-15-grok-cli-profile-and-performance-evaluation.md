@@ -445,8 +445,9 @@ remains model-mediated and unverified. If that result is accepted,
 the operator will generate a separate hydration stage with exact, independently issued conjunctive Post and Reply
 queries rather than asking one long model prompt to self-schedule both phases.
 
-The selected effective-prompt entry now binds `discovery_only_no_person_hydration_v1`. Transcript replay rejects every
-positive or negated `from:` form and every bare or punctuation-wrapped handle-like single-token query across the native-X query tools, so a provider
+The selected effective-prompt entry now binds `discovery_only_no_person_hydration_v1`. Transcript replay NFKC-normalizes
+every query and rejects every positive or negated `from:` form plus every bare or outer ASCII/Unicode-wrapped
+handle-like single-token query across the native-X query tools, so a provider
 cannot repeat the mechanically visible hydration pattern and still produce a verified session proof. User search also
 uses an NFKC, full-consumption closed grammar: a query needs both a target-lab token and a professional-context token,
 and no unrecognized character or token is accepted. Multiword person intent in keyword/semantic search remains an explicit manual audit

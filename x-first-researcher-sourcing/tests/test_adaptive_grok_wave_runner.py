@@ -604,6 +604,12 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             ({"query": "\"TargetPerson\"", "limit": "50", "mode": "Latest"}, "x_keyword_search"),
             ({"query": "(@TargetPerson)", "limit": "50"}, "x_semantic_search"),
             ({"query": "TargetPerson.", "limit": "50"}, "x_semantic_search"),
+            ({"query": "（TargetPerson）", "limit": "50", "mode": "Latest"}, "x_keyword_search"),
+            ({"query": "“TargetPerson”", "limit": "50"}, "x_semantic_search"),
+            ({"query": "＠TargetPerson", "limit": "50"}, "x_semantic_search"),
+            ({"query": "TargetPerson。", "limit": "50"}, "x_semantic_search"),
+            ({"query": "Target\u200bPerson", "limit": "50"}, "x_semantic_search"),
+            ({"query": "ｆｒｏｍ：TargetPerson", "limit": "50", "mode": "Latest"}, "x_keyword_search"),
         )
         for arguments, tool_name in allowed:
             self.assertTrue(
@@ -931,6 +937,31 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
                         "quoted-handle-query",
                         "x_keyword_search",
                         {"query": "\"TargetPerson\"", "limit": "100", "mode": "Latest"},
+                    ),
+                    (
+                        "fullwidth-parentheses-handle-query",
+                        "x_keyword_search",
+                        {"query": "（TargetPerson）", "limit": "100", "mode": "Latest"},
+                    ),
+                    (
+                        "curly-quoted-handle-query",
+                        "x_keyword_search",
+                        {"query": "“TargetPerson”", "limit": "100", "mode": "Latest"},
+                    ),
+                    (
+                        "fullwidth-at-handle-query",
+                        "x_keyword_search",
+                        {"query": "＠TargetPerson", "limit": "100", "mode": "Latest"},
+                    ),
+                    (
+                        "cjk-terminal-punctuation-handle-query",
+                        "x_keyword_search",
+                        {"query": "TargetPerson。", "limit": "100", "mode": "Latest"},
+                    ),
+                    (
+                        "zero-width-format-handle-query",
+                        "x_keyword_search",
+                        {"query": "Target\u200bPerson", "limit": "100", "mode": "Latest"},
                     ),
                     ("bare-user-query", "x_user_search", {"query": "TargetPerson", "count": "50"}),
                     ("exact-name-user-query", "x_user_search", {"query": "Known Person", "count": "50"}),

@@ -96,7 +96,7 @@ SESSION_QUERY_POLICY_SEMANTICS = {
     DISCOVERY_ONLY_SESSION_QUERY_POLICY_ID: {
         "policy_id": DISCOVERY_ONLY_SESSION_QUERY_POLICY_ID,
         "from_query": "forbidden_case_insensitive_v1",
-        "handle_like_single_token_query": "forbidden_punctuation_unwrapped_x_handle_grammar_v2",
+        "handle_like_single_token_query": "forbidden_nfkc_format_stripped_outer_nonhandle_x_handle_grammar_v3",
         "x_user_search": "unicode_nfkc_full_consumption_target_and_professional_allowlist_v2",
         "multiword_keyword_or_semantic_person_intent": "post_run_audit_residual_v1",
         "result_projection": "force_partial_and_operator_reason_without_hydration_surface_gate_v2",
@@ -134,6 +134,7 @@ _DISCOVERY_USER_SEARCH_PROFESSIONAL_TERMS = frozenset(
 )
 _DISCOVERY_USER_SEARCH_CONNECTOR_TERMS = frozenset({"ai", "and", "at", "lab", "labs", "or"})
 _DISCOVERY_USER_SEARCH_CLOSED_SYNTAX_RE = re.compile(r"[a-z0-9\s@\"'()_./-]+")
+_HANDLE_SUBJECT_CHARACTERS = frozenset(string.ascii_letters + string.digits + "_@")
 ALLOWED_DISCOVERY_DIMENSIONS = (
     "target_lab_affiliation",
     "professional_role_or_function",
@@ -3599,18 +3600,28 @@ def _session_query_phase_arguments_allowed(
     query = arguments.get("query")
     if not isinstance(query, str):
         return True
-    normalized_query = query.strip()
-    punctuation_unwrapped_query = normalized_query.strip(string.punctuation).strip()
+    normalized_query = "".join(
+        character
+        for character in unicodedata.normalize("NFKC", query.strip())
+        if unicodedata.category(character) != "Cf"
+    )
+    start = 0
+    end = len(normalized_query)
+    while start < end and normalized_query[start] not in _HANDLE_SUBJECT_CHARACTERS:
+        start += 1
+    while end > start and normalized_query[end - 1] not in _HANDLE_SUBJECT_CHARACTERS:
+        end -= 1
+    possible_handle_subject = normalized_query[start:end]
     if (
         _PERSON_SCOPED_FROM_RE.search(normalized_query) is not None
-        or _BARE_HANDLE_LIKE_QUERY_RE.fullmatch(punctuation_unwrapped_query) is not None
+        or _BARE_HANDLE_LIKE_QUERY_RE.fullmatch(possible_handle_subject) is not None
     ):
         return False
     if tool_name != "x_user_search":
         return True
     if not isinstance(discovery_target_lab_id, str) or _ID_RE.fullmatch(discovery_target_lab_id) is None:
         return False
-    normalized_user_query = unicodedata.normalize("NFKC", normalized_query).casefold()
+    normalized_user_query = normalized_query.casefold()
     if (
         not normalized_user_query.isascii()
         or _DISCOVERY_USER_SEARCH_CLOSED_SYNTAX_RE.fullmatch(normalized_user_query) is None

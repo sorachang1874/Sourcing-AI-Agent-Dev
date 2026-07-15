@@ -35,8 +35,8 @@ non-Bio label to `third_party`, with raw bytes and explicit audit text preserved
 pre-policy bundle. Performance review found that at least 72/101 calls were spent on person hydration before discovery
 converged, while Boolean scope made all 40 intended handle-level Post/Reply queries ineligible for mechanical coverage
 credit. The next reviewed challenger is therefore discovery-only; exact per-person Post/Reply hydration will be a
-separate operator-generated stage. Its effective-prompt entry binds a session-query policy that rejects `from:` and
-punctuation-wrapped handle-like single-token queries during replay; `x_user_search` additionally uses an NFKC, full-
+separate operator-generated stage. Its effective-prompt entry binds a session-query policy that NFKC-normalizes all
+queries, removes invisible format controls, and rejects outer ASCII/Unicode-wrapped handle-like single-token subjects during replay; `x_user_search` additionally uses a full-
 consumption target-lab plus professional-context grammar. Discovery-only projection never applies the hydration surface
 gate and always overwrites model OK/PARTIAL status text with the operator-owned unproven reason:
 raw arguments can prove strategy cells were attempted, but not per-query yield or population convergence. Every
