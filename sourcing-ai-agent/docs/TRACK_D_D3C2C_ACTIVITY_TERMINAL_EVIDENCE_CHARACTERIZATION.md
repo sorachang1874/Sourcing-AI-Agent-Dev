@@ -10,9 +10,18 @@ lexical dispatch-exposure zero proof. This fixed-forward records that surface as
 the heuristic predicate, narrows the remaining absence checks to already-ratified canonical named surfaces, and adds a
 structural Migration-A order assertion. A fresh pinned review remains required.
 
-Scout snapshot: `e76d20e36fd34ffb6184079668b7c57deda0496f` on
+The fixed-forward retry
+`runtime/reviews/20260714T234336Z_Track_D_D3c2c_named-surface_fixed-forward.md` is also invalid solely at the old
+Desktop response-item memory-annotation comparison; its printed `NO-GO` is advisory only. The prior lexical-zero issue
+was closed. Its new actionable evidence is fixed here: the order oracle structurally pins every Migration-A item
+5/6/7 member in the exact `ActivityRun -> ActivityAttempt -> event -> verification intent -> response receipt ->
+failure receipt -> quarantine` phase sequence, §7 asserts the complete exact non-closure tuple, and §8 supersedes the
+old seven-test count with the current eight-test baseline. `R-019/R-023/R-027/R-029` remain open.
+
+Original Scout snapshot: `e76d20e36fd34ffb6184079668b7c57deda0496f` on
 `governance-phase0-ttl-20260611` (2026-07-15). The enclosing implementation commit for this documentation/test batch is
-not assigned here.
+not assigned here. The exact read-call population is intentionally advanced when the later D3c1a bounded batch adds a
+compatibility-only test-double fallback; the production list path uses the new batch readers.
 
 ## 1. Purpose and boundary
 
@@ -46,10 +55,12 @@ Current AST call population:
 |---|---:|---|
 | `upsert_activity_run` | **30 / 5** | acquisition command owner 1; command kernel 2; enrichment 4; orchestrator 14; profile-fetch owner 9 |
 | `list_activity_runs` | **20 / 3** | CRM public-web owner 2; Excel-intake owner 2; orchestrator 16 |
-| `get_activity_run` | **25 / 3** | orchestrator 17; profile-fetch owner 7; workflow-runtime repository self-read 1 |
+| `get_activity_run` | **26 / 3** | orchestrator 18; profile-fetch owner 7; workflow-runtime repository self-read 1 |
 
-The raw get total is **25 = 24 external consumers + 1 repository-internal identity read** from
-`upsert_activity_run`. The current table also has exactly one table-specific direct SQL `UPDATE`, owned by
+The raw get total is **26 = 25 external consumers + 1 repository-internal identity read** from
+`upsert_activity_run`. The extra orchestrator call is the D3c1a compatibility fallback for incomplete test doubles;
+the production Store/repository expose bounded batch methods and the public list paths use zero point reads. The current
+table also has exactly one table-specific direct SQL `UPDATE`, owned by
 `LiveControlPlanePostgresAdapter.cancel_acquisition_owner_command`; repository upserts otherwise use the existing
 generic durable-row path. That cancel owner must be included in any future ActivityRun migration/adoption proof.
 
@@ -169,10 +180,10 @@ scope-local D3c2b review artifact.
 
 ## 8. Author validation
 
-Final shared-tree author evidence:
+Current full-oracle author evidence (the eight-test oracle to be pinned by the fixed-forward commit):
 
 - `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src .venv/bin/python -m pytest -q tests/test_d3_activity_terminal_evidence_characterization.py`
-  → **7 passed**;
+  → **8 passed**;
 - `.venv/bin/ruff format --check tests/test_d3_activity_terminal_evidence_characterization.py`
   → **1 file already formatted**;
 - `.venv/bin/ruff check tests/test_d3_activity_terminal_evidence_characterization.py`
@@ -180,8 +191,8 @@ Final shared-tree author evidence:
 - `git diff --check`
   → clean.
 
-Fixed-forward focused evidence: the ratified named-surface check, structural Migration-A order check, and document
-boundary check are **3 passed / 5 deselected**; Ruff format/check and scoped diff check are clean. The full oracle is
-rerun from the pinned clean commit when concurrent D3c1a projection work is excluded.
+The earlier **7 passed** full-oracle result and **3 passed / 5 deselected** focused result predated the complete
+Migration-A member-order and exact non-closure assertions. They are superseded historical evidence, not the current
+validation baseline.
 
 These commands validate this oracle/document batch only; they do not validate future DDL or close any gate in §7.

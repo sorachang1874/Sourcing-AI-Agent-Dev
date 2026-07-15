@@ -107,7 +107,7 @@ EXPECTED_CALL_POPULATIONS = {
     ),
     "get_activity_run": Counter(
         {
-            "orchestrator.py": 17,
+            "orchestrator.py": 18,
             "profile_fetch_owner.py": 7,
             "repositories/workflow_runtime.py": 1,
         }
@@ -185,6 +185,34 @@ def _class_method(path: Path, class_name: str, method_name: str) -> tuple[ast.Fu
 
 def _normalized_source(source: str) -> str:
     return re.sub(r"\s+", " ", source).strip()
+
+
+def _numbered_markdown_items(section: str) -> dict[int, str]:
+    starts = list(re.finditer(r"(?m)^(\d+)\. ", section))
+    return {
+        int(match.group(1)): _normalized_source(
+            section[match.end() : starts[index + 1].start() if index + 1 < len(starts) else len(section)]
+        )
+        for index, match in enumerate(starts)
+    }
+
+
+def _markdown_bullet_items(section: str) -> tuple[str, ...]:
+    items: list[str] = []
+    current: list[str] = []
+    for line in section.splitlines():
+        if line.startswith("- "):
+            if current:
+                items.append(_normalized_source(" ".join(current)))
+            current = [line[2:]]
+        elif current and line.startswith("  "):
+            current.append(line.strip())
+        elif current:
+            items.append(_normalized_source(" ".join(current)))
+            current = []
+    if current:
+        items.append(_normalized_source(" ".join(current)))
+    return tuple(items)
 
 
 def _terminal_call_name(node: ast.Call) -> str:
@@ -343,7 +371,7 @@ def test_current_activity_and_event_call_populations_are_mechanically_frozen() -
     assert sum(observed["upsert_activity_run"].values()) == 30
     assert len(observed["upsert_activity_run"]) == 5
     assert sum(observed["list_activity_runs"].values()) == 20
-    assert sum(observed["get_activity_run"].values()) == 25
+    assert sum(observed["get_activity_run"].values()) == 26
 
     assert sum(observed["upsert_activity_attempt"].values()) == 22
     assert len(observed["upsert_activity_attempt"]) == 4
@@ -436,15 +464,39 @@ def test_ratified_future_tables_and_registry_symbols_are_absent_from_named_schem
 
 
 def test_d3b_migration_a_orders_activity_before_event_before_receipt_surfaces() -> None:
-    normalized = _normalized_source(D3B_CONTRACT_PATH.read_text(encoding="utf-8"))
-    migration_a = normalized[normalized.index("### 11.1 Migration A") : normalized.index("### 11.2 Migration B")]
-    activity_position = migration_a.index(
-        "adds scope/coordination/spec/business-fence columns to `workflow_activity_runs`"
+    contract = D3B_CONTRACT_PATH.read_text(encoding="utf-8")
+    migration_a = contract[contract.index("### 11.1 Migration A") : contract.index("### 11.2 Migration B")]
+    items = _numbered_markdown_items(migration_a)
+
+    activity_item = items[5]
+    activity_run_position = activity_item.index("`workflow_activity_runs`")
+    activity_attempt_position = activity_item.index("`workflow_activity_attempts`")
+    assert activity_run_position < activity_attempt_position
+
+    event_item = items[6]
+    event_position = event_item.index("reuses `workflow_events.operation_id`")
+    intent_position = event_item.index("verification-intent source terminal tuple")
+    assert event_position < intent_position
+
+    terminal_evidence_item = items[7]
+    response_position = terminal_evidence_item.index("creates `transport_response_receipts`")
+    failure_position = terminal_evidence_item.index("`transport_attempt_failure_receipts`")
+    quarantine_position = terminal_evidence_item.index("creates `workflow_late_result_quarantine`")
+    assert response_position < failure_position < quarantine_position
+
+    ordered_markers = (
+        "`workflow_activity_runs`",
+        "`workflow_activity_attempts`",
+        "reuses `workflow_events.operation_id`",
+        "verification-intent source terminal tuple",
+        "creates `transport_response_receipts`",
+        "`transport_attempt_failure_receipts`",
+        "creates `workflow_late_result_quarantine`",
     )
-    assert "`workflow_activity_attempts`" in migration_a[activity_position:]
-    event_position = migration_a.index("reuses `workflow_events.operation_id`", activity_position)
-    receipt_position = migration_a.index("creates `transport_response_receipts`", event_position)
-    assert activity_position < event_position < receipt_position
+    observed_phase_numbers = tuple(
+        item_number for marker in ordered_markers for item_number, item in items.items() if marker in item
+    )
+    assert observed_phase_numbers == (5, 5, 6, 6, 7, 7, 7)
 
 
 def test_characterization_document_preserves_owner_ratification_and_open_gates() -> None:
@@ -459,10 +511,21 @@ def test_characterization_document_preserves_owner_ratification_and_open_gates()
         "workflow event",
         "verification intent + response/failure receipts + late quarantine",
         "unratified / undetermined",
-        "R-019",
-        "R-023",
-        "R-027",
-        "R-029",
-        "OB-10.1/10.2/10.3/10.4",
     ):
         assert required_text in document
+
+    non_closure = document[document.index("## 7. Explicit non-closure") : document.index("## 8. Author validation")]
+    assert "D3c2c changes no runtime behavior and closes none of these gates:" in non_closure
+    assert _markdown_bullet_items(non_closure) == (
+        "`R-019`: atomic owner effect / command-attempt-event terminal UoW remains open;",
+        "`R-023`: durable-runtime cutover and residual tripwire remains open;",
+        "`R-027`: scope-matched formal review status remains open where not already covered by a valid artifact;",
+        "`R-029`: action request-schema compatibility/adoption remains open;",
+        "action-root durable-scope gate and `OB-10.1/10.2/10.3/10.4` remain open;",
+        "Migration A remainder, Migration B-D, registries/manifests/factory, Stage A/B, dispatch, provider/model, "
+        "live/W6, promotion/signoff, and served Agent tool population remain closed to activation.",
+    )
+    assert (
+        "This characterization is author evidence only. It is not a formal independent-review `GO` and does not "
+        "broaden the scope-local D3c2b review artifact." in _normalized_source(non_closure)
+    )
