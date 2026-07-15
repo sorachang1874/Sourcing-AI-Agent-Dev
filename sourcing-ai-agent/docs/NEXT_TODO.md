@@ -245,10 +245,12 @@
   （仅 heartbeat/read-only
   exact replay 窄例外）。只有 invalidating control/input/requeue 接受态推进 control epoch `+1`；
   `succeeded|failed_terminal` terminal 不加 epoch，但清 token/lease并写 terminal pair。control-first/stale/business
-  mismatch 的 domain/attempt/intent/event/command/source/result 零写；dispatch-first 只允许已授权 in-flight，
-  response 才入 shared quarantine repository。immutable identity/digests insert-once，cost/retention typed CAS
-  entrypoints 写集分离且 monotonic；`cost_state: pending_reconciliation -> reconciled_confirmed | reconciled_uncertain |
-  reconciled_no_call` 与 `retention_state: retained -> purged_tombstone` 正交、domain 零 apply。terminal command/event
+  mismatch 的 domain/attempt/intent/event/command/source/result 零写；dispatch-first 只允许已授权 in-flight。
+  D3c2h0 fixed-forward 要求 response/failure receipt 在 full five-field PFX 下 exact-copy exposure 的 post-claim
+  `command_attempt`；response-only quarantine 禁止 `workflow_run_id` 与 `reconciled_no_call`，其 immutable
+  identity/digests insert-once，cost/retention typed CAS entrypoints 写集分离且 monotonic；
+  `cost_state: pending_reconciliation -> reconciled_confirmed | reconciled_uncertain` 与
+  `retention_state: retained -> purged_tombstone` 正交，no-call exposure 无 receipt/quarantine，domain 零 apply。terminal command/event
   用 local both-null/both-non-null CHECK + `MATCH SIMPLE DEFERRABLE` composite FK；该 FK 只证明 forward edge，
   reverse orphan-event rejection 由 terminal repository 单 PG UoW + injected-failure rollback 证明；pair 在 result-terminal 期间不可变，
   仅 registered reopen 可清；future native-PG DDL 须证明 null/half-null/exact/mismatch/non-orphan 语义。heartbeat 按
@@ -278,10 +280,16 @@
   `NoExposureTerminalSpec` 授权 complete-none `no_exposure`；它在 common `d3-dispatch-v2` coordination lock 下证明
   dispatch/exposure absence，**绝不**尝试锁一个不存在的 exposure row。stale already-authorized receipts 仅 audit/cost、
   不授权 apply；attempt/protocol failure 本身不进 response quarantine。provider delivery id 或 durable inbound
-  `TransportResponseReceipt` get-or-create stable occurrence；redelivery 复用，exact key=
-  `late-response-v1:<scope_digest>:<dispatch_exposure_id>:<canonical_delivery_identity>`，digest mismatch collision。
-  post-network 仅承接已授权 exposure，固定 exposure→receipt→quarantine/cost-axis order，绝不回到 operation/command/
-  intent/domain，也不授权 send/apply。Plan §6#7 的 owner matrix 已锁成机械非空 **26×10**（将 terminal policy
+  `TransportResponseReceipt` get-or-create stable occurrence；redelivery 复用。D3c2h0 已否决 scope-digest-only
+  receipt/quarantine occurrence/idempotency key；D3c2h1 须以完整 PFX ratify exact encoder，digest mismatch collision。
+  post-network 分成两条 UoW：pure exposure-first 仅 exposure lock→applicable receipt→exposure terminalization，
+  quarantine permission=0；只有先取 `d3-dispatch-v2` 并按 operation root→optional plan/review/gate→all participating
+  commands→intent/predecessor→ActivityRun/Attempt 完成全局 owner-row 前缀锁/验、从 stored current state 分类的
+  response-classification UoW，才可在 exposure tail 插 optional response-only quarantine；进入 exposure 后不得回头。
+  caller flag、callback 或 stale `ClaimReceipt` 不具分类权；pending response-classification owner/state、retry/recovery、
+  exact replay 与 idempotency 留 D3c2h1，也不授权 send/apply。
+  current canonical `ModelInvocationEnvelopeV1` 没有 durable ref issuer；D0f 必须先落 sole owner/ref grammar，禁止
+  placeholder ref/hash 或第二 envelope schema。Plan §6#7 的 owner matrix 已锁成机械非空 **26×10**（将 terminal policy
   registry 与 transport terminal receipts 分行；owner/SOT/allowed/derivation/consumers/forbidden/fallback/migration/
   deletion），decision shape complete；物理 owner/migration/repository/runtime 仍 NOT IMPLEMENTED。rollout 依赖序
   固定为 public projection/migration 与 registry/policy pins、双 population manifests、bootstrap authority
@@ -456,10 +464,27 @@
   ref grammar 仍是 implementation prerequisites。完整记录见
   `TRACK_D_D3C2G_COST_LEDGER_DISPATCH_EXPOSURE_DECISION_LOCK.md`；零 SQL/descriptor/repository/runtime/live，
   本 decision lock 不授权 migration，R-019/R-023/R-027/R-029、action-root、其余 OB 与 served=0 不变。
-- [ ] D3c2h remaining evidence-surface decision lock：先 ratify verification-intent、response/failure receipt 与
-  late-quarantine 的 sole owners、exact manifests、CAS/retention 和 scope-prefixed relations，并解决 response-only
-  `reconciled_no_call` reachability 与 receipt `command_attempt` identity；不得从 D3b prose 猜 schema，也不得把
-  D3c2g cost-ledger decision lock 当作任一 surface 的 SQL/migration 授权。
+- [x] D3c2h0 evidence cross-contract ratification（2026-07-15；decision-only）：full five-field PFX 取代 D3b
+  receipt/quarantine scope-only sketches；response/failure receipt exact-copy exposure 的 post-claim
+  `command_attempt`；response-only quarantine 禁止 `workflow_run_id` 与 `reconciled_no_call`，cost axis 只允许
+  pending→confirmed|uncertain。post-network 分成两条 UoW：pure exposure-first 仅 exposure lock→receipt→exposure
+  terminalization、quarantine permission=0；response-classification 必须先持 `d3-dispatch-v2` 并锁/验 complete global
+  owner-row prefix，从 stored current state 判 current/stale，才可在 exposure tail optional quarantine，且进入 exposure
+  后不得回头。caller flag/callback/stale `ClaimReceipt` 不具分类权；pending classification retry/recovery/idempotency
+  留 D3c2h1。initial v1 仅 `model_tool_v1` + live/simulate/scripted；simulate/scripted zero-cost
+  exposure/receipt 可达，replay zero-write fail-closed；Harvest/provider-search 必须另有 owner-ratified variant，
+  不得伪装 model transport。完整记录见 `TRACK_D_D3C2H0_EVIDENCE_CROSS_CONTRACT_RATIFICATION.md`；oracle=`9 passed`，
+  零 exact manifest/SQL/descriptor/repository/runtime/live，不授权 migration，fresh pinned/formal review pending。
+- [ ] D0f durable ModelInvocationEnvelope ref owner（D3c2h1 hard prerequisite）：保留
+  `ModelInvocationEnvelopeV1` 为唯一 canonical shape/digest owner；ratify/implement sole durable result-slot/evidence
+  owner、full-PFX ref grammar、issuance/persistence UoW、exact replay/collision、retention 与 live/simulate/scripted
+  presence。禁止 placeholder ref/hash、第二 envelope schema、receipt/quarantine owner 自行 mint ref。
+- [ ] D3c2h1 exact evidence-surface decision lock：仅在 D0f 后 ratify `verification_intent`、response/failure
+  receipt 与 late-quarantine 的 exact ordered manifests/types/checks/full-PFX keys/FKs、sole physical owners、
+  insert/exact-replay/CAS/retention、两条 composition API，以及 pending response-classification owner/state、
+  retry/recovery、exact replay 与 idempotency；先补 Decimal/TIMESTAMPTZ codecs 和 specialized
+  insert-once/CAS prerequisites。不得从 D3b prose 猜 schema，不得把 D3c2g/D3c2h0 当 SQL/migration 授权，且
+  Harvest/provider-search variant 未 owner-ratify 前不得进入该 evidence path。
 - [ ] Track D 后的 user-owned cohort selection contract（Thinking Machines Lab live 前置）：以一个 versioned、
   registry-digest-pinned `CohortSelection` 作为唯一 owner，显式承载 canonical ordered
   `role_bucket_ids[]`（Researcher/Engineer/Product Manager 可自由多选且 registry 可扩展）、

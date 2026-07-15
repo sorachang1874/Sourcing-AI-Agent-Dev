@@ -59,10 +59,29 @@
   Exact Decimal/TIMESTAMPTZ codecs, specialized insert-once/CAS primitives, and durable envelope owner/ref grammar are
   explicit implementation prerequisites; generic replace-all upsert is forbidden.
   This candidate authorizes no SQL, descriptor, repository, runtime writer, settlement daemon, provider/model path,
-  live/W6/manual signoff, rollout step 3, or served tool. Verification intent, response/failure receipts, late
-  quarantine (including response-only `reconciled_no_call` and receipt `command_attempt` decisions), upstream FKs,
-  Migration B-D, adoption, and fresh pinned/formal review remain later gates. R-019, R-023,
+  live/W6/manual signoff, rollout step 3, or served tool. D3c2h0 now separately ratifies receipt/quarantine cross-contract
+  identity/order, but verification-intent and exact receipt/quarantine manifests, upstream FKs, Migration B-D, adoption,
+  and fresh pinned/formal review remain later gates. R-019, R-023,
   R-027, R-029, action-root, the remaining OB gates, and served=0 retain their existing status.
+
+- **R-019 / D3c2h0 (2026-07-15):** decision-only cross-contract ratification supersedes D3b's scope-digest-only
+  receipt/quarantine sketches with the complete
+  `(runtime_namespace, provider_mode, workspace_id, scope_digest, coordination_plan_review_id)` PFX. Both response and
+  failure receipts exact-copy the exposure's post-claim `command_attempt`; response-only quarantine forbids
+  `workflow_run_id` and `reconciled_no_call`, so its cost axis is only pending→confirmed|uncertain and no-call has no
+  receipt/quarantine. This active annotation supersedes D3b's exposure-first optional-quarantine sketch with two PG
+  compositions: pure exposure-first is exposure lock→receipt→exposure terminalization with quarantine permission=0;
+  response-classification may add optional response quarantine only after `d3-dispatch-v2` locks and validates the
+  complete global owner-row prefix and derives current/stale from stored current state. Caller flags, callbacks, and stale
+  `ClaimReceipt` values have no classifier authority, and neither path may return to runtime/domain owners after exposure.
+  Durable pending response-classification owner/state, retry/recovery, exact replay, and idempotency remain D3c2h1 work.
+  Current `ModelInvocationEnvelopeV1` remains the sole canonical shape but has no
+  durable ref issuer, so D0f sole owner/ref grammar is a hard predecessor and placeholder refs/second schemas are
+  forbidden. Initial v1 admits only `model_tool_v1` live/simulate/scripted; simulate/scripted zero-cost evidence remains
+  reachable, replay is zero-write, and Harvest/provider-search cannot masquerade as model transport. Oracle=`9 passed`.
+  D3c2h0 ratifies no ordered manifest/count, SQL, descriptor, repository, runtime, or live path. Next order is D0f →
+  D3c2h1 exact intent/receipt/quarantine manifests after Decimal/TIMESTAMPTZ plus specialized insert-once/CAS
+  prerequisites. R-019/R-023/R-027/R-029, action-root, remaining OB gates, rollout step 3, and served=0 remain open.
 
 - **R-019 / D3c2f (2026-07-15):** the event-core Migration-A fragment adds only the dormant `workflow_events`
   eleven-column scope/claim/terminal-outcome shape plus eleven `NOT VALID` local checks. The 5s one-table timeout,
