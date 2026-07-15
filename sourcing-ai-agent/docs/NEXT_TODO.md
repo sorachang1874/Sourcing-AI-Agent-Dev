@@ -205,7 +205,8 @@
   approval 分支在返回 captured plan 前写 action/run/event，触发 R-019 next-mutation tripwire；current fixed-forward
   对 existing-plan approval requirement 只读返回，并把回归扩为全 D1g 表零写。Commit `ebe7ed0` fresh pinned
   non-author scope-local advisory=`GO 0/0/0/0`，但不是 formal GO；R-031 仍 formal-review pending。D1g checkpoint 不迁移当时其余
-  12 个 schema-less action；post-D1h current 为 11，不改 served=0、不授权 live/provider。
+  12 个 schema-less action；D1h checkpoint 将其降至 11，当前 D1i partition 见下一项。不改 served=0、
+  不授权 live/provider。
 - [x] D1h CRM Public Web action activation current author candidate（2026-07-16）：将
   `enrich_person_public_web` 作为第 4 个 schema-defined action 激活，当前 **4 schema-defined / 11 schema-less /
   served=0**。exact one batch/single/person-identity selector 绑定 authenticated server workspace+user，canonical
@@ -228,11 +229,25 @@
   `121+202 subtests`、final stable-tree Operation `136+503 subtests`、lint `58 files`、global mypy `81/4`、
   compile/diff clean；fresh pinned review pending。
   R-019/R-028/R-029/R-031 均不因本批关闭；无 provider/model/live。
+- [x] D1i acquisition root action activation current author candidate（2026-07-16）：将
+  `start_acquisition_run` 作为第 5 个 schema-defined action 激活，当前 **5 schema-defined / 10 schema-less /
+  served=0**。closed input 仅接受 nonblank `target_company+query`，`raw_user_request` 仅作 exclusive query alias；
+  caller command/workflow/job/review/retry/identity aliases 与非空 raw target 均 pre-write reject。authenticated
+  transport mint server workspace/actor + exact owner scope；open-mode explicit workspace 保持。approve/retry/resume/
+  dispatch/root owner 重验 persisted workspace target；root command 还需 exact OperationRun→AgentAction、canonical
+  payload/envelope、approved nonterminal action、nonterminal operation 与 currently-valid running lease。authority failure 仅可
+  terminalize root command，不能用未可信 operation id 回写 aggregate，也不创建 child/event/outbox/current-state/
+  review/run/job/Activity/Delta；positive 仅创建一个 deterministic `acquisition.intent.resolve` child。Final
+  stable-tree author evidence=D1i `9+28 subtests`、combined D1 `153+228 subtests`、command/control `175`、exact
+  acquisition+ratchet `2`、full Operation `136+503 subtests`、lint `58 files`、mypy `81/4`、compile/diff green；
+  fresh pinned review pending。R-019 仍保留
+  preflight→child 非同一 PG UoW 的 concurrent-cancel race；R-029 降至 10/15、epoch 仍为
+  `d1f_r029_20260715_v2`；无 served/provider/model/live。
 - [ ] R-029：宽松 action-schema bridge 仅可在 production action 尚无 reviewed schema/owner binder 期间存在；
   删除条件 = 全部 API-submittable actions（不是只看 served subset）连续一个 release window durable hit=0。
   observation epoch 必须每个 release window bump，且 `NOT VALID` checks 的既有行 validation 在独立部署完成；
   任一 action 进入 served 集前必须满足完整 schema+adapter+Activity+revisioned model-safe result+simulate serializer
-  谓词；D1h 后当前 11/15 schema-less、served=0。
+  谓词；D1i 后当前 10/15 schema-less、served=0。
 - [ ] R-031 review closeout：D1g current author candidate 已将 actions/runs list、detail、provenance 及
   approve/reject/dispatch/resume/retry/cancel 统一到 server-derived exact-workspace preflight，run 同时校验 linked
   action owner；nested commands/events 分别按 linked operation+action owner 与 physical event workspace 在 SQL

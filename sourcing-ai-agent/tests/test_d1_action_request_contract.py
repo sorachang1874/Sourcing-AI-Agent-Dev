@@ -24,6 +24,7 @@ from sourcing_agent.operation_runtime import (
     CRM_RESOURCE_BOUND_ACTION_TYPES,
     DEFAULT_ACTION_REGISTRY,
     DISPATCH_ADAPTER_PROJECTION_READ,
+    OPERATION_OWNER_BOUND_ACTION_TYPES,
     REQUEST_SCHEMA_COMPATIBILITY_EVENT_TYPE,
     REQUEST_SCHEMA_COMPATIBILITY_OBSERVATION_EPOCH,
     REQUEST_SCHEMA_COMPATIBILITY_ORIGIN_PRE_D1C,
@@ -297,14 +298,15 @@ def test_action_request_spec_rejects_unknown_duplicate_or_caller_owned_aliases(
         replace(_schema_spec(), target_ref_field_aliases=aliases)
 
 
-def test_production_action_registry_activates_only_existing_crm_schemas_and_remains_unserved() -> None:
+def test_production_action_registry_activates_owner_bound_schemas_and_remains_unserved() -> None:
     records = DEFAULT_ACTION_REGISTRY.to_record(include_command_contracts=False)
     assert len(records) == 15
     schema_defined = {
         action_type for action_type in records if DEFAULT_ACTION_REGISTRY.spec_for(action_type).has_request_schema
     }
-    assert schema_defined == set(CRM_RESOURCE_BOUND_ACTION_TYPES)
-    assert sum(not DEFAULT_ACTION_REGISTRY.spec_for(action_type).has_request_schema for action_type in records) == 11
+    assert set(CRM_RESOURCE_BOUND_ACTION_TYPES).issubset(schema_defined)
+    assert schema_defined == set(OPERATION_OWNER_BOUND_ACTION_TYPES)
+    assert sum(not DEFAULT_ACTION_REGISTRY.spec_for(action_type).has_request_schema for action_type in records) == 10
     assert all(
         bool(DEFAULT_ACTION_REGISTRY.spec_for(action_type).request_schema_digest) == (action_type in schema_defined)
         for action_type in records
@@ -793,7 +795,7 @@ class D1ActionRequestContractPGTest(PGDurableRuntimeTestMixin, unittest.TestCase
             for action_type in DEFAULT_ACTION_REGISTRY.to_record()
             if not DEFAULT_ACTION_REGISTRY.spec_for(action_type).has_request_schema
         )
-        self.assertEqual(len(schema_less_actions), 11)
+        self.assertEqual(len(schema_less_actions), 10)
         for ordinal, action_type in enumerate(schema_less_actions, start=1):
             with self.subTest(action_type=action_type):
                 spec = DEFAULT_ACTION_REGISTRY.spec_for(action_type)
@@ -862,7 +864,7 @@ class D1ActionRequestContractPGTest(PGDurableRuntimeTestMixin, unittest.TestCase
             for action_type in DEFAULT_ACTION_REGISTRY.to_record()
             if not DEFAULT_ACTION_REGISTRY.spec_for(action_type).has_request_schema
         )
-        self.assertEqual(len(schema_less_actions), 11)
+        self.assertEqual(len(schema_less_actions), 10)
         for ordinal, action_type in enumerate(schema_less_actions, start=1):
             with self.subTest(action_type=action_type):
                 spec = DEFAULT_ACTION_REGISTRY.spec_for(action_type)

@@ -16,6 +16,7 @@ from sourcing_agent.operation_runtime import (
     CRM_RECORD_BATCH_ACTION_REQUEST_CONTRACTS,
     CRM_RESOURCE_BOUND_ACTION_TYPES,
     DEFAULT_ACTION_REGISTRY,
+    OPERATION_OWNER_BOUND_ACTION_TYPES,
 )
 from sourcing_agent.orchestrator import SourcingOrchestrator
 from sourcing_agent.semantic_provider import LocalSemanticProvider
@@ -45,7 +46,7 @@ FULL_ZERO_WRITE_TABLES = (
 )
 
 
-def test_crm_public_web_action_is_the_fourth_schema_defined_unserved_action() -> None:
+def test_crm_public_web_action_remains_in_the_schema_defined_unserved_set() -> None:
     records = DEFAULT_ACTION_REGISTRY.to_record(include_command_contracts=False)
     schema_defined = {
         action_type for action_type in records if DEFAULT_ACTION_REGISTRY.spec_for(action_type).has_request_schema
@@ -53,9 +54,10 @@ def test_crm_public_web_action_is_the_fourth_schema_defined_unserved_action() ->
     spec = DEFAULT_ACTION_REGISTRY.spec_for(ACTION_ENRICH_PERSON_PUBLIC_WEB)
 
     assert set(CRM_RECORD_BATCH_ACTION_REQUEST_CONTRACTS) == {ACTION_ENRICH_PERSON_PUBLIC_WEB}
-    assert schema_defined == set(CRM_RESOURCE_BOUND_ACTION_TYPES)
-    assert len(schema_defined) == 4
-    assert sum(not DEFAULT_ACTION_REGISTRY.spec_for(action_type).has_request_schema for action_type in records) == 11
+    assert set(CRM_RESOURCE_BOUND_ACTION_TYPES).issubset(schema_defined)
+    assert schema_defined == set(OPERATION_OWNER_BOUND_ACTION_TYPES)
+    assert len(schema_defined) == 5
+    assert sum(not DEFAULT_ACTION_REGISTRY.spec_for(action_type).has_request_schema for action_type in records) == 10
     assert spec.request_schema_version == "crm_public_web_enrichment_request_v1"
     assert len(spec.request_schema_digest) == 64
     assert spec.request_identity_target_fields == ("crm_record_ids", "workspace_id")

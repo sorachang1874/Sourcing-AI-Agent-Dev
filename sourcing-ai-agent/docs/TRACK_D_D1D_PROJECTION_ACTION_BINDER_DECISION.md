@@ -100,9 +100,10 @@ After the owner choice is physical and reviewed, the bounded implementation must
 7. keep both actions non-live and `served=0` until revisioned model-safe result schemas and simulate serializer
    preflight complete the full served predicate.
 
-Only then may these two actions leave the R-029 numerator. D1f has independently reduced that numerator to 12 by
-activating three CRM actions; projection activation would reduce it further but would not close R-029 for the remaining
-API-submittable actions or authorize removal of the compatibility epoch/evidence.
+Only then may these two actions leave the R-029 numerator. D1f reduced that numerator to 12 by activating three CRM
+actions; D1h then reduced it to 11 and D1i to the current 10 through their own reviewed owner/schema contracts.
+Projection activation would reduce it further but would not close R-029 for the remaining API-submittable actions or
+authorize removal of the compatibility epoch/evidence.
 
 ## 5. Executable oracle and validation
 

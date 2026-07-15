@@ -55,7 +55,9 @@ CRM_EXISTING_RECORD_ACTION_TYPES = (
     ACTION_CREATE_CRM_TASK,
 )
 CRM_RECORD_BATCH_ACTION_TYPES = (ACTION_ENRICH_PERSON_PUBLIC_WEB,)
+ACQUISITION_ROOT_ACTION_TYPES = (ACTION_START_ACQUISITION_RUN,)
 CRM_RESOURCE_BOUND_ACTION_TYPES = CRM_EXISTING_RECORD_ACTION_TYPES + CRM_RECORD_BATCH_ACTION_TYPES
+OPERATION_OWNER_BOUND_ACTION_TYPES = CRM_RESOURCE_BOUND_ACTION_TYPES + ACQUISITION_ROOT_ACTION_TYPES
 ACTION_REFRESH_COMPANY_PUBLIC_WEB = "refresh_company_public_web_assets"
 ACTION_PROMOTE_PERSON_ASSERTION = "promote_person_assertion"
 ACTION_EXPORT_CANDIDATES = "export_candidates"
@@ -146,6 +148,35 @@ _CRM_RECORD_TARGET_ALIASES = (
     ("workspace_id", ("tenant_id",)),
     ("owner_user_id", ("requester_id", "user_id")),
     ("crm_version", ("record_version",)),
+)
+
+_ACQUISITION_ROOT_INPUT_PROPERTIES: dict[str, dict[str, Any]] = {
+    "target_company": {"type": "string", "minLength": 1, "maxLength": 500, "pattern": r"\S"},
+    "query": {"type": "string", "minLength": 1, "maxLength": 20_000, "pattern": r"\S"},
+}
+_ACQUISITION_ROOT_TARGET_PROPERTIES: dict[str, dict[str, Any]] = {
+    "workspace_id": {"type": "string", "minLength": 1, "maxLength": 200, "pattern": r"\S"},
+}
+
+
+ACQUISITION_ROOT_ACTION_REQUEST_CONTRACTS: Mapping[str, Mapping[str, Any]] = MappingProxyType(
+    {
+        ACTION_START_ACQUISITION_RUN: MappingProxyType(
+            {
+                "request_schema": _freeze_action_request_json(
+                    DEFAULT_ACTION_REQUEST_SCHEMA_BUILDER.build(
+                        input_properties=_ACQUISITION_ROOT_INPUT_PROPERTIES,
+                        input_required=tuple(_ACQUISITION_ROOT_INPUT_PROPERTIES),
+                        target_properties=_ACQUISITION_ROOT_TARGET_PROPERTIES,
+                        target_required=tuple(_ACQUISITION_ROOT_TARGET_PROPERTIES),
+                    )
+                ),
+                "request_schema_version": "acquisition_root_request_v1",
+                "request_identity_target_fields": ("workspace_id",),
+                "target_ref_field_aliases": (("workspace_id", ("tenant_id",)),),
+            }
+        )
+    }
 )
 
 
@@ -759,6 +790,7 @@ DEFAULT_ACTION_REGISTRY = ActionRegistry(
             display_category="acquisition",
             allowed_workflow_command_types=(ACQUISITION_RUN_CREATE_COMMAND_TYPE,),
             default_workflow_command_type=ACQUISITION_RUN_CREATE_COMMAND_TYPE,
+            **dict(ACQUISITION_ROOT_ACTION_REQUEST_CONTRACTS[ACTION_START_ACQUISITION_RUN]),
         ),
         ACTION_FETCH_PROFILE_SAMPLE: ActionSpec(
             action_type=ACTION_FETCH_PROFILE_SAMPLE,

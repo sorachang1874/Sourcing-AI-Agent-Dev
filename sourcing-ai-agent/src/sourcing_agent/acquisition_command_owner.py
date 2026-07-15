@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import hashlib
 import uuid
+from collections.abc import Mapping
 from typing import Any, Callable
 
 from .command_kernel import CommandKernel
@@ -132,6 +133,7 @@ class AcquisitionCommandOwner:
         durable_runtime_writer: Any,
         upsert_acquisition_run_phase: Callable[..., dict[str, Any]],
         sync_operation_run_from_workflow_command_control: Callable[..., dict[str, Any]],
+        revalidate_operation_action_target: Callable[[dict[str, Any]], dict[str, Any]],
     ) -> None:
         self.store = store
         self._kernel = command_kernel
@@ -143,6 +145,41 @@ class AcquisitionCommandOwner:
         # ``ProfileFetchOwner`` already receives it as an injected callable.
         self._upsert_acquisition_run_phase = upsert_acquisition_run_phase
         self._sync_operation_run_from_workflow_command_control = sync_operation_run_from_workflow_command_control
+        self._revalidate_operation_action_target = revalidate_operation_action_target
+
+    def _preflight_acquisition_root_operation_action_command(
+        self,
+        command: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        """Require exact Operation/action authority for every executable root."""
+
+        return self._revalidate_operation_action_target(dict(command))
+
+    def _acquisition_root_preflight_failure(
+        self,
+        command: Mapping[str, Any],
+        *,
+        reason: str,
+        mark_failed: bool,
+    ) -> dict[str, Any]:
+        command_record = dict(command)
+        command_id = str(command_record.get("command_id") or "").strip()
+        failed: dict[str, Any] | None = None
+        if mark_failed and command_id:
+            failed = self.store.mark_workflow_command_failed(
+                command_id,
+                error_text=reason,
+                retryable=False,
+            )
+        observed = failed or command_record
+        return {
+            "status": "failed",
+            "reason": reason,
+            "workflow_command": self._kernel._workflow_command_observation(
+                observed,
+                migration_phase="W11a_acquisition_run_create_root",
+            ),
+        }
 
     def _cancel_acquisition_owner_command_uow(
         self,
@@ -2777,7 +2814,16 @@ class AcquisitionCommandOwner:
         command_id = str(command_payload.get("command_id") or "").strip()
         if not command_id:
             return {"status": "failed", "reason": "acquisition_run_create_command_id_missing"}
+        latest_initial = self.store.get_workflow_command(command_id) or command_payload
+        command_payload = latest_initial
         if str(command_payload.get("status") or "").strip() == "succeeded":
+            terminal_preflight = self._preflight_acquisition_root_operation_action_command(command_payload)
+            if str(terminal_preflight.get("status") or "") != "ready":
+                return self._acquisition_root_preflight_failure(
+                    command_payload,
+                    reason=str(terminal_preflight.get("reason") or "acquisition_root_command_target_conflict").strip(),
+                    mark_failed=False,
+                )
             self._kernel._sync_operation_run_from_workflow_command(
                 command_payload,
                 actor=ACQUISITION_RUN_CREATE_OWNER,
@@ -2796,6 +2842,15 @@ class AcquisitionCommandOwner:
         if not claimed:
             latest = self.store.get_workflow_command(command_id) or command_payload
             if str(latest.get("status") or "").strip() == "succeeded":
+                latest_preflight = self._preflight_acquisition_root_operation_action_command(latest)
+                if str(latest_preflight.get("status") or "") != "ready":
+                    return self._acquisition_root_preflight_failure(
+                        latest,
+                        reason=str(
+                            latest_preflight.get("reason") or "acquisition_root_command_target_conflict"
+                        ).strip(),
+                        mark_failed=False,
+                    )
                 self._kernel._sync_operation_run_from_workflow_command(
                     latest,
                     actor=ACQUISITION_RUN_CREATE_OWNER,
@@ -2817,8 +2872,38 @@ class AcquisitionCommandOwner:
                     migration_phase="W11a_acquisition_run_create_root",
                 ),
             }
-        running = self.store.mark_workflow_command_running(command_id, lease_owner=lease_owner) or claimed
-        result = self._execute_acquisition_run_create_command_payload(running, lease_owner=lease_owner)
+        running = self.store.mark_workflow_command_running(command_id, lease_owner=lease_owner)
+        if not running:
+            latest = self.store.get_workflow_command(command_id) or claimed
+            return {
+                "status": "queued",
+                "reason": "acquisition_run_create_command_running_transition_not_applied",
+                "workflow_command": self._kernel._workflow_command_observation(
+                    latest,
+                    migration_phase="W11a_acquisition_run_create_root",
+                ),
+            }
+        latest = self.store.get_workflow_command(command_id) or running
+        if (
+            str(latest.get("status") or "").strip() != "running"
+            or str(latest.get("lease_owner") or "").strip() != lease_owner
+        ):
+            return {
+                "status": "queued",
+                "reason": "acquisition_run_create_command_live_lease_lost",
+                "workflow_command": self._kernel._workflow_command_observation(
+                    latest,
+                    migration_phase="W11a_acquisition_run_create_root",
+                ),
+            }
+        execution_preflight = self._preflight_acquisition_root_operation_action_command(latest)
+        if str(execution_preflight.get("status") or "") != "ready":
+            return self._acquisition_root_preflight_failure(
+                latest,
+                reason=str(execution_preflight.get("reason") or "acquisition_root_command_target_conflict").strip(),
+                mark_failed=True,
+            )
+        result = self._execute_acquisition_run_create_command_payload(latest, lease_owner=lease_owner)
         result_status = str(result.get("status") or "").strip()
         if result_status not in {"ready_for_downstream_commands"}:
             failed = self.store.mark_workflow_command_failed(
@@ -2827,7 +2912,7 @@ class AcquisitionCommandOwner:
                 retryable=False,
             )
             self._kernel._sync_operation_run_from_workflow_command(
-                failed or running,
+                failed or latest,
                 actor=ACQUISITION_RUN_CREATE_OWNER,
                 source="acquisition_run_create.command_owner",
             )
@@ -2835,13 +2920,13 @@ class AcquisitionCommandOwner:
                 "status": "failed",
                 "reason": str(result.get("reason") or "acquisition_run_create_invalid"),
                 "workflow_command": self._kernel._workflow_command_observation(
-                    failed or running,
+                    failed or latest,
                     migration_phase="W11a_acquisition_run_create_root",
                 ),
             }
         succeeded = self.store.mark_workflow_command_succeeded(command_id, result=result)
         self._kernel._sync_operation_run_from_workflow_command(
-            succeeded or running,
+            succeeded or latest,
             actor=ACQUISITION_RUN_CREATE_OWNER,
             source="acquisition_run_create.command_owner",
         )
@@ -2850,7 +2935,7 @@ class AcquisitionCommandOwner:
             "reason": "acquisition_run_create_root_recorded",
             "result": result,
             "workflow_command": self._kernel._workflow_command_observation(
-                succeeded or running,
+                succeeded or latest,
                 migration_phase="W11a_acquisition_run_create_root",
             ),
         }

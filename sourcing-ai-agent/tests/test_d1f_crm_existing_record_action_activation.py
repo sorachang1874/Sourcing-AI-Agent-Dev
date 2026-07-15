@@ -19,6 +19,7 @@ from sourcing_agent.operation_runtime import (
     CRM_EXISTING_RECORD_ACTION_TYPES,
     CRM_RESOURCE_BOUND_ACTION_TYPES,
     DEFAULT_ACTION_REGISTRY,
+    OPERATION_OWNER_BOUND_ACTION_TYPES,
     OperationSubmissionResult,
 )
 from sourcing_agent.orchestrator import SourcingOrchestrator
@@ -71,9 +72,10 @@ def test_production_registry_reflects_current_schema_partition_and_still_serves_
     }
 
     assert len(records) == 15
-    assert schema_defined == set(CRM_RESOURCE_BOUND_ACTION_TYPES)
-    assert len(schema_defined) == 4
-    assert sum(not DEFAULT_ACTION_REGISTRY.spec_for(action_type).has_request_schema for action_type in records) == 11
+    assert set(CRM_RESOURCE_BOUND_ACTION_TYPES).issubset(schema_defined)
+    assert schema_defined == set(OPERATION_OWNER_BOUND_ACTION_TYPES)
+    assert len(schema_defined) == 5
+    assert sum(not DEFAULT_ACTION_REGISTRY.spec_for(action_type).has_request_schema for action_type in records) == 10
     assert sum(record.get("agent_tool_enabled") is True for record in records.values()) == 0
     assert all("served_tool_status" not in record for record in records.values())
 

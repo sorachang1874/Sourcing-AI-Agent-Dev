@@ -166,8 +166,9 @@ W8 foundation is active.
 
 ### D1 Request Schema, Owner Binding, And Physical Pins
 
-The D1c foundation and D1e binder declarations are active. D1f activates exactly three existing-record CRM request
-schemas; no production action is served to a model.
+The D1c foundation and D1e binder declarations are active. D1f activated three existing-record CRM request schemas,
+D1h activated CRM Public Web enrichment, and D1i activated the acquisition root. Five actions are schema-defined,
+10 remain on the R-029 bridge, and no production action is served to a model.
 
 - `operation_runtime.ActionRequestSpec` is the checked-in action request-contract owner. `ActionSpec` is an
   object-identical compatibility alias, not a second schema model. A non-empty request schema is a closed root object
@@ -176,9 +177,9 @@ schemas; no production action is served to a model.
 - D0 `ToolSpec.validate_input(...)` and `ToolSpec.input_schema_digest` are the shared schema validator and canonical
   digest owner. D1 must not add a second JSON-schema evaluator or digest algorithm.
 - For a schema-defined action, normalized caller/model values enter only the request schema's `input_payload` segment.
-  The exact three D1f HTTP actions accept one object envelope named `input` or compatibility alias `input_payload`;
+  The five current schema-defined HTTP actions accept one object envelope named `input` or compatibility alias `input_payload`;
   selection is by key presence, every supplied envelope is validated, and supplying both is ambiguous even when equal
-  or empty. This rule does not silently migrate the 12 R-029 actions, which retain their existing truthy precedence.
+  or empty. This rule does not silently migrate the 10 R-029 actions, which retain their existing truthy precedence.
   The action owner must mint an `OwnerBoundTargetRef` whose owner equals `ActionRequestSpec.owner_module`; raw
   caller/model `target_ref`, a duplicate owner field, or a declared alias override fails before persistence. The API
   and writer also reject caller-supplied `request_schema_version` / `request_schema_digest` fields.
@@ -198,7 +199,10 @@ schemas; no production action is served to a model.
   immediately guarding new writes; validation of existing rows is a separately deployed transaction and remains
   pending. The CHECK constrains physical shape; repository/upsert and runtime preflight enforce immutable identity.
   This is not a claim that unrestricted direct SQL is protected by an immutability trigger.
-- Exactly three production actions are schema-defined: `set_crm_stage`, `add_crm_note`, and `create_crm_task`. Their
+- Exactly five production actions are schema-defined: `set_crm_stage`, `add_crm_note`, `create_crm_task`,
+  `enrich_person_public_web`, and `start_acquisition_run`. The four CRM-resource contracts use their CRM owner binders;
+  the acquisition root accepts only nonblank company/query intent and mints exactly one workspace target. The first
+  three CRM
   request contracts and versions come from `CRM_EXISTING_RECORD_ACTION_REQUEST_CONTRACTS`; the authenticated submit
   route derives workspace/user, the binder mints the complete CRM target snapshot, and dispatch plus the CRM command
   owner revalidate current ownership/version before new plan/domain writes. Authenticated missing and foreign CRM rows
@@ -207,7 +211,7 @@ schemas; no production action is served to a model.
   allowlist. The CRM command fence reconciles physical `workflow_command.operation_id` with payload
   `operation_run_id`; any non-empty dangling id fails before mutable action-label inspection, and the legacy
   owner-internal path is available only when both carriers are absent.
-- The other 12 production actions remain schema-less. Their physical pins are empty/empty and each submission records
+- The other 10 production actions remain schema-less. Their physical pins are empty/empty and each submission records
   `request_schema_status=schema_less_compatibility` plus `request_schema_compatibility_hit=true` in action metadata and
   the submission event payload. Any replay, approve, retry, or dispatch continuation also records an idempotent
   `ActionRequestSchemaCompatibilityObserved` event before its first domain mutation/handler; its checked-in epoch must
@@ -230,9 +234,18 @@ D1g is the bounded follow-up candidate for that R-031 boundary. For authenticate
 authorization ownership is `agent_actions.workspace_id` and `operation_runs.workspace_id`; a run additionally requires
 its linked action to exist in the same exact workspace. Server request state supplies the expected workspace, while
 `actor` is provenance only. Missing and foreign resources share one generic not-found transport shape per resource
-kind. Open mode keeps the existing explicit operator-workspace behavior. D1g does not add schemas for the remaining 12
-actions, change served=0, or close R-019/R-028; fresh pinned non-author review remains required before hosted/live
+kind. Open mode keeps the existing explicit operator-workspace behavior. At its checkpoint D1g did not add schemas for
+the remaining 12 actions; D1h/D1i later reduce the current bridge to 10. D1g does not change served=0 or close
+R-019/R-028; fresh pinned non-author review remains required before hosted/live
 multi-user Operation exposure.
+
+D1i activates only `start_acquisition_run`. Authenticated HTTP mints server workspace/actor and passes exact
+workspace/user scope; open mode preserves explicit operator workspace. The owner rejects caller target/command/
+workflow/job/review/retry/identity fields, derives the complete `acquisition.run.create` command, and revalidates
+target plus exact OperationRun→AgentAction/envelope authority before the first child. An authority failure may
+terminalize only the root command and never synchronizes an aggregate through an untrusted `operation_id`. A positive
+root creates exactly one `acquisition.intent.resolve` child and no job/run/review/provider effect. R-019 remains open:
+post-claim preflight and child append are not one PG UoW, so concurrent-cancel atomicity is not claimed.
 
 D1c adds zero-write pin-drift preflights but does not combine approval or retry state/event/run writes into one UoW.
 The generic operation/command atomicity, generation/lease fence, and transaction-lock budget limits in R-019 remain
@@ -248,9 +261,10 @@ W9 backend control foundation is active; product Agent UI remains deferred.
   Authenticated transport overwrites caller workspace with the server-derived exact workspace; open mode preserves the
   explicit operator workspace.
 - `POST /api/operations/actions` persists an `AgentAction` and, when no approval is required, a queued `OperationRun`.
-  For the exact three D1f CRM existing-record actions, authenticated request state overrides workspace/user, missing and
-  foreign rows share one HTTP 404 body, and raw owner/version aliases fail before persistence. Other action types retain
-  their existing schema-less/open-mode behavior until their owner contract is reviewed.
+  For the four CRM-resource actions and acquisition root action, authenticated request state overrides workspace/user
+  and supplies exact owner scope. CRM missing/foreign rows share one HTTP 404 body; raw owner/version aliases fail
+  before persistence. Acquisition root accepts no caller target and only canonical company/query intent. The other 10
+  action types retain their existing schema-less/open-mode behavior until reviewed.
   A fresh accepted submission returns HTTP 202 with `queued` or `approval_required`. A preflight-observed exact replay,
   or a committed result whose current lifecycle is already outside the fresh set, returns HTTP 200 with
   `idempotent_replay=true` and the current persisted run status, or action status when no run exists. The

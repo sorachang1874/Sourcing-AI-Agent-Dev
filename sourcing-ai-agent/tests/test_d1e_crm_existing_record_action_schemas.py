@@ -32,6 +32,7 @@ from sourcing_agent.operation_runtime import (
     CRM_EXISTING_RECORD_ACTION_TYPES,
     CRM_RESOURCE_BOUND_ACTION_TYPES,
     DEFAULT_ACTION_REGISTRY,
+    OPERATION_OWNER_BOUND_ACTION_TYPES,
     ActionRegistry,
     ActionRequestSpec,
     ActionRequestValidationError,
@@ -141,13 +142,14 @@ def test_schema_builder_always_closes_root_and_both_owner_segments() -> None:
         )
 
 
-def test_crm_action_schemas_are_exact_closed_digest_pinned_and_activated_only_for_three_actions() -> None:
+def test_crm_action_schemas_are_exact_closed_digest_pinned_with_the_current_partition() -> None:
     assert set(CRM_EXISTING_RECORD_ACTION_REQUEST_CONTRACTS) == set(CRM_ACTIONS)
     records = DEFAULT_ACTION_REGISTRY.to_record(include_command_contracts=False)
     assert {
         action_type for action_type in records if DEFAULT_ACTION_REGISTRY.spec_for(action_type).has_request_schema
-    } == set(CRM_RESOURCE_BOUND_ACTION_TYPES)
-    assert sum(not DEFAULT_ACTION_REGISTRY.spec_for(action_type).has_request_schema for action_type in records) == 11
+    } == set(OPERATION_OWNER_BOUND_ACTION_TYPES)
+    assert set(CRM_RESOURCE_BOUND_ACTION_TYPES).issubset(OPERATION_OWNER_BOUND_ACTION_TYPES)
+    assert sum(not DEFAULT_ACTION_REGISTRY.spec_for(action_type).has_request_schema for action_type in records) == 10
 
     for action_type in CRM_ACTIONS:
         spec = DEFAULT_ACTION_REGISTRY.spec_for(action_type)

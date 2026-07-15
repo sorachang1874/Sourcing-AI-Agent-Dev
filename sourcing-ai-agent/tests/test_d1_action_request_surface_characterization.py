@@ -23,6 +23,7 @@ from sourcing_agent.durable_runtime import (
 from sourcing_agent.operation_runtime import (
     CRM_RESOURCE_BOUND_ACTION_TYPES,
     DEFAULT_ACTION_REGISTRY,
+    OPERATION_OWNER_BOUND_ACTION_TYPES,
     OperationRuntimeWriter,
 )
 from sourcing_agent.orchestrator import SourcingOrchestrator
@@ -367,7 +368,8 @@ def test_action_request_spec_and_registry_record_freeze_the_schema_foundation_su
     schema_defined = {
         action_type for action_type in records if DEFAULT_ACTION_REGISTRY.spec_for(action_type).has_request_schema
     }
-    assert schema_defined == set(CRM_RESOURCE_BOUND_ACTION_TYPES)
+    assert set(CRM_RESOURCE_BOUND_ACTION_TYPES).issubset(schema_defined)
+    assert schema_defined == set(OPERATION_OWNER_BOUND_ACTION_TYPES)
     for action_type in records:
         spec = DEFAULT_ACTION_REGISTRY.spec_for(action_type)
         if action_type in schema_defined:
@@ -626,7 +628,7 @@ def test_runtime_dispatch_inventory_distinguishes_registration_from_adapter_supp
     assert operation_runtime.ACTION_EXTERNAL_INTAKE in expected_unsupported
 
 
-def test_command_plan_selection_and_fields_preserve_input_target_default_precedence() -> None:
+def test_command_plan_selection_preserves_legacy_precedence_and_acquisition_root_is_canonical() -> None:
     source = ORCHESTRATOR_PATH.read_text(encoding="utf-8")
     tree = ast.parse(source)
     method = _class_method(tree, "SourcingOrchestrator", "_build_agent_callable_workflow_command_plan")
@@ -702,198 +704,56 @@ def test_command_plan_selection_and_fields_preserve_input_target_default_precede
         "workspace_id": "workspace-a",
         "idempotency_key": "operation-start-a",
     }
-
-    def build_start_plan(
-        suffix: str,
-        *,
-        input_payload: dict[str, Any],
-        target_ref: dict[str, Any],
-    ) -> dict[str, Any]:
-        return SourcingOrchestrator._build_agent_callable_workflow_command_plan(
-            _plan_probe(),
-            operation_run=operation_run,
-            action={
-                "action_id": f"action-start-{suffix}",
-                "action_type": operation_runtime.ACTION_START_ACQUISITION_RUN,
-                "input": input_payload,
-                "target_ref": target_ref,
-            },
-        )
-
-    query_precedence_cases: tuple[tuple[str, dict[str, Any], dict[str, Any], str], ...] = (
-        (
-            "input-query",
-            {
-                "query": "sentinel-input-query",
-                "raw_user_request": "sentinel-input-raw",
-                "workflow_payload": {
-                    "raw_user_request": "sentinel-nested-raw",
-                    "query": "sentinel-nested-query",
-                },
-            },
-            {"query": "sentinel-target-query"},
-            "sentinel-input-query",
-        ),
-        (
-            "input-raw-over-target",
-            {
-                "raw_user_request": "sentinel-input-raw",
-                "workflow_payload": {
-                    "raw_user_request": "sentinel-nested-raw",
-                    "query": "sentinel-nested-query",
-                },
-            },
-            {"query": "sentinel-target-query"},
-            "sentinel-input-raw",
-        ),
-        (
-            "target-over-nested",
-            {
-                "workflow_payload": {
-                    "raw_user_request": "sentinel-nested-raw",
-                    "query": "sentinel-nested-query",
-                }
-            },
-            {"query": "sentinel-target-query"},
-            "sentinel-target-query",
-        ),
-        (
-            "nested-raw-over-query",
-            {
-                "workflow_payload": {
-                    "raw_user_request": "sentinel-nested-raw",
-                    "query": "sentinel-nested-query",
-                }
-            },
-            {},
-            "sentinel-nested-raw",
-        ),
-        (
-            "nested-query-fallback",
-            {"workflow_payload": {"query": "sentinel-nested-query"}},
-            {},
-            "sentinel-nested-query",
-        ),
-    )
-    for suffix, input_payload, target_ref, expected_query in query_precedence_cases:
-        plan = build_start_plan(suffix, input_payload=input_payload, target_ref=target_ref)
-        assert plan["status"] == "ok", suffix
-        assert plan["command_payload"]["query"] == expected_query, suffix
-
-    input_nested_source = build_start_plan(
-        "input-nested-source",
-        input_payload={
-            "workflow_payload": {"query": "sentinel-input-nested"},
-            "command_payload": {"workflow_payload": {"query": "sentinel-command-nested"}},
-        },
-        target_ref={"workflow_payload": {"query": "sentinel-target-nested"}},
-    )
-    assert input_nested_source["command_payload"]["query"] == "sentinel-input-nested"
-
-    target_nested_source = build_start_plan(
-        "target-nested-source",
-        input_payload={
-            "command_payload": {"workflow_payload": {"query": "sentinel-command-nested"}},
-        },
-        target_ref={"workflow_payload": {"query": "sentinel-target-nested"}},
-    )
-    assert target_nested_source["command_payload"]["query"] == "sentinel-target-nested"
-
-    command_nested_source = build_start_plan(
-        "command-nested-source",
-        input_payload={
-            "command_payload": {"workflow_payload": {"query": "sentinel-command-nested"}},
-        },
-        target_ref={},
-    )
-    assert command_nested_source["command_payload"]["query"] == "sentinel-command-nested"
-
-    default_plan = SourcingOrchestrator._build_agent_callable_workflow_command_plan(
-        _plan_probe(),
-        operation_run=operation_run,
-        action={
-            "action_id": "action-start-a",
-            "action_type": operation_runtime.ACTION_START_ACQUISITION_RUN,
-            "input": {
-                "target_company": "Input Company",
-                "query": "input query",
-                "workflow_payload": {"target_company": "Workflow Company", "query": "workflow query"},
-            },
-            "target_ref": {"target_company": "Target Company", "query": "target query"},
-        },
-    )
-    assert default_plan["status"] == "ok"
-    assert default_plan["command_type"] == ACQUISITION_RUN_CREATE_COMMAND_TYPE
-    assert default_plan["command_payload"]["target_company"] == "Input Company"
-    assert default_plan["command_payload"]["query"] == "input query"
-
-    target_over_nested_plan = SourcingOrchestrator._build_agent_callable_workflow_command_plan(
-        _plan_probe(),
-        operation_run=operation_run,
-        action={
-            "action_id": "action-start-target-over-nested",
-            "action_type": operation_runtime.ACTION_START_ACQUISITION_RUN,
-            "input": {
-                "workflow_payload": {
-                    "target_company": "Nested Company",
-                    "query": "nested query",
-                }
-            },
-            "target_ref": {
-                "target_company": "Target Company",
-                "query": "target query",
-            },
-        },
-    )
-    assert target_over_nested_plan["status"] == "ok"
-    assert target_over_nested_plan["command_payload"]["target_company"] == "Target Company"
-    assert target_over_nested_plan["command_payload"]["query"] == "target query"
-
-    nested_fallback_plan = SourcingOrchestrator._build_agent_callable_workflow_command_plan(
-        _plan_probe(),
-        operation_run=operation_run,
-        action={
-            "action_id": "action-start-nested-fallback",
-            "action_type": operation_runtime.ACTION_START_ACQUISITION_RUN,
-            "input": {
-                "workflow_payload": {
-                    "target_company": "Nested Company",
-                    "query": "nested query",
-                }
-            },
-            "target_ref": {},
-        },
-    )
-    assert nested_fallback_plan["status"] == "ok"
-    assert nested_fallback_plan["command_payload"]["target_company"] == "Nested Company"
-    assert nested_fallback_plan["command_payload"]["query"] == "nested query"
-
-    input_override = SourcingOrchestrator._build_agent_callable_workflow_command_plan(
-        _plan_probe(),
-        operation_run=operation_run,
-        action={
-            "action_id": "action-start-b",
-            "action_type": operation_runtime.ACTION_START_ACQUISITION_RUN,
-            "input": {"command_type": EXCEL_INTAKE_RUN_COMMAND_TYPE, "target_company": "Input Company"},
-            "target_ref": {"command_type": ACQUISITION_RUN_CREATE_COMMAND_TYPE},
-        },
-    )
-    assert input_override == {
-        "status": "invalid",
-        "reason": "unsupported_agent_callable_workflow_command_type",
-        "command_type": EXCEL_INTAKE_RUN_COMMAND_TYPE,
-        "allowed_command_types": [ACQUISITION_RUN_CREATE_COMMAND_TYPE],
+    action = {
+        "action_id": "action-start-a",
+        "action_type": operation_runtime.ACTION_START_ACQUISITION_RUN,
+        "input": {"target_company": "Input Company", "query": "input query"},
+        "target_ref": {"workspace_id": "workspace-a"},
     }
-
-    target_override = SourcingOrchestrator._build_agent_callable_workflow_command_plan(
-        _plan_probe(),
+    plan = SourcingOrchestrator._schema_defined_acquisition_root_command_plan(
         operation_run=operation_run,
-        action={
-            "action_id": "action-start-c",
-            "action_type": operation_runtime.ACTION_START_ACQUISITION_RUN,
-            "input": {"target_company": "Input Company"},
-            "target_ref": {"command_type": EXCEL_INTAKE_RUN_COMMAND_TYPE},
-        },
+        action=action,
+        owner="acquisition_run_writer",
     )
-    assert target_override["status"] == "invalid"
-    assert target_override["command_type"] == EXCEL_INTAKE_RUN_COMMAND_TYPE
+
+    assert plan["status"] == "ok"
+    assert plan["command_type"] == ACQUISITION_RUN_CREATE_COMMAND_TYPE
+    assert plan["owner"] == "acquisition_run_writer"
+    assert plan["max_attempts"] == 5
+    assert plan["retry_policy"] == {
+        "kind": "operation_acquisition_run_create",
+        "retry_delay_seconds": 30,
+    }
+    command_payload = plan["command_payload"]
+    assert command_payload["target_company"] == "Input Company"
+    assert command_payload["query"] == "input query"
+    assert command_payload["acquisition_root_target"] == {"workspace_id": "workspace-a"}
+    assert command_payload["workflow_payload"] == {
+        "runtime_execution_mode": "operation_command",
+        "requester_id": "",
+        "tenant_id": "workspace-a",
+        "workspace_id": "workspace-a",
+        "idempotency_key": "operation-start-a",
+        "target_company": "Input Company",
+        "raw_user_request": "input query",
+        "query": "input query",
+    }
+    assert not {
+        "command_type",
+        "command_payload",
+        "workflow_run_id",
+        "job_id",
+        "plan_review_id",
+        "max_attempts",
+    } & set(command_payload)
+
+    missing_query = SourcingOrchestrator._schema_defined_acquisition_root_command_plan(
+        operation_run=operation_run,
+        action={**action, "input": {"target_company": "Input Company"}},
+        owner="acquisition_run_writer",
+    )
+    assert missing_query == {
+        "status": "invalid",
+        "reason": "start_acquisition_run requires target_company and query",
+        "command_type": ACQUISITION_RUN_CREATE_COMMAND_TYPE,
+    }

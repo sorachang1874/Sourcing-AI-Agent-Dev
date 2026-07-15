@@ -29,15 +29,18 @@ from zoneinfo import ZoneInfo
 from .acquisition import AcquisitionEngine, _normalize_company_employee_shards
 from .acquisition_command_owner import AcquisitionCommandOwner
 from .action_target_binding import (
+    ACQUISITION_ROOT_TARGET_INVALID,
     AUTHORIZATION_MODE_AUTHENTICATED,
     AUTHORIZATION_MODE_OPEN_OPERATOR,
     CRM_RECORD_BATCH_TARGET_SELECTOR_FIELDS,
     CRM_RECORD_TARGET_NOT_FOUND,
     CRM_RECORD_TARGET_STALE,
+    AcquisitionRootTargetBinder,
     ActionBindContext,
     ActionTargetBindingError,
     CRMRecordBatchTargetBinder,
     CRMRecordTargetBinder,
+    build_acquisition_root_target_binder_registry,
     build_crm_existing_record_target_binder_registry,
     build_crm_record_batch_target_binder_registry,
 )
@@ -228,6 +231,7 @@ from .manual_review_synthesis import compile_manual_review_synthesis
 from .media_asset_owner import cache_media_asset, media_asset_frontend_url, read_media_asset_content
 from .model_provider import DeterministicModelClient, ModelClient
 from .operation_runtime import (
+    ACQUISITION_ROOT_ACTION_TYPES,
     ACTION_ADD_CRM_NOTE,
     ACTION_ADD_TO_CRM,
     ACTION_CREATE_CRM_TASK,
@@ -236,6 +240,7 @@ from .operation_runtime import (
     ACTION_REQUEST_PIN_FIELDS,
     ACTION_SEARCH_PROJECTION,
     ACTION_SET_CRM_STAGE,
+    ACTION_START_ACQUISITION_RUN,
     CRM_EXISTING_RECORD_ACTION_TYPES,
     CRM_RECORD_BATCH_ACTION_TYPES,
     CRM_RESOURCE_BOUND_ACTION_TYPES,
@@ -246,6 +251,9 @@ from .operation_runtime import (
     DISPATCH_ADAPTER_PERSON_PUBLIC_WEB,
     DISPATCH_ADAPTER_PROJECTION_READ,
     OPERATION_ACTION_FRESH_SUBMISSION_STATUSES,
+    OPERATION_ACTION_TERMINAL_STATUSES,
+    OPERATION_OWNER_BOUND_ACTION_TYPES,
+    OPERATION_RUN_TERMINAL_STATUSES,
     OperationRuntimeStateConflict,
     OperationRuntimeWriter,
     operation_run_control_state,
@@ -953,6 +961,10 @@ class SourcingOrchestrator:
         )
         self.durable_runtime_writer = DurableRuntimeWriter(self.store, runtime_dir=self.runtime_dir)
         self.operation_runtime_writer = OperationRuntimeWriter(self.store)
+        self._acquisition_root_target_binder = AcquisitionRootTargetBinder()
+        self._acquisition_root_target_binder_registry = build_acquisition_root_target_binder_registry(
+            binder=self._acquisition_root_target_binder,
+        )
         self._crm_record_target_binder = CRMRecordTargetBinder(self.store)
         self._crm_existing_record_target_binder_registry = build_crm_existing_record_target_binder_registry(
             self.store,
@@ -1035,6 +1047,7 @@ class SourcingOrchestrator:
             # attribute names so moved bodies stay verbatim.
             upsert_acquisition_run_phase=self._upsert_acquisition_run_phase,
             sync_operation_run_from_workflow_command_control=self._sync_operation_run_from_workflow_command_control,
+            revalidate_operation_action_target=self._revalidate_acquisition_root_command_target,
         )
         # Recovery-tick drain bindings, frozen in the exact pre-registry call
         # order. Validated against ``self`` so a renamed drain wrapper fails
@@ -48902,9 +48915,17 @@ class SourcingOrchestrator:
                 "reason": ("action_request_pin_fields_are_owner_reserved:" + ",".join(reserved_pin_fields)),
             }
         raw_target_ref = payload.get("target_ref")
-        if action_type in CRM_RESOURCE_BOUND_ACTION_TYPES:
+        owner_bound_action = action_type in OPERATION_OWNER_BOUND_ACTION_TYPES
+        if owner_bound_action:
             if raw_target_ref is not None and not isinstance(raw_target_ref, Mapping):
-                return {"status": "invalid", "reason": "crm_record_target_selector_invalid"}
+                return {
+                    "status": "invalid",
+                    "reason": (
+                        "crm_record_target_selector_invalid"
+                        if action_type in CRM_RESOURCE_BOUND_ACTION_TYPES
+                        else ACQUISITION_ROOT_TARGET_INVALID
+                    ),
+                }
             input_present = "input" in payload
             input_payload_present = "input_payload" in payload
             for input_field in ("input", "input_payload"):
@@ -48954,6 +48975,19 @@ class SourcingOrchestrator:
         if "input_payload" in batch_binding:
             input_payload = dict(batch_binding["input_payload"] or {})
         owner_bound_target_ref = batch_binding.get("owner_bound_target_ref") or owner_bound_target_ref
+        acquisition_binding = self._bind_operation_acquisition_root_target(
+            action_type=action_type,
+            workspace_id=str(payload.get("workspace_id") or "default").strip() or "default",
+            expected_workspace_id=expected_workspace_id,
+            expected_owner_user_id=expected_owner_user_id,
+            target_ref=target_ref,
+            input_payload=input_payload,
+        )
+        if str(acquisition_binding.get("status") or "") != "ready":
+            return acquisition_binding
+        target_ref = dict(acquisition_binding.get("target_ref") or {})
+        input_payload = dict(acquisition_binding.get("input_payload") or input_payload)
+        owner_bound_target_ref = acquisition_binding.get("owner_bound_target_ref") or owner_bound_target_ref
         try:
             result = self.operation_runtime_writer.submit_action(
                 action_type=action_type,
@@ -49011,6 +49045,67 @@ class SourcingOrchestrator:
             ),
             "module_state_mutated": False,
             "contract": "w9_operation_action_submit_v1",
+        }
+
+    def _bind_operation_acquisition_root_target(
+        self,
+        *,
+        action_type: str,
+        workspace_id: str,
+        expected_workspace_id: str,
+        expected_owner_user_id: str,
+        target_ref: dict[str, Any],
+        input_payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        if action_type not in ACQUISITION_ROOT_ACTION_TYPES:
+            return {
+                "status": "ready",
+                "target_ref": target_ref,
+                "input_payload": input_payload,
+                "owner_bound_target_ref": None,
+            }
+        expected_workspace = str(expected_workspace_id or "").strip()
+        expected_owner = str(expected_owner_user_id or "").strip()
+        if bool(expected_workspace) != bool(expected_owner):
+            return {"status": "invalid", "reason": "action_bind_context_owner_incomplete"}
+        normalized_workspace = str(workspace_id or "default").strip() or "default"
+        if expected_workspace and normalized_workspace != expected_workspace:
+            return {"status": "invalid", "reason": ACQUISITION_ROOT_TARGET_INVALID}
+        if target_ref:
+            return {"status": "invalid", "reason": ACQUISITION_ROOT_TARGET_INVALID}
+        normalized_input = dict(input_payload)
+        raw_alias_present = "raw_user_request" in normalized_input
+        if raw_alias_present and "query" in normalized_input:
+            return {"status": "invalid", "reason": "action_request_query_alias_ambiguous"}
+        if raw_alias_present:
+            normalized_input["query"] = normalized_input.pop("raw_user_request")
+        spec = DEFAULT_ACTION_REGISTRY.spec_for(action_type)
+        forbidden_input_fields = sorted(spec.owner_reserved_request_fields & set(normalized_input))
+        if forbidden_input_fields:
+            return {
+                "status": "invalid",
+                "reason": ("action_request_target_fields_are_owner_reserved:" + ",".join(forbidden_input_fields)),
+            }
+        try:
+            context = ActionBindContext(
+                authorization_mode=(
+                    AUTHORIZATION_MODE_AUTHENTICATED if expected_workspace else AUTHORIZATION_MODE_OPEN_OPERATOR
+                ),
+                workspace_id=expected_workspace or normalized_workspace,
+                owner_user_id=expected_owner,
+                target_selector={},
+            )
+            owner_bound_target_ref = self._acquisition_root_target_binder_registry.bind(
+                action_type=action_type,
+                context=context,
+            )
+        except ActionTargetBindingError as exc:
+            return {"status": "invalid", "reason": exc.reason}
+        return {
+            "status": "ready",
+            "target_ref": {},
+            "input_payload": normalized_input,
+            "owner_bound_target_ref": owner_bound_target_ref,
         }
 
     def _bind_operation_crm_existing_record_target(
@@ -49810,11 +49905,21 @@ class SourcingOrchestrator:
         expected_workspace_id: str = "",
     ) -> dict[str, Any]:
         payload = dict(payload or {})
-        if str(expected_workspace_id or "").strip() and not self._operation_action_for_expected_workspace(
+        action = self._operation_action_for_expected_workspace(
             action_id,
             expected_workspace_id=expected_workspace_id,
-        ):
+        )
+        if not action:
             return {"status": "not_found", "action_id": str(action_id or "").strip()}
+        target_preflight = self._preflight_acquisition_root_action_control(action=action)
+        if str(target_preflight.get("status") or "") != "ready":
+            return {
+                **target_preflight,
+                "action_id": str(action_id or "").strip(),
+                "action": self._operation_action_api_record(action),
+                "module_state_mutated": False,
+                "contract": "w9_operation_action_approval_v1",
+            }
         try:
             result = self.operation_runtime_writer.approve_action(
                 action_id=action_id,
@@ -49946,11 +50051,34 @@ class SourcingOrchestrator:
         expected_workspace_id: str = "",
     ) -> dict[str, Any]:
         payload = dict(payload or {})
-        if str(expected_workspace_id or "").strip() and not self._operation_run_for_expected_workspace(
+        operation_run = self._operation_run_for_expected_workspace(
             operation_run_id,
             expected_workspace_id=expected_workspace_id,
-        ):
+        )
+        if not operation_run:
             return {"status": "not_found", "operation_run_id": str(operation_run_id or "").strip()}
+        action = self._operation_action_for_expected_workspace(
+            str(operation_run.get("action_id") or ""),
+            expected_workspace_id=expected_workspace_id,
+        )
+        if not action:
+            return {"status": "not_found", "operation_run_id": str(operation_run_id or "").strip()}
+        target_preflight = self._preflight_acquisition_root_action_control(
+            action=action,
+            operation_run=operation_run,
+        )
+        if str(target_preflight.get("status") or "") != "ready":
+            return {
+                **target_preflight,
+                "operation_run_id": str(operation_run_id or "").strip(),
+                "operation_run": self._operation_run_api_record_with_status_summary(
+                    operation_run,
+                    expected_workspace_id=expected_workspace_id,
+                ),
+                "action": self._operation_action_api_record(action),
+                "module_state_mutated": False,
+                "contract": "w9_operation_run_retry_v1",
+            }
         try:
             result = self.operation_runtime_writer.retry_operation(
                 operation_run_id=operation_run_id,
@@ -49998,11 +50126,34 @@ class SourcingOrchestrator:
         expected_workspace_id: str = "",
     ) -> dict[str, Any]:
         payload = dict(payload or {})
-        if str(expected_workspace_id or "").strip() and not self._operation_run_for_expected_workspace(
+        operation_run = self._operation_run_for_expected_workspace(
             operation_run_id,
             expected_workspace_id=expected_workspace_id,
-        ):
+        )
+        if not operation_run:
             return {"status": "not_found", "operation_run_id": str(operation_run_id or "").strip()}
+        action = self._operation_action_for_expected_workspace(
+            str(operation_run.get("action_id") or ""),
+            expected_workspace_id=expected_workspace_id,
+        )
+        if not action:
+            return {"status": "not_found", "operation_run_id": str(operation_run_id or "").strip()}
+        target_preflight = self._preflight_acquisition_root_action_control(
+            action=action,
+            operation_run=operation_run,
+        )
+        if str(target_preflight.get("status") or "") != "ready":
+            return {
+                **target_preflight,
+                "operation_run_id": str(operation_run_id or "").strip(),
+                "operation_run": self._operation_run_api_record_with_status_summary(
+                    operation_run,
+                    expected_workspace_id=expected_workspace_id,
+                ),
+                "action": self._operation_action_api_record(action),
+                "module_state_mutated": False,
+                "contract": "w9_operation_run_resume_v1",
+            }
         try:
             result = self.operation_runtime_writer.resume_operation(
                 operation_run_id=operation_run_id,
@@ -50231,6 +50382,18 @@ class SourcingOrchestrator:
                 "module_state_mutated": False,
                 "contract": "w11_agent_callable_workflow_command_dispatch_v1",
             }
+        acquisition_target_preflight = self._revalidate_acquisition_root_action_target(
+            operation_run=operation_run,
+            action=action,
+        )
+        if str(acquisition_target_preflight.get("status") or "") != "ready":
+            return {
+                **acquisition_target_preflight,
+                "operation_run": operation_run,
+                "action": action,
+                "module_state_mutated": False,
+                "contract": "w11_agent_callable_workflow_command_dispatch_v1",
+            }
         plan = self._build_agent_callable_workflow_command_plan(operation_run=operation_run, action=action)
         if str(plan.get("status") or "") != "ok":
             return {
@@ -50328,6 +50491,227 @@ class SourcingOrchestrator:
     def _acquisition_decomposition_downstream_command_types() -> list[str]:
         return AcquisitionCommandOwner._acquisition_decomposition_downstream_command_types()
 
+    def _revalidate_acquisition_root_action_target(
+        self,
+        *,
+        operation_run: Mapping[str, Any],
+        action: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        if str(action.get("action_type") or "").strip() not in ACQUISITION_ROOT_ACTION_TYPES:
+            return {"status": "ready"}
+        raw_target_ref = action.get("target_ref")
+        if not isinstance(raw_target_ref, Mapping):
+            return {"status": "invalid", "reason": ACQUISITION_ROOT_TARGET_INVALID}
+        try:
+            target = self._acquisition_root_target_binder.revalidate_snapshot(
+                target_ref=raw_target_ref,
+                operation_workspace_id=str(operation_run.get("workspace_id") or "default").strip() or "default",
+            )
+        except ActionTargetBindingError as exc:
+            return {"status": "invalid", "reason": exc.reason}
+        return {"status": "ready", "acquisition_root_target": target}
+
+    def _preflight_acquisition_root_action_control(
+        self,
+        *,
+        action: Mapping[str, Any],
+        operation_run: Mapping[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        if str(action.get("action_type") or "").strip() not in ACQUISITION_ROOT_ACTION_TYPES:
+            return {"status": "ready"}
+        try:
+            self.operation_runtime_writer.validate_persisted_action_request(
+                action=action,
+                operation_run=operation_run,
+            )
+        except OperationRuntimeStateConflict as exc:
+            return {"status": "conflict", "reason": exc.reason}
+        workspace_record: Mapping[str, Any] = operation_run or {
+            "workspace_id": str(action.get("workspace_id") or "default").strip() or "default"
+        }
+        return self._revalidate_acquisition_root_action_target(
+            operation_run=workspace_record,
+            action=action,
+        )
+
+    @staticmethod
+    def _schema_defined_acquisition_root_command_plan(
+        *,
+        operation_run: Mapping[str, Any],
+        action: Mapping[str, Any],
+        owner: str,
+    ) -> dict[str, Any]:
+        raw_input_payload = action.get("input")
+        raw_target_ref = action.get("target_ref")
+        if not isinstance(raw_input_payload, Mapping) or not isinstance(raw_target_ref, Mapping):
+            return {
+                "status": "invalid",
+                "reason": "start_acquisition_run requires target_company and query",
+                "command_type": ACQUISITION_RUN_CREATE_COMMAND_TYPE,
+            }
+        input_payload = dict(raw_input_payload)
+        target_ref = dict(raw_target_ref)
+        target_company = str(input_payload.get("target_company") or "").strip()
+        query_text = str(input_payload.get("query") or "").strip()
+        if not target_company or not query_text:
+            return {
+                "status": "invalid",
+                "reason": "start_acquisition_run requires target_company and query",
+                "command_type": ACQUISITION_RUN_CREATE_COMMAND_TYPE,
+            }
+        operation_run_id = str(operation_run.get("operation_run_id") or "").strip()
+        workspace_id = str(operation_run.get("workspace_id") or "default").strip() or "default"
+        workflow_run_id = f"wf_operation_{hashlib.sha1(operation_run_id.encode('utf-8')).hexdigest()[:24]}"
+        workflow_payload = {
+            "runtime_execution_mode": "operation_command",
+            "requester_id": "",
+            "tenant_id": workspace_id,
+            "workspace_id": workspace_id,
+            "idempotency_key": str(operation_run.get("idempotency_key") or action.get("idempotency_key") or "").strip(),
+            "target_company": target_company,
+            "raw_user_request": query_text,
+            "query": query_text,
+        }
+        command_payload = {
+            "workflow_payload": workflow_payload,
+            "acquisition_root_target": target_ref,
+            "target_company": target_company,
+            "query": query_text,
+            "run_count": 1,
+            "operation_run_id": operation_run_id,
+            "action_id": str(action.get("action_id") or "").strip(),
+            "workspace_id": workspace_id,
+            "source": "operation_run_dispatch",
+            "migration_phase": "W11a_acquisition_run_create_root",
+            "decomposition_contract": {
+                "root_command_type": ACQUISITION_RUN_CREATE_COMMAND_TYPE,
+                "owner": owner,
+                "normal_path_executes_queue_workflow_inline": False,
+                "downstream_phases": AcquisitionCommandOwner._acquisition_decomposition_downstream_command_types(),
+            },
+        }
+        return {
+            "status": "ok",
+            "command_type": ACQUISITION_RUN_CREATE_COMMAND_TYPE,
+            "owner": owner,
+            "workflow_run_id": workflow_run_id,
+            "command_payload": command_payload,
+            "max_attempts": 5,
+            "retry_policy": {"kind": "operation_acquisition_run_create", "retry_delay_seconds": 30},
+        }
+
+    def _revalidate_acquisition_root_command_target(
+        self,
+        command: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        command_record = dict(command)
+        raw_payload = command_record.get("payload")
+        if not isinstance(raw_payload, Mapping):
+            return {"status": "invalid", "reason": "acquisition_root_command_payload_invalid"}
+        payload = dict(raw_payload)
+        operation_run_id = str(command_record.get("operation_id") or "").strip()
+        if not operation_run_id or str(payload.get("operation_id") or "").strip() != operation_run_id:
+            return {"status": "invalid", "reason": "acquisition_root_command_operation_mismatch"}
+        operation_run = self.store.repos.workflow_runtime.get_operation(operation_run_id)
+        if not operation_run:
+            return {"status": "invalid", "reason": "acquisition_root_command_operation_missing"}
+        action_id = str(operation_run.get("action_id") or "").strip()
+        action = self.store.repos.workflow_runtime.get_action(action_id) if action_id else {}
+        if (
+            not action
+            or str(action.get("action_type") or "").strip() != ACTION_START_ACQUISITION_RUN
+            or str(payload.get("action_id") or "").strip() != action_id
+        ):
+            return {"status": "invalid", "reason": "acquisition_root_command_action_mismatch"}
+        if str(operation_run.get("status") or "").strip() in OPERATION_RUN_TERMINAL_STATUSES:
+            return {"status": "invalid", "reason": "acquisition_root_command_operation_terminal"}
+        if (
+            str(action.get("status") or "").strip() in OPERATION_ACTION_TERMINAL_STATUSES
+            or str(action.get("approval_status") or "").strip() != "approved"
+        ):
+            return {"status": "invalid", "reason": "acquisition_root_command_action_not_executable"}
+        try:
+            self.operation_runtime_writer.validate_persisted_action_request(
+                action=action,
+                operation_run=operation_run,
+            )
+            spec = DEFAULT_ACTION_REGISTRY.spec_for(ACTION_START_ACQUISITION_RUN)
+        except (KeyError, OperationRuntimeStateConflict):
+            return {"status": "invalid", "reason": "acquisition_root_action_request_conflict"}
+        target_preflight = self._revalidate_acquisition_root_action_target(
+            operation_run=operation_run,
+            action=action,
+        )
+        if str(target_preflight.get("status") or "") != "ready":
+            return target_preflight
+        if (
+            str(command_record.get("command_type") or "").strip() != spec.default_workflow_command_type
+            or str(command_record.get("owner") or "").strip() != spec.owner_module
+            or spec.default_workflow_command_type not in spec.allowed_workflow_command_types
+        ):
+            return {"status": "invalid", "reason": "acquisition_root_target_command_mismatch"}
+        plan = self._schema_defined_acquisition_root_command_plan(
+            operation_run=operation_run,
+            action=action,
+            owner=spec.owner_module,
+        )
+        if str(plan.get("status") or "") != "ok":
+            return {"status": "invalid", "reason": "acquisition_root_command_payload_invalid"}
+        expected_command_payload = dict(plan.get("command_payload") or {})
+        raw_bound_target = payload.get("acquisition_root_target")
+        raw_action_target = action.get("target_ref")
+        if (
+            not isinstance(raw_bound_target, Mapping)
+            or not isinstance(raw_action_target, Mapping)
+            or dict(raw_bound_target) != dict(raw_action_target)
+        ):
+            return {"status": "invalid", "reason": "acquisition_root_bound_target_mismatch"}
+        causality = payload.pop("causality", None)
+        if not isinstance(causality, Mapping) or any(
+            str(causality.get(field) or "").strip() != str(command_record.get(field) or "").strip()
+            for field in (
+                "workflow_run_id",
+                "operation_id",
+                "command_type",
+                "owner",
+                "stage_id",
+                "causal_group_id",
+                "source_event_id",
+                "source_event_type",
+                "idempotency_key",
+            )
+        ):
+            return {"status": "invalid", "reason": "acquisition_root_command_causality_mismatch"}
+        if payload != {**expected_command_payload, "operation_id": operation_run_id}:
+            return {"status": "invalid", "reason": "acquisition_root_command_payload_mismatch"}
+        expected_payload_hash = hashlib.sha1(
+            json.dumps(expected_command_payload, ensure_ascii=False, sort_keys=True).encode("utf-8")
+        ).hexdigest()[:24]
+        expected_idempotency_key = (
+            f"{spec.default_workflow_command_type}:operation:{operation_run_id}:{expected_payload_hash}"
+        )
+        raw_max_attempts = command_record.get("max_attempts")
+        raw_retry_policy = command_record.get("retry_policy")
+        if (
+            isinstance(raw_max_attempts, bool)
+            or not isinstance(raw_max_attempts, int)
+            or not isinstance(raw_retry_policy, Mapping)
+        ):
+            return {"status": "invalid", "reason": "acquisition_root_command_envelope_mismatch"}
+        if (
+            str(command_record.get("workflow_run_id") or "").strip() != str(plan.get("workflow_run_id") or "").strip()
+            or str(command_record.get("idempotency_key") or "").strip() != expected_idempotency_key
+            or raw_max_attempts != int(plan.get("max_attempts") or 0)
+            or dict(raw_retry_policy) != dict(plan.get("retry_policy") or {})
+        ):
+            return {"status": "invalid", "reason": "acquisition_root_command_envelope_mismatch"}
+        return {
+            "status": "ready",
+            "operation_run": operation_run,
+            "action": action,
+            "acquisition_root_target": dict(target_preflight.get("acquisition_root_target") or {}),
+        }
+
     def _build_agent_callable_workflow_command_plan(
         self,
         *,
@@ -50338,6 +50722,7 @@ class SourcingOrchestrator:
         input_payload = dict(action.get("input") or {})
         target_ref = dict(action.get("target_ref") or {})
         allowed_types = self._agent_callable_workflow_command_types_for_action(action_type)
+        spec = None
         try:
             spec = DEFAULT_ACTION_REGISTRY.spec_for(action_type)
             default_type = str(spec.default_workflow_command_type or "").strip()
@@ -50355,6 +50740,12 @@ class SourcingOrchestrator:
             owner = DEFAULT_COMMAND_OWNER_REGISTRY.owner_for(command_type)
         except KeyError:
             return {"status": "invalid", "reason": "unknown_workflow_command_type", "command_type": command_type}
+        if action_type == ACTION_START_ACQUISITION_RUN and spec is not None and spec.has_request_schema:
+            return self._schema_defined_acquisition_root_command_plan(
+                operation_run=operation_run,
+                action=action,
+                owner=owner,
+            )
         workspace_id = str(operation_run.get("workspace_id") or target_ref.get("workspace_id") or "default").strip()
         workspace_id = workspace_id or "default"
         explicit_command_payload = dict(input_payload.get("command_payload") or {})

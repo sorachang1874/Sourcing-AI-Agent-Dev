@@ -57,13 +57,16 @@ W8 operation persistence contract:
   scan populated tables; validation of existing rows is a later, separately deployed transaction. The database CHECK
   owns pair shape; repository/upsert and runtime preflight own immutable replay identity. No direct-SQL
   immutability-trigger guarantee is claimed.
-- All 15 production actions remain on the R-029 schema-less compatibility bridge: physical pins are empty/empty and
-  durable action metadata plus the submission event record `request_schema_status=schema_less_compatibility` and
-  `request_schema_compatibility_hit=true`. Replay/approve/retry/dispatch continuations record a pre-mutation,
-  release-epoch-scoped `ActionRequestSchemaCompatibilityObserved` event, including brownfield origin. Served Agent tool
-  population remains zero. The bridge closes only after all API-submittable actions have reviewed schemas/owner
-  binders and the complete population records zero hits for one release window; measuring only a future served subset
-  is insufficient.
+- After D1i, five production actions have reviewed closed schemas and owner-minted targets; the remaining **10/15**
+  stay on the R-029 schema-less compatibility bridge with empty/empty physical pins. Schema-less submissions record
+  `request_schema_status=schema_less_compatibility` and `request_schema_compatibility_hit=true`, while their
+  replay/approve/retry/dispatch continuations record a pre-mutation, release-epoch-scoped
+  `ActionRequestSchemaCompatibilityObserved` event, including brownfield origin. Served Agent tool population remains
+  zero. The bridge closes only after all API-submittable actions have reviewed schemas/owner binders and the complete
+  population records zero hits for one release window; measuring only a future served subset is insufficient.
+- D1i's `start_acquisition_run` root validates exact OperationRun/AgentAction/request/target/current-lease authority
+  before planning one deterministic intent child. That preflight and child append are not one PG UoW, so R-019 and its
+  26-call ratchet remain open; no provider/model/live authorization follows.
 - Operation-layer persistence must not create `workflow_commands`, CRM rows, projection rows, person assets/evidence/assertions, provider registry rows, or export artifacts. Those remain module-owner effects.
 - W9 backend operation controls may approve, reject, query, and cancel operation state through operation runtime tables and append-only events. They must still not execute module side effects or bypass workflow command owners.
 - `store.repos.workflow_runtime` is the public storage owner for `agent_actions`, `operation_runs`, `operation_events`,

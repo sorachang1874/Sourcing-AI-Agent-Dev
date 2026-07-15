@@ -38,8 +38,9 @@ linked-operation command predicate in `storage.py`:
 - open-mode operator calls preserve their existing explicit-workspace behavior;
 - `GET /api/operations/action-registry` remains a shared registry read rather than a workspace-owned aggregate read.
 
-D1g did not define schemas or binders for the 12 schema-less actions at its checkpoint; post-D1h current is 11. It does not add an action to the served Agent
-registry, change D1f's CRM target contract, add a provider/model path, add a workflow-command type, or migrate storage.
+D1g did not define schemas or binders for the 12 schema-less actions at its checkpoint. D1h reduced that checkpoint to
+11 and D1i reduced the current population to 10. D1g does not add an action to the served Agent registry, change D1f's
+CRM target contract, add a provider/model path, add a workflow-command type, or migrate storage.
 
 ## 2. Canonical owner and caller provenance
 
@@ -130,7 +131,8 @@ not run the normal first-plan approval writer against a separately claimable com
   replay branch read-only and expands its regression snapshot to all D1g tables.
 - R-028 remains open and is not triggered by D1g. No CRM writer or effect boundary changes; D1f's target
   owner/version revalidation and the outstanding command/effect/terminal UoW remain exactly as documented.
-- R-029 remained open at **12/15 schema-less** actions at the D1g checkpoint; post-D1h current is **11/15**. D1g
+- R-029 remained open at **12/15 schema-less** actions at the D1g checkpoint; D1h reduced it to **11/15** and the
+  post-D1i current population is **10/15**. D1g
   protects existing Operation reads/controls; it does not claim that schema-less submission is served, reviewed, or
   migration-complete.
 - Served Agent tool population remains zero. Fake/scripted or local open-mode testing does not authorize live/provider

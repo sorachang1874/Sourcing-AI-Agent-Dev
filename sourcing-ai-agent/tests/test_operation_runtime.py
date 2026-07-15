@@ -8868,10 +8868,9 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             submitted = orchestrator.submit_operation_action(
                 {
                     "action_type": ACTION_START_ACQUISITION_RUN,
-                    "target_ref": {"target_company": "OpenAI"},
                     "input": {
+                        "target_company": "OpenAI",
                         "query": "site:linkedin.com/in OpenAI research engineer",
-                        "limit": 25,
                     },
                     "budget": {"max_provider_calls": 1, "max_usd": 1.0},
                     "idempotency_key": "discovery:job-discovery",
@@ -9641,27 +9640,17 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             rejected = orchestrator.submit_operation_action(
                 {
                     "action_type": ACTION_START_ACQUISITION_RUN,
-                    "target_ref": {"job_id": "job-discovery", "target_company": "OpenAI"},
                     "input": {
                         "command_type": LINKEDIN_DISCOVERY_QUERY_RUN_COMMAND_TYPE,
-                        "snapshot_id": "snap-discovery",
+                        "target_company": "OpenAI",
                         "query": "site:linkedin.com/in OpenAI research engineer",
                     },
                     "budget": {"max_provider_calls": 1, "max_usd": 1.0},
                     "idempotency_key": "discovery:job-discovery:rejected",
                 }
             )
-            rejected_approval = orchestrator.approve_operation_action_api(
-                rejected["action"]["action_id"],
-                {"actor": "unit-test"},
-            )
-            rejected_dispatch = orchestrator.dispatch_operation_run_api(
-                rejected_approval["operation_run"]["operation_run_id"],
-                {"actor": "unit-test"},
-            )
-
-            self.assertEqual(rejected_dispatch["status"], "invalid")
-            self.assertEqual(rejected_dispatch["reason"], "unsupported_agent_callable_workflow_command_type")
+            self.assertEqual(rejected["status"], "invalid")
+            self.assertIn("action_request_schema_validation_failed", rejected["reason"])
             self.assertEqual(len(api_store.list_workflow_commands(limit=100)), 16)
         finally:
             api_store.close()

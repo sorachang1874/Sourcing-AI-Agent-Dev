@@ -10,6 +10,28 @@
 
 ## 2026-07-16 (Asia/Singapore)
 
+### Track D D1i acquisition root action activation
+
+- `start_acquisition_run` is now the fifth schema-defined production action. Its closed input is exactly nonblank
+  `target_company+query`; `raw_user_request` is normalized as an exclusive query alias. Caller command/workflow/job/
+  review/retry/identity aliases and every nonempty raw target are rejected before writes. Authenticated HTTP mints the
+  server workspace/actor and exact owner scope; explicit open-mode workspace remains compatible.
+- Dispatch server-derives the complete `acquisition.run.create` envelope. Approve/retry/resume/dispatch and the root
+  owner revalidate the persisted workspace target. The owner requires exact operation/action/envelope linkage, an
+  approved nonterminal action, nonterminal operation, and a currently valid running lease. Cancelled, foreign,
+  missing, malformed,
+  or forged commands may terminalize only their root command and cannot create an intent child or sync an untrusted
+  Operation. The positive path creates exactly one `acquisition.intent.resolve` child and no job/run/review/provider
+  effect.
+- Final stable-tree author evidence is D1i PG **9 passed + 28 subtests**, combined request/binder/transport D1
+  **153 passed + 228 subtests**, command/control adjacency **175 passed**, exact acquisition + R-019 ratchet nodes
+  **2 passed**, and full Operation runtime **136 passed + 503 subtests**. Lint is green across **58 files**;
+  global mypy remains exactly **81 errors / 4 files**; compile and diff checks are green. Fresh pinned non-author review
+  remains pending. This is author evidence, not formal `GO`.
+- Current production partition is **5 schema-defined / 10 schema-less / served=0**. R-029 remains open at 10/15 and
+  keeps epoch `d1f_r029_20260715_v2`. R-019 remains open because post-claim preflight and child planning are not one PG
+  UoW; do not claim concurrent-cancel atomicity. No provider/model/live path is authorized.
+
 ### Track D D1f/D1g review fixed-forward
 
 - D1f pinned-`1cb829f` advisory `NO-GO 0/0/1/1` found that fresh HTTP 202 accepted absent/non-boolean replay markers
@@ -68,7 +90,8 @@
   linkage from current authoritative rows. A running command persists its complete continuation through an exact-owner,
   unexpired-lease CAS before any phase link, and native PG errors surface rather than becoming false CAS conflicts.
   Expired-lease recovery consumes that checkpoint after legitimate batch progress without duplicating rows.
-- The current production partition is **4 schema-defined / 11 schema-less / served=0**. Confirmed author evidence is
+- At the D1h checkpoint the production partition was **4 schema-defined / 11 schema-less / served=0**; D1i now
+  supersedes the current count at **5/10/0**. Confirmed D1h author evidence is
   D1h action/boundary/checkpoint **20 passed + 7 subtests**, exact Operation/transport/generic retry
   **5 passed + 11 subtests**, CRM Public Web boundary **34 passed**, combined D1 **121 passed + 202 subtests**, and
   final stable-tree Operation **136 passed + 503 subtests**. Lint is green across **58 files**; global mypy remains

@@ -32,9 +32,9 @@ from .cohort_selection import (
     validate_external_cohort_selection_payload,
 )
 from .operation_runtime import (
-    CRM_RESOURCE_BOUND_ACTION_TYPES,
     OPERATION_ACTION_FRESH_SUBMISSION_STATUSES,
     OPERATION_ACTION_SUBMISSION_STATUSES,
+    OPERATION_OWNER_BOUND_ACTION_TYPES,
 )
 from .orchestrator import SourcingOrchestrator
 from .plan_submit_contract import (
@@ -401,7 +401,7 @@ AUTHENTICATED_REQUEST_SCOPE_REGISTRY: dict[tuple[str, str], str] = {
     ("GET", "/api/operations/runs"): "exact_operation_workspace_read",
     ("GET", "/api/operations/runs/{run_id}"): "exact_operation_workspace_read",
     ("GET", "/api/operations/runs/{run_id}/provenance"): "exact_operation_workspace_read",
-    ("POST", "/api/operations/actions"): "owner_bound_crm_or_schema_less_operation_submit",
+    ("POST", "/api/operations/actions"): "owner_bound_schema_or_schema_less_operation_submit",
     ("POST", "/api/operations/actions/{action_id}/approve"): "exact_operation_workspace_write",
     ("POST", "/api/operations/actions/{action_id}/reject"): "exact_operation_workspace_write",
     ("POST", "/api/operations/runs/{run_id}/cancel"): "exact_operation_workspace_write",
@@ -2096,14 +2096,14 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["POST"], "/api/company-assets/public-web", post_company_public_web, read_body=True)
 
     def post_operation_actions(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
-        crm_owner_bound = str(payload.get("action_type") or "").strip() in CRM_RESOURCE_BOUND_ACTION_TYPES
+        owner_bound = str(payload.get("action_type") or "").strip() in OPERATION_OWNER_BOUND_ACTION_TYPES
         _apply_server_identity(
             payload,
             request,
-            workspace=crm_owner_bound,
+            workspace=owner_bound,
             actor_fields=("actor",),
         )
-        owner_scope = _expected_crm_owner_kwargs(request) if crm_owner_bound else {}
+        owner_scope = _expected_crm_owner_kwargs(request) if owner_bound else {}
         result = orchestrator.submit_operation_action(payload, **owner_scope)
         raw_status = result.get("status")
         if (

@@ -152,8 +152,17 @@ serve、会话/事件层、planner loop），用一个垂直切片证明闭环�
   surplus sentinel（1000→1001）、persisted-job frozen-status/current-linkage exact authority、running-command
   lease-fenced checkpoint/recovery 与 strict native-error propagation。Exact action/boundary/checkpoint=`20+7 subtests`、
   adjacent=`5+11 subtests`、CRM boundary=`34`、combined D1=`121+202 subtests`、final stable-tree Operation=`136+503 subtests`、lint=`58 files`、
-  mypy=`81/4`、compile/diff clean；fresh pinned review pending。当前 registry=**4 schema-defined / 11 schema-less /
-  served=0**；R-019/R-028/R-029 仍 open，且不授权 provider/model/live。
+  mypy=`81/4`、compile/diff clean；fresh pinned review pending。D1h checkpoint registry=**4 schema-defined / 11
+  schema-less / served=0**。D1i current author candidate 随后将 `start_acquisition_run` 作为第 5 个
+  schema-defined action 激活：closed input=`target_company+query`，owner-minted target 仅 workspace；authenticated
+  transport 使用 server workspace/actor，open-mode 保留。approve/retry/resume/dispatch/root owner 重验 target，
+  root owner 还要求 exact operation/action/canonical envelope、approved nonterminal action、nonterminal operation 与
+  currently-valid running lease；authority failure 仅 terminalize root，不通过未可信 operation id sync aggregate，
+  不创建 child/domain。positive 只创建一个 intent child。Final stable-tree author evidence=D1i=`9+28 subtests`、
+  combined D1=`153+228 subtests`、command/control=`175`、exact acquisition+ratchet=`2`、full Operation=
+  `136+503 subtests`、lint=`58 files`、mypy=`81/4`、compile/diff green；fresh pinned review pending。当前 registry=
+  **5 schema-defined / 10 schema-less / served=0**；R-019
+  仍保留 preflight→child 非同一 PG UoW 的并发 cancel race，R-028/R-029 仍 open，且不授权 provider/model/live。
 
 ### D2 — Agent 会话与事件层（与 C4/C5 合流）
 
@@ -541,10 +550,11 @@ TD-4 初始路由表已按 owner 2026-07-13 裁决落档（D0 §4）。
 3. 宽松 action-schema 迁移桥启用前，先落 residual 台账行 + NEXT_TODO 条目（D1 批）。
    **Implementation status (2026-07-16):** D1c 以 R-029 + NEXT_TODO 满足 bookkeeping；D1f exact 激活三项
    CRM existing-record actions 并把 numerator 从 15 降到 12；D1h 再激活 `enrich_person_public_web` 的 CRM
-   batch schema/binder，把 numerator 降到 11。bridge、release-window durable-hit audit、独立
+   batch schema/binder，把 numerator 降到 11；D1i 激活 `start_acquisition_run` 的 acquisition-root workspace
+   binder，把 numerator 降到 10。bridge、release-window durable-hit audit、独立
    `NOT VALID` validation 与 complete API-submittable-population 删除条件仍 open；served population 仍为零。
    D1g 仅闭合 downstream Operation API authorization，不改变其所在 checkpoint 的 schema
-   numerator/deletion condition；D1h 也不改变该 deletion condition。
+   numerator/deletion condition；D1h/D1i 也不改变该 deletion condition。
 4. tool-schema 版本/digest 在 turn 创建点钉住并贯穿 terminal result/journal → AgentAction →
    approve/retry run（D0/D2 批）。
 5. `judge_call_key` 追加 workspace/intent generation/有效路由/schema/policy revision 维度；

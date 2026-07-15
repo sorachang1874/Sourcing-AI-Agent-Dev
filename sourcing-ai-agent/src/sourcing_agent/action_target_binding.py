@@ -9,6 +9,7 @@ from types import MappingProxyType
 from typing import Any, Literal, Protocol
 
 from sourcing_agent.operation_runtime import (
+    ACQUISITION_ROOT_ACTION_TYPES,
     CRM_EXISTING_RECORD_ACTION_TYPES,
     CRM_RECORD_BATCH_ACTION_TYPES,
     OwnerBoundTargetRef,
@@ -30,6 +31,8 @@ CRM_RECORD_BATCH_TARGET_SELECTOR_FIELDS = (
     "person_identity_key",
 )
 CRM_RECORD_BATCH_LIMIT = 1000
+ACQUISITION_ROOT_TARGET_OWNER = "acquisition_run_writer"
+ACQUISITION_ROOT_TARGET_INVALID = "acquisition_root_target_invalid"
 
 
 class ActionTargetBindingError(ValueError):
@@ -151,6 +154,36 @@ class CRMRecordLookup(Protocol):
         *,
         workspace_id: str,
     ) -> dict[str, Any]: ...
+
+
+class AcquisitionRootTargetBinder:
+    """Mint and revalidate the server-owned workspace for one root run."""
+
+    def __call__(self, context: ActionBindContext) -> OwnerBoundTargetRef:
+        if dict(context.target_selector):
+            raise ActionTargetBindingError(ACQUISITION_ROOT_TARGET_INVALID)
+        return OwnerBoundTargetRef(
+            owner_module=ACQUISITION_ROOT_TARGET_OWNER,
+            target_ref={"workspace_id": context.workspace_id},
+        )
+
+    @staticmethod
+    def revalidate_snapshot(
+        *,
+        target_ref: Mapping[str, Any],
+        operation_workspace_id: str,
+    ) -> dict[str, str]:
+        target = dict(target_ref)
+        workspace_id = str(target.get("workspace_id") or "").strip()
+        operation_workspace = str(operation_workspace_id or "").strip()
+        if (
+            set(target) != {"workspace_id"}
+            or not workspace_id
+            or workspace_id != target.get("workspace_id")
+            or workspace_id != operation_workspace
+        ):
+            raise ActionTargetBindingError(ACQUISITION_ROOT_TARGET_INVALID)
+        return {"workspace_id": workspace_id}
 
 
 class CRMRecordTargetBinder:
@@ -403,6 +436,23 @@ def build_crm_existing_record_target_binder_registry(
                 binder=binder,
             )
             for action_type in CRM_EXISTING_RECORD_ACTION_TYPES
+        )
+    )
+
+
+def build_acquisition_root_target_binder_registry(
+    *,
+    binder: AcquisitionRootTargetBinder | None = None,
+) -> ActionTargetBinderRegistry:
+    binder = binder or AcquisitionRootTargetBinder()
+    return ActionTargetBinderRegistry(
+        tuple(
+            ActionTargetBinderSpec(
+                action_type=action_type,
+                owner_module=ACQUISITION_ROOT_TARGET_OWNER,
+                binder=binder,
+            )
+            for action_type in ACQUISITION_ROOT_ACTION_TYPES
         )
     )
 

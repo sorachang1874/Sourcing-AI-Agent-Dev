@@ -1025,6 +1025,28 @@ class RequestScopeWiringTest(unittest.TestCase):
                 self.assertEqual(captured["expected_workspace_id"], "user-alice")
                 self.assertEqual(captured["expected_owner_user_id"], "alice")
 
+        root_status, _ = self._request(
+            opener,
+            f"{base}/api/operations/actions",
+            method="POST",
+            body={
+                "action_type": "start_acquisition_run",
+                "workspace_id": "user-bob",
+                "actor": "bob",
+                "input": {
+                    "target_company": "Thinking Machines Lab",
+                    "query": "pre-training researchers",
+                },
+            },
+        )
+        self.assertEqual(root_status, 202)
+        captured_root = orchestrator.captured["operation_action"][-1]
+        self.assertEqual(captured_root["workspace_id"], "user-alice")
+        self.assertEqual(captured_root["actor"], "alice")
+        self.assertEqual(captured_root["expected_workspace_id"], "user-alice")
+        self.assertEqual(captured_root["expected_owner_user_id"], "alice")
+        self.assertNotIn("target_ref", captured_root)
+
         replay_status, replay = self._request(
             opener,
             f"{base}/api/operations/actions",
@@ -1165,6 +1187,28 @@ class RequestScopeWiringTest(unittest.TestCase):
         self.assertEqual(captured["actor"], "legacy-operator")
         self.assertNotIn("expected_workspace_id", captured)
         self.assertNotIn("expected_owner_user_id", captured)
+
+        root_status, _ = self._request(
+            open_opener,
+            f"{open_base}/api/operations/actions",
+            method="POST",
+            body={
+                "action_type": "start_acquisition_run",
+                "workspace_id": "operator-workspace",
+                "actor": "legacy-operator",
+                "input": {
+                    "target_company": "Thinking Machines Lab",
+                    "query": "pre-training researchers",
+                },
+            },
+            token=None,
+        )
+        self.assertEqual(root_status, 202)
+        captured_root = open_orchestrator.captured["operation_action"][-1]
+        self.assertEqual(captured_root["workspace_id"], "operator-workspace")
+        self.assertEqual(captured_root["actor"], "legacy-operator")
+        self.assertNotIn("expected_workspace_id", captured_root)
+        self.assertNotIn("expected_owner_user_id", captured_root)
 
     def test_authenticated_operation_reads_and_controls_use_exact_workspace_scope(self) -> None:
         base, opener, orchestrator = self._start_server()

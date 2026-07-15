@@ -13,7 +13,8 @@
 > used its explicit schema-less bridge at the D1c checkpoint. D1e then declared three existing-record CRM contracts,
 > and the current D1f candidate activates exactly those three with authenticated owner binding and two execution-side
 > revalidations. D1h subsequently activates `enrich_person_public_web` with a CRM batch owner/version snapshot and
-> two execution-side revalidations. The current partition is 4 schema-defined / 11 schema-less; the served population
+> two execution-side revalidations. D1i then activates `start_acquisition_run` with a server-owned workspace target
+> and canonical root-command envelope. The current partition is 5 schema-defined / 10 schema-less; the served population
 > remains zero.
 
 ## 1. Outcome and boundary
@@ -49,20 +50,20 @@ adapter and remains unsupported.
 |---|---|---|---|
 | Action metadata | `operation_runtime.ActionRequestSpec` (`ActionSpec` is an object-identical alias) | D1a froze the exact ten-field pre-schema surface | D1b added `dispatch_adapter`; D1c adds `request_schema`, `request_schema_version`, and target aliases; model-safe result schema remains deferred |
 | Registry serialization | `operation_runtime.ActionRegistry.to_record()` | action constant↔registry parity; exact compact record keys; optional command contract projection | adapter and request schema remain internal; physical pins live on action/run rows rather than this public registry record |
-| Submission | `OperationRuntimeWriter.submit_action` | D1a froze the old complete signature/call inventory, fail-closed gates, payload replay fence, write order, and approval boundary | D1c intentionally updates the signature/inventory and validates schema-defined requests before write; D1f activates three CRM existing-record schemas and D1h adds the CRM Public Web batch schema, while the other 11 remain on the recorded bridge |
+| Submission | `OperationRuntimeWriter.submit_action` | D1a froze the old complete signature/call inventory, fail-closed gates, payload replay fence, write order, and approval boundary | D1c intentionally updates the signature/inventory and validates schema-defined requests before write; D1f activates three CRM existing-record schemas, D1h adds the CRM Public Web batch schema, and D1i adds the acquisition root schema, while the other 10 remain on the recorded bridge |
 | Dispatch | `ActionRegistry` declaration + `SourcingOrchestrator` adapter bindings | D1a froze the old branch classification for every discovered action; D1b preserves the same 12 supported/three unsupported result | D1c adds pin/request preflight before adapter invocation; the full served-tool predicate remains deferred |
 | Command exposure mirror | `_agent_callable_workflow_command_types_for_action` | exact set projection of `ActionSpec.allowed_workflow_command_types`; unknown action returns empty | no served-tool predicate or result-schema gate |
 | Command plan selection | `_build_agent_callable_workflow_command_plan` | command selection is `input.command_type` → `target.command_type` → registry default; a present but disallowed higher-priority value fails closed instead of falling back | input and target remain dual behavior-driving sources pending D1 normalization |
 | Command execution contracts | command owner registry + Activity/control policy registries | every exposed command resolves to the same owner; Activity policy is Agent-callable and non-legacy; Activity and control records are fail-closed | this proves command readiness only, not action adapter or model-safe output readiness |
 
-The start-acquisition runtime probe pins the complete current query chain with adjacent sentinels:
+The D1a checkpoint start-acquisition probe pinned the then-current query chain with adjacent sentinels:
 `input.query` > `input.raw_user_request` > `target_ref.query` > selected nested `raw_user_request` > selected nested
 `query`. The selected nested payload is the first truthy whole mapping from
 `input.workflow_payload` > `target_ref.workflow_payload` > `input.command_payload.workflow_payload`; the implementation
 does not merge those three nested mappings. Separate company/query cases prove direct input beats target, target beats a
 selected nested payload, and nested values are used when both direct sources are absent. This documents the bypass
-surface that the D1 design intends to remove; it does not endorse preserving dual-source request semantics after the
-schema owner is introduced.
+surface that D1 intended to remove. D1i now removes it from the executable `start_acquisition_run` path: only canonical
+`input.target_company+query` plus the exclusive `raw_user_request` alias survives, and the owner mints workspace target.
 
 ## 3. Submission and dispatch baseline
 
@@ -126,7 +127,7 @@ D1c now provides the single validator/digest owner, strict two-segment schema fo
 action/run pins, submit/approve/retry/dispatch copy/verify foundation, and epoch-scoped brownfield compatibility
 observations. The remaining D1 work must still:
 
-- define reviewed per-action schemas and owner target binders for the remaining 11 production actions, then retire the
+- define reviewed per-action schemas and owner target binders for the remaining 10 production actions, then retire the
   R-029 schema-less bridge only after all API-submittable actions record zero compatibility hits for one release window; bump the
   checked-in observation epoch for each window and validate the installed `NOT VALID` checks in a separate deployment;
 - use the D1b registry-owned adapter as one necessary served-subset input, then derive the served subset only after
