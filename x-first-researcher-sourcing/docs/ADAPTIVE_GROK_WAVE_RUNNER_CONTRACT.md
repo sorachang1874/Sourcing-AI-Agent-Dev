@@ -38,7 +38,7 @@ CRM, export, billing, permission, or outreach state. Protected-identity inferenc
 | Prior waves | Private `0600` files plus SHA-256 | Casefold duplicates inside a prior wave fail |
 | Prior completion | Local validator | An old handle may reappear only with new evidence digest or a new temporal state |
 | Grok executable | Request digest plus canonical local locator | Stable owner-controlled target is descriptor-copied to a private staged executable |
-| OAuth state | Canonical private auth file and request-pinned digest/account reference | Descriptor-copied into isolated `GROK_HOME`; the entire ephemeral home is deleted before terminal receipt |
+| OAuth state | Canonical private auth file, current Grok 0.2.101 xAI OIDC/JWT contract, request-pinned digest/account reference, replay-independent active-use claim, and auth-digest taint registry | Exactly one issuer/client/identity-consistent credential is descriptor-copied into isolated `GROK_HOME`; one run/recovery owns the digest until audit plus durable deletion, and provider mutation/deletion/unreadability or an abnormal provider-capable exit taints that digest for future grants |
 | Live authority | Preissued request-scoped grant | Account/auth, model, command/tool/schema/environment policies, emergency, budget, retention, and request scope are bound; expiry is checked before consumption, after the exclusive link, and at the gated target release |
 | Native-X tool surface | Operator command policy | Exact closed allowlist of four tools; generic web and local/agent tools denied |
 | Run ownership | Random durable `run.lock` token plus nonblocking `flock` | Execution owns the lease for the whole run; recovery/purge mutate nothing while an active owner exists |
@@ -294,22 +294,61 @@ The configured Grok locator may be an owner-controlled symlink. Before grant con
 6. executes only the staged copy.
 
 The canonical OAuth file must be a current-owner, one-link, regular `0600` file within the size ceiling and must match
-the request-pinned digest. Digest equality proves byte identity, not a usable login. Grant issuance therefore parses
-the duplicate-key-safe JSON as exactly one active credential row and requires its access-token `expires_at` to be
-strictly later than the complete grant TTL plus process deadline, TERM/KILL grace, and a fixed 600-second
-refresh-avoidance margin. Execution repeats the runtime-window check after loading the grant but before reading the
-prompt or creating a run root. The descriptor-copied auth is checked once more with a fresh wall clock before the
-single-use grant is consumed.
+the request-pinned digest. A mismatch now fails before prompt access or run-root creation. Digest equality proves byte
+identity, not a usable login. Grant issuance therefore parses duplicate-key-safe JSON as exactly one current Grok
+0.2.101 xAI OIDC row. The row locator must be exactly `oidc_issuer::oidc_client_id`, `auth_mode` must be `oidc`, and
+the issuer must be `https://auth.x.ai`. Required client, subject/user/principal, principal-type, and team fields must
+agree between row metadata and the bounded base64url-decoded access-JWT payload. The payload must contain integer
+`iat` and `exp`, may contain integer `nbf`, cannot be not-yet-valid, and must include the required xAI/Grok access
+scopes; additional scopes are allowed. Payload decoding is byte/depth/node bounded and duplicate-key-safe. The runner
+does **not** verify the JWT signature and makes no cryptographic authenticity claim; signature validation remains with
+xAI/Grok.
+
+The usable expiry is `min(metadata expires_at, JWT exp)`. It must be strictly later than the complete grant TTL plus
+process deadline, TERM/KILL grace, and a fixed 600-second refresh-avoidance margin. Execution repeats the strict
+credential and runtime-window check after loading the grant but before reading the prompt or creating a run root. The
+descriptor-copied auth is checked once more with a fresh wall clock before the single-use grant is consumed.
 
 The live lane does not rely on Grok refreshing an expired token inside the disposable home. A provider refresh can
 rotate credential state; deleting that home would discard the new state while leaving the canonical file stale for
 the next run. Refreshing or writing back canonical OAuth state is not part of this runner. A stale, malformed,
-multi-row, or near-horizon auth file therefore fails locally without a provider call and, at execution, before grant
-consumption.
+wrong-issuer/scope/identity, multi-row, not-yet-valid, or near-horizon auth file therefore fails locally without a
+provider call and, at execution, before grant consumption.
+
+The approval root owns two closed, replay-independent records per auth digest. An
+`auth-active-use-<original-auth-sha256>.json` claim binds exactly one run ID, canonical request digest, run-lease
+digest, grant digest, and closed `live_consumption|legacy_recovery` origin. It is published before grant consumption
+and remains durable across process death; grant
+issuance, live execution, and sibling consumption all fail while it exists. Recovery acquires the run lease first,
+then validates that exact claim under the auth lock. For a pre-D2 incomplete live run with no claim, recovery publishes
+the same exact claim before it reads consumption state, closing the legacy reuse window.
+
+The separate `auth-taint-<original-auth-sha256>.json` marker contains only the original digest, source run/request
+digests, detection time, closed reason, and blocking state—never a token, claim value, profile field, or refreshed
+credential. A per-digest owner-only `flock` serializes short claim, taint, grant-publication, and consumption
+transactions. Acquisition is nonblocking with a 250 ms budget, and the lock path is revalidated after acquisition;
+the lock is never held across provider work. Issuance checks both registries, execution checks them again before
+prompt access, and consumption checks them under the same lock, so a prior sibling run can invalidate an already
+issued but unconsumed grant. An absent claim and marker is an ordinary clean state; an existing malformed, unreadable,
+or wrongly bound record fails closed. The first valid taint marker is idempotent and remains authoritative for that
+digest. Recovery from taint requires a newly logged-in canonical auth file with a new SHA-bound request; restoring the
+old bytes does not clear the marker.
 
 The auth file is descriptor-copied with pre/post identity checks. The durable intent is published before auth is
-copied. From the copy through grant consumption, executor completion, bounded session-tree measurement, and transcript
-capture, every exit deletes the complete ephemeral home in a `finally` boundary. Normal execution deletes it before
+copied. Consumption atomically establishes the durable active-use claim before it links the one-shot consumption
+record. Every owned exit follows one order: audit the copied auth, durably delete the complete ephemeral home, then
+resolve only that run's exact claim. An audit/taint-publication failure retains both home and claim; a deletion failure
+retains the claim. Either state blocks same-digest grants until explicit recovery completes the same order.
+
+Provider mutation, deletion, or unreadability records a taint before deletion. For an unchanged copy, an abnormal
+result is tainted only after the gated launcher callback passed every release check and authorized target execution.
+A post-consumption expiry, executor failure before spawn, or durable process ledger whose final release check fails
+still consumes that grant but does not taint exact unchanged OAuth bytes in the live process. Once target release was
+authorized, a nonzero return, timeout, execution error, or process/session-tree technical limit is conservatively
+tainted. Mutation/deletion/unreadability takes precedence over that generic reason. Recovery cannot reconstruct the
+in-memory release-authorization fact; a durable process ledger therefore conservatively means the provider may have
+run and forces the generic non-clean reason when the copy is otherwise unchanged. Taint does not rewrite the current
+run's otherwise valid evidence or terminal status; it governs future grants only. Normal execution deletes the home before
 raw stdout/stderr publication, structured-output parsing, sanitized-result publication, or terminal receipt
 construction. A terminal receipt requires `ephemeral_tree_deleted=true`; a post-executor publication failure can be
 recovered from the durable intent/spools without retaining OAuth bytes. Because the provider can write this tree,
@@ -336,14 +375,16 @@ Before reading the prompt, staging the binary, or creating a run root, live exec
 effective-prompt row and the complete preissued grant at a fresh wall-clock value. Missing, expired, wrong-scope, or
 wrong-prompt authority therefore leaves no unowned run directory. Disk/staging failures before durable intent are
 also recursively discarded; purge sees no intent-less orphan. After binary and auth preflight, execution revalidates
-grant expiry and
-publishes exactly one `O_EXCL` consumption record bound to the run lease. It then reads the authoritative clock again
-after the exclusive link. If the grant expired in that window, the record remains consumed but the executor is never
-invoked. A conservative monotonic deadline is derived from the remaining lifetime. The gated launcher rechecks both
-wall and monotonic time after its durable process ledger is published and immediately before target `execve`; expiry
-closes the gate and the staged Grok binary never runs. Reuse therefore fails before target execution. Changing any
+grant expiry plus the auth-digest taint/active-use state. Under one short per-digest transaction it first publishes the
+run/request/lease/grant-bound active-use claim and then publishes exactly one `O_EXCL` consumption record. It then
+reads the authoritative clock again after the exclusive link. If the grant expired in that window, the record remains
+consumed, the executor is never invoked, unchanged OAuth is audited/deleted without taint, and the claim is resolved.
+A conservative monotonic deadline is derived from the remaining lifetime. The gated launcher rechecks both wall and
+monotonic time after its durable process ledger is published and immediately before target `execve`; expiry closes
+the gate and the staged Grok binary never runs. Reuse therefore fails before target execution. Changing any
 execution-scope field invalidates the grant. The durable grant, consumption and launcher timestamp are replayed by
-`validate_operator_bundle` rather than trusted from the receipt.
+`validate_operator_bundle` rather than trusted from the receipt; active-use state is operator recovery coordination,
+not a new retained-bundle dependency.
 
 ## Result and prior-wave semantics
 
@@ -492,6 +533,17 @@ PYTHONPATH=src ../sourcing-ai-agent/.venv/bin/python \
 ```
 
 Recovery first acquires the nonblocking run lease, before cleaning pending publications or reading mutable run state.
+For a live run it next validates—or creates for a legacy incomplete run—the exact auth active-use claim under the
+short per-digest lock, then validates any consumption record as belonging to the same request/run/lease/grant. A
+sibling claim blocks recovery without mutation. After any recorded process group is confirmed dead, recovery audits
+the copied auth before measuring retained session state, durably deletes the ephemeral home, and only then resolves
+the claim. Audit/taint or deletion failure leaves the claim blocking retries. If recovery finds a
+`live_consumption` claim but the ephemeral home is already absent, D2 ordering proves that audit and durable deletion
+completed before the crash; recovery preserves any existing taint, creates no deleted-auth taint, and resolves the
+claim. A synthesized or previously retained `legacy_recovery` claim has no such proof. If its home is absent and a
+durable process ledger says the provider may have been released, recovery publishes
+`post_consumption_execution_not_clean` before resolving the claim; with no ledger, the pre-release legacy state may
+resolve cleanly.
 Before it signals an apparently live PGID, it enumerates group members and verifies their inherited random token;
 if the original leader remains, its current kernel birth identity must also match. Identity is checked again before
 SIGKILL, so PID/PGID reuse cannot redirect cleanup. Only after the recorded group is confirmed dead can recovery seal
@@ -579,8 +631,16 @@ PYTHONPATH=src ../sourcing-ai-agent/.venv/bin/python \
 ```
 
 The suite covers unbounded synthetic candidate arrays; 120 bound prior waves; strict overlap completion; v2
-schema/runtime key parity; staged symlinked binary; account/auth binding; malformed, multi-row, expired, boundary, and
-near-horizon OAuth state; pre-grant, pre-run-root, and copied-auth freshness checks; missing, pre-link, post-link and
+schema/runtime key parity; staged symlinked binary; account/auth binding; strict one-row xAI OIDC locator,
+issuer/client/identity and required-scope binding; bounded duplicate-safe JWT payloads; metadata/JWT expiry minimum;
+future `iat`/`nbf`; malformed, multi-row, expired, boundary, and near-horizon OAuth state; pre-grant, pre-run-root, and
+copied-auth freshness checks; clean-copy reuse; clean-copy/nonzero-exit rejection; 401-style mutation, deletion,
+unreadability, post-consumption exception,
+idempotent taint, bounded auth-lock contention, durable same-digest active-use exclusion, real concurrent sibling release, legacy-recovery claim
+publication, audit/taint-publication failure retention, deletion-failure retention, rotated-auth recovery,
+origin-aware current/legacy missing-home claim resolution, clean pre-release recovery/reuse, sibling-grant rejection,
+and new-auth recovery;
+missing, pre-link, post-link and
 gated-release expiry, wrong-scope, and consumed grants; launcher-time replay; exact closed tools;
 raw model/tool/usage/terminal proof; prompt-file argv privacy; stream/JSON/session
 ceilings; entry-scoped prompt-policy append replay and purge; full actual-argument protected-boundary checks;
@@ -605,3 +665,7 @@ redacted CLI output. It performs no Grok or X live call.
   budget charge from verified input/output usage plus the request-pinned pricing policy.
 - `completed` proves the local execution contract only. It is not an independent-review `GO`, product-quality verdict,
   milestone signoff, identity decision, or outreach authorization.
+- OAuth/JWT and grant timing still depend on the host wall clock. The runner detects not-yet-valid credentials and
+  wall-clock rollback across the grant's in-process checkpoints, but it does not implement a trusted-clock service or
+  durable monotonic epoch across separate processes. This remains an explicit P2 operational residual; the bounded
+  experiment requires a correctly synchronized host clock.

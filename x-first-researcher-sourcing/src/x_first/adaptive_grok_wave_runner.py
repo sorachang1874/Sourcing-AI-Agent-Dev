@@ -13,6 +13,8 @@ product, identity, CRM, export, ranking, or outreach writes.
 
 from __future__ import annotations
 
+import base64
+import binascii
 import fcntl
 import hashlib
 import json
@@ -63,6 +65,8 @@ CONSUMPTION_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.live_grant_consumption
 PROCESS_LEDGER_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.process_ledger.v2"
 DELETION_JOURNAL_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.deletion_journal.v1"
 DELETION_RECEIPT_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.deletion_receipt.v1"
+AUTH_TAINT_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.auth_taint.v1"
+AUTH_ACTIVE_USE_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.auth_active_use.v1"
 
 PROVIDER_ID = "grok_cli_oauth"
 DEFAULT_MODEL_ID = "grok-4.5"
@@ -77,6 +81,24 @@ MAX_EFFECTIVE_PROMPT_POLICY_BYTES = 4_194_304
 MAX_SESSION_TREE_DEPTH = 64
 FINAL_SESSION_TREE_SCAN_BUDGET_SECONDS = 5.0
 OAUTH_REFRESH_AVOIDANCE_MARGIN_SECONDS = 600
+XAI_OIDC_ISSUER = "https://auth.x.ai"
+XAI_OIDC_REQUIRED_SCOPES = frozenset(
+    {
+        "api:access",
+        "conversations:read",
+        "conversations:write",
+        "email",
+        "grok-cli:access",
+        "offline_access",
+        "openid",
+        "profile",
+    }
+)
+MAX_ACCESS_JWT_BYTES = 32_768
+MAX_ACCESS_JWT_PAYLOAD_SEGMENT_BYTES = 16_384
+MAX_ACCESS_JWT_PAYLOAD_BYTES = 12_288
+AUTH_STATE_LOCK_ACQUIRE_BUDGET_SECONDS = 0.250
+AUTH_STATE_LOCK_RETRY_SECONDS = 0.005
 DEFAULT_EFFECTIVE_PROMPT_POLICY = (
     Path(__file__).resolve().parents[2] / "configs/adaptive_grok_wave_effective_prompt_policy.v1.json"
 )
@@ -233,6 +255,7 @@ _OAUTH_EXPIRY_TIME_RE = re.compile(
     r"[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T"
     r"(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\.[0-9]{1,6})?Z"
 )
+_BASE64URL_SEGMENT_RE = re.compile(r"[A-Za-z0-9_-]+")
 _PENDING_RE = re.compile(r"\.pending-(?P<name>[a-z0-9_.-]{1,96})-[0-9a-f]{32}")
 _PERSON_SCOPED_FROM_RE = re.compile(r"(?i)(?:-?from:)")
 _FROM_OPERATOR_WITH_HANDLE_RE = re.compile(
@@ -566,6 +589,33 @@ _DELETION_RECEIPT_KEYS = {
     "deleted_at",
     "state",
 }
+_AUTH_TAINT_KEYS = {
+    "schema_version",
+    "oauth_auth_sha256",
+    "source_run_id",
+    "source_request_sha256",
+    "detected_at",
+    "reason",
+    "state",
+}
+_AUTH_TAINT_REASONS = {
+    "copied_auth_deleted",
+    "copied_auth_mutated",
+    "copied_auth_unreadable",
+    "post_consumption_execution_not_clean",
+}
+_AUTH_ACTIVE_USE_KEYS = {
+    "schema_version",
+    "oauth_auth_sha256",
+    "claim_origin",
+    "run_id",
+    "request_sha256",
+    "run_lease_sha256",
+    "grant_sha256",
+    "claimed_at",
+    "state",
+}
+_AUTH_ACTIVE_USE_ORIGINS = {"live_consumption", "legacy_recovery"}
 _RESULT_STATUSES = {"X_SEARCH_OK", "X_SEARCH_PARTIAL", "X_SEARCH_BLOCKED"}
 _DIMENSION_STATES = set(TEMPORAL_STATES)
 _CONFIDENCE_STATES = {"high", "medium", "low"}
@@ -3427,12 +3477,374 @@ def _grant_paths(grant_root: Path, grant_id_hash: str) -> tuple[Path, Path]:
     return grant_root / f"grant-{grant_id_hash}.json", grant_root / f"consumption-{grant_id_hash}.json"
 
 
+def _auth_taint_path(grant_root: Path, oauth_auth_sha256: str) -> Path:
+    if not _is_sha(oauth_auth_sha256):
+        raise AdaptiveWaveValidationError("grok_auth_taint_digest_invalid")
+    return grant_root / f"auth-taint-{oauth_auth_sha256}.json"
+
+
+def _auth_active_use_path(grant_root: Path, oauth_auth_sha256: str) -> Path:
+    if not _is_sha(oauth_auth_sha256):
+        raise AdaptiveWaveValidationError("grok_auth_active_use_digest_invalid")
+    return grant_root / f"auth-active-use-{oauth_auth_sha256}.json"
+
+
+@contextmanager
+def _auth_digest_lock(grant_root: Path, oauth_auth_sha256: str) -> Any:
+    """Bound one short auth-state transaction without holding across provider work."""
+
+    if not _is_sha(oauth_auth_sha256):
+        raise AdaptiveWaveValidationError("grok_auth_taint_digest_invalid")
+    _ensure_private_directory(grant_root, create=True)
+    lock_path = grant_root / f"auth-taint-lock-{oauth_auth_sha256}.lock"
+    flags = os.O_RDWR
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    created = False
+    try:
+        descriptor = os.open(lock_path, flags | os.O_CREAT | os.O_EXCL, 0o600)
+        created = True
+    except FileExistsError:
+        try:
+            descriptor = os.open(lock_path, flags)
+        except OSError as exc:
+            raise AdaptiveWaveValidationError("grok_auth_taint_lock_invalid") from exc
+    except OSError as exc:
+        raise AdaptiveWaveValidationError("grok_auth_taint_lock_invalid") from exc
+    try:
+        if created:
+            os.fchmod(descriptor, 0o600)
+            os.fsync(descriptor)
+            _fsync_directory(grant_root)
+        def require_current_lock_inode() -> None:
+            metadata = os.fstat(descriptor)
+            try:
+                current = lock_path.stat(follow_symlinks=False)
+            except OSError as exc:
+                raise AdaptiveWaveValidationError("grok_auth_taint_lock_invalid") from exc
+            if (
+                not stat.S_ISREG(metadata.st_mode)
+                or metadata.st_uid != os.getuid()
+                or metadata.st_nlink != 1
+                or stat.S_IMODE(metadata.st_mode) != 0o600
+                or (metadata.st_dev, metadata.st_ino) != (current.st_dev, current.st_ino)
+            ):
+                raise AdaptiveWaveValidationError("grok_auth_taint_lock_invalid")
+
+        require_current_lock_inode()
+        deadline = time.monotonic() + AUTH_STATE_LOCK_ACQUIRE_BUDGET_SECONDS
+        while True:
+            try:
+                fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError as exc:
+                if time.monotonic() >= deadline:
+                    raise PermissionError("grok_auth_state_busy") from exc
+                time.sleep(AUTH_STATE_LOCK_RETRY_SECONDS)
+        try:
+            # A replaced path can otherwise leave this process locking an
+            # unlinked inode while another process locks the replacement.
+            require_current_lock_inode()
+            yield
+        finally:
+            fcntl.flock(descriptor, fcntl.LOCK_UN)
+    finally:
+        os.close(descriptor)
+
+
+def _auth_taint_valid(value: Any, *, oauth_auth_sha256: str) -> bool:
+    return (
+        isinstance(value, dict)
+        and set(value) == _AUTH_TAINT_KEYS
+        and value.get("schema_version") == AUTH_TAINT_SCHEMA_VERSION
+        and value.get("oauth_auth_sha256") == oauth_auth_sha256
+        and isinstance(value.get("source_run_id"), str)
+        and _RUN_ID_RE.fullmatch(value["source_run_id"]) is not None
+        and _is_sha(value.get("source_request_sha256"))
+        and _timestamp_valid(value.get("detected_at"))
+        and value.get("reason") in _AUTH_TAINT_REASONS
+        and value.get("state") == "blocks_future_grants_for_auth_digest"
+    )
+
+
+def _auth_active_use_valid(value: Any, *, oauth_auth_sha256: str) -> bool:
+    return (
+        isinstance(value, dict)
+        and set(value) == _AUTH_ACTIVE_USE_KEYS
+        and value.get("schema_version") == AUTH_ACTIVE_USE_SCHEMA_VERSION
+        and value.get("oauth_auth_sha256") == oauth_auth_sha256
+        and value.get("claim_origin") in _AUTH_ACTIVE_USE_ORIGINS
+        and isinstance(value.get("run_id"), str)
+        and _RUN_ID_RE.fullmatch(value["run_id"]) is not None
+        and _is_sha(value.get("request_sha256"))
+        and _is_sha(value.get("run_lease_sha256"))
+        and _is_sha(value.get("grant_sha256"))
+        and _timestamp_valid(value.get("claimed_at"))
+        and value.get("state") == "active_until_auth_audit_and_ephemeral_delete"
+    )
+
+
+def _load_auth_active_use(grant_root: Path, oauth_auth_sha256: str) -> dict[str, Any] | None:
+    claim_path = _auth_active_use_path(grant_root, oauth_auth_sha256)
+    try:
+        grant_root.lstat()
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        raise AdaptiveWaveValidationError("grok_auth_active_use_root_invalid") from exc
+    _ensure_private_directory(grant_root, create=False)
+    try:
+        claim_path.lstat()
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        raise AdaptiveWaveValidationError("grok_auth_active_use_invalid") from exc
+    try:
+        claim_raw = _read_regular_owned_bounded(
+            claim_path,
+            maximum_bytes=4_096,
+            required_mode=0o600,
+        )
+        claim = strict_json_loads(claim_raw)
+    except (AdaptiveWaveValidationError, OSError, UnicodeError, ValueError) as exc:
+        raise AdaptiveWaveValidationError("grok_auth_active_use_invalid") from exc
+    if not _auth_active_use_valid(claim, oauth_auth_sha256=oauth_auth_sha256):
+        raise AdaptiveWaveValidationError("grok_auth_active_use_invalid")
+    return claim
+
+
+def _auth_digest_is_tainted(grant_root: Path, oauth_auth_sha256: str) -> bool:
+    """Read one replay-independent owner taint without creating approval state."""
+
+    marker_path = _auth_taint_path(grant_root, oauth_auth_sha256)
+    try:
+        grant_root.lstat()
+    except FileNotFoundError:
+        return False
+    except OSError as exc:
+        raise AdaptiveWaveValidationError("grok_auth_taint_root_invalid") from exc
+    _ensure_private_directory(grant_root, create=False)
+    try:
+        marker_path.lstat()
+    except FileNotFoundError:
+        return False
+    except OSError as exc:
+        raise AdaptiveWaveValidationError("grok_auth_taint_marker_invalid") from exc
+    try:
+        marker_raw = _read_regular_owned_bounded(
+            marker_path,
+            maximum_bytes=4_096,
+            required_mode=0o600,
+        )
+    except (AdaptiveWaveValidationError, OSError) as exc:
+        raise AdaptiveWaveValidationError("grok_auth_taint_marker_invalid") from exc
+    try:
+        marker = strict_json_loads(marker_raw)
+    except (UnicodeError, ValueError) as exc:
+        raise AdaptiveWaveValidationError("grok_auth_taint_marker_invalid") from exc
+    if not _auth_taint_valid(marker, oauth_auth_sha256=oauth_auth_sha256):
+        raise AdaptiveWaveValidationError("grok_auth_taint_marker_invalid")
+    return True
+
+
+def _require_auth_digest_not_tainted(grant_root: Path, oauth_auth_sha256: str) -> None:
+    if _auth_digest_is_tainted(grant_root, oauth_auth_sha256):
+        raise PermissionError("grok_auth_digest_tainted")
+
+
+def _require_auth_digest_available(grant_root: Path, oauth_auth_sha256: str) -> None:
+    _require_auth_digest_not_tainted(grant_root, oauth_auth_sha256)
+    if _load_auth_active_use(grant_root, oauth_auth_sha256) is not None:
+        raise PermissionError("grok_auth_digest_in_use")
+
+
+def _publish_auth_active_use_unlocked(
+    grant_root: Path,
+    *,
+    oauth_auth_sha256: str,
+    run_id: str,
+    request_sha256: str,
+    run_lease_sha256: str,
+    grant_sha256: str,
+    claimed_at: datetime,
+    claim_origin: str,
+) -> dict[str, Any]:
+    if _load_auth_active_use(grant_root, oauth_auth_sha256) is not None:
+        raise PermissionError("grok_auth_digest_in_use")
+    claim = {
+        "schema_version": AUTH_ACTIVE_USE_SCHEMA_VERSION,
+        "oauth_auth_sha256": oauth_auth_sha256,
+        "claim_origin": claim_origin,
+        "run_id": run_id,
+        "request_sha256": request_sha256,
+        "run_lease_sha256": run_lease_sha256,
+        "grant_sha256": grant_sha256,
+        "claimed_at": _timestamp(claimed_at.astimezone(UTC)),
+        "state": "active_until_auth_audit_and_ephemeral_delete",
+    }
+    if not _auth_active_use_valid(claim, oauth_auth_sha256=oauth_auth_sha256):
+        raise AdaptiveWaveValidationError("grok_auth_active_use_binding_invalid")
+    claim_path = _auth_active_use_path(grant_root, oauth_auth_sha256)
+    try:
+        _atomic_publish(claim_path, (canonical_json(claim) + "\n").encode())
+    except FileExistsError as exc:
+        raise PermissionError("grok_auth_digest_in_use") from exc
+    return claim
+
+
+def _auth_active_use_matches(
+    claim: Mapping[str, Any] | None,
+    *,
+    run_id: str,
+    request_sha256: str,
+    run_lease_sha256: str,
+    grant_sha256: str,
+) -> bool:
+    return claim is not None and all(
+        claim.get(key) == expected
+        for key, expected in {
+            "run_id": run_id,
+            "request_sha256": request_sha256,
+            "run_lease_sha256": run_lease_sha256,
+            "grant_sha256": grant_sha256,
+        }.items()
+    )
+
+
+def _auth_active_use_owned_by(
+    grant_root: Path,
+    *,
+    oauth_auth_sha256: str,
+    run_id: str,
+    request_sha256: str,
+    run_lease_sha256: str,
+    grant_sha256: str,
+    reject_sibling: bool,
+) -> bool:
+    """Read one claim under its short lock without ever taking sibling ownership."""
+
+    with _auth_digest_lock(grant_root, oauth_auth_sha256):
+        claim = _load_auth_active_use(grant_root, oauth_auth_sha256)
+        if claim is None:
+            return False
+        if _auth_active_use_matches(
+            claim,
+            run_id=run_id,
+            request_sha256=request_sha256,
+            run_lease_sha256=run_lease_sha256,
+            grant_sha256=grant_sha256,
+        ):
+            return True
+        if reject_sibling:
+            raise PermissionError("grok_auth_digest_in_use")
+        return False
+
+
+def _resolve_auth_active_use(
+    grant_root: Path,
+    *,
+    oauth_auth_sha256: str,
+    run_id: str,
+    request_sha256: str,
+    run_lease_sha256: str,
+    grant_sha256: str,
+) -> None:
+    with _auth_digest_lock(grant_root, oauth_auth_sha256):
+        claim = _load_auth_active_use(grant_root, oauth_auth_sha256)
+        if not _auth_active_use_matches(
+            claim,
+            run_id=run_id,
+            request_sha256=request_sha256,
+            run_lease_sha256=run_lease_sha256,
+            grant_sha256=grant_sha256,
+        ):
+            raise AdaptiveWaveValidationError("grok_auth_active_use_binding_invalid")
+        _auth_active_use_path(grant_root, oauth_auth_sha256).unlink()
+        _fsync_directory(grant_root)
+
+
+def _publish_auth_taint(
+    grant_root: Path,
+    *,
+    oauth_auth_sha256: str,
+    source_run_id: str,
+    source_request_sha256: str,
+    reason: str,
+    detected_at: datetime,
+) -> Path:
+    """Idempotently block future grants without retaining copied credential bytes."""
+
+    if reason not in _AUTH_TAINT_REASONS:
+        raise AdaptiveWaveValidationError("grok_auth_taint_reason_invalid")
+    if _RUN_ID_RE.fullmatch(source_run_id) is None or not _is_sha(source_request_sha256):
+        raise AdaptiveWaveValidationError("grok_auth_taint_source_invalid")
+    marker_path = _auth_taint_path(grant_root, oauth_auth_sha256)
+    marker = {
+        "schema_version": AUTH_TAINT_SCHEMA_VERSION,
+        "oauth_auth_sha256": oauth_auth_sha256,
+        "source_run_id": source_run_id,
+        "source_request_sha256": source_request_sha256,
+        "detected_at": _timestamp(detected_at.astimezone(UTC)),
+        "reason": reason,
+        "state": "blocks_future_grants_for_auth_digest",
+    }
+    with _auth_digest_lock(grant_root, oauth_auth_sha256):
+        try:
+            _atomic_publish(marker_path, (canonical_json(marker) + "\n").encode())
+        except FileExistsError:
+            if not _auth_digest_is_tainted(grant_root, oauth_auth_sha256):
+                raise AdaptiveWaveValidationError("grok_auth_taint_marker_invalid")
+    return marker_path
+
+
 def _auth_fingerprint(path: Path) -> str:
     return bytes_sha256(_read_regular_owned_bounded(path, maximum_bytes=64_000, required_mode=0o600))
 
 
-def _oauth_access_expires_at(path: Path) -> datetime:
-    """Read one active Grok OAuth row without ever exposing credential bytes."""
+def _decode_access_jwt_payload(access_token: Any) -> dict[str, Any]:
+    """Decode only a bounded JWT payload; signature verification is provider-owned."""
+
+    if not isinstance(access_token, str) or not 1 <= len(access_token.encode()) <= MAX_ACCESS_JWT_BYTES:
+        raise AdaptiveWaveValidationError("grok_auth_session_invalid")
+    segments = access_token.split(".")
+    if (
+        len(segments) != 3
+        or any(_BASE64URL_SEGMENT_RE.fullmatch(segment) is None for segment in segments)
+        or not 1 <= len(segments[1].encode()) <= MAX_ACCESS_JWT_PAYLOAD_SEGMENT_BYTES
+    ):
+        raise AdaptiveWaveValidationError("grok_auth_session_invalid")
+    payload_segment = segments[1]
+    padding = "=" * (-len(payload_segment) % 4)
+    try:
+        raw_payload = base64.b64decode(
+            payload_segment + padding,
+            altchars=b"-_",
+            validate=True,
+        )
+        payload = strict_json_loads_bounded(
+            raw_payload,
+            max_bytes=MAX_ACCESS_JWT_PAYLOAD_BYTES,
+            max_depth=4,
+            max_nodes=64,
+        )
+    except (AdaptiveWaveValidationError, binascii.Error, UnicodeError, ValueError) as exc:
+        raise AdaptiveWaveValidationError("grok_auth_session_invalid") from exc
+    if not isinstance(payload, dict):
+        raise AdaptiveWaveValidationError("grok_auth_session_invalid")
+    return payload
+
+
+def _jwt_epoch(value: Any) -> datetime:
+    if not _is_int(value) or not 0 <= value <= 253_402_300_799:
+        raise AdaptiveWaveValidationError("grok_auth_session_invalid")
+    try:
+        return datetime.fromtimestamp(value, tz=UTC)
+    except (OSError, OverflowError, ValueError) as exc:
+        raise AdaptiveWaveValidationError("grok_auth_session_invalid") from exc
+
+
+def _oauth_access_expires_at(path: Path, *, now: datetime) -> datetime:
+    """Select exactly one current Grok 0.2.101 xAI OIDC access credential."""
 
     try:
         payload = strict_json_loads(
@@ -3442,11 +3854,20 @@ def _oauth_access_expires_at(path: Path) -> datetime:
         raise AdaptiveWaveValidationError("grok_auth_session_invalid") from exc
     if not isinstance(payload, dict) or len(payload) != 1:
         raise AdaptiveWaveValidationError("grok_auth_session_invalid")
-    record = next(iter(payload.values()))
+    locator, record = next(iter(payload.items()))
     if (
-        not isinstance(record, dict)
-        or not isinstance(record.get("key"), str)
-        or not record["key"]
+        not isinstance(locator, str)
+        or not isinstance(record, dict)
+        or record.get("auth_mode") != "oidc"
+        or record.get("oidc_issuer") != XAI_OIDC_ISSUER
+        or not _is_text(record.get("oidc_client_id"), maximum=256)
+        or locator != f'{record["oidc_issuer"]}::{record["oidc_client_id"]}'
+        or not _is_text(record.get("key"), maximum=MAX_ACCESS_JWT_BYTES)
+        or not _is_text(record.get("refresh_token"), maximum=16_384)
+        or not _is_text(record.get("principal_id"), maximum=512)
+        or not _is_text(record.get("principal_type"), maximum=128)
+        or not _is_text(record.get("team_id"), maximum=512)
+        or not _is_text(record.get("user_id"), maximum=512)
         or not isinstance(record.get("expires_at"), str)
         or _OAUTH_EXPIRY_TIME_RE.fullmatch(record["expires_at"]) is None
     ):
@@ -3457,7 +3878,45 @@ def _oauth_access_expires_at(path: Path) -> datetime:
         raise AdaptiveWaveValidationError("grok_auth_session_invalid") from exc
     if expires_at.tzinfo is None or expires_at.utcoffset() != timedelta(0):
         raise AdaptiveWaveValidationError("grok_auth_session_invalid")
-    return expires_at.astimezone(UTC)
+    claims = _decode_access_jwt_payload(record["key"])
+    required_claims = {
+        "aud",
+        "client_id",
+        "exp",
+        "iat",
+        "iss",
+        "principal_id",
+        "principal_type",
+        "scope",
+        "sub",
+        "team_id",
+    }
+    if (
+        not required_claims.issubset(claims)
+        or claims.get("iss") != record["oidc_issuer"]
+        or claims.get("aud") != record["oidc_client_id"]
+        or claims.get("client_id") != record["oidc_client_id"]
+        or claims.get("sub") != record["user_id"]
+        or claims.get("principal_id") != record["principal_id"]
+        or record["user_id"] != record["principal_id"]
+        or claims.get("principal_type") != record["principal_type"]
+        or claims.get("team_id") != record["team_id"]
+        or not isinstance(claims.get("scope"), str)
+        or not XAI_OIDC_REQUIRED_SCOPES.issubset(claims["scope"].split())
+    ):
+        raise AdaptiveWaveValidationError("grok_auth_session_invalid")
+    issued_at = _jwt_epoch(claims["iat"])
+    jwt_expires_at = _jwt_epoch(claims["exp"])
+    not_before = _jwt_epoch(claims["nbf"]) if "nbf" in claims else issued_at
+    canonical_now = now.astimezone(UTC)
+    if (
+        not issued_at < jwt_expires_at
+        or not_before >= jwt_expires_at
+        or canonical_now < issued_at
+        or canonical_now < not_before
+    ):
+        raise AdaptiveWaveValidationError("grok_auth_session_not_yet_valid")
+    return min(expires_at.astimezone(UTC), jwt_expires_at)
 
 
 def _live_auth_runtime_window(request: Mapping[str, Any]) -> timedelta:
@@ -3482,8 +3941,54 @@ def _require_live_auth_freshness(
     required_until = now.astimezone(UTC) + _live_auth_runtime_window(request) + timedelta(
         seconds=grant_ttl_seconds
     )
-    if _oauth_access_expires_at(path) <= required_until:
+    if _oauth_access_expires_at(path, now=now) <= required_until:
         raise AdaptiveWaveValidationError("grok_auth_access_window_insufficient")
+
+
+def _audit_copied_auth_after_provider(
+    copied_auth: Path,
+    *,
+    expected_sha256: str,
+    source_run_id: str,
+    source_request_sha256: str,
+    grant_root: Path,
+    wall_clock: Callable[[], datetime],
+    force_taint_reason: str | None = None,
+) -> None:
+    """Leave an exact clean copy reusable; taint every other terminal state."""
+
+    if force_taint_reason is not None and force_taint_reason not in _AUTH_TAINT_REASONS:
+        raise AdaptiveWaveValidationError("grok_auth_taint_reason_invalid")
+    try:
+        copied_auth.lstat()
+    except FileNotFoundError:
+        reason = "copied_auth_deleted"
+    except OSError:
+        reason = "copied_auth_unreadable"
+    else:
+        try:
+            observed_sha256 = _auth_fingerprint(copied_auth)
+        except (AdaptiveWaveValidationError, OSError):
+            reason = "copied_auth_unreadable"
+        else:
+            if observed_sha256 == expected_sha256:
+                if force_taint_reason is None:
+                    return
+                reason = force_taint_reason
+            else:
+                reason = "copied_auth_mutated"
+    try:
+        detected_at = wall_clock().astimezone(UTC)
+    except BaseException:
+        detected_at = _utc_now()
+    _publish_auth_taint(
+        grant_root,
+        oauth_auth_sha256=expected_sha256,
+        source_run_id=source_run_id,
+        source_request_sha256=source_request_sha256,
+        reason=reason,
+        detected_at=detected_at,
+    )
 
 
 def _validate_grant(
@@ -3560,14 +4065,16 @@ def issue_live_grant(
     prompt_policy_binding = _approved_effective_prompt_binding(request)
     grant_id = request["approval"]["grant_id"]
     transport = request["transport"]
+    observed_auth_sha256 = _auth_fingerprint(auth_source)
     if (
         not isinstance(grant_id, str)
         or not _is_sha(transport["grok_binary_sha256"])
         or not isinstance(transport["operator_account_ref"], str)
         or not _is_sha(transport["oauth_auth_sha256"])
-        or _auth_fingerprint(auth_source) != transport["oauth_auth_sha256"]
+        or observed_auth_sha256 != transport["oauth_auth_sha256"]
     ):
         raise AdaptiveWaveValidationError("live_grant_request_invalid")
+    _require_auth_digest_available(grant_root, transport["oauth_auth_sha256"])
     now = wall_clock().astimezone(UTC)
     _require_live_auth_freshness(
         auth_source,
@@ -3601,9 +4108,10 @@ def issue_live_grant(
         "issuer": "local_owner_explicit_cli",
         "state": "preissued_single_use",
     }
-    _ensure_private_directory(grant_root, create=True)
     grant_path, _ = _grant_paths(grant_root, grant_id_hash)
-    _atomic_publish(grant_path, (canonical_json(grant) + "\n").encode())
+    with _auth_digest_lock(grant_root, transport["oauth_auth_sha256"]):
+        _require_auth_digest_available(grant_root, transport["oauth_auth_sha256"])
+        _atomic_publish(grant_path, (canonical_json(grant) + "\n").encode())
     return grant, grant_path
 
 
@@ -3643,6 +4151,8 @@ def _load_and_consume_grant(
     if not isinstance(grant_id, str):
         raise PermissionError("preissued_live_grant_required")
     _ensure_private_directory(grant_root, create=True)
+    oauth_auth_sha256 = request["transport"]["oauth_auth_sha256"]
+    _require_auth_digest_available(grant_root, oauth_auth_sha256)
     grant_id_hash = bytes_sha256(grant_id.encode())
     grant_path, consumption_path = _grant_paths(grant_root, grant_id_hash)
     # Read first, then obtain the authoritative clock immediately before the
@@ -3674,14 +4184,35 @@ def _load_and_consume_grant(
     raw = (canonical_json(payload) + "\n").encode()
 
     def revalidate_immediately_before_link() -> None:
+        _require_auth_digest_not_tainted(grant_root, oauth_auth_sha256)
         atomic_clock = wall_clock().astimezone(UTC)
         if atomic_clock < _parse_timestamp(consumed_at) or _validate_grant(grant, request, now=atomic_clock):
             raise PermissionError("preissued_live_grant_invalid")
 
-    try:
-        _atomic_publish(consumption_path, raw, pre_publish=revalidate_immediately_before_link)
-    except FileExistsError as exc:
-        raise PermissionError("live_grant_already_consumed") from exc
+    with _auth_digest_lock(grant_root, oauth_auth_sha256):
+        _require_auth_digest_available(grant_root, oauth_auth_sha256)
+        try:
+            consumption_path.lstat()
+        except FileNotFoundError:
+            pass
+        except OSError as exc:
+            raise AdaptiveWaveValidationError("live_grant_consumption_state_invalid") from exc
+        else:
+            raise PermissionError("live_grant_already_consumed")
+        _publish_auth_active_use_unlocked(
+            grant_root,
+            oauth_auth_sha256=oauth_auth_sha256,
+            run_id=run_id,
+            request_sha256=request_sha256,
+            run_lease_sha256=run_lease_sha256,
+            grant_sha256=grant_sha,
+            claimed_at=_parse_timestamp(consumed_at),
+            claim_origin="live_consumption",
+        )
+        try:
+            _atomic_publish(consumption_path, raw, pre_publish=revalidate_immediately_before_link)
+        except FileExistsError as exc:
+            raise PermissionError("live_grant_already_consumed") from exc
     # The exclusive link is the actual single-use transition. Re-read the
     # authoritative wall clock after that transition; a grant that expires in
     # the pre-link/link window remains consumed but must never release Grok.
@@ -3701,6 +4232,53 @@ def _load_and_consume_grant(
         expires_at=expires_clock,
         target_release_deadline_monotonic=post_link_monotonic + release_budget_seconds,
     )
+
+
+def _load_bound_recovery_consumption(
+    grant_root: Path,
+    *,
+    request: Mapping[str, Any],
+    run_id: str,
+    run_lease_sha256: str,
+    request_sha256: str,
+    grant_sha256: str,
+) -> tuple[dict[str, Any], bytes] | None:
+    """Read only a consumption record exactly owned by the recovering run."""
+
+    grant_id = request["approval"]["grant_id"]
+    if not isinstance(grant_id, str):
+        raise AdaptiveWaveValidationError("recovery_grant_id_invalid")
+    _, consumption_path = _grant_paths(grant_root, bytes_sha256(grant_id.encode()))
+    try:
+        consumption_path.lstat()
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        raise AdaptiveWaveValidationError("recovery_grant_consumption_invalid") from exc
+    try:
+        raw = _read_regular_owned_bounded(consumption_path, maximum_bytes=1_048_576, required_mode=0o600)
+        consumption = strict_json_loads(raw)
+    except (AdaptiveWaveValidationError, OSError, UnicodeError, ValueError) as exc:
+        raise AdaptiveWaveValidationError("recovery_grant_consumption_invalid") from exc
+    expected = {
+        "schema_version": CONSUMPTION_SCHEMA_VERSION,
+        "grant_id_hash": bytes_sha256(grant_id.encode()),
+        "grant_sha256": grant_sha256,
+        "execution_scope_sha256": execution_scope_sha256(request),
+        "request_sha256": request_sha256,
+        "run_id": run_id,
+        "run_lease_sha256": run_lease_sha256,
+        "consumed_at": consumption.get("consumed_at") if isinstance(consumption, dict) else None,
+        "state": "consumed_after_binary_auth_preflight_before_process_spawn",
+    }
+    if (
+        not isinstance(consumption, dict)
+        or set(consumption) != _CONSUMPTION_KEYS
+        or not _timestamp_valid(consumption.get("consumed_at"))
+        or consumption != expected
+    ):
+        raise AdaptiveWaveValidationError("recovery_grant_consumption_invalid")
+    return consumption, raw
 
 
 def _isolated_environment(ephemeral_home: Path) -> dict[str, str]:
@@ -4536,6 +5114,51 @@ def _delete_ephemeral_tree(path: Path) -> None:
         raise AdaptiveWaveValidationError("ephemeral_tree_deletion_failed")
 
 
+def _finalize_copied_auth_use(
+    copied_auth: Path,
+    ephemeral_home: Path,
+    *,
+    grant_root: Path,
+    oauth_auth_sha256: str,
+    run_id: str,
+    request_sha256: str,
+    run_lease_sha256: str,
+    grant_sha256: str,
+    wall_clock: Callable[[], datetime],
+    force_taint_reason: str | None,
+) -> None:
+    """Audit, durably delete, then release only this run's active-use claim."""
+
+    if not _auth_active_use_owned_by(
+        grant_root,
+        oauth_auth_sha256=oauth_auth_sha256,
+        run_id=run_id,
+        request_sha256=request_sha256,
+        run_lease_sha256=run_lease_sha256,
+        grant_sha256=grant_sha256,
+        reject_sibling=True,
+    ):
+        raise AdaptiveWaveValidationError("grok_auth_active_use_binding_invalid")
+    _audit_copied_auth_after_provider(
+        copied_auth,
+        expected_sha256=oauth_auth_sha256,
+        source_run_id=run_id,
+        source_request_sha256=request_sha256,
+        grant_root=grant_root,
+        wall_clock=wall_clock,
+        force_taint_reason=force_taint_reason,
+    )
+    _delete_ephemeral_tree(ephemeral_home)
+    _resolve_auth_active_use(
+        grant_root,
+        oauth_auth_sha256=oauth_auth_sha256,
+        run_id=run_id,
+        request_sha256=request_sha256,
+        run_lease_sha256=run_lease_sha256,
+        grant_sha256=grant_sha256,
+    )
+
+
 @contextmanager
 def _discard_run_root_without_intent_on_failure(run_root: Path) -> Any:
     """Leave only crash-recoverable roots that durably published an intent."""
@@ -4616,12 +5239,14 @@ def _run_adaptive_wave(
         # does not prove that their access token covers this run.  Avoid
         # triggering one-time refresh-token rotation inside the disposable
         # GROK_HOME, because that refreshed state is intentionally deleted.
-        if _auth_fingerprint(auth_source) == transport["oauth_auth_sha256"]:
-            _require_live_auth_freshness(
-                auth_source,
-                request=request,
-                now=started_clock,
-            )
+        if _auth_fingerprint(auth_source) != transport["oauth_auth_sha256"]:
+            raise AdaptiveWaveValidationError("live_auth_fingerprint_mismatch")
+        _require_auth_digest_available(approval_root, transport["oauth_auth_sha256"])
+        _require_live_auth_freshness(
+            auth_source,
+            request=request,
+            now=started_clock,
+        )
     prompt_raw = _load_bound_bytes(
         request["prompt_source"]["path"],
         request["prompt_source"]["sha256"],
@@ -4736,13 +5361,16 @@ def _run_adaptive_wave(
 
         approval_consumption_sha: str | None = None
         consumed_grant: ConsumedGrant | None = None
+        copied_auth: Path | None = None
         process_ledger_sha: str | None = None
+        target_release_authorized = False
         updates_source_path = _session_updates_path(ephemeral_home, workspace, actual_session_id)
         started_monotonic = monotonic()
         execution_deadline = started_monotonic + request["emergency"]["deadline_ms"] / 1000
         updates_raw: bytes | None = None
         session_capture_status = "not_applicable" if execution_mode == "fixture" else "missing"
         measurement = SessionTreeMeasurement(0, 0, 0, 0, 0, None)
+        provider_phase_completed_cleanly = False
         if execution_mode == "live":
             assert auth_source is not None
             try:
@@ -4769,7 +5397,34 @@ def _run_adaptive_wave(
                 grant_sha = consumed_grant.grant_sha256
                 approval_consumption_sha = consumed_grant.consumption_sha256
             except BaseException:
-                _delete_ephemeral_tree(ephemeral_home)
+                owns_claim = (
+                    copied_auth is not None
+                    and grant_sha is not None
+                    and _auth_active_use_owned_by(
+                        approval_root,
+                        oauth_auth_sha256=transport["oauth_auth_sha256"],
+                        run_id=actual_run_id,
+                        request_sha256=request_sha,
+                        run_lease_sha256=run_lease_sha,
+                        grant_sha256=grant_sha,
+                        reject_sibling=False,
+                    )
+                )
+                if owns_claim:
+                    _finalize_copied_auth_use(
+                        copied_auth,
+                        ephemeral_home,
+                        grant_root=approval_root,
+                        oauth_auth_sha256=transport["oauth_auth_sha256"],
+                        run_id=actual_run_id,
+                        request_sha256=request_sha,
+                        run_lease_sha256=run_lease_sha,
+                        grant_sha256=grant_sha,
+                        wall_clock=wall_clock,
+                        force_taint_reason=None,
+                    )
+                else:
+                    _delete_ephemeral_tree(ephemeral_home)
                 raise
 
         def persist_spawn(
@@ -4778,7 +5433,7 @@ def _run_adaptive_wave(
             kernel_birth_identity: str,
             process_identity_token: str,
         ) -> None:
-            nonlocal process_ledger_sha
+            nonlocal process_ledger_sha, target_release_authorized
             launcher_verified_clock = wall_clock().astimezone(UTC)
             ledger = {
                 "schema_version": PROCESS_LEDGER_SCHEMA_VERSION,
@@ -4807,6 +5462,7 @@ def _run_adaptive_wave(
                 or monotonic() >= consumed_grant.target_release_deadline_monotonic
             ):
                 raise PermissionError("live_grant_expired_before_target_release")
+            target_release_authorized = True
 
         try:
             approval_binding = _approval_binding(
@@ -4860,8 +5516,35 @@ def _run_adaptive_wave(
                 except (AdaptiveWaveValidationError, OSError, UnicodeError, ValueError):
                     updates_raw = None
                     session_capture_status = "invalid"
+            provider_phase_completed_cleanly = (
+                process_result.exit_code == 0
+                and not process_result.timed_out
+                and process_result.execution_error_code == "none"
+                and process_result.technical_limit_kind is None
+                and measurement.limit_kind is None
+            )
         finally:
-            _delete_ephemeral_tree(ephemeral_home)
+            if execution_mode == "live":
+                if consumed_grant is None or copied_auth is None or grant_sha is None:
+                    raise AdaptiveWaveValidationError("grok_auth_active_use_binding_invalid")
+                _finalize_copied_auth_use(
+                    copied_auth,
+                    ephemeral_home,
+                    grant_root=approval_root,
+                    oauth_auth_sha256=transport["oauth_auth_sha256"],
+                    run_id=actual_run_id,
+                    request_sha256=request_sha,
+                    run_lease_sha256=run_lease_sha,
+                    grant_sha256=grant_sha,
+                    wall_clock=wall_clock,
+                    force_taint_reason=(
+                        None
+                        if provider_phase_completed_cleanly or not target_release_authorized
+                        else "post_consumption_execution_not_clean"
+                    ),
+                )
+            else:
+                _delete_ephemeral_tree(ephemeral_home)
         elapsed_ms = max(0, round((monotonic() - started_monotonic) * 1000))
         completed_clock = wall_clock().astimezone(UTC)
         completed_at = _timestamp(completed_clock)
@@ -6606,6 +7289,11 @@ def _recover_incomplete_run_locked(
     if validate_request(request) or canonical_sha256(request) != intent["request_sha256"]:
         raise AdaptiveWaveValidationError("recovery_request_invalid")
     recovery_effective_prompt_policy: EffectivePromptPolicyBinding | None = None
+    recovery_auth_sha256: str | None = None
+    recovery_grant_sha256: str | None = None
+    recovery_active_auth_claim = False
+    recovery_auth_claim_origin: str | None = None
+    recovery_consumption: tuple[dict[str, Any], bytes] | None = None
     if intent["execution_mode"] == "live":
         recovery_effective_prompt_policy = _approved_effective_prompt_binding(request)
         if (
@@ -6615,6 +7303,44 @@ def _recover_incomplete_run_locked(
             != recovery_effective_prompt_policy.policy_entry_id
         ):
             raise AdaptiveWaveValidationError("recovery_effective_prompt_policy_invalid")
+        recovery_auth_sha256 = request["transport"]["oauth_auth_sha256"]
+        recovery_grant_sha256 = intent["approval"]["grant_sha256"]
+        if not _is_sha(recovery_auth_sha256) or not _is_sha(recovery_grant_sha256):
+            raise AdaptiveWaveValidationError("recovery_auth_binding_invalid")
+        with _auth_digest_lock(approval_root, recovery_auth_sha256):
+            active_claim = _load_auth_active_use(approval_root, recovery_auth_sha256)
+            if active_claim is None:
+                _publish_auth_active_use_unlocked(
+                    approval_root,
+                    oauth_auth_sha256=recovery_auth_sha256,
+                    run_id=intent["run_id"],
+                    request_sha256=intent["request_sha256"],
+                    run_lease_sha256=held_lease_sha,
+                    grant_sha256=recovery_grant_sha256,
+                    claimed_at=wall_clock().astimezone(UTC),
+                    claim_origin="legacy_recovery",
+                )
+                recovery_active_auth_claim = True
+                recovery_auth_claim_origin = "legacy_recovery"
+            else:
+                if not _auth_active_use_matches(
+                    active_claim,
+                    run_id=intent["run_id"],
+                    request_sha256=intent["request_sha256"],
+                    run_lease_sha256=held_lease_sha,
+                    grant_sha256=recovery_grant_sha256,
+                ):
+                    raise PermissionError("grok_auth_digest_in_use")
+                recovery_active_auth_claim = True
+                recovery_auth_claim_origin = active_claim["claim_origin"]
+            recovery_consumption = _load_bound_recovery_consumption(
+                approval_root,
+                request=request,
+                run_id=intent["run_id"],
+                run_lease_sha256=held_lease_sha,
+                request_sha256=intent["request_sha256"],
+                grant_sha256=recovery_grant_sha256,
+            )
     prior_handles, _, prior_candidates = load_prior_context(request)
     del prior_handles
     ledger_path = run_root / "process-ledger.json"
@@ -6656,7 +7382,29 @@ def _recover_incomplete_run_locked(
     ephemeral_home = run_root / intent["runtime_layout"]["ephemeral_home_name"]
     retained_updates_path = run_root / intent["runtime_layout"]["session_updates_name"]
     measurement = SessionTreeMeasurement(0, 0, 0, 0, 0, None)
-    if ephemeral_home.exists():
+    try:
+        ephemeral_home.lstat()
+        ephemeral_home_present = True
+    except FileNotFoundError:
+        ephemeral_home_present = False
+    except OSError as exc:
+        raise AdaptiveWaveValidationError("recovery_ephemeral_tree_invalid") from exc
+    if ephemeral_home_present:
+        if intent["execution_mode"] == "live" and (
+            recovery_active_auth_claim or recovery_consumption is not None or process_ledger_sha is not None
+        ):
+            assert recovery_auth_sha256 is not None
+            _audit_copied_auth_after_provider(
+                ephemeral_home / "auth.json",
+                expected_sha256=recovery_auth_sha256,
+                source_run_id=intent["run_id"],
+                source_request_sha256=intent["request_sha256"],
+                grant_root=approval_root,
+                wall_clock=wall_clock,
+                force_taint_reason=(
+                    "post_consumption_execution_not_clean" if process_ledger_sha is not None else None
+                ),
+            )
         source_updates_path = _session_updates_path(
             ephemeral_home,
             run_root / "workspace",
@@ -6692,6 +7440,44 @@ def _recover_incomplete_run_locked(
             else:
                 _atomic_publish(retained_updates_path, updates_raw)
         _delete_ephemeral_tree(ephemeral_home)
+        if recovery_active_auth_claim:
+            assert recovery_auth_sha256 is not None and recovery_grant_sha256 is not None
+            _resolve_auth_active_use(
+                approval_root,
+                oauth_auth_sha256=recovery_auth_sha256,
+                run_id=intent["run_id"],
+                request_sha256=intent["request_sha256"],
+                run_lease_sha256=held_lease_sha,
+                grant_sha256=recovery_grant_sha256,
+            )
+            recovery_active_auth_claim = False
+    elif recovery_active_auth_claim:
+        # A D2 live-consumption claim proves audit preceded durable deletion.
+        # A synthesized legacy-recovery claim carries no such ordering proof:
+        # the old runner could delete rotated auth after provider release.
+        assert recovery_auth_sha256 is not None and recovery_grant_sha256 is not None
+        if recovery_auth_claim_origin == "legacy_recovery" and process_ledger_sha is not None:
+            try:
+                legacy_detected_at = wall_clock().astimezone(UTC)
+            except BaseException:
+                legacy_detected_at = _utc_now()
+            _publish_auth_taint(
+                approval_root,
+                oauth_auth_sha256=recovery_auth_sha256,
+                source_run_id=intent["run_id"],
+                source_request_sha256=intent["request_sha256"],
+                reason="post_consumption_execution_not_clean",
+                detected_at=legacy_detected_at,
+            )
+        _resolve_auth_active_use(
+            approval_root,
+            oauth_auth_sha256=recovery_auth_sha256,
+            run_id=intent["run_id"],
+            request_sha256=intent["request_sha256"],
+            run_lease_sha256=held_lease_sha,
+            grant_sha256=recovery_grant_sha256,
+        )
+        recovery_active_auth_claim = False
     raw_path = run_root / "raw.stdout"
     stderr_path = run_root / "stderr.txt"
     for final_path, spool_name, ceiling in (
@@ -6773,15 +7559,8 @@ def _recover_incomplete_run_locked(
     except AdaptiveWaveValidationError as exc:
         raise AdaptiveWaveValidationError("recovery_compiled_prompt_invalid") from exc
     approval = dict(intent["approval"])
-    if intent["execution_mode"] == "live":
-        grant_id = request["approval"]["grant_id"]
-        if isinstance(grant_id, str):
-            _, consumption_path = _grant_paths(approval_root, bytes_sha256(grant_id.encode()))
-            if consumption_path.exists():
-                consumption_raw = _read_regular_owned_bounded(
-                    consumption_path, maximum_bytes=1_048_576, required_mode=0o600
-                )
-                approval["consumption_sha256"] = bytes_sha256(consumption_raw)
+    if intent["execution_mode"] == "live" and recovery_consumption is not None:
+        approval["consumption_sha256"] = bytes_sha256(recovery_consumption[1])
     session_raw: bytes | None = None
     session_proof: SessionProof | None = None
     session_status = "not_applicable" if intent["execution_mode"] == "fixture" else "missing"

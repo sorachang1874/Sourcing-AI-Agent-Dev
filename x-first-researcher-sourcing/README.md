@@ -54,9 +54,18 @@ The first reviewed v5 process did not produce a search sample. It failed after `
 zero model events, zero native-X calls, no fallback/timeout/technical limit, and a bundle replay result of `[]`. The
 request had correctly copied and SHA-bound one OAuth file, but its access token had expired `17,107.869606s` before
 process start. The previous v4 process had used the same expired bytes successfully inside a disposable home, which is
-consistent with refresh-token state being rotated there and then deleted. A bounded local repair now requires the
-access token to cover the grant TTL plus the complete process/grace window and a 600-second margin; it checks before
-grant creation, before prompt/run-root work, and again on the copied auth before grant consumption. This attempt is
+consistent with refresh-token state being rotated there and then deleted. A bounded local repair now selects exactly
+one current Grok 0.2.101 xAI OIDC row, validates its issuer/client/locator and identity-bound JWT payload without
+claiming signature verification, and uses the earlier of metadata expiry and JWT `exp`. The access window must cover
+the grant TTL plus the complete process/grace window and a 600-second margin; it is checked before grant creation,
+before prompt/run-root work, and again on the copied auth before grant consumption. A durable owner-only active-use
+claim permits only one run or recovery to own an auth digest at a time; grant consumption publishes that claim first,
+and only a successful auth audit followed by durable ephemeral-home deletion resolves it. A separate per-auth-digest
+taint marker blocks future grants if the provider mutates, deletes, makes the copy unreadable, or exits abnormally
+after the gated target was authorized to run. Failures before target release cleanly consume the one-shot grant but do
+not unnecessarily taint unchanged OAuth bytes. A legacy recovery claim is origin-marked: missing home plus a durable
+provider ledger is conservatively tainted because the pre-D2 cleanup order cannot be proven. No refreshed secret state
+is copied back. This attempt is
 excluded from every recall/precision/performance comparison and the consumed grant cannot be reused. See
 `docs/live-evidence/2026-07-15-google-deepmind-v5-oauth-lifecycle-failure.md`.
 

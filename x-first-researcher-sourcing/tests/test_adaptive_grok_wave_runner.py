@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import copy
 import hashlib
 import json
@@ -11,6 +12,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from datetime import UTC, datetime, timedelta
@@ -74,16 +76,50 @@ def _oauth_auth_bytes(
     expires_at: datetime = datetime(2099, 1, 1, tzinfo=UTC),
     *,
     row_count: int = 1,
+    claim_updates: dict[str, Any] | None = None,
+    record_updates: dict[str, Any] | None = None,
+    locator_override: str | None = None,
+    payload_raw_override: bytes | None = None,
 ) -> bytes:
-    payload = {
-        f"https://auth.x.ai::synthetic-{index}": {
+    payload: dict[str, Any] = {}
+    for index in range(row_count):
+        client_id = f"synthetic-client-{index}"
+        principal_id = f"synthetic-principal-{index}"
+        team_id = f"synthetic-team-{index}"
+        claims = {
+            "aud": client_id,
+            "client_id": client_id,
+            "exp": int(expires_at.timestamp()),
+            "iat": int((FIXED_TIME - timedelta(hours=1)).timestamp()),
+            "iss": runner.XAI_OIDC_ISSUER,
+            "principal_id": principal_id,
+            "principal_type": "user",
+            "scope": " ".join(sorted(runner.XAI_OIDC_REQUIRED_SCOPES)),
+            "sub": principal_id,
+            "team_id": team_id,
+        }
+        if claim_updates:
+            claims.update(claim_updates)
+        header_segment = base64.urlsafe_b64encode(b'{"alg":"none","typ":"JWT"}').rstrip(b"=").decode()
+        payload_bytes = payload_raw_override or canonical_json(claims).encode()
+        payload_segment = base64.urlsafe_b64encode(payload_bytes).rstrip(b"=").decode()
+        access_token = f"{header_segment}.{payload_segment}.synthetic-signature"
+        record = {
             "auth_mode": "oidc",
             "expires_at": expires_at.astimezone(UTC).isoformat(timespec="microseconds").replace("+00:00", "Z"),
-            "key": f"synthetic-access-token-{index}",
+            "key": access_token,
             "refresh_token": f"synthetic-refresh-token-{index}",
+            "oidc_issuer": runner.XAI_OIDC_ISSUER,
+            "oidc_client_id": client_id,
+            "principal_id": principal_id,
+            "principal_type": "user",
+            "team_id": team_id,
+            "user_id": principal_id,
         }
-        for index in range(row_count)
-    }
+        if record_updates:
+            record.update(record_updates)
+        locator = locator_override or f"{record['oidc_issuer']}::{record['oidc_client_id']}"
+        payload[locator] = record
     return (canonical_json(payload) + "\n").encode()
 
 
@@ -2990,7 +3026,105 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             root = Path(directory)
             os.chmod(root, 0o700)
             _, auth, binary_sha = _live_material(root)
-            _write_private(auth, _oauth_auth_bytes(issuance_horizon + timedelta(microseconds=1)))
+            # JWT NumericDate is whole seconds, so the first valid strict
+            # boundary is one second beyond the complete issuance horizon.
+            _write_private(auth, _oauth_auth_bytes(issuance_horizon + timedelta(seconds=1)))
+            _, request_path = _build_request(root, binary_sha=binary_sha)
+            _, grant_path = issue_live_grant(
+                request_path=request_path,
+                grant_root=root / "approvals",
+                auth_source=auth,
+                wall_clock=lambda: FIXED_TIME,
+            )
+            self.assertTrue(grant_path.is_file())
+
+    def test_grant_issuance_requires_current_xai_oidc_scope_and_consistent_jwt(self) -> None:
+        valid_expiry = FIXED_TIME + timedelta(hours=4)
+        required_scope_without_cli = " ".join(
+            sorted(runner.XAI_OIDC_REQUIRED_SCOPES - {"grok-cli:access"})
+        )
+        cases = (
+            (
+                "wrong_locator_scope",
+                _oauth_auth_bytes(valid_expiry, locator_override="https://auth.x.ai::wrong-client"),
+                "grok_auth_session_invalid",
+            ),
+            (
+                "wrong_issuer",
+                _oauth_auth_bytes(
+                    valid_expiry,
+                    record_updates={"oidc_issuer": "https://example.invalid"},
+                    locator_override="https://example.invalid::synthetic-client-0",
+                ),
+                "grok_auth_session_invalid",
+            ),
+            (
+                "missing_required_scope",
+                _oauth_auth_bytes(valid_expiry, claim_updates={"scope": required_scope_without_cli}),
+                "grok_auth_session_invalid",
+            ),
+            (
+                "inconsistent_principal",
+                _oauth_auth_bytes(valid_expiry, claim_updates={"principal_id": "different-principal"}),
+                "grok_auth_session_invalid",
+            ),
+            (
+                "duplicate_jwt_claim",
+                _oauth_auth_bytes(valid_expiry, payload_raw_override=b'{"exp":1,"exp":2}'),
+                "grok_auth_session_invalid",
+            ),
+            (
+                "non_integer_jwt_exp",
+                _oauth_auth_bytes(valid_expiry, claim_updates={"exp": "2099"}),
+                "grok_auth_session_invalid",
+            ),
+            (
+                "future_iat",
+                _oauth_auth_bytes(
+                    valid_expiry,
+                    claim_updates={"iat": int((FIXED_TIME + timedelta(seconds=1)).timestamp())},
+                ),
+                "grok_auth_session_not_yet_valid",
+            ),
+            (
+                "future_nbf",
+                _oauth_auth_bytes(
+                    valid_expiry,
+                    claim_updates={"nbf": int((FIXED_TIME + timedelta(seconds=1)).timestamp())},
+                ),
+                "grok_auth_session_not_yet_valid",
+            ),
+            (
+                "jwt_exp_precedes_metadata_expiry",
+                _oauth_auth_bytes(
+                    valid_expiry,
+                    claim_updates={"exp": int((FIXED_TIME + timedelta(minutes=30)).timestamp())},
+                ),
+                "grok_auth_access_window_insufficient",
+            ),
+        )
+        for label, auth_raw, expected_error in cases:
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                os.chmod(root, 0o700)
+                _, auth, binary_sha = _live_material(root)
+                _write_private(auth, auth_raw)
+                _, request_path = _build_request(root, binary_sha=binary_sha)
+                with self.assertRaisesRegex(AdaptiveWaveValidationError, expected_error):
+                    issue_live_grant(
+                        request_path=request_path,
+                        grant_root=root / "approvals",
+                        auth_source=auth,
+                        wall_clock=lambda: FIXED_TIME,
+                    )
+                self.assertFalse((root / "approvals").exists())
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            os.chmod(root, 0o700)
+            _, auth, binary_sha = _live_material(root)
+            superset_scope = " ".join(sorted(runner.XAI_OIDC_REQUIRED_SCOPES | {"future:read"}))
+            _write_private(auth, _oauth_auth_bytes(valid_expiry, claim_updates={"scope": superset_scope}))
             _, request_path = _build_request(root, binary_sha=binary_sha)
             _, grant_path = issue_live_grant(
                 request_path=request_path,
@@ -3856,6 +3990,7 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             root = Path(directory)
             os.chmod(root, 0o700)
             binary, auth, binary_sha = _live_material(root)
+            auth_sha = _bytes_sha(auth.read_bytes())
             request, request_path = _build_request(root, binary_sha=binary_sha)
             approvals = root / "approvals"
             issue_live_grant(
@@ -3893,12 +4028,27 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             self.assertEqual(fake.commands, [])
             self.assertEqual(fake.target_release_count, 0)
             self.assertEqual(len(list(approvals.glob("consumption-*.json"))), 1)
+            self.assertFalse((approvals / f"auth-active-use-{auth_sha}.json").exists())
+            self.assertFalse((approvals / f"auth-taint-{auth_sha}.json").exists())
+
+            next_request = copy.deepcopy(request)
+            next_request["request_id"] = "xwave_req_22222222222222222222222222222222"
+            next_request["approval"]["grant_id"] = "clean-after-post-link-expiry"
+            _write_private(request_path, (canonical_json(next_request) + "\n").encode())
+            _, next_grant_path = issue_live_grant(
+                request_path=request_path,
+                grant_root=approvals,
+                auth_source=auth,
+                wall_clock=lambda: FIXED_TIME,
+            )
+            self.assertTrue(next_grant_path.is_file())
 
     def test_grant_expiry_after_durable_launcher_ledger_never_releases_target(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             os.chmod(root, 0o700)
             binary, auth, binary_sha = _live_material(root)
+            auth_sha = _bytes_sha(auth.read_bytes())
             request, request_path = _build_request(root, binary_sha=binary_sha)
             approvals = root / "approvals"
             issue_live_grant(
@@ -3937,6 +4087,24 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
                 )
             self.assertEqual(fake.target_release_count, 0)
             self.assertEqual(len(list(approvals.glob("consumption-*.json"))), 1)
+            self.assertFalse((approvals / f"auth-taint-{auth_sha}.json").exists())
+            self.assertFalse((approvals / f"auth-active-use-{auth_sha}.json").exists())
+
+            # The live process knows the release callback failed and therefore
+            # leaves unchanged OAuth reusable. Once that proof is gone, legacy
+            # recovery must conservatively classify the ledger below.
+            next_request = copy.deepcopy(request)
+            next_request["request_id"] = "xwave_req_22222222222222222222222222222222"
+            next_request["approval"]["grant_id"] = "clean-after-unreleased-ledger"
+            _write_private(request_path, (canonical_json(next_request) + "\n").encode())
+            _, next_grant_path = issue_live_grant(
+                request_path=request_path,
+                grant_root=approvals,
+                auth_source=auth,
+                wall_clock=lambda: FIXED_TIME,
+            )
+            self.assertTrue(next_grant_path.is_file())
+
             run_root = next((root / "runtime").iterdir())
             self.assertTrue((run_root / "process-ledger.json").is_file())
             recovered = recover_incomplete_run(
@@ -3947,6 +4115,8 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             )
             self.assertEqual(recovered["status"], "crash_recovered")
             self.assertEqual(validate_operator_bundle(run_root, approval_root=approvals), [])
+            marker = json.loads((approvals / f"auth-taint-{auth_sha}.json").read_text())
+            self.assertEqual(marker["reason"], "post_consumption_execution_not_clean")
 
     def test_bundle_replay_rejects_launcher_verification_outside_grant_window(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -4057,11 +4227,12 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
                 self.assertEqual(receipt["session_proof"]["status"], "invalid")
                 self.assertEqual(validate_operator_bundle(run_root, approval_root=approvals), [])
 
-    def test_intent_precedes_auth_and_executor_exception_deletes_entire_ephemeral_home(self) -> None:
+    def test_executor_exception_before_provider_release_cleans_claim_without_taint(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             os.chmod(root, 0o700)
             binary, auth, binary_sha = _live_material(root)
+            auth_sha = _bytes_sha(auth.read_bytes())
             request, request_path = _build_request(root, binary_sha=binary_sha)
             approvals = root / "approvals"
             issue_live_grant(
@@ -4090,8 +4261,22 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             run_root = next((root / "runtime").iterdir())
             self.assertTrue((run_root / "operator-intent.json").is_file())
             self.assertFalse((run_root / "ephemeral-home").exists())
+            self.assertFalse((approvals / f"auth-taint-{auth_sha}.json").exists())
+            self.assertFalse((approvals / f"auth-active-use-{auth_sha}.json").exists())
 
-    def test_preconsumption_auth_failure_recovers_with_explicit_unconsumed_grant(self) -> None:
+            next_request = copy.deepcopy(request)
+            next_request["request_id"] = "xwave_req_22222222222222222222222222222222"
+            next_request["approval"]["grant_id"] = "clean-after-pre-release-failure"
+            _write_private(request_path, (canonical_json(next_request) + "\n").encode())
+            _, next_grant_path = issue_live_grant(
+                request_path=request_path,
+                grant_root=approvals,
+                auth_source=auth,
+                wall_clock=lambda: FIXED_TIME,
+            )
+            self.assertTrue(next_grant_path.is_file())
+
+    def test_canonical_auth_sha_mismatch_fails_before_prompt_or_run_root(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             os.chmod(root, 0o700)
@@ -4104,6 +4289,7 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
                 auth_source=auth,
                 wall_clock=lambda: FIXED_TIME,
             )
+            Path(request["prompt_source"]["path"]).unlink()
             _write_private(auth, b'{"synthetic":"rotated-after-intent-binding"}\n')
             fake = FakeExecutor(MutableClock(), (canonical_json(_empty_result()) + "\n").encode(), spawn=True)
             with self.assertRaisesRegex(AdaptiveWaveValidationError, "live_auth_fingerprint_mismatch"):
@@ -4118,16 +4304,883 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
                     monotonic=fake.clock,
                     wall_clock=lambda: FIXED_TIME,
                 )
+            self.assertEqual(fake.commands, [])
+            self.assertFalse((root / "runtime").exists())
+            self.assertEqual(list(approvals.glob("consumption-*.json")), [])
+
+    def test_clean_copied_auth_digest_remains_reusable_for_a_new_grant(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            os.chmod(root, 0o700)
+            binary, auth, binary_sha = _live_material(root)
+            request, request_path = _build_request(root, binary_sha=binary_sha, grant_id="clean-grant-1")
+            approvals = root / "approvals"
+            issue_live_grant(
+                request_path=request_path,
+                grant_root=approvals,
+                auth_source=auth,
+                wall_clock=lambda: FIXED_TIME,
+            )
+            fake = FakeExecutor(
+                MutableClock(),
+                (canonical_json(_empty_result()) + "\n").encode(),
+                spawn=True,
+            )
+            receipt, run_root = _run_adaptive_wave(
+                request=request,
+                execution_mode="live",
+                runtime_root=root / "runtime",
+                approval_root=approvals,
+                binary=binary,
+                auth_source=auth,
+                executor=fake,
+                monotonic=fake.clock,
+                wall_clock=lambda: FIXED_TIME,
+            )
+            self.assertEqual(receipt["status"], "completed")
+            self.assertEqual(validate_operator_bundle(run_root, approval_root=approvals), [])
+            self.assertEqual(list(approvals.glob("auth-taint-*.json")), [])
+
+            next_request = copy.deepcopy(request)
+            next_request["request_id"] = "xwave_req_22222222222222222222222222222222"
+            next_request["approval"]["grant_id"] = "clean-grant-2"
+            _write_private(request_path, (canonical_json(next_request) + "\n").encode())
+            _, next_grant_path = issue_live_grant(
+                request_path=request_path,
+                grant_root=approvals,
+                auth_source=auth,
+                wall_clock=lambda: FIXED_TIME,
+            )
+            self.assertTrue(next_grant_path.is_file())
+
+    def test_same_auth_digest_concurrent_runs_release_only_one_executor(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            os.chmod(root, 0o700)
+            binary, auth, binary_sha = _live_material(root)
+            auth_sha = _bytes_sha(auth.read_bytes())
+            request, request_path = _build_request(
+                root,
+                binary_sha=binary_sha,
+                grant_id="concurrent-grant-1",
+            )
+            sibling_request = copy.deepcopy(request)
+            sibling_request["request_id"] = "xwave_req_22222222222222222222222222222222"
+            sibling_request["approval"]["grant_id"] = "concurrent-grant-2"
+            sibling_request_path = root / "sibling-request.json"
+            _write_private(sibling_request_path, (canonical_json(sibling_request) + "\n").encode())
+            approvals = root / "approvals"
+            for path in (request_path, sibling_request_path):
+                issue_live_grant(
+                    request_path=path,
+                    grant_root=approvals,
+                    auth_source=auth,
+                    wall_clock=lambda: FIXED_TIME,
+                )
+
+            entered_executor = threading.Event()
+            release_executor = threading.Event()
+            inner = FakeExecutor(
+                MutableClock(),
+                (canonical_json(_empty_result()) + "\n").encode(),
+                spawn=True,
+            )
+
+            def block_after_claim(command: list[str], **kwargs: Any) -> ProcessResult:
+                entered_executor.set()
+                if not release_executor.wait(timeout=5):
+                    raise RuntimeError("synthetic_concurrency_release_timeout")
+                return inner(command, **kwargs)
+
+            first_result: list[tuple[dict[str, Any], Path]] = []
+            first_errors: list[BaseException] = []
+
+            def run_first() -> None:
+                try:
+                    first_result.append(
+                        _run_adaptive_wave(
+                            request=request,
+                            execution_mode="live",
+                            runtime_root=root / "runtime-first",
+                            approval_root=approvals,
+                            binary=binary,
+                            auth_source=auth,
+                            executor=block_after_claim,
+                            monotonic=inner.clock,
+                            wall_clock=lambda: FIXED_TIME,
+                        )
+                    )
+                except BaseException as exc:
+                    first_errors.append(exc)
+
+            first_thread = threading.Thread(target=run_first)
+            first_thread.start()
+            try:
+                self.assertTrue(entered_executor.wait(timeout=5))
+                active_claim = approvals / f"auth-active-use-{auth_sha}.json"
+                self.assertTrue(active_claim.is_file())
+                sibling = FakeExecutor(
+                    MutableClock(),
+                    (canonical_json(_empty_result()) + "\n").encode(),
+                    spawn=True,
+                )
+                with self.assertRaisesRegex(PermissionError, "grok_auth_digest_in_use"):
+                    _run_adaptive_wave(
+                        request=sibling_request,
+                        execution_mode="live",
+                        runtime_root=root / "runtime-sibling",
+                        approval_root=approvals,
+                        binary=binary,
+                        auth_source=auth,
+                        executor=sibling,
+                        monotonic=sibling.clock,
+                        wall_clock=lambda: FIXED_TIME,
+                    )
+                self.assertEqual(sibling.commands, [])
+                self.assertFalse((root / "runtime-sibling").exists())
+                self.assertEqual(len(list(approvals.glob("consumption-*.json"))), 1)
+            finally:
+                release_executor.set()
+                first_thread.join(timeout=5)
+            self.assertFalse(first_thread.is_alive())
+            self.assertEqual(first_errors, [])
+            self.assertEqual(len(first_result), 1)
+            first_receipt, first_run_root = first_result[0]
+            self.assertEqual(first_receipt["status"], "completed")
+            self.assertEqual(inner.target_release_count, 1)
+            self.assertFalse((approvals / f"auth-active-use-{auth_sha}.json").exists())
+            self.assertEqual(validate_operator_bundle(first_run_root, approval_root=approvals), [])
+
+    def test_recovery_audits_rotated_auth_then_resolves_active_claim(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            os.chmod(root, 0o700)
+            binary, auth, binary_sha = _live_material(root)
+            auth_sha = _bytes_sha(auth.read_bytes())
+            request, request_path = _build_request(root, binary_sha=binary_sha)
+            approvals = root / "approvals"
+            issue_live_grant(
+                request_path=request_path,
+                grant_root=approvals,
+                auth_source=auth,
+                wall_clock=lambda: FIXED_TIME,
+            )
+
+            def rotate_auth(session_tree_root: Path, updates_path: Path) -> None:
+                del updates_path
+                _write_private(
+                    session_tree_root / "auth.json",
+                    _oauth_auth_bytes(record_updates={"refresh_token": "recovery-rotated-token"}),
+                )
+
+            fake = FakeExecutor(
+                MutableClock(),
+                (canonical_json(_empty_result()) + "\n").encode(),
+                spawn=True,
+                session_tree_mutator=rotate_auth,
+            )
+            with mock.patch.object(
+                runner,
+                "_audit_copied_auth_after_provider",
+                side_effect=RuntimeError("synthetic_crash_before_auth_audit"),
+            ):
+                with self.assertRaisesRegex(RuntimeError, "synthetic_crash_before_auth_audit"):
+                    _run_adaptive_wave(
+                        request=request,
+                        execution_mode="live",
+                        runtime_root=root / "runtime",
+                        approval_root=approvals,
+                        binary=binary,
+                        auth_source=auth,
+                        executor=fake,
+                        monotonic=fake.clock,
+                        wall_clock=lambda: FIXED_TIME,
+                    )
             run_root = next((root / "runtime").iterdir())
+            active_claim = approvals / f"auth-active-use-{auth_sha}.json"
+            self.assertTrue(active_claim.is_file())
+            self.assertTrue((run_root / "ephemeral-home/auth.json").is_file())
+
             recovered = recover_incomplete_run(
                 run_root,
                 approval_root=approvals,
                 process_group_is_alive=lambda group: False,
                 wall_clock=lambda: FIXED_TIME + timedelta(minutes=5),
             )
-            self.assertIsNone(recovered["approval"]["consumption_sha256"])
-            self.assertFalse(recovered["process"]["process_spawn_attempted"])
+            self.assertEqual(recovered["status"], "crash_recovered")
+            self.assertFalse(active_claim.exists())
+            self.assertFalse((run_root / "ephemeral-home").exists())
+            marker = json.loads((approvals / f"auth-taint-{auth_sha}.json").read_text())
+            self.assertEqual(marker["reason"], "copied_auth_mutated")
             self.assertEqual(validate_operator_bundle(run_root, approval_root=approvals), [])
+
+            blocked_request = copy.deepcopy(request)
+            blocked_request["request_id"] = "xwave_req_22222222222222222222222222222222"
+            blocked_request["approval"]["grant_id"] = "rotated-recovery-retry"
+            _write_private(request_path, (canonical_json(blocked_request) + "\n").encode())
+            with self.assertRaisesRegex(PermissionError, "grok_auth_digest_tainted"):
+                issue_live_grant(
+                    request_path=request_path,
+                    grant_root=approvals,
+                    auth_source=auth,
+                    wall_clock=lambda: FIXED_TIME,
+                )
+
+    def test_recovery_clean_post_consumption_without_ledger_does_not_taint(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            os.chmod(root, 0o700)
+            binary, auth, binary_sha = _live_material(root)
+            auth_sha = _bytes_sha(auth.read_bytes())
+            request, request_path = _build_request(root, binary_sha=binary_sha)
+            approvals = root / "approvals"
+            issue_live_grant(
+                request_path=request_path,
+                grant_root=approvals,
+                auth_source=auth,
+                wall_clock=lambda: FIXED_TIME,
+            )
+
+            def fail_before_spawn(command: Any, **kwargs: Any) -> ProcessResult:
+                del command, kwargs
+                raise RuntimeError("synthetic_failure_before_provider_release")
+
+            with mock.patch.object(
+                runner,
+                "_audit_copied_auth_after_provider",
+                side_effect=RuntimeError("synthetic_crash_before_auth_audit"),
+            ):
+                with self.assertRaisesRegex(RuntimeError, "synthetic_crash_before_auth_audit"):
+                    _run_adaptive_wave(
+                        request=request,
+                        execution_mode="live",
+                        runtime_root=root / "runtime",
+                        approval_root=approvals,
+                        binary=binary,
+                        auth_source=auth,
+                        executor=fail_before_spawn,
+                        monotonic=MutableClock(),
+                        wall_clock=lambda: FIXED_TIME,
+                    )
+            run_root = next((root / "runtime").iterdir())
+            self.assertFalse((run_root / "process-ledger.json").exists())
+            active_claim = approvals / f"auth-active-use-{auth_sha}.json"
+            self.assertTrue(active_claim.is_file())
+            active_claim.unlink()
+
+            next_request = copy.deepcopy(request)
+            next_request["request_id"] = "xwave_req_22222222222222222222222222222222"
+            next_request["approval"]["grant_id"] = "clean-recovery-retry"
+            _write_private(request_path, (canonical_json(next_request) + "\n").encode())
+            original_audit = runner._audit_copied_auth_after_provider
+
+            def assert_recovery_claim_then_audit(*args: Any, **kwargs: Any) -> None:
+                self.assertTrue(active_claim.is_file())
+                with self.assertRaisesRegex(PermissionError, "grok_auth_digest_in_use"):
+                    issue_live_grant(
+                        request_path=request_path,
+                        grant_root=approvals,
+                        auth_source=auth,
+                        wall_clock=lambda: FIXED_TIME,
+                    )
+                original_audit(*args, **kwargs)
+
+            with mock.patch.object(
+                runner,
+                "_audit_copied_auth_after_provider",
+                side_effect=assert_recovery_claim_then_audit,
+            ):
+                recovered = recover_incomplete_run(
+                    run_root,
+                    approval_root=approvals,
+                    process_group_is_alive=lambda group: False,
+                    wall_clock=lambda: FIXED_TIME + timedelta(minutes=5),
+                )
+            self.assertEqual(recovered["status"], "crash_recovered")
+            self.assertFalse((approvals / f"auth-active-use-{auth_sha}.json").exists())
+            self.assertFalse((approvals / f"auth-taint-{auth_sha}.json").exists())
+            self.assertFalse((run_root / "ephemeral-home").exists())
+            self.assertEqual(validate_operator_bundle(run_root, approval_root=approvals), [])
+
+            _, next_grant_path = issue_live_grant(
+                request_path=request_path,
+                grant_root=approvals,
+                auth_source=auth,
+                wall_clock=lambda: FIXED_TIME,
+            )
+            self.assertTrue(next_grant_path.is_file())
+
+    def test_taint_publication_failure_retains_auth_and_claim_until_recovery(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            os.chmod(root, 0o700)
+            binary, auth, binary_sha = _live_material(root)
+            auth_sha = _bytes_sha(auth.read_bytes())
+            request, request_path = _build_request(root, binary_sha=binary_sha)
+            approvals = root / "approvals"
+            issue_live_grant(
+                request_path=request_path,
+                grant_root=approvals,
+                auth_source=auth,
+                wall_clock=lambda: FIXED_TIME,
+            )
+            fake = FakeExecutor(
+                MutableClock(),
+                (canonical_json(_empty_result()) + "\n").encode(),
+                spawn=True,
+                exit_code=1,
+            )
+            with mock.patch.object(
+                runner,
+                "_publish_auth_taint",
+                side_effect=RuntimeError("synthetic_taint_publication_failure"),
+            ):
+                with self.assertRaisesRegex(RuntimeError, "synthetic_taint_publication_failure"):
+                    _run_adaptive_wave(
+                        request=request,
+                        execution_mode="live",
+                        runtime_root=root / "runtime",
+                        approval_root=approvals,
+                        binary=binary,
+                        auth_source=auth,
+                        executor=fake,
+                        monotonic=fake.clock,
+                        wall_clock=lambda: FIXED_TIME,
+                    )
+            run_root = next((root / "runtime").iterdir())
+            active_claim = approvals / f"auth-active-use-{auth_sha}.json"
+            self.assertTrue((run_root / "ephemeral-home/auth.json").is_file())
+            self.assertTrue(active_claim.is_file())
+            self.assertFalse((approvals / f"auth-taint-{auth_sha}.json").exists())
+
+            blocked_request = copy.deepcopy(request)
+            blocked_request["request_id"] = "xwave_req_22222222222222222222222222222222"
+            blocked_request["approval"]["grant_id"] = "blocked-during-taint-recovery"
+            _write_private(request_path, (canonical_json(blocked_request) + "\n").encode())
+            with self.assertRaisesRegex(PermissionError, "grok_auth_digest_in_use"):
+                issue_live_grant(
+                    request_path=request_path,
+                    grant_root=approvals,
+                    auth_source=auth,
+                    wall_clock=lambda: FIXED_TIME,
+                )
+
+            recovered = recover_incomplete_run(
+                run_root,
+                approval_root=approvals,
+                process_group_is_alive=lambda group: False,
+                wall_clock=lambda: FIXED_TIME + timedelta(minutes=5),
+            )
+            self.assertEqual(recovered["status"], "crash_recovered")
+            self.assertFalse((run_root / "ephemeral-home").exists())
+            self.assertFalse(active_claim.exists())
+            marker = json.loads((approvals / f"auth-taint-{auth_sha}.json").read_text())
+            self.assertEqual(marker["reason"], "post_consumption_execution_not_clean")
+            self.assertEqual(validate_operator_bundle(run_root, approval_root=approvals), [])
+
+    def test_ephemeral_delete_failure_retains_clean_claim_until_recovery(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            os.chmod(root, 0o700)
+            binary, auth, binary_sha = _live_material(root)
+            auth_sha = _bytes_sha(auth.read_bytes())
+            request, request_path = _build_request(root, binary_sha=binary_sha)
+            approvals = root / "approvals"
+            issue_live_grant(
+                request_path=request_path,
+                grant_root=approvals,
+                auth_source=auth,
+                wall_clock=lambda: FIXED_TIME,
+            )
+
+            def fail_before_spawn(command: Any, **kwargs: Any) -> ProcessResult:
+                del command, kwargs
+                raise RuntimeError("synthetic_failure_before_provider_release")
+
+            with mock.patch.object(
+                runner,
+                "_delete_ephemeral_tree",
+                side_effect=RuntimeError("synthetic_ephemeral_delete_failure"),
+            ):
+                with self.assertRaisesRegex(RuntimeError, "synthetic_ephemeral_delete_failure"):
+                    _run_adaptive_wave(
+                        request=request,
+                        execution_mode="live",
+                        runtime_root=root / "runtime",
+                        approval_root=approvals,
+                        binary=binary,
+                        auth_source=auth,
+                        executor=fail_before_spawn,
+                        monotonic=MutableClock(),
+                        wall_clock=lambda: FIXED_TIME,
+                    )
+            run_root = next((root / "runtime").iterdir())
+            active_claim = approvals / f"auth-active-use-{auth_sha}.json"
+            self.assertTrue((run_root / "ephemeral-home/auth.json").is_file())
+            self.assertTrue(active_claim.is_file())
+            self.assertFalse((approvals / f"auth-taint-{auth_sha}.json").exists())
+
+            next_request = copy.deepcopy(request)
+            next_request["request_id"] = "xwave_req_22222222222222222222222222222222"
+            next_request["approval"]["grant_id"] = "clean-after-delete-recovery"
+            _write_private(request_path, (canonical_json(next_request) + "\n").encode())
+            with self.assertRaisesRegex(PermissionError, "grok_auth_digest_in_use"):
+                issue_live_grant(
+                    request_path=request_path,
+                    grant_root=approvals,
+                    auth_source=auth,
+                    wall_clock=lambda: FIXED_TIME,
+                )
+
+            recovered = recover_incomplete_run(
+                run_root,
+                approval_root=approvals,
+                process_group_is_alive=lambda group: False,
+                wall_clock=lambda: FIXED_TIME + timedelta(minutes=5),
+            )
+            self.assertEqual(recovered["status"], "crash_recovered")
+            self.assertFalse((run_root / "ephemeral-home").exists())
+            self.assertFalse(active_claim.exists())
+            self.assertFalse((approvals / f"auth-taint-{auth_sha}.json").exists())
+            self.assertEqual(validate_operator_bundle(run_root, approval_root=approvals), [])
+
+            _, next_grant_path = issue_live_grant(
+                request_path=request_path,
+                grant_root=approvals,
+                auth_source=auth,
+                wall_clock=lambda: FIXED_TIME,
+            )
+            self.assertTrue(next_grant_path.is_file())
+
+    def test_recovery_missing_ephemeral_resolves_claim_without_forging_taint(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            os.chmod(root, 0o700)
+            binary, auth, binary_sha = _live_material(root)
+            auth_sha = _bytes_sha(auth.read_bytes())
+            request, request_path = _build_request(root, binary_sha=binary_sha)
+            approvals = root / "approvals"
+            issue_live_grant(
+                request_path=request_path,
+                grant_root=approvals,
+                auth_source=auth,
+                wall_clock=lambda: FIXED_TIME,
+            )
+            fake = FakeExecutor(
+                MutableClock(),
+                (canonical_json(_empty_result()) + "\n").encode(),
+                spawn=True,
+            )
+            with mock.patch.object(
+                runner,
+                "_resolve_auth_active_use",
+                side_effect=RuntimeError("synthetic_crash_after_ephemeral_delete"),
+            ):
+                with self.assertRaisesRegex(RuntimeError, "synthetic_crash_after_ephemeral_delete"):
+                    _run_adaptive_wave(
+                        request=request,
+                        execution_mode="live",
+                        runtime_root=root / "runtime",
+                        approval_root=approvals,
+                        binary=binary,
+                        auth_source=auth,
+                        executor=fake,
+                        monotonic=fake.clock,
+                        wall_clock=lambda: FIXED_TIME,
+                    )
+            run_root = next((root / "runtime").iterdir())
+            self.assertFalse((run_root / "ephemeral-home").exists())
+            self.assertTrue((approvals / f"auth-active-use-{auth_sha}.json").is_file())
+
+            recovered = recover_incomplete_run(
+                run_root,
+                approval_root=approvals,
+                process_group_is_alive=lambda group: False,
+                wall_clock=lambda: FIXED_TIME + timedelta(minutes=5),
+            )
+            self.assertEqual(recovered["status"], "crash_recovered")
+            self.assertFalse((approvals / f"auth-active-use-{auth_sha}.json").exists())
+            self.assertFalse((approvals / f"auth-taint-{auth_sha}.json").exists())
+            self.assertEqual(validate_operator_bundle(run_root, approval_root=approvals), [])
+
+    def test_legacy_missing_home_after_provider_is_tainted_before_claim_resolution(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            run_root, approvals = _completed_live_run(root)
+            auth = root / "auth.json"
+            auth_sha = _bytes_sha(auth.read_bytes())
+            request_path = root / "request.json"
+            request = json.loads(request_path.read_text())
+            (run_root / "operator-receipt.json").unlink()
+            self.assertTrue((run_root / "process-ledger.json").is_file())
+            self.assertFalse((run_root / "ephemeral-home").exists())
+            self.assertFalse((approvals / f"auth-active-use-{auth_sha}.json").exists())
+
+            recovered = recover_incomplete_run(
+                run_root,
+                approval_root=approvals,
+                process_group_is_alive=lambda group: False,
+                wall_clock=lambda: FIXED_TIME + timedelta(minutes=5),
+            )
+            self.assertEqual(recovered["status"], "crash_recovered")
+            self.assertFalse((approvals / f"auth-active-use-{auth_sha}.json").exists())
+            marker = json.loads((approvals / f"auth-taint-{auth_sha}.json").read_text())
+            self.assertEqual(marker["reason"], "post_consumption_execution_not_clean")
+            self.assertEqual(marker["source_run_id"], recovered["run_id"])
+            self.assertEqual(validate_operator_bundle(run_root, approval_root=approvals), [])
+
+            next_request = copy.deepcopy(request)
+            next_request["request_id"] = "xwave_req_22222222222222222222222222222222"
+            next_request["approval"]["grant_id"] = "legacy-missing-home-retry"
+            _write_private(request_path, (canonical_json(next_request) + "\n").encode())
+            with self.assertRaisesRegex(PermissionError, "grok_auth_digest_tainted"):
+                issue_live_grant(
+                    request_path=request_path,
+                    grant_root=approvals,
+                    auth_source=auth,
+                    wall_clock=lambda: FIXED_TIME,
+                )
+
+    def test_exact_auth_copy_with_nonzero_provider_exit_is_tainted(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            os.chmod(root, 0o700)
+            binary, auth, binary_sha = _live_material(root)
+            auth_sha = _bytes_sha(auth.read_bytes())
+            request, request_path = _build_request(root, binary_sha=binary_sha)
+            approvals = root / "approvals"
+            issue_live_grant(
+                request_path=request_path,
+                grant_root=approvals,
+                auth_source=auth,
+                wall_clock=lambda: FIXED_TIME,
+            )
+            fake = FakeExecutor(
+                MutableClock(),
+                (canonical_json(_empty_result()) + "\n").encode(),
+                stderr=b"synthetic provider authentication failure",
+                spawn=True,
+                exit_code=1,
+            )
+            receipt, run_root = _run_adaptive_wave(
+                request=request,
+                execution_mode="live",
+                runtime_root=root / "runtime",
+                approval_root=approvals,
+                binary=binary,
+                auth_source=auth,
+                executor=fake,
+                monotonic=fake.clock,
+                wall_clock=lambda: FIXED_TIME,
+            )
+            self.assertEqual(receipt["status"], "process_failed")
+            self.assertEqual(validate_operator_bundle(run_root, approval_root=approvals), [])
+            marker = json.loads((approvals / f"auth-taint-{auth_sha}.json").read_text())
+            self.assertEqual(marker["reason"], "post_consumption_execution_not_clean")
+            next_request = copy.deepcopy(request)
+            next_request["request_id"] = "xwave_req_22222222222222222222222222222222"
+            next_request["approval"]["grant_id"] = "nonzero-retry-grant"
+            _write_private(request_path, (canonical_json(next_request) + "\n").encode())
+            with self.assertRaisesRegex(PermissionError, "grok_auth_digest_tainted"):
+                issue_live_grant(
+                    request_path=request_path,
+                    grant_root=approvals,
+                    auth_source=auth,
+                    wall_clock=lambda: FIXED_TIME,
+                )
+
+    def test_401_auth_mutation_taints_digest_keeps_bundle_and_blocks_preissued_sibling(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            os.chmod(root, 0o700)
+            binary, auth, binary_sha = _live_material(root)
+            original_auth_sha = _bytes_sha(auth.read_bytes())
+            request, request_path = _build_request(root, binary_sha=binary_sha, grant_id="taint-grant-1")
+            sibling_request = copy.deepcopy(request)
+            sibling_request["request_id"] = "xwave_req_22222222222222222222222222222222"
+            sibling_request["approval"]["grant_id"] = "taint-grant-2"
+            sibling_request_path = root / "sibling-request.json"
+            _write_private(sibling_request_path, (canonical_json(sibling_request) + "\n").encode())
+            approvals = root / "approvals"
+            for path in (request_path, sibling_request_path):
+                issue_live_grant(
+                    request_path=path,
+                    grant_root=approvals,
+                    auth_source=auth,
+                    wall_clock=lambda: FIXED_TIME,
+                )
+
+            def rotate_after_401(session_tree_root: Path, updates_path: Path) -> None:
+                del updates_path
+                _write_private(
+                    session_tree_root / "auth.json",
+                    _oauth_auth_bytes(record_updates={"refresh_token": "rotated-after-401"}),
+                )
+
+            fake = FakeExecutor(
+                MutableClock(),
+                (canonical_json(_empty_result()) + "\n").encode(),
+                stderr=b"HTTP 401 synthetic authorization failure",
+                spawn=True,
+                exit_code=1,
+                session_tree_mutator=rotate_after_401,
+            )
+            receipt, run_root = _run_adaptive_wave(
+                request=request,
+                execution_mode="live",
+                runtime_root=root / "runtime-first",
+                approval_root=approvals,
+                binary=binary,
+                auth_source=auth,
+                executor=fake,
+                monotonic=fake.clock,
+                wall_clock=lambda: FIXED_TIME,
+            )
+            self.assertEqual(receipt["status"], "process_failed")
+            self.assertEqual(validate_operator_bundle(run_root, approval_root=approvals), [])
+            self.assertFalse((run_root / "ephemeral-home").exists())
+            marker_path = approvals / f"auth-taint-{original_auth_sha}.json"
+            marker = json.loads(marker_path.read_text())
+            self.assertEqual(stat.S_IMODE(marker_path.stat().st_mode), 0o600)
+            self.assertEqual(marker["oauth_auth_sha256"], original_auth_sha)
+            self.assertEqual(marker["source_run_id"], receipt["run_id"])
+            self.assertEqual(marker["source_request_sha256"], receipt["request_sha256"])
+            self.assertEqual(marker["reason"], "copied_auth_mutated")
+            first_marker_raw = marker_path.read_bytes()
+            runner._publish_auth_taint(
+                approvals,
+                oauth_auth_sha256=original_auth_sha,
+                source_run_id="grok_wave_live_44444444444444444444444444444444",
+                source_request_sha256="4" * 64,
+                reason="copied_auth_deleted",
+                detected_at=FIXED_TIME + timedelta(minutes=1),
+            )
+            self.assertEqual(marker_path.read_bytes(), first_marker_raw)
+
+            sibling = FakeExecutor(
+                MutableClock(),
+                (canonical_json(_empty_result()) + "\n").encode(),
+                spawn=True,
+            )
+            with self.assertRaisesRegex(PermissionError, "grok_auth_digest_tainted"):
+                _run_adaptive_wave(
+                    request=sibling_request,
+                    execution_mode="live",
+                    runtime_root=root / "runtime-sibling",
+                    approval_root=approvals,
+                    binary=binary,
+                    auth_source=auth,
+                    executor=sibling,
+                    monotonic=sibling.clock,
+                    wall_clock=lambda: FIXED_TIME,
+                )
+            self.assertEqual(sibling.commands, [])
+            self.assertFalse((root / "runtime-sibling").exists())
+
+            blocked_request = copy.deepcopy(sibling_request)
+            blocked_request["request_id"] = "xwave_req_33333333333333333333333333333333"
+            blocked_request["approval"]["grant_id"] = "taint-grant-3"
+            _write_private(request_path, (canonical_json(blocked_request) + "\n").encode())
+            with self.assertRaisesRegex(PermissionError, "grok_auth_digest_tainted"):
+                issue_live_grant(
+                    request_path=request_path,
+                    grant_root=approvals,
+                    auth_source=auth,
+                    wall_clock=lambda: FIXED_TIME,
+                )
+
+            _write_private(auth, _oauth_auth_bytes(record_updates={"refresh_token": "fresh-canonical"}))
+            _, fresh_request_path = _build_request(
+                root,
+                binary_sha=binary_sha,
+                grant_id="fresh-auth-grant",
+            )
+            _, fresh_grant_path = issue_live_grant(
+                request_path=fresh_request_path,
+                grant_root=approvals,
+                auth_source=auth,
+                wall_clock=lambda: FIXED_TIME,
+            )
+            self.assertTrue(fresh_grant_path.is_file())
+
+    def test_malformed_existing_auth_taint_marker_fails_grant_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            os.chmod(root, 0o700)
+            _, auth, binary_sha = _live_material(root)
+            auth_sha = _bytes_sha(auth.read_bytes())
+            _, request_path = _build_request(root, binary_sha=binary_sha)
+            approvals = root / "approvals"
+            approvals.mkdir(mode=0o700)
+            _write_private(approvals / f"auth-taint-{auth_sha}.json", b'{"state":"forged"}\n')
+            with self.assertRaisesRegex(AdaptiveWaveValidationError, "grok_auth_taint_marker_invalid"):
+                issue_live_grant(
+                    request_path=request_path,
+                    grant_root=approvals,
+                    auth_source=auth,
+                    wall_clock=lambda: FIXED_TIME,
+                )
+            self.assertEqual(list(approvals.glob("grant-*.json")), [])
+
+    def test_auth_state_lock_contention_fails_within_bounded_budget(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            os.chmod(root, 0o700)
+            _, auth, binary_sha = _live_material(root)
+            auth_sha = _bytes_sha(auth.read_bytes())
+            _, request_path = _build_request(root, binary_sha=binary_sha)
+            approvals = root / "approvals"
+            approvals.mkdir(mode=0o700)
+            lock_path = approvals / f"auth-taint-lock-{auth_sha}.lock"
+            ready_path = root / "lock-ready"
+            holder_code = """
+import fcntl
+import os
+import pathlib
+import sys
+
+descriptor = os.open(sys.argv[1], os.O_RDWR | os.O_CREAT, 0o600)
+os.fchmod(descriptor, 0o600)
+fcntl.flock(descriptor, fcntl.LOCK_EX)
+pathlib.Path(sys.argv[2]).write_text("ready")
+sys.stdin.buffer.read(1)
+"""
+            holder = subprocess.Popen(
+                [sys.executable, "-c", holder_code, str(lock_path), str(ready_path)],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+            )
+            try:
+                ready_deadline = time.monotonic() + 3
+                while not ready_path.exists() and time.monotonic() < ready_deadline:
+                    time.sleep(0.01)
+                self.assertTrue(ready_path.is_file())
+                started = time.monotonic()
+                with self.assertRaisesRegex(PermissionError, "grok_auth_state_busy"):
+                    issue_live_grant(
+                        request_path=request_path,
+                        grant_root=approvals,
+                        auth_source=auth,
+                        wall_clock=lambda: FIXED_TIME,
+                    )
+                elapsed = time.monotonic() - started
+                self.assertGreaterEqual(elapsed, 0.18)
+                self.assertLess(elapsed, 1.0)
+                self.assertEqual(list(approvals.glob("grant-*.json")), [])
+                self.assertEqual(list(approvals.glob("auth-active-use-*.json")), [])
+                self.assertEqual(list(approvals.glob("consumption-*.json")), [])
+            finally:
+                try:
+                    holder.communicate(input=b"x", timeout=2)
+                except subprocess.TimeoutExpired:
+                    holder.kill()
+                    holder.communicate(timeout=2)
+
+    def test_deleted_or_unreadable_copied_auth_taints_after_provider(self) -> None:
+        def delete_auth(session_tree_root: Path, updates_path: Path) -> None:
+            del updates_path
+            (session_tree_root / "auth.json").unlink()
+
+        def make_auth_unreadable(session_tree_root: Path, updates_path: Path) -> None:
+            del updates_path
+            os.chmod(session_tree_root / "auth.json", 0o000)
+
+        for label, mutator, reason in (
+            ("deleted", delete_auth, "copied_auth_deleted"),
+            ("unreadable", make_auth_unreadable, "copied_auth_unreadable"),
+        ):
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                os.chmod(root, 0o700)
+                binary, auth, binary_sha = _live_material(root)
+                auth_sha = _bytes_sha(auth.read_bytes())
+                request, request_path = _build_request(root, binary_sha=binary_sha)
+                approvals = root / "approvals"
+                issue_live_grant(
+                    request_path=request_path,
+                    grant_root=approvals,
+                    auth_source=auth,
+                    wall_clock=lambda: FIXED_TIME,
+                )
+                fake = FakeExecutor(
+                    MutableClock(),
+                    (canonical_json(_empty_result()) + "\n").encode(),
+                    spawn=True,
+                    session_tree_mutator=mutator,
+                )
+                receipt, run_root = _run_adaptive_wave(
+                    request=request,
+                    execution_mode="live",
+                    runtime_root=root / "runtime",
+                    approval_root=approvals,
+                    binary=binary,
+                    auth_source=auth,
+                    executor=fake,
+                    monotonic=fake.clock,
+                    wall_clock=lambda: FIXED_TIME,
+                )
+                expected_status = "completed" if label == "deleted" else "technical_limit_exceeded"
+                self.assertEqual(receipt["status"], expected_status)
+                self.assertEqual(validate_operator_bundle(run_root, approval_root=approvals), [])
+                marker = json.loads((approvals / f"auth-taint-{auth_sha}.json").read_text())
+                self.assertEqual(marker["reason"], reason)
+                self.assertFalse((run_root / "ephemeral-home").exists())
+
+    def test_executor_exception_after_consumption_still_audits_and_taints_mutated_auth(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            os.chmod(root, 0o700)
+            binary, auth, binary_sha = _live_material(root)
+            auth_sha = _bytes_sha(auth.read_bytes())
+            request, request_path = _build_request(root, binary_sha=binary_sha)
+            approvals = root / "approvals"
+            issue_live_grant(
+                request_path=request_path,
+                grant_root=approvals,
+                auth_source=auth,
+                wall_clock=lambda: FIXED_TIME,
+            )
+
+            def mutate_auth(session_tree_root: Path, updates_path: Path) -> None:
+                del updates_path
+                _write_private(session_tree_root / "auth.json", b'{"synthetic":"mutated"}\n')
+
+            inner = FakeExecutor(
+                MutableClock(),
+                (canonical_json(_empty_result()) + "\n").encode(),
+                spawn=True,
+                session_tree_mutator=mutate_auth,
+            )
+
+            def execute_then_raise(command: list[str], **kwargs: Any) -> ProcessResult:
+                inner(command, **kwargs)
+                raise RuntimeError("synthetic_post_provider_exception")
+
+            with self.assertRaisesRegex(RuntimeError, "synthetic_post_provider_exception"):
+                _run_adaptive_wave(
+                    request=request,
+                    execution_mode="live",
+                    runtime_root=root / "runtime",
+                    approval_root=approvals,
+                    binary=binary,
+                    auth_source=auth,
+                    executor=execute_then_raise,
+                    monotonic=inner.clock,
+                    wall_clock=lambda: FIXED_TIME,
+                )
+            run_root = next((root / "runtime").iterdir())
+            self.assertTrue((run_root / "operator-intent.json").is_file())
+            self.assertFalse((run_root / "ephemeral-home").exists())
+            marker = json.loads((approvals / f"auth-taint-{auth_sha}.json").read_text())
+            self.assertEqual(marker["reason"], "copied_auth_mutated")
+            with self.assertRaisesRegex(PermissionError, "grok_auth_digest_tainted"):
+                issue_live_grant(
+                    request_path=request_path,
+                    grant_root=approvals,
+                    auth_source=auth,
+                    wall_clock=lambda: FIXED_TIME,
+                )
 
     def test_post_executor_publication_failure_deletes_auth_immediately_and_recovers(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

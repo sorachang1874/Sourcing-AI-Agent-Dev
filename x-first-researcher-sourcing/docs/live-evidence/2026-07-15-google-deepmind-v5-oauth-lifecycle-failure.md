@@ -39,13 +39,33 @@ that refreshed state, and v5 later retried the now-stale canonical refresh state
 preserve OAuth mutation payloads, so rotation causality is an evidence-backed inference rather than a replayable
 provider fact.
 
-The repair does not depend on that inference: it requires the existing access token to cover the complete grant wait
-and maximum process window, so no isolated refresh is needed. Grant issuance and execution fail locally on malformed,
-multi-row, expired, or near-horizon auth state; execution rechecks the copied bytes before consuming the grant. The
-runner does not log in, refresh, or write OAuth state back to the canonical home.
+The repair does not depend on that inference. It selects exactly one current Grok 0.2.101 xAI OIDC row, binds its
+locator/issuer/client and required identity fields to a bounded duplicate-safe access-JWT payload, and uses the earlier
+of metadata expiry and JWT `exp`. Required xAI/Grok scopes must be present, while a future legitimate scope superset is
+allowed; future `iat`/`nbf` fails. The runner decodes claims only for local consistency and freshness and does not
+verify the JWT signature. The usable access token must cover the complete grant wait and maximum process window, so
+no isolated refresh is needed.
+
+Grant issuance and execution fail locally on malformed, wrong-scope/identity, multi-row, expired, not-yet-valid, or
+near-horizon auth state; execution rechecks the copied bytes before consuming the grant. After consumption, the copy
+is owned by a durable auth-digest claim published before the one-shot consumption link. Grant issue, sibling
+consumption, and recovery serialize through bounded short lock transactions; the lock is not held across provider
+work. Normal cleanup and explicit recovery both audit first, durably delete the isolated home second, and resolve only
+the exact run's claim last. Audit/taint-publication or deletion failure leaves the claim blocking same-digest reuse.
+The claim records whether live consumption or legacy recovery created it: a missing home proves completed D2 cleanup
+only for the former; legacy origin plus a process ledger is conservatively tainted before resolution.
+
+Mutation, deletion, unreadability, or an abnormal exit after target release authorization writes a closed owner-only
+taint marker keyed by the original auth digest. A post-consumption or final launcher-expiry failure that never releases
+the target consumes that grant but does not taint an exact unchanged copy. Recovery conservatively treats a durable
+process ledger as provider-capable because the in-memory release fact is unavailable. The marker stores only
+digest/run/request/time/reason metadata, current run evidence remains otherwise usable, and no refreshed secret state
+is copied back. The runner does not log in, refresh, or write OAuth state back to the canonical home.
 
 ## Next valid experiment
 
 The consumed grant cannot be reused. After the repair passes targeted/full validation and a pinned non-author review,
 a replacement experiment requires a fresh user OAuth login plus a new auth SHA, request ID, grant ID, request artifact,
-and one-shot grant. Only a completed, transcript-verified, bundle-valid replacement run can be compared with v4.
+and one-shot grant. Restoring a tainted old digest is insufficient. Only a completed, transcript-verified,
+bundle-valid replacement run can be compared with v4. Host wall-clock rollback across separate processes remains a
+documented P2 residual; the experiment assumes a correctly synchronized local clock.
