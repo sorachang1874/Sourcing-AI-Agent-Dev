@@ -336,6 +336,11 @@ coverage. Bundle replay reparses the retained transcript and recomputes both str
 copies consistently still fails. This proves that a scoped search was attempted; it does not prove exhaustive X
 results or turn model excerpts into source-bound evidence.
 
+The coverage classifier admits only a closed conjunctive query subset. Any standalone Boolean `OR` token or pipe
+alternative makes the whole query unattributed, even when exactly one branch contains `from:<handle>` and a valid
+reply filter. The v3 prompt requires separate conjunctive vocabulary queries for the status-gating pair; broader
+Boolean searches remain allowed for discovery but cannot claim per-handle authored-surface coverage.
+
 For result status ownership, the model may propose `X_SEARCH_OK`, `X_SEARCH_PARTIAL`, or `X_SEARCH_BLOCKED`; the
 operator owns a single monotonic downgrade. If any retained candidate has `pretraining_experience_state` ambiguous or
 unsupported and lacks either mechanically classified per-handle authored-Post or authored-Reply attempt, an OK result

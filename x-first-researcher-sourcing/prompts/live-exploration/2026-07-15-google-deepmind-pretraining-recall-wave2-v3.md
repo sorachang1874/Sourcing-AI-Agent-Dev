@@ -87,8 +87,10 @@ corroboration. When technical relevance remains unresolved, start with distinct 
 
 For every retained lead that would otherwise finish with `pretraining_experience_state=ambiguous|unsupported`, both
 handle-scoped queries above are mandatory before finalization. A broad or official-lab Reply search does not satisfy
-this per-handle evidence audit. If the external deadline prevents the pair, retain the lead, return partial status, and
-name the missing authored surface in `limitations`; do not silently label the hydration complete.
+this per-handle evidence audit. Each required coverage query must be one conjunctive branch with no `OR` or `|`
+alternative; issue separate queries for alternate vocabulary. Richer Boolean searches may supplement discovery but
+cannot satisfy this pair. If the external deadline prevents the pair, retain the lead, return partial status, and name
+the missing authored surface in `limitations`; do not silently label the hydration complete.
 
 Use semantic or thread expansion only for a material ambiguity or conflict. Preserve incomplete candidates instead
 of spending repeated calls forcing a confident label. Retain the minimum sufficient public-X-referenced,

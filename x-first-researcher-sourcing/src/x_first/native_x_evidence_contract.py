@@ -5,7 +5,8 @@ The helpers in this module deliberately do two narrow jobs:
 * normalize explicit model support claims without inventing a temporal value
   for legacy string-only claims; and
 * attribute a query to an authored-post or authored-reply surface only when it
-  contains exactly one unambiguous ``from:<handle>`` operator.
+  contains exactly one unambiguous ``from:<handle>`` operator and no Boolean
+  alternative that can escape that handle scope.
 
 Neither helper upgrades model-mediated text to source-bound evidence.
 """
@@ -32,6 +33,7 @@ _REPLY_FILTER_RE = re.compile(
     re.IGNORECASE,
 )
 _ANY_REPLY_FILTER_RE = re.compile(r"(?i)(?:-?filter:replies)")
+_BOOLEAN_SCOPE_ESCAPE_RE = re.compile(r"(?i)(?:(?<![A-Za-z0-9_])OR(?![A-Za-z0-9_])|\|)")
 
 
 def normalize_support_claims(
@@ -88,10 +90,16 @@ def classify_single_handle_query_surface(query: Any) -> tuple[str, str] | None:
     A positive ``filter:replies`` classifies ``authored_reply``.  A negated or
     absent reply filter classifies ``authored_post``.  Mixed reply filters,
     negated ``from`` operators, multiple handles, malformed operator tokens,
-    and global queries are deliberately unattributed.
+    Boolean alternatives, and global queries are deliberately unattributed.
     """
 
     if not isinstance(query, str) or not query.strip() or len(query) > 2_000:
+        return None
+    # X Boolean OR can introduce a branch that is not constrained by the one
+    # observed from:<handle>. Required coverage queries deliberately use a
+    # closed conjunctive subset; richer OR searches may still run, but cannot
+    # satisfy the per-handle Post/Reply status gate.
+    if _BOOLEAN_SCOPE_ESCAPE_RE.search(query):
         return None
     from_matches = list(_FROM_OPERATOR_RE.finditer(query))
     if len(from_matches) != 1 or len(_ANY_FROM_OPERATOR_RE.findall(query)) != 1:

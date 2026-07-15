@@ -385,7 +385,7 @@ state matrix was 3 current/current, 6 current/ambiguous, 15 current/unsupported,
 historical/historical, and 2 historical/unsupported; those counts are diagnostic because their evidence objects were
 schema-damaged.
 
-The corrective v3 slice therefore does four bounded things:
+The corrective v3 slice therefore does six bounded things:
 
 1. result schema v3 removes the provider-incompatible evidence `oneOf` while runtime validation retains the complete
    Bio/Post/Reply cross-field rules; result v2 remains replay-only;
@@ -395,9 +395,11 @@ The corrective v3 slice therefore does four bounded things:
 4. extended cache reads are reconciled into total-token and conservative cost ceilings instead of being silently
    omitted from receipt validation;
 5. the wave2-v3 prompt makes both handle-scoped authored-Post and authored-Reply queries mandatory before an unresolved
-   pretraining lead is finalized, unless the external deadline is truthfully recorded.
+   pretraining lead is finalized, unless the external deadline is truthfully recorded;
+6. the mechanical coverage classifier rejects Boolean `OR` and pipe alternatives, so an unconstrained branch cannot
+   satisfy the per-handle Post/Reply pair or preserve a false `X_SEARCH_OK` status.
 
-The v3 prompt SHA-256 is `7f2ef099019f20a74f62e2ad6e0e1893518ec813afcdf2350771b8d7ace38888`.
+The v3 prompt SHA-256 is `8b752a8dd6606ac609f47fa5ce14af7c4c7518dffa2f302ca5292e46f1180651`.
 No retry is authorized by this diagnostic alone; a fresh request, one-shot grant, and pinned non-author review remain
 required.
 

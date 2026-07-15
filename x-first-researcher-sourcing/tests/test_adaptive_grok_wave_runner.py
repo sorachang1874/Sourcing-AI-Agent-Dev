@@ -1020,6 +1020,56 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
                 None,
             ),
             (
+                "boolean_scope_post_escape",
+                "x_keyword_search",
+                {
+                    "query": "from:TargetPerson pretraining -filter:replies OR pretraining",
+                    "limit": "100",
+                    "mode": "Latest",
+                },
+                None,
+            ),
+            (
+                "boolean_scope_reply_escape",
+                "x_keyword_search",
+                {
+                    "query": "from:TargetPerson pretraining filter:replies OR pretraining",
+                    "limit": "100",
+                    "mode": "Latest",
+                },
+                None,
+            ),
+            (
+                "boolean_scope_parenthesized_escape",
+                "x_keyword_search",
+                {
+                    "query": "(from:TargetPerson pretraining filter:replies) OR pretraining",
+                    "limit": "100",
+                    "mode": "Latest",
+                },
+                None,
+            ),
+            (
+                "boolean_scope_prefix_escape",
+                "x_keyword_search",
+                {
+                    "query": "pretraining OR from:TargetPerson pretraining filter:replies",
+                    "limit": "100",
+                    "mode": "Latest",
+                },
+                None,
+            ),
+            (
+                "boolean_pipe_escape",
+                "x_keyword_search",
+                {
+                    "query": "from:TargetPerson pretraining filter:replies | pretraining",
+                    "limit": "100",
+                    "mode": "Latest",
+                },
+                None,
+            ),
+            (
                 "semantic_from_is_not_mechanical_keyword_coverage",
                 "x_semantic_search",
                 {"query": "from:TargetPerson pretraining filter:replies", "limit": "100"},
@@ -1050,6 +1100,9 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
                 result["candidates"] = [_candidate("TargetPerson", profile_host="x.com")]
                 result["counts"]["candidates_retained"] = 1
                 result["local_reconciliation"]["candidate_records_validated"] = 1
+                if label in {"boolean_scope_post_escape", "boolean_scope_reply_escape"}:
+                    result["status"] = "X_SEARCH_OK"
+                    result["status_reason"] = "Synthetic model incorrectly claimed complete surface coverage."
 
                 def set_tool_call(events: list[dict[str, Any]]) -> None:
                     events[2]["params"]["update"]["rawOutput"]["name"] = tool_name
@@ -1096,6 +1149,10 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
                         {"attempted": bool(expected_hashes), "query_argument_sha256s": expected_hashes},
                     )
                 self.assertEqual(validate_operator_bundle(run_root, approval_root=approvals), [])
+                if label in {"boolean_scope_post_escape", "boolean_scope_reply_escape"}:
+                    sanitized = json.loads((run_root / "sanitized.json").read_text())
+                    self.assertEqual(sanitized["status"], "X_SEARCH_PARTIAL")
+                    self.assertEqual(sanitized["status_reason"], runner._SURFACE_COVERAGE_DOWNGRADE_REASON)
 
                 if label == "authored_reply":
                     inconsistent = copy.deepcopy(receipt)
