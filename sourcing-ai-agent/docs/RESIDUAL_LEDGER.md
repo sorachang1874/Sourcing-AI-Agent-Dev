@@ -55,8 +55,13 @@
   findings without SQL/runtime: classification now has nonterminal `current_pending_apply` plus a fresh normal-terminal
   continuation; failure-first/retry-first/distinct-response races preserve immutable cost and can only stale+quarantine;
   attempt 8 transient/lease expiry converges terminally; response/quarantine artifact refs reject blank/whitespace; and
-  D3c2g's two cost tables plus D3c2h1's five evidence tables now share exact 13 upstream constraints, 52 seven-table
-  constraints including 29 FKs, 11 indexes, and one creation/rollback order. The typed plan/review/gate parent and the
+  D3c2g's two cost tables plus D3c2h1's five evidence tables share exact 13 upstream constraints and 52 seven-table
+  constraints including 29 FKs. The later Ultra attempt against `f0a0069...` failed closed as `invalid_transport`, so its
+  substantive `0/1/2/0` output is advisory only. The second author repair now exact-compares every relation/index/access/
+  race/DAG tuple, shortens the sole over-limit identifier below PostgreSQL's 63-byte ceiling, gives both pending `<8`
+  claim and pending `=8` convergence admitted access through the same pending-state index, rejects nullable timestamp
+  `CHECK` `UNKNOWN`, and defines an executable 17-action create/attach plus 16-action rollback DAG with all six internal
+  forward/cycle FKs attached only after their targets exist. The typed plan/review/gate parent and the
   OB-10.2 Tier-2 grant parent still lack ratified physical table/key/unique targets, so a separately reviewed owner
   decision remains a hard predecessor and no dormant migration is authorized. Fresh pinned review of this repair is
   pending. This annotation changes neither R-019's pending state nor its 26-call ratchet, and it does not alter or claim

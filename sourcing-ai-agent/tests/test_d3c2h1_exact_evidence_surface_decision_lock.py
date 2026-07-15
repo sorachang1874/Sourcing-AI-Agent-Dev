@@ -11,10 +11,17 @@ MIGRATIONS_ROOT = SOURCE_ROOT / "migrations"
 
 DECISION_PATH = REPO_ROOT / "docs" / "TRACK_D_D3C2H1_EXACT_EVIDENCE_SURFACE_DECISION_LOCK.md"
 PLAN_PATH = REPO_ROOT / "docs" / "TRACK_D_AGENT_RUNTIME_PLAN.md"
+NEXT_TODO_PATH = REPO_ROOT / "docs" / "NEXT_TODO.md"
+LEDGER_PATH = REPO_ROOT / "docs" / "RESIDUAL_LEDGER.md"
 D0F_PATH = REPO_ROOT / "docs" / "TRACK_D_D0F_DURABLE_MODEL_INVOCATION_ENVELOPE_IMPLEMENTATION.md"
 D3C2G_PATH = REPO_ROOT / "docs" / "TRACK_D_D3C2G_COST_LEDGER_DISPATCH_EXPOSURE_DECISION_LOCK.md"
 D3C2H0_PATH = REPO_ROOT / "docs" / "TRACK_D_D3C2H0_EVIDENCE_CROSS_CONTRACT_RATIFICATION.md"
 CHECKLIST_PATH = REPO_ROOT / "docs" / "DESIGN_INVARIANT_CHECKLIST.md"
+
+
+def _expected_rows(raw: str) -> tuple[tuple[str, ...], ...]:
+    return tuple(tuple(cell.strip() for cell in line.split(" || ")) for line in raw.strip().splitlines())
+
 
 PFX = (
     ("runtime_namespace", "TEXT", "no", "none"),
@@ -249,6 +256,12 @@ EXPECTED_DECLARATIONS = (
     "ratified_seven_table_constraint_count = 52",
     "ratified_seven_table_fk_count = 29",
     "combined_index_count = 11",
+    "combined_access_path_count = 12",
+    "deferred_internal_fk_count = 6",
+    "forward_ddl_action_count = 17",
+    "rollback_ddl_action_count = 16",
+    "postgres_identifier_max_bytes = 63",
+    "classification_pending_access_path_count = 2",
     "unratified_parent_prerequisite_count = 2",
     "response_occurrence_domain = transport-response-occurrence-v2",
     "failure_occurrence_domain = transport-attempt-failure-occurrence-v2",
@@ -322,89 +335,188 @@ EXPECTED_OWNER_PATHS = {
     ),
 }
 
-EXPECTED_UPSTREAM_CONSTRAINT_NAMES = (
-    "plan_review_sessions_d3_scope_review_uk",
-    "operation_runs_d3_scope_operation_uk",
-    "operation_runs_d3_review_fk",
-    "workflow_commands_d3_scope_operation_command_uk",
-    "workflow_commands_d3_operation_fk",
-    "workflow_activity_runs_d3_scope_operation_command_run_uk",
-    "workflow_activity_runs_d3_command_fk",
-    "workflow_activity_attempts_d3_scope_operation_command_run_attempt_uk",
-    "workflow_activity_attempts_d3_run_fk",
-    "workflow_events_d3_scope_event_uk",
-    "workflow_events_d3_terminal_event_uk",
-    "workflow_events_d3_attempt_fk",
-    "model_invocation_envelopes_ref_digest_uk",
+EXPECTED_UPSTREAM_CONSTRAINTS = _expected_rows(
+    """
+1 || plan_review_sessions_d3_scope_review_uk || UNIQUE || (runtime_namespace, provider_mode, workspace_id, scope_digest, review_id)
+2 || operation_runs_d3_scope_operation_uk || UNIQUE || (PFX, operation_run_id)
+3 || operation_runs_d3_review_fk || FK_STD || operation PFX -> session (runtime_namespace, provider_mode, workspace_id, scope_digest, review_id)
+4 || workflow_commands_d3_scope_operation_command_uk || UNIQUE || (PFX, operation_id, command_id)
+5 || workflow_commands_d3_operation_fk || FK_STD || (PFX, operation_id) -> operation_runs(PFX, operation_run_id)
+6 || workflow_activity_runs_d3_scope_operation_command_run_uk || UNIQUE || (PFX, operation_run_id, command_id, activity_run_id)
+7 || workflow_activity_runs_d3_command_fk || FK_STD || (PFX, operation_run_id, command_id) -> workflow_commands(PFX, operation_id, command_id)
+8 || workflow_activity_attempts_d3_scope_op_cmd_run_attempt_uk || UNIQUE || (PFX, operation_run_id, command_id, activity_run_id, attempt_id)
+9 || workflow_activity_attempts_d3_run_fk || FK_STD || (PFX, operation_run_id, command_id, activity_run_id) -> workflow_activity_runs(PFX, operation_run_id, command_id, activity_run_id)
+10 || workflow_events_d3_scope_event_uk || UNIQUE || (PFX, event_id)
+11 || workflow_events_d3_terminal_event_uk || UNIQUE || (PFX, operation_id, command_id, event_id, terminal_outcome_digest)
+12 || workflow_events_d3_attempt_fk || FK_STD || (PFX, operation_id, command_id, activity_run_id, activity_attempt_id) -> workflow_activity_attempts(PFX, operation_run_id, command_id, activity_run_id, attempt_id)
+13 || model_invocation_envelopes_ref_digest_uk || existing UNIQUE || (PFX, model_invocation_envelope_ref, envelope_digest)
+"""
 )
 
-EXPECTED_SEVEN_TABLE_CONSTRAINT_NAMES = (
-    "cost_reservations_pkey",
-    "cost_reservations_operation_idempotency_uk",
-    "cost_reservations_review_fk",
-    "cost_reservations_operation_fk",
-    "dispatch_exposures_pkey",
-    "dispatch_exposures_physical_call_uk",
-    "dispatch_exposures_reservation_fk",
-    "dispatch_exposures_review_fk",
-    "dispatch_exposures_operation_fk",
-    "dispatch_exposures_command_fk",
-    "dispatch_exposures_activity_run_fk",
-    "dispatch_exposures_activity_attempt_fk",
-    "dispatch_exposures_base_intent_fk",
-    "dispatch_exposures_predecessor_intent_fk",
-    "dispatch_exposures_decision_event_fk",
-    "dispatch_exposures_predecessor_event_fk",
-    "dispatch_exposures_response_receipt_fk",
-    "dispatch_exposures_failure_receipt_fk",
-    "verification_intents_pkey",
-    "verification_intents_operation_phase_uk",
-    "verification_intents_exposure_parent_uk",
-    "verification_intents_operation_fk",
-    "verification_intents_source_attempt_fk",
-    "verification_intents_source_event_fk",
-    "verification_intents_response_receipt_fk",
-    "verification_intents_failure_receipt_fk",
-    "verification_intents_recorded_event_fk",
-    "transport_response_receipts_pkey",
-    "transport_response_receipts_delivery_uk",
-    "transport_response_receipts_occurrence_uk",
-    "transport_response_receipts_exposure_ref_uk",
-    "transport_response_receipts_child_fk_uk",
-    "transport_response_receipts_exposure_fk",
-    "transport_response_receipts_attempt_fk",
-    "transport_response_receipts_envelope_fk",
-    "transport_attempt_failure_receipts_pkey",
-    "transport_attempt_failure_receipts_exposure_uk",
-    "transport_attempt_failure_receipts_occurrence_uk",
-    "transport_attempt_failure_receipts_exposure_ref_uk",
-    "transport_attempt_failure_receipts_child_fk_uk",
-    "transport_attempt_failure_receipts_exposure_fk",
-    "transport_attempt_failure_receipts_attempt_fk",
-    "transport_response_classification_intents_pkey",
-    "transport_response_classification_intents_idempotency_uk",
-    "transport_response_classification_intents_occurrence_uk",
-    "transport_response_classification_intents_receipt_fk",
-    "workflow_late_result_quarantine_pkey",
-    "workflow_late_result_quarantine_idempotency_uk",
-    "workflow_late_result_quarantine_occurrence_uk",
-    "workflow_late_result_quarantine_receipt_fk",
-    "workflow_late_result_quarantine_classification_fk",
-    "workflow_late_result_quarantine_envelope_fk",
+EXPECTED_SEVEN_TABLE_CONSTRAINTS = _expected_rows(
+    """
+1 || cost_reservations_pkey || PK || (PFX, budget_reservation_ref)
+2 || cost_reservations_operation_idempotency_uk || UNIQUE || (PFX, operation_run_id, reservation_idempotency_key)
+3 || cost_reservations_review_fk || FK_STD || PFX -> session scope/review unique
+4 || cost_reservations_operation_fk || FK_STD || (PFX, operation_run_id) -> operation_runs(PFX, operation_run_id)
+5 || dispatch_exposures_pkey || PK || (PFX, dispatch_exposure_id)
+6 || dispatch_exposures_physical_call_uk || UNIQUE || (PFX, budget_reservation_ref, activity_attempt_id, physical_call_index)
+7 || dispatch_exposures_reservation_fk || FK_STD || (PFX, budget_reservation_ref) -> cost_reservations(PFX, budget_reservation_ref)
+8 || dispatch_exposures_review_fk || FK_STD || PFX -> session scope/review unique
+9 || dispatch_exposures_operation_fk || FK_STD || (PFX, operation_run_id) -> operation unique
+10 || dispatch_exposures_command_fk || FK_STD || (PFX, operation_run_id, command_id) -> command unique
+11 || dispatch_exposures_activity_run_fk || FK_STD || (PFX, operation_run_id, command_id, activity_run_id) -> activity-run unique
+12 || dispatch_exposures_activity_attempt_fk || FK_STD || (PFX, operation_run_id, command_id, activity_run_id, activity_attempt_id) -> activity-attempt unique
+13 || dispatch_exposures_base_intent_fk || FK_STD || (PFX, operation_run_id, base_intent_id, base_intent_phase_generation) -> verification exposure-parent unique
+14 || dispatch_exposures_predecessor_intent_fk || FK_STD || (PFX, operation_run_id, expected_predecessor_intent_id, expected_predecessor_phase_generation) -> verification exposure-parent unique
+15 || dispatch_exposures_decision_event_fk || FK_STD || (PFX, decision_source_event_id) -> workflow-event scope unique
+16 || dispatch_exposures_predecessor_event_fk || FK_STD || (PFX, expected_predecessor_decision_source_event_id) -> workflow-event scope unique
+17 || dispatch_exposures_response_receipt_fk || FK_CYCLE || (PFX, dispatch_exposure_id, transport_response_receipt_id) -> response exposure-ref unique
+18 || dispatch_exposures_failure_receipt_fk || FK_CYCLE || (PFX, dispatch_exposure_id, transport_attempt_failure_receipt_id) -> failure exposure-ref unique
+19 || verification_intents_pkey || PK || (PFX, intent_id)
+20 || verification_intents_operation_phase_uk || UNIQUE || (PFX, operation_run_id, phase_generation)
+21 || verification_intents_exposure_parent_uk || UNIQUE || (PFX, operation_run_id, intent_id, phase_generation)
+22 || verification_intents_operation_fk || FK_STD || (PFX, operation_run_id) -> operation unique
+23 || verification_intents_source_attempt_fk || FK_STD || (PFX, operation_run_id, source_verification_command_id, source_activity_run_id, source_activity_attempt_id) -> activity-attempt unique
+24 || verification_intents_source_event_fk || FK_STD || (PFX, operation_run_id, source_verification_command_id, expected_source_terminal_event_id, expected_source_terminal_outcome_digest) -> workflow terminal-event unique
+25 || verification_intents_response_receipt_fk || FK_STD || (PFX, expected_source_dispatch_exposure_id, expected_source_response_occurrence_id, expected_source_transport_response_receipt_id) -> response child-FK unique
+26 || verification_intents_failure_receipt_fk || FK_STD || (PFX, expected_source_dispatch_exposure_id, expected_source_failure_occurrence_id, expected_source_transport_attempt_failure_receipt_id) -> failure child-FK unique
+27 || verification_intents_recorded_event_fk || FK_STD || (PFX, recorded_event_id) -> workflow-event scope unique
+28 || transport_response_receipts_pkey || PK || (PFX, transport_response_receipt_id)
+29 || transport_response_receipts_delivery_uk || UNIQUE || (PFX, dispatch_exposure_id, canonical_delivery_identity)
+30 || transport_response_receipts_occurrence_uk || UNIQUE || (PFX, dispatch_exposure_id, response_occurrence_id)
+31 || transport_response_receipts_exposure_ref_uk || UNIQUE || (PFX, dispatch_exposure_id, transport_response_receipt_id)
+32 || transport_response_receipts_child_fk_uk || UNIQUE || (PFX, dispatch_exposure_id, response_occurrence_id, transport_response_receipt_id)
+33 || transport_response_receipts_exposure_fk || FK_STD || (PFX, dispatch_exposure_id) -> dispatch exposure identity
+34 || transport_response_receipts_attempt_fk || FK_STD || (PFX, operation_run_id, command_id, activity_run_id, activity_attempt_id) -> activity-attempt unique
+35 || transport_response_receipts_envelope_fk || FK_STD || (PFX, model_invocation_envelope_ref, model_invocation_envelope_digest) -> envelope ref/digest unique
+36 || transport_attempt_failure_receipts_pkey || PK || (PFX, transport_attempt_failure_receipt_id)
+37 || transport_attempt_failure_receipts_exposure_uk || UNIQUE || (PFX, dispatch_exposure_id)
+38 || transport_attempt_failure_receipts_occurrence_uk || UNIQUE || (PFX, dispatch_exposure_id, failure_occurrence_id)
+39 || transport_attempt_failure_receipts_exposure_ref_uk || UNIQUE || (PFX, dispatch_exposure_id, transport_attempt_failure_receipt_id)
+40 || transport_attempt_failure_receipts_child_fk_uk || UNIQUE || (PFX, dispatch_exposure_id, failure_occurrence_id, transport_attempt_failure_receipt_id)
+41 || transport_attempt_failure_receipts_exposure_fk || FK_STD || (PFX, dispatch_exposure_id) -> dispatch exposure identity
+42 || transport_attempt_failure_receipts_attempt_fk || FK_STD || (PFX, operation_run_id, command_id, activity_run_id, activity_attempt_id) -> activity-attempt unique
+43 || transport_response_classification_intents_pkey || PK || (PFX, classification_intent_id)
+44 || transport_response_classification_intents_idempotency_uk || UNIQUE || (PFX, classification_idempotency_key)
+45 || transport_response_classification_intents_occurrence_uk || UNIQUE || (PFX, dispatch_exposure_id, response_occurrence_id)
+46 || transport_response_classification_intents_receipt_fk || FK_STD || (PFX, dispatch_exposure_id, response_occurrence_id, transport_response_receipt_id) -> response child-FK unique
+47 || workflow_late_result_quarantine_pkey || PK || (PFX, quarantine_id)
+48 || workflow_late_result_quarantine_idempotency_uk || UNIQUE || (PFX, idempotency_key)
+49 || workflow_late_result_quarantine_occurrence_uk || UNIQUE || (PFX, dispatch_exposure_id, response_occurrence_id)
+50 || workflow_late_result_quarantine_receipt_fk || FK_STD || (PFX, dispatch_exposure_id, response_occurrence_id, transport_response_receipt_id) -> response child-FK unique
+51 || workflow_late_result_quarantine_classification_fk || FK_STD || (PFX, dispatch_exposure_id, response_occurrence_id) -> classification occurrence unique
+52 || workflow_late_result_quarantine_envelope_fk || FK_STD || (PFX, model_invocation_envelope_ref, model_invocation_envelope_digest) -> envelope ref/digest unique
+"""
 )
 
-EXPECTED_INDEX_NAMES = (
-    "cost_reservations_scope_operation_state_idx",
-    "dispatch_exposures_parent_settlement_idx",
-    "dispatch_exposures_scope_attempt_call_idx",
-    "verification_intents_source_attempt_idx",
-    "transport_response_receipts_attempt_idx",
-    "transport_attempt_failure_receipts_attempt_idx",
-    "transport_response_classification_intents_pending_due_idx",
-    "transport_response_classification_intents_claimed_expiry_idx",
-    "transport_response_classification_intents_current_apply_due_idx",
-    "workflow_late_result_quarantine_pending_cost_idx",
-    "workflow_late_result_quarantine_retention_idx",
+EXPECTED_INDEXES = _expected_rows(
+    """
+1 || cost_reservations_scope_operation_state_idx || cost_reservations || (PFX, operation_run_id, reservation_state)
+2 || dispatch_exposures_parent_settlement_idx || dispatch_exposures || (PFX, budget_reservation_ref, parent_settlement_state, dispatch_exposure_id)
+3 || dispatch_exposures_scope_attempt_call_idx || dispatch_exposures || (PFX, activity_attempt_id, physical_call_index)
+4 || verification_intents_source_attempt_idx || verification_intents || (PFX, operation_run_id, source_verification_command_id, source_activity_run_id, source_activity_attempt_id)
+5 || transport_response_receipts_attempt_idx || transport_response_receipts || (PFX, operation_run_id, command_id, activity_run_id, activity_attempt_id)
+6 || transport_attempt_failure_receipts_attempt_idx || transport_attempt_failure_receipts || (PFX, operation_run_id, command_id, activity_run_id, activity_attempt_id)
+7 || transport_response_classification_intents_pending_state_idx || transport_response_classification_intents || (PFX, next_attempt_at, classification_intent_id) WHERE classification_state = 'pending'
+8 || transport_response_classification_intents_claimed_expiry_idx || transport_response_classification_intents || (PFX, next_attempt_at, classification_intent_id) WHERE classification_state = 'claimed'
+9 || transport_response_classification_intents_current_apply_due_idx || transport_response_classification_intents || (PFX, next_attempt_at, classification_intent_id) WHERE classification_state = 'current_pending_apply'
+10 || workflow_late_result_quarantine_pending_cost_idx || workflow_late_result_quarantine || (PFX, recorded_at, quarantine_id) WHERE cost_state = 'pending_reconciliation'
+11 || workflow_late_result_quarantine_retention_idx || workflow_late_result_quarantine || (PFX, retention_until, quarantine_id) WHERE retention_state = 'retained'
+"""
+)
+
+EXPECTED_ACCESS_PATHS = _expected_rows(
+    """
+reservation state lookup and close || cost_reservations_scope_operation_state_idx
+child settlement scan in deterministic exposure order || dispatch_exposures_parent_settlement_idx
+exposure lookup by physical ActivityAttempt call || dispatch_exposures_scope_attempt_call_idx
+verification lookup by immutable source ActivityAttempt || verification_intents_source_attempt_idx
+response receipt audit by ActivityAttempt || transport_response_receipts_attempt_idx
+failure receipt audit by ActivityAttempt || transport_attempt_failure_receipts_attempt_idx
+claim_due oldest-due pending work with attempt_count < 8 || transport_response_classification_intents_pending_state_idx
+converge_exhausted_pending oldest pending work with attempt_count = 8 || transport_response_classification_intents_pending_state_idx
+reclaim_expired_claim oldest expired lease || transport_response_classification_intents_claimed_expiry_idx
+current-apply continuation oldest-due work || transport_response_classification_intents_current_apply_due_idx
+quarantine cost reconciliation oldest-first || workflow_late_result_quarantine_pending_cost_idx
+quarantine purge deadline oldest-first || workflow_late_result_quarantine_retention_idx
+"""
+)
+
+EXPECTED_UPSTREAM_CONSTRAINT_NAMES = tuple(row[1] for row in EXPECTED_UPSTREAM_CONSTRAINTS)
+EXPECTED_SEVEN_TABLE_CONSTRAINT_NAMES = tuple(row[1] for row in EXPECTED_SEVEN_TABLE_CONSTRAINTS)
+EXPECTED_INDEX_NAMES = tuple(row[1] for row in EXPECTED_INDEXES)
+POSTGRES_IDENTIFIER_MAX_BYTES = 63
+
+EXPECTED_FORWARD_DDL_DAG = _expected_rows(
+    """
+1 || adopt_validate_attach || strict upstream parents || none || §9.1 #1-13; preserve adopted parent rows
+2 || create_table || cost_reservations || strict upstream parents || §9.2 #1-4 inline
+3 || create_table || verification_intents || strict upstream parents || §9.2 #19-24 and #27 inline; #25-26 attach later
+4 || create_table || dispatch_exposures || strict upstream parents, cost_reservations || §9.2 #5-12 and #15-16 inline; #13-14 and #17-18 attach later
+5 || create_table || transport_response_receipts || strict upstream parents, dispatch_exposures || §9.2 #28-35 inline
+6 || create_table || transport_attempt_failure_receipts || strict upstream parents, dispatch_exposures || §9.2 #36-42 inline
+7 || create_table || transport_response_classification_intents || transport_response_receipts || §9.2 #43-46 inline
+8 || create_table || workflow_late_result_quarantine || strict upstream parents, transport_response_receipts, transport_response_classification_intents || §9.2 #47-52 inline
+9 || attach_fk || dispatch_exposures_base_intent_fk || dispatch_exposures, verification_intents || §9.2 #13 as valid FK_STD
+10 || attach_fk || dispatch_exposures_predecessor_intent_fk || dispatch_exposures, verification_intents || §9.2 #14 as valid FK_STD
+11 || attach_fk || verification_intents_response_receipt_fk || verification_intents, transport_response_receipts || §9.2 #25 as valid FK_STD
+12 || attach_fk || verification_intents_failure_receipt_fk || verification_intents, transport_attempt_failure_receipts || §9.2 #26 as valid FK_STD
+13 || attach_fk || dispatch_exposures_response_receipt_fk || dispatch_exposures, transport_response_receipts || §9.2 #17 as valid FK_CYCLE
+14 || attach_fk || dispatch_exposures_failure_receipt_fk || dispatch_exposures, transport_attempt_failure_receipts || §9.2 #18 as valid FK_CYCLE
+15 || attach_separately_ratified_fk_set || dispatch_exposures || typed plan/review/gate parent, Tier-2 grant parent || only exact names and targets ratified by their separate pinned GO; this document supplies none
+16 || create_indexes || all seven future tables || all seven tables, six attached internal FKs, separately ratified parent FKs || §9.3 indexes #1-11 in listed order
+17 || validate_acceptance || combined D3 evidence schema || all prior actions || real-PG constraint, identifier, rollback, race, plan, bounded-lock, and SKIP LOCKED acceptance
+"""
+)
+
+EXPECTED_ROLLBACK_DDL_DAG = _expected_rows(
+    """
+1 || drop_indexes || §9.3 indexes #11 through #1
+2 || detach_separately_ratified_fk_set || reverse the separately reviewed parent-FK order without changing parent rows
+3 || detach_fk || dispatch_exposures_failure_receipt_fk
+4 || detach_fk || dispatch_exposures_response_receipt_fk
+5 || detach_fk || verification_intents_failure_receipt_fk
+6 || detach_fk || verification_intents_response_receipt_fk
+7 || detach_fk || dispatch_exposures_predecessor_intent_fk
+8 || detach_fk || dispatch_exposures_base_intent_fk
+9 || drop_table || workflow_late_result_quarantine
+10 || drop_table || transport_response_classification_intents
+11 || drop_table || transport_attempt_failure_receipts
+12 || drop_table || transport_response_receipts
+13 || drop_table || dispatch_exposures
+14 || drop_table || verification_intents
+15 || drop_table || cost_reservations
+16 || detach_drop_if_created || §9.1 #13 through #1; preserve all adopted upstream parent data
+"""
+)
+
+INTERNAL_FK_TARGET_TABLES = {
+    "dispatch_exposures_reservation_fk": "cost_reservations",
+    "dispatch_exposures_base_intent_fk": "verification_intents",
+    "dispatch_exposures_predecessor_intent_fk": "verification_intents",
+    "dispatch_exposures_response_receipt_fk": "transport_response_receipts",
+    "dispatch_exposures_failure_receipt_fk": "transport_attempt_failure_receipts",
+    "verification_intents_response_receipt_fk": "transport_response_receipts",
+    "verification_intents_failure_receipt_fk": "transport_attempt_failure_receipts",
+    "transport_response_receipts_exposure_fk": "dispatch_exposures",
+    "transport_attempt_failure_receipts_exposure_fk": "dispatch_exposures",
+    "transport_response_classification_intents_receipt_fk": "transport_response_receipts",
+    "workflow_late_result_quarantine_receipt_fk": "transport_response_receipts",
+    "workflow_late_result_quarantine_classification_fk": "transport_response_classification_intents",
+}
+
+EXPECTED_RACE_OUTCOMES = _expected_rows(
+    """
+nonterminal exposure, response first || exact response redelivery || same receipt and classification intent exact-replay; zero new row
+nonterminal exposure, response first || failure or retry || reject; immutable response terminal and cost remain unchanged
+failure terminal first || distinct valid response || new response receipt + classification intent; exposure/cost exact-validated unchanged; classification must stale + quarantine; never apply
+retry/epoch advance first, exposure nonterminal || valid response || response receipt + response-backed cost terminal may commit; classification must stale + quarantine; never apply
+retry/epoch advance first, exposure already terminal || valid response || response receipt + classification intent; exposure/cost exact-validated unchanged; classification must stale + quarantine
+any response delivery || same delivery identity with drifted digest/shape || collision; entire ingress zero-write
+response terminal already names an earlier response || distinct second delivery || distinct receipt + classification intent; immutable exposure/cost unchanged; second response must stale + quarantine
+response marked current_pending_apply, then control/epoch/business advance || current-apply continuation || fresh proof chooses stale; zero domain/source/result write; quarantine + classified_stale
+"""
 )
 
 EXPECTED_LOCAL_CHECK_NAMES = (
@@ -465,7 +577,28 @@ EXPECTED_LOCAL_CHECK_COUNTS = {
     "workflow_late_result_quarantine": 12,
 }
 
-EXPECTED_LOCAL_CHECK_ROWS_SHA256 = "144c94b6b3abe6f5e39bf5d9d9fd1b3278d4e577def7d29d7c7411e493272922"
+EXPECTED_NULL_SAFE_TIMESTAMP_CHECKS = {
+    "verification_intents_timestamp_ck": (
+        "(updated_at >= created_at AND ((expected_source_terminal_status IS NULL AND "
+        "source_terminal_appended_at IS NULL) OR (expected_source_terminal_status IS NOT NULL AND "
+        "source_terminal_appended_at IS NOT NULL AND source_terminal_appended_at >= created_at))) IS TRUE"
+    ),
+    "transport_response_classification_intents_timestamp_ck": (
+        "(updated_at >= created_at AND next_attempt_at >= created_at AND ((classification_state IN "
+        "('pending', 'claimed', 'current_pending_apply') AND terminal_at IS NULL) OR "
+        "(classification_state IN ('applied_current', 'classified_stale', 'failed_terminal') AND "
+        "terminal_at IS NOT NULL AND terminal_at >= created_at))) IS TRUE"
+    ),
+    "workflow_late_result_quarantine_timestamp_ck": (
+        "(((cost_state = 'pending_reconciliation' AND cost_reconciled_at IS NULL) OR (cost_state IN "
+        "('reconciled_confirmed', 'reconciled_uncertain') AND cost_reconciled_at IS NOT NULL AND "
+        "cost_reconciled_at >= recorded_at)) AND ((retention_state = 'retained' AND purged_at IS NULL) OR "
+        "(retention_state = 'purged_tombstone' AND purged_at IS NOT NULL AND purged_at >= retention_until))) "
+        "IS TRUE"
+    ),
+}
+
+EXPECTED_LOCAL_CHECK_ROWS_SHA256 = "4b8182ce5dc517ea1551370992b191d0bc13df353e65a4c4e42573fccf0a54ad"
 
 EXPECTED_MATRIX_MECHANISMS = (
     "verification intent",
@@ -506,6 +639,35 @@ def _clean(cell: str) -> str:
 
 def _normalized(value: str) -> str:
     return re.sub(r"\s+", " ", value).strip()
+
+
+def _rows_without_code_ticks(rows: tuple[tuple[str, ...], ...]) -> tuple[tuple[str, ...], ...]:
+    return tuple(tuple(cell.replace("`", "") for cell in row) for row in rows)
+
+
+def _inline_constraint_orders(effect: str) -> tuple[int, ...]:
+    inline_clause = effect.split(" inline", 1)[0]
+    orders: list[int] = []
+    for start, end in re.findall(r"#(\d+)(?:-(\d+))?", inline_clause):
+        first = int(start)
+        last = int(end or start)
+        orders.extend(range(first, last + 1))
+    return tuple(orders)
+
+
+def _seven_table_constraint_owner(order: int) -> str:
+    for upper_bound, table_name in (
+        (4, "cost_reservations"),
+        (18, "dispatch_exposures"),
+        (27, "verification_intents"),
+        (35, "transport_response_receipts"),
+        (42, "transport_attempt_failure_receipts"),
+        (46, "transport_response_classification_intents"),
+        (52, "workflow_late_result_quarantine"),
+    ):
+        if order <= upper_bound:
+            return table_name
+    raise AssertionError(f"unexpected seven-table constraint order: {order}")
 
 
 def _section(document: str, start: str, end: str | None = None) -> str:
@@ -648,6 +810,7 @@ def test_owner_paths_and_intent_classification_cas_surfaces_are_exact() -> None:
         "pending|claimed|current_pending_apply|applied_current|classified_stale|failed_terminal"
         in classification_section
     )
+    normalized_classification = _normalized(classification_section)
     for marker in (
         "claim lease = 30 seconds",
         "min(2 ** (attempt_count - 1), 60)",
@@ -657,8 +820,10 @@ def test_owner_paths_and_intent_classification_cas_surfaces_are_exact() -> None:
         "rolls back the classification UoW first",
         "attempt 8 -> `failed_terminal` with `classification_retry_exhausted`",
         "attempt 8 -> `failed_terminal` with `classification_claim_lease_exhausted`",
+        "two admitted readers of the same pending-state partial index",
+        "bounded `FOR UPDATE SKIP LOCKED`",
     ):
-        assert marker in classification_section
+        assert marker in normalized_classification
     lifecycle_section = _section(classification_section, "| Method |", "The private claim capability")
     _, classification_methods = _table(lifecycle_section)
     assert tuple(row[0] for row in classification_methods) == (
@@ -673,6 +838,8 @@ def test_owner_paths_and_intent_classification_cas_surfaces_are_exact() -> None:
         "reclassify_current_pending_stale_with_quarantine",
         "fail_terminal",
     )
+    assert "attempt_count=8" in classification_methods[4][1]
+    assert "admitted pending-state index" in classification_methods[4][1]
 
     attempt_section = _section(classification_section, "The attempt boundary is total")
     attempt_header, attempt_rows = _table(attempt_section)
@@ -717,17 +884,13 @@ def test_combined_relations_foreign_keys_indexes_and_parent_blockers_are_exact()
     upstream = _section(section, "### 9.1 Ratified upstream", "### 9.2 Ratified seven-table")
     header, rows = _table(upstream)
     assert header == ("Order", "Name", "Kind", "Exact columns / target")
-    assert tuple(int(row[0]) for row in rows) == tuple(range(1, 14))
-    assert tuple(row[1] for row in rows) == EXPECTED_UPSTREAM_CONSTRAINT_NAMES
-    assert sum("FK" in row[2] for row in rows) == 5
-    assert "review_id" in rows[0][3]
+    assert _rows_without_code_ticks(rows) == EXPECTED_UPSTREAM_CONSTRAINTS
     assert "D3b's ratified `workflow_commands.workspace_id`" in upstream
 
     seven = _section(section, "### 9.2 Ratified seven-table", "### 9.3 Exact combined index")
     header, rows = _table(seven)
     assert header == ("Order", "Name", "Kind", "Exact child columns / target")
-    assert tuple(int(row[0]) for row in rows) == tuple(range(1, 53))
-    assert tuple(row[1] for row in rows) == EXPECTED_SEVEN_TABLE_CONSTRAINT_NAMES
+    assert _rows_without_code_ticks(rows) == EXPECTED_SEVEN_TABLE_CONSTRAINTS
     assert sum("FK" in row[2] for row in rows) == 29
     assert sum(row[2] == "FK_CYCLE" for row in rows) == 2
     assert tuple(row[1] for row in rows if row[2] == "FK_CYCLE") == (
@@ -739,15 +902,15 @@ def test_combined_relations_foreign_keys_indexes_and_parent_blockers_are_exact()
     indexes = _section(section, "### 9.3 Exact combined index", "### 9.4 Two unresolved")
     header, rows = _table(indexes)
     assert header == ("Order", "Name", "Table", "Exact ordered columns and predicate")
-    assert tuple(int(row[0]) for row in rows) == tuple(range(1, 12))
-    assert tuple(row[1] for row in rows) == EXPECTED_INDEX_NAMES
-    assert all("PFX" in row[3] for row in rows)
-    assert sum("WHERE" in row[3] for row in rows) == 5
+    assert _rows_without_code_ticks(rows) == EXPECTED_INDEXES
 
     access_section = _section(indexes, "| Access path |")
     access_header, access_rows = _table(access_section)
     assert access_header == ("Access path", "Sole exact index")
-    assert tuple(row[1] for row in access_rows) == EXPECTED_INDEX_NAMES
+    assert _rows_without_code_ticks(access_rows) == EXPECTED_ACCESS_PATHS
+    access_indexes = tuple(row[1].replace("`", "") for row in access_rows)
+    assert Counter(access_indexes)["transport_response_classification_intents_pending_state_idx"] == 2
+    assert set(access_indexes) == set(EXPECTED_INDEX_NAMES)
     assert "No owner lookup may rely on a broader hidden scan" in indexes
 
     blockers = _section(section, "### 9.4 Two unresolved", "### 9.5 Exact local CHECK")
@@ -764,10 +927,92 @@ def test_combined_relations_foreign_keys_indexes_and_parent_blockers_are_exact()
     for marker in (
         "does not authorize a dormant migration",
         "No placeholder FK, JSON comparison, unscoped parent, nullable waiver, or application-only assertion",
-        "Rollback drops those objects in exact reverse dependency order",
+        "Rollback performs these actions in exactly this dependency order",
         "Generic replace-all upsert is forbidden",
     ):
         assert marker in _normalized(section)
+
+
+def test_postgres_identifiers_fit_63_bytes_without_truncation_collision() -> None:
+    identifiers = (
+        *EXPECTED_UPSTREAM_CONSTRAINT_NAMES,
+        *EXPECTED_SEVEN_TABLE_CONSTRAINT_NAMES,
+        *EXPECTED_INDEX_NAMES,
+        *EXPECTED_LOCAL_CHECK_NAMES,
+    )
+    encoded = tuple(identifier.encode("utf-8") for identifier in identifiers)
+    assert len(identifiers) == 123
+    assert all(len(value) <= POSTGRES_IDENTIFIER_MAX_BYTES for value in encoded)
+    assert max(len(value) for value in encoded) == POSTGRES_IDENTIFIER_MAX_BYTES
+    assert len(set(identifiers)) == len(identifiers)
+    assert len({value[:POSTGRES_IDENTIFIER_MAX_BYTES] for value in encoded}) == len(encoded)
+
+
+def test_forward_and_rollback_ddl_dags_are_complete_and_dependency_safe() -> None:
+    document = DECISION_PATH.read_text(encoding="utf-8")
+    forward_section = _section(document, "#### 9.4.1 Exact forward", "The order is executable")
+    forward_header, forward_rows = _table(forward_section)
+    assert forward_header == (
+        "Order",
+        "Operation",
+        "Object",
+        "Requires present",
+        "Exact constraint scope / effect",
+    )
+    normalized_forward = _rows_without_code_ticks(forward_rows)
+    assert normalized_forward == EXPECTED_FORWARD_DDL_DAG
+
+    present = {"strict upstream parents"}
+    forward_tables: list[str] = []
+    attached_internal_fks: list[str] = []
+    inline_internal_fks: set[str] = set()
+    relation_by_order = {int(row[0]): row for row in EXPECTED_SEVEN_TABLE_CONSTRAINTS}
+    relation_by_name = {row[1]: row for row in EXPECTED_SEVEN_TABLE_CONSTRAINTS}
+    for _, operation, object_name, requires, effect in normalized_forward:
+        if operation not in {"create_table", "attach_fk"}:
+            continue
+        required_objects = {value.strip() for value in requires.split(",")}
+        assert required_objects <= present
+        if operation == "create_table":
+            inline_orders = _inline_constraint_orders(effect)
+            assert inline_orders
+            for constraint_order in inline_orders:
+                _, constraint_name, _, _ = relation_by_order[constraint_order]
+                assert _seven_table_constraint_owner(constraint_order) == object_name
+                target_table = INTERNAL_FK_TARGET_TABLES.get(constraint_name)
+                if target_table is not None:
+                    assert target_table in present
+                    inline_internal_fks.add(constraint_name)
+            present.add(object_name)
+            forward_tables.append(object_name)
+        else:
+            constraint_order, _, constraint_kind, _ = relation_by_name[object_name]
+            assert constraint_kind in {"FK_STD", "FK_CYCLE"}
+            assert _seven_table_constraint_owner(int(constraint_order)) in present
+            assert INTERNAL_FK_TARGET_TABLES[object_name] in present
+            present.add(object_name)
+            attached_internal_fks.append(object_name)
+
+    assert tuple(attached_internal_fks) == (
+        "dispatch_exposures_base_intent_fk",
+        "dispatch_exposures_predecessor_intent_fk",
+        "verification_intents_response_receipt_fk",
+        "verification_intents_failure_receipt_fk",
+        "dispatch_exposures_response_receipt_fk",
+        "dispatch_exposures_failure_receipt_fk",
+    )
+    assert set(attached_internal_fks) <= set(EXPECTED_SEVEN_TABLE_CONSTRAINT_NAMES)
+    assert set(INTERNAL_FK_TARGET_TABLES) - inline_internal_fks == set(attached_internal_fks)
+
+    rollback_section = _section(document, "#### 9.4.2 Exact rollback", "Rollback performs")
+    rollback_header, rollback_rows = _table(rollback_section)
+    assert rollback_header == ("Order", "Operation", "Object / exact effect")
+    normalized_rollback = _rows_without_code_ticks(rollback_rows)
+    assert normalized_rollback == EXPECTED_ROLLBACK_DDL_DAG
+    assert tuple(row[2] for row in normalized_rollback if row[1] == "detach_fk") == tuple(
+        reversed(attached_internal_fks)
+    )
+    assert tuple(row[2] for row in normalized_rollback if row[1] == "drop_table") == tuple(reversed(forward_tables))
 
 
 def test_local_check_inventory_is_exact_and_installed_with_table_creation() -> None:
@@ -793,6 +1038,12 @@ def test_local_check_inventory_is_exact_and_installed_with_table_creation() -> N
     assert tuple(row[1] for row in rows) == EXPECTED_LOCAL_CHECK_NAMES
     assert Counter(row[2] for row in rows) == Counter(EXPECTED_LOCAL_CHECK_COUNTS)
     assert all(len(row) == 4 and row[3] and "TBD" not in row[3] for row in rows)
+    predicates = {row[1]: row[3] for row in rows}
+    assert {name: predicates[name] for name in EXPECTED_NULL_SAFE_TIMESTAMP_CHECKS} == (
+        EXPECTED_NULL_SAFE_TIMESTAMP_CHECKS
+    )
+    assert all(predicate.endswith("IS TRUE") for predicate in EXPECTED_NULL_SAFE_TIMESTAMP_CHECKS.values())
+    assert all("IS NOT NULL" in predicate for predicate in EXPECTED_NULL_SAFE_TIMESTAMP_CHECKS.values())
 
     canonical_rows = "\n".join("|".join(row) for row in rows).encode("utf-8")
     assert hashlib.sha256(canonical_rows).hexdigest() == EXPECTED_LOCAL_CHECK_ROWS_SHA256
@@ -807,6 +1058,7 @@ def test_local_check_inventory_is_exact_and_installed_with_table_creation() -> N
         "same future `CREATE TABLE` batch",
         "valid `CHECK` constraints",
         "no later `NOT VALID` reinterpretation",
+        "PostgreSQL `CHECK` acceptance of `UNKNOWN` is never a valid state",
         "Registry applicability, parent-row equality, exact SHA recomputation, state CAS, and DB-clock eligibility",
     ):
         assert marker in normalized
@@ -965,20 +1217,7 @@ def test_two_ingress_orders_and_current_apply_continuation_close_all_races() -> 
     race_section = _section(section, "### 11.4 Exact response/failure/retry race outcomes")
     race_header, race_rows = _table(race_section)
     assert race_header == ("First committed condition", "Later ingress", "Exact outcome")
-    assert len(race_rows) == 8
-    assert tuple(row[0] for row in race_rows) == (
-        "nonterminal exposure, response first",
-        "nonterminal exposure, response first",
-        "failure terminal first",
-        "retry/epoch advance first, exposure nonterminal",
-        "retry/epoch advance first, exposure already terminal",
-        "any response delivery",
-        "response terminal already names an earlier response",
-        "response marked current_pending_apply, then control/epoch/business advance",
-    )
-    assert "never apply" in race_rows[2][2]
-    assert "fresh proof chooses stale" in race_rows[-1][2]
-    assert "zero domain/source/result write" in race_rows[-1][2]
+    assert _rows_without_code_ticks(race_rows) == EXPECTED_RACE_OUTCOMES
 
 
 def test_quarantine_retention_and_cost_axes_are_fixed_db_clock_cas() -> None:
@@ -1052,6 +1291,11 @@ def test_modes_matrix_physical_baseline_and_plan_integration() -> None:
         "Provenance 与信任边界",
         "自包含与跨文档一致",
         "运行时/模式隔离",
+        "point-CAS",
+        "partial-index predicate",
+        "完整 relation/index/access/race/DAG tuple",
+        "identifier 63-byte 上限",
+        "SQL `UNKNOWN`",
     ):
         assert marker in checklist
 
@@ -1076,16 +1320,21 @@ def test_modes_matrix_physical_baseline_and_plan_integration() -> None:
     assert "D0f successor observation" in g
 
     plan = PLAN_PATH.read_text(encoding="utf-8")
-    assert "D3c2h1 exact evidence-surface decision-lock" in plan
-    assert "`52/30/28/18/41`" in plan
-    assert "classification intent" in plan
-    assert "current_pending_apply" in plan
-    assert "13 upstream constraints" in plan
-    assert "52 seven-table constraints" in plan
-    assert "11 indexes" in plan
-    assert "typed plan/review/gate" in plan
-    assert "Tier-2 grant" in plan
-    assert "decision_locked_not_implemented" in plan
+    normalized_plan = _normalized(plan)
+    assert "D3c2h1 exact evidence-surface decision-lock" in normalized_plan
+    assert "`52/30/28/18/41`" in normalized_plan
+    assert "classification intent" in normalized_plan
+    assert "current_pending_apply" in normalized_plan
+    assert "13 upstream constraint tuples" in normalized_plan
+    assert "52 seven-table constraint tuples" in normalized_plan
+    assert "11 index tuples" in normalized_plan
+    assert "12 admitted access tuples" in normalized_plan
+    assert "17-step create/attach DAG" in normalized_plan
+    assert "identifier 必须 <=63 UTF-8 bytes" in normalized_plan
+    assert "nullable timestamp CHECK 不得让 `UNKNOWN` 通过" in normalized_plan
+    assert "typed plan/review/gate" in normalized_plan
+    assert "Tier-2 grant" in normalized_plan
+    assert "decision_locked_not_implemented" in normalized_plan
 
 
 def test_nonclosure_and_validation_command_are_honest() -> None:
@@ -1097,6 +1346,8 @@ def test_nonclosure_and_validation_command_are_honest() -> None:
         "does not authorize SQL by itself",
         "fresh pinned non-author review of this repaired decision lock",
         "formal `NO-GO 0/3/3/0`",
+        "failed closed as `invalid_transport`",
+        "advisory only and cannot be promoted into a formal verdict",
         "separate typed plan/review/gate-parent and Tier-2 grant-parent owner decision lock",
         "fake/simulate/scripted E2E",
         "separately gated bounded live canary",
@@ -1110,3 +1361,16 @@ def test_nonclosure_and_validation_command_are_honest() -> None:
     assert "tests/test_d0f_model_invocation_envelope_repository.py" in section
     assert "tests/test_model_invocation_contract.py" in section
     assert "test_d3c2h1_exact_eVIDENCE" not in section
+
+    next_todo = NEXT_TODO_PATH.read_text(encoding="utf-8")
+    ledger = LEDGER_PATH.read_text(encoding="utf-8")
+    for synchronized_document in (next_todo, ledger):
+        assert "invalid_transport" in synchronized_document
+        assert "63" in synchronized_document
+        assert "pending-state index" in synchronized_document
+        assert "17" in synchronized_document
+        assert "16" in synchronized_document
+        assert "UNKNOWN" in synchronized_document
+        assert "no dormant migration is authorized" in synchronized_document or "不单独授权 dormant migration" in (
+            synchronized_document
+        )

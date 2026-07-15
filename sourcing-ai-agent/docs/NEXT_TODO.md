@@ -498,11 +498,16 @@
   `gpt-5.6-sol/ultra/priority` non-author review 对 `1c4a2d9177dcb3470117700086b12fd533898bb7` 为 formal
   `NO-GO 0/3/3/0`。当前 repair 将六项 finding 固定为：nonterminal `current_pending_apply` + fresh normal-terminal
   continuation；failure/retry/second-response immutable-cost race table；attempt-8 transient/lease total convergence；
-  blank/whitespace artifact ref fail-closed；D3c2g+D3c2h1 combined 13 upstream constraints + 52 seven-table constraints
-  （29 FKs）+ 11 indexes + exact DDL/rollback order。typed plan/review/gate parent 与 Tier-2 grant parent 的物理
+  blank/whitespace artifact ref fail-closed。针对 `f0a0069...` 的 Ultra review 尝试因 transcript
+  `child_thread_ids_distinct=false` 为 `invalid_transport`，substantive `0/1/2/0` 仅 advisory。第二轮 author repair
+  进一步把 combined boundary 固定成 complete 13 upstream + 52 seven-table constraint tuples（29 FKs）、11 index +
+  12 admitted access tuples、17-step create/attach + 16-step rollback DAG；六个 internal forward/cycle FKs 在所有
+  targets 存在后才 attach；identifier 全部 <=63 UTF-8 bytes；pending-state index 明确服务 `<8` claim 与 `=8`
+  convergence；三条 nullable timestamp CHECK 以 `IS NOT NULL` + `IS TRUE` 拒绝 `UNKNOWN`；oracle exact-compare
+  relation/index/access/race/DAG 全 tuple。typed plan/review/gate parent 与 Tier-2 grant parent 的物理
   table/key/unique target 尚未 ratify，必须另做 owner decision lock + pinned review；不得猜 schema、用
   JSON/application-only proof 或无 FK 绕过。当前仍为 `decision_locked_not_implemented`，零 migration/repository/
-  runtime/provider/live；本 repair 须 fresh pinned non-author review，且即使 `GO` 也不单独授权 dormant migration。
+  runtime/provider/live；第二轮 repair 须 fresh pinned non-author review，且即使 `GO` 也不单独授权 dormant migration。
 - [x] Cohort CS1/CS2 foundation（Thinking Machines Lab live 前置）：versioned、registry-digest-pinned
   `CohortSelection` 已成为 request/plan-review/provider compiler 的唯一 owner；Researcher/Engineer/Product Manager
   等 role bucket 与 current/former 支持有序自由多选，`role_match=any|all`，用户显式选择优先于 raw text/model

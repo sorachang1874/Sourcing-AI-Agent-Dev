@@ -1,10 +1,13 @@
 # Track D D3c2h1 — Exact evidence-surface decision lock
 
 > Status: **decision-lock repair only** (2026-07-15). The first pinned highest-effort non-author review of commit
-> `1c4a2d9177dcb3470117700086b12fd533898bb7` returned formal `NO-GO 0/3/3/0`. This fixed-forward candidate ratifies
-> the six required lifecycle/relation/index/check repairs but still adds no SQL, migration, descriptor, repository,
-> runtime writer, provider/model/Harvest call, served Agent tool, live activation, or product gate. D0f is implemented
-> at `539c689`; the five evidence surfaces and the two D3c2g cost surfaces below remain physically absent.
+> `1c4a2d9177dcb3470117700086b12fd533898bb7` returned formal `NO-GO 0/3/3/0`. A later Ultra review attempt of
+> `f0a0069c83b7ec582682ad79f7a278e604cdd4a0` produced substantive advisory findings but failed closed as
+> `invalid_transport`; it is not formal review evidence. This second fixed-forward author candidate repairs the executable
+> DDL DAG, PostgreSQL identifier limit, attempt-8 access path, nullable timestamp checks, and exact oracle coverage in
+> addition to the first six lifecycle/relation/index/check repairs. It still adds no SQL, migration, descriptor,
+> repository, runtime writer, provider/model/Harvest call, served Agent tool, live activation, or product gate. D0f is
+> implemented at `539c689`; the five evidence surfaces and the two D3c2g cost surfaces below remain physically absent.
 
 ## 1. Outcome and bounded impact
 
@@ -47,6 +50,12 @@ ratified_upstream_constraint_count = 13
 ratified_seven_table_constraint_count = 52
 ratified_seven_table_fk_count = 29
 combined_index_count = 11
+combined_access_path_count = 12
+deferred_internal_fk_count = 6
+forward_ddl_action_count = 17
+rollback_ddl_action_count = 16
+postgres_identifier_max_bytes = 63
+classification_pending_access_path_count = 2
 unratified_parent_prerequisite_count = 2
 response_occurrence_domain = transport-response-occurrence-v2
 failure_occurrence_domain = transport-attempt-failure-occurrence-v2
@@ -362,7 +371,7 @@ change requires a new table/schema decision after all nonterminal v1 rows drain;
 | `claim_due` | due `pending` with `attempt_count < 8` -> `claimed`; attempt +1, version +1, DB clock sets the 30-second lease deadline; return a private non-serializable claim capability |
 | `retry_claim` | current `claimed` at attempt 1..7 plus registered transient error -> `pending` with fixed DB-clock delay/version +1; attempt 8 -> `failed_terminal` with `classification_retry_exhausted` |
 | `reclaim_expired_claim` | expired `claimed` at attempt 1..7 -> `pending` with `claim_lease_expired`, DB-clock due time/version +1; attempt 8 -> `failed_terminal` with `classification_claim_lease_exhausted` |
-| `converge_exhausted_pending` | defensive owner-only convergence for an observed `pending, attempt_count=8` row -> `failed_terminal` with `classification_retry_exhausted`; it is never claimable |
+| `converge_exhausted_pending` | owner-only recovery scan over the admitted pending-state index for `pending, attempt_count=8`; oldest-first `SKIP LOCKED`, exact PFX + classification id + state version -> `failed_terminal` with `classification_retry_exhausted`; it is never claimable |
 | `mark_current_pending_apply` | current claimed capability + locked stored-current proof -> `current_pending_apply`; set DB-clock `next_attempt_at`, terminal remains NULL, version +1; no domain write and no quarantine |
 | `complete_stale_with_quarantine` | current claimed capability + global stored-state proof -> `classified_stale`; same UoW inserts/exact-replays quarantine, sets terminal DB clock, version +1 |
 | `complete_current_apply` | `current_pending_apply` + fresh global stored-current proof -> `applied_current`; the same normal terminal/record UoW commits domain/attempt/command/event/source writes before this terminal CAS, then sets terminal DB clock/version +1 |
@@ -373,6 +382,11 @@ The private claim capability binds full PFX, classification id, receipt/exposure
 attempt count, and DB lease deadline. It is not stored, serialized, or reconstructed from ids. A failed global lock or
 unprovable classification rolls back the classification UoW first; only then may the classification owner perform its
 own row-only retry/fail CAS. That CAS records no current/stale label and grants no result authority.
+
+`claim_due` and `converge_exhausted_pending` are the two admitted readers of the same pending-state partial index.
+`claim_due` filters `attempt_count < 8` plus DB-clock due time; defensive convergence filters `attempt_count = 8` and
+does not wait for a new claim. Both use deterministic `(next_attempt_at, classification_intent_id)` order and bounded
+`FOR UPDATE SKIP LOCKED`. No reader repair, heap-wide scan, or hidden broader index is allowed.
 
 The attempt boundary is total and is a second machine-readable authority:
 
@@ -489,7 +503,7 @@ activate a strict-D3 row or reinterpret a brownfield sentinel.
 | 5 | `workflow_commands_d3_operation_fk` | FK_STD | `(PFX, operation_id)` -> `operation_runs(PFX, operation_run_id)` |
 | 6 | `workflow_activity_runs_d3_scope_operation_command_run_uk` | UNIQUE | `(PFX, operation_run_id, command_id, activity_run_id)` |
 | 7 | `workflow_activity_runs_d3_command_fk` | FK_STD | `(PFX, operation_run_id, command_id)` -> `workflow_commands(PFX, operation_id, command_id)` |
-| 8 | `workflow_activity_attempts_d3_scope_operation_command_run_attempt_uk` | UNIQUE | `(PFX, operation_run_id, command_id, activity_run_id, attempt_id)` |
+| 8 | `workflow_activity_attempts_d3_scope_op_cmd_run_attempt_uk` | UNIQUE | `(PFX, operation_run_id, command_id, activity_run_id, attempt_id)` |
 | 9 | `workflow_activity_attempts_d3_run_fk` | FK_STD | `(PFX, operation_run_id, command_id, activity_run_id)` -> `workflow_activity_runs(PFX, operation_run_id, command_id, activity_run_id)` |
 | 10 | `workflow_events_d3_scope_event_uk` | UNIQUE | `(PFX, event_id)` |
 | 11 | `workflow_events_d3_terminal_event_uk` | UNIQUE | `(PFX, operation_id, command_id, event_id, terminal_outcome_digest)` |
@@ -569,7 +583,7 @@ exposure's response/failure reverse tuple is likewise all NULL or complete and i
 | 4 | `verification_intents_source_attempt_idx` | `verification_intents` | `(PFX, operation_run_id, source_verification_command_id, source_activity_run_id, source_activity_attempt_id)` |
 | 5 | `transport_response_receipts_attempt_idx` | `transport_response_receipts` | `(PFX, operation_run_id, command_id, activity_run_id, activity_attempt_id)` |
 | 6 | `transport_attempt_failure_receipts_attempt_idx` | `transport_attempt_failure_receipts` | `(PFX, operation_run_id, command_id, activity_run_id, activity_attempt_id)` |
-| 7 | `transport_response_classification_intents_pending_due_idx` | `transport_response_classification_intents` | `(PFX, next_attempt_at, classification_intent_id) WHERE classification_state = 'pending' AND attempt_count < 8` |
+| 7 | `transport_response_classification_intents_pending_state_idx` | `transport_response_classification_intents` | `(PFX, next_attempt_at, classification_intent_id) WHERE classification_state = 'pending'` |
 | 8 | `transport_response_classification_intents_claimed_expiry_idx` | `transport_response_classification_intents` | `(PFX, next_attempt_at, classification_intent_id) WHERE classification_state = 'claimed'` |
 | 9 | `transport_response_classification_intents_current_apply_due_idx` | `transport_response_classification_intents` | `(PFX, next_attempt_at, classification_intent_id) WHERE classification_state = 'current_pending_apply'` |
 | 10 | `workflow_late_result_quarantine_pending_cost_idx` | `workflow_late_result_quarantine` | `(PFX, recorded_at, quarantine_id) WHERE cost_state = 'pending_reconciliation'` |
@@ -583,14 +597,16 @@ exposure's response/failure reverse tuple is likewise all NULL or complete and i
 | verification lookup by immutable source ActivityAttempt | `verification_intents_source_attempt_idx` |
 | response receipt audit by ActivityAttempt | `transport_response_receipts_attempt_idx` |
 | failure receipt audit by ActivityAttempt | `transport_attempt_failure_receipts_attempt_idx` |
-| `claim_due` oldest-due pending work | `transport_response_classification_intents_pending_due_idx` |
+| `claim_due` oldest-due pending work with `attempt_count < 8` | `transport_response_classification_intents_pending_state_idx` |
+| `converge_exhausted_pending` oldest pending work with `attempt_count = 8` | `transport_response_classification_intents_pending_state_idx` |
 | `reclaim_expired_claim` oldest expired lease | `transport_response_classification_intents_claimed_expiry_idx` |
 | current-apply continuation oldest-due work | `transport_response_classification_intents_current_apply_due_idx` |
 | quarantine cost reconciliation oldest-first | `workflow_late_result_quarantine_pending_cost_idx` |
 | quarantine purge deadline oldest-first | `workflow_late_result_quarantine_retention_idx` |
 
-No owner lookup may rely on a broader hidden scan. Real-PG acceptance must verify index names, ordered columns,
-predicates, eligible-row plans, bounded locks, and `SKIP LOCKED` recovery behavior.
+No owner lookup may rely on a broader hidden scan. The pending-state index intentionally has two admitted access paths;
+the other ten indexes each have one. Real-PG acceptance must verify index names, ordered columns, predicates, both
+pending filters, eligible-row plans, bounded locks, and `SKIP LOCKED` recovery behavior.
 
 ### 9.4 Two unresolved parent-owner prerequisites and exact DDL order
 
@@ -602,13 +618,62 @@ predicates, eligible-row plans, bounded locks, and `SKIP LOCKED` recovery behavi
 No placeholder FK, JSON comparison, unscoped parent, nullable waiver, or application-only assertion is allowed. These
 two blockers mean this repair **does not authorize a dormant migration**, even if every relation above receives `GO`.
 
-Once both parent decisions and this repaired decision lock have matching pinned `GO` artifacts, the exact forward order
-is: (1) adopt/validate strict upstream rows and install §9.1; (2) create `cost_reservations`; (3) create
-`dispatch_exposures` without its two reverse receipt FKs; (4) create `verification_intents`; (5) create response
-receipts; (6) create failure receipts; (7) create classification intents; (8) create quarantine; (9) attach the two
-`FK_CYCLE` reverse receipt FKs; (10) attach the separately ratified typed plan/review/gate and Tier-2 grant FKs; (11)
-create all 11 indexes; and (12) run real-PG constraint, rollback, race, plan, and lock acceptance. Rollback drops those
-objects in exact reverse dependency order and does not remove or rewrite adopted upstream parent data.
+Once both parent decisions and this repaired decision lock have matching pinned `GO` artifacts, the future migration must
+use the following exact forward create/attach DAG. A constraint listed as "attach later" is omitted from its table's
+`CREATE TABLE` and installed as an immediately valid `ALTER TABLE ... ADD CONSTRAINT` only after every referenced table
+and unique target exists. `FK_STD` versus `FK_CYCLE` still owns validation timing; inline versus attach-later is a separate
+dependency-topology decision.
+
+#### 9.4.1 Exact forward create/attach DAG — 17 actions
+
+| Order | Operation | Object | Requires present | Exact constraint scope / effect |
+|---:|---|---|---|---|
+| 1 | `adopt_validate_attach` | strict upstream parents | none | §9.1 #1-13; preserve adopted parent rows |
+| 2 | `create_table` | `cost_reservations` | strict upstream parents | §9.2 #1-4 inline |
+| 3 | `create_table` | `verification_intents` | strict upstream parents | §9.2 #19-24 and #27 inline; #25-26 attach later |
+| 4 | `create_table` | `dispatch_exposures` | strict upstream parents, `cost_reservations` | §9.2 #5-12 and #15-16 inline; #13-14 and #17-18 attach later |
+| 5 | `create_table` | `transport_response_receipts` | strict upstream parents, `dispatch_exposures` | §9.2 #28-35 inline |
+| 6 | `create_table` | `transport_attempt_failure_receipts` | strict upstream parents, `dispatch_exposures` | §9.2 #36-42 inline |
+| 7 | `create_table` | `transport_response_classification_intents` | `transport_response_receipts` | §9.2 #43-46 inline |
+| 8 | `create_table` | `workflow_late_result_quarantine` | strict upstream parents, `transport_response_receipts`, `transport_response_classification_intents` | §9.2 #47-52 inline |
+| 9 | `attach_fk` | `dispatch_exposures_base_intent_fk` | `dispatch_exposures`, `verification_intents` | §9.2 #13 as valid `FK_STD` |
+| 10 | `attach_fk` | `dispatch_exposures_predecessor_intent_fk` | `dispatch_exposures`, `verification_intents` | §9.2 #14 as valid `FK_STD` |
+| 11 | `attach_fk` | `verification_intents_response_receipt_fk` | `verification_intents`, `transport_response_receipts` | §9.2 #25 as valid `FK_STD` |
+| 12 | `attach_fk` | `verification_intents_failure_receipt_fk` | `verification_intents`, `transport_attempt_failure_receipts` | §9.2 #26 as valid `FK_STD` |
+| 13 | `attach_fk` | `dispatch_exposures_response_receipt_fk` | `dispatch_exposures`, `transport_response_receipts` | §9.2 #17 as valid `FK_CYCLE` |
+| 14 | `attach_fk` | `dispatch_exposures_failure_receipt_fk` | `dispatch_exposures`, `transport_attempt_failure_receipts` | §9.2 #18 as valid `FK_CYCLE` |
+| 15 | `attach_separately_ratified_fk_set` | `dispatch_exposures` | typed plan/review/gate parent, Tier-2 grant parent | only exact names and targets ratified by their separate pinned `GO`; this document supplies none |
+| 16 | `create_indexes` | all seven future tables | all seven tables, six attached internal FKs, separately ratified parent FKs | §9.3 indexes #1-11 in listed order |
+| 17 | `validate_acceptance` | combined D3 evidence schema | all prior actions | real-PG constraint, identifier, rollback, race, plan, bounded-lock, and `SKIP LOCKED` acceptance |
+
+The order is executable without a forward reference: `verification_intents` exists before the two exposure-to-intent
+links are attached; both receipt tables exist before the two intent-to-receipt and two exposure-to-receipt links are
+attached. The two separately owned parent sets remain symbolic blockers only—this document neither names nor guesses
+their tables, keys, unique targets, or FK names.
+
+#### 9.4.2 Exact rollback dependency order — 16 actions
+
+| Order | Operation | Object / exact effect |
+|---:|---|---|
+| 1 | `drop_indexes` | §9.3 indexes #11 through #1 |
+| 2 | `detach_separately_ratified_fk_set` | reverse the separately reviewed parent-FK order without changing parent rows |
+| 3 | `detach_fk` | `dispatch_exposures_failure_receipt_fk` |
+| 4 | `detach_fk` | `dispatch_exposures_response_receipt_fk` |
+| 5 | `detach_fk` | `verification_intents_failure_receipt_fk` |
+| 6 | `detach_fk` | `verification_intents_response_receipt_fk` |
+| 7 | `detach_fk` | `dispatch_exposures_predecessor_intent_fk` |
+| 8 | `detach_fk` | `dispatch_exposures_base_intent_fk` |
+| 9 | `drop_table` | `workflow_late_result_quarantine` |
+| 10 | `drop_table` | `transport_response_classification_intents` |
+| 11 | `drop_table` | `transport_attempt_failure_receipts` |
+| 12 | `drop_table` | `transport_response_receipts` |
+| 13 | `drop_table` | `dispatch_exposures` |
+| 14 | `drop_table` | `verification_intents` |
+| 15 | `drop_table` | `cost_reservations` |
+| 16 | `detach_drop_if_created` | §9.1 #13 through #1; preserve all adopted upstream parent data |
+
+Rollback performs these actions in exactly this dependency order. It never uses `CASCADE`, never drops an upstream
+parent table, and never removes or rewrites adopted upstream parent data.
 
 ### 9.5 Exact local CHECK inventory — 47 constraints
 
@@ -644,7 +709,7 @@ The executable oracle asserts the complete 29-row input and this one-to-one expa
 | 7 | `verification_intents_terminal_tuple_ck` | `verification_intents` | `TERMINAL_TUPLE_V1` |
 | 8 | `verification_intents_terminal_digest_ck` | `verification_intents` | `OPT_SHA(expected_source_terminal_outcome_digest) AND OPT_SHA(expected_source_terminal_provenance_policy_digest) AND OPT_SHA(expected_source_response_spec_digest) AND OPT_SHA(expected_source_model_invocation_envelope_digest) AND OPT_SHA(expected_source_response_occurrence_id) AND OPT_SHA(expected_source_canonical_response_digest) AND OPT_SHA(expected_source_canonical_result_digest) AND OPT_SHA(expected_source_result_artifact_digest) AND OPT_SHA(expected_source_failure_occurrence_id) AND OPT_SHA(expected_source_failure_spec_digest) AND OPT_SHA(expected_source_canonical_failure_digest) AND OPT_SHA(expected_source_failure_artifact_digest) AND OPT_SHA(expected_source_no_exposure_spec_digest)` |
 | 9 | `verification_intents_terminal_ref_ck` | `verification_intents` | `OPT_NB(expected_source_terminal_event_id) AND OPT_NB(expected_source_transport_response_receipt_id) AND OPT_NB(expected_source_transport_attempt_failure_receipt_id) AND OPT_NB(expected_source_dispatch_exposure_id) AND (expected_source_physical_call_index IS NULL OR expected_source_physical_call_index >= 0) AND OPT_NB(expected_source_provider_call_id) AND OPT_NB(expected_source_model_invocation_envelope_ref) AND OPT_NB(expected_source_result_artifact_ref) AND OPT_NB(expected_source_failure_artifact_ref)` |
-| 10 | `verification_intents_timestamp_ck` | `verification_intents` | `updated_at >= created_at AND ((expected_source_terminal_status IS NULL AND source_terminal_appended_at IS NULL) OR (expected_source_terminal_status IS NOT NULL AND source_terminal_appended_at >= created_at))` |
+| 10 | `verification_intents_timestamp_ck` | `verification_intents` | `(updated_at >= created_at AND ((expected_source_terminal_status IS NULL AND source_terminal_appended_at IS NULL) OR (expected_source_terminal_status IS NOT NULL AND source_terminal_appended_at IS NOT NULL AND source_terminal_appended_at >= created_at))) IS TRUE` |
 | 11 | `transport_response_receipts_pfx_ck` | `transport_response_receipts` | `PFX_VALID` |
 | 12 | `transport_response_receipts_identity_ck` | `transport_response_receipts` | `NB(transport_response_receipt_id) AND NB(operation_run_id) AND NB(command_id) AND NB(activity_run_id) AND NB(activity_attempt_id) AND NB(dispatch_exposure_id) AND NB(canonical_delivery_identity)` |
 | 13 | `transport_response_receipts_counter_ck` | `transport_response_receipts` | `command_attempt > 0 AND claim_generation > 0 AND control_epoch >= 0 AND physical_call_index >= 0` |
@@ -669,7 +734,7 @@ The executable oracle asserts the complete 29-row input and this one-to-one expa
 | 32 | `transport_response_classification_intents_state_ck` | `transport_response_classification_intents` | `classification_state IN ('pending', 'claimed', 'current_pending_apply', 'applied_current', 'classified_stale', 'failed_terminal')` |
 | 33 | `transport_response_classification_intents_counter_ck` | `transport_response_classification_intents` | `attempt_count >= 0 AND attempt_count <= 8 AND state_version >= 0` |
 | 34 | `transport_response_classification_intents_error_ck` | `transport_response_classification_intents` | `OPT_NB(last_error_code)` |
-| 35 | `transport_response_classification_intents_timestamp_ck` | `transport_response_classification_intents` | `updated_at >= created_at AND next_attempt_at >= created_at AND ((classification_state IN ('pending', 'claimed', 'current_pending_apply') AND terminal_at IS NULL) OR (classification_state IN ('applied_current', 'classified_stale', 'failed_terminal') AND terminal_at >= created_at))` |
+| 35 | `transport_response_classification_intents_timestamp_ck` | `transport_response_classification_intents` | `(updated_at >= created_at AND next_attempt_at >= created_at AND ((classification_state IN ('pending', 'claimed', 'current_pending_apply') AND terminal_at IS NULL) OR (classification_state IN ('applied_current', 'classified_stale', 'failed_terminal') AND terminal_at IS NOT NULL AND terminal_at >= created_at))) IS TRUE` |
 | 36 | `workflow_late_result_quarantine_pfx_ck` | `workflow_late_result_quarantine` | `PFX_VALID` |
 | 37 | `workflow_late_result_quarantine_identity_ck` | `workflow_late_result_quarantine` | `quarantine_id ~ '^lrq:v2:[0-9a-f]{64}$' AND NB(operation_run_id) AND NB(command_id) AND NB(activity_run_id) AND NB(activity_attempt_id) AND NB(dispatch_exposure_id) AND transport_response_receipt_id ~ '^trr:v2:[0-9a-f]{64}$' AND NB(canonical_delivery_identity) AND idempotency_key ~ '^late-response-v2:[0-9a-f]{64}$'` |
 | 38 | `workflow_late_result_quarantine_counter_ck` | `workflow_late_result_quarantine` | `command_attempt > 0 AND claim_generation > 0 AND control_epoch >= 0 AND physical_call_index >= 0 AND cost_state_version >= 0 AND retention_state_version >= 0` |
@@ -681,10 +746,12 @@ The executable oracle asserts the complete 29-row input and this one-to-one expa
 | 44 | `workflow_late_result_quarantine_rejection_ck` | `workflow_late_result_quarantine` | `rejection_reason IN ('stale_claim', 'business_precondition_conflict')` |
 | 45 | `workflow_late_result_quarantine_idempotency_ck` | `workflow_late_result_quarantine` | `substring(quarantine_id from 8) = substring(idempotency_key from 18)` |
 | 46 | `workflow_late_result_quarantine_retention_ck` | `workflow_late_result_quarantine` | `retention_policy_version = 'quarantine_retention_30d_v1' AND retention_until = recorded_at + interval '30 days'` |
-| 47 | `workflow_late_result_quarantine_timestamp_ck` | `workflow_late_result_quarantine` | `((cost_state = 'pending_reconciliation' AND cost_reconciled_at IS NULL) OR (cost_state IN ('reconciled_confirmed', 'reconciled_uncertain') AND cost_reconciled_at >= recorded_at)) AND ((retention_state = 'retained' AND purged_at IS NULL) OR (retention_state = 'purged_tombstone' AND purged_at >= retention_until))` |
+| 47 | `workflow_late_result_quarantine_timestamp_ck` | `workflow_late_result_quarantine` | `(((cost_state = 'pending_reconciliation' AND cost_reconciled_at IS NULL) OR (cost_state IN ('reconciled_confirmed', 'reconciled_uncertain') AND cost_reconciled_at IS NOT NULL AND cost_reconciled_at >= recorded_at)) AND ((retention_state = 'retained' AND purged_at IS NULL) OR (retention_state = 'purged_tombstone' AND purged_at IS NOT NULL AND purged_at >= retention_until))) IS TRUE` |
 
 All 47 constraints must be installed as valid `CHECK` constraints in the same future `CREATE TABLE` batch as their
-table; there may be no brownfield sentinels and no later `NOT VALID` reinterpretation. Registry applicability,
+table; there may be no brownfield sentinels and no later `NOT VALID` reinterpretation. Every predicate that can touch a
+nullable timestamp must make the required branch timestamp explicitly `IS NOT NULL` and wrap the whole predicate in
+`IS TRUE`; PostgreSQL `CHECK` acceptance of `UNKNOWN` is never a valid state. Registry applicability,
 parent-row equality, exact SHA recomputation, state CAS, and DB-clock eligibility remain repository/FK acceptance
 because a local `CHECK` cannot truthfully prove another row, recompute owner registry semantics, or authorize a
 transition.
@@ -698,6 +765,10 @@ branch truth table, exact state enums, and DB-clock timestamp relations.
 Any collision, FK/PFX/attempt mismatch, invalid state transition, optional quarantine failure, classification terminal
 CAS failure, or exposure terminalization mismatch rolls back every mutation in that UoW. Generic replace-all upsert is
 forbidden for all five surfaces.
+
+Every exact constraint and index identifier in §§9.1–9.3 and §9.5 is UTF-8 byte-counted against PostgreSQL's 63-byte
+identifier limit. The oracle rejects an over-limit name, any duplicate exact name, and any collision after a defensive
+63-byte prefix projection; relying on PostgreSQL's silent identifier truncation is forbidden.
 
 ## 10. Full-PFX v2 occurrence and idempotency encoder
 
@@ -890,24 +961,31 @@ review approval.
 - exact 52/30/28/18/41 ordered name/type/null/default manifests;
 - the exact source-seven list and 29-row terminal branch truth table;
 - all 47 named local CHECK predicates, their `10/9/9/7/12` table split, and same-create-table installation contract;
-- owner/store exclusivity, 13 upstream constraints, 52 seven-table constraints including 29 FKs, exact FK actions, and
-  the two unresolved parent-owner blockers;
-- all 11 named indexes, their ordered columns/predicates, and one-to-one owner access-path mapping;
-- classification-intent six-state lifecycle, complete attempt-8 boundary, two ingress orders, recoverable current-apply
-  continuation, and the eight-row response/failure/retry race table;
+- owner/store exclusivity, the complete exact tuples for 13 upstream constraints and 52 seven-table constraints including
+  29 FKs, PostgreSQL's 63-byte identifier ceiling, exact FK actions, and the two unresolved parent-owner blockers;
+- all 11 complete index tuples and 12 complete access-path tuples; the two pending-state readers deliberately share one
+  index while every other access path retains its named sole index;
+- the complete 17-action create/attach DAG and 16-action rollback order, including mechanical dependency validation of
+  all six deferred internal FKs without guessing either unresolved parent schema;
+- classification-intent six-state lifecycle, complete attempt-8 boundary and admitted recovery access, two ingress
+  orders, recoverable current-apply continuation, and all three fields of every eight-row response/failure/retry race
+  tuple;
 - response/quarantine artifact ref+digest SQL truth tables, including blank/whitespace rejection and retained-digest
   tombstones;
 - v2 length-delimited golden bytes/digests and supersession of the old scope-only formulas;
-- fixed DB-clock 30-day quarantine retention and disjoint cost/retention mutation sets;
+- fixed DB-clock 30-day quarantine retention, disjoint cost/retention mutation sets, and explicit rejection of nullable
+  timestamp `UNKNOWN` in all three affected local checks;
 - model-only three-mode eligibility, replay zero-write, and Harvest/provider-search deferral;
 - the complete 11×10 matrix and current physical absence of all seven future tables/owners;
 - actual D0f durable owner/migration presence at `539c689`, including the exact TIMESTAMPTZ substrate, without claiming
   a Decimal cost substrate.
 
 D3c2h1's first pinned `gpt-5.6-sol / ultra / priority` non-author review of `1c4a2d9177dcb3470117700086b12fd533898bb7`
-was formal `NO-GO 0/3/3/0`; this candidate is a fixed-forward author repair, not a review result. It closes no migration,
-repository, runtime, rollout, formal-review, provider, live, W6, manual, product, Migration A–D, served-action, or
-residual gate and does not authorize SQL by itself. The next bounded order is:
+was formal `NO-GO 0/3/3/0`. The later Ultra attempt against `f0a0069c83b7ec582682ad79f7a278e604cdd4a0`
+failed closed as `invalid_transport`; its substantive output is advisory only and cannot be promoted into a formal verdict.
+This candidate is a second fixed-forward author repair, not a review result. It closes no migration, repository, runtime,
+rollout, formal-review, provider, live, W6, manual, product, Migration A–D, served-action, or residual gate and does not
+authorize SQL by itself. The next bounded order is:
 
 1. fresh pinned non-author review of this repaired decision lock;
 2. separate typed plan/review/gate-parent and Tier-2 grant-parent owner decision lock, then its own pinned review;
@@ -917,7 +995,8 @@ residual gate and does not authorize SQL by itself. The next bounded order is:
 5. strict writers and fake/simulate/scripted E2E;
 6. separately reviewed provider-search variant and only then a separately gated bounded live canary.
 
-Local decision-oracle validation uses no provider/model credentials:
+Current second-repair author evidence is exact H1 `13 passed`, the five-file related battery `139 passed`, Ruff
+check/format clean, and `git diff --check` clean. It uses no provider/model credentials and remains author evidence only:
 
 ```bash
 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src .venv/bin/python -m pytest -q \

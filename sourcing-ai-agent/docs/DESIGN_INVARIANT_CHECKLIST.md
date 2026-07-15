@@ -34,7 +34,8 @@ N 层机制，评审即在 N+1 层产出新 findings**——修复引入的新�
    (workflow_run_id, idempotency_key)）下，两个不同命令/两次不同转移的键会不会互撞？
 4. **生命周期完备性**：状态迁移表全量（含反向路径：过期、policy 失效、supersession、重验、
    "谁重开一个已被清除的阻塞"）；定时收敛有 owner（定时事件/扫描 owner，非读者驱动）；
-   grant/信封类有不可变签发身份 + 终态不复活 + 余额继承规则。
+   grant/信封类有不可变签发身份 + 终态不复活 + 余额继承规则。每个上限/耗尽边界必须有明确 admitted
+   point-CAS 或 scan/index access path；专查 partial-index predicate 是否把恰需收敛的边界行排除，造成永久 stranded。
 5. **晚到与部分结果**：每个异步结果都可能在 cancel/supersession/timeout **之后**到达——落在哪
    （quarantine 显式终态）？"已接受未消费"窗口（accepted→persist 间被 cancel）有消费 CAS 吗？
    截断/过滤/异常终止的输出是否结构性不可授权？
@@ -49,7 +50,10 @@ N 层机制，评审即在 N+1 层产出新 findings**——修复引入的新�
    自证 transport 元数据或证据 provenance（provider/usage/fallback/域名归属全部服务端派生）；
    公共 ingress 不可伪造服务端引用；出站 model-safe 白名单覆盖全部消息角色。
 9. **自包含与跨文档一致**：无"同 vN"式历史引用（Git 历史不是契约）；跨文档共享的契约 =
-   一个物理 schema 一处定义；术语/命令名/状态枚举/链条描述逐字一致；上层计划与详设同步修订。
+   一个物理 schema 一处定义；术语/命令名/状态枚举/链条描述逐字一致；上层计划与详设同步修订。物理
+   schema decision 的 oracle 必须 exact-compare 完整 relation/index/access/race/DAG tuple，不能只数行、验名称或
+   substring；同时机械检查 PostgreSQL identifier 63-byte 上限、create/attach/drop dependency topology，以及
+   nullable `CHECK` 是否用 required `IS NOT NULL`/whole-predicate `IS TRUE` 拒绝 SQL `UNKNOWN`。
 10. **运行时/模式隔离**（v2 新增，R6#2 教训——首版清单完全缺失，而这是仓库
     RUNTIME_ENVIRONMENT_ISOLATION 契约的核心）：每个新 durable 行/幂等 scope/接受 CAS 是否携带
     不可变 `runtime_namespace` + `provider_mode`？simulate/scripted/回放产物是否**结构上不可能**

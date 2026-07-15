@@ -376,13 +376,18 @@ serve、会话/事件层、planner loop），用一个垂直切片证明闭环�
   `verification_intents`、response/failure receipts、durable response classification intent 与 late quarantine 的 exact
   `52/30/28/18/41` manifests、source core=`7`、terminal tuple=`29`、local CHECK=`47`，并新增完整 attempt-8
   convergence、nonterminal `current_pending_apply` + fresh-apply continuation、failure/retry/second-response race
-  boundary、blank artifact-ref rejection。D3c2g 两成本表与五 evidence 表现合并为 13 upstream constraints、
-  52 seven-table constraints（29 FKs）、11 indexes 及 exact DDL/rollback order；typed plan/review/gate parent 与
+  boundary、blank artifact-ref rejection。随后针对 `f0a0069...` 的 Ultra 尝试因 multi-turn transcript
+  `child_thread_ids_distinct=false` fail closed 为 `invalid_transport`；substantive `0/1/2/0` 仅 advisory，不能写成
+  formal verdict。第二轮 author repair 将 D3c2g 两成本表与五 evidence 表的 13 upstream constraint tuples、52
+  seven-table constraint tuples（29 FKs）、11 index tuples/12 admitted access tuples 固定完整；所有 constraint/index/
+  CHECK 名称 UTF-8 不超过 PostgreSQL 63 bytes；pending index 同时承载 `<8` claim 与 `=8` convergence；六个
+  forward/cycle FK 仅在 target 存在后 attach，形成 exact 17-step forward + 16-step rollback DAG；三条 nullable
+  timestamp CHECK 以 required `IS NOT NULL` + whole-predicate `IS TRUE` 拒绝 `UNKNOWN`。typed plan/review/gate parent 与
   Tier-2 grant parent 的物理 owner/key 尚未 ratify，显式成为两个 hard prerequisites，禁止猜 schema 或以无 FK
   绕过。initial v1 仍仅 `model_tool_v1` + live/simulate/scripted，replay zero-write，Harvest/provider-search deferred。
-  该批仍为 `decision_locked_not_implemented`：零 SQL/descriptor/repository/runtime/provider/live，fresh pinned formal
-  repair review pending；即使 repair `GO`，也须先 separate parent-owner decision lock + review，才可申请 dormant
-  combined migration。
+  该批仍为 `decision_locked_not_implemented`：零 SQL/descriptor/repository/runtime/provider/live，第二轮 repair 仍须
+  fresh pinned formal non-author review；即使 repair `GO`，也须先 separate parent-owner decision lock + review，才可
+  申请 dormant combined migration。
 
 ### D4 — 之后（本文只圈定，不展开）
 
@@ -645,10 +650,12 @@ TD-4 初始路由表已按 owner 2026-07-13 裁决落档（D0 §4）。
    `retention_state: retained -> purged_tombstone`；no-call exposure 没有 response receipt/
    quarantine。D0f 已落 sole durable `ModelInvocationEnvelopeV1` ref owner/ref grammar，D3c2h1 receipts 只 exact-copy
    并 full-PFX FK 绑定该 owner ref+digest，禁止 placeholder ref/hash 或第二 envelope schema；禁止持 PG transaction
-   跨网络。D3c2h1/D3c2g 的 combined boundary 为 exact 13 upstream constraints + 52 seven-table constraints（29
-   FKs）+ 11 indexes + creation/rollback order；typed plan/review/gate parent 与 Tier-2 grant parent 的物理表/键仍是
-   Plan §6 item 6/R-019 与 OB-10.2/item 7 的 separately reviewed owner-decision prerequisites。不得猜 schema、用
-   JSON/application-only proof 或省略 FK；因此当前 decision repair 仍不授权 migration、runtime 或 provider activation。
+   跨网络。D3c2h1/D3c2g 的 combined boundary 为 complete exact 13 upstream constraint tuples + 52 seven-table
+   constraint tuples（29 FKs）+ 11 index tuples + 12 admitted access tuples + 17-step create/attach DAG + 16-step
+   rollback；identifier 必须 <=63 UTF-8 bytes，pending attempt 8 有同一 pending-state index 上的独立收敛路径，
+   nullable timestamp CHECK 不得让 `UNKNOWN` 通过。typed plan/review/gate parent 与 Tier-2 grant parent 的物理表/键
+   仍是 Plan §6 item 6/R-019 与 OB-10.2/item 7 的 separately reviewed owner-decision prerequisites。不得猜 schema、
+   用 JSON/application-only proof 或省略 FK；因此当前 decision repair 仍不授权 migration、runtime 或 provider activation。
    strict-D3 首次 `succeeded|failed_terminal` result command+event 取 common lock，在同一 UoW 写
    canonical nullable outcome digest/event pair；pair 在 result-terminal 期间不可变，仅 registered reopen 可在
    requeue 前清除；event composite unique + command `MATCH SIMPLE DEFERRABLE` FK + local both-null/both-non-null
