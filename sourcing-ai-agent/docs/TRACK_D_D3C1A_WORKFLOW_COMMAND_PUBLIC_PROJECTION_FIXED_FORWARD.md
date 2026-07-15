@@ -184,6 +184,33 @@ the canonical final JSON node/byte budget; and the transport-body cap is limited
 operation/workflow variants. The prior `36c17dc...` object remains a historical pinned advisory `NO-GO`; the enclosing
 candidate requires a fresh pinned non-author review and is not a live or milestone gate until that review succeeds.
 
+#### Fresh pinned advisory against `395d7c7`
+
+A separate non-author session reviewed exact Git range
+`36c17dca7528639946f5bd8cb16538e0aaed25de..395d7c7e0858ac19e24496c61eee5dc3f109cc35`
+without substituting mutable working-tree files. The operator-owned reviewer settings were
+`gpt-5.6-sol / medium / priority`, so the result is scope-local advisory evidence rather than a formal highest-effort
+artifact. Its verdict was **ADVISORY NO-GO**, P0/P1/P2/P3=`0/0/2/2`:
+
+- one P2 re-raised final-budget closure because provenance projected all four source lists before it established and
+  consumed the shared final aggregate budget; exhaustion while admitting an earlier list therefore still touched a
+  later list's Proxy descriptors even though that list could no longer contribute an output row;
+- one new P2 showed that the exact-footprint walker skipped a non-enumerable own `toJSON` before checking its name and
+  did not inspect `Object.prototype` or `Array.prototype`; an inherited callable could therefore transform a DTO above
+  1 MiB during real `JSON.stringify` after the footprint admitted it;
+- the two P3 items are the already recorded bounded-streaming/header allocation residual and non-enumerable-`raw`
+  compatibility boundary. They remain explicit residuals rather than silently claimed closure.
+
+The current enclosing fixed-forward closes both P2 mechanisms without changing backend/storage or unrelated transport
+surfaces. Provenance creates its final aggregate budget before touching any of its four lists, then projects and admits
+each item in one monotonic pass; the first failed admission blocks the remaining current-list tail and every later list,
+and the enumerable DTO plus non-enumerable raw lists are built from the same admitted arrays. The footprint walker now
+uses own-property descriptors to reject data or accessor `toJSON` regardless of enumerability, and checks only the
+standard `Object.prototype`/`Array.prototype` descriptors for inherited transformation hooks. It does not invoke a
+getter, `toJSON`, or Proxy `get` trap and does not walk arbitrary prototype getters. Exact own, inherited-object,
+inherited-array, same-list-tail, and cross-list-tail executable regressions lock those boundaries. A fresh pinned
+non-author review of the enclosing commit is still required before this scope can cross its live/manual/milestone gate.
+
 ### 3.4 Earlier precommit adversarial author-audit fixes
 
 After implementing the five direct findings, adversarial passes in the author session exposed additional bounded
@@ -465,6 +492,23 @@ Current `4919990` pinned-review fixed-forward evidence, before creating its encl
   chunk warning remains informational;
 - scoped Ruff check/format and `git diff --check`: clean;
 - mypy ceiling: unchanged at **81 errors in 4 files**.
+
+Current `395d7c7` advisory fixed-forward evidence, before creating its enclosing commit:
+
+- D3c1a projection contract: **19 passed**, including own data/accessor and inherited object/array `toJSON`,
+  same-list tail, cross-list tail, raw-list synchronization, and exact final-footprint assertions;
+- clean-candidate D3 claim-fence + D3c1a projection + pre-Agent lane: **119 passed**; the three executable candidate
+  file hashes in that clean `4945ab7` archive were byte-identical to the shared-tree candidate (this evidence paragraph
+  was appended after the run);
+- frontend production build: **82 modules transformed**, `550.58 kB` / gzip `164.06 kB`; the existing `>500 kB`
+  chunk warning remains informational;
+- scoped Ruff check and format plus scoped `git diff --check`: clean;
+- the shared dirty-tree form of the same 119-test lane reported **117 passed / 2 failed** only because concurrent,
+  out-of-scope D3c2h edits had changed Plan/TODO/ledger/index phrases read by two D3b documentation oracles. Those exact
+  two nodes passed **2/2** in clean `4945ab7`, and the complete clean candidate passed 119/119; no concurrent file was
+  stashed, reset, or included;
+- PG was not rerun for this follow-up because it changes no backend, repository, storage, or PG oracle. The immediately
+  preceding pinned review independently reran the unchanged exact evidence matrix at **7 passed + 500 subtests**.
 
 The advisory also exercised hostile hash-collision keys with zero equality-hook calls, alternating carrier depth 40 in
 9 command projections, and a binary depth-10 carrier tree in 99 projections; budget cutoffs omitted the member rather

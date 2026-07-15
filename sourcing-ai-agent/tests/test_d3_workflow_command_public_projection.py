@@ -3480,6 +3480,81 @@ Object.defineProperty(finalFootprintAccessor, "value", {
 assert.equal(runtimeContract.workflowPublicFinalJsonFootprint(finalFootprintAccessor), undefined);
 assert.equal(finalFootprintAccessorReads, 0);
 
+let finalFootprintOwnToJsonCalls = 0;
+const finalFootprintOwnToJson = { safe: "value" };
+Object.defineProperty(finalFootprintOwnToJson, "toJSON", {
+  configurable: true,
+  enumerable: false,
+  value() {
+    finalFootprintOwnToJsonCalls += 1;
+    return { unsafe: true };
+  },
+});
+assert.equal(runtimeContract.workflowPublicFinalJsonFootprint(finalFootprintOwnToJson), undefined);
+assert.equal(finalFootprintOwnToJsonCalls, 0);
+
+let finalFootprintOwnToJsonGetterReads = 0;
+const finalFootprintOwnToJsonAccessor = { safe: "value" };
+Object.defineProperty(finalFootprintOwnToJsonAccessor, "toJSON", {
+  configurable: true,
+  enumerable: false,
+  get() {
+    finalFootprintOwnToJsonGetterReads += 1;
+    return () => ({ unsafe: true });
+  },
+});
+assert.equal(
+  runtimeContract.workflowPublicFinalJsonFootprint(finalFootprintOwnToJsonAccessor),
+  undefined,
+);
+assert.equal(finalFootprintOwnToJsonGetterReads, 0);
+
+const originalObjectPrototypeToJson = Object.getOwnPropertyDescriptor(Object.prototype, "toJSON");
+let inheritedObjectToJsonCalls = 0;
+Object.defineProperty(Object.prototype, "toJSON", {
+  configurable: true,
+  enumerable: false,
+  value() {
+    inheritedObjectToJsonCalls += 1;
+    return { unsafe: true };
+  },
+});
+try {
+  assert.equal(runtimeContract.workflowPublicFinalJsonFootprint({ safe: "value" }), undefined);
+  assert.throws(
+    () => demoApi.deriveWorkflowCommandRecord({ command_id: "inherited-object-to-json" }),
+    /final public DTO budget/,
+  );
+  assert.equal(inheritedObjectToJsonCalls, 0);
+} finally {
+  if (originalObjectPrototypeToJson) {
+    Object.defineProperty(Object.prototype, "toJSON", originalObjectPrototypeToJson);
+  } else {
+    delete Object.prototype.toJSON;
+  }
+}
+
+const originalArrayPrototypeToJson = Object.getOwnPropertyDescriptor(Array.prototype, "toJSON");
+let inheritedArrayToJsonCalls = 0;
+Object.defineProperty(Array.prototype, "toJSON", {
+  configurable: true,
+  enumerable: false,
+  value() {
+    inheritedArrayToJsonCalls += 1;
+    return ["unsafe"];
+  },
+});
+try {
+  assert.equal(runtimeContract.workflowPublicFinalJsonFootprint([]), undefined);
+  assert.equal(inheritedArrayToJsonCalls, 0);
+} finally {
+  if (originalArrayPrototypeToJson) {
+    Object.defineProperty(Array.prototype, "toJSON", originalArrayPrototypeToJson);
+  } else {
+    delete Array.prototype.toJSON;
+  }
+}
+
 const finalFootprintProxyReads = {
   get: 0,
   getPrototypeOf: 0,
@@ -3516,7 +3591,7 @@ assert.deepEqual(finalFootprintProxyReads, {
   get: 0,
   getPrototypeOf: 1,
   ownKeys: 1,
-  getOwnPropertyDescriptor: 1,
+  getOwnPropertyDescriptor: 2,
 });
 assert.deepEqual(runtimeContract.OPERATION_ACTION_DECISION_APPLIED_OUTCOMES, {
   approve: ["queued"],
@@ -5097,6 +5172,86 @@ for (const [value, expected] of diagnosticCases) {
     });
   } finally {
     JSON.parse = originalJsonParse;
+  }
+
+  const crossListTailProxyTraps = {
+    get: 0,
+    getPrototypeOf: 0,
+    ownKeys: 0,
+    getOwnPropertyDescriptor: 0,
+  };
+  const crossListTailProxy = new Proxy(
+    { command_id: "must-not-be-read-after-prior-list-closes-aggregate" },
+    {
+      get(target, key, receiver) {
+        crossListTailProxyTraps.get += 1;
+        return Reflect.get(target, key, receiver);
+      },
+      getPrototypeOf(target) {
+        crossListTailProxyTraps.getPrototypeOf += 1;
+        return Reflect.getPrototypeOf(target);
+      },
+      ownKeys(target) {
+        crossListTailProxyTraps.ownKeys += 1;
+        return Reflect.ownKeys(target);
+      },
+      getOwnPropertyDescriptor(target, key) {
+        crossListTailProxyTraps.getOwnPropertyDescriptor += 1;
+        return Reflect.getOwnPropertyDescriptor(target, key);
+      },
+    },
+  );
+  const crossListAggregatePayload = {
+    status: "ok",
+    action_events: Array.from(
+      { length: projectionLimits.maxCollectionEntries },
+      (_, index) => ({ event_id: `aggregate-action-event-${index}` }),
+    ),
+    operation_events: Array.from(
+      { length: projectionLimits.maxCollectionEntries },
+      (_, index) => ({ event_id: `aggregate-operation-event-${index}` }),
+    ),
+    workflow_commands: [crossListTailProxy],
+  };
+  const crossListOriginalJsonParse = JSON.parse;
+  JSON.parse = (input, reviver) => input === "__CROSS_LIST_AGGREGATE_PAYLOAD__"
+    ? crossListAggregatePayload
+    : crossListOriginalJsonParse(input, reviver);
+  global.fetch = async () => ({
+    ok: true,
+    status: 200,
+    headers: new Headers({ "Content-Type": "application/json" }),
+    text: async () => "__CROSS_LIST_AGGREGATE_PAYLOAD__",
+  });
+  try {
+    const crossListClosedProvenance = await demoApi.getOperationRunProvenance(
+      "operation-run-cross-list-aggregate-closed",
+    );
+    assert.equal(
+      crossListClosedProvenance.actionEvents.length,
+      projectionLimits.maxCollectionEntries,
+    );
+    assert.ok(
+      crossListClosedProvenance.operationEvents.length < projectionLimits.maxCollectionEntries,
+    );
+    assert.deepEqual(crossListClosedProvenance.workflowCommands, []);
+    assert.equal(
+      crossListClosedProvenance.raw.action_events.length,
+      crossListClosedProvenance.actionEvents.length,
+    );
+    assert.equal(
+      crossListClosedProvenance.raw.operation_events.length,
+      crossListClosedProvenance.operationEvents.length,
+    );
+    assert.deepEqual(crossListClosedProvenance.raw.workflow_commands, []);
+    assert.deepEqual(crossListTailProxyTraps, {
+      get: 0,
+      getPrototypeOf: 0,
+      ownKeys: 0,
+      getOwnPropertyDescriptor: 0,
+    });
+  } finally {
+    JSON.parse = crossListOriginalJsonParse;
   }
 
   global.fetch = async () => jsonResponse({

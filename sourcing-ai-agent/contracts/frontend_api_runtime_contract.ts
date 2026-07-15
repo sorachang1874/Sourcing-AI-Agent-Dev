@@ -163,6 +163,16 @@ function measureWorkflowPublicFinalJsonValue(
       : undefined;
   }
 
+  let ownToJsonDescriptor: PropertyDescriptor | undefined;
+  try {
+    ownToJsonDescriptor = Object.getOwnPropertyDescriptor(value, "toJSON");
+  } catch {
+    return undefined;
+  }
+  if (ownToJsonDescriptor) {
+    return undefined;
+  }
+
   let ownKeys: readonly PropertyKey[];
   try {
     ownKeys = Reflect.ownKeys(value);
@@ -177,6 +187,12 @@ function measureWorkflowPublicFinalJsonValue(
   try {
     let measured: WorkflowPublicMeasuredJsonFootprint;
     if (Array.isArray(value)) {
+      if (
+        Object.getOwnPropertyDescriptor(Array.prototype, "toJSON") ||
+        Object.getOwnPropertyDescriptor(Object.prototype, "toJSON")
+      ) {
+        return undefined;
+      }
       let lengthDescriptor: PropertyDescriptor | undefined;
       try {
         lengthDescriptor = Object.getOwnPropertyDescriptor(value, "length");
@@ -230,6 +246,12 @@ function measureWorkflowPublicFinalJsonValue(
         return undefined;
       }
       if (prototype !== Object.prototype && prototype !== null) {
+        return undefined;
+      }
+      if (
+        prototype === Object.prototype &&
+        Object.getOwnPropertyDescriptor(Object.prototype, "toJSON")
+      ) {
         return undefined;
       }
       let nodes = 1;

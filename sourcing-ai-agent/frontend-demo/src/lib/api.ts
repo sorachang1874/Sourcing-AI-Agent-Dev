@@ -1148,22 +1148,7 @@ function admitDemoWorkflowPublicFinalListItem<T extends object>(
   return true;
 }
 
-function admitDemoWorkflowPublicFinalList<T extends object>(
-  target: T[],
-  items: readonly T[],
-  budget: DemoWorkflowPublicFinalAggregateBudget,
-): void {
-  if (budget.blocked) {
-    return;
-  }
-  for (const item of items) {
-    if (!admitDemoWorkflowPublicFinalListItem(target, item, budget)) {
-      break;
-    }
-  }
-}
-
-function projectDemoCapturedPlainWorkflowPublicObjectArray<T extends object>(
+function projectAndAdmitDemoCapturedPlainWorkflowPublicObjectArray<T extends object>(
   value: unknown,
   projector: (
     record: Record<string, unknown>,
@@ -1172,26 +1157,29 @@ function projectDemoCapturedPlainWorkflowPublicObjectArray<T extends object>(
   ) => T,
   traversal: DemoWorkflowPublicProjectionTraversal,
   depth: number,
-): T[] | undefined {
+  target: T[],
+  finalBudget: DemoWorkflowPublicFinalAggregateBudget,
+): boolean {
+  // A failed admission is monotonic for the enclosing DTO.  In particular, do not even
+  // inspect a later source list after an earlier list has consumed the aggregate budget.
+  if (finalBudget.blocked) {
+    return true;
+  }
   if (!Array.isArray(value)) {
-    return undefined;
+    return false;
   }
   if (
     depth > WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxDepth ||
     traversal.activeContainers.has(value) ||
     !consumeDemoWorkflowPublicProjectionNode(traversal, 2)
   ) {
-    return undefined;
+    return false;
   }
   const items = captureDemoWorkflowPublicArrayItems(value);
   if (!items) {
-    return undefined;
+    return false;
   }
-  const result: T[] = [];
-  const finalBudget = requireDemoWorkflowPublicFinalFootprint(
-    result,
-    "Demo workflow public list",
-  );
+
   traversal.activeContainers.add(value);
   try {
     for (const item of items) {
@@ -1217,7 +1205,7 @@ function projectDemoCapturedPlainWorkflowPublicObjectArray<T extends object>(
             ? hasDemoWorkflowPublicSerializableFields(projected.raw)
             : hasDemoWorkflowPublicSerializableFields(projected)))
       ) {
-        if (!admitDemoWorkflowPublicFinalListItem(result, projected, finalBudget)) {
+        if (!admitDemoWorkflowPublicFinalListItem(target, projected, finalBudget)) {
           break;
         }
       }
@@ -1225,8 +1213,35 @@ function projectDemoCapturedPlainWorkflowPublicObjectArray<T extends object>(
   } finally {
     traversal.activeContainers.delete(value);
   }
-  markDemoWorkflowPublicProjectionClosed(result as object, traversal);
-  return result;
+  markDemoWorkflowPublicProjectionClosed(target as object, traversal);
+  return true;
+}
+
+function projectDemoCapturedPlainWorkflowPublicObjectArray<T extends object>(
+  value: unknown,
+  projector: (
+    record: Record<string, unknown>,
+    traversal: DemoWorkflowPublicProjectionTraversal,
+    depth: number,
+  ) => T,
+  traversal: DemoWorkflowPublicProjectionTraversal,
+  depth: number,
+): T[] | undefined {
+  const result: T[] = [];
+  const finalBudget = requireDemoWorkflowPublicFinalFootprint(
+    result,
+    "Demo workflow public list",
+  );
+  return projectAndAdmitDemoCapturedPlainWorkflowPublicObjectArray(
+    value,
+    projector,
+    traversal,
+    depth,
+    result,
+    finalBudget,
+  )
+    ? result
+    : undefined;
 }
 
 function projectWorkflowCommandPublicCarrier(
@@ -3579,30 +3594,6 @@ export async function getOperationRunProvenance(operationRunId: string): Promise
     traversal,
     depth + 1,
   ) ?? null;
-  const projectedActionEvents = projectDemoCapturedPlainWorkflowPublicObjectArray(
-    canonical.action_events,
-    deriveOperationEventRecord,
-    traversal,
-    depth + 1,
-  ) ?? [];
-  const projectedOperationEvents = projectDemoCapturedPlainWorkflowPublicObjectArray(
-    canonical.operation_events,
-    deriveOperationEventRecord,
-    traversal,
-    depth + 1,
-  ) ?? [];
-  const projectedEventTimeline = projectDemoCapturedPlainWorkflowPublicObjectArray(
-    canonical.event_timeline,
-    deriveOperationEventRecord,
-    traversal,
-    depth + 1,
-  ) ?? [];
-  const projectedWorkflowCommands = projectDemoCapturedPlainWorkflowPublicObjectArray(
-    canonical.workflow_commands,
-    deriveWorkflowCommandRecord,
-    traversal,
-    depth + 1,
-  ) ?? [];
   const provenanceValue: Omit<OperationRunProvenance, "raw"> = {
     status,
     action,
@@ -3616,24 +3607,36 @@ export async function getOperationRunProvenance(operationRunId: string): Promise
     provenanceValue,
     "Operation run provenance",
   );
-  admitDemoWorkflowPublicFinalList(
+  projectAndAdmitDemoCapturedPlainWorkflowPublicObjectArray(
+    canonical.action_events,
+    deriveOperationEventRecord,
+    traversal,
+    depth + 1,
     provenanceValue.actionEvents,
-    projectedActionEvents,
     finalBudget,
   );
-  admitDemoWorkflowPublicFinalList(
+  projectAndAdmitDemoCapturedPlainWorkflowPublicObjectArray(
+    canonical.operation_events,
+    deriveOperationEventRecord,
+    traversal,
+    depth + 1,
     provenanceValue.operationEvents,
-    projectedOperationEvents,
     finalBudget,
   );
-  admitDemoWorkflowPublicFinalList(
+  projectAndAdmitDemoCapturedPlainWorkflowPublicObjectArray(
+    canonical.event_timeline,
+    deriveOperationEventRecord,
+    traversal,
+    depth + 1,
     provenanceValue.eventTimeline,
-    projectedEventTimeline,
     finalBudget,
   );
-  admitDemoWorkflowPublicFinalList(
+  projectAndAdmitDemoCapturedPlainWorkflowPublicObjectArray(
+    canonical.workflow_commands,
+    deriveWorkflowCommandRecord,
+    traversal,
+    depth + 1,
     provenanceValue.workflowCommands,
-    projectedWorkflowCommands,
     finalBudget,
   );
 
