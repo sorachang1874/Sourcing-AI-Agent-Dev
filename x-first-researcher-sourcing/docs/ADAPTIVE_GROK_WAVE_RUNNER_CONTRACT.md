@@ -35,7 +35,7 @@ CRM, export, billing, permission, or outreach state. Protected-identity inferenc
 |---|---|---|
 | Live target and prompt | Versioned module-owned effective-prompt policy plus SHA-bound request | The exact target tuple and source-prompt digest must be one reviewed `live_authorized` row; arbitrary scope text or a new prompt fails before any run root is retained |
 | Fixture target and prompt | SHA-bound request plus private `0600` source | Fixture requests remain generic and offline; a `fixture_only` policy row never grants live authority |
-| Prior waves | Private `0600` files plus SHA-256 | Casefold duplicates inside a prior wave fail |
+| Prior waves | Private `0600` files plus SHA-256, optionally constrained by the selected effective-prompt entry | Casefold duplicates inside a prior wave fail; `require_empty_prior_waves_v1` rejects any non-empty array before auth, grant issuance/consumption, run-root creation, replay, or recovery |
 | Prior completion | Local validator | An old handle may reappear only with new evidence digest or a new temporal state |
 | Grok executable | Request digest plus canonical local locator | Stable owner-controlled target is descriptor-copied to a private staged executable |
 | OAuth state | Canonical private auth file, current Grok 0.2.101 xAI OIDC/JWT contract, request-pinned digest/account reference, replay-independent active-use claim, and auth-digest taint registry | Exactly one issuer/client/identity-consistent credential is descriptor-copied into isolated `GROK_HOME`; one run/recovery owns the digest until audit plus durable deletion, and provider mutation/deletion/unreadability or an abnormal provider-capable exit taints that digest for future grants |
@@ -91,11 +91,19 @@ fields and retain mixed discovery/hydration behavior under unchanged entry diges
 stricter phase/query/projection semantic digest and any official handles into the exact selected-entry digest used by
 the grant, intent, receipt, and replay. The loader recomputes the semantic digest from a
 versioned registry and fails closed on disagreement, preventing an existing ID from silently acquiring new behavior.
+An entry may independently own the paired `prior_input_policy_id` and `prior_input_policy_sha256`. The first policy,
+`require_empty_prior_waves_v1`, accepts only the exact empty request array. Both fields are optional so entries that do
+not opt in retain their byte-identical selected-entry digests; adding, removing, or altering the pair on a selected row
+changes that row's digest. Selection enforces the rule before live auth or grant work and before run-root creation, and
+the same selection is rerun during grant validation, retained-bundle replay, and crash recovery.
 The session parser NFKC-normalizes every native-X query and removes invisible Unicode format controls before checking positive or negated `from:` forms. The v2 official path requires one exact positive operator, a keyword tool, and an entry-bound official handle; every other `from:` path is rejected. It removes
 outer characters that cannot belong to an ASCII X handle, including ASCII punctuation, curly quotes, fullwidth
 punctuation, and other Unicode wrappers, then rejects a remaining handle-like single-token subject before branching
-by tool. User search is narrower: it fully consumes the normalized query, rejects non-ASCII or unrecognized syntax, requires a target-lab token and a professional-context token, and accepts
-only the closed target/professional/connector grammar. Arbitrary multiword person intent in keyword or semantic search
+by tool. User search is narrower: it fully consumes the normalized query, rejects non-ASCII or unrecognized syntax,
+requires a target-lab token and a professional-context token, and accepts only the closed
+target/professional/connector grammar. A model prompt must enumerate terms from that exact runtime vocabulary; bare
+organization literals and topic-only `data` queries belong to keyword/semantic discovery rather than user search.
+Arbitrary multiword person intent in keyword or semantic search
 remains a post-run audit residual because rejecting all such phrases would also remove useful project/topic discovery.
 
 Discovery-only transport completion proves the mechanically enforced phase boundary, not strategy-matrix completion
@@ -202,9 +210,9 @@ bound into the grant, intent, command binding, terminal receipt, and bundle repl
 semantic binding over the binding version, schema version, policy ID, owner, globally allowed discovery dimensions,
 and exact selected entry. It is deliberately not the complete mutable registry-file digest: appending an unrelated
 valid row cannot invalidate an issued grant, retained bundle, or TTL purge, while changing the selected row or any
-immutable owner semantic fails replay. The production registry currently authorizes seven tracked OpenAI prompts
-and seven tracked Google DeepMind prompts. Each lab has its own exact target tuple; prompt digests cannot be swapped
-between them. The OpenAI tuple is:
+immutable owner semantic fails replay. Production tests use an explicit lab-to-prompt-family table, discover each
+family's prompt files, and reconcile the complete live registry without hard-coded per-lab or global entry totals.
+Each lab has its own exact target tuple; prompt digests cannot be swapped between them. The OpenAI tuple is:
 
 ```text
 lab_id=openai

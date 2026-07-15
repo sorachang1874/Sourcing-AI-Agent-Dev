@@ -10,9 +10,8 @@ ambiguous; this wave discovers leads for later hydration and does not require fi
 
 Treat this execution as `prior_waves=[]`. Do not assume, import, exclude, or search from any prior handle union, known
 candidate list, historical campaign output, memory, or famous-person roster. Begin from the official, project, model,
-training-function, and colleague graph surfaces below. A frozen 98-handle exploratory OpenAI union may be used only by
-the operator after the run to calculate **frozen-union conditional coverage**. It is not available to you, is not a
-gold population, and must never be described as recall.
+training-function, and colleague graph surfaces below. Do not infer a target answer length or search budget from an
+earlier campaign; the external operator owns any post-run comparison and does not expose it to this execution.
 
 ## Hard phase boundary
 
@@ -31,13 +30,15 @@ are not permission to hydrate a known person. The operator will mechanically enf
 handle allowlist and continue to reject every candidate-scoped `from:` query.
 
 Broad role/organization user searches are allowed only in the closed form "OpenAI" plus one or more professional
-role/function terms such as researcher, scientist, engineer, research, pretraining, training, model, scaling,
-tokenization, data, infrastructure, safety, multimodal, or robotics. Do not add person-name tokens to a user search. A
-discovery query must contain multiple professional-context terms; do not use any handle-like single-token query in
-keyword, semantic, user, or thread search. A profile ID or Bio may be retained only when it is incidentally returned
-by such a broad native-X discovery result. Otherwise set optional profile fields to null. Constructing the canonical
-`https://x.com/<handle>` profile URL from an observed handle is allowed. Hydration is a separate operator-generated
-stage after this discovery result is mechanically reconciled.
+role/function terms. The exact `x_user_search` professional terms are `researcher`, `scientist`, `engineer`, `research`,
+`pretraining`, `training`, `model`, `scaling`, `tokenization`, `infrastructure`, `safety`, `multimodal`, and `robotics`.
+Do not add person-name tokens or a bare `data` term to a user search. Search data functions and data topics only with
+keyword or semantic search. A discovery user query must include `OpenAI` plus at least one listed professional term;
+bare `OpenAI` and `@OpenAI` are keyword/semantic organization literals, not valid user-search queries. Do not use any
+handle-like single-token query in keyword, semantic, user, or thread search. A profile ID or Bio may be retained only
+when it is incidentally returned by such a broad native-X discovery result. Otherwise set optional profile fields to
+null. Constructing the canonical `https://x.com/<handle>` profile URL from an observed handle is allowed. Hydration is
+a separate operator-generated stage after this discovery result is mechanically reconciled.
 
 ## Coverage matrix
 

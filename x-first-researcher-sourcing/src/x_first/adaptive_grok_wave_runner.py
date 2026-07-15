@@ -147,6 +147,14 @@ SESSION_QUERY_POLICY_SEMANTICS = {
         "result_projection": "force_partial_and_operator_reason_without_hydration_surface_gate_v2",
     },
 }
+REQUIRE_EMPTY_PRIOR_WAVES_POLICY_ID = "require_empty_prior_waves_v1"
+PRIOR_INPUT_POLICY_SEMANTICS = {
+    REQUIRE_EMPTY_PRIOR_WAVES_POLICY_ID: {
+        "policy_id": REQUIRE_EMPTY_PRIOR_WAVES_POLICY_ID,
+        "prior_waves": "require_exact_empty_array_v1",
+    },
+}
+PRIOR_INPUT_POLICY_IDS = frozenset(PRIOR_INPUT_POLICY_SEMANTICS)
 _DISCOVERY_USER_SEARCH_PROFESSIONAL_TERMS = frozenset(
     {
         "alignment",
@@ -741,6 +749,7 @@ class EffectivePromptPolicyBinding:
     policy_entry_id: str
     session_query_policy_id: str
     official_account_handles: tuple[str, ...]
+    prior_input_policy_id: str | None
 
 
 class Executor(Protocol):
@@ -780,6 +789,13 @@ def session_query_policy_semantics_sha256(policy_id: str) -> str:
     semantics = SESSION_QUERY_POLICY_SEMANTICS.get(policy_id)
     if semantics is None:
         raise AdaptiveWaveValidationError("session_query_policy_invalid")
+    return canonical_sha256(semantics)
+
+
+def prior_input_policy_semantics_sha256(policy_id: str) -> str:
+    semantics = PRIOR_INPUT_POLICY_SEMANTICS.get(policy_id)
+    if semantics is None:
+        raise AdaptiveWaveValidationError("prior_input_policy_invalid")
     return canonical_sha256(semantics)
 
 
@@ -1994,11 +2010,27 @@ def _load_effective_prompt_policy() -> dict[str, Any]:
             "session_query_policy_sha256",
         }
         official_account_keys = {"official_account_handles"}
-        if not isinstance(entry, dict) or frozenset(entry) not in {
-            frozenset(base_entry_keys),
-            frozenset(base_entry_keys | session_policy_keys),
-            frozenset(base_entry_keys | session_policy_keys | official_account_keys),
-        }:
+        prior_input_policy_keys = {
+            "prior_input_policy_id",
+            "prior_input_policy_sha256",
+        }
+        entry_keys = frozenset(entry) if isinstance(entry, dict) else frozenset()
+        session_policy_pair_complete = session_policy_keys.issubset(entry_keys)
+        prior_input_policy_pair_complete = prior_input_policy_keys.issubset(entry_keys)
+        if (
+            not isinstance(entry, dict)
+            or not base_entry_keys.issubset(entry_keys)
+            or not entry_keys.issubset(
+                base_entry_keys
+                | session_policy_keys
+                | official_account_keys
+                | prior_input_policy_keys
+            )
+            or bool(entry_keys & session_policy_keys) != session_policy_pair_complete
+            or bool(entry_keys & prior_input_policy_keys)
+            != prior_input_policy_pair_complete
+            or (bool(entry_keys & official_account_keys) and not session_policy_pair_complete)
+        ):
             raise AdaptiveWaveValidationError("effective_prompt_policy_invalid")
         entry_id = entry.get("policy_entry_id")
         target = entry.get("target")
@@ -2007,6 +2039,7 @@ def _load_effective_prompt_policy() -> dict[str, Any]:
             "session_query_policy_id",
             MIXED_SESSION_QUERY_POLICY_ID,
         )
+        prior_input_policy_id = entry.get("prior_input_policy_id")
         official_account_handles = entry.get("official_account_handles")
         official_handles_valid = (
             isinstance(official_account_handles, list)
@@ -2029,9 +2062,18 @@ def _load_effective_prompt_policy() -> dict[str, Any]:
             or entry.get("authority") not in {"fixture_only", "live_authorized"}
             or session_query_policy_id not in SESSION_QUERY_POLICY_IDS
             or (
+                prior_input_policy_id is not None
+                and prior_input_policy_id not in PRIOR_INPUT_POLICY_IDS
+            )
+            or (
                 "session_query_policy_id" in entry
                 and entry.get("session_query_policy_sha256")
                 != session_query_policy_semantics_sha256(entry["session_query_policy_id"])
+            )
+            or (
+                prior_input_policy_id is not None
+                and entry.get("prior_input_policy_sha256")
+                != prior_input_policy_semantics_sha256(prior_input_policy_id)
             )
             or (
                 session_query_policy_id == DISCOVERY_ONLY_OFFICIAL_SESSION_QUERY_POLICY_ID
@@ -2089,6 +2131,12 @@ def _approved_effective_prompt_binding(request: Mapping[str, Any]) -> EffectiveP
     if len(matches) != 1:
         raise PermissionError("effective_prompt_target_not_approved")
     selected_entry = matches[0]
+    prior_input_policy_id = selected_entry.get("prior_input_policy_id")
+    if (
+        prior_input_policy_id == REQUIRE_EMPTY_PRIOR_WAVES_POLICY_ID
+        and request.get("prior_waves") != []
+    ):
+        raise PermissionError("effective_prompt_prior_input_not_approved")
     return EffectivePromptPolicyBinding(
         policy_sha256=_effective_prompt_policy_entry_sha256(policy, selected_entry),
         policy_entry_id=selected_entry["policy_entry_id"],
@@ -2097,6 +2145,7 @@ def _approved_effective_prompt_binding(request: Mapping[str, Any]) -> EffectiveP
             MIXED_SESSION_QUERY_POLICY_ID,
         ),
         official_account_handles=tuple(selected_entry.get("official_account_handles", ())),
+        prior_input_policy_id=prior_input_policy_id,
     )
 
 

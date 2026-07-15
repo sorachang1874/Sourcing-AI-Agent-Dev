@@ -798,6 +798,67 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
                 ):
                     runner._load_effective_prompt_policy()
 
+    def test_prior_input_policy_pair_is_optional_paired_and_semantically_pinned(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            policy = json.loads(TEST_EFFECTIVE_PROMPT_POLICY.read_text())
+            original_entry = copy.deepcopy(policy["entries"][0])
+            original_digest = runner._effective_prompt_policy_entry_sha256(policy, original_entry)
+            entry = policy["entries"][0]
+            entry["prior_input_policy_id"] = runner.REQUIRE_EMPTY_PRIOR_WAVES_POLICY_ID
+            entry["prior_input_policy_sha256"] = runner.prior_input_policy_semantics_sha256(
+                runner.REQUIRE_EMPTY_PRIOR_WAVES_POLICY_ID
+            )
+            valid_path = root / "valid-prior-input-policy.json"
+            _write_private(valid_path, (canonical_json(policy) + "\n").encode())
+            with mock.patch.object(runner, "DEFAULT_EFFECTIVE_PROMPT_POLICY", valid_path):
+                loaded = runner._load_effective_prompt_policy()
+                self.assertEqual(
+                    loaded["entries"][0]["prior_input_policy_id"],
+                    runner.REQUIRE_EMPTY_PRIOR_WAVES_POLICY_ID,
+                )
+                request, _ = _build_request(root)
+                binding = runner._approved_effective_prompt_binding(request)
+                self.assertEqual(
+                    binding.prior_input_policy_id,
+                    runner.REQUIRE_EMPTY_PRIOR_WAVES_POLICY_ID,
+                )
+                self.assertNotEqual(binding.policy_sha256, original_digest)
+
+            for case_id, mutate in (
+                (
+                    "missing-sha",
+                    lambda candidate: candidate.pop("prior_input_policy_sha256"),
+                ),
+                (
+                    "unknown-id",
+                    lambda candidate: candidate.__setitem__("prior_input_policy_id", "unknown_prior_policy_v1"),
+                ),
+                (
+                    "forged-sha",
+                    lambda candidate: candidate.__setitem__("prior_input_policy_sha256", "0" * 64),
+                ),
+            ):
+                invalid_policy = copy.deepcopy(policy)
+                mutate(invalid_policy["entries"][0])
+                invalid_path = root / f"{case_id}.json"
+                _write_private(invalid_path, (canonical_json(invalid_policy) + "\n").encode())
+                with mock.patch.object(runner, "DEFAULT_EFFECTIVE_PROMPT_POLICY", invalid_path):
+                    with self.assertRaisesRegex(
+                        runner.AdaptiveWaveValidationError,
+                        "effective_prompt_policy_invalid",
+                    ):
+                        runner._load_effective_prompt_policy()
+
+            unchanged_policy = json.loads(TEST_EFFECTIVE_PROMPT_POLICY.read_text())
+            self.assertEqual(
+                runner._effective_prompt_policy_entry_sha256(
+                    unchanged_policy,
+                    unchanged_policy["entries"][0],
+                ),
+                original_digest,
+            )
+
     def test_entry_bound_official_from_query_is_verified_in_live_session_replay(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -920,55 +981,68 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             runner._HEADLESS_EXTENDED_USAGE_KEYS,
         )
 
-    def test_production_effective_prompt_policy_owns_exact_openai_and_google_deepmind_waves(self) -> None:
+    def test_production_effective_prompt_policy_reconciles_registered_lab_prompt_families(self) -> None:
         policy = json.loads(PRODUCTION_EFFECTIVE_PROMPT_POLICY.read_text())
         assert_schema_valid(policy, "x.grok.adaptive_recall_wave.effective_prompt_policy.v1.schema.json")
         synthetic = [entry for entry in policy["entries"] if entry["target"]["lab_id"] == "synthetic_lab"]
         self.assertEqual(len(synthetic), 1)
         self.assertEqual(synthetic[0]["authority"], "fixture_only")
-        openai_target = {
-            "lab_id": "openai",
-            "research_focus_id": "pretraining",
-            "scope": (
-                "Public professional evidence of current or historical OpenAI affiliation and current or historical "
-                "pre-training or base-model training relevance."
-            ),
-        }
-        google_deepmind_target = {
-            "lab_id": "google_deepmind",
-            "research_focus_id": "pretraining",
-            "scope": (
-                "Public professional evidence of current or historical Google DeepMind affiliation and current or "
-                "historical pre-training or base-model training relevance."
-            ),
+        prompt_families = {
+            "openai": {
+                "glob": "*-openai-pretrain-recall-wave*.md",
+                "target": {
+                    "lab_id": "openai",
+                    "research_focus_id": "pretraining",
+                    "scope": (
+                        "Public professional evidence of current or historical OpenAI affiliation and current or "
+                        "historical pre-training or base-model training relevance."
+                    ),
+                },
+            },
+            "google_deepmind": {
+                "glob": "*-google-deepmind-pretraining-recall-wave*.md",
+                "target": {
+                    "lab_id": "google_deepmind",
+                    "research_focus_id": "pretraining",
+                    "scope": (
+                        "Public professional evidence of current or historical Google DeepMind affiliation and current "
+                        "or historical pre-training or base-model training relevance."
+                    ),
+                },
+            },
         }
         live_entries = [entry for entry in policy["entries"] if entry["authority"] == "live_authorized"]
-        openai_prompt_paths = sorted(
-            (ROOT / "prompts/live-exploration").glob("*-openai-pretrain-recall-wave*.md")
-        )
-        google_deepmind_prompt_paths = sorted(
-            (ROOT / "prompts/live-exploration").glob("*-google-deepmind-pretraining-recall-wave*.md")
-        )
-        openai_entries = [entry for entry in live_entries if entry["target"]["lab_id"] == "openai"]
-        google_deepmind_entries = [
-            entry for entry in live_entries if entry["target"]["lab_id"] == "google_deepmind"
-        ]
-        self.assertEqual(len(openai_entries), len(openai_prompt_paths), 8)
-        self.assertEqual(len(google_deepmind_entries), len(google_deepmind_prompt_paths), 7)
-        self.assertEqual(len(live_entries), 15)
-        self.assertEqual({canonical_json(entry["target"]) for entry in openai_entries}, {canonical_json(openai_target)})
         self.assertEqual(
-            {canonical_json(entry["target"]) for entry in google_deepmind_entries},
-            {canonical_json(google_deepmind_target)},
+            {entry["target"]["lab_id"] for entry in live_entries},
+            set(prompt_families),
         )
-        self.assertEqual(
-            {entry["source_prompt_sha256"] for entry in openai_entries},
-            {_bytes_sha(path.read_bytes()) for path in openai_prompt_paths},
-        )
-        self.assertEqual(
-            {entry["source_prompt_sha256"] for entry in google_deepmind_entries},
-            {_bytes_sha(path.read_bytes()) for path in google_deepmind_prompt_paths},
-        )
+        entries_by_lab: dict[str, list[dict[str, Any]]] = {}
+        prompt_paths_by_lab: dict[str, list[Path]] = {}
+        for lab_id, family in prompt_families.items():
+            entries = [entry for entry in live_entries if entry["target"]["lab_id"] == lab_id]
+            prompt_paths = sorted((ROOT / "prompts/live-exploration").glob(family["glob"]))
+            self.assertTrue(entries, lab_id)
+            self.assertTrue(prompt_paths, lab_id)
+            self.assertEqual(len(entries), len(prompt_paths), lab_id)
+            self.assertEqual(
+                {canonical_json(entry["target"]) for entry in entries},
+                {canonical_json(family["target"])},
+                lab_id,
+            )
+            self.assertEqual(
+                {entry["source_prompt_sha256"] for entry in entries},
+                {_bytes_sha(path.read_bytes()) for path in prompt_paths},
+                lab_id,
+            )
+            entries_by_lab[lab_id] = entries
+            prompt_paths_by_lab[lab_id] = prompt_paths
+        self.assertEqual(len(live_entries), sum(len(entries) for entries in entries_by_lab.values()))
+        openai_target = prompt_families["openai"]["target"]
+        google_deepmind_target = prompt_families["google_deepmind"]["target"]
+        openai_entries = entries_by_lab["openai"]
+        google_deepmind_entries = entries_by_lab["google_deepmind"]
+        openai_prompt_paths = prompt_paths_by_lab["openai"]
+        google_deepmind_prompt_paths = prompt_paths_by_lab["google_deepmind"]
         discovery_only_prompt = next(
             path for path in google_deepmind_prompt_paths if "v4-discovery-only" in path.name
         ).read_text()
@@ -1055,11 +1129,82 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             entry=openai_official_entry,
             official_handles=["OpenAI"],
         )
+        self.assertEqual(
+            openai_official_entry["prior_input_policy_id"],
+            runner.REQUIRE_EMPTY_PRIOR_WAVES_POLICY_ID,
+        )
+        self.assertEqual(
+            openai_official_entry["prior_input_policy_sha256"],
+            runner.prior_input_policy_semantics_sha256(
+                runner.REQUIRE_EMPTY_PRIOR_WAVES_POLICY_ID
+            ),
+        )
         self.assertIn("Treat this execution as `prior_waves=[]`", openai_official_prompt)
-        self.assertIn("**frozen-union conditional coverage**", openai_official_prompt)
+        self.assertNotIn("98-handle", openai_official_prompt)
+        self.assertNotIn("frozen-union conditional coverage", openai_official_prompt)
         self.assertIn("exactly one positive `from:OpenAI` operator", openai_official_prompt)
         self.assertNotIn("from:GoogleDeepMind", openai_official_prompt)
         self.assertNotIn("from:DeepMind", openai_official_prompt)
+        user_search_terms = (
+            "researcher",
+            "scientist",
+            "engineer",
+            "research",
+            "pretraining",
+            "training",
+            "model",
+            "scaling",
+            "tokenization",
+            "infrastructure",
+            "safety",
+            "multimodal",
+            "robotics",
+        )
+        expected_user_search_vocabulary = (
+            "The exact `x_user_search` professional terms are "
+            + ", ".join(f"`{term}`" for term in user_search_terms[:-1])
+            + f", and `{user_search_terms[-1]}`."
+        )
+        self.assertIn(expected_user_search_vocabulary, " ".join(openai_official_prompt.split()))
+        for term in user_search_terms:
+            arguments = {"query": f"OpenAI {term}", "count": "50"}
+            self.assertTrue(
+                runner.base_discovery_tool_arguments_allowed(arguments, "x_user_search")
+                and runner._session_query_phase_arguments_allowed(
+                    arguments,
+                    "x_user_search",
+                    session_query_policy_id=openai_official_entry["session_query_policy_id"],
+                    discovery_target_lab_id="openai",
+                    approved_official_account_handles=openai_official_entry["official_account_handles"],
+                ),
+                term,
+            )
+        for query in ("OpenAI", "@OpenAI", "OpenAI data"):
+            arguments = {"query": query, "count": "50"}
+            self.assertFalse(
+                runner._session_query_phase_arguments_allowed(
+                    arguments,
+                    "x_user_search",
+                    session_query_policy_id=openai_official_entry["session_query_policy_id"],
+                    discovery_target_lab_id="openai",
+                    approved_official_account_handles=openai_official_entry["official_account_handles"],
+                ),
+                query,
+            )
+        for tool_name, arguments in (
+            ("x_keyword_search", {"query": "OpenAI data", "limit": "50", "mode": "Latest"}),
+            ("x_semantic_search", {"query": "OpenAI training data", "limit": "50"}),
+        ):
+            self.assertTrue(runner.base_discovery_tool_arguments_allowed(arguments, tool_name))
+            self.assertTrue(
+                runner._session_query_phase_arguments_allowed(
+                    arguments,
+                    tool_name,
+                    session_query_policy_id=openai_official_entry["session_query_policy_id"],
+                    discovery_target_lab_id="openai",
+                    approved_official_account_handles=openai_official_entry["official_account_handles"],
+                )
+            )
         transfer_contract = (ROOT / "docs/OPENAI_ZERO_PRIOR_OFFICIAL_DISCOVERY_V5.md").read_text()
         normalized_transfer_contract = " ".join(transfer_contract.split())
         self.assertIn("Status: offline transfer only", normalized_transfer_contract)
@@ -1106,6 +1251,56 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
                     grant["effective_prompt_policy_entry_id"],
                     "openai_pretraining_zero_prior_official_discovery.v5",
                 )
+                self.assertEqual(request["prior_waves"], [])
+
+                prior_raw = (canonical_json({"candidates": [{"handle": "KnownPrior"}]}) + "\n").encode()
+                prior_path = root / "known-prior.json"
+                _write_private(prior_path, prior_raw)
+                request["prior_waves"] = [
+                    {
+                        "wave_id": "known_prior",
+                        "path": str(prior_path),
+                        "sha256": _bytes_sha(prior_raw),
+                    }
+                ]
+                request["approval"]["grant_id"] = "openai-v5-nonempty-prior-must-fail"
+                _write_private(request_path, (canonical_json(request) + "\n").encode())
+                auth.unlink()
+                rejected_grant_root = root / "openai-v5-nonempty-prior-approvals"
+                with self.assertRaisesRegex(
+                    PermissionError,
+                    "effective_prompt_prior_input_not_approved",
+                ):
+                    issue_live_grant(
+                        request_path=request_path,
+                        grant_root=rejected_grant_root,
+                        auth_source=auth,
+                        wall_clock=lambda: FIXED_TIME,
+                    )
+                self.assertFalse(rejected_grant_root.exists())
+                rejected_runtime_root = root / "openai-v5-nonempty-prior-runtime"
+                with self.assertRaisesRegex(
+                    PermissionError,
+                    "effective_prompt_prior_input_not_approved",
+                ):
+                    _run_adaptive_wave(
+                        request=request,
+                        execution_mode="live",
+                        runtime_root=rejected_runtime_root,
+                        approval_root=rejected_grant_root,
+                        binary=binary,
+                        auth_source=auth,
+                        executor=FakeExecutor(
+                            MutableClock(),
+                            (canonical_json(_empty_result()) + "\n").encode(),
+                        ),
+                        monotonic=MutableClock(),
+                        wall_clock=lambda: FIXED_TIME,
+                    )
+                self.assertFalse(rejected_runtime_root.exists())
+
+                _write_private(auth, _oauth_auth_bytes())
+                request["prior_waves"] = []
 
                 gdm_prompt_raw = google_deepmind_prompt_paths[0].read_bytes()
                 _write_private(Path(request["prompt_source"]["path"]), gdm_prompt_raw)
@@ -1334,6 +1529,43 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
                 )
             self.assertEqual(len(deletion_receipts), 1)
             self.assertFalse(run_root.exists())
+
+    def test_prior_input_policy_is_bound_through_bundle_replay_and_recovery(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            policy = json.loads(TEST_EFFECTIVE_PROMPT_POLICY.read_text())
+            entry = policy["entries"][0]
+            entry["prior_input_policy_id"] = runner.REQUIRE_EMPTY_PRIOR_WAVES_POLICY_ID
+            entry["prior_input_policy_sha256"] = runner.prior_input_policy_semantics_sha256(
+                runner.REQUIRE_EMPTY_PRIOR_WAVES_POLICY_ID
+            )
+            bound_policy_path = root / "bound-prior-policy.json"
+            _write_private(bound_policy_path, (canonical_json(policy) + "\n").encode())
+            with mock.patch.object(runner, "DEFAULT_EFFECTIVE_PROMPT_POLICY", bound_policy_path):
+                run_root, approvals = _completed_live_run(root)
+                self.assertEqual(validate_operator_bundle(run_root, approval_root=approvals), [])
+
+            weakened_policy = copy.deepcopy(policy)
+            weakened_entry = weakened_policy["entries"][0]
+            del weakened_entry["prior_input_policy_id"]
+            del weakened_entry["prior_input_policy_sha256"]
+            weakened_policy_path = root / "weakened-prior-policy.json"
+            _write_private(weakened_policy_path, (canonical_json(weakened_policy) + "\n").encode())
+            with mock.patch.object(runner, "DEFAULT_EFFECTIVE_PROMPT_POLICY", weakened_policy_path):
+                replay_errors = validate_operator_bundle(run_root, approval_root=approvals)
+                self.assertIn("command_binding_request_replay_mismatch", replay_errors)
+                self.assertIn("grant_replay_invalid", replay_errors)
+                (run_root / "operator-receipt.json").unlink()
+                with self.assertRaisesRegex(
+                    AdaptiveWaveValidationError,
+                    "recovery_effective_prompt_policy_invalid",
+                ):
+                    recover_incomplete_run(
+                        run_root,
+                        approval_root=approvals,
+                        process_group_is_alive=lambda group: False,
+                    )
+                self.assertFalse((run_root / "operator-receipt.json").exists())
 
     def test_prior_waves_are_sha_bound_casefold_unique_and_exclusion_only(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

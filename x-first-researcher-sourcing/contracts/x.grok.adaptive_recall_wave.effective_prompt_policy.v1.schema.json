@@ -52,6 +52,12 @@
           "session_query_policy_sha256": [
             "session_query_policy_id"
           ],
+          "prior_input_policy_id": [
+            "prior_input_policy_sha256"
+          ],
+          "prior_input_policy_sha256": [
+            "prior_input_policy_id"
+          ],
           "official_account_handles": [
             "session_query_policy_id",
             "session_query_policy_sha256"
@@ -104,6 +110,15 @@
             ]
           },
           "session_query_policy_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "prior_input_policy_id": {
+            "enum": [
+              "require_empty_prior_waves_v1"
+            ]
+          },
+          "prior_input_policy_sha256": {
             "type": "string",
             "pattern": "^[0-9a-f]{64}$"
           },
