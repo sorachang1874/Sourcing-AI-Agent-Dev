@@ -9,9 +9,7 @@ from types import MappingProxyType
 from typing import Any, Literal, Protocol
 
 from sourcing_agent.operation_runtime import (
-    ACTION_ADD_CRM_NOTE,
-    ACTION_CREATE_CRM_TASK,
-    ACTION_SET_CRM_STAGE,
+    CRM_EXISTING_RECORD_ACTION_TYPES,
     OwnerBoundTargetRef,
 )
 from sourcing_agent.request_ownership import exact_crm_owner_matches
@@ -243,10 +241,6 @@ def build_crm_existing_record_target_binder_registry(
                 owner_module=CRM_RECORD_TARGET_OWNER,
                 binder=binder,
             )
-            for action_type in (
-                ACTION_SET_CRM_STAGE,
-                ACTION_ADD_CRM_NOTE,
-                ACTION_CREATE_CRM_TASK,
-            )
+            for action_type in CRM_EXISTING_RECORD_ACTION_TYPES
         )
     )

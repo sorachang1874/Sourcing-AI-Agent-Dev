@@ -175,10 +175,13 @@ schemas; no production action is served to a model.
   names, and declared target aliases cannot be caller-owned fields.
 - D0 `ToolSpec.validate_input(...)` and `ToolSpec.input_schema_digest` are the shared schema validator and canonical
   digest owner. D1 must not add a second JSON-schema evaluator or digest algorithm.
-- For a schema-defined action, caller/model values enter only through `input_payload`. The action owner must mint an
-  `OwnerBoundTargetRef` whose owner equals `ActionRequestSpec.owner_module`; raw caller/model `target_ref`, a duplicate
-  owner field, or a declared alias override fails before persistence. The API and writer also reject caller-supplied
-  `request_schema_version` / `request_schema_digest` fields.
+- For a schema-defined action, normalized caller/model values enter only the request schema's `input_payload` segment.
+  The exact three D1f HTTP actions accept one object envelope named `input` or compatibility alias `input_payload`;
+  selection is by key presence, every supplied envelope is validated, and supplying both is ambiguous even when equal
+  or empty. This rule does not silently migrate the 12 R-029 actions, which retain their existing truthy precedence.
+  The action owner must mint an `OwnerBoundTargetRef` whose owner equals `ActionRequestSpec.owner_module`; raw
+  caller/model `target_ref`, a duplicate owner field, or a declared alias override fails before persistence. The API
+  and writer also reject caller-supplied `request_schema_version` / `request_schema_digest` fields.
 - `ActionRequestSpec.request_identity_target_fields` may define the stable subset of an owner target snapshot used by
   default idempotency and persisted replay comparison. It must be a normalized, duplicate-free subset of declared
   target fields, and any change to that subset requires a new `request_schema_version`. Fields omitted from replay identity remain validated, persisted, and revalidated; omission is not an
@@ -200,6 +203,10 @@ schemas; no production action is served to a model.
   route derives workspace/user, the binder mints the complete CRM target snapshot, and dispatch plus the CRM command
   owner revalidate current ownership/version before new plan/domain writes. Authenticated missing and foreign CRM rows
   share one `404 crm_record_not_found` transport result. Brownfield empty-pin rows for these actions fail closed.
+  The target-binder registry consumes `CRM_EXISTING_RECORD_ACTION_TYPES` directly; it does not own a second three-item
+  allowlist. The CRM command fence reconciles physical `workflow_command.operation_id` with payload
+  `operation_run_id`; any non-empty dangling id fails before mutable action-label inspection, and the legacy
+  owner-internal path is available only when both carriers are absent.
 - The other 12 production actions remain schema-less. Their physical pins are empty/empty and each submission records
   `request_schema_status=schema_less_compatibility` plus `request_schema_compatibility_hit=true` in action metadata and
   the submission event payload. Any replay, approve, retry, or dispatch continuation also records an idempotent
@@ -244,6 +251,18 @@ W9 backend control foundation is active; product Agent UI remains deferred.
   For the exact three D1f CRM existing-record actions, authenticated request state overrides workspace/user, missing and
   foreign rows share one HTTP 404 body, and raw owner/version aliases fail before persistence. Other action types retain
   their existing schema-less/open-mode behavior until their owner contract is reviewed.
+  A fresh accepted submission returns HTTP 202 with `queued` or `approval_required`. A preflight-observed exact replay,
+  or a committed result whose current lifecycle is already outside the fresh set, returns HTTP 200 with
+  `idempotent_replay=true` and the current persisted run status, or action status when no run exists. The
+  response status closed set is `approval_required|queued|planned|running|completed|failed|cancelled|rejected`;
+  `rejected` is brownfield compatibility because canonical reject persists `cancelled` plus rejected approval.
+  `operation_submission_current_status` rejects any unknown persisted action/run status and any stable non-fresh
+  action with a missing run or terminally mismatched run before replay writes. Initial approval wait and action-only
+  rejection remain explicit legal shapes; a non-approval `queued` partial insert may repair only its deterministic run.
+  The route therefore cannot fabricate `queued` over a preflight-visible completed effect or expose an arbitrary
+  database string. A simultaneous same-state `queued|approval_required` insert collision is still subject to the
+  R-019 preflight/write ambiguity and may remain fresh-compatible 202/false until repository upsert returns an explicit
+  inserted-vs-existing outcome.
 - `GET /api/operations/actions/{action_id}` and `GET /api/operations/runs/{operation_run_id}` expose bounded action/run
   state and append-only operation events. Authenticated detail requires the canonical row workspace to exact-match the
   server workspace; an authenticated run also requires its linked action to exist in that workspace.

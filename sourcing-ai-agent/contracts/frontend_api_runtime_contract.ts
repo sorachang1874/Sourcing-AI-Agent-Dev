@@ -1,8 +1,21 @@
 export const OPERATION_ACTION_QUERY_SUCCESS_STATUSES = ["ok"] as const;
-export const OPERATION_ACTION_SUBMIT_APPLIED_OUTCOMES = [
+export const OPERATION_ACTION_SUBMIT_FRESH_OUTCOMES = [
   "queued",
   "approval_required",
 ] as const;
+export const OPERATION_ACTION_SUBMIT_REPLAY_OUTCOMES = [
+  ...OPERATION_ACTION_SUBMIT_FRESH_OUTCOMES,
+  "planned",
+  "running",
+  "completed",
+  "failed",
+  "cancelled",
+  "rejected",
+] as const;
+// Kept as the public client symbol: submit can return either a fresh outcome
+// or the truthful persisted lifecycle outcome of an idempotent replay.
+export const OPERATION_ACTION_SUBMIT_APPLIED_OUTCOMES =
+  OPERATION_ACTION_SUBMIT_REPLAY_OUTCOMES;
 export const OPERATION_ACTION_DECISION_APPLIED_OUTCOMES = {
   approve: ["queued"],
   reject: ["rejected"],
@@ -11,7 +24,6 @@ export const OPERATION_ACTION_DECISION_APPLIED_OUTCOMES = {
 export const OPERATION_ACTION_DETAIL_SUCCESS_STATUSES = [
   ...OPERATION_ACTION_QUERY_SUCCESS_STATUSES,
   ...OPERATION_ACTION_SUBMIT_APPLIED_OUTCOMES,
-  ...OPERATION_ACTION_DECISION_APPLIED_OUTCOMES.reject,
 ] as const;
 export type OperationActionDetailSuccessStatus =
   (typeof OPERATION_ACTION_DETAIL_SUCCESS_STATUSES)[number];

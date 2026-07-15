@@ -236,9 +236,11 @@ from .operation_runtime import (
     DISPATCH_ADAPTER_EXPORT,
     DISPATCH_ADAPTER_PERSON_PUBLIC_WEB,
     DISPATCH_ADAPTER_PROJECTION_READ,
+    OPERATION_ACTION_FRESH_SUBMISSION_STATUSES,
     OperationRuntimeStateConflict,
     OperationRuntimeWriter,
     operation_run_control_state,
+    operation_submission_current_status,
 )
 from .organization_assets import warmup_existing_organization_assets
 from .organization_execution_profile import (
@@ -48882,12 +48884,21 @@ class SourcingOrchestrator:
                 "reason": ("action_request_pin_fields_are_owner_reserved:" + ",".join(reserved_pin_fields)),
             }
         raw_target_ref = payload.get("target_ref")
-        raw_input_payload = payload.get("input") or payload.get("input_payload") or {}
         if action_type in CRM_EXISTING_RECORD_ACTION_TYPES:
             if raw_target_ref is not None and not isinstance(raw_target_ref, Mapping):
                 return {"status": "invalid", "reason": "crm_record_target_selector_invalid"}
-            if raw_input_payload is not None and not isinstance(raw_input_payload, Mapping):
-                return {"status": "invalid", "reason": "action_request_input_payload_must_be_object"}
+            input_present = "input" in payload
+            input_payload_present = "input_payload" in payload
+            for input_field in ("input", "input_payload"):
+                if input_field in payload and not isinstance(payload[input_field], Mapping):
+                    return {"status": "invalid", "reason": "action_request_input_payload_must_be_object"}
+            if input_present and input_payload_present:
+                return {"status": "invalid", "reason": "action_request_input_alias_ambiguous"}
+            raw_input_payload = (
+                payload["input"] if input_present else payload["input_payload"] if input_payload_present else {}
+            )
+        else:
+            raw_input_payload = payload.get("input") or payload.get("input_payload") or {}
         target_ref = dict(raw_target_ref or {})
         input_payload = dict(raw_input_payload or {})
         binding = self._bind_operation_projection_membership(
@@ -48928,18 +48939,28 @@ class SourcingOrchestrator:
                     **dict(binding.get("metadata") or {}),
                 },
             )
+            current_status = operation_submission_current_status(
+                action=result.action,
+                operation_run=result.operation_run,
+            )
+            idempotent_replay = result.replayed or current_status not in OPERATION_ACTION_FRESH_SUBMISSION_STATUSES
         except KeyError as exc:
             return {"status": "invalid", "reason": str(exc)}
         except ValueError as exc:
             return {"status": "invalid", "reason": str(exc)}
         except OperationRuntimeStateConflict as exc:
-            return {
+            conflict: dict[str, Any] = {
                 "status": "conflict",
                 "reason": exc.reason,
-                "action": self._operation_action_api_record(exc.record),
             }
+            if exc.record_kind == "operation_run":
+                conflict["operation_run"] = self._operation_run_api_record_with_status_summary(exc.record)
+            elif exc.record_kind == "action":
+                conflict["action"] = self._operation_action_api_record(exc.record)
+            return conflict
         return {
-            "status": "approval_required" if result.action.get("status") == "approval_required" else "queued",
+            "status": current_status,
+            "idempotent_replay": idempotent_replay,
             "action": self._operation_action_api_record(result.action),
             "operation_run": (
                 self._operation_run_api_record_with_status_summary(result.operation_run) if result.operation_run else {}
@@ -52505,7 +52526,7 @@ class SourcingOrchestrator:
             return {"status": "invalid", "reason": "crm_record_command_operation_mismatch"}
         operation_run = self.store.repos.workflow_runtime.get_operation(operation_run_id) if operation_run_id else {}
         if not operation_run:
-            if str(payload.get("action_type") or "").strip() in CRM_EXISTING_RECORD_ACTION_TYPES:
+            if operation_run_id:
                 return {"status": "invalid", "reason": "crm_record_command_operation_missing"}
             # Existing owner-internal commands with no Agent operation remain
             # on their legacy compatibility path. The discriminator is absence

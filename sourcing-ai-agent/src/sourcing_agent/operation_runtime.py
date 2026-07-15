@@ -62,6 +62,22 @@ APPROVAL_NOT_REQUIRED = "not_required"
 APPROVAL_REQUIRED = "required"
 OPERATION_RUN_TERMINAL_STATUSES = {"completed", "failed", "cancelled"}
 OPERATION_ACTION_TERMINAL_STATUSES = {"completed", "failed", "cancelled", "rejected"}
+OPERATION_ACTION_FRESH_SUBMISSION_STATUSES = frozenset({"queued", "approval_required"})
+OPERATION_ACTION_SUBMISSION_STATUSES = frozenset(
+    {
+        "planned",
+        "approval_required",
+        "queued",
+        "running",
+        "completed",
+        "failed",
+        "cancelled",
+        # Brownfield rows may still carry the legacy terminal status even
+        # though the canonical reject UoW persists cancelled + rejected approval.
+        "rejected",
+    }
+)
+OPERATION_RUN_SUBMISSION_STATUSES = frozenset({"queued", "planned", "running", "completed", "failed", "cancelled"})
 WORKFLOW_COMMAND_EXPOSURE_GATE_SOURCE = "operation_runtime.ActionRegistry.allowed_workflow_command_types"
 WORKFLOW_COMMAND_EXPOSURE_STATUS_ALLOWLISTED = "action_registry_allowlisted"
 DISPATCH_ADAPTER_PROJECTION_READ = "projection_read"
@@ -90,7 +106,9 @@ REQUEST_SCHEMA_COMPATIBILITY_EVENT_TYPE = "ActionRequestSchemaCompatibilityObser
 # Release owners must bump this checked-in epoch for every release window while
 # R-029 remains open.  Event idempotency is scoped to one logical continuation
 # per epoch, so an old observation cannot make a later release look unused.
-REQUEST_SCHEMA_COMPATIBILITY_OBSERVATION_EPOCH = "d1c_r029_20260714_v1"
+# v2 also moves submit-replay evidence to the action stream only; the bump keeps
+# already durable v1 run-carried observations backward compatible.
+REQUEST_SCHEMA_COMPATIBILITY_OBSERVATION_EPOCH = "d1f_r029_20260715_v2"
 REQUEST_SCHEMA_COMPATIBILITY_ORIGIN_PRE_D1C = "pre_d1c_blank_pin_migration"
 REQUEST_SCHEMA_COMPATIBILITY_ORIGIN_POST_D1C = "post_d1c_schema_less_submission"
 REQUEST_SCHEMA_COMPATIBILITY_OBSERVATIONS = frozenset(
@@ -826,6 +844,7 @@ class OperationSubmissionResult:
     action: dict[str, Any]
     operation_run: dict[str, Any] = field(default_factory=dict)
     events: tuple[dict[str, Any], ...] = ()
+    replayed: bool = False
 
     @property
     def executable(self) -> bool:
@@ -836,7 +855,73 @@ class OperationRuntimeStateConflict(RuntimeError):
     def __init__(self, reason: str, record: dict[str, Any]) -> None:
         self.reason = str(reason or "operation_runtime_state_conflict").strip()
         self.record = dict(record or {})
+        self.record_kind = (
+            "operation_run"
+            if str(self.record.get("operation_run_id") or "").strip()
+            else "action"
+            if str(self.record.get("action_id") or "").strip()
+            else "unknown"
+        )
         super().__init__(self.reason)
+
+
+def _operation_submission_is_action_only_rejection(action: Mapping[str, Any]) -> bool:
+    action_record = dict(action or {})
+    action_status = str(action_record.get("status") or "").strip()
+    approval_status = str(action_record.get("approval_status") or "").strip()
+    return action_status == "rejected" or (action_status == "cancelled" and approval_status == "rejected")
+
+
+def operation_submission_current_status(
+    *,
+    action: Mapping[str, Any],
+    operation_run: Mapping[str, Any] | None = None,
+) -> str:
+    action_record = dict(action or {})
+    operation_record = dict(operation_run or {})
+    action_status = str(action_record.get("status") or "").strip()
+    if action_record and action_status not in OPERATION_ACTION_SUBMISSION_STATUSES:
+        raise OperationRuntimeStateConflict("operation_submission_current_status_invalid", action_record)
+    operation_status = str(operation_record.get("status") or "").strip()
+    if operation_record and operation_status not in OPERATION_RUN_SUBMISSION_STATUSES:
+        raise OperationRuntimeStateConflict("operation_submission_current_status_invalid", operation_record)
+    if operation_record and not action_record:
+        raise OperationRuntimeStateConflict("operation_submission_state_incoherent", operation_record)
+    approval_policy = str(action_record.get("approval_policy") or "").strip()
+    approval_status = str(action_record.get("approval_status") or "").strip()
+    if action_record and not operation_record:
+        action_only_state_is_stable = (
+            (
+                action_status == "queued"
+                and approval_policy == APPROVAL_NOT_REQUIRED
+                and approval_status == APPROVAL_NOT_REQUIRED
+            )
+            or (
+                action_status == "approval_required"
+                and approval_policy == APPROVAL_REQUIRED
+                and approval_status == APPROVAL_REQUIRED
+            )
+            or _operation_submission_is_action_only_rejection(action_record)
+        )
+        if not action_only_state_is_stable:
+            raise OperationRuntimeStateConflict("operation_submission_state_incoherent", action_record)
+    if action_record and operation_record:
+        approval_gate_is_incoherent = approval_policy == APPROVAL_REQUIRED and (
+            approval_status != "approved" or action_status == "approval_required"
+        )
+        terminal_pair_is_incoherent = (
+            approval_gate_is_incoherent
+            or (action_status in {"completed", "failed"} and operation_status != action_status)
+            or (action_status == "cancelled" and (approval_status == "rejected" or operation_status != "cancelled"))
+            or action_status == "rejected"
+        )
+        if terminal_pair_is_incoherent:
+            raise OperationRuntimeStateConflict("operation_submission_state_incoherent", action_record)
+    if operation_record:
+        return operation_status
+    if action_record:
+        return action_status
+    raise OperationRuntimeStateConflict("operation_submission_current_status_invalid", {})
 
 
 @dataclass(frozen=True)
@@ -1203,7 +1288,10 @@ class OperationRuntimeWriter:
         identity_suffix = (
             action_id if normalized_observation in {"submit_replay", "approve"} else operation_run_id or action_id
         )
-        evidence_operation_run_id = "" if normalized_observation == "approve" else operation_run_id
+        # Action-scoped observations must remain stable when an approval later
+        # materializes the deterministic run; otherwise the same epoch/key
+        # would replay with a different physical event carrier.
+        evidence_operation_run_id = "" if normalized_observation in {"approve", "submit_replay"} else operation_run_id
         idempotency_key = (
             f"{action_id}:{REQUEST_SCHEMA_COMPATIBILITY_EVENT_TYPE}:"
             f"{REQUEST_SCHEMA_COMPATIBILITY_OBSERVATION_EPOCH}:"
@@ -1476,26 +1564,28 @@ class OperationRuntimeWriter:
             "idempotency_key": normalized_idempotency,
         }
         existing_action = self._preflight_action_replay(expected_action=expected_action_identity)
-        operation_id = ""
-        existing_operation: dict[str, Any] = {}
-        if not spec.requires_approval:
-            operation_id = operation_run_id_for(
-                action_id=action_id,
-                operation_type=spec.operation_type,
-                idempotency_key=normalized_idempotency,
-            )
-            existing_operation = self._preflight_operation_replay(
-                action={
-                    "action_id": action_id,
-                    "workspace_id": normalized_workspace_id,
-                    "owner_module": spec.owner_module,
-                    "operation_type": spec.operation_type,
-                    "request_schema_version": request_schema_version,
-                    "request_schema_digest": request_schema_digest,
-                },
-                operation_run_id=operation_id,
-                idempotency_key=normalized_idempotency,
-                identity_conflict_reason="operation_run_idempotency_payload_conflict",
+        operation_id = operation_run_id_for(
+            action_id=action_id,
+            operation_type=spec.operation_type,
+            idempotency_key=normalized_idempotency,
+        )
+        existing_operation = self._preflight_operation_replay(
+            action={
+                "action_id": action_id,
+                "workspace_id": normalized_workspace_id,
+                "owner_module": spec.owner_module,
+                "operation_type": spec.operation_type,
+                "request_schema_version": request_schema_version,
+                "request_schema_digest": request_schema_digest,
+            },
+            operation_run_id=operation_id,
+            idempotency_key=normalized_idempotency,
+            identity_conflict_reason="operation_run_idempotency_payload_conflict",
+        )
+        if existing_action or existing_operation:
+            operation_submission_current_status(
+                action=existing_action,
+                operation_run=existing_operation,
             )
         if existing_action:
             self.record_schema_less_compatibility_observation(
@@ -1505,6 +1595,16 @@ class OperationRuntimeWriter:
                 actor=actor,
                 source=source,
             )
+        if (
+            existing_action
+            and not existing_operation
+            and _operation_submission_is_action_only_rejection(existing_action)
+        ):
+            return OperationSubmissionResult(
+                action=existing_action,
+                replayed=True,
+            )
+        replayed = bool(existing_action or existing_operation)
         action = self.store.repos.workflow_runtime.upsert_action(
             action_id=action_id,
             workspace_id=normalized_workspace_id,
@@ -1553,7 +1653,12 @@ class OperationRuntimeWriter:
             },
         )
         if spec.requires_approval:
-            return OperationSubmissionResult(action=action, events=(action_event,))
+            return OperationSubmissionResult(
+                action=action,
+                operation_run=existing_operation,
+                events=(action_event,),
+                replayed=replayed,
+            )
         operation_run = self.store.repos.workflow_runtime.upsert_operation(
             operation_run_id=operation_id,
             workspace_id=normalized_workspace_id,
@@ -1600,6 +1705,7 @@ class OperationRuntimeWriter:
             action=action,
             operation_run=operation_run,
             events=(action_event, operation_event),
+            replayed=replayed,
         )
 
     def approve_action(

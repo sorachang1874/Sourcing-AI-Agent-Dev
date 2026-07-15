@@ -7,9 +7,32 @@ import {
 declare const client: SourcingAgentApiClient;
 
 async function assertActionSpecificStatusTypes(): Promise<void> {
-  const submitted: "queued" | "approval_required" = (
-    await client.submitOperationAction({})
-  ).status;
+  const submitResponse = await client.submitOperationAction({});
+  const submitted:
+    | "queued"
+    | "approval_required"
+    | "planned"
+    | "running"
+    | "completed"
+    | "failed"
+    | "cancelled"
+    | "rejected" = submitResponse.status;
+  const replayFlag: boolean = submitResponse.idempotent_replay;
+  if (submitResponse.idempotent_replay === true) {
+    const replayStatus:
+      | "queued"
+      | "approval_required"
+      | "planned"
+      | "running"
+      | "completed"
+      | "failed"
+      | "cancelled"
+      | "rejected" = submitResponse.status;
+    void replayStatus;
+  } else if (submitResponse.idempotent_replay === false) {
+    const freshStatus: "queued" | "approval_required" = submitResponse.status;
+    void freshStatus;
+  }
   const queried: "ok" = (await client.getOperationAction("action")).status;
   const approved: "queued" = (await client.approveOperationAction("action")).status;
   const rejected: "rejected" = (await client.rejectOperationAction("action")).status;
@@ -29,6 +52,7 @@ async function assertActionSpecificStatusTypes(): Promise<void> {
   const demoRejected: "rejected" = (await rejectOperationAction("action")).status;
 
   void submitted;
+  void replayFlag;
   void queried;
   void approved;
   void rejected;

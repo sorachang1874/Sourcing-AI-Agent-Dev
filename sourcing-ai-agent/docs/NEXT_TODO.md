@@ -169,9 +169,18 @@
   exact 绑定 workspace/user；missing/foreign 同一 404 且 pre-submit 全域零写；open-mode exact workspace 正向保留。
   owner snapshot 持久化 `crm_record_id/workspace_id/owner_user_id/crm_version`，stable request identity 仅
   `crm_record_id+workspace_id`；dispatch 在新 plan 写前、CRM command owner 在首个 domain effect 前分别 revalidate，
-  canonical linked AgentAction 是 action discriminator，brownfield blank pins 对三项 fail closed。local advisory
-  rounds=`NO-GO 0/3/2/0`、`NO-GO 0/2/1/0`，均仅作 fixed-forward 输入，不是 formal verdict；author evidence=
-  D1f `7+27`、D1 adjacency `136+136`、operation `136+503`，fresh pinned non-author review pending。R-028 仍 open，不宣称 command/effect/terminal/EntityDelta 同 UoW、完整 TOCTOU 或
+  canonical linked AgentAction 是 action discriminator，brownfield blank pins 对三项 fail closed。Pinned
+  `22055aa` advisory=`NO-GO 0/1/2/1`；current fixed-forward 对 exact 三项采用单 input envelope presence rule，
+  physical/payload operation carrier 任一 dangling 均 fail closed，binder factory 直接消费 canonical tuple，
+  replay 返回 closed current lifecycle + HTTP 200，unknown persisted status 与 stable non-fresh action/run
+  incoherence 均 pre-write conflict；approved replay 读取既有 run，action-only rejection 不会创建 run，queued
+  partial 只修复 deterministic run；所有 submit 均在写前读取该 run，orphan run 与非法 static-required approval
+  组合 fail closed，conditional non-required approval/cancel/retry 仍由既有 owner + R-019 约束。submit frontend contract 以 required literal true/false 区分 replay/fresh；
+  R-029 observation epoch 已 bump 为 `d1f_r029_20260715_v2`，submit-replay evidence 固定为 action-scoped，避免在
+  已落盘 v1 key 下更换 carrier。此前及本轮 local
+  advisory (`0/3/2/0`、`0/2/1/0`、`0/1/2/1`) 均仅作 fixed-forward 输入，不是 formal verdict；当前证据=
+  D1f `15+80`、D1 adjacency `119+189`、operation `136+503`、frontend contract `3` + build `84 modules`、lint
+  `58 files`、mypy `81/4`；fresh pinned non-author review pending。R-028 仍 open，不宣称 command/effect/terminal/EntityDelta 同 UoW、完整 TOCTOU 或
   exactly-once；无 provider/model/live。
 - [x] D1g Operation API exact-owner closure current author candidate（2026-07-15）：canonical authorization owner=
   `agent_actions/operation_runs.workspace_id`，run 额外要求 linked action 存在且 exact same workspace；actor 仅为

@@ -111,8 +111,10 @@ the other 12:
 - brownfield or replayed empty/empty actions append one idempotent
   `ActionRequestSchemaCompatibilityObserved` event before replay, approve, retry, or dispatch continues. The event
   distinguishes `pre_d1c_blank_pin_migration` from post-D1c schema-less submission, and its idempotency key/payload
-  includes checked-in observation epoch `d1c_r029_20260714_v1`; the epoch must be bumped for each release observation
-  window while R-029 remains open;
+  includes checked-in observation epoch `d1f_r029_20260715_v2`; the epoch must be bumped for each release observation
+  window while R-029 remains open. D1f bumped v1 rather than changing a durable event under the same key, and makes
+  submit-replay evidence action-scoped so approval can materialize its deterministic run without changing the
+  observation carrier;
 - a schema-less action preserves its existing caller `target_ref` / `input_payload` semantics and rejects an
   `OwnerBoundTargetRef`, so the strict and compatibility paths cannot silently blend;
 - an empty/empty action/run pair still passes dispatch preflight, preserving current open operation behavior.

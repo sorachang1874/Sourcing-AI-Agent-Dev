@@ -93,7 +93,7 @@ EXPECTED_ACTION_DISPATCH_ADAPTERS = {
     "external_intake": "",
 }
 
-SUBMIT_ACTION_CALL_INVENTORY_SHA256 = "cf133c88fd43bcd78e6c6cae88481d667e206dfa506df9ee3b508e561fcd4f2b"
+SUBMIT_ACTION_CALL_INVENTORY_SHA256 = "070c9c8095314b509af5100c9673750bfce5e4b6181446c524ac982a0b53949c"
 
 
 def _class_method(tree: ast.Module, class_name: str, method_name: str) -> ast.FunctionDef:
@@ -463,9 +463,10 @@ def test_submit_action_ast_freezes_keyword_only_surface_and_write_order() -> Non
     assert _signature_contract(method) == expected_signature
 
     call_inventory = _call_inventory(method)
-    assert len(call_inventory) == 34
+    assert len(call_inventory) == 38
     assert _call_inventory_digest(method) == SUBMIT_ACTION_CALL_INVENTORY_SHA256, _call_inventory_roots(method)
     assert _call_inventory_roots(method).count("self.record_schema_less_compatibility_observation") == 1
+    assert _call_inventory_roots(method).count("operation_submission_current_status") == 1
 
     repository_calls = sorted(
         (

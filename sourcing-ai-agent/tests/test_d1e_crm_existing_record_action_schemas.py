@@ -9,6 +9,7 @@ from typing import Any
 
 import pytest
 
+import sourcing_agent.action_target_binding as action_target_binding
 from sourcing_agent.action_request_schema import ActionRequestSchemaBuilder
 from sourcing_agent.action_target_binding import (
     AUTHORIZATION_MODE_AUTHENTICATED,
@@ -28,6 +29,7 @@ from sourcing_agent.operation_runtime import (
     ACTION_CREATE_CRM_TASK,
     ACTION_SET_CRM_STAGE,
     CRM_EXISTING_RECORD_ACTION_REQUEST_CONTRACTS,
+    CRM_EXISTING_RECORD_ACTION_TYPES,
     DEFAULT_ACTION_REGISTRY,
     ActionRegistry,
     ActionRequestSpec,
@@ -38,7 +40,7 @@ from sourcing_agent.operation_runtime import (
 from sourcing_agent.storage import ControlPlaneStore
 from tests.pg_durable_runtime import PGDurableRuntimeTestMixin
 
-CRM_ACTIONS = (ACTION_SET_CRM_STAGE, ACTION_ADD_CRM_NOTE, ACTION_CREATE_CRM_TASK)
+CRM_ACTIONS = CRM_EXISTING_RECORD_ACTION_TYPES
 CRM_TARGET: dict[str, Any] = {
     "crm_record_id": "crm-record-a",
     "workspace_id": "user-alice",
@@ -256,6 +258,21 @@ def test_crm_binder_registry_is_exact_and_mints_owner_snapshot_for_all_three_act
     assert store.lookups == ["crm-record-a"] * len(CRM_ACTIONS)
     with pytest.raises(ActionTargetBindingError, match="action_target_binder_missing:unknown"):
         registry.bind(action_type="unknown", context=_authenticated_context())
+
+
+def test_crm_binder_registry_factory_consumes_the_canonical_action_tuple(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    synthetic_actions = ("synthetic_crm_action_a", "synthetic_crm_action_b")
+    monkeypatch.setattr(
+        action_target_binding,
+        "CRM_EXISTING_RECORD_ACTION_TYPES",
+        synthetic_actions,
+    )
+
+    registry = build_crm_existing_record_target_binder_registry(_CRMRecordStore({}))
+
+    assert registry.to_record() == {action_type: {"owner_module": "crm_writer"} for action_type in synthetic_actions}
 
 
 @pytest.mark.parametrize("action_type", CRM_ACTIONS)

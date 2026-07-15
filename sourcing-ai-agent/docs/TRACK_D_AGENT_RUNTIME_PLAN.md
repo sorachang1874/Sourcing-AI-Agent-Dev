@@ -113,7 +113,14 @@ serve、会话/事件层、planner loop），用一个垂直切片证明闭环�
 - **Implementation status (2026-07-15):** D1c 已落 shared schema/pin foundation 与 R-029 bridge；D1e 声明
   existing-record CRM binder/contracts；D1f current author candidate 将 exact
   `set_crm_stage|add_crm_note|create_crm_task` 激活为 schema-defined，并从 authenticated request state 绑定
-  exact CRM owner，dispatch 与 command owner 各做一次只读 owner/version revalidation。当前 registry=
+  exact CRM owner，dispatch 与 command owner 各做一次只读 owner/version revalidation。Pinned `22055aa`
+  advisory `0/1/2/1` 的 fixed-forward 进一步让 exact 三项 input envelope 按 presence 单选、两个 operation
+  carrier 先 reconcile 且任一 dangling fail closed、binder factory 直接消费 canonical tuple，并让 idempotent
+  submit replay 返回 closed current lifecycle + HTTP 200；unknown persisted status 与 stable non-fresh action/run
+  incoherence pre-write conflict，approved replay 读取既有 run，action-only rejection 不创建 run，queued partial
+  仅修复 deterministic run；所有 submit 均 preflight deterministic run，orphan run 与非法 static-required
+  approval 组合 fail closed；conditional non-required approval/cancel/retry 保留既有 owner + R-019 边界。frontend submit 以 required literal replay discriminator 闭合 fresh/replay 联合；
+  R-029 observation epoch=`d1f_r029_20260715_v2` 且 submit-replay evidence action-scoped。当前 registry=
   **3 schema-defined / 12 schema-less / served=0**；full served predicate 的 revisioned model-safe result schema 与
   simulate serializer 尚未实现。D1g current author candidate 接续闭合 authenticated Operation API 的 R-031
   exact-owner boundary：canonical owner 为 `agent_actions/operation_runs.workspace_id`，run 还必须 linked action

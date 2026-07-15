@@ -25,6 +25,8 @@ export {
   OPERATION_ACTION_DETAIL_SUCCESS_STATUSES,
   OPERATION_ACTION_QUERY_SUCCESS_STATUSES,
   OPERATION_ACTION_SUBMIT_APPLIED_OUTCOMES,
+  OPERATION_ACTION_SUBMIT_FRESH_OUTCOMES,
+  OPERATION_ACTION_SUBMIT_REPLAY_OUTCOMES,
   OPERATION_RUN_CONTROL_APPLIED_OUTCOMES,
   OPERATION_RUN_PROVENANCE_SUCCESS_STATUSES,
   WORKFLOW_COMMAND_CONTROL_APPLIED_OUTCOMES,
@@ -1207,6 +1209,7 @@ export interface OperationActionListResponse {
 
 export interface OperationActionDetailResponse {
   status: OperationActionDetailSuccessStatus;
+  idempotent_replay?: boolean;
   contract?: string;
   action?: OperationActionRecord;
   operation_run?: OperationRunRecord;

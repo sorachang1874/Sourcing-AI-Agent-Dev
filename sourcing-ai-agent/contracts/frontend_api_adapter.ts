@@ -2,7 +2,8 @@ import {
   OPERATION_ACTION_DECISION_APPLIED_OUTCOMES,
   OPERATION_ACTION_DETAIL_SUCCESS_STATUSES,
   OPERATION_ACTION_QUERY_SUCCESS_STATUSES,
-  OPERATION_ACTION_SUBMIT_APPLIED_OUTCOMES,
+  OPERATION_ACTION_SUBMIT_FRESH_OUTCOMES,
+  OPERATION_ACTION_SUBMIT_REPLAY_OUTCOMES,
   OPERATION_RUN_CONTROL_APPLIED_OUTCOMES,
   OPERATION_RUN_PROVENANCE_SUCCESS_STATUSES,
   WORKFLOW_COMMAND_CONTROL_APPLIED_OUTCOMES,
@@ -114,10 +115,23 @@ export type PublicResponseForStatuses<
   TStatuses extends readonly string[],
 > = Omit<TResponse, "status"> & { status: TStatuses[number] };
 
-export type OperationActionSubmitResponse = PublicResponseForStatuses<
+type OperationActionFreshSubmitResponse = Omit<
   OperationActionDetailResponse,
-  typeof OPERATION_ACTION_SUBMIT_APPLIED_OUTCOMES
->;
+  "status" | "idempotent_replay"
+> & {
+  status: (typeof OPERATION_ACTION_SUBMIT_FRESH_OUTCOMES)[number];
+  idempotent_replay: false;
+};
+type OperationActionReplaySubmitResponse = Omit<
+  OperationActionDetailResponse,
+  "status" | "idempotent_replay"
+> & {
+  status: (typeof OPERATION_ACTION_SUBMIT_REPLAY_OUTCOMES)[number];
+  idempotent_replay: true;
+};
+export type OperationActionSubmitResponse =
+  | OperationActionFreshSubmitResponse
+  | OperationActionReplaySubmitResponse;
 export type OperationActionQueryResponse = PublicResponseForStatuses<
   OperationActionDetailResponse,
   typeof OPERATION_ACTION_QUERY_SUCCESS_STATUSES
@@ -253,12 +267,7 @@ export class SourcingAgentApiClient {
     return this.postWorkflowPublic(
       "/api/operations/actions",
       payload,
-      (response) => mapPublicResponseForStatuses(
-        response,
-        mapOperationActionDetailResponse,
-        OPERATION_ACTION_SUBMIT_APPLIED_OUTCOMES,
-        "Operation action submit",
-      ),
+      mapOperationActionSubmitResponse,
     );
   }
 
@@ -1343,6 +1352,7 @@ export function mapOperationActionDetailResponse(payload: unknown): OperationAct
       OPERATION_ACTION_DETAIL_SUCCESS_STATUSES,
       "OperationActionDetailResponse",
     ),
+    idempotent_replay: asOptionalBoolean(source.idempotent_replay),
     contract: asOptionalString(source.contract),
     action: mapCapturedPlainWorkflowPublicObject(
       canonical.action,
@@ -1363,6 +1373,27 @@ export function mapOperationActionDetailResponse(payload: unknown): OperationAct
       depth + 1,
     ) ?? [],
   };
+}
+
+export function mapOperationActionSubmitResponse(payload: unknown): OperationActionSubmitResponse {
+  const response = mapOperationActionDetailResponse(payload);
+  if (response.idempotent_replay === true) {
+    const status = asAllowedPublicResponseStatus(
+      response.status,
+      OPERATION_ACTION_SUBMIT_REPLAY_OUTCOMES,
+      "Operation action submit replay",
+    );
+    return { ...response, status, idempotent_replay: true };
+  }
+  if (response.idempotent_replay === false) {
+    const status = asAllowedPublicResponseStatus(
+      response.status,
+      OPERATION_ACTION_SUBMIT_FRESH_OUTCOMES,
+      "Operation action submit fresh",
+    );
+    return { ...response, status, idempotent_replay: false };
+  }
+  throw new Error("Operation action submit idempotent_replay must be boolean");
 }
 
 export function mapOperationRunListResponse(payload: unknown): OperationRunListResponse {

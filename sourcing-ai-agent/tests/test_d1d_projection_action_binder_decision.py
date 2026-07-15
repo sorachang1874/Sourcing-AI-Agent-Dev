@@ -96,12 +96,24 @@ def test_generic_operation_submit_only_derives_authenticated_scope_for_crm_owner
     submit_method = _class_method(orchestrator_tree, "SourcingOrchestrator", "submit_operation_action")
     raw_input_assignments = [
         node
-        for node in submit_method.body
+        for node in ast.walk(submit_method)
         if isinstance(node, ast.Assign)
         and any(isinstance(target, ast.Name) and target.id == "raw_input_payload" for target in node.targets)
     ]
-    assert len(raw_input_assignments) == 1
-    assert ast.unparse(raw_input_assignments[0].value) == ("payload.get('input') or payload.get('input_payload') or {}")
+    raw_input_values = {ast.unparse(assignment.value) for assignment in raw_input_assignments}
+    assert "payload.get('input') or payload.get('input_payload') or {}" in raw_input_values
+    payload_membership_checks = {
+        ast.unparse(node)
+        for node in ast.walk(submit_method)
+        if isinstance(node, ast.Compare)
+        and any(isinstance(operator, ast.In) for operator in node.ops)
+        and ast.unparse(node.comparators[0]) == "payload"
+    }
+    assert {"'input' in payload", "'input_payload' in payload"}.issubset(payload_membership_checks)
+    assert any(
+        isinstance(node, ast.Constant) and node.value == "action_request_input_alias_ambiguous"
+        for node in ast.walk(submit_method)
+    )
     writer_calls = _calls_named(submit_method, "submit_action")
     assert len(writer_calls) == 1
     writer_keywords = {keyword.arg: keyword.value for keyword in writer_calls[0].keywords}

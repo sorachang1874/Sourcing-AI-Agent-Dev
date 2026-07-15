@@ -21,7 +21,17 @@
     },
     "OperationActionDetailSuccessStatus": {
       "type": "string",
-      "enum": ["ok", "queued", "approval_required", "rejected"]
+      "enum": [
+        "ok",
+        "queued",
+        "approval_required",
+        "planned",
+        "running",
+        "completed",
+        "failed",
+        "cancelled",
+        "rejected"
+      ]
     },
     "OperationRunProvenanceSuccessStatus": {
       "type": "string",
@@ -1317,6 +1327,7 @@
       "required": ["status"],
       "properties": {
         "status": { "$ref": "#/$defs/OperationActionDetailSuccessStatus" },
+        "idempotent_replay": { "type": "boolean" },
         "contract": { "type": "string" },
         "action": { "$ref": "#/$defs/OperationActionRecord" },
         "operation_run": { "$ref": "#/$defs/OperationRunRecord" },
@@ -1325,6 +1336,43 @@
           "items": { "$ref": "#/$defs/OperationEventRecord" }
         }
       }
+    },
+    "OperationActionSubmitResponse": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["status", "idempotent_replay"],
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": ["queued", "approval_required"]
+            },
+            "idempotent_replay": { "const": false }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["status", "idempotent_replay"],
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": [
+                "queued",
+                "approval_required",
+                "planned",
+                "running",
+                "completed",
+                "failed",
+                "cancelled",
+                "rejected"
+              ]
+            },
+            "idempotent_replay": { "const": true }
+          }
+        }
+      ]
     },
     "OperationRunListResponse": {
       "type": "object",

@@ -40,14 +40,23 @@
   implicit action or break explicit-key replay. Dispatch and command-owner preflights follow the canonical
   OperationRun→AgentAction link; a mutable command label or a command relinked to another valid action cannot bypass
   the exact target/schema/command checks.
-- Stable author evidence: D1f PG matrix **7 passed + 27 subtests**; D1 request/adapter/binder/transport/CRM adjacency plus
-  R-019 caller ratchet **136 passed + 136 subtests**; full operation runtime **136 passed + 503 subtests**. One adjacent
-  frontend request-pin assertion failed identically on clean detached `HEAD=c260896`, outside the D1f file scope.
-  Ruff/format/compile/diff are green and global mypy remains the accepted **81 errors / 4 files** ceiling.
-- Local advisory rounds `NO-GO 0/3/2/0` then `NO-GO 0/2/1/0` are fixed-forward input only. R-019/R-028 stay open because
-  these are read-only preflights, not an effect/terminal UoW; R-029 falls only to 12; R-031 records the still-unscoped
-  authenticated Operation list/detail/control surface. Fresh pinned review is pending and no provider/model/live path
-  is authorized.
+- The pinned `22055aa` advisory reported `NO-GO 0/1/2/1`: a dangling operation id could fall into the legacy command
+  path when the mutable label was missing/wrong; falsy or dual input envelopes could bypass intended validation;
+  completed replay was projected as newly queued/HTTP 202; and the binder factory duplicated the three-action tuple.
+  The current fixed-forward candidate makes input selection presence-based and single-envelope, reconciles both
+  operation carriers before label inspection, consumes the canonical tuple, and returns a closed current lifecycle
+  replay status with HTTP 200. Unknown persisted statuses and stable non-fresh action/run incoherence fail before replay
+  writes; approved replay loads the existing run, action-only rejection cannot recreate one, and a queued partial
+  submit repairs only its deterministic run. Every submit also preflights that run before writes, so orphan runs and
+  invalid static-required approval combinations fail closed; conditional non-required approval/cancel/retry keeps its
+  existing owner and R-019 boundary. Submit responses now use a required true/false replay discriminator, and
+  R-029 observation epoch `d1f_r029_20260715_v2` keeps action-scoped replay evidence compatible with durable v1 rows.
+- Stable fixed-forward evidence: D1f PG matrix **15 passed + 80 subtests**; D1 request/schema/binder/transport adjacency
+  **119 passed + 189 subtests**; full Operation runtime **136 passed + 503 subtests**; frontend contract nodes
+  **3 passed** plus production build (**84 modules**); lint **58 files**; mypy remains **81 errors / 4 files**.
+- All local advisory rounds (`0/3/2/0`, `0/2/1/0`, `0/1/2/1`) are fixed-forward input only. R-019/R-028 stay open because
+  these are read-only preflights, not an effect/terminal UoW; R-029 falls only to 12; R-031 remains the separate D1g
+  review-pending boundary. Fresh pinned review is pending and no provider/model/live path is authorized.
 
 ### Cohort CS3/CS5 runtime publication fixed-forward
 

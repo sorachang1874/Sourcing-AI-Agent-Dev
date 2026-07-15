@@ -2768,7 +2768,17 @@ def test_frontend_schema_and_mappers_are_closed_and_operation_sync_is_typed() ->
     expected_status_contracts = {
         "OperationActionDetailResponse": (
             "OperationActionDetailSuccessStatus",
-            ["ok", "queued", "approval_required", "rejected"],
+            [
+                "ok",
+                "queued",
+                "approval_required",
+                "planned",
+                "running",
+                "completed",
+                "failed",
+                "cancelled",
+                "rejected",
+            ],
         ),
         "OperationRunProvenanceResponse": ("OperationRunProvenanceSuccessStatus", ["ok"]),
         "OperationRunControlResponse": (
@@ -2783,6 +2793,41 @@ def test_frontend_schema_and_mappers_are_closed_and_operation_sync_is_typed() ->
     for response_name, (status_name, values) in expected_status_contracts.items():
         assert schema["$defs"][response_name]["properties"]["status"] == {"$ref": f"#/$defs/{status_name}"}
         assert schema["$defs"][status_name]["enum"] == values
+    assert schema["$defs"]["OperationActionDetailResponse"]["properties"]["idempotent_replay"] == {"type": "boolean"}
+    assert re.search(r"^\s{2}idempotent_replay\?: boolean;", types_source, flags=re.MULTILINE)
+    submit_response_branches = schema["$defs"]["OperationActionSubmitResponse"]["oneOf"]
+    assert submit_response_branches == [
+        {
+            "type": "object",
+            "additionalProperties": True,
+            "required": ["status", "idempotent_replay"],
+            "properties": {
+                "status": {"type": "string", "enum": ["queued", "approval_required"]},
+                "idempotent_replay": {"const": False},
+            },
+        },
+        {
+            "type": "object",
+            "additionalProperties": True,
+            "required": ["status", "idempotent_replay"],
+            "properties": {
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "queued",
+                        "approval_required",
+                        "planned",
+                        "running",
+                        "completed",
+                        "failed",
+                        "cancelled",
+                        "rejected",
+                    ],
+                },
+                "idempotent_replay": {"const": True},
+            },
+        },
+    ]
     for symbol in (
         "OPERATION_ACTION_DECISION_APPLIED_OUTCOMES",
         "OPERATION_RUN_CONTROL_APPLIED_OUTCOMES",
@@ -4720,18 +4765,72 @@ assert.equal(
   publicAdapter.mapOperationRunControlResponse({ status: "cancelled", operation_run: "bad" }).operation_run,
   undefined,
 );
-for (const rejectedStatus of ["conflict", "approval_required", "not_found", "future_success"]) {
-  if (rejectedStatus === "approval_required") {
-    assert.equal(
-      publicAdapter.mapOperationActionDetailResponse({ status: rejectedStatus }).status,
-      "approval_required",
-    );
-  } else {
-    assert.throws(
-      () => publicAdapter.mapOperationActionDetailResponse({ status: rejectedStatus }),
-      new RegExp(`unsupported status: ${rejectedStatus}`),
-    );
-  }
+for (const acceptedStatus of [
+  "ok",
+  "queued",
+  "approval_required",
+  "planned",
+  "running",
+  "completed",
+  "failed",
+  "cancelled",
+  "rejected",
+]) {
+  assert.equal(
+    publicAdapter.mapOperationActionDetailResponse({ status: acceptedStatus }).status,
+    acceptedStatus,
+  );
+}
+assert.equal(
+  publicAdapter.mapOperationActionDetailResponse({ status: "completed", idempotent_replay: true })
+    .idempotent_replay,
+  true,
+);
+assert.equal(
+  publicAdapter.mapOperationActionDetailResponse({ status: "completed", idempotent_replay: "true" })
+    .idempotent_replay,
+  undefined,
+);
+for (const acceptedFreshStatus of ["queued", "approval_required"]) {
+  const freshSubmit = publicAdapter.mapOperationActionSubmitResponse({
+    status: acceptedFreshStatus,
+    idempotent_replay: false,
+  });
+  assert.equal(freshSubmit.status, acceptedFreshStatus);
+  assert.equal(freshSubmit.idempotent_replay, false);
+}
+for (const acceptedReplayStatus of [
+  "queued",
+  "approval_required",
+  "planned",
+  "running",
+  "completed",
+  "failed",
+  "cancelled",
+  "rejected",
+]) {
+  const replaySubmit = publicAdapter.mapOperationActionSubmitResponse({
+    status: acceptedReplayStatus,
+    idempotent_replay: true,
+  });
+  assert.equal(replaySubmit.status, acceptedReplayStatus);
+  assert.equal(replaySubmit.idempotent_replay, true);
+}
+for (const malformedSubmit of [
+  { status: "completed" },
+  { status: "completed", idempotent_replay: false },
+  { status: "completed", idempotent_replay: "true" },
+]) {
+  assert.throws(
+    () => publicAdapter.mapOperationActionSubmitResponse(malformedSubmit),
+    /idempotent_replay must be boolean|unsupported status/,
+  );
+}
+for (const rejectedStatus of ["conflict", "not_found", "future_success"]) {
+  assert.throws(
+    () => publicAdapter.mapOperationActionDetailResponse({ status: rejectedStatus }),
+    new RegExp(`unsupported status: ${rejectedStatus}`),
+  );
   assert.throws(
     () => publicAdapter.mapOperationRunProvenanceResponse({ status: rejectedStatus }),
     new RegExp(`unsupported status: ${rejectedStatus}`),
@@ -5169,7 +5268,16 @@ for (const [value, expected] of diagnosticCases) {
   const clientOutcomeCases = [
     {
       label: "action-submit",
-      accepted: ["queued", "approval_required"],
+      accepted: [
+        "queued",
+        "approval_required",
+        "planned",
+        "running",
+        "completed",
+        "failed",
+        "cancelled",
+        "rejected",
+      ],
       invoke: (client) => client.submitOperationAction({}),
     },
     {
@@ -5230,6 +5338,9 @@ for (const [value, expected] of diagnosticCases) {
     "rejected",
     "cancelled",
     "planned",
+    "running",
+    "completed",
+    "failed",
     "conflict",
     "not_found",
     "future_success",
@@ -5242,9 +5353,16 @@ for (const [value, expected] of diagnosticCases) {
   ];
   for (const outcomeCase of clientOutcomeCases) {
     for (const candidateStatus of clientOutcomeMatrix) {
+      const responsePayload = outcomeCase.label === "action-submit"
+        ? {
+            status: candidateStatus,
+            idempotent_replay: ["planned", "running", "completed", "failed", "cancelled", "rejected"]
+              .includes(candidateStatus),
+          }
+        : { status: candidateStatus };
       const client = new publicAdapter.SourcingAgentApiClient({
         baseUrl: "https://api.test",
-        fetchImpl: async () => jsonResponse({ status: candidateStatus }),
+        fetchImpl: async () => jsonResponse(responsePayload),
       });
       if (outcomeCase.accepted.includes(candidateStatus)) {
         const response = await outcomeCase.invoke(client);

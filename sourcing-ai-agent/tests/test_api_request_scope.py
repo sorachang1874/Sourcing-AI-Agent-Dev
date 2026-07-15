@@ -181,6 +181,16 @@ class _ScopeOrchestrator:
                 or str(record.get("owner_user_id") or "") not in {"", str(owner.get("expected_owner_user_id") or "")}
             ):
                 return {"status": "not_found", "reason": "crm_record_not_found"}
+        if str(payload.get("idempotency_key") or "").strip() == "completed-replay":
+            return {
+                "status": "completed",
+                "idempotent_replay": True,
+                "action": {"action_id": "action-completed", "status": "completed"},
+                "operation_run": {"operation_run_id": "run-completed", "status": "completed"},
+                "module_state_mutated": False,
+            }
+        if str(payload.get("idempotency_key") or "").strip() == "invalid-replay-flag":
+            return {"status": "invalid", "idempotent_replay": True, "reason": "stub-invalid"}
         return {"status": "queued", "module_state_mutated": False}
 
     def get_operation_action_registry(self):
@@ -979,6 +989,37 @@ class RequestScopeWiringTest(unittest.TestCase):
                 self.assertEqual(captured["actor"], "alice")
                 self.assertEqual(captured["expected_workspace_id"], "user-alice")
                 self.assertEqual(captured["expected_owner_user_id"], "alice")
+
+        replay_status, replay = self._request(
+            opener,
+            f"{base}/api/operations/actions",
+            method="POST",
+            body={
+                "action_type": "add_crm_note",
+                "target_ref": {"crm_record_id": "rec-alice-owned"},
+                "input": {"note": "already applied"},
+                "idempotency_key": "completed-replay",
+            },
+        )
+        self.assertEqual(replay_status, 200)
+        self.assertEqual(replay.get("status"), "completed", replay)
+        self.assertTrue(replay.get("idempotent_replay"), replay)
+        self.assertEqual(replay["action"]["status"], "completed")
+        self.assertEqual(replay["operation_run"]["status"], "completed")
+
+        invalid_replay_status, invalid_replay = self._request(
+            opener,
+            f"{base}/api/operations/actions",
+            method="POST",
+            body={
+                "action_type": "add_crm_note",
+                "target_ref": {"crm_record_id": "rec-alice-owned"},
+                "input": {"note": "invalid replay flag must not override failure"},
+                "idempotency_key": "invalid-replay-flag",
+            },
+        )
+        self.assertEqual(invalid_replay_status, 400)
+        self.assertEqual(invalid_replay.get("status"), "invalid", invalid_replay)
 
         foreign = self._request(
             opener,

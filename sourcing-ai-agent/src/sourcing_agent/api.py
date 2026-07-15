@@ -31,7 +31,11 @@ from .cohort_selection import (
     prepare_external_criteria_request_payload,
     validate_external_cohort_selection_payload,
 )
-from .operation_runtime import CRM_EXISTING_RECORD_ACTION_TYPES
+from .operation_runtime import (
+    CRM_EXISTING_RECORD_ACTION_TYPES,
+    OPERATION_ACTION_FRESH_SUBMISSION_STATUSES,
+    OPERATION_ACTION_SUBMISSION_STATUSES,
+)
 from .orchestrator import SourcingOrchestrator
 from .plan_submit_contract import (
     LEGACY_PLAN_SUBMIT_HTTP_STATUS,
@@ -2101,7 +2105,12 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
         )
         owner_scope = _expected_crm_owner_kwargs(request) if crm_owner_bound else {}
         result = orchestrator.submit_operation_action(payload, **owner_scope)
-        if result.get("status") in {"queued", "approval_required"}:
+        if (
+            result.get("idempotent_replay") is True
+            and str(result.get("status") or "").strip() in OPERATION_ACTION_SUBMISSION_STATUSES
+        ):
+            status = HTTPStatus.OK
+        elif result.get("status") in OPERATION_ACTION_FRESH_SUBMISSION_STATUSES:
             status = HTTPStatus.ACCEPTED
         elif result.get("status") == "not_found" and result.get("reason") == "crm_record_not_found":
             status = HTTPStatus.NOT_FOUND
