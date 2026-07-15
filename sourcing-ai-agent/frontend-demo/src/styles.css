@@ -509,6 +509,138 @@ button {
   margin-top: 18px;
 }
 
+.cohort-picker {
+  margin-top: 18px;
+  padding: 16px;
+  border: 1px solid #f0dfe3;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #fffafb 0%, #ffffff 100%);
+}
+
+.cohort-picker.compact {
+  padding: 14px 16px;
+}
+
+.cohort-picker.locked {
+  background: #fffdfd;
+}
+
+.cohort-picker-heading,
+.cohort-picker-enable,
+.cohort-picker-state {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.cohort-picker-heading {
+  justify-content: space-between;
+}
+
+.cohort-picker-enable {
+  color: var(--xh-text);
+  cursor: pointer;
+}
+
+.cohort-picker-enable input,
+.cohort-picker-fields input {
+  accent-color: var(--xh-red);
+}
+
+.cohort-picker-enable > span {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.cohort-picker-enable small,
+.cohort-picker-hint,
+.cohort-picker-state {
+  color: var(--xh-text-secondary);
+  font-size: var(--xh-caption-size);
+  line-height: 1.5;
+}
+
+.cohort-picker-lock {
+  flex: 0 0 auto;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: #f5e9ec;
+  color: #8a5963;
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.cohort-picker-state {
+  justify-content: space-between;
+  margin: 12px 0 0;
+}
+
+.cohort-picker-state.error {
+  color: #a33549;
+}
+
+.cohort-picker-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.cohort-picker-fields fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid #f2e1e6;
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.cohort-picker-fields legend {
+  padding: 0 4px;
+  color: #7f6b70;
+  font-size: var(--xh-caption-size);
+  font-weight: 600;
+}
+
+.cohort-picker-hint {
+  margin: 0 0 9px;
+}
+
+.cohort-picker-fields > .cohort-picker-hint {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.cohort-option-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cohort-all-roles {
+  align-self: flex-start;
+  padding: 7px 10px;
+  border: 1px solid #ead4da;
+  border-radius: 999px;
+  background: #ffffff;
+  color: var(--xh-text-secondary);
+  cursor: pointer;
+}
+
+.cohort-all-roles.selected {
+  border-color: rgba(255, 36, 66, 0.32);
+  background: var(--xh-red-soft);
+  color: var(--xh-red);
+  font-weight: 600;
+}
+
+.cohort-all-roles:disabled,
+.cohort-picker input:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
 .prompt-card,
 .board-tab,
 .message-tab,
@@ -3492,6 +3624,7 @@ button {
   .collection-overview-summary,
   .collection-overview-grid,
   .company-fact-grid,
+  .cohort-picker-fields,
   .collection-overview-metrics {
     grid-template-columns: 1fr;
   }

@@ -13,7 +13,7 @@ import {
   startWorkflowRun,
 } from "./api";
 import { normalizeWorkflowLaunchStatus, normalizeWorkflowStatus } from "./workflowStatus";
-import type { DashboardData, DemoPlan, PlanReviewDecision, RunStatusData } from "../types";
+import type { CohortSelection, DashboardData, DemoPlan, PlanReviewDecision, RunStatusData } from "../types";
 
 export interface NaturalLanguagePlanResult {
   plan: DemoPlan | null;
@@ -122,9 +122,13 @@ function buildLaunchRunStatus(jobId: string, raw: unknown): RunStatusData {
 }
 
 export class SourcingBackendClient {
-  async planNaturalLanguageSearch(queryText: string, historyId = ""): Promise<NaturalLanguagePlanResult> {
+  async planNaturalLanguageSearch(
+    queryText: string,
+    historyId = "",
+    cohortSelection?: CohortSelection,
+  ): Promise<NaturalLanguagePlanResult> {
     const trimmed = queryText.trim();
-    return submitPlanEnvelope(trimmed, historyId);
+    return submitPlanEnvelope(trimmed, historyId, cohortSelection);
   }
 
   async approvePlan(reviewId: string, plan: DemoPlan | null, decision?: PlanReviewDecision): Promise<void> {

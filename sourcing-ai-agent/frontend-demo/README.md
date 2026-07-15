@@ -20,6 +20,22 @@
 - `Results`
 - `Candidate history / profile detail`
 
+## 目标人群多选
+
+搜索输入区提供可选的“限定目标人群”控件。控件默认关闭；关闭时 `POST /api/plan/submit` 不携带
+`cohort_selection`，原有自然语言请求字节语义不变。启用后：
+
+- 角色、在职状态和匹配方式只读取 `GET /api/cohort-selection/options` 的 public projection；前端不维护
+  Researcher、Engineer、Product Manager 等第二份 registry。
+- 角色可多选；不选具体角色表示 all roles。Current / former 可多选且至少保留一项。
+- 多角色匹配默认使用后端 options 中声明的 `defaults.role_match`（当前为 `any`），也可选择 `all`。
+- 初次 plan submit、同 history 的 plan revision、history recovery 和 plan-review approval 都精确复制同一个
+  `cohort_selection.v1` 对象；若后端返回的 request / preview mirrors 不一致，前端 fail closed。
+- 已提交的显式人群边界在 Review 卡片中只读展示；需要更改时应新建搜索，避免 review 阶段静默改写请求。
+  旧方案若本来没有 cohort，则仍可在 Review 中显式添加一次。
+
+options endpoint 不可用时，精确人群控件保持禁用并提供重试；未启用 cohort 的普通搜索仍可继续。
+
 当前前端路由：
 
 - `/`

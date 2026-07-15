@@ -1,4 +1,6 @@
 import type { ReactNode } from "react";
+import type { CohortSelection, CohortSelectionOptions } from "../types";
+import { CohortSelectionPicker } from "./CohortSelectionPicker";
 
 interface SearchComposerProps {
   value: string;
@@ -7,7 +9,13 @@ interface SearchComposerProps {
   showWelcome?: boolean;
   promptExamples: string[];
   afterPrompts?: ReactNode;
+  cohortSelection?: CohortSelection | null;
+  cohortOptions?: CohortSelectionOptions | null;
+  isLoadingCohortOptions?: boolean;
+  cohortOptionsError?: string;
   onChange: (value: string) => void;
+  onCohortSelectionChange?: (value: CohortSelection | null) => void;
+  onRetryCohortOptions?: () => void;
   onSubmit: (value: string) => void;
   onPickPrompt?: (value: string) => void;
 }
@@ -19,7 +27,13 @@ export function SearchComposer({
   showWelcome = true,
   promptExamples,
   afterPrompts,
+  cohortSelection = null,
+  cohortOptions = null,
+  isLoadingCohortOptions = false,
+  cohortOptionsError = "",
   onChange,
+  onCohortSelectionChange,
+  onRetryCohortOptions,
   onSubmit,
   onPickPrompt,
 }: SearchComposerProps) {
@@ -52,6 +66,20 @@ export function SearchComposer({
             {isSubmitting ? "生成中..." : "开始搜索"}
           </button>
         </div>
+
+        {onCohortSelectionChange ? (
+          <CohortSelectionPicker
+            idPrefix="search"
+            value={cohortSelection}
+            options={cohortOptions}
+            isLoading={isLoadingCohortOptions}
+            errorMessage={cohortOptionsError}
+            disabled={isSubmitting}
+            compact
+            onChange={onCohortSelectionChange}
+            onRetryOptions={onRetryCohortOptions}
+          />
+        ) : null}
 
         <div className="prompt-grid">
           {promptExamples.map((prompt) => (

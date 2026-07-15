@@ -1,5 +1,30 @@
 export type PlanStatus = "draft" | "pending_review" | "approved";
 
+export interface CohortSelectionOption {
+  id: string;
+  label: string;
+  order: number;
+}
+
+export interface CohortSelectionOptions {
+  schemaVersion: string;
+  registryVersion: string;
+  registryDigest: string;
+  roleBuckets: CohortSelectionOption[];
+  employmentStatuses: CohortSelectionOption[];
+  roleMatchOptions: CohortSelectionOption[];
+  defaultRoleMatch: string;
+}
+
+/** Exact public API wire object; keys intentionally remain snake_case. */
+export interface CohortSelection {
+  schema_version: string;
+  role_bucket_ids: string[];
+  employment_statuses: string[];
+  role_match: string;
+  source: "user_explicit";
+}
+
 export type CandidateConfidence = "high" | "medium" | "lead_only";
 export type WorkflowPhase = "idle" | "plan" | "running" | "results";
 export type TimelineStepStatus = "completed" | "running" | "pending" | "failed" | "cancelled";
@@ -59,6 +84,7 @@ export interface PlanReviewDecision {
   forceFreshRun?: boolean;
   reuseExistingRoster?: boolean;
   runFormerSearchSeed?: boolean;
+  cohortSelection?: CohortSelection;
 }
 
 export interface TargetCompanyIdentityPreview {
@@ -110,6 +136,7 @@ export interface DemoPlan {
   providerExecutionLanes?: ProviderExecutionLanePreview[];
   reviewGate?: PlanReviewGate;
   reviewDecisionDefaults?: PlanReviewDecision;
+  cohortSelection?: CohortSelection;
 }
 
 export interface TimelineSourceTag {

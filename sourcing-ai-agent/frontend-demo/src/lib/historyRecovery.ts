@@ -4,6 +4,7 @@ import {
   buildReusedCompletedTimelineSteps,
   isReusedCompletedHistory,
 } from "./workflow";
+import { cloneCohortSelection } from "./cohortSelection";
 import type {
   DashboardData,
   DemoPlan,
@@ -55,6 +56,9 @@ export function cloneReviewDecision(plan: DemoPlan | null): PlanReviewDecision {
     forceFreshRun: defaults?.forceFreshRun,
     reuseExistingRoster: defaults?.reuseExistingRoster,
     runFormerSearchSeed: defaults?.runFormerSearchSeed,
+    cohortSelection: defaults?.cohortSelection
+      ? cloneCohortSelection(defaults.cohortSelection)
+      : undefined,
   };
 }
 

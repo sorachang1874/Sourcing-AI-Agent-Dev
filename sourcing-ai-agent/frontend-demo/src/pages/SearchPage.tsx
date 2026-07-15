@@ -7,6 +7,7 @@ import { readDemoSession, writeDemoSession } from "../lib/demoSession";
 import {
   getDashboard,
   getDashboardBoardPatches,
+  getCohortSelectionOptions,
   mergeDashboardBoardPatchRuntime,
   mergeDashboardRuntimeProgress,
   peekDashboardCache,
@@ -46,6 +47,8 @@ import {
   hydrateHistoryWithResult,
 } from "../lib/workflow";
 import type {
+  CohortSelection,
+  CohortSelectionOptions,
   DashboardData,
   DemoPlan,
   ExcelIntakeProgress,
@@ -123,6 +126,11 @@ export function SearchPage() {
   const [flow, setFlow] = useState<SearchHistoryItem>(emptyFlow);
   const flowRef = useRef<SearchHistoryItem>(emptyFlow);
   const [queryText, setQueryText] = useState("");
+  const [cohortSelection, setCohortSelection] = useState<CohortSelection | null>(null);
+  const [cohortOptions, setCohortOptions] = useState<CohortSelectionOptions | null>(null);
+  const [isLoadingCohortOptions, setIsLoadingCohortOptions] = useState(false);
+  const [cohortOptionsError, setCohortOptionsError] = useState("");
+  const cohortOptionsRequestRef = useRef(0);
   const [dashboard, setDashboard] = useState<DashboardData | null>(() => peekDashboardCache(routeJobId));
   const dashboardRef = useRef<DashboardData | null>(dashboard);
   const [runStatus, setRunStatus] = useState<RunStatusData | null>(null);
@@ -168,6 +176,38 @@ export function SearchPage() {
     setSearchParams(nextParams, { replace });
   };
 
+  const loadCohortOptions = async () => {
+    const requestId = cohortOptionsRequestRef.current + 1;
+    cohortOptionsRequestRef.current = requestId;
+    setIsLoadingCohortOptions(true);
+    setCohortOptionsError("");
+    try {
+      const options = await getCohortSelectionOptions();
+      if (cohortOptionsRequestRef.current !== requestId) {
+        return;
+      }
+      setCohortOptions(options);
+    } catch (error) {
+      if (cohortOptionsRequestRef.current !== requestId) {
+        return;
+      }
+      setCohortOptionsError(
+        error instanceof Error ? error.message : "目标人群选项加载失败；仍可使用原有自然语言搜索。",
+      );
+    } finally {
+      if (cohortOptionsRequestRef.current === requestId) {
+        setIsLoadingCohortOptions(false);
+      }
+    }
+  };
+
+  useEffect(() => {
+    void loadCohortOptions();
+    return () => {
+      cohortOptionsRequestRef.current += 1;
+    };
+  }, []);
+
   const updateFlow = (updater: (current: SearchHistoryItem) => SearchHistoryItem): SearchHistoryItem => {
     const nextFlow = updater(flowRef.current);
     commitFlow(nextFlow);
@@ -181,6 +221,7 @@ export function SearchPage() {
     dashboardWarmupAttemptedJobIdsRef.current.clear();
     commitFlow(emptyFlow);
     setQueryText("");
+    setCohortSelection(null);
     setDashboard(null);
     setRunStatus(null);
     setIsStartingExcelWorkflow(false);
@@ -1043,7 +1084,11 @@ export function SearchPage() {
     let submittedHistoryId = "";
     try {
       const { plan: planned, reviewId, historyId: nextHistoryId, status, raw } =
-        await sourcingBackendClient.planNaturalLanguageSearch(nextQuery);
+        await sourcingBackendClient.planNaturalLanguageSearch(
+          nextQuery,
+          "",
+          cohortSelection || undefined,
+        );
       submittedHistoryId = nextHistoryId;
       if (!isRequestEpochActive(requestEpoch)) {
         return;
@@ -1203,6 +1248,7 @@ export function SearchPage() {
         await sourcingBackendClient.planNaturalLanguageSearch(
           [currentFlow.queryText, currentFlow.revisionText].filter(Boolean).join(" "),
           currentFlow.id,
+          currentFlow.reviewDecision.cohortSelection || currentFlow.plan.cohortSelection,
         );
       if (!isRequestEpochActive(requestEpoch)) {
         return;
@@ -1542,6 +1588,10 @@ export function SearchPage() {
         reviewDecision={flow.reviewDecision}
         reviewChecklistConfirmed={flow.reviewChecklistConfirmed}
         promptExamples={promptExamples}
+        cohortSelection={cohortSelection}
+        cohortOptions={cohortOptions}
+        isLoadingCohortOptions={isLoadingCohortOptions}
+        cohortOptionsError={cohortOptionsError}
         plan={plan}
         timelineSteps={timelineSteps}
         dashboard={dashboard}
@@ -1575,6 +1625,10 @@ export function SearchPage() {
         isConfirmingPlan={isConfirmingPlan}
         isContinuingStage2={isContinuingStage2}
         onQueryChange={setQueryText}
+        onCohortSelectionChange={setCohortSelection}
+        onRetryCohortOptions={() => {
+          void loadCohortOptions();
+        }}
         onSubmitSearch={submitSearch}
         onPickPrompt={setQueryText}
         onRevisionChange={(value) => {

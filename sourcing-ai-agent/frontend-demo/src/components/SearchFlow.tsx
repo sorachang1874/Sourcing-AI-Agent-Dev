@@ -13,6 +13,8 @@ import {
 } from "../lib/dashboardHydration";
 import type {
   CandidateReviewStatus,
+  CohortSelection,
+  CohortSelectionOptions,
   DashboardData,
   DemoPlan,
   PlanReviewDecision,
@@ -34,6 +36,10 @@ interface SearchFlowProps {
   reviewDecision: PlanReviewDecision;
   reviewChecklistConfirmed: boolean;
   promptExamples: string[];
+  cohortSelection: CohortSelection | null;
+  cohortOptions: CohortSelectionOptions | null;
+  isLoadingCohortOptions: boolean;
+  cohortOptionsError: string;
   plan: DemoPlan | null;
   timelineSteps: SearchTimelineStep[];
   dashboard: DashboardData | null;
@@ -50,6 +56,8 @@ interface SearchFlowProps {
   isConfirmingPlan: boolean;
   isContinuingStage2: boolean;
   onQueryChange: (value: string) => void;
+  onCohortSelectionChange: (value: CohortSelection | null) => void;
+  onRetryCohortOptions: () => void;
   onSubmitSearch: (value: string) => void;
   onPickPrompt?: (value: string) => void;
   onRevisionChange: (value: string) => void;
@@ -110,6 +118,10 @@ export function SearchFlow({
   reviewDecision,
   reviewChecklistConfirmed,
   promptExamples,
+  cohortSelection,
+  cohortOptions,
+  isLoadingCohortOptions,
+  cohortOptionsError,
   plan,
   timelineSteps,
   dashboard,
@@ -126,6 +138,8 @@ export function SearchFlow({
   isConfirmingPlan,
   isContinuingStage2,
   onQueryChange,
+  onCohortSelectionChange,
+  onRetryCohortOptions,
   onSubmitSearch,
   onPickPrompt,
   onRevisionChange,
@@ -235,7 +249,13 @@ export function SearchFlow({
           isSubmitting={isGeneratingPlan}
           promptExamples={promptExamples}
           afterPrompts={idleSupplementalContent}
+          cohortSelection={cohortSelection}
+          cohortOptions={cohortOptions}
+          isLoadingCohortOptions={isLoadingCohortOptions}
+          cohortOptionsError={cohortOptionsError}
           onChange={onQueryChange}
+          onCohortSelectionChange={onCohortSelectionChange}
+          onRetryCohortOptions={onRetryCohortOptions}
           onSubmit={onSubmitSearch}
           onPickPrompt={onPickPrompt}
         />
@@ -313,11 +333,15 @@ export function SearchFlow({
                 plan={plan}
                 revisionText={revisionText}
                 reviewDecision={reviewDecision}
+                cohortOptions={cohortOptions}
+                isLoadingCohortOptions={isLoadingCohortOptions}
+                cohortOptionsError={cohortOptionsError}
                 reviewChecklistConfirmed={reviewChecklistConfirmed}
                 isApplyingRevision={isApplyingRevision}
                 isConfirming={isConfirmingPlan}
                 onRevisionChange={onRevisionChange}
                 onReviewDecisionChange={onReviewDecisionChange}
+                onRetryCohortOptions={onRetryCohortOptions}
                 onReviewChecklistChange={onReviewChecklistChange}
                 onApplyRevision={onApplyRevision}
                 onConfirm={onConfirmPlan}

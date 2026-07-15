@@ -5,6 +5,12 @@ import {
   dashboardRowHydrationTargetCount,
 } from "./dashboardHydration";
 import { lifecycleEffectiveDeltaMaterializedCount } from "./resultViewLifecycle";
+import {
+  cloneCohortSelection,
+  equalCohortSelection,
+  parseCohortSelectionOptionsPayload,
+  parseCohortSelectionPayload,
+} from "./cohortSelection";
 import { normalizeWorkflowStatus, resolveWorkflowStatus } from "./workflowStatus";
 import {
   OPERATION_ACTION_DECISION_APPLIED_OUTCOMES,
@@ -33,6 +39,8 @@ import type {
   CandidateReviewStatus,
   CandidateSourceMatch,
   BoardRuntimeState,
+  CohortSelection,
+  CohortSelectionOptions,
   DashboardData,
   DemoPlan,
   EffectiveExecutionSemantics,
@@ -5013,10 +5021,43 @@ function mapPlanReviewGate(payload: any, requestPreview: Record<string, unknown>
   };
 }
 
+function extractPlanCohortSelection(
+  payload: any,
+  explainPayload: any,
+  requestPreview: Record<string, unknown>,
+): CohortSelection | undefined {
+  const metadata = (payload?.metadata as Record<string, unknown>) || {};
+  const records = [
+    payload?.request,
+    explainPayload?.request,
+    requestPreview,
+    payload?.intent_view,
+    explainPayload?.intent_view,
+    payload?.plan?.intent_view,
+    metadata.request,
+    metadata.request_preview,
+  ].filter(
+    (value): value is Record<string, unknown> =>
+      Boolean(value) && typeof value === "object" && !Array.isArray(value),
+  );
+  const selections = records
+    .filter((record) => Object.prototype.hasOwnProperty.call(record, "cohort_selection"))
+    .map((record) => parseCohortSelectionPayload(record.cohort_selection));
+  if (selections.length === 0) {
+    return undefined;
+  }
+  const canonical = selections[0];
+  if (selections.some((selection) => !equalCohortSelection(canonical, selection))) {
+    throw new Error("Plan response contains conflicting cohort_selection mirrors.");
+  }
+  return cloneCohortSelection(canonical);
+}
+
 function mapPlanReviewDecisionDefaults(
   payload: any,
   requestPreview: Record<string, unknown>,
   reviewGate: PlanReviewGate,
+  cohortSelection?: CohortSelection,
 ): PlanReviewDecision {
   const intentAxes = ((requestPreview.intent_axes as Record<string, unknown>) || {});
   const scopeBoundary = ((intentAxes.scope_boundary as Record<string, unknown>) || {});
@@ -5064,6 +5105,7 @@ function mapPlanReviewDecisionDefaults(
     runFormerSearchSeed:
       asOptionalBoolean(fallbackPolicy.run_former_search_seed) ??
       asOptionalBoolean(recommendedPatch.run_former_search_seed),
+    cohortSelection: cohortSelection ? cloneCohortSelection(cohortSelection) : undefined,
   };
 }
 
@@ -5122,6 +5164,9 @@ export function planReviewDecisionToApiPayload(
   if (allowed.has("run_former_search_seed") && decision.runFormerSearchSeed !== undefined) {
     payload.run_former_search_seed = decision.runFormerSearchSeed;
   }
+  if (decision.cohortSelection) {
+    payload.cohort_selection = cloneCohortSelection(decision.cohortSelection);
+  }
   return payload;
 }
 
@@ -5170,6 +5215,7 @@ function mapPlanPayloadToDemoPlan(payload: any, queryText: string, explainPayloa
     (metadata.request_preview as Record<string, unknown>) ||
     {}
   );
+  const cohortSelection = extractPlanCohortSelection(payload, explain, requestPreview);
   const organizationExecutionProfile =
     (explain.organization_execution_profile as Record<string, unknown>) ||
     (payload.organization_execution_profile as Record<string, unknown>) ||
@@ -5251,19 +5297,26 @@ function mapPlanPayloadToDemoPlan(payload: any, queryText: string, explainPayloa
     targetCompanyIdentity,
     providerExecutionLanes,
     reviewGate,
-    reviewDecisionDefaults: mapPlanReviewDecisionDefaults(payload, requestPreview, reviewGate),
+    reviewDecisionDefaults: mapPlanReviewDecisionDefaults(payload, requestPreview, reviewGate, cohortSelection),
+    cohortSelection,
   };
 }
 
-export async function getWorkflowExplain(queryText: string): Promise<any> {
+export async function getWorkflowExplain(queryText: string, cohortSelection?: CohortSelection): Promise<any> {
   return fetchJson<any>("/api/workflows/explain", {
     method: "POST",
     body: JSON.stringify({
       raw_user_request: queryText,
       planning_mode: "model_assisted",
+      ...(cohortSelection ? { cohort_selection: cloneCohortSelection(cohortSelection) } : {}),
       ...DEFAULT_RECALL_LIMITS,
     }),
   }, PLAN_API_TIMEOUT_MS);
+}
+
+export async function getCohortSelectionOptions(): Promise<CohortSelectionOptions> {
+  const payload = await fetchJson<unknown>("/api/cohort-selection/options");
+  return parseCohortSelectionOptionsPayload(payload);
 }
 
 export interface FrontendHistoryRecoveryEnvelope {
@@ -5339,11 +5392,16 @@ function mapFrontendHistoryRecoveryPayload(
   };
 }
 
-function buildPlanSubmitPayload(queryText: string, historyId = ""): Record<string, unknown> {
+function buildPlanSubmitPayload(
+  queryText: string,
+  historyId = "",
+  cohortSelection?: CohortSelection,
+): Record<string, unknown> {
   const normalizedHistoryId = historyId.trim();
   return {
     raw_user_request: queryText,
     ...(normalizedHistoryId ? { history_id: normalizedHistoryId } : {}),
+    ...(cohortSelection ? { cohort_selection: cloneCohortSelection(cohortSelection) } : {}),
     planning_mode: "model_assisted",
     ...DEFAULT_RECALL_LIMITS,
   };
@@ -5367,8 +5425,9 @@ function resolvePlanSubmitHistoryId(requestedHistoryId: string, responseHistoryI
 export async function submitPlanEnvelope(
   queryText: string,
   historyId = "",
+  cohortSelection?: CohortSelection,
 ): Promise<{ plan: DemoPlan | null; reviewId: string; historyId: string; status: string; raw: any; explain: any }> {
-  const requestPayload = buildPlanSubmitPayload(queryText, historyId);
+  const requestPayload = buildPlanSubmitPayload(queryText, historyId, cohortSelection);
   const payload = await fetchJson<any>("/api/plan/submit", {
     method: "POST",
     body: JSON.stringify(requestPayload),
@@ -5392,8 +5451,9 @@ export async function submitPlanEnvelope(
 export function __testBuildPlanSubmitPayload(
   queryText: string,
   historyId = "",
+  cohortSelection?: CohortSelection,
 ): Record<string, unknown> {
-  return buildPlanSubmitPayload(queryText, historyId);
+  return buildPlanSubmitPayload(queryText, historyId, cohortSelection);
 }
 
 export function __testResolvePlanSubmitHistoryId(

@@ -48,6 +48,7 @@ class FrontendPlanContractTest(unittest.TestCase):
                   exports: module.exports,
                   require: localRequire,
                   console,
+                  TextEncoder,
                   crypto: { randomUUID: () => "test-plan-id" },
                 },
                 { filename: path.basename(relativePath) },
@@ -55,6 +56,8 @@ class FrontendPlanContractTest(unittest.TestCase):
               return module.exports;
             }
 
+            const cohortSelection = loadModule("frontend-demo/src/lib/cohortSelection.ts");
+            const runtimeContract = loadModule("contracts/frontend_api_runtime_contract.ts");
             const api = loadModule("frontend-demo/src/lib/api.ts", {
               "../data/mockData": {
                 mockCandidateDetails: {},
@@ -70,6 +73,8 @@ class FrontendPlanContractTest(unittest.TestCase):
               "./resultViewLifecycle": {
                 lifecycleEffectiveDeltaMaterializedCount: () => 0,
               },
+              "./cohortSelection": cohortSelection,
+              "../../../contracts/frontend_api_runtime_contract": runtimeContract,
             });
             const historyRecovery = loadModule("frontend-demo/src/lib/historyRecovery.ts", {
               "./historySummary": { summarizeSearchQuery: (value) => value },
@@ -77,6 +82,7 @@ class FrontendPlanContractTest(unittest.TestCase):
                 buildReusedCompletedTimelineSteps: () => [],
                 isReusedCompletedHistory: () => false,
               },
+              "./cohortSelection": cohortSelection,
             });
 
             const staleLovableShape = {
@@ -157,6 +163,51 @@ class FrontendPlanContractTest(unittest.TestCase):
                 return String(error?.message || error || "");
               }
             };
+            const optionsPayload = {
+              schema_version: "cohort_selection.v1",
+              registry_version: "cohort_selection.registry.v1",
+              registry_digest: "registry-digest",
+              role_buckets: [
+                { id: "engineering", label: "Engineer", order: 20 },
+                { id: "research", label: "Researcher", order: 10 },
+                { id: "product_management", label: "Product Manager", order: 30 },
+              ],
+              employment_statuses: [
+                { id: "former", label: "Former employees", order: 20 },
+                { id: "current", label: "Current employees", order: 10 },
+              ],
+              role_match_options: [
+                { id: "all", label: "Match all selected roles", order: 20 },
+                { id: "any", label: "Match any selected role", order: 10 },
+              ],
+              defaults: { role_match: "any" },
+            };
+            const parsedOptions = cohortSelection.parseCohortSelectionOptionsPayload(optionsPayload);
+            const defaultCohort = cohortSelection.createDefaultCohortSelection(parsedOptions);
+            const explicitCohort = {
+              schema_version: "cohort_selection.v1",
+              role_bucket_ids: ["research", "engineering"],
+              employment_statuses: ["current", "former"],
+              role_match: "any",
+              source: "user_explicit",
+            };
+            const exactCohortPlan = api.__testMapPlanPayloadToDemoPlan({
+              request: { raw_user_request: "find people", cohort_selection: explicitCohort },
+              request_preview: { cohort_selection: explicitCohort },
+              plan: {},
+            }, "find people");
+            const exactCohortReview = api.planReviewDecisionToApiPayload({
+              confirmedCompanyScope: [],
+              extraSourceFamilies: [],
+              cohortSelection: explicitCohort,
+            }, []);
+            const clonedReviewDecision = historyRecovery.cloneReviewDecision({
+              reviewDecisionDefaults: {
+                confirmedCompanyScope: [],
+                extraSourceFamilies: [],
+                cohortSelection: explicitCohort,
+              },
+            });
 
             console.log(JSON.stringify({
               canonicalLabel: api.__testResolvePlanAcquisitionStrategyLabel(staleLovableShape),
@@ -280,6 +331,47 @@ class FrontendPlanContractTest(unittest.TestCase):
               malformedResponseHistoryIdErrors: [{}, ["history-array"], true, 123].map((value) =>
                 captureError(() => api.__testResolvePlanSubmitHistoryId("", value)),
               ),
+              parsedRoleIds: parsedOptions.roleBuckets.map((option) => option.id),
+              parsedStatusIds: parsedOptions.employmentStatuses.map((option) => option.id),
+              parsedRoleMatchIds: parsedOptions.roleMatchOptions.map((option) => option.id),
+              defaultCohort,
+              orderedRoleToggle: cohortSelection.toggleOrderedOption(
+                ["engineering"],
+                "research",
+                true,
+                parsedOptions.roleBuckets,
+              ),
+              legacyCohortOmitted: !("cohort_selection" in api.__testBuildPlanSubmitPayload("find people")),
+              explicitCohortSubmit: api.__testBuildPlanSubmitPayload(
+                "find people",
+                "history-server-owned-1",
+                explicitCohort,
+              ).cohort_selection,
+              exactCohortPlan: exactCohortPlan.cohortSelection,
+              exactCohortPlanDefault: exactCohortPlan.reviewDecisionDefaults.cohortSelection,
+              exactCohortReview: exactCohortReview.cohort_selection,
+              clonedReviewCohort: clonedReviewDecision.cohortSelection,
+              conflictingCohortMirrorError: captureError(() =>
+                api.__testMapPlanPayloadToDemoPlan({
+                  request: { cohort_selection: explicitCohort },
+                  request_preview: {
+                    cohort_selection: {
+                      ...explicitCohort,
+                      employment_statuses: ["current"],
+                    },
+                  },
+                  plan: {},
+                }, "find people"),
+              ),
+              duplicateOptionError: captureError(() =>
+                cohortSelection.parseCohortSelectionOptionsPayload({
+                  ...optionsPayload,
+                  role_buckets: [
+                    { id: "research", label: "Researcher", order: 10 },
+                    { id: "research", label: "Duplicate", order: 20 },
+                  ],
+                }),
+              ),
             }));
             """
         )
@@ -340,7 +432,8 @@ class FrontendPlanContractTest(unittest.TestCase):
         initial_start = source.index("const submitSearch")
         initial_end = source.index("const startExcelWorkflow", initial_start)
         initial_section = source[initial_start:initial_end]
-        self.assertIn("planNaturalLanguageSearch(nextQuery);", initial_section)
+        self.assertIn("planNaturalLanguageSearch(", initial_section)
+        self.assertIn('nextQuery,\n          "",\n          cohortSelection || undefined,', initial_section)
         self.assertNotIn("planNaturalLanguageSearch(nextQuery, historyItem.id)", initial_section)
         self.assertGreaterEqual(initial_section.count("persistFlow("), 3)
         self.assertIn("persistFlow(pendingHydrationFlow, null, historyItem.id)", initial_section)
@@ -352,6 +445,60 @@ class FrontendPlanContractTest(unittest.TestCase):
         revision_call_end = revision_section.index(");", revision_call_start)
         revision_call = revision_section[revision_call_start:revision_call_end]
         self.assertIn("currentFlow.id", revision_call)
+
+    def test_cohort_selection_uses_public_options_and_round_trips_exactly(self) -> None:
+        result = self._run_contract_cases()
+        explicit = {
+            "schema_version": "cohort_selection.v1",
+            "role_bucket_ids": ["research", "engineering"],
+            "employment_statuses": ["current", "former"],
+            "role_match": "any",
+            "source": "user_explicit",
+        }
+
+        self.assertEqual(
+            result["parsedRoleIds"],
+            ["research", "engineering", "product_management"],
+        )
+        self.assertEqual(result["parsedStatusIds"], ["current", "former"])
+        self.assertEqual(result["parsedRoleMatchIds"], ["any", "all"])
+        self.assertEqual(
+            result["defaultCohort"],
+            {
+                "schema_version": "cohort_selection.v1",
+                "role_bucket_ids": [],
+                "employment_statuses": ["current", "former"],
+                "role_match": "any",
+                "source": "user_explicit",
+            },
+        )
+        self.assertEqual(result["orderedRoleToggle"], ["research", "engineering"])
+        self.assertTrue(result["legacyCohortOmitted"])
+        self.assertEqual(result["explicitCohortSubmit"], explicit)
+        self.assertEqual(result["exactCohortPlan"], explicit)
+        self.assertEqual(result["exactCohortPlanDefault"], explicit)
+        self.assertEqual(result["exactCohortReview"], explicit)
+        self.assertEqual(result["clonedReviewCohort"], explicit)
+        self.assertIn("conflicting cohort_selection mirrors", result["conflictingCohortMirrorError"])
+        self.assertIn("duplicate role_buckets id", result["duplicateOptionError"])
+
+        picker_source = (REPO_ROOT / "frontend-demo/src/components/CohortSelectionPicker.tsx").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("options.roleBuckets.map", picker_source)
+        self.assertIn("options.employmentStatuses.map", picker_source)
+        self.assertIn("options.roleMatchOptions.map", picker_source)
+        self.assertNotIn('value="research"', picker_source)
+        self.assertNotIn('value="engineering"', picker_source)
+        self.assertNotIn('value="product_management"', picker_source)
+
+        page_source = (REPO_ROOT / "frontend-demo/src/pages/SearchPage.tsx").read_text(encoding="utf-8")
+        self.assertIn("getCohortSelectionOptions()", page_source)
+        self.assertIn("cohortSelection || undefined", page_source)
+        self.assertIn(
+            "currentFlow.reviewDecision.cohortSelection || currentFlow.plan.cohortSelection",
+            page_source,
+        )
 
     def test_local_plan_snapshot_rekey_removes_provisional_id(self) -> None:
         if shutil.which("node") is None:

@@ -1,15 +1,27 @@
 import type { ReactNode } from "react";
-import type { DemoPlan, PlanReviewDecision, PlanReviewEditableField, ProviderExecutionLanePreview } from "../types";
+import { summarizeCohortSelection } from "../lib/cohortSelection";
+import type {
+  CohortSelectionOptions,
+  DemoPlan,
+  PlanReviewDecision,
+  PlanReviewEditableField,
+  ProviderExecutionLanePreview,
+} from "../types";
+import { CohortSelectionPicker } from "./CohortSelectionPicker";
 
 interface PlanCardProps {
   plan: DemoPlan;
   revisionText: string;
   reviewDecision: PlanReviewDecision;
+  cohortOptions: CohortSelectionOptions | null;
+  isLoadingCohortOptions: boolean;
+  cohortOptionsError: string;
   reviewChecklistConfirmed: boolean;
   isApplyingRevision: boolean;
   isConfirming: boolean;
   onRevisionChange: (value: string) => void;
   onReviewDecisionChange: (patch: Partial<PlanReviewDecision>) => void;
+  onRetryCohortOptions: () => void;
   onReviewChecklistChange: (value: boolean) => void;
   onApplyRevision: () => void;
   onConfirm: () => void;
@@ -171,10 +183,14 @@ export function PlanCard({
   plan,
   revisionText,
   reviewDecision,
+  cohortOptions,
+  isLoadingCohortOptions,
+  cohortOptionsError,
   isApplyingRevision,
   isConfirming,
   onRevisionChange,
   onReviewDecisionChange,
+  onRetryCohortOptions,
   onApplyRevision,
   onConfirm,
 }: PlanCardProps) {
@@ -216,6 +232,12 @@ export function PlanCard({
           <dt>目标人群</dt>
           <dd>{plan.targetPopulation}</dd>
         </div>
+        {plan.cohortSelection ? (
+          <div className="plan-grid-wide" data-testid="plan-cohort-summary">
+            <dt>精确人群筛选</dt>
+            <dd>{summarizeCohortSelection(plan.cohortSelection, cohortOptions)}</dd>
+          </div>
+        ) : null}
         {showProjectScope ? (
           <div>
             <dt>项目范围</dt>
@@ -288,6 +310,17 @@ export function PlanCard({
             rows={3}
           />
         </div>
+
+        <CohortSelectionPicker
+          idPrefix="plan-review"
+          value={reviewDecision.cohortSelection || plan.cohortSelection || null}
+          options={cohortOptions}
+          isLoading={isLoadingCohortOptions}
+          errorMessage={cohortOptionsError}
+          locked={Boolean(plan.cohortSelection)}
+          onChange={(value) => onReviewDecisionChange({ cohortSelection: value || undefined })}
+          onRetryOptions={onRetryCohortOptions}
+        />
 
         {hasAdvancedContent ? (
           <details className="advanced-review-panel">
