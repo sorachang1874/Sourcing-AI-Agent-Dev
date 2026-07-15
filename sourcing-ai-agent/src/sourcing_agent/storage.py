@@ -6917,6 +6917,34 @@ class ControlPlaneStore:
             return {}
         return postgres_row
 
+    def list_workflow_commands_by_ids(
+        self,
+        command_ids: list[str] | tuple[str, ...],
+    ) -> list[dict[str, Any]]:
+        """Fetch one bounded public page of WorkflowCommand identities with one authoritative query."""
+
+        self._require_postgres_for_durable_runtime("workflow_commands")
+        normalized_ids = _workflow_runtime_repo.normalize_workflow_evidence_batch_ids(
+            command_ids,
+            identity_name="command_ids",
+        )
+        if not normalized_ids:
+            return []
+        rows = self._select_control_plane_rows(
+            "workflow_commands",
+            row_builder=self._workflow_command_from_row,
+            where_sql="command_id IN (" + ", ".join(["%s"] * len(normalized_ids)) + ")",
+            params=normalized_ids,
+            limit=len(normalized_ids),
+        )
+        requested_ids = set(normalized_ids)
+        rows_by_id = {
+            str(row.get("command_id") or "").strip(): row
+            for row in rows
+            if str(row.get("command_id") or "").strip() in requested_ids
+        }
+        return [rows_by_id[command_id] for command_id in normalized_ids if command_id in rows_by_id]
+
     def update_workflow_command_payload(
         self,
         command_id: str,

@@ -268,7 +268,15 @@ serve、会话/事件层、planner loop），用一个垂直切片证明闭环�
   constructor-only `CommandKernel` fixed-forward；#3=`R-019` 继续 open。该 follow-up stable evidence=
   `18/63/129/60/51`、frontend `81 modules`、public mapper `85/34`、Ruff/diff clean、mypy `81/4`，fresh
   dirty-tree non-author advisory=`0/0/0/0 CLEAN`；pinned review 仍 pending，在 valid scope-matched artifact 前没有
-  formal verdict。该批零
+  formal verdict。第二个 artifact `20260714T231243Z_*` 也因 Desktop 只在 rollout `response_item` 追加 terminal
+  memory citation 而 `final_response_item_exact=false`，故其 `0/4/4/1` 与 printed `NO-GO` 仍仅 advisory。其
+  action-specific outcome、canonical member once-capture/shared traversal、demo bounded/cycle-safe、single outcome
+  owner、真实 PG 500-id 1+1 batch/zero-point-read、exact-empty operation-sync 与 mutable-Activity TOCTOU findings
+  已 fixed-forward；final integration audit 又闭合 frontend nonempty-projected-empty sync、memoized DAG alias output
+  放大、foreign workspace/run provenance 与 whitespace-wrapped outcome。focused evidence=`18 projection + 38
+  claim-fence + 6 backend/3 subtests + 2 real-PG + 60 storage + 60 pre-Agent`、frontend build `82 modules`、mypy
+  `81/4`、Ruff/diff clean，dirty-tree non-author advisory=`0/0/0/0 CLEAN`。fresh highest-effort pinned review 仍
+  pending。该批零
   migration/claim/CAS/Stage A/B/dispatch/served，故 R-019、action-root gate、
   OB-10.1/10.2/10.3/10.4 和 served=0 均不变。
 - D3c2a dormant migration candidate 仅安装 `workflow_commands` 的精确 20 columns + 16 个 `NOT VALID` local
@@ -297,7 +305,10 @@ serve、会话/事件层、planner loop），用一个垂直切片证明闭环�
   event→commands→outbox→state 仍是 R-019 multi-commit。下一批必须先 ratify DDL，
   再按 dormant ActivityRun+Attempt → event → intent/receipt/quarantine 顺序推进；本批不设计 schema，不关闭
   R-019/R-023/R-027/R-029、action-root、OB-10.1-10.4 或 served=0。首个 D3c2c pinned artifact 因
-  `final_response_item_exact=false` invalid；其 exposure lexical-zero advisory 已 fixed-forward，fresh retry pending。
+  `final_response_item_exact=false` invalid；其 exposure lexical-zero advisory 已 fixed-forward。retry
+  `20260714T234336Z_*` 也仅因同一 Desktop response-item annotation mismatch invalid；其 incomplete Migration-A
+  order oracle、non-closure exactness 与 stale 7-test evidence 已 fixed-forward，current oracle=`8 passed`，fresh
+  highest-effort pinned retry pending。
 - D3c2d implementation candidate 已据 §5.2/§11.1 ratify 并安装 dormant ActivityRun `6` columns +
   ActivityAttempt `10` columns，以及 `7+11` 个 `NOT VALID` local checks；5s second-table contention 必须回滚
   first-table DDL 与 ledger。existing `attempt_number` 与 future post-claim exact-copy `command_attempt` 明确分离，
@@ -414,7 +425,11 @@ TD-4 初始路由表已按 owner 2026-07-13 裁决落档（D0 §4）。
    `20260714T215839Z_*` D3c1a artifact 因 `final_response_item_exact=false` 仅为 invalid/advisory，不是 formal
    `NO-GO`；其 #1/#2/#4-#11 已按 bounded exact-built-in copier、single frontend traversal、source-exclusive current
    evidence、strict envelope/outcome、`NumberRecord`、producer-owned policy families 与 constructor-only kernel
-   fixed-forward，#3=`R-019` 保持 open。当前 follow-up 的 fresh validation/review 尚未记录；两批都不授权 runtime write。
+   fixed-forward，#3=`R-019` 保持 open。第二个 `20260714T231243Z_*` 同样 invalid/advisory；其七项 actionable
+   evidence 已通过 canonical outcome/budget manifest、action-specific matrix、once-captured wrapper traversal、bounded
+   demo、真实 PG bounded batch、exact-empty sentinel 与 Activity capture-once fixed-forward；final integration audit
+   进一步闭合 alias occurrence charging、frontend sync sentinel、foreign lineage 与 exact-string outcome。当前
+   targeted validation 已记录；fresh highest-effort pinned review 尚未完成。两批都不授权 runtime write。
    D3c2a 仅安装
    `workflow_commands` 的 20-column/16-`NOT VALID` dormant command subbatch，descriptor 与 runtime writers 未激活。
    D3c2b 接续安装 `plan_review_sessions` 11-column + `operation_runs` 5-column scoped-root dormant subbatch，

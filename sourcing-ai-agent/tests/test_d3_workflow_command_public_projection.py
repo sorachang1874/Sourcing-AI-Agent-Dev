@@ -57,6 +57,7 @@ API_PATH = SOURCE_ROOT / "api.py"
 FRONTEND_SCHEMA_PATH = REPO_ROOT / "contracts" / "frontend_api_contract.schema.json"
 FRONTEND_TYPES_PATH = REPO_ROOT / "contracts" / "frontend_api_contract.ts"
 FRONTEND_ADAPTER_PATH = REPO_ROOT / "contracts" / "frontend_api_adapter.ts"
+FRONTEND_RUNTIME_CONTRACT_PATH = REPO_ROOT / "contracts" / "frontend_api_runtime_contract.ts"
 FRONTEND_DEMO_API_PATH = REPO_ROOT / "frontend-demo" / "src" / "lib" / "api.ts"
 ESBUILD_MODULE_PATH = REPO_ROOT / "frontend-demo" / "node_modules" / "esbuild" / "lib" / "main.js"
 
@@ -1253,18 +1254,22 @@ def test_activity_public_field_contracts_are_descriptor_anchored_and_exact() -> 
     function = _function_definitions(ast.parse(ORCHESTRATOR_PATH.read_text(encoding="utf-8")))[
         "_workflow_command_control_public_api_record"
     ]
-    served_carriers = {
-        key.value
-        for assignment in ast.walk(function)
-        if isinstance(assignment, ast.Assign)
-        and any(
+    served_carriers: set[str] = set()
+    for assignment in ast.walk(function):
+        if isinstance(assignment, ast.Assign):
+            targets = assignment.targets
+        elif isinstance(assignment, ast.AnnAssign):
+            targets = [assignment.target]
+        else:
+            continue
+        if not any(
             isinstance(target, ast.Name) and target.id in {"activity_projectors", "activity_list_projectors"}
-            for target in assignment.targets
+            for target in targets
+        ) or not isinstance(assignment.value, ast.Dict):
+            continue
+        served_carriers.update(
+            key.value for key in assignment.value.keys if isinstance(key, ast.Constant) and isinstance(key.value, str)
         )
-        and isinstance(assignment.value, ast.Dict)
-        for key in assignment.value.keys
-        if isinstance(key, ast.Constant) and isinstance(key.value, str)
-    }
     assert served_carriers == EXPECTED_SERVED_CONTROL_ACTIVITY_CARRIER_FIELDS
 
 
@@ -1773,6 +1778,7 @@ def test_activity_carriers_and_canonical_execution_summary_share_the_capability_
 def test_activity_control_target_and_command_control_activity_payloads_are_closed() -> None:
     command = {
         "command_id": "cmd-control-activity",
+        "workflow_run_id": "workflow-control-activity",
         "command_type": "test.command",
         "owner": "test-owner",
         "status": "running",
@@ -1818,6 +1824,8 @@ def test_activity_control_target_and_command_control_activity_payloads_are_close
 
     raw_activity_run = {
         "activity_run_id": "activity-control",
+        "workspace_id": "workspace-control-activity",
+        "workflow_run_id": command["workflow_run_id"],
         "command_id": command["command_id"],
         "activity_type": command["command_type"],
         "owner": command["owner"],
@@ -1827,7 +1835,9 @@ def test_activity_control_target_and_command_control_activity_payloads_are_close
     }
     raw_activity_attempt = {
         "attempt_id": "attempt-control",
+        "workspace_id": raw_activity_run["workspace_id"],
         "activity_run_id": "activity-control",
+        "workflow_run_id": command["workflow_run_id"],
         "command_id": command["command_id"],
         "attempt_number": 1.0,
         "activity_type": command["command_type"],
@@ -1838,7 +1848,9 @@ def test_activity_control_target_and_command_control_activity_payloads_are_close
     }
     raw_entity_delta = {
         "delta_id": "delta-control",
+        "workspace_id": raw_activity_run["workspace_id"],
         "activity_run_id": "activity-control",
+        "workflow_run_id": command["workflow_run_id"],
         "attempt_id": "attempt-control",
         "command_id": command["command_id"],
         "activity_type": command["command_type"],
@@ -1915,12 +1927,15 @@ def test_activity_control_target_and_command_control_activity_payloads_are_close
 def test_trusted_activity_provenance_is_reattached_only_from_consistent_current_evidence() -> None:
     command = {
         "command_id": "cmd-current-evidence",
+        "workflow_run_id": "workflow-current-evidence",
         "command_type": "test.command",
         "owner": "test-owner",
         "status": "running",
     }
     activity = {
         "activity_run_id": "activity-current-evidence",
+        "workspace_id": "workspace-current-evidence",
+        "workflow_run_id": command["workflow_run_id"],
         "command_id": command["command_id"],
         "activity_type": command["command_type"],
         "owner": command["owner"],
@@ -1931,7 +1946,9 @@ def test_trusted_activity_provenance_is_reattached_only_from_consistent_current_
     orchestrator = _projection_orchestrator(store)
     attempt = {
         "attempt_id": "attempt-current-evidence",
+        "workspace_id": activity["workspace_id"],
         "activity_run_id": activity["activity_run_id"],
+        "workflow_run_id": activity["workflow_run_id"],
         "command_id": command["command_id"],
         "attempt_number": 1,
         "status": "running",
@@ -1941,7 +1958,9 @@ def test_trusted_activity_provenance_is_reattached_only_from_consistent_current_
     }
     delta = {
         "delta_id": "delta-current-evidence",
+        "workspace_id": activity["workspace_id"],
         "activity_run_id": activity["activity_run_id"],
+        "workflow_run_id": activity["workflow_run_id"],
         "attempt_id": attempt["attempt_id"],
         "command_id": command["command_id"],
         "status": "pending",
@@ -2538,6 +2557,7 @@ def test_frontend_schema_and_mappers_are_closed_and_operation_sync_is_typed() ->
 
     types_source = FRONTEND_TYPES_PATH.read_text(encoding="utf-8")
     adapter_source = FRONTEND_ADAPTER_PATH.read_text(encoding="utf-8")
+    runtime_contract_source = FRONTEND_RUNTIME_CONTRACT_PATH.read_text(encoding="utf-8")
     demo_source = FRONTEND_DEMO_API_PATH.read_text(encoding="utf-8")
     assert (
         _typescript_interface_fields(
@@ -2762,7 +2782,33 @@ def test_frontend_schema_and_mappers_are_closed_and_operation_sync_is_typed() ->
         "WORKFLOW_COMMAND_CONTROL_APPLIED_OUTCOMES",
         "requirePublicResponseOutcome",
     ):
-        assert symbol in types_source or symbol in demo_source
+        assert symbol in types_source or symbol in demo_source or symbol in runtime_contract_source
+    runtime_contract_import = 'from "./frontend_api_runtime_contract"'
+    assert runtime_contract_import in types_source
+    assert runtime_contract_import in adapter_source
+    assert 'from "../../../contracts/frontend_api_runtime_contract"' in demo_source
+    for symbol in (
+        "OPERATION_ACTION_DECISION_APPLIED_OUTCOMES",
+        "OPERATION_RUN_CONTROL_APPLIED_OUTCOMES",
+        "OPERATION_RUN_PROVENANCE_SUCCESS_STATUSES",
+        "WORKFLOW_COMMAND_CONTROL_APPLIED_OUTCOMES",
+        "WORKFLOW_PUBLIC_PROJECTION_LIMITS",
+    ):
+        assert f"export const {symbol}" in runtime_contract_source
+        assert f"const {symbol} =" not in demo_source
+    for projector_source in (adapter_source, demo_source):
+        assert "defaultMemo: new WeakMap<object" in projector_source
+        assert "executionSummaryMemo: new WeakMap<object" in projector_source
+        assert "PublicProjectionOccurrence" in projector_source
+        assert "occurrenceNodes > remainingNodes" in projector_source
+    demo_status_validator = _typescript_segment(
+        demo_source,
+        "function requirePublicResponseStatus",
+        "function requirePublicResponseOutcome",
+    )
+    assert "asString(" not in demo_status_validator
+    assert "value.length === 0" in demo_status_validator
+    assert "return value;" in demo_status_validator
 
     provider_after_start_string_fields = {
         "generic_control_contract",
@@ -2788,6 +2834,7 @@ def test_frontend_schema_and_mappers_are_closed_and_operation_sync_is_typed() ->
 def test_frontend_mappers_executably_drop_unknown_and_nested_capability_fields(tmp_path: Path) -> None:
     public_adapter_bundle = tmp_path / "frontend_api_adapter.cjs"
     demo_api_bundle = tmp_path / "demo_api.cjs"
+    runtime_contract_bundle = tmp_path / "frontend_api_runtime_contract.cjs"
     bundle_script = """
 const esbuild = require(process.argv[1]);
 esbuild.buildSync({
@@ -2803,6 +2850,7 @@ esbuild.buildSync({
     for entrypoint, output_path in (
         (FRONTEND_ADAPTER_PATH, public_adapter_bundle),
         (FRONTEND_DEMO_API_PATH, demo_api_bundle),
+        (FRONTEND_RUNTIME_CONTRACT_PATH, runtime_contract_bundle),
     ):
         build = subprocess.run(
             [
@@ -2824,6 +2872,7 @@ esbuild.buildSync({
 const assert = require("node:assert/strict");
 const publicAdapter = require(process.argv[1]);
 const demoApi = require(process.argv[2]);
+const runtimeContract = require(process.argv[6]);
 
 function structuredArtifactRefs() {
   return [
@@ -3175,21 +3224,22 @@ const mappedDelta = publicAdapter.mapWorkflowEntityDeltaRecord(deltaInput);
 const demoActivity = demoApi.deriveWorkflowActivityRecord(activityInput);
 const demoAttempt = demoApi.deriveWorkflowActivityAttemptRecord(attemptInput);
 const demoDelta = demoApi.deriveWorkflowEntityDeltaRecord(deltaInput);
+const cloneProjectionInput = (value) => structuredClone(value);
 const mappedControlResponse = publicAdapter.mapWorkflowCommandControlResponse({
   status: "cancelled",
-  workflow_activity: activityInput,
-  workflow_activity_run: activityInput,
-  workflow_activity_attempt: attemptInput,
-  workflow_entity_delta: deltaInput,
-  workflow_activities: [activityInput],
-  workflow_activity_runs: [activityInput],
-  workflow_activity_attempts: [attemptInput],
-  workflow_entity_deltas: [deltaInput],
+  workflow_activity: cloneProjectionInput(activityInput),
+  workflow_activity_run: cloneProjectionInput(activityInput),
+  workflow_activity_attempt: cloneProjectionInput(attemptInput),
+  workflow_entity_delta: cloneProjectionInput(deltaInput),
+  workflow_activities: [cloneProjectionInput(activityInput)],
+  workflow_activity_runs: [cloneProjectionInput(activityInput)],
+  workflow_activity_attempts: [cloneProjectionInput(attemptInput)],
+  workflow_entity_deltas: [cloneProjectionInput(deltaInput)],
   workflowActivityRun: {
-    ...activityInput,
+    ...cloneProjectionInput(activityInput),
     control_target: { command_id: "forged", command_status: "forged" },
   },
-  "workflow-activities": [activityInput],
+  "workflow-activities": [cloneProjectionInput(activityInput)],
 });
 
 for (const record of [mappedActivity, mappedAttempt, mappedDelta]) {
@@ -3245,16 +3295,16 @@ const nestedCarrierInput = {
   ...input,
   result: {
     safe_result: 7,
-    workflow_activity: activityInput,
-    workflow_activity_run: activityInput,
-    workflow_activity_attempt: attemptInput,
-    workflow_entity_delta: deltaInput,
-    workflow_activities: [activityInput],
-    workflow_activity_runs: [activityInput],
-    workflow_activity_attempts: [attemptInput],
-    workflow_entity_deltas: [deltaInput],
-    workflowActivityRun: activityInput,
-    "workflow-activity-attempts": [attemptInput],
+    workflow_activity: cloneProjectionInput(activityInput),
+    workflow_activity_run: cloneProjectionInput(activityInput),
+    workflow_activity_attempt: cloneProjectionInput(attemptInput),
+    workflow_entity_delta: cloneProjectionInput(deltaInput),
+    workflow_activities: [cloneProjectionInput(activityInput)],
+    workflow_activity_runs: [cloneProjectionInput(activityInput)],
+    workflow_activity_attempts: [cloneProjectionInput(attemptInput)],
+    workflow_entity_deltas: [cloneProjectionInput(deltaInput)],
+    workflowActivityRun: cloneProjectionInput(activityInput),
+    "workflow-activity-attempts": [cloneProjectionInput(attemptInput)],
     workflow_command: {
       command_id: "cmd-frontend-inner",
       command_type: "test.command",
@@ -3379,15 +3429,39 @@ assert.deepEqual(projectionLimits, {
   maxNodes: 4096,
   maxCollectionEntries: 256,
 });
+assert.deepEqual(runtimeContract.WORKFLOW_PUBLIC_PROJECTION_LIMITS, projectionLimits);
+assert.deepEqual(runtimeContract.OPERATION_ACTION_DECISION_APPLIED_OUTCOMES, {
+  approve: ["queued"],
+  reject: ["rejected"],
+});
+assert.deepEqual(runtimeContract.OPERATION_RUN_CONTROL_APPLIED_OUTCOMES, {
+  cancel: ["cancelled"],
+  retry: ["queued"],
+  resume: ["queued"],
+  dispatch: ["planned"],
+});
+assert.deepEqual(runtimeContract.WORKFLOW_COMMAND_CONTROL_APPLIED_OUTCOMES, {
+  cancel: ["cancelled"],
+  retry: ["queued"],
+  resume: ["queued"],
+});
 
 const exactCollectionBoundary = publicAdapter.mapWorkflowCommandRecord({
   payload: { items: Array.from({ length: projectionLimits.maxCollectionEntries }, (_, index) => index) },
 });
 assert.equal(exactCollectionBoundary.payload.items.length, projectionLimits.maxCollectionEntries);
+const exactDemoCollectionBoundary = demoApi.deriveWorkflowCommandRecord({
+  payload: { items: Array.from({ length: projectionLimits.maxCollectionEntries }, (_, index) => index) },
+}).raw;
+assert.equal(exactDemoCollectionBoundary.payload.items.length, projectionLimits.maxCollectionEntries);
 const overCollectionBoundary = publicAdapter.mapWorkflowCommandRecord({
   payload: { items: Array.from({ length: projectionLimits.maxCollectionEntries + 1 }, (_, index) => index) },
 });
 assert.equal(overCollectionBoundary.payload.items, undefined);
+const overDemoCollectionBoundary = demoApi.deriveWorkflowCommandRecord({
+  payload: { items: Array.from({ length: projectionLimits.maxCollectionEntries + 1 }, (_, index) => index) },
+}).raw;
+assert.equal(overDemoCollectionBoundary.payload.items, undefined);
 
 function nestedDepthPayload(wrapperCount) {
   let value = { leaf: "kept-at-boundary" };
@@ -3407,15 +3481,26 @@ const exactDepthWrapperCount = projectionLimits.maxDepth - 2;
 const exactDepthRecord = publicAdapter.mapWorkflowCommandRecord({
   payload: nestedDepthPayload(exactDepthWrapperCount),
 });
+const exactDemoDepthRecord = demoApi.deriveWorkflowCommandRecord({
+  payload: nestedDepthPayload(exactDepthWrapperCount),
+}).raw;
 assert.equal(
   readNestedDepthPayload(exactDepthRecord.payload, exactDepthWrapperCount),
+  "kept-at-boundary",
+);
+assert.equal(
+  readNestedDepthPayload(exactDemoDepthRecord.payload, exactDepthWrapperCount),
   "kept-at-boundary",
 );
 const overDepthWrapperCount = exactDepthWrapperCount + 1;
 const overDepthRecord = publicAdapter.mapWorkflowCommandRecord({
   payload: nestedDepthPayload(overDepthWrapperCount),
 });
+const overDemoDepthRecord = demoApi.deriveWorkflowCommandRecord({
+  payload: nestedDepthPayload(overDepthWrapperCount),
+}).raw;
 assert.equal(readNestedDepthPayload(overDepthRecord.payload, overDepthWrapperCount), undefined);
+assert.equal(readNestedDepthPayload(overDemoDepthRecord.payload, overDepthWrapperCount), undefined);
 
 const exactNodeBudgetRecord = publicAdapter.mapWorkflowCommandRecord({
   payload: {
@@ -3429,11 +3514,25 @@ assert.equal(exactNodeBudgetRecord.payload.matrix.length, 16);
 assert.equal(exactNodeBudgetRecord.payload.matrix[14].length, projectionLimits.maxCollectionEntries);
 assert.equal(exactNodeBudgetRecord.payload.matrix[15].length, 237);
 assert.equal(exactNodeBudgetRecord.payload.after_budget, undefined);
+const exactDemoNodeBudgetRecord = demoApi.deriveWorkflowCommandRecord({
+  payload: {
+    matrix: Array.from({ length: 16 }, () =>
+      Array.from({ length: projectionLimits.maxCollectionEntries }, (_, index) => index),
+    ),
+    after_budget: "must-be-omitted",
+  },
+}).raw;
+assert.equal(exactDemoNodeBudgetRecord.payload.matrix.length, 16);
+assert.equal(exactDemoNodeBudgetRecord.payload.matrix[14].length, projectionLimits.maxCollectionEntries);
+assert.equal(exactDemoNodeBudgetRecord.payload.matrix[15].length, 237);
+assert.equal(exactDemoNodeBudgetRecord.payload.after_budget, undefined);
 
 const cyclicPayload = { safe: true };
 cyclicPayload.self = cyclicPayload;
 const cyclicRecord = publicAdapter.mapWorkflowCommandRecord({ payload: cyclicPayload });
 assert.deepEqual(cyclicRecord.payload, { safe: true });
+const cyclicDemoRecord = demoApi.deriveWorkflowCommandRecord({ payload: cyclicPayload }).raw;
+assert.deepEqual(cyclicDemoRecord.payload, { safe: true });
 
 function nestedCarrierListDepthPayload(wrapperCount) {
   let value = { workflow_commands: [] };
@@ -3453,9 +3552,19 @@ const exactCarrierListDepthWrapperCount = projectionLimits.maxDepth - 2;
 const exactCarrierListDepthRecord = publicAdapter.mapWorkflowCommandRecord({
   payload: nestedCarrierListDepthPayload(exactCarrierListDepthWrapperCount),
 });
+const exactDemoCarrierListDepthRecord = demoApi.deriveWorkflowCommandRecord({
+  payload: nestedCarrierListDepthPayload(exactCarrierListDepthWrapperCount),
+}).raw;
 assert.deepEqual(
   readNestedCarrierListDepthPayload(
     exactCarrierListDepthRecord.payload,
+    exactCarrierListDepthWrapperCount,
+  ).workflow_commands,
+  [],
+);
+assert.deepEqual(
+  readNestedCarrierListDepthPayload(
+    exactDemoCarrierListDepthRecord.payload,
     exactCarrierListDepthWrapperCount,
   ).workflow_commands,
   [],
@@ -3464,9 +3573,19 @@ const overCarrierListDepthWrapperCount = exactCarrierListDepthWrapperCount + 1;
 const overCarrierListDepthRecord = publicAdapter.mapWorkflowCommandRecord({
   payload: nestedCarrierListDepthPayload(overCarrierListDepthWrapperCount),
 });
+const overDemoCarrierListDepthRecord = demoApi.deriveWorkflowCommandRecord({
+  payload: nestedCarrierListDepthPayload(overCarrierListDepthWrapperCount),
+}).raw;
 assert.equal(
   readNestedCarrierListDepthPayload(
     overCarrierListDepthRecord.payload,
+    overCarrierListDepthWrapperCount,
+  ).workflow_commands,
+  undefined,
+);
+assert.equal(
+  readNestedCarrierListDepthPayload(
+    overDemoCarrierListDepthRecord.payload,
     overCarrierListDepthWrapperCount,
   ).workflow_commands,
   undefined,
@@ -3481,8 +3600,13 @@ cyclicCommandCarrierList.push(cyclicCommandCarrierChild);
 const cyclicCommandCarrierRecord = publicAdapter.mapWorkflowCommandRecord({
   result: { workflow_commands: cyclicCommandCarrierList },
 });
+const cyclicDemoCommandCarrierRecord = demoApi.deriveWorkflowCommandRecord({
+  result: { workflow_commands: cyclicCommandCarrierList },
+}).raw;
 assert.equal(cyclicCommandCarrierRecord.result.workflow_commands.length, 1);
 assert.deepEqual(cyclicCommandCarrierRecord.result.workflow_commands[0].result, {});
+assert.equal(cyclicDemoCommandCarrierRecord.result.workflow_commands.length, 1);
+assert.deepEqual(cyclicDemoCommandCarrierRecord.result.workflow_commands[0].result, {});
 
 const cyclicActivityCarrierList = [];
 const cyclicActivityCarrierChild = {
@@ -3493,8 +3617,13 @@ cyclicActivityCarrierList.push(cyclicActivityCarrierChild);
 const cyclicActivityCarrierRecord = publicAdapter.mapWorkflowCommandRecord({
   result: { workflow_activities: cyclicActivityCarrierList },
 });
+const cyclicDemoActivityCarrierRecord = demoApi.deriveWorkflowCommandRecord({
+  result: { workflow_activities: cyclicActivityCarrierList },
+}).raw;
 assert.equal(cyclicActivityCarrierRecord.result.workflow_activities.length, 1);
 assert.deepEqual(cyclicActivityCarrierRecord.result.workflow_activities[0].metadata, {});
+assert.equal(cyclicDemoActivityCarrierRecord.result.workflow_activities.length, 1);
+assert.deepEqual(cyclicDemoActivityCarrierRecord.result.workflow_activities[0].metadata, {});
 
 const hostilePrototypeProxy = new Proxy({}, {
   getPrototypeOf() {
@@ -3523,6 +3652,15 @@ const hostileTraversalRecord = publicAdapter.mapWorkflowCommandRecord({
   },
 });
 assert.deepEqual(hostileTraversalRecord.payload, { safe: true });
+const hostileDemoTraversalRecord = demoApi.deriveWorkflowCommandRecord({
+  payload: {
+    safe: true,
+    hostile_prototype: hostilePrototypeProxy,
+    hostile_accessor: hostileAccessorObject,
+    workflow_commands: hostileLengthCarrierArray,
+  },
+}).raw;
+assert.deepEqual(hostileDemoTraversalRecord.payload, { safe: true });
 
 function multiplicativeCommand(level, branch) {
   if (level === 0) {
@@ -3544,11 +3682,22 @@ const multiplicativeRecord = publicAdapter.mapWorkflowCommandRecord(
   multiplicativeCommand(8, "root"),
 );
 const multiplicativeProjectionElapsedMs = Date.now() - multiplicativeProjectionStartedAt;
+const multiplicativeDemoProjectionStartedAt = Date.now();
+const multiplicativeDemoRecord = demoApi.deriveWorkflowCommandRecord(
+  multiplicativeCommand(8, "demo-root"),
+).raw;
+const multiplicativeDemoProjectionElapsedMs = Date.now() - multiplicativeDemoProjectionStartedAt;
 assert.equal(multiplicativeRecord.command_id, "cmd-budget-8-root");
+assert.equal(multiplicativeDemoRecord.command_id, "cmd-budget-8-demo-root");
 assert.ok(JSON.stringify(multiplicativeRecord).length < 1_000_000);
+assert.ok(JSON.stringify(multiplicativeDemoRecord).length < 1_000_000);
 assert.ok(
   multiplicativeProjectionElapsedMs < 2_000,
   `multiplicative projection exceeded runtime budget: ${multiplicativeProjectionElapsedMs}ms`,
+);
+assert.ok(
+  multiplicativeDemoProjectionElapsedMs < 2_000,
+  `demo multiplicative projection exceeded runtime budget: ${multiplicativeDemoProjectionElapsedMs}ms`,
 );
 
 const directActivityNestedCommandInput = {
@@ -3745,6 +3894,52 @@ const malformedControlOperationSync = publicAdapter.mapWorkflowCommandControlRes
   operation_sync: "bad",
 });
 assert.equal(malformedControlOperationSync.operation_sync, undefined);
+assert.equal(Object.hasOwn(malformedControlOperationSync, "operation_sync"), false);
+const exactEmptyControlOperationSync = publicAdapter.mapWorkflowCommandControlResponse({
+  status: "cancelled",
+  operation_sync: {},
+});
+assert.equal(Object.hasOwn(exactEmptyControlOperationSync, "operation_sync"), true);
+assert.deepEqual(exactEmptyControlOperationSync.operation_sync, {});
+for (const projectedEmptySource of [
+  { claim_token: "private-only" },
+  { status: 7 },
+]) {
+  const projectedEmptyControlOperationSync = publicAdapter.mapWorkflowCommandControlResponse({
+    status: "cancelled",
+    operation_sync: projectedEmptySource,
+  });
+  assert.equal(projectedEmptyControlOperationSync.operation_sync, undefined);
+  assert.equal(Object.hasOwn(projectedEmptyControlOperationSync, "operation_sync"), false);
+}
+const partiallyValidControlOperationSync = publicAdapter.mapWorkflowCommandControlResponse({
+  status: "cancelled",
+  operation_sync: {
+    status: 7,
+    reason: "valid-public-reason",
+    claim_token: "private",
+  },
+});
+assert.deepEqual(partiallyValidControlOperationSync.operation_sync, {
+  reason: "valid-public-reason",
+});
+let mutableOperationSyncStatusReads = 0;
+const mutableOperationSync = {};
+Object.defineProperty(mutableOperationSync, "status", {
+  enumerable: true,
+  get() {
+    mutableOperationSyncStatusReads += 1;
+    return mutableOperationSyncStatusReads === 1 ? "captured-status" : 7;
+  },
+});
+const capturedOnceControlOperationSync = publicAdapter.mapWorkflowCommandControlResponse({
+  status: "cancelled",
+  operation_sync: mutableOperationSync,
+});
+assert.equal(mutableOperationSyncStatusReads, 1);
+assert.deepEqual(capturedOnceControlOperationSync.operation_sync, {
+  status: "captured-status",
+});
 const minimallyValidCommand = { command_id: "cmd-malformed-member-survivor" };
 const filteredCommandList = publicAdapter.mapWorkflowCommandListResponse({
   workflow_commands: ["bad", minimallyValidCommand, []],
@@ -3850,16 +4045,17 @@ const hostileOperationExtension = {
     unknown_future_column: "drop",
   },
 };
+const cloneHostileOperationExtension = () => structuredClone(hostileOperationExtension);
 const hostileOperationActionInput = {
   action_id: "action-operation-seal",
   claimToken: "secret",
-  unknown_extension: hostileOperationExtension,
+  unknown_extension: cloneHostileOperationExtension(),
   display_contract: { schema_version: 7, safe_extension: true },
-  target_ref: hostileOperationExtension,
-  input: hostileOperationExtension,
-  budget: hostileOperationExtension,
-  result_ref: hostileOperationExtension,
-  metadata: hostileOperationExtension,
+  target_ref: cloneHostileOperationExtension(),
+  input: cloneHostileOperationExtension(),
+  budget: cloneHostileOperationExtension(),
+  result_ref: cloneHostileOperationExtension(),
+  metadata: cloneHostileOperationExtension(),
 };
 const operationActionRecords = [
   publicAdapter.mapOperationActionRecord(hostileOperationActionInput),
@@ -3889,8 +4085,8 @@ const hostileOperationEventInput = {
   sequence_number: "4",
   actor: false,
   claimToken: "secret",
-  unknown_extension: hostileOperationExtension,
-  payload: hostileOperationExtension,
+  unknown_extension: cloneHostileOperationExtension(),
+  payload: cloneHostileOperationExtension(),
 };
 const mappedOperationEvent = publicAdapter.mapOperationEventRecord(hostileOperationEventInput);
 const demoOperationEvent = demoApi.deriveOperationEventRecord(hostileOperationEventInput);
@@ -3908,16 +4104,16 @@ assert.equal(demoOperationEvent.sequenceNumber, 0);
 const hostileOperationRunInput = {
   operation_run_id: "operation-run-seal",
   claimToken: "secret",
-  unknown_extension: hostileOperationExtension,
-  progress: hostileOperationExtension,
-  workflow_ref: hostileOperationExtension,
-  result_ref: hostileOperationExtension,
-  metadata: hostileOperationExtension,
+  unknown_extension: cloneHostileOperationExtension(),
+  progress: cloneHostileOperationExtension(),
+  workflow_ref: cloneHostileOperationExtension(),
+  result_ref: cloneHostileOperationExtension(),
+  metadata: cloneHostileOperationExtension(),
   control_state: {
     can_cancel: "true",
     module_state_mutated_on_control: 1,
     allowed_actions: "bad",
-    disabled_reasons: hostileOperationExtension,
+    disabled_reasons: cloneHostileOperationExtension(),
     safe_extension: true,
   },
   status_summary: {
@@ -4022,6 +4218,142 @@ for (const rejectedStatus of ["conflict", "approval_required", "not_found", "fut
     new RegExp(`unsupported status: ${rejectedStatus}`),
   );
 }
+
+const exactWrapperCommands = Array.from(
+  { length: projectionLimits.maxCollectionEntries },
+  (_, index) => ({ command_id: `wrapper-exact-${index}` }),
+);
+assert.equal(
+  publicAdapter.mapWorkflowCommandListResponse({ workflow_commands: exactWrapperCommands })
+    .workflow_commands.length,
+  projectionLimits.maxCollectionEntries,
+);
+const overWrapperCommands = Array.from(
+  { length: projectionLimits.maxCollectionEntries + 1 },
+  (_, index) => ({ command_id: `wrapper-over-${index}` }),
+);
+assert.deepEqual(
+  publicAdapter.mapWorkflowCommandListResponse({ workflow_commands: overWrapperCommands })
+    .workflow_commands,
+  [],
+);
+assert.deepEqual(
+  publicAdapter.mapWorkflowCommandListResponse({ workflow_commands: hostileLengthCarrierArray })
+    .workflow_commands,
+  [],
+);
+const nodeBudgetWrapperCommands = Array.from(
+  { length: projectionLimits.maxCollectionEntries },
+  (_, index) => ({
+    command_id: `wrapper-node-${index}`,
+    payload: { items: Array.from({ length: 32 }, () => index) },
+  }),
+);
+const nodeBudgetWrapperResult = publicAdapter.mapWorkflowCommandListResponse({
+  workflow_commands: nodeBudgetWrapperCommands,
+});
+assert.ok(nodeBudgetWrapperResult.workflow_commands.length > 0);
+assert.ok(nodeBudgetWrapperResult.workflow_commands.length < projectionLimits.maxCollectionEntries);
+function countProjectedJsonNodes(value) {
+  if (value === undefined) return 0;
+  if (!value || typeof value !== "object") return 1;
+  if (Array.isArray(value)) {
+    return 1 + value.reduce((total, item) => total + countProjectedJsonNodes(item), 0);
+  }
+  return 1 + Object.values(value).reduce(
+    (total, item) => total + countProjectedJsonNodes(item),
+    0,
+  );
+}
+const sharedLargeCommand = {
+  command_id: "wrapper-shared-large",
+  payload: {
+    matrix: Array.from(
+      { length: 15 },
+      () => Array.from({ length: projectionLimits.maxCollectionEntries }, (_, index) => index),
+    ),
+  },
+};
+const sharedAliasCommandList = Array.from(
+  { length: projectionLimits.maxCollectionEntries },
+  () => sharedLargeCommand,
+);
+const sharedAliasWrapperResult = publicAdapter.mapWorkflowCommandListResponse({
+  workflow_commands: sharedAliasCommandList,
+});
+assert.equal(sharedAliasWrapperResult.workflow_commands.length, 1);
+assert.ok(countProjectedJsonNodes(sharedAliasWrapperResult) <= projectionLimits.maxNodes);
+assert.ok(JSON.stringify(sharedAliasWrapperResult).length < 100_000);
+const sharedAliasDemoCarrierResult = demoApi.deriveWorkflowCommandRecord({
+  command_id: "demo-wrapper-shared-root",
+  result: { workflow_commands: sharedAliasCommandList },
+}).raw;
+assert.equal(sharedAliasDemoCarrierResult.result.workflow_commands.length, 1);
+assert.ok(countProjectedJsonNodes(sharedAliasDemoCarrierResult) <= projectionLimits.maxNodes);
+assert.ok(JSON.stringify(sharedAliasDemoCarrierResult).length < 100_000);
+assert.deepEqual(
+  publicAdapter.mapWorkflowActivityListResponse({
+    workflow_activities: Array.from(
+      { length: projectionLimits.maxCollectionEntries + 1 },
+      (_, index) => ({ activity_run_id: `activity-over-${index}` }),
+    ),
+  }).workflow_activities,
+  [],
+);
+const overBudgetProvenance = publicAdapter.mapOperationRunProvenanceResponse({
+  status: "ok",
+  action_events: Array.from(
+    { length: projectionLimits.maxCollectionEntries + 1 },
+    (_, index) => ({ event_id: `event-over-${index}` }),
+  ),
+  workflow_commands: overWrapperCommands,
+});
+assert.deepEqual(overBudgetProvenance.action_events, []);
+assert.deepEqual(overBudgetProvenance.workflow_commands, []);
+assert.equal(
+  publicAdapter.mapWorkflowCommandControlResponse({
+    status: "cancelled",
+    workflow_activity_runs: Array.from(
+      { length: projectionLimits.maxCollectionEntries + 1 },
+      (_, index) => ({ activity_run_id: `control-activity-over-${index}` }),
+    ),
+  }).workflow_activity_runs,
+  undefined,
+);
+
+let mutableActivityCarrierReads = 0;
+const mutableActivityCarrierEnvelope = { status: "cancelled" };
+Object.defineProperty(mutableActivityCarrierEnvelope, "workflow_activity", {
+  enumerable: true,
+  get() {
+    mutableActivityCarrierReads += 1;
+    return mutableActivityCarrierReads === 1
+      ? {
+          activity_run_id: "activity-captured-once",
+          activity_type: "trusted-activity-type",
+          owner: "trusted-owner",
+          module_state_mutated: false,
+          mutation_contract: "trusted-mutation-contract",
+          control_target: { target_type: "workflow_command", owner: "trusted-owner" },
+        }
+      : {
+          activity_run_id: "activity-forged-second-read",
+          activity_type: "forged-activity-type",
+          owner: "forged-owner",
+          module_state_mutated: true,
+          mutation_contract: "forged-mutation-contract",
+          control_target: { target_type: "workflow_command", owner: "forged-owner" },
+        };
+  },
+});
+const capturedOnceActivityResponse = publicAdapter.mapWorkflowCommandControlResponse(
+  mutableActivityCarrierEnvelope,
+);
+assert.equal(mutableActivityCarrierReads, 1);
+assert.equal(capturedOnceActivityResponse.workflow_activity.activity_run_id, "activity-captured-once");
+assert.equal(capturedOnceActivityResponse.workflow_activity.owner, "trusted-owner");
+assert.equal(capturedOnceActivityResponse.workflow_activity.control_target.owner, "trusted-owner");
+assert.equal(capturedOnceActivityResponse.workflow_activity.module_state_mutated, false);
 
 const trustedEnvelopeCommand = {
   command_id: "command-envelope-trusted",
@@ -4191,6 +4523,132 @@ for (const [value, expected] of diagnosticCases) {
     headers: new Headers({ "Content-Type": "application/json" }),
     text: async () => JSON.stringify(payload),
   });
+  const clientOutcomeCases = [
+    {
+      label: "action-submit",
+      accepted: ["queued", "approval_required"],
+      invoke: (client) => client.submitOperationAction({}),
+    },
+    {
+      label: "action-query",
+      accepted: ["ok"],
+      invoke: (client) => client.getOperationAction("action-client-matrix"),
+    },
+    {
+      label: "action-approve",
+      accepted: ["queued"],
+      invoke: (client) => client.approveOperationAction("action-client-matrix"),
+    },
+    {
+      label: "action-reject",
+      accepted: ["rejected"],
+      invoke: (client) => client.rejectOperationAction("action-client-matrix"),
+    },
+    {
+      label: "operation-cancel",
+      accepted: ["cancelled"],
+      invoke: (client) => client.cancelOperationRun("run-client-matrix"),
+    },
+    {
+      label: "operation-retry",
+      accepted: ["queued"],
+      invoke: (client) => client.retryOperationRun("run-client-matrix"),
+    },
+    {
+      label: "operation-resume",
+      accepted: ["queued"],
+      invoke: (client) => client.resumeOperationRun("run-client-matrix"),
+    },
+    {
+      label: "operation-dispatch",
+      accepted: ["planned"],
+      invoke: (client) => client.dispatchOperationRun("run-client-matrix"),
+    },
+    {
+      label: "command-cancel",
+      accepted: ["cancelled"],
+      invoke: (client) => client.cancelWorkflowCommand("command-client-matrix"),
+    },
+    {
+      label: "command-retry",
+      accepted: ["queued"],
+      invoke: (client) => client.retryWorkflowCommand("command-client-matrix"),
+    },
+    {
+      label: "command-resume",
+      accepted: ["queued"],
+      invoke: (client) => client.resumeWorkflowCommand("command-client-matrix"),
+    },
+  ];
+  const clientOutcomeMatrix = [
+    "ok",
+    "queued",
+    "approval_required",
+    "rejected",
+    "cancelled",
+    "planned",
+    "conflict",
+    "not_found",
+    "future_success",
+    " queued ",
+    "cancelled ",
+    " planned",
+    "\\trejected\\n",
+    " ",
+    "",
+  ];
+  for (const outcomeCase of clientOutcomeCases) {
+    for (const candidateStatus of clientOutcomeMatrix) {
+      const client = new publicAdapter.SourcingAgentApiClient({
+        baseUrl: "https://api.test",
+        fetchImpl: async () => jsonResponse({ status: candidateStatus }),
+      });
+      if (outcomeCase.accepted.includes(candidateStatus)) {
+        const response = await outcomeCase.invoke(client);
+        assert.equal(response.status, candidateStatus, outcomeCase.label);
+      } else {
+        await assert.rejects(
+          () => outcomeCase.invoke(client),
+          /unsupported status/,
+          `${outcomeCase.label} accepted cross-action outcome ${candidateStatus}`,
+        );
+      }
+    }
+  }
+  global.fetch = async () => jsonResponse({
+    status: "ok",
+    action_events: Array.from(
+      { length: projectionLimits.maxCollectionEntries + 1 },
+      (_, index) => ({ event_id: `demo-event-over-${index}` }),
+    ),
+    workflow_commands: overWrapperCommands,
+  });
+  const demoOverBudgetProvenance = await demoApi.getOperationRunProvenance(
+    "operation-run-over-budget",
+  );
+  assert.deepEqual(demoOverBudgetProvenance.actionEvents, []);
+  assert.deepEqual(demoOverBudgetProvenance.workflowCommands, []);
+
+  global.fetch = async () => jsonResponse({
+    status: "ok",
+    workflow_commands: nodeBudgetWrapperCommands,
+  });
+  const demoNodeBudgetProvenance = await demoApi.getOperationRunProvenance(
+    "operation-run-node-budget",
+  );
+  assert.ok(demoNodeBudgetProvenance.workflowCommands.length > 0);
+  assert.ok(
+    demoNodeBudgetProvenance.workflowCommands.length < projectionLimits.maxCollectionEntries,
+  );
+
+  global.fetch = async () => jsonResponse({
+    workflow_activities: Array.from(
+      { length: projectionLimits.maxCollectionEntries + 1 },
+      (_, index) => ({ activity_run_id: `demo-activity-over-${index}` }),
+    ),
+  });
+  assert.deepEqual(await demoApi.listWorkflowActivities({}), []);
+
   global.fetch = async () => jsonResponse({
     status: "ok",
     contract: false,
@@ -4251,6 +4709,72 @@ for (const [value, expected] of diagnosticCases) {
     control_policy: { safe: true },
     activity_spine_policy: { safe: true },
   };
+  const demoOutcomeCases = [
+    {
+      label: "demo-action-approve",
+      accepted: ["queued"],
+      invoke: () => demoApi.approveOperationAction("demo-action-matrix"),
+    },
+    {
+      label: "demo-action-reject",
+      accepted: ["rejected"],
+      invoke: () => demoApi.rejectOperationAction("demo-action-matrix"),
+    },
+    {
+      label: "demo-operation-cancel",
+      accepted: ["cancelled"],
+      invoke: () => demoApi.cancelOperationRun("demo-operation-matrix"),
+    },
+    {
+      label: "demo-operation-retry",
+      accepted: ["queued"],
+      invoke: () => demoApi.retryOperationRun("demo-operation-matrix"),
+    },
+    {
+      label: "demo-operation-resume",
+      accepted: ["queued"],
+      invoke: () => demoApi.resumeOperationRun("demo-operation-matrix"),
+    },
+    {
+      label: "demo-operation-dispatch",
+      accepted: ["planned"],
+      invoke: () => demoApi.dispatchOperationRun("demo-operation-matrix"),
+    },
+    {
+      label: "demo-command-cancel",
+      accepted: ["cancelled"],
+      invoke: () => demoApi.cancelWorkflowCommand("demo-command-matrix"),
+    },
+    {
+      label: "demo-command-retry",
+      accepted: ["queued"],
+      invoke: () => demoApi.retryWorkflowCommand("demo-command-matrix"),
+    },
+    {
+      label: "demo-command-resume",
+      accepted: ["queued"],
+      invoke: () => demoApi.resumeWorkflowCommand("demo-command-matrix"),
+    },
+  ];
+  for (const outcomeCase of demoOutcomeCases) {
+    for (const candidateStatus of clientOutcomeMatrix) {
+      global.fetch = async () => jsonResponse({
+        status: candidateStatus,
+        action: { action_id: "demo-action-matrix" },
+        operation_run: { operation_run_id: "demo-operation-matrix" },
+        workflow_command: forgedControlCommand,
+      });
+      if (outcomeCase.accepted.includes(candidateStatus)) {
+        assert.ok(await outcomeCase.invoke(), outcomeCase.label);
+      } else {
+        await assert.rejects(
+          () => outcomeCase.invoke(),
+          candidateStatus === "" ? /missing status/ : /unexpected status/,
+          `${outcomeCase.label} accepted cross-action outcome ${candidateStatus}`,
+        );
+      }
+    }
+  }
   global.fetch = async () => jsonResponse({
     status: "cancelled",
     workflow_command: forgedControlCommand,
@@ -4336,6 +4860,7 @@ for (const [value, expected] of diagnosticCases) {
             json.dumps(sorted(WORKFLOW_COMMAND_PRIVATE_PUBLIC_MIRROR_FIELDS)),
             json.dumps(PRIVATE_ALIAS_KEYS),
             str(MAX_SAFE_DIAGNOSTIC_INTEGER),
+            str(runtime_contract_bundle),
         ],
         cwd=REPO_ROOT,
         capture_output=True,

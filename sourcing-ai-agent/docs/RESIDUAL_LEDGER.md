@@ -58,7 +58,15 @@
   different `activity_type`/`owner` from its source command, so those two owner domains are verified independently rather
   than forced equal. The prior pinned `4cfd1916` author evidence remains recorded. Current stable evidence is
   `18/63/129/60/51`, frontend `81 modules`, public mapper `85/34`, Ruff/diff clean, and mypy `81/4`; fresh dirty-tree
-  non-author advisory is `0/0/0/0 CLEAN`. A fresh pinned non-author review is still **pending**. Neither invalid
+  non-author advisory is `0/0/0/0 CLEAN`. The later `20260714T231243Z_*` artifact is also invalid solely at
+  `final_response_item_exact=false`; its `0/4/4/1` is advisory only. Its actionable evidence is fixed by one canonical
+  frontend outcome/budget manifest, exact action matrices, once-captured shared wrapper traversal, bounded/cycle-safe
+  demo traversal, true bounded PG batch provenance reads, the exact-empty operation-sync bit, and capture-once Activity
+  provenance. Final integration audit additionally closes nonempty projected-empty frontend sync, memoized DAG alias
+  output amplification, foreign workspace/run provenance, and whitespace-wrapped outcomes. Focused evidence is
+  `18+38+6(+3 subtests)+2+60+60`, frontend build `82 modules`, Ruff/diff clean, mypy `81/4`, and dirty-tree non-author
+  advisory `0/0/0/0 CLEAN`. A fresh
+  highest-effort pinned non-author review is still **pending**. No invalid
   artifact is a formal `NO-GO` or `GO`. This
   annotation does not change R-019's status, tripwire, 26-call ratchet, claim-fence obligations, or `served=0`.
 

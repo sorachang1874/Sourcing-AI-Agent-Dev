@@ -1,3 +1,11 @@
+import type {
+  OperationActionDecisionAppliedOutcome,
+  OperationActionDetailSuccessStatus,
+  OperationRunControlAppliedOutcome,
+  OperationRunProvenanceSuccessStatus,
+  WorkflowCommandControlAppliedOutcome,
+} from "./frontend_api_runtime_contract";
+
 export type JsonValue =
   | string
   | number
@@ -12,45 +20,26 @@ export interface JsonObject {
 
 export type NumberRecord = Record<string, number>;
 
-export const OPERATION_ACTION_DETAIL_SUCCESS_STATUSES = [
-  "ok",
-  "queued",
-  "approval_required",
-  "rejected",
-] as const;
-export type OperationActionDetailSuccessStatus =
-  (typeof OPERATION_ACTION_DETAIL_SUCCESS_STATUSES)[number];
-
-export const OPERATION_ACTION_DECISION_APPLIED_OUTCOMES = {
-  approve: ["queued"],
-  reject: ["rejected"],
-} as const;
-export type OperationActionDecision = keyof typeof OPERATION_ACTION_DECISION_APPLIED_OUTCOMES;
-export type OperationActionDecisionAppliedOutcome =
-  (typeof OPERATION_ACTION_DECISION_APPLIED_OUTCOMES)[OperationActionDecision][number];
-
-export const OPERATION_RUN_PROVENANCE_SUCCESS_STATUSES = ["ok"] as const;
-export type OperationRunProvenanceSuccessStatus =
-  (typeof OPERATION_RUN_PROVENANCE_SUCCESS_STATUSES)[number];
-
-export const OPERATION_RUN_CONTROL_APPLIED_OUTCOMES = {
-  cancel: ["cancelled"],
-  retry: ["queued"],
-  resume: ["queued"],
-  dispatch: ["planned"],
-} as const;
-export type OperationRunControlAction = keyof typeof OPERATION_RUN_CONTROL_APPLIED_OUTCOMES;
-export type OperationRunControlAppliedOutcome =
-  (typeof OPERATION_RUN_CONTROL_APPLIED_OUTCOMES)[OperationRunControlAction][number];
-
-export const WORKFLOW_COMMAND_CONTROL_APPLIED_OUTCOMES = {
-  cancel: ["cancelled"],
-  retry: ["queued"],
-  resume: ["queued"],
-} as const;
-export type WorkflowCommandControlAction = keyof typeof WORKFLOW_COMMAND_CONTROL_APPLIED_OUTCOMES;
-export type WorkflowCommandControlAppliedOutcome =
-  (typeof WORKFLOW_COMMAND_CONTROL_APPLIED_OUTCOMES)[WorkflowCommandControlAction][number];
+export {
+  OPERATION_ACTION_DECISION_APPLIED_OUTCOMES,
+  OPERATION_ACTION_DETAIL_SUCCESS_STATUSES,
+  OPERATION_ACTION_QUERY_SUCCESS_STATUSES,
+  OPERATION_ACTION_SUBMIT_APPLIED_OUTCOMES,
+  OPERATION_RUN_CONTROL_APPLIED_OUTCOMES,
+  OPERATION_RUN_PROVENANCE_SUCCESS_STATUSES,
+  WORKFLOW_COMMAND_CONTROL_APPLIED_OUTCOMES,
+  WORKFLOW_PUBLIC_PROJECTION_LIMITS,
+} from "./frontend_api_runtime_contract";
+export type {
+  OperationActionDecision,
+  OperationActionDecisionAppliedOutcome,
+  OperationActionDetailSuccessStatus,
+  OperationRunControlAction,
+  OperationRunControlAppliedOutcome,
+  OperationRunProvenanceSuccessStatus,
+  WorkflowCommandControlAction,
+  WorkflowCommandControlAppliedOutcome,
+} from "./frontend_api_runtime_contract";
 
 export interface IntentRewriteRule {
   rewrite_id?: string;

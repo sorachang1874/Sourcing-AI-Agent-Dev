@@ -17,6 +17,31 @@ from ..control_plane_repository import Column, Kind, Repository, TableDescriptor
 from ..control_plane_serde import json_safe_payload
 from ..control_plane_time import utc_now_timestamp
 
+WORKFLOW_PUBLIC_EVIDENCE_BATCH_LIMIT = 500
+
+
+def normalize_workflow_evidence_batch_ids(
+    identity_values: list[str] | tuple[str, ...],
+    *,
+    identity_name: str,
+) -> list[str]:
+    """Normalize one public workflow evidence page without permitting an unbounded ``IN`` query."""
+
+    if not isinstance(identity_values, (list, tuple)):
+        raise TypeError(f"{identity_name} must be a list or tuple")
+    if len(identity_values) > WORKFLOW_PUBLIC_EVIDENCE_BATCH_LIMIT:
+        raise ValueError(
+            f"{identity_name} supports at most {WORKFLOW_PUBLIC_EVIDENCE_BATCH_LIMIT} identifiers per batch"
+        )
+    normalized_ids: list[str] = []
+    seen: set[str] = set()
+    for value in identity_values:
+        normalized = str(value or "").strip()
+        if normalized and normalized not in seen:
+            normalized_ids.append(normalized)
+            seen.add(normalized)
+    return normalized_ids
+
 
 def _loads_json_list(value: Any, *, default: list[Any] | None = None) -> list[Any]:
     if isinstance(value, list):
@@ -1310,6 +1335,34 @@ class WorkflowRuntimeRepository(Repository):
             params=[normalized_activity_run_id],
         )
         return postgres_row or {}
+
+    def list_activity_runs_by_ids(
+        self,
+        activity_run_ids: list[str] | tuple[str, ...],
+    ) -> list[dict[str, Any]]:
+        """Fetch one bounded public page of ActivityRun identities with a single authoritative query."""
+
+        self._require_postgres_for_durable_runtime("workflow_activity_runs")
+        normalized_ids = normalize_workflow_evidence_batch_ids(
+            activity_run_ids,
+            identity_name="activity_run_ids",
+        )
+        if not normalized_ids:
+            return []
+        rows = self._select_rows(
+            "workflow_activity_runs",
+            row_builder=self._activity_run_from_row,
+            where_sql="activity_run_id IN (" + ", ".join(["%s"] * len(normalized_ids)) + ")",
+            params=normalized_ids,
+            limit=len(normalized_ids),
+        )
+        requested_ids = set(normalized_ids)
+        rows_by_id = {
+            str(row.get("activity_run_id") or "").strip(): row
+            for row in rows
+            if str(row.get("activity_run_id") or "").strip() in requested_ids
+        }
+        return [rows_by_id[activity_run_id] for activity_run_id in normalized_ids if activity_run_id in rows_by_id]
 
     def list_activity_runs(
         self,

@@ -677,6 +677,404 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             first_timestamps,
         )
 
+    def test_workflow_control_projection_preserves_only_true_empty_operation_sync_sentinel(self) -> None:
+        class CollidingHostileKey:
+            def __init__(self) -> None:
+                self.equality_calls = 0
+
+            def __hash__(self) -> int:
+                return hash("status")
+
+            def __eq__(self, other: object) -> bool:
+                self.equality_calls += 1
+                raise AssertionError(f"hostile equality executed for {other!r}")
+
+        orchestrator = self._build_r020_orchestrator()
+        replay = orchestrator._workflow_command_control_public_api_record(  # noqa: SLF001
+            {"status": "already_applied", "operation_sync": {}}
+        )
+        self.assertEqual(replay["operation_sync"], {})
+
+        hostile_key = CollidingHostileKey()
+        malformed_syncs = (
+            {"claim_token": "secret"},
+            {"status": 7},
+            {hostile_key: "secret"},
+        )
+        for operation_sync in malformed_syncs:
+            with self.subTest(operation_sync=operation_sync):
+                projected = orchestrator._workflow_command_control_public_api_record(  # noqa: SLF001
+                    {"status": "already_applied", "operation_sync": operation_sync}
+                )
+                self.assertNotIn("operation_sync", projected)
+        self.assertEqual(hostile_key.equality_calls, 0)
+
+        partially_valid = orchestrator._workflow_command_control_public_api_record(  # noqa: SLF001
+            {
+                "status": "already_applied",
+                "operation_sync": {"status": "skipped", "claim_token": "secret"},
+            }
+        )
+        self.assertEqual(partially_valid["operation_sync"], {"status": "skipped"})
+
+    def test_activity_public_lists_prefetch_unique_evidence_and_keep_500_rows(self) -> None:
+        orchestrator = self._build_r020_orchestrator()
+        runtime_repository = self.store.repos.workflow_runtime
+        commands = [
+            {
+                "command_id": f"cmd-activity-prefetch-{index}",
+                "workflow_run_id": "wf-activity-prefetch",
+                "command_type": LINKEDIN_DISCOVERY_QUERY_RUN_COMMAND_TYPE,
+                "owner": LINKEDIN_DISCOVERY_QUERY_RUN_OWNER,
+                "status": "running",
+            }
+            for index in range(500)
+        ]
+        activities = [
+            {
+                "activity_run_id": f"actrun-prefetch-{index}",
+                "workspace_id": "default",
+                "workflow_run_id": "wf-activity-prefetch",
+                "command_id": commands[index]["command_id"],
+                "activity_type": "downstream.activity",
+                "owner": "downstream-owner",
+                "status": "running",
+                "idempotency_key": f"activity-prefetch:{index}",
+            }
+            for index in range(500)
+        ]
+        canonical_activity = activities[0]
+        canonical_command = commands[0]
+        unique_attempts = [
+            {
+                "attempt_id": f"attempt-prefetch-{index}",
+                "workspace_id": "default",
+                "activity_run_id": activities[index]["activity_run_id"],
+                "workflow_run_id": activities[index]["workflow_run_id"],
+                "command_id": commands[index]["command_id"],
+                "attempt_number": index + 1,
+                "status": "running",
+                "activity_type": "forged.activity",
+                "owner": "forged-owner",
+                "idempotency_key": f"attempt-prefetch:{index}",
+            }
+            for index in range(500)
+        ]
+        unique_deltas = [
+            {
+                "delta_id": f"delta-prefetch-{index}",
+                "workspace_id": "default",
+                "activity_run_id": activities[index]["activity_run_id"],
+                "workflow_run_id": activities[index]["workflow_run_id"],
+                "command_id": commands[index]["command_id"],
+                "attempt_id": unique_attempts[index]["attempt_id"],
+                "entity_type": "candidate_profile",
+                "entity_key": f"candidate-{index}",
+                "delta_kind": "profile_observed",
+                "status": "recorded",
+                "activity_type": "forged.activity",
+                "owner": "forged-owner",
+                "idempotency_key": f"delta-prefetch:{index}",
+            }
+            for index in range(500)
+        ]
+        same_identity_attempts = [
+            {
+                **attempt,
+                "attempt_id": f"attempt-prefetch-shared-{index}",
+                "activity_run_id": canonical_activity["activity_run_id"],
+                "command_id": canonical_command["command_id"],
+            }
+            for index, attempt in enumerate(unique_attempts)
+        ]
+        activities_by_id = {activity["activity_run_id"]: activity for activity in activities}
+        commands_by_id = {command["command_id"]: command for command in commands}
+
+        with (
+            mock.patch.object(runtime_repository, "list_activity_runs", return_value=activities) as list_activities,
+            mock.patch.object(
+                runtime_repository,
+                "list_activity_attempts",
+                return_value=unique_attempts,
+            ) as list_attempts,
+            mock.patch.object(runtime_repository, "list_entity_deltas", return_value=unique_deltas) as list_deltas,
+            mock.patch.object(
+                runtime_repository,
+                "list_activity_runs_by_ids",
+                side_effect=lambda activity_run_ids: [
+                    activities_by_id[activity_run_id]
+                    for activity_run_id in activity_run_ids
+                    if activity_run_id in activities_by_id
+                ],
+            ) as list_activities_by_ids,
+            mock.patch.object(
+                self.store,
+                "list_workflow_commands_by_ids",
+                side_effect=lambda command_ids: [
+                    commands_by_id[command_id] for command_id in command_ids if command_id in commands_by_id
+                ],
+            ) as list_commands_by_ids,
+            mock.patch.object(
+                runtime_repository,
+                "get_activity_run",
+                side_effect=AssertionError("point ActivityRun read must not execute"),
+            ) as get_activity,
+            mock.patch.object(
+                self.store,
+                "get_workflow_command",
+                side_effect=AssertionError("point WorkflowCommand read must not execute"),
+            ) as get_command,
+        ):
+            activity_response = orchestrator.list_workflow_activities_api({"limit": 500})
+            self.assertEqual(len(activity_response["workflow_activities"]), 500)
+            self.assertEqual(list_activities_by_ids.call_count, 0)
+            self.assertEqual(list_commands_by_ids.call_count, 1)
+            self.assertEqual(get_activity.call_count, 0)
+            self.assertEqual(get_command.call_count, 0)
+            self.assertEqual(list_activities.call_args.kwargs["limit"], 500)
+            self.assertEqual(activity_response["workflow_activities"][0]["activity_type"], "downstream.activity")
+            self.assertEqual(activity_response["workflow_activities"][0]["owner"], "downstream-owner")
+            self.assertEqual(
+                activity_response["workflow_activities"][0]["control_target"]["command_type"],
+                canonical_command["command_type"],
+            )
+            self.assertEqual(
+                activity_response["workflow_activities"][0]["control_target"]["owner"],
+                canonical_command["owner"],
+            )
+
+            list_activities_by_ids.reset_mock()
+            list_commands_by_ids.reset_mock()
+            get_activity.reset_mock()
+            get_command.reset_mock()
+            attempt_response = orchestrator.list_workflow_activity_attempts_api({"limit": 500})
+            self.assertEqual(len(attempt_response["workflow_activity_attempts"]), 500)
+            self.assertEqual(list_activities_by_ids.call_count, 1)
+            self.assertEqual(list_commands_by_ids.call_count, 1)
+            self.assertEqual(len(list_activities_by_ids.call_args.args[0]), 500)
+            self.assertEqual(len(list_commands_by_ids.call_args.args[0]), 500)
+            self.assertEqual(set(list_activities_by_ids.call_args.args[0]), set(activities_by_id))
+            self.assertEqual(set(list_commands_by_ids.call_args.args[0]), set(commands_by_id))
+            self.assertEqual(get_activity.call_count, 0)
+            self.assertEqual(get_command.call_count, 0)
+            self.assertEqual(list_attempts.call_args.kwargs["limit"], 500)
+            self.assertEqual(
+                attempt_response["workflow_activity_attempts"][0]["activity_type"],
+                "downstream.activity",
+            )
+            self.assertEqual(attempt_response["workflow_activity_attempts"][0]["owner"], "downstream-owner")
+
+            list_activities_by_ids.reset_mock()
+            list_commands_by_ids.reset_mock()
+            get_activity.reset_mock()
+            get_command.reset_mock()
+            delta_response = orchestrator.list_workflow_entity_deltas_api({"limit": 500})
+            self.assertEqual(len(delta_response["workflow_entity_deltas"]), 500)
+            self.assertEqual(list_activities_by_ids.call_count, 1)
+            self.assertEqual(list_commands_by_ids.call_count, 1)
+            self.assertEqual(len(list_activities_by_ids.call_args.args[0]), 500)
+            self.assertEqual(len(list_commands_by_ids.call_args.args[0]), 500)
+            self.assertEqual(get_activity.call_count, 0)
+            self.assertEqual(get_command.call_count, 0)
+            self.assertEqual(list_deltas.call_args.kwargs["limit"], 500)
+            self.assertEqual(delta_response["workflow_entity_deltas"][0]["activity_type"], "downstream.activity")
+            self.assertEqual(delta_response["workflow_entity_deltas"][0]["owner"], "downstream-owner")
+
+            list_attempts.return_value = same_identity_attempts
+            list_activities_by_ids.reset_mock()
+            list_commands_by_ids.reset_mock()
+            shared_response = orchestrator.list_workflow_activity_attempts_api({"limit": 500})
+            self.assertEqual(len(shared_response["workflow_activity_attempts"]), 500)
+            list_activities_by_ids.assert_called_once_with([canonical_activity["activity_run_id"]])
+            list_commands_by_ids.assert_called_once_with([canonical_command["command_id"]])
+            self.assertEqual(get_activity.call_count, 0)
+            self.assertEqual(get_command.call_count, 0)
+
+    def test_workflow_evidence_batch_readers_issue_one_pg_query_per_owner(self) -> None:
+        repository = self.store.repos.workflow_runtime
+        commands = [
+            self.store.upsert_workflow_command(
+                command_id=f"cmd-evidence-batch-pg-{index}",
+                workflow_run_id="wf-evidence-batch-pg",
+                command_type=LINKEDIN_DISCOVERY_QUERY_RUN_COMMAND_TYPE,
+                owner=LINKEDIN_DISCOVERY_QUERY_RUN_OWNER,
+                idempotency_key=f"workflow-command:evidence-batch-pg:{index}",
+            )
+            for index in range(2)
+        ]
+        activities = [
+            repository.upsert_activity_run(
+                {
+                    "activity_run_id": f"actrun-evidence-batch-pg-{index}",
+                    "workspace_id": "default",
+                    "workflow_run_id": "wf-evidence-batch-pg",
+                    "command_id": commands[index]["command_id"],
+                    "activity_type": "downstream.activity",
+                    "owner": "downstream-owner",
+                    "status": "running",
+                    "idempotency_key": f"workflow-activity:evidence-batch-pg:{index}",
+                }
+            )
+            for index in range(2)
+        ]
+        adapter = self.store._control_plane_postgres
+
+        with mock.patch.object(adapter, "select_many", wraps=adapter.select_many) as select_many:
+            activity_rows = repository.list_activity_runs_by_ids(
+                [activities[1]["activity_run_id"], activities[0]["activity_run_id"], activities[1]["activity_run_id"]]
+            )
+            command_rows = self.store.list_workflow_commands_by_ids(
+                [commands[1]["command_id"], commands[0]["command_id"], commands[1]["command_id"]]
+            )
+
+        self.assertEqual(
+            [row["activity_run_id"] for row in activity_rows],
+            [activities[1]["activity_run_id"], activities[0]["activity_run_id"]],
+        )
+        self.assertEqual(
+            [row["command_id"] for row in command_rows],
+            [commands[1]["command_id"], commands[0]["command_id"]],
+        )
+        activity_queries = [
+            call for call in select_many.call_args_list if call.args and call.args[0] == "workflow_activity_runs"
+        ]
+        command_queries = [
+            call for call in select_many.call_args_list if call.args and call.args[0] == "workflow_commands"
+        ]
+        self.assertEqual(len(activity_queries), 1)
+        self.assertEqual(len(command_queries), 1)
+        self.assertEqual(activity_queries[0].kwargs["where_sql"], "activity_run_id IN (%s, %s)")
+        self.assertEqual(
+            activity_queries[0].kwargs["params"],
+            [activities[1]["activity_run_id"], activities[0]["activity_run_id"]],
+        )
+        self.assertEqual(activity_queries[0].kwargs["limit"], 2)
+        self.assertEqual(command_queries[0].kwargs["where_sql"], "command_id IN (%s, %s)")
+        self.assertEqual(
+            command_queries[0].kwargs["params"],
+            [commands[1]["command_id"], commands[0]["command_id"]],
+        )
+        self.assertEqual(command_queries[0].kwargs["limit"], 2)
+
+    def test_activity_public_provenance_requires_exact_workspace_and_run_lineage(self) -> None:
+        orchestrator = self._build_r020_orchestrator()
+        runtime_repository = self.store.repos.workflow_runtime
+        activity = {
+            "activity_run_id": "actrun-scope-b",
+            "workspace_id": "workspace-b",
+            "workflow_run_id": "workflow-b",
+            "operation_run_id": "operation-b",
+            "acquisition_run_id": "acquisition-b",
+            "command_id": "command-b",
+            "activity_type": "foreign.activity",
+            "owner": "foreign-activity-owner",
+            "status": "running",
+        }
+        command = {
+            "command_id": "command-b",
+            "workflow_run_id": "workflow-b",
+            "operation_id": "operation-b",
+            "command_type": LINKEDIN_DISCOVERY_QUERY_RUN_COMMAND_TYPE,
+            "owner": LINKEDIN_DISCOVERY_QUERY_RUN_OWNER,
+            "status": "running",
+        }
+        foreign_attempt = {
+            "attempt_id": "attempt-scope-a",
+            "workspace_id": "workspace-a",
+            "workflow_run_id": "workflow-a",
+            "activity_run_id": activity["activity_run_id"],
+            "command_id": command["command_id"],
+            "attempt_number": 1,
+            "status": "running",
+            "activity_type": "forged.activity",
+            "owner": "forged-owner",
+        }
+
+        with (
+            mock.patch.object(
+                runtime_repository,
+                "list_activity_runs_by_ids",
+                return_value=[activity],
+            ) as list_activities_by_ids,
+            mock.patch.object(
+                self.store,
+                "list_workflow_commands_by_ids",
+                return_value=[command],
+            ) as list_commands_by_ids,
+        ):
+            activity_by_id, command_by_id = orchestrator._workflow_activity_linked_evidence_prefetch(  # noqa: SLF001
+                [foreign_attempt]
+            )
+
+        list_activities_by_ids.assert_called_once_with([activity["activity_run_id"]])
+        list_commands_by_ids.assert_not_called()
+        self.assertEqual(command_by_id, {})
+        projected_foreign = orchestrator._workflow_activity_attempt_api_record(  # noqa: SLF001
+            foreign_attempt,
+            _activity_by_id=activity_by_id,
+            _command_by_id=command_by_id,
+        )
+        self.assertNotIn("activity_type", projected_foreign)
+        self.assertNotIn("owner", projected_foreign)
+        self.assertNotIn("control_target", projected_foreign)
+
+        exact_attempt = {
+            **foreign_attempt,
+            "workspace_id": activity["workspace_id"],
+            "workflow_run_id": activity["workflow_run_id"],
+        }
+        for missing_field in ("workspace_id", "workflow_run_id"):
+            missing_scope_attempt = {key: value for key, value in exact_attempt.items() if key != missing_field}
+            self.assertEqual(
+                orchestrator._workflow_activity_linked_evidence(  # noqa: SLF001
+                    missing_scope_attempt,
+                    activity_by_id={activity["activity_run_id"]: activity},
+                    command_by_id={command["command_id"]: command},
+                ),
+                ({}, {}),
+            )
+
+        wrong_workflow_command = {**command, "workflow_run_id": "workflow-c"}
+        projected_wrong_command = orchestrator._workflow_activity_attempt_api_record(  # noqa: SLF001
+            exact_attempt,
+            _activity_by_id={activity["activity_run_id"]: activity},
+            _command_by_id={command["command_id"]: wrong_workflow_command},
+        )
+        self.assertEqual(projected_wrong_command["activity_type"], activity["activity_type"])
+        self.assertEqual(projected_wrong_command["owner"], activity["owner"])
+        self.assertNotIn("control_target", projected_wrong_command)
+
+        projected_exact = orchestrator._workflow_activity_attempt_api_record(  # noqa: SLF001
+            exact_attempt,
+            _activity_by_id={activity["activity_run_id"]: activity},
+            _command_by_id={command["command_id"]: command},
+        )
+        self.assertEqual(projected_exact["activity_type"], activity["activity_type"])
+        self.assertEqual(projected_exact["owner"], activity["owner"])
+        self.assertEqual(projected_exact["control_target"]["command_id"], command["command_id"])
+
+        foreign_delta = {
+            "delta_id": "delta-scope-b",
+            "workspace_id": activity["workspace_id"],
+            "workflow_run_id": activity["workflow_run_id"],
+            "operation_run_id": "operation-other",
+            "acquisition_run_id": activity["acquisition_run_id"],
+            "activity_run_id": activity["activity_run_id"],
+            "command_id": command["command_id"],
+            "entity_type": "candidate_profile",
+            "entity_key": "candidate-scope",
+            "delta_kind": "profile_observed",
+            "status": "recorded",
+        }
+        projected_delta = orchestrator._workflow_entity_delta_api_record(  # noqa: SLF001
+            foreign_delta,
+            _activity_by_id={activity["activity_run_id"]: activity},
+            _command_by_id={command["command_id"]: command},
+        )
+        self.assertNotIn("activity_type", projected_delta)
+        self.assertNotIn("owner", projected_delta)
+        self.assertNotIn("control_target", projected_delta)
+
     def test_r020_explicit_run_scope_mismatch_is_structured_conflict_and_zero_write(self) -> None:
         scope = self._seed_r020_scale_scope(
             "scope-mismatch",

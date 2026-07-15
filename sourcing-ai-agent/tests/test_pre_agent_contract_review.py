@@ -3444,7 +3444,9 @@ def test_frontend_contract_exposes_operation_command_activity_spine_policy() -> 
     assert "operation_run.status_summary" in agent_doc
     assert "Operation queue summaries must be operation/runtime-owned" in review_doc
     assert "include_status_summary=true" in frontend_doc
-    assert "status_summary: mapOptionalPlainWorkflowPublicObject(" in adapter_source
+    assert '"OperationRunRecord",\n    ["status_summary"],' in adapter_source
+    assert "status_summary: mapCapturedPlainWorkflowPublicObject(" in adapter_source
+    assert "canonical.status_summary," in adapter_source
     assert "mapOperationRunStatusSummary," in adapter_source
     assert "Command status/provenance summaries must be Activity-spine-owned" in review_doc
     assert "Operation UI command status copy must be Activity-spine-owned" in review_doc

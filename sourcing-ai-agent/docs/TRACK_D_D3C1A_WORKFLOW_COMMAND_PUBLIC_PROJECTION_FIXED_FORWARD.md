@@ -5,7 +5,11 @@
 > `runtime/reviews/20260714T215839Z_Track_D_D3c1a_workflow-command_public_projection_fixed-forward.md` is also
 > **invalid/advisory only**: `reviewer_exit_code=0`, but `causal_binding.final_response_item_exact=false`, so its
 > substantive `NO-GO` text is neither a formal `NO-GO` nor a formal `GO`. Its findings #1, #2, and #4-#11 are
-> fixed-forwarded below; #3 is the accepted `R-019` residual and remains open. Section 9 distinguishes the original
+> fixed-forwarded below; #3 is the accepted `R-019` residual and remains open. A second pinned attempt,
+> `runtime/reviews/20260714T231243Z_Track_D_D3c1a_public_projection_advisory_fixed-forward.md`, was likewise rejected
+> only because Desktop appended a terminal memory-citation annotation to the rollout `response_item`; it is invalid,
+> so its printed `NO-GO` is advisory only. Its seven actionable findings are fixed-forwarded in §3.2; `R-019` remains
+> open. Section 9 distinguishes the original
 > `4cfd1916da8bd98483d1ecfdba1f66639b122da9` evidence from the current follow-up evidence. Fresh validation is
 > recorded; a new pinned non-author review for the current follow-up remains pending.
 
@@ -21,7 +25,11 @@ typed trusted execution summaries, normalized response-envelope aliases, and dem
 also replaces path-filtered review checks with explicit route, owner, alias-dataflow, mutation, schema, adapter, and
 demo gates. The `20260714T215839Z` advisory follow-up adds the exact-built-in bounded copier, one-budget traversal in
 each backend/frontend boundary, owner-separated current-evidence provenance, strict envelope/outcome and
-numeric/policy families, and the constructor-only `CommandKernel` lifecycle described in §3.1.
+numeric/policy families, and the constructor-only `CommandKernel` lifecycle described in §3.1. The later
+`20260714T231243Z` advisory is closed by one canonical frontend outcome/budget manifest, action-specific client
+outcome validation, once-captured canonical envelope members, one shared traversal across every wrapper child, a
+bounded/cycle-safe demo projector, an exact-empty operation-sync source bit, and bounded batch Activity/Command
+provenance reads described in §3.2.
 
 The canonical backend owners remain deliberately split:
 
@@ -74,7 +82,52 @@ Finding #3 remains `R-019`; this projection follow-up does not implement its gen
 requirements. The mechanisms above are present in the current fixed-forward tree; fresh author and scope-local
 advisory evidence is recorded in §9. A scope-matched pinned formal verdict remains pending.
 
-### 3.2 Earlier precommit adversarial author-audit fixes
+### 3.2 `20260714T231243Z` invalid-artifact advisory fixed-forward
+
+The second runner attempt completed with `reviewer_exit_code=0`, but the persisted final `response_item` carried a
+Desktop-owned terminal `<oai-mem-citation>` suffix that was absent from the exact raw reviewer output, rollout
+`agent_message`, and `task_complete.last_agent_message`. The old verifier therefore set
+`final_response_item_exact=false` and rejected the artifact. Its substantive counts were
+`P0/P1/P2/P3=0/4/4/1`, including accepted residual `R-019`; neither those counts nor the printed `NO-GO` are a formal
+verdict. The actionable evidence is fixed-forwarded as follows:
+
+| Advisory finding | Current fixed-forward mechanism |
+| --- | --- |
+| action methods accepted another action's successful outcome | `frontend_api_runtime_contract.ts` is the sole outcome-policy owner. All eleven client methods select their exact action/decision outcome set; adapter and demo tests exercise the complete **11 client methods × 9 action outcomes** and **9 demo actions × 9 outcomes** matrices. |
+| response wrappers reset collection/node budgets and reread canonical members | Every wrapper captures each own canonical member once, excludes it from the open envelope, and maps it with the same traversal used by the envelope. Exact/over-limit, total-node, depth, cycle, hostile array/Proxy/getter, and capture-once fixtures run against the adapter. |
+| the demo projector was unbounded and cycle-unsafe | The demo imports the same canonical limits and owns an equivalent depth/node/collection, active-container, memo, and closed-container traversal. The same adversarial budget/cycle fixtures run through the actual demo bundle. |
+| the demo duplicated endpoint outcome policy | Outcome values, action maps, and projection budgets are imported from one runtime manifest and mechanically compared; the demo no longer declares a second table. |
+| Activity provenance introduced hosted-PG N+1 reads | Public pages use one bounded request-ordered ActivityRun batch read and one WorkflowCommand batch read for up to 500 unique ids, with zero point reads. Activity list reuses its selected rows, empty input issues zero SQL, duplicates are deduplicated, missing rows stay absent, and the real PG adapter query spy proves one `select_many` per required owner. Compatibility point reads exist only when an incomplete test double omits the batch method. |
+| malformed operation sync could impersonate `{}` replay | The backend records whether the original exact built-in `operation_sync` member was truly an empty dict. A nonempty value that projects empty is omitted; only the genuine empty source preserves the no-sync replay sentinel. Hostile-key and partially valid fixtures prove the distinction. |
+| canonical Activity provenance was reread from mutable input | Canonical Activity values are captured once and projected only from that snapshot under the shared traversal; getter/Proxy fixtures prove no second read. |
+| validation wording was stale | This document, the original D3c1 baseline, Plan, TODO, ledger, and index now distinguish recorded author evidence, invalid/advisory artifacts, and the still-pending highest-effort pinned review. |
+
+The stable-tree precommit audit then found and closed four second-order integration gaps without broadening the batch:
+
+1. the adapter now preserves `operation_sync={}` only when the captured source member was itself the exact empty plain
+   object; a nonempty member that projects to empty is omitted, while a partially valid member keeps only its valid
+   fields;
+2. every memoized DAG alias occurrence is charged by the serialized projected node population, so repeating one shared
+   large subtree cannot amplify the adapter or demo output beyond the shared total-node budget;
+3. Activity-derived provenance now requires exact nonempty `workspace_id` and `workflow_run_id` lineage, exact optional
+   Operation/acquisition lineage when supplied, and exact ActivityRun-to-WorkflowCommand run lineage before either a
+   control target is queried or attached; foreign/missing evidence stays absent;
+4. demo outcomes are compared as exact strings, so whitespace-wrapped enum values remain fail closed exactly as they
+   do in the adapter and JSON contract.
+
+These are author-audit findings, not findings retroactively attributed to either invalid artifact. The final dirty-tree
+non-author audit reports `P0/P1/P2/P3=0/0/0/0`, but it is advisory and does not replace a pinned formal review.
+
+The review runner transport incompatibility was first addressed by
+`4dac471ec18197259dc65a8e3d8759a369bbefe0`; its pinned advisory found two P2 and two P3 edge cases. Commits
+`7010fa49ecee0d1f69c28bad4bb762853d459426` and
+`eea26e3a71245b91a19021ac13325de6a3b7b2f3` fix-forward suffix separation, unique final-response observation,
+canonical Desktop source/thread gating, lowercase UUIDs, and transport-added prompt context. A fresh pinned non-author
+review of exact range `4dac471..eea26e3` is advisory `GO`, `P0/P1/P2/P3=0/0/0/0`; the operator-owned effort was
+`medium`, so this is not a formal gate artifact. The app-server final item, rollout `agent_message`, and
+`task_complete` remain exact raw-output bindings. Runner evidence is separate from this product scope.
+
+### 3.3 Earlier precommit adversarial author-audit fixes
 
 After implementing the five direct findings, adversarial passes in the author session exposed additional bounded
 cross-layer gaps. They are fixed in the same D3c1a candidate because leaving them open would make the advertised public
@@ -329,15 +382,32 @@ Current follow-up stable-tree evidence, before creating the enclosing commit:
 - mypy ceiling: unchanged at **81 errors in 4 files**;
 - fresh dirty-tree non-author backend advisory: **CLEAN**, `P0/P1/P2/P3=0/0/0/0`.
 
+Second invalid-artifact fixed-forward focused evidence, before creating its enclosing commit:
+
+- full D3c1a projection contract: **18 passed**;
+- D3c1 claim-fence/static contract: **38 passed**;
+- exact backend sentinel/batch/provenance matrix: **6 passed, 3 subtests passed**;
+- real-PG batch provenance proof: **2 passed**, including exactly one ActivityRun and one WorkflowCommand
+  `select_many` for the two required owners and zero point reads;
+- storage surface guardrails: **60 passed**;
+- full pre-Agent contract suite: **60 passed**;
+- standalone adapter/contract/runtime-manifest TypeScript compile: exit **0**;
+- frontend production build: **82 modules transformed**; the existing `>500 kB` warning remains informational;
+- scoped Ruff check/format and `git diff --check`: clean;
+- mypy ceiling: unchanged at **81 errors in 4 files**;
+- stable-tree non-author audit: advisory **GO/CLEAN**, `P0/P1/P2/P3=0/0/0/0`.
+
 The advisory also exercised hostile hash-collision keys with zero equality-hook calls, alternating carrier depth 40 in
 9 command projections, and a binary depth-10 carrier tree in 99 projections; budget cutoffs omitted the member rather
 than emitting an empty canonical carrier. This is author/advisory evidence, not a formal pinned verdict.
 
 The earlier D3c1 review artifact remains invalid formal evidence even though its five direct findings motivated the
-first D3c1a candidate. The later pinned D3c1a artifact `20260714T215839Z_*` also remains invalid: its process completed,
-but `causal_binding.final_response_item_exact=false`. Its substantive #1/#2/#4-#11 findings are mapped to the current
-fixed-forward mechanisms in §3.1; #3 remains `R-019`. Neither invalid artifact is formal `NO-GO` or `GO`. Fresh targeted
-validation is recorded above; a fresh pinned non-author review must still bind the enclosing commit. Until a valid
+first D3c1a candidate. The later pinned D3c1a artifacts `20260714T215839Z_*` and `20260714T231243Z_*` also remain
+invalid: both processes completed, but `causal_binding.final_response_item_exact=false`. The first artifact's
+substantive #1/#2/#4-#11 findings are mapped to §3.1; the second artifact's actionable findings are mapped to §3.2;
+accepted residual `R-019` remains open. No invalid artifact is formal `NO-GO` or `GO`. Fresh targeted validation is
+recorded above; a fresh pinned non-author product review must still bind the enclosing commit at the operator-owned
+highest supported reasoning effort. Until a valid
 scope-matched artifact exists, live/W6/manual validation, promotion, and milestone signoff remain fail closed for this
 scope.
 

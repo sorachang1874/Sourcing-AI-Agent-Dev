@@ -2971,6 +2971,11 @@ def test_d3c1_frontend_contract_is_closed_and_names_only_safe_diagnostics() -> N
             "export function mapWorkflowActivityControlTarget"
         )
     ]
+    operation_sync_mapper_source = adapter_source[
+        adapter_source.index("export function mapWorkflowCommandOperationSync") : adapter_source.index(
+            "export function mapWorkflowCommandListResponse"
+        )
+    ]
     demo_mapper_source = demo_source[
         demo_source.index("function deriveWorkflowCommandRecord") : demo_source.index(
             "function deriveWorkflowActivityRecord"
@@ -2980,8 +2985,12 @@ def test_d3c1_frontend_contract_is_closed_and_names_only_safe_diagnostics() -> N
     assert "export interface WorkflowCommandRecord extends JsonObject" not in contract_source
     assert "operation_sync?: WorkflowCommandOperationSync" in contract_source
     assert "...(source as JsonObject)" not in mapper_source
-    assert "operation_sync: mapOptionalPlainWorkflowPublicObject(" in control_mapper_source
-    assert "mapWorkflowCommandOperationSync," in control_mapper_source
+    assert "canonical.operation_sync," in control_mapper_source
+    assert "mapWorkflowCommandOperationSyncIfMeaningful," in control_mapper_source
+    assert "operation_sync: operationSync," in control_mapper_source
+    assert "delete mapped.operation_sync" in control_mapper_source
+    assert "payloadWasExactEmpty" in operation_sync_mapper_source
+    assert "Object.keys(projection.value).length > 0" in operation_sync_mapper_source
     assert "raw: record" not in demo_mapper_source
 
 

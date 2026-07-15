@@ -18,7 +18,13 @@
 > later `20260714T215839Z_*` pinned artifact is itself invalid/advisory because
 > `causal_binding.final_response_item_exact=false`; its substantive text is not formal `NO-GO`. Findings #1/#2/#4-#11
 > are fixed-forwarded in the current follow-up, including replacement of lazy repair with constructor-only
-> `CommandKernel` ownership; #3 remains `R-019`, and fresh validation/review remain pending;
+> `CommandKernel` ownership; #3 remains `R-019`. A second pinned attempt,
+> `20260714T231243Z_*`, is also invalid/advisory only for the same Desktop response-item memory-annotation mismatch;
+> its action-outcome, wrapper-budget, demo, policy-owner, PG N+1, operation-sync sentinel, mutable-Activity, and stale-doc
+> evidence is fixed-forwarded in the D3c1a document. A final integration audit additionally closed DAG-alias output
+> amplification, nonempty projected-empty frontend operation sync, foreign Activity lineage, and whitespace-wrapped
+> outcomes. Current targeted validation is recorded there; a fresh
+> highest-effort pinned review remains pending;
 > this document is retained as the original implementation baseline, not as a current formal verdict.
 
 ## 1. Outcome and impact
@@ -151,10 +157,12 @@ invalid formal evidence: it is neither formal `NO-GO` nor `GO`. Its concrete fin
 and must be verified/fixed forward before Live/W6/manual/signoff; pending review still does not freeze unrelated
 non-live batches.
 
-The later D3c1a pinned attempt `20260714T215839Z_*` also completed a substantive review but failed the gate at
-`causal_binding.final_response_item_exact=false`. Its printed `NO-GO` is therefore advisory only, not a formal verdict.
-The current D3c1a follow-up records fixed-forward mechanisms for #1/#2/#4-#11; #3 is the still-open `R-019` residual.
-Fresh validation and a fresh scope-matched review are still required for that follow-up.
+The later D3c1a pinned attempts `20260714T215839Z_*` and `20260714T231243Z_*` both completed substantive reviews but
+failed the gate at `causal_binding.final_response_item_exact=false`. Their printed `NO-GO` text is therefore advisory
+only, not a formal verdict. D3c1a records fixed-forward mechanisms for the first artifact's #1/#2/#4-#11 and every
+actionable finding from the second, plus the four final integration-audit gaps; `R-019` remains open. Current targeted
+validation is recorded in D3c1a, while a
+fresh scope-matched review at the operator-owned highest supported reasoning effort is still required.
 
 ## 7. Explicit non-closure
 

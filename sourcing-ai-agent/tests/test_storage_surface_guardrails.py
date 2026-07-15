@@ -121,6 +121,7 @@ _RETIRED_ACTIVITY_SPINE_CALL_ATTRIBUTES = {
 _ACTIVITY_SPINE_REPOSITORY_METHODS = {
     "upsert_activity_run",
     "get_activity_run",
+    "list_activity_runs_by_ids",
     "list_activity_runs",
     "upsert_activity_attempt",
     "get_activity_attempt",
@@ -773,6 +774,58 @@ class _BulkUpsertRecordingAdapter:
         return len(rows)
 
 
+class _WorkflowEvidenceBatchRecordingAdapter:
+    mode = "postgres_only"
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, dict[str, object]]] = []
+        self.rows_by_table = {
+            "workflow_activity_runs": {
+                "activity-1": {
+                    "activity_run_id": "activity-1",
+                    "workflow_run_id": "workflow-1",
+                    "command_id": "command-1",
+                    "activity_type": "test.activity",
+                    "owner": "test-owner",
+                },
+                "activity-2": {
+                    "activity_run_id": "activity-2",
+                    "workflow_run_id": "workflow-1",
+                    "command_id": "command-2",
+                    "activity_type": "test.activity",
+                    "owner": "test-owner",
+                },
+            },
+            "workflow_commands": {
+                "command-1": {
+                    "command_id": "command-1",
+                    "workflow_run_id": "workflow-1",
+                    "command_type": "test.command",
+                    "owner": "test-owner",
+                    "status": "running",
+                },
+                "command-2": {
+                    "command_id": "command-2",
+                    "workflow_run_id": "workflow-1",
+                    "command_type": "test.command",
+                    "owner": "test-owner",
+                    "status": "running",
+                },
+            },
+        }
+
+    def should_prefer_read(self, _table_name: str) -> bool:
+        return True
+
+    def is_authoritative(self, _table_name: str) -> bool:
+        return True
+
+    def select_many(self, table_name: str, **kwargs: object) -> list[dict[str, object]]:
+        self.calls.append((table_name, dict(kwargs)))
+        rows_by_id = self.rows_by_table[table_name]
+        return [rows_by_id[value] for value in reversed(list(kwargs.get("params") or [])) if value in rows_by_id]
+
+
 def _runtime_error(callable_) -> RuntimeError:
     with pytest.raises(RuntimeError) as raised:
         callable_()
@@ -1161,6 +1214,52 @@ def test_activity_spine_storage_facade_is_retired_to_workflow_runtime_repository
             "_workflow_entity_delta_from_row",
         }
     )
+
+
+def test_workflow_evidence_batch_readers_are_bounded_single_query_and_request_ordered() -> None:
+    adapter = _WorkflowEvidenceBatchRecordingAdapter()
+    repository = WorkflowRuntimeRepository(adapter)
+    store = object.__new__(ControlPlaneStore)
+    store._control_plane_postgres = adapter
+
+    activities = repository.list_activity_runs_by_ids(
+        [" activity-2 ", "activity-1", "activity-2", "missing-activity", ""]
+    )
+    commands = store.list_workflow_commands_by_ids((" command-2 ", "command-1", "command-2", "missing-command", ""))
+
+    assert [row["activity_run_id"] for row in activities] == ["activity-2", "activity-1"]
+    assert [row["command_id"] for row in commands] == ["command-2", "command-1"]
+    assert adapter.calls == [
+        (
+            "workflow_activity_runs",
+            {
+                "where_sql": "activity_run_id IN (%s, %s, %s)",
+                "params": ["activity-2", "activity-1", "missing-activity"],
+                "order_by_sql": "",
+                "limit": 3,
+                "offset": 0,
+            },
+        ),
+        (
+            "workflow_commands",
+            {
+                "where_sql": "command_id IN (%s, %s, %s)",
+                "params": ["command-2", "command-1", "missing-command"],
+                "order_by_sql": "",
+                "limit": 3,
+                "offset": 0,
+            },
+        ),
+    ]
+
+    adapter.calls.clear()
+    assert repository.list_activity_runs_by_ids([]) == []
+    assert store.list_workflow_commands_by_ids(()) == []
+    with pytest.raises(ValueError, match="activity_run_ids supports at most 500 identifiers per batch"):
+        repository.list_activity_runs_by_ids([f"activity-{index}" for index in range(501)])
+    with pytest.raises(ValueError, match="command_ids supports at most 500 identifiers per batch"):
+        store.list_workflow_commands_by_ids([f"command-{index}" for index in range(501)])
+    assert adapter.calls == []
 
 
 def test_activity_spine_retired_store_calls_cannot_return() -> None:

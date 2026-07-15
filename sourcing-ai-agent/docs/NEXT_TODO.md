@@ -346,6 +346,16 @@
   fixed-forward；#3=`R-019` 继续 open。该 follow-up 的 stable evidence=`18` D3c1a、`63` D3+durable、full
   operation `129`、pre-Agent `60`、cancel/request-scope `51`、frontend `81 modules`、public mapper `85/34`、
   Ruff/diff clean、mypy `81/4`；fresh dirty-tree non-author advisory=`0/0/0/0 CLEAN`，但 fresh pinned review 仍 pending。
+  第二个 pinned artifact `runtime/reviews/20260714T231243Z_Track_D_D3c1a_public_projection_advisory_fixed-forward.md`
+  同样只因 Desktop terminal memory-citation suffix 令 `final_response_item_exact=false` 而 invalid；其
+  `P0/P1/P2/P3=0/4/4/1` 与 printed `NO-GO` 仅 advisory。action-specific outcome、wrapper once-capture/shared
+  budget、demo bounded/cycle-safe、single outcome owner、真实 PG bounded 500-id batch/zero point read、exact-empty
+  `operation_sync` sentinel、mutable Activity TOCTOU 与 stale wording 均已 fixed-forward。focused evidence=
+  projection `18`、claim-fence `38`、backend exact matrix `6 + 3 subtests`、real-PG `2`、storage guardrails `60`、
+  pre-Agent `60`、frontend build `82 modules`、mypy `81/4`、Ruff/diff clean。final integration audit 还闭合
+  frontend nonempty-projected-empty sync、DAG alias output amplification、foreign workspace/run provenance 与
+  whitespace-wrapped outcome，dirty-tree non-author advisory=`0/0/0/0 CLEAN`；fresh highest-effort pinned review 仍
+  pending。
   因此在 valid scope-matched artifact 前既无 formal GO 也无 formal NO-GO，Live/W6/manual/promotion/
   signoff fail closed，但不冻结无关 non-live batch。该批零 storage/runtime write、migration、claim/CAS、Stage A/B、
   dispatch 或 served 激活；完整非闭合边界见
@@ -378,8 +388,9 @@
   `7988dd50814ba1c2cc4a3c5efa7ec40ac7eb47b80cbce901ecc8c04a83a92685`）。该 `GO` 只覆盖 dormant
   nine-file physical foundation，不关闭 R-019、完整 Migration A、runtime activation 或 live/signoff gate。
 - [x] D3c2c Activity / terminal-evidence physical surface characterization（2026-07-15；零产品码/零 migration）：
-  descriptor/call inventory 机械冻结为 ActivityRun `20 cols / 30 upserts in 5 files / 20 list / 25 raw get
-  = 24 external + 1 internal`、ActivityAttempt `22 cols / 22 upserts in 4 files / 21 list / 2 raw get = 1 external
+  descriptor/call inventory 机械冻结为 ActivityRun `20 cols / 30 upserts in 5 files / 20 list / 26 raw get
+  = 25 external + 1 internal`（新增 1 个只服务 incomplete test-double 的 compatibility fallback，production list
+  使用 bounded batch、零 point read）、ActivityAttempt `22 cols / 22 upserts in 4 files / 21 list / 2 raw get = 1 external
   + 1 internal`、event `17 cols / 62 append_event_and_reduce in 7 modules / 2 list`；唯一 physical event INSERT
   owner 为 `LiveControlPlanePostgresAdapter.append_workflow_event`，ActivityRun 另有唯一 direct cancel `UPDATE`。
   current `attempt_number` 不是 future post-claim `command_attempt`；event→commands→outbox→state 仍为 R-019
@@ -390,7 +401,9 @@
   R-019/R-023/R-027/R-029、action-root、OB-10.1-10.4、完整 Migration A 与 served=0 均不变。完整事实与
   executable oracle 见 `TRACK_D_D3C2C_ACTIVITY_TERMINAL_EVIDENCE_CHARACTERIZATION.md`。首个 pinned artifact
   `20260714T232853Z_*` 因 `final_response_item_exact=false` invalid、不是 formal `NO-GO`；其 lexical exposure-zero
-  advisory 已 fixed-forward，fresh pinned retry pending。
+  advisory 已 fixed-forward。retry `20260714T234336Z_*` 同样因 Desktop response-item memory annotation invalid；
+  其完整 item 5/6/7 Migration-A member order、exact non-closure tuple 与 stale 7-test evidence 已 fixed-forward，
+  current full oracle=`8 passed`，fresh highest-effort pinned retry pending。
 - [x] D3c2d dormant ActivityRun / ActivityAttempt claim-chain foundation（2026-07-15；implementation candidate）：
   `0005_d3_activity_claim_chain_foundation.sql` 按 D3b §5.2/§11.1 ratify 并安装 ActivityRun `6` columns 与
   ActivityAttempt `10` columns，保留 existing workspace/operation/command links；`command_attempt` 为 future

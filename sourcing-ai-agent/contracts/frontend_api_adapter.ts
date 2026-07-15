@@ -1,9 +1,13 @@
 import {
+  OPERATION_ACTION_DECISION_APPLIED_OUTCOMES,
   OPERATION_ACTION_DETAIL_SUCCESS_STATUSES,
+  OPERATION_ACTION_QUERY_SUCCESS_STATUSES,
+  OPERATION_ACTION_SUBMIT_APPLIED_OUTCOMES,
   OPERATION_RUN_CONTROL_APPLIED_OUTCOMES,
   OPERATION_RUN_PROVENANCE_SUCCESS_STATUSES,
   WORKFLOW_COMMAND_CONTROL_APPLIED_OUTCOMES,
-} from "./frontend_api_contract";
+  WORKFLOW_PUBLIC_PROJECTION_LIMITS,
+} from "./frontend_api_runtime_contract";
 import type {
   AcquisitionDiscoveryLaneDetailResponse,
   AcquisitionDiscoveryLaneListResponse,
@@ -210,18 +214,40 @@ export class SourcingAgentApiClient {
   }
 
   async submitOperationAction(payload: JsonObject): Promise<OperationActionDetailResponse> {
-    return this.post("/api/operations/actions", payload, mapOperationActionDetailResponse);
+    return this.post(
+      "/api/operations/actions",
+      payload,
+      (response) => mapPublicResponseForStatuses(
+        response,
+        mapOperationActionDetailResponse,
+        OPERATION_ACTION_SUBMIT_APPLIED_OUTCOMES,
+        "Operation action submit",
+      ),
+    );
   }
 
   async getOperationAction(actionId: string): Promise<OperationActionDetailResponse> {
-    return this.get(`/api/operations/actions/${encodeURIComponent(actionId)}`, mapOperationActionDetailResponse);
+    return this.get(
+      `/api/operations/actions/${encodeURIComponent(actionId)}`,
+      (response) => mapPublicResponseForStatuses(
+        response,
+        mapOperationActionDetailResponse,
+        OPERATION_ACTION_QUERY_SUCCESS_STATUSES,
+        "Operation action query",
+      ),
+    );
   }
 
   async approveOperationAction(actionId: string, payload: JsonObject = {}): Promise<OperationActionDetailResponse> {
     return this.post(
       `/api/operations/actions/${encodeURIComponent(actionId)}/approve`,
       payload,
-      mapOperationActionDetailResponse,
+      (response) => mapPublicResponseForStatuses(
+        response,
+        mapOperationActionDetailResponse,
+        OPERATION_ACTION_DECISION_APPLIED_OUTCOMES.approve,
+        "Operation action approve",
+      ),
     );
   }
 
@@ -229,7 +255,12 @@ export class SourcingAgentApiClient {
     return this.post(
       `/api/operations/actions/${encodeURIComponent(actionId)}/reject`,
       payload,
-      mapOperationActionDetailResponse,
+      (response) => mapPublicResponseForStatuses(
+        response,
+        mapOperationActionDetailResponse,
+        OPERATION_ACTION_DECISION_APPLIED_OUTCOMES.reject,
+        "Operation action reject",
+      ),
     );
   }
 
@@ -253,7 +284,12 @@ export class SourcingAgentApiClient {
     return this.post(
       `/api/operations/runs/${encodeURIComponent(operationRunId)}/cancel`,
       payload,
-      mapOperationRunControlResponse,
+      (response) => mapPublicResponseForStatuses(
+        response,
+        mapOperationRunControlResponse,
+        OPERATION_RUN_CONTROL_APPLIED_OUTCOMES.cancel,
+        "Operation run cancel",
+      ),
     );
   }
 
@@ -261,7 +297,12 @@ export class SourcingAgentApiClient {
     return this.post(
       `/api/operations/runs/${encodeURIComponent(operationRunId)}/retry`,
       payload,
-      mapOperationRunControlResponse,
+      (response) => mapPublicResponseForStatuses(
+        response,
+        mapOperationRunControlResponse,
+        OPERATION_RUN_CONTROL_APPLIED_OUTCOMES.retry,
+        "Operation run retry",
+      ),
     );
   }
 
@@ -269,7 +310,12 @@ export class SourcingAgentApiClient {
     return this.post(
       `/api/operations/runs/${encodeURIComponent(operationRunId)}/resume`,
       payload,
-      mapOperationRunControlResponse,
+      (response) => mapPublicResponseForStatuses(
+        response,
+        mapOperationRunControlResponse,
+        OPERATION_RUN_CONTROL_APPLIED_OUTCOMES.resume,
+        "Operation run resume",
+      ),
     );
   }
 
@@ -277,7 +323,12 @@ export class SourcingAgentApiClient {
     return this.post(
       `/api/operations/runs/${encodeURIComponent(operationRunId)}/dispatch`,
       payload,
-      mapOperationRunControlResponse,
+      (response) => mapPublicResponseForStatuses(
+        response,
+        mapOperationRunControlResponse,
+        OPERATION_RUN_CONTROL_APPLIED_OUTCOMES.dispatch,
+        "Operation run dispatch",
+      ),
     );
   }
 
@@ -298,7 +349,12 @@ export class SourcingAgentApiClient {
     return this.post(
       `/api/workflow/commands/${encodeURIComponent(commandId)}/cancel`,
       payload,
-      mapWorkflowCommandControlResponse,
+      (response) => mapPublicResponseForStatuses(
+        response,
+        mapWorkflowCommandControlResponse,
+        WORKFLOW_COMMAND_CONTROL_APPLIED_OUTCOMES.cancel,
+        "Workflow command cancel",
+      ),
     );
   }
 
@@ -306,7 +362,12 @@ export class SourcingAgentApiClient {
     return this.post(
       `/api/workflow/commands/${encodeURIComponent(commandId)}/retry`,
       payload,
-      mapWorkflowCommandControlResponse,
+      (response) => mapPublicResponseForStatuses(
+        response,
+        mapWorkflowCommandControlResponse,
+        WORKFLOW_COMMAND_CONTROL_APPLIED_OUTCOMES.retry,
+        "Workflow command retry",
+      ),
     );
   }
 
@@ -314,7 +375,12 @@ export class SourcingAgentApiClient {
     return this.post(
       `/api/workflow/commands/${encodeURIComponent(commandId)}/resume`,
       payload,
-      mapWorkflowCommandControlResponse,
+      (response) => mapPublicResponseForStatuses(
+        response,
+        mapWorkflowCommandControlResponse,
+        WORKFLOW_COMMAND_CONTROL_APPLIED_OUTCOMES.resume,
+        "Workflow command resume",
+      ),
     );
   }
 
@@ -802,12 +868,19 @@ export function mapWorkflowCommandDisplayContract(
   };
 }
 
-export function mapOperationActionDisplayContract(payload: unknown): OperationActionDisplayContract {
+export function mapOperationActionDisplayContract(
+  payload: unknown,
+  traversal: WorkflowPublicProjectionTraversal = createWorkflowPublicProjectionTraversal(),
+  depth = 0,
+): OperationActionDisplayContract {
   const source = asWorkflowCommandPublicMirrorSource(
     payload ?? {},
     "OperationActionDisplayContract",
+    false,
+    traversal,
+    depth,
   );
-  return {
+  const mapped: OperationActionDisplayContract = {
     ...(source as JsonObject),
     schema_version: asOptionalString(source.schema_version),
     action_type: asOptionalString(source.action_type),
@@ -819,6 +892,8 @@ export function mapOperationActionDisplayContract(payload: unknown): OperationAc
     source_of_truth: asOptionalString(source.source_of_truth),
     fallback_status: asOptionalString(source.fallback_status),
   };
+  markWorkflowPublicProjectionClosed(mapped, traversal);
+  return mapped;
 }
 
 export function mapWorkflowCommandContract(payload: unknown): WorkflowCommandContract {
@@ -935,9 +1010,19 @@ export function mapOperationActionRegistryResponse(payload: unknown): OperationA
   };
 }
 
-export function mapOperationEventRecord(payload: unknown): OperationEventRecord {
-  const source = asWorkflowCommandPublicMirrorSource(payload, "OperationEventRecord");
-  return {
+export function mapOperationEventRecord(
+  payload: unknown,
+  traversal: WorkflowPublicProjectionTraversal = createWorkflowPublicProjectionTraversal(),
+  depth = 0,
+): OperationEventRecord {
+  const source = asWorkflowCommandPublicMirrorSource(
+    payload,
+    "OperationEventRecord",
+    false,
+    traversal,
+    depth,
+  );
+  const mapped: OperationEventRecord = {
     ...(source as JsonObject),
     event_id: asOptionalString(source.event_id),
     workspace_id: asOptionalString(source.workspace_id),
@@ -949,15 +1034,27 @@ export function mapOperationEventRecord(payload: unknown): OperationEventRecord 
     sequence_number: asOptionalNumber(source.sequence_number),
     actor: asOptionalString(source.actor),
     source: asOptionalString(source.source),
-    payload: asOptionalWorkflowCommandPublicMirrorObject(source.payload),
+    payload: asOptionalWorkflowCommandPublicMirrorObject(source.payload, traversal, depth + 1),
     occurred_at: asOptionalString(source.occurred_at),
     recorded_at: asOptionalString(source.recorded_at),
   };
+  markWorkflowPublicProjectionClosed(mapped, traversal);
+  return mapped;
 }
 
-export function mapOperationActionRecord(payload: unknown): OperationActionRecord {
-  const source = asWorkflowCommandPublicMirrorSource(payload, "OperationActionRecord");
-  return {
+export function mapOperationActionRecord(
+  payload: unknown,
+  traversal: WorkflowPublicProjectionTraversal = createWorkflowPublicProjectionTraversal(),
+  depth = 0,
+): OperationActionRecord {
+  const source = asWorkflowCommandPublicMirrorSource(
+    payload,
+    "OperationActionRecord",
+    false,
+    traversal,
+    depth,
+  );
+  const mapped: OperationActionRecord = {
     ...(source as JsonObject),
     action_id: asOptionalString(source.action_id),
     workspace_id: asOptionalString(source.workspace_id),
@@ -967,27 +1064,38 @@ export function mapOperationActionRecord(payload: unknown): OperationActionRecor
     operation_type: asOptionalString(source.operation_type),
     display_contract: mapOptionalPlainWorkflowPublicObject(
       source.display_contract,
-      mapOperationActionDisplayContract,
+      (value) => mapOperationActionDisplayContract(value, traversal, depth + 1),
     ),
-    target_ref: asOptionalWorkflowCommandPublicMirrorObject(source.target_ref),
-    input: asOptionalWorkflowCommandPublicMirrorObject(source.input),
+    target_ref: asOptionalWorkflowCommandPublicMirrorObject(source.target_ref, traversal, depth + 1),
+    input: asOptionalWorkflowCommandPublicMirrorObject(source.input, traversal, depth + 1),
     approval_status: asOptionalString(source.approval_status),
     approval_policy: asOptionalString(source.approval_policy),
-    budget: asOptionalWorkflowCommandPublicMirrorObject(source.budget),
+    budget: asOptionalWorkflowCommandPublicMirrorObject(source.budget, traversal, depth + 1),
     status: asOptionalString(source.status),
-    result_ref: asOptionalWorkflowCommandPublicMirrorObject(source.result_ref),
-    metadata: asOptionalWorkflowCommandPublicMirrorObject(source.metadata),
+    result_ref: asOptionalWorkflowCommandPublicMirrorObject(source.result_ref, traversal, depth + 1),
+    metadata: asOptionalWorkflowCommandPublicMirrorObject(source.metadata, traversal, depth + 1),
     request_schema_version: asOptionalString(source.request_schema_version),
     request_schema_digest: asOptionalString(source.request_schema_digest),
     created_at: asOptionalString(source.created_at),
     updated_at: asOptionalString(source.updated_at),
   };
+  markWorkflowPublicProjectionClosed(mapped, traversal);
+  return mapped;
 }
 
-export function mapOperationRunRecord(payload: unknown): OperationRunRecord {
-  const rawSource = asObject(payload, "OperationRunRecord");
-  const source = asWorkflowCommandPublicMirrorSource(payload, "OperationRunRecord");
-  return {
+export function mapOperationRunRecord(
+  payload: unknown,
+  traversal: WorkflowPublicProjectionTraversal = createWorkflowPublicProjectionTraversal(),
+  depth = 0,
+): OperationRunRecord {
+  const { source, canonical } = captureWorkflowPublicEnvelope(
+    payload,
+    "OperationRunRecord",
+    ["status_summary"],
+    traversal,
+    depth,
+  );
+  const mapped: OperationRunRecord = {
     ...(source as JsonObject),
     operation_run_id: asOptionalString(source.operation_run_id),
     workspace_id: asOptionalString(source.workspace_id),
@@ -996,37 +1104,48 @@ export function mapOperationRunRecord(payload: unknown): OperationRunRecord {
     operation_type: asOptionalString(source.operation_type),
     display_contract: mapOptionalPlainWorkflowPublicObject(
       source.display_contract,
-      mapOperationActionDisplayContract,
+      (value) => mapOperationActionDisplayContract(value, traversal, depth + 1),
     ),
     status: asOptionalString(source.status),
-    progress: asOptionalWorkflowCommandPublicMirrorObject(source.progress),
-    workflow_ref: asOptionalWorkflowCommandPublicMirrorObject(source.workflow_ref),
-    cost_budget: asOptionalWorkflowCommandPublicMirrorObject(source.cost_budget),
-    result_ref: asOptionalWorkflowCommandPublicMirrorObject(source.result_ref),
-    metadata: asOptionalWorkflowCommandPublicMirrorObject(source.metadata),
+    progress: asOptionalWorkflowCommandPublicMirrorObject(source.progress, traversal, depth + 1),
+    workflow_ref: asOptionalWorkflowCommandPublicMirrorObject(source.workflow_ref, traversal, depth + 1),
+    cost_budget: asOptionalWorkflowCommandPublicMirrorObject(source.cost_budget, traversal, depth + 1),
+    result_ref: asOptionalWorkflowCommandPublicMirrorObject(source.result_ref, traversal, depth + 1),
+    metadata: asOptionalWorkflowCommandPublicMirrorObject(source.metadata, traversal, depth + 1),
     request_schema_version: asOptionalString(source.request_schema_version),
     request_schema_digest: asOptionalString(source.request_schema_digest),
     control_state: mapOptionalPlainWorkflowPublicObject(
       source.control_state,
-      mapOperationRunControlState,
+      (value) => mapOperationRunControlState(value, traversal, depth + 1),
     ),
-    status_summary: mapOptionalPlainWorkflowPublicObject(
-      rawSource.status_summary,
+    status_summary: mapCapturedPlainWorkflowPublicObject(
+      canonical.status_summary,
       mapOperationRunStatusSummary,
+      traversal,
+      depth + 1,
     ),
     started_at: asOptionalString(source.started_at),
     completed_at: asOptionalString(source.completed_at),
     created_at: asOptionalString(source.created_at),
     updated_at: asOptionalString(source.updated_at),
   };
+  markWorkflowPublicProjectionClosed(mapped, traversal);
+  return mapped;
 }
 
-export function mapOperationRunControlState(payload: unknown): OperationRunControlState {
+export function mapOperationRunControlState(
+  payload: unknown,
+  traversal: WorkflowPublicProjectionTraversal = createWorkflowPublicProjectionTraversal(),
+  depth = 0,
+): OperationRunControlState {
   const source = asWorkflowCommandPublicMirrorSource(
     payload ?? {},
     "OperationRunControlState",
+    false,
+    traversal,
+    depth,
   );
-  return {
+  const mapped: OperationRunControlState = {
     ...(source as JsonObject),
     operation_status: asOptionalString(source.operation_status),
     action_status: asOptionalString(source.action_status),
@@ -1036,21 +1155,33 @@ export function mapOperationRunControlState(payload: unknown): OperationRunContr
     can_retry: asOptionalBoolean(source.can_retry),
     can_resume: asOptionalBoolean(source.can_resume),
     allowed_actions: asSparseOptionalStringArray(source.allowed_actions),
-    disabled_reasons: asOptionalWorkflowCommandPublicMirrorObject(source.disabled_reasons),
+    disabled_reasons: asOptionalWorkflowCommandPublicMirrorObject(
+      source.disabled_reasons,
+      traversal,
+      depth + 1,
+    ),
     control_source_of_truth: asOptionalString(source.control_source_of_truth),
     fallback_status: asOptionalString(source.fallback_status),
     module_state_mutated_on_control: asOptionalBoolean(source.module_state_mutated_on_control),
     schema_version: asOptionalString(source.schema_version),
   };
+  markWorkflowPublicProjectionClosed(mapped, traversal);
+  return mapped;
 }
 
-export function mapOperationRunStatusSummary(payload: unknown): OperationRunStatusSummary {
-  const rawSource = asObject(payload ?? {}, "OperationRunStatusSummary");
-  const source = asWorkflowCommandPublicMirrorSource(
+export function mapOperationRunStatusSummary(
+  payload: unknown,
+  traversal: WorkflowPublicProjectionTraversal = createWorkflowPublicProjectionTraversal(),
+  depth = 0,
+): OperationRunStatusSummary {
+  const { source, canonical } = captureWorkflowPublicEnvelope(
     payload ?? {},
     "OperationRunStatusSummary",
+    ["latest_workflow_command"],
+    traversal,
+    depth,
   );
-  return {
+  const mapped: OperationRunStatusSummary = {
     ...(source as JsonObject),
     source: asOptionalString(source.source),
     fallback_status: asOptionalString(source.fallback_status),
@@ -1062,30 +1193,46 @@ export function mapOperationRunStatusSummary(payload: unknown): OperationRunStat
     operation_event_count: asOptionalNumber(source.operation_event_count),
     command_status_counts: asSparseRecordOfNumber(source.command_status_counts),
     latest_event_type: asOptionalString(source.latest_event_type),
-    latest_event: mapOptionalPlainWorkflowPublicObject(source.latest_event, mapOperationEventRecord),
-    latest_workflow_command: mapOptionalPlainWorkflowPublicObject(
-      rawSource.latest_workflow_command,
+    latest_event: mapOptionalPlainWorkflowPublicObject(
+      source.latest_event,
+      (value) => mapOperationEventRecord(value, traversal, depth + 1),
+    ),
+    latest_workflow_command: mapCapturedPlainWorkflowPublicObject(
+      canonical.latest_workflow_command,
       mapWorkflowCommandRecord,
+      traversal,
+      depth + 1,
     ),
   };
+  markWorkflowPublicProjectionClosed(mapped, traversal);
+  return mapped;
 }
 
 export function mapOperationActionListResponse(payload: unknown): OperationActionListResponse {
-  const rawSource = asObject(payload, "OperationActionListResponse");
-  const source = asWorkflowCommandPublicMirrorSource(payload, "OperationActionListResponse");
+  const { source, canonical, traversal, depth } = captureWorkflowPublicEnvelope(
+    payload,
+    "OperationActionListResponse",
+    ["actions"],
+  );
   return {
     ...(source as JsonObject),
     status: asOptionalString(source.status),
     contract: asOptionalString(source.contract),
-    actions: asArray(rawSource.actions)
-      .filter(isPlainWorkflowPublicObject)
-      .map(mapOperationActionRecord),
+    actions: mapCapturedPlainWorkflowPublicObjectArray(
+      canonical.actions,
+      mapOperationActionRecord,
+      traversal,
+      depth + 1,
+    ) ?? [],
   };
 }
 
 export function mapOperationActionDetailResponse(payload: unknown): OperationActionDetailResponse {
-  const rawSource = asObject(payload, "OperationActionDetailResponse");
-  const source = asWorkflowCommandPublicMirrorSource(payload, "OperationActionDetailResponse");
+  const { source, canonical, traversal, depth } = captureWorkflowPublicEnvelope(
+    payload,
+    "OperationActionDetailResponse",
+    ["action", "operation_run", "events"],
+  );
   return {
     ...(source as JsonObject),
     status: asAllowedPublicResponseStatus(
@@ -1094,52 +1241,83 @@ export function mapOperationActionDetailResponse(payload: unknown): OperationAct
       "OperationActionDetailResponse",
     ),
     contract: asOptionalString(source.contract),
-    action: mapOptionalPlainWorkflowPublicObject(rawSource.action, mapOperationActionRecord),
-    operation_run: mapOptionalPlainWorkflowPublicObject(
-      rawSource.operation_run,
-      mapOperationRunRecord,
+    action: mapCapturedPlainWorkflowPublicObject(
+      canonical.action,
+      mapOperationActionRecord,
+      traversal,
+      depth + 1,
     ),
-    events: asArray(rawSource.events)
-      .filter(isPlainWorkflowPublicObject)
-      .map(mapOperationEventRecord),
+    operation_run: mapCapturedPlainWorkflowPublicObject(
+      canonical.operation_run,
+      mapOperationRunRecord,
+      traversal,
+      depth + 1,
+    ),
+    events: mapCapturedPlainWorkflowPublicObjectArray(
+      canonical.events,
+      mapOperationEventRecord,
+      traversal,
+      depth + 1,
+    ) ?? [],
   };
 }
 
 export function mapOperationRunListResponse(payload: unknown): OperationRunListResponse {
-  const rawSource = asObject(payload, "OperationRunListResponse");
-  const source = asWorkflowCommandPublicMirrorSource(payload, "OperationRunListResponse");
+  const { source, canonical, traversal, depth } = captureWorkflowPublicEnvelope(
+    payload,
+    "OperationRunListResponse",
+    ["operation_runs"],
+  );
   return {
     ...(source as JsonObject),
     status: asOptionalString(source.status),
     contract: asOptionalString(source.contract),
-    operation_runs: asArray(rawSource.operation_runs)
-      .filter(isPlainWorkflowPublicObject)
-      .map(mapOperationRunRecord),
+    operation_runs: mapCapturedPlainWorkflowPublicObjectArray(
+      canonical.operation_runs,
+      mapOperationRunRecord,
+      traversal,
+      depth + 1,
+    ) ?? [],
   };
 }
 
 export function mapOperationRunDetailResponse(payload: unknown): OperationRunDetailResponse {
-  const rawSource = asObject(payload, "OperationRunDetailResponse");
-  const source = asWorkflowCommandPublicMirrorSource(payload, "OperationRunDetailResponse");
+  const { source, canonical, traversal, depth } = captureWorkflowPublicEnvelope(
+    payload,
+    "OperationRunDetailResponse",
+    ["operation_run", "events"],
+  );
   return {
     ...(source as JsonObject),
     status: asString(source.status),
     contract: asOptionalString(source.contract),
-    operation_run: mapOptionalPlainWorkflowPublicObject(
-      rawSource.operation_run,
+    operation_run: mapCapturedPlainWorkflowPublicObject(
+      canonical.operation_run,
       mapOperationRunRecord,
+      traversal,
+      depth + 1,
     ),
-    events: asArray(rawSource.events)
-      .filter(isPlainWorkflowPublicObject)
-      .map(mapOperationEventRecord),
+    events: mapCapturedPlainWorkflowPublicObjectArray(
+      canonical.events,
+      mapOperationEventRecord,
+      traversal,
+      depth + 1,
+    ) ?? [],
   };
 }
 
 export function mapOperationRunProvenanceResponse(payload: unknown): OperationRunProvenanceResponse {
-  const rawSource = asObject(payload, "OperationRunProvenanceResponse");
-  const source = asWorkflowCommandPublicMirrorSource(
+  const { source, canonical, traversal, depth } = captureWorkflowPublicEnvelope(
     payload,
     "OperationRunProvenanceResponse",
+    [
+      "action",
+      "operation_run",
+      "action_events",
+      "operation_events",
+      "event_timeline",
+      "workflow_commands",
+    ],
   );
   return {
     ...(source as JsonObject),
@@ -1149,30 +1327,60 @@ export function mapOperationRunProvenanceResponse(payload: unknown): OperationRu
       "OperationRunProvenanceResponse",
     ),
     contract: asOptionalString(source.contract),
-    action: mapOptionalPlainWorkflowPublicObject(rawSource.action, mapOperationActionRecord),
-    operation_run: mapOptionalPlainWorkflowPublicObject(
-      rawSource.operation_run,
-      mapOperationRunRecord,
+    action: mapCapturedPlainWorkflowPublicObject(
+      canonical.action,
+      mapOperationActionRecord,
+      traversal,
+      depth + 1,
     ),
-    action_events: asArray(rawSource.action_events)
-      .filter(isPlainWorkflowPublicObject)
-      .map(mapOperationEventRecord),
-    operation_events: asArray(rawSource.operation_events)
-      .filter(isPlainWorkflowPublicObject)
-      .map(mapOperationEventRecord),
-    event_timeline: asArray(rawSource.event_timeline)
-      .filter(isPlainWorkflowPublicObject)
-      .map(mapOperationEventRecord),
-    workflow_commands: asArray(rawSource.workflow_commands)
-      .filter(isPlainWorkflowPublicObject)
-      .map((item) => mapWorkflowCommandRecord(item)),
+    operation_run: mapCapturedPlainWorkflowPublicObject(
+      canonical.operation_run,
+      mapOperationRunRecord,
+      traversal,
+      depth + 1,
+    ),
+    action_events: mapCapturedPlainWorkflowPublicObjectArray(
+      canonical.action_events,
+      mapOperationEventRecord,
+      traversal,
+      depth + 1,
+    ) ?? [],
+    operation_events: mapCapturedPlainWorkflowPublicObjectArray(
+      canonical.operation_events,
+      mapOperationEventRecord,
+      traversal,
+      depth + 1,
+    ) ?? [],
+    event_timeline: mapCapturedPlainWorkflowPublicObjectArray(
+      canonical.event_timeline,
+      mapOperationEventRecord,
+      traversal,
+      depth + 1,
+    ) ?? [],
+    workflow_commands: mapCapturedPlainWorkflowPublicObjectArray(
+      canonical.workflow_commands,
+      mapWorkflowCommandRecord,
+      traversal,
+      depth + 1,
+    ) ?? [],
     module_state_mutated: asOptionalBoolean(source.module_state_mutated),
   };
 }
 
 export function mapOperationRunControlResponse(payload: unknown): OperationRunControlResponse {
-  const rawSource = asObject(payload, "OperationRunControlResponse");
-  const source = asWorkflowCommandPublicMirrorSource(payload, "OperationRunControlResponse");
+  const { source, canonical, traversal, depth } = captureWorkflowPublicEnvelope(
+    payload,
+    "OperationRunControlResponse",
+    [
+      "action",
+      "operation_run",
+      "parent_operation_run",
+      "display_contract",
+      "control_state",
+      "workflow_command",
+      "events",
+    ],
+  );
   return {
     ...(source as JsonObject),
     status: asAllowedPublicResponseStatus(
@@ -1187,30 +1395,48 @@ export function mapOperationRunControlResponse(payload: unknown): OperationRunCo
     ),
     reason: asOptionalString(source.reason),
     contract: asOptionalString(source.contract),
-    action: mapOptionalPlainWorkflowPublicObject(rawSource.action, mapOperationActionRecord),
-    operation_run: mapOptionalPlainWorkflowPublicObject(
-      rawSource.operation_run,
-      mapOperationRunRecord,
+    action: mapCapturedPlainWorkflowPublicObject(
+      canonical.action,
+      mapOperationActionRecord,
+      traversal,
+      depth + 1,
     ),
-    parent_operation_run: mapOptionalPlainWorkflowPublicObject(
-      rawSource.parent_operation_run,
+    operation_run: mapCapturedPlainWorkflowPublicObject(
+      canonical.operation_run,
       mapOperationRunRecord,
+      traversal,
+      depth + 1,
     ),
-    display_contract: mapOptionalPlainWorkflowPublicObject(
-      rawSource.display_contract,
+    parent_operation_run: mapCapturedPlainWorkflowPublicObject(
+      canonical.parent_operation_run,
+      mapOperationRunRecord,
+      traversal,
+      depth + 1,
+    ),
+    display_contract: mapCapturedPlainWorkflowPublicObject(
+      canonical.display_contract,
       mapOperationActionDisplayContract,
+      traversal,
+      depth + 1,
     ),
-    control_state: mapOptionalPlainWorkflowPublicObject(
-      rawSource.control_state,
+    control_state: mapCapturedPlainWorkflowPublicObject(
+      canonical.control_state,
       mapOperationRunControlState,
+      traversal,
+      depth + 1,
     ),
-    workflow_command: mapOptionalPlainWorkflowPublicObject(
-      source.workflow_command,
+    workflow_command: mapCapturedPlainWorkflowPublicObject(
+      canonical.workflow_command,
       mapWorkflowCommandRecord,
+      traversal,
+      depth + 1,
     ),
-    events: asArray(rawSource.events)
-      .filter(isPlainWorkflowPublicObject)
-      .map(mapOperationEventRecord),
+    events: mapCapturedPlainWorkflowPublicObjectArray(
+      canonical.events,
+      mapOperationEventRecord,
+      traversal,
+      depth + 1,
+    ) ?? [],
     module_state_mutated: asOptionalBoolean(source.module_state_mutated),
   };
 }
@@ -1355,51 +1581,135 @@ export function mapWorkflowCommandRecord(
   return mapped;
 }
 
-export function mapWorkflowCommandOperationSync(payload: unknown): WorkflowCommandOperationSync {
-  const source = asWorkflowCommandPublicMirrorSource(payload ?? {}, "WorkflowCommandOperationSync");
-  return {
+export function mapWorkflowCommandOperationSync(
+  payload: unknown,
+  traversal: WorkflowPublicProjectionTraversal = createWorkflowPublicProjectionTraversal(),
+  depth = 0,
+): WorkflowCommandOperationSync {
+  return projectWorkflowCommandOperationSync(payload, traversal, depth).value;
+}
+
+interface WorkflowCommandOperationSyncProjection {
+  readonly value: WorkflowCommandOperationSync;
+  readonly payloadWasExactEmpty: boolean;
+}
+
+function projectWorkflowCommandOperationSync(
+  payload: unknown,
+  traversal: WorkflowPublicProjectionTraversal,
+  depth: number,
+): WorkflowCommandOperationSyncProjection {
+  const { source, canonical, payloadWasExactEmpty } = captureWorkflowPublicEnvelope(
+    payload ?? {},
+    "WorkflowCommandOperationSync",
+    ["operation_run", "event", "workflow_command"],
+    traversal,
+    depth,
+  );
+  const mapped: WorkflowCommandOperationSync = {
     status: asOptionalString(source.status),
     reason: asOptionalString(source.reason),
     operation_run_id: asOptionalString(source.operation_run_id),
     operation_status: asOptionalString(source.operation_status),
     control_action: asOptionalString(source.control_action),
     command_status: asOptionalString(source.command_status),
-    operation_run: mapOptionalPlainWorkflowPublicObject(source.operation_run, mapOperationRunRecord),
-    event: mapOptionalPlainWorkflowPublicObject(source.event, mapOperationEventRecord),
-    workflow_command: mapOptionalPlainWorkflowPublicObject(source.workflow_command, mapWorkflowCommandRecord),
+    operation_run: mapCapturedPlainWorkflowPublicObject(
+      canonical.operation_run,
+      mapOperationRunRecord,
+      traversal,
+      depth + 1,
+    ),
+    event: mapCapturedPlainWorkflowPublicObject(
+      canonical.event,
+      mapOperationEventRecord,
+      traversal,
+      depth + 1,
+    ),
+    workflow_command: mapCapturedPlainWorkflowPublicObject(
+      canonical.workflow_command,
+      mapWorkflowCommandGenericPublicCarrierRecord,
+      traversal,
+      depth + 1,
+    ),
   };
+  for (const field of Object.keys(mapped) as Array<keyof WorkflowCommandOperationSync>) {
+    if (mapped[field] === undefined) {
+      delete mapped[field];
+    }
+  }
+  markWorkflowPublicProjectionClosed(mapped, traversal);
+  return { value: mapped, payloadWasExactEmpty };
+}
+
+function mapWorkflowCommandOperationSyncIfMeaningful(
+  payload: unknown,
+  traversal: WorkflowPublicProjectionTraversal,
+  depth: number,
+): WorkflowCommandOperationSync | undefined {
+  const projection = projectWorkflowCommandOperationSync(payload, traversal, depth);
+  return projection.payloadWasExactEmpty || Object.keys(projection.value).length > 0
+    ? projection.value
+    : undefined;
 }
 
 export function mapWorkflowCommandListResponse(payload: unknown): WorkflowCommandListResponse {
-  const rawSource = asObject(payload, "WorkflowCommandListResponse");
-  const source = asWorkflowCommandPublicMirrorSource(payload, "WorkflowCommandListResponse");
+  const { source, canonical, traversal, depth } = captureWorkflowPublicEnvelope(
+    payload,
+    "WorkflowCommandListResponse",
+    ["workflow_commands"],
+  );
   return {
     ...(source as JsonObject),
     status: asOptionalString(source.status),
     contract: asOptionalString(source.contract),
-    workflow_commands: asArray(rawSource.workflow_commands)
-      .filter(isPlainWorkflowPublicObject)
-      .map((item) => mapWorkflowCommandRecord(item)),
+    workflow_commands: mapCapturedPlainWorkflowPublicObjectArray(
+      canonical.workflow_commands,
+      mapWorkflowCommandRecord,
+      traversal,
+      depth + 1,
+    ) ?? [],
   };
 }
 
 export function mapWorkflowCommandDetailResponse(payload: unknown): WorkflowCommandDetailResponse {
-  const rawSource = asObject(payload, "WorkflowCommandDetailResponse");
-  const source = asWorkflowCommandPublicMirrorSource(payload, "WorkflowCommandDetailResponse");
+  const { source, canonical, traversal, depth } = captureWorkflowPublicEnvelope(
+    payload,
+    "WorkflowCommandDetailResponse",
+    ["workflow_command"],
+  );
   return {
     ...(source as JsonObject),
     status: asString(source.status),
     contract: asOptionalString(source.contract),
-    workflow_command: mapOptionalPlainWorkflowPublicObject(
-      rawSource.workflow_command,
+    workflow_command: mapCapturedPlainWorkflowPublicObject(
+      canonical.workflow_command,
       mapWorkflowCommandRecord,
+      traversal,
+      depth + 1,
     ),
   };
 }
 
 export function mapWorkflowCommandControlResponse(payload: unknown): WorkflowCommandControlResponse {
-  const rawSource = asObject(payload, "WorkflowCommandControlResponse");
-  const source = asWorkflowCommandPublicMirrorSource(payload, "WorkflowCommandControlResponse");
+  const { source, canonical, traversal, depth } = captureWorkflowPublicEnvelope(
+    payload,
+    "WorkflowCommandControlResponse",
+    [
+      "workflow_command",
+      "operation_sync",
+      "workflow_activity",
+      "workflow_activity_run",
+      "workflow_activity_attempt",
+      "workflow_entity_delta",
+      "workflow_activity_runs",
+      "workflow_activity_attempts",
+      "workflow_entity_deltas",
+      "display_contract",
+      "control_policy",
+      "control_state",
+      "activity_spine_policy",
+    ],
+  );
   const publicSource = { ...(source as JsonObject) };
   for (const field of Object.keys(publicSource)) {
     if (
@@ -1409,7 +1719,13 @@ export function mapWorkflowCommandControlResponse(payload: unknown): WorkflowCom
       delete publicSource[field];
     }
   }
-  return {
+  const operationSync = mapCapturedPlainWorkflowPublicObject(
+    canonical.operation_sync,
+    mapWorkflowCommandOperationSyncIfMeaningful,
+    traversal,
+    depth + 1,
+  );
+  const mapped: WorkflowCommandControlResponse = {
     ...publicSource,
     status: asAllowedPublicResponseStatus(
       source.status,
@@ -1422,59 +1738,87 @@ export function mapWorkflowCommandControlResponse(payload: unknown): WorkflowCom
     ),
     reason: asOptionalString(source.reason),
     command_status: asOptionalString(source.command_status),
-    workflow_command: mapOptionalPlainWorkflowPublicObject(source.workflow_command, mapWorkflowCommandRecord),
-    operation_sync: mapOptionalPlainWorkflowPublicObject(
-      source.operation_sync,
-      mapWorkflowCommandOperationSync,
+    workflow_command: mapCapturedPlainWorkflowPublicObject(
+      canonical.workflow_command,
+      mapWorkflowCommandGenericPublicCarrierRecord,
+      traversal,
+      depth + 1,
     ),
-    workflow_activity: mapOptionalPlainWorkflowPublicObject(
-      rawSource.workflow_activity,
+    operation_sync: operationSync,
+    workflow_activity: mapCapturedPlainWorkflowPublicObject(
+      canonical.workflow_activity,
       mapWorkflowActivityRecord,
+      traversal,
+      depth + 1,
     ),
-    workflow_activity_run: mapOptionalPlainWorkflowPublicObject(
-      rawSource.workflow_activity_run,
+    workflow_activity_run: mapCapturedPlainWorkflowPublicObject(
+      canonical.workflow_activity_run,
       mapWorkflowActivityRecord,
+      traversal,
+      depth + 1,
     ),
-    workflow_activity_attempt: mapOptionalPlainWorkflowPublicObject(
-      rawSource.workflow_activity_attempt,
+    workflow_activity_attempt: mapCapturedPlainWorkflowPublicObject(
+      canonical.workflow_activity_attempt,
       mapWorkflowActivityAttemptRecord,
+      traversal,
+      depth + 1,
     ),
-    workflow_entity_delta: mapOptionalPlainWorkflowPublicObject(
-      rawSource.workflow_entity_delta,
+    workflow_entity_delta: mapCapturedPlainWorkflowPublicObject(
+      canonical.workflow_entity_delta,
       mapWorkflowEntityDeltaRecord,
+      traversal,
+      depth + 1,
     ),
-    workflow_activity_runs: mapOptionalPlainWorkflowPublicObjectArray(
-      rawSource.workflow_activity_runs,
+    workflow_activity_runs: mapCapturedPlainWorkflowPublicObjectArray(
+      canonical.workflow_activity_runs,
       mapWorkflowActivityRecord,
+      traversal,
+      depth + 1,
     ),
-    workflow_activity_attempts: mapOptionalPlainWorkflowPublicObjectArray(
-      rawSource.workflow_activity_attempts,
+    workflow_activity_attempts: mapCapturedPlainWorkflowPublicObjectArray(
+      canonical.workflow_activity_attempts,
       mapWorkflowActivityAttemptRecord,
+      traversal,
+      depth + 1,
     ),
-    workflow_entity_deltas: mapOptionalPlainWorkflowPublicObjectArray(
-      rawSource.workflow_entity_deltas,
+    workflow_entity_deltas: mapCapturedPlainWorkflowPublicObjectArray(
+      canonical.workflow_entity_deltas,
       mapWorkflowEntityDeltaRecord,
+      traversal,
+      depth + 1,
     ),
-    display_contract: mapOptionalPlainWorkflowPublicObject(
-      source.display_contract,
+    display_contract: mapCapturedPlainWorkflowPublicObject(
+      canonical.display_contract,
       mapWorkflowCommandDisplayContract,
+      traversal,
+      depth + 1,
     ),
-    control_policy: mapOptionalPlainWorkflowPublicObject(
-      source.control_policy,
+    control_policy: mapCapturedPlainWorkflowPublicObject(
+      canonical.control_policy,
       mapWorkflowCommandControlPolicy,
+      traversal,
+      depth + 1,
     ),
-    control_state: mapOptionalPlainWorkflowPublicObject(
-      source.control_state,
+    control_state: mapCapturedPlainWorkflowPublicObject(
+      canonical.control_state,
       mapWorkflowCommandControlState,
+      traversal,
+      depth + 1,
     ),
-    activity_spine_policy: mapOptionalPlainWorkflowPublicObject(
-      source.activity_spine_policy,
+    activity_spine_policy: mapCapturedPlainWorkflowPublicObject(
+      canonical.activity_spine_policy,
       mapWorkflowCommandActivitySpinePolicy,
+      traversal,
+      depth + 1,
     ),
     module_state_mutated: asOptionalBoolean(source.module_state_mutated),
     owner_specific_control: asOptionalBoolean(source.owner_specific_control),
     contract: asOptionalString(source.contract),
   };
+  if (operationSync === undefined) {
+    delete mapped.operation_sync;
+  }
+  return mapped;
 }
 
 export function mapWorkflowActivityControlTarget(
@@ -1655,91 +1999,121 @@ export function mapWorkflowEntityDeltaRecord(
 }
 
 export function mapWorkflowActivityListResponse(payload: unknown): WorkflowActivityListResponse {
-  const rawSource = asObject(payload, "WorkflowActivityListResponse");
-  const source = asWorkflowCommandPublicMirrorSource(payload, "WorkflowActivityListResponse");
+  const { source, canonical, traversal, depth } = captureWorkflowPublicEnvelope(
+    payload,
+    "WorkflowActivityListResponse",
+    ["workflow_activities"],
+  );
   return {
     ...(source as JsonObject),
     status: asOptionalString(source.status),
     contract: asOptionalString(source.contract),
-    workflow_activities: asArray(rawSource.workflow_activities)
-      .filter(isPlainWorkflowPublicObject)
-      .map((item) => mapWorkflowActivityRecord(item)),
+    workflow_activities: mapCapturedPlainWorkflowPublicObjectArray(
+      canonical.workflow_activities,
+      mapWorkflowActivityRecord,
+      traversal,
+      depth + 1,
+    ) ?? [],
   };
 }
 
 export function mapWorkflowActivityDetailResponse(payload: unknown): WorkflowActivityDetailResponse {
-  const rawSource = asObject(payload, "WorkflowActivityDetailResponse");
-  const source = asWorkflowCommandPublicMirrorSource(payload, "WorkflowActivityDetailResponse");
+  const { source, canonical, traversal, depth } = captureWorkflowPublicEnvelope(
+    payload,
+    "WorkflowActivityDetailResponse",
+    ["workflow_activity", "activity_attempts"],
+  );
   return {
     ...(source as JsonObject),
     status: asString(source.status),
     contract: asOptionalString(source.contract),
-    workflow_activity: mapOptionalPlainWorkflowPublicObject(
-      rawSource.workflow_activity,
+    workflow_activity: mapCapturedPlainWorkflowPublicObject(
+      canonical.workflow_activity,
       mapWorkflowActivityRecord,
+      traversal,
+      depth + 1,
     ),
-    activity_attempts: asArray(rawSource.activity_attempts)
-      .filter(isPlainWorkflowPublicObject)
-      .map((item) => mapWorkflowActivityAttemptRecord(item)),
+    activity_attempts: mapCapturedPlainWorkflowPublicObjectArray(
+      canonical.activity_attempts,
+      mapWorkflowActivityAttemptRecord,
+      traversal,
+      depth + 1,
+    ) ?? [],
   };
 }
 
 export function mapWorkflowActivityAttemptListResponse(payload: unknown): WorkflowActivityAttemptListResponse {
-  const rawSource = asObject(payload, "WorkflowActivityAttemptListResponse");
-  const source = asWorkflowCommandPublicMirrorSource(
+  const { source, canonical, traversal, depth } = captureWorkflowPublicEnvelope(
     payload,
     "WorkflowActivityAttemptListResponse",
+    ["workflow_activity_attempts"],
   );
   return {
     ...(source as JsonObject),
     status: asOptionalString(source.status),
     contract: asOptionalString(source.contract),
-    workflow_activity_attempts: asArray(rawSource.workflow_activity_attempts)
-      .filter(isPlainWorkflowPublicObject)
-      .map((item) => mapWorkflowActivityAttemptRecord(item)),
+    workflow_activity_attempts: mapCapturedPlainWorkflowPublicObjectArray(
+      canonical.workflow_activity_attempts,
+      mapWorkflowActivityAttemptRecord,
+      traversal,
+      depth + 1,
+    ) ?? [],
   };
 }
 
 export function mapWorkflowActivityAttemptDetailResponse(payload: unknown): WorkflowActivityAttemptDetailResponse {
-  const rawSource = asObject(payload, "WorkflowActivityAttemptDetailResponse");
-  const source = asWorkflowCommandPublicMirrorSource(
+  const { source, canonical, traversal, depth } = captureWorkflowPublicEnvelope(
     payload,
     "WorkflowActivityAttemptDetailResponse",
+    ["workflow_activity_attempt"],
   );
   return {
     ...(source as JsonObject),
     status: asString(source.status),
     contract: asOptionalString(source.contract),
-    workflow_activity_attempt: mapOptionalPlainWorkflowPublicObject(
-      rawSource.workflow_activity_attempt,
+    workflow_activity_attempt: mapCapturedPlainWorkflowPublicObject(
+      canonical.workflow_activity_attempt,
       mapWorkflowActivityAttemptRecord,
+      traversal,
+      depth + 1,
     ),
   };
 }
 
 export function mapWorkflowEntityDeltaListResponse(payload: unknown): WorkflowEntityDeltaListResponse {
-  const rawSource = asObject(payload, "WorkflowEntityDeltaListResponse");
-  const source = asWorkflowCommandPublicMirrorSource(payload, "WorkflowEntityDeltaListResponse");
+  const { source, canonical, traversal, depth } = captureWorkflowPublicEnvelope(
+    payload,
+    "WorkflowEntityDeltaListResponse",
+    ["workflow_entity_deltas"],
+  );
   return {
     ...(source as JsonObject),
     status: asOptionalString(source.status),
     contract: asOptionalString(source.contract),
-    workflow_entity_deltas: asArray(rawSource.workflow_entity_deltas)
-      .filter(isPlainWorkflowPublicObject)
-      .map((item) => mapWorkflowEntityDeltaRecord(item)),
+    workflow_entity_deltas: mapCapturedPlainWorkflowPublicObjectArray(
+      canonical.workflow_entity_deltas,
+      mapWorkflowEntityDeltaRecord,
+      traversal,
+      depth + 1,
+    ) ?? [],
   };
 }
 
 export function mapWorkflowEntityDeltaDetailResponse(payload: unknown): WorkflowEntityDeltaDetailResponse {
-  const rawSource = asObject(payload, "WorkflowEntityDeltaDetailResponse");
-  const source = asWorkflowCommandPublicMirrorSource(payload, "WorkflowEntityDeltaDetailResponse");
+  const { source, canonical, traversal, depth } = captureWorkflowPublicEnvelope(
+    payload,
+    "WorkflowEntityDeltaDetailResponse",
+    ["workflow_entity_delta"],
+  );
   return {
     ...(source as JsonObject),
     status: asString(source.status),
     contract: asOptionalString(source.contract),
-    workflow_entity_delta: mapOptionalPlainWorkflowPublicObject(
-      rawSource.workflow_entity_delta,
+    workflow_entity_delta: mapCapturedPlainWorkflowPublicObject(
+      canonical.workflow_entity_delta,
       mapWorkflowEntityDeltaRecord,
+      traversal,
+      depth + 1,
     ),
   };
 }
@@ -2922,15 +3296,6 @@ function mapSparsePlainWorkflowPublicObjectsSafely<T>(
   return result;
 }
 
-function mapOptionalPlainWorkflowPublicObjectArray<T>(
-  value: unknown,
-  mapper: (payload: unknown) => T,
-): T[] | undefined {
-  return Array.isArray(value)
-    ? value.filter(isPlainWorkflowPublicObject).map((item) => mapper(item))
-    : undefined;
-}
-
 function defineWorkflowPublicOwnField(
   target: Record<string, unknown>,
   key: string,
@@ -2944,11 +3309,7 @@ function defineWorkflowPublicOwnField(
   });
 }
 
-export const WORKFLOW_PUBLIC_PROJECTION_LIMITS = Object.freeze({
-  maxDepth: 32,
-  maxNodes: 4096,
-  maxCollectionEntries: 256,
-});
+export { WORKFLOW_PUBLIC_PROJECTION_LIMITS } from "./frontend_api_runtime_contract";
 
 interface WorkflowPublicProjectionTraversal {
   visitedNodes: number;
@@ -2957,6 +3318,14 @@ interface WorkflowPublicProjectionTraversal {
   readonly executionSummaryClosedContainers: WeakSet<object>;
   readonly defaultMemo: WeakMap<object, JsonValue | undefined>;
   readonly executionSummaryMemo: WeakMap<object, JsonValue | undefined>;
+}
+
+interface WorkflowPublicEnvelopeSnapshot {
+  readonly source: Record<string, unknown>;
+  readonly canonical: Record<string, unknown>;
+  readonly traversal: WorkflowPublicProjectionTraversal;
+  readonly depth: number;
+  readonly payloadWasExactEmpty: boolean;
 }
 
 function createWorkflowPublicProjectionTraversal(): WorkflowPublicProjectionTraversal {
@@ -2986,6 +3355,125 @@ function workflowPublicProjectionArrayLength(value: unknown[]): number | undefin
   } catch {
     return undefined;
   }
+}
+
+function captureWorkflowPublicEnvelope(
+  payload: unknown,
+  label: string,
+  canonicalFields: readonly string[],
+  traversal: WorkflowPublicProjectionTraversal = createWorkflowPublicProjectionTraversal(),
+  depth = 0,
+): WorkflowPublicEnvelopeSnapshot {
+  const rawSource = asObject(payload, label);
+  if (!isPlainWorkflowPublicObject(rawSource)) {
+    throw new Error(`${label} must be a plain object`);
+  }
+  let entries: [string, unknown][];
+  try {
+    entries = Object.entries(rawSource);
+  } catch {
+    throw new Error(`${label} could not be captured`);
+  }
+  if (entries.length > WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxCollectionEntries) {
+    throw new Error(`${label} exceeds the public projection collection budget`);
+  }
+  const canonicalFieldSet = new Set(canonicalFields);
+  const envelopeSource: Record<string, unknown> = {};
+  const canonical: Record<string, unknown> = {};
+  for (const [key, value] of entries) {
+    defineWorkflowPublicOwnField(
+      canonicalFieldSet.has(key) ? canonical : envelopeSource,
+      key,
+      value,
+    );
+  }
+  return {
+    source: asWorkflowCommandPublicMirrorSource(
+      envelopeSource,
+      label,
+      false,
+      traversal,
+      depth,
+    ),
+    canonical,
+    traversal,
+    depth,
+    payloadWasExactEmpty: entries.length === 0,
+  };
+}
+
+function mapCapturedPlainWorkflowPublicObject<T>(
+  value: unknown,
+  mapper: (
+    payload: unknown,
+    traversal: WorkflowPublicProjectionTraversal,
+    depth: number,
+  ) => T,
+  traversal: WorkflowPublicProjectionTraversal,
+  depth: number,
+): T | undefined {
+  if (!isPlainWorkflowPublicObject(value)) {
+    return undefined;
+  }
+  try {
+    return mapper(value, traversal, depth);
+  } catch {
+    return undefined;
+  }
+}
+
+function mapCapturedPlainWorkflowPublicObjectArray<T>(
+  value: unknown,
+  mapper: (
+    payload: unknown,
+    traversal: WorkflowPublicProjectionTraversal,
+    depth: number,
+  ) => T,
+  traversal: WorkflowPublicProjectionTraversal,
+  depth: number,
+): T[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  if (
+    depth > WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxDepth ||
+    traversal.activeContainers.has(value) ||
+    !consumeWorkflowPublicProjectionNode(traversal)
+  ) {
+    return undefined;
+  }
+  const arrayLength = workflowPublicProjectionArrayLength(value);
+  if (
+    arrayLength === undefined ||
+    arrayLength > WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxCollectionEntries
+  ) {
+    return undefined;
+  }
+  const result: T[] = [];
+  traversal.activeContainers.add(value);
+  try {
+    for (let index = 0; index < arrayLength; index += 1) {
+      let item: unknown;
+      try {
+        item = value[index];
+      } catch {
+        continue;
+      }
+      const mapped = mapCapturedPlainWorkflowPublicObject(
+        item,
+        mapper,
+        traversal,
+        depth + 1,
+      );
+      if (mapped !== undefined) {
+        result.push(mapped);
+      }
+    }
+  } finally {
+    traversal.activeContainers.delete(value);
+  }
+  markWorkflowPublicProjectionClosed(result, traversal);
+  return result;
 }
 
 function markWorkflowPublicProjectionClosed(
@@ -3020,6 +3508,35 @@ function workflowPublicProjectionMemo(
     : traversal.defaultMemo;
 }
 
+function consumeWorkflowPublicProjectionOccurrence(
+  traversal: WorkflowPublicProjectionTraversal,
+  value: JsonValue,
+): boolean {
+  const remainingNodes = WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxNodes - traversal.visitedNodes;
+  const pending: unknown[] = [value];
+  let occurrenceNodes = 0;
+  while (pending.length > 0) {
+    const item = pending.pop();
+    if (item === undefined) {
+      continue;
+    }
+    occurrenceNodes += 1;
+    if (occurrenceNodes > remainingNodes) {
+      return false;
+    }
+    if (!item || typeof item !== "object") {
+      continue;
+    }
+    if (Array.isArray(item)) {
+      pending.push(...item);
+    } else {
+      pending.push(...Object.values(item));
+    }
+  }
+  traversal.visitedNodes += occurrenceNodes;
+  return true;
+}
+
 function sanitizeWorkflowCommandPublicCarrier(
   key: string,
   value: unknown,
@@ -3031,10 +3548,11 @@ function sanitizeWorkflowCommandPublicCarrier(
     commandDepth: number,
   ): JsonValue | undefined => {
     try {
-      const projected = mapWorkflowCommandRecord(command, traversal, commandDepth);
-      delete projected.execution_summary;
-      markWorkflowPublicProjectionClosed(projected, traversal);
-      return projected as unknown as JsonValue;
+      return mapWorkflowCommandGenericPublicCarrierRecord(
+        command,
+        traversal,
+        commandDepth,
+      ) as unknown as JsonValue;
     } catch {
       return undefined;
     }
@@ -3089,6 +3607,17 @@ function sanitizeWorkflowCommandPublicCarrier(
   }
   markWorkflowPublicProjectionClosed(projected, traversal);
   return { matched: true, value: projected };
+}
+
+function mapWorkflowCommandGenericPublicCarrierRecord(
+  payload: unknown,
+  traversal: WorkflowPublicProjectionTraversal = createWorkflowPublicProjectionTraversal(),
+  depth = 0,
+): WorkflowCommandRecord {
+  const projected = mapWorkflowCommandRecord(payload, traversal, depth);
+  delete projected.execution_summary;
+  markWorkflowPublicProjectionClosed(projected, traversal);
+  return projected;
 }
 
 function sanitizeWorkflowActivityPublicCarrier(
@@ -3239,7 +3768,10 @@ function sanitizeWorkflowCommandPublicMirrorValue(
     allowExecutionSummaryAtCurrentLevel,
   );
   if (memo.has(value)) {
-    return memo.get(value);
+    const cached = memo.get(value);
+    return cached !== undefined && consumeWorkflowPublicProjectionOccurrence(traversal, cached)
+      ? cached
+      : undefined;
   }
   if (!consumeWorkflowPublicProjectionNode(traversal)) {
     memo.set(value, undefined);
@@ -3451,6 +3983,20 @@ function asAllowedPublicResponseStatus<const T extends readonly string[]>(
     throw new Error(`${label} has unsupported status: ${status}`);
   }
   return status as T[number];
+}
+
+function mapPublicResponseForStatuses<
+  TResponse extends { status: string },
+  const TStatuses extends readonly string[],
+>(
+  payload: unknown,
+  mapper: (value: unknown) => TResponse,
+  allowedStatuses: TStatuses,
+  label: string,
+): TResponse {
+  const response = mapper(payload);
+  asAllowedPublicResponseStatus(response.status, allowedStatuses, label);
+  return response;
 }
 
 function asOptionalString(value: unknown): string | undefined {

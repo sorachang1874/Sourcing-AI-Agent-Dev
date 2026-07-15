@@ -44885,9 +44885,46 @@ class SourcingOrchestrator:
                 counts[value] = counts.get(value, 0) + 1
             return counts
 
-        latest_activity = self._workflow_activity_api_record(activities[0]) if activities else {}
-        latest_attempt = self._workflow_activity_attempt_api_record(attempts[0]) if attempts else {}
-        latest_delta = self._workflow_entity_delta_api_record(deltas[0]) if deltas else {}
+        latest_evidence_rows = [
+            row
+            for row in (
+                activities[0] if activities else None,
+                attempts[0] if attempts else None,
+                deltas[0] if deltas else None,
+            )
+            if type(row) is dict
+        ]
+        activity_by_id, command_by_id = self._workflow_activity_linked_evidence_prefetch(
+            latest_evidence_rows,
+            current_activities=activities,
+        )
+        latest_activity = (
+            self._workflow_activity_api_record(
+                activities[0],
+                _activity_by_id=activity_by_id,
+                _command_by_id=command_by_id,
+            )
+            if activities
+            else {}
+        )
+        latest_attempt = (
+            self._workflow_activity_attempt_api_record(
+                attempts[0],
+                _activity_by_id=activity_by_id,
+                _command_by_id=command_by_id,
+            )
+            if attempts
+            else {}
+        )
+        latest_delta = (
+            self._workflow_entity_delta_api_record(
+                deltas[0],
+                _activity_by_id=activity_by_id,
+                _command_by_id=command_by_id,
+            )
+            if deltas
+            else {}
+        )
         latest_effect_status = (
             str(latest_delta.get("status") or "").strip()
             or str(latest_attempt.get("status") or "").strip()
@@ -44934,14 +44971,22 @@ class SourcingOrchestrator:
     def _workflow_activity_linked_evidence(
         self,
         row: dict[str, Any],
+        *,
+        activity_by_id: dict[str, dict[str, Any]] | None = None,
+        command_by_id: dict[str, dict[str, Any]] | None = None,
     ) -> tuple[dict[str, Any], dict[str, Any]]:
         payload = dict(row or {})
         activity_run_id = str(payload.get("activity_run_id") or "").strip()
-        activity = self.store.repos.workflow_runtime.get_activity_run(activity_run_id) if activity_run_id else {}
+        if activity_by_id is None:
+            activity = self.store.repos.workflow_runtime.get_activity_run(activity_run_id) if activity_run_id else {}
+        else:
+            activity = activity_by_id.get(activity_run_id, {})
         if not activity:
             return {}, {}
         evidence_activity_run_id = str(activity.get("activity_run_id") or "").strip()
         if not activity_run_id or evidence_activity_run_id != activity_run_id:
+            return {}, {}
+        if not self._workflow_activity_scope_matches(payload, activity):
             return {}, {}
         command_id = str(payload.get("command_id") or "").strip()
         evidence_command_id = str(activity.get("command_id") or "").strip()
@@ -44951,16 +44996,139 @@ class SourcingOrchestrator:
         owner = str(activity.get("owner") or "").strip()
         if not activity_type or not owner:
             return {}, {}
-        command = self.store.get_workflow_command(command_id)
+        if command_by_id is None:
+            command = self.store.get_workflow_command(command_id)
+        else:
+            command = command_by_id.get(command_id, {})
         if not command:
             return activity, {}
+        if not self._workflow_activity_command_scope_matches(activity, command):
+            return activity, {}
         return activity, command
+
+    @staticmethod
+    def _workflow_activity_scope_matches(
+        row: dict[str, Any],
+        activity: dict[str, Any],
+    ) -> bool:
+        """Require a public child row to prove the ActivityRun tenant/run lineage it names."""
+
+        for field in ("workspace_id", "workflow_run_id"):
+            row_value = str(row.get(field) or "").strip()
+            activity_value = str(activity.get(field) or "").strip()
+            if not row_value or activity_value != row_value:
+                return False
+        for field in ("operation_run_id", "acquisition_run_id"):
+            row_value = str(row.get(field) or "").strip()
+            if row_value and str(activity.get(field) or "").strip() != row_value:
+                return False
+        return True
+
+    @staticmethod
+    def _workflow_activity_command_scope_matches(
+        activity: dict[str, Any],
+        command: dict[str, Any],
+    ) -> bool:
+        """Attach a control target only when the command shares the ActivityRun lineage."""
+
+        activity_command_id = str(activity.get("command_id") or "").strip()
+        if not activity_command_id or str(command.get("command_id") or "").strip() != activity_command_id:
+            return False
+        activity_workflow_run_id = str(activity.get("workflow_run_id") or "").strip()
+        if (
+            not activity_workflow_run_id
+            or str(command.get("workflow_run_id") or "").strip() != activity_workflow_run_id
+        ):
+            return False
+        activity_operation_run_id = str(activity.get("operation_run_id") or "").strip()
+        if activity_operation_run_id and str(command.get("operation_id") or "").strip() != activity_operation_run_id:
+            return False
+        return True
+
+    def _workflow_activity_linked_evidence_prefetch(
+        self,
+        rows: list[dict[str, Any]],
+        *,
+        current_activities: list[dict[str, Any]] | None = None,
+    ) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
+        """Bulk-resolve linked evidence; point reads exist only for incomplete compatibility doubles."""
+
+        activity_run_ids = {
+            str(row.get("activity_run_id") or "").strip()
+            for row in rows
+            if type(row) is dict and str(row.get("activity_run_id") or "").strip()
+        }
+        activity_by_id: dict[str, dict[str, Any]] = {}
+        for activity in current_activities or []:
+            if type(activity) is not dict:
+                continue
+            activity_run_id = str(activity.get("activity_run_id") or "").strip()
+            if activity_run_id in activity_run_ids and activity_run_id not in activity_by_id:
+                activity_by_id[activity_run_id] = activity
+        missing_activity_run_ids = sorted(activity_run_ids - activity_by_id.keys())
+        activity_batch_reader = getattr(
+            self.store.repos.workflow_runtime,
+            "list_activity_runs_by_ids",
+            None,
+        )
+        if missing_activity_run_ids:
+            if callable(activity_batch_reader):
+                for activity_run_id in missing_activity_run_ids:
+                    activity_by_id[activity_run_id] = {}
+                for activity in activity_batch_reader(missing_activity_run_ids):
+                    if type(activity) is not dict:
+                        continue
+                    activity_run_id = str(activity.get("activity_run_id") or "").strip()
+                    if activity_run_id in activity_by_id:
+                        activity_by_id[activity_run_id] = activity
+            else:
+                for activity_run_id in missing_activity_run_ids:
+                    activity_by_id[activity_run_id] = (
+                        self.store.repos.workflow_runtime.get_activity_run(activity_run_id) or {}
+                    )
+
+        command_ids: set[str] = set()
+        for row in rows:
+            if type(row) is not dict:
+                continue
+            activity_run_id = str(row.get("activity_run_id") or "").strip()
+            command_id = str(row.get("command_id") or "").strip()
+            activity = activity_by_id.get(activity_run_id, {})
+            if (
+                activity_run_id
+                and command_id
+                and str(activity.get("activity_run_id") or "").strip() == activity_run_id
+                and str(activity.get("command_id") or "").strip() == command_id
+                and self._workflow_activity_scope_matches(row, activity)
+                and str(activity.get("activity_type") or "").strip()
+                and str(activity.get("owner") or "").strip()
+            ):
+                command_ids.add(command_id)
+        sorted_command_ids = sorted(command_ids)
+        command_by_id: dict[str, dict[str, Any]] = {command_id: {} for command_id in sorted_command_ids}
+        command_batch_reader = getattr(self.store, "list_workflow_commands_by_ids", None)
+        if sorted_command_ids:
+            if callable(command_batch_reader):
+                for command in command_batch_reader(sorted_command_ids):
+                    if type(command) is not dict:
+                        continue
+                    command_id = str(command.get("command_id") or "").strip()
+                    if command_id in command_by_id:
+                        command_by_id[command_id] = command
+            else:
+                for command_id in sorted_command_ids:
+                    command_by_id[command_id] = self.store.get_workflow_command(command_id) or {}
+        return activity_by_id, command_by_id
 
     def _workflow_activity_control_target_record(
         self,
         row: dict[str, Any],
+        *,
+        linked_evidence: tuple[dict[str, Any], dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
-        activity, command = self._workflow_activity_linked_evidence(row)
+        activity, command = (
+            linked_evidence if linked_evidence is not None else self._workflow_activity_linked_evidence(row)
+        )
         if not activity or not command:
             return {}
         command_id = str(command.get("command_id") or "").strip()
@@ -44993,18 +45161,32 @@ class SourcingOrchestrator:
             "fallback_status": "fail_closed",
         }
 
-    def _workflow_activity_api_record(self, activity: dict[str, Any]) -> dict[str, Any]:
+    def _workflow_activity_api_record(
+        self,
+        activity: dict[str, Any],
+        *,
+        _activity_by_id: dict[str, dict[str, Any]] | None = None,
+        _command_by_id: dict[str, dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
         record = dict(activity or {})
         for field in WORKFLOW_ACTIVITY_RUN_TRUSTED_DERIVED_FIELDS:
             record.pop(field, None)
-        current_activity, current_command = self._workflow_activity_linked_evidence(record)
+        linked_evidence = self._workflow_activity_linked_evidence(
+            record,
+            activity_by_id=_activity_by_id,
+            command_by_id=_command_by_id,
+        )
+        current_activity, current_command = linked_evidence
         if current_activity:
             record["activity_type"] = str(current_activity.get("activity_type") or "").strip()
             record["owner"] = str(current_activity.get("owner") or "").strip()
         else:
             record.pop("activity_type", None)
             record.pop("owner", None)
-        control_target = self._workflow_activity_control_target_record(record)
+        control_target = self._workflow_activity_control_target_record(
+            record,
+            linked_evidence=linked_evidence,
+        )
         if control_target:
             record["control_target"] = control_target
         record["module_state_mutated"] = False
@@ -45014,15 +45196,29 @@ class SourcingOrchestrator:
             include_trusted_derived=True,
         )
 
-    def _workflow_activity_attempt_api_record(self, attempt: dict[str, Any]) -> dict[str, Any]:
+    def _workflow_activity_attempt_api_record(
+        self,
+        attempt: dict[str, Any],
+        *,
+        _activity_by_id: dict[str, dict[str, Any]] | None = None,
+        _command_by_id: dict[str, dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
         record = dict(attempt or {})
         for field in WORKFLOW_ACTIVITY_ATTEMPT_TRUSTED_DERIVED_FIELDS:
             record.pop(field, None)
-        activity, command = self._workflow_activity_linked_evidence(record)
+        linked_evidence = self._workflow_activity_linked_evidence(
+            record,
+            activity_by_id=_activity_by_id,
+            command_by_id=_command_by_id,
+        )
+        activity, command = linked_evidence
         if activity:
             record["activity_type"] = str(activity.get("activity_type") or "").strip()
             record["owner"] = str(activity.get("owner") or "").strip()
-        control_target = self._workflow_activity_control_target_record(record)
+        control_target = self._workflow_activity_control_target_record(
+            record,
+            linked_evidence=linked_evidence,
+        )
         if control_target:
             record["control_target"] = control_target
         record["module_state_mutated"] = False
@@ -45032,15 +45228,29 @@ class SourcingOrchestrator:
             include_trusted_derived=True,
         )
 
-    def _workflow_entity_delta_api_record(self, delta: dict[str, Any]) -> dict[str, Any]:
+    def _workflow_entity_delta_api_record(
+        self,
+        delta: dict[str, Any],
+        *,
+        _activity_by_id: dict[str, dict[str, Any]] | None = None,
+        _command_by_id: dict[str, dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
         record = dict(delta or {})
         for field in WORKFLOW_ENTITY_DELTA_TRUSTED_DERIVED_FIELDS:
             record.pop(field, None)
-        activity, command = self._workflow_activity_linked_evidence(record)
+        linked_evidence = self._workflow_activity_linked_evidence(
+            record,
+            activity_by_id=_activity_by_id,
+            command_by_id=_command_by_id,
+        )
+        activity, command = linked_evidence
         if activity:
             record["activity_type"] = str(activity.get("activity_type") or "").strip()
             record["owner"] = str(activity.get("owner") or "").strip()
-        control_target = self._workflow_activity_control_target_record(record)
+        control_target = self._workflow_activity_control_target_record(
+            record,
+            linked_evidence=linked_evidence,
+        )
         if control_target:
             record["control_target"] = control_target
         record["module_state_mutated"] = False
@@ -45052,6 +45262,12 @@ class SourcingOrchestrator:
 
     def _workflow_command_control_public_api_record(self, response: dict[str, Any] | None) -> dict[str, Any]:
         kernel = self._command_kernel
+        operation_sync_source_was_exact_empty = False
+        if type(response) is dict:
+            for key, value in response.items():
+                if type(key) is str and key == "operation_sync":
+                    operation_sync_source_was_exact_empty = type(value) is dict and len(value) == 0
+                    break
         sanitized_source = _sanitize_workflow_command_public_mirror(response if type(response) is dict else {})
         source = sanitized_source if type(sanitized_source) is dict else {}
         record = kernel._workflow_command_public_carrier_api_record(source)
@@ -45101,36 +45317,59 @@ class SourcingOrchestrator:
         if type(operation_sync) is dict:
             projected_sync = kernel._workflow_command_operation_sync_api_record(operation_sync)
             # An exact empty object is the durable replay owner's explicit
-            # "no synchronization work" sentinel. Keep it while still
-            # dropping malformed non-object canonical members.
-            record["operation_sync"] = projected_sync
+            # "no synchronization work" sentinel. A nonempty owner response
+            # that projects to empty is malformed, not that replay sentinel.
+            if projected_sync or operation_sync_source_was_exact_empty:
+                record["operation_sync"] = projected_sync
         if projected_command:
             record.update(kernel._workflow_command_control_response_policy_records(projected_command))
         served_activity_carriers = frozenset(WORKFLOW_COMMAND_CONTROL_PUBLIC_ACTIVITY_CARRIER_FIELDS)
         for field in tuple(record):
             if is_workflow_activity_public_carrier_field(field) and field not in served_activity_carriers:
                 record.pop(field, None)
-        activity_projectors = {
+        activity_projectors: dict[str, Callable[..., dict[str, Any]]] = {
             "workflow_activity": self._workflow_activity_api_record,
             "workflow_activity_run": self._workflow_activity_api_record,
             "workflow_activity_attempt": self._workflow_activity_attempt_api_record,
             "workflow_entity_delta": self._workflow_entity_delta_api_record,
         }
-        for field, projector in activity_projectors.items():
-            value = source.get(field)
-            if type(value) is dict:
-                record[field] = projector(value)
-            else:
-                record.pop(field, None)
-        activity_list_projectors = {
+        activity_list_projectors: dict[str, Callable[..., dict[str, Any]]] = {
             "workflow_activity_runs": self._workflow_activity_api_record,
             "workflow_activity_attempts": self._workflow_activity_attempt_api_record,
             "workflow_entity_deltas": self._workflow_entity_delta_api_record,
         }
+        activity_rows: list[dict[str, Any]] = []
+        for field in activity_projectors:
+            value = source.get(field)
+            if type(value) is dict:
+                activity_rows.append(value)
+        for field in activity_list_projectors:
+            value = source.get(field)
+            if type(value) is list:
+                activity_rows.extend(item for item in value if type(item) is dict)
+        activity_by_id, command_by_id = self._workflow_activity_linked_evidence_prefetch(activity_rows)
+        for field, projector in activity_projectors.items():
+            value = source.get(field)
+            if type(value) is dict:
+                record[field] = projector(
+                    value,
+                    _activity_by_id=activity_by_id,
+                    _command_by_id=command_by_id,
+                )
+            else:
+                record.pop(field, None)
         for field, projector in activity_list_projectors.items():
             value = source.get(field)
             if type(value) is list:
-                record[field] = [projector(item) for item in value if type(item) is dict]
+                record[field] = [
+                    projector(
+                        item,
+                        _activity_by_id=activity_by_id,
+                        _command_by_id=command_by_id,
+                    )
+                    for item in value
+                    if type(item) is dict
+                ]
             else:
                 record.pop(field, None)
         return record
@@ -45293,9 +45532,20 @@ class SourcingOrchestrator:
             statuses=status_values,
             limit=max(1, min(500, _coerce_int(payload.get("limit"), 100))),
         )
+        activity_by_id, command_by_id = self._workflow_activity_linked_evidence_prefetch(
+            activities,
+            current_activities=activities,
+        )
         return {
             "status": "ok",
-            "workflow_activities": [self._workflow_activity_api_record(activity) for activity in activities],
+            "workflow_activities": [
+                self._workflow_activity_api_record(
+                    activity,
+                    _activity_by_id=activity_by_id,
+                    _command_by_id=command_by_id,
+                )
+                for activity in activities
+            ],
             "module_state_mutated": False,
             "contract": "w11_workflow_activity_list_v1",
         }
@@ -45312,10 +45562,25 @@ class SourcingOrchestrator:
         attempts = self.store.repos.workflow_runtime.list_activity_attempts(
             activity_run_id=normalized_activity_run_id, limit=100
         )
+        activity_by_id, command_by_id = self._workflow_activity_linked_evidence_prefetch(
+            [activity, *attempts],
+            current_activities=[activity],
+        )
         return {
             "status": "ok",
-            "workflow_activity": self._workflow_activity_api_record(activity),
-            "activity_attempts": [self._workflow_activity_attempt_api_record(attempt) for attempt in attempts],
+            "workflow_activity": self._workflow_activity_api_record(
+                activity,
+                _activity_by_id=activity_by_id,
+                _command_by_id=command_by_id,
+            ),
+            "activity_attempts": [
+                self._workflow_activity_attempt_api_record(
+                    attempt,
+                    _activity_by_id=activity_by_id,
+                    _command_by_id=command_by_id,
+                )
+                for attempt in attempts
+            ],
             "module_state_mutated": False,
             "contract": "w11_workflow_activity_query_v1",
         }
@@ -45337,9 +45602,17 @@ class SourcingOrchestrator:
             statuses=status_values,
             limit=max(1, min(500, _coerce_int(payload.get("limit"), 100))),
         )
+        activity_by_id, command_by_id = self._workflow_activity_linked_evidence_prefetch(attempts)
         return {
             "status": "ok",
-            "workflow_activity_attempts": [self._workflow_activity_attempt_api_record(attempt) for attempt in attempts],
+            "workflow_activity_attempts": [
+                self._workflow_activity_attempt_api_record(
+                    attempt,
+                    _activity_by_id=activity_by_id,
+                    _command_by_id=command_by_id,
+                )
+                for attempt in attempts
+            ],
             "module_state_mutated": False,
             "contract": "w11_workflow_activity_attempt_list_v1",
         }
@@ -45353,9 +45626,14 @@ class SourcingOrchestrator:
         )
         if not attempt:
             return {"status": "not_found", "attempt_id": normalized_attempt_id}
+        activity_by_id, command_by_id = self._workflow_activity_linked_evidence_prefetch([attempt])
         return {
             "status": "ok",
-            "workflow_activity_attempt": self._workflow_activity_attempt_api_record(attempt),
+            "workflow_activity_attempt": self._workflow_activity_attempt_api_record(
+                attempt,
+                _activity_by_id=activity_by_id,
+                _command_by_id=command_by_id,
+            ),
             "module_state_mutated": False,
             "contract": "w11_workflow_activity_attempt_query_v1",
         }
@@ -45382,9 +45660,17 @@ class SourcingOrchestrator:
             statuses=status_values,
             limit=max(1, min(500, _coerce_int(payload.get("limit"), 100))),
         )
+        activity_by_id, command_by_id = self._workflow_activity_linked_evidence_prefetch(deltas)
         return {
             "status": "ok",
-            "workflow_entity_deltas": [self._workflow_entity_delta_api_record(delta) for delta in deltas],
+            "workflow_entity_deltas": [
+                self._workflow_entity_delta_api_record(
+                    delta,
+                    _activity_by_id=activity_by_id,
+                    _command_by_id=command_by_id,
+                )
+                for delta in deltas
+            ],
             "module_state_mutated": False,
             "contract": "w11_workflow_entity_delta_list_v1",
         }
@@ -45394,9 +45680,14 @@ class SourcingOrchestrator:
         delta = self.store.repos.workflow_runtime.get_entity_delta(normalized_delta_id) if normalized_delta_id else {}
         if not delta:
             return {"status": "not_found", "delta_id": normalized_delta_id}
+        activity_by_id, command_by_id = self._workflow_activity_linked_evidence_prefetch([delta])
         return {
             "status": "ok",
-            "workflow_entity_delta": self._workflow_entity_delta_api_record(delta),
+            "workflow_entity_delta": self._workflow_entity_delta_api_record(
+                delta,
+                _activity_by_id=activity_by_id,
+                _command_by_id=command_by_id,
+            ),
             "module_state_mutated": False,
             "contract": "w11_workflow_entity_delta_query_v1",
         }
