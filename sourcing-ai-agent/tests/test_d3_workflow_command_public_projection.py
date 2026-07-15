@@ -2904,6 +2904,7 @@ esbuild.buildSync({
 
     assertion_script = """
 const assert = require("node:assert/strict");
+const vm = require("node:vm");
 const publicAdapter = require(process.argv[1]);
 const demoApi = require(process.argv[2]);
 const runtimeContract = require(process.argv[6]);
@@ -3477,7 +3478,7 @@ Object.defineProperty(finalFootprintAccessor, "value", {
     return "must-not-run";
   },
 });
-assert.equal(runtimeContract.workflowPublicFinalJsonFootprint(finalFootprintAccessor), undefined);
+assert.equal(runtimeContract.captureWorkflowPublicFinalJsonSnapshot(finalFootprintAccessor), undefined);
 assert.equal(finalFootprintAccessorReads, 0);
 
 let finalFootprintOwnToJsonCalls = 0;
@@ -3490,7 +3491,7 @@ Object.defineProperty(finalFootprintOwnToJson, "toJSON", {
     return { unsafe: true };
   },
 });
-assert.equal(runtimeContract.workflowPublicFinalJsonFootprint(finalFootprintOwnToJson), undefined);
+assert.equal(runtimeContract.captureWorkflowPublicFinalJsonSnapshot(finalFootprintOwnToJson), undefined);
 assert.equal(finalFootprintOwnToJsonCalls, 0);
 
 let finalFootprintOwnToJsonGetterReads = 0;
@@ -3504,7 +3505,7 @@ Object.defineProperty(finalFootprintOwnToJsonAccessor, "toJSON", {
   },
 });
 assert.equal(
-  runtimeContract.workflowPublicFinalJsonFootprint(finalFootprintOwnToJsonAccessor),
+  runtimeContract.captureWorkflowPublicFinalJsonSnapshot(finalFootprintOwnToJsonAccessor),
   undefined,
 );
 assert.equal(finalFootprintOwnToJsonGetterReads, 0);
@@ -3520,11 +3521,18 @@ Object.defineProperty(Object.prototype, "toJSON", {
   },
 });
 try {
-  assert.equal(runtimeContract.workflowPublicFinalJsonFootprint({ safe: "value" }), undefined);
-  assert.throws(
-    () => demoApi.deriveWorkflowCommandRecord({ command_id: "inherited-object-to-json" }),
-    /final public DTO budget/,
+  const inheritedObjectSnapshot = runtimeContract.captureWorkflowPublicFinalJsonSnapshot({
+    safe: "value",
+  });
+  assert.ok(inheritedObjectSnapshot);
+  assert.equal(
+    JSON.stringify(inheritedObjectSnapshot.value),
+    '{"safe":"value"}',
   );
+  const inheritedObjectCommand = demoApi.deriveWorkflowCommandRecord({
+    command_id: "inherited-object-to-json",
+  });
+  assert.equal(JSON.stringify(inheritedObjectCommand).includes("inherited-object-to-json"), true);
   assert.equal(inheritedObjectToJsonCalls, 0);
 } finally {
   if (originalObjectPrototypeToJson) {
@@ -3545,7 +3553,9 @@ Object.defineProperty(Array.prototype, "toJSON", {
   },
 });
 try {
-  assert.equal(runtimeContract.workflowPublicFinalJsonFootprint([]), undefined);
+  const inheritedArraySnapshot = runtimeContract.captureWorkflowPublicFinalJsonSnapshot([]);
+  assert.ok(inheritedArraySnapshot);
+  assert.equal(JSON.stringify(inheritedArraySnapshot.value), "[]");
   assert.equal(inheritedArrayToJsonCalls, 0);
 } finally {
   if (originalArrayPrototypeToJson) {
@@ -3566,6 +3576,12 @@ const finalFootprintSharedProxy = new Proxy(
   {
     get(target, key, receiver) {
       finalFootprintProxyReads.get += 1;
+      if (key === "toJSON") {
+        return () => ({ unsafe: "x".repeat(projectionLimits.maxOccurrenceBytes) });
+      }
+      if (key === "safe") {
+        return "x".repeat(projectionLimits.maxOccurrenceBytes);
+      }
       return Reflect.get(target, key, receiver);
     },
     getPrototypeOf(target) {
@@ -3582,17 +3598,159 @@ const finalFootprintSharedProxy = new Proxy(
     },
   },
 );
-const finalAliasFootprint = runtimeContract.workflowPublicFinalJsonFootprint({
+const finalAliasFootprint = runtimeContract.captureWorkflowPublicFinalJsonSnapshot({
   first: finalFootprintSharedProxy,
   second: finalFootprintSharedProxy,
 });
 assert.ok(finalAliasFootprint);
 assert.deepEqual(finalFootprintProxyReads, {
   get: 0,
-  getPrototypeOf: 1,
+  getPrototypeOf: 0,
   ownKeys: 1,
-  getOwnPropertyDescriptor: 2,
+  getOwnPropertyDescriptor: 1,
 });
+assert.equal(
+  JSON.stringify(finalAliasFootprint.value),
+  '{"first":{"safe":"shared"},"second":{"safe":"shared"}}',
+);
+assert.equal(Object.isFrozen(finalAliasFootprint.value), true);
+assert.equal(Object.isFrozen(finalAliasFootprint.value.first), true);
+assert.equal(
+  Object.getOwnPropertyDescriptor(finalAliasFootprint.value.first, "toJSON").value,
+  undefined,
+);
+assert.equal(finalFootprintProxyReads.get, 0);
+
+let callableToJsonCalls = 0;
+function hostileCallable() {}
+Object.defineProperty(hostileCallable, "toJSON", {
+  configurable: true,
+  value() {
+    callableToJsonCalls += 1;
+    return { unsafe: "x".repeat(projectionLimits.maxOccurrenceBytes) };
+  },
+});
+assert.equal(runtimeContract.captureWorkflowPublicFinalJsonSnapshot(hostileCallable), undefined);
+assert.equal(
+  runtimeContract.captureWorkflowPublicFinalJsonSnapshot({ callable: hostileCallable }),
+  undefined,
+);
+assert.equal(
+  runtimeContract.captureWorkflowPublicFinalJsonSnapshot([hostileCallable]),
+  undefined,
+);
+function hostileAccessorCallable() {}
+Object.defineProperty(hostileAccessorCallable, "toJSON", {
+  configurable: true,
+  get() {
+    callableToJsonCalls += 1;
+    return () => ({ unsafe: true });
+  },
+});
+assert.equal(
+  runtimeContract.captureWorkflowPublicFinalJsonSnapshot(hostileAccessorCallable),
+  undefined,
+);
+assert.equal(callableToJsonCalls, 0);
+
+const originalFunctionPrototypeToJson = Object.getOwnPropertyDescriptor(
+  Function.prototype,
+  "toJSON",
+);
+Object.defineProperty(Function.prototype, "toJSON", {
+  configurable: true,
+  value() {
+    callableToJsonCalls += 1;
+    return { unsafe: true };
+  },
+});
+try {
+  assert.equal(
+    runtimeContract.captureWorkflowPublicFinalJsonSnapshot(function inheritedCallable() {}),
+    undefined,
+  );
+  assert.equal(callableToJsonCalls, 0);
+} finally {
+  if (originalFunctionPrototypeToJson) {
+    Object.defineProperty(Function.prototype, "toJSON", originalFunctionPrototypeToJson);
+  } else {
+    delete Function.prototype.toJSON;
+  }
+}
+
+let customArrayToJsonCalls = 0;
+const customArrayPrototype = Object.create(Array.prototype, {
+  toJSON: {
+    configurable: true,
+    value() {
+      customArrayToJsonCalls += 1;
+      return ["x".repeat(projectionLimits.maxOccurrenceBytes)];
+    },
+  },
+});
+const customPrototypeArray = ["safe"];
+Object.setPrototypeOf(customPrototypeArray, customArrayPrototype);
+const customArraySnapshot = runtimeContract.captureWorkflowPublicFinalJsonSnapshot(
+  customPrototypeArray,
+);
+assert.ok(customArraySnapshot);
+assert.equal(JSON.stringify(customArraySnapshot.value), '["safe"]');
+assert.equal(customArrayToJsonCalls, 0);
+
+const crossRealmState = { calls: 0 };
+const crossRealmArray = vm.runInNewContext(
+  `(() => {
+    const state = globalThis.__state;
+    Object.defineProperty(Array.prototype, "toJSON", {
+      configurable: true,
+      value() {
+        state.calls += 1;
+        return ["unsafe"];
+      },
+    });
+    return ["cross-realm-safe"];
+  })()`,
+  { __state: crossRealmState },
+);
+const crossRealmSnapshot = runtimeContract.captureWorkflowPublicFinalJsonSnapshot(
+  crossRealmArray,
+);
+assert.ok(crossRealmSnapshot);
+assert.equal(JSON.stringify(crossRealmSnapshot.value), '["cross-realm-safe"]');
+assert.equal(crossRealmState.calls, 0);
+
+let inheritedSparseIndexReads = 0;
+const sparseSource = new Array(2);
+const sparseSourcePrototype = Object.create(Array.prototype, {
+  0: {
+    configurable: true,
+    get() {
+      inheritedSparseIndexReads += 1;
+      return "unsafe-inherited-hole";
+    },
+  },
+});
+Object.setPrototypeOf(sparseSource, sparseSourcePrototype);
+const sparseSnapshot = runtimeContract.captureWorkflowPublicFinalJsonSnapshot(sparseSource);
+assert.ok(sparseSnapshot);
+assert.equal(JSON.stringify(sparseSnapshot.value), "[null,null]");
+assert.equal(Object.prototype.hasOwnProperty.call(sparseSnapshot.value, "0"), true);
+assert.equal(Object.prototype.hasOwnProperty.call(sparseSnapshot.value, "1"), true);
+assert.equal(inheritedSparseIndexReads, 0);
+
+let speciesReads = 0;
+class HostileSpeciesArray extends Array {
+  static get [Symbol.species]() {
+    speciesReads += 1;
+    return Array;
+  }
+}
+const speciesSnapshot = runtimeContract.captureWorkflowPublicFinalJsonSnapshot(
+  new HostileSpeciesArray("species-safe"),
+);
+assert.ok(speciesSnapshot);
+assert.equal(JSON.stringify(speciesSnapshot.value), '["species-safe"]');
+assert.equal(speciesReads, 0);
 assert.deepEqual(runtimeContract.OPERATION_ACTION_DECISION_APPLIED_OUTCOMES, {
   approve: ["queued"],
   reject: ["rejected"],
@@ -3647,11 +3805,13 @@ function finalDtoBoundaryCommand(stringLength) {
   };
 }
 const admittedFinalDto = demoApi.deriveWorkflowCommandRecord(finalDtoBoundaryCommand(65_480));
-const admittedFinalDtoFootprint = runtimeContract.workflowPublicFinalJsonFootprint(admittedFinalDto);
+const admittedFinalDtoFootprint = runtimeContract.captureWorkflowPublicFinalJsonSnapshot(admittedFinalDto);
 assert.ok(admittedFinalDtoFootprint);
+assert.equal(Object.isFrozen(admittedFinalDto), true);
+assert.equal(Object.getOwnPropertyDescriptor(admittedFinalDto, "toJSON").value, undefined);
 assert.equal(
   admittedFinalDtoFootprint.bytes,
-  runtimeContract.workflowPublicUtf8ByteLength(JSON.stringify(admittedFinalDto)),
+  runtimeContract.workflowPublicUtf8ByteLength(JSON.stringify(admittedFinalDtoFootprint.value)),
 );
 const rawNearBoundaryCommand = publicAdapter.mapWorkflowCommandRecord(
   finalDtoBoundaryCommand(65_500),
@@ -5102,7 +5262,7 @@ for (const [value, expected] of diagnosticCases) {
     sparseFinalDtoProvenance.raw.workflow_commands.length,
     sparseFinalDtoProvenance.workflowCommands.length,
   );
-  const sparseFinalDtoFootprint = runtimeContract.workflowPublicFinalJsonFootprint(
+  const sparseFinalDtoFootprint = runtimeContract.captureWorkflowPublicFinalJsonSnapshot(
     sparseFinalDtoProvenance,
   );
   assert.ok(sparseFinalDtoFootprint);
@@ -5112,7 +5272,7 @@ for (const [value, expected] of diagnosticCases) {
   );
   assert.equal(
     sparseFinalDtoFootprint.bytes,
-    runtimeContract.workflowPublicUtf8ByteLength(JSON.stringify(sparseFinalDtoProvenance)),
+    runtimeContract.workflowPublicUtf8ByteLength(JSON.stringify(sparseFinalDtoFootprint.value)),
   );
 
   const unreadTailProxyTraps = {
@@ -5172,6 +5332,159 @@ for (const [value, expected] of diagnosticCases) {
     });
   } finally {
     JSON.parse = originalJsonParse;
+  }
+
+  const lazyArrayDescriptorKeys = [];
+  const lazyArrayTail = { command_id: "must-not-read-source-index-one" };
+  const lazySourceArray = new Proxy(
+    [finalDtoBoundaryCommand(65_500), lazyArrayTail],
+    {
+      getOwnPropertyDescriptor(target, key) {
+        lazyArrayDescriptorKeys.push(String(key));
+        return Reflect.getOwnPropertyDescriptor(target, key);
+      },
+    },
+  );
+  const lazySourceArrayPayload = {
+    status: "ok",
+    workflow_commands: lazySourceArray,
+  };
+  const lazyArrayOriginalJsonParse = JSON.parse;
+  JSON.parse = (input, reviver) => input === "__LAZY_SOURCE_ARRAY_PAYLOAD__"
+    ? lazySourceArrayPayload
+    : lazyArrayOriginalJsonParse(input, reviver);
+  global.fetch = async () => ({
+    ok: true,
+    status: 200,
+    headers: new Headers({ "Content-Type": "application/json" }),
+    text: async () => "__LAZY_SOURCE_ARRAY_PAYLOAD__",
+  });
+  try {
+    const lazySourceArrayProvenance = await demoApi.getOperationRunProvenance(
+      "operation-run-lazy-source-array",
+    );
+    assert.deepEqual(lazySourceArrayProvenance.workflowCommands, []);
+    assert.deepEqual(lazyArrayDescriptorKeys, ["length", "0"]);
+  } finally {
+    JSON.parse = lazyArrayOriginalJsonParse;
+  }
+
+  const exactCapBase = {
+    status: "ok",
+    action: null,
+    operationRun: null,
+    actionEvents: [],
+    operationEvents: [],
+    eventTimeline: [],
+    workflowCommands: [],
+  };
+  const exactCapBaseSnapshot = runtimeContract.captureWorkflowPublicFinalJsonSnapshot(
+    exactCapBase,
+  );
+  const minimumExactCapEvent = demoApi.deriveOperationEventRecord({ event_id: "" });
+  const minimumExactCapEventSnapshot =
+    runtimeContract.captureWorkflowPublicFinalJsonSnapshot(minimumExactCapEvent);
+  assert.ok(exactCapBaseSnapshot);
+  assert.ok(minimumExactCapEventSnapshot);
+  let exactCapEventCount = 0;
+  let exactCapStringBytes = 0;
+  for (let count = 1; count <= projectionLimits.maxCollectionEntries; count += 1) {
+    const requiredStringBytes =
+      projectionLimits.maxOccurrenceBytes -
+      exactCapBaseSnapshot.bytes -
+      (count - 1) -
+      count * minimumExactCapEventSnapshot.bytes;
+    if (
+      requiredStringBytes >= 0 &&
+      requiredStringBytes <= count * projectionLimits.maxStringBytes
+    ) {
+      exactCapEventCount = count;
+      exactCapStringBytes = requiredStringBytes;
+      break;
+    }
+  }
+  assert.ok(exactCapEventCount > 0);
+  const exactCapActionEvents = [];
+  let remainingExactCapStringBytes = exactCapStringBytes;
+  for (let index = 0; index < exactCapEventCount; index += 1) {
+    const stringBytes = Math.min(
+      projectionLimits.maxStringBytes,
+      remainingExactCapStringBytes,
+    );
+    exactCapActionEvents.push({ event_id: "x".repeat(stringBytes) });
+    remainingExactCapStringBytes -= stringBytes;
+  }
+  assert.equal(remainingExactCapStringBytes, 0);
+  const exactCapLaterListTraps = {
+    get: 0,
+    getPrototypeOf: 0,
+    ownKeys: 0,
+    getOwnPropertyDescriptor: 0,
+  };
+  const exactCapLaterList = new Proxy(
+    [{ event_id: "must-not-read-after-exact-cap" }],
+    {
+      get(target, key, receiver) {
+        exactCapLaterListTraps.get += 1;
+        return Reflect.get(target, key, receiver);
+      },
+      getPrototypeOf(target) {
+        exactCapLaterListTraps.getPrototypeOf += 1;
+        return Reflect.getPrototypeOf(target);
+      },
+      ownKeys(target) {
+        exactCapLaterListTraps.ownKeys += 1;
+        return Reflect.ownKeys(target);
+      },
+      getOwnPropertyDescriptor(target, key) {
+        exactCapLaterListTraps.getOwnPropertyDescriptor += 1;
+        return Reflect.getOwnPropertyDescriptor(target, key);
+      },
+    },
+  );
+  const exactCapPayload = {
+    status: "ok",
+    action_events: exactCapActionEvents,
+    operation_events: exactCapLaterList,
+  };
+  const exactCapOriginalJsonParse = JSON.parse;
+  JSON.parse = (input, reviver) => input === "__EXACT_CAP_PAYLOAD__"
+    ? exactCapPayload
+    : exactCapOriginalJsonParse(input, reviver);
+  global.fetch = async () => ({
+    ok: true,
+    status: 200,
+    headers: new Headers({ "Content-Type": "application/json" }),
+    text: async () => "__EXACT_CAP_PAYLOAD__",
+  });
+  try {
+    const exactCapProvenance = await demoApi.getOperationRunProvenance(
+      "operation-run-exact-cap",
+    );
+    const exactCapSnapshot = runtimeContract.captureWorkflowPublicFinalJsonSnapshot(
+      exactCapProvenance,
+    );
+    assert.equal(exactCapProvenance.actionEvents.length, exactCapEventCount);
+    assert.equal(Object.isFrozen(exactCapProvenance), true);
+    assert.equal(
+      Object.getOwnPropertyDescriptor(exactCapProvenance, "toJSON").value,
+      undefined,
+    );
+    assert.ok(exactCapSnapshot);
+    assert.equal(exactCapSnapshot.bytes, projectionLimits.maxOccurrenceBytes);
+    assert.equal(
+      runtimeContract.workflowPublicUtf8ByteLength(JSON.stringify(exactCapProvenance)),
+      projectionLimits.maxOccurrenceBytes,
+    );
+    assert.deepEqual(exactCapProvenance.operationEvents, []);
+    assert.deepEqual(exactCapLaterListTraps, {
+      get: 0,
+      getPrototypeOf: 0,
+      ownKeys: 0,
+      getOwnPropertyDescriptor: 0,
+    });
+  } finally {
+    JSON.parse = exactCapOriginalJsonParse;
   }
 
   const crossListTailProxyTraps = {
@@ -5271,7 +5584,12 @@ for (const [value, expected] of diagnosticCases) {
   const finalBudgetActivities = await demoApi.listWorkflowActivities({});
   assert.ok(finalBudgetActivities.length > 0);
   assert.ok(finalBudgetActivities.length < projectionLimits.maxCollectionEntries);
-  assert.ok(runtimeContract.workflowPublicFinalJsonFootprint(finalBudgetActivities));
+  assert.equal(Object.isFrozen(finalBudgetActivities), true);
+  assert.equal(
+    Object.getOwnPropertyDescriptor(finalBudgetActivities, "toJSON").value,
+    undefined,
+  );
+  assert.ok(runtimeContract.captureWorkflowPublicFinalJsonSnapshot(finalBudgetActivities));
 
   global.fetch = async () => jsonResponse({
     status: "ok",

@@ -12,9 +12,12 @@
 > open. Section 9 distinguishes the original
 > `4cfd1916da8bd98483d1ecfdba1f66639b122da9` evidence from the current follow-up evidence. Fresh validation is
 > recorded. Commit `491999040d163ef9c49e707fb830cdce319b7c2a` subsequently received two fresh pinned
-> medium-effort non-author advisory reviews; their findings and current fixed-forward are recorded in §3.3. A new
-> pinned re-review for the current follow-up remains pending, and no medium-effort result is a formal highest-effort
-> verdict.
+> medium-effort non-author advisory reviews; their findings and current fixed-forward are recorded in §3.3. Commit
+> `b54ef9c735612c228a0b803a892be0f6ba7b64d0` then received the valid isolated-reviewer-home
+> `gpt-5.6-sol / ultra / priority` pinned review
+> `runtime/reviews/20260715T030659Z_Track_D_D3c1a_public_projection_fixed-forward_ec0ad95.md`: formal **NO-GO**,
+> P0/P1/P2/P3=`0/0/5/2`. Section 3.4 records the fixed-forward for all five P2 findings and the two explicit P3
+> residuals. A fresh pinned formal re-review of the enclosing commit is still required.
 
 ## 1. Outcome and bounded impact
 
@@ -211,7 +214,38 @@ getter, `toJSON`, or Proxy `get` trap and does not walk arbitrary prototype gett
 inherited-array, same-list-tail, and cross-list-tail executable regressions lock those boundaries. A fresh pinned
 non-author review of the enclosing commit is still required before this scope can cross its live/manual/milestone gate.
 
-### 3.4 Earlier precommit adversarial author-audit fixes
+### 3.4 Valid Ultra review fixed-forward
+
+The isolated reviewer home bound the exact range
+`395d7c7e0858ac19e24496c61eee5dc3f109cc35..b54ef9c735612c228a0b803a892be0f6ba7b64d0`
+to `gpt-5.6-sol / ultra / priority` and returned formal **NO-GO**, P0/P1/P2/P3=`0/0/5/2`. The two P3 items remain
+explicit: decoded-body allocation before the 4 MiB post-read check is the existing `R-019` bounded-streaming
+residual, while the non-enumerable demo `raw` compatibility boundary is now owned by `R-030`. The five P2 mechanisms
+are fixed-forwarded together instead of adding another measurement-only patch:
+
+1. `captureWorkflowPublicFinalJsonSnapshot(...)` replaces the old footprint-only export. It captures every source
+   container through one descriptor pass, rejects enumerable accessors and every function value, and returns a fresh,
+   frozen, accessor-free ordinary-object/dense-array snapshot. Each snapshot owns a non-enumerable `toJSON=undefined`
+   shadow, so later `Object.prototype`, `Array.prototype`, custom-prototype, cross-realm, sparse-index, or species hooks
+   cannot change or execute during final serialization.
+2. The measured value and serialized value are now identical by construction. `attachDemoRaw(...)` returns the
+   captured root snapshot, list admission pushes the captured item snapshot, and the provenance root is sealed again
+   after all admitted lists are installed. No admitted arbitrary Proxy or descriptor source is subsequently passed to
+   `JSON.stringify`; descriptor/`get` divergence therefore cannot alter the emitted bytes.
+3. Function-valued roots, object members, and array members fail closed before any own or inherited
+   `Function.prototype.toJSON` lookup. Own data/accessor and inherited callable regressions prove zero invocation.
+4. Aggregate admission marks the DTO closed when either node or byte usage is exactly equal to its cap, not only when
+   the next item exceeds it. The exact-1-MiB fixture proves a later provenance list receives zero Proxy traps.
+5. Provenance source arrays capture only `length` up front. Each numeric descriptor is fetched inside the
+   project-and-admit loop, so a failed first item leaves source index `1` and every later descriptor untouched. The
+   enclosing-array Proxy regression proves the descriptor sequence is exactly `length, 0`.
+
+The positive ordinary-object/array/open-mode behavior remains unchanged. Custom-prototype, cross-realm, sparse, and
+arbitrary-Proxy sources may still be accepted, but only their descriptor-derived trusted snapshot is returned and
+serialized. `R-030` preserves the old non-enumerable `raw` reference only as an explicitly unsealed compatibility
+view; it is not part of the Response JSON graph or the final footprint.
+
+### 3.5 Earlier precommit adversarial author-audit fixes
 
 After implementing the five direct findings, adversarial passes in the author session exposed additional bounded
 cross-layer gaps. They are fixed in the same D3c1a candidate because leaving them open would make the advertised public
@@ -510,6 +544,19 @@ Current `395d7c7` advisory fixed-forward evidence, before creating its enclosing
 - PG was not rerun for this follow-up because it changes no backend, repository, storage, or PG oracle. The immediately
   preceding pinned review independently reran the unchanged exact evidence matrix at **7 passed + 500 subtests**.
 
+Current Ultra-review fixed-forward evidence, before creating its enclosing commit:
+
+- combined D3 claim-fence + D3c1a projection + pre-Agent contract lane: **119 passed in 90.28s**;
+- D3c1a projection contract contribution: **19 passed**, including exact-cap later-list zero-touch, lazy enclosing-array
+  descriptors, function-own/accessor/inherited-hook zero invocation, custom/cross-realm/sparse/species arrays,
+  arbitrary Proxy descriptor/get snapshot equivalence, and final root/list snapshot serialization;
+- frontend production build: **82 modules transformed**, `551.56 kB` / gzip `164.37 kB`; the existing `>500 kB`
+  chunk warning remains informational;
+- scoped Ruff check/format and `git diff --check`: clean;
+- PG was intentionally not rerun because this fixed-forward changes only the shared TypeScript snapshot contract, demo
+  projection, executable frontend oracle, and docs; it changes no backend, repository, storage, migration, or PG path;
+- fresh formal pinned re-review of the enclosing commit remains pending. Author validation is not a verdict.
+
 The advisory also exercised hostile hash-collision keys with zero equality-hook calls, alternating carrier depth 40 in
 9 command projections, and a binary depth-10 carrier tree in 99 projections; budget cutoffs omitted the member rather
 than emitting an empty canonical carrier. This is author/advisory evidence, not a formal pinned verdict.
@@ -520,9 +567,10 @@ invalid: both processes completed, but `causal_binding.final_response_item_exact
 substantive #1/#2/#4-#11 findings are mapped to §3.1; the second artifact's actionable findings are mapped to §3.2;
 accepted residual `R-019` remains open. No invalid artifact is formal `NO-GO` or `GO`. Fresh targeted validation is
 recorded above. The two valid medium-effort reviews of `4919990` are advisory `NO-GO` inputs and are fixed-forwarded
-in §3.3; a fresh pinned re-review must bind the enclosing commit. A formal review still requires the operator-owned
-highest supported reasoning effort. Until a valid formal scope-matched artifact exists, live/W6/manual validation,
-promotion, and milestone signoff remain fail closed for this scope.
+in §3.3. The valid `gpt-5.6-sol / ultra / priority` artifact for `b54ef9c...` is formal **NO-GO** and its five P2
+findings are fixed-forwarded in §3.4; `R-019` and `R-030` remain explicit P3 residuals. A fresh formal pinned re-review
+must bind the enclosing commit. Until that scope-matched artifact returns GO, live/W6/manual validation, promotion,
+and milestone signoff remain fail closed for this scope.
 
 ## 10. Explicit non-closure
 
@@ -532,6 +580,6 @@ ClaimAuthority/ClaimReceipt mint and verification, Stage A/B, generation/token/e
 business fencing, terminal provenance, late-result quarantine, dispatch coordination, action-root durable scope, or
 any Plan §6/OB-ID obligation.
 
-R-019 remains open. Served Agent tool population remains zero. No fake, scripted, or live provider/model path is
+R-019 and R-030 remain open/accepted as recorded. Served Agent tool population remains zero. No fake, scripted, or live provider/model path is
 authorized by this batch, and no provider-costing validation or product handoff may infer authorization from a closed
 public mirror or a safe diagnostic value.

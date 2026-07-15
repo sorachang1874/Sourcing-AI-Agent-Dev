@@ -12,7 +12,7 @@ import {
   OPERATION_RUN_PROVENANCE_SUCCESS_STATUSES,
   WORKFLOW_COMMAND_CONTROL_APPLIED_OUTCOMES,
   WORKFLOW_PUBLIC_PROJECTION_LIMITS,
-  workflowPublicFinalJsonFootprint,
+  captureWorkflowPublicFinalJsonSnapshot,
   workflowPublicJsonStringByteLength,
   workflowPublicTransportBodyIsOverLimit,
   workflowPublicTransportContentLengthIsOverLimit,
@@ -931,7 +931,7 @@ function captureDemoWorkflowPublicOwnDataEntries(
   return { entries, ownKeyCount: ownKeys.length, hadRejectedDataProperty };
 }
 
-function captureDemoWorkflowPublicArrayItems(value: unknown[]): readonly unknown[] | undefined {
+function captureDemoWorkflowPublicArrayLength(value: unknown[]): number | undefined {
   let lengthDescriptor: PropertyDescriptor | undefined;
   try {
     lengthDescriptor = Object.getOwnPropertyDescriptor(value, "length");
@@ -947,18 +947,44 @@ function captureDemoWorkflowPublicArrayItems(value: unknown[]): readonly unknown
   ) {
     return undefined;
   }
+  return lengthDescriptor.value;
+}
+
+interface DemoWorkflowPublicArrayItemDescriptor {
+  readonly present: boolean;
+  readonly value?: unknown;
+}
+
+function captureDemoWorkflowPublicArrayItemDescriptor(
+  value: unknown[],
+  index: number,
+): DemoWorkflowPublicArrayItemDescriptor | undefined {
+  let descriptor: PropertyDescriptor | undefined;
+  try {
+    descriptor = Object.getOwnPropertyDescriptor(value, String(index));
+  } catch {
+    return undefined;
+  }
+  if (!descriptor || !descriptor.enumerable || !("value" in descriptor)) {
+    return { present: false };
+  }
+  return { present: true, value: descriptor.value };
+}
+
+function captureDemoWorkflowPublicArrayItems(value: unknown[]): readonly unknown[] | undefined {
+  const length = captureDemoWorkflowPublicArrayLength(value);
+  if (length === undefined) {
+    return undefined;
+  }
   const items: unknown[] = [];
-  for (let index = 0; index < lengthDescriptor.value; index += 1) {
-    let descriptor: PropertyDescriptor | undefined;
-    try {
-      descriptor = Object.getOwnPropertyDescriptor(value, String(index));
-    } catch {
+  for (let index = 0; index < length; index += 1) {
+    const item = captureDemoWorkflowPublicArrayItemDescriptor(value, index);
+    if (!item) {
       return undefined;
     }
-    if (!descriptor || !descriptor.enumerable || !("value" in descriptor)) {
-      continue;
+    if (item.present) {
+      items.push(item.value);
     }
-    items.push(descriptor.value);
   }
   return items;
 }
@@ -1109,15 +1135,29 @@ interface DemoWorkflowPublicFinalAggregateBudget {
   blocked: boolean;
 }
 
+function requireDemoWorkflowPublicFinalSnapshot<T>(value: unknown, label: string): T {
+  const snapshot = captureWorkflowPublicFinalJsonSnapshot(value);
+  if (!snapshot) {
+    throw new DemoWorkflowPublicFinalBudgetError(label);
+  }
+  return snapshot.value as T;
+}
+
 function requireDemoWorkflowPublicFinalFootprint(
   value: unknown,
   label: string,
 ): DemoWorkflowPublicFinalAggregateBudget {
-  const footprint = workflowPublicFinalJsonFootprint(value);
-  if (!footprint) {
+  const snapshot = captureWorkflowPublicFinalJsonSnapshot(value);
+  if (!snapshot) {
     throw new DemoWorkflowPublicFinalBudgetError(label);
   }
-  return { nodes: footprint.nodes, bytes: footprint.bytes, blocked: false };
+  return {
+    nodes: snapshot.nodes,
+    bytes: snapshot.bytes,
+    blocked:
+      snapshot.nodes >= WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxNodes ||
+      snapshot.bytes >= WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxOccurrenceBytes,
+  };
 }
 
 function admitDemoWorkflowPublicFinalListItem<T extends object>(
@@ -1128,13 +1168,13 @@ function admitDemoWorkflowPublicFinalListItem<T extends object>(
   if (budget.blocked) {
     return false;
   }
-  const footprint = workflowPublicFinalJsonFootprint(item);
-  if (!footprint) {
+  const snapshot = captureWorkflowPublicFinalJsonSnapshot(item);
+  if (!snapshot) {
     budget.blocked = true;
     return false;
   }
-  const nextNodes = budget.nodes + footprint.nodes;
-  const nextBytes = budget.bytes + footprint.bytes + (target.length > 0 ? 1 : 0);
+  const nextNodes = budget.nodes + snapshot.nodes;
+  const nextBytes = budget.bytes + snapshot.bytes + (target.length > 0 ? 1 : 0);
   if (
     nextNodes > WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxNodes ||
     nextBytes > WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxOccurrenceBytes
@@ -1142,9 +1182,12 @@ function admitDemoWorkflowPublicFinalListItem<T extends object>(
     budget.blocked = true;
     return false;
   }
-  target.push(item);
+  target.push(snapshot.value as T);
   budget.nodes = nextNodes;
   budget.bytes = nextBytes;
+  budget.blocked =
+    nextNodes >= WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxNodes ||
+    nextBytes >= WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxOccurrenceBytes;
   return true;
 }
 
@@ -1175,18 +1218,26 @@ function projectAndAdmitDemoCapturedPlainWorkflowPublicObjectArray<T extends obj
   ) {
     return false;
   }
-  const items = captureDemoWorkflowPublicArrayItems(value);
-  if (!items) {
+  const length = captureDemoWorkflowPublicArrayLength(value);
+  if (length === undefined) {
     return false;
   }
 
   traversal.activeContainers.add(value);
   try {
-    for (const item of items) {
+    for (let index = 0; index < length; index += 1) {
+      const capturedItem = captureDemoWorkflowPublicArrayItemDescriptor(value, index);
+      if (!capturedItem) {
+        finalBudget.blocked = true;
+        break;
+      }
+      if (!capturedItem.present) {
+        continue;
+      }
       let projected: T | undefined;
       try {
         projected = projectDemoCapturedPlainWorkflowPublicObject(
-          item,
+          capturedItem.value,
           projector,
           traversal,
           depth + 1,
@@ -1232,16 +1283,17 @@ function projectDemoCapturedPlainWorkflowPublicObjectArray<T extends object>(
     result,
     "Demo workflow public list",
   );
-  return projectAndAdmitDemoCapturedPlainWorkflowPublicObjectArray(
+  if (!projectAndAdmitDemoCapturedPlainWorkflowPublicObjectArray(
     value,
     projector,
     traversal,
     depth,
     result,
     finalBudget,
-  )
-    ? result
-    : undefined;
+  )) {
+    return undefined;
+  }
+  return requireDemoWorkflowPublicFinalSnapshot<T[]>(result, "Demo workflow public list");
 }
 
 function projectWorkflowCommandPublicCarrier(
@@ -3095,8 +3147,10 @@ function attachDemoRaw<T extends object>(
     configurable: false,
     writable: false,
   });
-  requireDemoWorkflowPublicFinalFootprint(value, "Demo workflow public DTO");
-  return value as T & { raw: Record<string, unknown> };
+  return requireDemoWorkflowPublicFinalSnapshot<T & { raw: Record<string, unknown> }>(
+    value,
+    "Demo workflow public DTO",
+  );
 }
 
 function deriveWorkflowCommandControlPolicy(record: Record<string, unknown>): WorkflowCommandControlPolicy {
@@ -3443,12 +3497,16 @@ export async function listOperationRuns(options?: {
     "OperationRunListResponse",
     ["operation_runs"],
   );
-  return (projectDemoCapturedPlainWorkflowPublicObjectArray(
+  const runs = (projectDemoCapturedPlainWorkflowPublicObjectArray(
     canonical.operation_runs,
     deriveOperationRunRecord,
     traversal,
     depth + 1,
   ) ?? []).filter((item) => item.operationRunId);
+  return requireDemoWorkflowPublicFinalSnapshot<OperationRunRecord[]>(
+    runs,
+    "Operation run list",
+  );
 }
 
 export async function listOperationActions(options?: {
@@ -3472,12 +3530,16 @@ export async function listOperationActions(options?: {
     "OperationActionListResponse",
     ["actions"],
   );
-  return (projectDemoCapturedPlainWorkflowPublicObjectArray(
+  const actions = (projectDemoCapturedPlainWorkflowPublicObjectArray(
     canonical.actions,
     deriveOperationActionRecord,
     traversal,
     depth + 1,
   ) ?? []).filter((item) => item.actionId);
+  return requireDemoWorkflowPublicFinalSnapshot<OperationActionRecord[]>(
+    actions,
+    "Operation action list",
+  );
 }
 
 async function postOperationActionDecision<TDecision extends OperationActionDecision>(
@@ -3783,12 +3845,16 @@ export async function listWorkflowActivities(filters: {
     "WorkflowActivityListResponse",
     ["workflow_activities"],
   );
-  return (projectDemoCapturedPlainWorkflowPublicObjectArray(
+  const activities = (projectDemoCapturedPlainWorkflowPublicObjectArray(
     canonical.workflow_activities,
     deriveWorkflowActivityRecord,
     traversal,
     depth + 1,
   ) ?? []).filter((item) => item.activityRunId);
+  return requireDemoWorkflowPublicFinalSnapshot<WorkflowActivityRecord[]>(
+    activities,
+    "Workflow activity list",
+  );
 }
 
 export async function listWorkflowActivityAttempts(filters: {
@@ -3810,12 +3876,16 @@ export async function listWorkflowActivityAttempts(filters: {
     "WorkflowActivityAttemptListResponse",
     ["workflow_activity_attempts"],
   );
-  return (projectDemoCapturedPlainWorkflowPublicObjectArray(
+  const attempts = (projectDemoCapturedPlainWorkflowPublicObjectArray(
     canonical.workflow_activity_attempts,
     deriveWorkflowActivityAttemptRecord,
     traversal,
     depth + 1,
   ) ?? []).filter((item) => item.attemptId);
+  return requireDemoWorkflowPublicFinalSnapshot<WorkflowActivityAttemptRecord[]>(
+    attempts,
+    "Workflow activity attempt list",
+  );
 }
 
 export async function listWorkflowEntityDeltas(filters: {
@@ -3841,12 +3911,16 @@ export async function listWorkflowEntityDeltas(filters: {
     "WorkflowEntityDeltaListResponse",
     ["workflow_entity_deltas"],
   );
-  return (projectDemoCapturedPlainWorkflowPublicObjectArray(
+  const deltas = (projectDemoCapturedPlainWorkflowPublicObjectArray(
     canonical.workflow_entity_deltas,
     deriveWorkflowEntityDeltaRecord,
     traversal,
     depth + 1,
   ) ?? []).filter((item) => item.deltaId);
+  return requireDemoWorkflowPublicFinalSnapshot<WorkflowEntityDeltaRecord[]>(
+    deltas,
+    "Workflow entity delta list",
+  );
 }
 
 function stripMarkdown(value: string): string {
