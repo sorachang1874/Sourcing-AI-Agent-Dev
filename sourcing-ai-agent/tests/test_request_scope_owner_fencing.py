@@ -561,8 +561,9 @@ def test_criteria_feedback_preflights_every_explicit_job_before_any_write(
     orchestrator = object.__new__(SourcingOrchestrator)
     orchestrator.store = SimpleNamespace(
         repos=SimpleNamespace(criteria_confidence=criteria_repo),
-        get_job=lambda job_id: events.append(f"read:job:{job_id}")
-        or (_foreign_job() if job_state == "foreign" else None),
+        get_job=lambda job_id: (
+            events.append(f"read:job:{job_id}") or (_foreign_job() if job_state == "foreign" else None)
+        ),
     )
     orchestrator.criteria_evolution = SimpleNamespace(
         recompile_after_feedback=lambda *_args: events.append("write:compiler")
@@ -593,8 +594,9 @@ def test_criteria_recompile_preflights_every_explicit_job_before_any_write(
     events: list[str] = []
     orchestrator = object.__new__(SourcingOrchestrator)
     orchestrator.store = SimpleNamespace(
-        get_job=lambda job_id: events.append(f"read:job:{job_id}")
-        or (_foreign_job() if job_state == "foreign" else None),
+        get_job=lambda job_id: (
+            events.append(f"read:job:{job_id}") or (_foreign_job() if job_state == "foreign" else None)
+        ),
     )
     orchestrator.criteria_evolution = SimpleNamespace(
         recompile_after_feedback=lambda *_args: events.append("write:compiler")
@@ -625,15 +627,15 @@ def test_criteria_suggestion_preflights_every_source_job_before_any_write(
         get_suggestion=lambda _suggestion_id: (
             events.append("read:suggestion") or {"suggestion_id": 7, "source_feedback_id": 11}
         ),
-        get_feedback=lambda _feedback_id: events.append("read:feedback")
-        or {"job_id": f"job-{job_state}"},
+        get_feedback=lambda _feedback_id: events.append("read:feedback") or {"job_id": f"job-{job_state}"},
         review_suggestion=lambda **_kwargs: events.append("write:review"),
     )
     orchestrator = object.__new__(SourcingOrchestrator)
     orchestrator.store = SimpleNamespace(
         repos=SimpleNamespace(criteria_confidence=criteria_repo),
-        get_job=lambda job_id: events.append(f"read:job:{job_id}")
-        or (_foreign_job() if job_state == "foreign" else None),
+        get_job=lambda job_id: (
+            events.append(f"read:job:{job_id}") or (_foreign_job() if job_state == "foreign" else None)
+        ),
     )
     orchestrator.criteria_evolution = SimpleNamespace(
         recompile_after_feedback=lambda *_args: events.append("write:compiler")
@@ -741,19 +743,15 @@ def test_criteria_suggestion_open_mode_still_reviews_existing_source_job() -> No
     events: list[str] = []
     criteria_repo = SimpleNamespace(
         get_suggestion=lambda _suggestion_id: {"suggestion_id": 7, "source_job_id": "job-legacy"},
-        review_suggestion=lambda **_kwargs: events.append("write:review")
-        or {"status": "rejected", "suggestion_id": 7},
+        review_suggestion=lambda **_kwargs: events.append("write:review") or {"status": "rejected", "suggestion_id": 7},
     )
     orchestrator = object.__new__(SourcingOrchestrator)
     orchestrator.store = SimpleNamespace(
-        get_job=lambda job_id: events.append(f"read:job:{job_id}")
-        or _owned_job(requester_id="", tenant_id=""),
+        get_job=lambda job_id: events.append(f"read:job:{job_id}") or _owned_job(requester_id="", tenant_id=""),
         repos=SimpleNamespace(criteria_confidence=criteria_repo),
     )
 
-    result = orchestrator.review_pattern_suggestion(
-        {"suggestion_id": 7, "action": "reject", "rerun_retrieval": False}
-    )
+    result = orchestrator.review_pattern_suggestion({"suggestion_id": 7, "action": "reject", "rerun_retrieval": False})
 
     assert result["status"] == "reviewed"
     assert result["rerun"] == {"status": "not_requested"}
@@ -769,8 +767,7 @@ def test_criteria_suggestion_rechecks_locked_sources_before_first_write() -> Non
             "source_job_id": "job-owned",
         },
         get_feedback=lambda _feedback_id: {"job_id": "job-owned"},
-        review_suggestion=lambda **_kwargs: events.append("locked-review:owner-miss")
-        or {"status": "owner_miss"},
+        review_suggestion=lambda **_kwargs: events.append("locked-review:owner-miss") or {"status": "owner_miss"},
     )
     orchestrator = object.__new__(SourcingOrchestrator)
     orchestrator.store = SimpleNamespace(
@@ -838,7 +835,89 @@ def test_criteria_rerun_whitespace_job_id_does_not_mask_explicit_baseline() -> N
         )
 
     assert result["baseline_job_id"] == "job-owned"
+    assert result["baseline_selection"]["family_score"] == 100.0
+    assert result["baseline_selection"]["exact_request_match"] is True
+    assert result["baseline_selection"]["exact_family_match"] is True
     assert reads == ["job-owned"]
+
+
+@pytest.mark.parametrize(
+    ("source_kind", "eligible"),
+    [
+        ("missing", False),
+        ("legacy", False),
+        ("different", False),
+        ("malformed", False),
+        ("same", True),
+    ],
+)
+def test_criteria_rerun_explicit_baseline_requires_exact_cohort_identity(
+    source_kind: str,
+    eligible: bool,
+) -> None:
+    current_request = JobRequest.from_payload(
+        {
+            "target_company": "OpenAI",
+            "cohort_selection": {
+                "schema_version": "cohort_selection.v1",
+                "role_bucket_ids": ["research"],
+                "employment_statuses": ["current"],
+                "role_match": "any",
+                "source": "user_explicit",
+            },
+        }
+    ).to_record()
+    different_request = JobRequest.from_payload(
+        {
+            "target_company": "OpenAI",
+            "cohort_selection": {
+                "schema_version": "cohort_selection.v1",
+                "role_bucket_ids": ["engineering"],
+                "employment_statuses": ["current"],
+                "role_match": "any",
+                "source": "user_explicit",
+            },
+        }
+    ).to_record()
+    source_requests = {
+        "missing": {},
+        "legacy": {"target_company": "OpenAI"},
+        "different": different_request,
+        "malformed": {"target_company": "OpenAI", "cohort_selection": {}},
+        "same": current_request,
+    }
+    events: list[str] = []
+    source_job = _owned_job(
+        job_id="job-owned",
+        status="completed",
+        request=source_requests[source_kind],
+    )
+    orchestrator = object.__new__(SourcingOrchestrator)
+    orchestrator.store = SimpleNamespace(
+        get_job=lambda job_id: events.append(f"read:job:{job_id}") or source_job,
+        get_job_results=lambda job_id: events.append(f"read:results:{job_id}") or [],
+    )
+    with patch(
+        "sourcing_agent.orchestrator.decide_rerun_policy",
+        return_value={"status": "gated_off", "mode": "none"},
+    ):
+        result = orchestrator._rerun_after_recompile_if_requested(
+            {"job_id": "job-owned", "rerun_retrieval": True},
+            {"feedback_id": 1},
+            {"status": "recompiled", "request": current_request, "plan": {}},
+            expected_requester_id="alice",
+            expected_tenant_id="user-alice",
+        )
+
+    if eligible:
+        assert result["status"] == "gated_off"
+        assert result["baseline_selection"]["family_score"] == 100.0
+        assert result["baseline_selection"]["exact_request_match"] is True
+        assert events == ["read:job:job-owned", "read:results:job-owned"]
+    else:
+        assert result["status"] == "skipped"
+        assert result["reason"] == "baseline_cohort_mismatch"
+        assert events == ["read:job:job-owned"]
 
 
 def test_criteria_automatic_baseline_selection_is_exact_owner_scoped() -> None:

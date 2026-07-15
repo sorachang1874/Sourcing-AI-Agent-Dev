@@ -10,6 +10,7 @@ from typing import Any
 from .asset_coverage_contracts import build_population_coverage_contract
 from .asset_paths import iter_company_asset_snapshot_dirs, load_company_snapshot_identity
 from .candidate_artifacts import CandidateArtifactError, _resolve_company_snapshot
+from .cohort_selection import cohort_execution_identity_for_signature, source_request_covers_explicit_cohort
 from .company_registry import normalize_company_key, resolve_company_alias_key
 from .company_shard_planning import (
     merge_company_filters,
@@ -3889,6 +3890,8 @@ def _compile_asset_reuse_plan_for_baseline(
         ),
         "planner_mode": ("delta_from_snapshot" if requires_delta_acquisition else "reuse_snapshot_only"),
     }
+    if cohort_execution_identity_for_signature(request.to_record()):
+        plan_payload["baseline_source_job_id"] = _normalize_text(baseline.get("source_job_id"))
     plan_payload["baseline_selection_explanation"] = build_asset_reuse_baseline_selection_explanation(
         request=request,
         baseline=baseline,
@@ -4001,11 +4004,38 @@ def compile_asset_reuse_plan(
             "reason": "no_cached_authoritative_baseline",
         }
 
+    ordered_candidate_rows = [
+        dict(candidate_row or {})
+        for candidate_row in list(candidate_inventory.get("ordered_candidate_rows") or [])
+        if dict(candidate_row or {})
+    ]
+    request_payload = request.to_record()
+    if cohort_execution_identity_for_signature(request_payload):
+        source_jobs: dict[str, dict[str, Any]] = {}
+
+        def _cohort_compatible(candidate_row: dict[str, Any]) -> bool:
+            source_job_id = str(candidate_row.get("source_job_id") or "").strip()
+            if not source_job_id:
+                return False
+            if source_job_id not in source_jobs:
+                source_job = store.get_job(source_job_id)
+                source_jobs[source_job_id] = dict(source_job) if isinstance(source_job, dict) else {}
+            return source_request_covers_explicit_cohort(
+                request_payload,
+                source_jobs[source_job_id].get("request"),
+            )
+
+        ordered_candidate_rows = [row for row in ordered_candidate_rows if _cohort_compatible(row)]
+        if authoritative_baseline and not _cohort_compatible(authoritative_baseline):
+            authoritative_baseline = {}
+        if not ordered_candidate_rows and not authoritative_baseline:
+            return {
+                "baseline_reuse_available": False,
+                "reason": "no_cohort_compatible_authoritative_baseline",
+            }
+
     best_plan: dict[str, Any] = {}
-    for candidate_row in list(candidate_inventory.get("ordered_candidate_rows") or []):
-        candidate_baseline = dict(candidate_row or {})
-        if not candidate_baseline:
-            continue
+    for candidate_baseline in ordered_candidate_rows:
         candidate_plan = _compile_asset_reuse_plan_for_baseline(
             runtime_dir=runtime_dir,
             store=store,
@@ -4017,7 +4047,7 @@ def compile_asset_reuse_plan(
         if not best_plan or _asset_reuse_plan_candidate_is_better(candidate_plan, best_plan):
             best_plan = candidate_plan
 
-    if not best_plan:
+    if not best_plan and authoritative_baseline:
         best_plan = _compile_asset_reuse_plan_for_baseline(
             runtime_dir=runtime_dir,
             store=store,
@@ -4027,6 +4057,11 @@ def compile_asset_reuse_plan(
             allow_missing_ledger_rebuild=allow_missing_ledger_rebuild,
         )
 
+    if not best_plan:
+        return {
+            "baseline_reuse_available": False,
+            "reason": "no_cohort_compatible_authoritative_baseline",
+        }
     return _strip_asset_reuse_plan_private_fields(best_plan)
 
 

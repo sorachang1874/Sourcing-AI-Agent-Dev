@@ -3,6 +3,10 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from .cohort_selection import (
+    apply_user_explicit_cohort_authority,
+    remove_explicit_cohort_mirror_patch_fields,
+)
 from .domain import (
     FACET_ALIAS_MAP,
     ROLE_BUCKET_PRIORITY,
@@ -19,7 +23,6 @@ from .request_normalization import (
     extract_query_signal_terms,
     merge_unique_request_string_values,
 )
-
 
 _ALLOWED_PATCH_FIELDS = {
     "asset_view",
@@ -133,6 +136,10 @@ def compile_refinement_patch_from_instruction(
     deterministic_patch = normalize_refinement_patch(
         parse_refinement_instruction(normalized_instruction, target_company=target_company)
     )
+    deterministic_patch, deterministic_protected_fields = remove_explicit_cohort_mirror_patch_fields(
+        base_request,
+        deterministic_patch,
+    )
     model_raw: dict[str, Any] = {}
     model_patch: dict[str, Any] = {}
     provider_name = ""
@@ -159,6 +166,12 @@ def compile_refinement_patch_from_instruction(
                 target_company=target_company,
             )
         )
+        model_patch, model_protected_fields = remove_explicit_cohort_mirror_patch_fields(
+            base_request,
+            model_patch,
+        )
+    else:
+        model_protected_fields = []
 
     merged_patch = dict(model_patch)
     supplemented_keys: list[str] = []
@@ -180,6 +193,7 @@ def compile_refinement_patch_from_instruction(
             "deterministic_patch": deterministic_patch,
             "supplemented_keys": supplemented_keys,
             "fallback_used": bool(supplemented_keys) or not bool(model_patch),
+            "protected_cohort_fields": sorted(set(deterministic_protected_fields + model_protected_fields)),
         },
     }
 
@@ -226,11 +240,7 @@ def normalize_refinement_patch(payload: dict[str, Any] | None) -> dict[str, Any]
                 patch[key] = value
             continue
         if key == "employment_statuses":
-            values = [
-                item
-                for item in _normalize_string_list(raw_value)
-                if item in _ALLOWED_EMPLOYMENT_STATUSES
-            ]
+            values = [item for item in _normalize_string_list(raw_value) if item in _ALLOWED_EMPLOYMENT_STATUSES]
             if values:
                 patch[key] = values
             continue
@@ -263,7 +273,7 @@ def apply_refinement_patch(base_request: dict[str, Any], patch: dict[str, Any]) 
             merged[key] = list(value)
         else:
             merged[key] = value
-    return canonicalize_request_payload(merged)
+    return canonicalize_request_payload(apply_user_explicit_cohort_authority(base_request, merged))
 
 
 def _parse_asset_view(lower: str) -> str:
@@ -311,9 +321,15 @@ def _parse_semantic_rerank_limit(text: str, lower: str) -> int:
 
 
 def _parse_employment_statuses(lower: str) -> list[str]:
-    if any(token in lower for token in ["不要 former", "排除 former", "exclude former", "without former", "不要前员工", "排除前员工"]):
+    if any(
+        token in lower
+        for token in ["不要 former", "排除 former", "exclude former", "without former", "不要前员工", "排除前员工"]
+    ):
         return ["current"]
-    if any(token in lower for token in ["不要 current", "排除 current", "exclude current", "without current", "不要在职", "排除在职"]):
+    if any(
+        token in lower
+        for token in ["不要 current", "排除 current", "exclude current", "without current", "不要在职", "排除在职"]
+    ):
         return ["former"]
     statuses: list[str] = []
     if any(token in lower for token in ["current only", "只看 current", "只看在职", "当前成员", "在职"]):
@@ -329,7 +345,9 @@ def _parse_focus_terms(text: str, *, prefixes: list[str]) -> list[str]:
         pattern = re.compile(rf"{re.escape(prefix)}\s*([^。；;\n]+)", flags=re.IGNORECASE)
         for match in pattern.finditer(text):
             fragment = str(match.group(1) or "").strip()
-            for item in re.split(r"[,，、/]|(?:\band\b)|(?:\bor\b)|(?:和)|(?:及)|(?:与)", fragment, flags=re.IGNORECASE):
+            for item in re.split(
+                r"[,，、/]|(?:\band\b)|(?:\bor\b)|(?:和)|(?:及)|(?:与)", fragment, flags=re.IGNORECASE
+            ):
                 normalized = " ".join(str(item or "").strip().split())
                 if normalized and normalized not in terms:
                     terms.append(normalized)

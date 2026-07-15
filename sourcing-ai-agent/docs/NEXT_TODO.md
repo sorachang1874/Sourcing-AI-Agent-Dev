@@ -501,15 +501,16 @@
   evidence/cost tables 自己的 specialized insert-once/CAS prerequisites。不得从 D3b prose 猜 schema，不得把
   D3c2g/D3c2h0 当 SQL/migration 授权，且 Harvest/provider-search variant 未 owner-ratify 前不得进入该 evidence
   path。
-- [ ] Track D 后的 user-owned cohort selection contract（Thinking Machines Lab live 前置）：以一个 versioned、
-  registry-digest-pinned `CohortSelection` 作为唯一 owner，显式承载 canonical ordered
-  `role_bucket_ids[]`（Researcher/Engineer/Product Manager 可自由多选且 registry 可扩展）、
-  `employment_statuses[]`（current/former 可自由多选）、`role_match=any|all` 与 `source=user_explicit`。UI → request
-  schema → plan/review → compiler/provider lanes → result/audit 必须 exact-copy；用户显式选择优先于 raw text/model
-  patch，unknown 值 fail closed，hash 前按 registry order canonicalize。HarvestAPI 若只接受 scalar employment
-  status，current+former 必须编译为两个独立有界 lanes 后确定性 merge/dedupe，禁止取数组第一项决定 provider
-  lane；legacy flat fields 只在 report-visible compatibility boundary 物化并有删除条件。fake/scripted E2E 必须
-  覆盖单选/多选、顺序不变 hash、model 不可覆盖、lane budget/cost 和结果中 effective cohort 可审计。
+- [x] Cohort CS1/CS2 foundation（Thinking Machines Lab live 前置）：versioned、registry-digest-pinned
+  `CohortSelection` 已成为 request/plan-review/provider compiler 的唯一 owner；Researcher/Engineer/Product Manager
+  等 role bucket 与 current/former 支持有序自由多选，`role_match=any|all`，用户显式选择优先于 raw text/model
+  patch，unknown 值 fail closed。Harvest scalar status/role 已编译成独立有界 lanes 后确定性 merge/dedupe；全局
+  budget、strict result envelope、all-role verifier、request/feedback/baseline/snapshot/authoritative projection reuse
+  identity fence 已有 fast regression。normal acquisition runtime 仍 fail closed，不能把 foundation 写成产品可用。
+- [ ] Cohort runtime/frontend/result/scripted E2E：runtime 必须 exact-copy compiler manifest 并把 manifest/lane identity
+  与 durable submission state + provider run id 绑定，闭合 ambiguous-submit、resume、exact replay、terminal reuse，避免
+  进程重启重复付费；随后实现 UI 多选、result/audit effective cohort projection，并用 fake/scripted E2E 覆盖
+  单选/多选、顺序不变 hash、model 不可覆盖、lane budget/cost、partial failure/zero result/retry 与结果可审计。
 - [ ] Track D 落地后的首个 live canary：fake/scripted 与 scope-matched review gate 全绿后，仅使用 operator 外置、
   不入库/不落日志的凭据做 **Thinking Machines Lab-only** 有界尝试，目标为华人 pre-training researcher mapping；
   OpenAI/Anthropic/Google DeepMind/xAI/Meta 及全量扩展另行 gating，不与首轮 canary 合并。

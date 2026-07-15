@@ -338,11 +338,15 @@ KNOWN_THEMATIC_SIGNAL_SPECS: tuple[dict[str, Any], ...] = (
 
 ROLE_BUCKET_KNOWLEDGE: dict[str, dict[str, Any]] = {
     "product_management": {
+        "selectable_label": "Product Manager",
+        "selectable_order": 30,
         "aliases": ("product manager", "product management", "产品经理", "pm"),
         "role_hints": ("Product Manager", "Senior Product Manager", "Group Product Manager"),
         "function_ids": ("19",),
     },
     "research": {
+        "selectable_label": "Researcher",
+        "selectable_order": 10,
         "aliases": (
             "researcher",
             "research scientist",
@@ -355,6 +359,8 @@ ROLE_BUCKET_KNOWLEDGE: dict[str, dict[str, Any]] = {
         "function_ids": ("24",),
     },
     "engineering": {
+        "selectable_label": "Engineer",
+        "selectable_order": 20,
         "aliases": (
             "engineer",
             "engineering",
@@ -367,6 +373,8 @@ ROLE_BUCKET_KNOWLEDGE: dict[str, dict[str, Any]] = {
         "function_ids": ("8",),
     },
     "infra_systems": {
+        "selectable_label": "Infrastructure & Systems",
+        "selectable_order": 40,
         "aliases": (
             "infra systems",
             "infra engineer",
@@ -380,6 +388,8 @@ ROLE_BUCKET_KNOWLEDGE: dict[str, dict[str, Any]] = {
         "function_ids": ("8",),
     },
     "founding": {
+        "selectable_label": "Founder",
+        "selectable_order": 50,
         "aliases": ("founder", "co-founder", "founding", "entrepreneur", "entrepreneurship"),
         "role_hints": ("Founder", "Co-founder"),
         "function_ids": ("9",),
@@ -411,7 +421,7 @@ _THEMATIC_SIGNAL_BY_CANONICAL = {
 }
 _THEMATIC_SIGNAL_LOOKUP: dict[str, str] = {}
 for _canonical_label, _spec in _THEMATIC_SIGNAL_BY_CANONICAL.items():
-    for _value in ([_canonical_label] + list(_spec.get("aliases") or [])):
+    for _value in [_canonical_label] + list(_spec.get("aliases") or []):
         _normalized = "".join(ch.lower() for ch in str(_value or "") if ch.isalnum())
         if _normalized:
             _THEMATIC_SIGNAL_LOOKUP.setdefault(_normalized, _canonical_label)
@@ -481,7 +491,9 @@ def resolve_target_company_alias(value: str) -> dict[str, Any]:
     target_company = str(spec.get("target_company") or "").strip()
     if not target_company:
         return {}
-    organization_keywords = [str(item).strip() for item in list(spec.get("organization_keywords") or []) if str(item).strip()]
+    organization_keywords = [
+        str(item).strip() for item in list(spec.get("organization_keywords") or []) if str(item).strip()
+    ]
     return {
         "target_company": target_company,
         "organization_keywords": organization_keywords,
@@ -638,7 +650,11 @@ def scope_review_hints(target_company: str, values: Iterable[str]) -> list[str]:
         spec = lookup_scope_signal(value)
         if not spec:
             continue
-        review_parent_keys = {normalize_company_key(item) for item in list(spec.get("review_parent_company_keys") or []) if str(item).strip()}
+        review_parent_keys = {
+            normalize_company_key(item)
+            for item in list(spec.get("review_parent_company_keys") or [])
+            if str(item).strip()
+        }
         if target_key not in review_parent_keys:
             continue
         hints.extend(str(item).strip() for item in list(spec.get("organization_keywords") or []) if str(item).strip())

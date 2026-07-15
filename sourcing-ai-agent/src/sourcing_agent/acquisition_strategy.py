@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from .cohort_provider_compiler import resolve_effective_role_targeting
 from .company_registry import builtin_company_identity, normalize_company_key
 from .domain import (
     AcquisitionStrategyPlan,
@@ -149,23 +150,40 @@ def compile_acquisition_strategy(
     population_boundary = coerce_intent_axis_mapping(intent_axes.get("population_boundary"))
     scope_boundary = coerce_intent_axis_mapping(intent_axes.get("scope_boundary"))
     effective_target_company = str(effective_request.target_company or request.target_company or "").strip()
-    effective_categories = list(effective_request.categories or population_boundary.get("categories") or categories or [])
+    effective_categories = list(
+        effective_request.categories or population_boundary.get("categories") or categories or []
+    )
     effective_employment_statuses = list(
-        effective_request.employment_statuses or population_boundary.get("employment_statuses") or employment_statuses or []
-    )
-    effective_organization_keywords = list(
-        intent_view.get("organization_keywords") or effective_request.organization_keywords or scope_boundary.get("organization_keywords") or []
-    )
-    effective_keywords = list(intent_view.get("keywords") or effective_request.keywords or [])
-    effective_must_have_keywords = list(intent_view.get("must_have_keywords") or effective_request.must_have_keywords or [])
-    effective_must_have_facets = list(intent_view.get("must_have_facets") or effective_request.must_have_facets or [])
-    requested_role_buckets = list(
-        intent_view.get("must_have_primary_role_buckets")
-        or effective_request.must_have_primary_role_buckets
+        effective_request.employment_statuses
+        or population_boundary.get("employment_statuses")
+        or employment_statuses
         or []
     )
+    effective_organization_keywords = list(
+        intent_view.get("organization_keywords")
+        or effective_request.organization_keywords
+        or scope_boundary.get("organization_keywords")
+        or []
+    )
+    effective_keywords = list(intent_view.get("keywords") or effective_request.keywords or [])
+    effective_must_have_keywords = list(
+        intent_view.get("must_have_keywords") or effective_request.must_have_keywords or []
+    )
+    effective_must_have_facets = list(intent_view.get("must_have_facets") or effective_request.must_have_facets or [])
+    requested_role_buckets = list(
+        intent_view.get("must_have_primary_role_buckets") or effective_request.must_have_primary_role_buckets or []
+    )
     category_role_buckets = normalize_requested_role_buckets(effective_categories)
-    primary_role_bucket_mode = str(getattr(effective_request, "primary_role_bucket_mode", "") or intent_view.get("primary_role_bucket_mode") or "hard").strip().lower() or "hard"
+    primary_role_bucket_mode = (
+        str(
+            getattr(effective_request, "primary_role_bucket_mode", "")
+            or intent_view.get("primary_role_bucket_mode")
+            or "hard"
+        )
+        .strip()
+        .lower()
+        or "hard"
+    )
     execution_preferences = dict(effective_request.execution_preferences or {})
     semantic_brief = dict(
         intent_view.get("semantic_brief")
@@ -191,11 +209,24 @@ def compile_acquisition_strategy(
     )
     scope_semantics = dict(semantic_brief.get("scope") or {})
     role_targeting = dict(semantic_brief.get("role_targeting") or {})
-    effective_role_buckets = list(
-        role_targeting.get("resolved_role_buckets")
-        or requested_role_buckets
-        or []
+    legacy_effective_role_buckets = list(role_targeting.get("resolved_role_buckets") or requested_role_buckets or [])
+    legacy_function_target_groups = semantic_brief_function_target_groups(semantic_brief)
+    effective_role_targeting = resolve_effective_role_targeting(
+        effective_request.to_record(),
+        legacy_resolved_role_buckets=legacy_effective_role_buckets,
+        legacy_function_target_groups=legacy_function_target_groups,
     )
+    explicit_role_authority = str(effective_role_targeting.get("authority") or "") == "user_explicit"
+    effective_role_buckets = list(effective_role_targeting.get("resolved_role_buckets") or [])
+    function_target_groups = [dict(item) for item in list(effective_role_targeting.get("function_target_groups") or [])]
+    if explicit_role_authority:
+        semantic_brief["role_targeting"] = {
+            "source": "user_explicit",
+            "resolved_role_buckets": effective_role_buckets,
+            "function_target_groups": function_target_groups,
+            "all_roles": bool(effective_role_targeting.get("all_roles")),
+            "inference_allowed": False,
+        }
     scope_hints = list(
         scope_semantics.get("scope_hints")
         or _merge_scope_hints(
@@ -225,18 +256,25 @@ def compile_acquisition_strategy(
         scope_hints,
         strategy_type,
         execution_preferences,
-        scope_disambiguation=dict(effective_request.scope_disambiguation or intent_view.get("scope_disambiguation") or scope_boundary.get("scope_disambiguation") or {}),
+        scope_disambiguation=dict(
+            effective_request.scope_disambiguation
+            or intent_view.get("scope_disambiguation")
+            or scope_boundary.get("scope_disambiguation")
+            or {}
+        ),
     )
-    function_target_groups = semantic_brief_function_target_groups(semantic_brief)
     role_hints = _grouped_role_hints(function_target_groups)
     function_ids = _grouped_function_ids(function_target_groups)
-    if not role_hints:
+    if explicit_role_authority:
+        role_hints = role_bucket_role_hints(effective_role_buckets)
+        function_ids = role_bucket_function_ids(effective_role_buckets)
+    elif not role_hints:
         role_hints = _infer_role_hints(
             text,
             [*category_role_buckets, *(effective_role_buckets if primary_role_bucket_mode == "hard" else [])],
             effective_must_have_facets,
         )
-    if not function_ids:
+    if not explicit_role_authority and not function_ids:
         function_ids = _infer_function_ids(
             text,
             [*category_role_buckets, *effective_role_buckets],
@@ -292,6 +330,7 @@ def compile_acquisition_strategy(
         strategy_type=strategy_type,
         cost_policy=cost_policy,
         function_ids=function_ids,
+        explicit_role_authority=explicit_role_authority,
     )
     confirmation_points = _build_confirmation_points(
         strategy_type,
@@ -301,7 +340,12 @@ def compile_acquisition_strategy(
         execution_preferences,
         raw_text=raw_text,
         keyword_hints=keyword_hints,
-        scope_disambiguation=dict(effective_request.scope_disambiguation or intent_view.get("scope_disambiguation") or scope_boundary.get("scope_disambiguation") or {}),
+        scope_disambiguation=dict(
+            effective_request.scope_disambiguation
+            or intent_view.get("scope_disambiguation")
+            or scope_boundary.get("scope_disambiguation")
+            or {}
+        ),
     )
     reasoning = _build_reasoning(
         strategy_type,
@@ -335,6 +379,7 @@ def compile_acquisition_strategy(
             **dict(strategy_decision or {}),
             "semantic_brief": semantic_brief,
             "function_target_groups": function_target_groups,
+            **({"effective_role_targeting": effective_role_targeting} if explicit_role_authority else {}),
         },
     )
 
@@ -517,7 +562,11 @@ def _infer_strategy_type(
         return explicit_override
     normalized_categories = {str(item).strip().lower() for item in categories if str(item).strip()}
     normalized_statuses = {str(item).strip().lower() for item in employment_statuses if str(item).strip()}
-    if bool(execution_preferences.get("use_company_employees_lane")) and normalized_statuses != {"former"} and "investor" not in normalized_categories:
+    if (
+        bool(execution_preferences.get("use_company_employees_lane"))
+        and normalized_statuses != {"former"}
+        and "investor" not in normalized_categories
+    ):
         return "full_company_roster"
     company_key = target_company.strip().lower()
     if "investor" in categories:
@@ -663,7 +712,11 @@ def _determine_strategy_decision(
             "directional_query": directional_query,
             "organization_execution_profile": normalized_profile,
         }
-    if bool(execution_preferences.get("use_company_employees_lane")) and normalized_statuses != {"former"} and "investor" not in normalized_categories:
+    if (
+        bool(execution_preferences.get("use_company_employees_lane"))
+        and normalized_statuses != {"former"}
+        and "investor" not in normalized_categories
+    ):
         return {
             "strategy_type": "full_company_roster",
             "decision_source": "execution_preferences",
@@ -727,7 +780,10 @@ def _determine_strategy_decision(
     if boundary_type == "scoped_directional" and (
         bool(requested_population_boundary.get("full_company_filter_allowed")) or profile_scoped_only_coverage
     ):
-        if bool(requested_population_boundary.get("full_company_filter_allowed")) and profile_full_company_coverage_proven:
+        if (
+            bool(requested_population_boundary.get("full_company_filter_allowed"))
+            and profile_full_company_coverage_proven
+        ):
             return {
                 "strategy_type": "full_company_roster",
                 "decision_source": "request_population_boundary",
@@ -853,9 +909,7 @@ def _should_expand_directional_function_ids(
     if not any(token in normalized_text for token in _DIRECTIONAL_SCOPE_HINT_TERMS):
         return False
     normalized_categories = {
-        str(item or "").strip().lower()
-        for item in list(categories or [])
-        if str(item or "").strip()
+        str(item or "").strip().lower() for item in list(categories or []) if str(item or "").strip()
     }
     if normalized_categories and not normalized_categories.issubset({"employee", "former_employee"}):
         return False
@@ -1118,6 +1172,7 @@ def _build_filter_hints(
     strategy_type: str,
     cost_policy: dict[str, object],
     function_ids: list[str],
+    explicit_role_authority: bool = False,
 ) -> dict[str, list[str]]:
     large_org_keyword_probe_mode = bool(cost_policy.get("large_org_keyword_probe_mode"))
     prefer_known_scope_company_urls = bool(
@@ -1126,7 +1181,7 @@ def _build_filter_hints(
         or normalize_company_key(target_company) in LARGE_ORG_SCOPE_COMPANY_URLS
     )
     effective_function_ids = list(function_ids or [])
-    if not effective_function_ids and strategy_type == "full_company_roster":
+    if not effective_function_ids and strategy_type == "full_company_roster" and not explicit_role_authority:
         company_key = normalize_company_key(target_company)
         if company_key in FALLBACK_LARGE_COMPANY_KEYS:
             effective_function_ids = list(FULL_COMPANY_TECHNICAL_ROSTER_FUNCTION_IDS)
@@ -1150,7 +1205,7 @@ def _build_filter_hints(
         cost_policy=cost_policy,
     ):
         filters["locations"] = [DEFAULT_PRIMARY_LOCATION]
-    if large_org_keyword_probe_mode:
+    if large_org_keyword_probe_mode and not explicit_role_authority:
         filters["function_ids"] = list(dict.fromkeys([*LARGE_ORG_PRIORITY_FUNCTION_IDS, *effective_function_ids]))
     elif effective_function_ids:
         filters["function_ids"] = list(effective_function_ids)
@@ -1241,7 +1296,9 @@ def _build_confirmation_points(
             f"Confirm whether the roster should be limited to {' / '.join(company_scope[1:] or [target_company])} instead of the full {target_company} organization."
         )
     if employment_statuses == ["former"]:
-        points.append("Confirm whether former employees should exclude anyone who has already returned to the target company.")
+        points.append(
+            "Confirm whether former employees should exclude anyone who has already returned to the target company."
+        )
     implicit_keywords = _keywords_not_explicitly_mentioned(raw_text, keyword_hints)
     if implicit_keywords:
         points.append(
@@ -1391,7 +1448,8 @@ def _build_cost_policy(
         "provider_people_search_query_strategy": "all_queries_union",
         "provider_people_search_min_expected_results": 10,
         "provider_people_search_max_queries": 8,
-        "provider_people_search_accept_zero_results": strategy_type in {"scoped_search_roster", "former_employee_search"},
+        "provider_people_search_accept_zero_results": strategy_type
+        in {"scoped_search_roster", "former_employee_search"},
         "company_employees_min_batch_size": 50,
         "company_employees_start_cost_usd": 0.02,
         "profile_search_page_cost_usd": 0.10,
@@ -1412,7 +1470,8 @@ def _build_cost_policy(
         "worker_retry_limit": 2,
         "large_org_member_threshold": 10000,
         "large_org_keyword_probe_mode": large_org_keyword_probe_mode,
-        "keyword_priority_only": large_org_keyword_probe_mode or (strategy_type == "scoped_search_roster" and bool(keyword_hints)),
+        "keyword_priority_only": large_org_keyword_probe_mode
+        or (strategy_type == "scoped_search_roster" and bool(keyword_hints)),
         "former_keyword_queries_only": large_org_keyword_probe_mode,
         "former_broad_past_company_only": (
             (strategy_type == "full_company_roster" and not large_org_keyword_probe_mode)
@@ -1440,9 +1499,7 @@ def _build_cost_policy(
     if "former_keyword_queries_only" in execution_preferences:
         policy["former_keyword_queries_only"] = bool(execution_preferences.get("former_keyword_queries_only"))
     if "former_broad_past_company_only" in execution_preferences:
-        policy["former_broad_past_company_only"] = bool(
-            execution_preferences.get("former_broad_past_company_only")
-        )
+        policy["former_broad_past_company_only"] = bool(execution_preferences.get("former_broad_past_company_only"))
     if bool(policy.get("former_keyword_queries_only")):
         policy["former_broad_past_company_only"] = False
     if "provider_people_search_query_strategy" in execution_preferences:
@@ -1451,12 +1508,16 @@ def _build_cost_policy(
             policy["provider_people_search_query_strategy"] = query_strategy
     if "provider_people_search_max_queries" in execution_preferences:
         try:
-            policy["provider_people_search_max_queries"] = max(1, int(execution_preferences.get("provider_people_search_max_queries") or 1))
+            policy["provider_people_search_max_queries"] = max(
+                1, int(execution_preferences.get("provider_people_search_max_queries") or 1)
+            )
         except (TypeError, ValueError):
             pass
     if "provider_people_search_pages" in execution_preferences:
         try:
-            policy["provider_people_search_pages"] = max(1, min(100, int(execution_preferences.get("provider_people_search_pages") or 1)))
+            policy["provider_people_search_pages"] = max(
+                1, min(100, int(execution_preferences.get("provider_people_search_pages") or 1))
+            )
         except (TypeError, ValueError):
             pass
     if "provider_people_search_scale_chunk_pages" in execution_preferences:
@@ -1521,9 +1582,7 @@ def _should_enable_large_org_keyword_probe_mode(
     if related_scope_urls:
         return True
     non_root_scope_tokens = {
-        token
-        for token in scope_tokens
-        if token and token != normalize_company_key(target_company)
+        token for token in scope_tokens if token and token != normalize_company_key(target_company)
     }
     return bool(non_root_scope_tokens)
 
@@ -1541,21 +1600,29 @@ def _build_reasoning(
             f"{target_company} is large enough that company-wide roster acquisition would be high-cost and noisy, so the plan prefers a scoped roster."
         )
     elif strategy_type == "former_employee_search":
-        reasoning.append("Former-employee tasks should prioritize people search and relation verification over a current-company roster.")
+        reasoning.append(
+            "Former-employee tasks should prioritize people search and relation verification over a current-company roster."
+        )
     elif strategy_type == "investor_firm_roster":
         reasoning.append("Investor tasks should start from the investment graph before enumerating firm members.")
     else:
-        reasoning.append("The current request is narrow enough that a full company roster is still a practical baseline.")
+        reasoning.append(
+            "The current request is narrow enough that a full company roster is still a practical baseline."
+        )
     if company_scope[1:]:
         reasoning.append(f"Current scope hints: {', '.join(company_scope[1:])}.")
     reasoning.append(f"Retrieval is expected to run in {retrieval_strategy} mode after acquisition.")
-    reasoning.append("Slug resolution should stay low-cost first: relation check and public web search before paid LinkedIn people search.")
+    reasoning.append(
+        "Slug resolution should stay low-cost first: relation check and public web search before paid LinkedIn people search."
+    )
     if str(execution_preferences.get("acquisition_strategy_override") or "").strip().lower() == "full_company_roster":
         reasoning.append("The user explicitly requested a full-company roster instead of a scoped acquisition.")
     if bool(execution_preferences.get("force_fresh_run")):
         reasoning.append("The user explicitly requested a fresh run instead of cache reuse or historical inheritance.")
     if bool(execution_preferences.get("use_company_employees_lane")):
-        reasoning.append("The plan uses the Harvest company-employees lane because the user asked for a broad current-company roster.")
+        reasoning.append(
+            "The plan uses the Harvest company-employees lane because the user asked for a broad current-company roster."
+        )
     return reasoning
 
 

@@ -62,6 +62,18 @@ from .candidate_materialization import (
     remap_evidence_candidate,
 )
 from .canonicalization import canonicalize_company_records
+from .cohort_provider_compiler import (
+    CohortProviderCompilationError,
+    cohort_execution_not_ready_result,
+)
+from .cohort_selection import (
+    CohortSelectionValidationError,
+    apply_user_explicit_cohort_authority,
+    merge_plan_review_cohort_selection,
+    source_request_covers_explicit_cohort,
+    validate_external_cohort_selection_payload,
+    validate_refinement_patch_against_explicit_cohort,
+)
 from .command_kernel import (
     WORKFLOW_ACTIVITY_ATTEMPT_TRUSTED_DERIVED_FIELDS,
     WORKFLOW_ACTIVITY_RUN_TRUSTED_DERIVED_FIELDS,
@@ -1593,6 +1605,10 @@ class SourcingOrchestrator:
         }
 
     def submit_plan_workflow(self, payload: dict[str, Any]) -> dict[str, Any]:
+        try:
+            payload = validate_external_cohort_selection_payload(payload)
+        except CohortSelectionValidationError as exc:
+            return exc.to_result()
         normalized_payload = normalize_workflow_submission_payload(dict(payload or {}))
         identity_provenance = str(normalized_payload.pop(PLAN_SUBMIT_IDENTITY_PROVENANCE_PAYLOAD_KEY, "") or "").strip()
         requested_history_id = str(normalized_payload.get("history_id") or "").strip()
@@ -2327,6 +2343,10 @@ class SourcingOrchestrator:
                 )
 
     def explain_workflow(self, payload: dict[str, Any]) -> dict[str, Any]:
+        try:
+            payload = validate_external_cohort_selection_payload(payload)
+        except CohortSelectionValidationError as exc:
+            return exc.to_result()
         started_at = time.perf_counter()
         normalized_submission = normalize_workflow_submission_payload(dict(payload or {}))
         resolve_plan_started_at = time.perf_counter()
@@ -2667,7 +2687,7 @@ class SourcingOrchestrator:
         )
         queued = self.queue_workflow(payload)
         queue_status = str(queued.get("status") or "")
-        if queue_status == "needs_plan_review":
+        if queue_status in {"needs_plan_review", "invalid"}:
             return queued
         dispatch = dict(queued.get("dispatch") or {})
         matched_job_status = str(dispatch.get("matched_job_status") or "")
@@ -2836,9 +2856,25 @@ class SourcingOrchestrator:
         }
 
     def queue_workflow(self, payload: dict[str, Any]) -> dict[str, Any]:
+        try:
+            payload = validate_external_cohort_selection_payload(payload)
+        except CohortSelectionValidationError as exc:
+            return exc.to_result()
+        if not int(payload.get("plan_review_id") or 0):
+            execution_gate = cohort_execution_not_ready_result(payload)
+            if execution_gate is not None:
+                return execution_gate
         resolved = self._resolve_workflow_plan(payload)
-        if resolved.get("status") == "needs_plan_review":
+        if resolved.get("status") in {"needs_plan_review", "invalid"}:
             return resolved
+        execution_gate = cohort_execution_not_ready_result(
+            dict(resolved.get("request") or {}),
+            base_filter_hints=dict(dict(resolved.get("plan") or {}).get("acquisition_strategy") or {}).get(
+                "filter_hints"
+            ),
+        )
+        if execution_gate is not None:
+            return execution_gate
         request = JobRequest.from_payload(dict(resolved.get("request") or {}))
         plan = hydrate_sourcing_plan(dict(resolved.get("plan") or {}))
         asset_reuse_plan = dict(plan.asset_reuse_plan or {})
@@ -4154,9 +4190,25 @@ class SourcingOrchestrator:
             }
 
     def run_workflow_blocking(self, payload: dict[str, Any]) -> dict[str, Any]:
+        try:
+            payload = validate_external_cohort_selection_payload(payload)
+        except CohortSelectionValidationError as exc:
+            return exc.to_result()
+        if not int(payload.get("plan_review_id") or 0):
+            execution_gate = cohort_execution_not_ready_result(payload)
+            if execution_gate is not None:
+                return execution_gate
         resolved = self._resolve_workflow_plan(payload)
-        if resolved.get("status") == "needs_plan_review":
+        if resolved.get("status") in {"needs_plan_review", "invalid"}:
             return resolved
+        execution_gate = cohort_execution_not_ready_result(
+            dict(resolved.get("request") or {}),
+            base_filter_hints=dict(dict(resolved.get("plan") or {}).get("acquisition_strategy") or {}).get(
+                "filter_hints"
+            ),
+        )
+        if execution_gate is not None:
+            return execution_gate
         request = JobRequest.from_payload(dict(resolved.get("request") or {}))
         plan = hydrate_sourcing_plan(dict(resolved.get("plan") or {}))
         job_id = self._create_workflow_job(
@@ -4197,6 +4249,13 @@ class SourcingOrchestrator:
         durable workflow path (POST /api/workflows -> queue_workflow -> worker), of
         which this is the retrieval tail.
         """
+        try:
+            payload = validate_external_cohort_selection_payload(payload)
+        except CohortSelectionValidationError as exc:
+            return exc.to_result()
+        execution_gate = cohort_execution_not_ready_result(payload)
+        if execution_gate is not None:
+            return execution_gate
         request = JobRequest.from_payload(self._prepare_request_payload(payload))
         plan = self._build_augmented_sourcing_plan(request)
         job_id = uuid.uuid4().hex[:12]
@@ -44656,12 +44715,56 @@ class SourcingOrchestrator:
         request_payload = dict(session.get("request") or {})
         plan_payload = dict(session.get("plan") or {})
         prior_execution_bundle = dict(session.get("execution_bundle") or {})
-        if status == "approved":
-            request_payload, plan_payload = apply_plan_review_decision(
+        cohort_changed = False
+        nested_decision_payload = payload.get("decision") or payload.get("decision_payload")
+        decision_payload = dict(nested_decision_payload or payload)
+        try:
+            decision_payload = validate_external_cohort_selection_payload(decision_payload)
+        except CohortSelectionValidationError as exc:
+            # Every review action is an external write boundary.  A malformed
+            # cohort must not be persisted merely because the action is reject
+            # or needs_changes rather than approve.
+            return exc.to_result()
+        try:
+            cohort_validated_request = merge_plan_review_cohort_selection(
                 request_payload,
-                plan_payload,
-                dict(payload.get("decision") or payload.get("decision_payload") or payload),
+                decision_payload,
             )
+        except CohortSelectionValidationError as exc:
+            return exc.to_result()
+        if status == "approved":
+            try:
+                prior_cohort = dict(request_payload.get("cohort_selection") or {})
+                request_payload = cohort_validated_request
+                request_payload, plan_payload = apply_plan_review_decision(
+                    request_payload,
+                    plan_payload,
+                    decision_payload,
+                )
+                cohort_changed = dict(request_payload.get("cohort_selection") or {}) != prior_cohort
+                if cohort_changed:
+                    reviewed_request = JobRequest.from_payload(request_payload)
+                    rebuilt_plan = self._build_augmented_sourcing_plan(reviewed_request)
+                    request_payload = reviewed_request.to_record()
+                    plan_payload = _ensure_plan_company_scope(
+                        rebuilt_plan.to_record(),
+                        str(reviewed_request.target_company or "").strip(),
+                    )
+            except CohortSelectionValidationError as exc:
+                return exc.to_result()
+            except Exception:
+                return {
+                    "status": "invalid",
+                    "reason": "cohort_selection_plan_rebuild_failed",
+                }
+        prior_bundle_request = dict(prior_execution_bundle.get("request") or {})
+        prior_bundle_plan = dict(prior_execution_bundle.get("plan") or {})
+        fresh_execution_bundle_required = status == "approved" and (
+            cohort_changed
+            or not prior_execution_bundle
+            or request_payload != prior_bundle_request
+            or plan_payload != prior_bundle_plan
+        )
         execution_bundle: dict[str, Any] = {}
         try:
             execution_bundle = self._build_execution_bundle(
@@ -44693,14 +44796,21 @@ class SourcingOrchestrator:
                     prior_execution_bundle.get("causal_group_id") or dict(execution_bundle).get("causal_group_id") or ""
                 ).strip(),
             }
+        except CohortSelectionValidationError as exc:
+            return exc.to_result()
         except Exception:
+            if fresh_execution_bundle_required:
+                return {
+                    "status": "invalid",
+                    "reason": "plan_review_execution_bundle_rebuild_failed",
+                }
             execution_bundle = prior_execution_bundle
         reviewed = self.store.review_plan_session(
             review_id=review_id,
             status=status,
             reviewer=str(payload.get("reviewer") or "").strip(),
             notes=str(payload.get("notes") or "").strip(),
-            decision_payload=dict(payload.get("decision") or payload.get("decision_payload") or {}),
+            decision_payload=(decision_payload if isinstance(nested_decision_payload, dict) else {}),
             request_payload=request_payload,
             plan_payload=plan_payload,
             execution_bundle_payload=execution_bundle,
@@ -53388,6 +53498,13 @@ class SourcingOrchestrator:
             merged_request = dict(compiled.get("merged_request") or {})
             instruction_compiler = dict(compiled.get("instruction_compiler") or {})
         else:
+            try:
+                validate_refinement_patch_against_explicit_cohort(
+                    base_request,
+                    dict(payload.get("request_patch") or payload.get("patch") or {}),
+                )
+            except CohortSelectionValidationError as exc:
+                return exc.to_result()
             request_patch = normalize_refinement_patch(dict(payload.get("request_patch") or payload.get("patch") or {}))
             if not request_patch:
                 return {"status": "invalid", "reason": "instruction or request_patch is required"}
@@ -55853,6 +55970,10 @@ class SourcingOrchestrator:
                 if inferred_target_company:
                     request_payload["target_company"] = inferred_target_company
                     plan_payload = _ensure_plan_company_scope(plan_payload, inferred_target_company)
+            try:
+                request_payload = merge_plan_review_cohort_selection(request_payload, payload)
+            except CohortSelectionValidationError as exc:
+                return exc.to_result()
             request_payload = _apply_plan_review_execution_overrides(request_payload, payload)
             if str(review_session.get("status") or "") not in {"approved", "ready"}:
                 return {
@@ -55883,6 +56004,8 @@ class SourcingOrchestrator:
                         source="plan_review_override_rebuild" if override_requested else "plan_review_legacy_rebuild",
                         plan_review_session=review_session,
                     )
+                except CohortSelectionValidationError as exc:
+                    return exc.to_result()
                 except Exception:
                     execution_bundle = stored_execution_bundle
             return {
@@ -56084,6 +56207,7 @@ class SourcingOrchestrator:
             raw_text=raw_user_request,
             include_raw_keyword_extraction=not _shared_has_structured_request_signals(normalized_patch),
         )
+        merged_payload = apply_user_explicit_cohort_authority(fallback_request, merged_payload)
         breakdown_ms["deterministic_signal_supplement"] = round((time.perf_counter() - step_started_at) * 1000, 2)
 
         step_started_at = time.perf_counter()
@@ -56290,11 +56414,29 @@ class SourcingOrchestrator:
         former_ready = bool(asset_reuse_plan.get("baseline_former_effective_ready"))
         current_count = int(asset_reuse_plan.get("baseline_current_effective_candidate_count") or 0)
         former_count = int(asset_reuse_plan.get("baseline_former_effective_candidate_count") or 0)
+        request_payload = request.to_record()
+        explicit_cohort = not source_request_covers_explicit_cohort(request_payload, None)
+        if explicit_cohort and baseline_snapshot_id and baseline_reuse_available:
+            baseline_source_job_id = str(asset_reuse_plan.get("baseline_source_job_id") or "").strip()
+            baseline_source_job = self.store.get_job(baseline_source_job_id) if baseline_source_job_id else None
+            if not self._matched_job_covers_explicit_cohort(
+                request_payload=request_payload,
+                matched_job=baseline_source_job,
+            ):
+                return request, {}
         if not baseline_snapshot_id or not baseline_reuse_available:
             registry_row = self.store.get_authoritative_organization_asset_registry(
                 target_company=request.target_company,
                 asset_view=str(request.asset_view or "canonical_merged").strip() or "canonical_merged",
             )
+            if registry_row and explicit_cohort:
+                source_job_id = str(registry_row.get("source_job_id") or "").strip()
+                source_job = self.store.get_job(source_job_id) if source_job_id else None
+                if not self._matched_job_covers_explicit_cohort(
+                    request_payload=request_payload,
+                    matched_job=source_job,
+                ):
+                    registry_row = {}
             if registry_row:
                 baseline_snapshot_id = str(registry_row.get("snapshot_id") or "").strip()
                 baseline_reuse_available = bool(baseline_snapshot_id)
@@ -56657,6 +56799,11 @@ class SourcingOrchestrator:
         source_job_id = str(registry_row.get("source_job_id") or "").strip()
         if source_job_id:
             matched_job = dict(self.store.get_job(source_job_id) or {})
+        if not self._matched_job_covers_explicit_cohort(
+            request_payload=request_payload,
+            matched_job=matched_job,
+        ):
+            return {}
 
         explanation = self._build_registry_dispatch_reuse_explanation(
             request=request,
@@ -56812,10 +56959,15 @@ class SourcingOrchestrator:
             or ""
         ).strip()
         matched_job = dict(self.store.get_job(source_run_id) or {}) if source_run_id else {}
+        request_payload = request.to_record()
+        if not self._matched_job_covers_explicit_cohort(
+            request_payload=request_payload,
+            matched_job=matched_job,
+        ):
+            return {}
         strategy = (
             "reuse_completed" if str(matched_job.get("status") or "").strip() == "completed" else "reuse_snapshot"
         )
-        request_payload = request.to_record()
         explanation = self._build_dispatch_request_family_match_explanation(
             request_payload=request_payload,
             matched_job=matched_job,
@@ -56870,6 +57022,17 @@ class SourcingOrchestrator:
             "request_family_match_explanation": explanation,
         }
 
+    @staticmethod
+    def _matched_job_covers_explicit_cohort(
+        *,
+        request_payload: dict[str, Any],
+        matched_job: dict[str, Any] | None,
+    ) -> bool:
+        return source_request_covers_explicit_cohort(
+            request_payload,
+            (matched_job or {}).get("request"),
+        )
+
     def _resolve_snapshot_reuse_job_match(
         self,
         request: JobRequest,
@@ -56908,6 +57071,8 @@ class SourcingOrchestrator:
                 left_bundle=request_matching,
                 right_bundle=dict(candidate.get("request_matching") or {}),
             )
+            if bool(match.get("hard_family_mismatch")):
+                continue
             score = float(match.get("score") or 0.0)
             if score < MATCH_THRESHOLD and not bool(match.get("exact_family_match")):
                 continue
@@ -57041,6 +57206,8 @@ class SourcingOrchestrator:
                 left_bundle=request_matching,
                 right_bundle=dict(candidate.get("request_matching") or {}),
             )
+            if bool(match.get("hard_family_mismatch")):
+                continue
             sort_key = (str(candidate.get("updated_at") or ""), str(candidate.get("created_at") or ""))
             if (
                 best_job is None
@@ -57150,6 +57317,11 @@ class SourcingOrchestrator:
                 tenant_id=tenant_id,
                 scope=scope,
             )
+            if matched_by_idempotency and not self._matched_job_covers_explicit_cohort(
+                request_payload=request_payload,
+                matched_job=matched_by_idempotency,
+            ):
+                matched_by_idempotency = None
             if matched_by_idempotency:
                 matched_status = str(matched_by_idempotency.get("status") or "")
                 strategy = "reuse_completed" if matched_status == "completed" else "join_inflight"
@@ -57462,6 +57634,16 @@ class SourcingOrchestrator:
         resume_mode: bool = False,
         assume_job_run_lock: bool = False,
     ) -> dict[str, Any]:
+        acquisition_strategy = getattr(plan, "acquisition_strategy", None)
+        execution_gate = cohort_execution_not_ready_result(
+            request.to_record(),
+            base_filter_hints=dict(acquisition_strategy.filter_hints or {}) if acquisition_strategy is not None else {},
+        )
+        if execution_gate is not None:
+            raise CohortProviderCompilationError(
+                str(execution_gate.get("reason") or "cohort_selection_execution_not_ready"),
+                "cohort_selection",
+            )
         bootstrap_summary = None
         job_summary = self._workflow_job_summary(job_id)
         acquisition_progress = _normalize_acquisition_progress_payload(job_summary.get("acquisition_progress"))
@@ -73703,6 +73885,8 @@ class SourcingOrchestrator:
         explicit_job_id = str(payload.get("job_id") or "").strip()
         explicit_baseline_job_id = str(payload.get("baseline_job_id") or "").strip()
         baseline_job_id = explicit_job_id or explicit_baseline_job_id
+        explicit_baseline_requested = bool(baseline_job_id)
+        request_has_explicit_cohort = not source_request_covers_explicit_cohort(request_payload, None)
         baseline_job: dict[str, Any] | None = None
         baseline_selection = {
             "selected_via": "none",
@@ -73720,25 +73904,61 @@ class SourcingOrchestrator:
             baseline_job_id = str((baseline_job or {}).get("job_id") or "")
         elif baseline_job_id:
             baseline_job = self.store.get_job(baseline_job_id)
-            baseline_selection = {
-                "selected_via": "explicit_job_id",
-                "reason": "Baseline job was explicitly provided by the caller.",
-                "request_signature": request_signature(request_payload),
-                "request_family_signature": request_family_signature(request_payload),
-                "matched_request_signature": request_signature((baseline_job or {}).get("request") or {}),
-                "matched_request_family_signature": request_family_signature((baseline_job or {}).get("request") or {}),
-                "family_score": 100.0 if baseline_job else 0.0,
-                "exact_request_match": True if baseline_job else False,
-                "exact_family_match": True if baseline_job else False,
-                "reasons": ["explicit_job_id"],
-            }
         if baseline_job_id and not _exact_job_owner_matches(
             baseline_job,
             expected_requester_id=expected_requester_id,
             expected_tenant_id=expected_tenant_id,
         ):
             return {"status": "not_found", "reason": "job_not_found"}
-        if baseline_job and baseline_job.get("baseline_match"):
+        if baseline_job:
+            baseline_request = (baseline_job or {}).get("request")
+            baseline_match = request_family_score(
+                request_payload,
+                baseline_request if isinstance(baseline_request, dict) else {},
+            )
+            if (
+                request_has_explicit_cohort
+                and not self._matched_job_covers_explicit_cohort(
+                    request_payload=request_payload,
+                    matched_job=baseline_job,
+                )
+            ) or "cohort_selection_invalid" in set(baseline_match.get("reasons") or []):
+                return {
+                    "status": "skipped",
+                    "reason": "baseline_cohort_mismatch",
+                    "baseline_job_id": baseline_job_id,
+                    "baseline_selection": {
+                        "selected_via": "explicit_job_id" if explicit_baseline_requested else "automatic",
+                        "family_score": 0.0,
+                        "exact_request_match": False,
+                        "exact_family_match": False,
+                        "reasons": list(baseline_match.get("reasons") or ["cohort_selection_identity_mismatch"]),
+                    },
+                }
+            if explicit_baseline_requested:
+                exact_request_match = bool(baseline_match.get("exact_request_match"))
+                exact_family_match = bool(baseline_match.get("exact_family_match"))
+                family_score = float(baseline_match.get("score") or 0.0)
+                selection_reasons = ["explicit_job_id", *list(baseline_match.get("reasons") or [])]
+                if not request_has_explicit_cohort:
+                    exact_request_match = True
+                    exact_family_match = True
+                    family_score = 100.0
+                    selection_reasons = ["explicit_job_id"]
+                baseline_selection = {
+                    "selected_via": "explicit_job_id",
+                    "reason": "Baseline job was explicitly provided by the caller.",
+                    "request_signature": request_signature(request_payload),
+                    "request_family_signature": request_family_signature(request_payload),
+                    "matched_request_signature": request_signature(baseline_request),
+                    "matched_request_family_signature": request_family_signature(baseline_request),
+                    "family_score": family_score,
+                    "exact_request_match": exact_request_match,
+                    "exact_family_match": exact_family_match,
+                    "reasons": selection_reasons,
+                    "request_family_match_explanation": dict(baseline_match.get("explanation") or {}),
+                }
+        if baseline_job and not explicit_baseline_requested and baseline_job.get("baseline_match"):
             baseline_selection = {
                 **dict(baseline_job.get("baseline_match") or {}),
                 "reason": baseline_selection_reason(dict(baseline_job.get("baseline_match") or {})),
@@ -73768,12 +73988,25 @@ class SourcingOrchestrator:
             "criteria_request_signature": recompile.get("criteria_request_signature", ""),
             "trigger_feedback_id": int(feedback.get("feedback_id") or 0),
         }
-        if baseline_job_id and not _exact_job_owner_matches(
-            self.store.get_job(baseline_job_id),
-            expected_requester_id=expected_requester_id,
-            expected_tenant_id=expected_tenant_id,
-        ):
-            return {"status": "not_found", "reason": "job_not_found"}
+        if baseline_job_id:
+            current_baseline_job = self.store.get_job(baseline_job_id)
+            if not _exact_job_owner_matches(
+                current_baseline_job,
+                expected_requester_id=expected_requester_id,
+                expected_tenant_id=expected_tenant_id,
+            ):
+                return {"status": "not_found", "reason": "job_not_found"}
+            if not self._matched_job_covers_explicit_cohort(
+                request_payload=request_payload,
+                matched_job=current_baseline_job,
+            ):
+                return {
+                    "status": "skipped",
+                    "reason": "baseline_cohort_mismatch",
+                    "baseline_job_id": baseline_job_id,
+                    "baseline_selection": baseline_selection,
+                    "policy": policy,
+                }
         rerun_artifact = self._run_retrieval_job(
             request_payload=request_payload,
             plan_payload=plan_payload,
@@ -74187,7 +74420,7 @@ def _merge_request_payload(
                 if key not in merged_scope_dict:
                     merged_scope_dict[key] = value
             merged["scope_disambiguation"] = merged_scope_dict
-    return merged
+    return apply_user_explicit_cohort_authority(base_payload, merged)
 
 
 def _apply_plan_review_execution_overrides(

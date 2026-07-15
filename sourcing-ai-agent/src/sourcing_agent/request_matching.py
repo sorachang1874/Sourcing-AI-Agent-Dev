@@ -4,6 +4,7 @@ import json
 from hashlib import sha1
 from typing import Any
 
+from .cohort_selection import CohortSelectionValidationError, cohort_execution_identity_for_signature
 from .domain import normalize_requested_facets, normalize_requested_role_buckets
 from .request_normalization import (
     build_effective_request_payload,
@@ -12,7 +13,6 @@ from .request_normalization import (
     materialize_request_payload,
     supplement_request_query_signals,
 )
-
 
 MATCH_THRESHOLD = 30.0
 _SCALAR_MATCH_FIELDS = [
@@ -133,8 +133,25 @@ def request_family_score(
     left_bundle: dict[str, Any] | None = None,
     right_bundle: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    left_matching_bundle = _coerce_matching_bundle(left, left_bundle)
-    right_matching_bundle = _coerce_matching_bundle(right, right_bundle)
+    try:
+        left_matching_bundle = _coerce_matching_bundle(left, left_bundle)
+        right_matching_bundle = _coerce_matching_bundle(right, right_bundle)
+    except CohortSelectionValidationError:
+        left_norm = _invalid_cohort_matching_payload(left, side="left")
+        right_norm = _invalid_cohort_matching_payload(right, side="right")
+        result = {
+            "score": 0.0,
+            "hard_family_mismatch": True,
+            "exact_request_match": False,
+            "exact_family_match": False,
+            "family_signature_left": "",
+            "family_signature_right": "",
+            "reasons": ["cohort_selection_invalid"],
+            "matching_request_left": left_norm,
+            "matching_request_right": right_norm,
+        }
+        result["explanation"] = build_request_family_match_explanation(left, right, match=result)
+        return result
     left_norm = dict(left_matching_bundle.get("matching_family_request") or {})
     right_norm = dict(right_matching_bundle.get("matching_family_request") or {})
     left_request_signature = str(left_matching_bundle.get("matching_request_signature") or "")
@@ -155,13 +172,26 @@ def request_family_score(
         result["explanation"] = build_request_family_match_explanation(left, right, match=result)
         return result
 
-    exact_request_match = (
-        bool(left_request_signature)
-        and left_request_signature == right_request_signature
-    )
+    left_cohort_identity = str(left_norm.get("cohort_selection_digest") or "")
+    right_cohort_identity = str(right_norm.get("cohort_selection_digest") or "")
+    if left_cohort_identity != right_cohort_identity:
+        result = {
+            "score": 0.0,
+            "hard_family_mismatch": True,
+            "exact_request_match": False,
+            "exact_family_match": False,
+            "family_signature_left": left_request_family_signature,
+            "family_signature_right": right_request_family_signature,
+            "reasons": ["cohort_selection_identity_mismatch"],
+            "matching_request_left": left_norm,
+            "matching_request_right": right_norm,
+        }
+        result["explanation"] = build_request_family_match_explanation(left, right, match=result)
+        return result
+
+    exact_request_match = bool(left_request_signature) and left_request_signature == right_request_signature
     exact_family_match = (
-        bool(left_request_family_signature)
-        and left_request_family_signature == right_request_family_signature
+        bool(left_request_family_signature) and left_request_family_signature == right_request_family_signature
     )
     if exact_request_match:
         result = {
@@ -225,6 +255,15 @@ def request_family_score(
     return result
 
 
+def _invalid_cohort_matching_payload(payload: dict[str, Any], *, side: str) -> dict[str, Any]:
+    normalized = {
+        "target_company": _normalize_scalar(payload.get("target_company")),
+    }
+    if "cohort_selection" in payload:
+        normalized["cohort_selection_digest"] = f"__invalid_cohort_{side}__"
+    return normalized
+
+
 def build_request_family_match_explanation(
     left: dict[str, Any],
     right: dict[str, Any],
@@ -232,8 +271,12 @@ def build_request_family_match_explanation(
     match: dict[str, Any] | None = None,
     selection_mode: str = "request_family_score",
 ) -> dict[str, Any]:
-    left_norm = dict((match or {}).get("matching_request_left") or _normalized_matching_payload(left, include_runtime_limits=False))
-    right_norm = dict((match or {}).get("matching_request_right") or _normalized_matching_payload(right, include_runtime_limits=False))
+    left_norm = dict(
+        (match or {}).get("matching_request_left") or _normalized_matching_payload(left, include_runtime_limits=False)
+    )
+    right_norm = dict(
+        (match or {}).get("matching_request_right") or _normalized_matching_payload(right, include_runtime_limits=False)
+    )
     computed_match = dict(match or request_family_score(left, right))
     field_details: list[dict[str, Any]] = []
     matched_fields: list[str] = []
@@ -295,7 +338,27 @@ def build_request_family_match_explanation(
             }
         )
 
-    return {
+    left_cohort_identity = str(left_norm.get("cohort_selection_digest") or "")
+    right_cohort_identity = str(right_norm.get("cohort_selection_digest") or "")
+    if left_cohort_identity or right_cohort_identity:
+        cohort_status = "match" if left_cohort_identity == right_cohort_identity else "hard_mismatch"
+        if cohort_status == "match":
+            matched_fields.append("cohort_selection_digest")
+        else:
+            mismatched_fields.append("cohort_selection_digest")
+        field_details.append(
+            {
+                "field": "cohort_selection_digest",
+                "kind": "hard_identity",
+                "weight": 0.0,
+                "status": cohort_status,
+                "left_value": left_cohort_identity,
+                "right_value": right_cohort_identity,
+                "contribution": 0.0,
+            }
+        )
+
+    explanation = {
         "selection_mode": str(selection_mode or "request_family_score"),
         "match_threshold": MATCH_THRESHOLD,
         "score": float(computed_match.get("score") or 0.0),
@@ -308,6 +371,9 @@ def build_request_family_match_explanation(
         "matching_request_right": right_norm,
         "field_details": field_details,
     }
+    if "hard_family_mismatch" in computed_match:
+        explanation["hard_family_mismatch"] = bool(computed_match.get("hard_family_mismatch"))
+    return explanation
 
 
 def baseline_selection_reason(match: dict[str, Any]) -> str:
@@ -318,22 +384,21 @@ def baseline_selection_reason(match: dict[str, Any]) -> str:
     if match.get("exact_family_match"):
         return "Selected baseline job with an exact request-family match."
     if match.get("selected_via") == "request_family_score":
-        return (
-            f"Selected baseline job by request-family similarity score "
-            f"{match.get('family_score') or 0}."
-        )
+        return f"Selected baseline job by request-family similarity score {match.get('family_score') or 0}."
     return "Fell back to the latest completed job for the target company."
 
 
 def _normalized_request_payload(payload: dict[str, Any], *, include_runtime_limits: bool) -> dict[str, Any]:
-    normalized = {
+    normalized: dict[str, Any] = {
         "target_company": _normalize_scalar(payload.get("target_company")),
         "asset_view": _normalize_scalar(payload.get("asset_view")) or "canonical_merged",
         "target_scope": _normalize_scalar(payload.get("target_scope")),
         "categories": _normalize_list(payload.get("categories")),
         "employment_statuses": _normalize_list(payload.get("employment_statuses")),
         "keywords": _normalize_list(payload.get("keywords")),
-        "must_have_facets": normalize_requested_facets(payload.get("must_have_facets") or payload.get("must_have_facet")),
+        "must_have_facets": normalize_requested_facets(
+            payload.get("must_have_facets") or payload.get("must_have_facet")
+        ),
         "must_have_primary_role_buckets": normalize_requested_role_buckets(
             payload.get("must_have_primary_role_buckets") or payload.get("must_have_primary_role_bucket")
         ),
@@ -342,6 +407,9 @@ def _normalized_request_payload(payload: dict[str, Any], *, include_runtime_limi
         "organization_keywords": _normalize_list(payload.get("organization_keywords")),
         "retrieval_strategy": _normalize_scalar(payload.get("retrieval_strategy")),
     }
+    cohort_identity = cohort_execution_identity_for_signature(payload)
+    if cohort_identity:
+        normalized["cohort_selection_digest"] = cohort_identity
     if include_runtime_limits:
         normalized.update(
             {
@@ -386,7 +454,7 @@ def _normalized_effective_request_payload(
     *,
     include_runtime_limits: bool,
 ) -> dict[str, Any]:
-    normalized = {
+    normalized: dict[str, Any] = {
         "target_company": _normalize_scalar(effective_payload.get("target_company")),
         "asset_view": _normalize_scalar(effective_payload.get("asset_view")) or "canonical_merged",
         "target_scope": _normalize_scalar(effective_payload.get("target_scope")),
@@ -397,13 +465,17 @@ def _normalized_effective_request_payload(
             effective_payload.get("must_have_facets") or effective_payload.get("must_have_facet")
         ),
         "must_have_primary_role_buckets": normalize_requested_role_buckets(
-            effective_payload.get("must_have_primary_role_buckets") or effective_payload.get("must_have_primary_role_bucket")
+            effective_payload.get("must_have_primary_role_buckets")
+            or effective_payload.get("must_have_primary_role_bucket")
         ),
         "must_have_keywords": _normalize_list(effective_payload.get("must_have_keywords")),
         "exclude_keywords": _normalize_list(effective_payload.get("exclude_keywords")),
         "organization_keywords": _normalize_list(effective_payload.get("organization_keywords")),
         "retrieval_strategy": _normalize_scalar(effective_payload.get("retrieval_strategy")),
     }
+    cohort_identity = cohort_execution_identity_for_signature(effective_payload)
+    if cohort_identity:
+        normalized["cohort_selection_digest"] = cohort_identity
     if include_runtime_limits:
         normalized.update(
             {
@@ -414,7 +486,9 @@ def _normalized_effective_request_payload(
                 "publication_scan_limit": _normalize_int(effective_payload.get("publication_scan_limit")),
                 "publication_lead_limit": _normalize_int(effective_payload.get("publication_lead_limit")),
                 "exploration_limit": _normalize_int(effective_payload.get("exploration_limit")),
-                "scholar_coauthor_follow_up_limit": _normalize_int(effective_payload.get("scholar_coauthor_follow_up_limit")),
+                "scholar_coauthor_follow_up_limit": _normalize_int(
+                    effective_payload.get("scholar_coauthor_follow_up_limit")
+                ),
             }
         )
     return normalized
@@ -426,6 +500,11 @@ def _coerce_matching_bundle(payload: dict[str, Any], bundle: dict[str, Any] | No
         matching_request = dict(normalized_bundle.get("matching_request") or {})
         matching_family_request = dict(normalized_bundle.get("matching_family_request") or {})
         if matching_request and matching_family_request:
+            payload_cohort_identity = cohort_execution_identity_for_signature(payload)
+            request_cohort_identity = str(matching_request.get("cohort_selection_digest") or "")
+            family_cohort_identity = str(matching_family_request.get("cohort_selection_digest") or "")
+            if payload_cohort_identity != request_cohort_identity or payload_cohort_identity != family_cohort_identity:
+                return build_request_matching_bundle(payload)
             normalized_bundle["matching_request"] = matching_request
             normalized_bundle["matching_family_request"] = matching_family_request
             normalized_bundle.setdefault(

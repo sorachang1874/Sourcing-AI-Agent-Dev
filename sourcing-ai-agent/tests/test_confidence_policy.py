@@ -93,6 +93,72 @@ class ConfidencePolicyTest(unittest.TestCase):
         self.assertEqual(policy["summary"]["exact_family_feedback_count"], 1)
         self.assertTrue(policy["matching_request_family_signature"])
 
+    def test_explicit_cohort_requires_exact_feedback_cohort_identity(self) -> None:
+        current_request = {
+            "target_company": "Thinking Machines Lab",
+            "cohort_selection": {
+                "schema_version": "cohort_selection.v1",
+                "role_bucket_ids": [],
+                "employment_statuses": ["current"],
+                "role_match": "any",
+                "source": "user_explicit",
+            },
+        }
+        legacy_request = {
+            "target_company": "Thinking Machines Lab",
+            "employment_statuses": ["current"],
+        }
+        same_explicit_request = {
+            "target_company": "Thinking Machines Lab",
+            "cohort_selection": {
+                "schema_version": "cohort_selection.v1",
+                "role_bucket_ids": [],
+                "employment_statuses": ["current"],
+                "role_match": "any",
+                "source": "user_explicit",
+            },
+        }
+        cases = (
+            ("missing", {}, 0),
+            ("legacy", {"request_payload": legacy_request}, 0),
+            (
+                "malformed",
+                {
+                    "request_payload": {
+                        "target_company": "Thinking Machines Lab",
+                        "cohort_selection": {},
+                    }
+                },
+                0,
+            ),
+            ("non_object", {"request_payload": "invalid"}, 0),
+            ("same_explicit", {"request_payload": same_explicit_request}, 1),
+        )
+        for name, metadata, expected_applied_count in cases:
+            with self.subTest(name=name):
+                policy = build_confidence_policy(
+                    target_company="Thinking Machines Lab",
+                    request_payload=current_request,
+                    feedback_items=[
+                        {
+                            "feedback_type": "false_negative_pattern",
+                            "metadata": metadata,
+                        }
+                    ],
+                )
+                self.assertEqual(
+                    policy["summary"]["applied_feedback_count"],
+                    expected_applied_count,
+                )
+                self.assertEqual(
+                    policy["summary"]["company_fallback_feedback_count"],
+                    0,
+                )
+                if expected_applied_count:
+                    self.assertLess(policy["high_threshold"], 0.75)
+                else:
+                    self.assertEqual(policy["high_threshold"], 0.75)
+
     def test_old_feedback_decays_over_time(self) -> None:
         request_payload = {
             "target_company": "xAI",

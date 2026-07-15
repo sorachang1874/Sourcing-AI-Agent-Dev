@@ -5,6 +5,10 @@ from dataclasses import asdict, dataclass, field
 from hashlib import sha1
 from typing import Any
 
+from .cohort_selection import (
+    apply_user_explicit_cohort_authority,
+    canonicalize_cohort_selection_request_payload,
+)
 from .company_registry import builtin_company_identity, infer_target_company_from_text
 from .execution_preferences import (
     apply_execution_preference_policy,
@@ -138,7 +142,9 @@ def _build_source_match_record(value: str, *, field: str, metadata: dict[str, An
     source_type = _clean(metadata.get("seed_source_type") or metadata.get("source_type") or metadata.get("provider"))
     normalized_field = _clean(field)
     record: dict[str, Any] = {
-        "field": "source_seed_query" if normalized_field in {"seed_query", "source_query", "query"} else normalized_field,
+        "field": "source_seed_query"
+        if normalized_field in {"seed_query", "source_query", "query"}
+        else normalized_field,
         "matched_on": value,
     }
     if source_type:
@@ -290,6 +296,7 @@ class JobRequest:
     scope_disambiguation: dict[str, Any] = field(default_factory=dict)
     intent_axes: dict[str, Any] = field(default_factory=dict)
     requested_population_boundary: dict[str, Any] = field(default_factory=dict)
+    cohort_selection: dict[str, Any] | None = None
     semantic_rerank_limit: int = 0
     top_k: int = 10
     slug_resolution_limit: int = 8
@@ -301,7 +308,12 @@ class JobRequest:
 
     @classmethod
     def from_payload(cls, payload: dict[str, Any]) -> "JobRequest":
-        normalized_payload = apply_query_intent_rewrite(payload)
+        cohort_authoritative_payload = canonicalize_cohort_selection_request_payload(payload)
+        normalized_payload = apply_query_intent_rewrite(cohort_authoritative_payload)
+        normalized_payload = apply_user_explicit_cohort_authority(
+            cohort_authoritative_payload,
+            normalized_payload,
+        )
         if isinstance(normalized_payload, dict) and isinstance(normalized_payload.get("intent_axes"), dict):
             from .request_normalization import materialize_request_payload
 
@@ -316,8 +328,12 @@ class JobRequest:
             target_company = str(inferred_company.get("canonical_name") or "").strip()
             if target_company:
                 normalized_payload["target_company"] = target_company
-        explicit_execution_preferences = normalize_execution_preferences(normalized_payload, target_company=target_company)
-        inferred_execution_preferences = infer_execution_preferences_from_text(raw_user_request, target_company=target_company)
+        explicit_execution_preferences = normalize_execution_preferences(
+            normalized_payload, target_company=target_company
+        )
+        inferred_execution_preferences = infer_execution_preferences_from_text(
+            raw_user_request, target_company=target_company
+        )
         merged_execution_preferences = merge_execution_preferences(
             explicit_execution_preferences,
             inferred_execution_preferences,
@@ -377,13 +393,26 @@ class JobRequest:
             requested_population_boundary=dict(normalized_payload.get("requested_population_boundary") or {})
             if isinstance(normalized_payload.get("requested_population_boundary"), dict)
             else {},
+            cohort_selection=dict(normalized_payload.get("cohort_selection") or {})
+            if isinstance(normalized_payload.get("cohort_selection"), dict)
+            else None,
             semantic_rerank_limit=_normalize_semantic_limit(normalized_payload.get("semantic_rerank_limit")),
             top_k=_normalize_top_k(normalized_payload.get("top_k")),
-            slug_resolution_limit=_normalize_small_limit(normalized_payload.get("slug_resolution_limit"), default=8, maximum=50),
-            profile_detail_limit=_normalize_small_limit(normalized_payload.get("profile_detail_limit"), default=5, maximum=50),
-            publication_scan_limit=_normalize_small_limit(normalized_payload.get("publication_scan_limit"), default=8, maximum=50),
-            publication_lead_limit=_normalize_small_limit(normalized_payload.get("publication_lead_limit"), default=12, maximum=100),
-            exploration_limit=_normalize_small_limit(normalized_payload.get("exploration_limit"), default=6, maximum=50),
+            slug_resolution_limit=_normalize_small_limit(
+                normalized_payload.get("slug_resolution_limit"), default=8, maximum=50
+            ),
+            profile_detail_limit=_normalize_small_limit(
+                normalized_payload.get("profile_detail_limit"), default=5, maximum=50
+            ),
+            publication_scan_limit=_normalize_small_limit(
+                normalized_payload.get("publication_scan_limit"), default=8, maximum=50
+            ),
+            publication_lead_limit=_normalize_small_limit(
+                normalized_payload.get("publication_lead_limit"), default=12, maximum=100
+            ),
+            exploration_limit=_normalize_small_limit(
+                normalized_payload.get("exploration_limit"), default=6, maximum=50
+            ),
             scholar_coauthor_follow_up_limit=_normalize_small_limit(
                 normalized_payload.get("scholar_coauthor_follow_up_limit"),
                 default=0,
@@ -392,7 +421,10 @@ class JobRequest:
         )
 
     def to_record(self) -> dict[str, Any]:
-        return asdict(self)
+        record = asdict(self)
+        if self.cohort_selection is None:
+            record.pop("cohort_selection", None)
+        return record
 
 
 def _normalize_list(value: Any) -> list[str]:
@@ -825,7 +857,9 @@ def derive_candidate_facets(candidate: Candidate) -> list[str]:
         ],
     ):
         facets.append("ops")
-    if _contains_any(text, ["product manager", "product management", "产品经理", "group product manager", "senior product manager"]):
+    if _contains_any(
+        text, ["product manager", "product management", "产品经理", "group product manager", "senior product manager"]
+    ):
         facets.append("product_management")
     if _contains_any(
         text,
@@ -849,15 +883,44 @@ def derive_candidate_facets(candidate: Candidate) -> list[str]:
         ],
     ):
         facets.append("infra_systems")
-    if _contains_any(text, ["research scientist", "research engineer", "researcher", "scientist", "applied scientist", "research"]):
+    if _contains_any(
+        text, ["research scientist", "research engineer", "researcher", "scientist", "applied scientist", "research"]
+    ):
         facets.append("research")
-    if _contains_any(text, ["engineer", "engineering", "member of technical staff", "technical staff", "developer", "architect"]):
+    if _contains_any(
+        text, ["engineer", "engineering", "member of technical staff", "technical staff", "developer", "architect"]
+    ):
         facets.append("engineering")
-    if _contains_any(text, ["multimodal", "multimodality", "vision-language", "vision language", "vision", "image", "video", "audio", "speech", "diffusion"]):
+    if _contains_any(
+        text,
+        [
+            "multimodal",
+            "multimodality",
+            "vision-language",
+            "vision language",
+            "vision",
+            "image",
+            "video",
+            "audio",
+            "speech",
+            "diffusion",
+        ],
+    ):
         facets.append("multimodal")
     if _contains_any(text, ["alignment", "safety", "red team", "red-teaming", "evals", "evaluation"]):
         facets.append("safety")
-    if _contains_any(text, ["training", "pretraining", "pre-training", "post-training", "finetuning", "fine-tuning", "reinforcement learning"]):
+    if _contains_any(
+        text,
+        [
+            "training",
+            "pretraining",
+            "pre-training",
+            "post-training",
+            "finetuning",
+            "fine-tuning",
+            "reinforcement learning",
+        ],
+    ):
         facets.append("training")
     if _contains_any(text, ["inference", "decoding", "latency", "serving runtime"]):
         facets.append("inference")

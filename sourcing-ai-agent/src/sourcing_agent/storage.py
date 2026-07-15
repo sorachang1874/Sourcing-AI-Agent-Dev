@@ -7655,6 +7655,8 @@ class ControlPlaneStore:
                 left_bundle=request_matching,
                 right_bundle=dict(job_payload.get("request_matching") or {}),
             )
+            if bool(match.get("hard_family_mismatch")):
+                continue
             sort_key = _job_match_sort_key(match, row)
             if best_sort_key is None or sort_key > best_sort_key:
                 best_job = job_payload
@@ -7680,6 +7682,8 @@ class ControlPlaneStore:
                 left_bundle=request_matching,
                 right_bundle=dict(fallback.get("request_matching") or {}),
             )
+            if bool(fallback_match.get("hard_family_mismatch")):
+                return None
             fallback["baseline_match"] = {
                 "selected_via": "latest_company_fallback",
                 "family_score": float(fallback_match.get("score") or 0.0),

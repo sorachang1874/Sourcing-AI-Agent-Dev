@@ -25,6 +25,11 @@ from starlette.requests import Request
 from starlette.responses import Response
 from starlette.routing import Route
 
+from .cohort_selection import (
+    CohortSelectionValidationError,
+    cohort_selection_options_payload,
+    validate_external_cohort_selection_payload,
+)
 from .orchestrator import SourcingOrchestrator
 from .plan_submit_contract import (
     LEGACY_PLAN_SUBMIT_HTTP_STATUS,
@@ -736,6 +741,15 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     def add(methods: list[str], path: str, handler: _RouteHandler, *, read_body: bool = False) -> None:
         routes.append(Route(path, _make_endpoint(handler, read_body=read_body), methods=methods))
 
+    def _invalid_external_cohort(payload: dict[str, Any]) -> Response | None:
+        try:
+            canonical_payload = validate_external_cohort_selection_payload(payload)
+        except CohortSelectionValidationError as exc:
+            return _json_response(HTTPStatus.BAD_REQUEST, exc.to_result())
+        payload.clear()
+        payload.update(canonical_payload)
+        return None
+
     def _gate_job_owner(request: Request, job_id: str) -> Response | None:
         """C2.3: 404 when the caller is not the job's owner. None => proceed.
 
@@ -926,6 +940,11 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
         return _json_response(status, progress)
 
     add(["GET"], "/api/runtime/progress", get_runtime_progress)
+
+    def get_cohort_selection_options(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        return _json_response(HTTPStatus.OK, cohort_selection_options_payload())
+
+    add(["GET"], "/api/cohort-selection/options", get_cohort_selection_options)
 
     def get_criteria_patterns(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
         return _json_response(HTTPStatus.OK, orchestrator.list_criteria_patterns())
@@ -1794,6 +1813,9 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
         # the API writes the one marker that submit consumes into history metadata;
         # in open mode the private key stays absent.
         payload.pop(PLAN_SUBMIT_IDENTITY_PROVENANCE_PAYLOAD_KEY, None)
+        invalid_cohort = _invalid_external_cohort(payload)
+        if invalid_cohort is not None:
+            return invalid_cohort
         _apply_server_identity(payload, request, requester=True, tenant=True)
         if _server_identity(request) is not None:
             payload[PLAN_SUBMIT_IDENTITY_PROVENANCE_PAYLOAD_KEY] = PLAN_SUBMIT_IDENTITY_PROVENANCE_SERVER
@@ -1834,8 +1856,13 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["POST"], "/api/plan/submit", post_plan_submit, read_body=True)
 
     def post_workflows_explain(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        invalid_cohort = _invalid_external_cohort(payload)
+        if invalid_cohort is not None:
+            return invalid_cohort
         _apply_server_identity(payload, request, requester=True, tenant=True)
-        return _json_response(HTTPStatus.OK, orchestrator.explain_workflow(payload))
+        result = orchestrator.explain_workflow(payload)
+        status = HTTPStatus.BAD_REQUEST if result.get("status") == "invalid" else HTTPStatus.OK
+        return _json_response(status, result)
 
     add(["POST"], "/api/workflows/explain", post_workflows_explain, read_body=True)
 
@@ -1906,13 +1933,17 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     # off the serving surface. Heavy retrieval reaches the request tier only via
     # the durable workflow path.
     def post_workflows(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        invalid_cohort = _invalid_external_cohort(payload)
+        if invalid_cohort is not None:
+            return invalid_cohort
         _apply_server_identity(payload, request, requester=True, tenant=True)
         payload = normalize_workflow_submission_payload(payload)
         if workflow_runtime_uses_managed_runner(payload.get("runtime_execution_mode")):
             result = orchestrator.start_workflow_runner_managed(payload)
         else:
             result = orchestrator.start_workflow(payload)
-        return _json_response(HTTPStatus.ACCEPTED, result)
+        status = HTTPStatus.BAD_REQUEST if result.get("status") == "invalid" else HTTPStatus.ACCEPTED
+        return _json_response(status, result)
 
     add(["POST"], "/api/workflows", post_workflows, read_body=True)
 
@@ -2153,7 +2184,12 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     def post_plan_review(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
         _apply_server_identity(payload, request, actor_fields=("reviewer",))
         result = orchestrator.review_plan_session(payload)
-        status = HTTPStatus.OK if result.get("status") != "not_found" else HTTPStatus.NOT_FOUND
+        if result.get("status") == "not_found":
+            status = HTTPStatus.NOT_FOUND
+        elif result.get("status") == "invalid":
+            status = HTTPStatus.BAD_REQUEST
+        else:
+            status = HTTPStatus.OK
         return _json_response(status, result)
 
     add(["POST"], "/api/plan/review", post_plan_review, read_body=True)

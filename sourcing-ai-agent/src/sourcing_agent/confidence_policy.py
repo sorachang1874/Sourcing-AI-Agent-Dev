@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
+from .cohort_selection import CohortSelectionValidationError, cohort_execution_identity_for_signature
 from .request_matching import (
     MATCH_THRESHOLD,
     build_request_matching_bundle,
@@ -10,7 +11,6 @@ from .request_matching import (
     request_family_signature,
     request_signature,
 )
-
 
 DEFAULT_HIGH_THRESHOLD = 0.75
 DEFAULT_MEDIUM_THRESHOLD = 0.45
@@ -83,7 +83,9 @@ def build_confidence_policy(
             continue
         applied_feedback_count += 1
         applied_feedback_weight += effective_weight
-        weighted_feedback_counts[feedback_type] = round(weighted_feedback_counts.get(feedback_type, 0.0) + effective_weight, 4)
+        weighted_feedback_counts[feedback_type] = round(
+            weighted_feedback_counts.get(feedback_type, 0.0) + effective_weight, 4
+        )
         if family_bucket == "exact_family":
             exact_family_feedback_count += 1
         elif family_bucket == "related_family":
@@ -165,8 +167,12 @@ def apply_policy_control(policy: dict[str, Any], control: dict[str, Any] | None)
     control_mode = str(control.get("control_mode") or "").strip() or "override"
     reviewer = str(control.get("reviewer") or "").strip()
     notes = str(control.get("notes") or "").strip()
-    high_threshold = _coerce_threshold(control.get("high_threshold"), updated.get("high_threshold"), upper=MAX_HIGH_THRESHOLD)
-    medium_threshold = _coerce_threshold(control.get("medium_threshold"), updated.get("medium_threshold"), upper=MAX_MEDIUM_THRESHOLD)
+    high_threshold = _coerce_threshold(
+        control.get("high_threshold"), updated.get("high_threshold"), upper=MAX_HIGH_THRESHOLD
+    )
+    medium_threshold = _coerce_threshold(
+        control.get("medium_threshold"), updated.get("medium_threshold"), upper=MAX_MEDIUM_THRESHOLD
+    )
     if high_threshold < medium_threshold + MIN_THRESHOLD_GAP:
         high_threshold = min(MAX_HIGH_THRESHOLD, medium_threshold + MIN_THRESHOLD_GAP)
     updated["high_threshold"] = round(high_threshold, 2)
@@ -230,6 +236,16 @@ def _family_relevance_weight(
         return 1.0, "company_scope_policy", "company_fallback"
     metadata = dict(item.get("metadata") or {})
     feedback_request = metadata.get("request_payload") if isinstance(metadata.get("request_payload"), dict) else {}
+    request_cohort_identity = cohort_execution_identity_for_signature(request_payload)
+    if request_cohort_identity:
+        try:
+            feedback_cohort_identity = cohort_execution_identity_for_signature(feedback_request)
+        except CohortSelectionValidationError:
+            return 0.0, "cohort_identity_invalid", "mismatch"
+        if not feedback_cohort_identity:
+            return 0.0, "cohort_identity_missing", "mismatch"
+        if feedback_cohort_identity != request_cohort_identity:
+            return 0.0, "cohort_identity_mismatch", "mismatch"
     feedback_matching = dict(metadata.get("request_matching") or {})
     feedback_request_sig = str(
         metadata.get("matching_request_signature")

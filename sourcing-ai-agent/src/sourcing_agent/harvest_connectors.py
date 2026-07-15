@@ -5,6 +5,7 @@ import json
 import os
 import re
 import time
+from copy import deepcopy
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from hashlib import sha1
@@ -14,6 +15,12 @@ from typing import Any, Callable
 from urllib import error, parse, request
 
 from .asset_logger import AssetLogger
+from .cohort_provider_compiler import (
+    CohortExecutionCapability,
+    CohortProviderCompiler,
+    CohortProviderExecutionError,
+    CohortRoleProofVerifier,
+)
 from .company_registry import normalize_company_key
 from .connectors import CompanyIdentity, CompanyRosterSnapshot
 from .profile_registry_utils import harvest_profile_payload_has_usable_content
@@ -52,6 +59,7 @@ _SCRIPTED_SAMPLE_CANDIDATE_DOC_CACHE: dict[str, tuple[int, int, list[dict[str, A
 _SCRIPTED_SAMPLE_FILTERED_CANDIDATE_CACHE: dict[str, tuple[int, int, list[dict[str, Any]]]] = {}
 _APIFY_DEFAULT_API_BASE_URL = "https://api.apify.com"
 _APIFY_API_BASE_URL_ENV = "SOURCING_APIFY_API_BASE_URL"
+_HARVEST_DISPATCH_ASYNC_ONLY = "async_only"
 
 
 def _external_provider_mode() -> str:
@@ -93,7 +101,9 @@ def _assert_live_harvest_access(
     assert_live_provider_access_allowed(
         provider_name="harvest_apify",
         operation=operation,
-        provider_mode=str(context.get("external_provider_mode") or context.get("provider_mode") or _external_provider_mode() or ""),
+        provider_mode=str(
+            context.get("external_provider_mode") or context.get("provider_mode") or _external_provider_mode() or ""
+        ),
         runtime_dir=str(context.get("runtime_dir") or ""),
         runtime_environment=str(context.get("runtime_environment") or ""),
         payload=payload,
@@ -336,9 +346,9 @@ def _apify_actor_run_webhooks_query_value(
         headers["User-Agent"] = user_agent
     if headers:
         webhook["headersTemplate"] = json.dumps(headers, ensure_ascii=False, separators=(",", ":"))
-    encoded = base64.b64encode(
-        json.dumps([webhook], ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-    ).decode("ascii")
+    encoded = base64.b64encode(json.dumps([webhook], ensure_ascii=False, separators=(",", ":")).encode("utf-8")).decode(
+        "ascii"
+    )
     return encoded
 
 
@@ -419,6 +429,10 @@ class HarvestRetryableRequestError(RuntimeError):
         self.dataset_id = str(dataset_id or "")
 
 
+class HarvestProfileSearchResultError(RuntimeError):
+    """The provider returned a lossy or malformed profile-search envelope."""
+
+
 @dataclass(frozen=True, slots=True)
 class HarvestExecutionArtifact:
     label: str
@@ -472,9 +486,11 @@ class HarvestProfileConnector:
             now_epoch_ms = int(time.time() * 1000)
             is_terminal = remote_ready_epoch_ms <= 0 or now_epoch_ms >= remote_ready_epoch_ms
             status = "SUCCEEDED" if is_terminal else "RUNNING"
-            started_at = _epoch_ms_to_iso(remote_ready_epoch_ms - int(remote_wait_seconds * 1000)) if (
-                remote_ready_epoch_ms > 0 and remote_wait_seconds is not None and remote_wait_seconds >= 0
-            ) else ""
+            started_at = (
+                _epoch_ms_to_iso(remote_ready_epoch_ms - int(remote_wait_seconds * 1000))
+                if (remote_ready_epoch_ms > 0 and remote_wait_seconds is not None and remote_wait_seconds >= 0)
+                else ""
+            )
             finished_at = _epoch_ms_to_iso(remote_ready_epoch_ms) if remote_ready_epoch_ms > 0 and is_terminal else ""
             return {
                 "run_id": normalized_run_id,
@@ -503,11 +519,7 @@ class HarvestProfileConnector:
         status = _normalize_harvest_run_status(run.get("status") or "")
         started_at = str(run.get("startedAt") or run.get("started_at") or "").strip()
         finished_at = str(
-            run.get("finishedAt")
-            or run.get("finished_at")
-            or run.get("endedAt")
-            or run.get("ended_at")
-            or ""
+            run.get("finishedAt") or run.get("finished_at") or run.get("endedAt") or run.get("ended_at") or ""
         ).strip()
         event_created_at = str(run.get("eventCreatedAt") or run.get("event_created_at") or "").strip()
         return {
@@ -1153,6 +1165,112 @@ class HarvestProfileConnector:
 class HarvestProfileSearchConnector:
     settings: HarvestActorSettings
 
+    def search_profiles_for_cohort_manifest(
+        self,
+        *,
+        manifest: dict[str, Any],
+        execution_capability: CohortExecutionCapability | None,
+        discovery_dir: Path,
+        role_proof_verifier: CohortRoleProofVerifier | None = None,
+        asset_logger: AssetLogger | None = None,
+        allow_shared_provider_cache: bool = True,
+        runtime_timing_overrides: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Execute already-compiled physical lanes and apply their post-filter.
+
+        Manifest readiness and digest verification happen before directory,
+        cache, or provider work.  The normal acquisition runtime remains gated
+        until it delegates to this boundary.
+        """
+
+        manifest_snapshot = deepcopy(manifest)
+        compiler = CohortProviderCompiler()
+        compiler.assert_execution_ready(
+            manifest_snapshot,
+            execution_capability=execution_capability,
+        )
+        compiler.assert_role_proof_verifier(
+            manifest_snapshot,
+            role_proof_verifier=role_proof_verifier,
+        )
+        lane_results: dict[str, list[dict[str, Any]]] = {}
+        lane_summaries: list[dict[str, Any]] = []
+        for lane in [dict(item) for item in list(manifest_snapshot.get("lanes") or [])]:
+            lane_id = str(lane.get("lane_id") or "").strip()
+            lane_limit = int(lane.get("provider_item_limit") or 0)
+            lane_pages = max(1, (lane_limit + 24) // 25)
+            provider_payload = dict(lane.get("provider_payload") or {})
+            filter_hints = {
+                str(key): [str(item) for item in list(value or [])]
+                for key, value in dict(provider_payload.get("filter_hints") or {}).items()
+            }
+            try:
+                result = self.search_profiles(
+                    query_text=str(provider_payload.get("query_text") or ""),
+                    filter_hints=filter_hints,
+                    employment_status=str(provider_payload.get("employment_status") or ""),
+                    discovery_dir=discovery_dir / "cohort_lanes" / lane_id,
+                    asset_logger=asset_logger,
+                    limit=lane_limit,
+                    pages=lane_pages,
+                    allow_shared_provider_cache=allow_shared_provider_cache,
+                    auto_probe=False,
+                    dispatch_mode=_HARVEST_DISPATCH_ASYNC_ONLY,
+                    strict_result_envelope=True,
+                    runtime_timing_overrides=runtime_timing_overrides,
+                )
+            except HarvestProfileSearchResultError as exc:
+                raise CohortProviderExecutionError(
+                    "cohort_provider_lane_result_invalid",
+                    lane_id=lane_id,
+                    completed_lane_ids=tuple(lane_results),
+                    detail=type(exc).__name__,
+                ) from exc
+            except Exception as exc:
+                raise CohortProviderExecutionError(
+                    "cohort_provider_lane_failed",
+                    lane_id=lane_id,
+                    completed_lane_ids=tuple(lane_results),
+                    detail=type(exc).__name__,
+                ) from exc
+            if not isinstance(result, dict) or "rows" not in result or not isinstance(result.get("rows"), list):
+                raise CohortProviderExecutionError(
+                    "cohort_provider_lane_result_unavailable",
+                    lane_id=lane_id,
+                    completed_lane_ids=tuple(lane_results),
+                )
+            raw_rows = list(result["rows"])
+            if len(raw_rows) > lane_limit or any(not isinstance(item, dict) for item in raw_rows):
+                raise CohortProviderExecutionError(
+                    "cohort_provider_lane_result_invalid",
+                    lane_id=lane_id,
+                    completed_lane_ids=tuple(lane_results),
+                )
+            rows = [dict(item) for item in raw_rows]
+            lane_results[lane_id] = rows
+            lane_summaries.append(
+                {
+                    "lane_id": lane_id,
+                    "lane_digest": str(lane.get("lane_digest") or ""),
+                    "employment_status": str(lane.get("employment_status") or ""),
+                    "role_bucket_id": str(lane.get("role_bucket_id") or ""),
+                    "provider_item_limit": lane_limit,
+                    "row_count": len(rows),
+                    "raw_path": str(dict(result or {}).get("raw_path") or ""),
+                }
+            )
+        combined = compiler.combine_lane_results(
+            manifest_snapshot,
+            lane_results,
+            execution_capability=execution_capability,
+            role_proof_verifier=role_proof_verifier,
+        )
+        return {
+            **combined,
+            "cohort_provider_manifest": manifest_snapshot,
+            "lane_summaries": lane_summaries,
+        }
+
     def search_profiles(
         self,
         *,
@@ -1166,11 +1284,16 @@ class HarvestProfileSearchConnector:
         start_page: int = 1,
         allow_shared_provider_cache: bool = True,
         auto_probe: bool = True,
+        dispatch_mode: str = "",
+        strict_result_envelope: bool = False,
         runtime_timing_overrides: dict[str, Any] | None = None,
         zero_result_retry_attempts: int = 0,
         zero_result_retry_backoff_seconds: float = 0.0,
     ) -> dict[str, Any] | None:
         query_text = str(query_text or "").strip()
+        normalized_dispatch_mode = str(dispatch_mode or "").strip().lower()
+        if normalized_dispatch_mode not in {"", _HARVEST_DISPATCH_ASYNC_ONLY}:
+            raise ValueError("Unsupported Harvest dispatch mode.")
         search_dir = discovery_dir / "harvest_profile_search"
         search_dir.mkdir(parents=True, exist_ok=True)
         logger = asset_logger or AssetLogger(discovery_dir.parent)
@@ -1185,8 +1308,10 @@ class HarvestProfileSearchConnector:
         former_past_company_scan = (
             str(employment_status or "").strip().lower() == "former" and bool(past_companies) and not query_text
         )
-        should_probe = bool(auto_probe) and start_page == 1 and (
-            requested_limit > 25 or take_pages > 1 or former_past_company_scan
+        should_probe = (
+            bool(auto_probe)
+            and start_page == 1
+            and (requested_limit > 25 or take_pages > 1 or former_past_company_scan)
         )
         if should_probe:
             probe_result = self.search_profiles(
@@ -1200,6 +1325,8 @@ class HarvestProfileSearchConnector:
                 start_page=1,
                 allow_shared_provider_cache=allow_shared_provider_cache,
                 auto_probe=False,
+                dispatch_mode=normalized_dispatch_mode,
+                strict_result_envelope=strict_result_envelope,
                 runtime_timing_overrides=runtime_timing_overrides,
                 zero_result_retry_attempts=zero_result_retry_attempts,
                 zero_result_retry_backoff_seconds=zero_result_retry_backoff_seconds,
@@ -1263,6 +1390,10 @@ class HarvestProfileSearchConnector:
             _harvest_runtime_request_context(search_dir),
             runtime_timing_overrides=runtime_timing_overrides,
         )
+        if normalized_dispatch_mode:
+            request_context["harvest_dispatch_mode"] = normalized_dispatch_mode
+        if strict_result_envelope:
+            request_context["strict_harvest_profile_search_result_envelope"] = True
         payload_key = _payload_cache_key(payload)
         raw_path = search_dir / f"{payload_key}.json"
         # Serialize identical final payloads so probe/final callers cannot dispatch the same request twice.
@@ -1276,6 +1407,8 @@ class HarvestProfileSearchConnector:
                 return None
             try:
                 cached = json.loads(raw_path.read_text(encoding="utf-8"))
+                if strict_result_envelope:
+                    _assert_harvest_profile_search_result_envelope(cached)
                 cached_rows = parse_harvest_search_rows(cached)
                 cached_pagination = parse_harvest_search_pagination(cached)
                 if retry_empty_cache and _harvest_profile_search_zero_result(
@@ -1339,6 +1472,8 @@ class HarvestProfileSearchConnector:
                     payload=payload,
                 )
             if cached_body is not None:
+                if strict_result_envelope:
+                    _assert_harvest_profile_search_result_envelope(cached_body)
                 cached_rows = parse_harvest_search_rows(cached_body)
                 cached_pagination = parse_harvest_search_pagination(cached_body)
                 if retry_empty_cache and _harvest_profile_search_zero_result(
@@ -1420,6 +1555,8 @@ class HarvestProfileSearchConnector:
                         time.sleep(retry_backoff_seconds)
                 if body is None:
                     return None
+                if strict_result_envelope:
+                    _assert_harvest_profile_search_result_envelope(body)
                 request_manifest_path = _write_harvest_request_manifest(
                     logger,
                     raw_path,
@@ -2488,6 +2625,20 @@ def parse_harvest_search_rows(payload: Any) -> list[dict[str, Any]]:
     return rows
 
 
+def _assert_harvest_profile_search_result_envelope(payload: Any) -> None:
+    if isinstance(payload, list):
+        items = payload
+    elif isinstance(payload, dict):
+        items = [payload]
+    else:
+        raise HarvestProfileSearchResultError("Harvest profile search result must be an object or array.")
+    for item in items:
+        if not isinstance(item, dict):
+            raise HarvestProfileSearchResultError("Harvest profile search result contains a non-object item.")
+        if "item" in item and not isinstance(item.get("item"), dict):
+            raise HarvestProfileSearchResultError("Harvest profile search result contains an invalid item envelope.")
+
+
 def parse_harvest_search_pagination(payload: Any) -> dict[str, int]:
     items = payload if isinstance(payload, list) else [payload]
     returned_count = 0
@@ -2873,7 +3024,9 @@ def _persist_shared_harvest_payload(
                     "request_payload": payload,
                     "request_context": {
                         **dict(request_context or {}),
-                        "provider_mode": str((request_context or {}).get("provider_mode") or _external_provider_mode() or ""),
+                        "provider_mode": str(
+                            (request_context or {}).get("provider_mode") or _external_provider_mode() or ""
+                        ),
                         **runtime_context,
                     },
                     "response_path": str(cache_path),
@@ -3517,16 +3670,10 @@ def _execute_harvest_actor_with_checkpoint(
         )
     if cached_body is not None:
         cached_run_id = str(
-            existing.get("run_id")
-            or existing.get("actor_run_id")
-            or existing.get("actorRunId")
-            or ""
+            existing.get("run_id") or existing.get("actor_run_id") or existing.get("actorRunId") or ""
         ).strip()
         cached_dataset_id = str(
-            existing.get("dataset_id")
-            or existing.get("default_dataset_id")
-            or existing.get("defaultDatasetId")
-            or ""
+            existing.get("dataset_id") or existing.get("default_dataset_id") or existing.get("defaultDatasetId") or ""
         ).strip()
         cached_checkpoint = {
             "logical_name": logical_name,
@@ -3571,7 +3718,12 @@ def _execute_harvest_actor_with_checkpoint(
     if provider_mode == "scripted":
         has_existing_remote_run = bool(
             str(existing.get("run_id") or existing.get("actor_run_id") or existing.get("actorRunId") or "").strip()
-            or str(existing.get("dataset_id") or existing.get("default_dataset_id") or existing.get("defaultDatasetId") or "").strip()
+            or str(
+                existing.get("dataset_id")
+                or existing.get("default_dataset_id")
+                or existing.get("defaultDatasetId")
+                or ""
+            ).strip()
         )
         if not has_existing_remote_run:
             record_scripted_provider_invocation(
@@ -3947,14 +4099,21 @@ def _get_harvest_dataset_items(
             run_id=run_id,
             request_context=request_context,
         )
+        strict_profile_search = bool(dict(request_context or {}).get("strict_harvest_profile_search_result_envelope"))
         if page is None:
+            if strict_profile_search:
+                raise HarvestProfileSearchResultError("Harvest profile search dataset page is unavailable.")
             break
+        if strict_profile_search and not isinstance(page, list):
+            raise HarvestProfileSearchResultError("Harvest profile search dataset page must be an array.")
         if isinstance(page, list):
             page_items = list(page)
         else:
             page_items = [page]
         if not page_items:
             break
+        if strict_profile_search:
+            _assert_harvest_profile_search_result_envelope(page_items)
         items.extend(page_items)
         if len(page_items) < page_size:
             break
@@ -4288,6 +4447,8 @@ def _run_harvest_actor_via_async_dataset(
             run_id=run_id,
             request_context=request_context,
         )
+    except HarvestProfileSearchResultError:
+        raise
     except Exception:
         return None
 
@@ -4342,6 +4503,13 @@ def _run_harvest_actor(
             logical_name=logical_name,
             payload=payload,
             provider_mode=provider_mode,
+        )
+    if str(request_context.get("harvest_dispatch_mode") or "").strip().lower() == _HARVEST_DISPATCH_ASYNC_ONLY:
+        return _run_harvest_actor_via_async_dataset(
+            settings,
+            payload,
+            logical_name=logical_name,
+            request_context=request_context,
         )
     if _harvest_sync_should_prefer_async(settings, payload):
         return _run_harvest_actor_via_async_dataset(
@@ -4486,15 +4654,9 @@ def _scripted_harvest_remote_identifiers(
     payload_hash: str,
 ) -> tuple[str, str]:
     normalized_hash = str(payload_hash or "").strip()[:16] or "unknown"
-    run_id = str(
-        rule.get("run_id")
-        or existing.get("run_id")
-        or f"scripted_run_{logical_name}_{normalized_hash}"
-    )
+    run_id = str(rule.get("run_id") or existing.get("run_id") or f"scripted_run_{logical_name}_{normalized_hash}")
     dataset_id = str(
-        rule.get("dataset_id")
-        or existing.get("dataset_id")
-        or f"scripted_dataset_{logical_name}_{normalized_hash}"
+        rule.get("dataset_id") or existing.get("dataset_id") or f"scripted_dataset_{logical_name}_{normalized_hash}"
     )
     return run_id, dataset_id
 
@@ -4589,7 +4751,9 @@ def _build_scripted_harvest_result(
                 ),
             ],
         )
-    error_spec = {} if terminal_remote_event_seen else scripted_phase_error(rule, phase="execute", round_number=round_number)
+    error_spec = (
+        {} if terminal_remote_event_seen else scripted_phase_error(rule, phase="execute", round_number=round_number)
+    )
     if error_spec:
         kind = str(error_spec.get("kind") or "runtime").strip().lower()
         message = str(error_spec.get("message") or f"Scripted harvest {kind} error for {logical_name}.").strip()
@@ -4787,7 +4951,10 @@ def _build_scripted_generated_harvest_body(
     kind = str(spec.get("kind") or logical_name or "").strip().lower()
     if kind in {"profile_search", "harvest_profile_search"} or logical_name == "harvest_profile_search":
         return _build_scripted_generated_profile_search_body(spec=spec, payload=payload)
-    if kind in {"profile_scraper", "profile_scraper_batch", "harvest_profile_scraper_batch"} or logical_name == "harvest_profile_scraper_batch":
+    if (
+        kind in {"profile_scraper", "profile_scraper_batch", "harvest_profile_scraper_batch"}
+        or logical_name == "harvest_profile_scraper_batch"
+    ):
         return _build_scripted_generated_profile_scraper_body(spec=spec, payload=payload)
     if kind in {"company_employees", "harvest_company_employees"} or logical_name == "harvest_company_employees":
         return _build_scripted_generated_company_employee_body(spec=spec, payload=payload)
@@ -5046,7 +5213,11 @@ def _filter_scripted_sample_candidates(
         row = dict(candidate or {})
         metadata = dict(row.get("metadata") or {})
         if employment_scope:
-            row_scope = str(row.get("employment_status") or metadata.get("membership_claim_employment_status") or "").strip().lower()
+            row_scope = (
+                str(row.get("employment_status") or metadata.get("membership_claim_employment_status") or "")
+                .strip()
+                .lower()
+            )
             if row_scope != employment_scope:
                 continue
         if source_datasets and str(row.get("source_dataset") or "").strip().lower() not in source_datasets:
@@ -5133,7 +5304,9 @@ def _scripted_profile_search_rows_from_candidates(
             "publicIdentifier": public_identifier,
             "headline": headline,
             "location": location,
-            "summary": str(metadata.get("about") or candidate.get("focus_areas") or candidate.get("notes") or "").strip(),
+            "summary": str(
+                metadata.get("about") or candidate.get("focus_areas") or candidate.get("notes") or ""
+            ).strip(),
         }
         if employment_scope == "former":
             item["pastCompany"] = str(candidate.get("target_company") or candidate.get("organization") or "").strip()

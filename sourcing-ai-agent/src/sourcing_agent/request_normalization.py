@@ -4,6 +4,11 @@ import re
 from collections.abc import Mapping
 from typing import Any
 
+from .cohort_selection import (
+    apply_user_explicit_cohort_authority,
+    canonicalize_cohort_selection_request_payload,
+    explicit_cohort_selection,
+)
 from .company_registry import builtin_company_identity
 from .connectors import CompanyIdentity, resolve_company_identity, resolve_manual_company_identity
 from .domain import JobRequest, normalize_requested_facet
@@ -254,9 +259,7 @@ def _ascii_terms_with_explicit_chinese_scope_suffix(text: str) -> list[str]:
 
 def _looks_like_scaffolded_phrase(text: str, *, ascii_terms: list[str] | None = None) -> bool:
     ascii_terms = list(ascii_terms or _ascii_scope_like_terms(text))
-    ascii_terms = [
-        item for item in ascii_terms if str(item).strip()
-    ]
+    ascii_terms = [item for item in ascii_terms if str(item).strip()]
     if (
         ascii_terms
         and re.search(r"[\u4e00-\u9fff]", text)
@@ -267,7 +270,7 @@ def _looks_like_scaffolded_phrase(text: str, *, ascii_terms: list[str] | None = 
 
 
 def canonicalize_request_payload(payload: dict[str, Any]) -> dict[str, Any]:
-    canonical = dict(payload or {})
+    canonical = canonicalize_cohort_selection_request_payload(payload)
     target_company = str(canonical.get("target_company") or "").strip()
     if not target_company:
         return canonical
@@ -290,11 +293,7 @@ def materialize_request_payload(
     target_company: str = "",
 ) -> dict[str, Any]:
     materialized = dict(payload or {})
-    resolved_target_company = str(
-        target_company
-        or materialized.get("target_company")
-        or ""
-    ).strip()
+    resolved_target_company = str(target_company or materialized.get("target_company") or "").strip()
     expanded = expand_request_intent_axes_patch(
         materialized,
         target_company=resolved_target_company,
@@ -307,9 +306,7 @@ def materialize_request_payload(
         if not _has_preview_value(materialized.get(key)):
             materialized[key] = value
     resolved_target_company = str(
-        materialized.get("target_company")
-        or expanded.get("target_company")
-        or resolved_target_company
+        materialized.get("target_company") or expanded.get("target_company") or resolved_target_company
     ).strip()
     existing_preferences = normalize_execution_preferences(
         materialized,
@@ -334,7 +331,8 @@ def supplement_request_query_signals(
     raw_text: str,
     include_raw_keyword_extraction: bool = True,
 ) -> dict[str, Any]:
-    updated = dict(payload or {})
+    authority_base = dict(payload or {})
+    updated = dict(authority_base)
     target_company = str(updated.get("target_company") or "").strip()
     if include_raw_keyword_extraction:
         extracted = extract_query_signal_terms(raw_text, target_company=target_company)
@@ -373,7 +371,7 @@ def supplement_request_query_signals(
                 scope_disambiguation["source"] = "hybrid" if had_scope_disambiguation else "rules"
             updated["scope_disambiguation"] = scope_disambiguation
     updated = apply_high_confidence_request_inference(updated, raw_text=raw_text)
-    return updated
+    return apply_user_explicit_cohort_authority(authority_base, updated)
 
 
 def extract_query_signal_terms(raw_text: str, *, target_company: str) -> dict[str, list[str]]:
@@ -482,7 +480,11 @@ def _preserved_keyword_surface_forms(value: str, *, target_company: str) -> list
         preserved.append(normalized)
     thematic_signal = lookup_thematic_signal(normalized)
     canonical_label = str(thematic_signal.get("canonical_label") or "").strip()
-    if canonical_label and re.fullmatch(r"[A-Z]{2,4}", canonical_label) and normalized.lower() != canonical_label.lower():
+    if (
+        canonical_label
+        and re.fullmatch(r"[A-Z]{2,4}", canonical_label)
+        and normalized.lower() != canonical_label.lower()
+    ):
         preserved.append(normalized)
     facet_labels = [
         normalize_requested_facet(item)
@@ -526,9 +528,7 @@ def _prefer_hard_facet_keyword_labels(
     target_company: str,
 ) -> list[str]:
     active_facets = {
-        normalize_requested_facet(item)
-        for item in list(hard_facets or [])
-        if normalize_requested_facet(item)
+        normalize_requested_facet(item) for item in list(hard_facets or []) if normalize_requested_facet(item)
     }
     if not active_facets:
         return list(keywords or [])
@@ -727,6 +727,8 @@ def normalize_must_have_facets_for_request_fields(
 def has_structured_request_signals(payload: dict[str, Any] | None) -> bool:
     if not isinstance(payload, dict):
         return False
+    if isinstance(payload.get("cohort_selection"), dict):
+        return True
     for key in _STRUCTURED_REQUEST_SIGNAL_FIELDS:
         value = payload.get(key)
         if isinstance(value, str) and value.strip():
@@ -742,10 +744,7 @@ def has_structured_request_signals(payload: dict[str, Any] | None) -> bool:
     ):
         return True
     intent_axes = payload.get("intent_axes")
-    if isinstance(intent_axes, dict) and any(
-        isinstance(value, dict) and bool(value)
-        for value in intent_axes.values()
-    ):
+    if isinstance(intent_axes, dict) and any(isinstance(value, dict) and bool(value) for value in intent_axes.values()):
         return True
     return False
 
@@ -759,9 +758,7 @@ def expand_request_intent_axes_patch(
     if not axes:
         return {}
     resolved_target_company = str(
-        target_company
-        or coerce_intent_axis_mapping(axes.get("scope_boundary")).get("target_company")
-        or ""
+        target_company or coerce_intent_axis_mapping(axes.get("scope_boundary")).get("target_company") or ""
     ).strip()
     patch: dict[str, Any] = {}
 
@@ -844,7 +841,11 @@ def apply_high_confidence_request_inference(
     resolved_target_company = str(updated.get("target_company") or "").strip()
     if not resolved_target_company:
         target_candidates = list(
-            dict.fromkeys(str(item.get("target_company") or "").strip() for item in scope_matches if str(item.get("target_company") or "").strip())
+            dict.fromkeys(
+                str(item.get("target_company") or "").strip()
+                for item in scope_matches
+                if str(item.get("target_company") or "").strip()
+            )
         )
         if len(target_candidates) == 1:
             resolved_target_company = target_candidates[0]
@@ -956,8 +957,7 @@ def _infra_theme_should_not_force_role_bucket(
         return False
     keyword_labels = merge_unique_request_string_values(keywords, must_have_keywords)
     has_infra_theme = any(
-        str(lookup_thematic_signal(item).get("canonical_label") or "").strip() == "Infra"
-        for item in keyword_labels
+        str(lookup_thematic_signal(item).get("canonical_label") or "").strip() == "Infra" for item in keyword_labels
     )
     normalized_text = " ".join(str(raw_text or "").lower().split())
     has_directional_hint = any(token in normalized_text for token in _DIRECTIONAL_QUERY_HINT_TERMS)
@@ -1058,9 +1058,7 @@ def _resolve_primary_role_bucket_mode(
     if any(token in text for token in _DIRECTIONAL_QUERY_HINT_TERMS):
         return "soft"
     normalized_categories = {
-        " ".join(str(item or "").lower().split())
-        for item in list(categories or [])
-        if str(item or "").strip()
+        " ".join(str(item or "").lower().split()) for item in list(categories or []) if str(item or "").strip()
     }
     if len(normalized_categories) >= 2 and normalized_categories.intersection(
         {"researcher", "engineer", "product manager", "product_management"}
@@ -1098,15 +1096,18 @@ def _looks_like_technical_thematic_people_query(
     if normalized_role_buckets and normalized_role_buckets.issubset(_TECHNICAL_DEFAULT_ROLE_BUCKETS):
         return True
     normalized_facets = {
-        " ".join(str(item or "").lower().split())
-        for item in list(must_have_facets or [])
-        if str(item or "").strip()
+        " ".join(str(item or "").lower().split()) for item in list(must_have_facets or []) if str(item or "").strip()
     }
     if normalized_facets and normalized_facets.issubset(_TECHNICAL_DEFAULT_FACETS):
         return True
     thematic_keywords = merge_unique_request_string_values(keywords, must_have_keywords)
     if any(
-        str(lookup_thematic_signal(normalize_request_query_signal(item, target_company=target_company)).get("canonical_label") or "").strip()
+        str(
+            lookup_thematic_signal(normalize_request_query_signal(item, target_company=target_company)).get(
+                "canonical_label"
+            )
+            or ""
+        ).strip()
         in _RESEARCH_DIRECTION_DEFAULT_THEMATIC_LABELS
         for item in thematic_keywords
     ):
@@ -1124,9 +1125,7 @@ def _normalize_default_technical_population_categories(
     must_have_primary_role_buckets: list[str],
 ) -> list[str]:
     normalized_categories = [
-        " ".join(str(item or "").lower().split())
-        for item in list(categories or [])
-        if str(item or "").strip()
+        " ".join(str(item or "").lower().split()) for item in list(categories or []) if str(item or "").strip()
     ]
     if bool(dict(request.execution_preferences or {}).get("disable_default_technical_population_categories")):
         return categories
@@ -1141,17 +1140,13 @@ def _normalize_default_technical_population_categories(
     if normalized_role_buckets and not normalized_role_buckets.issubset(_TECHNICAL_DEFAULT_ROLE_BUCKETS):
         return categories
     normalized_facets = {
-        " ".join(str(item or "").lower().split())
-        for item in list(must_have_facets or [])
-        if str(item or "").strip()
+        " ".join(str(item or "").lower().split()) for item in list(must_have_facets or []) if str(item or "").strip()
     }
     if normalized_facets and not normalized_facets.issubset(_TECHNICAL_DEFAULT_FACETS):
         return categories
 
     raw_text = " ".join(
-        item
-        for item in [str(request.raw_user_request or "").strip(), str(request.query or "").strip()]
-        if item
+        item for item in [str(request.raw_user_request or "").strip(), str(request.query or "").strip()] if item
     )
     explicit_role_categories = _explicit_population_role_categories(raw_text)
     if explicit_role_categories:
@@ -1203,6 +1198,7 @@ def build_request_preview_payload(
     preview_intent_view = resolve_request_intent_view(effective)
     preview_target_company = str(effective.target_company or requested.target_company or "").strip()
 
+    cohort = explicit_cohort_selection(effective.to_record())
     preview = {
         "request_view": "effective_request" if _request_preview_changed(requested, effective) else "normalized_request",
         "raw_user_request": str(requested.raw_user_request or "").strip(),
@@ -1220,12 +1216,12 @@ def build_request_preview_payload(
         ),
         "must_have_keywords": list(preview_intent_view.get("must_have_keywords") or []),
         "must_have_facets": list(preview_intent_view.get("must_have_facets") or []),
-        "must_have_primary_role_buckets": list(
-            preview_intent_view.get("must_have_primary_role_buckets") or []
-        ),
+        "must_have_primary_role_buckets": list(preview_intent_view.get("must_have_primary_role_buckets") or []),
         "primary_role_bucket_mode": str(preview_intent_view.get("primary_role_bucket_mode") or "hard"),
         "intent_axes": build_request_intent_axes_payload(request=effective),
     }
+    if cohort is not None:
+        preview["cohort_selection"] = cohort
     scope_disambiguation = dict(effective.scope_disambiguation or {})
     if scope_disambiguation and set(scope_disambiguation.keys()) != {"target_company"}:
         preview["scope_disambiguation"] = scope_disambiguation
@@ -1299,14 +1295,19 @@ def build_request_intent_axes_payload(
     }
     fallback_policy = {
         "force_fresh_run": execution_preferences.get("force_fresh_run"),
-        "provider_people_search_query_strategy": str(execution_preferences.get("provider_people_search_query_strategy") or "").strip(),
+        "provider_people_search_query_strategy": str(
+            execution_preferences.get("provider_people_search_query_strategy") or ""
+        ).strip(),
         "provider_people_search_max_queries": execution_preferences.get("provider_people_search_max_queries"),
         "provider_people_search_pages": execution_preferences.get("provider_people_search_pages"),
-        "provider_people_search_scale_chunk_pages": execution_preferences.get("provider_people_search_scale_chunk_pages"),
+        "provider_people_search_scale_chunk_pages": execution_preferences.get(
+            "provider_people_search_scale_chunk_pages"
+        ),
         "reuse_existing_roster": execution_preferences.get("reuse_existing_roster"),
         "run_former_search_seed": execution_preferences.get("run_former_search_seed"),
         "runtime_tuning_profile": str(execution_preferences.get("runtime_tuning_profile") or "").strip(),
     }
+    cohort = explicit_cohort_selection(normalized.to_record())
     thematic_constraints = {
         "keywords": list(normalized.keywords or []),
         "must_have_keywords": list(normalized.must_have_keywords or []),
@@ -1320,6 +1321,8 @@ def build_request_intent_axes_payload(
             must_have_primary_role_buckets=list(normalized.must_have_primary_role_buckets or []),
         ),
     }
+    if cohort is not None:
+        thematic_constraints["role_match"] = str(cohort.get("role_match") or "any")
     axes = {
         "population_boundary": _merge_intent_axis_payload(
             population_boundary,
@@ -1352,6 +1355,7 @@ def resolve_request_intent_view(
     fallback_employment_statuses: list[str] | None = None,
 ) -> dict[str, Any]:
     normalized = _coerce_job_request(request)
+    cohort = explicit_cohort_selection(normalized.to_record())
     axes = build_request_intent_axes_payload(request=normalized)
     population_boundary = coerce_intent_axis_mapping(axes.get("population_boundary"))
     scope_boundary = coerce_intent_axis_mapping(axes.get("scope_boundary"))
@@ -1361,9 +1365,7 @@ def resolve_request_intent_view(
 
     target_company = str(scope_boundary.get("target_company") or normalized.target_company or "").strip()
     raw_signal_text = " ".join(
-        item
-        for item in [str(normalized.raw_user_request or "").strip(), str(normalized.query or "").strip()]
-        if item
+        item for item in [str(normalized.raw_user_request or "").strip(), str(normalized.query or "").strip()] if item
     ).strip()
     scope_signal_matches = match_scope_signals(raw_signal_text.lower())
     scope_signal_organization_keywords: list[str] = []
@@ -1377,6 +1379,8 @@ def resolve_request_intent_view(
     employment_statuses = merge_unique_request_string_values(
         population_boundary.get("employment_statuses") or fallback_employment_statuses or normalized.employment_statuses
     )
+    if cohort is not None:
+        employment_statuses = list(cohort.get("employment_statuses") or [])
     organization_keywords = merge_unique_request_string_values(
         scope_boundary.get("organization_keywords") or normalized.organization_keywords,
         scope_signal_organization_keywords,
@@ -1417,7 +1421,9 @@ def resolve_request_intent_view(
         thematic_constraints.get("must_have_primary_role_buckets") or normalized.must_have_primary_role_buckets,
         target_company=target_company,
     )
-    if raw_signal_text:
+    if cohort is not None:
+        must_have_primary_role_buckets = list(cohort.get("role_bucket_ids") or [])
+    if raw_signal_text and cohort is None:
         must_have_primary_role_buckets = _drop_infra_systems_role_bucket_for_thematic_infra(
             raw_text=raw_signal_text,
             keywords=keywords,
@@ -1432,16 +1438,19 @@ def resolve_request_intent_view(
         must_have_facets=must_have_facets,
         must_have_primary_role_buckets=must_have_primary_role_buckets,
     )
-    primary_role_bucket_mode = str(
-        thematic_constraints.get("primary_role_bucket_mode")
-        or _resolve_primary_role_bucket_mode(
-            request=normalized,
-            categories=categories,
-            keywords=keywords,
-            must_have_keywords=must_have_keywords,
-            must_have_primary_role_buckets=must_have_primary_role_buckets,
-        )
-    ).strip() or "hard"
+    primary_role_bucket_mode = (
+        str(
+            thematic_constraints.get("primary_role_bucket_mode")
+            or _resolve_primary_role_bucket_mode(
+                request=normalized,
+                categories=categories,
+                keywords=keywords,
+                must_have_keywords=must_have_keywords,
+                must_have_primary_role_buckets=must_have_primary_role_buckets,
+            )
+        ).strip()
+        or "hard"
+    )
     execution_preference_patch: dict[str, Any] = {}
     confirmed_company_scope = merge_unique_request_string_values(
         scope_boundary.get("confirmed_company_scope"),
@@ -1476,18 +1485,14 @@ def resolve_request_intent_view(
         must_have_facets=must_have_facets,
         must_have_primary_role_buckets=must_have_primary_role_buckets,
         execution_preferences=execution_preferences,
-        scope_disambiguation=dict(
-            scope_boundary.get("scope_disambiguation")
-            or normalized.scope_disambiguation
-            or {}
-        ),
+        scope_disambiguation=dict(scope_boundary.get("scope_disambiguation") or normalized.scope_disambiguation or {}),
     )
     requested_population_boundary = dict(
         semantic_brief.get("requested_population_boundary")
         or dict(semantic_brief.get("population") or {}).get("requested_population_boundary")
         or {}
     )
-    return {
+    resolved = {
         "target_company": target_company,
         "categories": categories,
         "employment_statuses": employment_statuses,
@@ -1497,7 +1502,9 @@ def resolve_request_intent_view(
         "must_have_facets": must_have_facets,
         "must_have_primary_role_buckets": must_have_primary_role_buckets,
         "primary_role_bucket_mode": primary_role_bucket_mode,
-        "scope_disambiguation": dict(scope_boundary.get("scope_disambiguation") or normalized.scope_disambiguation or {}),
+        "scope_disambiguation": dict(
+            scope_boundary.get("scope_disambiguation") or normalized.scope_disambiguation or {}
+        ),
         "acquisition_lane_policy": acquisition_lane_policy,
         "fallback_policy": fallback_policy,
         "execution_preferences": execution_preferences,
@@ -1505,6 +1512,11 @@ def resolve_request_intent_view(
         "requested_population_boundary": requested_population_boundary,
         "intent_axes": axes,
     }
+    if cohort is not None:
+        resolved["cohort_selection"] = cohort
+        resolved["role_match"] = str(cohort.get("role_match") or "any")
+        resolved = apply_user_explicit_cohort_authority(normalized.to_record(), resolved)
+    return resolved
 
 
 def build_effective_request_payload(
@@ -1514,11 +1526,7 @@ def build_effective_request_payload(
     fallback_categories: list[str] | None = None,
     fallback_employment_statuses: list[str] | None = None,
 ) -> dict[str, Any]:
-    payload = (
-        request.to_record()
-        if isinstance(request, JobRequest)
-        else dict(request or {})
-    )
+    payload = request.to_record() if isinstance(request, JobRequest) else dict(request or {})
     resolved_intent_view = dict(
         intent_view
         or resolve_request_intent_view(
@@ -1528,7 +1536,9 @@ def build_effective_request_payload(
         )
     )
     effective_payload = dict(payload)
-    effective_payload["target_company"] = str(resolved_intent_view.get("target_company") or payload.get("target_company") or "").strip()
+    effective_payload["target_company"] = str(
+        resolved_intent_view.get("target_company") or payload.get("target_company") or ""
+    ).strip()
     effective_payload["categories"] = list(resolved_intent_view.get("categories") or [])
     effective_payload["employment_statuses"] = list(resolved_intent_view.get("employment_statuses") or [])
     effective_payload["organization_keywords"] = list(resolved_intent_view.get("organization_keywords") or [])
@@ -1545,7 +1555,9 @@ def build_effective_request_payload(
         resolved_intent_view.get("requested_population_boundary") or {}
     )
     effective_payload["intent_axes"] = dict(resolved_intent_view.get("intent_axes") or {})
-    return effective_payload
+    if isinstance(resolved_intent_view.get("cohort_selection"), dict):
+        effective_payload["cohort_selection"] = dict(resolved_intent_view["cohort_selection"])
+    return apply_user_explicit_cohort_authority(payload, effective_payload)
 
 
 def build_effective_job_request(
@@ -1592,11 +1604,7 @@ def _merge_intent_axis_payload(
     derived: dict[str, Any] | None,
     existing: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    merged = {
-        key: value
-        for key, value in coerce_intent_axis_mapping(derived).items()
-        if _has_preview_value(value)
-    }
+    merged = {key: value for key, value in coerce_intent_axis_mapping(derived).items() if _has_preview_value(value)}
     for key, value in coerce_intent_axis_mapping(existing).items():
         if not _has_preview_value(value):
             continue
