@@ -1358,12 +1358,14 @@ def test_nonclosure_and_validation_command_are_honest() -> None:
     for marker in (
         "closes no migration, repository, runtime, rollout, formal-review, provider, live, W6, manual, product",
         "does not authorize SQL by itself",
-        "fresh pinned non-author re-review of this repaired decision lock",
+        "formal highest-effort review of this repaired decision lock",
+        "fdb3b792c14fa02e986f99decd3bf510173ea6cf",
+        "GO 0/0/0/0",
         "NO-GO 0/0/1/0",
         "formal `NO-GO 0/3/3/0`",
         "failed closed as `invalid_transport`",
         "advisory only and cannot be promoted into a formal verdict",
-        "separate typed plan/review/gate-parent and Tier-2 grant-parent owner decision lock",
+        "separate pinned review of the typed plan/review/gate-parent and Tier-2 grant-parent owner decision lock",
         "fake/simulate/scripted E2E",
         "separately gated bounded live canary",
         "Author evidence is not a formal `GO`",
@@ -1386,6 +1388,9 @@ def test_nonclosure_and_validation_command_are_honest() -> None:
         assert "17" in synchronized_document
         assert "16" in synchronized_document
         assert "UNKNOWN" in synchronized_document
+        assert "20260715T215450Z_Track_D_D3c2h1_fixed-forward_local_advisory.md" in synchronized_document
+        assert "GO 0/0/0/0" in synchronized_document
+        assert "formal highest-effort" in synchronized_document
         assert "no dormant migration is authorized" in synchronized_document or "不单独授权 dormant migration" in (
             synchronized_document
         )

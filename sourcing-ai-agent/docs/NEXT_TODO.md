@@ -608,7 +608,9 @@
   migration 须新增其实已由 `0003` 安装的 `workflow_commands.workspace_id`。当前 fixed-forward 改为 adopt/validate
   既有 `TEXT DEFAULT '' NOT NULL` + named `NOT VALID` check，保留 brownfield empty sentinel，禁止 add/drop/rewrite/
   reinterpret；oracle 直接读取 `0003` 精确证明。Current author evidence=H1 `13`、related battery `139`、Ruff/
-  diff green；fresh pinned re-review pending，不是 formal `GO`。
+  diff green。`fdb3b792...` fresh exact-object non-author local advisory=`GO 0/0/0/0`，关闭该 P2 re-raise；artifact=
+  `runtime/reviews/20260715T215450Z_Track_D_D3c2h1_fixed-forward_local_advisory.md`。它不是 formal highest-effort
+  `GO`，因此 dormant migration/live/product gate 仍 fail closed。
 - [x] D3c2i typed plan/review/gate + Tier-2 grant parent decision lock（2026-07-15；decision-only）：sole future
   `PlanReviewAuthorityRepository` / `store.repos.plan_review_authority` owns exact immutable
   `plan_review_gate_authority_versions`（32 columns）、`identity_search_budget_grants`（37）与

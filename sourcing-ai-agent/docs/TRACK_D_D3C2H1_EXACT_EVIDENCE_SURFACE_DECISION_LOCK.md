@@ -6,9 +6,12 @@
 > `invalid_transport`; it is not formal review evidence. The fresh scope-local advisory against
 > `af4db419bddb9b18dd61f6dcca6191bb70f4733c` returned `NO-GO 0/0/1/0`: its sole P2 found stale wording that told a
 > future migration to add `workflow_commands.workspace_id` even though migration `0003` already installed it. This
-> fixed-forward author candidate repairs that installed-parent adoption contract in addition to the executable
+> fixed-forward at `fdb3b792c14fa02e986f99decd3bf510173ea6cf` repairs that installed-parent adoption contract in addition to the executable
 > DDL DAG, PostgreSQL identifier limit, attempt-8 access path, nullable timestamp checks, and exact oracle coverage in
-> addition to the first six lifecycle/relation/index/check repairs. It still adds no SQL, migration, descriptor,
+> addition to the first six lifecycle/relation/index/check repairs. Its fresh exact-object non-author local advisory is
+> `GO 0/0/0/0`, recorded at
+> `runtime/reviews/20260715T215450Z_Track_D_D3c2h1_fixed-forward_local_advisory.md`; this is not a formal highest-effort
+> `GO`. The batch still adds no SQL, migration, descriptor,
 > repository, runtime writer, provider/model/Harvest call, served Agent tool, live activation, or product gate. D0f is
 > implemented at `539c689`; the five evidence surfaces and the two D3c2g cost surfaces below remain physically absent.
 
@@ -993,13 +996,14 @@ D3c2h1's first pinned `gpt-5.6-sol / ultra / priority` non-author review of `1c4
 was formal `NO-GO 0/3/3/0`. The later Ultra attempt against `f0a0069c83b7ec582682ad79f7a278e604cdd4a0`
 failed closed as `invalid_transport`; its substantive output is advisory only and cannot be promoted into a formal verdict.
 The fresh scope-local advisory against `af4db419bddb9b18dd61f6dcca6191bb70f4733c` returned
-`NO-GO 0/0/1/0`; its sole P2 was the stale `workspace_id` installation wording now fixed above. This candidate is an
-author repair, not a review result. It closes no migration, repository, runtime,
+`NO-GO 0/0/1/0`; its sole P2 was the stale `workspace_id` installation wording now fixed above. The fresh pinned local
+advisory against `fdb3b792c14fa02e986f99decd3bf510173ea6cf` returned `GO 0/0/0/0` and closed that re-raise, but is not a
+formal highest-effort review result. It closes no migration, repository, runtime,
 rollout, formal-review, provider, live, W6, manual, product, Migration A–D, served-action, or residual gate and does not
 authorize SQL by itself. The next bounded order is:
 
-1. fresh pinned non-author re-review of this repaired decision lock;
-2. separate typed plan/review/gate-parent and Tier-2 grant-parent owner decision lock, then its own pinned review;
+1. formal highest-effort review of this repaired decision lock;
+2. separate pinned review of the typed plan/review/gate-parent and Tier-2 grant-parent owner decision lock;
 3. only after both scopes have matching formal `GO`, a dormant combined migration with real-PG
    constraint/index/rollback/race/plan/lock acceptance;
 4. specialized repositories/CAS, two ingress APIs, and the current-apply continuation, still with no provider call;

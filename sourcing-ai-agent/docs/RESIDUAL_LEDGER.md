@@ -154,8 +154,10 @@
   `NO-GO 0/0/1/0`; its sole P2 found that the document told a future migration to add
   `workflow_commands.workspace_id` even though migration `0003` already installs `TEXT DEFAULT '' NOT NULL` plus its
   named `NOT VALID` check. The current fixed-forward requires adopt/validate, preserves the empty-string brownfield
-  sentinel, forbids add/drop/rewrite/reinterpret, and makes the oracle read `0003` directly. Fresh pinned re-review is
-  pending; the advisory is not formal `GO`. This annotation
+  sentinel, forbids add/drop/rewrite/reinterpret, and makes the oracle read `0003` directly. `fdb3b792...` then received
+  a fresh exact-object non-author local advisory `GO 0/0/0/0`, recorded at
+  `runtime/reviews/20260715T215450Z_Track_D_D3c2h1_fixed-forward_local_advisory.md`; it closes the P2 re-raise but is not
+  formal highest-effort `GO`. This annotation
   changes neither R-019's pending state nor its 26-call ratchet, and it does not alter or claim closure of R-027, R-023,
   R-028, R-029, action-root, served=0, provider/live, Migration A-D, or any other residual.
 

@@ -444,7 +444,9 @@ serve、会话/事件层、planner loop），用一个垂直切片证明闭环�
   migration `0003` 已安装的 `workflow_commands.workspace_id`。Current fixed-forward 要求 adopt/validate 既有
   `TEXT DEFAULT '' NOT NULL` + named `NOT VALID` check，保留 brownfield empty sentinel，禁止 add/drop/rewrite/
   reinterpret；oracle 直接读取 `0003`。该批仍为 `decision_locked_not_implemented`：零 SQL/descriptor/repository/
-  runtime/provider/live，fresh pinned re-review pending，formal review 仍未取得；即使 repair `GO`，也须先
+  runtime/provider/live。`fdb3b792...` fresh exact-object non-author local advisory=`GO 0/0/0/0`，关闭上述 P2
+  re-raise；artifact=`runtime/reviews/20260715T215450Z_Track_D_D3c2h1_fixed-forward_local_advisory.md`，但 formal
+  highest-effort review 仍未取得；即使该 advisory `GO`，也须先
   separate parent-owner decision lock + review，才可申请 dormant combined migration。
 - D3c2i decision-only parent lock 将上述两个 symbolic prerequisite 收口到 sole future
   `PlanReviewAuthorityRepository` / `store.repos.plan_review_authority` aggregate：immutable
@@ -736,7 +738,8 @@ TD-4 初始路由表已按 owner 2026-07-13 裁决落档（D0 §4）。
    不得猜 schema、用 JSON/application-only proof 或省略 FK，因此当前 decisions 仍不授权 migration、runtime 或
    provider activation。`af4db419...` advisory 的唯一 P2 已 fixed-forward：future combined migration 只可
    adopt/validate migration `0003` 已安装的 `workflow_commands.workspace_id` 与 named `NOT VALID` check，保留
-   empty sentinel，禁止重新 add/drop/rewrite/reinterpret；fresh pinned re-review 仍 pending。
+   empty sentinel，禁止重新 add/drop/rewrite/reinterpret。`fdb3b792...` fresh exact-object local advisory=
+   `GO 0/0/0/0`，关闭该 P2 re-raise；formal highest-effort review 仍 pending。
    strict-D3 首次 `succeeded|failed_terminal` result command+event 取 common lock，在同一 UoW 写
    canonical nullable outcome digest/event pair；pair 在 result-terminal 期间不可变，仅 registered reopen 可在
    requeue 前清除；event composite unique + command `MATCH SIMPLE DEFERRABLE` FK + local both-null/both-non-null
