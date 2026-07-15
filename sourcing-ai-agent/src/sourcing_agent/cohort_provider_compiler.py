@@ -23,7 +23,12 @@ from .query_signal_knowledge import (
     role_bucket_role_hints,
     role_buckets_from_text,
 )
-from .runtime_environment import NON_LIVE_PROVIDER_MODES, current_runtime_environment
+from .runtime_environment import (
+    ISOLATED_RUNTIME_ENVIRONMENTS,
+    NON_LIVE_PROVIDER_MODES,
+    current_runtime_environment,
+    validate_runtime_environment,
+)
 
 COHORT_PROVIDER_MANIFEST_VERSION = "cohort_provider_manifest.v1"
 COHORT_PROVIDER = "harvest_profile_search"
@@ -33,6 +38,8 @@ COHORT_EXECUTION_CAPABILITY_OWNER = "cohort_runtime"
 COHORT_NON_LIVE_RUNTIME_POLICY_VERSION = "cohort_non_live_runtime.v1"
 COHORT_HEADLINE_ROLE_PROOF_VERIFIER_ID = "cohort_headline_role_classifier"
 COHORT_HEADLINE_ROLE_PROOF_VERIFIER_REVISION = "cohort_headline_role_classifier.v1"
+COHORT_PUBLIC_HEADLINE_SOURCE = "harvest_profile_search.headline"
+COHORT_CANONICAL_PROFILE_URL_FIELD = "cohort_canonical_profile_url"
 DEFAULT_COHORT_RESULT_LIMIT = 25
 MAX_COHORT_PROVIDER_LANES = 10
 
@@ -85,6 +92,8 @@ class CohortExecutionCapability:
     """Execution-owner input kept separate from the serializable manifest."""
 
     policy_revision: str
+    provider_mode: str
+    runtime_namespace: str
     max_provider_calls: int = MAX_COHORT_PROVIDER_LANES
     max_provider_items: int = DEFAULT_COHORT_RESULT_LIMIT
     max_output_candidates: int = DEFAULT_COHORT_RESULT_LIMIT
@@ -109,6 +118,20 @@ class CohortExecutionCapability:
                 "cohort_execution_capability_invalid",
                 "policy_revision",
             )
+        normalized_provider_mode = str(self.provider_mode or "").strip().lower()
+        if normalized_provider_mode not in NON_LIVE_PROVIDER_MODES:
+            raise CohortProviderCompilationError(
+                "cohort_execution_capability_invalid",
+                "provider_mode",
+            )
+        object.__setattr__(self, "provider_mode", normalized_provider_mode)
+        normalized_runtime_namespace = _canonical_runtime_namespace(self.runtime_namespace)
+        if not normalized_runtime_namespace:
+            raise CohortProviderCompilationError(
+                "cohort_execution_capability_invalid",
+                "runtime_namespace",
+            )
+        object.__setattr__(self, "runtime_namespace", normalized_runtime_namespace)
         for field_name in ("max_provider_calls", "max_provider_items", "max_output_candidates"):
             value = getattr(self, field_name)
             if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
@@ -129,6 +152,8 @@ class CohortExecutionCapability:
             "schema_version": self.schema_version,
             "owner": self.owner,
             "policy_revision": self.policy_revision,
+            "provider_mode": self.provider_mode,
+            "runtime_namespace": self.runtime_namespace,
             "max_provider_calls": self.max_provider_calls,
             "max_provider_items": self.max_provider_items,
             "max_output_candidates": self.max_output_candidates,
@@ -143,6 +168,8 @@ class CohortExecutionCapability:
             "schema_version",
             "owner",
             "policy_revision",
+            "provider_mode",
+            "runtime_namespace",
             "max_provider_calls",
             "max_provider_items",
             "max_output_candidates",
@@ -158,6 +185,8 @@ class CohortExecutionCapability:
             schema_version=str(record.get("schema_version") or ""),
             owner=str(record.get("owner") or ""),
             policy_revision=str(record.get("policy_revision") or ""),
+            provider_mode=str(record.get("provider_mode") or ""),
+            runtime_namespace=str(record.get("runtime_namespace") or ""),
             max_provider_calls=_require_positive_int(
                 record.get("max_provider_calls"),
                 "max_provider_calls",
@@ -199,7 +228,13 @@ class CohortHeadlineRoleProofVerifier:
 
     @staticmethod
     def verify(row: dict[str, Any]) -> VerifiedCohortRoleProof | None:
-        headline = " ".join(str(dict(row or {}).get("headline") or "").split()).strip()
+        normalized_row = dict(row or {})
+        if str(normalized_row.get("public_headline_source") or "").strip() != COHORT_PUBLIC_HEADLINE_SOURCE:
+            return None
+        raw_headline = normalized_row.get("public_headline")
+        if not isinstance(raw_headline, str):
+            return None
+        headline = " ".join(raw_headline.split()).strip()
         if not headline:
             return None
         role_bucket_ids = tuple(role_buckets_from_text(headline))
@@ -211,6 +246,7 @@ class CohortHeadlineRoleProofVerifier:
                 {
                     "verifier_id": COHORT_HEADLINE_ROLE_PROOF_VERIFIER_ID,
                     "verifier_revision": COHORT_HEADLINE_ROLE_PROOF_VERIFIER_REVISION,
+                    "public_headline_source": COHORT_PUBLIC_HEADLINE_SOURCE,
                     "headline": headline,
                     "role_bucket_ids": list(role_bucket_ids),
                 }
@@ -669,10 +705,29 @@ def cohort_execution_capability_for_runtime(
     """
 
     runtime = current_runtime_environment(runtime_dir=runtime_dir)
-    if runtime.provider_mode not in NON_LIVE_PROVIDER_MODES:
+    if (
+        runtime.provider_mode not in NON_LIVE_PROVIDER_MODES
+        or runtime.runtime_dir is None
+        or not runtime.runtime_dir.is_dir()
+        or runtime.is_production
+        or runtime.name not in ISOLATED_RUNTIME_ENVIRONMENTS
+    ):
+        return None
+    try:
+        validate_runtime_environment(
+            runtime_dir=runtime.runtime_dir,
+            provider_mode=runtime.provider_mode,
+            runtime_environment=runtime.name,
+        )
+    except RuntimeError:
+        return None
+    runtime_namespace = _canonical_runtime_namespace(runtime.runtime_dir)
+    if not runtime_namespace:
         return None
     return CohortExecutionCapability(
         policy_revision=f"{COHORT_NON_LIVE_RUNTIME_POLICY_VERSION}:{runtime.provider_mode}",
+        provider_mode=runtime.provider_mode,
+        runtime_namespace=runtime_namespace,
         role_proof_verifier_id=COHORT_HEADLINE_ROLE_PROOF_VERIFIER_ID,
         role_proof_verifier_revision=COHORT_HEADLINE_ROLE_PROOF_VERIFIER_REVISION,
     )
@@ -822,7 +877,7 @@ def _candidate_identity(row: dict[str, Any]) -> str:
     identity = resolve_person_identity_key(
         person_identity_key=_validated_cohort_identity_key(row.get("person_identity_key")),
         profile_url_key="",
-        linkedin_url=_candidate_linkedin_url(row),
+        linkedin_url=canonical_cohort_profile_url(row),
         candidate_identity_key=_validated_cohort_identity_key(row.get("candidate_identity_key")),
         candidate_id=str(row.get("candidate_id") or row.get("id") or ""),
     )
@@ -838,6 +893,16 @@ def _candidate_identity(row: dict[str, Any]) -> str:
             1,
         )
     return normalized_identity
+
+
+def canonical_cohort_profile_url(row: dict[str, Any]) -> str:
+    """Return the only LinkedIn URL accepted by Cohort identity resolution.
+
+    Raw non-LinkedIn URLs are discarded. A valid public identifier is promoted
+    to the same canonical LinkedIn URL used by the person-identity owner.
+    """
+
+    return _candidate_linkedin_url(dict(row or {}))
 
 
 def _candidate_linkedin_url(row: dict[str, Any]) -> str:
@@ -906,7 +971,11 @@ def _normalize_lane_rows(rows: Any, *, lane_id: str) -> list[dict[str, Any]]:
                 lane_id=lane_id,
             )
         row = dict(item)
+        row.pop(COHORT_CANONICAL_PROFILE_URL_FIELD, None)
         _candidate_identity(row)
+        canonical_profile_url = canonical_cohort_profile_url(row)
+        if canonical_profile_url:
+            row[COHORT_CANONICAL_PROFILE_URL_FIELD] = canonical_profile_url
         row.pop("normalized_role_bucket_ids", None)
         row.pop("cohort_role_proof", None)
         row.pop("cohort_lane_membership", None)
@@ -950,3 +1019,13 @@ def _sha256_json(payload: dict[str, Any]) -> str:
         default=str,
     ).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
+
+
+def _canonical_runtime_namespace(value: Any) -> str:
+    raw_value = str(value or "").strip()
+    if not raw_value:
+        return ""
+    try:
+        return str(Path(raw_value).expanduser().resolve(strict=False))
+    except OSError:
+        return str(Path(raw_value).expanduser().absolute())

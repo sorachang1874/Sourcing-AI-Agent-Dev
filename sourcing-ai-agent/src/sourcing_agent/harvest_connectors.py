@@ -16,7 +16,9 @@ from urllib import error, parse, request
 
 from .asset_logger import AssetLogger
 from .cohort_provider_compiler import (
+    COHORT_PUBLIC_HEADLINE_SOURCE,
     CohortExecutionCapability,
+    CohortProviderCompilationError,
     CohortProviderCompiler,
     CohortProviderExecutionError,
     CohortRoleProofVerifier,
@@ -26,8 +28,11 @@ from .connectors import CompanyIdentity, CompanyRosterSnapshot
 from .profile_registry_utils import harvest_profile_payload_has_usable_content
 from .profile_timeline import normalized_primary_email_metadata
 from .runtime_environment import (
+    ISOLATED_RUNTIME_ENVIRONMENTS,
     LIVE_PROVIDER_MODE,
+    NON_LIVE_PROVIDER_MODES,
     assert_live_provider_access_allowed,
+    current_runtime_environment,
     external_provider_mode,
     infer_runtime_dir_from_path,
     normalize_provider_mode,
@@ -60,6 +65,7 @@ _SCRIPTED_SAMPLE_FILTERED_CANDIDATE_CACHE: dict[str, tuple[int, int, list[dict[s
 _APIFY_DEFAULT_API_BASE_URL = "https://api.apify.com"
 _APIFY_API_BASE_URL_ENV = "SOURCING_APIFY_API_BASE_URL"
 _HARVEST_DISPATCH_ASYNC_ONLY = "async_only"
+_COHORT_SNAPSHOT_CACHE_NAMESPACE_VERSION = "cohort_snapshot_cache.v1"
 
 
 def _external_provider_mode() -> str:
@@ -89,6 +95,120 @@ def _runtime_scoped_provider_mode(
         if scoped_mode:
             return normalize_provider_mode(scoped_mode)
     return _external_provider_mode()
+
+
+def _canonical_runtime_namespace(value: Any) -> str:
+    raw_value = str(value or "").strip()
+    if not raw_value:
+        return ""
+    try:
+        return str(Path(raw_value).expanduser().resolve(strict=False))
+    except OSError:
+        return str(Path(raw_value).expanduser().absolute())
+
+
+def _path_within_runtime_namespace(path: Path, runtime_namespace: str) -> bool:
+    normalized_namespace = _canonical_runtime_namespace(runtime_namespace)
+    if not normalized_namespace:
+        return False
+    try:
+        Path(path).expanduser().resolve(strict=False).relative_to(Path(normalized_namespace))
+    except (OSError, ValueError):
+        return False
+    return True
+
+
+def _assert_cohort_runtime_binding(
+    *,
+    discovery_dir: Path,
+    required_provider_mode: str,
+    required_runtime_namespace: str,
+) -> dict[str, str]:
+    """Re-derive and exact-match the execution owner's non-live runtime binding."""
+
+    provider_mode = normalize_provider_mode(required_provider_mode)
+    if provider_mode not in NON_LIVE_PROVIDER_MODES:
+        raise CohortProviderCompilationError(
+            "cohort_execution_runtime_mismatch",
+            "provider_mode",
+        )
+    runtime_namespace = _canonical_runtime_namespace(required_runtime_namespace)
+    if not runtime_namespace:
+        raise CohortProviderCompilationError(
+            "cohort_execution_runtime_mismatch",
+            "runtime_namespace",
+        )
+
+    if not _path_within_runtime_namespace(discovery_dir, runtime_namespace):
+        raise CohortProviderCompilationError(
+            "cohort_execution_runtime_mismatch",
+            "runtime_namespace",
+        )
+    runtime = current_runtime_environment(runtime_dir=runtime_namespace)
+    actual_runtime_namespace = _canonical_runtime_namespace(runtime.runtime_dir)
+    if (
+        runtime.provider_mode != provider_mode
+        or actual_runtime_namespace != runtime_namespace
+        or runtime.is_production
+        or runtime.name not in ISOLATED_RUNTIME_ENVIRONMENTS
+    ):
+        raise CohortProviderCompilationError(
+            "cohort_execution_runtime_mismatch",
+            "execution_capability",
+        )
+    try:
+        validate_runtime_environment(
+            runtime_dir=runtime_namespace,
+            provider_mode=runtime.provider_mode,
+            runtime_environment=runtime.name,
+        )
+    except RuntimeError as exc:
+        raise CohortProviderCompilationError(
+            "cohort_execution_runtime_mismatch",
+            "execution_capability",
+            detail=type(exc).__name__,
+        ) from exc
+    return {
+        "provider_mode": provider_mode,
+        "runtime_namespace": runtime_namespace,
+        "runtime_environment": runtime.name,
+    }
+
+
+def _cohort_snapshot_cache_namespace(provider_mode: str, runtime_namespace: str) -> str:
+    binding_digest = sha1(
+        f"{_COHORT_SNAPSHOT_CACHE_NAMESPACE_VERSION}\0{provider_mode}\0{runtime_namespace}".encode("utf-8")
+    ).hexdigest()[:16]
+    return f"{provider_mode}-{binding_digest}"
+
+
+def _cohort_snapshot_raw_cache_provenance_matches(
+    *,
+    raw_path: Path,
+    payload: dict[str, Any],
+    provider_mode: str,
+    runtime_namespace: str,
+    cache_namespace: str,
+) -> bool:
+    request_path = raw_path.with_name(f"{raw_path.stem}.request.json")
+    if not request_path.exists():
+        return False
+    try:
+        request_manifest = json.loads(request_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    request_context = dict(dict(request_manifest or {}).get("request_context") or {})
+    return bool(
+        str(request_manifest.get("logical_name") or "") == "harvest_profile_search"
+        and str(request_manifest.get("payload_hash") or "") == _payload_cache_key(payload)
+        and dict(request_manifest.get("request_payload") or {}) == payload
+        and _canonical_runtime_namespace(request_manifest.get("response_path"))
+        == _canonical_runtime_namespace(raw_path)
+        and str(request_context.get("cohort_required_provider_mode") or "") == provider_mode
+        and _canonical_runtime_namespace(request_context.get("cohort_runtime_namespace"))
+        == _canonical_runtime_namespace(runtime_namespace)
+        and str(request_context.get("cohort_snapshot_cache_namespace") or "") == cache_namespace
+    )
 
 
 def _assert_live_harvest_access(
@@ -1193,6 +1313,16 @@ class HarvestProfileSearchConnector:
             manifest_snapshot,
             role_proof_verifier=role_proof_verifier,
         )
+        if execution_capability is None:
+            raise CohortProviderCompilationError(
+                "cohort_selection_execution_not_ready",
+                "execution_capability",
+            )
+        runtime_binding = _assert_cohort_runtime_binding(
+            discovery_dir=discovery_dir,
+            required_provider_mode=execution_capability.provider_mode,
+            required_runtime_namespace=execution_capability.runtime_namespace,
+        )
         lane_results: dict[str, list[dict[str, Any]]] = {}
         lane_summaries: list[dict[str, Any]] = []
         for lane in [dict(item) for item in list(manifest_snapshot.get("lanes") or [])]:
@@ -1218,6 +1348,8 @@ class HarvestProfileSearchConnector:
                     dispatch_mode=_HARVEST_DISPATCH_ASYNC_ONLY,
                     strict_result_envelope=True,
                     runtime_timing_overrides=runtime_timing_overrides,
+                    required_provider_mode=runtime_binding["provider_mode"],
+                    required_runtime_namespace=runtime_binding["runtime_namespace"],
                 )
             except HarvestProfileSearchResultError as exc:
                 raise CohortProviderExecutionError(
@@ -1310,12 +1442,29 @@ class HarvestProfileSearchConnector:
         runtime_timing_overrides: dict[str, Any] | None = None,
         zero_result_retry_attempts: int = 0,
         zero_result_retry_backoff_seconds: float = 0.0,
+        required_provider_mode: str = "",
+        required_runtime_namespace: str = "",
     ) -> dict[str, Any] | None:
         query_text = str(query_text or "").strip()
         normalized_dispatch_mode = str(dispatch_mode or "").strip().lower()
         if normalized_dispatch_mode not in {"", _HARVEST_DISPATCH_ASYNC_ONLY}:
             raise ValueError("Unsupported Harvest dispatch mode.")
         search_dir = discovery_dir / "harvest_profile_search"
+        runtime_binding: dict[str, str] = {}
+        if required_provider_mode or required_runtime_namespace:
+            runtime_binding = _assert_cohort_runtime_binding(
+                discovery_dir=discovery_dir,
+                required_provider_mode=required_provider_mode,
+                required_runtime_namespace=required_runtime_namespace,
+            )
+            search_dir = (
+                search_dir
+                / "runtime_namespaces"
+                / _cohort_snapshot_cache_namespace(
+                    runtime_binding["provider_mode"],
+                    runtime_binding["runtime_namespace"],
+                )
+            )
         search_dir.mkdir(parents=True, exist_ok=True)
         logger = asset_logger or AssetLogger(discovery_dir.parent)
         take_pages = max(1, min(int(pages or 1), 100))
@@ -1351,6 +1500,8 @@ class HarvestProfileSearchConnector:
                 runtime_timing_overrides=runtime_timing_overrides,
                 zero_result_retry_attempts=zero_result_retry_attempts,
                 zero_result_retry_backoff_seconds=zero_result_retry_backoff_seconds,
+                required_provider_mode=required_provider_mode,
+                required_runtime_namespace=required_runtime_namespace,
             )
             if probe_result is not None:
                 pagination = dict(probe_result.get("pagination") or {})
@@ -1411,6 +1562,24 @@ class HarvestProfileSearchConnector:
             _harvest_runtime_request_context(search_dir),
             runtime_timing_overrides=runtime_timing_overrides,
         )
+        if runtime_binding:
+            cache_namespace = _cohort_snapshot_cache_namespace(
+                runtime_binding["provider_mode"],
+                runtime_binding["runtime_namespace"],
+            )
+            request_context.update(
+                {
+                    "provider_mode": runtime_binding["provider_mode"],
+                    "external_provider_mode": runtime_binding["provider_mode"],
+                    "runtime_dir": runtime_binding["runtime_namespace"],
+                    "runtime_environment": runtime_binding["runtime_environment"],
+                    "cohort_required_provider_mode": runtime_binding["provider_mode"],
+                    "cohort_runtime_namespace": runtime_binding["runtime_namespace"],
+                    "cohort_snapshot_cache_namespace": cache_namespace,
+                }
+            )
+        else:
+            cache_namespace = ""
         if normalized_dispatch_mode:
             request_context["harvest_dispatch_mode"] = normalized_dispatch_mode
         if strict_result_envelope:
@@ -1421,10 +1590,23 @@ class HarvestProfileSearchConnector:
         request_lane = f"harvest_profile_search_request:{sha1(f'{search_dir.resolve()}|{payload_key}'.encode('utf-8')).hexdigest()[:16]}"
         retry_attempts = max(0, min(int(zero_result_retry_attempts or 0), 5))
         retry_backoff_seconds = max(0.0, min(float(zero_result_retry_backoff_seconds or 0.0), 30.0))
-        retry_empty_cache = retry_attempts > 0 and _external_provider_mode() == LIVE_PROVIDER_MODE
+        effective_provider_mode = _runtime_scoped_provider_mode(
+            base_path=search_dir,
+            request_context=request_context,
+        )
+        retry_provider_mode = effective_provider_mode if runtime_binding else _external_provider_mode()
+        retry_empty_cache = retry_attempts > 0 and retry_provider_mode == LIVE_PROVIDER_MODE
 
         def _load_snapshot_raw_cache(cache_status: str) -> dict[str, Any] | None:
             if not raw_path.exists():
+                return None
+            if runtime_binding and not _cohort_snapshot_raw_cache_provenance_matches(
+                raw_path=raw_path,
+                payload=payload,
+                provider_mode=runtime_binding["provider_mode"],
+                runtime_namespace=runtime_binding["runtime_namespace"],
+                cache_namespace=cache_namespace,
+            ):
                 return None
             try:
                 cached = json.loads(raw_path.read_text(encoding="utf-8"))
@@ -1536,7 +1718,10 @@ class HarvestProfileSearchConnector:
                         "pagination": cached_pagination,
                         "payload": cached_body,
                     }
-            if not _harvest_connector_available(self.settings):
+            if not (
+                _harvest_connector_available(self.settings)
+                or (runtime_binding and effective_provider_mode in NON_LIVE_PROVIDER_MODES)
+            ):
                 return None
             dispatch_guard = _claim_harvest_profile_search_dispatch_guard(
                 raw_path=raw_path,
@@ -1585,7 +1770,11 @@ class HarvestProfileSearchConnector:
                     payload=payload,
                     request_context={
                         **request_context,
-                        "cache_status": "live_api",
+                        "cache_status": (
+                            f"{effective_provider_mode}_provider"
+                            if runtime_binding and effective_provider_mode in NON_LIVE_PROVIDER_MODES
+                            else "live_api"
+                        ),
                         "zero_result_retry_attempts": retry_attempts,
                         "zero_result_retry_count": zero_result_retry_count,
                         "zero_result_retry_exhausted": zero_result_retry_exhausted,
@@ -2629,12 +2818,16 @@ def parse_harvest_search_rows(payload: Any) -> list[dict[str, Any]]:
     for item in items:
         if not isinstance(item, dict):
             continue
-        data = item.get("item") if isinstance(item.get("item"), dict) else item
+        nested_item = item.get("item")
+        data: dict[str, Any] = dict(nested_item) if isinstance(nested_item, dict) else dict(item)
         profile_url = str(data.get("linkedinUrl") or data.get("profileUrl") or data.get("url") or "").strip()
+        public_headline = _public_headline_from_payload(data)
         rows.append(
             {
                 "full_name": _full_name_from_payload(data),
                 "headline": _headline_from_payload(data),
+                "public_headline": public_headline,
+                "public_headline_source": COHORT_PUBLIC_HEADLINE_SOURCE if public_headline else "",
                 "location": _location_text(data.get("location") or data.get("locationName")),
                 "location_normalized": _normalized_harvest_location(data.get("location") or data.get("locationName")),
                 "profile_url": profile_url,
@@ -6333,6 +6526,19 @@ def _headline_from_payload(data: dict[str, Any]) -> str:
                 return f"{position} at {company_name}"
             return position or company_name
     return ""
+
+
+def _public_headline_from_payload(data: dict[str, Any]) -> str:
+    """Return only the provider's exact public headline string.
+
+    Legacy headline normalization may synthesize display text from occupation or
+    current-position fields. Cohort all-role proof deliberately cannot use it.
+    """
+
+    raw_headline = data.get("headline")
+    if not isinstance(raw_headline, str):
+        return ""
+    return " ".join(raw_headline.split()).strip()
 
 
 def _location_text(value: Any) -> str:
