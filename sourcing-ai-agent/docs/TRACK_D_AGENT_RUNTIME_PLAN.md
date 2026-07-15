@@ -121,7 +121,8 @@ serve、会话/事件层、planner loop），用一个垂直切片证明闭环�
   仅修复 deterministic run；所有 submit 均 preflight deterministic run，orphan run 与非法 static-required
   approval 组合 fail closed；conditional non-required approval/cancel/retry 保留既有 owner + R-019 边界。Frontend
   submit 以 required literal replay discriminator 闭合 fresh/replay 联合；`5677a59` 后续 advisory 的 composite
-  raw-status HTTP 500 已以 string-first total enum guard fixed-forward，exact transport evidence=`25+72`；
+  raw-status HTTP 500 已以 string-first total enum guard fixed-forward，exact transport evidence=`25+72`；commit
+  `0740a36` fresh pinned non-author advisory=`GO 0/0/0/0`，不是 formal GO；
   R-029 observation epoch=`d1f_r029_20260715_v2` 且 submit-replay evidence action-scoped。D1f checkpoint=
   **3 schema-defined / 12 schema-less / served=0**；full served predicate 的 revisioned model-safe result schema 与
   simulate serializer 尚未实现。D1g current author candidate 接续闭合 authenticated Operation API 的 R-031
@@ -134,8 +135,9 @@ serve、会话/事件层、planner loop），用一个垂直切片证明闭环�
   workspace predicate 下推到 SQL limit 前，并在任何 compatibility observation/write 前 exact-bind planned
   CRM/export command 到当前 run，blank/missing/foreign/same-workspace-other ref 均 not-found/零写。
   D1g checkpoint 仍不关闭 R-019/R-028、不迁移当时其余 12 个 schema-less action、不改变 served=0。Pinned
-  `646e596` advisory=`NO-GO 0/0/1/1`：invalid-reference closure 通过，但 positive planned replay 必须继续经过
-  schema/request validator 与 approval guard；该 P2 正在 fixed-forward。Reviewed artifact 前不得据此宣称
+  `646e596` advisory=`NO-GO 0/0/1/1`：invalid-reference closure 通过；fixed-forward 现把 valid planned response
+  捕获一次并继续经过 schema/request validator 与 approval/target guard，同时跳过 compatibility write，避免
+  mutable ref 双读。Exact=`7+35 subtests`、request+D1g=`29+107`、registry/probe=`25`；fresh pinned review pending。Reviewed artifact 前不得据此宣称
   hosted/live multi-user signoff。D1h current author candidate 随后将
   `enrich_person_public_web` 作为第 4 个 schema-defined action 激活：authenticated exact-owner CRM batch binder
   生成 per-record workspace/owner/version snapshot，dispatch 写新 plan 前与 queue-command owner 建 batch/run 前

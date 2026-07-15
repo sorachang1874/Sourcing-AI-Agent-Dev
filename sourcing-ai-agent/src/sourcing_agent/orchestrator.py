@@ -50127,6 +50127,7 @@ class SourcingOrchestrator:
         except KeyError:
             action_spec = None
         dispatch_adapter = str(action_spec.dispatch_adapter or "").strip() if action_spec is not None else ""
+        preflighted_existing_plan: dict[str, Any] = {}
         if dispatch_adapter in {DISPATCH_ADAPTER_CRM_WRITER, DISPATCH_ADAPTER_EXPORT}:
             existing_plan = self._existing_planned_operation_command_response(
                 operation_run=operation_run,
@@ -50134,23 +50135,25 @@ class SourcingOrchestrator:
                 contract="w9_operation_run_dispatch_v1",
                 expected_workspace_id=expected_workspace_id,
             )
-            if existing_plan:
+            if existing_plan and str(existing_plan.get("status") or "").strip() != "planned":
                 return self._operation_run_control_response_record(
                     existing_plan,
                     expected_workspace_id=expected_workspace_id,
                 )
+            preflighted_existing_plan = existing_plan
         try:
             self.operation_runtime_writer.validate_persisted_action_request(
                 action=action,
                 operation_run=operation_run,
             )
-            self.operation_runtime_writer.record_schema_less_compatibility_observation(
-                action=action,
-                operation_run=operation_run,
-                observation="dispatch",
-                actor=actor,
-                source="api.operation_run_dispatch",
-            )
+            if not preflighted_existing_plan:
+                self.operation_runtime_writer.record_schema_less_compatibility_observation(
+                    action=action,
+                    operation_run=operation_run,
+                    observation="dispatch",
+                    actor=actor,
+                    source="api.operation_run_dispatch",
+                )
         except OperationRuntimeStateConflict as exc:
             return self._operation_run_control_response_record(
                 {
@@ -50172,6 +50175,7 @@ class SourcingOrchestrator:
                     action=action,
                     actor=actor,
                     expected_workspace_id=expected_workspace_id,
+                    preflighted_existing_plan=preflighted_existing_plan,
                 ),
                 expected_workspace_id=expected_workspace_id,
             )
@@ -50205,6 +50209,7 @@ class SourcingOrchestrator:
         action: dict[str, Any],
         actor: str,
         expected_workspace_id: str = "",
+        preflighted_existing_plan: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         if (
             str(action.get("approval_policy") or "").strip() == "required"
@@ -51602,6 +51607,7 @@ class SourcingOrchestrator:
         action: dict[str, Any],
         actor: str,
         expected_workspace_id: str = "",
+        preflighted_existing_plan: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         if str(operation_run.get("status") or "").strip() in {"completed", "failed", "cancelled"}:
             return {
@@ -51612,14 +51618,6 @@ class SourcingOrchestrator:
                 "module_state_mutated": False,
                 "contract": "w9_operation_run_dispatch_v1",
             }
-        existing_plan = self._existing_planned_operation_command_response(
-            operation_run=operation_run,
-            action=action,
-            contract="w9_operation_run_dispatch_v1",
-            expected_workspace_id=expected_workspace_id,
-        )
-        if existing_plan:
-            return existing_plan
         target_preflight = self._revalidate_crm_existing_record_action_target(
             operation_run=operation_run,
             action=action,
@@ -51667,6 +51665,8 @@ class SourcingOrchestrator:
                 "module_state_mutated": False,
                 "contract": "w9_operation_run_dispatch_v1",
             }
+        if preflighted_existing_plan:
+            return dict(preflighted_existing_plan)
         plan = self._build_crm_writer_operation_command_plan(
             operation_run=operation_run,
             action=action,
@@ -52054,6 +52054,7 @@ class SourcingOrchestrator:
         action: dict[str, Any],
         actor: str,
         expected_workspace_id: str = "",
+        preflighted_existing_plan: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         target_preflight = self._revalidate_crm_record_batch_action_target(
             operation_run=operation_run,
@@ -52100,6 +52101,7 @@ class SourcingOrchestrator:
         action: dict[str, Any],
         actor: str,
         expected_workspace_id: str = "",
+        preflighted_existing_plan: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         current_status = str(operation_run.get("status") or "").strip()
         if current_status in {"completed", "failed", "cancelled"}:
@@ -52222,6 +52224,7 @@ class SourcingOrchestrator:
         action: dict[str, Any],
         actor: str,
         expected_workspace_id: str = "",
+        preflighted_existing_plan: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         if (
             str(action.get("approval_policy") or "").strip() == "required"
@@ -52243,14 +52246,8 @@ class SourcingOrchestrator:
                 "module_state_mutated": False,
                 "contract": "w9_operation_run_dispatch_v1",
             }
-        existing_plan = self._existing_planned_operation_command_response(
-            operation_run=operation_run,
-            action=action,
-            contract="w9_operation_run_dispatch_v1",
-            expected_workspace_id=expected_workspace_id,
-        )
-        if existing_plan:
-            return existing_plan
+        if preflighted_existing_plan:
+            return dict(preflighted_existing_plan)
         target_ref = dict(action.get("target_ref") or {})
         input_payload = dict(action.get("input") or {})
         projection_id = str(

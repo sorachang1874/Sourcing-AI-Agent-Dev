@@ -344,7 +344,11 @@ class _DispatchPreflightProbe:
         self.handler_calls = 0
 
     @staticmethod
-    def _operation_run_control_response_record(record: dict[str, Any]) -> dict[str, Any]:
+    def _operation_run_control_response_record(
+        record: dict[str, Any],
+        *,
+        expected_workspace_id: str = "",
+    ) -> dict[str, Any]:
         return record
 
     def _projection_handler(self, **_: Any) -> dict[str, Any]:

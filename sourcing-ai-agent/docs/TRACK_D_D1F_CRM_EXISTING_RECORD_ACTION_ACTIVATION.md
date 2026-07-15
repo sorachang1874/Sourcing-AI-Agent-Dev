@@ -16,8 +16,9 @@
 > schema-invalid body such as `" completed "` to receive HTTP 200. Commit `5677a59` changed this to exact raw enum
 > membership, but its pinned advisory returned `NO-GO 0/0/1/0`: unhashable list/object status values raised `TypeError`
 > and leaked HTTP 500. The current fixed-forward first requires the raw status to be a string, so replay and fresh
-> list/object negatives both return the unchanged stable body with HTTP 400. Author validation and a fresh pinned non-author
-> review must bind the enclosing commit before this scope
+> list/object negatives both return the unchanged stable body with HTTP 400. Commit `0740a36` has a fresh pinned
+> non-author advisory `GO 0/0/0/0`; this is not formal GO and does not authorize live use. A scope-matched formal
+> review must still bind the enclosing commit before this scope
 > can enter live/manual/product/milestone signoff. No provider, model, or live environment is used by this batch.
 
 ## 1. Outcome and bounded scope
@@ -238,6 +239,6 @@ Final author evidence on the stable worktree:
   **81 errors / 4 files** ceiling (non-zero by baseline), with no new error at this batch's changed contracts.
 
 The local advisory rounds `0/3/2/0`, `0/2/1/0`, pinned-`22055aa` `0/1/2/1`, pinned-`1cb829f` `0/0/1/1`, and
-pinned-`d5b0a31` `0/0/1/0`, and pinned-`5677a59` `0/0/1/0` are fixed-forward inputs only. They cannot be promoted to formal verdicts, and author tests
-cannot replace a fresh pinned non-author review. Pending review blocks this scope's live/manual/product/milestone
+pinned-`d5b0a31` `0/0/1/0`, and pinned-`5677a59` `0/0/1/0` are fixed-forward inputs only. Commit `0740a36` fresh
+pinned non-author advisory=`GO 0/0/0/0`; it cannot be promoted to formal GO. Pending formal review blocks this scope's live/manual/product/milestone
 signoff only; unrelated non-live Track D work may continue asynchronously.

@@ -184,7 +184,8 @@
   submit-response schema 缺口已在 `d5b0a31` fixed-forward；missing/null/string replay marker 均稳定 400，两分支
   均组合完整 detail contract。Pinned `5677a59` advisory=`NO-GO 0/0/1/0` 进一步发现 list/object raw status 的
   unhashable HTTP 500；当前 fixed-forward 在 replay/fresh enum membership 前强制 raw string，两类 composite
-  negatives 均稳定 400 且 body 不变，latest exact evidence=`25+72`，fresh pinned non-author review pending。R-028 仍 open，不宣称 command/effect/terminal/EntityDelta 同 UoW、完整 TOCTOU 或
+  negatives 均稳定 400 且 body 不变，latest exact evidence=`25+72`。Commit `0740a36` fresh pinned non-author
+  advisory=`GO 0/0/0/0`，不是 formal GO。R-028 仍 open，不宣称 command/effect/terminal/EntityDelta 同 UoW、完整 TOCTOU 或
   exactly-once；无 provider/model/live。
 - [x] D1g Operation API exact-owner closure current author candidate（2026-07-15）：canonical authorization owner=
   `agent_actions/operation_runs.workspace_id`，run 额外要求 linked action 存在且 exact same workspace；actor 仅为
@@ -196,9 +197,11 @@
   predicate 下推到 SQL `LIMIT` 前，并在任何 compatibility observation/write 前 exact-bind planned command 到当前
   run；foreign/missing/blank/same-workspace-other reference 同一 not-found/零写，open-mode 保留。当前证据=
   `28+97`（D1g alone `6+29`）、adjacent exact `4`、full operation
-  `136+503`、lint `58 files`、global mypy `81/4`。Pinned `646e596` advisory=`NO-GO 0/0/1/1`：positive
-  planned replay 仍过早绕过 persisted request validation 与 approval guard；invalid-reference preflight 已通过。
-  该 P2 与 post-D1h 计数 wording 正在 fixed-forward，R-031 仍 review-pending。D1g checkpoint 不迁移当时其余
+  `136+503`、lint `58 files`、global mypy `81/4`。Pinned `646e596` advisory=`NO-GO 0/0/1/1` 的 fixed-forward
+  已把 invalid-ref fail-closed 与 valid replay 分为两阶段：valid ref 只读取一次并继续通过 persisted request、
+  target 与 approval guards，且不写 compatibility observation；auth/open approval + schema-invalid/pin-drift
+  positives 与三个 stale characterization probes 已补，current exact=`7+35 subtests`、request+D1g=`29+107`、
+  registry/probe adjacency=`25`。Fresh pinned review pending，R-031 仍 review-pending。D1g checkpoint 不迁移当时其余
   12 个 schema-less action；post-D1h current 为 11，不改 served=0、不授权 live/provider。
 - [x] D1h CRM Public Web action activation current author candidate（2026-07-16）：将
   `enrich_person_public_web` 作为第 4 个 schema-defined action 激活，当前 **4 schema-defined / 11 schema-less /
@@ -225,8 +228,9 @@
   action owner；nested commands/events 分别按 linked operation+action owner 与 physical event workspace 在 SQL
   limit 前过滤，planned CRM/export command ref exact-bind 当前 run 且失败在所有写前。并补 foreign/missing
   transport parity、全路径零写、same-owner 与 open-mode 矩阵。Pinned `646e596` advisory 的 invalid-reference
-  部分通过，但 positive planned replay 仍必须先经过 schema/request validator 与 approval guard；该 P2 fixed-forward
-  与 fresh pinned review pending。有效 scope-matched artifact 前继续阻断 hosted/live multi-user Operation exposure、
+  部分通过；positive planned replay 现先经过 schema/request validator 与 approval/target guard，并复用一次捕获
+  的 exact-current response，避免 mutable ref 双读。该 fixed-forward 的 fresh pinned review pending。有效
+  scope-matched artifact 前继续阻断 hosted/live multi-user Operation exposure、
   served-registry promotion及 manual/product/milestone signoff，但不阻断 bounded non-live implementation、
   fake/scripted 或 local open-mode testing。
 - [x] D3a characterize-first（2026-07-14；enclosing commit 由提交后 handoff 固定）：Plan §6#1 的 registry/snapshot

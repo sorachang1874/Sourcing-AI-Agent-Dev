@@ -21,18 +21,22 @@
   current fixed-forward requires a raw string before either replay/fresh membership check; list/object negatives now
   return stable HTTP 400 bodies. Evidence: request-scope plus three exact frontend nodes **25 passed + 72 subtests**,
   D1f PG **15 + 80 subtests**, frontend build **84 modules**, and full Operation runtime **136 + 503 subtests**. This
-  remains author fixed-forward evidence; fresh pinned review is pending.
+  remains author evidence; commit `0740a36` fresh pinned non-author advisory=`GO 0/0/0/0`, not formal GO.
 - A later D1g review attempt ended without a valid verdict but supplied three reproducible closure gaps. The
   fixed-forward now filters shared-workflow commands through their physical operation→run+action owner and filters
   malformed operation events by physical workspace before SQL `LIMIT`. Planned CRM/export command references must
   exist and exact-bind the current owned run before any schema-less compatibility observation or write; blank,
   missing, foreign, and same-workspace-other-run references return the same not-found result with a full zero-write
   snapshot. Empty expected workspace preserves operator/open-mode behavior.
-- Current D1g evidence is **6 passed + 29 subtests** for the exact PG matrix, **28 + 97 subtests** with request-scope
+- Candidate `646e596` evidence was **6 passed + 29 subtests** for the exact PG matrix, **28 + 97 subtests** with request-scope
   transport, **4** exact Operation adjacency nodes, and full Operation runtime **136 + 503 subtests**. R-031 remains
   review-pending: pinned `646e596` advisory=`NO-GO 0/0/1/1` because valid planned replay still precedes persisted
-  request validation and approval; its invalid-reference matrix passed. The P2 and post-D1h count wording P3 are being
-  fixed-forward. R-019's **26**-caller ratchet and R-028 remain unchanged. No provider/model/live path is authorized.
+  request validation and approval; its invalid-reference matrix passed. Current fixed-forward captures a valid ref
+  once, runs request/target/approval guards, skips compatibility writes, and updates post-D1h wording. Exact evidence=
+  D1g **7 + 35 subtests**, request+D1g **29 + 107 subtests**, registry/stale-probe adjacency **25**, combined D1
+  **117 + 198 subtests**, and full Operation runtime **136 + 503 subtests**. Global mypy remains exactly
+  **81 errors / 4 files**. Fresh pinned review remains pending. R-019's **26**-caller ratchet and R-028 remain
+  unchanged. No provider/model/live path is authorized.
 
 ### Track D D1h CRM Public Web action activation
 
@@ -54,10 +58,11 @@
 - The current production partition is **4 schema-defined / 11 schema-less / served=0**. Confirmed author evidence is
   D1h fixed-forward PG **6 passed + 3 subtests**, exact Operation/transport **4 passed + 11 subtests**, generic retry
   **1 passed**, CRM Public Web boundary **34 passed**, and mypy **81 errors / 4 files**. The combined D1 run reached
-  **117 passed + 198 subtests** with two separately tracked D1g characterization-probe failures (missing planned helper
-  / keyword owner response seam); they join the D1g approval-order fixed-forward rather than being hidden as D1h green
-  evidence. The pre-review candidate's full Operation runtime was **136 passed + 503 subtests**. Final commit and fresh pinned
-  non-author review remain pending; this is not a formal `GO` and authorizes no provider/model/live path.
+  prior **117 passed + 198 subtests** run exposed two D1g characterization-probe seams (missing planned helper /
+  keyword owner response). The D1g fixed-forward updates those frozen probes without weakening their contracts; the
+  same combined D1 scope is now green at **117 passed + 198 subtests**, and full Operation runtime is green at
+  **136 passed + 503 subtests**. D1h's fresh pinned review remains pending; this is not a formal `GO` and authorizes no
+  provider/model/live path.
 - R-019/R-028/R-029 remain open. The command-owner rejection happens after its existing claim/running transition, so
   D1h claims only batch/run/EntityDelta zero-write there, not a cross-table UoW or exactly-once closure. R-031 remains
   the separately review-pending D1g boundary.

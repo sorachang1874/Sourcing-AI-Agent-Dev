@@ -42,8 +42,16 @@ class _DispatchProbe:
         self.operation_runtime_writer = _DispatchOperationRuntimeWriterProbe()
 
     @staticmethod
-    def _operation_run_control_response_record(record: dict[str, Any]) -> dict[str, Any]:
+    def _operation_run_control_response_record(
+        record: dict[str, Any],
+        *,
+        expected_workspace_id: str = "",
+    ) -> dict[str, Any]:
         return record
+
+    @staticmethod
+    def _existing_planned_operation_command_response(**_: Any) -> dict[str, Any]:
+        return {}
 
     @staticmethod
     def _dispatch_projection_read_operation(**_: Any) -> dict[str, Any]:
@@ -264,20 +272,41 @@ def _dispatch_operation_run_from_records(
     operation_run: dict[str, Any],
     action: dict[str, Any],
     actor: str,
+    expected_workspace_id: str = "",
 ) -> dict[str, Any]:
     action_type = str(action.get("action_type") or "").strip()
+    try:
+        action_spec = DEFAULT_ACTION_REGISTRY.spec_for(action_type)
+    except KeyError:
+        action_spec = None
+    dispatch_adapter = str(action_spec.dispatch_adapter or "").strip() if action_spec is not None else ""
+    preflighted_existing_plan: dict[str, Any] = {}
+    if dispatch_adapter in {DISPATCH_ADAPTER_CRM_WRITER, DISPATCH_ADAPTER_EXPORT}:
+        existing_plan = self._existing_planned_operation_command_response(
+            operation_run=operation_run,
+            action=action,
+            contract="w9_operation_run_dispatch_v1",
+            expected_workspace_id=expected_workspace_id,
+        )
+        if existing_plan and str(existing_plan.get("status") or "").strip() != "planned":
+            return self._operation_run_control_response_record(
+                existing_plan,
+                expected_workspace_id=expected_workspace_id,
+            )
+        preflighted_existing_plan = existing_plan
     try:
         self.operation_runtime_writer.validate_persisted_action_request(
             action=action,
             operation_run=operation_run,
         )
-        self.operation_runtime_writer.record_schema_less_compatibility_observation(
-            action=action,
-            operation_run=operation_run,
-            observation="dispatch",
-            actor=actor,
-            source="api.operation_run_dispatch",
-        )
+        if not preflighted_existing_plan:
+            self.operation_runtime_writer.record_schema_less_compatibility_observation(
+                action=action,
+                operation_run=operation_run,
+                observation="dispatch",
+                actor=actor,
+                source="api.operation_run_dispatch",
+            )
     except OperationRuntimeStateConflict as exc:
         return self._operation_run_control_response_record(
             {
@@ -288,13 +317,9 @@ def _dispatch_operation_run_from_records(
                 "module_state_mutated": False,
                 "request_schema_revalidation_required": True,
                 "contract": "w9_operation_run_dispatch_v1",
-            }
+            },
+            expected_workspace_id=expected_workspace_id,
         )
-    try:
-        action_spec = DEFAULT_ACTION_REGISTRY.spec_for(action_type)
-    except KeyError:
-        action_spec = None
-    dispatch_adapter = str(action_spec.dispatch_adapter or "").strip() if action_spec is not None else ""
     dispatch_handler = self._operation_dispatch_adapter_bindings().get(dispatch_adapter)
     if dispatch_handler is not None:
         return self._operation_run_control_response_record(
@@ -302,7 +327,10 @@ def _dispatch_operation_run_from_records(
                 operation_run=operation_run,
                 action=action,
                 actor=actor,
-            )
+                expected_workspace_id=expected_workspace_id,
+                preflighted_existing_plan=preflighted_existing_plan,
+            ),
+            expected_workspace_id=expected_workspace_id,
         )
     return self._operation_run_control_response_record(
         {
@@ -312,7 +340,8 @@ def _dispatch_operation_run_from_records(
             "action": action,
             "module_state_mutated": False,
             "contract": "w9_operation_run_dispatch_v1",
-        }
+        },
+        expected_workspace_id=expected_workspace_id,
     )
 """
 
@@ -331,17 +360,24 @@ def _operation_dispatch_adapter_bindings(self) -> dict[str, Callable[..., dict[s
 
 _EXPECTED_SELECTOR_BODY_DEPENDENCIES = frozenset(
     {
+        "Any",
         "DEFAULT_ACTION_REGISTRY",
+        "DISPATCH_ADAPTER_CRM_WRITER",
+        "DISPATCH_ADAPTER_EXPORT",
         "KeyError",
         "OperationRuntimeStateConflict",
         "action",
         "action_spec",
         "action_type",
         "actor",
+        "dict",
         "dispatch_adapter",
         "dispatch_handler",
         "exc",
+        "existing_plan",
+        "expected_workspace_id",
         "operation_run",
+        "preflighted_existing_plan",
         "self",
         "str",
     }
@@ -413,6 +449,10 @@ def _binding_is_canonical(tree: ast.AST) -> bool:
 _RUNTIME_METHOD_QUALNAMES = {
     "_dispatch_operation_run_from_records": ("SourcingOrchestrator._dispatch_operation_run_from_records"),
     "_operation_dispatch_adapter_bindings": ("SourcingOrchestrator._operation_dispatch_adapter_bindings"),
+}
+_RUNTIME_METHOD_KWDEFAULTS = {
+    "_dispatch_operation_run_from_records": {"expected_workspace_id": ""},
+    "_operation_dispatch_adapter_bindings": None,
 }
 
 
@@ -523,7 +563,9 @@ def _runtime_method_contract(method_name: str) -> tuple[str, ast.Module] | None:
         return None
     if method.__globals__ is not vars(orchestrator_module):
         return None
-    if method.__closure__ is not None or method.__defaults__ is not None or method.__kwdefaults__ is not None:
+    if method.__closure__ is not None or method.__defaults__ is not None:
+        return None
+    if method.__kwdefaults__ != _RUNTIME_METHOD_KWDEFAULTS.get(method_name):
         return None
     if "__wrapped__" in vars(method):
         return None

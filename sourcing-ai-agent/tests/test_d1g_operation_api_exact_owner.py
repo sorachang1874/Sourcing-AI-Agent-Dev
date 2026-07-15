@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -13,6 +14,7 @@ from sourcing_agent.operation_runtime import (
     ACTION_ADD_CRM_NOTE,
     ACTION_EXPORT_CANDIDATES,
     ACTION_FILTER_PROJECTION,
+    ACTION_SET_CRM_STAGE,
 )
 from sourcing_agent.orchestrator import SourcingOrchestrator
 from sourcing_agent.semantic_provider import LocalSemanticProvider
@@ -97,6 +99,49 @@ class D1gOperationAPIExactOwnerPGTest(PGDurableRuntimeTestMixin, unittest.TestCa
                     cursor.execute(f"SELECT row_to_json(t)::text FROM {quoted_schema}.{quoted_table} AS t")
                     state[table_name] = tuple(sorted(str(row[0]) for row in cursor.fetchall()))
         return state
+
+    def _execute_pg(self, statement: str, parameters: tuple[Any, ...]) -> None:
+        fixture = self._pg_durable_runtime_fixture
+        self.assertIsNotNone(fixture)
+        self.assertIsNotNone(psycopg)
+        assert fixture is not None
+        assert psycopg is not None
+        quoted_schema = quote_control_plane_postgres_identifier(fixture.schema)
+        with psycopg.connect(
+            fixture.dsn,
+            autocommit=True,
+            connect_timeout=5,
+            client_encoding="utf8",
+        ) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(statement.format(schema=quoted_schema), parameters)
+
+    def _bind_planned_command(
+        self,
+        operation_run: dict[str, Any],
+        *,
+        suffix: str,
+        command_type: str,
+        owner: str,
+    ) -> dict[str, Any]:
+        command = self.store.upsert_workflow_command(
+            workflow_run_id=f"workflow-{suffix}",
+            operation_id=str(operation_run.get("operation_run_id") or ""),
+            command_type=command_type,
+            owner=owner,
+            idempotency_key=f"planned-guard:{suffix}",
+        )
+        self.store.repos.workflow_runtime.update_operation_state(
+            str(operation_run.get("operation_run_id") or ""),
+            status="planned",
+            workflow_ref_patch={
+                "workflow_run_id": command["workflow_run_id"],
+                "command_id": command["command_id"],
+                "command_type": command["command_type"],
+                "owner": command["owner"],
+            },
+        )
+        return command
 
     def _submit_filter(self, suffix: str, *, workspace_id: str) -> Any:
         return self.writer.submit_action(
@@ -542,6 +587,162 @@ class D1gOperationAPIExactOwnerPGTest(PGDurableRuntimeTestMixin, unittest.TestCa
         self.assertEqual(open_foreign["status"], "planned", open_foreign)
         self.assertEqual(open_foreign["workflow_command"]["command_id"], foreign_command["command_id"])
         self.assertEqual(self._table_state(), baseline)
+
+    def test_planned_replay_runs_request_and_approval_guards_before_returning_command(self) -> None:
+        workspace_id = "user-alice"
+
+        export_action, export_operation = self._approved_export(
+            "planned-unapproved-export",
+            workspace_id=workspace_id,
+        )
+        self.store.repos.workflow_runtime.update_action_state(
+            export_action["action_id"],
+            status="approval_required",
+            approval_status="required",
+        )
+        export_command = self._bind_planned_command(
+            export_operation,
+            suffix="planned-unapproved-export",
+            command_type="export.projection.generate",
+            owner="projection_exporter",
+        )
+        export_baseline = self._table_state()
+        for expected_workspace_id in (workspace_id, ""):
+            with self.subTest(kind="export-approval", expected_workspace_id=expected_workspace_id):
+                result = self.orchestrator.dispatch_operation_run_api(
+                    export_operation["operation_run_id"],
+                    {"actor": "alice"},
+                    expected_workspace_id=expected_workspace_id,
+                )
+                self.assertEqual(result.get("status"), "approval_required", result)
+                self.assertNotIn("workflow_command", result)
+                self.assertEqual(self._table_state(), export_baseline)
+                self.assertIsNotNone(self.store.get_workflow_command(export_command["command_id"]))
+
+        for mode, expected_workspace_id in (("authenticated", workspace_id), ("open", "")):
+            record_id = f"record-sensitive-{mode}"
+            self.store.upsert_crm_record(
+                {
+                    "crm_record_id": record_id,
+                    "workspace_id": workspace_id,
+                    "owner_user_id": "alice",
+                    "person_identity_key": f"person::{record_id}",
+                }
+            )
+            submitted = self.orchestrator.submit_operation_action(
+                {
+                    "action_type": ACTION_SET_CRM_STAGE,
+                    "workspace_id": workspace_id,
+                    "target_ref": {"crm_record_id": record_id},
+                    "input": {"stage": "do_not_contact"},
+                    "idempotency_key": f"stage:{mode}",
+                    "actor": "alice",
+                },
+                expected_workspace_id=workspace_id,
+                expected_owner_user_id="alice",
+            )
+            command = self._bind_planned_command(
+                submitted["operation_run"],
+                suffix=f"planned-sensitive-{mode}",
+                command_type="crm.record.update",
+                owner="crm_writer",
+            )
+            protected_before = self._table_state(
+                ("workflow_commands", "crm_records", "crm_engagements", "crm_tasks", "crm_events")
+            )
+            result = self.orchestrator.dispatch_operation_run_api(
+                submitted["operation_run"]["operation_run_id"],
+                {"actor": "alice"},
+                expected_workspace_id=expected_workspace_id,
+            )
+            self.assertEqual(result.get("status"), "approval_required", result)
+            self.assertNotIn("workflow_command", result)
+            self.assertEqual(
+                self._table_state(("workflow_commands", "crm_records", "crm_engagements", "crm_tasks", "crm_events")),
+                protected_before,
+            )
+            self.assertEqual(
+                self.store.get_workflow_command(command["command_id"])["status"],
+                command["status"],
+            )
+
+        invalid_record_id = "record-schema-invalid"
+        self.store.upsert_crm_record(
+            {
+                "crm_record_id": invalid_record_id,
+                "workspace_id": workspace_id,
+                "owner_user_id": "alice",
+                "person_identity_key": f"person::{invalid_record_id}",
+            }
+        )
+        invalid = self.orchestrator.submit_operation_action(
+            {
+                "action_type": ACTION_ADD_CRM_NOTE,
+                "workspace_id": workspace_id,
+                "target_ref": {"crm_record_id": invalid_record_id},
+                "input": {"note": "valid before persisted tamper"},
+                "idempotency_key": "note:schema-invalid-planned",
+                "actor": "alice",
+            },
+            expected_workspace_id=workspace_id,
+            expected_owner_user_id="alice",
+        )
+        self._bind_planned_command(
+            invalid["operation_run"],
+            suffix="planned-schema-invalid",
+            command_type="crm.note.add",
+            owner="crm_writer",
+        )
+        self._execute_pg(
+            "UPDATE {schema}.agent_actions SET input_json = %s::jsonb WHERE action_id = %s",
+            (json.dumps({"note": ""}), invalid["action"]["action_id"]),
+        )
+        invalid_baseline = self._table_state()
+        for expected_workspace_id in (workspace_id, ""):
+            with self.subTest(kind="schema-invalid", expected_workspace_id=expected_workspace_id):
+                result = self.orchestrator.dispatch_operation_run_api(
+                    invalid["operation_run"]["operation_run_id"],
+                    {"actor": "alice"},
+                    expected_workspace_id=expected_workspace_id,
+                )
+                self.assertEqual(result.get("status"), "conflict", result)
+                self.assertEqual(result.get("reason"), "operation_action_request_schema_validation_conflict")
+                self.assertTrue(result.get("request_schema_revalidation_required"), result)
+                self.assertEqual(self._table_state(), invalid_baseline)
+
+        pin_drift_action, pin_drift_operation = self._approved_export(
+            "planned-pin-drift",
+            workspace_id=workspace_id,
+        )
+        self._bind_planned_command(
+            pin_drift_operation,
+            suffix="planned-pin-drift",
+            command_type="export.projection.generate",
+            owner="projection_exporter",
+        )
+        forged_digest = "f" * 64
+        self._execute_pg(
+            "UPDATE {schema}.agent_actions SET request_schema_version = %s, request_schema_digest = %s "
+            "WHERE action_id = %s",
+            ("forged_v1", forged_digest, pin_drift_action["action_id"]),
+        )
+        self._execute_pg(
+            "UPDATE {schema}.operation_runs SET request_schema_version = %s, request_schema_digest = %s "
+            "WHERE operation_run_id = %s",
+            ("forged_v1", forged_digest, pin_drift_operation["operation_run_id"]),
+        )
+        pin_baseline = self._table_state()
+        for expected_workspace_id in (workspace_id, ""):
+            with self.subTest(kind="pin-drift", expected_workspace_id=expected_workspace_id):
+                result = self.orchestrator.dispatch_operation_run_api(
+                    pin_drift_operation["operation_run_id"],
+                    {"actor": "alice"},
+                    expected_workspace_id=expected_workspace_id,
+                )
+                self.assertEqual(result.get("status"), "conflict", result)
+                self.assertEqual(result.get("reason"), "operation_action_request_schema_pin_conflict")
+                self.assertTrue(result.get("request_schema_revalidation_required"), result)
+                self.assertEqual(self._table_state(), pin_baseline)
 
     def test_same_owner_controls_and_explicit_open_mode_reach_existing_semantics(self) -> None:
         expected = "user-alice"

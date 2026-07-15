@@ -4,8 +4,9 @@
 > authenticated Operation reads and controls without expanding the action request-schema or served-tool population.
 > A review attempt against the earlier candidate terminated without a valid verdict, but supplied three reproducible
 > findings: shared-workflow command leakage, malformed foreign-workspace event leakage, and mutable planned-command
-> references. The current fixed-forward closes those findings; that partial evidence is not an advisory or formal
-> verdict.
+> references. Pinned `646e596` advisory then returned `NO-GO 0/0/1/1`: valid planned replay bypassed persisted request
+> validation and approval, while post-D1h schema-count wording drifted. The current fixed-forward closes both findings;
+> neither author evidence nor an advisory is a formal verdict.
 > Author validation is not an independent verdict; a fresh pinned non-author review must bind the enclosing commit
 > before hosted/live multi-user Operation exposure or product/milestone signoff. No provider, model, or live
 > environment is used by this batch.
@@ -30,11 +31,13 @@ linked-operation command predicate in `storage.py`:
   `LIMIT`, including malformed rows whose stream/action ids point at an owned aggregate;
 - an authenticated planned CRM/export run exposes or reuses its referenced command only when that command resolves to
   the exact current OperationRun; blank, missing, foreign, and same-workspace-other-run references return generic
-  not-found before compatibility observation or any domain/runtime write;
+  not-found before compatibility observation or any domain/runtime write. A valid reference is captured once, then
+  must pass persisted request validation plus adapter target/approval guards before replay is returned; it never
+  records a schema-less compatibility write and is not read a second time from mutable `workflow_ref`;
 - open-mode operator calls preserve their existing explicit-workspace behavior;
 - `GET /api/operations/action-registry` remains a shared registry read rather than a workspace-owned aggregate read.
 
-D1g does not define schemas or binders for the remaining 12 schema-less actions, add an action to the served Agent
+D1g did not define schemas or binders for the 12 schema-less actions at its checkpoint; post-D1h current is 11. It does not add an action to the served Agent
 registry, change D1f's CRM target contract, add a provider/model path, add a workflow-command type, or migrate storage.
 
 ## 2. Canonical owner and caller provenance
@@ -67,7 +70,7 @@ canonical production owner remains the workspace columns above.
 | dispatch | exact OperationRun plus linked AgentAction workspace preflight; lock-taking branch rechecks under the dispatch lock before the R-029 compatibility event | existing operator dispatch retained |
 | nested status/provenance commands | command `operation_id` resolves through exact-workspace run+action at query time; shared workflow aliases cannot widen scope | existing shared-workflow aggregation retained |
 | nested action/run/timeline events | physical event workspace exact-matches before query limit | existing unfiltered operator evidence view retained |
-| planned CRM/export command reference | referenced command exact-binds the current owned run before compatibility observation or writes | existing legacy planned-reference behavior retained |
+| planned CRM/export command reference | invalid ref fails before writes; valid-current ref is captured once, passes request/target/approval validation, then replays without compatibility observation | existing invalid-ref legacy behavior retained; valid replay still passes approval/schema guards |
 
 The production method signatures make `expected_workspace_id` keyword-only. An empty value is the explicit open-mode
 compatibility marker; authenticated routes always pass a non-empty server-derived value.
@@ -106,7 +109,10 @@ authorization predicates, not response-time cleanup: a foreign row cannot consum
 For planned CRM/export dispatch, command-reference validation runs before request-schema compatibility observation.
 In authenticated mode the command must exist, carry a nonblank physical operation id, resolve through the same exact
 workspace, and name the current run. Failure returns the same run not-found shape with a full zero-write snapshot.
-Open mode passes an empty expected workspace and intentionally retains the previous compatibility behavior.
+Open mode passes an empty expected workspace and retains legacy invalid-reference behavior. A valid planned replay in
+either mode still passes the same persisted request validator and adapter approval/target guards. The captured replay
+is passed into the adapter, avoiding a second mutable-reference read and preserving zero compatibility writes for a
+valid replay.
 
 ## 5. Compatibility and residual boundaries
 
@@ -119,8 +125,9 @@ Open mode passes an empty expected workspace and intentionally retains the previ
   obligations are unchanged.
 - R-028 remains open and is not triggered by D1g. No CRM writer or effect boundary changes; D1f's target
   owner/version revalidation and the outstanding command/effect/terminal UoW remain exactly as documented.
-- R-029 remains open at **12/15 schema-less** actions. D1g protects existing Operation reads/controls; it does not
-  claim that schema-less submission is served, reviewed, or migration-complete.
+- R-029 remained open at **12/15 schema-less** actions at the D1g checkpoint; post-D1h current is **11/15**. D1g
+  protects existing Operation reads/controls; it does not claim that schema-less submission is served, reviewed, or
+  migration-complete.
 - Served Agent tool population remains zero. Fake/scripted or local open-mode testing does not authorize live/provider
   use.
 
@@ -163,15 +170,19 @@ git diff --check
 
 Evidence confirmed so far on the current candidate tree:
 
-- `tests/test_api_request_scope.py` plus the expanded D1g real-PG matrix: **28 passed + 97 subtests**;
-- exact D1g matrix alone: **6 passed + 29 subtests**, including pre-limit shared-workflow command and malformed-event
-  probes plus blank/missing/foreign/same-workspace-other planned-reference zero-write cases;
+- `tests/test_api_request_scope.py` plus the expanded D1g real-PG matrix: **29 passed + 107 subtests**;
+- exact D1g matrix alone: **7 passed + 35 subtests**, including pre-limit shared-workflow command/malformed-event
+  probes; blank/missing/foreign/same-workspace-other planned-reference zero-write; and authenticated/open approval,
+  schema-invalid, and pin-drift planned positives;
+- dispatch registry plus two exact characterization adjacency probes: **25 passed**; the stale probe seams exposed by
+  `646e596` are updated without weakening the frozen selector contract;
+- combined D1 request/schema/activation adjacency: **117 passed + 198 subtests**;
 - four exact adjacent Operation nodes: **4 passed** — cross-workspace link/event-collision, list/provenance/resume/retry,
   open-mode HTTP Operation flow, and the R-019 state-sync caller ratchet;
 - full `tests/test_operation_runtime.py`: **136 passed + 503 subtests**;
 - `make lint`: **58 files**, green;
 - global mypy: accepted baseline unchanged at **81 errors / 4 files**.
 
-The final staged diff check, commit id, and fresh pinned review status remain pending
-and must be appended by the enclosing author closeout. No author or local advisory evidence may be represented as a
-formal `GO`.
+The full Operation runtime and final diff check are green. The enclosing commit id and fresh pinned review status must
+be appended by the enclosing author closeout. No author or local advisory evidence may be represented as a formal
+`GO`.

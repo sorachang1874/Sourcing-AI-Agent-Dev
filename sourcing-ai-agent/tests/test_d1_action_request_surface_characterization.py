@@ -290,8 +290,16 @@ class _DispatchProbe:
         self.operation_runtime_writer = _DispatchOperationRuntimeWriterProbe()
 
     @staticmethod
-    def _operation_run_control_response_record(record: dict[str, Any]) -> dict[str, Any]:
+    def _operation_run_control_response_record(
+        record: dict[str, Any],
+        *,
+        expected_workspace_id: str = "",
+    ) -> dict[str, Any]:
         return record
+
+    @staticmethod
+    def _existing_planned_operation_command_response(**_: Any) -> dict[str, Any]:
+        return {}
 
     @staticmethod
     def _dispatch_projection_read_operation(**_: Any) -> dict[str, Any]:
