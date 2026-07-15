@@ -91,6 +91,21 @@
       "authority": "live_authorized"
     },
     {
+      "policy_entry_id": "openai_pretraining_zero_prior_official_discovery.v5",
+      "target": {
+        "lab_id": "openai",
+        "research_focus_id": "pretraining",
+        "scope": "Public professional evidence of current or historical OpenAI affiliation and current or historical pre-training or base-model training relevance."
+      },
+      "source_prompt_sha256": "d6717a385cd2d5d7309f0e4a0abccb6dbcf03f67d0aef2b79e8017364478cbe3",
+      "authority": "live_authorized",
+      "session_query_policy_id": "discovery_only_official_accounts_no_person_hydration_v2",
+      "session_query_policy_sha256": "26305c1bd1529e51bb35e9ce1533b64f09b2ed87f99981f14be5dde0718101fc",
+      "official_account_handles": [
+        "OpenAI"
+      ]
+    },
+    {
       "policy_entry_id": "google_deepmind_pretraining_recall_wave1.v1",
       "target": {
         "lab_id": "google_deepmind",

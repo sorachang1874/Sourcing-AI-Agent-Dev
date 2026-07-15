@@ -908,18 +908,18 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
         }
         live_entries = [entry for entry in policy["entries"] if entry["authority"] == "live_authorized"]
         openai_prompt_paths = sorted(
-            (ROOT / "prompts/live-exploration").glob("2026-07-14-openai-pretrain-recall-wave*.md")
+            (ROOT / "prompts/live-exploration").glob("*-openai-pretrain-recall-wave*.md")
         )
         google_deepmind_prompt_paths = sorted(
-            (ROOT / "prompts/live-exploration").glob("2026-07-15-google-deepmind-pretraining-recall-wave*.md")
+            (ROOT / "prompts/live-exploration").glob("*-google-deepmind-pretraining-recall-wave*.md")
         )
         openai_entries = [entry for entry in live_entries if entry["target"]["lab_id"] == "openai"]
         google_deepmind_entries = [
             entry for entry in live_entries if entry["target"]["lab_id"] == "google_deepmind"
         ]
-        self.assertEqual(len(openai_entries), len(openai_prompt_paths), 7)
+        self.assertEqual(len(openai_entries), len(openai_prompt_paths), 8)
         self.assertEqual(len(google_deepmind_entries), len(google_deepmind_prompt_paths), 7)
-        self.assertEqual(len(live_entries), 14)
+        self.assertEqual(len(live_entries), 15)
         self.assertEqual({canonical_json(entry["target"]) for entry in openai_entries}, {canonical_json(openai_target)})
         self.assertEqual(
             {canonical_json(entry["target"]) for entry in google_deepmind_entries},
@@ -956,29 +956,80 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             "Do not impose a candidate, observation, query, or native-X-call business cap",
             discovery_only_prompt,
         )
-        official_prompt = next(
+        def assert_official_discovery_v5(
+            *,
+            prompt: str,
+            entry: dict[str, Any],
+            official_handles: list[str],
+        ) -> None:
+            normalized_prompt = " ".join(prompt.split())
+            self.assertEqual(
+                entry["session_query_policy_id"],
+                runner.DISCOVERY_ONLY_OFFICIAL_SESSION_QUERY_POLICY_ID,
+            )
+            self.assertEqual(
+                entry["session_query_policy_sha256"],
+                runner.session_query_policy_semantics_sha256(
+                    runner.DISCOVERY_ONLY_OFFICIAL_SESSION_QUERY_POLICY_ID
+                ),
+            )
+            self.assertEqual(entry["official_account_handles"], official_handles)
+            self.assertIn("This wave is Phase D only", normalized_prompt)
+            self.assertIn("One narrow organization exception is allowed", normalized_prompt)
+            self.assertIn("positive `filter:replies` discovery across four distinct cells", normalized_prompt)
+            self.assertIn("both `mode=Top` and `mode=Latest`", normalized_prompt)
+            self.assertIn("current, recent-historical, and older-historical shards", normalized_prompt)
+            self.assertIn("Harvest handles from Posts, Replies, mentions", normalized_prompt)
+            self.assertIn("Do not over-focus on Bio", normalized_prompt)
+            self.assertIn(
+                "Keep lab affiliation and technical temporality as independent dimensions",
+                normalized_prompt,
+            )
+            self.assertIn("Convert native-X RFC dates", normalized_prompt)
+            self.assertIn(
+                "Do not impose a candidate, observation, query, or native-X-call business cap",
+                normalized_prompt,
+            )
+
+        google_deepmind_official_prompt = next(
             path for path in google_deepmind_prompt_paths if "v5-official-discovery" in path.name
         ).read_text()
-        official_entry = next(
+        google_deepmind_official_entry = next(
             entry
             for entry in google_deepmind_entries
             if entry["policy_entry_id"] == "google_deepmind_pretraining_recall_wave2_official_discovery.v5"
         )
-        self.assertEqual(
-            official_entry["session_query_policy_id"],
-            runner.DISCOVERY_ONLY_OFFICIAL_SESSION_QUERY_POLICY_ID,
+        assert_official_discovery_v5(
+            prompt=google_deepmind_official_prompt,
+            entry=google_deepmind_official_entry,
+            official_handles=["GoogleDeepMind", "DeepMind"],
         )
-        self.assertEqual(
-            official_entry["session_query_policy_sha256"],
-            runner.session_query_policy_semantics_sha256(
-                runner.DISCOVERY_ONLY_OFFICIAL_SESSION_QUERY_POLICY_ID
-            ),
+
+        openai_official_prompt_path = next(
+            path for path in openai_prompt_paths if "wave0-v5-official-discovery" in path.name
         )
-        self.assertEqual(official_entry["official_account_handles"], ["GoogleDeepMind", "DeepMind"])
-        self.assertIn("One narrow organization exception is allowed", official_prompt)
-        self.assertIn("positive `filter:replies` discovery across four distinct cells", official_prompt)
-        self.assertIn("Convert native-X RFC dates", official_prompt)
-        self.assertIn("Do not impose a candidate, observation, query, or native-X-call business cap", official_prompt)
+        openai_official_prompt = openai_official_prompt_path.read_text()
+        openai_official_entry = next(
+            entry
+            for entry in openai_entries
+            if entry["policy_entry_id"] == "openai_pretraining_zero_prior_official_discovery.v5"
+        )
+        assert_official_discovery_v5(
+            prompt=openai_official_prompt,
+            entry=openai_official_entry,
+            official_handles=["OpenAI"],
+        )
+        self.assertIn("Treat this execution as `prior_waves=[]`", openai_official_prompt)
+        self.assertIn("**frozen-union conditional coverage**", openai_official_prompt)
+        self.assertIn("exactly one positive `from:OpenAI` operator", openai_official_prompt)
+        self.assertNotIn("from:GoogleDeepMind", openai_official_prompt)
+        self.assertNotIn("from:DeepMind", openai_official_prompt)
+        transfer_contract = (ROOT / "docs/OPENAI_ZERO_PRIOR_OFFICIAL_DISCOVERY_V5.md").read_text()
+        normalized_transfer_contract = " ".join(transfer_contract.split())
+        self.assertIn("Status: offline transfer only", normalized_transfer_contract)
+        self.assertIn("Prior input: `prior_waves=[]`", normalized_transfer_contract)
+        self.assertIn("**frozen-union conditional coverage**", normalized_transfer_contract)
+        self.assertIn('It is never "recall"', normalized_transfer_contract)
         with mock.patch.object(runner, "DEFAULT_EFFECTIVE_PROMPT_POLICY", PRODUCTION_EFFECTIVE_PROMPT_POLICY):
             with tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
@@ -1004,6 +1055,21 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
                     wall_clock=lambda: FIXED_TIME,
                 )
                 self.assertEqual(grant["effective_prompt_policy_entry_id"], "openai_pretraining_recall_wave1.v1")
+
+                openai_official_prompt_raw = openai_official_prompt_path.read_bytes()
+                _write_private(Path(request["prompt_source"]["path"]), openai_official_prompt_raw)
+                request["prompt_source"]["sha256"] = _bytes_sha(openai_official_prompt_raw)
+                _write_private(request_path, (canonical_json(request) + "\n").encode())
+                grant, _ = issue_live_grant(
+                    request_path=request_path,
+                    grant_root=root / "openai-v5-approvals",
+                    auth_source=auth,
+                    wall_clock=lambda: FIXED_TIME,
+                )
+                self.assertEqual(
+                    grant["effective_prompt_policy_entry_id"],
+                    "openai_pretraining_zero_prior_official_discovery.v5",
+                )
 
                 gdm_prompt_raw = google_deepmind_prompt_paths[0].read_bytes()
                 _write_private(Path(request["prompt_source"]["path"]), gdm_prompt_raw)
