@@ -2820,6 +2820,7 @@ def _parse_independent_review_causal_binding(
         *,
         normalize_newlines: bool = False,
         allow_response_item_memory_annotation: bool = False,
+        require_only_observation: bool = False,
     ) -> bool:
         window_observations = [
             observed for line_number, observed in observations if start_line < line_number < complete_line
@@ -2835,7 +2836,11 @@ def _parse_independent_review_causal_binding(
                 else observed == expected
             )
         ]
-        return single_task_turn and len(window_observations) == 1 and len(matches) == 1
+        return (
+            single_task_turn
+            and len(matches) == 1
+            and (not require_only_observation or len(window_observations) == 1)
+        )
 
     binding: dict[str, Any] = {
         "turn_id": turn_id,
@@ -2856,6 +2861,7 @@ def _parse_independent_review_causal_binding(
                 expected_session_source == "vscode"
                 and expected_thread_source == _INDEPENDENT_REVIEW_APP_SERVER_THREAD_SOURCE
             ),
+            require_only_observation=True,
         ),
         "final_event_message_exact": exact_between(
             event_final_messages,

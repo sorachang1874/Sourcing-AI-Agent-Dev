@@ -635,6 +635,22 @@ def test_causal_binding_requires_one_complete_root_exec_turn_and_exact_messages(
     assert runner._review_causal_binding_valid(valid_binding) is True
     assert valid_blockers == []
 
+    transport_augmented_events = json.loads(json.dumps(base_events))
+    transport_augmented_events.insert(
+        2,
+        {
+            "type": "response_item",
+            "payload": {
+                "type": "message",
+                "role": "user",
+                "content": [{"type": "input_text", "text": "recommended_plugins transport context"}],
+            },
+        },
+    )
+    augmented_binding, augmented_blockers = causal(transport_augmented_events)
+    assert runner._review_causal_binding_valid(augmented_binding) is True
+    assert augmented_blockers == []
+
     memory_annotation = """<oai-mem-citation>
 <citation_entries>
 MEMORY.md:10-12|note=[pinned scope evidence]
