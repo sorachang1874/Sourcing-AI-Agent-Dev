@@ -707,8 +707,22 @@ def test_d3c2f_migration_is_exactly_the_dormant_workflow_event_core_subbatch() -
             flags=re.IGNORECASE | re.DOTALL,
         )
     )
+    event_constraint_names = tuple(
+        name.casefold()
+        for name in re.findall(
+            r"\bADD CONSTRAINT ([a-z0-9_]+)\b",
+            alter_sections[0][1],
+            flags=re.IGNORECASE,
+        )
+    )
+    expected_constraint_names = tuple(name for name, _predicate in D3C2F_EVENT_CHECK_DEFINITIONS)
     assert event_columns == D3C2F_EVENT_COLUMNS
     assert event_column_definitions == D3C2F_EVENT_COLUMN_DEFINITIONS
+    # Count every constraint, not only the CHECK ... NOT VALID subset. This
+    # rejects an accidental twelfth validating constraint before its predicate
+    # can force a brownfield table scan.
+    assert event_constraint_names == expected_constraint_names
+    assert len(event_constraint_names) == 11
     assert event_check_definitions == D3C2F_EVENT_CHECK_DEFINITIONS
     assert len(event_columns) == 11
     assert "SET LOCAL lock_timeout = '5s'" in sql

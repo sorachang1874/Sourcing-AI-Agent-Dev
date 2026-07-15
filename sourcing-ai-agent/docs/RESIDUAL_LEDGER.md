@@ -58,7 +58,10 @@
   population remain open. This candidate changes neither R-019 status nor the 26-call ratchet and authorizes no
   runtime/live path. Commit `47a7f7db...` received a fresh pinned medium-effort advisory `NO-GO 0/0/2/0`; the migration
   semantics passed, and its two contract-evidence findings (stale `0006` absence wording and incomplete zero-PG exact
-  DDL oracle) are immediate fixed-forward inputs with fresh re-review pending. This does not change any residual status.
+  DDL oracle) were fixed-forwarded. Commit `316741a...` re-review closed those two but returned medium advisory
+  `NO-GO 0/0/1/0` because a twelfth validating `ADD CONSTRAINT` escaped the `CHECK ... NOT VALID`-only extractor; the
+  every-constraint ordered-name/total exact assertion is now fixed-forwarded with migration/runtime unchanged and a
+  fresh re-review pending. This does not change any residual status.
 
 - **R-019 / D3c2e (2026-07-15):** decision-only batch ratifies the exact WorkflowEvent terminal-lineage core as
   **11 columns + 11 local `NOT VALID` checks**, reuses existing operation/command/attempt links, and forbids redundant

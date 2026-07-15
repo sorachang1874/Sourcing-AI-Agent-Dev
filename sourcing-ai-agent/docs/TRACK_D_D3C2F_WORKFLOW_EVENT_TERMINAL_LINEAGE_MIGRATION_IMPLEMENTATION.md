@@ -109,8 +109,13 @@ Pinned review record: commit `47a7f7db8582fef36afbeecf15fa6310f3e3c048` received
 medium-effort **ADVISORY NO-GO** with P0/P1/P2/P3=`0/0/2/0`. The SQL/runtime boundary itself passed; the two findings
 were contract-evidence gaps: stale D3c2e wording still claimed `0006` absence, and the zero-PG static preflight did not
 exact-compare type/default/nullability plus complete constraint names/predicates. The immediate fixed-forward corrects
-both without changing migration or runtime behavior; a fresh pinned re-review is required. This advisory is not a
-formal highest-effort verdict and authorizes no live/signoff path.
+both without changing migration or runtime behavior. Commit `316741a786f9cef0f945c83e0438fa6b4d097e37` then
+received a fresh pinned medium-effort **ADVISORY NO-GO** with P0/P1/P2/P3=`0/0/1/0`: the original two gaps were
+closed, but the oracle still counted only `CHECK ... NOT VALID` matches and therefore accepted an added twelfth
+validated `ADD CONSTRAINT`. The next fixed-forward independently exact-compares the ordered names and total of every
+`ADD CONSTRAINT` before comparing the full eleven-predicate grammar; migration/runtime blobs remain unchanged and a
+fresh pinned re-review is required. These advisories are not formal highest-effort verdicts and authorize no
+live/signoff path.
 
 ## 7. Explicit non-closure and next bounded decision
 
