@@ -12,6 +12,7 @@ from sourcing_agent.acquisition import AcquisitionEngine
 from sourcing_agent.asset_catalog import AssetCatalog
 from sourcing_agent.model_provider import DeterministicModelClient
 from sourcing_agent.orchestrator import SourcingOrchestrator
+from sourcing_agent.runtime_contamination_audit import build_runtime_contamination_report
 from sourcing_agent.scripted_provider_scenario import load_scripted_provider_invocations
 from sourcing_agent.semantic_provider import LocalSemanticProvider
 from sourcing_agent.settings import load_settings
@@ -125,7 +126,7 @@ class CohortWorkflowScriptedE2ETest(unittest.TestCase):
                         with patch(
                             "sourcing_agent.harvest_connectors._submit_harvest_actor_run",
                             side_effect=AssertionError("scripted Cohort E2E must not submit a live Harvest run"),
-                        ):
+                        ) as live_submit_sentinel:
                             result = orchestrator.run_workflow_blocking(
                                 {
                                     "raw_user_request": (
@@ -145,20 +146,39 @@ class CohortWorkflowScriptedE2ETest(unittest.TestCase):
                                     },
                                 }
                             )
-                        job_id = str(dict(result.get("job") or {}).get("job_id") or "")
-                        background_threads = [
-                            thread
-                            for thread in threading.enumerate()
-                            if thread.name == f"background-outreach-layering-{job_id}"
-                        ]
-                        for thread in background_threads:
-                            thread.join(timeout=20)
-                        self.assertFalse(
-                            any(thread.is_alive() for thread in background_threads),
-                            "background outreach reconcile did not settle before fixture teardown",
-                        )
-                        result = orchestrator.get_job_results(job_id) or result
-                        invocations = load_scripted_provider_invocations()
+                            job_id = str(dict(result.get("job") or {}).get("job_id") or "")
+                            background_threads = [
+                                thread
+                                for thread in threading.enumerate()
+                                if thread.name == f"background-outreach-layering-{job_id}"
+                            ]
+                            for thread in background_threads:
+                                thread.join(timeout=20)
+                            self.assertFalse(
+                                any(thread.is_alive() for thread in background_threads),
+                                "background outreach reconcile did not settle before fixture teardown",
+                            )
+                            result = (
+                                orchestrator.get_job_results_api(
+                                    job_id,
+                                    include_candidates=True,
+                                    include_runtime_details=True,
+                                )
+                                or result
+                            )
+                            invocations = load_scripted_provider_invocations()
+                            job_events = store.list_job_events(job_id)
+                            run_projection_link = store.repos.serving_projection.get_run_link(job_id)
+                            run_projection = store.repos.serving_projection.get(
+                                str(dict(run_projection_link or {}).get("projection_id") or "")
+                            )
+                            contamination_report = build_runtime_contamination_report(
+                                workspace_root=root,
+                                target_runtime_dir=runtime_dir,
+                                provider_cache_runtime_root=runtime_dir,
+                                include_postgres=False,
+                            )
+                            live_submit_sentinel.assert_not_called()
                     finally:
                         store.close()
 
@@ -166,6 +186,21 @@ class CohortWorkflowScriptedE2ETest(unittest.TestCase):
             self.assertEqual((job.get("status"), job.get("stage")), ("completed", "completed"))
             self.assertTrue(str(job.get("job_id") or ""))
             self.assertEqual(result["provider_execution_manifest"]["schema_version"], "cohort_provider_manifest.v1")
+            self.assertTrue(run_projection_link)
+            self.assertEqual(run_projection.get("projection_type"), "run_scope_projection")
+            self.assertEqual(str(dict(run_projection.get("readiness") or {}).get("profile") or ""), "complete")
+            self.assertEqual(contamination_report["status"], "clean")
+            self.assertEqual(contamination_report["finding_count"], 0)
+
+            event_details = [str(item.get("detail") or "") for item in job_events]
+            self.assertTrue(
+                any("Queued background outreach layering reconcile" in detail for detail in event_details),
+                json.dumps(event_details, ensure_ascii=False, indent=2),
+            )
+            self.assertTrue(
+                any("Background outreach layering reconcile completed" in detail for detail in event_details),
+                json.dumps(event_details, ensure_ascii=False, indent=2),
+            )
 
             asset_population = dict(result.get("asset_population") or {})
             self.assertEqual(asset_population.get("candidate_count"), 1)
@@ -207,6 +242,11 @@ class CohortWorkflowScriptedE2ETest(unittest.TestCase):
                     "harvest_profile_scraper_batch",
                 ],
             )
+            self.assertTrue(all(item.get("provider_mode") == "scripted" for item in invocations))
+            board_runtime_state = dict(result.get("board_runtime_state") or {})
+            serving_resolution = dict(board_runtime_state.get("serving_projection_resolution") or {})
+            self.assertEqual(serving_resolution.get("source"), "run_projection_link")
+            self.assertEqual(serving_resolution.get("status"), "ready")
 
 
 if __name__ == "__main__":

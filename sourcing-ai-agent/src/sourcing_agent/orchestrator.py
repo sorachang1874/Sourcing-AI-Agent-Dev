@@ -60482,6 +60482,10 @@ class SourcingOrchestrator:
             "completed_workflow_reconcile_inflight",
             "background_outreach_layering_running",
         }
+        terminal_outreach_statuses = {
+            "reconciled_outreach_layering",
+            "queued_outreach_layering",
+        }
         last_result: dict[str, Any] = {
             "job_id": normalized_job_id,
             "status": "skipped",
@@ -60514,23 +60518,44 @@ class SourcingOrchestrator:
             last_result = dict(result or {})
             reason = str(last_result.get("reason") or "").strip()
             status = str(last_result.get("status") or "").strip().lower()
-            if reason not in retryable_reasons:
+            if status in terminal_outreach_statuses:
                 if attempt_index > 1:
                     last_result["attempt_count"] = attempt_index
                     last_result["background_retry"] = True
                 return last_result
+            retry_reason = reason
+            if reason not in retryable_reasons:
+                latest_job = self.store.get_job(normalized_job_id)
+                outreach_still_pending = False
+                if latest_job is not None:
+                    latest_request = JobRequest.from_payload(dict(latest_job.get("request") or {}))
+                    outreach_still_pending = self._outreach_layering_requires_background_reconcile(
+                        request=latest_request,
+                        summary_payload=dict(latest_job.get("summary") or {}),
+                        allow_missing=True,
+                    )
+                if not outreach_still_pending:
+                    if attempt_index > 1:
+                        last_result["attempt_count"] = attempt_index
+                        last_result["background_retry"] = True
+                    return last_result
+                retry_reason = "background_outreach_layering_pending_after_adjacent_reconcile"
             if attempt_index >= max_attempts:
                 break
             self.store.append_job_event(
                 normalized_job_id,
                 "completed",
                 "running",
-                "Background outreach layering reconcile yielded until the workflow completion lease is released.",
+                (
+                    "Background outreach layering reconcile yielded after adjacent completed-workflow work."
+                    if retry_reason == "background_outreach_layering_pending_after_adjacent_reconcile"
+                    else "Background outreach layering reconcile yielded until the workflow completion lease is released."
+                ),
                 {
                     "source": normalized_source,
                     "attempt_index": attempt_index,
                     "max_attempts": max_attempts,
-                    "retry_reason": reason,
+                    "retry_reason": retry_reason,
                     "status": status,
                     "retry_sleep_seconds": retry_sleep_seconds,
                 },

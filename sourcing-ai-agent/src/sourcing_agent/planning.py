@@ -592,11 +592,18 @@ def _build_acquisition_tasks(
         effective_target_company,
         acquisition_strategy,
     )
-    include_former_search_seed = _should_include_default_former_search_seed(
-        categories=categories,
-        employment_statuses=employment_statuses,
-        acquisition_strategy=acquisition_strategy,
-        execution_preferences=effective_execution_preferences,
+    explicit_cohort = explicit_cohort_selection(request.to_record())
+    explicit_cohort_owns_employment_lanes = bool(
+        explicit_cohort is not None and str(explicit_cohort.get("source") or "") == "user_explicit"
+    )
+    include_former_search_seed = (
+        not explicit_cohort_owns_employment_lanes
+        and _should_include_default_former_search_seed(
+            categories=categories,
+            employment_statuses=employment_statuses,
+            acquisition_strategy=acquisition_strategy,
+            execution_preferences=effective_execution_preferences,
+        )
     )
     task_intent_view = _build_task_intent_view_metadata(
         effective_request=request,

@@ -9,11 +9,13 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import patch
 
-from sourcing_agent.acquisition import AcquisitionEngine
+from sourcing_agent.acquisition import AcquisitionEngine, AcquisitionExecution
 from sourcing_agent.acquisition_strategy import compile_acquisition_strategy
 from sourcing_agent.asset_catalog import AssetCatalog
 from sourcing_agent.cohort_provider_compiler import (
+    COHORT_CANONICAL_PROFILE_URL_FIELD,
     COHORT_EXECUTION_NOT_READY,
+    COHORT_PUBLIC_HEADLINE_SOURCE,
     CohortExecutionCapability,
     CohortHeadlineRoleProofVerifier,
     CohortProviderCompilationError,
@@ -37,6 +39,7 @@ from sourcing_agent.harvest_connectors import (
 from sourcing_agent.model_provider import DeterministicModelClient
 from sourcing_agent.planning import build_sourcing_plan, hydrate_sourcing_plan
 from sourcing_agent.runtime_environment import RuntimeEnvironment
+from sourcing_agent.search_seed_registry import load_search_seed_snapshot_from_snapshot_dir
 from sourcing_agent.settings import HarvestActorSettings
 
 
@@ -70,6 +73,14 @@ def _request_payload(
             role_match=role_match,
         ),
     }
+
+
+def _write_isolated_runtime_contract(runtime_dir: Path) -> None:
+    runtime_dir.mkdir(parents=True, exist_ok=True)
+    (runtime_dir / ".scripted-local-postgres.env").write_text(
+        "SOURCING_EXTERNAL_PROVIDER_MODE=scripted\nSOURCING_RUNTIME_ENVIRONMENT=scripted\n",
+        encoding="utf-8",
+    )
 
 
 class CohortRoleAuthorityTest(unittest.TestCase):
@@ -136,7 +147,15 @@ class CohortRoleAuthorityTest(unittest.TestCase):
 class CohortProviderCompilerTest(unittest.TestCase):
     def setUp(self) -> None:
         self.compiler = CohortProviderCompiler()
-        self.capability = CohortExecutionCapability(policy_revision="test.cohort-runtime.v1")
+        runtime_home = tempfile.TemporaryDirectory()
+        self.addCleanup(runtime_home.cleanup)
+        self.runtime_dir = Path(runtime_home.name)
+        _write_isolated_runtime_contract(self.runtime_dir)
+        self.capability = CohortExecutionCapability(
+            policy_revision="test.cohort-runtime.v1",
+            provider_mode="scripted",
+            runtime_namespace=str(self.runtime_dir),
+        )
         self.base_filters = {
             "current_companies": ["Acme"],
             "function_ids": ["999"],
@@ -149,7 +168,7 @@ class CohortProviderCompilerTest(unittest.TestCase):
         scripted_runtime = RuntimeEnvironment(
             name="scripted",
             provider_mode="scripted",
-            runtime_dir=Path("/tmp/scripted-runtime"),
+            runtime_dir=self.runtime_dir,
         )
         live_runtime = RuntimeEnvironment(
             name="production",
@@ -162,10 +181,10 @@ class CohortProviderCompilerTest(unittest.TestCase):
             "sourcing_agent.cohort_provider_compiler.current_runtime_environment",
             return_value=scripted_runtime,
         ):
-            capability = cohort_execution_capability_for_runtime(runtime_dir="/tmp/scripted-runtime")
+            capability = cohort_execution_capability_for_runtime(runtime_dir=self.runtime_dir)
             gate = cohort_execution_not_ready_result(
                 payload,
-                runtime_dir="/tmp/scripted-runtime",
+                runtime_dir=self.runtime_dir,
             )
 
         self.assertIsNotNone(capability)
@@ -194,20 +213,20 @@ class CohortProviderCompilerTest(unittest.TestCase):
         scripted_runtime = RuntimeEnvironment(
             name="scripted",
             provider_mode="scripted",
-            runtime_dir=Path("/tmp/scripted-runtime"),
+            runtime_dir=self.runtime_dir,
         )
         with patch(
             "sourcing_agent.cohort_provider_compiler.current_runtime_environment",
             return_value=scripted_runtime,
         ):
-            capability = cohort_execution_capability_for_runtime(runtime_dir="/tmp/scripted-runtime")
+            capability = cohort_execution_capability_for_runtime(runtime_dir=self.runtime_dir)
             gate = cohort_execution_not_ready_result(
                 _request_payload(
                     roles=["research", "engineering"],
                     statuses=["current"],
                     role_match="all",
                 ),
-                runtime_dir="/tmp/scripted-runtime",
+                runtime_dir=self.runtime_dir,
             )
 
         self.assertIsNone(gate)
@@ -217,7 +236,12 @@ class CohortProviderCompilerTest(unittest.TestCase):
             capability.role_proof_verifier_revision,
             CohortHeadlineRoleProofVerifier.verifier_revision,
         )
-        proof = CohortHeadlineRoleProofVerifier().verify({"headline": "Research Scientist and Software Engineer"})
+        proof = CohortHeadlineRoleProofVerifier().verify(
+            {
+                "public_headline": "Research Scientist and Software Engineer",
+                "public_headline_source": COHORT_PUBLIC_HEADLINE_SOURCE,
+            }
+        )
         self.assertIsNotNone(proof)
         assert proof is not None
         self.assertEqual(proof.role_bucket_ids, ("research", "engineering"))
@@ -269,9 +293,12 @@ class CohortProviderCompilerTest(unittest.TestCase):
                 "61252aff9cbe1c372a41c18fd1fb1414e16b283f5528a525977015c95c831e2a",
             ],
         )
+        manifest_without_digest = dict(manifest)
+        manifest_without_digest.pop("manifest_digest")
+        self.assertEqual(manifest["manifest_digest"], _sha256_json(manifest_without_digest))
         self.assertEqual(
-            manifest["manifest_digest"],
-            "1e0a10c1c361d0198f3a0d3a9d65a48d11fad1d08e04985e33ee0759f43bdc07",
+            manifest["compiler_inputs"]["execution_capability"]["runtime_namespace"],
+            str(self.runtime_dir.resolve()),
         )
         self.assertEqual(manifest["budget"]["lane_item_limits"], [7, 6, 6, 6])
         self.assertNotIn(
@@ -340,7 +367,11 @@ class CohortProviderCompilerTest(unittest.TestCase):
             _request_payload(roles=["research"], statuses=["current"]),
             execution_capability=self.capability,
         )
-        other = CohortExecutionCapability(policy_revision="test.other-policy.v1")
+        other = CohortExecutionCapability(
+            policy_revision="test.other-policy.v1",
+            provider_mode="scripted",
+            runtime_namespace=str(self.runtime_dir),
+        )
 
         with self.assertRaisesRegex(
             CohortProviderCompilationError,
@@ -543,7 +574,7 @@ class CohortProviderCompilerTest(unittest.TestCase):
                 }
 
         connector = _FakeConnector(HarvestActorSettings())
-        with tempfile.TemporaryDirectory() as tempdir:
+        with tempfile.TemporaryDirectory(dir=self.runtime_dir) as tempdir:
             result = connector.search_profiles_for_cohort_manifest(
                 manifest=manifest,
                 execution_capability=self.capability,
@@ -587,6 +618,8 @@ class CohortProviderCompilerTest(unittest.TestCase):
     def test_harvest_boundary_derives_exact_page_count_from_lane_budget(self) -> None:
         capability = CohortExecutionCapability(
             policy_revision="test.cohort-runtime.large-budget.v1",
+            provider_mode="scripted",
+            runtime_namespace=str(self.runtime_dir),
             max_provider_items=50,
             max_output_candidates=50,
         )
@@ -602,7 +635,7 @@ class CohortProviderCompilerTest(unittest.TestCase):
                 captured.append(dict(kwargs))
                 return {"rows": []}
 
-        with tempfile.TemporaryDirectory() as tempdir:
+        with tempfile.TemporaryDirectory(dir=self.runtime_dir) as tempdir:
             _FakeConnector(HarvestActorSettings()).search_profiles_for_cohort_manifest(
                 manifest=manifest,
                 execution_capability=capability,
@@ -649,7 +682,7 @@ class CohortProviderCompilerTest(unittest.TestCase):
                 return None
 
         connector = _PartialConnector(HarvestActorSettings())
-        with tempfile.TemporaryDirectory() as tempdir:
+        with tempfile.TemporaryDirectory(dir=self.runtime_dir) as tempdir:
             with self.assertRaises(CohortProviderExecutionError) as caught:
                 connector.search_profiles_for_cohort_manifest(
                     manifest=manifest,
@@ -663,7 +696,7 @@ class CohortProviderCompilerTest(unittest.TestCase):
             def search_profiles(self, **kwargs):
                 return {"rows": [None]}
 
-        with tempfile.TemporaryDirectory() as tempdir:
+        with tempfile.TemporaryDirectory(dir=self.runtime_dir) as tempdir:
             with self.assertRaisesRegex(
                 CohortProviderExecutionError,
                 "cohort_provider_lane_result_invalid",
@@ -682,7 +715,10 @@ class CohortProviderCompilerTest(unittest.TestCase):
             HarvestActorSettings(enabled=True, api_token="test", actor_id="actor")
         )
         for malformed_body in ([None], [{"publicIdentifier": "valid-person"}, None]):
-            with self.subTest(malformed_body=malformed_body), tempfile.TemporaryDirectory() as tempdir:
+            with (
+                self.subTest(malformed_body=malformed_body),
+                tempfile.TemporaryDirectory(dir=self.runtime_dir) as tempdir,
+            ):
                 with (
                     patch("sourcing_agent.harvest_connectors._harvest_connector_available", return_value=True),
                     patch("sourcing_agent.harvest_connectors._run_harvest_actor", return_value=malformed_body),
@@ -696,7 +732,7 @@ class CohortProviderCompilerTest(unittest.TestCase):
                     )
                 self.assertEqual(malformed.exception.code, "cohort_provider_lane_result_invalid")
 
-        with tempfile.TemporaryDirectory() as tempdir:
+        with tempfile.TemporaryDirectory(dir=self.runtime_dir) as tempdir:
             with (
                 patch("sourcing_agent.harvest_connectors._harvest_connector_available", return_value=True),
                 patch("sourcing_agent.harvest_connectors._run_harvest_actor", return_value=[]),
@@ -725,7 +761,7 @@ class CohortProviderCompilerTest(unittest.TestCase):
                 return {"rows": [{"full_name": "Identity-free"}]}
 
         connector = _InvalidFirstLaneConnector(HarvestActorSettings())
-        with tempfile.TemporaryDirectory() as tempdir:
+        with tempfile.TemporaryDirectory(dir=self.runtime_dir) as tempdir:
             with self.assertRaises(CohortProviderExecutionError) as caught:
                 connector.search_profiles_for_cohort_manifest(
                     manifest=manifest,
@@ -741,6 +777,8 @@ class CohortProviderCompilerTest(unittest.TestCase):
     def test_harvest_boundary_binds_completed_lanes_to_role_verifier_failure(self) -> None:
         capability = CohortExecutionCapability(
             policy_revision="test.proof-attempt-evidence.v1",
+            provider_mode="scripted",
+            runtime_namespace=str(self.runtime_dir),
             role_proof_verifier_id="failing_role_verifier",
             role_proof_verifier_revision="v1",
         )
@@ -765,7 +803,7 @@ class CohortProviderCompilerTest(unittest.TestCase):
             def verify(_row):
                 raise RuntimeError("proof unavailable")
 
-        with tempfile.TemporaryDirectory() as tempdir:
+        with tempfile.TemporaryDirectory(dir=self.runtime_dir) as tempdir:
             with self.assertRaises(CohortProviderExecutionError) as caught:
                 _Connector(HarvestActorSettings()).search_profiles_for_cohort_manifest(
                     manifest=manifest,
@@ -819,7 +857,7 @@ class CohortProviderCompilerTest(unittest.TestCase):
                 return {"rows": []}
 
         connector = _CountingConnector(HarvestActorSettings(enabled=False, api_token="", actor_id="actor"))
-        with tempfile.TemporaryDirectory() as tempdir:
+        with tempfile.TemporaryDirectory(dir=self.runtime_dir) as tempdir:
             not_integrated = self.compiler.compile(
                 _request_payload(roles=["research"], statuses=["current"]),
             )
@@ -845,6 +883,8 @@ class CohortProviderCompilerTest(unittest.TestCase):
 
         proof_capability = CohortExecutionCapability(
             policy_revision="test.cohort-runtime.v1",
+            provider_mode="scripted",
+            runtime_namespace=str(self.runtime_dir),
             role_proof_verifier_id="test_role_verifier",
             role_proof_verifier_revision="v1",
         )
@@ -856,7 +896,7 @@ class CohortProviderCompilerTest(unittest.TestCase):
             ),
             execution_capability=proof_capability,
         )
-        with tempfile.TemporaryDirectory() as tempdir:
+        with tempfile.TemporaryDirectory(dir=self.runtime_dir) as tempdir:
             with self.assertRaisesRegex(
                 CohortProviderCompilationError,
                 "cohort_selection_all_role_proof_unavailable",
@@ -873,7 +913,7 @@ class CohortProviderCompilerTest(unittest.TestCase):
             verifier_id = "test_role_verifier"
             verifier_revision = "v1"
 
-        with tempfile.TemporaryDirectory() as tempdir:
+        with tempfile.TemporaryDirectory(dir=self.runtime_dir) as tempdir:
             with self.assertRaisesRegex(
                 CohortProviderCompilationError,
                 "cohort_selection_all_role_proof_unavailable",
@@ -1019,11 +1059,92 @@ class CohortProviderCompilerTest(unittest.TestCase):
             ],
         )
         self.assertEqual(len(manifest["manifest_digest"]), 64)
+        self.assertNotIn(
+            "acquire_former_search_seed",
+            [task.task_type for task in plan.acquisition_tasks],
+        )
+        full_roster_task = next(task for task in plan.acquisition_tasks if task.task_type == "acquire_full_roster")
+        self.assertFalse(full_roster_task.metadata["include_former_search_seed"])
 
 
 class CohortAcquisitionRuntimeTest(unittest.TestCase):
+    def test_explicit_cohort_fence_precedes_every_legacy_strategy_route(self) -> None:
+        engine = object.__new__(AcquisitionEngine)
+        engine._should_use_local_anthropic_assets = lambda _request: False
+        routed: list[str] = []
+
+        def _cohort_route(task, _state, _request):
+            routed.append(str(task.metadata.get("strategy_type") or ""))
+            return AcquisitionExecution(
+                task_id=task.task_id,
+                status="blocked",
+                detail="cohort fence reached",
+                payload={"reason": "cohort_fence_reached"},
+            )
+
+        engine._acquire_search_seed_pool = _cohort_route
+        engine._acquire_full_roster = lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("legacy full-roster route must not run")
+        )
+        engine._acquire_investor_firm_roster = lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("legacy investor route must not run")
+        )
+        request = JobRequest.from_payload(
+            _request_payload(
+                roles=["research", "engineering"],
+                statuses=["current", "former"],
+            )
+        )
+        strategy_types = [
+            "full_company_roster",
+            "scoped_search_roster",
+            "former_employee_search",
+            "investor_firm_roster",
+            "caller_override_unknown",
+        ]
+
+        for strategy_type in strategy_types:
+            with self.subTest(strategy_type=strategy_type):
+                execution = engine.execute_task(
+                    AcquisitionTask(
+                        task_id=f"cohort-{strategy_type}",
+                        task_type="acquire_full_roster",
+                        title="Acquire explicit cohort",
+                        description="strategy route fence",
+                        status="ready",
+                        blocking=True,
+                        metadata={"strategy_type": strategy_type},
+                    ),
+                    request,
+                    "Acme",
+                    {},
+                )
+                self.assertEqual(execution.payload["reason"], "cohort_fence_reached")
+
+        self.assertEqual(routed, strategy_types)
+
+    def test_zero_result_normalizer_never_converts_manifest_mismatch_to_success(self) -> None:
+        engine = object.__new__(AcquisitionEngine)
+        blocked = AcquisitionExecution(
+            task_id="cohort-former-compatibility",
+            status="blocked",
+            detail="Stored cohort provider manifest no longer matches canonical inputs.",
+            payload={"reason": "cohort_provider_manifest_semantic_mismatch"},
+        )
+
+        normalized = engine._normalize_zero_result_search_seed_execution(
+            blocked,
+            detail="Former-member search completed but did not add any new candidates.",
+        )
+
+        self.assertIs(normalized, blocked)
+        self.assertEqual(normalized.status, "blocked")
+        self.assertEqual(normalized.payload["reason"], "cohort_provider_manifest_semantic_mismatch")
+
     def test_non_live_manifest_flows_into_one_durable_search_seed_contract(self) -> None:
         captured: list[dict[str, Any]] = []
+        emit_rows = [True]
+        rejected_unverified_count = [0]
 
         class _Connector:
             @staticmethod
@@ -1038,19 +1159,25 @@ class CohortAcquisitionRuntimeTest(unittest.TestCase):
                     }
                     for lane in manifest["lanes"]
                 ]
-                return {
-                    "rows": [
+                rows = (
+                    [
                         {
                             "full_name": "Ada Researcher",
                             "headline": "Research Engineer",
                             "profile_url": "https://www.linkedin.com/in/ada-researcher/",
                             "username": "ada-researcher",
+                            COHORT_CANONICAL_PROFILE_URL_FIELD: "https://linkedin.com/in/ada-researcher",
                             "cohort_lane_membership": memberships,
                         }
-                    ],
-                    "candidate_count": 1,
+                    ]
+                    if emit_rows[0]
+                    else []
+                )
+                return {
+                    "rows": rows,
+                    "candidate_count": len(rows),
                     "truncated_count": 0,
-                    "rejected_unverified_count": 0,
+                    "rejected_unverified_count": rejected_unverified_count[0],
                     "missing_required_lane_count": 0,
                     "result_digest": "result-digest",
                     "cohort_provider_manifest": manifest,
@@ -1061,7 +1188,7 @@ class CohortAcquisitionRuntimeTest(unittest.TestCase):
                             "employment_status": lane["employment_status"],
                             "role_bucket_id": lane["role_bucket_id"],
                             "provider_item_limit": lane["provider_item_limit"],
-                            "row_count": 1,
+                            "row_count": len(rows),
                             "raw_path": f"/tmp/{lane['lane_id']}.json",
                         }
                         for lane in manifest["lanes"]
@@ -1104,7 +1231,7 @@ class CohortAcquisitionRuntimeTest(unittest.TestCase):
                 blocking=True,
                 metadata={
                     "strategy_type": "scoped_search_roster",
-                    "filter_hints": {"current_companies": ["Acme"], "past_companies": ["Acme"]},
+                    "filter_hints": {"past_companies": ["Injected task-local company"]},
                     "cost_policy": {"allow_shared_provider_cache": False},
                 },
             )
@@ -1113,20 +1240,23 @@ class CohortAcquisitionRuntimeTest(unittest.TestCase):
                 base_filter_hints={"current_companies": ["Acme"], "past_companies": ["Acme"]},
             )
 
-            execution = engine._acquire_search_seed_pool(
-                task,
-                {
-                    "company_identity": identity,
-                    "snapshot_dir": snapshot_dir,
-                    "job_id": "job-cohort",
-                    "plan_payload": {
-                        "acquisition_strategy": {
-                            "provider_execution_manifest": preview_manifest,
-                        }
-                    },
-                    "runtime_mode": "workflow",
+            runtime_state = {
+                "company_identity": identity,
+                "snapshot_dir": snapshot_dir,
+                "job_id": "job-cohort",
+                "plan_payload": {
+                    "acquisition_strategy": {
+                        "filter_hints": {"current_companies": ["Acme"], "past_companies": ["Acme"]},
+                        "provider_execution_manifest": preview_manifest,
+                    }
                 },
+                "runtime_mode": "workflow",
+            }
+            execution = engine.execute_task(
+                task,
                 request,
+                "Acme",
+                runtime_state,
             )
 
             self.assertEqual(execution.status, "completed")
@@ -1135,6 +1265,10 @@ class CohortAcquisitionRuntimeTest(unittest.TestCase):
             self.assertEqual(len(captured), 1)
             manifest = captured[0]["manifest"]
             self.assertTrue(manifest["execution_ready"])
+            self.assertEqual(
+                manifest["compiler_inputs"]["base_filter_hints"],
+                {"current_companies": ["Acme"], "past_companies": ["Acme"]},
+            )
             self.assertEqual(
                 {(lane["employment_status"], lane["role_bucket_id"]) for lane in manifest["lanes"]},
                 {
@@ -1152,12 +1286,41 @@ class CohortAcquisitionRuntimeTest(unittest.TestCase):
             )
             candidate_documents = json.loads((snapshot_dir / "candidate_documents.json").read_text(encoding="utf-8"))
             self.assertEqual(candidate_documents["candidate_count"], 1)
-            result_summary = json.loads(
-                (snapshot_dir / "cohort_provider_discovery" / "cohort_execution_result.json").read_text(
-                    encoding="utf-8"
-                )
-            )
+            result_summary_path = snapshot_dir / "cohort_provider_discovery" / "cohort_execution_result.json"
+            result_summary = json.loads(result_summary_path.read_text(encoding="utf-8"))
             self.assertEqual(result_summary["result_digest"], "result-digest")
+            self.assertEqual(result_summary["artifact_path"], str(result_summary_path))
+            publication_digest = result_summary["cohort_publication_digest"]
+            self.assertEqual(len(publication_digest), 64)
+            self.assertEqual(
+                candidate_documents["acquisition_sources"]["search_seed_snapshot"]["cohort_publication_digest"],
+                publication_digest,
+            )
+            self.assertIsNotNone(load_search_seed_snapshot_from_snapshot_dir(snapshot_dir, identity=identity))
+
+            runtime_state.update(execution.state_updates)
+            compatibility_former_task = AcquisitionTask(
+                task_id="cohort-former-compatibility",
+                task_type="acquire_former_search_seed",
+                title="Acquire former cohort",
+                description="legacy hydrated plan compatibility",
+                status="ready",
+                blocking=False,
+                metadata={
+                    "strategy_type": "former_employee_search",
+                    "employment_statuses": ["former"],
+                    "search_seed_queries": ["legacy former query"],
+                    "filter_hints": {"past_companies": ["Acme"]},
+                },
+            )
+            compatibility_execution = engine._acquire_former_search_seed(
+                compatibility_former_task,
+                runtime_state,
+                request,
+            )
+            self.assertEqual(compatibility_execution.status, "completed")
+            self.assertTrue(compatibility_execution.payload["reused_existing_full_manifest"])
+            self.assertEqual(len(captured), 1)
 
             invalid_plan_payloads = {
                 "missing": {},
@@ -1169,20 +1332,151 @@ class CohortAcquisitionRuntimeTest(unittest.TestCase):
             }
             for label, plan_payload in invalid_plan_payloads.items():
                 with self.subTest(plan_manifest=label):
-                    blocked = engine._acquire_search_seed_pool(
+                    invalid_snapshot_dir = runtime_dir / "company_assets" / "acme" / f"snap-invalid-{label}"
+                    invalid_snapshot_dir.mkdir(parents=True)
+                    blocked = engine.execute_task(
                         task,
+                        request,
+                        "Acme",
                         {
                             "company_identity": identity,
-                            "snapshot_dir": snapshot_dir,
+                            "snapshot_dir": invalid_snapshot_dir,
                             "job_id": f"job-{label}-plan",
-                            "plan_payload": plan_payload,
+                            "plan_payload": {
+                                **plan_payload,
+                                **(
+                                    {
+                                        "acquisition_strategy": {
+                                            "filter_hints": {
+                                                "current_companies": ["Acme"],
+                                                "past_companies": ["Acme"],
+                                            },
+                                            **dict(plan_payload.get("acquisition_strategy") or {}),
+                                        }
+                                    }
+                                    if plan_payload.get("acquisition_strategy")
+                                    else {}
+                                ),
+                            },
                             "runtime_mode": "workflow",
                         },
-                        request,
                     )
                     self.assertEqual(blocked.status, "blocked")
                     self.assertEqual(blocked.payload["reason"], "cohort_provider_manifest_semantic_mismatch")
+                    self.assertFalse((invalid_snapshot_dir / "candidate_documents.json").exists())
+                    self.assertFalse(
+                        (invalid_snapshot_dir / "cohort_provider_discovery" / "cohort_execution_result.json").exists()
+                    )
+                    self.assertFalse((invalid_snapshot_dir / "search_seed_discovery" / "summary.json").exists())
             self.assertEqual(len(captured), 1)
+
+            emit_rows[0] = False
+            zero_snapshot_dir = runtime_dir / "company_assets" / "acme" / "snap-zero"
+            zero_snapshot_dir.mkdir(parents=True)
+            stale_candidate_path = zero_snapshot_dir / "candidate_documents.json"
+            stale_result_path = zero_snapshot_dir / "cohort_provider_discovery" / "cohort_execution_result.json"
+            stale_result_path.parent.mkdir(parents=True)
+            stale_candidate_path.write_text('{"sentinel":"stale-candidates"}', encoding="utf-8")
+            stale_result_path.write_text('{"sentinel":"stale-result"}', encoding="utf-8")
+            mutated_route_task = AcquisitionTask(
+                task_id="cohort-mutated-route",
+                task_type="acquire_full_roster",
+                title="Acquire explicit cohort",
+                description="task-local strategy must not redirect the cohort route",
+                status="ready",
+                blocking=True,
+                metadata={
+                    "strategy_type": "investor_firm_roster",
+                    "filter_hints": {"past_companies": ["Injected task-local company"]},
+                    "cost_policy": {"allow_shared_provider_cache": False},
+                },
+            )
+            zero_execution = engine.execute_task(
+                mutated_route_task,
+                request,
+                "Acme",
+                {
+                    "company_identity": identity,
+                    "snapshot_dir": zero_snapshot_dir,
+                    "job_id": "job-cohort-zero",
+                    "plan_payload": {
+                        "acquisition_strategy": {
+                            "filter_hints": {
+                                "current_companies": ["Acme"],
+                                "past_companies": ["Acme"],
+                            },
+                            "provider_execution_manifest": preview_manifest,
+                        }
+                    },
+                    "runtime_mode": "workflow",
+                },
+            )
+            self.assertEqual(zero_execution.status, "blocked")
+            self.assertEqual(zero_execution.payload["reason"], "cohort_provider_no_results")
+            self.assertEqual(zero_execution.state_updates, {})
+            self.assertEqual(len(captured), 2)
+            self.assertEqual(
+                json.loads(stale_candidate_path.read_text(encoding="utf-8")),
+                {"sentinel": "stale-candidates"},
+            )
+            self.assertEqual(
+                json.loads(stale_result_path.read_text(encoding="utf-8")),
+                {"sentinel": "stale-result"},
+            )
+            self.assertFalse((zero_snapshot_dir / "search_seed_discovery" / "summary.json").exists())
+
+            rejected_unverified_count[0] = 2
+            rejected_snapshot_dir = runtime_dir / "company_assets" / "acme" / "snap-all-rejected"
+            rejected_snapshot_dir.mkdir(parents=True)
+            rejected_execution = engine.execute_task(
+                mutated_route_task,
+                request,
+                "Acme",
+                {
+                    "company_identity": identity,
+                    "snapshot_dir": rejected_snapshot_dir,
+                    "job_id": "job-cohort-all-rejected",
+                    "plan_payload": runtime_state["plan_payload"],
+                    "runtime_mode": "workflow",
+                },
+            )
+            self.assertEqual(rejected_execution.status, "blocked")
+            self.assertEqual(rejected_execution.payload["reason"], "cohort_provider_all_rows_rejected")
+            self.assertEqual(rejected_execution.state_updates, {})
+            self.assertFalse(
+                (rejected_snapshot_dir / "cohort_provider_discovery" / "cohort_execution_result.json").exists()
+            )
+            self.assertFalse((rejected_snapshot_dir / "search_seed_discovery" / "summary.json").exists())
+
+            emit_rows[0] = True
+            rejected_unverified_count[0] = 0
+            partial_snapshot_dir = runtime_dir / "company_assets" / "acme" / "snap-partial-publication"
+            partial_snapshot_dir.mkdir(parents=True)
+            with (
+                patch(
+                    "sourcing_agent.search_seed_registry.project_search_seed_snapshot_to_candidate_documents",
+                    side_effect=OSError("synthetic candidate projection failure"),
+                ),
+                self.assertRaisesRegex(OSError, "synthetic candidate projection failure"),
+            ):
+                engine.execute_task(
+                    mutated_route_task,
+                    request,
+                    "Acme",
+                    {
+                        "company_identity": identity,
+                        "snapshot_dir": partial_snapshot_dir,
+                        "job_id": "job-cohort-partial-publication",
+                        "plan_payload": runtime_state["plan_payload"],
+                        "runtime_mode": "workflow",
+                    },
+                )
+            self.assertTrue(
+                (partial_snapshot_dir / "cohort_provider_discovery" / "cohort_execution_result.json").exists()
+            )
+            self.assertTrue((partial_snapshot_dir / "search_seed_discovery" / "summary.json").exists())
+            self.assertFalse((partial_snapshot_dir / "candidate_documents.json").exists())
+            self.assertIsNone(load_search_seed_snapshot_from_snapshot_dir(partial_snapshot_dir, identity=identity))
 
     def test_scripted_runtime_executes_real_harvest_boundary_without_live_submission(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
@@ -1200,7 +1494,7 @@ class CohortAcquisitionRuntimeTest(unittest.TestCase):
                                     "match": {"logical_name": "harvest_profile_search"},
                                     "body": [
                                         {
-                                            "linkedinUrl": "https://www.linkedin.com/in/scripted-researcher/",
+                                            "linkedinUrl": "https://example.com/not-the-linkedin-identity",
                                             "publicIdentifier": "scripted-researcher",
                                             "fullName": "Scripted Researcher",
                                             "headline": "Research Scientist and Software Engineer",
@@ -1270,20 +1564,22 @@ class CohortAcquisitionRuntimeTest(unittest.TestCase):
                     side_effect=AssertionError("scripted cohort runtime must not submit a live Harvest run"),
                 ),
             ):
-                execution = engine._acquire_search_seed_pool(
+                execution = engine.execute_task(
                     task,
+                    request,
+                    "Acme",
                     {
                         "company_identity": identity,
                         "snapshot_dir": snapshot_dir,
                         "job_id": "job-scripted-cohort",
                         "plan_payload": {
                             "acquisition_strategy": {
+                                "filter_hints": {"current_companies": ["Acme"]},
                                 "provider_execution_manifest": preview_manifest,
                             }
                         },
                         "runtime_mode": "workflow",
                     },
-                    request,
                 )
 
             self.assertEqual(execution.status, "completed")
@@ -1299,6 +1595,7 @@ class CohortAcquisitionRuntimeTest(unittest.TestCase):
                 (snapshot_dir / "search_seed_discovery" / "entries.json").read_text(encoding="utf-8")
             )
             self.assertEqual(persisted[0]["full_name"], "Scripted Researcher")
+            self.assertEqual(persisted[0]["profile_url"], "https://linkedin.com/in/scripted-researcher")
             self.assertEqual(
                 persisted[0]["metadata"]["cohort_role_bucket_ids"],
                 ["research", "engineering"],

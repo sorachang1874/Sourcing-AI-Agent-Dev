@@ -5,7 +5,7 @@ import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field, replace
 from datetime import datetime
-from hashlib import sha1
+from hashlib import sha1, sha256
 from pathlib import Path
 from typing import Any, Callable
 
@@ -28,6 +28,7 @@ from .candidate_artifacts import (
 )
 from .canonicalization import canonicalize_company_records
 from .cohort_provider_compiler import (
+    COHORT_CANONICAL_PROFILE_URL_FIELD,
     CohortHeadlineRoleProofVerifier,
     CohortProviderCompiler,
     cohort_execution_capability_for_runtime,
@@ -80,6 +81,10 @@ from .runtime_tuning import (
     runtime_provider_limiter_slot,
 )
 from .search_provider import SearchProviderError, build_search_provider
+from .search_seed_registry import (
+    COHORT_PUBLICATION_DIGEST_FIELD,
+    cohort_publication_commit_digest_from_candidate_documents,
+)
 from .search_seed_registry import (
     dedupe_search_seed_entries as _registry_dedupe_search_seed_entries,
 )
@@ -141,6 +146,51 @@ class AcquisitionExecution:
     detail: str
     payload: dict[str, Any]
     state_updates: dict[str, Any] = field(default_factory=dict)
+
+
+def _build_cohort_execution_result(
+    *,
+    manifest: dict[str, Any],
+    execution: dict[str, Any],
+    entries: list[dict[str, Any]],
+    lane_summaries: list[dict[str, Any]],
+    execution_capability: dict[str, Any],
+    artifact_path: Path,
+    commit_marker_path: Path,
+) -> dict[str, Any]:
+    core = {
+        "schema_version": "cohort_execution_result.v1",
+        "provider": str(manifest.get("provider") or ""),
+        "cohort_selection_digest": str(manifest.get("cohort_selection_digest") or ""),
+        "cohort_provider_manifest_digest": str(manifest.get("manifest_digest") or ""),
+        "result_digest": str(execution.get("result_digest") or ""),
+        "candidate_count": len(entries),
+        "truncated_count": int(execution.get("truncated_count") or 0),
+        "rejected_unverified_count": int(execution.get("rejected_unverified_count") or 0),
+        "missing_required_lane_count": int(execution.get("missing_required_lane_count") or 0),
+        "lane_summaries": [dict(item) for item in lane_summaries],
+        "execution_capability": dict(execution_capability),
+    }
+    publication_digest = sha256(
+        json.dumps(
+            core,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+            default=str,
+        ).encode("utf-8")
+    ).hexdigest()
+    return {
+        **core,
+        "artifact_path": str(artifact_path),
+        "commit_marker_path": str(commit_marker_path),
+        COHORT_PUBLICATION_DIGEST_FIELD: publication_digest,
+        "publication_contract": {
+            "schema_version": "cohort_publication_commit.v1",
+            "state": "requires_candidate_documents_digest_match",
+            "digest_field": COHORT_PUBLICATION_DIGEST_FIELD,
+        },
+    }
 
 
 def _effective_cost_policy(
@@ -880,6 +930,21 @@ class AcquisitionEngine:
         use_local_anthropic_assets = self._should_use_local_anthropic_assets(job_request)
         if task.task_type == "resolve_company_identity":
             return self._resolve_company(target_company, task, state, job_request)
+        explicit_cohort = explicit_cohort_selection(_effective_request_payload(job_request))
+        explicit_cohort_is_authoritative = bool(
+            explicit_cohort is not None and str(explicit_cohort.get("source") or "") == "user_explicit"
+        )
+        if explicit_cohort_is_authoritative and task.task_type == "acquire_full_roster":
+            # Explicit cohort acquisition owns the entire physical provider
+            # route. Mutable/legacy strategy metadata cannot redirect this
+            # task into company-roster or investor-roster connectors.
+            return self._acquire_search_seed_pool(task, state, job_request)
+        if explicit_cohort_is_authoritative and task.task_type == "acquire_former_search_seed":
+            # New plans omit this legacy task. Hydrated historical plans may
+            # only reuse a verified result from the already-executed full
+            # manifest; _acquire_former_search_seed never recompiles a narrow
+            # task-local manifest for an explicit cohort.
+            return self._acquire_former_search_seed(task, state, job_request)
         strategy_type = self._task_strategy_type(task, job_request)
         if (
             company_key == "anthropic"
@@ -1755,8 +1820,13 @@ class AcquisitionEngine:
             if isinstance(search_seed_snapshot, SearchSeedSnapshot)
             else int(payload.get("entry_count") or 0)
         )
+        valid_zero_result = bool(
+            isinstance(search_seed_snapshot, SearchSeedSnapshot)
+            and stop_reason in {"completed", "cohort_provider_no_results"}
+        )
         if (
             execution.status == "blocked"
+            and valid_zero_result
             and search_seed_entry_count == 0
             and queued_query_count == 0
             and stop_reason != "queued_background_search"
@@ -2586,18 +2656,17 @@ class AcquisitionEngine:
         """
 
         request_payload = _effective_request_payload(job_request)
-        filter_hints = self._task_filter_hints(task, job_request)
+        plan_acquisition_strategy = dict(dict(state.get("plan_payload") or {}).get("acquisition_strategy") or {})
+        # The full cohort manifest is plan-owned. A later compatibility task
+        # must not narrow its compiler inputs (for example, to past-only
+        # filters) and thereby create a second physical provider plan.
+        filter_hints = dict(plan_acquisition_strategy.get("filter_hints") or {})
         compiler = CohortProviderCompiler()
         preview_manifest = compiler.compile(
             request_payload,
             base_filter_hints=filter_hints,
         )
-        stored_manifest = dict(
-            dict(dict(state.get("plan_payload") or {}).get("acquisition_strategy") or {}).get(
-                "provider_execution_manifest"
-            )
-            or {}
-        )
+        stored_manifest = dict(plan_acquisition_strategy.get("provider_execution_manifest") or {})
         if stored_manifest != preview_manifest:
             return AcquisitionExecution(
                 task_id=task.task_id,
@@ -2690,20 +2759,34 @@ class AcquisitionEngine:
             }
             for status in lane_entries
         }
-        result_summary = {
-            "schema_version": "cohort_execution_result.v1",
-            "provider": str(manifest.get("provider") or ""),
-            "cohort_selection_digest": str(manifest.get("cohort_selection_digest") or ""),
-            "cohort_provider_manifest_digest": str(manifest.get("manifest_digest") or ""),
-            "result_digest": str(execution.get("result_digest") or ""),
-            "candidate_count": len(entries),
-            "truncated_count": int(execution.get("truncated_count") or 0),
-            "rejected_unverified_count": int(execution.get("rejected_unverified_count") or 0),
-            "missing_required_lane_count": int(execution.get("missing_required_lane_count") or 0),
-            "lane_summaries": lane_summaries,
-            "execution_capability": capability.to_record(),
-        }
         result_summary_path = snapshot_dir / "cohort_provider_discovery" / "cohort_execution_result.json"
+        candidate_documents_path = snapshot_dir / "candidate_documents.json"
+        result_summary = _build_cohort_execution_result(
+            manifest=manifest,
+            execution=execution,
+            entries=entries,
+            lane_summaries=lane_summaries,
+            execution_capability=capability.to_record(),
+            artifact_path=result_summary_path,
+            commit_marker_path=candidate_documents_path,
+        )
+        if not entries:
+            all_rows_rejected = int(execution.get("rejected_unverified_count") or 0) > 0
+            return AcquisitionExecution(
+                task_id=task.task_id,
+                status="blocked",
+                detail=(
+                    "Cohort provider execution produced rows, but none had the required exact role proof."
+                    if all_rows_rejected
+                    else "Cohort provider execution completed but returned no candidate leads."
+                ),
+                payload={
+                    "reason": (
+                        "cohort_provider_all_rows_rejected" if all_rows_rejected else "cohort_provider_no_results"
+                    ),
+                    "cohort_execution_attempt": result_summary,
+                },
+            )
         AssetLogger(snapshot_dir).write_json(
             result_summary_path,
             result_summary,
@@ -2730,6 +2813,7 @@ class AcquisitionEngine:
                     "strategy_type": self._task_strategy_type(task, job_request),
                     "requested_filter_hints": dict(filter_hints),
                     "effective_filter_hints": dict(filter_hints),
+                    COHORT_PUBLICATION_DIGEST_FIELD: str(result_summary.get(COHORT_PUBLICATION_DIGEST_FIELD) or ""),
                     "cohort_provider_manifest": manifest,
                     "cohort_execution_result": result_summary,
                     "cohort_execution_result_path": str(result_summary_path),
@@ -2738,24 +2822,18 @@ class AcquisitionEngine:
                 lane_entries=lane_entries,
             )
         )
+        publication_digest = str(result_summary.get(COHORT_PUBLICATION_DIGEST_FIELD) or "")
+        committed_publication_digest = cohort_publication_commit_digest_from_candidate_documents(snapshot_dir)
+        if not publication_digest or committed_publication_digest != publication_digest:
+            raise RuntimeError("Cohort publication did not commit its candidate-document digest marker.")
+        committed_result_summary = {
+            **result_summary,
+            "publication_committed": True,
+        }
         candidate_documents_projection = self._reawaken_waiting_prerequisite_after_candidate_documents_write(
             job_id=str(state.get("job_id") or ""),
             snapshot=snapshot,
         )
-        if not entries:
-            return AcquisitionExecution(
-                task_id=task.task_id,
-                status="blocked",
-                detail="Cohort provider execution completed but returned no candidate leads.",
-                payload={
-                    **snapshot.to_record(),
-                    "cohort_execution_result": result_summary,
-                    "cohort_execution_result_path": str(result_summary_path),
-                    "candidate_documents_projection": candidate_documents_projection,
-                },
-                state_updates={"search_seed_snapshot": snapshot},
-            )
-
         profile_prefetch = self._queue_background_profile_prefetch_for_search_seed_entries(
             identity=identity,
             entries=entries,
@@ -2781,7 +2859,7 @@ class AcquisitionEngine:
                 "profile_prefetch": dict(profile_prefetch),
                 "candidate_documents_projection": candidate_documents_projection,
                 "cohort_provider_manifest": manifest,
-                "cohort_execution_result": result_summary,
+                "cohort_execution_result": committed_result_summary,
                 "cohort_execution_result_path": str(result_summary_path),
             },
             state_updates={"search_seed_snapshot": snapshot},
@@ -2809,12 +2887,10 @@ class AcquisitionEngine:
                 if str(item.get("role_bucket_id") or "").strip()
             )
         )
+        profile_url = str(normalized.get(COHORT_CANONICAL_PROFILE_URL_FIELD) or "").strip()
         username = str(normalized.get("username") or "").strip().strip("/")
-        profile_url = str(
-            normalized.get("profile_url") or normalized.get("linkedin_url") or normalized.get("url") or ""
-        ).strip()
-        if not profile_url and username:
-            profile_url = f"https://www.linkedin.com/in/{username}/"
+        if not username and profile_url:
+            username = profile_url.rstrip("/").rsplit("/", 1)[-1]
         metadata = {
             **dict(normalized.get("metadata") or {}),
             "cohort_provider_manifest_digest": manifest_digest,
@@ -3295,6 +3371,111 @@ class AcquisitionEngine:
             existing_search_seed_snapshot if isinstance(existing_search_seed_snapshot, SearchSeedSnapshot) else None,
             durable_search_seed_snapshot,
         )
+        explicit_cohort = explicit_cohort_selection(_effective_request_payload(job_request))
+        if explicit_cohort is not None and str(explicit_cohort.get("source") or "") == "user_explicit":
+            plan_acquisition_strategy = dict(dict(state.get("plan_payload") or {}).get("acquisition_strategy") or {})
+            stored_manifest = dict(plan_acquisition_strategy.get("provider_execution_manifest") or {})
+            expected_manifest = CohortProviderCompiler().compile(
+                _effective_request_payload(job_request),
+                base_filter_hints=dict(plan_acquisition_strategy.get("filter_hints") or {}),
+            )
+            if stored_manifest != expected_manifest:
+                return AcquisitionExecution(
+                    task_id=task.task_id,
+                    status="blocked",
+                    detail="Stored cohort provider manifest no longer matches the canonical request and plan inputs.",
+                    payload={
+                        "reason": "cohort_provider_manifest_semantic_mismatch",
+                        "cohort_provider_manifest": stored_manifest,
+                        "expected_cohort_provider_manifest": expected_manifest,
+                    },
+                )
+
+            summary_payload = (
+                dict(reusable_search_seed_snapshot.summary_payload or {})
+                if isinstance(reusable_search_seed_snapshot, SearchSeedSnapshot)
+                else {}
+            )
+            executed_manifest = dict(summary_payload.get("cohort_provider_manifest") or {})
+            execution_result = dict(summary_payload.get("cohort_execution_result") or {})
+            stored_compiler_inputs = dict(stored_manifest.get("compiler_inputs") or {})
+            executed_compiler_inputs = dict(executed_manifest.get("compiler_inputs") or {})
+            stored_lane_digests = {
+                str(lane.get("lane_id") or ""): str(lane.get("lane_digest") or "")
+                for lane in list(stored_manifest.get("lanes") or [])
+                if isinstance(lane, dict) and str(lane.get("lane_id") or "").strip()
+            }
+            executed_lane_digests = {
+                str(lane.get("lane_id") or ""): str(lane.get("lane_digest") or "")
+                for lane in list(executed_manifest.get("lanes") or [])
+                if isinstance(lane, dict) and str(lane.get("lane_id") or "").strip()
+            }
+            expected_former_lane_ids = {
+                str(lane.get("lane_id") or "")
+                for lane in list(stored_manifest.get("lanes") or [])
+                if isinstance(lane, dict)
+                and str(lane.get("employment_status") or "").strip().lower() == "former"
+                and str(lane.get("lane_id") or "").strip()
+            }
+            completed_former_lane_ids = {
+                str(lane.get("lane_id") or "")
+                for lane in list(execution_result.get("lane_summaries") or [])
+                if isinstance(lane, dict)
+                and str(lane.get("employment_status") or "").strip().lower() == "former"
+                and str(lane.get("lane_id") or "").strip()
+            }
+            manifest_digest = str(stored_manifest.get("manifest_digest") or "")
+            executed_manifest_digest = str(executed_manifest.get("manifest_digest") or "")
+            reusable_full_manifest = bool(
+                isinstance(reusable_search_seed_snapshot, SearchSeedSnapshot)
+                and expected_former_lane_ids
+                and expected_former_lane_ids.issubset(completed_former_lane_ids)
+                and manifest_digest
+                and executed_manifest_digest
+                and bool(executed_manifest.get("execution_ready"))
+                and stored_lane_digests == executed_lane_digests
+                and stored_compiler_inputs.get("cohort_selection") == executed_compiler_inputs.get("cohort_selection")
+                and stored_compiler_inputs.get("base_filter_hints") == executed_compiler_inputs.get("base_filter_hints")
+                and stored_compiler_inputs.get("requested_result_limit")
+                == executed_compiler_inputs.get("requested_result_limit")
+                and str(execution_result.get("cohort_provider_manifest_digest") or "") == executed_manifest_digest
+                and str(execution_result.get("result_digest") or "")
+                and int(execution_result.get("missing_required_lane_count") or 0) == 0
+            )
+            if reusable_full_manifest:
+                former_entries = _search_seed_snapshot_lane_entries(reusable_search_seed_snapshot, "former")
+                return AcquisitionExecution(
+                    task_id=task.task_id,
+                    status="completed",
+                    detail=(
+                        "The canonical cohort manifest already completed every requested former-member lane; "
+                        "skipped duplicate provider execution."
+                    ),
+                    payload={
+                        **reusable_search_seed_snapshot.to_record(),
+                        "lane_entry_count": len(former_entries),
+                        "reused_existing_full_manifest": True,
+                        "planned_cohort_provider_manifest_digest": manifest_digest,
+                        "cohort_provider_manifest_digest": executed_manifest_digest,
+                        "completed_former_lane_ids": sorted(completed_former_lane_ids),
+                    },
+                    state_updates={"search_seed_snapshot": reusable_search_seed_snapshot},
+                )
+            return AcquisitionExecution(
+                task_id=task.task_id,
+                status="blocked",
+                detail=(
+                    "The compatibility former-member task requires a durable result for every former lane in "
+                    "the canonical cohort manifest."
+                ),
+                payload={
+                    "reason": "cohort_full_manifest_result_not_reusable",
+                    "planned_cohort_provider_manifest_digest": manifest_digest,
+                    "cohort_provider_manifest_digest": executed_manifest_digest,
+                    "expected_former_lane_ids": sorted(expected_former_lane_ids),
+                    "completed_former_lane_ids": sorted(completed_former_lane_ids),
+                },
+            )
         if _search_seed_snapshot_satisfies_lane_queries(
             reusable_search_seed_snapshot,
             lane="former",

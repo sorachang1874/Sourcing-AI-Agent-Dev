@@ -22369,6 +22369,65 @@ class PipelineTest(unittest.TestCase):
         self.assertTrue(result["background_retry"])
         self.assertEqual(reconcile.call_count, 2)
 
+    def test_background_outreach_layering_reconcile_continues_after_adjacent_reconcile(self) -> None:
+        job_id = "job_outreach_layering_after_adjacent_reconcile"
+        request_payload = {
+            "raw_user_request": "Find current and former researchers",
+            "target_company": "Acme",
+            "target_scope": "full_company_asset",
+        }
+        self.store.save_job(
+            job_id=job_id,
+            job_type="workflow",
+            status="completed",
+            stage="completed",
+            request_payload=request_payload,
+            plan_payload={},
+            summary_payload={
+                "candidate_source": {"snapshot_id": "snapshot-adjacent-reconcile"},
+                "outreach_layering": {
+                    "status": "scheduled",
+                    "snapshot_id": "snapshot-adjacent-reconcile",
+                    "reason": "deferred_for_asset_population_fast_path",
+                },
+            },
+            artifact_path="",
+        )
+        initial_event_count = len(self.store.list_job_events(job_id))
+        with (
+            unittest.mock.patch.dict(
+                os.environ,
+                {
+                    "OUTREACH_LAYERING_BACKGROUND_RECONCILE_MAX_ATTEMPTS": "3",
+                    "OUTREACH_LAYERING_BACKGROUND_RECONCILE_RETRY_SECONDS": "0",
+                },
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_reconcile_completed_workflow_if_needed",
+                side_effect=[
+                    {"job_id": job_id, "status": "reconciled_harvest_prefetch"},
+                    {"job_id": job_id, "status": "reconciled_outreach_layering"},
+                ],
+            ) as reconcile,
+        ):
+            result = self.orchestrator._run_background_outreach_layering_reconcile(
+                job_id=job_id,
+                source="workflow_completion",
+            )
+
+        self.assertEqual(result["status"], "reconciled_outreach_layering")
+        self.assertEqual(result["attempt_count"], 2)
+        self.assertTrue(result["background_retry"])
+        self.assertEqual(reconcile.call_count, 2)
+        retry_events = [
+            event
+            for event in self.store.list_job_events(job_id)[initial_event_count:]
+            if str(dict(event.get("payload") or {}).get("retry_reason") or "")
+            == "background_outreach_layering_pending_after_adjacent_reconcile"
+        ]
+        self.assertEqual(len(retry_events), 1)
+
     def test_reconcile_completed_workflow_after_deferred_outreach_layering(self) -> None:
         request_payload = {
             "raw_user_request": "帮我找Reflection AI的Post-train方向的人",

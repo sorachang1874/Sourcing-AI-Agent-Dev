@@ -17,6 +17,21 @@ from .snapshot_state import load_candidate_document_state as _load_candidate_doc
 from .snapshot_state import read_json_dict as _read_json_dict
 from .snapshot_state import read_json_list as _read_json_list
 
+COHORT_PUBLICATION_DIGEST_FIELD = "cohort_publication_digest"
+
+
+def cohort_publication_commit_digest_from_candidate_documents(snapshot_dir: Path) -> str:
+    payload = _read_json_dict(Path(snapshot_dir) / "candidate_documents.json")
+    source = dict(dict(payload.get("acquisition_sources") or {}).get("search_seed_snapshot") or {})
+    return str(source.get(COHORT_PUBLICATION_DIGEST_FIELD) or "").strip()
+
+
+def cohort_publication_is_committed(snapshot_dir: Path, summary_payload: dict[str, Any] | None) -> bool:
+    expected_digest = str(dict(summary_payload or {}).get(COHORT_PUBLICATION_DIGEST_FIELD) or "").strip()
+    if not expected_digest:
+        return True
+    return cohort_publication_commit_digest_from_candidate_documents(snapshot_dir) == expected_digest
+
 
 def dedupe_search_seed_entries(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
     deduped: list[dict[str, Any]] = []
@@ -348,7 +363,13 @@ def project_search_seed_snapshot_to_candidate_documents(
     merged_candidate_list = sorted(list(merged_candidates.values()), key=lambda item: item.display_name)
     merged_evidence_list = list(merged_evidence.values())
     acquisition_sources = dict(existing_payload.get("acquisition_sources") or {})
-    acquisition_sources["search_seed_snapshot"] = snapshot.to_record()
+    search_seed_source = snapshot.to_record()
+    cohort_publication_digest = str(
+        dict(snapshot.summary_payload or {}).get(COHORT_PUBLICATION_DIGEST_FIELD) or ""
+    ).strip()
+    if cohort_publication_digest:
+        search_seed_source[COHORT_PUBLICATION_DIGEST_FIELD] = cohort_publication_digest
+    acquisition_sources["search_seed_snapshot"] = search_seed_source
     payload = {
         **existing_payload,
         "snapshot": existing_payload.get("snapshot") or snapshot.to_record(),
@@ -504,6 +525,8 @@ def load_search_seed_snapshot_from_snapshot_dir(
     summary_path = discovery_dir / "summary.json"
     entries_path = discovery_dir / "entries.json"
     summary_payload = _read_json_dict(summary_path)
+    if not cohort_publication_is_committed(snapshot_dir, summary_payload):
+        return None
     aggregate_entries = _read_json_list(entries_path)
 
     lane_payloads: dict[str, dict[str, Any]] = {}
@@ -515,7 +538,9 @@ def load_search_seed_snapshot_from_snapshot_dir(
         if not lane_payload:
             continue
         lane_key = normalize_search_seed_employment_scope(
-            lane_payload.get("employment_scope") or lane_payload.get("employment_status") or lane_summary_path.parent.name
+            lane_payload.get("employment_scope")
+            or lane_payload.get("employment_status")
+            or lane_summary_path.parent.name
         )
         lane_entries_path = _resolve_search_seed_entries_path(
             lane_payload.get("entries_path"),
@@ -624,6 +649,13 @@ def load_search_seed_lane_summaries(
     auto_backfill: bool = True,
 ) -> list[dict[str, Any]]:
     discovery_dir = snapshot_dir / "search_seed_discovery"
+    aggregate_summary_payload = _load_json(discovery_dir / "summary.json")
+    if (
+        isinstance(aggregate_summary_payload, dict)
+        and aggregate_summary_payload
+        and not cohort_publication_is_committed(snapshot_dir, aggregate_summary_payload)
+    ):
+        return []
     lane_summaries = _load_materialized_lane_summaries(discovery_dir)
     if lane_summaries:
         return lane_summaries
@@ -642,6 +674,18 @@ def backfill_search_seed_lane_assets(snapshot_dir: Path) -> dict[str, Any]:
     discovery_dir = snapshot_dir / "search_seed_discovery"
     aggregate_summary_path = discovery_dir / "summary.json"
     aggregate_entries_path = discovery_dir / "entries.json"
+    aggregate_summary_payload = _load_json(aggregate_summary_path)
+    if (
+        isinstance(aggregate_summary_payload, dict)
+        and aggregate_summary_payload
+        and not cohort_publication_is_committed(snapshot_dir, aggregate_summary_payload)
+    ):
+        return {
+            "status": "cohort_publication_uncommitted",
+            "snapshot_dir": str(snapshot_dir),
+            "lane_keys": [],
+            "lane_count": 0,
+        }
     existing_lane_summaries = _load_materialized_lane_summaries(discovery_dir)
     if existing_lane_summaries:
         return {
@@ -653,7 +697,6 @@ def backfill_search_seed_lane_assets(snapshot_dir: Path) -> dict[str, Any]:
             ],
             "lane_count": len(existing_lane_summaries),
         }
-    aggregate_summary_payload = _load_json(aggregate_summary_path)
     if not isinstance(aggregate_summary_payload, dict) or not aggregate_summary_payload:
         return {
             "status": "missing_aggregate_summary",
@@ -911,9 +954,7 @@ def _partition_aggregate_entries_by_lane(
         if lane_key not in grouped:
             lane_key = fallback_lane if fallback_lane in grouped else unique_lane_keys[0]
         grouped.setdefault(lane_key, []).append(dict(entry))
-    return {
-        lane_key: dedupe_search_seed_entries(lane_entries) for lane_key, lane_entries in grouped.items()
-    }
+    return {lane_key: dedupe_search_seed_entries(lane_entries) for lane_key, lane_entries in grouped.items()}
 
 
 def _search_seed_entry_merge_key(entry: dict[str, Any]) -> str:

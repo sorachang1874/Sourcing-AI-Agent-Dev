@@ -133,6 +133,7 @@ CI_PG_CONTRACT_CMD = $(DOCKER_CONTEXT_CMD) env PYTHONPATH=src SOURCING_REQUIRE_T
 CI_WORKFLOW_FAKE_PROVIDER_CMD = $(DOCKER_CONTEXT_CMD) env PYTHONPATH=src SOURCING_REQUIRE_TESTCONTAINERS=1 SOURCING_RUN_TESTCONTAINERS=1 TESTCONTAINERS_RYUK_DISABLED=1 SOURCING_TESTCONTAINERS_POSTGRES_IMAGE="$(TESTCONTAINERS_POSTGRES_IMAGE)" "$(TEST_PYTHON_BIN)" -m unittest tests.testcontainers_workflow_fake_provider -v
 CI_FRONTEND_BROWSER_GATE_CMD = $(DOCKER_CONTEXT_CMD) env PYTHONPATH=src SOURCING_REQUIRE_TESTCONTAINERS=1 SOURCING_RUN_TESTCONTAINERS=1 TESTCONTAINERS_RYUK_DISABLED=1 SOURCING_TESTCONTAINERS_POSTGRES_IMAGE="$(TESTCONTAINERS_POSTGRES_IMAGE)" "$(TEST_PYTHON_BIN)" -m unittest tests.testcontainers_frontend_browser_gate -v
 CI_WORKFLOW_BROWSER_GATE_CMD = $(DOCKER_CONTEXT_CMD) env PYTHONPATH=src SOURCING_REQUIRE_TESTCONTAINERS=1 SOURCING_RUN_TESTCONTAINERS=1 TESTCONTAINERS_RYUK_DISABLED=1 SOURCING_TESTCONTAINERS_POSTGRES_IMAGE="$(TESTCONTAINERS_POSTGRES_IMAGE)" "$(TEST_PYTHON_BIN)" -m unittest tests.testcontainers_workflow_browser_gate -v
+CI_COHORT_SCRIPTED_E2E_CMD = $(DOCKER_CONTEXT_CMD) env PYTHONPATH=src SOURCING_REQUIRE_TESTCONTAINERS=1 SOURCING_RUN_TESTCONTAINERS=1 SOURCING_REQUIRE_PG_DURABLE_RUNTIME_TESTS=1 TESTCONTAINERS_RYUK_DISABLED=1 SOURCING_TESTCONTAINERS_POSTGRES_IMAGE="$(TESTCONTAINERS_POSTGRES_IMAGE)" "$(TEST_PYTHON_BIN)" -m unittest tests.test_cohort_workflow_e2e -v
 CI_PRE_AGENT_CONTRACT_CMD = export SOURCING_REQUIRE_PG_STORE_TESTS=1 SOURCING_REQUIRE_PG_DURABLE_RUNTIME_TESTS=1 && PYTHONPATH=src "$(TEST_PYTHON_BIN)" -m pytest tests/test_pre_agent_contract_review.py tests/test_independent_review_gate_runner.py tests/test_operation_runtime.py tests/test_crm_public_web_runtime_boundary.py tests/test_legacy_public_web_retirement_audit.py tests/test_storage_surface_guardrails.py tests/test_pg_onconflict_guard.py -q && SOURCING_REQUIRE_PG_DURABLE_RUNTIME_TESTS=1 PYTHONPATH=src "$(TEST_PYTHON_BIN)" -m pytest tests/test_enrichment.py -k 'isolates_retry_wait or retry_wait_as_isolated_batch' -q && PYTHONPATH=src "$(TEST_PYTHON_BIN)" -m pytest tests/test_dataforseo_client.py tests/test_search_provider.py tests/test_public_web_search.py tests/test_seed_discovery.py tests/test_exploratory_enrichment.py -k 'partial_task_errors or dataforseo_provider_submit_batch_retries_only_failed_query_item or dataforseo_provider_submit_batch_fails_closed_without_provider_identity or batch_provider_requires_stable_query_identity_key or provider_chain_rejects_missing_query_identity_before_fallback or dataforseo_provider_fetch_ready_batch_preserves_success_when_one_task_get_fails or batch_queue_submit_failure_is_query_level_not_whole_batch or public_web_batch_query_identity_is_candidate_query_scoped_not_order_scoped or search_seed_worker_key_uses_query_identity_not_order_ordinal or exploration_query_task_key_uses_query_identity_not_order_ordinal or model_native_search_provider_order_fails_closed_without_contract' -q && PYTHONPATH=src "$(TEST_PYTHON_BIN)" -m pytest tests/test_projection_crm_api_contracts.py -k asset_backfill_http_routes_are_explicit_migration_paths -q && PYTHONPATH=src "$(TEST_PYTHON_BIN)" -m pytest tests/test_scripted_smoke_signoff.py -k durable_command_owner_contract -q && PYTHONPATH=src "$(TEST_PYTHON_BIN)" ./scripts/run_crm_public_web_live_product_validation.py --report-json "$(CRM_PUBLIC_WEB_LIVE_REPORT_JSON)"
 LOCAL_CONTAINER_SMOKE_CMD = $(DOCKER_CONTEXT_CMD) env PYTHONPATH=src SOURCING_RUN_TESTCONTAINERS=1 TESTCONTAINERS_RYUK_DISABLED=1 SOURCING_TESTCONTAINERS_POSTGRES_IMAGE="$(TESTCONTAINERS_POSTGRES_IMAGE)" "$(TEST_PYTHON_BIN)" -m unittest tests.testcontainers_pg_contract -v
 LIVE_TEST_BACKEND_CMD = SOURCING_RUNTIME_ENVIRONMENT="$(LIVE_TEST_RUNTIME_ENVIRONMENT)" SOURCING_EXTERNAL_PROVIDER_MODE="live" SOURCING_LIVE_PROVIDER_CONFIRM="1" SOURCING_ALLOW_ISOLATED_LIVE_PROVIDER_ACCESS="1" SOURCING_ALLOW_TEST_REPO_POSTGRES_ENV="1" SOURCING_CONTROL_PLANE_POSTGRES_LIVE_MODE="postgres_only" SOURCING_REQUIRE_CONTROL_PLANE_POSTGRES="1" SOURCING_PG_ONLY_SQLITE_BACKEND="shared_memory" SOURCING_SECRETS_FILE="$(abspath $(LIVE_TEST_SECRETS_FILE))" OBJECT_STORAGE_PREFIX="$(LIVE_TEST_OBJECT_STORAGE_PREFIX)" "$(SHELL)" ./scripts/dev_backend.sh --runtime-dir "$(LIVE_TEST_RUNTIME_DIR)" --host "$(HOST)" --port "$(LIVE_TEST_API_PORT)" $(foreach port,$(LIVE_TEST_ALLOWED_FRONTEND_PORTS),--frontend-port "$(port)") $(if $(ALLOW_ORIGIN),--allow-origin "$(ALLOW_ORIGIN)") $(LIVE_TEST_EXTRA_BACKEND_ARGS)
@@ -150,7 +151,7 @@ FRONTEND_HOSTED_BUILD_SAME_ORIGIN_CMD = cd frontend-demo && VITE_API_BASE_URL="s
 PYTHON_QUALITY_CMD = "$(SHELL)" ./scripts/run_python_quality.sh
 DETACHED_LAUNCH_CMD = PYTHONPATH=src "$(PYTHON_BIN)" -m sourcing_agent.cli launch-detached
 
-.PHONY: help bootstrap-test-env dev-doctor agent-network-preflight docker-start docker-doctor local-pg-up local-pg-down local-pg-status dev-backend dev-frontend dev-launch-backend dev-launch-frontend dev dev-status dev-stop dev-logs dev-clean hosted-trial-backend hosted-trial-backend-launch frontend-build-hosted frontend-build-hosted-same-origin lint typecheck verify-python test-env-backend test-env-launch-backend test-env-frontend test-env test-env-status test-env-stop test-env-logs test-env-clean test-env-seed-assets test-env-scripted-openai-agent test-env-scripted-openai-agent-backend test-env-scripted-openai-agent-seed test-env-scripted-openai-agent-status test-env-scripted-openai-agent-stop test-env-scripted-openai-agent-logs test-browser-e2e-fast test-browser-e2e-slow test-browser-e2e-full test-scripted-large-org ci-pg-contract ci-workflow-fake-provider ci-frontend-browser-gate ci-workflow-browser-gate ci-pre-agent-contract independent-review-gate ci-containerized-pre-release local-container-smoke test-env-backend-live test-live-large-org-manual test-crm-public-web-live-product-validation asset-media-backfill-dry-run asset-media-backfill-apply prune-test-env prune-test-env-apply
+.PHONY: help bootstrap-test-env dev-doctor agent-network-preflight docker-start docker-doctor local-pg-up local-pg-down local-pg-status dev-backend dev-frontend dev-launch-backend dev-launch-frontend dev dev-status dev-stop dev-logs dev-clean hosted-trial-backend hosted-trial-backend-launch frontend-build-hosted frontend-build-hosted-same-origin lint typecheck verify-python test-env-backend test-env-launch-backend test-env-frontend test-env test-env-status test-env-stop test-env-logs test-env-clean test-env-seed-assets test-env-scripted-openai-agent test-env-scripted-openai-agent-backend test-env-scripted-openai-agent-seed test-env-scripted-openai-agent-status test-env-scripted-openai-agent-stop test-env-scripted-openai-agent-logs test-browser-e2e-fast test-browser-e2e-slow test-browser-e2e-full test-scripted-large-org ci-pg-contract ci-workflow-fake-provider ci-frontend-browser-gate ci-workflow-browser-gate ci-cohort-scripted-e2e ci-pre-agent-contract independent-review-gate ci-containerized-pre-release local-container-smoke test-env-backend-live test-live-large-org-manual test-crm-public-web-live-product-validation asset-media-backfill-dry-run asset-media-backfill-apply prune-test-env prune-test-env-apply
 
 help:
 	@printf '%s\n' \
@@ -198,7 +199,8 @@ help:
 	  '  make ci-pg-contract Run disposable Testcontainers PG storage/writer contract harness' \
 	  '  make ci-workflow-fake-provider Run disposable PG + fake Apify workflow provider contract harness' \
 		  '  make ci-frontend-browser-gate Run disposable PG + backend/frontend/browser projection board gate' \
-		  '  make ci-workflow-browser-gate Run workflow-driven fake-provider projection browser gate' \
+	  '  make ci-workflow-browser-gate Run workflow-driven fake-provider projection browser gate' \
+	  '  make ci-cohort-scripted-e2e Run mandatory-PG explicit Cohort scripted service E2E' \
 		  '  make ci-pre-agent-contract Run W7/W9/W10/W11 fast contract gates before Agent UI/graph work' \
 		  '  make independent-review-gate REVIEW_TITLE="..." REVIEW_FILES="..." REVIEW_EXECUTE=1  Run/read prompt for independent adversarial review' \
 		  '  make ci-containerized-pre-release Run Docker doctor + all containerized pre-release gates' \
@@ -371,6 +373,9 @@ ci-frontend-browser-gate:
 ci-workflow-browser-gate:
 	@$(CI_WORKFLOW_BROWSER_GATE_CMD)
 
+ci-cohort-scripted-e2e:
+	@$(CI_COHORT_SCRIPTED_E2E_CMD)
+
 ci-pre-agent-contract:
 	@$(CI_PRE_AGENT_CONTRACT_CMD)
 
@@ -384,6 +389,7 @@ ci-containerized-pre-release:
 	@$(CI_WORKFLOW_FAKE_PROVIDER_CMD)
 	@$(CI_FRONTEND_BROWSER_GATE_CMD)
 	@$(CI_WORKFLOW_BROWSER_GATE_CMD)
+	@$(CI_COHORT_SCRIPTED_E2E_CMD)
 
 local-container-smoke:
 	@$(LOCAL_CONTAINER_SMOKE_CMD)

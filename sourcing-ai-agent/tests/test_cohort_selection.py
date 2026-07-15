@@ -114,7 +114,11 @@ class CohortSelectionContractTest(unittest.TestCase):
     def test_registry_digest_binds_execution_affecting_role_mapping(self) -> None:
         selection = _cohort(roles=["research"], statuses=["current"])
         compiler = CohortProviderCompiler()
-        capability = CohortExecutionCapability(policy_revision="test.registry-binding.v1")
+        capability = CohortExecutionCapability(
+            policy_revision="test.registry-binding.v1",
+            provider_mode="simulate",
+            runtime_namespace="/tmp/cohort-selection-compile-only",
+        )
         before_registry = cohort_selection_registry_digest()
         before_selection = cohort_selection_digest(selection)
         before_manifest = compiler.compile(
