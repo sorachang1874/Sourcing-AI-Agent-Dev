@@ -31,12 +31,15 @@ from .acquisition_command_owner import AcquisitionCommandOwner
 from .action_target_binding import (
     AUTHORIZATION_MODE_AUTHENTICATED,
     AUTHORIZATION_MODE_OPEN_OPERATOR,
+    CRM_RECORD_BATCH_TARGET_SELECTOR_FIELDS,
     CRM_RECORD_TARGET_NOT_FOUND,
     CRM_RECORD_TARGET_STALE,
     ActionBindContext,
     ActionTargetBindingError,
+    CRMRecordBatchTargetBinder,
     CRMRecordTargetBinder,
     build_crm_existing_record_target_binder_registry,
+    build_crm_record_batch_target_binder_registry,
 )
 from .agent_runtime import AgentRuntimeCoordinator
 from .artifact_cache import (
@@ -115,9 +118,12 @@ from .criteria_evolution import CriteriaEvolutionEngine
 from .criteria_request_provenance import prepare_criteria_write_payload
 from .crm_migration import CRMTargetCandidateMigrationBackfill
 from .crm_public_web_owner import (
+    CRM_PUBLIC_WEB_OPERATION_ACTION_COMMAND_IDEMPOTENCY_PREFIX,
+    CRM_PUBLIC_WEB_OPERATION_ACTION_PLANNING_MODE,
     CrmPublicWebOwner,
     _coerce_public_web_float,
     _coerce_public_web_record_ids,
+    _crm_public_web_operation_refresh_nonce,
     _public_web_signal_is_rejected,
     _public_web_target_candidate_summary,
     _target_candidate_archive_name_component,
@@ -225,11 +231,14 @@ from .operation_runtime import (
     ACTION_ADD_CRM_NOTE,
     ACTION_ADD_TO_CRM,
     ACTION_CREATE_CRM_TASK,
+    ACTION_ENRICH_PERSON_PUBLIC_WEB,
     ACTION_EXPORT_CANDIDATES,
     ACTION_REQUEST_PIN_FIELDS,
     ACTION_SEARCH_PROJECTION,
     ACTION_SET_CRM_STAGE,
     CRM_EXISTING_RECORD_ACTION_TYPES,
+    CRM_RECORD_BATCH_ACTION_TYPES,
+    CRM_RESOURCE_BOUND_ACTION_TYPES,
     DEFAULT_ACTION_REGISTRY,
     DISPATCH_ADAPTER_AGENT_CALLABLE_WORKFLOW_COMMAND,
     DISPATCH_ADAPTER_CRM_WRITER,
@@ -949,6 +958,11 @@ class SourcingOrchestrator:
             self.store,
             binder=self._crm_record_target_binder,
         )
+        self._crm_record_batch_target_binder = CRMRecordBatchTargetBinder(self.store)
+        self._crm_record_batch_target_binder_registry = build_crm_record_batch_target_binder_registry(
+            self.store,
+            binder=self._crm_record_batch_target_binder,
+        )
         self.serving_projection_writer = ServingProjectionWriter(self.store)
         self.serving_projection_reader = ServingProjectionReader(self.store)
         self.crm_writer = CRMWriter(self.store)
@@ -969,6 +983,7 @@ class SourcingOrchestrator:
             workflow_command_waiting_prerequisite=self._workflow_command_waiting_prerequisite,
             export_command_cancelled_owner_response=self._export_command_cancelled_owner_response,
             publish_export_artifact_if_command_active=self._publish_export_artifact_if_command_active,
+            revalidate_operation_action_target=self._revalidate_crm_record_batch_command_target,
         )
         self._excel_intake_owner = ExcelIntakeOwner(
             store=self.store,
@@ -48884,7 +48899,7 @@ class SourcingOrchestrator:
                 "reason": ("action_request_pin_fields_are_owner_reserved:" + ",".join(reserved_pin_fields)),
             }
         raw_target_ref = payload.get("target_ref")
-        if action_type in CRM_EXISTING_RECORD_ACTION_TYPES:
+        if action_type in CRM_RESOURCE_BOUND_ACTION_TYPES:
             if raw_target_ref is not None and not isinstance(raw_target_ref, Mapping):
                 return {"status": "invalid", "reason": "crm_record_target_selector_invalid"}
             input_present = "input" in payload
@@ -48922,6 +48937,19 @@ class SourcingOrchestrator:
             return crm_binding
         target_ref = dict(crm_binding.get("target_ref") or {})
         owner_bound_target_ref = crm_binding.get("owner_bound_target_ref")
+        batch_binding = self._bind_operation_crm_record_batch_target(
+            action_type=action_type,
+            workspace_id=str(payload.get("workspace_id") or "default").strip() or "default",
+            expected_workspace_id=expected_workspace_id,
+            expected_owner_user_id=expected_owner_user_id,
+            target_ref=target_ref,
+            input_payload=input_payload,
+        )
+        if str(batch_binding.get("status") or "") != "ready":
+            return batch_binding
+        target_ref = dict(batch_binding.get("target_ref") or {})
+        input_payload = dict(batch_binding.get("input_payload") or input_payload)
+        owner_bound_target_ref = batch_binding.get("owner_bound_target_ref") or owner_bound_target_ref
         try:
             result = self.operation_runtime_writer.submit_action(
                 action_type=action_type,
@@ -49020,6 +49048,67 @@ class SourcingOrchestrator:
         return {
             "status": "ready",
             "target_ref": {},
+            "owner_bound_target_ref": owner_bound_target_ref,
+        }
+
+    def _bind_operation_crm_record_batch_target(
+        self,
+        *,
+        action_type: str,
+        workspace_id: str,
+        expected_workspace_id: str,
+        expected_owner_user_id: str,
+        target_ref: dict[str, Any],
+        input_payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        if action_type not in CRM_RECORD_BATCH_ACTION_TYPES:
+            return {
+                "status": "ready",
+                "target_ref": target_ref,
+                "input_payload": input_payload,
+                "owner_bound_target_ref": None,
+            }
+        expected_workspace = str(expected_workspace_id or "").strip()
+        expected_owner = str(expected_owner_user_id or "").strip()
+        if bool(expected_workspace) != bool(expected_owner):
+            return {"status": "invalid", "reason": "action_bind_context_owner_incomplete"}
+        normalized_workspace = str(workspace_id or "default").strip() or "default"
+        if expected_workspace and normalized_workspace != expected_workspace:
+            return {"status": "not_found", "reason": CRM_RECORD_TARGET_NOT_FOUND}
+        target_selectors = [field for field in CRM_RECORD_BATCH_TARGET_SELECTOR_FIELDS if field in target_ref]
+        input_selectors = [field for field in CRM_RECORD_BATCH_TARGET_SELECTOR_FIELDS if field in input_payload]
+        if len(target_selectors) + len(input_selectors) != 1:
+            return {"status": "invalid", "reason": "crm_record_batch_target_selector_invalid"}
+        if target_selectors and set(target_ref) != {target_selectors[0]}:
+            return {"status": "invalid", "reason": "crm_record_batch_target_selector_invalid"}
+        selector_field = (target_selectors or input_selectors)[0]
+        selector_value = (target_ref if target_selectors else input_payload).get(selector_field)
+        normalized_input = {
+            field: value
+            for field, value in input_payload.items()
+            if field not in CRM_RECORD_BATCH_TARGET_SELECTOR_FIELDS
+        }
+        try:
+            context = ActionBindContext(
+                authorization_mode=(
+                    AUTHORIZATION_MODE_AUTHENTICATED if expected_workspace else AUTHORIZATION_MODE_OPEN_OPERATOR
+                ),
+                workspace_id=expected_workspace or normalized_workspace,
+                owner_user_id=expected_owner,
+                target_selector={selector_field: selector_value},
+            )
+            owner_bound_target_ref = self._crm_record_batch_target_binder_registry.bind(
+                action_type=action_type,
+                context=context,
+            )
+        except ActionTargetBindingError as exc:
+            if exc.reason == CRM_RECORD_TARGET_NOT_FOUND:
+                return {"status": "not_found", "reason": CRM_RECORD_TARGET_NOT_FOUND}
+            return {"status": "invalid", "reason": exc.reason}
+        return {
+            "status": "ready",
+            "target_ref": {},
+            "input_payload": normalized_input,
             "owner_bound_target_ref": owner_bound_target_ref,
         }
 
@@ -51774,11 +51863,43 @@ class SourcingOrchestrator:
         action: dict[str, Any],
         actor: str,
     ) -> dict[str, Any]:
+        target_preflight = self._revalidate_crm_record_batch_action_target(
+            operation_run=operation_run,
+            action=action,
+        )
+        if str(target_preflight.get("status") or "") != "ready":
+            return {
+                **target_preflight,
+                "operation_run": operation_run,
+                "action": action,
+                "module_state_mutated": False,
+                "contract": "w9_operation_run_dispatch_v1",
+            }
         return self._crm_public_web_owner._dispatch_person_public_web_enrichment_operation(
             operation_run=operation_run,
             action=action,
             actor=actor,
         )
+
+    def _revalidate_crm_record_batch_action_target(
+        self,
+        *,
+        operation_run: Mapping[str, Any],
+        action: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        if str(action.get("action_type") or "").strip() not in CRM_RECORD_BATCH_ACTION_TYPES:
+            return {"status": "ready"}
+        try:
+            records = self._crm_record_batch_target_binder.revalidate_snapshot(
+                target_ref=dict(action.get("target_ref") or {}),
+                operation_workspace_id=str(operation_run.get("workspace_id") or "default").strip() or "default",
+            )
+        except ActionTargetBindingError as exc:
+            return {
+                "status": "conflict" if exc.reason == CRM_RECORD_TARGET_STALE else "not_found",
+                "reason": exc.reason,
+            }
+        return {"status": "ready", "crm_records": records}
 
     def _dispatch_projection_read_operation(
         self,
@@ -52507,6 +52628,107 @@ class SourcingOrchestrator:
                 }
             )
         return completed_result
+
+    def _revalidate_crm_record_batch_command_target(
+        self,
+        command: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        command_record = dict(command)
+        raw_payload = command_record.get("payload")
+        if not isinstance(raw_payload, Mapping):
+            return {"status": "invalid", "reason": "crm_record_batch_command_payload_invalid"}
+        payload = dict(raw_payload)
+        if str(payload.get("operation_planning_mode") or "").strip() != (CRM_PUBLIC_WEB_OPERATION_ACTION_PLANNING_MODE):
+            return {"status": "invalid", "reason": "crm_record_batch_target_command_mismatch"}
+        if (
+            not str(command_record.get("idempotency_key") or "")
+            .strip()
+            .startswith(CRM_PUBLIC_WEB_OPERATION_ACTION_COMMAND_IDEMPOTENCY_PREFIX)
+        ):
+            return {"status": "invalid", "reason": "crm_record_batch_target_command_mismatch"}
+        command_operation_id = str(command_record.get("operation_id") or "").strip()
+        payload_operation_id = str(payload.get("operation_run_id") or "").strip()
+        if not command_operation_id or command_operation_id != payload_operation_id:
+            return {"status": "invalid", "reason": "crm_record_batch_command_operation_mismatch"}
+        operation_run = self.store.repos.workflow_runtime.get_operation(command_operation_id)
+        if not operation_run:
+            return {"status": "invalid", "reason": "crm_record_batch_command_operation_missing"}
+        action_id = str(operation_run.get("action_id") or "").strip()
+        action = self.store.repos.workflow_runtime.get_action(action_id) if action_id else {}
+        if (
+            not action
+            or str(action.get("action_type") or "").strip() != ACTION_ENRICH_PERSON_PUBLIC_WEB
+            or str(payload.get("action_id") or "").strip() != action_id
+        ):
+            return {"status": "invalid", "reason": "crm_record_batch_command_action_mismatch"}
+        try:
+            self.operation_runtime_writer.validate_persisted_action_request(
+                action=action,
+                operation_run=operation_run,
+            )
+            spec = DEFAULT_ACTION_REGISTRY.spec_for(ACTION_ENRICH_PERSON_PUBLIC_WEB)
+        except (KeyError, OperationRuntimeStateConflict):
+            return {"status": "invalid", "reason": "crm_record_batch_action_request_conflict"}
+        if (
+            str(command_record.get("command_type") or "").strip() != spec.default_workflow_command_type
+            or spec.default_workflow_command_type not in spec.allowed_workflow_command_types
+        ):
+            return {"status": "invalid", "reason": "crm_record_batch_target_command_mismatch"}
+        raw_target = payload.get("crm_record_target")
+        persisted_target = action.get("target_ref")
+        if (
+            not isinstance(raw_target, Mapping)
+            or not isinstance(persisted_target, Mapping)
+            or dict(raw_target) != dict(persisted_target)
+        ):
+            return {"status": "invalid", "reason": "crm_record_batch_bound_target_mismatch"}
+        target_ref = dict(raw_target)
+        target_record_ids = [str(item or "").strip() for item in list(target_ref.get("crm_record_ids") or [])]
+        workspace_id = str(payload.get("workspace_id") or "default").strip() or "default"
+        if (
+            payload.get("crm_record_ids") != target_record_ids
+            or payload.get("record_ids") != target_record_ids
+            or str(target_ref.get("workspace_id") or "").strip() != workspace_id
+            or str(operation_run.get("workspace_id") or "default").strip() != workspace_id
+            or str(action.get("workspace_id") or "default").strip() != workspace_id
+        ):
+            return {"status": "invalid", "reason": "crm_record_batch_bound_target_mismatch"}
+        raw_request_payload = payload.get("request_payload")
+        action_input = action.get("input")
+        if not isinstance(raw_request_payload, Mapping) or not isinstance(action_input, Mapping):
+            return {"status": "invalid", "reason": "crm_record_batch_command_payload_invalid"}
+        request_payload = dict(raw_request_payload)
+        requested_by = str(request_payload.get("requested_by") or "").strip()
+        if not requested_by:
+            return {"status": "invalid", "reason": "crm_record_batch_command_payload_invalid"}
+        expected_request_payload = {
+            **dict(action_input),
+            "workspace_id": workspace_id,
+            "crm_record_ids": target_record_ids,
+            "record_ids": target_record_ids,
+            "crm_record_target": target_ref,
+            "requested_by": requested_by,
+            "metadata": {
+                "operation_run_id": command_operation_id,
+                "action_id": action_id,
+                "operation_adapter": "w9_enrich_person_public_web_v1",
+            },
+        }
+        if bool(action_input.get("force_refresh")):
+            refresh_nonce = str(action_input.get("refresh_nonce") or "").strip() or (
+                _crm_public_web_operation_refresh_nonce(
+                    operation_run_id=command_operation_id,
+                    action_id=action_id,
+                )
+            )
+            expected_request_payload["refresh_nonce"] = refresh_nonce
+            expected_request_payload["nonce"] = refresh_nonce
+        if request_payload != expected_request_payload:
+            return {"status": "invalid", "reason": "crm_record_batch_command_payload_mismatch"}
+        return self._revalidate_crm_record_batch_action_target(
+            operation_run=operation_run,
+            action=action,
+        )
 
     def _revalidate_crm_existing_record_command_target(
         self,

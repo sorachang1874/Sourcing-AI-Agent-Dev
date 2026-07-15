@@ -110,7 +110,7 @@ serve、会话/事件层、planner loop），用一个垂直切片证明闭环�
 - 守卫改为语义断言（v2 修正 v1 的空断言）：对每个 served command 断言
   `activity_spine_policy.requirement != legacy-internal` 且 `agent_callable`（复用注册期校验）。
 - command 级字段复用 `command_type_manifest()` 序列化，不再第三处重组。
-- **Implementation status (2026-07-15):** D1c 已落 shared schema/pin foundation 与 R-029 bridge；D1e 声明
+- **Implementation status (2026-07-16):** D1c 已落 shared schema/pin foundation 与 R-029 bridge；D1e 声明
   existing-record CRM binder/contracts；D1f current author candidate 将 exact
   `set_crm_stage|add_crm_note|create_crm_task` 激活为 schema-defined，并从 authenticated request state 绑定
   exact CRM owner，dispatch 与 command owner 各做一次只读 owner/version revalidation。Pinned `22055aa`
@@ -120,7 +120,7 @@ serve、会话/事件层、planner loop），用一个垂直切片证明闭环�
   incoherence pre-write conflict，approved replay 读取既有 run，action-only rejection 不创建 run，queued partial
   仅修复 deterministic run；所有 submit 均 preflight deterministic run，orphan run 与非法 static-required
   approval 组合 fail closed；conditional non-required approval/cancel/retry 保留既有 owner + R-019 边界。frontend submit 以 required literal replay discriminator 闭合 fresh/replay 联合；
-  R-029 observation epoch=`d1f_r029_20260715_v2` 且 submit-replay evidence action-scoped。当前 registry=
+  R-029 observation epoch=`d1f_r029_20260715_v2` 且 submit-replay evidence action-scoped。D1f checkpoint=
   **3 schema-defined / 12 schema-less / served=0**；full served predicate 的 revisioned model-safe result schema 与
   simulate serializer 尚未实现。D1g current author candidate 接续闭合 authenticated Operation API 的 R-031
   exact-owner boundary：canonical owner 为 `agent_actions/operation_runs.workspace_id`，run 还必须 linked action
@@ -128,7 +128,12 @@ serve、会话/事件层、planner loop），用一个垂直切片证明闭环�
   list/detail/provenance/approve/reject/cancel/retry/resume/dispatch 均消费
   server-derived expected workspace，foreign/missing 同一 generic 404，open-mode operator compatibility 保留。
   D1g 仍不关闭 R-019/R-028、不迁移 12 个 schema-less action、不改变 served=0；fresh pinned review pending，
-  reviewed artifact 前不得据此宣称 hosted/live multi-user signoff。
+  reviewed artifact 前不得据此宣称 hosted/live multi-user signoff。D1h current author candidate 随后将
+  `enrich_person_public_web` 作为第 4 个 schema-defined action 激活：authenticated exact-owner CRM batch binder
+  生成 per-record workspace/owner/version snapshot，dispatch 写新 plan 前与 queue-command owner 建 batch/run 前
+  分别 revalidate；command-owner 拒绝发生在既有 claim/running 后，故只主张 batch/run/EntityDelta 零写，不主张
+  全域零写或 UoW 闭合。当前 registry=**4 schema-defined / 11 schema-less / served=0**；R-019/R-028/R-029 仍
+  open，D1h fresh pinned review pending，且不授权 provider/model/live。
 
 ### D2 — Agent 会话与事件层（与 C4/C5 合流）
 
@@ -514,10 +519,12 @@ TD-4 初始路由表已按 owner 2026-07-13 裁决落档（D0 §4）。
 2. `agent_events` 精确投影契约（D2 批）：stream 身份公式、source-event ordinal/基数、唯一约束、
    rebuild owner/顺序、cursor 授权、replay parity preflight。
 3. 宽松 action-schema 迁移桥启用前，先落 residual 台账行 + NEXT_TODO 条目（D1 批）。
-   **Implementation status (2026-07-15):** D1c 以 R-029 + NEXT_TODO 满足 bookkeeping；D1f exact 激活三项
-   CRM existing-record actions 并把 numerator 从 15 降到 12。bridge、release-window durable-hit audit、独立
+   **Implementation status (2026-07-16):** D1c 以 R-029 + NEXT_TODO 满足 bookkeeping；D1f exact 激活三项
+   CRM existing-record actions 并把 numerator 从 15 降到 12；D1h 再激活 `enrich_person_public_web` 的 CRM
+   batch schema/binder，把 numerator 降到 11。bridge、release-window durable-hit audit、独立
    `NOT VALID` validation 与 complete API-submittable-population 删除条件仍 open；served population 仍为零。
-   D1g 仅闭合 downstream Operation API authorization，不改变本项 schema numerator/deletion condition。
+   D1g 仅闭合 downstream Operation API authorization，不改变其所在 checkpoint 的 schema
+   numerator/deletion condition；D1h 也不改变该 deletion condition。
 4. tool-schema 版本/digest 在 turn 创建点钉住并贯穿 terminal result/journal → AgentAction →
    approve/retry run（D0/D2 批）。
 5. `judge_call_key` 追加 workspace/intent generation/有效路由/schema/policy revision 维度；

@@ -21,7 +21,7 @@ from sourcing_agent.durable_runtime import (
     workflow_command_control_policy,
 )
 from sourcing_agent.operation_runtime import (
-    CRM_EXISTING_RECORD_ACTION_TYPES,
+    CRM_RESOURCE_BOUND_ACTION_TYPES,
     DEFAULT_ACTION_REGISTRY,
     OperationRuntimeWriter,
 )
@@ -359,7 +359,7 @@ def test_action_request_spec_and_registry_record_freeze_the_schema_foundation_su
     schema_defined = {
         action_type for action_type in records if DEFAULT_ACTION_REGISTRY.spec_for(action_type).has_request_schema
     }
-    assert schema_defined == set(CRM_EXISTING_RECORD_ACTION_TYPES)
+    assert schema_defined == set(CRM_RESOURCE_BOUND_ACTION_TYPES)
     for action_type in records:
         spec = DEFAULT_ACTION_REGISTRY.spec_for(action_type)
         if action_type in schema_defined:

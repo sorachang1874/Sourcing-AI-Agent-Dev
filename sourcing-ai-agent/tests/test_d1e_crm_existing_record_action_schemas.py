@@ -30,6 +30,7 @@ from sourcing_agent.operation_runtime import (
     ACTION_SET_CRM_STAGE,
     CRM_EXISTING_RECORD_ACTION_REQUEST_CONTRACTS,
     CRM_EXISTING_RECORD_ACTION_TYPES,
+    CRM_RESOURCE_BOUND_ACTION_TYPES,
     DEFAULT_ACTION_REGISTRY,
     ActionRegistry,
     ActionRequestSpec,
@@ -145,8 +146,8 @@ def test_crm_action_schemas_are_exact_closed_digest_pinned_and_activated_only_fo
     records = DEFAULT_ACTION_REGISTRY.to_record(include_command_contracts=False)
     assert {
         action_type for action_type in records if DEFAULT_ACTION_REGISTRY.spec_for(action_type).has_request_schema
-    } == set(CRM_ACTIONS)
-    assert sum(not DEFAULT_ACTION_REGISTRY.spec_for(action_type).has_request_schema for action_type in records) == 12
+    } == set(CRM_RESOURCE_BOUND_ACTION_TYPES)
+    assert sum(not DEFAULT_ACTION_REGISTRY.spec_for(action_type).has_request_schema for action_type in records) == 11
 
     for action_type in CRM_ACTIONS:
         spec = DEFAULT_ACTION_REGISTRY.spec_for(action_type)

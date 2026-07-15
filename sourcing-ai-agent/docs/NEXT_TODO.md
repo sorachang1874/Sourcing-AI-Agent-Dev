@@ -190,11 +190,23 @@
   全域零写，open-mode operator compatibility 保留。当前证据=`25+88`、adjacent exact `4`、full operation
   `136+503`、lint `58 files`、global mypy `81/4`；final stable commit 与 fresh pinned non-author review pending。该批不迁移 12 个 schema-less action、不
   改 served=0、不授权 live/provider。
+- [x] D1h CRM Public Web action activation current author candidate（2026-07-16）：将
+  `enrich_person_public_web` 作为第 4 个 schema-defined action 激活，当前 **4 schema-defined / 11 schema-less /
+  served=0**。exact one batch/single/person-identity selector 绑定 authenticated server workspace+user，canonical
+  ids 去重排序且上限 1000；任一 missing/foreign member 返回同一 `crm_record_not_found`，submit 前全域零写，
+  same-owner/replay/open-mode 保留。owner-minted target 持久化每项 workspace/owner/version snapshot，dispatch
+  写新 plan 前与 queue-command owner 建 batch/run 前分别 revalidate；后者发生在既有 claim/running 后，失败会
+  terminalize command，故只主张 batch/run/EntityDelta 零写，不宣称 command/Operation 全域零写。`force_refresh=true`
+  且 caller 未给 nonce 时，planning 从 operation/action identity 铸稳定 `operation-...` nonce 并持久化，重试不随机
+  重建批。当前 author evidence=`5` PG、D1 adjacency `116+188 subtests`、exact adjacent Operation/transport
+  `4+4 subtests`、full operation `136+503 subtests`、CRM Public Web boundary `34`、lint `58`、mypy `81/4`；final
+  stable commit 与 fresh pinned non-author review pending。R-019/R-028/R-029/R-031 均不因本批关闭；无
+  provider/model/live。
 - [ ] R-029：宽松 action-schema bridge 仅可在 production action 尚无 reviewed schema/owner binder 期间存在；
   删除条件 = 全部 API-submittable actions（不是只看 served subset）连续一个 release window durable hit=0。
   observation epoch 必须每个 release window bump，且 `NOT VALID` checks 的既有行 validation 在独立部署完成；
   任一 action 进入 served 集前必须满足完整 schema+adapter+Activity+revisioned model-safe result+simulate serializer
-  谓词；D1f 后当前 12/15 schema-less、served=0。
+  谓词；D1h 后当前 11/15 schema-less、served=0。
 - [ ] R-031 review closeout：D1g current author candidate 已将 actions/runs list、detail、provenance 及
   approve/reject/dispatch/resume/retry/cancel 统一到 server-derived exact-workspace preflight，run 同时校验 linked
   action owner，并补 foreign/missing transport parity、全路径零写、same-owner 与 open-mode 矩阵。fresh pinned

@@ -89,6 +89,19 @@ from .storage import _json_safe_payload as _storage_json_safe_payload
 # orchestrator would create a cycle).  The bodies are copied verbatim; several
 # other ``sourcing_agent`` modules already carry the same local copies.
 _CHINA_TIME_ZONE = ZoneInfo("Asia/Shanghai")
+CRM_PUBLIC_WEB_OPERATION_ACTION_PLANNING_MODE = "create_crm_public_web_batch_from_operation_action"
+CRM_PUBLIC_WEB_OPERATION_ACTION_COMMAND_IDEMPOTENCY_PREFIX = f"{CRM_PUBLIC_WEB_QUEUE_BATCH_COMMAND_TYPE}:operation:"
+
+
+def _crm_public_web_operation_refresh_nonce(*, operation_run_id: str, action_id: str) -> str:
+    normalized_operation_run_id = str(operation_run_id or "").strip()
+    normalized_action_id = str(action_id or "").strip()
+    if not normalized_operation_run_id or not normalized_action_id:
+        return ""
+    return (
+        "operation-"
+        + hashlib.sha1(f"{normalized_operation_run_id}:{normalized_action_id}".encode("utf-8")).hexdigest()[:24]
+    )
 
 
 def _china_now_iso() -> str:
@@ -1046,6 +1059,7 @@ class CrmPublicWebOwner:
         workflow_command_waiting_prerequisite: Callable[..., dict[str, Any]],
         export_command_cancelled_owner_response: Callable[..., dict[str, Any]],
         publish_export_artifact_if_command_active: Callable[..., dict[str, Any]],
+        revalidate_operation_action_target: Callable[[dict[str, Any]], dict[str, Any]],
     ) -> None:
         self.store = store
         self._kernel = command_kernel
@@ -1064,6 +1078,7 @@ class CrmPublicWebOwner:
         self._workflow_command_waiting_prerequisite = workflow_command_waiting_prerequisite
         self._export_command_cancelled_owner_response = export_command_cancelled_owner_response
         self._publish_export_artifact_if_command_active = publish_export_artifact_if_command_active
+        self._revalidate_operation_action_target = revalidate_operation_action_target
 
     def _crm_public_web_workflow_run_id(self, batch_id: str) -> str:
         normalized_batch_id = str(batch_id or "").strip()
@@ -1319,6 +1334,18 @@ class CrmPublicWebOwner:
         normalized_record_ids = _dedupe_texts(str(record_id or "").strip() for record_id in list(record_ids or []))
         if not operation_run_id or not action_id or not normalized_record_ids:
             return {}
+        normalized_request_payload = dict(request_payload or {})
+        if bool(normalized_request_payload.get("force_refresh")):
+            refresh_nonce = str(
+                normalized_request_payload.get("refresh_nonce") or normalized_request_payload.get("nonce") or ""
+            ).strip()
+            if not refresh_nonce:
+                refresh_nonce = _crm_public_web_operation_refresh_nonce(
+                    operation_run_id=operation_run_id,
+                    action_id=action_id,
+                )
+            normalized_request_payload["refresh_nonce"] = refresh_nonce
+            normalized_request_payload["nonce"] = refresh_nonce
         digest = hashlib.sha1(
             json.dumps(
                 {
@@ -1332,7 +1359,7 @@ class CrmPublicWebOwner:
             ).encode("utf-8")
         ).hexdigest()[:24]
         workflow_run_id = f"wf_crm_public_web_op_{digest}"
-        command_idempotency_key = f"{CRM_PUBLIC_WEB_QUEUE_BATCH_COMMAND_TYPE}:operation:{digest}"
+        command_idempotency_key = f"{CRM_PUBLIC_WEB_OPERATION_ACTION_COMMAND_IDEMPOTENCY_PREFIX}{digest}"
         materialization_metadata = {
             "command_payload_storage": "workflow_commands",
             "write_owner": CRM_PUBLIC_WEB_QUEUE_BATCH_OWNER,
@@ -1341,20 +1368,21 @@ class CrmPublicWebOwner:
             "migration_phase": "W9_operation_crm_public_web_queue_batch",
         }
         command_payload = {
-            "operation_planning_mode": "create_crm_public_web_batch_from_operation",
+            "operation_planning_mode": CRM_PUBLIC_WEB_OPERATION_ACTION_PLANNING_MODE,
             "operation_run_id": operation_run_id,
             "action_id": action_id,
             "workspace_id": workspace_id,
             "record_ids": normalized_record_ids,
             "crm_record_ids": normalized_record_ids,
+            "crm_record_target": dict(normalized_request_payload.get("crm_record_target") or {}),
             "request_payload": {
-                **dict(request_payload or {}),
+                **normalized_request_payload,
                 "workspace_id": workspace_id,
                 "crm_record_ids": normalized_record_ids,
                 "record_ids": normalized_record_ids,
                 "requested_by": str(actor or "operation_runtime").strip() or "operation_runtime",
                 "metadata": {
-                    **dict(dict(request_payload or {}).get("metadata") or {}),
+                    **dict(normalized_request_payload.get("metadata") or {}),
                     "operation_run_id": operation_run_id,
                     "action_id": action_id,
                     "operation_adapter": "w9_enrich_person_public_web_v1",
@@ -2425,6 +2453,7 @@ class CrmPublicWebOwner:
                 "workspace_id": workspace_id,
                 "crm_record_ids": record_ids,
                 "record_ids": record_ids,
+                "crm_record_target": target_ref,
             },
             actor=actor,
         )
@@ -5248,9 +5277,44 @@ class CrmPublicWebOwner:
         payload = dict(latest_command.get("payload") or {})
         batch_id = str(payload.get("batch_id") or "").strip()
         workspace_id = str(payload.get("workspace_id") or "default").strip() or "default"
-        if not batch_id and str(payload.get("operation_planning_mode") or "").strip() == (
-            "create_crm_public_web_batch_from_operation"
-        ):
+        operation_planning_mode = str(payload.get("operation_planning_mode") or "").strip()
+        operation_action_command = (
+            str(latest_command.get("idempotency_key") or "")
+            .strip()
+            .startswith(CRM_PUBLIC_WEB_OPERATION_ACTION_COMMAND_IDEMPOTENCY_PREFIX)
+        )
+        if operation_action_command or operation_planning_mode == CRM_PUBLIC_WEB_OPERATION_ACTION_PLANNING_MODE:
+            target_preflight = (
+                self._revalidate_operation_action_target(latest_command)
+                if operation_action_command and operation_planning_mode == CRM_PUBLIC_WEB_OPERATION_ACTION_PLANNING_MODE
+                else {"status": "invalid", "reason": "crm_record_batch_target_command_mismatch"}
+            )
+            if str(target_preflight.get("status") or "") != "ready":
+                failure_reason = str(
+                    target_preflight.get("reason") or "crm_record_batch_action_target_conflict"
+                ).strip()
+                failed = self.store.mark_workflow_command_failed(
+                    command_id,
+                    error_text=failure_reason,
+                    retryable=False,
+                )
+                self._kernel._sync_operation_run_from_workflow_command(
+                    failed or latest_command,
+                    actor=CRM_PUBLIC_WEB_QUEUE_BATCH_OWNER,
+                    source="crm_public_web.queue_batch_owner",
+                )
+                return {
+                    "status": "failed",
+                    "reason": failure_reason,
+                    "workflow_command": self._kernel._workflow_command_observation(
+                        failed or latest_command,
+                        migration_phase="W9_operation_crm_public_web_queue_batch",
+                    ),
+                }
+        if not batch_id and operation_planning_mode in {
+            "create_crm_public_web_batch_from_operation",
+            CRM_PUBLIC_WEB_OPERATION_ACTION_PLANNING_MODE,
+        }:
             record_ids = _coerce_public_web_record_ids(
                 payload.get("crm_record_ids") or payload.get("record_ids") or payload.get("record_id")
             )

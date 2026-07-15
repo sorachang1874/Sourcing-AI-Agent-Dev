@@ -10,6 +10,7 @@ from typing import Any, Literal, Protocol
 
 from sourcing_agent.operation_runtime import (
     CRM_EXISTING_RECORD_ACTION_TYPES,
+    CRM_RECORD_BATCH_ACTION_TYPES,
     OwnerBoundTargetRef,
 )
 from sourcing_agent.request_ownership import exact_crm_owner_matches
@@ -18,8 +19,17 @@ AuthorizationMode = Literal["authenticated", "open_operator"]
 AUTHORIZATION_MODE_AUTHENTICATED: Literal["authenticated"] = "authenticated"
 AUTHORIZATION_MODE_OPEN_OPERATOR: Literal["open_operator"] = "open_operator"
 CRM_RECORD_TARGET_OWNER = "crm_writer"
+CRM_RECORD_BATCH_TARGET_OWNER = "person_evidence_ingestion"
 CRM_RECORD_TARGET_NOT_FOUND = "crm_record_not_found"
 CRM_RECORD_TARGET_STALE = "crm_record_target_stale"
+CRM_RECORD_BATCH_TARGET_SELECTOR_FIELDS = (
+    "crm_record_ids",
+    "record_ids",
+    "crm_record_id",
+    "record_id",
+    "person_identity_key",
+)
+CRM_RECORD_BATCH_LIMIT = 1000
 
 
 class ActionTargetBindingError(ValueError):
@@ -135,6 +145,13 @@ class ActionTargetBinderRegistry:
 class CRMRecordLookup(Protocol):
     def get_crm_record(self, crm_record_id: str) -> dict[str, Any]: ...
 
+    def get_crm_record_by_person_identity(
+        self,
+        person_identity_key: str,
+        *,
+        workspace_id: str,
+    ) -> dict[str, Any]: ...
+
 
 class CRMRecordTargetBinder:
     """Resolve one exact CRM owner row and mint its immutable target snapshot."""
@@ -228,6 +245,150 @@ class CRMRecordTargetBinder:
         return dict(record)
 
 
+class CRMRecordBatchTargetBinder:
+    """Resolve one bounded CRM-record set and mint a canonical owner snapshot."""
+
+    def __init__(self, store: CRMRecordLookup) -> None:
+        self.store = store
+
+    def __call__(self, context: ActionBindContext) -> OwnerBoundTargetRef:
+        selector = dict(context.target_selector)
+        present = [field for field in CRM_RECORD_BATCH_TARGET_SELECTOR_FIELDS if field in selector]
+        if len(present) != 1 or set(selector) != {present[0]}:
+            raise ActionTargetBindingError("crm_record_batch_target_selector_invalid")
+        selector_field = present[0]
+        if selector_field == "person_identity_key":
+            raw_person_identity_key = selector.get(selector_field)
+            if not isinstance(raw_person_identity_key, str):
+                raise ActionTargetBindingError("crm_record_batch_target_selector_invalid")
+            person_identity_key = raw_person_identity_key.strip()
+            if not person_identity_key:
+                raise ActionTargetBindingError(CRM_RECORD_TARGET_NOT_FOUND)
+            record = self.store.get_crm_record_by_person_identity(
+                person_identity_key,
+                workspace_id=context.workspace_id,
+            )
+            raw_record_ids: Any = [str(record.get("crm_record_id") or "").strip()] if record else []
+        elif selector_field in {"crm_record_ids", "record_ids"}:
+            raw_record_ids = selector.get(selector_field)
+            if not isinstance(raw_record_ids, (list, tuple)):
+                raise ActionTargetBindingError("crm_record_batch_target_selector_invalid")
+        else:
+            raw_record_id = selector.get(selector_field)
+            if not isinstance(raw_record_id, str):
+                raise ActionTargetBindingError("crm_record_batch_target_selector_invalid")
+            raw_record_ids = [raw_record_id]
+        record_ids = self._normalize_record_ids(raw_record_ids)
+        snapshots: list[dict[str, Any]] = []
+        for record_id in record_ids:
+            record = self.store.get_crm_record(record_id)
+            if not CRMRecordTargetBinder._context_owns_record(context=context, record=record):
+                raise ActionTargetBindingError(CRM_RECORD_TARGET_NOT_FOUND)
+            assert record is not None
+            snapshot = self._snapshot_record(record, expected_record_id=record_id)
+            snapshots.append(snapshot)
+        return OwnerBoundTargetRef(
+            owner_module=CRM_RECORD_BATCH_TARGET_OWNER,
+            target_ref={
+                "crm_record_ids": [snapshot["crm_record_id"] for snapshot in snapshots],
+                "workspace_id": context.workspace_id,
+                "crm_record_snapshots": snapshots,
+            },
+        )
+
+    @staticmethod
+    def _normalize_record_ids(value: Any) -> list[str]:
+        if not isinstance(value, (list, tuple)):
+            raise ActionTargetBindingError("crm_record_batch_target_selector_invalid")
+        raw_values = list(value)
+        if any(not isinstance(item, str) for item in raw_values):
+            raise ActionTargetBindingError("crm_record_batch_target_selector_invalid")
+        normalized = [item.strip() for item in raw_values]
+        if not normalized or any(not item for item in normalized) or len(normalized) > CRM_RECORD_BATCH_LIMIT:
+            raise ActionTargetBindingError(CRM_RECORD_TARGET_NOT_FOUND)
+        return sorted(set(normalized))
+
+    @staticmethod
+    def _snapshot_record(record: Mapping[str, Any], *, expected_record_id: str) -> dict[str, Any]:
+        record_id = str(record.get("crm_record_id") or "").strip()
+        workspace_id = str(record.get("workspace_id") or "default").strip() or "default"
+        owner_user_id = str(record.get("owner_user_id") or "").strip()
+        crm_version = record.get("crm_version")
+        if (
+            record_id != expected_record_id
+            or isinstance(crm_version, bool)
+            or not isinstance(crm_version, int)
+            or crm_version <= 0
+        ):
+            raise ActionTargetBindingError(CRM_RECORD_TARGET_NOT_FOUND)
+        return {
+            "crm_record_id": record_id,
+            "workspace_id": workspace_id,
+            "owner_user_id": owner_user_id,
+            "crm_version": crm_version,
+        }
+
+    def revalidate_snapshot(
+        self,
+        *,
+        target_ref: Mapping[str, Any],
+        operation_workspace_id: str,
+    ) -> list[dict[str, Any]]:
+        target = dict(target_ref)
+        if set(target) != {"crm_record_ids", "workspace_id", "crm_record_snapshots"}:
+            raise ActionTargetBindingError("crm_record_batch_bound_target_invalid")
+        workspace_id = str(target.get("workspace_id") or "").strip()
+        operation_workspace = str(operation_workspace_id or "").strip()
+        if not workspace_id or workspace_id != operation_workspace:
+            raise ActionTargetBindingError(CRM_RECORD_TARGET_NOT_FOUND)
+        raw_record_ids = target.get("crm_record_ids")
+        try:
+            record_ids = self._normalize_record_ids(raw_record_ids)
+        except ActionTargetBindingError as exc:
+            raise ActionTargetBindingError("crm_record_batch_bound_target_invalid") from exc
+        if list(raw_record_ids) != record_ids:
+            raise ActionTargetBindingError("crm_record_batch_bound_target_invalid")
+        raw_snapshots = target.get("crm_record_snapshots")
+        if not isinstance(raw_snapshots, (list, tuple)) or len(raw_snapshots) != len(record_ids):
+            raise ActionTargetBindingError("crm_record_batch_bound_target_invalid")
+        snapshots: list[dict[str, Any]] = []
+        for raw_snapshot in raw_snapshots:
+            if not isinstance(raw_snapshot, Mapping):
+                raise ActionTargetBindingError("crm_record_batch_bound_target_invalid")
+            snapshot = dict(raw_snapshot)
+            if set(snapshot) != {"crm_record_id", "workspace_id", "owner_user_id", "crm_version"}:
+                raise ActionTargetBindingError("crm_record_batch_bound_target_invalid")
+            if (
+                not isinstance(snapshot.get("crm_record_id"), str)
+                or not isinstance(snapshot.get("workspace_id"), str)
+                or not isinstance(snapshot.get("owner_user_id"), str)
+                or isinstance(snapshot.get("crm_version"), bool)
+                or not isinstance(snapshot.get("crm_version"), int)
+                or snapshot["crm_version"] <= 0
+            ):
+                raise ActionTargetBindingError("crm_record_batch_bound_target_invalid")
+            snapshots.append(snapshot)
+        if [str(snapshot.get("crm_record_id") or "").strip() for snapshot in snapshots] != record_ids:
+            raise ActionTargetBindingError("crm_record_batch_bound_target_invalid")
+        records: list[dict[str, Any]] = []
+        for record_id, snapshot in zip(record_ids, snapshots):
+            if str(snapshot.get("workspace_id") or "").strip() != workspace_id:
+                raise ActionTargetBindingError(CRM_RECORD_TARGET_NOT_FOUND)
+            record = self.store.get_crm_record(record_id)
+            if not record:
+                raise ActionTargetBindingError(CRM_RECORD_TARGET_NOT_FOUND)
+            current_snapshot = self._snapshot_record(record, expected_record_id=record_id)
+            if (
+                current_snapshot["workspace_id"] != workspace_id
+                or current_snapshot["owner_user_id"] != str(snapshot.get("owner_user_id") or "").strip()
+            ):
+                raise ActionTargetBindingError(CRM_RECORD_TARGET_NOT_FOUND)
+            if current_snapshot["crm_version"] != snapshot.get("crm_version"):
+                raise ActionTargetBindingError(CRM_RECORD_TARGET_STALE)
+            records.append(dict(record))
+        return records
+
+
 def build_crm_existing_record_target_binder_registry(
     store: CRMRecordLookup,
     *,
@@ -242,5 +403,23 @@ def build_crm_existing_record_target_binder_registry(
                 binder=binder,
             )
             for action_type in CRM_EXISTING_RECORD_ACTION_TYPES
+        )
+    )
+
+
+def build_crm_record_batch_target_binder_registry(
+    store: CRMRecordLookup,
+    *,
+    binder: CRMRecordBatchTargetBinder | None = None,
+) -> ActionTargetBinderRegistry:
+    binder = binder or CRMRecordBatchTargetBinder(store)
+    return ActionTargetBinderRegistry(
+        tuple(
+            ActionTargetBinderSpec(
+                action_type=action_type,
+                owner_module=CRM_RECORD_BATCH_TARGET_OWNER,
+                binder=binder,
+            )
+            for action_type in CRM_RECORD_BATCH_ACTION_TYPES
         )
     )

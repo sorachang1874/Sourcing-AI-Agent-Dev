@@ -36,6 +36,7 @@ from sourcing_agent.durable_runtime import (
     workflow_command_display_contract,
 )
 from sourcing_agent.model_tool_runtime import ModelToolSchemaError, ToolSpec
+from sourcing_agent.public_web_search import DEFAULT_TARGET_CANDIDATE_SOURCE_FAMILIES
 
 ACTION_PLAN_ACQUISITION = "plan_acquisition"
 ACTION_START_ACQUISITION_RUN = "start_acquisition_run"
@@ -47,12 +48,14 @@ ACTION_ADD_TO_CRM = "add_to_crm"
 ACTION_SET_CRM_STAGE = "set_crm_stage"
 ACTION_ADD_CRM_NOTE = "add_crm_note"
 ACTION_CREATE_CRM_TASK = "create_crm_task"
+ACTION_ENRICH_PERSON_PUBLIC_WEB = "enrich_person_public_web"
 CRM_EXISTING_RECORD_ACTION_TYPES = (
     ACTION_SET_CRM_STAGE,
     ACTION_ADD_CRM_NOTE,
     ACTION_CREATE_CRM_TASK,
 )
-ACTION_ENRICH_PERSON_PUBLIC_WEB = "enrich_person_public_web"
+CRM_RECORD_BATCH_ACTION_TYPES = (ACTION_ENRICH_PERSON_PUBLIC_WEB,)
+CRM_RESOURCE_BOUND_ACTION_TYPES = CRM_EXISTING_RECORD_ACTION_TYPES + CRM_RECORD_BATCH_ACTION_TYPES
 ACTION_REFRESH_COMPANY_PUBLIC_WEB = "refresh_company_public_web_assets"
 ACTION_PROMOTE_PERSON_ASSERTION = "promote_person_assertion"
 ACTION_EXPORT_CANDIDATES = "export_candidates"
@@ -213,6 +216,87 @@ CRM_EXISTING_RECORD_ACTION_REQUEST_CONTRACTS: Mapping[str, Mapping[str, Any]] = 
                 "target_ref_field_aliases": _CRM_RECORD_TARGET_ALIASES,
             }
         ),
+    }
+)
+
+_CRM_RECORD_BATCH_SNAPSHOT_PROPERTIES: dict[str, dict[str, Any]] = {
+    "crm_record_id": {"type": "string", "minLength": 1, "maxLength": 200, "pattern": r"\S"},
+    "workspace_id": {"type": "string", "minLength": 1, "maxLength": 200, "pattern": r"\S"},
+    "owner_user_id": {"type": "string", "maxLength": 200},
+    "crm_version": {"type": "integer", "minimum": 1},
+}
+_CRM_RECORD_BATCH_TARGET_PROPERTIES: dict[str, dict[str, Any]] = {
+    "crm_record_ids": {
+        "type": "array",
+        "items": {"type": "string", "minLength": 1, "maxLength": 200, "pattern": r"\S"},
+        "minItems": 1,
+        "maxItems": 1000,
+    },
+    "workspace_id": {"type": "string", "minLength": 1, "maxLength": 200, "pattern": r"\S"},
+    "crm_record_snapshots": {
+        "type": "array",
+        "items": {
+            "type": "object",
+            "properties": _CRM_RECORD_BATCH_SNAPSHOT_PROPERTIES,
+            "required": list(_CRM_RECORD_BATCH_SNAPSHOT_PROPERTIES),
+            "additionalProperties": False,
+        },
+        "minItems": 1,
+        "maxItems": 1000,
+    },
+}
+_CRM_PUBLIC_WEB_INPUT_PROPERTIES: dict[str, dict[str, Any]] = {
+    "source_families": {
+        "type": "array",
+        "items": {"type": "string", "enum": list(DEFAULT_TARGET_CANDIDATE_SOURCE_FAMILIES)},
+        "minItems": 1,
+        "maxItems": len(DEFAULT_TARGET_CANDIDATE_SOURCE_FAMILIES),
+    },
+    "max_queries_per_candidate": {"type": "integer", "minimum": 1, "maximum": 16},
+    "max_results_per_query": {"type": "integer", "minimum": 1, "maximum": 20},
+    "max_entry_links_per_candidate": {"type": "integer", "minimum": 1, "maximum": 80},
+    "max_fetches_per_candidate": {"type": "integer", "minimum": 0, "maximum": 12},
+    "max_ai_evidence_documents": {"type": "integer", "minimum": 1, "maximum": 20},
+    "max_ai_entry_links": {"type": "integer", "minimum": 1, "maximum": 20},
+    "fetch_content": {"type": "boolean"},
+    "extract_contact_signals": {"type": "boolean"},
+    "ai_extraction": {"type": "string", "enum": ["auto", "on", "off"]},
+    "timeout_seconds": {"type": "integer", "minimum": 5, "maximum": 90},
+    "use_batch_search": {"type": "boolean"},
+    "batch_ready_poll_interval_seconds": {"type": "number", "minimum": 0, "maximum": 60},
+    "max_batch_ready_polls": {"type": "integer", "minimum": 1, "maximum": 60},
+    "max_remote_search_wait_seconds": {"type": "integer", "minimum": 30, "maximum": 7200},
+    "max_provider_pending_wait_seconds": {"type": "integer", "minimum": 30, "maximum": 21600},
+    "max_provider_task_reset_attempts": {"type": "integer", "minimum": 0, "maximum": 3},
+    "max_concurrent_fetches_per_candidate": {"type": "integer", "minimum": 1, "maximum": 8},
+    "max_concurrent_candidate_analyses": {"type": "integer", "minimum": 1, "maximum": 4},
+    "document_fetch_total_timeout_seconds": {"type": "number", "minimum": 0.01, "maximum": 600},
+    "force_refresh": {"type": "boolean"},
+    "refresh_nonce": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": r"\S"},
+}
+
+CRM_RECORD_BATCH_ACTION_REQUEST_CONTRACTS: Mapping[str, Mapping[str, Any]] = MappingProxyType(
+    {
+        ACTION_ENRICH_PERSON_PUBLIC_WEB: MappingProxyType(
+            {
+                "request_schema": _freeze_action_request_json(
+                    DEFAULT_ACTION_REQUEST_SCHEMA_BUILDER.build(
+                        input_properties=_CRM_PUBLIC_WEB_INPUT_PROPERTIES,
+                        target_properties=_CRM_RECORD_BATCH_TARGET_PROPERTIES,
+                        target_required=tuple(_CRM_RECORD_BATCH_TARGET_PROPERTIES),
+                    )
+                ),
+                "request_schema_version": "crm_public_web_enrichment_request_v1",
+                "request_identity_target_fields": ("crm_record_ids", "workspace_id"),
+                "target_ref_field_aliases": (
+                    (
+                        "crm_record_ids",
+                        ("record_ids", "crm_record_id", "record_id", "person_identity_key"),
+                    ),
+                    ("workspace_id", ("tenant_id",)),
+                ),
+            }
+        )
     }
 )
 
@@ -786,6 +870,7 @@ DEFAULT_ACTION_REGISTRY = ActionRegistry(
             display_category="public_web",
             allowed_workflow_command_types=(CRM_PUBLIC_WEB_QUEUE_BATCH_COMMAND_TYPE,),
             default_workflow_command_type=CRM_PUBLIC_WEB_QUEUE_BATCH_COMMAND_TYPE,
+            **dict(CRM_RECORD_BATCH_ACTION_REQUEST_CONTRACTS[ACTION_ENRICH_PERSON_PUBLIC_WEB]),
         ),
         ACTION_REFRESH_COMPANY_PUBLIC_WEB: ActionSpec(
             action_type=ACTION_REFRESH_COMPANY_PUBLIC_WEB,

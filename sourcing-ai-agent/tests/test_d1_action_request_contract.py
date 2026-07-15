@@ -21,6 +21,7 @@ from sourcing_agent.operation_runtime import (
     ACTION_SET_CRM_STAGE,
     APPROVAL_REQUIRED,
     CRM_EXISTING_RECORD_ACTION_TYPES,
+    CRM_RESOURCE_BOUND_ACTION_TYPES,
     DEFAULT_ACTION_REGISTRY,
     DISPATCH_ADAPTER_PROJECTION_READ,
     REQUEST_SCHEMA_COMPATIBILITY_EVENT_TYPE,
@@ -302,8 +303,8 @@ def test_production_action_registry_activates_only_existing_crm_schemas_and_rema
     schema_defined = {
         action_type for action_type in records if DEFAULT_ACTION_REGISTRY.spec_for(action_type).has_request_schema
     }
-    assert schema_defined == set(CRM_EXISTING_RECORD_ACTION_TYPES)
-    assert sum(not DEFAULT_ACTION_REGISTRY.spec_for(action_type).has_request_schema for action_type in records) == 12
+    assert schema_defined == set(CRM_RESOURCE_BOUND_ACTION_TYPES)
+    assert sum(not DEFAULT_ACTION_REGISTRY.spec_for(action_type).has_request_schema for action_type in records) == 11
     assert all(
         bool(DEFAULT_ACTION_REGISTRY.spec_for(action_type).request_schema_digest) == (action_type in schema_defined)
         for action_type in records
@@ -788,7 +789,7 @@ class D1ActionRequestContractPGTest(PGDurableRuntimeTestMixin, unittest.TestCase
             for action_type in DEFAULT_ACTION_REGISTRY.to_record()
             if not DEFAULT_ACTION_REGISTRY.spec_for(action_type).has_request_schema
         )
-        self.assertEqual(len(schema_less_actions), 12)
+        self.assertEqual(len(schema_less_actions), 11)
         for ordinal, action_type in enumerate(schema_less_actions, start=1):
             with self.subTest(action_type=action_type):
                 spec = DEFAULT_ACTION_REGISTRY.spec_for(action_type)
@@ -857,7 +858,7 @@ class D1ActionRequestContractPGTest(PGDurableRuntimeTestMixin, unittest.TestCase
             for action_type in DEFAULT_ACTION_REGISTRY.to_record()
             if not DEFAULT_ACTION_REGISTRY.spec_for(action_type).has_request_schema
         )
-        self.assertEqual(len(schema_less_actions), 12)
+        self.assertEqual(len(schema_less_actions), 11)
         for ordinal, action_type in enumerate(schema_less_actions, start=1):
             with self.subTest(action_type=action_type):
                 spec = DEFAULT_ACTION_REGISTRY.spec_for(action_type)

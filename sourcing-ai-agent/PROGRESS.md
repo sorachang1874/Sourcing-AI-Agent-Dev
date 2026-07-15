@@ -8,6 +8,30 @@
 > month-before-last out before appending. Keep this file under ~300 lines.
 > Archives: [2026-05](docs/archive/progress/PROGRESS_2026-05.md) · [2026-04 and earlier](docs/archive/progress/PROGRESS_2026-04_and_earlier.md)
 
+## 2026-07-16 (Asia/Singapore)
+
+### Track D D1h CRM Public Web action activation
+
+- Exact `enrich_person_public_web` now has a closed request schema and a canonical batch target binder. Authenticated
+  submit exact-matches every selected CRM row to the server workspace and its populated owner adjunct, persists sorted
+  per-record workspace/owner/version snapshots, and maps any missing or foreign member to the same pre-write not-found result.
+  Same-owner batches, person-identity lookup, exact replay, and explicit open-mode workspace behavior remain covered.
+- Dispatch revalidates the snapshot before command planning. The action-bound queue command binds its dedicated
+  planning mode to the physical `crm.public_web.queue_batch:operation:` idempotency prefix, carries the exact snapshot,
+  and revalidates before batch/run materialization; either discriminator missing or mismatched fails closed, while
+  generic `:start:` API-start/retry commands retain their pre-D1h path. A missing forced-refresh nonce is derived
+  deterministically from operation/action identity and persisted, so retry cannot mint a second batch identity after
+  a crash.
+- The current production partition is **4 schema-defined / 11 schema-less / served=0**. Confirmed author evidence is
+  D1h PG **5 passed**, combined D1 adjacency **116 passed + 188 subtests**, and exact Operation/transport adjacency
+  **4 passed + 4 subtests**; full Operation runtime is **136 passed + 503 subtests**, and the CRM Public Web boundary
+  file is **34 passed**. Lint is green across **58 files**; global mypy remains at the accepted **81 errors / 4 files**
+  ceiling. Final stable commit and fresh pinned non-author review remain pending; this is not a formal `GO` and
+  authorizes no provider/model/live path.
+- R-019/R-028/R-029 remain open. The command-owner rejection happens after its existing claim/running transition, so
+  D1h claims only batch/run/EntityDelta zero-write there, not a cross-table UoW or exactly-once closure. R-031 remains
+  the separately review-pending D1g boundary.
+
 ## 2026-07-15 (Asia/Singapore)
 
 ### Track D D1g Operation API exact-owner closure
@@ -27,12 +51,13 @@
   pinned non-author review remain pending; this is not a formal `GO` and authorizes no live/provider path.
 - R-031 is remediated by the current candidate but remains review-pending. R-019 stays open: D1g adds only
   authorization reads/rechecks, no new state mutator or transaction-lock caller, and the **26** caller ratchet does not
-  rise. R-028 is unchanged/not triggered; the other 12 schema-less submissions and served=0 are unchanged.
+  rise. R-028 is unchanged/not triggered; at the D1g checkpoint the other 12 schema-less submissions and served=0
+  were unchanged. D1h supersedes that partition count.
 
 ### Track D D1f CRM existing-record action activation
 
 - Exact `set_crm_stage`, `add_crm_note`, and `create_crm_task` request contracts are active in the production registry;
-  the current partition is **3 schema-defined / 12 schema-less / served=0**. Authenticated submit derives workspace and
+  the D1f checkpoint partition was **3 schema-defined / 12 schema-less / served=0**. Authenticated submit derives workspace and
   user from request state, maps missing/foreign to one 404, rejects forged target aliases before persistence, and keeps
   explicit open-mode workspace compatibility.
 - The full owner snapshot (`crm_record_id/workspace_id/owner_user_id/crm_version`) remains the execution pin. Stable

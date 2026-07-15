@@ -3473,14 +3473,14 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
     def test_budget_required_action_requires_explicit_budget(self) -> None:
         with self.assertRaisesRegex(ValueError, "requires explicit budget"):
             self.writer.submit_action(
-                action_type=ACTION_ENRICH_PERSON_PUBLIC_WEB,
-                target_ref={"person_identity_key": "person-a"},
+                action_type=ACTION_REFRESH_COMPANY_PUBLIC_WEB,
+                target_ref={"company_id": "company-a"},
                 idempotency_key="enrich:person-a",
             )
 
         result = self.writer.submit_action(
-            action_type=ACTION_ENRICH_PERSON_PUBLIC_WEB,
-            target_ref={"person_identity_key": "person-a"},
+            action_type=ACTION_REFRESH_COMPANY_PUBLIC_WEB,
+            target_ref={"company_id": "company-a"},
             budget={"max_provider_calls": 3, "max_usd": 1.5},
             idempotency_key="enrich:person-a",
         )

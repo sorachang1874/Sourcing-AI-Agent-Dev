@@ -13,10 +13,11 @@ from sourcing_agent.model_provider import DeterministicModelClient
 from sourcing_agent.operation_runtime import (
     ACTION_ADD_CRM_NOTE,
     ACTION_CREATE_CRM_TASK,
-    ACTION_ENRICH_PERSON_PUBLIC_WEB,
     ACTION_EXTERNAL_INTAKE,
+    ACTION_FETCH_PROFILE_SAMPLE,
     ACTION_SET_CRM_STAGE,
     CRM_EXISTING_RECORD_ACTION_TYPES,
+    CRM_RESOURCE_BOUND_ACTION_TYPES,
     DEFAULT_ACTION_REGISTRY,
     OperationSubmissionResult,
 )
@@ -63,16 +64,16 @@ FULL_ZERO_WRITE_TABLES = (
 )
 
 
-def test_production_registry_activates_exactly_three_schemas_and_still_serves_zero_tools() -> None:
+def test_production_registry_reflects_current_schema_partition_and_still_serves_zero_tools() -> None:
     records = DEFAULT_ACTION_REGISTRY.to_record(include_command_contracts=False)
     schema_defined = {
         action_type for action_type in records if DEFAULT_ACTION_REGISTRY.spec_for(action_type).has_request_schema
     }
 
     assert len(records) == 15
-    assert schema_defined == set(CRM_EXISTING_RECORD_ACTION_TYPES)
-    assert len(schema_defined) == 3
-    assert sum(not DEFAULT_ACTION_REGISTRY.spec_for(action_type).has_request_schema for action_type in records) == 12
+    assert schema_defined == set(CRM_RESOURCE_BOUND_ACTION_TYPES)
+    assert len(schema_defined) == 4
+    assert sum(not DEFAULT_ACTION_REGISTRY.spec_for(action_type).has_request_schema for action_type in records) == 11
     assert sum(record.get("agent_tool_enabled") is True for record in records.values()) == 0
     assert all("served_tool_status" not in record for record in records.values())
 
@@ -704,7 +705,7 @@ class D1fCRMExistingRecordActionActivationPGTest(PGDurableRuntimeTestMixin, unit
 
     def test_approved_action_replay_reads_existing_run_and_rejects_unknown_run_status_pre_write(self) -> None:
         payload = {
-            "action_type": ACTION_ENRICH_PERSON_PUBLIC_WEB,
+            "action_type": ACTION_FETCH_PROFILE_SAMPLE,
             "workspace_id": "user-alice",
             "target_ref": {},
             "input": {},
@@ -781,7 +782,7 @@ class D1fCRMExistingRecordActionActivationPGTest(PGDurableRuntimeTestMixin, unit
     def test_approval_submission_rejects_orphan_and_unapproved_runs_before_writes(self) -> None:
         def approval_payload(suffix: str) -> dict[str, Any]:
             return {
-                "action_type": ACTION_ENRICH_PERSON_PUBLIC_WEB,
+                "action_type": ACTION_FETCH_PROFILE_SAMPLE,
                 "workspace_id": "user-alice",
                 "target_ref": {},
                 "input": {},

@@ -7,8 +7,9 @@
 > not a formal `NO-GO`. The fresh pinned review must bind the fixed-forward hash. Until a hash-bound valid artifact
 > exists, formal review remains pending.
 > This was a bounded, non-live D1 foundation batch: all 15 production actions were schema-less at its checkpoint.
-> D1f now activates exactly three existing-record CRM actions, leaving 12 on this bridge; the served Agent tool
-> population remains zero. It is not D1 completion, a formal independent-review `GO`, live-provider approval,
+> D1f later activated exactly three existing-record CRM actions, and D1h now activates
+> `enrich_person_public_web`, leaving 11 on this bridge; the served Agent tool population remains zero. It is not D1
+> completion, a formal independent-review `GO`, live-provider approval,
 > manual/product signoff, or milestone closure. A fresh pinned non-author review is required after the author commit.
 > D1b has only a scope-local advisory `GO`; its formal review remains pending. C2.8 is separately formal-pending after
 > an `invalid_transport` review outcome and does not supply review evidence for this scope.
@@ -31,8 +32,9 @@ served to a model. It deliberately does not populate a production schema or expo
 
 The implementation was intentionally exercised with a synthetic schema-defined action. At the D1c checkpoint every
 action in `DEFAULT_ACTION_REGISTRY` had `request_schema=None`, an empty version/digest pair, and no served-tool status.
-D1f later activates exactly three existing-record CRM actions; 12 still use empty pins and no action has served-tool
-status. The existing 12 supported/three unsupported dispatch behavior remains the D1b contract; D1c only inserts a
+D1f later activates exactly three existing-record CRM actions and D1h activates `enrich_person_public_web`; 11 still
+use empty pins and no action has served-tool status. The existing 12 supported/three unsupported dispatch behavior
+remains the D1b contract; D1c only inserts a
 request-pin preflight before an existing adapter may run.
 
 ## 2. Design-obligation disposition
@@ -101,8 +103,8 @@ the persisted pins match the current request identity.
 ## 5. Schema-less compatibility bridge
 
 At the D1c checkpoint all 15 production action specs used the temporary bridge. D1f removes exactly
-`set_crm_stage`, `add_crm_note`, and `create_crm_task` from that numerator; the following behavior remains current for
-the other 12:
+`set_crm_stage`, `add_crm_note`, and `create_crm_task` from that numerator; D1h additionally removes
+`enrich_person_public_web`. The following behavior remains current for the other 11:
 
 - physical action and run pins are exactly `""` / `""`;
 - action metadata records `request_schema_status="schema_less_compatibility"` and
@@ -128,9 +130,9 @@ sufficient.
 
 | Contract | Owner/source of truth | Consumers | Forbidden source/fallback | Migration/deletion status |
 | --- | --- | --- | --- | --- |
-| request schema/version | checked-in `ActionRequestSpec` in `ActionRegistry` | HTTP submit, writer validation, dispatch preflight; future planner projection | caller metadata, API fields, persisted metadata mirror | foundation active; three CRM schemas active, 12 schema-less |
+| request schema/version | checked-in `ActionRequestSpec` in `ActionRegistry` | HTTP submit, writer validation, dispatch preflight; future planner projection | caller metadata, API fields, persisted metadata mirror | foundation active; four CRM-resource schemas active, 11 schema-less |
 | schema digest/validation | D0 `ToolSpec.input_schema_digest` and `ToolSpec.validate_input` | D1 submit/revalidation; future served tool parser | second D1 validator or ad hoc JSON hash | canonical shared owner active |
-| target resource identity | action owner through `OwnerBoundTargetRef` | schema-defined submit and dispatch | caller/model raw target or input alias | D1f activates the CRM existing-record binder for three actions; other binders deferred |
+| target resource identity | action owner through `OwnerBoundTargetRef` | schema-defined submit and dispatch | caller/model raw target or input alias | D1f activates the CRM existing-record binder for three actions; D1h adds the CRM Public Web batch binder; other binders deferred |
 | AgentAction physical pin | `OperationRuntimeWriter` derived from current registry at submit | replay, approve, retry, dispatch, audit/API records | caller-supplied pin, metadata-only pin | active columns; empty/empty marks R-029 |
 | OperationRun physical pin | run creator copying the linked AgentAction | immediate/approve/retry run replay and dispatch | current-registry re-derivation without action equality | active columns; copy/verify required |
 | schema-less hit evidence | action metadata/submission event plus epoch-scoped continuation observation event | residual reporting/audit across submit replay, approve, retry, and dispatch | absence interpreted as strict validation; cross-release event-key reuse | R-029 pending; bump epoch per observation window and require one-window zero-hit deletion gate |
@@ -140,7 +142,7 @@ sufficient.
 
 D1c does not implement or claim:
 
-- more than the three later D1f production request schemas, any other production owner-target binder, served predicate, or
+- more than the four later D1f/D1h production request schemas, any other production owner-target binder, served predicate, or
   `GET /api/agent/tool-registry`;
 - revisioned `model_safe_result_schema`, its validator owner, or simulate-dispatch serializer preflight;
 - model-turn/journal/result-slot propagation, tool schema pinning at turn creation, Agent Session, SSE, provider/model

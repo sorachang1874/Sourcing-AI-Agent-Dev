@@ -172,13 +172,19 @@ class _ScopeOrchestrator:
     def submit_operation_action(self, payload, **owner):
         self._capture("operation_action", {**dict(payload), **owner})
         action_type = str(payload.get("action_type") or "").strip()
-        if action_type in {"set_crm_stage", "add_crm_note", "create_crm_task"}:
+        if action_type in {"set_crm_stage", "add_crm_note", "create_crm_task", "enrich_person_public_web"}:
             target_ref = dict(payload.get("target_ref") or {})
-            record = self.store.get_crm_record(str(target_ref.get("crm_record_id") or ""))
+            record_ids = target_ref.get("crm_record_ids") or [target_ref.get("crm_record_id")]
+            records = [self.store.get_crm_record(str(record_id or "")) for record_id in list(record_ids or [])]
             if owner and (
-                not record
-                or record.get("workspace_id") != owner.get("expected_workspace_id")
-                or str(record.get("owner_user_id") or "") not in {"", str(owner.get("expected_owner_user_id") or "")}
+                not records
+                or any(
+                    not record
+                    or record.get("workspace_id") != owner.get("expected_workspace_id")
+                    or str(record.get("owner_user_id") or "")
+                    not in {"", str(owner.get("expected_owner_user_id") or "")}
+                    for record in records
+                )
             ):
                 return {"status": "not_found", "reason": "crm_record_not_found"}
         if str(payload.get("idempotency_key") or "").strip() == "completed-replay":
@@ -191,7 +197,7 @@ class _ScopeOrchestrator:
             }
         if str(payload.get("idempotency_key") or "").strip() == "invalid-replay-flag":
             return {"status": "invalid", "idempotent_replay": True, "reason": "stub-invalid"}
-        return {"status": "queued", "module_state_mutated": False}
+        return {"status": "queued", "idempotent_replay": False, "module_state_mutated": False}
 
     def get_operation_action_registry(self):
         return {"status": "ok", "actions": {}}
@@ -969,8 +975,13 @@ class RequestScopeWiringTest(unittest.TestCase):
 
     def test_operation_crm_action_transport_derives_owner_and_preserves_open_mode(self) -> None:
         base, opener, orchestrator = self._start_server()
-        for action_type in ("set_crm_stage", "add_crm_note", "create_crm_task"):
+        for action_type in ("set_crm_stage", "add_crm_note", "create_crm_task", "enrich_person_public_web"):
             with self.subTest(action_type=action_type):
+                target_ref = (
+                    {"crm_record_ids": ["rec-alice-owned"]}
+                    if action_type == "enrich_person_public_web"
+                    else {"crm_record_id": "rec-alice-owned"}
+                )
                 status, _ = self._request(
                     opener,
                     f"{base}/api/operations/actions",
@@ -979,7 +990,7 @@ class RequestScopeWiringTest(unittest.TestCase):
                         "action_type": action_type,
                         "workspace_id": "user-bob",
                         "actor": "bob",
-                        "target_ref": {"crm_record_id": "rec-alice-owned"},
+                        "target_ref": target_ref,
                         "input": {},
                     },
                 )

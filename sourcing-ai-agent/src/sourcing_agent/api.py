@@ -32,7 +32,7 @@ from .cohort_selection import (
     validate_external_cohort_selection_payload,
 )
 from .operation_runtime import (
-    CRM_EXISTING_RECORD_ACTION_TYPES,
+    CRM_RESOURCE_BOUND_ACTION_TYPES,
     OPERATION_ACTION_FRESH_SUBMISSION_STATUSES,
     OPERATION_ACTION_SUBMISSION_STATUSES,
 )
@@ -2096,7 +2096,7 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["POST"], "/api/company-assets/public-web", post_company_public_web, read_body=True)
 
     def post_operation_actions(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
-        crm_owner_bound = str(payload.get("action_type") or "").strip() in CRM_EXISTING_RECORD_ACTION_TYPES
+        crm_owner_bound = str(payload.get("action_type") or "").strip() in CRM_RESOURCE_BOUND_ACTION_TYPES
         _apply_server_identity(
             payload,
             request,
