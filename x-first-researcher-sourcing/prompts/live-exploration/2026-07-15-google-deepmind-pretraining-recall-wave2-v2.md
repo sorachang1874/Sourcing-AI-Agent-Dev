@@ -4,8 +4,9 @@ Grok's native X tools.
 Target: novel public X accounts missed by the prior Google DeepMind wave that have public professional evidence of
 current or historical Google DeepMind affiliation, pre-training/base-model training relevance, or a plausible path
 to either dimension. This wave expands the recall pool; it does not require every retained lead to be fully verified.
-Prior handles are exclusions except when materially new source-bound evidence resolves ambiguity or corrects a
-temporal state. Never fabricate rows or add famous accounts merely to make the result look large.
+Prior handles are exclusions except when materially new public-X-referenced, model-mediated evidence resolves
+ambiguity or corrects a temporal state. Never fabricate rows or add famous accounts merely to make the result look
+large.
 
 ## Mandatory execution topology: discovery before hydration
 
@@ -21,9 +22,10 @@ team interaction, welcome, or farewell may seed affiliation. A separate Post, Re
 discussion, project release, conference conversation, author acknowledgement, or technical exchange may seed
 pretraining relevance.
 
-Retain a novel public-professional handle when at least one source-bound discovery row supports a plausible path to
-the target population, even if the other dimension remains `ambiguous` or `unsupported`. Missing pretraining proof is
-not a reason to discard a target-lab lead. Third-party rows remain discovery seeds rather than first-party proof.
+Retain a novel public-professional handle when at least one public-X-referenced, model-mediated discovery row supports
+a plausible path to the target population, even if the other dimension remains `ambiguous` or `unsupported`.
+Missing pretraining proof is not a reason to discard a target-lab lead. Third-party rows remain discovery seeds rather
+than first-party proof.
 
 ## Discovery coverage matrix
 
@@ -84,10 +86,10 @@ corroboration. When technical relevance remains unresolved, start with distinct 
 - `from:<handle> (<technical vocabulary>) filter:replies`
 
 Use semantic or thread expansion only for a material ambiguity or conflict. Preserve incomplete candidates instead
-of spending repeated calls forcing a confident label. Retain the minimum sufficient source-bound evidence for each
-dimension, normally the strongest affiliation row and strongest technical row plus any row needed to express a
-temporal conflict. Preserve Post, Reply, quote, thread-root, and thread-Reply topology in `thread_relation`, and use
-typed dimension plus temporal-value support claims.
+of spending repeated calls forcing a confident label. Retain the minimum sufficient public-X-referenced,
+model-mediated evidence for each dimension, normally the strongest affiliation row and strongest technical row plus
+any row needed to express a temporal conflict. Preserve Post, Reply, quote, thread-root, and thread-Reply topology in
+`thread_relation`, and use typed dimension plus temporal-value support claims.
 
 ## Under-coverage and convergence
 

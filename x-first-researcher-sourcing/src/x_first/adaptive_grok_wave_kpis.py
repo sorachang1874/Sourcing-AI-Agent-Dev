@@ -169,7 +169,6 @@ def _validate_pair_bindings(result: Mapping[str, Any], receipt: Mapping[str, Any
         raise AdaptiveWaveKPIError("result_receipt_surface_population_mismatch")
 
     local = result["local_reconciliation"]
-    provenance = result["native_x_tool_provenance"]
     proof = receipt["session_proof"]
     if (
         result["counts"]["candidates_retained"] != len(candidates)
@@ -177,7 +176,6 @@ def _validate_pair_bindings(result: Mapping[str, Any], receipt: Mapping[str, Any
         or local["evidence_items_validated"] != evidence_count
         or local["post_urls_structurally_validated"] != actual_counts["post_url_count"]
         or local["tool_calls_completed"] != proof["completed_tool_calls"]
-        or provenance["tool_calls_reported"] != proof["completed_tool_calls"]
         or local["tool_counts"] != proof["tool_counts"]
     ):
         raise AdaptiveWaveKPIError("result_receipt_reconciliation_mismatch")

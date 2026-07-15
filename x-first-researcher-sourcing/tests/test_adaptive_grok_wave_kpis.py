@@ -10,6 +10,7 @@ from unittest import mock
 from tests.test_adaptive_grok_wave_runner import (
     TEST_EFFECTIVE_PROMPT_POLICY,
     _completed_live_run,
+    _empty_result,
 )
 from x_first import adaptive_grok_wave_runner as runner
 from x_first.adaptive_grok_wave_kpis import (
@@ -292,6 +293,34 @@ class AdaptiveGrokWaveKPITests(unittest.TestCase):
             os.chmod(sanitized_path, 0o600)
             with self.assertRaisesRegex(AdaptiveWaveKPIError, "operator_bundle_replay_invalid"):
                 analyze_operator_bundle(run_root, approval_root=approvals)
+
+    def test_model_reported_call_mismatch_is_a_metric_not_a_validation_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as directory, mock.patch.object(
+            runner,
+            "DEFAULT_EFFECTIVE_PROMPT_POLICY",
+            TEST_EFFECTIVE_PROMPT_POLICY,
+        ):
+            model_result = _empty_result()
+            model_result["native_x_tool_provenance"]["tool_calls_reported"] = 0
+            model_result["native_x_tool_provenance"]["queries"] = []
+            model_result["local_reconciliation"]["tool_calls_completed"] = 0
+            model_result["local_reconciliation"]["tool_counts"] = {}
+            root = Path(directory)
+            run_root, approvals = _completed_live_run(root, model_result=model_result)
+
+            summary = analyze_operator_bundle(run_root, approval_root=approvals)
+            discrepancy = summary["model_reported_vs_ledger_discrepancies"]
+            self.assertTrue(discrepancy["any_discrepancy"])
+            self.assertEqual(
+                discrepancy["completed_native_x_calls"],
+                {
+                    "model_provenance_reported": 0,
+                    "model_local_reported": 1,
+                    "ledger": 1,
+                    "provenance_delta_from_ledger": -1,
+                    "local_delta_from_ledger": 0,
+                },
+            )
 
     def test_pair_path_rejects_non_private_input(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

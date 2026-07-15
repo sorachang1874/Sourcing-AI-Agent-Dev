@@ -335,7 +335,7 @@ Google DeepMind wave2-v2 changes the ordering rather than merely adding keywords
 1. complete a discovery matrix over organization eras, model/project families, training functions, official/team
    graphs, Post/Reply/thread surfaces, and both Top and Latest before exact-person hydration;
 2. keep lab affiliation and pretraining as independent handle-joined ledgers, retaining an incomplete candidate when
-   either dimension has source-bound professional evidence;
+   either dimension has public-X-referenced, model-mediated professional evidence;
 3. use official and contributor threads to harvest handles before profile resolution;
 4. perform one cached bare-handle profile lookup per novel handle, then selectively query authored Posts and Replies
    only for unresolved technical states;

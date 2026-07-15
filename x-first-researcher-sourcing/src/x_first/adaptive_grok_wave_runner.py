@@ -3348,7 +3348,7 @@ def _parse_session_proof(
                     handle_key, surface = classified_surface
                     surface_attempts.add((handle_key, surface, query_sha256))
         elif kind == "agent_message_chunk":
-            if user_events != 1 or not started or started != completed:
+            if user_events != 1 or started != completed:
                 raise AdaptiveWaveValidationError("session_assistant_causality_invalid")
             content = update.get("content")
             if isinstance(content, dict) and content.get("type") == "text" and isinstance(content.get("text"), str):

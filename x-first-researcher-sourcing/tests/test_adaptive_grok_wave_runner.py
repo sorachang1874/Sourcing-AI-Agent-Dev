@@ -433,7 +433,7 @@ class FakeExecutor:
         )
 
 
-def _completed_live_run(root: Path) -> tuple[Path, Path]:
+def _completed_live_run(root: Path, *, model_result: dict[str, Any] | None = None) -> tuple[Path, Path]:
     os.chmod(root, 0o700)
     binary, auth, binary_sha = _live_material(root)
     request, request_path = _build_request(root, binary_sha=binary_sha)
@@ -447,7 +447,7 @@ def _completed_live_run(root: Path) -> tuple[Path, Path]:
     clock = MutableClock()
     executor = FakeExecutor(
         clock,
-        (canonical_json(_empty_result()) + "\n").encode(),
+        (canonical_json(model_result if model_result is not None else _empty_result()) + "\n").encode(),
         spawn=True,
     )
     _, run_root = _run_adaptive_wave(
@@ -1195,6 +1195,10 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             }
             progress = copy.deepcopy(final_message)
             progress["params"]["update"]["content"]["text"] = "Progress: expanding a second query family."
+            pre_tool_progress = copy.deepcopy(final_message)
+            pre_tool_progress["params"]["update"]["content"]["text"] = (
+                "Progress: preparing the first discovery query family."
+            )
             second_start = copy.deepcopy(first_start)
             second_start["params"]["update"]["toolCallId"] = "tool-2"
             second_complete = copy.deepcopy(first_complete)
@@ -1211,6 +1215,7 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             updates[:] = [
                 retry,
                 user,
+                pre_tool_progress,
                 first_start,
                 first_complete,
                 progress,
