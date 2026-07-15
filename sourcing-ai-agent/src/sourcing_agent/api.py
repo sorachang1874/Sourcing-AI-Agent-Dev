@@ -28,6 +28,7 @@ from starlette.routing import Route
 from .cohort_selection import (
     CohortSelectionValidationError,
     cohort_selection_options_payload,
+    prepare_external_criteria_request_payload,
     validate_external_cohort_selection_payload,
 )
 from .orchestrator import SourcingOrchestrator
@@ -744,6 +745,15 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     def _invalid_external_cohort(payload: dict[str, Any]) -> Response | None:
         try:
             canonical_payload = validate_external_cohort_selection_payload(payload)
+        except CohortSelectionValidationError as exc:
+            return _json_response(HTTPStatus.BAD_REQUEST, exc.to_result())
+        payload.clear()
+        payload.update(canonical_payload)
+        return None
+
+    def _invalid_external_criteria_request(payload: dict[str, Any]) -> Response | None:
+        try:
+            canonical_payload = prepare_external_criteria_request_payload(payload)
         except CohortSelectionValidationError as exc:
             return _json_response(HTTPStatus.BAD_REQUEST, exc.to_result())
         payload.clear()
@@ -2175,8 +2185,15 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["POST"], "/api/intake/excel/continue", post_intake_excel_continue, read_body=True)
 
     def post_criteria_feedback(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        invalid = _invalid_external_criteria_request(payload)
+        if invalid is not None:
+            return invalid
         result = orchestrator.record_criteria_feedback(payload, **_expected_job_owner_kwargs(request))
-        status = HTTPStatus.NOT_FOUND if result.get("status") == "not_found" else HTTPStatus.CREATED
+        status = HTTPStatus.CREATED
+        if result.get("status") == "not_found":
+            status = HTTPStatus.NOT_FOUND
+        elif result.get("status") == "invalid":
+            status = HTTPStatus.BAD_REQUEST
         return _json_response(status, result)
 
     add(["POST"], "/api/criteria/feedback", post_criteria_feedback, read_body=True)
@@ -2238,6 +2255,9 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["POST"], "/api/results/refine", post_results_refine, read_body=True)
 
     def post_criteria_confidence_policy(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        invalid = _invalid_external_criteria_request(payload)
+        if invalid is not None:
+            return invalid
         result = orchestrator.configure_confidence_policy(payload)
         status = HTTPStatus.OK if result.get("status") != "invalid" else HTTPStatus.BAD_REQUEST
         return _json_response(status, result)
@@ -2754,8 +2774,15 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["POST"], "/api/manual-review/synthesize", post_manual_review_synthesize, read_body=True)
 
     def post_criteria_recompile(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        invalid = _invalid_external_criteria_request(payload)
+        if invalid is not None:
+            return invalid
         result = orchestrator.recompile_criteria(payload, **_expected_job_owner_kwargs(request))
-        status = HTTPStatus.NOT_FOUND if result.get("status") == "not_found" else HTTPStatus.OK
+        status = HTTPStatus.OK
+        if result.get("status") == "not_found":
+            status = HTTPStatus.NOT_FOUND
+        elif result.get("status") == "invalid":
+            status = HTTPStatus.BAD_REQUEST
         return _json_response(status, result)
 
     add(["POST"], "/api/criteria/recompile", post_criteria_recompile, read_body=True)

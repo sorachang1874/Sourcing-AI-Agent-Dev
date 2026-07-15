@@ -312,7 +312,9 @@ class CriteriaConfidenceRepository(Repository):
                     },
                 )
             source_feedback_ids = [
-                int(item.get("source_feedback_id") or 0) for item in suggestions if int(item.get("source_feedback_id") or 0)
+                int(item.get("source_feedback_id") or 0)
+                for item in suggestions
+                if int(item.get("source_feedback_id") or 0)
             ]
             if not source_feedback_ids:
                 return []
@@ -938,16 +940,18 @@ class CriteriaConfidenceRepository(Repository):
                     order_by_sql="version_id DESC",
                     limit=0,
                 )
-                version_ids = {int(row.get("version_id") or 0) for row in version_rows if int(row.get("version_id") or 0)}
+                version_ids = {
+                    int(row.get("version_id") or 0) for row in version_rows if int(row.get("version_id") or 0)
+                }
                 compiler_rows = self._select_rows(
                     "criteria_compiler_runs",
                     row_builder=self._criteria_compiler_run_from_row,
                     order_by_sql="compiler_run_id DESC",
                     limit=0,
                 )
-                filtered_rows = [
-                    row for row in compiler_rows if int(row.get("version_id") or 0) in version_ids
-                ][: max(0, int(limit or 0)) or len(compiler_rows)]
+                filtered_rows = [row for row in compiler_rows if int(row.get("version_id") or 0) in version_ids][
+                    : max(0, int(limit or 0)) or len(compiler_rows)
+                ]
                 if filtered_rows or self._strict_authoritative("criteria_compiler_runs"):
                     return filtered_rows
             else:
@@ -1019,30 +1023,22 @@ class CriteriaConfidenceRepository(Repository):
                     request_payload = dict(job["request"])
         if isinstance(request_payload, dict) and request_payload:
             request_payload = JobRequest.from_payload(request_payload).to_record()
-            existing_matching = (
-                metadata.get("request_matching") if isinstance(metadata.get("request_matching"), dict) else {}
-            )
-            signature_context = request_signature_context(
-                request_payload,
-                execution_bundle_payload={"request_matching": existing_matching} if existing_matching else None,
-            )
+            # Feedback-family provenance is derived from the canonical request
+            # at this write boundary. Caller metadata is never an execution
+            # bundle and cannot supply a preferred matching/signature snapshot.
+            signature_context = request_signature_context(request_payload)
             request_target_company = str(request_payload.get("target_company") or "").strip()
             if request_target_company and not target_company:
                 target_company = request_target_company
-            metadata.setdefault("request_payload", request_payload)
-            metadata.setdefault("request_matching", _json_safe_payload(signature_context.get("request_matching") or {}))
-            metadata.setdefault("request_signature", str(signature_context.get("request_signature") or ""))
-            metadata.setdefault(
-                "request_family_signature", str(signature_context.get("request_family_signature") or "")
+            metadata["request_payload"] = request_payload
+            metadata["request_matching"] = _json_safe_payload(signature_context.get("request_matching") or {})
+            metadata["request_signature"] = str(signature_context.get("request_signature") or "")
+            metadata["request_family_signature"] = str(signature_context.get("request_family_signature") or "")
+            metadata["matching_request_signature"] = str(signature_context.get("matching_request_signature") or "")
+            metadata["matching_request_family_signature"] = str(
+                signature_context.get("matching_request_family_signature") or ""
             )
-            metadata.setdefault(
-                "matching_request_signature", str(signature_context.get("matching_request_signature") or "")
-            )
-            metadata.setdefault(
-                "matching_request_family_signature",
-                str(signature_context.get("matching_request_family_signature") or ""),
-            )
-            metadata.setdefault("target_company", request_target_company)
+            metadata["target_company"] = request_target_company
         return target_company, metadata
 
     def _criteria_feedback_from_row(self, row: Any) -> dict[str, Any]:

@@ -101,6 +101,7 @@ from .control_plane_postgres import (
     load_control_plane_postgres_sync_state,
 )
 from .criteria_evolution import CriteriaEvolutionEngine
+from .criteria_request_provenance import prepare_criteria_write_payload
 from .crm_migration import CRMTargetCandidateMigrationBackfill
 from .crm_public_web_owner import (
     CrmPublicWebOwner,
@@ -55525,12 +55526,12 @@ class SourcingOrchestrator:
         expected_requester_id: str = "",
         expected_tenant_id: str = "",
     ) -> dict[str, Any]:
-        preflight = self._preflight_criteria_job_ownership(
+        payload, preflight = self._prepare_criteria_write_payload(
             payload,
             expected_requester_id=expected_requester_id,
             expected_tenant_id=expected_tenant_id,
         )
-        if preflight.get("status") == "not_found":
+        if preflight.get("status") != "ready":
             return preflight
         feedback = self.store.repos.criteria_confidence.record_feedback(payload)
         suggestions = self._suggest_patterns_from_feedback(int(feedback.get("feedback_id") or 0))
@@ -55559,12 +55560,12 @@ class SourcingOrchestrator:
         expected_requester_id: str = "",
         expected_tenant_id: str = "",
     ) -> dict[str, Any]:
-        preflight = self._preflight_criteria_job_ownership(
+        payload, preflight = self._prepare_criteria_write_payload(
             payload,
             expected_requester_id=expected_requester_id,
             expected_tenant_id=expected_tenant_id,
         )
-        if preflight.get("status") == "not_found":
+        if preflight.get("status") != "ready":
             return preflight
         trigger_feedback_id = int(payload.get("trigger_feedback_id") or 0)
         recompile = self.criteria_evolution.recompile_after_feedback(payload, trigger_feedback_id)
@@ -55580,6 +55581,12 @@ class SourcingOrchestrator:
         return {**recompile, "rerun": rerun}
 
     def configure_confidence_policy(self, payload: dict[str, Any]) -> dict[str, Any]:
+        payload, preparation = self._prepare_criteria_write_payload(
+            payload,
+            bind_referenced_job=False,
+        )
+        if preparation.get("status") != "ready":
+            return preparation
         action = str(payload.get("action") or "").strip().lower()
         request_payload = dict(payload.get("request") or payload.get("request_payload") or {})
         if request_payload:
@@ -55752,6 +55759,22 @@ class SourcingOrchestrator:
             "recompile": recompile,
             "rerun": rerun,
         }
+
+    def _prepare_criteria_write_payload(
+        self,
+        payload: dict[str, Any],
+        *,
+        expected_requester_id: str = "",
+        expected_tenant_id: str = "",
+        bind_referenced_job: bool = True,
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        return prepare_criteria_write_payload(
+            payload,
+            job_lookup=self.store.get_job,
+            expected_requester_id=expected_requester_id,
+            expected_tenant_id=expected_tenant_id,
+            bind_referenced_job=bind_referenced_job,
+        )
 
     def _preflight_criteria_job_ownership(
         self,

@@ -26,6 +26,7 @@ EXPECTED_ROUTES = [
     ("GET", "/api/runtime/health"),
     ("GET", "/api/runtime/metrics"),
     ("GET", "/api/runtime/progress"),
+    ("GET", "/api/cohort-selection/options"),
     ("GET", "/api/criteria/patterns"),
     ("GET", "/api/plan/reviews"),
     ("GET", "/api/query-dispatches"),

@@ -183,6 +183,77 @@ def validate_external_cohort_selection_payload(payload: dict[str, Any] | None) -
     )
 
 
+def prepare_external_criteria_request_payload(payload: dict[str, Any] | None) -> dict[str, Any]:
+    """Canonicalize the single request carried by an external criteria write.
+
+    Criteria endpoints historically accepted both ``request`` and
+    ``request_payload`` and also allowed a request copy inside ``metadata``.
+    Treating those as a fallback ladder lets one alias bypass CohortSelection
+    validation or disagree with the alias that a later writer consumes.  This
+    owner validates every present alias, requires exact canonical agreement,
+    and emits one ``request_payload`` value for downstream provenance binding.
+
+    An absent request remains absent so company-only legacy criteria writes do
+    not materialize a new request contract.
+    """
+
+    criteria_payload = dict(payload or {})
+    raw_metadata = criteria_payload.get("metadata")
+    if "metadata" in criteria_payload and not isinstance(raw_metadata, dict):
+        raise CohortSelectionValidationError(
+            "criteria_request_invalid_type",
+            "metadata",
+            "metadata must be an object",
+        )
+    metadata = dict(raw_metadata or {})
+    candidates: list[tuple[str, dict[str, Any]]] = []
+
+    for alias in ("request", "request_payload"):
+        if alias not in criteria_payload:
+            continue
+        raw_request = criteria_payload.get(alias)
+        if not isinstance(raw_request, dict):
+            raise CohortSelectionValidationError(
+                "criteria_request_invalid_type",
+                alias,
+                f"{alias} must be an object",
+            )
+        candidates.append((alias, validate_external_cohort_selection_payload(raw_request)))
+
+    if "request_payload" in metadata:
+        raw_request = metadata.get("request_payload")
+        if not isinstance(raw_request, dict):
+            raise CohortSelectionValidationError(
+                "criteria_request_invalid_type",
+                "metadata.request_payload",
+                "metadata.request_payload must be an object",
+            )
+        candidates.append(
+            (
+                "metadata.request_payload",
+                validate_external_cohort_selection_payload(raw_request),
+            )
+        )
+
+    if not candidates:
+        return criteria_payload
+
+    canonical_request = candidates[0][1]
+    for alias, candidate in candidates[1:]:
+        if candidate != canonical_request:
+            raise CohortSelectionValidationError(
+                "criteria_request_alias_conflict",
+                alias,
+            )
+
+    criteria_payload.pop("request", None)
+    criteria_payload["request_payload"] = canonical_request
+    metadata.pop("request_payload", None)
+    if "metadata" in criteria_payload:
+        criteria_payload["metadata"] = metadata
+    return criteria_payload
+
+
 def canonicalize_cohort_selection_request_payload(
     payload: dict[str, Any] | None,
     *,

@@ -29,6 +29,7 @@ from sourcing_agent.cohort_selection import (
     cohort_selection_registry_digest,
     effective_cohort_selection,
     merge_plan_review_cohort_selection,
+    prepare_external_criteria_request_payload,
     validate_external_cohort_selection_payload,
 )
 from sourcing_agent.domain import JobRequest, RetrievalPlan
@@ -187,6 +188,63 @@ class CohortSelectionContractTest(unittest.TestCase):
             with self.subTest(payload=payload):
                 with self.assertRaises(CohortSelectionValidationError):
                     validate_external_cohort_selection_payload(payload)
+
+    def test_external_criteria_request_aliases_share_one_canonical_owner(self) -> None:
+        request_payload = {
+            "target_company": "OpenAI",
+            "cohort_selection": _cohort(
+                roles=["engineering", "research"],
+                statuses=["former", "current"],
+            ),
+        }
+
+        prepared = prepare_external_criteria_request_payload(
+            {
+                "request": request_payload,
+                "request_payload": request_payload,
+                "metadata": {"request_payload": request_payload, "note": "keep"},
+            }
+        )
+
+        self.assertNotIn("request", prepared)
+        self.assertEqual(
+            prepared["request_payload"]["must_have_primary_role_buckets"],
+            ["research", "engineering"],
+        )
+        self.assertEqual(prepared["request_payload"]["employment_statuses"], ["current", "former"])
+        self.assertEqual(prepared["metadata"], {"note": "keep"})
+
+    def test_external_criteria_request_rejects_conflicting_aliases(self) -> None:
+        with self.assertRaises(CohortSelectionValidationError) as captured:
+            prepare_external_criteria_request_payload(
+                {
+                    "request": {
+                        "target_company": "OpenAI",
+                        "cohort_selection": _cohort(roles=["research"]),
+                    },
+                    "request_payload": {
+                        "target_company": "OpenAI",
+                        "cohort_selection": _cohort(roles=["engineering"]),
+                    },
+                }
+            )
+
+        self.assertEqual(captured.exception.code, "criteria_request_alias_conflict")
+
+    def test_external_criteria_request_rejects_server_owned_source_in_metadata_alias(self) -> None:
+        with self.assertRaises(CohortSelectionValidationError) as captured:
+            prepare_external_criteria_request_payload(
+                {
+                    "metadata": {
+                        "request_payload": {
+                            "target_company": "OpenAI",
+                            "cohort_selection": _cohort(source="inferred"),
+                        }
+                    }
+                }
+            )
+
+        self.assertEqual(captured.exception.code, "cohort_selection_invalid_source")
 
     def test_present_flat_or_intent_axis_mirror_conflicts_fail_closed(self) -> None:
         conflicts: list[dict[str, Any]] = [
@@ -1539,7 +1597,14 @@ class CohortSelectionApiTest(unittest.TestCase):
         self.previous_tokens = os.environ.pop("SOURCING_API_BEARER_TOKENS", None)
 
         class _ApiOrchestrator:
-            calls = {"plan": 0, "explain": 0, "workflow": 0}
+            calls = {
+                "plan": 0,
+                "explain": 0,
+                "workflow": 0,
+                "criteria_feedback": 0,
+                "criteria_confidence": 0,
+                "criteria_recompile": 0,
+            }
             received_payloads = {}
 
             def submit_plan_workflow(self, payload):
@@ -1562,6 +1627,21 @@ class CohortSelectionApiTest(unittest.TestCase):
                     "status": "invalid",
                     "reason": "cohort_selection_plan_review_conflict",
                 }
+
+            def record_criteria_feedback(self, payload, **_owner):
+                self.calls["criteria_feedback"] += 1
+                self.received_payloads["criteria_feedback"] = dict(payload)
+                return {"status": "recorded"}
+
+            def configure_confidence_policy(self, payload):
+                self.calls["criteria_confidence"] += 1
+                self.received_payloads["criteria_confidence"] = dict(payload)
+                return {"status": "configured"}
+
+            def recompile_criteria(self, payload, **_owner):
+                self.calls["criteria_recompile"] += 1
+                self.received_payloads["criteria_recompile"] = dict(payload)
+                return {"status": "recompiled"}
 
         self.orchestrator = _ApiOrchestrator()
         self.server = create_server(self.orchestrator, host="127.0.0.1", port=0)
@@ -1613,8 +1693,84 @@ class CohortSelectionApiTest(unittest.TestCase):
                 self.assertEqual(result["reason"], "cohort_selection_mirror_conflict")
         self.assertEqual(
             self.orchestrator.calls,
-            {"plan": 0, "explain": 0, "workflow": 0},
+            {
+                "plan": 0,
+                "explain": 0,
+                "workflow": 0,
+                "criteria_feedback": 0,
+                "criteria_confidence": 0,
+                "criteria_recompile": 0,
+            },
         )
+
+    def test_criteria_ingress_rejects_invalid_nested_cohort_before_handlers(self) -> None:
+        endpoints = (
+            ("/api/criteria/feedback", "criteria_feedback"),
+            ("/api/criteria/confidence-policy", "criteria_confidence"),
+            ("/api/criteria/recompile", "criteria_recompile"),
+        )
+        invalid_requests = (
+            (
+                {
+                    "target_company": "OpenAI",
+                    "cohort_selection": _cohort(source="inferred"),
+                },
+                "cohort_selection_invalid_source",
+            ),
+            (
+                {
+                    "target_company": "OpenAI",
+                    "cohort_selection": _cohort(statuses=["current"]),
+                    "employment_statuses": ["former"],
+                },
+                "cohort_selection_mirror_conflict",
+            ),
+        )
+
+        for path, call_name in endpoints:
+            for request_payload, expected_reason in invalid_requests:
+                with self.subTest(path=path, reason=expected_reason):
+                    status, result = self._request(
+                        path,
+                        method="POST",
+                        body={"request_payload": request_payload},
+                    )
+                    self.assertEqual(status, 400)
+                    self.assertEqual(result["reason"], expected_reason)
+            self.assertEqual(self.orchestrator.calls[call_name], 0)
+
+    def test_criteria_ingress_canonicalizes_valid_nested_cohort_before_handlers(self) -> None:
+        endpoints = (
+            ("/api/criteria/feedback", "criteria_feedback", 201),
+            ("/api/criteria/confidence-policy", "criteria_confidence", 200),
+            ("/api/criteria/recompile", "criteria_recompile", 200),
+        )
+        for path, call_name, expected_status in endpoints:
+            with self.subTest(path=path):
+                status, _ = self._request(
+                    path,
+                    method="POST",
+                    body={
+                        "request": {
+                            "target_company": "OpenAI",
+                            "cohort_selection": _cohort(
+                                roles=["engineering", "research"],
+                                statuses=["former", "current"],
+                            ),
+                        }
+                    },
+                )
+                self.assertEqual(status, expected_status)
+                received = self.orchestrator.received_payloads[call_name]
+                self.assertNotIn("request", received)
+                self.assertEqual(
+                    received["request_payload"]["must_have_primary_role_buckets"],
+                    ["research", "engineering"],
+                )
+                self.assertEqual(
+                    received["request_payload"]["employment_statuses"],
+                    ["current", "former"],
+                )
 
     def test_valid_public_ingress_installs_canonical_mirrors_before_handler(self) -> None:
         status, _ = self._request(

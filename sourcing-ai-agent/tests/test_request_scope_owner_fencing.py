@@ -716,7 +716,212 @@ def test_criteria_feedback_same_owner_still_writes_without_rerun() -> None:
 
     assert result["status"] == "recorded"
     assert result["rerun"] == {"status": "not_requested"}
-    assert events == ["read:job:job-owned", "write:feedback", "write:compiler"]
+    assert events == ["read:job:job-owned", "read:job:job-owned", "write:feedback", "write:compiler"]
+
+
+def _explicit_cohort_request(role_bucket_id: str) -> dict[str, object]:
+    return JobRequest.from_payload(
+        {
+            "target_company": "OpenAI",
+            "cohort_selection": {
+                "schema_version": "cohort_selection.v1",
+                "role_bucket_ids": [role_bucket_id],
+                "employment_statuses": ["current"],
+                "role_match": "any",
+                "source": "user_explicit",
+            },
+        }
+    ).to_record()
+
+
+@pytest.mark.parametrize("operation", ["feedback", "recompile"])
+@pytest.mark.parametrize("conflict_kind", ["request", "signature"])
+def test_owned_job_criteria_context_rejects_caller_provenance_before_any_write(
+    operation: str,
+    conflict_kind: str,
+) -> None:
+    stored_request = _explicit_cohort_request("research")
+    caller_request = _explicit_cohort_request("engineering")
+    events: list[str] = []
+    criteria_repo = SimpleNamespace(
+        record_feedback=lambda _payload: events.append("write:feedback"),
+    )
+    orchestrator = object.__new__(SourcingOrchestrator)
+    orchestrator.store = SimpleNamespace(
+        repos=SimpleNamespace(criteria_confidence=criteria_repo),
+        get_job=lambda job_id: (
+            events.append(f"read:job:{job_id}")
+            or _owned_job(
+                job_id="job-owned",
+                request=stored_request,
+                plan={"target_company": "OpenAI"},
+            )
+        ),
+    )
+    orchestrator.criteria_evolution = SimpleNamespace(
+        recompile_after_feedback=lambda *_args: events.append("write:compiler")
+    )
+    payload: dict[str, object] = {"job_id": "job-owned", "rerun_retrieval": False}
+    if conflict_kind == "request":
+        payload["request_payload"] = caller_request
+        expected_reason = "criteria_job_request_conflict"
+    else:
+        payload["metadata"] = {"request_signature": "caller-forged-signature"}
+        expected_reason = "criteria_request_provenance_conflict"
+
+    if operation == "feedback":
+        result = orchestrator.record_criteria_feedback(
+            payload,
+            expected_requester_id="alice",
+            expected_tenant_id="user-alice",
+        )
+    else:
+        result = orchestrator.recompile_criteria(
+            payload,
+            expected_requester_id="alice",
+            expected_tenant_id="user-alice",
+        )
+
+    assert result["status"] == "invalid"
+    assert result["reason"] == expected_reason
+    assert not [event for event in events if event.startswith("write:")]
+
+
+def test_owned_job_feedback_derives_request_and_signatures_from_stored_job() -> None:
+    stored_request = _explicit_cohort_request("research")
+    expected_request = JobRequest.from_payload(stored_request).to_record()
+    captured: dict[str, object] = {}
+    orchestrator = object.__new__(SourcingOrchestrator)
+    orchestrator.store = SimpleNamespace(
+        get_job=lambda _job_id: _owned_job(
+            job_id="job-owned",
+            request=stored_request,
+            plan={"target_company": "OpenAI"},
+        ),
+        repos=SimpleNamespace(
+            criteria_confidence=SimpleNamespace(
+                record_feedback=lambda payload: captured.update(payload) or {"feedback_id": 3}
+            )
+        ),
+    )
+    orchestrator._suggest_patterns_from_feedback = lambda _feedback_id: []
+    orchestrator.criteria_evolution = SimpleNamespace(
+        recompile_after_feedback=lambda payload, _feedback_id: {
+            "status": "recompiled",
+            "request": dict(payload.get("request_payload") or {}),
+        }
+    )
+
+    result = orchestrator.record_criteria_feedback(
+        {
+            "job_id": "job-owned",
+            "request": stored_request,
+            "metadata": {"note": "preserved"},
+            "rerun_retrieval": False,
+        },
+        expected_requester_id="alice",
+        expected_tenant_id="user-alice",
+    )
+
+    assert result["status"] == "recorded"
+    assert captured["request_payload"] == expected_request
+    metadata = dict(captured["metadata"])
+    assert metadata["request_payload"] == expected_request
+    assert metadata["note"] == "preserved"
+    assert metadata["request_signature"] != ""
+    assert metadata["matching_request_family_signature"] != ""
+
+
+def test_open_mode_feedback_uses_server_owned_stored_cohort_without_external_rejection() -> None:
+    stored_request = JobRequest.from_payload(
+        {
+            "target_company": "OpenAI",
+            "cohort_selection": {
+                "schema_version": "cohort_selection.v1",
+                "role_bucket_ids": ["research"],
+                "employment_statuses": ["current"],
+                "role_match": "any",
+                "source": "inferred",
+            },
+        }
+    ).to_record()
+    captured: dict[str, object] = {}
+    orchestrator = object.__new__(SourcingOrchestrator)
+    orchestrator.store = SimpleNamespace(
+        get_job=lambda _job_id: _owned_job(
+            requester_id="",
+            tenant_id="",
+            request=stored_request,
+            plan={"target_company": "OpenAI"},
+        ),
+        repos=SimpleNamespace(
+            criteria_confidence=SimpleNamespace(
+                record_feedback=lambda payload: captured.update(payload) or {"feedback_id": 4}
+            )
+        ),
+    )
+    orchestrator._suggest_patterns_from_feedback = lambda _feedback_id: []
+    orchestrator.criteria_evolution = SimpleNamespace(recompile_after_feedback=lambda *_args: {"status": "recompiled"})
+
+    result = orchestrator.record_criteria_feedback({"job_id": "job-open", "rerun_retrieval": False})
+
+    assert result["status"] == "recorded"
+    assert dict(captured["request_payload"])["cohort_selection"]["source"] == "inferred"
+
+
+@pytest.mark.parametrize("operation", ["feedback", "confidence", "recompile"])
+@pytest.mark.parametrize("invalid_kind", ["server_source", "mirror_conflict"])
+def test_external_criteria_orchestrator_rejects_invalid_cohort_before_any_write(
+    operation: str,
+    invalid_kind: str,
+) -> None:
+    events: list[str] = []
+    cohort = {
+        "schema_version": "cohort_selection.v1",
+        "role_bucket_ids": ["research"],
+        "employment_statuses": ["current"],
+        "role_match": "any",
+        "source": "inferred" if invalid_kind == "server_source" else "user_explicit",
+    }
+    request_payload: dict[str, object] = {
+        "target_company": "OpenAI",
+        "cohort_selection": cohort,
+    }
+    expected_reason = "cohort_selection_invalid_source"
+    if invalid_kind == "mirror_conflict":
+        request_payload["employment_statuses"] = ["former"]
+        expected_reason = "cohort_selection_mirror_conflict"
+
+    orchestrator = object.__new__(SourcingOrchestrator)
+    orchestrator.store = SimpleNamespace(
+        get_job=lambda _job_id: events.append("read:job"),
+        repos=SimpleNamespace(
+            criteria_confidence=SimpleNamespace(
+                record_feedback=lambda _payload: events.append("write:feedback"),
+                create_policy_control=lambda **_kwargs: events.append("write:policy"),
+                deactivate_policy_control=lambda **_kwargs: events.append("write:policy"),
+            )
+        ),
+    )
+    orchestrator.criteria_evolution = SimpleNamespace(
+        recompile_after_feedback=lambda *_args: events.append("write:compiler")
+    )
+    payload = {
+        "request_payload": request_payload,
+        "action": "override",
+        "target_company": "OpenAI",
+    }
+
+    if operation == "feedback":
+        result = orchestrator.record_criteria_feedback(payload)
+    elif operation == "confidence":
+        result = orchestrator.configure_confidence_policy(payload)
+    else:
+        result = orchestrator.recompile_criteria(payload)
+
+    assert result["status"] == "invalid"
+    assert result["reason"] == expected_reason
+    assert events == []
 
 
 def test_criteria_recompile_without_job_ref_still_writes_without_owner_read() -> None:
