@@ -470,9 +470,9 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
 
         schema_names = (
             "x.grok.adaptive_recall_wave.request.v2.schema.json",
-            "x.grok.adaptive_recall_wave.result.v1.schema.json",
+            "x.grok.adaptive_recall_wave.result.v2.schema.json",
             "x.grok.adaptive_recall_wave.intent.v2.schema.json",
-            "x.grok.adaptive_recall_wave.operator_receipt.v2.schema.json",
+            "x.grok.adaptive_recall_wave.operator_receipt.v3.schema.json",
             "x.grok.adaptive_recall_wave.live_grant.v2.schema.json",
             "x.grok.adaptive_recall_wave.live_grant_consumption.v2.schema.json",
             "x.grok.adaptive_recall_wave.process_ledger.v2.schema.json",
@@ -491,9 +491,9 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
     def test_schema_top_level_keys_match_runtime_registries(self) -> None:
         mappings = {
             "x.grok.adaptive_recall_wave.request.v2.schema.json": runner._REQUEST_KEYS,
-            "x.grok.adaptive_recall_wave.result.v1.schema.json": runner._RESULT_KEYS,
+            "x.grok.adaptive_recall_wave.result.v2.schema.json": runner._RESULT_KEYS,
             "x.grok.adaptive_recall_wave.intent.v2.schema.json": runner._INTENT_KEYS,
-            "x.grok.adaptive_recall_wave.operator_receipt.v2.schema.json": runner._RECEIPT_KEYS,
+            "x.grok.adaptive_recall_wave.operator_receipt.v3.schema.json": runner._RECEIPT_KEYS,
             "x.grok.adaptive_recall_wave.live_grant.v2.schema.json": runner._GRANT_KEYS,
             "x.grok.adaptive_recall_wave.live_grant_consumption.v2.schema.json": runner._CONSUMPTION_KEYS,
             "x.grok.adaptive_recall_wave.process_ledger.v2.schema.json": runner._PROCESS_LEDGER_KEYS,
@@ -505,25 +505,34 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             self.assertEqual(set(schema["required"]), keys, name)
             self.assertEqual(set(schema["properties"]), keys, name)
         receipt_schema = json.loads(
+            (ROOT / "contracts/x.grok.adaptive_recall_wave.operator_receipt.v3.schema.json").read_text()
+        )
+        receipt_v2_schema = json.loads(
             (ROOT / "contracts/x.grok.adaptive_recall_wave.operator_receipt.v2.schema.json").read_text()
         )
-        self.assertEqual(set(receipt_schema["$defs"]["command_binding"]["required"]), runner._COMMAND_BINDING_KEYS)
-        self.assertEqual(set(receipt_schema["properties"]["process"]["required"]), runner._PROCESS_KEYS)
-        result_schema = json.loads((ROOT / "contracts/x.grok.adaptive_recall_wave.result.v1.schema.json").read_text())
+        self.assertEqual(set(receipt_v2_schema["$defs"]["command_binding"]["required"]), runner._COMMAND_BINDING_KEYS)
+        self.assertEqual(set(receipt_v2_schema["properties"]["process"]["required"]), runner._PROCESS_KEYS)
+        self.assertEqual(set(receipt_schema["properties"]["session_proof"]["required"]), runner._SESSION_PROOF_KEYS)
+        self.assertEqual(
+            set(receipt_schema["$defs"]["reconciliation"]["required"]),
+            runner._RECONCILIATION_RECEIPT_KEYS,
+        )
+        result_schema = json.loads((ROOT / "contracts/x.grok.adaptive_recall_wave.result.v2.schema.json").read_text())
         self.assertEqual(set(result_schema["$defs"]["evidence"]["required"]), runner._EVIDENCE_KEYS)
+        self.assertEqual(set(result_schema["$defs"]["support_claim"]["required"]), runner._SUPPORT_CLAIM_KEYS)
         request_schema = json.loads((ROOT / "contracts/x.grok.adaptive_recall_wave.request.v2.schema.json").read_text())
         self.assertEqual(
             set(request_schema["properties"]["technical_limits"]["required"]),
             runner._TECHNICAL_LIMIT_KEYS,
         )
 
-    def test_production_effective_prompt_policy_owns_all_seven_openai_waves(self) -> None:
+    def test_production_effective_prompt_policy_owns_exact_openai_and_google_deepmind_waves(self) -> None:
         policy = json.loads(PRODUCTION_EFFECTIVE_PROMPT_POLICY.read_text())
         assert_schema_valid(policy, "x.grok.adaptive_recall_wave.effective_prompt_policy.v1.schema.json")
         synthetic = [entry for entry in policy["entries"] if entry["target"]["lab_id"] == "synthetic_lab"]
         self.assertEqual(len(synthetic), 1)
         self.assertEqual(synthetic[0]["authority"], "fixture_only")
-        expected_target = {
+        openai_target = {
             "lab_id": "openai",
             "research_focus_id": "pretraining",
             "scope": (
@@ -531,13 +540,40 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
                 "pre-training or base-model training relevance."
             ),
         }
+        google_deepmind_target = {
+            "lab_id": "google_deepmind",
+            "research_focus_id": "pretraining",
+            "scope": (
+                "Public professional evidence of current or historical Google DeepMind affiliation and current or "
+                "historical pre-training or base-model training relevance."
+            ),
+        }
         live_entries = [entry for entry in policy["entries"] if entry["authority"] == "live_authorized"]
-        prompt_paths = sorted((ROOT / "prompts/live-exploration").glob("2026-07-14-openai-pretrain-recall-wave*.md"))
-        self.assertEqual(len(live_entries), len(prompt_paths), 7)
-        self.assertEqual({canonical_json(entry["target"]) for entry in live_entries}, {canonical_json(expected_target)})
+        openai_prompt_paths = sorted(
+            (ROOT / "prompts/live-exploration").glob("2026-07-14-openai-pretrain-recall-wave*.md")
+        )
+        google_deepmind_prompt_paths = sorted(
+            (ROOT / "prompts/live-exploration").glob("2026-07-15-google-deepmind-pretraining-recall-wave*.md")
+        )
+        openai_entries = [entry for entry in live_entries if entry["target"]["lab_id"] == "openai"]
+        google_deepmind_entries = [
+            entry for entry in live_entries if entry["target"]["lab_id"] == "google_deepmind"
+        ]
+        self.assertEqual(len(openai_entries), len(openai_prompt_paths), 7)
+        self.assertEqual(len(google_deepmind_entries), len(google_deepmind_prompt_paths), 3)
+        self.assertEqual(len(live_entries), 10)
+        self.assertEqual({canonical_json(entry["target"]) for entry in openai_entries}, {canonical_json(openai_target)})
         self.assertEqual(
-            {entry["source_prompt_sha256"] for entry in live_entries},
-            {_bytes_sha(path.read_bytes()) for path in prompt_paths},
+            {canonical_json(entry["target"]) for entry in google_deepmind_entries},
+            {canonical_json(google_deepmind_target)},
+        )
+        self.assertEqual(
+            {entry["source_prompt_sha256"] for entry in openai_entries},
+            {_bytes_sha(path.read_bytes()) for path in openai_prompt_paths},
+        )
+        self.assertEqual(
+            {entry["source_prompt_sha256"] for entry in google_deepmind_entries},
+            {_bytes_sha(path.read_bytes()) for path in google_deepmind_prompt_paths},
         )
         with mock.patch.object(runner, "DEFAULT_EFFECTIVE_PROMPT_POLICY", PRODUCTION_EFFECTIVE_PROMPT_POLICY):
             with tempfile.TemporaryDirectory() as directory:
@@ -552,10 +588,10 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
                         auth_source=auth,
                         wall_clock=lambda: FIXED_TIME,
                     )
-                prompt_raw = prompt_paths[0].read_bytes()
+                prompt_raw = openai_prompt_paths[0].read_bytes()
                 _write_private(Path(request["prompt_source"]["path"]), prompt_raw)
                 request["prompt_source"]["sha256"] = _bytes_sha(prompt_raw)
-                request["target"] = expected_target
+                request["target"] = openai_target
                 _write_private(request_path, (canonical_json(request) + "\n").encode())
                 grant, _ = issue_live_grant(
                     request_path=request_path,
@@ -564,6 +600,46 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
                     wall_clock=lambda: FIXED_TIME,
                 )
                 self.assertEqual(grant["effective_prompt_policy_entry_id"], "openai_pretraining_recall_wave1.v1")
+
+                gdm_prompt_raw = google_deepmind_prompt_paths[0].read_bytes()
+                _write_private(Path(request["prompt_source"]["path"]), gdm_prompt_raw)
+                request["prompt_source"]["sha256"] = _bytes_sha(gdm_prompt_raw)
+                request["target"] = openai_target
+                _write_private(request_path, (canonical_json(request) + "\n").encode())
+                with self.assertRaisesRegex(PermissionError, "effective_prompt_target_not_approved"):
+                    issue_live_grant(
+                        request_path=request_path,
+                        grant_root=root / "gdm-prompt-wrong-target",
+                        auth_source=auth,
+                        wall_clock=lambda: FIXED_TIME,
+                    )
+
+                wrong_prompt_raw = b"Unregistered Google DeepMind prompt.\n"
+                _write_private(Path(request["prompt_source"]["path"]), wrong_prompt_raw)
+                request["prompt_source"]["sha256"] = _bytes_sha(wrong_prompt_raw)
+                request["target"] = google_deepmind_target
+                _write_private(request_path, (canonical_json(request) + "\n").encode())
+                with self.assertRaisesRegex(PermissionError, "effective_prompt_target_not_approved"):
+                    issue_live_grant(
+                        request_path=request_path,
+                        grant_root=root / "gdm-wrong-prompt",
+                        auth_source=auth,
+                        wall_clock=lambda: FIXED_TIME,
+                    )
+
+                _write_private(Path(request["prompt_source"]["path"]), gdm_prompt_raw)
+                request["prompt_source"]["sha256"] = _bytes_sha(gdm_prompt_raw)
+                _write_private(request_path, (canonical_json(request) + "\n").encode())
+                grant, _ = issue_live_grant(
+                    request_path=request_path,
+                    grant_root=root / "gdm-approvals",
+                    auth_source=auth,
+                    wall_clock=lambda: FIXED_TIME,
+                )
+                self.assertEqual(
+                    grant["effective_prompt_policy_entry_id"],
+                    "google_deepmind_pretraining_recall_wave1.v1",
+                )
 
     def test_effective_prompt_binding_survives_unrelated_append_and_purge_replay(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -657,7 +733,11 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             "url": "https://x.com/TargetPerson/status/123456",
             "published_at": "2026-07-01T00:00:00Z",
             "excerpt": "I currently work on pretraining at the target lab.",
-            "supports": ["target_lab_affiliation_state", "pretraining_experience_state"],
+            "thread_relation": "self_post",
+            "supports": [
+                {"dimension": "target_lab_affiliation_state", "asserted_value": "current"},
+                {"dimension": "pretraining_experience_state", "asserted_value": "current"},
+            ],
         }
         candidate["evidence"] = [evidence]
         result["candidates"] = [candidate]
@@ -670,6 +750,12 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             }
         )
         self.assertEqual(validate_model_result(result), [])
+        reply_classification = copy.deepcopy(evidence)
+        reply_classification["thread_relation"] = "reply"
+        self.assertEqual(
+            runner._evidence_source_sha256(evidence, "TargetPerson"),
+            runner._evidence_source_sha256(reply_classification, "TargetPerson"),
+        )
         for field, value in (
             ("subject_handle", "OtherPerson"),
             ("author_handle", "OtherPerson"),
@@ -682,6 +768,53 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
                 any(error.startswith("evidence_value_invalid") for error in validate_model_result(changed)),
                 field,
             )
+        legacy_supports = copy.deepcopy(result)
+        legacy_supports["candidates"][0]["evidence"][0]["supports"] = ["target_lab_affiliation_state"]
+        self.assertIn("evidence_value_invalid:0:0", validate_model_result(legacy_supports))
+        missing_relation = copy.deepcopy(result)
+        missing_relation["candidates"][0]["evidence"][0]["thread_relation"] = None
+        self.assertIn("evidence_value_invalid:0:0", validate_model_result(missing_relation))
+
+    def test_bio_requires_null_thread_relation_and_typed_temporal_support(self) -> None:
+        result = _empty_result()
+        candidate = _candidate("BioPerson")
+        candidate.update(
+            {
+                "bio_excerpt": "Researcher at the target lab.",
+                "target_lab_affiliation_state": "current",
+                "confidence": "medium",
+                "evidence": [
+                    {
+                        "kind": "bio",
+                        "relationship": "self",
+                        "subject_handle": "BioPerson",
+                        "author_handle": "BioPerson",
+                        "post_id": None,
+                        "url": "https://profiles.invalid/BioPerson",
+                        "published_at": None,
+                        "excerpt": "Researcher at the target lab.",
+                        "thread_relation": None,
+                        "supports": [
+                            {"dimension": "target_lab_affiliation_state", "asserted_value": "current"}
+                        ],
+                    }
+                ],
+            }
+        )
+        result["candidates"] = [candidate]
+        result["counts"] = {"observations_inspected_reported": 1, "candidates_retained": 1}
+        result["local_reconciliation"].update(
+            {
+                "candidate_records_validated": 1,
+                "evidence_items_validated": 1,
+            }
+        )
+        self.assertEqual(validate_model_result(result), [])
+        assert_schema_valid(result, "x.grok.adaptive_recall_wave.result.v2.schema.json")
+        candidate["evidence"][0]["thread_relation"] = "self_post"
+        self.assertIn("evidence_value_invalid:0:0", validate_model_result(result))
+        with self.assertRaises(MiniDraft202012Error):
+            assert_schema_valid(result, "x.grok.adaptive_recall_wave.result.v2.schema.json")
 
     def test_prior_overlap_requires_mechanically_new_evidence_or_temporal_state(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -713,6 +846,17 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             _write_private(path, raw)
             request["prior_waves"] = [{"wave_id": "prior", "path": str(path), "sha256": _bytes_sha(raw)}]
             _, _, facts = load_prior_context(request)
+            self.assertEqual(
+                facts["priorperson"].pretraining_experience_latest_at,
+                datetime(2026, 7, 1, tzinfo=UTC),
+            )
+            evidence = {
+                **evidence,
+                "thread_relation": "self_post",
+                "supports": [
+                    {"dimension": "pretraining_experience_state", "asserted_value": "historical"}
+                ],
+            }
             result = _empty_result()
             zero_evidence = _candidate("PriorPerson")
             zero_evidence["overlap_status"] = "prior_material_update"
@@ -743,7 +887,10 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             candidate["target_lab_affiliation_state"] = "current"
             excerpt_only = copy.deepcopy(evidence)
             excerpt_only["excerpt"] = "Model-edited prose for the same immutable source."
-            excerpt_only["supports"] = ["target_lab_affiliation_state", "pretraining_experience_state"]
+            excerpt_only["supports"] = [
+                {"dimension": "target_lab_affiliation_state", "asserted_value": "current"},
+                {"dimension": "pretraining_experience_state", "asserted_value": "historical"},
+            ]
             candidate["evidence"] = [excerpt_only]
             self.assertIn(
                 "prior_overlap_without_material_update:0",
@@ -753,7 +900,10 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             evidence2["post_id"] = "234567"
             evidence2["url"] = "https://x.com/PriorPerson/status/234567"
             evidence2["published_at"] = "2026-07-02T00:00:00Z"
-            evidence2["supports"] = ["target_lab_affiliation_state", "pretraining_experience_state"]
+            evidence2["supports"] = [
+                {"dimension": "target_lab_affiliation_state", "asserted_value": "current"},
+                {"dimension": "pretraining_experience_state", "asserted_value": "historical"},
+            ]
             evidence2["excerpt"] = "Synthetic current affiliation and pretraining evidence."
             candidate["evidence"] = [evidence, evidence2]
             result["counts"]["observations_inspected_reported"] = 2
@@ -764,6 +914,141 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
                 }
             )
             self.assertEqual(validate_model_result(result, prior_candidates=facts), [])
+
+    def test_completed_keyword_queries_mechanically_bind_candidate_surface_attempts(self) -> None:
+        cases = (
+            (
+                "authored_post",
+                "x_keyword_search",
+                {"query": "from:TargetPerson pretraining -filter:replies", "limit": "100", "mode": "Latest"},
+                "authored_post",
+            ),
+            (
+                "authored_reply",
+                "x_keyword_search",
+                {"query": "from:TargetPerson pretraining filter:replies", "limit": "100", "mode": "Latest"},
+                "authored_reply",
+            ),
+            (
+                "global_reply",
+                "x_keyword_search",
+                {"query": "pretraining filter:replies", "limit": "100", "mode": "Latest"},
+                None,
+            ),
+            (
+                "multi_handle_reply",
+                "x_keyword_search",
+                {
+                    "query": "(from:TargetPerson OR from:OtherPerson) pretraining filter:replies",
+                    "limit": "100",
+                    "mode": "Latest",
+                },
+                None,
+            ),
+            (
+                "semantic_from_is_not_mechanical_keyword_coverage",
+                "x_semantic_search",
+                {"query": "from:TargetPerson pretraining filter:replies", "limit": "100"},
+                None,
+            ),
+        )
+        for label, tool_name, arguments, expected_surface in cases:
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                os.chmod(root, 0o700)
+                binary, auth, binary_sha = _live_material(root)
+                request, request_path = _build_request(root, binary_sha=binary_sha)
+                approvals = root / "approvals"
+                issue_live_grant(
+                    request_path=request_path,
+                    grant_root=approvals,
+                    auth_source=auth,
+                    wall_clock=lambda: FIXED_TIME,
+                )
+                result = _empty_result()
+                result["native_x_tool_provenance"].update(
+                    {
+                        "tools_reported": [tool_name],
+                        "queries": [arguments["query"]],
+                    }
+                )
+                result["local_reconciliation"]["tool_counts"] = {tool_name: 1}
+                result["candidates"] = [_candidate("TargetPerson", profile_host="x.com")]
+                result["counts"]["candidates_retained"] = 1
+                result["local_reconciliation"]["candidate_records_validated"] = 1
+
+                def set_tool_call(events: list[dict[str, Any]]) -> None:
+                    events[2]["params"]["update"]["rawOutput"]["name"] = tool_name
+                    events[2]["params"]["update"]["rawOutput"]["input"] = canonical_json(arguments)
+
+                fake = FakeExecutor(
+                    MutableClock(),
+                    (canonical_json(result) + "\n").encode(),
+                    spawn=True,
+                    session_mutator=set_tool_call,
+                )
+                receipt, run_root = _run_adaptive_wave(
+                    request=request,
+                    execution_mode="live",
+                    runtime_root=root / "runtime",
+                    approval_root=approvals,
+                    binary=binary,
+                    auth_source=auth,
+                    executor=fake,
+                    monotonic=fake.clock,
+                    wall_clock=lambda: FIXED_TIME,
+                )
+                self.assertEqual(receipt["status"], "completed")
+                assert_schema_valid(receipt, "x.grok.adaptive_recall_wave.operator_receipt.v3.schema.json")
+                query_sha256 = runner.canonical_sha256({"tool_name": tool_name, "arguments": arguments})
+                expected_attempts = (
+                    [
+                        {
+                            "handle_key": "targetperson",
+                            "surface": expected_surface,
+                            "query_argument_sha256": query_sha256,
+                        }
+                    ]
+                    if expected_surface is not None
+                    else []
+                )
+                self.assertEqual(receipt["session_proof"]["candidate_surface_attempts"], expected_attempts)
+                coverage = receipt["reconciliation"]["candidate_surface_coverage"]
+                self.assertEqual(len(coverage), 1)
+                for surface in ("authored_post", "authored_reply"):
+                    expected_hashes = [query_sha256] if surface == expected_surface else []
+                    self.assertEqual(
+                        coverage[0][surface],
+                        {"attempted": bool(expected_hashes), "query_argument_sha256s": expected_hashes},
+                    )
+                self.assertEqual(validate_operator_bundle(run_root, approval_root=approvals), [])
+
+                if label == "authored_reply":
+                    inconsistent = copy.deepcopy(receipt)
+                    inconsistent["session_proof"]["candidate_surface_attempts"][0]["surface"] = "authored_post"
+                    self.assertIn(
+                        "receipt_candidate_surface_reconciliation_invalid",
+                        validate_operator_receipt(inconsistent),
+                    )
+                    forged = copy.deepcopy(inconsistent)
+                    forged_coverage = forged["reconciliation"]["candidate_surface_coverage"][0]
+                    forged_coverage["authored_post"] = {
+                        "attempted": True,
+                        "query_argument_sha256s": [query_sha256],
+                    }
+                    forged_coverage["authored_reply"] = {
+                        "attempted": False,
+                        "query_argument_sha256s": [],
+                    }
+                    self.assertEqual(validate_operator_receipt(forged), [])
+                    self.assertIn(
+                        "session_proof_replay_mismatch",
+                        validate_operator_bundle(
+                            run_root,
+                            approval_root=approvals,
+                            receipt_override=forged,
+                        ),
+                    )
 
     def test_live_run_stages_binary_isolates_auth_uses_closed_tools_and_replays_bundle(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -2041,7 +2326,7 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             with self.assertRaises(MiniDraft202012Error):
                 assert_schema_valid(
                     contradictory,
-                    "x.grok.adaptive_recall_wave.operator_receipt.v2.schema.json",
+                    "x.grok.adaptive_recall_wave.operator_receipt.v3.schema.json",
                 )
 
     def test_provider_mode_tampering_fails_closed_and_mode_zero_tree_is_deleted(self) -> None:
@@ -2138,7 +2423,7 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
                     with self.assertRaises(MiniDraft202012Error):
                         assert_schema_valid(
                             changed,
-                            "x.grok.adaptive_recall_wave.operator_receipt.v2.schema.json",
+                            "x.grok.adaptive_recall_wave.operator_receipt.v3.schema.json",
                         )
                     self.assertIn("receipt_artifacts_value_invalid", validate_operator_receipt(changed))
 

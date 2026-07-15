@@ -89,6 +89,36 @@
       },
       "source_prompt_sha256": "2db5049f74f8c9d57b8c5be2232df88a10e8dbb5902adf017ced987fbfe73c76",
       "authority": "live_authorized"
+    },
+    {
+      "policy_entry_id": "google_deepmind_pretraining_recall_wave1.v1",
+      "target": {
+        "lab_id": "google_deepmind",
+        "research_focus_id": "pretraining",
+        "scope": "Public professional evidence of current or historical Google DeepMind affiliation and current or historical pre-training or base-model training relevance."
+      },
+      "source_prompt_sha256": "b8073ded1675dbb96801caa36247f8cbe152d921b02dd7a18a2824cb4099d544",
+      "authority": "live_authorized"
+    },
+    {
+      "policy_entry_id": "google_deepmind_pretraining_recall_wave2.v1",
+      "target": {
+        "lab_id": "google_deepmind",
+        "research_focus_id": "pretraining",
+        "scope": "Public professional evidence of current or historical Google DeepMind affiliation and current or historical pre-training or base-model training relevance."
+      },
+      "source_prompt_sha256": "a195728be9c6ed239d3e9912417513634c31d8ab5b01d635f541622f40cfd677",
+      "authority": "live_authorized"
+    },
+    {
+      "policy_entry_id": "google_deepmind_pretraining_recall_wave3.v1",
+      "target": {
+        "lab_id": "google_deepmind",
+        "research_focus_id": "pretraining",
+        "scope": "Public professional evidence of current or historical Google DeepMind affiliation and current or historical pre-training or base-model training relevance."
+      },
+      "source_prompt_sha256": "0ff2d205592dccebdd2a5ccaccf73296bc7702cc299c46d1020ed07b18a22ab9",
+      "authority": "live_authorized"
     }
   ]
 }

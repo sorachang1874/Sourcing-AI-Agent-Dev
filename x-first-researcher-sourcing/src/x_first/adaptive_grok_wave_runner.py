@@ -39,11 +39,19 @@ from x_first.grok_cli_exploration import (
     BASE_DISCOVERY_TOOL_ARGUMENT_POLICY_VERSION,
     base_discovery_tool_arguments_allowed,
 )
+from x_first.native_x_evidence_contract import (
+    QUERY_SURFACES,
+    SUPPORT_DIMENSIONS,
+    TEMPORAL_STATES,
+    THREAD_RELATIONS,
+    classify_single_handle_query_surface,
+    normalize_support_claims,
+)
 
 REQUEST_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.request.v2"
-RESULT_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.result.v1"
+RESULT_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.result.v2"
 INTENT_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.intent.v2"
-RECEIPT_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.operator_receipt.v2"
+RECEIPT_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.operator_receipt.v3"
 GRANT_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.live_grant.v2"
 CONSUMPTION_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.live_grant_consumption.v2"
 PROCESS_LEDGER_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.process_ledger.v2"
@@ -200,8 +208,10 @@ _EVIDENCE_KEYS = {
     "url",
     "published_at",
     "excerpt",
+    "thread_relation",
     "supports",
 }
+_SUPPORT_CLAIM_KEYS = {"dimension", "asserted_value"}
 _EXCLUDED_KEYS = {"handle", "reason"}
 _RECONCILIATION_KEYS = {
     "candidate_records_validated",
@@ -324,6 +334,7 @@ _SESSION_PROOF_KEYS = {
     "completed_tool_calls",
     "tool_counts",
     "query_argument_sha256s",
+    "candidate_surface_attempts",
     "terminal_stop_reason",
     "input_tokens",
     "output_tokens",
@@ -347,6 +358,7 @@ _RECONCILIATION_RECEIPT_KEYS = {
     "model_reported_tool_calls",
     "mechanically_verified_tool_calls",
     "tool_fact_source",
+    "candidate_surface_coverage",
 }
 _RUNTIME_LAYOUT_KEYS = {
     "compiled_prompt_name",
@@ -425,11 +437,11 @@ _DELETION_RECEIPT_KEYS = {
     "state",
 }
 _RESULT_STATUSES = {"X_SEARCH_OK", "X_SEARCH_PARTIAL", "X_SEARCH_BLOCKED"}
-_DIMENSION_STATES = {"current", "historical", "ambiguous", "unsupported"}
+_DIMENSION_STATES = set(TEMPORAL_STATES)
 _CONFIDENCE_STATES = {"high", "medium", "low"}
 _EVIDENCE_KINDS = {"bio", "post", "mention", "thread"}
 _RELATIONSHIPS = {"self", "official_lab", "colleague_or_team", "third_party", "historical"}
-_SUPPORTS = {"target_lab_affiliation_state", "pretraining_experience_state"}
+_SUPPORTS = set(SUPPORT_DIMENSIONS)
 _TOOL_NAMES = {"x_keyword_search", "x_semantic_search", "x_user_search", "x_thread_fetch"}
 _RECEIPT_STATUSES = {
     "fixture_complete",
@@ -499,6 +511,7 @@ class SessionProof:
     completed_tool_calls: int
     tool_counts: dict[str, int]
     query_argument_sha256s: tuple[str, ...]
+    candidate_surface_attempts: tuple[dict[str, str], ...]
     terminal_stop_reason: str
     input_tokens: int
     output_tokens: int
@@ -910,9 +923,15 @@ def _strict_temporal_transition_proved(
             published = _parse_evidence_timestamp(evidence.get("published_at"))
             supports = evidence.get("supports")
             source_sha256 = _evidence_source_sha256(evidence, str(candidate.get("handle", "")))
+            try:
+                support_claims = normalize_support_claims(supports, allow_legacy=False)
+            except ValueError:
+                support_claims = ()
             if (
-                isinstance(supports, list)
-                and dimension in supports
+                any(
+                    claim.get("dimension") == dimension and claim.get("asserted_value") == next_state
+                    for claim in support_claims
+                )
                 and published is not None
                 and source_sha256 is not None
                 and source_sha256 not in baseline.evidence_source_sha256s
@@ -964,6 +983,26 @@ def _candidate_reconciliation(
                 verified_material_updates += 1
     provenance = result.get("native_x_tool_provenance")
     reported_calls = provenance.get("tool_calls_reported") if isinstance(provenance, dict) else 0
+    surface_attempts: dict[tuple[str, str], set[str]] = {}
+    if session_proof is not None:
+        for attempt in session_proof.candidate_surface_attempts:
+            key = (attempt["handle_key"], attempt["surface"])
+            surface_attempts.setdefault(key, set()).add(attempt["query_argument_sha256"])
+    candidate_surface_coverage: list[dict[str, Any]] = []
+    for candidate in candidates:
+        handle = candidate.get("handle") if isinstance(candidate, dict) else None
+        if not _validate_handle(handle):
+            continue
+        handle_key = handle.casefold()
+        coverage: dict[str, Any] = {"handle_key": handle_key}
+        for surface in ("authored_post", "authored_reply"):
+            hashes = sorted(surface_attempts.get((handle_key, surface), set()))
+            coverage[surface] = {
+                "attempted": bool(hashes),
+                "query_argument_sha256s": hashes,
+            }
+        candidate_surface_coverage.append(coverage)
+    candidate_surface_coverage.sort(key=lambda row: row["handle_key"])
     return {
         "candidate_count": len(candidates),
         "evidence_count": evidence_count,
@@ -979,6 +1018,7 @@ def _candidate_reconciliation(
             if session_proof is not None
             else "session_transcript_unverified"
         ),
+        "candidate_surface_coverage": candidate_surface_coverage,
     }
 
 
@@ -1009,6 +1049,7 @@ def _evidence_binding_valid(
             and evidence.get("post_id") is None
             and evidence.get("url") in allowed_profile_urls
             and evidence.get("published_at") is None
+            and evidence.get("thread_relation") is None
         )
     parsed_url = _parse_post_url(evidence.get("url"))
     published = _parse_evidence_timestamp(evidence.get("published_at"))
@@ -1018,6 +1059,7 @@ def _evidence_binding_valid(
         or parsed_url[0].casefold() != author.casefold()
         or parsed_url[1] != evidence.get("post_id")
         or published is None
+        or evidence.get("thread_relation") not in THREAD_RELATIONS
     ):
         return False
     return evidence.get("relationship") != "self" or author.casefold() == handle.casefold()
@@ -1103,12 +1145,16 @@ def validate_model_result(
             errors.append(f"candidate_evidence_invalid:{index}")
             continue
         evidence_digests: set[str] = set()
-        supports_by_dimension: dict[str, int] = {dimension: 0 for dimension in _SUPPORTS}
+        supports_by_dimension: dict[str, set[str]] = {dimension: set() for dimension in _SUPPORTS}
         for evidence_index, evidence in enumerate(evidence_rows):
             if not isinstance(evidence, dict) or set(evidence) != _EVIDENCE_KEYS:
                 errors.append(f"evidence_shape_invalid:{index}:{evidence_index}")
                 continue
             supports = evidence.get("supports")
+            try:
+                support_claims = normalize_support_claims(supports, allow_legacy=False)
+            except ValueError:
+                support_claims = ()
             digest = canonical_sha256(evidence)
             if digest in evidence_digests:
                 errors.append(f"evidence_duplicate:{index}:{evidence_index}")
@@ -1122,20 +1168,16 @@ def validate_model_result(
                 or (evidence.get("url") is not None and not _is_text(evidence["url"], maximum=2_048))
                 or (evidence.get("published_at") is not None and not _is_text(evidence["published_at"], maximum=64))
                 or not _is_text(evidence.get("excerpt"), maximum=280)
-                or not isinstance(supports, list)
-                or not supports
-                or any(not isinstance(item, str) for item in supports)
-                or len(set(supports)) != len(supports)
-                or any(item not in _SUPPORTS for item in supports)
+                or not support_claims
                 or not _evidence_binding_valid(evidence, candidate, live_mode=live_mode)
             ):
                 errors.append(f"evidence_value_invalid:{index}:{evidence_index}")
-            elif isinstance(supports, list):
-                for dimension in supports:
-                    supports_by_dimension[dimension] += 1
+            else:
+                for claim in support_claims:
+                    supports_by_dimension[claim["dimension"]].add(claim["asserted_value"])
         for dimension in _SUPPORTS:
             state = candidate.get(dimension)
-            if state in {"current", "historical"} and supports_by_dimension[dimension] == 0:
+            if state in {"current", "historical"} and state not in supports_by_dimension[dimension]:
                 errors.append(f"dimension_evidence_missing:{index}:{dimension}")
         baseline = prior.get(handle_key)
         if baseline is None:
@@ -1368,10 +1410,13 @@ def load_prior_context(
                         published = _parse_evidence_timestamp(item.get("published_at"))
                         if published is None:
                             continue
-                        supports = item.get("supports")
-                        if not isinstance(supports, list):
+                        try:
+                            support_claims = normalize_support_claims(item.get("supports"), allow_legacy=True)
+                        except ValueError:
                             continue
-                        for dimension in _SUPPORTS.intersection(supports):
+                        for dimension in {
+                            claim["dimension"] for claim in support_claims if claim["dimension"] in _SUPPORTS
+                        }:
                             latest_key = f"{dimension.removesuffix('_state')}_latest_at"
                             if facts[latest_key] is None or published > facts[latest_key]:
                                 facts[latest_key] = published
@@ -1431,6 +1476,9 @@ def compile_prompt(
         "Base discovery may use only target-lab affiliation, professional role/function, public research evidence, "
         "and pretraining relevance. Never infer or query protected identity. Keep target-lab affiliation temporality "
         "and pretraining-experience temporality independent.\n"
+        "For each evidence row, emit an explicit typed support claim with the dimension and asserted temporal value. "
+        "Classify every non-Bio post as self_post, reply, quote, thread_root, or thread_reply; Bio thread_relation is "
+        "always null. These model-organized classifications remain unverified discovery proposals.\n"
         "Return exactly one JSON object matching the supplied schema. Do not emit Markdown, commentary, a prefix, "
         "or a suffix. Model-organized evidence remains a discovery lead, not replayable source truth.\n"
         f"Authoritative result JSON Schema: {schema_json}"
@@ -1438,7 +1486,7 @@ def compile_prompt(
 
 
 def result_schema_sha256() -> str:
-    path = Path(__file__).resolve().parents[2] / "contracts/x.grok.adaptive_recall_wave.result.v1.schema.json"
+    path = Path(__file__).resolve().parents[2] / "contracts/x.grok.adaptive_recall_wave.result.v2.schema.json"
     return bytes_sha256(_read_regular_owned_bounded(path, maximum_bytes=MAX_CONTRACT_SCHEMA_BYTES))
 
 
@@ -2511,7 +2559,7 @@ def _copy_private_auth(source: Path, ephemeral_home: Path) -> Path:
 
 
 def _load_result_schema() -> dict[str, Any]:
-    path = Path(__file__).resolve().parents[2] / "contracts/x.grok.adaptive_recall_wave.result.v1.schema.json"
+    path = Path(__file__).resolve().parents[2] / "contracts/x.grok.adaptive_recall_wave.result.v2.schema.json"
     try:
         schema = strict_json_loads(_read_regular_owned_bounded(path, maximum_bytes=MAX_CONTRACT_SCHEMA_BYTES))
     except (OSError, UnicodeError, ValueError) as exc:
@@ -2931,6 +2979,7 @@ def _parse_session_proof(
     provider_call_ids: set[str] = set()
     tool_counts: dict[str, int] = {}
     query_hashes: list[str] = []
+    surface_attempts: set[tuple[str, str, str]] = set()
     prompt_ids: set[str] = set()
     model_ids: list[str] = []
     assistant_chunks: list[str] = []
@@ -3040,7 +3089,13 @@ def _parse_session_proof(
             completed.add(call_id)
             tool_name = raw_output["name"]
             tool_counts[tool_name] = tool_counts.get(tool_name, 0) + 1
-            query_hashes.append(canonical_sha256({"tool_name": tool_name, "arguments": arguments}))
+            query_sha256 = canonical_sha256({"tool_name": tool_name, "arguments": arguments})
+            query_hashes.append(query_sha256)
+            if tool_name == "x_keyword_search":
+                classified_surface = classify_single_handle_query_surface(arguments.get("query"))
+                if classified_surface is not None:
+                    handle_key, surface = classified_surface
+                    surface_attempts.add((handle_key, surface, query_sha256))
         elif kind == "agent_message_chunk":
             if user_events != 1 or not started or started != completed:
                 raise AdaptiveWaveValidationError("session_assistant_causality_invalid")
@@ -3092,6 +3147,14 @@ def _parse_session_proof(
         completed_tool_calls=len(completed),
         tool_counts=dict(sorted(tool_counts.items())),
         query_argument_sha256s=tuple(query_hashes),
+        candidate_surface_attempts=tuple(
+            {
+                "handle_key": handle_key,
+                "surface": surface,
+                "query_argument_sha256": query_sha256,
+            }
+            for handle_key, surface, query_sha256 in sorted(surface_attempts)
+        ),
         terminal_stop_reason="end_turn",
         input_tokens=input_tokens,
         output_tokens=output_tokens,
@@ -3114,6 +3177,7 @@ def _session_proof_payload(proof: SessionProof | None, *, status: str, raw: byte
             "completed_tool_calls": 0,
             "tool_counts": {},
             "query_argument_sha256s": [],
+            "candidate_surface_attempts": [],
             "terminal_stop_reason": None,
             "input_tokens": None,
             "output_tokens": None,
@@ -3132,6 +3196,7 @@ def _session_proof_payload(proof: SessionProof | None, *, status: str, raw: byte
         "completed_tool_calls": proof.completed_tool_calls,
         "tool_counts": proof.tool_counts,
         "query_argument_sha256s": list(proof.query_argument_sha256s),
+        "candidate_surface_attempts": list(proof.candidate_surface_attempts),
         "terminal_stop_reason": proof.terminal_stop_reason,
         "input_tokens": proof.input_tokens,
         "output_tokens": proof.output_tokens,
@@ -4026,6 +4091,61 @@ def _runtime_layout_valid(value: Any) -> bool:
     )
 
 
+def _surface_attempts_valid(value: Any, query_hashes: Any) -> bool:
+    if not isinstance(value, list) or not isinstance(query_hashes, list):
+        return False
+    normalized: list[tuple[str, str, str]] = []
+    query_hash_set = set(query_hashes)
+    for row in value:
+        if not isinstance(row, dict) or set(row) != {
+            "handle_key",
+            "surface",
+            "query_argument_sha256",
+        }:
+            return False
+        handle_key = row.get("handle_key")
+        surface = row.get("surface")
+        query_sha256 = row.get("query_argument_sha256")
+        if (
+            not _validate_handle(handle_key)
+            or handle_key != handle_key.casefold()
+            or surface not in QUERY_SURFACES
+            or not _is_sha(query_sha256)
+            or query_sha256 not in query_hash_set
+        ):
+            return False
+        normalized.append((handle_key, surface, query_sha256))
+    return normalized == sorted(set(normalized))
+
+
+def _candidate_surface_coverage_valid(value: Any) -> bool:
+    if not isinstance(value, list):
+        return False
+    order: list[str] = []
+    for row in value:
+        if not isinstance(row, dict) or set(row) != {"handle_key", "authored_post", "authored_reply"}:
+            return False
+        handle_key = row.get("handle_key")
+        if not _validate_handle(handle_key) or handle_key != handle_key.casefold():
+            return False
+        order.append(handle_key)
+        for surface in ("authored_post", "authored_reply"):
+            state = row.get(surface)
+            if not isinstance(state, dict) or set(state) != {"attempted", "query_argument_sha256s"}:
+                return False
+            attempted = state.get("attempted")
+            hashes = state.get("query_argument_sha256s")
+            if (
+                type(attempted) is not bool
+                or not isinstance(hashes, list)
+                or hashes != sorted(set(hashes))
+                or any(not _is_sha(item) for item in hashes)
+                or attempted is not bool(hashes)
+            ):
+                return False
+    return order == sorted(order)
+
+
 def _receipt_reconciliation_valid(value: Any) -> bool:
     return (
         isinstance(value, dict)
@@ -4046,6 +4166,7 @@ def _receipt_reconciliation_valid(value: Any) -> bool:
         and value["verified_material_update_count"] <= value["prior_overlap_count"]
         and value.get("tool_fact_source")
         in {"fixture_not_applicable", "session_transcript_verified", "session_transcript_unverified"}
+        and _candidate_surface_coverage_valid(value.get("candidate_surface_coverage"))
     )
 
 
@@ -4090,6 +4211,7 @@ def _session_proof_valid(value: Any, execution_mode: Any) -> bool:
             and value.get("completed_tool_calls") == 0
             and value.get("tool_counts") == {}
             and value.get("query_argument_sha256s") == []
+            and value.get("candidate_surface_attempts") == []
             and value.get("terminal_stop_reason") is None
             and all(
                 value.get(key) is None
@@ -4115,6 +4237,7 @@ def _session_proof_valid(value: Any, execution_mode: Any) -> bool:
             and value.get("completed_tool_calls") == 0
             and value.get("tool_counts") == {}
             and value.get("query_argument_sha256s") == []
+            and value.get("candidate_surface_attempts") == []
             and value.get("terminal_stop_reason") is None
             and all(
                 value.get(key) is None
@@ -4150,6 +4273,7 @@ def _session_proof_valid(value: Any, execution_mode: Any) -> bool:
         and isinstance(query_hashes, list)
         and len(query_hashes) == value["completed_tool_calls"]
         and all(_is_sha(item) for item in query_hashes)
+        and _surface_attempts_valid(value.get("candidate_surface_attempts"), query_hashes)
         and value.get("terminal_stop_reason") == "end_turn"
         and all(
             _validate_nonnegative_int(value.get(key))
@@ -4325,8 +4449,34 @@ def validate_operator_receipt(receipt: Any) -> list[str]:
     if not _retention_receipt_valid(retention):
         errors.append("receipt_retention_invalid")
 
-    if not _receipt_reconciliation_valid(receipt.get("reconciliation")):
+    reconciliation = receipt.get("reconciliation")
+    reconciliation_valid = _receipt_reconciliation_valid(reconciliation)
+    if not reconciliation_valid:
         errors.append("receipt_reconciliation_invalid")
+    if (
+        reconciliation_valid
+        and isinstance(reconciliation, dict)
+        and isinstance(session_proof, dict)
+        and _session_proof_valid(session_proof, mode)
+    ):
+        attempt_index: dict[tuple[str, str], set[str]] = {}
+        for attempt in session_proof["candidate_surface_attempts"]:
+            attempt_index.setdefault((attempt["handle_key"], attempt["surface"]), set()).add(
+                attempt["query_argument_sha256"]
+            )
+        for coverage in reconciliation["candidate_surface_coverage"]:
+            for surface in ("authored_post", "authored_reply"):
+                expected_hashes = sorted(attempt_index.get((coverage["handle_key"], surface), set()))
+                if coverage[surface] != {
+                    "attempted": bool(expected_hashes),
+                    "query_argument_sha256s": expected_hashes,
+                }:
+                    errors.append("receipt_candidate_surface_reconciliation_invalid")
+                    break
+        if status in {"completed", "fixture_complete"} and len(
+            reconciliation["candidate_surface_coverage"]
+        ) != reconciliation["candidate_count"]:
+            errors.append("receipt_candidate_surface_count_invalid")
     if receipt.get("authority") != AUTHORITY:
         errors.append("receipt_authority_invalid")
 

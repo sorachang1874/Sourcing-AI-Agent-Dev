@@ -45,6 +45,7 @@ CRM, export, billing, permission, or outreach state. Protected-identity inferenc
 | Process cleanup | Monotonic operator | All normal, timeout, output-limit, callback-error, and exception paths are bounded |
 | Output truth | Raw private bytes plus local validator | Prefix/suffix, duplicate keys, nonfinite numbers, shape drift, or bad reconciliation fails |
 | Tool-call facts | Raw Grok session `updates.jsonl` | Effective model, native-X starts/completions, arguments, terminal causality, turns, token usage, and cost are replayed; model-reported counts must match |
+| Candidate authored-surface attempts | Completed `x_keyword_search` arguments in the raw session transcript | Only one exact positive `from:<handle>` can be attributed; positive `filter:replies` means `authored_reply`, absent/negated reply filter means `authored_post`, and global, multi-handle, semantic, user, or thread calls remain unattributed |
 | Retention/deletion | Request TTL, terminal receipt, external deletion journal and receipt | Expired bundle is validated and journaled before recursive deletion; a crash between delete and receipt is reconcilable |
 
 ## Request contract
@@ -147,14 +148,18 @@ bound into the grant, intent, command binding, terminal receipt, and bundle repl
 semantic binding over the binding version, schema version, policy ID, owner, globally allowed discovery dimensions,
 and exact selected entry. It is deliberately not the complete mutable registry-file digest: appending an unrelated
 valid row cannot invalidate an issued grant, retained bundle, or TTL purge, while changing the selected row or any
-immutable owner semantic fails replay. The production registry currently authorizes the seven tracked OpenAI
-recall-wave prompts for one controlled target tuple:
+immutable owner semantic fails replay. The production registry currently authorizes seven tracked OpenAI prompts
+and three tracked Google DeepMind prompts. Each lab has its own exact target tuple; prompt digests cannot be swapped
+between them. The OpenAI tuple is:
 
 ```text
 lab_id=openai
 research_focus_id=pretraining
 scope=Public professional evidence of current or historical OpenAI affiliation and current or historical pre-training or base-model training relevance.
 ```
+
+The Google DeepMind tuple changes only the lab ID and lab name in the scope. Tests reconcile both exact prompt sets,
+reject wrong-target and wrong-prompt combinations, and grant only a matching append-only row.
 
 The synthetic row is `fixture_only`. Tests replace the module path with an isolated test policy; no public live
 entrypoint accepts a caller-supplied policy path. Adding another lab, focus, scope, or prompt therefore requires a
@@ -249,15 +254,19 @@ execution-scope field invalidates the grant. The durable grant, consumption and 
 
 ## Result and prior-wave semantics
 
-`contracts/x.grok.adaptive_recall_wave.result.v1.schema.json` keeps target-lab affiliation and pretraining experience
+`contracts/x.grok.adaptive_recall_wave.result.v2.schema.json` keeps target-lab affiliation and pretraining experience
 as two independent temporal dimensions: `current`, `historical`, `ambiguous`, or `unsupported`. Current lab plus
 historical pretraining, historical lab plus historical pretraining, and other combinations remain representable;
 downstream precision views may select a subset without deleting the broader recall pool.
 
-Each current/historical state requires evidence explicitly supporting that dimension. Every evidence row carries a
+Each v2 support is a typed `{dimension, asserted_value}` proposal. A current/historical candidate state requires an
+evidence claim with the same dimension and temporal value; a dimension-only label is accepted only while reading a
+retained v1 prior wave and is never assigned an invented value. Every evidence row carries a
 `subject_handle` equal to the candidate. For posts, mentions, and threads, the URL author and status ID must equal
 `author_handle` and `post_id`; `self` evidence also requires author equals candidate. Bio evidence must bind the exact
-candidate profile. Nullable strings must be either null or nonempty. In live mode a profile URL must equal
+candidate profile and has `thread_relation=null`. Every non-Bio row requires one Stage-2-aligned relation:
+`self_post`, `reply`, `quote`, `thread_root`, or `thread_reply`. The relation is a model-mediated classification and
+is deliberately excluded from the immutable source-identity fingerprint. Nullable strings must be either null or nonempty. In live mode a profile URL must equal
 `https://x.com/<exact handle>`. Handles are unique under casefold.
 
 Prior handles are completion exclusions, not permanent suppression:
@@ -273,6 +282,14 @@ of native-X tool starts/completions, exact parsed arguments, a unique prompt cha
 token usage, and estimated cost. Transcript tool counts must exactly equal the model result. Post bodies remain
 model-mediated (`provider_post_bodies_replayable=false`); transcript proof authenticates execution facts, not every
 quoted X payload.
+
+`contracts/x.grok.adaptive_recall_wave.operator_receipt.v3.schema.json` additionally records unique mechanically
+classified keyword-query attempts in `session_proof.candidate_surface_attempts`. Reconciliation projects those exact
+query hashes onto each returned candidate as separate `authored_post` and `authored_reply` attempted states. A global
+reply query, a query containing more than one `from:` handle, or any non-keyword native-X tool cannot satisfy this
+coverage. Bundle replay reparses the retained transcript and recomputes both structures, so editing both receipt
+copies consistently still fails. This proves that a scoped search was attempted; it does not prove exhaustive X
+results or turn model excerpts into source-bound evidence.
 
 ## Recall-campaign bridge is fail-closed
 
