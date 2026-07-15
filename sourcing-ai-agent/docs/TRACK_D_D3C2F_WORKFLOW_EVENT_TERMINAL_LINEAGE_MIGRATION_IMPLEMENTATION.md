@@ -114,8 +114,12 @@ received a fresh pinned medium-effort **ADVISORY NO-GO** with P0/P1/P2/P3=`0/0/1
 closed, but the oracle still counted only `CHECK ... NOT VALID` matches and therefore accepted an added twelfth
 validated `ADD CONSTRAINT`. The next fixed-forward independently exact-compares the ordered names and total of every
 `ADD CONSTRAINT` before comparing the full eleven-predicate grammar; migration/runtime blobs remain unchanged and a
-fresh pinned re-review is required. These advisories are not formal highest-effort verdicts and authorize no
-live/signoff path.
+fresh pinned re-review is required. That `68c901a...` re-review returned another medium-effort **ADVISORY NO-GO** with
+P0/P1/P2/P3=`0/0/1/0`: an extra constraint with a quoted name or alternate whitespace still escaped the single-space,
+unquoted-name extractor. The next fixed-forward counts every `ADD` and `CONSTRAINT` token independently of name and
+predicate extraction, then exact-compares the whitespace-tolerant unquoted name grammar and full predicate grammar;
+migration/runtime blobs remain unchanged and a fresh pinned re-review is required. These advisories are not formal
+highest-effort verdicts and authorize no live/signoff path.
 
 ## 7. Explicit non-closure and next bounded decision
 

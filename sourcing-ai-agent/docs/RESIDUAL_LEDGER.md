@@ -61,7 +61,10 @@
   DDL oracle) were fixed-forwarded. Commit `316741a...` re-review closed those two but returned medium advisory
   `NO-GO 0/0/1/0` because a twelfth validating `ADD CONSTRAINT` escaped the `CHECK ... NOT VALID`-only extractor; the
   every-constraint ordered-name/total exact assertion is now fixed-forwarded with migration/runtime unchanged and a
-  fresh re-review pending. This does not change any residual status.
+  fresh re-review pending. Commit `68c901a...` re-review returned medium advisory `NO-GO 0/0/1/0` because quoted-name
+  or alternate-whitespace constraints still escaped the extractor; independent total counts for every `ADD` and
+  `CONSTRAINT` token now precede whitespace-tolerant exact name and full-predicate comparisons, with migration/runtime
+  still unchanged and another fresh re-review pending. This does not change any residual status.
 
 - **R-019 / D3c2e (2026-07-15):** decision-only batch ratifies the exact WorkflowEvent terminal-lineage core as
   **11 columns + 11 local `NOT VALID` checks**, reuses existing operation/command/attempt links, and forbids redundant
