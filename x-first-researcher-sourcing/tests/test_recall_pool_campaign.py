@@ -96,6 +96,48 @@ def _candidate(
     }
 
 
+def _v2_evidence(
+    subject_handle: str,
+    *,
+    post_id: str,
+    asserted_value: str,
+    thread_relation: str | None = "self_post",
+    excerpt: str = "Synthetic authored pretraining evidence.",
+) -> dict[str, Any]:
+    return {
+        "kind": "post",
+        "relationship": "self",
+        "subject_handle": subject_handle,
+        "author_handle": subject_handle,
+        "post_id": post_id,
+        "url": f"https://x.com/{subject_handle}/status/{post_id}",
+        "published_at": "2026-07-14T00:00:00Z",
+        "excerpt": excerpt,
+        "thread_relation": thread_relation,
+        "supports": [
+            {
+                "dimension": "pretraining_experience_state",
+                "asserted_value": asserted_value,
+            }
+        ],
+    }
+
+
+def _v2_candidate(
+    handle: str,
+    *,
+    evidence: list[dict[str, Any]],
+    pretrain_state: str = "historical",
+) -> dict[str, Any]:
+    candidate = _candidate(
+        handle,
+        pretrain_state=pretrain_state,
+        evidence=evidence,
+    )
+    candidate["overlap_status"] = "novel"
+    return candidate
+
+
 def _wave_payload(
     candidates: list[dict[str, Any]],
     *,
@@ -104,6 +146,8 @@ def _wave_payload(
     model_tool_calls: int = 1,
     model_queries: list[str] | None = None,
     generic_web_used: bool = False,
+    tools_reported: list[str] | None = None,
+    model_tool_counts: dict[str, int] | None = None,
 ) -> dict[str, Any]:
     queries = ["model reported query"] if model_queries is None else model_queries
     evidence_items = sum(len(row["evidence"]) for row in candidates)
@@ -113,7 +157,7 @@ def _wave_payload(
         "native_x_tool_provenance": {
             "generic_web_used": generic_web_used,
             "tool_calls_reported": model_tool_calls,
-            "tools_reported": ["x_user_search"],
+            "tools_reported": ["x_user_search"] if tools_reported is None else tools_reported,
             "queries": queries,
         },
         "counts": {
@@ -129,7 +173,7 @@ def _wave_payload(
             "post_urls_structurally_validated": evidence_items,
             "provider_post_bodies_replayable": False,
             "tool_calls_completed": model_tool_calls,
-            "tool_counts": {"x_user_search": model_tool_calls},
+            "tool_counts": {"x_user_search": model_tool_calls} if model_tool_counts is None else model_tool_counts,
         },
     }
 
@@ -155,6 +199,30 @@ def _call(wave_id: str, index: int, *, user_search_count: int = 10) -> dict[str,
             "sequence_ordinal": index,
             "tool_name": call["tool_name"],
             "arguments": call["arguments"],
+        }
+    )
+    return call
+
+
+def _native_x_call(
+    wave_id: str,
+    index: int,
+    *,
+    tool_name: str,
+    arguments: dict[str, str],
+) -> dict[str, Any]:
+    call = {
+        "tool_call_id": f"tool-{wave_id}-{index}",
+        "provider_call_id": f"provider-{wave_id}-{index}",
+        "tool_name": tool_name,
+        "arguments": arguments,
+    }
+    call["call_identity_sha256"] = canonical_sha256(call)
+    call["planned_call_identity_sha256"] = canonical_sha256(
+        {
+            "sequence_ordinal": index,
+            "tool_name": tool_name,
+            "arguments": arguments,
         }
     )
     return call
@@ -217,6 +285,8 @@ def _bundle(
     model_tool_calls: int = 1,
     model_queries: list[str] | None = None,
     generic_web_used: bool = False,
+    calls_override: list[dict[str, Any]] | None = None,
+    wave_result_v2: bool = False,
 ) -> dict[str, Any]:
     families = ["broad"] if query_family_ids is None else query_family_ids
     if call_count < len(families):
@@ -226,15 +296,26 @@ def _bundle(
     model_id = "grok-4.5"
     prompt = f"Synthetic tracked prompt for {wave_id}.\n".encode()
     system_prompt = f"Synthetic system prompt. Prior exclusion status: {prior_exclusion_status}.\n".encode()
-    calls = [_call(wave_id, index, user_search_count=user_search_count) for index in range(call_count)]
+    calls = (
+        [_call(wave_id, index, user_search_count=user_search_count) for index in range(call_count)]
+        if calls_override is None
+        else calls_override
+    )
+    tools_reported = sorted({call["tool_name"] for call in calls})
+    reported_tool_counts = {
+        tool: sum(call["tool_name"] == tool for call in calls) for tool in tools_reported
+    }
+    reported_model_tool_calls = len(calls) if calls_override is not None else model_tool_calls
     result_bytes = _json_bytes(
         _wave_payload(
             candidates,
             model_candidate_rows=model_candidate_rows,
             model_evidence_items=model_evidence_items,
-            model_tool_calls=model_tool_calls,
+            model_tool_calls=reported_model_tool_calls,
             model_queries=model_queries,
             generic_web_used=generic_web_used,
+            tools_reported=tools_reported,
+            model_tool_counts=reported_tool_counts,
         )
     )
     updates = [
@@ -391,9 +472,17 @@ def _bundle(
             "sha256": user_visible_chat_context_sha256(chat_rows),
         }
     upstream = {
-        "schema_version": "x.recall_pool.campaign.wave_request.v1",
+        "schema_version": (
+            "x.recall_pool.campaign.wave_request.v2"
+            if wave_result_v2
+            else "x.recall_pool.campaign.wave_request.v1"
+        ),
         "wave_id": wave_id,
-        "wave_result_schema_version": "x.grok_cli.recall_wave.result_adapter.v1",
+        "wave_result_schema_version": (
+            "x.grok_cli.recall_wave.result_adapter.v2"
+            if wave_result_v2
+            else "x.grok_cli.recall_wave.result_adapter.v1"
+        ),
         "target": {"lab_id": "synthetic_lab", "research_focus_id": "pretraining"},
         "prompt_sha256": _sha(prompt),
         "expected_session_id": session_id,
@@ -1150,6 +1239,201 @@ class RecallPoolCampaignTests(unittest.TestCase):
             "campaign_result_model_native_tool_set_conflict",
         ):
             validate_campaign_result(mutated)
+
+    def test_v2_typed_post_reply_evidence_and_mechanical_surface_coverage(self) -> None:
+        calls = [
+            _native_x_call(
+                "wave_v2",
+                0,
+                tool_name="x_keyword_search",
+                arguments={"query": "from:Alpha -filter:replies pretraining", "limit": "25", "mode": "Latest"},
+            ),
+            _native_x_call(
+                "wave_v2",
+                1,
+                tool_name="x_keyword_search",
+                arguments={"query": "from:alpha filter:replies tokenizer", "limit": "25", "mode": "Latest"},
+            ),
+            _native_x_call(
+                "wave_v2",
+                2,
+                tool_name="x_semantic_search",
+                arguments={"query": "OpenAI pretraining researchers", "limit": "25"},
+            ),
+            _native_x_call(
+                "wave_v2",
+                3,
+                tool_name="x_keyword_search",
+                arguments={"query": "from:NotACandidate pretraining", "limit": "25", "mode": "Top"},
+            ),
+            _native_x_call(
+                "wave_v2",
+                4,
+                tool_name="x_semantic_search",
+                arguments={"query": "from:Alpha filter:replies tokenizer", "limit": "25"},
+            ),
+        ]
+        candidate = _v2_candidate(
+            "Alpha",
+            evidence=[
+                _v2_evidence("Alpha", post_id="1001", asserted_value="historical"),
+                _v2_evidence(
+                    "Alpha",
+                    post_id="1002",
+                    asserted_value="current",
+                    thread_relation="reply",
+                    excerpt="I work on both pretraining and inference-time algorithms.",
+                ),
+            ],
+        )
+        result = _merge(
+            [
+                _bundle(
+                    "wave_v2",
+                    [candidate],
+                    calls_override=calls,
+                    wave_result_v2=True,
+                )
+            ]
+        )
+
+        self.assertEqual(result["schema_version"], "x.recall_pool.campaign.result.v2")
+        merged = result["candidates"][0]
+        pretrain = merged["state_summary"]["pretraining_experience_state"]
+        self.assertEqual(pretrain["model_evidence_proposed_values"], ["current", "historical"])
+        self.assertEqual(pretrain["model_evidence_proposed_resolution"], "conflict")
+        self.assertEqual(pretrain["model_evidence_proposal_status"], "model_mediated_unverified")
+        self.assertEqual(pretrain["evidence_supported_values"], [])
+        self.assertIsNone(pretrain["evidence_supported_resolution"])
+        self.assertTrue(merged["model_evidence_proposed_state_conflict"])
+        self.assertEqual(merged["surface_coverage"], "both")
+        self.assertEqual(len(merged["surface_attempts"]), 2)
+        self.assertEqual(
+            {row["thread_relation"] for row in merged["evidence"]},
+            {"self_post", "reply"},
+        )
+        self.assertTrue(
+            all(
+                row["observed_wave_result_schema_versions"]
+                == ["x.grok_cli.recall_wave.result_adapter.v2"]
+                for row in merged["evidence"]
+            )
+        )
+        receipt = result["wave_yields"][0]["mechanically_observed"]["receipt"]
+        self.assertEqual(len(receipt["candidate_surface_attempts"]), 2)
+        self.assertEqual(receipt["candidate_surface_coverage"][0]["handle_key"], "alpha")
+        self.assertTrue(receipt["candidate_surface_coverage"][0]["authored_post"]["attempted"])
+        self.assertTrue(receipt["candidate_surface_coverage"][0]["authored_reply"]["attempted"])
+        validate_campaign_result(result)
+
+        mutated = copy.deepcopy(result)
+        mutated["candidates"][0]["surface_coverage"] = "authored_post_only"
+        with self.assertRaisesRegex(CampaignValidationError, "candidate_surface_merge"):
+            validate_campaign_result(mutated)
+        mutated = copy.deepcopy(result)
+        mutated["candidates"][0]["state_summary"]["pretraining_experience_state"][
+            "model_evidence_proposed_resolution"
+        ] = "historical"
+        with self.assertRaisesRegex(CampaignValidationError, "state_summary"):
+            validate_campaign_result(mutated)
+
+    def test_v2_campaign_preserves_legacy_v1_evidence_without_inventing_topology_or_temporality(self) -> None:
+        legacy = _bundle("wave_legacy", [_candidate("Legacy")])
+        typed = _bundle(
+            "wave_typed",
+            [
+                _v2_candidate(
+                    "Typed",
+                    evidence=[
+                        _v2_evidence(
+                            "Typed",
+                            post_id="4001",
+                            asserted_value="historical",
+                        )
+                    ],
+                )
+            ],
+            wave_result_v2=True,
+        )
+        result = _merge([legacy, typed])
+
+        self.assertEqual(result["schema_version"], "x.recall_pool.campaign.result.v2")
+        by_handle = {candidate["handle_key"]: candidate for candidate in result["candidates"]}
+        legacy_evidence = by_handle["legacy"]["evidence"][0]
+        self.assertIsNone(legacy_evidence["thread_relation"])
+        self.assertEqual(
+            legacy_evidence["observed_wave_result_schema_versions"],
+            ["x.grok_cli.recall_wave.result_adapter.v1"],
+        )
+        self.assertEqual(legacy_evidence["support_claims"][0]["asserted_value"], None)
+        legacy_proposal = by_handle["legacy"]["state_summary"]["pretraining_experience_state"]
+        self.assertEqual(legacy_proposal["model_evidence_proposed_values"], [])
+        self.assertIsNone(legacy_proposal["model_evidence_proposed_resolution"])
+        validate_campaign_result(result)
+
+        relabeled = copy.deepcopy(result)
+        relabeled["candidates"][0]["evidence"][0]["observed_wave_result_schema_versions"] = [
+            "x.grok_cli.recall_wave.result_adapter.v2"
+        ]
+        with self.assertRaisesRegex(CampaignValidationError, "adapter_versions"):
+            validate_campaign_result(relabeled)
+
+    def test_v2_rejects_untyped_support_and_missing_nonbio_thread_relation(self) -> None:
+        untyped = _v2_evidence("Alpha", post_id="2001", asserted_value="historical")
+        untyped["supports"] = ["pretraining_experience_state"]
+        with self.assertRaisesRegex(CampaignValidationError, "evidence_supports_invalid"):
+            _merge([_bundle("wave_untyped", [_v2_candidate("Alpha", evidence=[untyped])], wave_result_v2=True)])
+
+        missing_relation = _v2_evidence(
+            "Alpha",
+            post_id="2002",
+            asserted_value="historical",
+            thread_relation=None,
+        )
+        with self.assertRaisesRegex(CampaignValidationError, "evidence_post_shape_invalid"):
+            _merge(
+                [
+                    _bundle(
+                        "wave_relation",
+                        [_v2_candidate("Alpha", evidence=[missing_relation])],
+                        wave_result_v2=True,
+                    )
+                ]
+            )
+
+    def test_wave_request_and_result_adapter_versions_are_exact_pairs(self) -> None:
+        for wave_result_v2, wrong_result_version in (
+            (False, "x.grok_cli.recall_wave.result_adapter.v2"),
+            (True, "x.grok_cli.recall_wave.result_adapter.v1"),
+        ):
+            with self.subTest(wave_result_v2=wave_result_v2):
+                wave_id = "wave_pair_v2" if wave_result_v2 else "wave_pair_v1"
+                candidate = (
+                    _v2_candidate(
+                        "Alpha",
+                        evidence=[_v2_evidence("Alpha", post_id="3001", asserted_value="historical")],
+                    )
+                    if wave_result_v2
+                    else _candidate("Alpha")
+                )
+                bundle = _bundle(
+                    wave_id,
+                    [candidate],
+                    wave_result_v2=wave_result_v2,
+                )
+                upstream = json.loads(bundle["wave"].upstream_request_bytes)
+                upstream["wave_result_schema_version"] = wrong_result_version
+                upstream_bytes = _json_bytes(upstream)
+                bundle["wave"] = WaveInput(
+                    bundle["wave"].wave_id,
+                    bundle["wave"].result_bytes,
+                    upstream_bytes,
+                    bundle["wave"].prompt_bytes,
+                    bundle["wave"].raw_session_files,
+                )
+                bundle["binding"]["upstream_request"]["sha256"] = _sha(upstream_bytes)
+                with self.assertRaisesRegex(CampaignValidationError, "wave_request_version_pair_invalid"):
+                    _merge([bundle])
 
     def test_cli_atomic_publish_orphan_cleanup_no_replace_and_replay(self) -> None:
         bundle = _bundle("wave_1", [_candidate("Alpha")], exact_attribution=True)

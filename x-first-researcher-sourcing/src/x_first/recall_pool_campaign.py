@@ -12,6 +12,11 @@ from typing import Any
 from urllib.parse import urlsplit
 from uuid import UUID
 
+from x_first.native_x_evidence_contract import (
+    THREAD_RELATIONS,
+    classify_single_handle_query_surface,
+    normalize_support_claims,
+)
 from x_first.recall_pool_schema import (
     MiniDraft202012Error,
     assert_schema_valid,
@@ -24,6 +29,10 @@ WAVE_REQUEST_SCHEMA_VERSION = "x.recall_pool.campaign.wave_request.v1"
 WAVE_RESULT_SCHEMA_VERSION = "x.grok_cli.recall_wave.result_adapter.v1"
 MECHANICAL_RECEIPT_SCHEMA_VERSION = "x.recall_pool.campaign.wave_mechanical_receipt.v1"
 RESULT_SCHEMA_VERSION = "x.recall_pool.campaign.result.v1"
+WAVE_REQUEST_SCHEMA_VERSION_V2 = "x.recall_pool.campaign.wave_request.v2"
+WAVE_RESULT_SCHEMA_VERSION_V2 = "x.grok_cli.recall_wave.result_adapter.v2"
+MECHANICAL_RECEIPT_SCHEMA_VERSION_V2 = "x.recall_pool.campaign.wave_mechanical_receipt.v2"
+RESULT_SCHEMA_VERSION_V2 = "x.recall_pool.campaign.result.v2"
 ALLOWED_TOOL_REGISTRY_VERSION = "native_x_tools.v1"
 STRATEGY_COMPARABILITY_RULE_VERSION = "versioned_strategy_and_precommitted_family_call_profile.v2"
 STRATEGY_DEFINITION_SCHEMA_VERSION = "x.recall_pool.campaign.strategy_definition.v1"
@@ -36,12 +45,28 @@ POLICY_SCHEMA_FILE = "x.recall_pool.campaign.policy.v1.schema.json"
 WAVE_REQUEST_SCHEMA_FILE = "x.recall_pool.campaign.wave_request.v1.schema.json"
 MECHANICAL_RECEIPT_SCHEMA_FILE = "x.recall_pool.campaign.wave_mechanical_receipt.v1.schema.json"
 RESULT_SCHEMA_FILE = "x.recall_pool.campaign.result.v1.schema.json"
-CONTRACT_SCHEMA_FILES = (
+WAVE_REQUEST_SCHEMA_FILE_V2 = "x.recall_pool.campaign.wave_request.v2.schema.json"
+MECHANICAL_RECEIPT_SCHEMA_FILE_V2 = "x.recall_pool.campaign.wave_mechanical_receipt.v2.schema.json"
+RESULT_SCHEMA_FILE_V2 = "x.recall_pool.campaign.result.v2.schema.json"
+CONTRACT_SCHEMA_FILES_V1 = (
     REQUEST_SCHEMA_FILE,
     POLICY_SCHEMA_FILE,
     WAVE_REQUEST_SCHEMA_FILE,
     MECHANICAL_RECEIPT_SCHEMA_FILE,
     RESULT_SCHEMA_FILE,
+)
+# Backward-compatible export: existing v1 replay tests and persisted artifacts bind
+# this exact five-file set.
+CONTRACT_SCHEMA_FILES = CONTRACT_SCHEMA_FILES_V1
+CONTRACT_SCHEMA_FILES_V2 = (
+    REQUEST_SCHEMA_FILE,
+    POLICY_SCHEMA_FILE,
+    WAVE_REQUEST_SCHEMA_FILE,
+    WAVE_REQUEST_SCHEMA_FILE_V2,
+    MECHANICAL_RECEIPT_SCHEMA_FILE,
+    MECHANICAL_RECEIPT_SCHEMA_FILE_V2,
+    RESULT_SCHEMA_FILE,
+    RESULT_SCHEMA_FILE_V2,
 )
 
 RAW_SESSION_FILES = frozenset(
@@ -516,7 +541,7 @@ def _validate_strategy_definition(definition: Any, query_family_ids: Sequence[st
         raise CampaignValidationError("wave_request_strategy_family_order_invalid")
 
 
-def validate_wave_request(upstream: Any) -> None:
+def validate_wave_request(upstream: Any) -> str:
     upstream = _exact_keys(
         upstream,
         {
@@ -533,10 +558,18 @@ def validate_wave_request(upstream: Any) -> None:
         },
         "wave_request_shape_invalid",
     )
+    version_pair = (
+        upstream["schema_version"],
+        upstream["wave_result_schema_version"],
+    )
+    if version_pair == (WAVE_REQUEST_SCHEMA_VERSION, WAVE_RESULT_SCHEMA_VERSION):
+        schema_file = WAVE_REQUEST_SCHEMA_FILE
+    elif version_pair == (WAVE_REQUEST_SCHEMA_VERSION_V2, WAVE_RESULT_SCHEMA_VERSION_V2):
+        schema_file = WAVE_REQUEST_SCHEMA_FILE_V2
+    else:
+        raise CampaignValidationError("wave_request_version_pair_invalid")
     if (
-        upstream["schema_version"] != WAVE_REQUEST_SCHEMA_VERSION
-        or upstream["wave_result_schema_version"] != WAVE_RESULT_SCHEMA_VERSION
-        or not isinstance(upstream["wave_id"], str)
+        not isinstance(upstream["wave_id"], str)
         or _SLUG_RE.fullmatch(upstream["wave_id"]) is None
         or not isinstance(upstream["prompt_sha256"], str)
         or _SHA256_RE.fullmatch(upstream["prompt_sha256"]) is None
@@ -672,7 +705,8 @@ def validate_wave_request(upstream: Any) -> None:
             or _SHA256_RE.fullmatch(chat_binding["sha256"]) is None
         ):
             raise CampaignValidationError("wave_request_user_chat_binding_invalid")
-    _schema_guard(upstream, WAVE_REQUEST_SCHEMA_FILE, "wave_request_schema_invalid")
+    _schema_guard(upstream, schema_file, "wave_request_schema_invalid")
+    return upstream["schema_version"]
 
 
 def _tool_arguments_valid(arguments: Any, tool_name: str) -> bool:
@@ -827,6 +861,69 @@ def _extract_unique_terminal_json(raw: bytes) -> _TerminalJsonSlice:
     )
 
 
+def _candidate_surface_attempts(
+    calls: Sequence[Mapping[str, Any]],
+    candidate_handle_keys: set[str],
+) -> list[dict[str, str]]:
+    """Attribute only exact, replayed, single-candidate authored-surface queries."""
+
+    attempts: set[tuple[str, str, str]] = set()
+    for call in calls:
+        if call["tool_name"] != "x_keyword_search":
+            continue
+        classified = classify_single_handle_query_surface(call["arguments"].get("query"))
+        if classified is None:
+            continue
+        handle_key, surface = classified
+        if handle_key not in candidate_handle_keys:
+            continue
+        attempts.add((handle_key, surface, call["query_identity_sha256"]))
+    return [
+        {
+            "handle_key": handle_key,
+            "surface": surface,
+            "query_argument_sha256": query_sha256,
+        }
+        for handle_key, surface, query_sha256 in sorted(attempts)
+    ]
+
+
+def _candidate_surface_coverage(
+    candidate_handle_keys: set[str],
+    attempts: Sequence[Mapping[str, str]],
+) -> list[dict[str, Any]]:
+    by_handle: dict[str, dict[str, set[str]]] = {
+        handle_key: {"authored_post": set(), "authored_reply": set()}
+        for handle_key in candidate_handle_keys
+    }
+    for attempt in attempts:
+        by_handle[attempt["handle_key"]][attempt["surface"]].add(attempt["query_argument_sha256"])
+    return [
+        {
+            "handle_key": handle_key,
+            "authored_post": {
+                "attempted": bool(surfaces["authored_post"]),
+                "query_argument_sha256s": sorted(surfaces["authored_post"]),
+            },
+            "authored_reply": {
+                "attempted": bool(surfaces["authored_reply"]),
+                "query_argument_sha256s": sorted(surfaces["authored_reply"]),
+            },
+        }
+        for handle_key, surfaces in sorted(by_handle.items())
+    ]
+
+
+def _surface_coverage_label(surfaces: set[str]) -> str:
+    if surfaces == {"authored_post", "authored_reply"}:
+        return "both"
+    if surfaces == {"authored_post"}:
+        return "authored_post_only"
+    if surfaces == {"authored_reply"}:
+        return "authored_reply_only"
+    return "none"
+
+
 def _replay_raw_session(
     wave: WaveInput,
     upstream: Mapping[str, Any],
@@ -834,7 +931,14 @@ def _replay_raw_session(
     result_sha256: str,
     upstream_request_sha256: str,
     result_payload: Mapping[str, Any],
+    receipt_schema_version: str,
+    candidate_handle_keys: set[str],
 ) -> dict[str, Any]:
+    if receipt_schema_version not in {
+        MECHANICAL_RECEIPT_SCHEMA_VERSION,
+        MECHANICAL_RECEIPT_SCHEMA_VERSION_V2,
+    }:
+        raise CampaignValidationError("mechanical_receipt_version_invalid")
     if set(wave.raw_session_files) != RAW_SESSION_FILES or any(
         not isinstance(value, bytes) for value in wave.raw_session_files.values()
     ):
@@ -1142,7 +1246,7 @@ def _replay_raw_session(
         attribution_plan_digest = None
 
     receipt = {
-        "schema_version": MECHANICAL_RECEIPT_SCHEMA_VERSION,
+        "schema_version": receipt_schema_version,
         "wave_id": wave.wave_id,
         "result_sha256": result_sha256,
         "upstream_request_sha256": upstream_request_sha256,
@@ -1195,14 +1299,49 @@ def _replay_raw_session(
             else "operator_asserted"
         ),
     }
-    _schema_guard(receipt, MECHANICAL_RECEIPT_SCHEMA_FILE, "mechanical_receipt_schema_invalid")
+    if receipt_schema_version == MECHANICAL_RECEIPT_SCHEMA_VERSION_V2:
+        attempts = _candidate_surface_attempts(calls, candidate_handle_keys)
+        receipt.update(
+            {
+                "wave_request_schema_version": upstream["schema_version"],
+                "wave_result_schema_version": upstream["wave_result_schema_version"],
+                "candidate_surface_attempts": attempts,
+                "candidate_surface_coverage": _candidate_surface_coverage(
+                    candidate_handle_keys,
+                    attempts,
+                ),
+            }
+        )
+        receipt_schema_file = MECHANICAL_RECEIPT_SCHEMA_FILE_V2
+    else:
+        receipt_schema_file = MECHANICAL_RECEIPT_SCHEMA_FILE
+    _schema_guard(receipt, receipt_schema_file, "mechanical_receipt_schema_invalid")
     return receipt
 
 
-def _validate_evidence(evidence: Any, *, subject_handle: str, subject_profile_url: str) -> dict[str, Any]:
+def _validate_evidence(
+    evidence: Any,
+    *,
+    subject_handle: str,
+    subject_profile_url: str,
+    wave_result_schema_version: str,
+) -> dict[str, Any]:
+    adaptive_v2 = wave_result_schema_version == WAVE_RESULT_SCHEMA_VERSION_V2
+    expected_keys = {
+        "kind",
+        "relationship",
+        "author_handle",
+        "post_id",
+        "url",
+        "published_at",
+        "excerpt",
+        "supports",
+    }
+    if adaptive_v2:
+        expected_keys |= {"subject_handle", "thread_relation"}
     evidence = _exact_keys(
         evidence,
-        {"kind", "relationship", "author_handle", "post_id", "url", "published_at", "excerpt", "supports"},
+        expected_keys,
         "evidence_shape_invalid",
     )
     kind = _nonempty_text(evidence["kind"], maximum=64, error="evidence_kind_invalid")
@@ -1219,39 +1358,53 @@ def _validate_evidence(evidence: Any, *, subject_handle: str, subject_profile_ur
     published_at = evidence["published_at"]
     if published_at is not None and not _valid_utc_timestamp(published_at):
         raise CampaignValidationError("evidence_published_at_invalid")
+    if adaptive_v2:
+        provided_subject = _valid_handle(evidence["subject_handle"])
+        if provided_subject.casefold() != subject_handle.casefold():
+            raise CampaignValidationError("evidence_subject_mismatch")
+        thread_relation = evidence["thread_relation"]
+        if thread_relation is not None and thread_relation not in THREAD_RELATIONS:
+            raise CampaignValidationError("evidence_thread_relation_invalid")
+    else:
+        thread_relation = None
     if relationship == "self" and author_handle.casefold() != subject_handle.casefold():
         raise CampaignValidationError("evidence_self_subject_mismatch")
     if kind == "bio":
-        if relationship != "self" or url != subject_profile_url or post_id is not None or published_at is not None:
+        if (
+            relationship != "self"
+            or url != subject_profile_url
+            or post_id is not None
+            or published_at is not None
+            or thread_relation is not None
+        ):
             raise CampaignValidationError("evidence_bio_subject_binding_invalid")
-    elif post_id is None or published_at is None or "/status/" not in url:
+    elif (
+        post_id is None
+        or published_at is None
+        or "/status/" not in url
+        or (adaptive_v2 and thread_relation is None)
+    ):
         raise CampaignValidationError("evidence_post_shape_invalid")
     excerpt = _nonempty_text(evidence["excerpt"], maximum=10_000, error="evidence_excerpt_invalid")
-    supports = evidence["supports"]
-    if not isinstance(supports, list):
-        raise CampaignValidationError("evidence_supports_invalid")
+    try:
+        supports = normalize_support_claims(
+            evidence["supports"],
+            allow_legacy=not adaptive_v2,
+        )
+    except ValueError as exc:
+        raise CampaignValidationError("evidence_supports_invalid") from exc
     support_claims: list[dict[str, Any]] = []
     for item in supports:
-        if isinstance(item, str):
-            dimension = item
-            asserted_value = None
-        elif isinstance(item, Mapping) and set(item) == {"dimension", "asserted_value"}:
-            dimension = item["dimension"]
-            asserted_value = item["asserted_value"]
-        else:
-            raise CampaignValidationError("evidence_supports_invalid")
-        if dimension not in DIMENSIONS or asserted_value not in TEMPORAL_STATES | {None}:
-            raise CampaignValidationError("evidence_supports_invalid")
         support_claims.append(
             {
-                "dimension": dimension,
-                "asserted_value": asserted_value,
+                "dimension": item["dimension"],
+                "asserted_value": item.get("asserted_value"),
                 "source_status": MODEL_MEDIATED_UNVERIFIED,
             }
         )
     if len({canonical_json(claim) for claim in support_claims}) != len(support_claims):
         raise CampaignValidationError("evidence_supports_invalid")
-    return {
+    normalized = {
         "subject_handle": subject_handle,
         "subject_binding_status": "enclosing_candidate_model_asserted",
         "kind": kind,
@@ -1267,22 +1420,29 @@ def _validate_evidence(evidence: Any, *, subject_handle: str, subject_profile_ur
         ),
         "source_status": MODEL_MEDIATED_UNVERIFIED,
     }
+    if adaptive_v2:
+        normalized["thread_relation"] = thread_relation
+    return normalized
 
 
-def _validate_candidate(candidate: Any) -> dict[str, Any]:
+def _validate_candidate(candidate: Any, *, wave_result_schema_version: str) -> dict[str, Any]:
+    adaptive_v2 = wave_result_schema_version == WAVE_RESULT_SCHEMA_VERSION_V2
+    candidate_keys = {
+        "handle",
+        "profile_url",
+        "platform_user_id",
+        "bio_excerpt",
+        "target_lab_affiliation_state",
+        "pretraining_experience_state",
+        "confidence",
+        "evidence",
+        "caveats",
+    }
+    if adaptive_v2:
+        candidate_keys.add("overlap_status")
     candidate = _exact_keys(
         candidate,
-        {
-            "handle",
-            "profile_url",
-            "platform_user_id",
-            "bio_excerpt",
-            "target_lab_affiliation_state",
-            "pretraining_experience_state",
-            "confidence",
-            "evidence",
-            "caveats",
-        },
+        candidate_keys,
         "candidate_shape_invalid",
     )
     handle = _valid_handle(candidate["handle"])
@@ -1299,6 +1459,8 @@ def _validate_candidate(candidate: Any) -> dict[str, Any]:
         raise CampaignValidationError("candidate_temporal_state_invalid")
     if candidate["confidence"] not in {"high", "medium", "low"}:
         raise CampaignValidationError("candidate_confidence_invalid")
+    if adaptive_v2 and candidate["overlap_status"] not in {"novel", "prior_material_update"}:
+        raise CampaignValidationError("candidate_overlap_status_invalid")
     evidence = candidate["evidence"]
     caveats = candidate["caveats"]
     if (
@@ -1316,6 +1478,7 @@ def _validate_candidate(candidate: Any) -> dict[str, Any]:
                     item,
                     subject_handle=handle,
                     subject_profile_url=profile_url,
+                    wave_result_schema_version=wave_result_schema_version,
                 )
             )
         except CampaignValidationError as exc:
@@ -1323,6 +1486,7 @@ def _validate_candidate(candidate: Any) -> dict[str, Any]:
                 "x_url_author_handle_mismatch",
                 "evidence_self_subject_mismatch",
                 "evidence_bio_subject_binding_invalid",
+                "evidence_subject_mismatch",
             }:
                 raise
             rejected_evidence_items += 1
@@ -1341,7 +1505,9 @@ def _validate_candidate(candidate: Any) -> dict[str, Any]:
     }
 
 
-def _validate_wave_payload(payload: Any) -> dict[str, Any]:
+def _validate_wave_payload(payload: Any, *, wave_result_schema_version: str) -> dict[str, Any]:
+    if wave_result_schema_version not in {WAVE_RESULT_SCHEMA_VERSION, WAVE_RESULT_SCHEMA_VERSION_V2}:
+        raise CampaignValidationError("wave_result_schema_version_invalid")
     payload = _exact_keys(
         payload,
         {
@@ -1415,7 +1581,10 @@ def _validate_wave_payload(payload: Any) -> dict[str, Any]:
         if tentative:
             model_tool_counts = tentative
     return {
-        "candidates": [_validate_candidate(candidate) for candidate in candidates],
+        "candidates": [
+            _validate_candidate(candidate, wave_result_schema_version=wave_result_schema_version)
+            for candidate in candidates
+        ],
         "model_reported": {
             "candidate_rows": model_candidate_count,
             "evidence_items": model_evidence_items,
@@ -1437,7 +1606,7 @@ def _evidence_key(evidence: Mapping[str, Any]) -> str:
     identity["author_handle"] = identity["author_handle"].casefold()
     identity["support_claims"] = sorted(
         identity["support_claims"],
-        key=lambda claim: (claim["dimension"], str(claim["asserted_value"])),
+        key=lambda claim: (claim["dimension"], str(claim.get("asserted_value"))),
     )
     return canonical_sha256(identity)
 
@@ -1452,15 +1621,35 @@ def _resolve_states(values: Sequence[str]) -> str | None:
 def _dimension_summary(
     observations: Sequence[Mapping[str, Any]],
     dimension: str,
+    evidence_records: Sequence[Mapping[str, Any]] = (),
+    *,
+    include_model_evidence_proposals: bool = False,
 ) -> dict[str, Any]:
     model_values = sorted({str(row[dimension]) for row in observations})
-    return {
+    summary = {
         "model_reported_values": model_values,
         "model_reported_resolution": _resolve_states(model_values),
         "evidence_supported_values": [],
         "evidence_supported_resolution": None,
         "evidence_support_status": MODEL_MEDIATED_UNVERIFIED,
     }
+    if include_model_evidence_proposals:
+        proposed_values = sorted(
+            {
+                claim["asserted_value"]
+                for evidence in evidence_records
+                for claim in evidence["support_claims"]
+                if claim["dimension"] == dimension and claim.get("asserted_value") in TEMPORAL_STATES
+            }
+        )
+        summary.update(
+            {
+                "model_evidence_proposed_values": proposed_values,
+                "model_evidence_proposed_resolution": _resolve_states(proposed_values),
+                "model_evidence_proposal_status": MODEL_MEDIATED_UNVERIFIED,
+            }
+        )
+    return summary
 
 
 def _stop_advisory(
@@ -1590,6 +1779,34 @@ def merge_campaign(
 
     ceiling = policy["kill_ceilings"]
     total_input_bytes = 0
+    wave_request_versions: list[str] = []
+    for wave in waves:
+        source_size = len(wave.result_bytes)
+        raw_sizes = [len(raw) for raw in wave.raw_session_files.values()]
+        if source_size > ceiling["max_bytes_per_wave"] or any(
+            size > ceiling["max_raw_session_file_bytes"] for size in raw_sizes
+        ):
+            raise CampaignValidationError("campaign_source_kill_ceiling_exceeded")
+        total_input_bytes += (
+            source_size
+            + len(wave.upstream_request_bytes)
+            + len(wave.prompt_bytes)
+            + sum(raw_sizes)
+        )
+        if total_input_bytes > ceiling["max_total_input_bytes"]:
+            raise CampaignValidationError("max_total_input_bytes_kill_ceiling_exceeded")
+        upstream_for_version = strict_json_bytes(
+            wave.upstream_request_bytes,
+            error="wave_request_json_invalid",
+        )
+        wave_request_versions.append(validate_wave_request(upstream_for_version))
+    campaign_v2 = WAVE_REQUEST_SCHEMA_VERSION_V2 in wave_request_versions
+    result_schema_version = RESULT_SCHEMA_VERSION_V2 if campaign_v2 else RESULT_SCHEMA_VERSION
+    receipt_schema_version = (
+        MECHANICAL_RECEIPT_SCHEMA_VERSION_V2 if campaign_v2 else MECHANICAL_RECEIPT_SCHEMA_VERSION
+    )
+    contract_schema_files = CONTRACT_SCHEMA_FILES_V2 if campaign_v2 else CONTRACT_SCHEMA_FILES_V1
+
     total_candidate_rows = 0
     total_evidence_rows = 0
     seen_handles: set[str] = set()
@@ -1611,18 +1828,6 @@ def merge_campaign(
     raw_candidate_evidence_rows = 0
 
     for binding, wave in zip(bindings, waves, strict=True):
-        source_size = len(wave.result_bytes)
-        upstream_size = len(wave.upstream_request_bytes)
-        prompt_size = len(wave.prompt_bytes)
-        raw_sizes = [len(raw) for raw in wave.raw_session_files.values()]
-        if source_size > ceiling["max_bytes_per_wave"] or any(
-            size > ceiling["max_raw_session_file_bytes"] for size in raw_sizes
-        ):
-            raise CampaignValidationError("campaign_source_kill_ceiling_exceeded")
-        total_input_bytes += source_size + upstream_size + prompt_size + sum(raw_sizes)
-        if total_input_bytes > ceiling["max_total_input_bytes"]:
-            raise CampaignValidationError("max_total_input_bytes_kill_ceiling_exceeded")
-
         result_sha256 = bytes_sha256(wave.result_bytes)
         upstream_sha256 = bytes_sha256(wave.upstream_request_bytes)
         prompt_sha256 = bytes_sha256(wave.prompt_bytes)
@@ -1644,16 +1849,21 @@ def merge_campaign(
         ):
             raise CampaignValidationError("wave_request_relabel_binding_mismatch")
         payload = strict_json_bytes(wave.result_bytes, error="wave_result_json_invalid")
-        normalized = _validate_wave_payload(payload)
+        normalized = _validate_wave_payload(
+            payload,
+            wave_result_schema_version=upstream["wave_result_schema_version"],
+        )
+        candidates = normalized["candidates"]
         receipt = _replay_raw_session(
             wave,
             upstream,
             result_sha256=result_sha256,
             upstream_request_sha256=upstream_sha256,
             result_payload=payload,
+            receipt_schema_version=receipt_schema_version,
+            candidate_handle_keys={row["handle"].casefold() for row in candidates},
         )
 
-        candidates = normalized["candidates"]
         model = normalized["model_reported"]
         if model["tools_reported"] != sorted(receipt["tool_counts"]):
             raise CampaignValidationError("model_native_tool_set_conflict")
@@ -1687,6 +1897,7 @@ def merge_campaign(
                     "wave_ids": set(),
                     "state_observations": [],
                     "evidence": {},
+                    "surface_attempts": {},
                 },
             )
             accumulator["handle_variants"].add(row["handle"])
@@ -1709,6 +1920,8 @@ def merge_campaign(
             }
             accumulator["state_observations"].append(observation)
             for evidence in row["evidence"]:
+                if campaign_v2 and "thread_relation" not in evidence:
+                    evidence = {**evidence, "thread_relation": None}
                 record_sha = _evidence_key(evidence)
                 wave_evidence_records.add(record_sha)
                 wave_associations.add((handle_key, record_sha))
@@ -1716,9 +1929,16 @@ def merge_campaign(
                 global_candidate_evidence_associations.add((handle_key, record_sha))
                 existing = accumulator["evidence"].setdefault(
                     record_sha,
-                    {"record": evidence, "wave_ids": set()},
+                    {"record": evidence, "wave_ids": set(), "wave_result_schema_versions": set()},
                 )
                 existing["wave_ids"].add(wave.wave_id)
+                existing["wave_result_schema_versions"].add(upstream["wave_result_schema_version"])
+
+        if campaign_v2:
+            for attempt in receipt["candidate_surface_attempts"]:
+                accumulator = candidate_accumulators[attempt["handle_key"]]
+                attempt_key = (attempt["surface"], attempt["query_argument_sha256"])
+                accumulator["surface_attempts"].setdefault(attempt_key, set()).add(wave.wave_id)
 
         raw_candidate_evidence_rows += raw_evidence_row_count
         global_replayed_query_hashes.update(receipt["query_identity_sha256s"])
@@ -1782,6 +2002,7 @@ def merge_campaign(
 
     candidates_output: list[dict[str, Any]] = []
     model_state_conflicts = 0
+    model_evidence_proposal_conflicts = 0
     evidence_state_conflicts = 0
     stable_id_conflict_candidates = 0
     candidates_with_evidence = 0
@@ -1789,14 +2010,30 @@ def merge_campaign(
     candidates_with_stable_id = 0
     for handle_key, accumulator in sorted(candidate_accumulators.items()):
         observations = accumulator["state_observations"]
-        state_summary = {dimension: _dimension_summary(observations, dimension) for dimension in DIMENSIONS}
+        normalized_evidence_records = [
+            record["record"] for record in accumulator["evidence"].values()
+        ]
+        state_summary = {
+            dimension: _dimension_summary(
+                observations,
+                dimension,
+                normalized_evidence_records,
+                include_model_evidence_proposals=campaign_v2,
+            )
+            for dimension in DIMENSIONS
+        }
         model_conflict = any(
             state_summary[dimension]["model_reported_resolution"] == "conflict" for dimension in DIMENSIONS
+        )
+        model_evidence_proposal_conflict = campaign_v2 and any(
+            state_summary[dimension]["model_evidence_proposed_resolution"] == "conflict"
+            for dimension in DIMENSIONS
         )
         evidence_conflict = any(
             state_summary[dimension]["evidence_supported_resolution"] == "conflict" for dimension in DIMENSIONS
         )
         model_state_conflicts += model_conflict
+        model_evidence_proposal_conflicts += model_evidence_proposal_conflict
         evidence_state_conflicts += evidence_conflict
         platform_ids = sorted(accumulator["platform_user_ids"])
         stable_id_conflict_candidates += len(platform_ids) > 1
@@ -1805,15 +2042,17 @@ def merge_campaign(
         candidates_with_evidence += bool(accumulator["evidence"])
         evidence_output = []
         for record_sha, record in sorted(accumulator["evidence"].items()):
-            evidence_output.append(
-                {
+            evidence_row = {
                     **record["record"],
                     "evidence_record_sha256": record_sha,
                     "observed_in_wave_ids": sorted(record["wave_ids"]),
                 }
-            )
-        candidates_output.append(
-            {
+            if campaign_v2:
+                evidence_row["observed_wave_result_schema_versions"] = sorted(
+                    record["wave_result_schema_versions"]
+                )
+            evidence_output.append(evidence_row)
+        candidate_output = {
                 "handle_key": handle_key,
                 "handle": accumulator["handle"],
                 "handle_variants": sorted(accumulator["handle_variants"], key=lambda item: (item.casefold(), item)),
@@ -1836,7 +2075,26 @@ def merge_campaign(
                 },
                 "evidence": evidence_output,
             }
-        )
+        if campaign_v2:
+            candidate_output.update(
+                {
+                    "model_evidence_proposed_state_conflict": model_evidence_proposal_conflict,
+                    "surface_attempts": [
+                        {
+                            "surface": surface,
+                            "query_argument_sha256": query_sha256,
+                            "observed_in_wave_ids": sorted(wave_ids),
+                        }
+                        for (surface, query_sha256), wave_ids in sorted(
+                            accumulator["surface_attempts"].items()
+                        )
+                    ],
+                    "surface_coverage": _surface_coverage_label(
+                        {surface for surface, _ in accumulator["surface_attempts"]}
+                    ),
+                }
+            )
+        candidates_output.append(candidate_output)
 
     reverse_index = []
     multi_handle_stable_id_conflicts = 0
@@ -1911,8 +2169,40 @@ def merge_campaign(
         "replayed_tool_counts": dict(sorted(replayed_tool_counts.items())),
         "replayed_global_unique_query_count": len(global_replayed_query_hashes),
     }
+    if campaign_v2:
+        candidates_with_authored_post_attempt = sum(
+            candidate["surface_coverage"] in {"authored_post_only", "both"}
+            for candidate in candidates_output
+        )
+        candidates_with_authored_reply_attempt = sum(
+            candidate["surface_coverage"] in {"authored_reply_only", "both"}
+            for candidate in candidates_output
+        )
+        candidates_with_both_attempts = sum(
+            candidate["surface_coverage"] == "both" for candidate in candidates_output
+        )
+        metrics.update(
+            {
+                "model_evidence_proposed_state_conflict_candidates": model_evidence_proposal_conflicts,
+                "candidates_with_authored_post_attempt": candidates_with_authored_post_attempt,
+                "authored_post_attempt_coverage_rate": _fraction(
+                    candidates_with_authored_post_attempt,
+                    total_unique,
+                ),
+                "candidates_with_authored_reply_attempt": candidates_with_authored_reply_attempt,
+                "authored_reply_attempt_coverage_rate": _fraction(
+                    candidates_with_authored_reply_attempt,
+                    total_unique,
+                ),
+                "candidates_with_both_authored_surfaces_attempted": candidates_with_both_attempts,
+                "both_authored_surfaces_attempt_coverage_rate": _fraction(
+                    candidates_with_both_attempts,
+                    total_unique,
+                ),
+            }
+        )
     result = {
-        "schema_version": RESULT_SCHEMA_VERSION,
+        "schema_version": result_schema_version,
         "campaign_id": request["campaign_id"],
         "target": dict(request["target"]),
         "input_binding": {
@@ -1920,7 +2210,7 @@ def merge_campaign(
             "policy_version": policy["policy_version"],
             "policy_sha256": canonical_sha256(policy),
             "contract_schema_sha256": {
-                filename: contract_schema_sha256(filename) for filename in CONTRACT_SCHEMA_FILES
+                filename: contract_schema_sha256(filename) for filename in contract_schema_files
             },
             "wave_count": len(waves),
         },
@@ -1958,9 +2248,20 @@ def merge_campaign(
 def validate_campaign_result(result: Any) -> None:
     """Validate shape plus the high-value semantic invariants of a persisted result."""
 
-    _schema_guard(result, RESULT_SCHEMA_FILE, "campaign_result_schema_invalid")
     if not isinstance(result, Mapping):
         raise CampaignValidationError("campaign_result_shape_invalid")
+    result_version = result.get("schema_version")
+    if result_version == RESULT_SCHEMA_VERSION:
+        campaign_v2 = False
+        result_schema_file = RESULT_SCHEMA_FILE
+        contract_schema_files = CONTRACT_SCHEMA_FILES_V1
+    elif result_version == RESULT_SCHEMA_VERSION_V2:
+        campaign_v2 = True
+        result_schema_file = RESULT_SCHEMA_FILE_V2
+        contract_schema_files = CONTRACT_SCHEMA_FILES_V2
+    else:
+        raise CampaignValidationError("campaign_result_version_invalid")
+    _schema_guard(result, result_schema_file, "campaign_result_schema_invalid")
     expected_authority = {
         "offline_only": True,
         "provider_calls_performed": False,
@@ -1970,7 +2271,7 @@ def validate_campaign_result(result: Any) -> None:
         "outreach_authorized": False,
         "canonical_person_merge_authorized": False,
     }
-    if result.get("schema_version") != RESULT_SCHEMA_VERSION or result.get("authority") != expected_authority:
+    if result.get("authority") != expected_authority:
         raise CampaignValidationError("campaign_result_authority_invalid")
     expected_provenance = {
         "raw_tool_source_payload_available": False,
@@ -1983,7 +2284,7 @@ def validate_campaign_result(result: Any) -> None:
     if result.get("provenance") != expected_provenance:
         raise CampaignValidationError("campaign_result_provenance_invalid")
     binding = result["input_binding"]
-    expected_schema_hashes = {filename: contract_schema_sha256(filename) for filename in CONTRACT_SCHEMA_FILES}
+    expected_schema_hashes = {filename: contract_schema_sha256(filename) for filename in contract_schema_files}
     if binding["contract_schema_sha256"] != expected_schema_hashes:
         raise CampaignValidationError("campaign_result_schema_binding_invalid")
     if binding["wave_count"] != len(result["wave_yields"]):
@@ -2001,11 +2302,23 @@ def validate_campaign_result(result: Any) -> None:
         "temporal_state": MODEL_MEDIATED_UNVERIFIED,
         "evidence_excerpt": MODEL_MEDIATED_UNVERIFIED,
     }
+    wave_result_versions_by_id: dict[str, str] = {}
+    for wave in result["wave_yields"]:
+        wave_id = wave["wave_id"]
+        version = wave["source_binding"]["wave_result_schema_version"]
+        if (
+            wave_id in wave_result_versions_by_id
+            or version not in {WAVE_RESULT_SCHEMA_VERSION, WAVE_RESULT_SCHEMA_VERSION_V2}
+        ):
+            raise CampaignValidationError("campaign_result_wave_version_index_invalid")
+        wave_result_versions_by_id[wave_id] = version
+    candidates_by_handle: dict[str, Mapping[str, Any]] = {}
     for candidate in result["candidates"]:
         handle_key = candidate["handle_key"]
         if handle_key in candidate_handle_keys or candidate["handle"].casefold() != handle_key:
             raise CampaignValidationError("campaign_result_candidate_identity_invalid")
         candidate_handle_keys.add(handle_key)
+        candidates_by_handle[handle_key] = candidate
         if candidate["field_source_status"] != expected_field_source_status:
             raise CampaignValidationError("campaign_result_candidate_source_status_invalid")
         if candidate["multiple_stable_ids_for_handle"] != (len(candidate["platform_user_ids"]) > 1):
@@ -2022,33 +2335,52 @@ def validate_campaign_result(result: Any) -> None:
                 or observation["source_status"] != MODEL_MEDIATED_UNVERIFIED
             ):
                 raise CampaignValidationError("campaign_result_state_observation_invalid")
-        expected_summary = {dimension: _dimension_summary(observations, dimension) for dimension in DIMENSIONS}
-        if candidate["state_summary"] != expected_summary:
-            raise CampaignValidationError("campaign_result_state_summary_invalid")
-        if candidate["model_reported_state_conflict"] != any(
-            expected_summary[dimension]["model_reported_resolution"] == "conflict" for dimension in DIMENSIONS
-        ):
-            raise CampaignValidationError("campaign_result_model_state_conflict_invalid")
-        if candidate["evidence_supported_state_conflict"] != any(
-            expected_summary[dimension]["evidence_supported_resolution"] == "conflict" for dimension in DIMENSIONS
-        ):
-            raise CampaignValidationError("campaign_result_evidence_state_conflict_invalid")
+        normalized_candidate_evidence: list[dict[str, Any]] = []
         for evidence in candidate["evidence"]:
+            if campaign_v2:
+                observed_adapter_versions = evidence["observed_wave_result_schema_versions"]
+                if (
+                    not isinstance(observed_adapter_versions, list)
+                    or not observed_adapter_versions
+                    or observed_adapter_versions != sorted(set(observed_adapter_versions))
+                    or any(
+                        version not in {WAVE_RESULT_SCHEMA_VERSION, WAVE_RESULT_SCHEMA_VERSION_V2}
+                        for version in observed_adapter_versions
+                    )
+                    or observed_adapter_versions
+                    != sorted(
+                        {
+                            wave_result_versions_by_id[wave_id]
+                            for wave_id in evidence["observed_in_wave_ids"]
+                            if wave_id in wave_result_versions_by_id
+                        }
+                    )
+                    or any(
+                        wave_id not in wave_result_versions_by_id
+                        for wave_id in evidence["observed_in_wave_ids"]
+                    )
+                ):
+                    raise CampaignValidationError("campaign_result_evidence_adapter_versions_invalid")
+            else:
+                observed_adapter_versions = [WAVE_RESULT_SCHEMA_VERSION]
+            evidence_keys = [
+                "subject_handle",
+                "subject_binding_status",
+                "kind",
+                "relationship",
+                "author_handle",
+                "post_id",
+                "url",
+                "published_at",
+                "excerpt",
+                "support_claims",
+                "source_status",
+            ]
+            if campaign_v2:
+                evidence_keys.append("thread_relation")
             normalized = {
                 key: evidence[key]
-                for key in (
-                    "subject_handle",
-                    "subject_binding_status",
-                    "kind",
-                    "relationship",
-                    "author_handle",
-                    "post_id",
-                    "url",
-                    "published_at",
-                    "excerpt",
-                    "support_claims",
-                    "source_status",
-                )
+                for key in evidence_keys
             }
             try:
                 canonical_evidence_url, _ = _canonical_x_url(
@@ -2063,6 +2395,7 @@ def validate_campaign_result(result: Any) -> None:
                     or normalized["post_id"] is not None
                     or normalized["published_at"] is not None
                     or normalized["url"] not in candidate["profile_urls"]
+                    or (campaign_v2 and normalized["thread_relation"] is not None)
                 ):
                     raise CampaignValidationError("campaign_result_evidence_bio_binding_invalid")
             elif (
@@ -2070,8 +2403,30 @@ def validate_campaign_result(result: Any) -> None:
                 or not _valid_utc_timestamp(normalized["published_at"])
                 or "/status/" not in canonical_evidence_url
                 or not canonical_evidence_url.endswith(f"/status/{normalized['post_id']}")
+                or (
+                    campaign_v2
+                    and normalized["thread_relation"] not in THREAD_RELATIONS
+                    and not (
+                        normalized["thread_relation"] is None
+                        and observed_adapter_versions == [WAVE_RESULT_SCHEMA_VERSION]
+                    )
+                )
             ):
                 raise CampaignValidationError("campaign_result_evidence_post_binding_invalid")
+            support_claims_valid = all(
+                isinstance(claim, Mapping)
+                and set(claim) == {"dimension", "asserted_value", "source_status"}
+                and claim["dimension"] in DIMENSIONS
+                and (
+                    claim["asserted_value"] in TEMPORAL_STATES
+                    or (
+                        claim["asserted_value"] is None
+                        and WAVE_RESULT_SCHEMA_VERSION in observed_adapter_versions
+                    )
+                )
+                and claim["source_status"] == MODEL_MEDIATED_UNVERIFIED
+                for claim in normalized["support_claims"]
+            )
             if (
                 normalized["subject_handle"].casefold() != handle_key
                 or normalized["subject_binding_status"] != "enclosing_candidate_model_asserted"
@@ -2079,7 +2434,8 @@ def validate_campaign_result(result: Any) -> None:
                 or normalized["relationship"] not in EVIDENCE_RELATIONSHIPS
                 or (normalized["relationship"] == "self" and normalized["author_handle"].casefold() != handle_key)
                 or normalized["source_status"] != MODEL_MEDIATED_UNVERIFIED
-                or any(claim["source_status"] != MODEL_MEDIATED_UNVERIFIED for claim in normalized["support_claims"])
+                or not support_claims_valid
+                or (campaign_v2 and not normalized["support_claims"])
             ):
                 raise CampaignValidationError("campaign_result_evidence_source_status_invalid")
             record_sha = _evidence_key(normalized)
@@ -2087,6 +2443,32 @@ def validate_campaign_result(result: Any) -> None:
                 raise CampaignValidationError("campaign_result_evidence_hash_invalid")
             evidence_records.add(record_sha)
             associations.add((handle_key, record_sha))
+            normalized_candidate_evidence.append(normalized)
+
+        expected_summary = {
+            dimension: _dimension_summary(
+                observations,
+                dimension,
+                normalized_candidate_evidence,
+                include_model_evidence_proposals=campaign_v2,
+            )
+            for dimension in DIMENSIONS
+        }
+        if candidate["state_summary"] != expected_summary:
+            raise CampaignValidationError("campaign_result_state_summary_invalid")
+        if candidate["model_reported_state_conflict"] != any(
+            expected_summary[dimension]["model_reported_resolution"] == "conflict" for dimension in DIMENSIONS
+        ):
+            raise CampaignValidationError("campaign_result_model_state_conflict_invalid")
+        if campaign_v2 and candidate["model_evidence_proposed_state_conflict"] != any(
+            expected_summary[dimension]["model_evidence_proposed_resolution"] == "conflict"
+            for dimension in DIMENSIONS
+        ):
+            raise CampaignValidationError("campaign_result_model_evidence_proposal_conflict_invalid")
+        if candidate["evidence_supported_state_conflict"] != any(
+            expected_summary[dimension]["evidence_supported_resolution"] == "conflict" for dimension in DIMENSIONS
+        ):
+            raise CampaignValidationError("campaign_result_evidence_state_conflict_invalid")
 
     expected_reverse = []
     expected_conflicts = 0
@@ -2124,11 +2506,15 @@ def validate_campaign_result(result: Any) -> None:
 
     replayed_calls = 0
     replayed_queries: set[str] = set()
+    expected_surface_attempts: dict[str, dict[tuple[str, str], set[str]]] = defaultdict(dict)
     for wave in result["wave_yields"]:
         observed = wave["mechanically_observed"]
         receipt = observed["receipt"]
         model_reported = wave["model_reported"]
-        _schema_guard(receipt, MECHANICAL_RECEIPT_SCHEMA_FILE, "campaign_result_receipt_schema_invalid")
+        receipt_schema_file = (
+            MECHANICAL_RECEIPT_SCHEMA_FILE_V2 if campaign_v2 else MECHANICAL_RECEIPT_SCHEMA_FILE
+        )
+        _schema_guard(receipt, receipt_schema_file, "campaign_result_receipt_schema_invalid")
         if observed["receipt_sha256"] != canonical_sha256(receipt):
             raise CampaignValidationError("campaign_result_receipt_hash_invalid")
         if wave["wave_id"] != receipt["wave_id"]:
@@ -2143,6 +2529,42 @@ def validate_campaign_result(result: Any) -> None:
             raise CampaignValidationError("campaign_result_source_receipt_invalid")
         if wave["source_binding"]["strategy_definition_sha256"] != receipt["strategy_definition_sha256"]:
             raise CampaignValidationError("campaign_result_source_receipt_invalid")
+        if campaign_v2:
+            if (
+                receipt["schema_version"] != MECHANICAL_RECEIPT_SCHEMA_VERSION_V2
+                or receipt["wave_request_schema_version"]
+                not in {WAVE_REQUEST_SCHEMA_VERSION, WAVE_REQUEST_SCHEMA_VERSION_V2}
+                or receipt["wave_result_schema_version"] != wave["source_binding"]["wave_result_schema_version"]
+                or (
+                    receipt["wave_request_schema_version"] == WAVE_REQUEST_SCHEMA_VERSION
+                    and receipt["wave_result_schema_version"] != WAVE_RESULT_SCHEMA_VERSION
+                )
+                or (
+                    receipt["wave_request_schema_version"] == WAVE_REQUEST_SCHEMA_VERSION_V2
+                    and receipt["wave_result_schema_version"] != WAVE_RESULT_SCHEMA_VERSION_V2
+                )
+            ):
+                raise CampaignValidationError("campaign_result_receipt_version_binding_invalid")
+            wave_candidate_handles = {
+                handle_key
+                for handle_key, candidate in candidates_by_handle.items()
+                if wave["wave_id"] in candidate["observed_in_wave_ids"]
+            }
+            if receipt["candidate_surface_coverage"] != _candidate_surface_coverage(
+                wave_candidate_handles,
+                receipt["candidate_surface_attempts"],
+            ):
+                raise CampaignValidationError("campaign_result_surface_coverage_invalid")
+            for attempt in receipt["candidate_surface_attempts"]:
+                if (
+                    attempt["handle_key"] not in wave_candidate_handles
+                    or attempt["query_argument_sha256"] not in receipt["query_identity_sha256s"]
+                ):
+                    raise CampaignValidationError("campaign_result_surface_attempt_binding_invalid")
+                key = (attempt["surface"], attempt["query_argument_sha256"])
+                expected_surface_attempts[attempt["handle_key"]].setdefault(key, set()).add(
+                    wave["wave_id"]
+                )
         if (
             receipt["assistant_terminal_json_start_update_index"] <= receipt["last_native_x_update_index"]
             or receipt["assistant_terminal_json_start_update_index"]
@@ -2192,7 +2614,52 @@ def validate_campaign_result(result: Any) -> None:
         expected_productivity = round(wave["yield"]["new_unique_handles"] / receipt["completed_tool_calls"], 8)
         if wave["yield"]["new_unique_handles_per_replayed_completed_native_x_call"] != expected_productivity:
             raise CampaignValidationError("campaign_result_productivity_invalid")
+    if campaign_v2:
+        for handle_key, candidate in candidates_by_handle.items():
+            attempts = expected_surface_attempts[handle_key]
+            expected_attempt_rows = [
+                {
+                    "surface": surface,
+                    "query_argument_sha256": query_sha256,
+                    "observed_in_wave_ids": sorted(wave_ids),
+                }
+                for (surface, query_sha256), wave_ids in sorted(attempts.items())
+            ]
+            if (
+                candidate["surface_attempts"] != expected_attempt_rows
+                or candidate["surface_coverage"]
+                != _surface_coverage_label({surface for surface, _ in attempts})
+            ):
+                raise CampaignValidationError("campaign_result_candidate_surface_merge_invalid")
     metrics = result["metrics"]
+    v2_metrics_invalid = False
+    if campaign_v2:
+        proposed_conflicts = sum(
+            candidate["model_evidence_proposed_state_conflict"] for candidate in result["candidates"]
+        )
+        post_attempts = sum(
+            candidate["surface_coverage"] in {"authored_post_only", "both"}
+            for candidate in result["candidates"]
+        )
+        reply_attempts = sum(
+            candidate["surface_coverage"] in {"authored_reply_only", "both"}
+            for candidate in result["candidates"]
+        )
+        both_attempts = sum(
+            candidate["surface_coverage"] == "both" for candidate in result["candidates"]
+        )
+        v2_metrics_invalid = (
+            metrics["model_evidence_proposed_state_conflict_candidates"] != proposed_conflicts
+            or metrics["candidates_with_authored_post_attempt"] != post_attempts
+            or metrics["authored_post_attempt_coverage_rate"]
+            != _fraction(post_attempts, len(candidate_handle_keys))
+            or metrics["candidates_with_authored_reply_attempt"] != reply_attempts
+            or metrics["authored_reply_attempt_coverage_rate"]
+            != _fraction(reply_attempts, len(candidate_handle_keys))
+            or metrics["candidates_with_both_authored_surfaces_attempted"] != both_attempts
+            or metrics["both_authored_surfaces_attempt_coverage_rate"]
+            != _fraction(both_attempts, len(candidate_handle_keys))
+        )
     if (
         metrics["total_unique_handles"] != len(candidate_handle_keys)
         or metrics["unique_evidence_records"] != len(evidence_records)
@@ -2205,6 +2672,7 @@ def validate_campaign_result(result: Any) -> None:
         or metrics["replayed_global_unique_query_count"] != len(replayed_queries)
         or result["stop_advisory"]["enforced"] is not False
         or result["stop_advisory"]["candidate_count_triggered"] is not False
+        or v2_metrics_invalid
     ):
         raise CampaignValidationError("campaign_result_metrics_invalid")
 

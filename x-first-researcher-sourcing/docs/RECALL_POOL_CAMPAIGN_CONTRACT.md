@@ -25,10 +25,10 @@ aggregate check and allocation to bypass the campaign budget.
 | Owner | File |
 |---|---|
 | Ordered source bindings | `contracts/x.recall_pool.campaign.request.v1.schema.json` |
-| Per-wave target, prompt, execution-context and strategy bindings | `contracts/x.recall_pool.campaign.wave_request.v1.schema.json` |
+| Per-wave target, prompt, execution-context and strategy bindings | `contracts/x.recall_pool.campaign.wave_request.v1.schema.json`; typed evidence adapter `v2` |
 | Technical ceilings and non-enforcing stop policy | `contracts/x.recall_pool.campaign.policy.v1.schema.json`; `configs/recall_pool_campaign_policy.v1.json` |
-| Raw-session replay receipt | `contracts/x.recall_pool.campaign.wave_mechanical_receipt.v1.schema.json` |
-| Persisted merged artifact | `contracts/x.recall_pool.campaign.result.v1.schema.json` |
+| Raw-session replay receipt | `contracts/x.recall_pool.campaign.wave_mechanical_receipt.v1.schema.json`; surface-aware `v2` |
+| Persisted merged artifact | `contracts/x.recall_pool.campaign.result.v1.schema.json`; mixed-wave-compatible `v2` |
 | Runtime validation and deterministic merge | `src/x_first/recall_pool_campaign.py`; `src/x_first/recall_pool_schema.py` |
 | Private atomic CLI | `scripts/merge_recall_pool_campaign.py` |
 | Regression suite | `tests/test_recall_pool_campaign.py` |
@@ -120,6 +120,18 @@ The manifest order is authoritative. The merge:
 9. keeps two handles as two candidate rows even when they share a model-reported platform ID; a diagnostic reverse
    index emits a
    review-required, reversible handle-history proposal with `auto_merge_authorized=false`.
+
+The v2 adapter adds two deliberately separate facts. First, typed evidence retains
+`thread_relation=self_post|reply|quote|thread_root|thread_reply`; Bio requires `null`. Its temporal claim is reduced
+into `model_evidence_proposed_*`, while `evidence_supported_*` stays empty/null because the raw X payload remains
+unavailable. Second, replay derives candidate surface attempts only from completed `x_keyword_search` calls whose
+query contains exactly one positive `from:<handle>` operator. `filter:replies` records `authored_reply`; its negation
+or absence records `authored_post`. Global, multi-handle, semantic, user and thread calls do not count as candidate
+coverage. These are attempt metrics, not proof that X results were exhaustive.
+
+A v2 campaign may include older v1 waves. Each evidence row records the exact adapter versions of its source waves;
+only a pure v1-origin row may retain `thread_relation=null` for non-Bio evidence or a legacy
+`asserted_value=null`. The merge never invents either topology or temporality while upgrading the aggregate envelope.
 
 All current/historical combinations across the two independent axes remain in the recall pool. This lane does not
 select the business precision tranche.
@@ -229,7 +241,7 @@ python3 -m py_compile \
   tests/test_recall_pool_campaign.py
 ```
 
-The 27-test focused suite covers strict schema execution, complete user-chat/system/assistant/result binding, forged
+The 31-test focused suite covers strict schema execution, complete user-chat/system/assistant/result binding, forged
 result+manifest
 rejection, split-terminal-before-tools rejection, raw source/session/model/prompt/context/terminal binding, model vs.
 mechanical count drift, global query
@@ -240,5 +252,6 @@ conflicts, target/strategy relabel prevention, persisted replay, 1,500 handles w
 ceilings including aggregate preflight before content reads and fail-closed post-preflight growth, versioned strategy
 and runner-bound family call-profile
 comparisons, 50/1/50 fail-closed behavior,
-model-mediated provenance, owner-only PII boundaries, all-public-prompt rejection, literal orphan cleanup, atomic
-no-replace publication and replay validation.
+model-mediated provenance, typed Post/Reply proposals, mechanically replayed authored-Post/Reply coverage, semantic
+query non-attribution, mixed v1/v2 evidence preservation, owner-only PII boundaries, all-public-prompt rejection,
+literal orphan cleanup, atomic no-replace publication and replay validation.
