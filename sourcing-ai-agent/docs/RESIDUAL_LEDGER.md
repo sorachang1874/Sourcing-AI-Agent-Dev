@@ -54,11 +54,12 @@
   `CostLedgerRepository` aggregate and its exact parent/child `21/75` manifests, keys/indexes/checks, immutable
   pricing/reconciliation registry shapes, eight-method CAS surface, source-dependent terminal mapping, and parent-first
   settlement order. Strict-D3 live/simulate/scripted all require a durable exposure so D3b receipts remain reachable;
-  live money is positive, simulate/scripted money is zero, and replay waits for a D0 envelope plus schema revision.
+  live money is positive, simulate/scripted money is zero, and replay now waits for its schema revision.
   OB-2.2 and OB-10.3 advance only to `decision_locked_not_implemented`; the current `83` baseline
   tables and `41` descriptors still contain neither physical table, and no future owner/registry/store wiring exists.
-  Exact Decimal/TIMESTAMPTZ codecs, specialized insert-once/CAS primitives, and durable envelope owner/ref grammar are
-  explicit implementation prerequisites; generic replace-all upsert is forbidden.
+  D0f now provides the exact TIMESTAMPTZ codec, durable envelope owner/ref grammar, and one envelope-specific immutable
+  insert/replay path. Exact Decimal plus cost/receipt table-specific insert-once/CAS primitives remain explicit
+  implementation prerequisites; generic replace-all upsert is forbidden.
   This candidate authorizes no SQL, descriptor, repository, runtime writer, settlement daemon, provider/model path,
   live/W6/manual signoff, rollout step 3, or served tool. D3c2h0 now separately ratifies receipt/quarantine cross-contract
   identity/order, but verification-intent and exact receipt/quarantine manifests, upstream FKs, Migration B-D, adoption,
@@ -76,13 +77,20 @@
   complete global owner-row prefix and derives current/stale from stored current state. Caller flags, callbacks, and stale
   `ClaimReceipt` values have no classifier authority, and neither path may return to runtime/domain owners after exposure.
   Durable pending response-classification owner/state, retry/recovery, exact replay, and idempotency remain D3c2h1 work.
-  Current `ModelInvocationEnvelopeV1` remains the sole canonical shape but has no
-  durable ref issuer, so D0f sole owner/ref grammar is a hard predecessor and placeholder refs/second schemas are
-  forbidden. Initial v1 admits only `model_tool_v1` live/simulate/scripted; simulate/scripted zero-cost evidence remains
+  Current `ModelInvocationEnvelopeV1` remains the sole canonical shape, and D0f now supplies its sole durable full-PFX
+  ref/persistence owner; placeholder refs/second schemas remain forbidden. Initial v1 admits only `model_tool_v1`
+  live/simulate/scripted; simulate/scripted zero-cost evidence remains
   reachable, replay is zero-write, and Harvest/provider-search cannot masquerade as model transport. Oracle=`9 passed`.
-  D3c2h0 ratifies no ordered manifest/count, SQL, descriptor, repository, runtime, or live path. Next order is D0f →
-  D3c2h1 exact intent/receipt/quarantine manifests after Decimal/TIMESTAMPTZ plus specialized insert-once/CAS
+  D3c2h0 ratifies no ordered manifest/count, SQL, descriptor, repository, runtime, or live path. D0f is now complete;
+  next is D3c2h1 exact intent/receipt/quarantine manifests after Decimal plus table-specific specialized insert-once/CAS
   prerequisites. R-019/R-023/R-027/R-029, action-root, remaining OB gates, rollout step 3, and served=0 remain open.
+
+- **R-019 / D0f (2026-07-15):** D0f closes only the durable `ModelInvocationEnvelopeV1` full-PFX ref/persistence and
+  TIMESTAMPTZ substrate prerequisites. It adds one immutable PG evidence table with exact replay/collision and a fixed
+  retained-to-tombstone CAS; it does not accept/consume logical results, authorize effects or sends, implement cost or
+  receipt/quarantine owners, close any Migration A-D aggregate, or activate live/served paths. Fresh formal review is
+  pending. D3c2h1, Decimal/cost tables, R-019/R-023/R-027/R-029, action-root, remaining OB gates, rollout step 3, and
+  served=0 remain open.
 
 - **R-019 / D3c2f (2026-07-15):** the event-core Migration-A fragment adds only the dormant `workflow_events`
   eleven-column scope/claim/terminal-outcome shape plus eleven `NOT VALID` local checks. The 5s one-table timeout,

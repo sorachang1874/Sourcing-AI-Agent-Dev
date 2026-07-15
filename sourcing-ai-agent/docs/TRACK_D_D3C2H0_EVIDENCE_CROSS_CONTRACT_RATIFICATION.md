@@ -287,8 +287,8 @@ fixed-forwards contradictions within the existing Plan §6 / D3b / D3c2g obligat
 - owner separation, D0f-before-D3c2h1 ordering, model-only v1 applicability, non-live zero-cost reachability, replay
   zero-write behavior, and Harvest/provider-search deferral;
 - the complete eight-mechanism × ten-invariant matrix;
-- current source absence of future evidence tables/owners and durable envelope refs;
-- the current generic Kind/replace-all incompatibility and D0c/D3b/D3c2g evidence behind each supersession.
+- decision-time source absence of future receipt/quarantine owners and durable envelope refs;
+- the decision-time generic Kind/replace-all incompatibility and D0c/D3b/D3c2g evidence behind each supersession.
 
 The absence checks are a decision-only ratchet, not a permanent ban. A later implementation batch must intentionally
 advance the oracle together with reviewed SQL/runtime evidence; it may not make this batch look implemented retroactively.
@@ -321,3 +321,11 @@ git diff --check -- \
 ```
 
 Author validation is local evidence only. It is not an independent or formal `GO`.
+
+### D0f successor observation (2026-07-15)
+
+The bounded D0f implementation candidate now supplies the sole PG-only durable `ModelInvocationEnvelopeV1` ref owner,
+an exact `TIMESTAMPTZ` codec, immutable insert/exact-replay storage, and the fixed retained-to-tombstone CAS. This
+intentionally advances the D0f predecessor described above without retroactively changing D3c2h0's decision-time
+evidence. D3c2h1 receipt/quarantine manifests, Decimal cost codecs/tables, strict runtime writers, and every live/product
+gate remain outside D0f.

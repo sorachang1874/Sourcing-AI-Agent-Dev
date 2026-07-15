@@ -14,6 +14,7 @@ from typing import Any
 from .criteria_confidence import CriteriaConfidenceRepository
 from .linkedin_profile_registry import LinkedinProfileRegistryRepository
 from .manual_review import ManualReviewRepository
+from .model_invocation_envelopes import ModelInvocationEnvelopeRepository
 from .serving_projection import ServingProjectionRepository
 from .workflow_runtime import WorkflowRuntimeRepository
 
@@ -34,6 +35,7 @@ class ControlPlaneRepositories:
         self.linkedin_profile_registry = LinkedinProfileRegistryRepository(adapter)
         self.criteria_confidence = CriteriaConfidenceRepository(adapter, job_lookup=job_lookup)
         self.manual_review = ManualReviewRepository(adapter)
+        self.model_invocation_envelopes = ModelInvocationEnvelopeRepository(adapter)
         self.serving_projection = ServingProjectionRepository(adapter)
         self.workflow_runtime = WorkflowRuntimeRepository(adapter)
 

@@ -467,9 +467,10 @@ class ModelInvocationEnvelopeV1:
     """Canonical immutable terminal-result model invocation evidence.
 
     Optional references represent typed absence. This value does not mint refs,
-    persist itself, authorize an effect, or imply that a durable owner exists.
-    Pre-call, transport, and protocol failures require a future closed attempt
-    outcome contract and must not be encoded as fabricated terminal results.
+    persist itself, or authorize an effect; D0f's repository is the separate sole
+    durable owner. Pre-call, transport, and protocol failures require a future
+    closed attempt outcome contract and must not be encoded as fabricated
+    terminal results.
     """
 
     schema_version: str
@@ -650,6 +651,15 @@ class ModelInvocationEnvelopeV1:
     def to_record(self) -> dict[str, object]:
         return {**self._record_without_envelope_digest(), "envelope_digest": self.envelope_digest}
 
+    def to_canonical_json(self) -> str:
+        """Serialize the exact v1 record for durable evidence persistence.
+
+        The canonical envelope owner stays in this module. Durable repositories
+        persist these exact bytes rather than re-encoding a second schema.
+        """
+
+        return _canonical_json(self.to_record())
+
     @classmethod
     def from_record(cls, record: Mapping[str, object]) -> ModelInvocationEnvelopeV1:
         if not isinstance(record, Mapping) or set(record) != MODEL_INVOCATION_ENVELOPE_RECORD_KEYS:
@@ -759,6 +769,23 @@ class ModelInvocationEnvelopeV1:
         )
         if envelope.to_record() != _thaw_json(record):
             raise ModelInvocationEnvelopeError("model_invocation_record_not_canonical")
+        return envelope
+
+    @classmethod
+    def from_canonical_json(cls, value: str) -> ModelInvocationEnvelopeV1:
+        """Parse only the exact canonical JSON emitted by :meth:`to_canonical_json`."""
+
+        if type(value) is not str or not value:
+            raise ModelInvocationEnvelopeError("model_invocation_canonical_json_invalid")
+        try:
+            record = _json_loads_strict(value)
+        except (json.JSONDecodeError, ValueError) as exc:
+            raise ModelInvocationEnvelopeError("model_invocation_canonical_json_invalid") from exc
+        if not isinstance(record, dict):
+            raise ModelInvocationEnvelopeError("model_invocation_canonical_json_not_object")
+        envelope = cls.from_record(record)
+        if envelope.to_canonical_json() != value:
+            raise ModelInvocationEnvelopeError("model_invocation_canonical_json_not_canonical")
         return envelope
 
 

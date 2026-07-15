@@ -477,16 +477,21 @@
   exposure/receipt 可达，replay zero-write fail-closed；Harvest/provider-search 必须另有 owner-ratified variant，
   不得伪装 model transport。完整记录见 `TRACK_D_D3C2H0_EVIDENCE_CROSS_CONTRACT_RATIFICATION.md`；oracle=`9 passed`，
   零 exact manifest/SQL/descriptor/repository/runtime/live，不授权 migration，fresh pinned/formal review pending。
-- [ ] D0f durable ModelInvocationEnvelope ref owner（D3c2h1 hard prerequisite）：保留
-  `ModelInvocationEnvelopeV1` 为唯一 canonical shape/digest owner；ratify/implement sole durable result-slot/evidence
-  owner、full-PFX ref grammar、issuance/persistence UoW、exact replay/collision、retention 与 live/simulate/scripted
-  presence。禁止 placeholder ref/hash、第二 envelope schema、receipt/quarantine owner 自行 mint ref。
+- [x] D0f durable ModelInvocationEnvelope ref owner（2026-07-15；D3c2h1 prerequisite closed）：保留
+  `ModelInvocationEnvelopeV1` 为唯一 canonical shape/digest/JSON owner，并以 sole PG-only
+  `ModelInvocationEnvelopeRepository` 落 full-PFX `mie:v1` ref、15-column immutable evidence table、specialized
+  advisory-lock + `FOR UPDATE` + plain insert exact replay/collision、`live|simulate|scripted` 六段 causality + cost-ref
+  presence、live route-snapshot presence，以及 fixed 30-day DB-clock retained→purged-tombstone CAS；新增 exact
+  nullable timezone-aware `TIMESTAMPTZ` codec。它不是 logical result-slot accept/consume、receipt/quarantine、cost
+  ledger、runtime writer 或 live activation。author evidence=`83 + PG 1 + migration 15/65 + guards 64 + adjacent 22 +
+  control-plane 17`，Ruff/format/diff clean，focused mypy clean，global mypy=`81/4`；fresh pinned formal review pending。
 - [ ] D3c2h1 exact evidence-surface decision lock：仅在 D0f 后 ratify `verification_intent`、response/failure
   receipt 与 late-quarantine 的 exact ordered manifests/types/checks/full-PFX keys/FKs、sole physical owners、
   insert/exact-replay/CAS/retention、两条 composition API，以及 pending response-classification owner/state、
-  retry/recovery、exact replay 与 idempotency；先补 Decimal/TIMESTAMPTZ codecs 和 specialized
-  insert-once/CAS prerequisites。不得从 D3b prose 猜 schema，不得把 D3c2g/D3c2h0 当 SQL/migration 授权，且
-  Harvest/provider-search variant 未 owner-ratify 前不得进入该 evidence path。
+  retry/recovery、exact replay 与 idempotency；D0f `TIMESTAMPTZ`/durable ref 可复用，但仍须先补 Decimal 与这些
+  evidence/cost tables 自己的 specialized insert-once/CAS prerequisites。不得从 D3b prose 猜 schema，不得把
+  D3c2g/D3c2h0 当 SQL/migration 授权，且 Harvest/provider-search variant 未 owner-ratify 前不得进入该 evidence
+  path。
 - [ ] Track D 后的 user-owned cohort selection contract（Thinking Machines Lab live 前置）：以一个 versioned、
   registry-digest-pinned `CohortSelection` 作为唯一 owner，显式承载 canonical ordered
   `role_bucket_ids[]`（Researcher/Engineer/Product Manager 可自由多选且 registry 可扩展）、

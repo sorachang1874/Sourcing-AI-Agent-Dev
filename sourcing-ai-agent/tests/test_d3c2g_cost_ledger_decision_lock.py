@@ -1505,8 +1505,17 @@ def test_current_physical_absence_baseline_is_mechanical_and_exact() -> None:
         for target in node.targets
         if isinstance(target, ast.Name)
     }
-    assert kind_members == {"STR", "INT", "FLOAT", "BOOL_INT", "JSON", "JSON_LIST", "JSON_STR_LIST"}
-    assert {"DECIMAL", "TIMESTAMPTZ"}.isdisjoint(kind_members)
+    assert kind_members == {
+        "STR",
+        "INT",
+        "FLOAT",
+        "BOOL_INT",
+        "JSON",
+        "JSON_LIST",
+        "JSON_STR_LIST",
+        "TIMESTAMPTZ",
+    }
+    assert "DECIMAL" not in kind_members
     assert 'f"ON CONFLICT ({conflict}) DO UPDATE SET {assignments} RETURNING *"' in control_plane_source
 
     model_runtime_source = MODEL_TOOL_RUNTIME_PATH.read_text(encoding="utf-8")

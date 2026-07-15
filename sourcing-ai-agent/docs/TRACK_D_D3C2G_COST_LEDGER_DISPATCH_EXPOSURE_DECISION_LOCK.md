@@ -698,3 +698,12 @@ identity, issuance/persistence UoW, tenant/mode scope, retention, and exact repl
 D3c2g does not resolve D3c2h's response-only quarantine `reconciled_no_call` reachability or receipt-side
 `command_attempt` identity. Those remain explicit D3c2h ratifications; nothing here silently changes D3b receipt or
 quarantine semantics.
+
+### D0f successor observation (2026-07-15)
+
+D0f's implementation candidate subsequently adds the first exact nullable timezone-aware `TIMESTAMPTZ` codec and the
+sole PG-only durable `ModelInvocationEnvelopeV1` reference/persistence owner. This successor work closes only those two
+substrate observations: it does not add a Decimal/`NUMERIC(38,12)` codec, either cost table, receipt/quarantine
+manifests, or a cost-ledger writer. The historical D3c2g decision and its
+83-baseline-table/41-generic-descriptor census remain the evidence for the decision point; D0f deliberately uses
+specialized immutable storage rather than a generic `TableDescriptor`.

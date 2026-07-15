@@ -449,8 +449,17 @@ def test_current_physical_absence_and_prerequisite_evidence_are_mechanical() -> 
         for target in node.targets
         if isinstance(target, ast.Name)
     }
-    assert kind_members == {"STR", "INT", "FLOAT", "BOOL_INT", "JSON", "JSON_LIST", "JSON_STR_LIST"}
-    assert {"DECIMAL", "TIMESTAMPTZ"}.isdisjoint(kind_members)
+    assert kind_members == {
+        "STR",
+        "INT",
+        "FLOAT",
+        "BOOL_INT",
+        "JSON",
+        "JSON_LIST",
+        "JSON_STR_LIST",
+        "TIMESTAMPTZ",
+    }
+    assert "DECIMAL" not in kind_members
 
     upsert_source = _class_method_source(
         CONTROL_PLANE_REPOSITORY_PATH,

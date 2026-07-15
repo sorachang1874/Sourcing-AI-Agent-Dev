@@ -114,6 +114,7 @@ DEFAULT_CONTROL_PLANE_TABLES = [
     "linkedin_profile_registry_events",
     "linkedin_profile_registry_backfill_runs",
     "runtime_provider_limiter_leases",
+    "model_invocation_envelopes",
 ]
 
 _CONTROL_PLANE_UNIQUE_INDEXES: dict[str, tuple[tuple[str, tuple[str, ...], str], ...]] = {

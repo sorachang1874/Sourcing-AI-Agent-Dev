@@ -44,6 +44,7 @@ _D3_COMMAND_MIGRATION = "0003_workflow_command_claim_fence_foundation"
 _D3_SCOPED_ROOT_MIGRATION = "0004_d3_scoped_root_foundation"
 _D3_ACTIVITY_MIGRATION = "0005_d3_activity_claim_chain_foundation"
 _D3_EVENT_MIGRATION = "0006_d3_workflow_event_terminal_lineage_foundation"
+_D0F_ENVELOPE_MIGRATION = "0007_model_invocation_envelopes"
 _ALL_MIGRATIONS = [
     "0001_baseline",
     "0002_action_request_schema_pins",
@@ -51,6 +52,7 @@ _ALL_MIGRATIONS = [
     _D3_SCOPED_ROOT_MIGRATION,
     _D3_ACTIVITY_MIGRATION,
     _D3_EVENT_MIGRATION,
+    _D0F_ENVELOPE_MIGRATION,
 ]
 _D3_COMMAND_COLUMNS = (
     ("runtime_namespace", "text", "NO", "''::text"),
@@ -397,7 +399,7 @@ class MigrationRunnerTest(unittest.TestCase):
             runner_fp["columns"], live_fp["columns"], "column: schema created outside the migration ledger"
         )
         self.assertEqual(runner_fp["indexes"], live_fp["indexes"], "index: schema created outside the migration ledger")
-        self.assertEqual(len(runner_fp["tables"]), 83)
+        self.assertEqual(len(runner_fp["tables"]), 84)
 
     def test_runner_is_idempotent(self) -> None:
         schema = self._fresh_schema("idem")
@@ -438,6 +440,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 _D3_SCOPED_ROOT_MIGRATION,
                 _D3_ACTIVITY_MIGRATION,
                 _D3_EVENT_MIGRATION,
+                _D0F_ENVELOPE_MIGRATION,
             ],
         )
         self.assertEqual(ledger, _ALL_MIGRATIONS)
@@ -485,6 +488,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 _D3_SCOPED_ROOT_MIGRATION,
                 _D3_ACTIVITY_MIGRATION,
                 _D3_EVENT_MIGRATION,
+                _D0F_ENVELOPE_MIGRATION,
             ],
         )
         self.assertEqual(
@@ -700,7 +704,13 @@ class MigrationRunnerTest(unittest.TestCase):
 
         self.assertEqual(
             result.applied,
-            [_D3_COMMAND_MIGRATION, _D3_SCOPED_ROOT_MIGRATION, _D3_ACTIVITY_MIGRATION, _D3_EVENT_MIGRATION],
+            [
+                _D3_COMMAND_MIGRATION,
+                _D3_SCOPED_ROOT_MIGRATION,
+                _D3_ACTIVITY_MIGRATION,
+                _D3_EVENT_MIGRATION,
+                _D0F_ENVELOPE_MIGRATION,
+            ],
         )
         self.assertEqual(columns, list(_D3_COMMAND_COLUMNS))
         self.assertEqual(
@@ -864,7 +874,13 @@ class MigrationRunnerTest(unittest.TestCase):
             again = mr.apply_pending_migrations(conn, schema=schema)
         self.assertEqual(
             recovered.applied,
-            [_D3_COMMAND_MIGRATION, _D3_SCOPED_ROOT_MIGRATION, _D3_ACTIVITY_MIGRATION, _D3_EVENT_MIGRATION],
+            [
+                _D3_COMMAND_MIGRATION,
+                _D3_SCOPED_ROOT_MIGRATION,
+                _D3_ACTIVITY_MIGRATION,
+                _D3_EVENT_MIGRATION,
+                _D0F_ENVELOPE_MIGRATION,
+            ],
         )
         self.assertEqual(again.applied, [])
         self.assertEqual(again.already_applied, _ALL_MIGRATIONS)
@@ -944,7 +960,15 @@ class MigrationRunnerTest(unittest.TestCase):
                 )
                 checks = cur.fetchall()
 
-        self.assertEqual(result.applied, [_D3_SCOPED_ROOT_MIGRATION, _D3_ACTIVITY_MIGRATION, _D3_EVENT_MIGRATION])
+        self.assertEqual(
+            result.applied,
+            [
+                _D3_SCOPED_ROOT_MIGRATION,
+                _D3_ACTIVITY_MIGRATION,
+                _D3_EVENT_MIGRATION,
+                _D0F_ENVELOPE_MIGRATION,
+            ],
+        )
         self.assertEqual(session_columns, list(_D3_SCOPED_SESSION_COLUMNS))
         self.assertEqual(operation_columns, list(_D3_OPERATION_ROOT_COLUMNS))
         self.assertEqual(session_sentinel, ("", "", "", "", "", "", "", "", 0, "", ""))
@@ -1134,7 +1158,12 @@ class MigrationRunnerTest(unittest.TestCase):
             again = mr.apply_pending_migrations(conn, schema=schema)
         self.assertEqual(
             recovered.applied,
-            [_D3_SCOPED_ROOT_MIGRATION, _D3_ACTIVITY_MIGRATION, _D3_EVENT_MIGRATION],
+            [
+                _D3_SCOPED_ROOT_MIGRATION,
+                _D3_ACTIVITY_MIGRATION,
+                _D3_EVENT_MIGRATION,
+                _D0F_ENVELOPE_MIGRATION,
+            ],
         )
         self.assertEqual(again.applied, [])
         self.assertEqual(again.already_applied, _ALL_MIGRATIONS)
@@ -1214,7 +1243,10 @@ class MigrationRunnerTest(unittest.TestCase):
                 )
                 checks = cur.fetchall()
 
-        self.assertEqual(result.applied, [_D3_ACTIVITY_MIGRATION, _D3_EVENT_MIGRATION])
+        self.assertEqual(
+            result.applied,
+            [_D3_ACTIVITY_MIGRATION, _D3_EVENT_MIGRATION, _D0F_ENVELOPE_MIGRATION],
+        )
         self.assertEqual(run_columns, list(_D3_ACTIVITY_RUN_COLUMNS))
         self.assertEqual(attempt_columns, list(_D3_ACTIVITY_ATTEMPT_COLUMNS))
         self.assertEqual(run_sentinel, ("", "", "", None, "", ""))
@@ -1416,7 +1448,10 @@ class MigrationRunnerTest(unittest.TestCase):
         with psycopg.connect(self.dsn, client_encoding="utf8") as conn:
             recovered = mr.apply_pending_migrations(conn, schema=schema)
             again = mr.apply_pending_migrations(conn, schema=schema)
-        self.assertEqual(recovered.applied, [_D3_ACTIVITY_MIGRATION, _D3_EVENT_MIGRATION])
+        self.assertEqual(
+            recovered.applied,
+            [_D3_ACTIVITY_MIGRATION, _D3_EVENT_MIGRATION, _D0F_ENVELOPE_MIGRATION],
+        )
         self.assertEqual(again.applied, [])
         self.assertEqual(again.already_applied, _ALL_MIGRATIONS)
 
@@ -1487,7 +1522,7 @@ class MigrationRunnerTest(unittest.TestCase):
             conn.commit()
 
         sentinel = ("", "", "", "", None, "", 0, 0, "", "", None)
-        self.assertEqual(result.applied, [_D3_EVENT_MIGRATION])
+        self.assertEqual(result.applied, [_D3_EVENT_MIGRATION, _D0F_ENVELOPE_MIGRATION])
         self.assertEqual(columns, list(_D3_EVENT_COLUMNS))
         self.assertEqual(legacy_sentinel, sentinel)
         self.assertEqual(current_writer_sentinel, sentinel)
@@ -1618,7 +1653,7 @@ class MigrationRunnerTest(unittest.TestCase):
         with psycopg.connect(self.dsn, client_encoding="utf8") as conn:
             recovered = mr.apply_pending_migrations(conn, schema=schema)
             again = mr.apply_pending_migrations(conn, schema=schema)
-        self.assertEqual(recovered.applied, [_D3_EVENT_MIGRATION])
+        self.assertEqual(recovered.applied, [_D3_EVENT_MIGRATION, _D0F_ENVELOPE_MIGRATION])
         self.assertEqual(again.applied, [])
         self.assertEqual(again.already_applied, _ALL_MIGRATIONS)
 

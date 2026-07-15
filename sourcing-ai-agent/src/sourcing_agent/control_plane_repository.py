@@ -9,9 +9,9 @@ directly (owner-ratified 2026-06-21).
 
 Design notes:
 - Column ``Kind`` is the typed contract. ``JSON``/``JSON_STR_LIST`` today (de)serialize a TEXT column
-  that holds JSON; the B4.2 schema migration adds ``JSONB`` and ``TIMESTAMPTZ`` kinds whose only change
-  is the storage/coercion, leaving every descriptor and every caller untouched. That is the whole point
-  of routing all (de)serialization through one declarative place.
+  that holds JSON; D0f adds an exact nullable, timezone-aware ``TIMESTAMPTZ`` codec. A later B4.2
+  schema migration may add ``JSONB`` while leaving every descriptor and caller untouched. That is the
+  whole point of routing all (de)serialization through one declarative place.
 - Row values arrive as ``dict`` from the PG adapter (psycopg ``dict_row``). ``_row_value`` also tolerates
   mapping-like rows for safety.
 """
@@ -22,6 +22,7 @@ import json
 from collections.abc import Callable
 from dataclasses import dataclass
 from dataclasses import field as dataclass_field
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, NoReturn
 
@@ -64,7 +65,8 @@ class Kind(Enum):
     JSON = "json"  # text holding a JSON object -> dict (non-dict/parse-fail -> {}); == _loads_json_dict
     JSON_LIST = "json_list"  # text holding a JSON array -> list verbatim (non-list/fail -> []); == _loads_json_list
     JSON_STR_LIST = "json_str_list"  # text holding a JSON array -> list[non-empty stripped str] (filtered)
-    # B4.2 schema migration will add: JSONB, TIMESTAMPTZ (same descriptor API, different coercion).
+    TIMESTAMPTZ = "timestamptz"  # nullable timezone-aware datetime; normalized to UTC, never string-coerced
+    # B4.2 schema migration will add: JSONB (same descriptor API, different coercion).
 
 
 def _row_value(row: Any, name: str, default: Any = None) -> Any:
@@ -99,6 +101,23 @@ class Column:
 
 
 def _decode(col: Column, value: Any) -> Any:
+    if col.kind is Kind.TIMESTAMPTZ:
+        if value is None:
+            return None
+        parsed_timestamp: datetime
+        if isinstance(value, datetime):
+            parsed_timestamp = value
+        elif type(value) is str and value:
+            candidate = value[:-1] + "+00:00" if value.endswith("Z") else value
+            try:
+                parsed_timestamp = datetime.fromisoformat(candidate)
+            except ValueError as exc:
+                raise ValueError(f"invalid TIMESTAMPTZ value for {col.name}") from exc
+        else:
+            raise TypeError(f"invalid TIMESTAMPTZ value type for {col.name}")
+        if parsed_timestamp.tzinfo is None or parsed_timestamp.utcoffset() is None:
+            raise ValueError(f"naive TIMESTAMPTZ value for {col.name}")
+        return parsed_timestamp.astimezone(timezone.utc)
     if col.kind is Kind.STR:
         text = str(value or "")
         if not text and col.read_default is not None:
@@ -150,6 +169,14 @@ def _decode(col: Column, value: Any) -> Any:
 
 
 def _encode(col: Column, value: Any, *, strip_text: bool, clamp_int: bool) -> Any:
+    if col.kind is Kind.TIMESTAMPTZ:
+        if value is None:
+            return None
+        if not isinstance(value, datetime):
+            raise TypeError(f"TIMESTAMPTZ write requires datetime for {col.name}")
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError(f"TIMESTAMPTZ write requires timezone for {col.name}")
+        return value.astimezone(timezone.utc)
     if col.kind in (Kind.JSON, Kind.JSON_LIST, Kind.JSON_STR_LIST):
         empty: Any = {} if col.kind is Kind.JSON else []
         # json_safe_payload mirrors the former hand builders' json.dumps(_json_safe_payload(...)) so the

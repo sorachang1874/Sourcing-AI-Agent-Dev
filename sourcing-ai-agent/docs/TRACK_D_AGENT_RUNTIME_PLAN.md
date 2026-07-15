@@ -344,10 +344,10 @@ serve、会话/事件层、planner loop），用一个垂直切片证明闭环�
   `dispatch_exposures` aggregate；exact parent/child `21/75` manifests、keys/indexes、`16/29` checks、immutable
   pricing/reconciliation registries、eight-method CAS、source-dependent terminal mapping 与 parent-first settlement
   已关闭。strict-D3 live/simulate/scripted 均用 durable exposure；live money positive、simulate/scripted zero，
-  replay 等待 D0 envelope + schema revision。OB-2.2/OB-10.3 仅为 `decision_locked_not_implemented`；current baseline/
-  descriptor=`83/41`，两表与 owner/registries/store wiring 仍 physical absent；exact Decimal/TIMESTAMPTZ codec、
-  specialized insert-once/CAS 与 durable envelope ref grammar 仍 prerequisite。该 decision-only batch 零 SQL/
-  descriptor/repository/runtime/live，
+  replay 等待 schema revision。OB-2.2/OB-10.3 仅为 `decision_locked_not_implemented`；current baseline/
+  descriptor=`83/41`，两表与 owner/registries/store wiring 仍 physical absent；D0f 已提供 exact TIMESTAMPTZ codec 与
+  durable envelope ref grammar，exact Decimal、cost-table specialized insert-once/CAS 与 receipts 仍 prerequisite。
+  该 decision-only batch 零 SQL/descriptor/repository/runtime/live，
   不授权 migration 或 rollout step 3；verification intent、response/failure receipt、late quarantine 与其余 gates
   继续 open。
 - D3c2h0 decision-lock candidate 仅 fixed-forward remaining evidence surfaces 的 cross-contract 关系：所有
@@ -357,11 +357,18 @@ serve、会话/事件层、planner loop），用一个垂直切片证明闭环�
   exposure terminalization、quarantine permission=0；response-classification 必须先持 `d3-dispatch-v2` 并锁/验
   complete global owner-row prefix、从 stored current state 判 current/stale，才可在 exposure tail optional quarantine，
   且进入 exposure 后不得回头。caller flag/callback/stale `ClaimReceipt` 不具分类权；pending classification
-  retry/recovery/idempotency 留 D3c2h1。current `ModelInvocationEnvelopeV1` 继续独占 canonical shape，D0f 是 sole
-  durable ref owner hard prerequisite，D3c2h1 才能 ratify exact manifests。initial v1 仅 `model_tool_v1` +
+  retry/recovery/idempotency 留 D3c2h1。current `ModelInvocationEnvelopeV1` 继续独占 canonical shape；D0f 已关闭 sole
+  durable ref owner hard prerequisite，但 D3c2h1 仍须 ratify exact manifests。initial v1 仅 `model_tool_v1` +
   live/simulate/scripted；non-live zero-cost evidence 可达，replay zero-write，Harvest/provider-search 另需
   owner-ratified variant。该批 oracle=`9 passed`，零 exact schema/SQL/descriptor/repository/runtime/live，仍不授权
   migration 或 rollout step 3。
+- D0f implementation candidate 已以 sole PG-only `ModelInvocationEnvelopeRepository` 持久化 canonical
+  `ModelInvocationEnvelopeV1`：full five-field PFX owner ref、15-column immutable evidence row、specialized
+  advisory-lock/`FOR UPDATE`/plain INSERT exact replay、live/simulate/scripted strict presence、DB-clock
+  retained→purged-tombstone CAS 与 exact `TIMESTAMPTZ` codec。它不实现 logical result-slot、receipt/quarantine、
+  cost ledger/Decimal、strict runtime writer、provider call、live gate 或 served tool；author validation 已记录，fresh
+  pinned formal review pending。下一顺序仍为 D3c2h1 exact evidence-surface decision lock，再按 ratified manifest 落
+  remaining Migration A evidence fragments 与 Migration B-D。
 
 ### D4 — 之后（本文只圈定，不展开）
 

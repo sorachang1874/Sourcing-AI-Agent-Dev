@@ -129,6 +129,7 @@ CONTROL_PLANE_LIVE_TABLES = (
     "linkedin_profile_registry_events",
     "linkedin_profile_registry_backfill_runs",
     "runtime_provider_limiter_leases",
+    "model_invocation_envelopes",
 )
 
 _PRIMARY_KEY_COLUMNS = {
@@ -1110,6 +1111,214 @@ class LiveControlPlanePostgresAdapter:
                     connection.close()
                 except Exception:
                     pass
+
+    def insert_model_invocation_envelope(
+        self,
+        *,
+        table_name: str,
+        row: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        """Plain INSERT or exact immutable replay for one full-PFX envelope.
+
+        This table intentionally bypasses ``upsert_row``: a generic
+        ``ON CONFLICT DO UPDATE`` would make canonical evidence replaceable.
+        """
+
+        if _normalize_postgres_identifier(table_name) != "model_invocation_envelopes":
+            raise ValueError("insert_model_invocation_envelope requires table_name=model_invocation_envelopes")
+        if not self.should_prefer_read("model_invocation_envelopes"):
+            return None
+        expected_keys = {
+            "runtime_namespace",
+            "provider_mode",
+            "workspace_id",
+            "scope_digest",
+            "coordination_plan_review_id",
+            "model_invocation_envelope_ref",
+            "envelope_schema_version",
+            "envelope_digest",
+            "envelope_record_json",
+            "retention_policy_version",
+        }
+        if set(row) != expected_keys:
+            raise ValueError("model_invocation_envelope_insert_keyset_invalid")
+        payload = dict(row)
+        pfx_columns = (
+            "runtime_namespace",
+            "provider_mode",
+            "workspace_id",
+            "scope_digest",
+            "coordination_plan_review_id",
+        )
+        pfx_values = tuple(payload[column] for column in pfx_columns)
+        reference = str(payload["model_invocation_envelope_ref"])
+        digest = str(payload["envelope_digest"])
+        lock_key = f"model_invocation_envelopes:{reference}"
+        self.ensure_bootstrapped()
+        attempt = 0
+        while True:
+            try:
+                with self._connect() as connection:
+                    with connection.cursor() as cursor:
+                        self._acquire_transaction_lock(cursor, lock_key)
+                        prefix_where = " AND ".join(f"{column} = %s" for column in pfx_columns)
+                        cursor.execute(
+                            f"SELECT * FROM model_invocation_envelopes WHERE {prefix_where} "
+                            "AND envelope_digest = %s FOR UPDATE",
+                            (*pfx_values, digest),
+                        )
+                        by_digest = _fetch_one_dict_row(cursor, cursor.fetchone())
+                        cursor.execute(
+                            f"SELECT * FROM model_invocation_envelopes WHERE {prefix_where} "
+                            "AND model_invocation_envelope_ref = %s FOR UPDATE",
+                            (*pfx_values, reference),
+                        )
+                        by_reference = _fetch_one_dict_row(cursor, cursor.fetchone())
+                        if by_digest is not None or by_reference is not None:
+                            if by_digest is None or by_reference is None:
+                                raise ValueError("model_invocation_envelope_collision:ref_or_digest")
+                            if by_digest != by_reference:
+                                raise ValueError("model_invocation_envelope_collision:identity_split")
+                            immutable_identity_fields = (
+                                *pfx_columns,
+                                "model_invocation_envelope_ref",
+                                "envelope_schema_version",
+                                "envelope_digest",
+                                "retention_policy_version",
+                            )
+                            mismatches = [
+                                field_name
+                                for field_name in immutable_identity_fields
+                                if by_digest.get(field_name) != payload.get(field_name)
+                            ]
+                            if mismatches:
+                                raise ValueError("model_invocation_envelope_collision:" + ",".join(sorted(mismatches)))
+                            # A valid tombstone is an immutable terminal identity. Return it
+                            # unchanged so the typed repository reports PurgedError; comparing
+                            # its intentionally erased canonical JSON to the retry payload would
+                            # misclassify the lifecycle terminal as an identity collision.
+                            if by_digest.get("retention_state") == "purged_tombstone":
+                                connection.commit()
+                                return by_digest
+                            if by_digest.get("envelope_record_json") != payload.get("envelope_record_json"):
+                                raise ValueError("model_invocation_envelope_collision:envelope_record_json")
+                            connection.commit()
+                            return by_digest
+
+                        columns = tuple(payload)
+                        cursor.execute(
+                            "INSERT INTO model_invocation_envelopes ("
+                            + ", ".join(columns)
+                            + ", retained_until) VALUES ("
+                            + ", ".join(["%s"] * len(columns))
+                            + ", transaction_timestamp() + interval '30 days') RETURNING *",
+                            tuple(payload[column] for column in columns),
+                        )
+                        inserted = _fetch_one_dict_row(cursor, cursor.fetchone())
+                    connection.commit()
+                    return inserted
+            except Exception as exc:
+                attempt += 1
+                if not _is_retryable_postgres_exception(exc) or attempt >= _CONTROL_PLANE_POSTGRES_MAX_RETRIES:
+                    raise
+                time.sleep(_control_plane_postgres_retry_delay_seconds(attempt))
+
+    def get_model_invocation_envelope(
+        self,
+        *,
+        table_name: str,
+        runtime_namespace: str,
+        provider_mode: str,
+        workspace_id: str,
+        scope_digest: str,
+        coordination_plan_review_id: int,
+        model_invocation_envelope_ref: str,
+        envelope_digest: str,
+    ) -> dict[str, Any] | None:
+        if _normalize_postgres_identifier(table_name) != "model_invocation_envelopes":
+            raise ValueError("get_model_invocation_envelope requires table_name=model_invocation_envelopes")
+        if not self.should_prefer_read("model_invocation_envelopes"):
+            return None
+        return self.select_one(
+            "model_invocation_envelopes",
+            where_sql=(
+                "runtime_namespace = %s AND provider_mode = %s AND workspace_id = %s "
+                "AND scope_digest = %s AND coordination_plan_review_id = %s "
+                "AND model_invocation_envelope_ref = %s AND envelope_digest = %s"
+            ),
+            params=[
+                runtime_namespace,
+                provider_mode,
+                workspace_id,
+                scope_digest,
+                coordination_plan_review_id,
+                model_invocation_envelope_ref,
+                envelope_digest,
+            ],
+        )
+
+    def purge_expired_model_invocation_envelopes(
+        self,
+        *,
+        table_name: str,
+        retention_policy_version: str,
+        limit: int,
+    ) -> list[dict[str, Any]]:
+        """DB-clock retained-to-tombstone CAS for the fixed 30-day policy."""
+
+        if _normalize_postgres_identifier(table_name) != "model_invocation_envelopes":
+            raise ValueError("purge_expired_model_invocation_envelopes requires table_name=model_invocation_envelopes")
+        if not self.should_prefer_read("model_invocation_envelopes"):
+            return []
+        self.ensure_bootstrapped()
+        attempt = 0
+        while True:
+            try:
+                with self._connect() as connection:
+                    with connection.cursor() as cursor:
+                        cursor.execute(
+                            """
+                            WITH candidates AS (
+                                SELECT runtime_namespace, provider_mode, workspace_id, scope_digest,
+                                       coordination_plan_review_id, model_invocation_envelope_ref,
+                                       state_version
+                                FROM model_invocation_envelopes
+                                WHERE retention_policy_version = %s
+                                  AND retention_state = 'retained'
+                                  AND retained_until <= transaction_timestamp()
+                                ORDER BY retained_until, runtime_namespace, provider_mode, workspace_id,
+                                         scope_digest, coordination_plan_review_id,
+                                         model_invocation_envelope_ref
+                                LIMIT %s
+                                FOR UPDATE SKIP LOCKED
+                            )
+                            UPDATE model_invocation_envelopes AS envelopes
+                            SET envelope_record_json = NULL,
+                                retention_state = 'purged_tombstone',
+                                purged_at = transaction_timestamp(),
+                                state_version = envelopes.state_version + 1
+                            FROM candidates
+                            WHERE envelopes.runtime_namespace = candidates.runtime_namespace
+                              AND envelopes.provider_mode = candidates.provider_mode
+                              AND envelopes.workspace_id = candidates.workspace_id
+                              AND envelopes.scope_digest = candidates.scope_digest
+                              AND envelopes.coordination_plan_review_id = candidates.coordination_plan_review_id
+                              AND envelopes.model_invocation_envelope_ref = candidates.model_invocation_envelope_ref
+                              AND envelopes.state_version = candidates.state_version
+                              AND envelopes.retention_state = 'retained'
+                              AND envelopes.retained_until <= transaction_timestamp()
+                            RETURNING envelopes.*
+                            """,
+                            (retention_policy_version, limit),
+                        )
+                        rows = _fetch_all_dict_rows(cursor)
+                    connection.commit()
+                    return rows
+            except Exception as exc:
+                attempt += 1
+                if not _is_retryable_postgres_exception(exc) or attempt >= _CONTROL_PLANE_POSTGRES_MAX_RETRIES:
+                    raise
+                time.sleep(_control_plane_postgres_retry_delay_seconds(attempt))
 
     def insert_row_with_generated_id(
         self,
