@@ -647,9 +647,7 @@ class D1gOperationAPIExactOwnerPGTest(PGDurableRuntimeTestMixin, unittest.TestCa
                 command_type="crm.record.update",
                 owner="crm_writer",
             )
-            protected_before = self._table_state(
-                ("workflow_commands", "crm_records", "crm_engagements", "crm_tasks", "crm_events")
-            )
+            protected_before = self._table_state()
             result = self.orchestrator.dispatch_operation_run_api(
                 submitted["operation_run"]["operation_run_id"],
                 {"actor": "alice"},
@@ -657,10 +655,7 @@ class D1gOperationAPIExactOwnerPGTest(PGDurableRuntimeTestMixin, unittest.TestCa
             )
             self.assertEqual(result.get("status"), "approval_required", result)
             self.assertNotIn("workflow_command", result)
-            self.assertEqual(
-                self._table_state(("workflow_commands", "crm_records", "crm_engagements", "crm_tasks", "crm_events")),
-                protected_before,
-            )
+            self.assertEqual(self._table_state(), protected_before)
             self.assertEqual(
                 self.store.get_workflow_command(command["command_id"])["status"],
                 command["status"],

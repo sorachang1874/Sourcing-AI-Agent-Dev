@@ -112,7 +112,9 @@ workspace, and name the current run. Failure returns the same run not-found shap
 Open mode passes an empty expected workspace and retains legacy invalid-reference behavior. A valid planned replay in
 either mode still passes the same persisted request validator and adapter approval/target guards. The captured replay
 is passed into the adapter, avoiding a second mutable-reference read and preserving zero compatibility writes for a
-valid replay.
+valid replay. If an already-planned sensitive CRM action no longer has valid approval, the adapter returns the same
+approval requirement from the persisted action/run without writing action, run, event, command, or CRM state; it does
+not run the normal first-plan approval writer against a separately claimable command.
 
 ## 5. Compatibility and residual boundaries
 
@@ -122,7 +124,9 @@ valid replay.
 - R-019 remains open. D1g adds authorization-only read preflights and a lock-internal recheck, but no state mutator,
   no `_connect_with_transaction_lock` caller, and no claim/terminal/UoW implementation. The production state-sync
   caller ratchet remains **26**. The existing event/action/run/command atomicity, generation/lease, and total lock-budget
-  obligations are unchanged.
+  obligations are unchanged. Pinned `c7d2e24` advisory re-raised this boundary because the first fixed-forward let a
+  captured-plan approval guard call the existing action/run/event writer; the current fixed-forward makes that exact
+  replay branch read-only and expands its regression snapshot to all D1g tables.
 - R-028 remains open and is not triggered by D1g. No CRM writer or effect boundary changes; D1f's target
   owner/version revalidation and the outstanding command/effect/terminal UoW remain exactly as documented.
 - R-029 remained open at **12/15 schema-less** actions at the D1g checkpoint; post-D1h current is **11/15**. D1g
@@ -173,7 +177,8 @@ Evidence confirmed so far on the current candidate tree:
 - `tests/test_api_request_scope.py` plus the expanded D1g real-PG matrix: **29 passed + 107 subtests**;
 - exact D1g matrix alone: **7 passed + 35 subtests**, including pre-limit shared-workflow command/malformed-event
   probes; blank/missing/foreign/same-workspace-other planned-reference zero-write; and authenticated/open approval,
-  schema-invalid, and pin-drift planned positives;
+  schema-invalid, and pin-drift planned positives. The latest approval replay assertion uses the full D1g table
+  snapshot after pinned `c7d2e24` advisory=`NO-GO 0/0/1/0`;
 - dispatch registry plus two exact characterization adjacency probes: **25 passed**; the stale probe seams exposed by
   `646e596` are updated without weakening the frozen selector contract;
 - combined D1 request/schema/activation adjacency: **117 passed + 198 subtests**;

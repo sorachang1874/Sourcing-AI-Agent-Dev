@@ -201,7 +201,10 @@
   已把 invalid-ref fail-closed 与 valid replay 分为两阶段：valid ref 只读取一次并继续通过 persisted request、
   target 与 approval guards，且不写 compatibility observation；auth/open approval + schema-invalid/pin-drift
   positives 与三个 stale characterization probes 已补，current exact=`7+35 subtests`、request+D1g=`29+107`、
-  registry/probe adjacency=`25`。Fresh pinned review pending，R-031 仍 review-pending。D1g checkpoint 不迁移当时其余
+  registry/probe adjacency=`25`。Pinned `c7d2e24` advisory=`NO-GO 0/0/1/0` 进一步发现 planned sensitive-CRM
+  approval 分支在返回 captured plan 前写 action/run/event，触发 R-019 next-mutation tripwire；current fixed-forward
+  对 existing-plan approval requirement 只读返回，并把回归扩为全 D1g 表零写。Fresh pinned re-review pending，
+  R-031 仍 review-pending。D1g checkpoint 不迁移当时其余
   12 个 schema-less action；post-D1h current 为 11，不改 served=0、不授权 live/provider。
 - [x] D1h CRM Public Web action activation current author candidate（2026-07-16）：将
   `enrich_person_public_web` 作为第 4 个 schema-defined action 激活，当前 **4 schema-defined / 11 schema-less /

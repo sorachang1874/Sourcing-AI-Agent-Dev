@@ -35,8 +35,11 @@
   once, runs request/target/approval guards, skips compatibility writes, and updates post-D1h wording. Exact evidence=
   D1g **7 + 35 subtests**, request+D1g **29 + 107 subtests**, registry/stale-probe adjacency **25**, combined D1
   **117 + 198 subtests**, and full Operation runtime **136 + 503 subtests**. Global mypy remains exactly
-  **81 errors / 4 files**. Fresh pinned review remains pending. R-019's **26**-caller ratchet and R-028 remain
-  unchanged. No provider/model/live path is authorized.
+  **81 errors / 4 files**. Pinned `c7d2e24` advisory=`NO-GO 0/0/1/0`: valid planned sensitive-CRM replay ran the
+  existing approval state/event writer before returning its captured command, crossing R-019's next-mutation tripwire.
+  The current fixed-forward returns the same approval requirement read-only when a captured plan already exists, and
+  the regression now snapshots every D1g table. Fresh pinned re-review remains pending. R-019's **26**-caller ratchet
+  and R-028 remain unchanged. No provider/model/live path is authorized.
 
 ### Track D D1h CRM Public Web action activation
 

@@ -137,7 +137,9 @@ serve、会话/事件层、planner loop），用一个垂直切片证明闭环�
   D1g checkpoint 仍不关闭 R-019/R-028、不迁移当时其余 12 个 schema-less action、不改变 served=0。Pinned
   `646e596` advisory=`NO-GO 0/0/1/1`：invalid-reference closure 通过；fixed-forward 现把 valid planned response
   捕获一次并继续经过 schema/request validator 与 approval/target guard，同时跳过 compatibility write，避免
-  mutable ref 双读。Exact=`7+35 subtests`、request+D1g=`29+107`、registry/probe=`25`；fresh pinned review pending。Reviewed artifact 前不得据此宣称
+  mutable ref 双读。Pinned `c7d2e24` advisory=`NO-GO 0/0/1/0` 发现 captured-plan CRM approval 仍写
+  action/run/event；current fixed-forward 在 existing-plan 分支只读返回 approval requirement，并以全表快照
+  锁定零写。Exact=`7+35 subtests`、request+D1g=`29+107`、registry/probe=`25`；fresh pinned re-review pending。Reviewed artifact 前不得据此宣称
   hosted/live multi-user signoff。D1h current author candidate 随后将
   `enrich_person_public_web` 作为第 4 个 schema-defined action 激活：authenticated exact-owner CRM batch binder
   生成 per-record workspace/owner/version snapshot，dispatch 写新 plan 前与 queue-command owner 建 batch/run 前

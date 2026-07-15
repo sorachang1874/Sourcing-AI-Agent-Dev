@@ -51632,6 +51632,16 @@ class SourcingOrchestrator:
             }
         approval_reason = self._crm_writer_operation_approval_reason(action)
         if approval_reason and str(action.get("approval_status") or "").strip() != "approved":
+            if preflighted_existing_plan:
+                return {
+                    "status": "approval_required",
+                    "reason": approval_reason,
+                    "action": action,
+                    "operation_run": operation_run,
+                    "events": [],
+                    "module_state_mutated": False,
+                    "contract": "w9_operation_run_dispatch_v1",
+                }
             next_action = self.store.repos.workflow_runtime.update_action_state(
                 str(action.get("action_id") or ""),
                 status="approval_required",
