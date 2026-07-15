@@ -2444,16 +2444,28 @@ class WorkflowRuntimeRepository(Repository):
             "should_prefer_read returned False; legacy SQLite tail retired (B4)"
         )
 
-    def list_operation_events(self, event_stream_id: str, *, limit: int = 1000) -> list[dict[str, Any]]:
+    def list_operation_events(
+        self,
+        event_stream_id: str,
+        *,
+        expected_workspace_id: str = "",
+        limit: int = 1000,
+    ) -> list[dict[str, Any]]:
         self._require_postgres_for_durable_runtime("operation_events")
         normalized_stream_id = str(event_stream_id or "").strip()
         if not normalized_stream_id:
             return []
+        clauses = ["event_stream_id = %s"]
+        params = [normalized_stream_id]
+        normalized_workspace_id = str(expected_workspace_id or "").strip()
+        if normalized_workspace_id:
+            clauses.append("workspace_id = %s")
+            params.append(normalized_workspace_id)
         postgres_rows = self._select_rows(
             "operation_events",
             row_builder=self._operation_event_from_row,
-            where_sql="event_stream_id = %s",
-            params=[normalized_stream_id],
+            where_sql=" AND ".join(clauses),
+            params=params,
             order_by_sql="sequence_number ASC",
             limit=max(0, int(limit or 0)),
         )
@@ -2461,16 +2473,28 @@ class WorkflowRuntimeRepository(Repository):
             return postgres_rows
         return []
 
-    def list_operation_events_for_action(self, action_id: str, *, limit: int = 1000) -> list[dict[str, Any]]:
+    def list_operation_events_for_action(
+        self,
+        action_id: str,
+        *,
+        expected_workspace_id: str = "",
+        limit: int = 1000,
+    ) -> list[dict[str, Any]]:
         self._require_postgres_for_durable_runtime("operation_events")
         normalized_action_id = str(action_id or "").strip()
         if not normalized_action_id:
             return []
+        clauses = ["action_id = %s"]
+        params = [normalized_action_id]
+        normalized_workspace_id = str(expected_workspace_id or "").strip()
+        if normalized_workspace_id:
+            clauses.append("workspace_id = %s")
+            params.append(normalized_workspace_id)
         postgres_rows = self._select_rows(
             "operation_events",
             row_builder=self._operation_event_from_row,
-            where_sql="action_id = %s",
-            params=[normalized_action_id],
+            where_sql=" AND ".join(clauses),
+            params=params,
             order_by_sql="recorded_at ASC, event_stream_id ASC, sequence_number ASC",
             limit=max(0, int(limit or 0)),
         )

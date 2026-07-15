@@ -48868,7 +48868,10 @@ class SourcingOrchestrator:
             "status": "ok",
             "operation_runs": [
                 (
-                    self._operation_run_api_record_with_status_summary(operation_run)
+                    self._operation_run_api_record_with_status_summary(
+                        operation_run,
+                        expected_workspace_id=expected_workspace_id,
+                    )
                     if include_status_summary
                     else self._operation_run_api_record(operation_run)
                 )
@@ -48982,7 +48985,10 @@ class SourcingOrchestrator:
                 "reason": exc.reason,
             }
             if exc.record_kind == "operation_run":
-                conflict["operation_run"] = self._operation_run_api_record_with_status_summary(exc.record)
+                conflict["operation_run"] = self._operation_run_api_record_with_status_summary(
+                    exc.record,
+                    expected_workspace_id=expected_workspace_id,
+                )
             elif exc.record_kind == "action":
                 conflict["action"] = self._operation_action_api_record(exc.record)
             return conflict
@@ -48991,9 +48997,17 @@ class SourcingOrchestrator:
             "idempotent_replay": idempotent_replay,
             "action": self._operation_action_api_record(result.action),
             "operation_run": (
-                self._operation_run_api_record_with_status_summary(result.operation_run) if result.operation_run else {}
+                self._operation_run_api_record_with_status_summary(
+                    result.operation_run,
+                    expected_workspace_id=expected_workspace_id,
+                )
+                if result.operation_run
+                else {}
             ),
-            "events": self._operation_event_api_records(result.events),
+            "events": self._operation_event_api_records(
+                result.events,
+                expected_workspace_id=expected_workspace_id,
+            ),
             "module_state_mutated": False,
             "contract": "w9_operation_action_submit_v1",
         }
@@ -49279,18 +49293,35 @@ class SourcingOrchestrator:
         operation_run: dict[str, Any],
         action: dict[str, Any],
         contract: str,
+        expected_workspace_id: str = "",
     ) -> dict[str, Any]:
         if str(operation_run.get("status") or "").strip() != "planned":
             return {}
+        expected_workspace = str(expected_workspace_id or "").strip()
+        operation_run_id = str(operation_run.get("operation_run_id") or "").strip()
+
+        def planned_reference_not_found() -> dict[str, Any]:
+            return {"status": "not_found", "operation_run_id": operation_run_id} if expected_workspace else {}
+
         workflow_ref = dict(operation_run.get("workflow_ref") or {})
         command_id = str(workflow_ref.get("command_id") or "").strip()
         if not command_id:
-            return {}
+            return planned_reference_not_found()
         command = self.store.get_workflow_command(command_id)
         if not command:
-            return {}
-        operation_run_id = str(operation_run.get("operation_run_id") or "").strip()
-        events = self.store.repos.workflow_runtime.list_operation_events(operation_run_id)
+            return planned_reference_not_found()
+        if expected_workspace:
+            command_operation_id = str(command.get("operation_id") or "").strip()
+            linked_operation = self._operation_run_for_expected_workspace(
+                command_operation_id,
+                expected_workspace_id=expected_workspace,
+            )
+            if not linked_operation or command_operation_id != operation_run_id:
+                return planned_reference_not_found()
+        events = self.store.repos.workflow_runtime.list_operation_events(
+            operation_run_id,
+            expected_workspace_id=expected_workspace,
+        )
         planned_event: dict[str, Any] = next(
             (
                 event
@@ -49326,7 +49357,10 @@ class SourcingOrchestrator:
             "status": "ok",
             "action": self._operation_action_api_record(action),
             "events": self._operation_event_api_records(
-                self.store.repos.workflow_runtime.list_operation_events(action["action_id"])
+                self.store.repos.workflow_runtime.list_operation_events(
+                    action["action_id"],
+                    expected_workspace_id=expected_workspace_id,
+                )
             ),
             "module_state_mutated": False,
             "contract": "w9_operation_action_query_v1",
@@ -49346,15 +49380,26 @@ class SourcingOrchestrator:
             return {"status": "not_found", "operation_run_id": str(operation_run_id or "").strip()}
         return {
             "status": "ok",
-            "operation_run": self._operation_run_api_record_with_status_summary(operation_run),
+            "operation_run": self._operation_run_api_record_with_status_summary(
+                operation_run,
+                expected_workspace_id=expected_workspace_id,
+            ),
             "events": self._operation_event_api_records(
-                self.store.repos.workflow_runtime.list_operation_events(operation_run["operation_run_id"])
+                self.store.repos.workflow_runtime.list_operation_events(
+                    operation_run["operation_run_id"],
+                    expected_workspace_id=expected_workspace_id,
+                )
             ),
             "module_state_mutated": False,
             "contract": "w9_operation_run_query_v1",
         }
 
-    def _operation_run_status_summary(self, operation_run: dict[str, Any]) -> dict[str, Any]:
+    def _operation_run_status_summary(
+        self,
+        operation_run: dict[str, Any],
+        *,
+        expected_workspace_id: str = "",
+    ) -> dict[str, Any]:
         record = dict(operation_run or {})
         operation_run_id = str(record.get("operation_run_id") or "").strip()
         if not operation_run_id:
@@ -49369,17 +49414,28 @@ class SourcingOrchestrator:
                 "latest_event_type": "",
                 "latest_workflow_command": {},
             }
-        commands = self.store.list_workflow_commands(operation_id=operation_run_id, limit=100)
+        commands = self.store.list_workflow_commands(
+            operation_id=operation_run_id,
+            linked_operation_workspace_id=expected_workspace_id,
+            limit=100,
+        )
         workflow_ref = dict(record.get("workflow_ref") or {})
         workflow_run_id = str(workflow_ref.get("workflow_run_id") or "").strip()
         if workflow_run_id:
             command_ids = {str(command.get("command_id") or "") for command in commands}
-            for command in self.store.list_workflow_commands(workflow_run_id=workflow_run_id, limit=100):
+            for command in self.store.list_workflow_commands(
+                workflow_run_id=workflow_run_id,
+                linked_operation_workspace_id=expected_workspace_id,
+                limit=100,
+            ):
                 command_id = str(command.get("command_id") or "")
                 if command_id and command_id not in command_ids:
                     commands.append(command)
                     command_ids.add(command_id)
-        events = self.store.repos.workflow_runtime.list_operation_events(operation_run_id)
+        events = self.store.repos.workflow_runtime.list_operation_events(
+            operation_run_id,
+            expected_workspace_id=expected_workspace_id,
+        )
 
         command_status_counts: dict[str, int] = {}
         for command in commands:
@@ -49435,12 +49491,20 @@ class SourcingOrchestrator:
     def _operation_event_api_record(self, event: dict[str, Any]) -> dict[str, Any]:
         return self._command_kernel._operation_event_public_api_record(event)
 
-    def _operation_event_api_records(self, events: Any) -> list[dict[str, Any]]:
+    def _operation_event_api_records(
+        self,
+        events: Any,
+        *,
+        expected_workspace_id: str = "",
+    ) -> list[dict[str, Any]]:
         if type(events) is not list:
             return []
+        expected_workspace = str(expected_workspace_id or "").strip()
         records: list[dict[str, Any]] = []
         for event in events:
             if type(event) is not dict:
+                continue
+            if expected_workspace and str(event.get("workspace_id") or "").strip() != expected_workspace:
                 continue
             projected = self._operation_event_api_record(event)
             if projected:
@@ -49523,8 +49587,45 @@ class SourcingOrchestrator:
                 trusted_execution_summary
             )
 
-    def _operation_run_control_response_record(self, response: dict[str, Any]) -> dict[str, Any]:
-        sanitized_source = _sanitize_workflow_command_public_mirror(response if type(response) is dict else {})
+    def _operation_run_control_response_record(
+        self,
+        response: dict[str, Any],
+        *,
+        expected_workspace_id: str = "",
+    ) -> dict[str, Any]:
+        raw_source = dict(response) if type(response) is dict else {}
+        expected_workspace = str(expected_workspace_id or "").strip()
+        if expected_workspace:
+            action = raw_source.get("action")
+            if type(action) is dict and str(action.get("workspace_id") or "").strip() != expected_workspace:
+                raw_source.pop("action", None)
+            for key in ("operation_run", "parent_operation_run"):
+                operation = raw_source.get(key)
+                if type(operation) is not dict:
+                    continue
+                persisted_operation = self._operation_run_for_expected_workspace(
+                    str(operation.get("operation_run_id") or ""),
+                    expected_workspace_id=expected_workspace,
+                )
+                if not persisted_operation:
+                    raw_source.pop(key, None)
+            command = raw_source.get("workflow_command")
+            if type(command) is dict and not self._operation_run_for_expected_workspace(
+                str(command.get("operation_id") or ""),
+                expected_workspace_id=expected_workspace,
+            ):
+                raw_source.pop("workflow_command", None)
+            event = raw_source.get("event")
+            if type(event) is dict and str(event.get("workspace_id") or "").strip() != expected_workspace:
+                raw_source.pop("event", None)
+            events = raw_source.get("events")
+            if type(events) is list:
+                raw_source["events"] = [
+                    event
+                    for event in events
+                    if type(event) is dict and str(event.get("workspace_id") or "").strip() == expected_workspace
+                ]
+        sanitized_source = _sanitize_workflow_command_public_mirror(raw_source)
         source = sanitized_source if type(sanitized_source) is dict else {}
         record = self._command_kernel._workflow_command_public_carrier_api_record(source)
         canonical_fields = {
@@ -49572,7 +49673,10 @@ class SourcingOrchestrator:
         for key in ("operation_run", "parent_operation_run"):
             value = source.get(key)
             if type(value) is dict and value:
-                record[key] = self._operation_run_api_record_with_status_summary(value)
+                record[key] = self._operation_run_api_record_with_status_summary(
+                    value,
+                    expected_workspace_id=expected_workspace,
+                )
         command = source.get("workflow_command")
         if type(command) is dict:
             projected_command = self._workflow_command_api_record(command)
@@ -49585,7 +49689,10 @@ class SourcingOrchestrator:
                 record["event"] = projected_event
         events = source.get("events")
         if type(events) is list:
-            record["events"] = self._operation_event_api_records(events)
+            record["events"] = self._operation_event_api_records(
+                events,
+                expected_workspace_id=expected_workspace,
+            )
         operation_run = record.get("operation_run")
         if type(operation_run) is dict and operation_run.get("control_state"):
             record["control_state"] = operation_run["control_state"]
@@ -49607,9 +49714,14 @@ class SourcingOrchestrator:
     def _operation_run_api_record_with_status_summary(
         self,
         operation_run: dict[str, Any],
+        *,
+        expected_workspace_id: str = "",
     ) -> dict[str, Any]:
         record = self._operation_run_api_record(operation_run)
-        record["status_summary"] = self._operation_run_status_summary(operation_run)
+        record["status_summary"] = self._operation_run_status_summary(
+            operation_run,
+            expected_workspace_id=expected_workspace_id,
+        )
         projected = self._command_kernel._workflow_command_public_carrier_api_record(record)
         self._reattach_trusted_operation_execution_summary(
             projected_operation_run=projected,
@@ -49637,10 +49749,18 @@ class SourcingOrchestrator:
             return {"status": "not_found", "operation_run_id": str(operation_run_id or "").strip()}
         workflow_ref = dict(operation_run.get("workflow_ref") or {})
         workflow_run_id = str(workflow_ref.get("workflow_run_id") or "").strip()
-        commands = self.store.list_workflow_commands(operation_id=operation_run["operation_run_id"], limit=100)
+        commands = self.store.list_workflow_commands(
+            operation_id=operation_run["operation_run_id"],
+            linked_operation_workspace_id=expected_workspace_id,
+            limit=100,
+        )
         if workflow_run_id:
             command_ids = {str(command.get("command_id") or "") for command in commands}
-            for command in self.store.list_workflow_commands(workflow_run_id=workflow_run_id, limit=100):
+            for command in self.store.list_workflow_commands(
+                workflow_run_id=workflow_run_id,
+                linked_operation_workspace_id=expected_workspace_id,
+                limit=100,
+            ):
                 command_id = str(command.get("command_id") or "")
                 if command_id and command_id not in command_ids:
                     commands.append(command)
@@ -49648,18 +49768,28 @@ class SourcingOrchestrator:
         return {
             "status": "ok",
             "action": self._operation_action_api_record(action) if action else {},
-            "operation_run": self._operation_run_api_record_with_status_summary(operation_run),
+            "operation_run": self._operation_run_api_record_with_status_summary(
+                operation_run,
+                expected_workspace_id=expected_workspace_id,
+            ),
             "action_events": self._operation_event_api_records(
-                self.store.repos.workflow_runtime.list_operation_events(str(action.get("action_id") or ""))
+                self.store.repos.workflow_runtime.list_operation_events(
+                    str(action.get("action_id") or ""),
+                    expected_workspace_id=expected_workspace_id,
+                )
             )
             if action
             else [],
             "operation_events": self._operation_event_api_records(
-                self.store.repos.workflow_runtime.list_operation_events(operation_run["operation_run_id"])
+                self.store.repos.workflow_runtime.list_operation_events(
+                    operation_run["operation_run_id"],
+                    expected_workspace_id=expected_workspace_id,
+                )
             ),
             "event_timeline": self._operation_event_api_records(
                 self.store.repos.workflow_runtime.list_operation_events_for_action(
-                    str(operation_run.get("action_id") or "")
+                    str(operation_run.get("action_id") or ""),
+                    expected_workspace_id=expected_workspace_id,
                 )
             ),
             "workflow_commands": [
@@ -49701,7 +49831,8 @@ class SourcingOrchestrator:
                 "action": self._operation_action_api_record(exc.record),
                 "events": self._operation_event_api_records(
                     self.store.repos.workflow_runtime.list_operation_events(
-                        str(exc.record.get("action_id") or action_id)
+                        str(exc.record.get("action_id") or action_id),
+                        expected_workspace_id=expected_workspace_id,
                     )
                 ),
                 "module_state_mutated": False,
@@ -49710,8 +49841,14 @@ class SourcingOrchestrator:
         return {
             "status": "queued",
             "action": self._operation_action_api_record(result.action),
-            "operation_run": self._operation_run_api_record_with_status_summary(result.operation_run),
-            "events": self._operation_event_api_records(result.events),
+            "operation_run": self._operation_run_api_record_with_status_summary(
+                result.operation_run,
+                expected_workspace_id=expected_workspace_id,
+            ),
+            "events": self._operation_event_api_records(
+                result.events,
+                expected_workspace_id=expected_workspace_id,
+            ),
             "module_state_mutated": False,
             "contract": "w9_operation_action_approval_v1",
         }
@@ -49748,7 +49885,10 @@ class SourcingOrchestrator:
             "actual_status": str(action.get("status") or "").strip(),
             "action": self._operation_action_api_record(action),
             "events": self._operation_event_api_records(
-                self.store.repos.workflow_runtime.list_operation_events(action["action_id"])
+                self.store.repos.workflow_runtime.list_operation_events(
+                    action["action_id"],
+                    expected_workspace_id=expected_workspace_id,
+                )
             ),
             "module_state_mutated": False,
             "contract": "w9_operation_action_rejection_v1",
@@ -49781,9 +49921,15 @@ class SourcingOrchestrator:
             "status": "cancelled" if cancelled else "conflict",
             "reason": "" if cancelled else "operation_run_cancel_conflict",
             "actual_status": str(operation_run.get("status") or "").strip(),
-            "operation_run": self._operation_run_api_record_with_status_summary(operation_run),
+            "operation_run": self._operation_run_api_record_with_status_summary(
+                operation_run,
+                expected_workspace_id=expected_workspace_id,
+            ),
             "events": self._operation_event_api_records(
-                self.store.repos.workflow_runtime.list_operation_events(operation_run["operation_run_id"])
+                self.store.repos.workflow_runtime.list_operation_events(
+                    operation_run["operation_run_id"],
+                    expected_workspace_id=expected_workspace_id,
+                )
             ),
             "module_state_mutated": False,
             "contract": "w9_operation_run_cancel_v1",
@@ -49825,9 +49971,18 @@ class SourcingOrchestrator:
             }
         return {
             "status": "queued",
-            "parent_operation_run": self._operation_run_api_record_with_status_summary(result["parent_operation_run"]),
-            "operation_run": self._operation_run_api_record_with_status_summary(result["operation_run"]),
-            "events": self._operation_event_api_records(result["events"]),
+            "parent_operation_run": self._operation_run_api_record_with_status_summary(
+                result["parent_operation_run"],
+                expected_workspace_id=expected_workspace_id,
+            ),
+            "operation_run": self._operation_run_api_record_with_status_summary(
+                result["operation_run"],
+                expected_workspace_id=expected_workspace_id,
+            ),
+            "events": self._operation_event_api_records(
+                result["events"],
+                expected_workspace_id=expected_workspace_id,
+            ),
             "module_state_mutated": False,
             "contract": "w9_operation_run_retry_v1",
         }
@@ -49861,10 +50016,14 @@ class SourcingOrchestrator:
                 "status": "conflict",
                 "reason": exc.reason,
                 "actual_status": str(exc.record.get("status") or "").strip(),
-                "operation_run": self._operation_run_api_record_with_status_summary(exc.record),
+                "operation_run": self._operation_run_api_record_with_status_summary(
+                    exc.record,
+                    expected_workspace_id=expected_workspace_id,
+                ),
                 "events": self._operation_event_api_records(
                     self.store.repos.workflow_runtime.list_operation_events(
-                        str(exc.record.get("operation_run_id") or operation_run_id)
+                        str(exc.record.get("operation_run_id") or operation_run_id),
+                        expected_workspace_id=expected_workspace_id,
                     )
                 ),
                 "module_state_mutated": False,
@@ -49872,8 +50031,14 @@ class SourcingOrchestrator:
             }
         return {
             "status": "queued",
-            "operation_run": self._operation_run_api_record_with_status_summary(result["operation_run"]),
-            "events": self._operation_event_api_records(result["events"]),
+            "operation_run": self._operation_run_api_record_with_status_summary(
+                result["operation_run"],
+                expected_workspace_id=expected_workspace_id,
+            ),
+            "events": self._operation_event_api_records(
+                result["events"],
+                expected_workspace_id=expected_workspace_id,
+            ),
             "module_state_mutated": False,
             "contract": "w9_operation_run_resume_v1",
         }
@@ -49930,16 +50095,19 @@ class SourcingOrchestrator:
                             operation_run=operation_run,
                             action=action,
                             actor=actor,
+                            expected_workspace_id=expected_workspace_id,
                         )
                 return self._dispatch_operation_run_from_records(
                     operation_run=operation_run,
                     action=action,
                     actor=actor,
+                    expected_workspace_id=expected_workspace_id,
                 )
         return self._dispatch_operation_run_from_records(
             operation_run=operation_run,
             action=action,
             actor=actor,
+            expected_workspace_id=expected_workspace_id,
         )
 
     def _dispatch_operation_run_from_records(
@@ -49948,8 +50116,26 @@ class SourcingOrchestrator:
         operation_run: dict[str, Any],
         action: dict[str, Any],
         actor: str,
+        expected_workspace_id: str = "",
     ) -> dict[str, Any]:
         action_type = str(action.get("action_type") or "").strip()
+        try:
+            action_spec = DEFAULT_ACTION_REGISTRY.spec_for(action_type)
+        except KeyError:
+            action_spec = None
+        dispatch_adapter = str(action_spec.dispatch_adapter or "").strip() if action_spec is not None else ""
+        if dispatch_adapter in {DISPATCH_ADAPTER_CRM_WRITER, DISPATCH_ADAPTER_EXPORT}:
+            existing_plan = self._existing_planned_operation_command_response(
+                operation_run=operation_run,
+                action=action,
+                contract="w9_operation_run_dispatch_v1",
+                expected_workspace_id=expected_workspace_id,
+            )
+            if existing_plan:
+                return self._operation_run_control_response_record(
+                    existing_plan,
+                    expected_workspace_id=expected_workspace_id,
+                )
         try:
             self.operation_runtime_writer.validate_persisted_action_request(
                 action=action,
@@ -49972,13 +50158,9 @@ class SourcingOrchestrator:
                     "module_state_mutated": False,
                     "request_schema_revalidation_required": True,
                     "contract": "w9_operation_run_dispatch_v1",
-                }
+                },
+                expected_workspace_id=expected_workspace_id,
             )
-        try:
-            action_spec = DEFAULT_ACTION_REGISTRY.spec_for(action_type)
-        except KeyError:
-            action_spec = None
-        dispatch_adapter = str(action_spec.dispatch_adapter or "").strip() if action_spec is not None else ""
         dispatch_handler = self._operation_dispatch_adapter_bindings().get(dispatch_adapter)
         if dispatch_handler is not None:
             return self._operation_run_control_response_record(
@@ -49986,7 +50168,9 @@ class SourcingOrchestrator:
                     operation_run=operation_run,
                     action=action,
                     actor=actor,
-                )
+                    expected_workspace_id=expected_workspace_id,
+                ),
+                expected_workspace_id=expected_workspace_id,
             )
         return self._operation_run_control_response_record(
             {
@@ -49996,7 +50180,8 @@ class SourcingOrchestrator:
                 "action": action,
                 "module_state_mutated": False,
                 "contract": "w9_operation_run_dispatch_v1",
-            }
+            },
+            expected_workspace_id=expected_workspace_id,
         )
 
     def _operation_dispatch_adapter_bindings(self) -> dict[str, Callable[..., dict[str, Any]]]:
@@ -50016,6 +50201,7 @@ class SourcingOrchestrator:
         operation_run: dict[str, Any],
         action: dict[str, Any],
         actor: str,
+        expected_workspace_id: str = "",
     ) -> dict[str, Any]:
         if (
             str(action.get("approval_policy") or "").strip() == "required"
@@ -51412,6 +51598,7 @@ class SourcingOrchestrator:
         operation_run: dict[str, Any],
         action: dict[str, Any],
         actor: str,
+        expected_workspace_id: str = "",
     ) -> dict[str, Any]:
         if str(operation_run.get("status") or "").strip() in {"completed", "failed", "cancelled"}:
             return {
@@ -51426,6 +51613,7 @@ class SourcingOrchestrator:
             operation_run=operation_run,
             action=action,
             contract="w9_operation_run_dispatch_v1",
+            expected_workspace_id=expected_workspace_id,
         )
         if existing_plan:
             return existing_plan
@@ -51862,6 +52050,7 @@ class SourcingOrchestrator:
         operation_run: dict[str, Any],
         action: dict[str, Any],
         actor: str,
+        expected_workspace_id: str = "",
     ) -> dict[str, Any]:
         target_preflight = self._revalidate_crm_record_batch_action_target(
             operation_run=operation_run,
@@ -51907,6 +52096,7 @@ class SourcingOrchestrator:
         operation_run: dict[str, Any],
         action: dict[str, Any],
         actor: str,
+        expected_workspace_id: str = "",
     ) -> dict[str, Any]:
         current_status = str(operation_run.get("status") or "").strip()
         if current_status in {"completed", "failed", "cancelled"}:
@@ -52028,6 +52218,7 @@ class SourcingOrchestrator:
         operation_run: dict[str, Any],
         action: dict[str, Any],
         actor: str,
+        expected_workspace_id: str = "",
     ) -> dict[str, Any]:
         if (
             str(action.get("approval_policy") or "").strip() == "required"
@@ -52053,6 +52244,7 @@ class SourcingOrchestrator:
             operation_run=operation_run,
             action=action,
             contract="w9_operation_run_dispatch_v1",
+            expected_workspace_id=expected_workspace_id,
         )
         if existing_plan:
             return existing_plan

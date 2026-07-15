@@ -180,14 +180,20 @@
   已落盘 v1 key 下更换 carrier。此前及本轮 local
   advisory (`0/3/2/0`、`0/2/1/0`、`0/1/2/1`) 均仅作 fixed-forward 输入，不是 formal verdict；当前证据=
   D1f `15+80`、D1 adjacency `119+189`、operation `136+503`、frontend contract `3` + build `84 modules`、lint
-  `58 files`、mypy `81/4`；fresh pinned non-author review pending。R-028 仍 open，不宣称 command/effect/terminal/EntityDelta 同 UoW、完整 TOCTOU 或
+  `58 files`、mypy `81/4`。Pinned `1cb829f` 后续 advisory `NO-GO 0/0/1/1` 的 fresh-202 discriminator 与 nested
+  submit-response schema 缺口已在 `d5b0a31` fixed-forward；missing/null/string replay marker 均稳定 400，两分支
+  均组合完整 detail contract，latest exact evidence=`25+68`，fresh pinned non-author review pending。R-028 仍 open，不宣称 command/effect/terminal/EntityDelta 同 UoW、完整 TOCTOU 或
   exactly-once；无 provider/model/live。
 - [x] D1g Operation API exact-owner closure current author candidate（2026-07-15）：canonical authorization owner=
   `agent_actions/operation_runs.workspace_id`，run 额外要求 linked action 存在且 exact same workspace；actor 仅为
   provenance。authenticated action/run list 使用 server workspace，detail/provenance 与
   approve/reject/cancel/retry/resume/dispatch 均做 keyword-only expected-workspace preflight；dispatch 的既有锁分支
   在锁内、R-029 compatibility event 前再验。foreign/missing 使用 action/run 各自 byte-identical generic 404 并
-  全域零写，open-mode operator compatibility 保留。当前证据=`25+88`、adjacent exact `4`、full operation
+  全域零写，open-mode operator compatibility 保留。无有效 verdict 的后续 review attempt 提供三项可复现新证据；
+  fixed-forward 已把 shared-workflow command 的 linked run+action owner `EXISTS` 与 physical event workspace
+  predicate 下推到 SQL `LIMIT` 前，并在任何 compatibility observation/write 前 exact-bind planned command 到当前
+  run；foreign/missing/blank/same-workspace-other reference 同一 not-found/零写，open-mode 保留。当前证据=
+  `28+97`（D1g alone `6+29`）、adjacent exact `4`、full operation
   `136+503`、lint `58 files`、global mypy `81/4`；final stable commit 与 fresh pinned non-author review pending。该批不迁移 12 个 schema-less action、不
   改 served=0、不授权 live/provider。
 - [x] D1h CRM Public Web action activation current author candidate（2026-07-16）：将
@@ -209,7 +215,9 @@
   谓词；D1h 后当前 11/15 schema-less、served=0。
 - [ ] R-031 review closeout：D1g current author candidate 已将 actions/runs list、detail、provenance 及
   approve/reject/dispatch/resume/retry/cancel 统一到 server-derived exact-workspace preflight，run 同时校验 linked
-  action owner，并补 foreign/missing transport parity、全路径零写、same-owner 与 open-mode 矩阵。fresh pinned
+  action owner；nested commands/events 分别按 linked operation+action owner 与 physical event workspace 在 SQL
+  limit 前过滤，planned CRM/export command ref exact-bind 当前 run 且失败在所有写前。并补 foreign/missing
+  transport parity、全路径零写、same-owner 与 open-mode 矩阵。fresh pinned
   non-author review 仍 pending；有效 scope-matched artifact 前继续阻断 hosted/live multi-user Operation exposure、
   served-registry promotion及 manual/product/milestone signoff，但不阻断 bounded non-live implementation、
   fake/scripted 或 local open-mode testing。

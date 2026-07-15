@@ -10,6 +10,25 @@
 
 ## 2026-07-16 (Asia/Singapore)
 
+### Track D D1f/D1g review fixed-forward
+
+- D1f pinned-`1cb829f` advisory `NO-GO 0/0/1/1` found that fresh HTTP 202 accepted absent/non-boolean replay markers
+  and that the submit union constrained only its discriminator, not nested action/run/events. Commit `d5b0a31` now
+  requires literal `idempotent_replay=false` for 202 and composes both branches with the complete detail response.
+  Missing/null/string markers return the stable 400 body; malformed nested carriers fail the executable schema probe.
+  Evidence: request-scope plus three exact frontend nodes **25 passed + 68 subtests**, D1f PG **15 + 80 subtests**,
+  frontend build **84 modules**, and full Operation runtime **136 + 503 subtests**. This remains author
+  fixed-forward evidence; fresh pinned review is pending.
+- A later D1g review attempt ended without a valid verdict but supplied three reproducible closure gaps. The
+  fixed-forward now filters shared-workflow commands through their physical operation→run+action owner and filters
+  malformed operation events by physical workspace before SQL `LIMIT`. Planned CRM/export command references must
+  exist and exact-bind the current owned run before any schema-less compatibility observation or write; blank,
+  missing, foreign, and same-workspace-other-run references return the same not-found result with a full zero-write
+  snapshot. Empty expected workspace preserves operator/open-mode behavior.
+- Current D1g evidence is **6 passed + 29 subtests** for the exact PG matrix, **28 + 97 subtests** with request-scope
+  transport, **4** exact Operation adjacency nodes, and full Operation runtime **136 + 503 subtests**. R-031 remains
+  review-pending; R-019's **26**-caller ratchet and R-028 remain unchanged. No provider/model/live path is authorized.
+
 ### Track D D1h CRM Public Web action activation
 
 - Exact `enrich_person_public_web` now has a closed request schema and a canonical batch target binder. Authenticated

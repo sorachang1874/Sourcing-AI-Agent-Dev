@@ -127,6 +127,10 @@ serve、会话/事件层、planner loop），用一个垂直切片证明闭环�
   同 workspace，run list 以 repository SQL `EXISTS` 避免 N+1 与 limit/offset 后过滤；actor 仅为 provenance；
   list/detail/provenance/approve/reject/cancel/retry/resume/dispatch 均消费
   server-derived expected workspace，foreign/missing 同一 generic 404，open-mode operator compatibility 保留。
+  后续无有效 verdict 的 review attempt 提供 shared-workflow command、malformed foreign event 与 mutable planned
+  command ref 三项直接证据；fixed-forward 现把 nested command 的 physical operation→run+action owner 与 event
+  workspace predicate 下推到 SQL limit 前，并在任何 compatibility observation/write 前 exact-bind planned
+  CRM/export command 到当前 run，blank/missing/foreign/same-workspace-other ref 均 not-found/零写。
   D1g 仍不关闭 R-019/R-028、不迁移 12 个 schema-less action、不改变 served=0；fresh pinned review pending，
   reviewed artifact 前不得据此宣称 hosted/live multi-user signoff。D1h current author candidate 随后将
   `enrich_person_public_web` 作为第 4 个 schema-defined action 激活：authenticated exact-owner CRM batch binder

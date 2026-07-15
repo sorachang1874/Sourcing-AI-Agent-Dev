@@ -1,7 +1,11 @@
 # Track D D1g — Operation API exact-owner closure
 
-> Status: Current author implementation candidate (2026-07-15). This bounded non-live batch remediates R-031 for
+> Status: Fixed-forward author implementation candidate (2026-07-16). This bounded non-live batch remediates R-031 for
 > authenticated Operation reads and controls without expanding the action request-schema or served-tool population.
+> A review attempt against the earlier candidate terminated without a valid verdict, but supplied three reproducible
+> findings: shared-workflow command leakage, malformed foreign-workspace event leakage, and mutable planned-command
+> references. The current fixed-forward closes those findings; that partial evidence is not an advisory or formal
+> verdict.
 > Author validation is not an independent verdict; a fresh pinned non-author review must bind the enclosing commit
 > before hosted/live multi-user Operation exposure or product/milestone signoff. No provider, model, or live
 > environment is used by this batch.
@@ -9,8 +13,9 @@
 ## 1. Outcome and bounded scope
 
 D1g closes the authenticated Operation IDOR mechanism recorded after D1f. The product-code change is limited to the
-HTTP owner-context wiring in `api.py`, the Operation aggregate preflights in `orchestrator.py`, and the linked-action
-workspace predicate in `repositories/workflow_runtime.py`:
+HTTP owner-context wiring in `api.py`, the Operation aggregate preflights and response composition in
+`orchestrator.py`, the linked-action/event workspace predicates in `repositories/workflow_runtime.py`, and the
+linked-operation command predicate in `storage.py`:
 
 - authenticated action/run lists ignore caller workspace overrides and use the server-derived workspace;
 - authenticated action/run detail, run provenance, and all existing Operation controls exact-match that workspace
@@ -18,6 +23,14 @@ workspace predicate in `repositories/workflow_runtime.py`:
 - an authenticated OperationRun is valid only when both the run and its linked AgentAction exist in the exact same
   workspace;
 - authenticated missing and foreign ids use the same generic not-found transport body for each resource kind;
+- authenticated status/provenance command reads require each command's physical `operation_id` to resolve through an
+  exact-workspace OperationRun and linked AgentAction before SQL `LIMIT` is applied; a caller-reused
+  `workflow_run_id` cannot cross that boundary;
+- authenticated action/run/timeline event reads exact-filter physical `operation_events.workspace_id` before SQL
+  `LIMIT`, including malformed rows whose stream/action ids point at an owned aggregate;
+- an authenticated planned CRM/export run exposes or reuses its referenced command only when that command resolves to
+  the exact current OperationRun; blank, missing, foreign, and same-workspace-other-run references return generic
+  not-found before compatibility observation or any domain/runtime write;
 - open-mode operator calls preserve their existing explicit-workspace behavior;
 - `GET /api/operations/action-registry` remains a shared registry read rather than a workspace-owned aggregate read.
 
@@ -52,6 +65,9 @@ canonical production owner remains the workspace columns above.
 | approve/reject | exact AgentAction workspace preflight | existing operator control retained |
 | cancel/retry/resume | exact OperationRun plus linked AgentAction workspace preflight | existing operator control retained |
 | dispatch | exact OperationRun plus linked AgentAction workspace preflight; lock-taking branch rechecks under the dispatch lock before the R-029 compatibility event | existing operator dispatch retained |
+| nested status/provenance commands | command `operation_id` resolves through exact-workspace run+action at query time; shared workflow aliases cannot widen scope | existing shared-workflow aggregation retained |
+| nested action/run/timeline events | physical event workspace exact-matches before query limit | existing unfiltered operator evidence view retained |
+| planned CRM/export command reference | referenced command exact-binds the current owned run before compatibility observation or writes | existing legacy planned-reference behavior retained |
 
 The production method signatures make `expected_workspace_id` keyword-only. An empty value is the explicit open-mode
 compatibility marker; authenticated routes always pass a non-empty server-derived value.
@@ -81,6 +97,16 @@ List protection is server-scoped rather than post-filtered for actions. Authenti
 the linked action to share the exact workspace, so a malformed cross-workspace link cannot become visible through an
 otherwise owned run row. That linked-action predicate is one repository-level SQL `EXISTS`, not per-row lookups or an
 application post-filter; this avoids N+1 reads and prevents `limit`/`offset` from being applied before authorization.
+
+The same pre-limit rule now governs nested evidence. `list_workflow_commands(...,
+linked_operation_workspace_id=...)` uses one SQL `EXISTS` joining the command's physical `operation_id` through
+`operation_runs` and `agent_actions`. Event repository reads add physical workspace clauses before `LIMIT`. These are
+authorization predicates, not response-time cleanup: a foreign row cannot consume the authorized result window.
+
+For planned CRM/export dispatch, command-reference validation runs before request-schema compatibility observation.
+In authenticated mode the command must exist, carry a nonblank physical operation id, resolve through the same exact
+workspace, and name the current run. Failure returns the same run not-found shape with a full zero-write snapshot.
+Open mode passes an empty expected workspace and intentionally retains the previous compatibility behavior.
 
 ## 5. Compatibility and residual boundaries
 
@@ -137,7 +163,9 @@ git diff --check
 
 Evidence confirmed so far on the current candidate tree:
 
-- `tests/test_api_request_scope.py` plus the new D1g real-PG matrix: **25 passed + 88 subtests**;
+- `tests/test_api_request_scope.py` plus the expanded D1g real-PG matrix: **28 passed + 97 subtests**;
+- exact D1g matrix alone: **6 passed + 29 subtests**, including pre-limit shared-workflow command and malformed-event
+  probes plus blank/missing/foreign/same-workspace-other planned-reference zero-write cases;
 - four exact adjacent Operation nodes: **4 passed** — cross-workspace link/event-collision, list/provenance/resume/retry,
   open-mode HTTP Operation flow, and the R-019 state-sync caller ratchet;
 - full `tests/test_operation_runtime.py`: **136 passed + 503 subtests**;

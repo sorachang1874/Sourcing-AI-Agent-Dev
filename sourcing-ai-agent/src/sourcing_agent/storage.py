@@ -6997,6 +6997,7 @@ class ControlPlaneStore:
         operation_id: str = "",
         owner: str = "",
         statuses: list[str] | tuple[str, ...] | None = None,
+        linked_operation_workspace_id: str = "",
         limit: int = 100,
     ) -> list[dict[str, Any]]:
         self._require_postgres_for_durable_runtime("workflow_commands")
@@ -7017,6 +7018,19 @@ class ControlPlaneStore:
         if normalized_owner:
             pg_clauses.append("owner = %s")
             pg_params.append(normalized_owner)
+        normalized_linked_workspace_id = str(linked_operation_workspace_id or "").strip()
+        if normalized_linked_workspace_id:
+            pg_clauses.append(
+                "EXISTS ("
+                "SELECT 1 FROM operation_runs AS linked_operation "
+                "JOIN agent_actions AS linked_action "
+                "ON linked_action.action_id = linked_operation.action_id "
+                "WHERE linked_operation.operation_run_id = workflow_commands.operation_id "
+                "AND linked_operation.workspace_id = %s "
+                "AND linked_action.workspace_id = %s"
+                ")"
+            )
+            pg_params.extend([normalized_linked_workspace_id, normalized_linked_workspace_id])
         normalized_statuses = [
             str(status or "").strip() for status in list(statuses or []) if str(status or "").strip()
         ]
