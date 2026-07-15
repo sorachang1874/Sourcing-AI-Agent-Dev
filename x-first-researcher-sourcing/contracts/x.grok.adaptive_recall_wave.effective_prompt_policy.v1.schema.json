@@ -51,6 +51,10 @@
           ],
           "session_query_policy_sha256": [
             "session_query_policy_id"
+          ],
+          "official_account_handles": [
+            "session_query_policy_id",
+            "session_query_policy_sha256"
           ]
         },
         "properties": {
@@ -95,12 +99,22 @@
           "session_query_policy_id": {
             "enum": [
               "mixed_discovery_hydration_v1",
-              "discovery_only_no_person_hydration_v1"
+              "discovery_only_no_person_hydration_v1",
+              "discovery_only_official_accounts_no_person_hydration_v2"
             ]
           },
           "session_query_policy_sha256": {
             "type": "string",
             "pattern": "^[0-9a-f]{64}$"
+          },
+          "official_account_handles": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_]{1,15}$"
+            }
           }
         }
       }

@@ -28,21 +28,26 @@ semantic-v2.2 live gate. The formal Luna canary now has a separate receipt-first
 validation is frozen to semantic v2.1 assets, while v2 binds current semantic v2.2 and persists exact observed
 route/model/payload/timing/HTTP-or-failure receipts. It has not been executed live and still requires independent GO.
 
-A separate Google DeepMind large-lab challenger has produced three rejected but replayable diagnostics. The latest
-completed 101 unique native-X calls and returned 34 candidates / 96 complete evidence rows; one mechanically impossible
-`self` relationship correctly failed the entire result. The current command policy can only downgrade that isolated
-non-Bio label to `third_party`, with raw bytes and explicit audit text preserved, and cannot reinterpret the sealed
-pre-policy bundle. Performance review found that at least 72/101 calls were spent on person hydration before discovery
-converged, while Boolean scope made all 40 intended handle-level Post/Reply queries ineligible for mechanical coverage
-credit. The next reviewed challenger is therefore discovery-only; exact per-person Post/Reply hydration will be a
-separate operator-generated stage. Its effective-prompt entry binds a session-query policy that NFKC-normalizes all
-queries, removes invisible format controls, and rejects outer ASCII/Unicode-wrapped handle-like single-token subjects during replay; `x_user_search` additionally uses a full-
-consumption target-lab plus professional-context grammar. Discovery-only projection never applies the hydration surface
-gate and always overwrites model OK/PARTIAL status text with the operator-owned unproven reason:
-raw arguments can prove strategy cells were attempted, but not per-query yield or population convergence. Every
-operator normalization/projection is also rechecked against the request-frozen JSON byte and structure ceilings before
-publication. The current command-policy digest binds that post-transform serializer and exact transcript-terminal
-limit replay; normalization-only result-v3 bundles remain replay-only under their recorded digest.
+A separate Google DeepMind large-lab challenger has produced four rejected but replayable diagnostics. The latest v4
+provider run completed normally in 111.982 seconds and used 35 unique native-X calls to return 14 rows / 13 unique
+handles and 20 X status evidence proposals; four rows were `current lab + current pretraining`. This was not Bio-only:
+all 20 evidence items had status URLs. The session failed before promotion because the v1 discovery policy rejected two
+organization-level `from:GoogleDeepMind` keyword queries, all 20 native timestamps used X's RFC `GMT` form, one status
+row was mislabelled as Bio without topology, and two conflicting rows shared one handle. No candidate-scoped `from:`
+query occurred. Only one positive Reply query was attempted, so Reply discovery remains a measured weak cell.
+
+The v5 implementation now awaiting pinned independent review is designed around those facts rather than a fixed
+answer quota. Its append-only
+effective-prompt row can bind a casefold-unique official-account allowlist for any lab; the v2 session policy accepts
+exactly one positive, entry-bound official handle only in keyword search and continues to reject candidate, negated,
+multiple, semantic, and unknown-handle `from:` forms. The current result policy can also convert only an exact
+round-trippable native-X IMF-fixdate `GMT` timestamp to canonical UTC ISO-8601 `Z`, while preserving raw bytes. It does
+not repair malformed Bio/Post topology or merge duplicate handles. The v5 prompt requires four distinct positive Reply
+cells and a terminal casefold-dedup/topology preflight, with no business candidate, observation, query, or call cap.
+Discovery-only projection never applies the hydration surface gate and always overwrites model OK/PARTIAL status text
+with the operator-owned unproven reason: raw arguments can prove strategy cells were attempted, but not per-query yield
+or population convergence. Old v1-plus-artifact, normalization-only result-v3, pre-normalization v3, and result-v2
+bundles remain replay-only under their recorded digests.
 
 The first vertical slice covers OpenAI with:
 

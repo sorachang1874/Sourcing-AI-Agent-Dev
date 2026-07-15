@@ -143,6 +143,22 @@
       "session_query_policy_sha256": "e528e99abe6b5ae19fe47a3b4520630459f91444682a786c57a59f1dc54e0270"
     },
     {
+      "policy_entry_id": "google_deepmind_pretraining_recall_wave2_official_discovery.v5",
+      "target": {
+        "lab_id": "google_deepmind",
+        "research_focus_id": "pretraining",
+        "scope": "Public professional evidence of current or historical Google DeepMind affiliation and current or historical pre-training or base-model training relevance."
+      },
+      "source_prompt_sha256": "09991dbb9420309628f36794a79268a3ecb1aa67439f5e3d42169cb9795c8978",
+      "authority": "live_authorized",
+      "session_query_policy_id": "discovery_only_official_accounts_no_person_hydration_v2",
+      "session_query_policy_sha256": "26305c1bd1529e51bb35e9ce1533b64f09b2ed87f99981f14be5dde0718101fc",
+      "official_account_handles": [
+        "GoogleDeepMind",
+        "DeepMind"
+      ]
+    },
+    {
       "policy_entry_id": "google_deepmind_pretraining_recall_wave3.v1",
       "target": {
         "lab_id": "google_deepmind",

@@ -47,9 +47,9 @@ CRM, export, billing, permission, or outreach state. Protected-identity inferenc
 | Output transport | Strict Grok headless envelope plus raw private bytes | Exact outer object, `EndTurn`, command session, request ID, turns, token totals, inner JSON, duplicate keys, nonfinite numbers, prefix, and suffix are replayed; the inner result alone cannot claim terminal success |
 | Model diagnostics | Raw outer `text`, plus diagnostic provenance retained in the normalized inner result | Model-reported calls, queries, observations, and original `local_reconciliation` are never tool-ledger truth; the unmodified original remains in `raw.stdout` |
 | Operator projections | Inner candidate/evidence arrays plus verified session proof | `sanitized.json` rewrites candidate, evidence, post-URL, tool-call, and per-tool counts from local structure/transcript facts; it preserves model provenance only as diagnostics |
-| Mechanical relationship normalization | `mechanical-evidence-relationship-downgrade-v1`, bound into the command-policy digest | A current-policy result may change only a non-Bio `self` row whose author differs from the candidate to `third_party`; the candidate and global audit strings are appended, raw stdout is unchanged, and the normalized copy is admitted only when the complete result then passes runtime validation. No support, state, confidence, or evidence row can be upgraded. Normalization-only result-v3, pre-normalization result-v3, and result-v2 bundles remain replay-only under their recorded policy digests |
+| Mechanical result normalization | `mechanical-evidence-relationship-and-x-rfc2822-timestamp-v2`, bound into the command-policy digest | The current policy may downgrade only a non-Bio `self` row whose author differs from the candidate to `third_party`, and may convert only an exact round-trippable native-X IMF-fixdate `GMT` timestamp to canonical UTC ISO-8601 `Z`. Raw bytes stay unchanged, deterministic audit text is appended, and all changes are admitted atomically only when the complete result passes. The v1 relationship-only policy, normalization-only result-v3, pre-normalization result-v3, and result-v2 remain replay-only under their recorded digests; duplicates and malformed Bio/Post topology still fail closed |
 | Tool-call facts | Raw Grok session `updates.jsonl` | Effective model, native-X starts/completions, names, and exact arguments are replayed. On Grok 0.2.101 the outer envelope owns terminal/usage; a legacy transcript `turn_completed` is additionally reconciled when present |
-| Session query phase | Selected effective-prompt entry plus raw native-X arguments | Entries default to `mixed_discovery_hydration_v1`; a `discovery_only_no_person_hydration_v1` entry NFKC-normalizes every query, removes invisible Unicode format controls, rejects every `from:` form, and unwraps outer ASCII/Unicode non-handle characters before rejecting a handle-like single-token subject. Its `x_user_search` grammar fully consumes the normalized input, requires target-lab and professional-context tokens, and rejects every character/token outside the versioned allowlist; multiword person intent in keyword/semantic search remains a named post-run residual |
+| Session query phase | Selected effective-prompt entry plus raw native-X arguments | Entries default to `mixed_discovery_hydration_v1`; `discovery_only_no_person_hydration_v1` rejects every `from:` form. `discovery_only_official_accounts_no_person_hydration_v2` instead accepts exactly one positive `from:` only in keyword search and only when its handle casefold-matches the selected entry's non-empty `official_account_handles`; negated, multiple, semantic, unknown, and candidate handles fail. Both discovery policies NFKC-normalize queries, remove invisible format controls, reject outer ASCII/Unicode-wrapped handle-like single-token subjects, and apply the same closed target/professional `x_user_search` grammar; multiword keyword/semantic person intent remains a named residual |
 | Post-transform technical envelope | Request-frozen `max_json_bytes`, `max_json_depth`, and `max_json_nodes`, plus `post-transform-json-envelope-and-terminal-limit-replay-v1` in the current command-policy digest | Normalization, transcript-terminal recovery, and phase-aware projection are serialized and structurally rechecked before publication. An expanded result that crosses a bound becomes a truthful `technical_limit_exceeded` bundle with no oversized `sanitized.json`; current-policy replay independently rederives the exact transcript-terminal limit kind rather than trusting the receipt label |
 | Candidate authored-surface attempts | Completed `x_keyword_search` arguments in the raw session transcript | Only one exact positive `from:<handle>` can be attributed; positive `filter:replies` means `authored_reply`, absent/negated reply filter means `authored_post`, and global, multi-handle, semantic, user, or thread calls remain unattributed |
 | Retention/deletion | Request TTL, terminal receipt, external deletion journal and receipt | Expired bundle is validated and journaled before recursive deletion; a crash between delete and receipt is reconcilable |
@@ -73,21 +73,25 @@ The runtime additionally enforces `max_json_bytes <= max_stdout_bytes`, owner-on
 the state relationships that plain JSON Schema cannot express.
 
 The command-policy digest owns the exact provider argv template,
-`mechanical-evidence-relationship-downgrade-v1`, and
+`mechanical-evidence-relationship-and-x-rfc2822-timestamp-v2`, and
 `post-transform-json-envelope-and-terminal-limit-replay-v1`. This prevents a retained result-v3 bundle sealed before
-either policy from being reinterpreted after the fact. The normalization-only digest is accepted solely for retained
-replay and cannot authorize a new grant under the current operator. The current normalization is deliberately monotonic: it repairs only the
-mechanically impossible authority label `self` to the generic lower-authority `third_party`, preserves raw provider
-bytes, appends a deterministic per-candidate caveat and global count, and accepts the transformed copy only if no
-other runtime contract error remains. Bio rows and case-insensitive self authors are never rewritten; malformed
-subject/URL/Post ID/time/thread/support bindings, duplicate evidence, and every other invalid result still fail closed.
+either policy from being reinterpreted after the fact. The former v1-plus-artifact digest and the older
+normalization-only digest are accepted solely for retained replay and cannot authorize a new grant. The current
+normalization is deliberately monotonic: it repairs only the mechanically impossible authority label `self` to the
+generic lower-authority `third_party`, and converts a timestamp only when parsing and formatting it back as IMF-fixdate
+reproduces the input byte-for-byte with literal `GMT`. It preserves raw provider bytes, appends deterministic audit
+text, and accepts the whole transformed copy only if no other runtime contract error remains. Bio rows and
+case-insensitive self authors are never rewritten; malformed subject/URL/Post ID/time/thread/support bindings,
+duplicate handles/evidence, and every other invalid result still fail closed.
 
 The effective-prompt entry may also own the pair `session_query_policy_id` plus
-`session_query_policy_sha256`. Existing rows omit both and retain the mixed discovery/hydration behavior under their
-unchanged entry digests. A discovery-only row binds the stricter phase/query/projection semantic digest into the
-selected-entry digest used by the grant, intent, receipt, and replay. The loader recomputes the semantic digest from a
+`session_query_policy_sha256`. The official-account discovery policy additionally requires a non-empty, casefold-unique
+`official_account_handles` array of valid X handles; no other policy may carry that field. Existing rows omit these
+fields and retain mixed discovery/hydration behavior under unchanged entry digests. A discovery-only row binds the
+stricter phase/query/projection semantic digest and any official handles into the exact selected-entry digest used by
+the grant, intent, receipt, and replay. The loader recomputes the semantic digest from a
 versioned registry and fails closed on disagreement, preventing an existing ID from silently acquiring new behavior.
-The session parser NFKC-normalizes every native-X query and removes invisible Unicode format controls before checking positive or negated `from:` forms. It removes
+The session parser NFKC-normalizes every native-X query and removes invisible Unicode format controls before checking positive or negated `from:` forms. The v2 official path requires one exact positive operator, a keyword tool, and an entry-bound official handle; every other `from:` path is rejected. It removes
 outer characters that cannot belong to an ASCII X handle, including ASCII punctuation, curly quotes, fullwidth
 punctuation, and other Unicode wrappers, then rejects a remaining handle-like single-token subject before branching
 by tool. User search is narrower: it fully consumes the normalized query, rejects non-ASCII or unrecognized syntax, requires a target-lab token and a professional-context token, and accepts
@@ -106,7 +110,7 @@ receipt may still be `completed` because it describes verified transport complet
 convergence.
 
 All operator-owned transformations reuse one post-transform serializer. It reapplies the request-frozen JSON byte,
-depth, and node ceilings after mechanical relationship normalization, transcript-terminal recovery, and ledger/status
+depth, and node ceilings after version-selected mechanical normalization, transcript-terminal recovery, and ledger/status
 projection. Crossing a ceiling sets the corresponding technical-limit terminal state and suppresses publication of an
 oversized or structurally invalid `sanitized.json`; replay derives the same outcome. For a current-policy live bundle
 whose terminal state is `technical_limit_exceeded`, replay reruns transcript-terminal recovery and compares the
@@ -199,7 +203,7 @@ semantic binding over the binding version, schema version, policy ID, owner, glo
 and exact selected entry. It is deliberately not the complete mutable registry-file digest: appending an unrelated
 valid row cannot invalidate an issued grant, retained bundle, or TTL purge, while changing the selected row or any
 immutable owner semantic fails replay. The production registry currently authorizes seven tracked OpenAI prompts
-and four tracked Google DeepMind prompts. Each lab has its own exact target tuple; prompt digests cannot be swapped
+and seven tracked Google DeepMind prompts. Each lab has its own exact target tuple; prompt digests cannot be swapped
 between them. The OpenAI tuple is:
 
 ```text

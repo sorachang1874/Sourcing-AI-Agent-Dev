@@ -471,10 +471,66 @@ rederives the transcript-owned limit kind and rejects a receipt that swaps `json
 relabels a process-owned limit as a JSON limit when replay derives none.
 Normalization-only result-v3 bundles remain replayable under their old digest but cannot authorize this v4 run.
 
-The current command policy adds a versioned, monotonic operator normalization for the isolated relationship error:
+The command policy that sealed v4 added a versioned, monotonic v1 normalization for the isolated relationship error:
 only a non-Bio `self` row whose author differs from the candidate may be downgraded to `third_party`; raw stdout stays
 unchanged, audit caveat/count text is appended, and the transformed result is admitted only when every other runtime
 contract passes. This cannot upgrade evidence or retroactively change the rejected r2 bundle.
+
+### Wave2-v4 discovery-only live diagnostic and v5 repair target
+
+After manual OAuth refresh, the reviewed v4 request executed once with its fresh 900-second single-use grant. The
+provider process exited `0` after 111.982 seconds with no timeout, TERM/KILL, fallback, or technical limit, but the
+operator sealed `result_contract_invalid`. It remains a private rejected diagnostic and does not enter the campaign,
+product, identity, export, ranking, or outreach lane.
+
+The retained session contains 77 causal events and 35 completed, unique native-X calls:
+
+| Tool / surface | Mechanical count |
+|---|---:|
+| `x_keyword_search` | 24 (`Latest=18`, `Top=6`) |
+| `x_semantic_search` | 5 |
+| `x_user_search` | 3 |
+| `x_thread_fetch` | 3 |
+| Query-bearing calls | 32, all unique |
+| Explicit time-shard queries | 4 |
+| Positive `filter:replies` queries | 1 |
+
+The terminal model object contained 14 candidate rows / 13 case-insensitive unique handles, 20 unique status URLs,
+nine excluded examples, and seven limitations. The independent lab/pretraining state grid included four
+`current/current`, three `historical/historical`, four `current/ambiguous`, one `ambiguous/current`, one
+`current/historical`, and one `ambiguous/historical` row. Although the model labelled the evidence as one Bio, twelve
+mentions, and seven Posts, all 20 rows mechanically carried a status URL, Post ID, and native-X date; eight were
+self-authored and twelve third-party. The output was therefore Post/Mention-led rather than Bio-led. Direct Reply
+coverage was still weak: the trace contained only one positive Reply query and the result only one `thread_reply`
+topology.
+
+Exactly two query-policy violations occurred, both broad official-account keyword searches using
+`from:GoogleDeepMind`; no candidate-scoped `from:` query occurred. Replaying the same trace under the mixed policy for
+diagnosis verified all 35 calls and measured 133,692 uncached input tokens, 445,824 cache-read tokens, 13,384 output
+tokens, 592,900 total tokens, and estimated cost `$1.239336`. At 13 unique handles this is diagnostic-only performance
+of `0.371` unique handle/call, `8.614` seconds/unique handle, `2.692` calls/unique handle, and approximately
+`$0.0953`/unique handle. These numbers do not make the invalid discovery proof successful.
+
+The terminal validator produced 43 errors: 20 invalid evidence rows, 22 consequential missing-dimension supports,
+and one duplicate handle. All 20 timestamps were exact round-trippable native-X IMF-fixdate values such as
+`Mon, 18 May 2026 14:35:17 GMT`; converting only those values to UTC ISO-8601 `Z` reduced the error set to two. The
+remaining status-shaped Bio lacked a non-null topology, and the two same-handle rows had conflicting temporality and
+disjoint evidence. Neither can be repaired without semantic judgment, so both remain fail-closed. In particular, the
+operator does not silently merge or choose one duplicate row.
+
+The v5 repair is versioned rather than changing the meaning of v4 artifacts:
+
+1. `discovery_only_official_accounts_no_person_hydration_v2` accepts exactly one positive `from:` in keyword search
+   only when the handle matches the selected effective-prompt entry's `official_account_handles`; all candidate,
+   unknown, negated, multiple, and non-keyword forms fail.
+2. `mechanical-evidence-relationship-and-x-rfc2822-timestamp-v2` preserves the existing relationship downgrade and
+   adds only strict byte-for-byte round-trip IMF-fixdate `GMT` conversion. The former v1-plus-artifact digest remains a
+   distinct replay path; the rejected v4 bundle still validates with zero bundle-integrity errors.
+3. The v5 prompt performs casefold deduplication, Bio/status mutual-exclusion, topology, timestamp, and diagnostic-count
+   preflight before its one terminal JSON. It requires distinct positive Reply discovery across official/team,
+   model/report, training-function, and historical cells, but imposes no business call or candidate maximum.
+
+This v5 code and prompt require pinned independent `GO` before another costly live grant is issued.
 
 ### Native-result attribution limit
 

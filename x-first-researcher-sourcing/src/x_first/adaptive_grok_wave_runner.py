@@ -34,6 +34,7 @@ from collections.abc import Callable, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from email.utils import format_datetime, parsedate_to_datetime
 from pathlib import Path
 from typing import Any, Protocol
 from urllib.parse import quote
@@ -84,8 +85,21 @@ EFFECTIVE_PROMPT_POLICY_OWNER = "x_first_adaptive_wave_operator"
 EFFECTIVE_PROMPT_POLICY_BINDING_VERSION = "adaptive-effective-prompt-entry-semantics-v1"
 MIXED_SESSION_QUERY_POLICY_ID = "mixed_discovery_hydration_v1"
 DISCOVERY_ONLY_SESSION_QUERY_POLICY_ID = "discovery_only_no_person_hydration_v1"
+DISCOVERY_ONLY_OFFICIAL_SESSION_QUERY_POLICY_ID = (
+    "discovery_only_official_accounts_no_person_hydration_v2"
+)
 SESSION_QUERY_POLICY_IDS = frozenset(
-    {MIXED_SESSION_QUERY_POLICY_ID, DISCOVERY_ONLY_SESSION_QUERY_POLICY_ID}
+    {
+        MIXED_SESSION_QUERY_POLICY_ID,
+        DISCOVERY_ONLY_SESSION_QUERY_POLICY_ID,
+        DISCOVERY_ONLY_OFFICIAL_SESSION_QUERY_POLICY_ID,
+    }
+)
+DISCOVERY_ONLY_SESSION_QUERY_POLICY_IDS = frozenset(
+    {
+        DISCOVERY_ONLY_SESSION_QUERY_POLICY_ID,
+        DISCOVERY_ONLY_OFFICIAL_SESSION_QUERY_POLICY_ID,
+    }
 )
 SESSION_QUERY_POLICY_SEMANTICS = {
     MIXED_SESSION_QUERY_POLICY_ID: {
@@ -96,6 +110,14 @@ SESSION_QUERY_POLICY_SEMANTICS = {
     DISCOVERY_ONLY_SESSION_QUERY_POLICY_ID: {
         "policy_id": DISCOVERY_ONLY_SESSION_QUERY_POLICY_ID,
         "from_query": "forbidden_case_insensitive_v1",
+        "handle_like_single_token_query": "forbidden_nfkc_format_stripped_outer_nonhandle_x_handle_grammar_v3",
+        "x_user_search": "unicode_nfkc_full_consumption_target_and_professional_allowlist_v2",
+        "multiword_keyword_or_semantic_person_intent": "post_run_audit_residual_v1",
+        "result_projection": "force_partial_and_operator_reason_without_hydration_surface_gate_v2",
+    },
+    DISCOVERY_ONLY_OFFICIAL_SESSION_QUERY_POLICY_ID: {
+        "policy_id": DISCOVERY_ONLY_OFFICIAL_SESSION_QUERY_POLICY_ID,
+        "from_query": "one_positive_entry_bound_official_account_keyword_only_v1",
         "handle_like_single_token_query": "forbidden_nfkc_format_stripped_outer_nonhandle_x_handle_grammar_v3",
         "x_user_search": "unicode_nfkc_full_consumption_target_and_professional_allowlist_v2",
         "multiword_keyword_or_semantic_person_intent": "post_run_audit_residual_v1",
@@ -176,11 +198,17 @@ _DISCOVERY_CONVERGENCE_UNPROVEN_REASON = (
     "Operator kept the discovery-only result partial because strategy coverage and population convergence "
     "have not been mechanically proven from the retained native-X arguments."
 )
-RESULT_NORMALIZATION_POLICY_VERSION = "mechanical-evidence-relationship-downgrade-v1"
+LEGACY_RESULT_NORMALIZATION_POLICY_VERSION_V1 = "mechanical-evidence-relationship-downgrade-v1"
+RESULT_NORMALIZATION_POLICY_VERSION = "mechanical-evidence-relationship-and-x-rfc2822-timestamp-v2"
 OPERATOR_RESULT_ARTIFACT_POLICY_VERSION = "post-transform-json-envelope-and-terminal-limit-replay-v1"
 _RELATIONSHIP_DOWNGRADE_CAVEAT = (
     "Operator normalized a mechanically impossible self relationship to third_party because the evidence author "
     "did not match the candidate handle; the raw model output is retained and this evidence requires source review."
+)
+_TIMESTAMP_NORMALIZATION_LIMITATION = (
+    "Operator normalization {policy_version} converted {count} strict native-X IMF-fixdate GMT evidence timestamp(s) "
+    "to canonical UTC ISO-8601 Z. Raw model output is unchanged; no evidence, support claim, candidate state, or "
+    "confidence value was added or upgraded."
 )
 AUTHORITY = {
     "canonical_identity_write_authorized": False,
@@ -202,6 +230,9 @@ _CANONICAL_TIME_RE = re.compile(
 )
 _PENDING_RE = re.compile(r"\.pending-(?P<name>[a-z0-9_.-]{1,96})-[0-9a-f]{32}")
 _PERSON_SCOPED_FROM_RE = re.compile(r"(?i)(?:-?from:)")
+_FROM_OPERATOR_WITH_HANDLE_RE = re.compile(
+    r"(?i)(?<![A-Za-z0-9_])(?P<negated>-?)from:(?P<handle>[A-Za-z0-9_]{1,15})(?=$|[^A-Za-z0-9_])"
+)
 _BARE_HANDLE_LIKE_QUERY_RE = re.compile(r"@?[A-Za-z0-9_]{1,15}")
 
 _REQUEST_KEYS = {
@@ -654,6 +685,7 @@ class EffectivePromptPolicyBinding:
     policy_sha256: str
     policy_entry_id: str
     session_query_policy_id: str
+    official_account_handles: tuple[str, ...]
 
 
 class Executor(Protocol):
@@ -1386,22 +1418,44 @@ def validate_model_result(
     return errors
 
 
-def _operator_normalize_mechanical_evidence_relationships(
+def _canonicalize_native_x_rfc2822_timestamp(value: Any) -> str | None:
+    """Convert only an exact, round-trippable native-X IMF-fixdate GMT value."""
+
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = parsedate_to_datetime(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    if parsed.tzinfo is None or parsed.utcoffset() != timedelta(0):
+        return None
+    canonical_gmt = format_datetime(parsed.astimezone(UTC), usegmt=True)
+    if canonical_gmt != value:
+        return None
+    return parsed.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _operator_normalize_mechanical_result(
     result: Any,
     *,
+    policy_version: str,
     prior_candidates: Mapping[str, PriorCandidateFacts] | None = None,
     live_mode: bool,
     require_operator_projection: bool,
 ) -> Any:
-    """Apply the current result-policy's narrow, monotonic relationship repair.
+    """Apply one recorded result policy to a copy and admit it only atomically.
 
-    The model can occasionally label a non-Bio Post/mention/thread authored by
-    another handle as ``self``.  The raw envelope remains untouched; only the
-    operator-owned sanitized projection may downgrade that impossible claim to
-    ``third_party``.  No candidate state, support claim, evidence row, or
-    confidence value is added or upgraded.
+    Both versions may downgrade a mechanically impossible ``self`` relationship
+    to ``third_party``.  V2 may additionally convert an exact native-X
+    IMF-fixdate GMT timestamp to canonical UTC ISO-8601 Z.  The raw envelope is
+    untouched, and a partially repaired result is never admitted.
     """
 
+    if policy_version not in {
+        LEGACY_RESULT_NORMALIZATION_POLICY_VERSION_V1,
+        RESULT_NORMALIZATION_POLICY_VERSION,
+    }:
+        raise AdaptiveWaveValidationError("result_normalization_policy_invalid")
     if not isinstance(result, dict) or set(result) != _RESULT_KEYS:
         return result
     limitations = result.get("limitations")
@@ -1413,7 +1467,8 @@ def _operator_normalize_mechanical_evidence_relationships(
     ):
         return result
     normalized = strict_json_loads(canonical_json(result))
-    normalized_count = 0
+    relationship_count = 0
+    timestamp_count = 0
     for candidate in normalized["candidates"]:
         if not isinstance(candidate, dict) or set(candidate) != _CANDIDATE_KEYS:
             continue
@@ -1430,6 +1485,18 @@ def _operator_normalize_mechanical_evidence_relationships(
         candidate_downgrade_count = 0
         for evidence in evidence_rows:
             if (
+                policy_version == RESULT_NORMALIZATION_POLICY_VERSION
+                and isinstance(evidence, dict)
+                and set(evidence) == _EVIDENCE_KEYS
+                and _parse_evidence_timestamp(evidence.get("published_at")) is None
+            ):
+                canonical_timestamp = _canonicalize_native_x_rfc2822_timestamp(
+                    evidence.get("published_at")
+                )
+                if canonical_timestamp is not None:
+                    evidence["published_at"] = canonical_timestamp
+                    timestamp_count += 1
+            if (
                 not isinstance(evidence, dict)
                 or set(evidence) != _EVIDENCE_KEYS
                 or evidence.get("kind") not in (_EVIDENCE_KINDS - {"bio"})
@@ -1441,17 +1508,25 @@ def _operator_normalize_mechanical_evidence_relationships(
             evidence["relationship"] = "third_party"
             candidate_downgrade_count += 1
         if candidate_downgrade_count:
-            normalized_count += candidate_downgrade_count
+            relationship_count += candidate_downgrade_count
             if _RELATIONSHIP_DOWNGRADE_CAVEAT not in caveats:
                 caveats.append(_RELATIONSHIP_DOWNGRADE_CAVEAT)
-    if normalized_count:
+    if relationship_count:
         limitation = (
-            f"Operator normalization {RESULT_NORMALIZATION_POLICY_VERSION} downgraded {normalized_count} "
+            f"Operator normalization {policy_version} downgraded {relationship_count} "
             "mechanically impossible evidence relationship value(s) from self to third_party because the evidence "
             "author did not match the candidate handle. Raw model output is unchanged; no evidence, support claim, "
             "candidate state, or confidence value was upgraded."
         )
         normalized["limitations"].append(limitation)
+    if timestamp_count:
+        normalized["limitations"].append(
+            _TIMESTAMP_NORMALIZATION_LIMITATION.format(
+                policy_version=policy_version,
+                count=timestamp_count,
+            )
+        )
+    if relationship_count or timestamp_count:
         if not validate_model_result(
             normalized,
             prior_candidates=prior_candidates,
@@ -1460,6 +1535,24 @@ def _operator_normalize_mechanical_evidence_relationships(
         ):
             return normalized
     return result
+
+
+def _operator_normalize_mechanical_evidence_relationships(
+    result: Any,
+    *,
+    prior_candidates: Mapping[str, PriorCandidateFacts] | None = None,
+    live_mode: bool,
+    require_operator_projection: bool,
+) -> Any:
+    """Replay-compatible v1 relationship-only normalization helper."""
+
+    return _operator_normalize_mechanical_result(
+        result,
+        policy_version=LEGACY_RESULT_NORMALIZATION_POLICY_VERSION_V1,
+        prior_candidates=prior_candidates,
+        live_mode=live_mode,
+        require_operator_projection=require_operator_projection,
+    )
 
 
 def _operator_project_model_result(
@@ -1508,7 +1601,7 @@ def _operator_project_model_result(
     if (
         not fixture
         and session_proof is not None
-        and session_query_policy_id == DISCOVERY_ONLY_SESSION_QUERY_POLICY_ID
+        and session_query_policy_id in DISCOVERY_ONLY_SESSION_QUERY_POLICY_IDS
         and projected.get("status") in {"X_SEARCH_OK", "X_SEARCH_PARTIAL"}
     ):
         projected["status"] = "X_SEARCH_PARTIAL"
@@ -1845,14 +1938,27 @@ def _load_effective_prompt_policy() -> dict[str, Any]:
             "session_query_policy_id",
             "session_query_policy_sha256",
         }
+        official_account_keys = {"official_account_handles"}
         if not isinstance(entry, dict) or frozenset(entry) not in {
             frozenset(base_entry_keys),
             frozenset(base_entry_keys | session_policy_keys),
+            frozenset(base_entry_keys | session_policy_keys | official_account_keys),
         }:
             raise AdaptiveWaveValidationError("effective_prompt_policy_invalid")
         entry_id = entry.get("policy_entry_id")
         target = entry.get("target")
         source_prompt_sha = entry.get("source_prompt_sha256")
+        session_query_policy_id = entry.get(
+            "session_query_policy_id",
+            MIXED_SESSION_QUERY_POLICY_ID,
+        )
+        official_account_handles = entry.get("official_account_handles")
+        official_handles_valid = (
+            isinstance(official_account_handles, list)
+            and bool(official_account_handles)
+            and all(_validate_handle(handle) for handle in official_account_handles)
+            and len({handle.casefold() for handle in official_account_handles}) == len(official_account_handles)
+        )
         if (
             not isinstance(entry_id, str)
             or _ID_RE.fullmatch(entry_id) is None
@@ -1866,12 +1972,19 @@ def _load_effective_prompt_policy() -> dict[str, Any]:
             or not _is_text(target.get("scope"), maximum=20_000)
             or not _is_sha(source_prompt_sha)
             or entry.get("authority") not in {"fixture_only", "live_authorized"}
-            or entry.get("session_query_policy_id", MIXED_SESSION_QUERY_POLICY_ID)
-            not in SESSION_QUERY_POLICY_IDS
+            or session_query_policy_id not in SESSION_QUERY_POLICY_IDS
             or (
                 "session_query_policy_id" in entry
                 and entry.get("session_query_policy_sha256")
                 != session_query_policy_semantics_sha256(entry["session_query_policy_id"])
+            )
+            or (
+                session_query_policy_id == DISCOVERY_ONLY_OFFICIAL_SESSION_QUERY_POLICY_ID
+                and not official_handles_valid
+            )
+            or (
+                session_query_policy_id != DISCOVERY_ONLY_OFFICIAL_SESSION_QUERY_POLICY_ID
+                and official_account_handles is not None
             )
         ):
             raise AdaptiveWaveValidationError("effective_prompt_policy_invalid")
@@ -1928,6 +2041,7 @@ def _approved_effective_prompt_binding(request: Mapping[str, Any]) -> EffectiveP
             "session_query_policy_id",
             MIXED_SESSION_QUERY_POLICY_ID,
         ),
+        official_account_handles=tuple(selected_entry.get("official_account_handles", ())),
     )
 
 
@@ -1957,7 +2071,19 @@ def _legacy_normalization_only_result_v3_command_policy_sha256(request: Mapping[
     return canonical_sha256(
         {
             "argv_template": _command_policy(request),
-            "result_normalization_policy_version": RESULT_NORMALIZATION_POLICY_VERSION,
+            "result_normalization_policy_version": LEGACY_RESULT_NORMALIZATION_POLICY_VERSION_V1,
+        }
+    )
+
+
+def _legacy_operator_result_v1_command_policy_sha256(request: Mapping[str, Any]) -> str:
+    """Replay-only digest for v1 normalization plus the artifact policy."""
+
+    return canonical_sha256(
+        {
+            "argv_template": _command_policy(request),
+            "result_normalization_policy_version": LEGACY_RESULT_NORMALIZATION_POLICY_VERSION_V1,
+            "operator_result_artifact_policy_version": OPERATOR_RESULT_ARTIFACT_POLICY_VERSION,
         }
     )
 
@@ -2001,6 +2127,7 @@ def _redacted_policy_from_bindings(
     legacy_plain: bool = False,
     legacy_result_v2: bool = False,
     legacy_normalization_only_result_v3: bool = False,
+    legacy_operator_result_v1: bool = False,
     legacy_pre_normalization_result_v3: bool = False,
 ) -> list[str] | dict[str, Any]:
     del input_binding
@@ -2020,7 +2147,11 @@ def _redacted_policy_from_bindings(
         return argv_template
     policy = {
         "argv_template": argv_template,
-        "result_normalization_policy_version": RESULT_NORMALIZATION_POLICY_VERSION,
+        "result_normalization_policy_version": (
+            LEGACY_RESULT_NORMALIZATION_POLICY_VERSION_V1
+            if legacy_normalization_only_result_v3 or legacy_operator_result_v1
+            else RESULT_NORMALIZATION_POLICY_VERSION
+        ),
     }
     if not legacy_normalization_only_result_v3:
         policy["operator_result_artifact_policy_version"] = OPERATOR_RESULT_ARTIFACT_POLICY_VERSION
@@ -3144,7 +3275,7 @@ def _parse_structured_stdout(
     expected_model_id: str | None = None,
     max_turns: int = 512,
     allow_legacy_plain: bool = False,
-    apply_result_normalization: bool = False,
+    result_normalization_policy_version: str | None = None,
 ) -> tuple[Any | None, bytes | None, int, int, bool, bool, str | None, HeadlessEnvelope | None]:
     if len(raw) > technical_limits["max_json_bytes"]:
         return None, None, 0, 0, False, False, "json_bytes", None
@@ -3203,9 +3334,10 @@ def _parse_structured_stdout(
             model_payload = payload
     if not isinstance(model_payload, dict):
         return model_payload, None, prefix_bytes, suffix_bytes, syntax_compliant, False, None, headless
-    if apply_result_normalization:
-        model_payload = _operator_normalize_mechanical_evidence_relationships(
+    if result_normalization_policy_version is not None:
+        model_payload = _operator_normalize_mechanical_result(
             model_payload,
+            policy_version=result_normalization_policy_version,
             prior_candidates=prior_candidates,
             live_mode=live_mode,
             require_operator_projection=headless is None,
@@ -3588,6 +3720,7 @@ def _session_query_phase_arguments_allowed(
     *,
     session_query_policy_id: str,
     discovery_target_lab_id: str | None = None,
+    approved_official_account_handles: Sequence[str] = (),
 ) -> bool:
     """Enforce the effective-prompt entry's mechanically provable phase boundary."""
 
@@ -3595,7 +3728,7 @@ def _session_query_phase_arguments_allowed(
         return False
     if session_query_policy_id == MIXED_SESSION_QUERY_POLICY_ID:
         return True
-    if session_query_policy_id != DISCOVERY_ONLY_SESSION_QUERY_POLICY_ID:
+    if session_query_policy_id not in DISCOVERY_ONLY_SESSION_QUERY_POLICY_IDS:
         return False
     query = arguments.get("query")
     if not isinstance(query, str):
@@ -3612,10 +3745,25 @@ def _session_query_phase_arguments_allowed(
     while end > start and normalized_query[end - 1] not in _HANDLE_SUBJECT_CHARACTERS:
         end -= 1
     possible_handle_subject = normalized_query[start:end]
-    if (
-        _PERSON_SCOPED_FROM_RE.search(normalized_query) is not None
-        or _BARE_HANDLE_LIKE_QUERY_RE.fullmatch(possible_handle_subject) is not None
-    ):
+    from_markers = tuple(_PERSON_SCOPED_FROM_RE.finditer(normalized_query))
+    if from_markers:
+        from_operators = tuple(_FROM_OPERATOR_WITH_HANDLE_RE.finditer(normalized_query))
+        approved_handles = {
+            handle.casefold()
+            for handle in approved_official_account_handles
+            if _validate_handle(handle)
+        }
+        if (
+            session_query_policy_id != DISCOVERY_ONLY_OFFICIAL_SESSION_QUERY_POLICY_ID
+            or tool_name != "x_keyword_search"
+            or len(from_markers) != 1
+            or len(from_operators) != 1
+            or from_markers[0].start() != from_operators[0].start()
+            or from_operators[0].group("negated")
+            or from_operators[0].group("handle").casefold() not in approved_handles
+        ):
+            return False
+    if _BARE_HANDLE_LIKE_QUERY_RE.fullmatch(possible_handle_subject) is not None:
         return False
     if tool_name != "x_user_search":
         return True
@@ -3657,6 +3805,7 @@ def _parse_session_proof(
     budget: Mapping[str, Any],
     session_query_policy_id: str = MIXED_SESSION_QUERY_POLICY_ID,
     discovery_target_lab_id: str | None = None,
+    approved_official_account_handles: Sequence[str] = (),
 ) -> SessionProof:
     if not raw or not raw.endswith(b"\n"):
         raise AdaptiveWaveValidationError("session_updates_incomplete")
@@ -3851,6 +4000,7 @@ def _parse_session_proof(
                 raw_output["name"],
                 session_query_policy_id=session_query_policy_id,
                 discovery_target_lab_id=discovery_target_lab_id,
+                approved_official_account_handles=approved_official_account_handles,
             ):
                 raise AdaptiveWaveValidationError("session_query_phase_policy_invalid")
             provider_call_ids.add(raw_output["call_id"])
@@ -3975,7 +4125,7 @@ def _terminal_session_model_result(
     *,
     technical_limits: Mapping[str, Any],
     prior_candidates: Mapping[str, PriorCandidateFacts],
-    apply_result_normalization: bool,
+    result_normalization_policy_version: str | None,
 ) -> tuple[dict[str, Any] | None, str | None]:
     """Return only a transcript-proven terminal structured model result.
 
@@ -3999,9 +4149,10 @@ def _terminal_session_model_result(
         )
     except (AdaptiveWaveValidationError, UnicodeError, ValueError, RecursionError):
         return None, None
-    if apply_result_normalization:
-        payload = _operator_normalize_mechanical_evidence_relationships(
+    if result_normalization_policy_version is not None:
+        payload = _operator_normalize_mechanical_result(
             payload,
+            policy_version=result_normalization_policy_version,
             prior_candidates=prior_candidates,
             live_mode=True,
             require_operator_projection=False,
@@ -4034,7 +4185,7 @@ def _recover_transcript_terminal_result(
     technical_limits: Mapping[str, Any],
     prior_candidates: Mapping[str, PriorCandidateFacts],
     allow_recovery: bool,
-    apply_result_normalization: bool,
+    result_normalization_policy_version: str | None,
 ) -> tuple[Any | None, bytes | None, bool, str | None]:
     if contract_valid or not allow_recovery or headless_envelope is None or session_proof is None:
         return parsed_result, sanitized, contract_valid, None
@@ -4042,7 +4193,7 @@ def _recover_transcript_terminal_result(
         session_proof,
         technical_limits=technical_limits,
         prior_candidates=prior_candidates,
-        apply_result_normalization=apply_result_normalization,
+        result_normalization_policy_version=result_normalization_policy_version,
     )
     if transform_limit_kind is not None:
         return parsed_result, None, False, transform_limit_kind
@@ -4466,10 +4617,18 @@ def _run_adaptive_wave(
             command=command,
             effective_prompt_policy=effective_prompt_policy,
         )
-        apply_result_normalization = command_binding["command_policy_sha256"] in {
-            _current_operator_result_command_policy_sha256(request),
-            _legacy_normalization_only_result_v3_command_policy_sha256(request),
-        }
+        recorded_command_policy = command_binding["command_policy_sha256"]
+        result_normalization_policy_version = (
+            RESULT_NORMALIZATION_POLICY_VERSION
+            if recorded_command_policy == _current_operator_result_command_policy_sha256(request)
+            else LEGACY_RESULT_NORMALIZATION_POLICY_VERSION_V1
+            if recorded_command_policy
+            in {
+                _legacy_operator_result_v1_command_policy_sha256(request),
+                _legacy_normalization_only_result_v3_command_policy_sha256(request),
+            }
+            else None
+        )
         started_at = _timestamp(started_clock)
         intent_approval = _approval_binding(
             request,
@@ -4663,7 +4822,7 @@ def _run_adaptive_wave(
             expected_model_id=transport["model_id"],
             max_turns=request["emergency"]["max_turns"],
             allow_legacy_plain=execution_mode == "fixture",
-            apply_result_normalization=apply_result_normalization,
+            result_normalization_policy_version=result_normalization_policy_version,
         )
         technical_limit_kind = technical_limit_kind or json_limit_kind
 
@@ -4686,6 +4845,11 @@ def _run_adaptive_wave(
                         else MIXED_SESSION_QUERY_POLICY_ID
                     ),
                     discovery_target_lab_id=request["target"]["lab_id"],
+                    approved_official_account_handles=(
+                        effective_prompt_policy.official_account_handles
+                        if effective_prompt_policy is not None
+                        else ()
+                    ),
                 )
                 session_proof_status = "verified"
             except (AdaptiveWaveValidationError, OSError, UnicodeError, ValueError):
@@ -4703,7 +4867,7 @@ def _run_adaptive_wave(
             technical_limits=request["technical_limits"],
             prior_candidates=prior_candidates,
             allow_recovery=execution_mode == "live",
-            apply_result_normalization=apply_result_normalization,
+            result_normalization_policy_version=result_normalization_policy_version,
         )
         technical_limit_kind = technical_limit_kind or recovery_limit_kind
         if contract_valid and isinstance(parsed_result, dict) and (
@@ -5437,6 +5601,13 @@ def validate_operator_receipt(receipt: Any) -> list[str]:
         current_schema_sha = result_schema_sha256()
         legacy_schema_sha = result_schema_sha256(legacy_v2=True)
         current_policy = canonical_sha256(_redacted_policy_from_bindings(input_binding, command_binding))
+        legacy_operator_result_v1_policy = canonical_sha256(
+            _redacted_policy_from_bindings(
+                input_binding,
+                command_binding,
+                legacy_operator_result_v1=True,
+            )
+        )
         normalization_only_result_v3_policy = canonical_sha256(
             _redacted_policy_from_bindings(
                 input_binding,
@@ -5465,6 +5636,7 @@ def validate_operator_receipt(receipt: Any) -> list[str]:
             and recorded_policy
             in {
                 current_policy,
+                legacy_operator_result_v1_policy,
                 normalization_only_result_v3_policy,
                 pre_normalization_result_v3_policy,
             }
@@ -5696,6 +5868,7 @@ def validate_operator_bundle(
     command_binding = receipt.get("command_binding", {})
     input_binding = receipt.get("input_binding", {})
     new_command_policy = command_policy_sha256(request)
+    legacy_operator_result_v1_policy = _legacy_operator_result_v1_command_policy_sha256(request)
     normalization_only_result_v3_policy = _legacy_normalization_only_result_v3_command_policy_sha256(request)
     pre_normalization_result_v3_policy = _legacy_pre_normalization_result_v3_command_policy_sha256(request)
     legacy_command_policy = _legacy_command_policy_sha256(request)
@@ -5704,13 +5877,22 @@ def validate_operator_bundle(
         command_binding.get("command_policy_sha256") if isinstance(command_binding, dict) else None
     )
     current_operator_result_replay = recorded_command_policy == new_command_policy
+    legacy_operator_result_v1_replay = recorded_command_policy == legacy_operator_result_v1_policy
     normalization_only_result_v3_replay = recorded_command_policy == normalization_only_result_v3_policy
-    apply_result_normalization = current_operator_result_replay or normalization_only_result_v3_replay
+    result_normalization_policy_version = (
+        RESULT_NORMALIZATION_POLICY_VERSION
+        if current_operator_result_replay
+        else LEGACY_RESULT_NORMALIZATION_POLICY_VERSION_V1
+        if legacy_operator_result_v1_replay or normalization_only_result_v3_replay
+        else None
+    )
+    operator_artifact_policy_replay = current_operator_result_replay or legacy_operator_result_v1_replay
     pre_normalization_result_v3_replay = recorded_command_policy == pre_normalization_result_v3_policy
     legacy_plain_replay = recorded_command_policy == legacy_command_policy
     legacy_result_policy_replay = recorded_command_policy == legacy_result_command_policy
     if recorded_command_policy not in {
         new_command_policy,
+        legacy_operator_result_v1_policy,
         normalization_only_result_v3_policy,
         pre_normalization_result_v3_policy,
         legacy_command_policy,
@@ -5724,6 +5906,7 @@ def validate_operator_bundle(
         not legacy_result_schema_replay
         and not (
             current_operator_result_replay
+            or legacy_operator_result_v1_replay
             or normalization_only_result_v3_replay
             or pre_normalization_result_v3_replay
         )
@@ -5786,6 +5969,8 @@ def validate_operator_bundle(
                 if pre_normalization_result_v3_replay
                 else normalization_only_result_v3_policy
                 if normalization_only_result_v3_replay
+                else legacy_operator_result_v1_policy
+                if legacy_operator_result_v1_replay
                 else new_command_policy
             ),
             "environment_policy_sha256": canonical_sha256(_redacted_environment_policy()),
@@ -5850,6 +6035,8 @@ def validate_operator_bundle(
                                 if pre_normalization_result_v3_replay
                                 else normalization_only_result_v3_policy
                                 if normalization_only_result_v3_replay
+                                else legacy_operator_result_v1_policy
+                                if legacy_operator_result_v1_replay
                                 else new_command_policy
                             ),
                             replay_result_schema_sha256=(
@@ -5974,7 +6161,7 @@ def validate_operator_bundle(
         expected_model_id=request.get("transport", {}).get("model_id"),
         max_turns=request["emergency"]["max_turns"],
         allow_legacy_plain=mode == "fixture" or legacy_plain_replay,
-        apply_result_normalization=apply_result_normalization,
+        result_normalization_policy_version=result_normalization_policy_version,
     )
     if receipt.get("status") != "crash_recovered":
         if artifacts.get("non_json_prefix_bytes") != prefix or artifacts.get("non_json_suffix_bytes") != suffix:
@@ -6019,6 +6206,11 @@ def validate_operator_bundle(
                     else MIXED_SESSION_QUERY_POLICY_ID
                 ),
                 discovery_target_lab_id=request["target"]["lab_id"],
+                approved_official_account_handles=(
+                    effective_prompt_policy.official_account_handles
+                    if effective_prompt_policy is not None
+                    else ()
+                ),
             )
             session_status = "verified"
         except (AdaptiveWaveValidationError, KeyError, UnicodeError, ValueError):
@@ -6039,11 +6231,11 @@ def validate_operator_bundle(
         and (
             receipt.get("status") == "completed"
             or (
-                current_operator_result_replay
+                operator_artifact_policy_replay
                 and receipt.get("status") == "technical_limit_exceeded"
             )
         ),
-        apply_result_normalization=apply_result_normalization,
+        result_normalization_policy_version=result_normalization_policy_version,
     )
     limit_kind = limit_kind or recovery_limit_kind
     if contract_valid and isinstance(parsed_result, dict) and (mode == "fixture" or session_proof is not None):
@@ -6073,7 +6265,7 @@ def validate_operator_bundle(
     if receipt.get("status") == "crash_recovered":
         if recorded_limit != limit_kind:
             errors.append("structured_technical_limit_mismatch")
-    elif current_operator_result_replay and (
+    elif operator_artifact_policy_replay and (
         recorded_limit in _JSON_TECHNICAL_LIMIT_KINDS
         or limit_kind in _JSON_TECHNICAL_LIMIT_KINDS
     ):
@@ -6127,6 +6319,7 @@ def validate_operator_bundle(
             errors.append("structured_output_schema_hash_mismatch")
         if command_binding["command_policy_sha256"] not in {
             command_policy_sha256(request),
+            _legacy_operator_result_v1_command_policy_sha256(request),
             _legacy_normalization_only_result_v3_command_policy_sha256(request),
             _legacy_pre_normalization_result_v3_command_policy_sha256(request),
             _legacy_command_policy_sha256(request),
@@ -6455,10 +6648,18 @@ def _recover_incomplete_run_locked(
     recovery_legacy_plain = intent["command_binding"].get("command_policy_sha256") == _legacy_command_policy_sha256(
         request
     )
-    recovery_current_normalization = intent["command_binding"].get("command_policy_sha256") in {
-        command_policy_sha256(request),
-        _legacy_normalization_only_result_v3_command_policy_sha256(request),
-    }
+    recovery_recorded_policy = intent["command_binding"].get("command_policy_sha256")
+    recovery_result_normalization_policy_version = (
+        RESULT_NORMALIZATION_POLICY_VERSION
+        if recovery_recorded_policy == command_policy_sha256(request)
+        else LEGACY_RESULT_NORMALIZATION_POLICY_VERSION_V1
+        if recovery_recorded_policy
+        in {
+            _legacy_operator_result_v1_command_policy_sha256(request),
+            _legacy_normalization_only_result_v3_command_policy_sha256(request),
+        }
+        else None
+    )
     (
         parsed_result,
         sanitized,
@@ -6477,7 +6678,7 @@ def _recover_incomplete_run_locked(
         expected_model_id=request["transport"]["model_id"],
         max_turns=intent["emergency"]["max_turns"],
         allow_legacy_plain=intent["execution_mode"] == "fixture" or recovery_legacy_plain,
-        apply_result_normalization=recovery_current_normalization,
+        result_normalization_policy_version=recovery_result_normalization_policy_version,
     )
     sanitized_path = run_root / "sanitized.json"
     compiled_prompt_path = run_root / intent["runtime_layout"]["compiled_prompt_name"]
@@ -6524,6 +6725,11 @@ def _recover_incomplete_run_locked(
                     else MIXED_SESSION_QUERY_POLICY_ID
                 ),
                 discovery_target_lab_id=request["target"]["lab_id"],
+                approved_official_account_handles=(
+                    recovery_effective_prompt_policy.official_account_handles
+                    if recovery_effective_prompt_policy is not None
+                    else ()
+                ),
             )
             session_status = "verified"
         except (AdaptiveWaveValidationError, KeyError, UnicodeError, ValueError):

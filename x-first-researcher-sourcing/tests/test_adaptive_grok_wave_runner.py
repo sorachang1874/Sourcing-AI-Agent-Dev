@@ -641,6 +641,172 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
                 (tool_name, arguments),
             )
 
+    def test_discovery_only_official_policy_allows_only_one_bound_official_from_query(self) -> None:
+        official_policy = runner.DISCOVERY_ONLY_OFFICIAL_SESSION_QUERY_POLICY_ID
+        approved = ("GoogleDeepMind", "DeepMind")
+        allowed = (
+            {"query": 'from:GoogleDeepMind (Gemini OR pretraining)', "limit": "50", "mode": "Latest"},
+            {"query": 'FROM:deepmind "technical report"', "limit": "50", "mode": "Top"},
+        )
+        for arguments in allowed:
+            self.assertTrue(
+                runner._session_query_phase_arguments_allowed(
+                    arguments,
+                    "x_keyword_search",
+                    session_query_policy_id=official_policy,
+                    discovery_target_lab_id="google_deepmind",
+                    approved_official_account_handles=approved,
+                ),
+                arguments,
+            )
+            self.assertFalse(
+                runner._session_query_phase_arguments_allowed(
+                    arguments,
+                    "x_keyword_search",
+                    session_query_policy_id=runner.DISCOVERY_ONLY_SESSION_QUERY_POLICY_ID,
+                    discovery_target_lab_id="google_deepmind",
+                    approved_official_account_handles=approved,
+                ),
+                arguments,
+            )
+
+        rejected = (
+            ("x_keyword_search", {"query": "from:TargetPerson pretraining", "limit": "50"}, approved),
+            ("x_keyword_search", {"query": "-from:GoogleDeepMind pretraining", "limit": "50"}, approved),
+            (
+                "x_keyword_search",
+                {"query": "from:GoogleDeepMind OR from:DeepMind pretraining", "limit": "50"},
+                approved,
+            ),
+            ("x_semantic_search", {"query": "from:GoogleDeepMind pretraining", "limit": "50"}, approved),
+            ("x_keyword_search", {"query": "from:GoogleDeepMind pretraining", "limit": "50"}, ()),
+            ("x_keyword_search", {"query": "from:GoogleDeepMind_extra pretraining", "limit": "50"}, approved),
+            ("x_keyword_search", {"query": "notfrom:GoogleDeepMind pretraining", "limit": "50"}, approved),
+        )
+        for tool_name, arguments, handles in rejected:
+            self.assertFalse(
+                runner._session_query_phase_arguments_allowed(
+                    arguments,
+                    tool_name,
+                    session_query_policy_id=official_policy,
+                    discovery_target_lab_id="google_deepmind",
+                    approved_official_account_handles=handles,
+                ),
+                (tool_name, arguments),
+            )
+
+    def test_official_account_handles_are_entry_bound_and_required_only_for_v2_policy(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            policy = json.loads(TEST_EFFECTIVE_PROMPT_POLICY.read_text())
+            entry = policy["entries"][0]
+            entry["session_query_policy_id"] = runner.DISCOVERY_ONLY_OFFICIAL_SESSION_QUERY_POLICY_ID
+            entry["session_query_policy_sha256"] = runner.session_query_policy_semantics_sha256(
+                runner.DISCOVERY_ONLY_OFFICIAL_SESSION_QUERY_POLICY_ID
+            )
+            missing_path = root / "missing-official-handles.json"
+            _write_private(missing_path, (canonical_json(policy) + "\n").encode())
+            with mock.patch.object(runner, "DEFAULT_EFFECTIVE_PROMPT_POLICY", missing_path):
+                with self.assertRaisesRegex(
+                    runner.AdaptiveWaveValidationError,
+                    "effective_prompt_policy_invalid",
+                ):
+                    runner._load_effective_prompt_policy()
+
+            entry["official_account_handles"] = ["SyntheticLab", "syntheticlab"]
+            duplicate_path = root / "duplicate-official-handles.json"
+            _write_private(duplicate_path, (canonical_json(policy) + "\n").encode())
+            with mock.patch.object(runner, "DEFAULT_EFFECTIVE_PROMPT_POLICY", duplicate_path):
+                with self.assertRaisesRegex(
+                    runner.AdaptiveWaveValidationError,
+                    "effective_prompt_policy_invalid",
+                ):
+                    runner._load_effective_prompt_policy()
+
+            entry["official_account_handles"] = ["SyntheticLab"]
+            valid_path = root / "valid-official-handles.json"
+            _write_private(valid_path, (canonical_json(policy) + "\n").encode())
+            with mock.patch.object(runner, "DEFAULT_EFFECTIVE_PROMPT_POLICY", valid_path):
+                loaded = runner._load_effective_prompt_policy()
+                self.assertEqual(loaded["entries"][0]["official_account_handles"], ["SyntheticLab"])
+
+            del entry["official_account_handles"]
+            entry["session_query_policy_id"] = runner.DISCOVERY_ONLY_SESSION_QUERY_POLICY_ID
+            entry["session_query_policy_sha256"] = runner.session_query_policy_semantics_sha256(
+                runner.DISCOVERY_ONLY_SESSION_QUERY_POLICY_ID
+            )
+            entry["official_account_handles"] = ["SyntheticLab"]
+            forbidden_path = root / "old-policy-with-handles.json"
+            _write_private(forbidden_path, (canonical_json(policy) + "\n").encode())
+            with mock.patch.object(runner, "DEFAULT_EFFECTIVE_PROMPT_POLICY", forbidden_path):
+                with self.assertRaisesRegex(
+                    runner.AdaptiveWaveValidationError,
+                    "effective_prompt_policy_invalid",
+                ):
+                    runner._load_effective_prompt_policy()
+
+    def test_entry_bound_official_from_query_is_verified_in_live_session_replay(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            os.chmod(root, 0o700)
+            policy = json.loads(TEST_EFFECTIVE_PROMPT_POLICY.read_text())
+            entry = policy["entries"][0]
+            entry["session_query_policy_id"] = runner.DISCOVERY_ONLY_OFFICIAL_SESSION_QUERY_POLICY_ID
+            entry["session_query_policy_sha256"] = runner.session_query_policy_semantics_sha256(
+                runner.DISCOVERY_ONLY_OFFICIAL_SESSION_QUERY_POLICY_ID
+            )
+            entry["official_account_handles"] = ["SyntheticLab"]
+            policy_path = root / "official-policy.json"
+            _write_private(policy_path, (canonical_json(policy) + "\n").encode())
+
+            binary, auth, binary_sha = _live_material(root)
+            request, request_path = _build_request(root, binary_sha=binary_sha)
+            approvals = root / "approvals"
+
+            def official_query(updates: list[dict[str, Any]]) -> list[dict[str, Any]]:
+                for envelope in updates:
+                    update = envelope.get("params", {}).get("update", {})
+                    raw_output = update.get("rawOutput")
+                    if isinstance(raw_output, dict) and raw_output.get("name") == "x_keyword_search":
+                        raw_output["input"] = canonical_json(
+                            {
+                                "query": "from:SyntheticLab pretraining",
+                                "limit": "100",
+                                "mode": "Latest",
+                            }
+                        )
+                return updates
+
+            with mock.patch.object(runner, "DEFAULT_EFFECTIVE_PROMPT_POLICY", policy_path):
+                issue_live_grant(
+                    request_path=request_path,
+                    grant_root=approvals,
+                    auth_source=auth,
+                    wall_clock=lambda: FIXED_TIME,
+                )
+                clock = MutableClock()
+                executor = FakeExecutor(
+                    clock,
+                    (canonical_json(_empty_result()) + "\n").encode(),
+                    spawn=True,
+                    session_mutator=official_query,
+                )
+                receipt, run_root = _run_adaptive_wave(
+                    request=request,
+                    execution_mode="live",
+                    runtime_root=root / "runtime",
+                    approval_root=approvals,
+                    binary=binary,
+                    auth_source=auth,
+                    executor=executor,
+                    monotonic=clock,
+                    wall_clock=lambda: FIXED_TIME,
+                )
+                self.assertEqual(receipt["status"], "completed")
+                self.assertEqual(receipt["session_proof"]["status"], "verified")
+                self.assertEqual(receipt["session_proof"]["completed_tool_calls"], 1)
+                self.assertEqual(validate_operator_bundle(run_root, approval_root=approvals), [])
+
     def test_schema_top_level_keys_match_runtime_registries(self) -> None:
         mappings = {
             "x.grok.adaptive_recall_wave.request.v2.schema.json": runner._REQUEST_KEYS,
@@ -735,8 +901,8 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             entry for entry in live_entries if entry["target"]["lab_id"] == "google_deepmind"
         ]
         self.assertEqual(len(openai_entries), len(openai_prompt_paths), 7)
-        self.assertEqual(len(google_deepmind_entries), len(google_deepmind_prompt_paths), 5)
-        self.assertEqual(len(live_entries), 13)
+        self.assertEqual(len(google_deepmind_entries), len(google_deepmind_prompt_paths), 7)
+        self.assertEqual(len(live_entries), 14)
         self.assertEqual({canonical_json(entry["target"]) for entry in openai_entries}, {canonical_json(openai_target)})
         self.assertEqual(
             {canonical_json(entry["target"]) for entry in google_deepmind_entries},
@@ -773,6 +939,29 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             "Do not impose a candidate, observation, query, or native-X-call business cap",
             discovery_only_prompt,
         )
+        official_prompt = next(
+            path for path in google_deepmind_prompt_paths if "v5-official-discovery" in path.name
+        ).read_text()
+        official_entry = next(
+            entry
+            for entry in google_deepmind_entries
+            if entry["policy_entry_id"] == "google_deepmind_pretraining_recall_wave2_official_discovery.v5"
+        )
+        self.assertEqual(
+            official_entry["session_query_policy_id"],
+            runner.DISCOVERY_ONLY_OFFICIAL_SESSION_QUERY_POLICY_ID,
+        )
+        self.assertEqual(
+            official_entry["session_query_policy_sha256"],
+            runner.session_query_policy_semantics_sha256(
+                runner.DISCOVERY_ONLY_OFFICIAL_SESSION_QUERY_POLICY_ID
+            ),
+        )
+        self.assertEqual(official_entry["official_account_handles"], ["GoogleDeepMind", "DeepMind"])
+        self.assertIn("One narrow organization exception is allowed", official_prompt)
+        self.assertIn("positive `filter:replies` discovery across four distinct cells", official_prompt)
+        self.assertIn("Convert native-X RFC dates", official_prompt)
+        self.assertIn("Do not impose a candidate, observation, query, or native-X-call business cap", official_prompt)
         with mock.patch.object(runner, "DEFAULT_EFFECTIVE_PROMPT_POLICY", PRODUCTION_EFFECTIVE_PROMPT_POLICY):
             with tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
@@ -1139,7 +1328,7 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
         self.assertIn(runner._RELATIONSHIP_DOWNGRADE_CAVEAT, normalized["candidates"][0]["caveats"])
         self.assertTrue(
             any(
-                runner.RESULT_NORMALIZATION_POLICY_VERSION in limitation and "downgraded 1" in limitation
+                runner.LEGACY_RESULT_NORMALIZATION_POLICY_VERSION_V1 in limitation and "downgraded 1" in limitation
                 for limitation in normalized["limitations"]
             )
         )
@@ -1211,6 +1400,92 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             bio_mismatch,
         )
         self.assertIn("evidence_value_invalid:0:0", validate_model_result(bio_mismatch, live_mode=True))
+
+    def test_current_v2_normalization_atomically_repairs_strict_x_time_and_relationship(self) -> None:
+        raw = _relationship_mismatch_result()
+        raw["candidates"][0]["evidence"][0]["published_at"] = "Wed, 01 Jul 2026 00:00:00 GMT"
+        raw_before = canonical_json(raw)
+
+        normalized = runner._operator_normalize_mechanical_result(
+            raw,
+            policy_version=runner.RESULT_NORMALIZATION_POLICY_VERSION,
+            live_mode=True,
+            require_operator_projection=True,
+        )
+
+        self.assertEqual(canonical_json(raw), raw_before)
+        evidence = normalized["candidates"][0]["evidence"][0]
+        self.assertEqual(evidence["relationship"], "third_party")
+        self.assertEqual(evidence["published_at"], "2026-07-01T00:00:00Z")
+        self.assertTrue(
+            any(
+                runner.RESULT_NORMALIZATION_POLICY_VERSION in limitation and "converted 1" in limitation
+                for limitation in normalized["limitations"]
+            )
+        )
+        self.assertEqual(validate_model_result(normalized, live_mode=True), [])
+
+        legacy = runner._operator_normalize_mechanical_result(
+            raw,
+            policy_version=runner.LEGACY_RESULT_NORMALIZATION_POLICY_VERSION_V1,
+            live_mode=True,
+            require_operator_projection=True,
+        )
+        self.assertEqual(legacy, raw)
+        self.assertIn("evidence_value_invalid:0:0", validate_model_result(legacy, live_mode=True))
+
+    def test_current_v2_timestamp_normalization_is_strict_and_does_not_merge_duplicates(self) -> None:
+        invalid_values = (
+            "Tue, 01 Jul 2026 00:00:00 GMT",
+            "Wed, 01 Jul 2026 00:00:00 +0000",
+            "Wed, 01 Jul 2026 00:00:00 UTC",
+            "Wed, 01 Jul 2026 00:00 GMT",
+            "Wed, 31 Jun 2026 00:00:00 GMT",
+            " Wed, 01 Jul 2026 00:00:00 GMT",
+            "wed, 01 Jul 2026 00:00:00 GMT",
+        )
+        for value in invalid_values:
+            raw = _relationship_mismatch_result()
+            evidence = raw["candidates"][0]["evidence"][0]
+            evidence["relationship"] = "third_party"
+            evidence["published_at"] = value
+            self.assertEqual(
+                runner._operator_normalize_mechanical_result(
+                    raw,
+                    policy_version=runner.RESULT_NORMALIZATION_POLICY_VERSION,
+                    live_mode=True,
+                    require_operator_projection=True,
+                ),
+                raw,
+                value,
+            )
+
+        canonical = _relationship_mismatch_result()
+        canonical["candidates"][0]["evidence"][0]["relationship"] = "third_party"
+        self.assertEqual(
+            runner._operator_normalize_mechanical_result(
+                canonical,
+                policy_version=runner.RESULT_NORMALIZATION_POLICY_VERSION,
+                live_mode=True,
+                require_operator_projection=True,
+            ),
+            canonical,
+        )
+
+        duplicate = copy.deepcopy(canonical)
+        duplicate["candidates"].append(copy.deepcopy(duplicate["candidates"][0]))
+        duplicate["counts"]["candidates_retained"] = 2
+        duplicate["local_reconciliation"]["candidate_records_validated"] = 2
+        self.assertEqual(
+            runner._operator_normalize_mechanical_result(
+                duplicate,
+                policy_version=runner.RESULT_NORMALIZATION_POLICY_VERSION,
+                live_mode=True,
+                require_operator_projection=True,
+            ),
+            duplicate,
+        )
+        self.assertIn("candidate_handle_duplicate:1", validate_model_result(duplicate, live_mode=True))
 
     def test_bio_requires_null_thread_relation_and_typed_temporal_support(self) -> None:
         result = _empty_result()
@@ -2299,6 +2574,56 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             self.assertEqual(sanitized["candidates"][0]["evidence"][0]["relationship"], "third_party")
             self.assertEqual(validate_operator_bundle(run_root, approval_root=approvals), [])
 
+    def test_current_v2_live_bundle_keeps_raw_x_time_and_publishes_canonical_time(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            model_result = _relationship_mismatch_result()
+            model_result["candidates"][0]["evidence"][0]["published_at"] = (
+                "Wed, 01 Jul 2026 00:00:00 GMT"
+            )
+            run_root, approvals = _completed_live_run(root, model_result=model_result)
+
+            receipt = json.loads((run_root / "operator-receipt.json").read_text())
+            raw_model = json.loads(json.loads((run_root / "raw.stdout").read_text())["text"])
+            sanitized = json.loads((run_root / "sanitized.json").read_text())
+            self.assertEqual(receipt["status"], "completed")
+            self.assertEqual(
+                raw_model["candidates"][0]["evidence"][0]["published_at"],
+                "Wed, 01 Jul 2026 00:00:00 GMT",
+            )
+            self.assertEqual(
+                sanitized["candidates"][0]["evidence"][0]["published_at"],
+                "2026-07-01T00:00:00Z",
+            )
+            self.assertEqual(
+                sanitized["candidates"][0]["evidence"][0]["relationship"],
+                "third_party",
+            )
+            self.assertEqual(validate_operator_bundle(run_root, approval_root=approvals), [])
+
+    def test_legacy_operator_v1_bundle_does_not_gain_timestamp_normalization(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            model_result = _relationship_mismatch_result()
+            evidence = model_result["candidates"][0]["evidence"][0]
+            evidence["relationship"] = "third_party"
+            evidence["published_at"] = "Wed, 01 Jul 2026 00:00:00 GMT"
+            with mock.patch.object(
+                runner,
+                "command_policy_sha256",
+                side_effect=runner._legacy_operator_result_v1_command_policy_sha256,
+            ):
+                run_root, approvals = _completed_live_run(root, model_result=model_result)
+
+            receipt = json.loads((run_root / "operator-receipt.json").read_text())
+            sanitized = json.loads((run_root / "sanitized.json").read_text())
+            self.assertEqual(receipt["status"], "result_contract_invalid")
+            self.assertEqual(
+                sanitized["candidates"][0]["evidence"][0]["published_at"],
+                "Wed, 01 Jul 2026 00:00:00 GMT",
+            )
+            self.assertEqual(validate_operator_bundle(run_root, approval_root=approvals), [])
+
     def test_campaign_bridge_is_source_bound_but_always_blocked_without_native_payloads(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -2764,7 +3089,7 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
                 terminal_proof,
                 technical_limits=request["technical_limits"],
                 prior_candidates={},
-                apply_result_normalization=True,
+                result_normalization_policy_version=runner.RESULT_NORMALIZATION_POLICY_VERSION,
             )
             self.assertIsNone(recovered_terminal)
             self.assertEqual(terminal_limit_kind, "json_bytes")
