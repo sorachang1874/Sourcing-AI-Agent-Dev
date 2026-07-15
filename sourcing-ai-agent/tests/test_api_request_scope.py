@@ -199,12 +199,28 @@ class _ScopeOrchestrator:
             return {"status": "invalid", "idempotent_replay": True, "reason": "stub-invalid"}
         if str(payload.get("idempotency_key") or "").strip() == "replay-status-whitespace":
             return {"status": " completed ", "idempotent_replay": True, "module_state_mutated": False}
+        if str(payload.get("idempotency_key") or "").strip() == "replay-status-list":
+            return {"status": ["completed"], "idempotent_replay": True, "module_state_mutated": False}
+        if str(payload.get("idempotency_key") or "").strip() == "replay-status-dict":
+            return {
+                "status": {"value": "completed"},
+                "idempotent_replay": True,
+                "module_state_mutated": False,
+            }
         if str(payload.get("idempotency_key") or "").strip() == "fresh-replay-flag-missing":
             return {"status": "queued", "module_state_mutated": False}
         if str(payload.get("idempotency_key") or "").strip() == "fresh-replay-flag-null":
             return {"status": "queued", "idempotent_replay": None, "module_state_mutated": False}
         if str(payload.get("idempotency_key") or "").strip() == "fresh-replay-flag-string":
             return {"status": "queued", "idempotent_replay": "false", "module_state_mutated": False}
+        if str(payload.get("idempotency_key") or "").strip() == "fresh-status-list":
+            return {"status": ["queued"], "idempotent_replay": False, "module_state_mutated": False}
+        if str(payload.get("idempotency_key") or "").strip() == "fresh-status-dict":
+            return {
+                "status": {"value": "queued"},
+                "idempotent_replay": False,
+                "module_state_mutated": False,
+            }
         return {"status": "queued", "idempotent_replay": False, "module_state_mutated": False}
 
     def get_operation_action_registry(self):
@@ -1057,7 +1073,17 @@ class RequestScopeWiringTest(unittest.TestCase):
             {"status": " completed ", "idempotent_replay": True, "module_state_mutated": False},
         )
 
-        malformed_fresh_results = {
+        malformed_submission_results = {
+            "replay-status-list": {
+                "status": ["completed"],
+                "idempotent_replay": True,
+                "module_state_mutated": False,
+            },
+            "replay-status-dict": {
+                "status": {"value": "completed"},
+                "idempotent_replay": True,
+                "module_state_mutated": False,
+            },
             "fresh-replay-flag-missing": {"status": "queued", "module_state_mutated": False},
             "fresh-replay-flag-null": {
                 "status": "queued",
@@ -1069,8 +1095,18 @@ class RequestScopeWiringTest(unittest.TestCase):
                 "idempotent_replay": "false",
                 "module_state_mutated": False,
             },
+            "fresh-status-list": {
+                "status": ["queued"],
+                "idempotent_replay": False,
+                "module_state_mutated": False,
+            },
+            "fresh-status-dict": {
+                "status": {"value": "queued"},
+                "idempotent_replay": False,
+                "module_state_mutated": False,
+            },
         }
-        for idempotency_key, expected_body in malformed_fresh_results.items():
+        for idempotency_key, expected_body in malformed_submission_results.items():
             with self.subTest(idempotency_key=idempotency_key):
                 malformed_status, malformed_body = self._request(
                     opener,

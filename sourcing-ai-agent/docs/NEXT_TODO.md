@@ -182,7 +182,9 @@
   D1f `15+80`、D1 adjacency `119+189`、operation `136+503`、frontend contract `3` + build `84 modules`、lint
   `58 files`、mypy `81/4`。Pinned `1cb829f` 后续 advisory `NO-GO 0/0/1/1` 的 fresh-202 discriminator 与 nested
   submit-response schema 缺口已在 `d5b0a31` fixed-forward；missing/null/string replay marker 均稳定 400，两分支
-  均组合完整 detail contract，latest exact evidence=`25+68`，fresh pinned non-author review pending。R-028 仍 open，不宣称 command/effect/terminal/EntityDelta 同 UoW、完整 TOCTOU 或
+  均组合完整 detail contract。Pinned `5677a59` advisory=`NO-GO 0/0/1/0` 进一步发现 list/object raw status 的
+  unhashable HTTP 500；当前 fixed-forward 在 replay/fresh enum membership 前强制 raw string，两类 composite
+  negatives 均稳定 400 且 body 不变，latest exact evidence=`25+72`，fresh pinned non-author review pending。R-028 仍 open，不宣称 command/effect/terminal/EntityDelta 同 UoW、完整 TOCTOU 或
   exactly-once；无 provider/model/live。
 - [x] D1g Operation API exact-owner closure current author candidate（2026-07-15）：canonical authorization owner=
   `agent_actions/operation_runs.workspace_id`，run 额外要求 linked action 存在且 exact same workspace；actor 仅为

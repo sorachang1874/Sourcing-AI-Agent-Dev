@@ -2105,17 +2105,23 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
         )
         owner_scope = _expected_crm_owner_kwargs(request) if crm_owner_bound else {}
         result = orchestrator.submit_operation_action(payload, **owner_scope)
-        if result.get("idempotent_replay") is True and result.get("status") in OPERATION_ACTION_SUBMISSION_STATUSES:
+        raw_status = result.get("status")
+        if (
+            isinstance(raw_status, str)
+            and result.get("idempotent_replay") is True
+            and raw_status in OPERATION_ACTION_SUBMISSION_STATUSES
+        ):
             status = HTTPStatus.OK
         elif (
-            result.get("idempotent_replay") is False
-            and result.get("status") in OPERATION_ACTION_FRESH_SUBMISSION_STATUSES
+            isinstance(raw_status, str)
+            and result.get("idempotent_replay") is False
+            and raw_status in OPERATION_ACTION_FRESH_SUBMISSION_STATUSES
         ):
             status = HTTPStatus.ACCEPTED
-        elif result.get("status") == "not_found" and result.get("reason") == "crm_record_not_found":
+        elif raw_status == "not_found" and result.get("reason") == "crm_record_not_found":
             status = HTTPStatus.NOT_FOUND
             result = dict(_CRM_RECORD_NOT_FOUND_BODY)
-        elif result.get("status") == "conflict":
+        elif raw_status == "conflict":
             status = HTTPStatus.CONFLICT
         else:
             status = HTTPStatus.BAD_REQUEST

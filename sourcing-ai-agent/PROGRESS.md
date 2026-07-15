@@ -16,9 +16,12 @@
   and that the submit union constrained only its discriminator, not nested action/run/events. Commit `d5b0a31` now
   requires literal `idempotent_replay=false` for 202 and composes both branches with the complete detail response.
   Missing/null/string markers return the stable 400 body; malformed nested carriers fail the executable schema probe.
-  Evidence: request-scope plus three exact frontend nodes **25 passed + 68 subtests**, D1f PG **15 + 80 subtests**,
-  frontend build **84 modules**, and full Operation runtime **136 + 503 subtests**. This remains author
-  fixed-forward evidence; fresh pinned review is pending.
+  A re-review of `d5b0a31` then found padded replay status acceptance; `5677a59` switched to raw enum membership, but
+  its pinned advisory=`NO-GO 0/0/1/0` because list/object status values raised unhashable `TypeError` and HTTP 500. The
+  current fixed-forward requires a raw string before either replay/fresh membership check; list/object negatives now
+  return stable HTTP 400 bodies. Evidence: request-scope plus three exact frontend nodes **25 passed + 72 subtests**,
+  D1f PG **15 + 80 subtests**, frontend build **84 modules**, and full Operation runtime **136 + 503 subtests**. This
+  remains author fixed-forward evidence; fresh pinned review is pending.
 - A later D1g review attempt ended without a valid verdict but supplied three reproducible closure gaps. The
   fixed-forward now filters shared-workflow commands through their physical operation→run+action owner and filters
   malformed operation events by physical workspace before SQL `LIMIT`. Planned CRM/export command references must

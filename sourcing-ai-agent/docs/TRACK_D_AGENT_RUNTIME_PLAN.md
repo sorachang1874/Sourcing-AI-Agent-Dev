@@ -119,7 +119,9 @@ serve、会话/事件层、planner loop），用一个垂直切片证明闭环�
   submit replay 返回 closed current lifecycle + HTTP 200；unknown persisted status 与 stable non-fresh action/run
   incoherence pre-write conflict，approved replay 读取既有 run，action-only rejection 不创建 run，queued partial
   仅修复 deterministic run；所有 submit 均 preflight deterministic run，orphan run 与非法 static-required
-  approval 组合 fail closed；conditional non-required approval/cancel/retry 保留既有 owner + R-019 边界。frontend submit 以 required literal replay discriminator 闭合 fresh/replay 联合；
+  approval 组合 fail closed；conditional non-required approval/cancel/retry 保留既有 owner + R-019 边界。Frontend
+  submit 以 required literal replay discriminator 闭合 fresh/replay 联合；`5677a59` 后续 advisory 的 composite
+  raw-status HTTP 500 已以 string-first total enum guard fixed-forward，exact transport evidence=`25+72`；
   R-029 observation epoch=`d1f_r029_20260715_v2` 且 submit-replay evidence action-scoped。D1f checkpoint=
   **3 schema-defined / 12 schema-less / served=0**；full served predicate 的 revisioned model-safe result schema 与
   simulate serializer 尚未实现。D1g current author candidate 接续闭合 authenticated Operation API 的 R-031

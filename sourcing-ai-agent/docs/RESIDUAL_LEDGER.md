@@ -75,7 +75,9 @@
   migrate the other 12 R-029 actions. Epoch `d1f_r029_20260715_v2` gives action-scoped submit-replay evidence a new
   durable key instead of mutating v1 run-carried evidence. Authenticated submit is exact-owner fenced; downstream Operation
   list/detail/provenance/control is separately remediated by the review-pending D1g candidate under R-031. Local
-  advisory findings and author tests are fixed-forward evidence only; fresh pinned non-author review remains pending.
+  advisory findings and author tests are fixed-forward evidence only. Pinned `5677a59` advisory=`NO-GO 0/0/1/0` found
+  list/object raw statuses could raise HTTP 500; current string-first replay/fresh enum guard returns stable HTTP 400
+  with exact evidence `25+72`. Fresh pinned non-author review remains pending.
 
 - **R-019 / R-028 / R-031 / D1g (2026-07-16):** D1g fixed-forward exact-scopes authenticated action/run
   lists, detail, provenance, and every Operation control to the server-derived workspace; an authenticated run also
