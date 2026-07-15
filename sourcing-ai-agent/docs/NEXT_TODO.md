@@ -280,8 +280,10 @@
   `NoExposureTerminalSpec` 授权 complete-none `no_exposure`；它在 common `d3-dispatch-v2` coordination lock 下证明
   dispatch/exposure absence，**绝不**尝试锁一个不存在的 exposure row。stale already-authorized receipts 仅 audit/cost、
   不授权 apply；attempt/protocol failure 本身不进 response quarantine。provider delivery id 或 durable inbound
-  `TransportResponseReceipt` get-or-create stable occurrence；redelivery 复用。D3c2h0 已否决 scope-digest-only
-  receipt/quarantine occurrence/idempotency key；D3c2h1 须以完整 PFX ratify exact encoder，digest mismatch collision。
+  `TransportResponseReceipt` get-or-create stable occurrence；redelivery 复用。`late-response-v1` 只保留为
+  domain-separation tag；D3c2h0 已否决 scope-digest-only receipt/quarantine occurrence/idempotency key，D3c2h1 须以
+  完整 PFX ratify exact encoder，digest mismatch collision。legacy `exposure→receipt→quarantine/cost-axis` shorthand
+  已被 supersede，quarantine 不再是无条件 tail。
   post-network 分成两条 UoW：pure exposure-first 仅 exposure lock→applicable receipt→exposure terminalization，
   quarantine permission=0；只有先取 `d3-dispatch-v2` 并按 operation root→optional plan/review/gate→all participating
   commands→intent/predecessor→ActivityRun/Attempt 完成全局 owner-row 前缀锁/验、从 stored current state 分类的

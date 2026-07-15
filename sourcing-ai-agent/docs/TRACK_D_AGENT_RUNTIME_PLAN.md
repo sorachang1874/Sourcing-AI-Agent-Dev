@@ -593,8 +593,11 @@ TD-4 初始路由表已按 owner 2026-07-13 裁决落档（D0 §4）。
    control 先赢则零 send，dispatch 先赢只形成已授权 in-flight，response 仅可入 durable quarantine/cost
    reconciliation；provider delivery id 或 durable inbound `TransportResponseReceipt` get-or-create stable
    `response_occurrence_id`（stable occurrence），redelivery 复用。D3c2h0 禁止 scope-digest-only receipt/quarantine
-   key；D3c2h1 必须以 full five-field PFX ratify exact occurrence/idempotency encoder，digest mismatch 是 collision。
+   key；`late-response-v1` 只保留为 domain-separation tag，旧的 scope-digest-only grammar 已被 supersede；D3c2h1
+   必须以 full five-field PFX + exact exposure/delivery identity ratify exact occurrence/idempotency encoder，digest
+   mismatch 是 collision。
    response/failure receipt 同时 exact-copy exposure 的 post-claim `command_attempt`。post-network 分成两条 UoW：
+   legacy `exposure→receipt→quarantine/cost-axis` shorthand 已被 supersede，不能再把 quarantine 当成无条件 tail；
    pure exposure-first 仅 exposure lock→applicable receipt→exposure terminalization，quarantine permission=0；
    response-classification 必须先持 `d3-dispatch-v2`，再按 operation root→optional plan/review/gate→all participating
    commands（确定序）→intent/predecessor→ActivityRun/Attempt 锁/验 complete global owner-row prefix，从 stored current
@@ -605,9 +608,10 @@ TD-4 初始路由表已按 owner 2026-07-13 裁决落档（D0 §4）。
    `not_applied(reason=stale_claim|business_precondition_conflict)`（不是 event/state），domain/attempt/intent/event/
    command/source/result 全零写；
    quarantine 由一个 SQL repository 拥有，immutable identity/digests insert-once，且禁止 unowned
-   `workflow_run_id`；cost/retention typed CAS entrypoints 写集分离且 monotonic，quarantine 的两轴正交：
+   `workflow_run_id`；cost/retention typed CAS entrypoints 写集分离且 monotonic，`cost_state/retention_state 正交`，
+   禁止混成 disposition；quarantine 的两轴精确为：
    `cost_state: pending_reconciliation -> reconciled_confirmed | reconciled_uncertain` 与
-   `retention_state: retained -> purged_tombstone`，禁止混成 disposition；no-call exposure 没有 response receipt/
+   `retention_state: retained -> purged_tombstone`；no-call exposure 没有 response receipt/
    quarantine。current canonical `ModelInvocationEnvelopeV1` 无 durable ref issuer；D0f sole owner/ref grammar 是
    receipt manifests 前置，禁止 placeholder ref/hash 或第二 envelope schema；禁止持 PG transaction 跨网络。
    strict-D3 首次 `succeeded|failed_terminal` result command+event 取 common lock，在同一 UoW 写
