@@ -212,10 +212,10 @@ export interface WorkflowCommandControlPolicy {
   readonly providerAfterStartControlMode: string;
   readonly providerAfterStartControlOwner: string;
   readonly providerAfterStartControlBlockedReason: string;
-  readonly providerAfterStartControlUpgradeRequirements: readonly string[];
+  readonly providerAfterStartControlUpgradeRequirements: WorkflowPublicFrozenArray<string>;
   readonly moduleStateMutatedOnProviderAfterStartControl: boolean;
   readonly runningControlCategory: string;
-  readonly runningControlCategories: readonly string[];
+  readonly runningControlCategories: WorkflowPublicFrozenArray<string>;
   readonly runningControlMaturity: string;
   readonly runningControlGapStatus: string;
   readonly runningControlSurface: string;
@@ -328,7 +328,17 @@ export type WorkflowPublicJsonValue =
 
 declare global {
   interface ArrayConstructor {
-    isArray(value: WorkflowPublicJsonValue): value is WorkflowPublicJsonArray;
+    isArray<
+      T extends
+        | WorkflowPublicJsonValue
+        | WorkflowPublicFrozenArray<unknown>
+        | undefined,
+    >(
+      value: T,
+    ): value is Extract<
+      T,
+      WorkflowPublicJsonArray | WorkflowPublicFrozenArray<unknown>
+    >;
   }
 }
 
@@ -2464,7 +2474,7 @@ export interface OperationRunControlState {
   readonly canCancel: boolean;
   readonly canRetry: boolean;
   readonly canResume: boolean;
-  readonly allowedActions: readonly string[];
+  readonly allowedActions: WorkflowPublicFrozenArray<string>;
   readonly disabledReasons: Readonly<Record<string, string>>;
   readonly controlSourceOfTruth: string;
   readonly fallbackStatus: string;

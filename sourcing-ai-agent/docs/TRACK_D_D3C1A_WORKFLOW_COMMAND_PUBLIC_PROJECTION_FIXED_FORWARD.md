@@ -17,7 +17,9 @@
 > `gpt-5.6-sol / ultra / priority` pinned review
 > `runtime/reviews/20260715T030659Z_Track_D_D3c1a_public_projection_fixed-forward_ec0ad95.md`: formal **NO-GO**,
 > P0/P1/P2/P3=`0/0/5/2`. Section 3.4 records the fixed-forward for all five P2 findings and the two explicit P3
-> residuals. A fresh pinned formal re-review of the enclosing commit is still required.
+> residuals. The later valid Ultra review of `74df4b4` is also formal **NO-GO**, P0/P1/P2/P3=`0/0/2/2`;
+> §3.7 records the fixed-forward for its two P2 findings. A fresh pinned formal re-review of the enclosing commit is
+> still required.
 
 ## 1. Outcome and bounded impact
 
@@ -294,7 +296,30 @@ The two P3 findings remain the already accepted `R-019` streaming-allocation and
 boundaries. They are not promoted into this bounded compile-contract/document correction. A fresh pinned Ultra review
 must bind the new enclosing commit; this formal NO-GO remains controlling until that re-review returns GO.
 
-### 3.7 Earlier precommit adversarial author-audit fixes
+### 3.7 Fourth valid Ultra review fixed-forward
+
+The isolated reviewer home then bound the exact range
+`46af086692b230eae1d0455f03d791cf0008adf7..74df4b49c6cdec362f370504d6c77a3f3ff3f325`
+and produced
+`runtime/reviews/20260715T044618Z_Track_D_D3c1a_third_Ultra_fixed-forward_74df4b4.md` with formal **NO-GO**,
+P0/P1/P2/P3=`0/0/2/2`. Its two new P2 mechanisms are fixed-forwarded in this candidate:
+
+1. The `Array.isArray` declaration is now a constrained generic over trusted recursive JSON values, optional trusted
+   JSON values, and arbitrary `WorkflowPublicFrozenArray<DTO>` values. Its extracted predicate retains the exact
+   frozen-array member type after narrowing instead of falling through to the mutable standard-library predicate.
+   Compile-only assertions reject index assignment, `length` writes, `push`, and `splice` for an optional JSON member,
+   an endpoint DTO list, and a provenance DTO list. A positive mutable-array assertion proves ordinary
+   `Array.isArray(unknown)` narrowing is unchanged outside that constrained domain.
+2. `providerAfterStartControlUpgradeRequirements`, `runningControlCategories`, and `allowedActions` now expose
+   `WorkflowPublicFrozenArray<string>` instead of ordinary `readonly string[]`. The compile-only oracle rejects index,
+   length, and mutator access after `Array.isArray` narrowing for each previously omitted surface.
+
+The two P3 findings remain the already accepted `R-019` streaming-allocation and `R-030` non-enumerable compatibility
+boundaries. This bounded fix changes only the TypeScript compile contract and its documentation; the runtime wire and
+snapshot implementation are unchanged. A fresh pinned Ultra review must bind the new enclosing commit; this formal
+NO-GO remains controlling until that re-review returns GO.
+
+### 3.8 Earlier precommit adversarial author-audit fixes
 
 After implementing the five direct findings, adversarial passes in the author session exposed additional bounded
 cross-layer gaps. They are fixed in the same D3c1a candidate because leaving them open would make the advertised public
@@ -631,6 +656,19 @@ Third Ultra-review fixed-forward evidence, before creating its enclosing commit:
 - fresh formal pinned re-review of the new enclosing commit remains pending. These author results do not override the
   recorded NO-GO.
 
+Fourth Ultra-review fixed-forward evidence, before creating its enclosing commit:
+
+- valid formal review artifact against `74df4b4`: **NO-GO**, P0/P1/P2/P3=`0/0/2/2`;
+- frontend production build: **82 modules transformed**, `551.65 kB` / gzip `164.40 kB`; the existing `>500 kB`
+  chunk warning remains informational;
+- the compile-only contract rejects index, `length`, `push`, and `splice` mutation after `Array.isArray` narrowing for
+  optional JSON, endpoint DTO, provenance DTO, control-upgrade requirements, running-control categories, and allowed
+  actions, while ordinary mutable-array narrowing remains available;
+- D3c1a projection contract: **19 passed**; this TypeScript-only fixed-forward changes no backend, repository, storage,
+  migration, or PG path;
+- fresh formal pinned re-review of the new enclosing commit remains pending. These author results do not override the
+  recorded NO-GO.
+
 The advisory also exercised hostile hash-collision keys with zero equality-hook calls, alternating carrier depth 40 in
 9 command projections, and a binary depth-10 carrier tree in 99 projections; budget cutoffs omitted the member rather
 than emitting an empty canonical carrier. This is author/advisory evidence, not a formal pinned verdict.
@@ -645,6 +683,7 @@ in §3.3. The valid `gpt-5.6-sol / ultra / priority` artifact for `b54ef9c...` i
 findings are fixed-forwarded in §3.4; `R-019` and `R-030` remain explicit P3 residuals. A fresh formal pinned re-review
 for `f5c33b0...` is also formal **NO-GO**, with its four P2 findings fixed-forwarded in §3.5. A fresh formal pinned
 re-review for `46af086...` is formal **NO-GO**, with its two P2 findings fixed-forwarded in §3.6. A fresh formal pinned
+re-review for `74df4b4...` is formal **NO-GO**, with its two P2 findings fixed-forwarded in §3.7. A fresh formal pinned
 re-review must bind the enclosing commit. Until that scope-matched artifact returns GO, live/W6/manual validation,
 promotion, and milestone signoff remain fail closed for this scope.
 
