@@ -131,6 +131,16 @@
       "authority": "live_authorized"
     },
     {
+      "policy_entry_id": "google_deepmind_pretraining_recall_wave2_discovery_only.v4",
+      "target": {
+        "lab_id": "google_deepmind",
+        "research_focus_id": "pretraining",
+        "scope": "Public professional evidence of current or historical Google DeepMind affiliation and current or historical pre-training or base-model training relevance."
+      },
+      "source_prompt_sha256": "dedbd2044651a3edfdb12442b80eb24b3ce61a361fcfe24806d50c96978dc4ac",
+      "authority": "live_authorized"
+    },
+    {
       "policy_entry_id": "google_deepmind_pretraining_recall_wave3.v1",
       "target": {
         "lab_id": "google_deepmind",

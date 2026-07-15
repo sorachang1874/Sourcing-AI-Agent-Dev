@@ -403,6 +403,52 @@ The v3 prompt SHA-256 is `8b752a8dd6606ac609f47fa5ce14af7c4c7518dffa2f302ca5292e
 No retry is authorized by this diagnostic alone; a fresh request, one-shot grant, and pinned non-author review remain
 required.
 
+### Wave2-v3-r2 rejected diagnostic and discovery-only correction
+
+The fresh result-v3 execution also finished the provider process normally but sealed `result_contract_invalid`.
+The raw result contained 34 candidate rows and 96 complete evidence objects; 95 evidence rows passed every runtime
+binding. One non-Bio row used `relationship=self` even though its valid Post URL and `author_handle` belonged to a
+different handle. Runtime validation correctly rejected the whole bundle. A read-only copy passed with zero errors
+after changing only that mechanically impossible relationship to `third_party`; the sealed bundle itself remains
+unchanged and replays with zero bundle-integrity errors under its pre-normalization policy digest.
+
+| Measure | Rejected diagnostic value |
+| --- | ---: |
+| Provider process | exit 0; no timeout, TERM, KILL, fallback, or technical-limit breach |
+| Elapsed | 372.435 seconds |
+| Session events / model turns | 222 / 3 |
+| Completed native-X calls | 101 unique calls |
+| Tool mix | keyword 60 / user 37 / semantic 3 / thread 1 |
+| Tokens | 233,951 uncached input / 2,563,840 cache read / 35,675 output / 2,833,466 total |
+| Conservative estimated cost | $5.809632 |
+| Candidate / evidence rows | 34 / 96 |
+| Directional candidate yield | `34/101 = 0.337` |
+
+The richer v3 evidence did not improve large-lab recall over rejected wave2-v2 (`34/100 = 0.340`). At least 72 of
+101 calls were already person-level hydration: 38 handle-scoped keyword calls plus 34 candidate profile lookups. The
+first handle-scoped query occurred at ordinal 4 and the first exact candidate lookup at ordinal 26, so the prompt's
+declared discovery-first ordering was not followed. Top coverage fell from eight to six calls, explicit historical
+shards fell from three to one, and only one thread was fetched.
+
+Post/Reply evidence remains valuable in the returned candidate records: 32/34 candidates had Post-like evidence,
+11/34 had Reply-like evidence, and 32/34 had Post-or-Reply support for pretraining relevance. The execution problem
+was query attribution, not Bio-only result construction. All 40 single-positive-`from:` queries contained `OR` or
+`|`, so the closed conjunctive classifier credited zero authored-Post and zero authored-Reply attempts. None of the
+20 unresolved-pretraining leads had a mechanically complete Post/Reply pair. Prompt prose alone is therefore not a
+reliable owner for the hydration pair.
+
+The next challenger is `wave2-v4-discovery-only`. It removes person hydration from the Grok turn entirely: no
+`from:<handle>`, exact-name, bare-handle, or per-person corroboration query is allowed. Its work is broad organization,
+era, project, technical-function, official/team Reply, semantic, user and thread expansion, with no business count
+cap. This makes discovery-call allocation and marginal unique-handle yield observable. If that result is accepted,
+the operator will generate a separate hydration stage with exact, independently issued conjunctive Post and Reply
+queries rather than asking one long model prompt to self-schedule both phases.
+
+The current command policy adds a versioned, monotonic operator normalization for the isolated relationship error:
+only a non-Bio `self` row whose author differs from the candidate may be downgraded to `third_party`; raw stdout stays
+unchanged, audit caveat/count text is appended, and the transformed result is admitted only when every other runtime
+contract passes. This cannot upgrade evidence or retroactively change the rejected r2 bundle.
+
 ### Native-result attribution limit
 
 Grok CLI 0.2.101 stores native-X tool names and input arguments but not the returned X result bodies in its local

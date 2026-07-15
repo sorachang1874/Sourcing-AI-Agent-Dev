@@ -117,6 +117,11 @@ _SURFACE_COVERAGE_DOWNGRADE_REASON = (
     "Operator downgraded the result to partial because required per-handle authored Post/Reply coverage "
     "is incomplete for unresolved pretraining leads."
 )
+RESULT_NORMALIZATION_POLICY_VERSION = "mechanical-evidence-relationship-downgrade-v1"
+_RELATIONSHIP_DOWNGRADE_CAVEAT = (
+    "Operator normalized a mechanically impossible self relationship to third_party because the evidence author "
+    "did not match the candidate handle; the raw model output is retained and this evidence requires source review."
+)
 AUTHORITY = {
     "canonical_identity_write_authorized": False,
     "outreach_authorized": False,
@@ -1310,6 +1315,82 @@ def validate_model_result(
     return errors
 
 
+def _operator_normalize_mechanical_evidence_relationships(
+    result: Any,
+    *,
+    prior_candidates: Mapping[str, PriorCandidateFacts] | None = None,
+    live_mode: bool,
+    require_operator_projection: bool,
+) -> Any:
+    """Apply the current result-policy's narrow, monotonic relationship repair.
+
+    The model can occasionally label a non-Bio Post/mention/thread authored by
+    another handle as ``self``.  The raw envelope remains untouched; only the
+    operator-owned sanitized projection may downgrade that impossible claim to
+    ``third_party``.  No candidate state, support claim, evidence row, or
+    confidence value is added or upgraded.
+    """
+
+    if not isinstance(result, dict) or set(result) != _RESULT_KEYS:
+        return result
+    limitations = result.get("limitations")
+    candidates = result.get("candidates")
+    if (
+        not isinstance(limitations, list)
+        or any(not _is_text(item, maximum=4_000) for item in limitations)
+        or not isinstance(candidates, list)
+    ):
+        return result
+    normalized = strict_json_loads(canonical_json(result))
+    normalized_count = 0
+    for candidate in normalized["candidates"]:
+        if not isinstance(candidate, dict) or set(candidate) != _CANDIDATE_KEYS:
+            continue
+        handle = candidate.get("handle")
+        caveats = candidate.get("caveats")
+        evidence_rows = candidate.get("evidence")
+        if (
+            not _validate_handle(handle)
+            or not isinstance(caveats, list)
+            or any(not _is_text(item, maximum=2_000) for item in caveats)
+            or not isinstance(evidence_rows, list)
+        ):
+            continue
+        candidate_downgrade_count = 0
+        for evidence in evidence_rows:
+            if (
+                not isinstance(evidence, dict)
+                or set(evidence) != _EVIDENCE_KEYS
+                or evidence.get("kind") not in (_EVIDENCE_KINDS - {"bio"})
+                or evidence.get("relationship") != "self"
+                or not _validate_handle(evidence.get("author_handle"))
+                or evidence["author_handle"].casefold() == handle.casefold()
+            ):
+                continue
+            evidence["relationship"] = "third_party"
+            candidate_downgrade_count += 1
+        if candidate_downgrade_count:
+            normalized_count += candidate_downgrade_count
+            if _RELATIONSHIP_DOWNGRADE_CAVEAT not in caveats:
+                caveats.append(_RELATIONSHIP_DOWNGRADE_CAVEAT)
+    if normalized_count:
+        limitation = (
+            f"Operator normalization {RESULT_NORMALIZATION_POLICY_VERSION} downgraded {normalized_count} "
+            "mechanically impossible evidence relationship value(s) from self to third_party because the evidence "
+            "author did not match the candidate handle. Raw model output is unchanged; no evidence, support claim, "
+            "candidate state, or confidence value was upgraded."
+        )
+        normalized["limitations"].append(limitation)
+        if not validate_model_result(
+            normalized,
+            prior_candidates=prior_candidates,
+            live_mode=live_mode,
+            require_operator_projection=require_operator_projection,
+        ):
+            return normalized
+    return result
+
+
 def _operator_project_model_result(
     result: Mapping[str, Any],
     *,
@@ -1766,7 +1847,22 @@ def _command_policy(
     )
 
 
+def _current_result_normalization_command_policy_sha256(request: Mapping[str, Any]) -> str:
+    return canonical_sha256(
+        {
+            "argv_template": _command_policy(request),
+            "result_normalization_policy_version": RESULT_NORMALIZATION_POLICY_VERSION,
+        }
+    )
+
+
 def command_policy_sha256(request: Mapping[str, Any]) -> str:
+    return _current_result_normalization_command_policy_sha256(request)
+
+
+def _legacy_pre_normalization_result_v3_command_policy_sha256(request: Mapping[str, Any]) -> str:
+    """Replay-only digest for retained result-v3 bundles sealed before normalization v1."""
+
     return canonical_sha256(_command_policy(request))
 
 
@@ -1788,7 +1884,8 @@ def _redacted_policy_from_bindings(
     *,
     legacy_plain: bool = False,
     legacy_result_v2: bool = False,
-) -> list[str]:
+    legacy_pre_normalization_result_v3: bool = False,
+) -> list[str] | dict[str, Any]:
     del input_binding
     synthetic_request = {
         "transport": {
@@ -1797,11 +1894,17 @@ def _redacted_policy_from_bindings(
         },
         "emergency": {"max_turns": command_binding["max_turns"]},
     }
-    return _command_policy(
+    argv_template = _command_policy(
         synthetic_request,
         legacy_plain=legacy_plain,
         legacy_result_v2=legacy_result_v2,
     )
+    if legacy_plain or legacy_result_v2 or legacy_pre_normalization_result_v3:
+        return argv_template
+    return {
+        "argv_template": argv_template,
+        "result_normalization_policy_version": RESULT_NORMALIZATION_POLICY_VERSION,
+    }
 
 
 def _redacted_environment_policy() -> dict[str, str]:
@@ -2902,6 +3005,7 @@ def _parse_structured_stdout(
     expected_model_id: str | None = None,
     max_turns: int = 512,
     allow_legacy_plain: bool = False,
+    apply_result_normalization: bool = False,
 ) -> tuple[Any | None, bytes | None, int, int, bool, bool, str | None, HeadlessEnvelope | None]:
     if len(raw) > technical_limits["max_json_bytes"]:
         return None, None, 0, 0, False, False, "json_bytes", None
@@ -2960,6 +3064,13 @@ def _parse_structured_stdout(
             model_payload = payload
     if not isinstance(model_payload, dict):
         return model_payload, None, prefix_bytes, suffix_bytes, syntax_compliant, False, None, headless
+    if apply_result_normalization:
+        model_payload = _operator_normalize_mechanical_evidence_relationships(
+            model_payload,
+            prior_candidates=prior_candidates,
+            live_mode=live_mode,
+            require_operator_projection=headless is None,
+        )
     sanitized = (canonical_json(model_payload) + "\n").encode()
     contract_valid = not validate_model_result(
         model_payload,
@@ -3639,6 +3750,7 @@ def _terminal_session_model_result(
     *,
     technical_limits: Mapping[str, Any],
     prior_candidates: Mapping[str, PriorCandidateFacts],
+    apply_result_normalization: bool,
 ) -> dict[str, Any] | None:
     """Return only a transcript-proven terminal structured model result.
 
@@ -3662,6 +3774,13 @@ def _terminal_session_model_result(
         )
     except (AdaptiveWaveValidationError, UnicodeError, ValueError, RecursionError):
         return None
+    if apply_result_normalization:
+        payload = _operator_normalize_mechanical_evidence_relationships(
+            payload,
+            prior_candidates=prior_candidates,
+            live_mode=True,
+            require_operator_projection=False,
+        )
     if not isinstance(payload, dict) or validate_model_result(
         payload,
         prior_candidates=prior_candidates,
@@ -3682,6 +3801,7 @@ def _recover_transcript_terminal_result(
     technical_limits: Mapping[str, Any],
     prior_candidates: Mapping[str, PriorCandidateFacts],
     allow_recovery: bool,
+    apply_result_normalization: bool,
 ) -> tuple[Any | None, bytes | None, bool]:
     if contract_valid or not allow_recovery or headless_envelope is None or session_proof is None:
         return parsed_result, sanitized, contract_valid
@@ -3689,6 +3809,7 @@ def _recover_transcript_terminal_result(
         session_proof,
         technical_limits=technical_limits,
         prior_candidates=prior_candidates,
+        apply_result_normalization=apply_result_normalization,
     )
     if recovered is None:
         return parsed_result, sanitized, contract_valid
@@ -4104,6 +4225,9 @@ def _run_adaptive_wave(
             command=command,
             effective_prompt_policy=effective_prompt_policy,
         )
+        apply_result_normalization = command_binding["command_policy_sha256"] == (
+            _current_result_normalization_command_policy_sha256(request)
+        )
         started_at = _timestamp(started_clock)
         intent_approval = _approval_binding(
             request,
@@ -4297,6 +4421,7 @@ def _run_adaptive_wave(
             expected_model_id=transport["model_id"],
             max_turns=request["emergency"]["max_turns"],
             allow_legacy_plain=execution_mode == "fixture",
+            apply_result_normalization=apply_result_normalization,
         )
         technical_limit_kind = technical_limit_kind or json_limit_kind
 
@@ -4330,6 +4455,7 @@ def _run_adaptive_wave(
             technical_limits=request["technical_limits"],
             prior_candidates=prior_candidates,
             allow_recovery=execution_mode == "live",
+            apply_result_normalization=apply_result_normalization,
         )
         if contract_valid and isinstance(parsed_result, dict) and (
             execution_mode == "fixture" or session_proof is not None
@@ -5051,6 +5177,13 @@ def validate_operator_receipt(receipt: Any) -> list[str]:
         current_schema_sha = result_schema_sha256()
         legacy_schema_sha = result_schema_sha256(legacy_v2=True)
         current_policy = canonical_sha256(_redacted_policy_from_bindings(input_binding, command_binding))
+        pre_normalization_result_v3_policy = canonical_sha256(
+            _redacted_policy_from_bindings(
+                input_binding,
+                command_binding,
+                legacy_pre_normalization_result_v3=True,
+            )
+        )
         legacy_plain_policy = canonical_sha256(
             _redacted_policy_from_bindings(input_binding, command_binding, legacy_plain=True)
         )
@@ -5061,7 +5194,8 @@ def validate_operator_receipt(receipt: Any) -> list[str]:
             errors.append("receipt_result_schema_hash_invalid")
         recorded_policy = command_binding["command_policy_sha256"]
         schema_policy_pair_valid = (
-            recorded_schema_sha == current_schema_sha and recorded_policy == current_policy
+            recorded_schema_sha == current_schema_sha
+            and recorded_policy in {current_policy, pre_normalization_result_v3_policy}
         ) or (
             recorded_schema_sha == legacy_schema_sha
             and recorded_policy in {legacy_plain_policy, legacy_result_policy}
@@ -5288,15 +5422,19 @@ def validate_operator_bundle(
     command_binding = receipt.get("command_binding", {})
     input_binding = receipt.get("input_binding", {})
     new_command_policy = command_policy_sha256(request)
+    pre_normalization_result_v3_policy = _legacy_pre_normalization_result_v3_command_policy_sha256(request)
     legacy_command_policy = _legacy_command_policy_sha256(request)
     legacy_result_command_policy = _legacy_structured_result_command_policy_sha256(request)
     recorded_command_policy = (
         command_binding.get("command_policy_sha256") if isinstance(command_binding, dict) else None
     )
+    current_normalization_replay = recorded_command_policy == new_command_policy
+    pre_normalization_result_v3_replay = recorded_command_policy == pre_normalization_result_v3_policy
     legacy_plain_replay = recorded_command_policy == legacy_command_policy
     legacy_result_policy_replay = recorded_command_policy == legacy_result_command_policy
     if recorded_command_policy not in {
         new_command_policy,
+        pre_normalization_result_v3_policy,
         legacy_command_policy,
         legacy_result_command_policy,
     }:
@@ -5304,7 +5442,10 @@ def validate_operator_bundle(
     if (
         legacy_result_schema_replay
         and not (legacy_plain_replay or legacy_result_policy_replay)
-    ) or (not legacy_result_schema_replay and legacy_result_policy_replay):
+    ) or (
+        not legacy_result_schema_replay
+        and not (current_normalization_replay or pre_normalization_result_v3_replay)
+    ):
         errors.append("result_schema_command_policy_mismatch")
     session_id = command_binding.get("session_id") if isinstance(command_binding, dict) else None
     expected_binary_sha: str | None = None
@@ -5359,6 +5500,8 @@ def validate_operator_bundle(
                 if legacy_plain_replay
                 else legacy_result_command_policy
                 if legacy_result_policy_replay
+                else pre_normalization_result_v3_policy
+                if pre_normalization_result_v3_replay
                 else new_command_policy
             ),
             "environment_policy_sha256": canonical_sha256(_redacted_environment_policy()),
@@ -5419,6 +5562,8 @@ def validate_operator_bundle(
                                 if legacy_plain_replay
                                 else legacy_result_command_policy
                                 if legacy_result_policy_replay
+                                else pre_normalization_result_v3_policy
+                                if pre_normalization_result_v3_replay
                                 else new_command_policy
                             ),
                             replay_result_schema_sha256=(
@@ -5543,6 +5688,7 @@ def validate_operator_bundle(
         expected_model_id=request.get("transport", {}).get("model_id"),
         max_turns=request["emergency"]["max_turns"],
         allow_legacy_plain=mode == "fixture" or legacy_plain_replay,
+        apply_result_normalization=current_normalization_replay,
     )
     if receipt.get("status") != "crash_recovered":
         if artifacts.get("non_json_prefix_bytes") != prefix or artifacts.get("non_json_suffix_bytes") != suffix:
@@ -5600,6 +5746,7 @@ def validate_operator_bundle(
         # Preserve replay of already-sealed rejected bundles.  Current runs
         # can only seal `completed` after terminal-message recovery succeeds.
         allow_recovery=mode == "live" and receipt.get("status") == "completed",
+        apply_result_normalization=current_normalization_replay,
     )
     if contract_valid and isinstance(parsed_result, dict) and (mode == "fixture" or session_proof is not None):
         parsed_result = _operator_project_model_result(
@@ -5659,6 +5806,7 @@ def validate_operator_bundle(
             errors.append("structured_output_schema_hash_mismatch")
         if command_binding["command_policy_sha256"] not in {
             command_policy_sha256(request),
+            _legacy_pre_normalization_result_v3_command_policy_sha256(request),
             _legacy_command_policy_sha256(request),
             _legacy_structured_result_command_policy_sha256(request),
         }:
@@ -5975,6 +6123,9 @@ def _recover_incomplete_run_locked(
     recovery_legacy_plain = intent["command_binding"].get("command_policy_sha256") == _legacy_command_policy_sha256(
         request
     )
+    recovery_current_normalization = (
+        intent["command_binding"].get("command_policy_sha256") == command_policy_sha256(request)
+    )
     parsed_result, sanitized, _, _, _, contract_valid, _, headless_envelope = _parse_structured_stdout(
         raw,
         technical_limits=intent["technical_limits"],
@@ -5984,6 +6135,7 @@ def _recover_incomplete_run_locked(
         expected_model_id=request["transport"]["model_id"],
         max_turns=intent["emergency"]["max_turns"],
         allow_legacy_plain=intent["execution_mode"] == "fixture" or recovery_legacy_plain,
+        apply_result_normalization=recovery_current_normalization,
     )
     sanitized_path = run_root / "sanitized.json"
     compiled_prompt_path = run_root / intent["runtime_layout"]["compiled_prompt_name"]

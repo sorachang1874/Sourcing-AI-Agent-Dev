@@ -110,6 +110,43 @@ def _candidate(handle: str, *, profile_host: str = "profiles.invalid") -> dict[s
     }
 
 
+def _relationship_mismatch_result() -> dict[str, Any]:
+    result = _empty_result()
+    candidate = _candidate("TargetPerson", profile_host="x.com")
+    candidate.update(
+        {
+            "target_lab_affiliation_state": "current",
+            "confidence": "medium",
+            "evidence": [
+                {
+                    "kind": "post",
+                    "relationship": "self",
+                    "subject_handle": "TargetPerson",
+                    "author_handle": "OtherAuthor",
+                    "post_id": "123456",
+                    "url": "https://x.com/OtherAuthor/status/123456",
+                    "published_at": "2026-07-01T00:00:00Z",
+                    "excerpt": "TargetPerson currently works at the synthetic target lab.",
+                    "thread_relation": "quote",
+                    "supports": [
+                        {"dimension": "target_lab_affiliation_state", "asserted_value": "current"}
+                    ],
+                }
+            ],
+        }
+    )
+    result["candidates"] = [candidate]
+    result["counts"] = {"observations_inspected_reported": 1, "candidates_retained": 1}
+    result["local_reconciliation"].update(
+        {
+            "candidate_records_validated": 1,
+            "evidence_items_validated": 1,
+            "post_urls_structurally_validated": 1,
+        }
+    )
+    return result
+
+
 def _build_request(
     root: Path,
     *,
@@ -631,7 +668,7 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
         ]
         self.assertEqual(len(openai_entries), len(openai_prompt_paths), 7)
         self.assertEqual(len(google_deepmind_entries), len(google_deepmind_prompt_paths), 5)
-        self.assertEqual(len(live_entries), 12)
+        self.assertEqual(len(live_entries), 13)
         self.assertEqual({canonical_json(entry["target"]) for entry in openai_entries}, {canonical_json(openai_target)})
         self.assertEqual(
             {canonical_json(entry["target"]) for entry in google_deepmind_entries},
@@ -644,6 +681,16 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
         self.assertEqual(
             {entry["source_prompt_sha256"] for entry in google_deepmind_entries},
             {_bytes_sha(path.read_bytes()) for path in google_deepmind_prompt_paths},
+        )
+        discovery_only_prompt = next(
+            path for path in google_deepmind_prompt_paths if "v4-discovery-only" in path.name
+        ).read_text()
+        self.assertIn("This wave is Phase D only", discovery_only_prompt)
+        self.assertIn("do not issue any `from:<handle>` query", discovery_only_prompt)
+        self.assertIn("Hydration will be a separate operator-generated stage", discovery_only_prompt)
+        self.assertIn(
+            "Do not impose a candidate, observation, query, or native-X-call business cap",
+            discovery_only_prompt,
         )
         with mock.patch.object(runner, "DEFAULT_EFFECTIVE_PROMPT_POLICY", PRODUCTION_EFFECTIVE_PROMPT_POLICY):
             with tempfile.TemporaryDirectory() as directory:
@@ -844,6 +891,95 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
         missing_relation = copy.deepcopy(result)
         missing_relation["candidates"][0]["evidence"][0]["thread_relation"] = None
         self.assertIn("evidence_value_invalid:0:0", validate_model_result(missing_relation))
+
+    def test_current_policy_only_downgrades_an_isolated_impossible_self_relationship(self) -> None:
+        raw = _relationship_mismatch_result()
+        raw_before = canonical_json(raw)
+        self.assertIn("evidence_value_invalid:0:0", validate_model_result(raw, live_mode=True))
+
+        normalized = runner._operator_normalize_mechanical_evidence_relationships(
+            raw,
+            live_mode=True,
+            require_operator_projection=True,
+        )
+
+        self.assertEqual(canonical_json(raw), raw_before)
+        self.assertEqual(normalized["candidates"][0]["evidence"][0]["relationship"], "third_party")
+        self.assertIn(runner._RELATIONSHIP_DOWNGRADE_CAVEAT, normalized["candidates"][0]["caveats"])
+        self.assertTrue(
+            any(
+                runner.RESULT_NORMALIZATION_POLICY_VERSION in limitation and "downgraded 1" in limitation
+                for limitation in normalized["limitations"]
+            )
+        )
+        self.assertEqual(validate_model_result(normalized, live_mode=True), [])
+
+        for field, value in (
+            ("subject_handle", "DifferentSubject"),
+            ("url", "https://x.com/DifferentAuthor/status/123456"),
+            ("post_id", "654321"),
+            ("published_at", "not-a-timestamp"),
+            ("thread_relation", None),
+        ):
+            multiply_invalid = _relationship_mismatch_result()
+            multiply_invalid["candidates"][0]["evidence"][0][field] = value
+            unchanged = runner._operator_normalize_mechanical_evidence_relationships(
+                multiply_invalid,
+                live_mode=True,
+                require_operator_projection=True,
+            )
+            self.assertEqual(unchanged, multiply_invalid, field)
+            self.assertIn("evidence_value_invalid:0:0", validate_model_result(unchanged, live_mode=True), field)
+
+        invalid_support = _relationship_mismatch_result()
+        invalid_support["candidates"][0]["evidence"][0]["supports"] = [
+            {"dimension": "target_lab_affiliation_state", "asserted_value": "not-a-state"}
+        ]
+        self.assertEqual(
+            runner._operator_normalize_mechanical_evidence_relationships(
+                invalid_support,
+                live_mode=True,
+                require_operator_projection=True,
+            ),
+            invalid_support,
+        )
+
+        casefold_self = _relationship_mismatch_result()
+        casefold_self["candidates"][0]["evidence"][0].update(
+            {
+                "author_handle": "targetperson",
+                "url": "https://x.com/targetperson/status/123456",
+            }
+        )
+        self.assertEqual(
+            runner._operator_normalize_mechanical_evidence_relationships(
+                casefold_self,
+                live_mode=True,
+                require_operator_projection=True,
+            ),
+            casefold_self,
+        )
+        self.assertEqual(validate_model_result(casefold_self, live_mode=True), [])
+
+        bio_mismatch = _relationship_mismatch_result()
+        bio_mismatch["candidates"][0]["evidence"][0].update(
+            {
+                "kind": "bio",
+                "post_id": None,
+                "url": "https://x.com/TargetPerson",
+                "published_at": None,
+                "thread_relation": None,
+            }
+        )
+        self.assertEqual(
+            runner._operator_normalize_mechanical_evidence_relationships(
+                bio_mismatch,
+                live_mode=True,
+                require_operator_projection=True,
+            ),
+            bio_mismatch,
+        )
+        self.assertIn("evidence_value_invalid:0:0", validate_model_result(bio_mismatch, live_mode=True))
 
     def test_bio_requires_null_thread_relation_and_typed_temporal_support(self) -> None:
         result = _empty_result()
@@ -1584,7 +1720,14 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             binary, auth, binary_sha = _live_material(root)
             request, request_path = _build_request(root, binary_sha=binary_sha)
             approvals = root / "approvals"
-            with mock.patch.object(runner, "RESULT_SCHEMA_FILE", runner.LEGACY_RESULT_SCHEMA_FILE):
+            with (
+                mock.patch.object(runner, "RESULT_SCHEMA_FILE", runner.LEGACY_RESULT_SCHEMA_FILE),
+                mock.patch.object(
+                    runner,
+                    "command_policy_sha256",
+                    side_effect=runner._legacy_structured_result_command_policy_sha256,
+                ),
+            ):
                 issue_live_grant(
                     request_path=request_path,
                     grant_root=approvals,
@@ -1761,7 +1904,14 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             root = Path(directory)
             os.chmod(root, 0o700)
             request, request_path = _build_request(root)
-            with mock.patch.object(runner, "RESULT_SCHEMA_FILE", runner.LEGACY_RESULT_SCHEMA_FILE):
+            with (
+                mock.patch.object(runner, "RESULT_SCHEMA_FILE", runner.LEGACY_RESULT_SCHEMA_FILE),
+                mock.patch.object(
+                    runner,
+                    "command_policy_sha256",
+                    side_effect=runner._legacy_structured_result_command_policy_sha256,
+                ),
+            ):
                 receipt, run_root = run_adaptive_grok_wave_fixture(
                     request_path=request_path,
                     runtime_root=root / "runtime",
@@ -1797,7 +1947,14 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
         )
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            with mock.patch.object(runner, "RESULT_SCHEMA_FILE", runner.LEGACY_RESULT_SCHEMA_FILE):
+            with (
+                mock.patch.object(runner, "RESULT_SCHEMA_FILE", runner.LEGACY_RESULT_SCHEMA_FILE),
+                mock.patch.object(
+                    runner,
+                    "command_policy_sha256",
+                    side_effect=runner._legacy_structured_result_command_policy_sha256,
+                ),
+            ):
                 run_root, approvals = _completed_live_run(root)
             receipt = json.loads((run_root / "operator-receipt.json").read_text())
             self.assertEqual(
@@ -1808,6 +1965,39 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             forged_pair["command_binding"]["structured_output_schema_sha256"] = runner.result_schema_sha256()
             self.assertIn("receipt_command_policy_hash_invalid", validate_operator_receipt(forged_pair))
             self.assertEqual(validate_operator_bundle(run_root, approval_root=approvals), [])
+
+    def test_pre_normalization_result_v3_replay_stays_rejected_while_new_policy_downgrades(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "old").mkdir(mode=0o700)
+            with mock.patch.object(
+                runner,
+                "command_policy_sha256",
+                side_effect=runner._legacy_pre_normalization_result_v3_command_policy_sha256,
+            ):
+                old_run_root, old_approvals = _completed_live_run(
+                    root / "old",
+                    model_result=_relationship_mismatch_result(),
+                )
+            old_receipt = json.loads((old_run_root / "operator-receipt.json").read_text())
+            old_sanitized = json.loads((old_run_root / "sanitized.json").read_text())
+            self.assertEqual(old_receipt["status"], "result_contract_invalid")
+            self.assertEqual(old_sanitized["candidates"][0]["evidence"][0]["relationship"], "self")
+            self.assertEqual(validate_operator_bundle(old_run_root, approval_root=old_approvals), [])
+
+            (root / "new").mkdir(mode=0o700)
+            new_run_root, new_approvals = _completed_live_run(
+                root / "new",
+                model_result=_relationship_mismatch_result(),
+            )
+            new_receipt = json.loads((new_run_root / "operator-receipt.json").read_text())
+            new_sanitized = json.loads((new_run_root / "sanitized.json").read_text())
+            new_raw_model = json.loads(json.loads((new_run_root / "raw.stdout").read_text())["text"])
+            self.assertEqual(new_receipt["status"], "completed")
+            self.assertEqual(new_raw_model["candidates"][0]["evidence"][0]["relationship"], "self")
+            self.assertEqual(new_sanitized["candidates"][0]["evidence"][0]["relationship"], "third_party")
+            self.assertIn(runner._RELATIONSHIP_DOWNGRADE_CAVEAT, new_sanitized["candidates"][0]["caveats"])
+            self.assertEqual(validate_operator_bundle(new_run_root, approval_root=new_approvals), [])
 
     def test_campaign_bridge_is_source_bound_but_always_blocked_without_native_payloads(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

@@ -46,6 +46,7 @@ CRM, export, billing, permission, or outreach state. Protected-identity inferenc
 | Output transport | Strict Grok headless envelope plus raw private bytes | Exact outer object, `EndTurn`, command session, request ID, turns, token totals, inner JSON, duplicate keys, nonfinite numbers, prefix, and suffix are replayed; the inner result alone cannot claim terminal success |
 | Model diagnostics | Raw outer `text`, plus diagnostic provenance retained in the normalized inner result | Model-reported calls, queries, observations, and original `local_reconciliation` are never tool-ledger truth; the unmodified original remains in `raw.stdout` |
 | Operator projections | Inner candidate/evidence arrays plus verified session proof | `sanitized.json` rewrites candidate, evidence, post-URL, tool-call, and per-tool counts from local structure/transcript facts; it preserves model provenance only as diagnostics |
+| Mechanical relationship normalization | `mechanical-evidence-relationship-downgrade-v1`, bound into the command-policy digest | A current-policy result may change only a non-Bio `self` row whose author differs from the candidate to `third_party`; the candidate and global audit strings are appended, raw stdout is unchanged, and the normalized copy is admitted only when the complete result then passes runtime validation. No support, state, confidence, or evidence row can be upgraded. Pre-normalization result-v3 and result-v2 bundles remain replay-only under their recorded policy digests |
 | Tool-call facts | Raw Grok session `updates.jsonl` | Effective model, native-X starts/completions, names, and exact arguments are replayed. On Grok 0.2.101 the outer envelope owns terminal/usage; a legacy transcript `turn_completed` is additionally reconciled when present |
 | Candidate authored-surface attempts | Completed `x_keyword_search` arguments in the raw session transcript | Only one exact positive `from:<handle>` can be attributed; positive `filter:replies` means `authored_reply`, absent/negated reply filter means `authored_post`, and global, multi-handle, semantic, user, or thread calls remain unattributed |
 | Retention/deletion | Request TTL, terminal receipt, external deletion journal and receipt | Expired bundle is validated and journaled before recursive deletion; a crash between delete and receipt is reconcilable |
@@ -67,6 +68,14 @@ The closed schema is `contracts/x.grok.adaptive_recall_wave.request.v2.schema.js
 
 The runtime additionally enforces `max_json_bytes <= max_stdout_bytes`, owner-only files, cross-field profile URLs, and
 the state relationships that plain JSON Schema cannot express.
+
+The command-policy digest owns both the exact provider argv template and
+`mechanical-evidence-relationship-downgrade-v1`. This prevents a retained result-v3 bundle sealed before that policy
+from being reinterpreted after the fact. The current normalization is deliberately monotonic: it repairs only the
+mechanically impossible authority label `self` to the generic lower-authority `third_party`, preserves raw provider
+bytes, appends a deterministic per-candidate caveat and global count, and accepts the transformed copy only if no
+other runtime contract error remains. Bio rows and case-insensitive self authors are never rewritten; malformed
+subject/URL/Post ID/time/thread/support bindings, duplicate evidence, and every other invalid result still fail closed.
 
 Example fixture request shape:
 

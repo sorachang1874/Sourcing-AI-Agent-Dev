@@ -28,6 +28,15 @@ semantic-v2.2 live gate. The formal Luna canary now has a separate receipt-first
 validation is frozen to semantic v2.1 assets, while v2 binds current semantic v2.2 and persists exact observed
 route/model/payload/timing/HTTP-or-failure receipts. It has not been executed live and still requires independent GO.
 
+A separate Google DeepMind large-lab challenger has produced three rejected but replayable diagnostics. The latest
+completed 101 unique native-X calls and returned 34 candidates / 96 complete evidence rows; one mechanically impossible
+`self` relationship correctly failed the entire result. The current command policy can only downgrade that isolated
+non-Bio label to `third_party`, with raw bytes and explicit audit text preserved, and cannot reinterpret the sealed
+pre-policy bundle. Performance review found that at least 72/101 calls were spent on person hydration before discovery
+converged, while Boolean scope made all 40 intended handle-level Post/Reply queries ineligible for mechanical coverage
+credit. The next reviewed challenger is therefore discovery-only; exact per-person Post/Reply hydration will be a
+separate operator-generated stage.
+
 The first vertical slice covers OpenAI with:
 
 - 24 completely synthetic external accounts;
