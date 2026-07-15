@@ -367,8 +367,19 @@ serve、会话/事件层、planner loop），用一个垂直切片证明闭环�
   advisory-lock/`FOR UPDATE`/plain INSERT exact replay、live/simulate/scripted strict presence、DB-clock
   retained→purged-tombstone CAS 与 exact `TIMESTAMPTZ` codec。它不实现 logical result-slot、receipt/quarantine、
   cost ledger/Decimal、strict runtime writer、provider call、live gate 或 served tool；author validation 已记录，fresh
-  pinned formal review pending。下一顺序仍为 D3c2h1 exact evidence-surface decision lock，再按 ratified manifest 落
-  remaining Migration A evidence fragments 与 Migration B-D。
+  pinned formal review pending。
+- D3c2h1 exact evidence-surface decision-lock candidate 已以 full five-field PFX ratify future
+  `verification_intents`、response/failure receipts、durable response classification intent 与 late quarantine 的 exact
+  `52/30/28/18/41` ordered manifests；source core=`7`、append-once terminal tuple=`29` 并有三 variant + unbound
+  truth table；五表 local CHECK 清单为 exact `10/9/9/7/12`=`47`。sole owners/store paths、full-PFX
+  PK/unique/FK、`transport-*-occurrence-v2` length-delimited golden
+  vectors、fixed DB-clock 30-day quarantine retention 与 split cost/retention CAS 均 decision-locked。pure
+  exposure-first response UoW 必须创建/exact-replay classification intent 后才 terminalize exposure，仍有
+  quarantine permission=0；classification UoW 仅在 `d3-dispatch-v2` complete global owner-row prefix 下从 stored
+  current state 分类并 terminal-CAS intent。initial v1 仍仅 `model_tool_v1` + live/simulate/scripted，replay
+  zero-write，Harvest/provider-search deferred。该批为 `decision_locked_not_implemented`：零 SQL/descriptor/
+  repository/runtime/provider/live，fresh pinned formal review pending；下一顺序是 reviewed dormant evidence-table
+  migration + upstream full-PFX keys/FKs，再落 repositories/composition、fake/scripted E2E 与后续 Migration B-D。
 
 ### D4 — 之后（本文只圈定，不展开）
 
@@ -610,17 +621,24 @@ TD-4 初始路由表已按 owner 2026-07-13 裁决落档（D0 §4）。
    commands（确定序）→intent/predecessor→ActivityRun/Attempt 锁/验 complete global owner-row prefix，从 stored current
    state 判 current/stale，随后才可进入 exposure lock→response receipt→optional response-only quarantine→exposure
    terminalization。caller flag/callback/stale `ClaimReceipt` 不具分类权；任一路径进入 exposure 后绝不回到
-   operation/command/intent/domain，也不授权 send/apply；pending response-classification owner/state、retry/recovery、
-   exact replay 与 idempotency 留 D3c2h1。stale application/business mismatch 只返回
+   operation/command/intent/domain，也不授权 send/apply；D3c2h1 现已把 pending response-classification owner/state、
+   retry/recovery、exact replay 与 idempotency ratify 为 fifth durable surface：response exposure-first UoW 在 receipt
+   后 create-or-exact-replay classification intent，classification UoW 再于 receipt 后 lock 该 intent，并在 optional
+   response-only quarantine 后 terminal-CAS current/stale，最后 exact-replay exposure terminalization；失败的 global
+   classification transaction 先全回滚，随后仅 classification owner 可 row-only retry/fail CAS，仍无 caller
+   classification authority。stale application/business mismatch 只返回
    `not_applied(reason=stale_claim|business_precondition_conflict)`（不是 event/state），domain/attempt/intent/event/
    command/source/result 全零写；
    quarantine 由一个 SQL repository 拥有，immutable identity/digests insert-once，且禁止 unowned
-   `workflow_run_id`；cost/retention typed CAS entrypoints 写集分离且 monotonic，`cost_state/retention_state 正交`，
+   `workflow_run_id`；D3c2h1 exact quarantine manifest 以 DB clock 固定
+   `retention_until=recorded_at+interval '30 days'`，cost/retention typed CAS entrypoints 写集分离且 monotonic，
+   `cost_state/retention_state 正交`，
    禁止混成 disposition；quarantine 的两轴精确为：
    `cost_state: pending_reconciliation -> reconciled_confirmed | reconciled_uncertain` 与
    `retention_state: retained -> purged_tombstone`；no-call exposure 没有 response receipt/
-   quarantine。current canonical `ModelInvocationEnvelopeV1` 无 durable ref issuer；D0f sole owner/ref grammar 是
-   receipt manifests 前置，禁止 placeholder ref/hash 或第二 envelope schema；禁止持 PG transaction 跨网络。
+   quarantine。D0f 已落 sole durable `ModelInvocationEnvelopeV1` ref owner/ref grammar，D3c2h1 receipts 只 exact-copy
+   并 full-PFX FK 绑定该 owner ref+digest，禁止 placeholder ref/hash 或第二 envelope schema；禁止持 PG transaction
+   跨网络。D3c2h1 仍只 decision-lock exact manifests/relations，不授权 migration、runtime 或 provider activation。
    strict-D3 首次 `succeeded|failed_terminal` result command+event 取 common lock，在同一 UoW 写
    canonical nullable outcome digest/event pair；pair 在 result-terminal 期间不可变，仅 registered reopen 可在
    requeue 前清除；event composite unique + command `MATCH SIMPLE DEFERRABLE` FK + local both-null/both-non-null
