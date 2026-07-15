@@ -1,0 +1,82 @@
+{
+  "schema_version": "x.grok_cli.candidate_value_segment_policy.v2",
+  "policy_version": "two-axis-researcher-value-v2",
+  "state_values": [
+    "current",
+    "historical",
+    "ambiguous",
+    "unsupported"
+  ],
+  "priority_tiers": {
+    "precision": 500,
+    "mixed_recall": 400,
+    "historical_recall": 300,
+    "needs_evidence": 100
+  },
+  "segments": [
+    {
+      "segment_id": "precision_current_current",
+      "target_lab_affiliation_state": "current",
+      "pretraining_experience_state": "current",
+      "priority_tier": "precision",
+      "recall_pool_eligible": true
+    },
+    {
+      "segment_id": "recall_current_historical",
+      "target_lab_affiliation_state": "current",
+      "pretraining_experience_state": "historical",
+      "priority_tier": "mixed_recall",
+      "recall_pool_eligible": true
+    },
+    {
+      "segment_id": "recall_historical_current",
+      "target_lab_affiliation_state": "historical",
+      "pretraining_experience_state": "current",
+      "priority_tier": "mixed_recall",
+      "recall_pool_eligible": true
+    },
+    {
+      "segment_id": "recall_historical_historical",
+      "target_lab_affiliation_state": "historical",
+      "pretraining_experience_state": "historical",
+      "priority_tier": "historical_recall",
+      "recall_pool_eligible": true
+    }
+  ],
+  "fallback_segment_id": "needs_evidence",
+  "fallback_priority_tier": "needs_evidence",
+  "affiliation_profile_gate": {
+    "operator": "any",
+    "inputs": [
+      "profile_bio",
+      "high_authority_target_lab_affiliation_evidence"
+    ],
+    "high_authority_relationships": [
+      "self",
+      "official_lab",
+      "colleague_or_team"
+    ],
+    "required_support_field": "target_lab_affiliation_state"
+  },
+  "precision_tranche": {
+    "required_segment_id": "precision_current_current",
+    "required_confidence": "high",
+    "required_high_authority_support": [
+      "target_lab_affiliation_state",
+      "pretraining_experience_state"
+    ],
+    "require_stable_platform_user_id": true
+  },
+  "hydration": {
+    "state_triggers": [
+      "ambiguous",
+      "unsupported"
+    ],
+    "required_high_authority_support": [
+      "target_lab_affiliation_state",
+      "pretraining_experience_state"
+    ],
+    "require_stable_platform_user_id": true,
+    "historical_state_triggers_hydration": false
+  }
+}

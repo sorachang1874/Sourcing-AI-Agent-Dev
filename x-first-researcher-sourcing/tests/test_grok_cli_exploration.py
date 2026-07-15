@@ -200,8 +200,12 @@ def _public_policy() -> dict[str, Any]:
     return json.loads((ROOT / "configs/grok_cli_exploration_query_policy_descriptor.v2.json").read_text())
 
 
-def _candidate_value_policy() -> dict[str, Any]:
+def _candidate_value_policy_v1() -> dict[str, Any]:
     return json.loads((ROOT / "configs/candidate_value_segment_policy.v1.json").read_text())
+
+
+def _candidate_value_policy() -> dict[str, Any]:
+    return json.loads((ROOT / "configs/candidate_value_segment_policy.v2.json").read_text())
 
 
 def _public_query_policy_registry() -> dict[str, Any]:
@@ -556,9 +560,12 @@ def _canonical_payloads() -> tuple[dict[str, Any], dict[str, Any]]:
     return _result(), _receipt()
 
 
-def _binding() -> dict[str, str]:
+def _binding(*, policy_schema_version: str = "v2") -> dict[str, str]:
     registry = _query_policy_registry()
     registry_row = registry["policies"][0]
+    candidate_value_policy = (
+        _candidate_value_policy_v1() if policy_schema_version == "v1" else _candidate_value_policy()
+    )
     return {
         "lab_id": "openai",
         "run_binding_commitment": _canonical_policy()["run_binding_commitment"],
@@ -575,8 +582,8 @@ def _binding() -> dict[str, str]:
         "query_policy_registry_version": registry["registry_version"],
         "query_policy_registry_sha256": canonical_sha256(registry),
         "query_policy_registry_row_sha256": canonical_sha256(registry_row),
-        "candidate_value_policy_version": _candidate_value_policy()["policy_version"],
-        "candidate_value_policy_sha256": canonical_sha256(_candidate_value_policy()),
+        "candidate_value_policy_version": candidate_value_policy["policy_version"],
+        "candidate_value_policy_sha256": canonical_sha256(candidate_value_policy),
     }
 
 
@@ -617,12 +624,21 @@ class GrokCliExplorationTest(unittest.TestCase):
 
     def test_persisted_output_schemas_are_recursive_closed_world_contracts(self) -> None:
         evaluation_schema = json.loads(
-            (ROOT / "contracts/x.grok_cli.exploration.evaluation.v1.schema.json").read_text()
+            (ROOT / "contracts/x.grok_cli.exploration.evaluation.v2.schema.json").read_text()
         )
         hydration_schema = json.loads(
-            (ROOT / "contracts/x.grok_cli.candidate_hydration.task.v1.schema.json").read_text()
+            (ROOT / "contracts/x.grok_cli.candidate_hydration.task.v2.schema.json").read_text()
         )
         candidate_policy_schema = json.loads(
+            (ROOT / "contracts/x.grok_cli.candidate_value_segment_policy.v2.schema.json").read_text()
+        )
+        evaluation_schema_v1 = json.loads(
+            (ROOT / "contracts/x.grok_cli.exploration.evaluation.v1.schema.json").read_text()
+        )
+        hydration_schema_v1 = json.loads(
+            (ROOT / "contracts/x.grok_cli.candidate_hydration.task.v1.schema.json").read_text()
+        )
+        candidate_policy_schema_v1 = json.loads(
             (ROOT / "contracts/x.grok_cli.candidate_value_segment_policy.v1.schema.json").read_text()
         )
         query_policy_schema = json.loads(
@@ -647,26 +663,31 @@ class GrokCliExplorationTest(unittest.TestCase):
 
         self.assertEqual(
             evaluation_schema["properties"]["schema_version"]["const"],
-            "x.grok_cli.exploration.evaluation.v1",
+            "x.grok_cli.exploration.evaluation.v2",
         )
         self.assertEqual(
             hydration_schema["properties"]["task_version"]["const"],
-            "x.grok_cli.candidate_hydration.task.v1",
+            "x.grok_cli.candidate_hydration.task.v2",
         )
         self.assertEqual(
             evaluation_schema["properties"]["hydration_tasks"]["items"]["$ref"],
-            "x.grok_cli.candidate_hydration.task.v1.schema.json",
+            "x.grok_cli.candidate_hydration.task.v2.schema.json",
         )
         assert_closed_objects(evaluation_schema)
         assert_closed_objects(hydration_schema)
+        assert_closed_objects(candidate_policy_schema)
+        assert_closed_objects(evaluation_schema_v1)
+        assert_closed_objects(hydration_schema_v1)
+        assert_closed_objects(candidate_policy_schema_v1)
         result, receipt = _canonical_payloads()
         evaluation = _evaluate(result, receipt)
         task_candidate = _candidate(platform_user_id=None)
         task = build_hydration_tasks([task_candidate], experiment_binding=_binding())[0]
-        external_schemas = {"x.grok_cli.candidate_hydration.task.v1.schema.json": hydration_schema}
+        external_schemas = {"x.grok_cli.candidate_hydration.task.v2.schema.json": hydration_schema}
         _mini_schema_validate(evaluation, evaluation_schema, externals=external_schemas)
         _mini_schema_validate(task, hydration_schema)
         _mini_schema_validate(_candidate_value_policy(), candidate_policy_schema)
+        _mini_schema_validate(_candidate_value_policy_v1(), candidate_policy_schema_v1)
         _mini_schema_validate(_canonical_policy(), query_policy_schema)
         _mini_schema_validate(_query_policy_registry(), registry_schema)
         _mini_schema_validate(_query_commitment_issuance_history(), issuance_history_schema)
@@ -714,7 +735,7 @@ class GrokCliExplorationTest(unittest.TestCase):
         wrong_rate["metrics"]["model_mediated_precision_tranche_rate"] = 0.5
         evaluation_mutations.append(wrong_rate)
         wrong_gap = copy.deepcopy(evaluation)
-        wrong_gap["first_field_gate_gaps"]["bio_coverage_gap_to_100_percent"] = 0.5
+        wrong_gap["first_field_gate_gaps"]["bio_presence_gap_to_100_percent"] = 0.5
         evaluation_mutations.append(wrong_gap)
         wrong_proof = copy.deepcopy(evaluation)
         wrong_proof["native_x_call_proof"] = "session_hash_and_calls_verified"
@@ -757,9 +778,7 @@ class GrokCliExplorationTest(unittest.TestCase):
         replay_only_mutations.append(forged_hash)
         forged_rate = copy.deepcopy(hydration_evaluation)
         forged_rate["metrics"]["model_mediated_bio_presence_rate"] = 0.5
-        forged_rate["first_field_gate_gaps"]["bio_coverage_gap_to_100_percent"] = 0.5
-        coverage_index = forged_rate["scale_blockers"].index("stable_platform_user_id_coverage_below_100_percent")
-        forged_rate["scale_blockers"].insert(coverage_index + 1, "bio_coverage_below_100_percent")
+        forged_rate["first_field_gate_gaps"]["bio_presence_gap_to_100_percent"] = 0.5
         replay_only_mutations.append(forged_rate)
         for mutation in replay_only_mutations:
             with self.subTest(replay_only_mutation=mutation):
@@ -1066,6 +1085,10 @@ class GrokCliExplorationTest(unittest.TestCase):
             ROOT / "contracts/x.grok_cli.exploration.query_commitment_issuance_history.v1.schema.json",
             ROOT / "contracts/x.grok_cli.exploration.evaluation.v1.schema.json",
             ROOT / "contracts/x.grok_cli.candidate_hydration.task.v1.schema.json",
+            ROOT / "contracts/x.grok_cli.exploration.evaluation.v2.schema.json",
+            ROOT / "contracts/x.grok_cli.candidate_hydration.task.v2.schema.json",
+            ROOT / "contracts/x.grok_cli.candidate_value_segment_policy.v2.schema.json",
+            ROOT / "configs/candidate_value_segment_policy.v2.json",
             ROOT / "fixtures/grok_cli_exploration_pre_migration_evaluation.v1.json",
             ROOT / "docs/live-evidence/2026-07-14-openai-pretrain-grok-cli-and-luna-exploration.md",
         ]
@@ -1246,7 +1269,7 @@ class GrokCliExplorationTest(unittest.TestCase):
 
     def test_candidate_value_policy_and_schema_own_temporal_ordering_and_completeness(self) -> None:
         policy = _candidate_value_policy()
-        schema = json.loads((ROOT / "contracts/x.grok_cli.candidate_value_segment_policy.v1.schema.json").read_text())
+        schema = json.loads((ROOT / "contracts/x.grok_cli.candidate_value_segment_policy.v2.schema.json").read_text())
         priorities = {
             item["segment_id"]: policy["priority_tiers"][item["priority_tier"]] for item in policy["segments"]
         }
@@ -1260,8 +1283,19 @@ class GrokCliExplorationTest(unittest.TestCase):
         )
         self.assertFalse(policy["hydration"]["historical_state_triggers_hydration"])
         self.assertEqual(
+            policy["affiliation_profile_gate"],
+            {
+                "operator": "any",
+                "inputs": ["profile_bio", "high_authority_target_lab_affiliation_evidence"],
+                "high_authority_relationships": ["self", "official_lab", "colleague_or_team"],
+                "required_support_field": "target_lab_affiliation_state",
+            },
+        )
+        self.assertNotIn("require_bio", policy["precision_tranche"])
+        self.assertNotIn("require_bio", policy["hydration"])
+        self.assertEqual(
             schema["properties"]["schema_version"]["const"],
-            "x.grok_cli.candidate_value_segment_policy.v1",
+            "x.grok_cli.candidate_value_segment_policy.v2",
         )
         observed = _evaluate(_result(), _receipt())
         self.assertEqual(
@@ -2002,6 +2036,94 @@ class GrokCliExplorationTest(unittest.TestCase):
         self.assertEqual(observed["hydration_tasks"], [])
         self.assertTrue(all(item["recall_pool_eligible"] for item in observed["candidate_value_assessments"]))
 
+    def test_v2_affiliation_profile_gate_accepts_high_authority_lab_support_without_bio(self) -> None:
+        candidate = _candidate()
+        candidate["bio_excerpt"] = None
+        candidate["evidence"] = candidate["evidence"][1:]
+        candidate["evidence"][0]["supports"] = [
+            "target_lab_affiliation_state",
+            "pretraining_experience_state",
+        ]
+
+        observed = _evaluate(_result(candidate=candidate), _receipt())
+
+        assessment = observed["candidate_value_assessments"][0]
+        self.assertEqual(observed["schema_version"], "x.grok_cli.exploration.evaluation.v2")
+        self.assertTrue(assessment["affiliation_profile_gate_satisfied"])
+        self.assertTrue(assessment["precision_tranche_eligible"])
+        self.assertFalse(assessment["hydration_required"])
+        self.assertEqual(observed["hydration_tasks"], [])
+        self.assertEqual(observed["metrics"]["model_mediated_bio_presence_rate"], 0.0)
+        self.assertEqual(observed["metrics"]["model_mediated_affiliation_profile_gate_coverage"], 1.0)
+        self.assertEqual(observed["first_field_gate_gaps"]["bio_presence_gap_to_100_percent"], 1.0)
+        self.assertEqual(observed["first_field_gate_gaps"]["affiliation_profile_gate_gap_to_100_percent"], 0.0)
+        self.assertNotIn("bio_coverage_below_100_percent", observed["scale_blockers"])
+        self.assertNotIn("affiliation_profile_gate_coverage_below_100_percent", observed["scale_blockers"])
+        validate_evaluation_output(observed, _result(candidate=candidate), _receipt())
+
+    def test_v2_affiliation_profile_gate_rejects_ordinary_third_party_lab_mention(self) -> None:
+        candidate = _candidate()
+        candidate["bio_excerpt"] = None
+        candidate["evidence"] = candidate["evidence"][1:]
+        candidate["evidence"][0].update(
+            {
+                "relationship": "third_party",
+                "author_handle": "xfs_observer",
+                "url": "https://x.com/xfs_observer/status/123456",
+                "supports": ["target_lab_affiliation_state", "pretraining_experience_state"],
+            }
+        )
+
+        observed = _evaluate(_result(candidate=candidate), _receipt())
+
+        assessment = observed["candidate_value_assessments"][0]
+        self.assertFalse(assessment["affiliation_profile_gate_satisfied"])
+        self.assertFalse(assessment["precision_tranche_eligible"])
+        self.assertIn("affiliation_profile_gate_unsatisfied", assessment["hydration_reasons"])
+        self.assertIn(
+            "high_authority_target_lab_affiliation_state_evidence_missing",
+            assessment["hydration_reasons"],
+        )
+        self.assertEqual(
+            observed["hydration_tasks"][0]["task_version"],
+            "x.grok_cli.candidate_hydration.task.v2",
+        )
+        self.assertIn("affiliation_profile_gate_coverage_below_100_percent", observed["scale_blockers"])
+
+    def test_v1_evaluation_and_hydration_artifacts_replay_with_original_bio_gate(self) -> None:
+        candidate = _candidate()
+        candidate["bio_excerpt"] = None
+        candidate["evidence"] = candidate["evidence"][1:]
+        candidate["evidence"][0]["supports"] = [
+            "target_lab_affiliation_state",
+            "pretraining_experience_state",
+        ]
+        result = _result(candidate=candidate)
+        receipt = _receipt()
+
+        observed = evaluate_exploration(
+            result,
+            receipt,
+            _evaluation_schema_version="x.grok_cli.exploration.evaluation.v1",
+        )
+
+        assessment = observed["candidate_value_assessments"][0]
+        self.assertEqual(observed["schema_version"], "x.grok_cli.exploration.evaluation.v1")
+        self.assertEqual(
+            observed["input_binding"]["candidate_value_policy_schema_version"],
+            "x.grok_cli.candidate_value_segment_policy.v1",
+        )
+        self.assertNotIn("affiliation_profile_gate_satisfied", assessment)
+        self.assertFalse(assessment["precision_tranche_eligible"])
+        self.assertEqual(assessment["hydration_reasons"], ["missing_bio"])
+        self.assertIn("bio_coverage_below_100_percent", observed["scale_blockers"])
+        self.assertEqual(
+            observed["hydration_tasks"][0]["task_version"],
+            "x.grok_cli.candidate_hydration.task.v1",
+        )
+        validate_hydration_task(observed["hydration_tasks"][0])
+        validate_evaluation_output(observed, result, receipt)
+
     def test_precision_requires_complete_current_current_but_confidence_does_not_trigger_hydration(self) -> None:
         candidate = _candidate(confidence="medium")
 
@@ -2317,6 +2439,10 @@ class GrokCliExplorationTest(unittest.TestCase):
             shutil.copy2(
                 ROOT / "configs/candidate_value_segment_policy.v1.json",
                 project_root / "configs/candidate_value_segment_policy.v1.json",
+            )
+            shutil.copy2(
+                ROOT / "configs/candidate_value_segment_policy.v2.json",
+                project_root / "configs/candidate_value_segment_policy.v2.json",
             )
             (project_root / "configs/grok_cli_exploration_query_policy_descriptor.v2.json").write_text(
                 json.dumps(_canonical_policy())

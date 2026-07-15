@@ -24,15 +24,23 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID
 
-EVALUATION_SCHEMA_VERSION = "x.grok_cli.exploration.evaluation.v1"
-HYDRATION_TASK_VERSION = "x.grok_cli.candidate_hydration.task.v1"
+EVALUATION_SCHEMA_VERSION_V1 = "x.grok_cli.exploration.evaluation.v1"
+EVALUATION_SCHEMA_VERSION_V2 = "x.grok_cli.exploration.evaluation.v2"
+EVALUATION_SCHEMA_VERSION = EVALUATION_SCHEMA_VERSION_V2
+HYDRATION_TASK_VERSION_V1 = "x.grok_cli.candidate_hydration.task.v1"
+HYDRATION_TASK_VERSION_V2 = "x.grok_cli.candidate_hydration.task.v2"
+HYDRATION_TASK_VERSION = HYDRATION_TASK_VERSION_V2
 SUPPORTED_RECEIPT_VERSION = "x.grok_cli.exploration.tool_receipt.v1"
 QUERY_POLICY_SCHEMA_VERSION = "x.grok_cli.exploration.query_policy_descriptor.v2"
 QUERY_POLICY_REGISTRY_SCHEMA_VERSION = "x.grok_cli.exploration.query_policy_registry.v2"
 QUERY_COMMITMENT_ISSUANCE_HISTORY_SCHEMA_VERSION = "x.grok_cli.exploration.query_commitment_issuance_history.v1"
 QUERY_COMMITMENT_ISSUANCE_HISTORY_VERSION = "approved-query-commitment-issuances-v1"
-CANDIDATE_VALUE_POLICY_SCHEMA_VERSION = "x.grok_cli.candidate_value_segment_policy.v1"
-CANDIDATE_VALUE_POLICY_CANONICAL_SHA256 = "78800fd8ae6977e49301aaf1c6ee3663d74639d7969d829354a7e1676a917d91"
+CANDIDATE_VALUE_POLICY_SCHEMA_VERSION_V1 = "x.grok_cli.candidate_value_segment_policy.v1"
+CANDIDATE_VALUE_POLICY_SCHEMA_VERSION_V2 = "x.grok_cli.candidate_value_segment_policy.v2"
+CANDIDATE_VALUE_POLICY_SCHEMA_VERSION = CANDIDATE_VALUE_POLICY_SCHEMA_VERSION_V2
+CANDIDATE_VALUE_POLICY_CANONICAL_SHA256_V1 = "78800fd8ae6977e49301aaf1c6ee3663d74639d7969d829354a7e1676a917d91"
+CANDIDATE_VALUE_POLICY_CANONICAL_SHA256_V2 = "4cc38df430f673cee24383915b7b197756467e79c312268ddb0cee81a93a1337"
+CANDIDATE_VALUE_POLICY_CANONICAL_SHA256 = CANDIDATE_VALUE_POLICY_CANONICAL_SHA256_V2
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_QUERY_POLICY_REGISTRY_VERSION = "approved-query-policies-v2"
 QUERY_POLICY_REGISTRY_DIRECTORY = PROJECT_ROOT / "configs/grok_cli_exploration_query_policy_registries"
@@ -50,7 +58,14 @@ QUERY_POLICY_REGISTRY_SNAPSHOT_ADMISSIONS = (
 QUERY_COMMITMENT_ISSUANCE_HISTORY_RELATIVE_PATH = Path(
     "configs/grok_cli_exploration_query_commitment_issuance_history.v1.json"
 )
-CANDIDATE_VALUE_POLICY_PATH = PROJECT_ROOT / "configs/candidate_value_segment_policy.v1.json"
+CANDIDATE_VALUE_POLICY_PATHS = {
+    CANDIDATE_VALUE_POLICY_SCHEMA_VERSION_V1: PROJECT_ROOT / "configs/candidate_value_segment_policy.v1.json",
+    CANDIDATE_VALUE_POLICY_SCHEMA_VERSION_V2: PROJECT_ROOT / "configs/candidate_value_segment_policy.v2.json",
+}
+CANDIDATE_VALUE_POLICY_CANONICAL_SHA256_BY_SCHEMA = {
+    CANDIDATE_VALUE_POLICY_SCHEMA_VERSION_V1: CANDIDATE_VALUE_POLICY_CANONICAL_SHA256_V1,
+    CANDIDATE_VALUE_POLICY_SCHEMA_VERSION_V2: CANDIDATE_VALUE_POLICY_CANONICAL_SHA256_V2,
+}
 
 ALLOWED_TOOL_NAMES = frozenset(
     {
@@ -233,7 +248,7 @@ _QUERY_COMMITMENT_ISSUANCE_KEYS = {
     "commitment_key_id",
     "commitment_nonce_id",
 }
-_CANDIDATE_VALUE_POLICY_KEYS = {
+_CANDIDATE_VALUE_POLICY_KEYS_V1 = {
     "schema_version",
     "policy_version",
     "state_values",
@@ -244,6 +259,7 @@ _CANDIDATE_VALUE_POLICY_KEYS = {
     "precision_tranche",
     "hydration",
 }
+_CANDIDATE_VALUE_POLICY_KEYS_V2 = _CANDIDATE_VALUE_POLICY_KEYS_V1 | {"affiliation_profile_gate"}
 _CANDIDATE_SEGMENT_KEYS = {
     "segment_id",
     "target_lab_affiliation_state",
@@ -269,7 +285,7 @@ _VALUE_SEGMENT_IDS = frozenset(
 )
 _CANDIDATE_DIMENSION_FIELDS = ("target_lab_affiliation_state", "pretraining_experience_state")
 _BASE_DISCOVERY_DIMENSIONS = ["lab_affiliation", "role_function", "pretraining_relevance"]
-_HYDRATION_REASON_ORDER = (
+_HYDRATION_REASON_ORDER_V1 = (
     "reported_platform_user_id_conflict",
     "missing_platform_user_id",
     "missing_bio",
@@ -278,7 +294,31 @@ _HYDRATION_REASON_ORDER = (
     "high_authority_target_lab_affiliation_state_evidence_missing",
     "high_authority_pretraining_experience_state_evidence_missing",
 )
-_HYDRATION_REASON_VALUES = frozenset(_HYDRATION_REASON_ORDER)
+_HYDRATION_REASON_ORDER_V2 = (
+    "reported_platform_user_id_conflict",
+    "missing_platform_user_id",
+    "affiliation_profile_gate_unsatisfied",
+    "target_lab_affiliation_state_unresolved",
+    "pretraining_experience_state_unresolved",
+    "high_authority_target_lab_affiliation_state_evidence_missing",
+    "high_authority_pretraining_experience_state_evidence_missing",
+)
+_HYDRATION_REASON_ORDER_BY_TASK_VERSION = {
+    HYDRATION_TASK_VERSION_V1: _HYDRATION_REASON_ORDER_V1,
+    HYDRATION_TASK_VERSION_V2: _HYDRATION_REASON_ORDER_V2,
+}
+_HYDRATION_TASK_VERSION_BY_POLICY_SCHEMA = {
+    CANDIDATE_VALUE_POLICY_SCHEMA_VERSION_V1: HYDRATION_TASK_VERSION_V1,
+    CANDIDATE_VALUE_POLICY_SCHEMA_VERSION_V2: HYDRATION_TASK_VERSION_V2,
+}
+_EVALUATION_SCHEMA_TO_POLICY_SCHEMA = {
+    EVALUATION_SCHEMA_VERSION_V1: CANDIDATE_VALUE_POLICY_SCHEMA_VERSION_V1,
+    EVALUATION_SCHEMA_VERSION_V2: CANDIDATE_VALUE_POLICY_SCHEMA_VERSION_V2,
+}
+_EVALUATION_SCHEMA_TO_TASK_VERSION = {
+    EVALUATION_SCHEMA_VERSION_V1: HYDRATION_TASK_VERSION_V1,
+    EVALUATION_SCHEMA_VERSION_V2: HYDRATION_TASK_VERSION_V2,
+}
 _HYDRATION_TASK_KEYS = {
     "task_version",
     "task_status",
@@ -349,7 +389,7 @@ _EVALUATION_INPUT_BINDING_KEYS = {
     "result_to_receipt",
     "raw_session",
 }
-_ASSESSMENT_KEYS = {
+_ASSESSMENT_KEYS_V1 = {
     "handle",
     "target_lab_affiliation_state",
     "pretraining_experience_state",
@@ -361,7 +401,8 @@ _ASSESSMENT_KEYS = {
     "hydration_required",
     "hydration_reasons",
 }
-_METRIC_KEYS = {
+_ASSESSMENT_KEYS_V2 = _ASSESSMENT_KEYS_V1 | {"affiliation_profile_gate_satisfied"}
+_METRIC_KEYS_V1 = {
     "tool_call_receipt_rows",
     "session_verified_completed_tool_calls",
     "candidates_retained",
@@ -383,7 +424,8 @@ _METRIC_KEYS = {
     "recall_pool_candidates",
     "observations_mechanically_replayable",
 }
-_METRIC_DENOMINATOR_KEYS = {
+_METRIC_KEYS_V2 = _METRIC_KEYS_V1 | {"model_mediated_affiliation_profile_gate_coverage"}
+_METRIC_DENOMINATOR_KEYS_V1 = {
     "candidates_per_tool_call",
     "model_mediated_bio_presence_rate",
     "model_mediated_platform_user_id_presence_rate",
@@ -392,6 +434,22 @@ _METRIC_DENOMINATOR_KEYS = {
     "model_mediated_high_authority_support_coverage",
     "third_party_only_candidate_rate",
     "replayable_provider_post_body_rate",
+}
+_METRIC_DENOMINATOR_KEYS_V2 = _METRIC_DENOMINATOR_KEYS_V1 | {
+    "model_mediated_affiliation_profile_gate_coverage"
+}
+_GAP_KEYS_V1 = {
+    "bio_coverage_gap_to_100_percent",
+    "stable_id_coverage_gap_to_100_percent",
+    "evidence_complete_gap_to_90_percent",
+    "provider_post_body_replayability_gap_to_100_percent",
+}
+_GAP_KEYS_V2 = {
+    "bio_presence_gap_to_100_percent",
+    "affiliation_profile_gate_gap_to_100_percent",
+    "stable_id_coverage_gap_to_100_percent",
+    "evidence_complete_gap_to_90_percent",
+    "provider_post_body_replayability_gap_to_100_percent",
 }
 _RAW_SESSION_BINDING_KEYS = {
     "status",
@@ -760,22 +818,35 @@ def _load_closed_json(path: Path, *, maximum_bytes: int, error: str) -> Any:
         raise ExplorationValidationError(error) from exc
 
 
-def _load_candidate_value_policy(*, deadline_monotonic: float | None = None) -> tuple[Mapping[str, Any], str]:
+def _load_candidate_value_policy(
+    *,
+    schema_version: str = CANDIDATE_VALUE_POLICY_SCHEMA_VERSION,
+    deadline_monotonic: float | None = None,
+) -> tuple[Mapping[str, Any], str]:
     if deadline_monotonic is not None:
         _check_deadline(deadline_monotonic)
+    policy_path = CANDIDATE_VALUE_POLICY_PATHS.get(schema_version)
+    expected_sha256 = CANDIDATE_VALUE_POLICY_CANONICAL_SHA256_BY_SCHEMA.get(schema_version)
+    if policy_path is None or expected_sha256 is None:
+        raise ExplorationValidationError("candidate_value_policy_schema_invalid")
     policy = _load_closed_json(
-        CANDIDATE_VALUE_POLICY_PATH,
+        policy_path,
         maximum_bytes=100_000,
         error="candidate_value_policy_file_invalid",
     )
-    if not isinstance(policy, dict) or set(policy) != _CANDIDATE_VALUE_POLICY_KEYS:
+    expected_keys = (
+        _CANDIDATE_VALUE_POLICY_KEYS_V1
+        if schema_version == CANDIDATE_VALUE_POLICY_SCHEMA_VERSION_V1
+        else _CANDIDATE_VALUE_POLICY_KEYS_V2
+    )
+    if not isinstance(policy, dict) or set(policy) != expected_keys:
         raise ExplorationValidationError("candidate_value_policy_schema_invalid")
     policy_sha256 = canonical_sha256(policy)
     if deadline_monotonic is not None:
         _check_deadline(deadline_monotonic)
     tiers = policy.get("priority_tiers")
     if (
-        policy.get("schema_version") != CANDIDATE_VALUE_POLICY_SCHEMA_VERSION
+        policy.get("schema_version") != schema_version
         or _POLICY_VERSION_RE.fullmatch(str(policy.get("policy_version"))) is None
         or policy.get("state_values") != ["current", "historical", "ambiguous", "unsupported"]
         or not isinstance(tiers, dict)
@@ -784,7 +855,7 @@ def _load_candidate_value_policy(*, deadline_monotonic: float | None = None) -> 
         or not tiers["precision"] > tiers["mixed_recall"] > tiers["historical_recall"] > tiers["needs_evidence"]
         or policy.get("fallback_segment_id") != "needs_evidence"
         or policy.get("fallback_priority_tier") != "needs_evidence"
-        or policy_sha256 != CANDIDATE_VALUE_POLICY_CANONICAL_SHA256
+        or policy_sha256 != expected_sha256
     ):
         raise ExplorationValidationError("candidate_value_policy_binding_invalid")
     segments = policy.get("segments")
@@ -811,38 +882,81 @@ def _load_candidate_value_policy(*, deadline_monotonic: float | None = None) -> 
         raise ExplorationValidationError("candidate_value_policy_segments_invalid")
     precision = policy.get("precision_tranche")
     hydration = policy.get("hydration")
+    precision_keys = {
+        "required_segment_id",
+        "required_confidence",
+        "required_high_authority_support",
+        "require_stable_platform_user_id",
+    }
+    hydration_keys = {
+        "state_triggers",
+        "required_high_authority_support",
+        "require_stable_platform_user_id",
+        "historical_state_triggers_hydration",
+    }
+    if schema_version == CANDIDATE_VALUE_POLICY_SCHEMA_VERSION_V1:
+        precision_keys.add("require_bio")
+        hydration_keys.add("require_bio")
     if (
         not isinstance(precision, dict)
-        or set(precision)
-        != {
-            "required_segment_id",
-            "required_confidence",
-            "required_high_authority_support",
-            "require_stable_platform_user_id",
-            "require_bio",
-        }
+        or set(precision) != precision_keys
         or precision.get("required_segment_id") != "precision_current_current"
         or precision.get("required_confidence") != "high"
         or precision.get("required_high_authority_support") != list(_CANDIDATE_DIMENSION_FIELDS)
         or precision.get("require_stable_platform_user_id") is not True
-        or precision.get("require_bio") is not True
         or not isinstance(hydration, dict)
-        or set(hydration)
-        != {
-            "state_triggers",
-            "required_high_authority_support",
-            "require_stable_platform_user_id",
-            "require_bio",
-            "historical_state_triggers_hydration",
-        }
+        or set(hydration) != hydration_keys
         or hydration.get("state_triggers") != ["ambiguous", "unsupported"]
         or hydration.get("required_high_authority_support") != list(_CANDIDATE_DIMENSION_FIELDS)
         or hydration.get("require_stable_platform_user_id") is not True
-        or hydration.get("require_bio") is not True
         or hydration.get("historical_state_triggers_hydration") is not False
+        or (
+            schema_version == CANDIDATE_VALUE_POLICY_SCHEMA_VERSION_V1
+            and (precision.get("require_bio") is not True or hydration.get("require_bio") is not True)
+        )
     ):
         raise ExplorationValidationError("candidate_value_policy_rules_invalid")
+    if schema_version == CANDIDATE_VALUE_POLICY_SCHEMA_VERSION_V2:
+        affiliation_profile_gate = policy.get("affiliation_profile_gate")
+        if (
+            not isinstance(affiliation_profile_gate, dict)
+            or set(affiliation_profile_gate)
+            != {
+                "operator",
+                "inputs",
+                "high_authority_relationships",
+                "required_support_field",
+            }
+            or affiliation_profile_gate.get("operator") != "any"
+            or affiliation_profile_gate.get("inputs")
+            != ["profile_bio", "high_authority_target_lab_affiliation_evidence"]
+            or affiliation_profile_gate.get("high_authority_relationships")
+            != ["self", "official_lab", "colleague_or_team"]
+            or affiliation_profile_gate.get("required_support_field") != "target_lab_affiliation_state"
+        ):
+            raise ExplorationValidationError("candidate_value_policy_rules_invalid")
     return policy, policy_sha256
+
+
+def _load_candidate_value_policy_for_binding(
+    experiment_binding: Mapping[str, Any],
+    *,
+    deadline_monotonic: float | None = None,
+) -> tuple[Mapping[str, Any], str]:
+    for schema_version in (
+        CANDIDATE_VALUE_POLICY_SCHEMA_VERSION_V2,
+        CANDIDATE_VALUE_POLICY_SCHEMA_VERSION_V1,
+    ):
+        policy, policy_sha256 = _load_candidate_value_policy(
+            schema_version=schema_version,
+            deadline_monotonic=deadline_monotonic,
+        )
+        if (
+            experiment_binding.get("candidate_value_policy_version") == policy["policy_version"]
+            and experiment_binding.get("candidate_value_policy_sha256") == policy_sha256
+        ):
+            return policy, policy_sha256
+    raise ExplorationValidationError("candidate_value_policy_binding_invalid")
 
 
 def _fraction(numerator: int, denominator: int) -> float | None:
@@ -929,6 +1043,28 @@ def _evidence_supports(candidate: Mapping[str, Any], field: str, *, high_authori
         if not high_authority_only or evidence["relationship"] in HIGH_AUTHORITY_RELATIONSHIPS:
             return True
     return False
+
+
+def _affiliation_profile_gate_satisfied(
+    candidate: Mapping[str, Any],
+    policy: Mapping[str, Any],
+) -> bool:
+    """Accept a profile Bio or explicit high-authority target-lab support.
+
+    Bio presence is descriptive input, not proof of affiliation.  The second
+    arm is intentionally narrower: only self, official-lab, or colleague/team
+    evidence that explicitly supports the target-lab state can substitute for
+    a missing Bio.  Ordinary third-party mentions never satisfy this gate.
+    """
+
+    if policy["schema_version"] == CANDIDATE_VALUE_POLICY_SCHEMA_VERSION_V1:
+        return candidate["bio_excerpt"] is not None
+    gate = policy["affiliation_profile_gate"]
+    return candidate["bio_excerpt"] is not None or any(
+        gate["required_support_field"] in evidence["supports"]
+        and evidence["relationship"] in gate["high_authority_relationships"]
+        for evidence in candidate["evidence"]
+    )
 
 
 def _valid_uuid_version(value: Any, *, version: int) -> bool:
@@ -2229,8 +2365,15 @@ def _hydration_reasons(
         reasons.append("reported_platform_user_id_conflict")
     if hydration["require_stable_platform_user_id"] and candidate["platform_user_id"] is None:
         reasons.append("missing_platform_user_id")
-    if hydration["require_bio"] and candidate["bio_excerpt"] is None:
+    if policy["schema_version"] == CANDIDATE_VALUE_POLICY_SCHEMA_VERSION_V1 and hydration["require_bio"] and candidate[
+        "bio_excerpt"
+    ] is None:
         reasons.append("missing_bio")
+    if (
+        policy["schema_version"] == CANDIDATE_VALUE_POLICY_SCHEMA_VERSION_V2
+        and not _affiliation_profile_gate_satisfied(candidate, policy)
+    ):
+        reasons.append("affiliation_profile_gate_unsatisfied")
     if candidate["target_lab_affiliation_state"] in hydration["state_triggers"]:
         reasons.append("target_lab_affiliation_state_unresolved")
     if candidate["pretraining_experience_state"] in hydration["state_triggers"]:
@@ -2323,8 +2466,9 @@ def _validate_experiment_binding(
         commitment_material=None,
         deadline_monotonic=deadline_monotonic,
     )
-    candidate_value_policy, candidate_value_policy_sha256 = _load_candidate_value_policy(
-        deadline_monotonic=deadline_monotonic
+    candidate_value_policy, candidate_value_policy_sha256 = _load_candidate_value_policy_for_binding(
+        experiment_binding,
+        deadline_monotonic=deadline_monotonic,
     )
     if (
         experiment_binding["lab_id"] != approved_record["lab_id"]
@@ -2363,7 +2507,10 @@ def _validate_hydration_task_output(
     if not isinstance(binding, dict):
         raise ExplorationValidationError("hydration_task_binding_invalid")
     try:
-        _validate_experiment_binding(binding, deadline_monotonic=deadline_monotonic)
+        _, candidate_value_policy = _validate_experiment_binding(
+            binding,
+            deadline_monotonic=deadline_monotonic,
+        )
     except ExplorationValidationError as exc:
         raise ExplorationValidationError("hydration_task_binding_invalid") from exc
     if expected_binding is not None and canonical_json(binding) != canonical_json(expected_binding):
@@ -2376,8 +2523,12 @@ def _validate_hydration_task_output(
     requested_tools = task.get("requested_tools")
     seed_post_urls = task.get("seed_post_urls")
     required_fields = task.get("required_fields")
+    task_version = task.get("task_version")
+    expected_task_version = _HYDRATION_TASK_VERSION_BY_POLICY_SCHEMA[candidate_value_policy["schema_version"]]
+    reason_order = _HYDRATION_REASON_ORDER_BY_TASK_VERSION.get(task_version)
+    reason_values = frozenset(reason_order) if reason_order is not None else frozenset()
     if (
-        task.get("task_version") != HYDRATION_TASK_VERSION
+        task_version != expected_task_version
         or task.get("task_status") != "planned"
         or not isinstance(task.get("task_key"), str)
         or re.fullmatch(r"xhydrate_[0-9a-f]{24}", task["task_key"]) is None
@@ -2387,11 +2538,11 @@ def _validate_hydration_task_output(
         or task.get("candidate_value_segment") not in _VALUE_SEGMENT_IDS
         or not isinstance(reasons, list)
         or not reasons
-        or len(reasons) > len(_HYDRATION_REASON_VALUES)
+        or len(reasons) > len(reason_values)
         or any(not isinstance(reason, str) for reason in reasons)
         or len(set(reasons)) != len(reasons)
-        or any(reason not in _HYDRATION_REASON_VALUES for reason in reasons)
-        or reasons != sorted(reasons, key=_HYDRATION_REASON_ORDER.index)
+        or any(reason not in reason_values for reason in reasons)
+        or reasons != sorted(reasons, key=reason_order.index)
         or task.get("execution_authorized") is not False
     ):
         raise ExplorationValidationError("hydration_task_value_invalid")
@@ -2459,7 +2610,7 @@ def _validate_hydration_task_output(
         "post_urls": seed_post_urls,
         "reasons": reasons,
         "task_status": task["task_status"],
-        "task_version": HYDRATION_TASK_VERSION,
+        "task_version": task_version,
     }
     expected_task_key = f"xhydrate_{hashlib.sha256(canonical_json(identity).encode()).hexdigest()[:24]}"
     if task["task_key"] != expected_task_key:
@@ -2467,7 +2618,7 @@ def _validate_hydration_task_output(
 
 
 def validate_hydration_task(task: Any) -> None:
-    """Fail closed unless one persisted hydration task matches the v1 contract."""
+    """Fail closed unless one persisted hydration task matches v1 or v2."""
 
     deadline_monotonic = time.monotonic() + MAX_EVALUATION_SECONDS
     _validate_hydration_task_output(task, deadline_monotonic=deadline_monotonic)
@@ -2489,9 +2640,20 @@ def _validate_evaluation_output_shape(evaluation: Any, *, deadline_monotonic: fl
     )
     if not isinstance(evaluation, dict) or set(evaluation) != _EVALUATION_KEYS:
         raise ExplorationValidationError("evaluation_output_schema_invalid")
+    evaluation_schema_version = evaluation.get("schema_version")
+    expected_policy_schema_version = _EVALUATION_SCHEMA_TO_POLICY_SCHEMA.get(evaluation_schema_version)
+    expected_task_version = _EVALUATION_SCHEMA_TO_TASK_VERSION.get(evaluation_schema_version)
+    if expected_policy_schema_version is None or expected_task_version is None:
+        raise ExplorationValidationError("evaluation_output_schema_invalid")
+    is_v2 = evaluation_schema_version == EVALUATION_SCHEMA_VERSION_V2
+    assessment_keys = _ASSESSMENT_KEYS_V2 if is_v2 else _ASSESSMENT_KEYS_V1
+    metric_keys = _METRIC_KEYS_V2 if is_v2 else _METRIC_KEYS_V1
+    metric_denominator_keys = _METRIC_DENOMINATOR_KEYS_V2 if is_v2 else _METRIC_DENOMINATOR_KEYS_V1
+    gap_keys = _GAP_KEYS_V2 if is_v2 else _GAP_KEYS_V1
+    reason_order = _HYDRATION_REASON_ORDER_BY_TASK_VERSION[expected_task_version]
+    reason_values = frozenset(reason_order)
     if (
-        evaluation.get("schema_version") != EVALUATION_SCHEMA_VERSION
-        or evaluation.get("status") != "evaluated"
+        evaluation.get("status") != "evaluated"
         or evaluation.get("native_x_call_proof") not in {"receipt_only_unverified", "session_hash_and_calls_verified"}
         or evaluation.get("candidate_search_feasibility")
         not in {
@@ -2518,7 +2680,7 @@ def _validate_evaluation_output_shape(evaluation: Any, *, deadline_monotonic: fl
         or input_binding.get("query_policy_registry_schema_version") != QUERY_POLICY_REGISTRY_SCHEMA_VERSION
         or input_binding.get("query_commitment_scheme") != QUERY_COMMITMENT_SCHEME
         or re.fullmatch(r"qci_[0-9a-f]{24}", str(input_binding.get("query_commitment_issuance_id"))) is None
-        or input_binding.get("candidate_value_policy_schema_version") != CANDIDATE_VALUE_POLICY_SCHEMA_VERSION
+        or input_binding.get("candidate_value_policy_schema_version") != expected_policy_schema_version
         or input_binding.get("query_policy_purpose") != "base_researcher_discovery"
         or input_binding.get("query_policy_allowed_decision_dimensions") != _BASE_DISCOVERY_DIMENSIONS
         or input_binding.get("result_to_receipt") != "exact_tool_query_reconciliation_model_mediated_result"
@@ -2595,7 +2757,7 @@ def _validate_evaluation_output_shape(evaluation: Any, *, deadline_monotonic: fl
     segment_counts: Counter[str] = Counter()
     for assessment in assessments:
         _check_deadline(deadline_monotonic)
-        if not isinstance(assessment, dict) or set(assessment) != _ASSESSMENT_KEYS:
+        if not isinstance(assessment, dict) or set(assessment) != assessment_keys:
             raise ExplorationValidationError("evaluation_assessments_invalid")
         handle = assessment.get("handle")
         lab_state = assessment.get("target_lab_affiliation_state")
@@ -2628,6 +2790,7 @@ def _validate_evaluation_output_shape(evaluation: Any, *, deadline_monotonic: fl
             if isinstance(reasons, list) and all(isinstance(reason, str) for reason in reasons)
             else False
         )
+        affiliation_profile_gate_satisfied = assessment.get("affiliation_profile_gate_satisfied") if is_v2 else None
         if (
             not isinstance(handle, str)
             or _HANDLE_RE.fullmatch(handle) is None
@@ -2649,15 +2812,21 @@ def _validate_evaluation_output_shape(evaluation: Any, *, deadline_monotonic: fl
                     "hydration_required",
                 )
             )
+            or (is_v2 and type(affiliation_profile_gate_satisfied) is not bool)
             or assessment["recall_pool_eligible"] != (segment_id != "needs_evidence" and not identity_conflict)
             or (assessment["precision_tranche_eligible"] and segment_id != "precision_current_current")
             or not isinstance(reasons, list)
             or any(not isinstance(reason, str) for reason in reasons)
             or len(set(reasons)) != len(reasons)
-            or any(reason not in _HYDRATION_REASON_VALUES for reason in reasons)
-            or reasons != sorted(reasons, key=_HYDRATION_REASON_ORDER.index)
+            or any(reason not in reason_values for reason in reasons)
+            or reasons != sorted(reasons, key=reason_order.index)
             or assessment["hydration_required"] != bool(reasons)
             or ("reported_platform_user_id_conflict" in reasons) != identity_conflict
+            or (
+                is_v2
+                and ("affiliation_profile_gate_unsatisfied" in reasons)
+                == affiliation_profile_gate_satisfied
+            )
             or target_unresolved != (lab_state in {"ambiguous", "unsupported"})
             or pretraining_unresolved != (pretraining_state in {"ambiguous", "unsupported"})
             or assessment["high_authority_evidence_complete"] == high_authority_missing
@@ -2665,6 +2834,7 @@ def _validate_evaluation_output_shape(evaluation: Any, *, deadline_monotonic: fl
                 assessment["precision_tranche_eligible"]
                 and (
                     assessment["high_authority_evidence_complete"] is not True
+                    or (is_v2 and affiliation_profile_gate_satisfied is not True)
                     or assessment["hydration_required"] is not False
                 )
             )
@@ -2676,7 +2846,7 @@ def _validate_evaluation_output_shape(evaluation: Any, *, deadline_monotonic: fl
 
     metrics = evaluation.get("metrics")
     ordered_segment_ids = [*_EXPECTED_SEGMENT_BINDINGS, "needs_evidence"]
-    if not isinstance(metrics, dict) or set(metrics) != _METRIC_KEYS:
+    if not isinstance(metrics, dict) or set(metrics) != metric_keys:
         raise ExplorationValidationError("evaluation_metrics_invalid")
     integer_metrics = {
         "tool_call_receipt_rows",
@@ -2688,6 +2858,31 @@ def _validate_evaluation_output_shape(evaluation: Any, *, deadline_monotonic: fl
         "precision_tranche_candidates",
         "recall_pool_candidates",
     }
+    expected_metric_denominators = {
+        "candidates_per_tool_call": metrics["tool_call_receipt_rows"],
+        "model_mediated_bio_presence_rate": metrics["candidates_retained"],
+        "model_mediated_platform_user_id_presence_rate": metrics["candidates_retained"],
+        "model_mediated_precision_tranche_rate": metrics["unique_candidates_retained"],
+        "model_mediated_recall_pool_rate": metrics["unique_candidates_retained"],
+        "model_mediated_high_authority_support_coverage": metrics["unique_candidates_retained"],
+        "third_party_only_candidate_rate": metrics["candidates_retained"],
+        "replayable_provider_post_body_rate": metrics["post_evidence_records"],
+    }
+    if is_v2:
+        expected_metric_denominators["model_mediated_affiliation_profile_gate_coverage"] = metrics[
+            "unique_candidates_retained"
+        ]
+    rate_fields = [
+        "model_mediated_bio_presence_rate",
+        "model_mediated_platform_user_id_presence_rate",
+        "model_mediated_precision_tranche_rate",
+        "model_mediated_recall_pool_rate",
+        "model_mediated_high_authority_support_coverage",
+        "third_party_only_candidate_rate",
+        "replayable_provider_post_body_rate",
+    ]
+    if is_v2:
+        rate_fields.append("model_mediated_affiliation_profile_gate_coverage")
     if (
         any(type(metrics.get(field)) is not int or metrics[field] < 0 for field in integer_metrics)
         or metrics["tool_call_receipt_rows"] < 1
@@ -2707,19 +2902,9 @@ def _validate_evaluation_output_shape(evaluation: Any, *, deadline_monotonic: fl
         or metrics["recall_pool_candidates"] != sum(assessment["recall_pool_eligible"] for assessment in assessments)
         or metrics.get("observations_mechanically_replayable") is not False
         or not isinstance(metrics.get("metric_denominators"), dict)
-        or set(metrics["metric_denominators"]) != _METRIC_DENOMINATOR_KEYS
+        or set(metrics["metric_denominators"]) != metric_denominator_keys
         or any(type(value) is not int or value < 0 for value in metrics["metric_denominators"].values())
-        or metrics["metric_denominators"]
-        != {
-            "candidates_per_tool_call": metrics["tool_call_receipt_rows"],
-            "model_mediated_bio_presence_rate": metrics["candidates_retained"],
-            "model_mediated_platform_user_id_presence_rate": metrics["candidates_retained"],
-            "model_mediated_precision_tranche_rate": metrics["unique_candidates_retained"],
-            "model_mediated_recall_pool_rate": metrics["unique_candidates_retained"],
-            "model_mediated_high_authority_support_coverage": metrics["unique_candidates_retained"],
-            "third_party_only_candidate_rate": metrics["candidates_retained"],
-            "replayable_provider_post_body_rate": metrics["post_evidence_records"],
-        }
+        or metrics["metric_denominators"] != expected_metric_denominators
         or not isinstance(metrics.get("candidate_value_segment_counts"), dict)
         or set(metrics["candidate_value_segment_counts"]) != set(ordered_segment_ids)
         or any(
@@ -2738,15 +2923,7 @@ def _validate_evaluation_output_shape(evaluation: Any, *, deadline_monotonic: fl
         != _fraction(metrics["candidates_retained"], metrics["tool_call_receipt_rows"])
         or any(
             not _valid_optional_rate(metrics.get(field))
-            for field in (
-                "model_mediated_bio_presence_rate",
-                "model_mediated_platform_user_id_presence_rate",
-                "model_mediated_precision_tranche_rate",
-                "model_mediated_recall_pool_rate",
-                "model_mediated_high_authority_support_coverage",
-                "third_party_only_candidate_rate",
-                "replayable_provider_post_body_rate",
-            )
+            for field in rate_fields
         )
         or metrics["model_mediated_precision_tranche_rate"]
         != _fraction(metrics["precision_tranche_candidates"], metrics["unique_candidates_retained"])
@@ -2760,6 +2937,18 @@ def _validate_evaluation_output_shape(evaluation: Any, *, deadline_monotonic: fl
                 if assessment["identity_counting_status"] == "unique_provisional_or_reported_id"
             ),
             metrics["unique_candidates_retained"],
+        )
+        or (
+            is_v2
+            and metrics["model_mediated_affiliation_profile_gate_coverage"]
+            != _fraction(
+                sum(
+                    assessment["affiliation_profile_gate_satisfied"]
+                    for assessment in assessments
+                    if assessment["identity_counting_status"] == "unique_provisional_or_reported_id"
+                ),
+                metrics["unique_candidates_retained"],
+            )
         )
         or metrics["model_reported_observations"] < metrics["candidates_retained"]
         or metrics["replayable_provider_post_body_rate"] != (0.0 if metrics["post_evidence_records"] else None)
@@ -2778,20 +2967,11 @@ def _validate_evaluation_output_shape(evaluation: Any, *, deadline_monotonic: fl
     gaps = evaluation.get("first_field_gate_gaps")
     if (
         not isinstance(gaps, dict)
-        or set(gaps)
-        != {
-            "bio_coverage_gap_to_100_percent",
-            "stable_id_coverage_gap_to_100_percent",
-            "evidence_complete_gap_to_90_percent",
-            "provider_post_body_replayability_gap_to_100_percent",
-        }
+        or set(gaps) != gap_keys
         or any(not _valid_optional_rate(value) for value in gaps.values())
     ):
         raise ExplorationValidationError("evaluation_gate_gaps_invalid")
     expected_gaps = {
-        "bio_coverage_gap_to_100_percent": None
-        if metrics["model_mediated_bio_presence_rate"] is None
-        else round(1.0 - metrics["model_mediated_bio_presence_rate"], 6),
         "stable_id_coverage_gap_to_100_percent": None
         if metrics["model_mediated_platform_user_id_presence_rate"] is None
         else round(1.0 - metrics["model_mediated_platform_user_id_presence_rate"], 6),
@@ -2800,6 +2980,17 @@ def _validate_evaluation_output_shape(evaluation: Any, *, deadline_monotonic: fl
         else round(max(0.0, 0.9 - metrics["model_mediated_high_authority_support_coverage"]), 6),
         "provider_post_body_replayability_gap_to_100_percent": 1.0 if metrics["post_evidence_records"] else None,
     }
+    expected_gaps["bio_presence_gap_to_100_percent" if is_v2 else "bio_coverage_gap_to_100_percent"] = (
+        None
+        if metrics["model_mediated_bio_presence_rate"] is None
+        else round(1.0 - metrics["model_mediated_bio_presence_rate"], 6)
+    )
+    if is_v2:
+        expected_gaps["affiliation_profile_gate_gap_to_100_percent"] = (
+            None
+            if metrics["model_mediated_affiliation_profile_gate_coverage"] is None
+            else round(1.0 - metrics["model_mediated_affiliation_profile_gate_coverage"], 6)
+        )
     if canonical_json(gaps) != canonical_json(expected_gaps):
         raise ExplorationValidationError("evaluation_gate_gaps_invalid")
 
@@ -2832,8 +3023,10 @@ def _validate_evaluation_output_shape(evaluation: Any, *, deadline_monotonic: fl
     ]
     if metrics["model_mediated_platform_user_id_presence_rate"] != 1.0:
         expected_blockers.append("stable_platform_user_id_coverage_below_100_percent")
-    if metrics["model_mediated_bio_presence_rate"] != 1.0:
+    if not is_v2 and metrics["model_mediated_bio_presence_rate"] != 1.0:
         expected_blockers.append("bio_coverage_below_100_percent")
+    if is_v2 and metrics["model_mediated_affiliation_profile_gate_coverage"] != 1.0:
+        expected_blockers.append("affiliation_profile_gate_coverage_below_100_percent")
     if metrics["reported_platform_user_id_conflict_candidates"]:
         expected_blockers.append("reported_platform_user_id_conflict_quarantined")
     if raw_session["owner_only_permissions"] is not True:
@@ -2881,9 +3074,14 @@ def _validate_evaluation_output_shape(evaluation: Any, *, deadline_monotonic: fl
         "candidate_value_policy_sha256": input_binding["candidate_value_policy_sha256"],
     }
     try:
-        _validate_experiment_binding(experiment_binding, deadline_monotonic=deadline_monotonic)
+        _, validated_candidate_value_policy = _validate_experiment_binding(
+            experiment_binding,
+            deadline_monotonic=deadline_monotonic,
+        )
     except ExplorationValidationError as exc:
         raise ExplorationValidationError("evaluation_input_binding_invalid") from exc
+    if validated_candidate_value_policy["schema_version"] != expected_policy_schema_version:
+        raise ExplorationValidationError("evaluation_input_binding_invalid")
     hydration_tasks = evaluation.get("hydration_tasks")
     if not isinstance(hydration_tasks, list):
         raise ExplorationValidationError("evaluation_hydration_tasks_invalid")
@@ -2936,6 +3134,7 @@ def build_hydration_tasks(
         )
     except ExplorationValidationError as exc:
         raise ExplorationValidationError("hydration_experiment_binding_invalid") from exc
+    task_version = _HYDRATION_TASK_VERSION_BY_POLICY_SCHEMA[candidate_value_policy["schema_version"]]
     for candidate in candidates:
         _check_deadline(deadline_monotonic)
         _validate_candidate(candidate)
@@ -3008,7 +3207,7 @@ def build_hydration_tasks(
             "post_urls": post_urls,
             "reasons": reasons,
             "task_status": "planned",
-            "task_version": HYDRATION_TASK_VERSION,
+            "task_version": task_version,
         }
         required_fields = ["platform_user_id", "current_handle", "bio_text", "bio_observed_at"]
         if post_urls:
@@ -3022,7 +3221,7 @@ def build_hydration_tasks(
                 ]
             )
         task = {
-            "task_version": HYDRATION_TASK_VERSION,
+            "task_version": task_version,
             "task_status": "planned",
             "task_key": f"xhydrate_{hashlib.sha256(canonical_json(identity).encode()).hexdigest()[:24]}",
             "experiment_binding": dict(experiment_binding),
@@ -3055,6 +3254,7 @@ def evaluate_exploration(
     raw_session_directory: Path | None = None,
     query_policy_version: str | None = None,
     query_policy_registry_version: str | None = None,
+    _evaluation_schema_version: str = EVALUATION_SCHEMA_VERSION,
     _deadline_monotonic: float | None = None,
 ) -> dict[str, Any]:
     """Validate one exploration and recompute decision-relevant diagnostics."""
@@ -3062,6 +3262,10 @@ def evaluate_exploration(
     deadline_monotonic = (
         _deadline_monotonic if _deadline_monotonic is not None else time.monotonic() + MAX_EVALUATION_SECONDS
     )
+    candidate_value_policy_schema_version = _EVALUATION_SCHEMA_TO_POLICY_SCHEMA.get(_evaluation_schema_version)
+    if candidate_value_policy_schema_version is None:
+        raise ExplorationValidationError("evaluation_output_schema_invalid")
+    is_v2 = _evaluation_schema_version == EVALUATION_SCHEMA_VERSION_V2
     calls = _validate_receipt(receipt, deadline_monotonic=deadline_monotonic)
     if query_policy_version is not None and (
         not isinstance(query_policy_version, str) or _POLICY_VERSION_RE.fullmatch(query_policy_version) is None
@@ -3088,6 +3292,7 @@ def evaluate_exploration(
     )
     _check_deadline(deadline_monotonic)
     candidate_value_policy, candidate_value_policy_sha256 = _load_candidate_value_policy(
+        schema_version=candidate_value_policy_schema_version,
         deadline_monotonic=deadline_monotonic
     )
     raw_session = _raw_session_verification(receipt, calls, raw_session_directory)
@@ -3114,12 +3319,20 @@ def evaluate_exploration(
             _evidence_supports(candidate, dimension, high_authority_only=True)
             for dimension in precision_rule["required_high_authority_support"]
         )
+        affiliation_profile_gate_satisfied = _affiliation_profile_gate_satisfied(
+            candidate,
+            candidate_value_policy,
+        )
         precision_eligible = (
             segment_id == precision_rule["required_segment_id"]
             and candidate["confidence"] == precision_rule["required_confidence"]
             and high_authority_complete
             and (not precision_rule["require_stable_platform_user_id"] or candidate["platform_user_id"] is not None)
-            and (not precision_rule["require_bio"] or candidate["bio_excerpt"] is not None)
+            and (
+                affiliation_profile_gate_satisfied
+                if is_v2
+                else not precision_rule["require_bio"] or candidate["bio_excerpt"] is not None
+            )
             and not identity_conflict
         )
         hydration_reasons = _hydration_reasons(
@@ -3127,22 +3340,23 @@ def evaluate_exploration(
             candidate_value_policy,
             identity_conflict=identity_conflict,
         )
-        candidate_value_assessments.append(
-            {
-                "handle": candidate["handle"],
-                "target_lab_affiliation_state": candidate["target_lab_affiliation_state"],
-                "pretraining_experience_state": candidate["pretraining_experience_state"],
-                "candidate_value_segment": segment_id,
-                "identity_counting_status": "reported_platform_user_id_conflict_quarantined"
-                if identity_conflict
-                else "unique_provisional_or_reported_id",
-                "recall_pool_eligible": segment["recall_pool_eligible"] and not identity_conflict,
-                "precision_tranche_eligible": precision_eligible,
-                "high_authority_evidence_complete": high_authority_complete,
-                "hydration_required": bool(hydration_reasons),
-                "hydration_reasons": hydration_reasons,
-            }
-        )
+        assessment = {
+            "handle": candidate["handle"],
+            "target_lab_affiliation_state": candidate["target_lab_affiliation_state"],
+            "pretraining_experience_state": candidate["pretraining_experience_state"],
+            "candidate_value_segment": segment_id,
+            "identity_counting_status": "reported_platform_user_id_conflict_quarantined"
+            if identity_conflict
+            else "unique_provisional_or_reported_id",
+            "recall_pool_eligible": segment["recall_pool_eligible"] and not identity_conflict,
+            "precision_tranche_eligible": precision_eligible,
+            "high_authority_evidence_complete": high_authority_complete,
+            "hydration_required": bool(hydration_reasons),
+            "hydration_reasons": hydration_reasons,
+        }
+        if is_v2:
+            assessment["affiliation_profile_gate_satisfied"] = affiliation_profile_gate_satisfied
+        candidate_value_assessments.append(assessment)
     precision_candidates = [
         assessment for assessment in candidate_value_assessments if assessment["precision_tranche_eligible"]
     ]
@@ -3154,6 +3368,11 @@ def evaluate_exploration(
             _evidence_supports(candidate, dimension, high_authority_only=True)
             for dimension in _CANDIDATE_DIMENSION_FIELDS
         )
+    ]
+    affiliation_profile_gate_complete = [
+        candidate
+        for candidate in unique_candidates
+        if _affiliation_profile_gate_satisfied(candidate, candidate_value_policy)
     ]
     third_party_only = [
         candidate
@@ -3201,6 +3420,12 @@ def evaluate_exploration(
         "recall_pool_candidates": len(recall_candidates),
         "observations_mechanically_replayable": False,
     }
+    if is_v2:
+        metrics["model_mediated_affiliation_profile_gate_coverage"] = _fraction(
+            len(affiliation_profile_gate_complete),
+            unique_total,
+        )
+        metrics["metric_denominators"]["model_mediated_affiliation_profile_gate_coverage"] = unique_total
     experiment_binding = {
         "lab_id": validated_query_policy["lab_id"],
         "run_binding_commitment": validated_query_policy["run_binding_commitment"],
@@ -3234,8 +3459,10 @@ def evaluate_exploration(
     ]
     if metrics["model_mediated_platform_user_id_presence_rate"] != 1.0:
         scale_blockers.append("stable_platform_user_id_coverage_below_100_percent")
-    if metrics["model_mediated_bio_presence_rate"] != 1.0:
+    if not is_v2 and metrics["model_mediated_bio_presence_rate"] != 1.0:
         scale_blockers.append("bio_coverage_below_100_percent")
+    if is_v2 and metrics["model_mediated_affiliation_profile_gate_coverage"] != 1.0:
+        scale_blockers.append("affiliation_profile_gate_coverage_below_100_percent")
     if conflict_handles:
         scale_blockers.append("reported_platform_user_id_conflict_quarantined")
     if raw_session["owner_only_permissions"] is not True:
@@ -3245,8 +3472,26 @@ def evaluate_exploration(
     if raw_session["tool_disable_flags_verified"] is not True:
         scale_blockers.append("tool_disable_flags_receipt_only")
     proof = "session_hash_and_calls_verified" if raw_session["tool_calls_verified"] else "receipt_only_unverified"
+    first_field_gate_gaps = {
+        "stable_id_coverage_gap_to_100_percent": None
+        if metrics["model_mediated_platform_user_id_presence_rate"] is None
+        else round(1.0 - metrics["model_mediated_platform_user_id_presence_rate"], 6),
+        "evidence_complete_gap_to_90_percent": None
+        if metrics["model_mediated_high_authority_support_coverage"] is None
+        else round(max(0.0, 0.9 - metrics["model_mediated_high_authority_support_coverage"]), 6),
+        "provider_post_body_replayability_gap_to_100_percent": 1.0 if post_evidence else None,
+        "bio_presence_gap_to_100_percent" if is_v2 else "bio_coverage_gap_to_100_percent": None
+        if metrics["model_mediated_bio_presence_rate"] is None
+        else round(1.0 - metrics["model_mediated_bio_presence_rate"], 6),
+    }
+    if is_v2:
+        first_field_gate_gaps["affiliation_profile_gate_gap_to_100_percent"] = (
+            None
+            if metrics["model_mediated_affiliation_profile_gate_coverage"] is None
+            else round(1.0 - metrics["model_mediated_affiliation_profile_gate_coverage"], 6)
+        )
     evaluation = {
-        "schema_version": EVALUATION_SCHEMA_VERSION,
+        "schema_version": _evaluation_schema_version,
         "status": "evaluated",
         "native_x_call_proof": proof,
         "input_binding": {
@@ -3294,18 +3539,7 @@ def evaluate_exploration(
         "tool_counts": dict(Counter(call["tool_name"] for call in calls)),
         "metrics": metrics,
         "candidate_value_assessments": candidate_value_assessments,
-        "first_field_gate_gaps": {
-            "bio_coverage_gap_to_100_percent": None
-            if metrics["model_mediated_bio_presence_rate"] is None
-            else round(1.0 - metrics["model_mediated_bio_presence_rate"], 6),
-            "stable_id_coverage_gap_to_100_percent": None
-            if metrics["model_mediated_platform_user_id_presence_rate"] is None
-            else round(1.0 - metrics["model_mediated_platform_user_id_presence_rate"], 6),
-            "evidence_complete_gap_to_90_percent": None
-            if metrics["model_mediated_high_authority_support_coverage"] is None
-            else round(max(0.0, 0.9 - metrics["model_mediated_high_authority_support_coverage"]), 6),
-            "provider_post_body_replayability_gap_to_100_percent": 1.0 if post_evidence else None,
-        },
+        "first_field_gate_gaps": first_field_gate_gaps,
         "hydration_tasks": hydration_tasks,
         "authority": {
             "formal_gate_eligible": False,
@@ -3343,6 +3577,7 @@ def validate_evaluation_output(
         raw_session_directory=raw_session_directory,
         query_policy_version=input_binding["query_policy_version"],
         query_policy_registry_version=input_binding["query_policy_registry_version"],
+        _evaluation_schema_version=evaluation["schema_version"],
         _deadline_monotonic=deadline_monotonic,
     )
     if canonical_json(evaluation) != canonical_json(replayed):

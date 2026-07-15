@@ -160,6 +160,15 @@ form a configured 2×2 matrix. Current/current is the narrow precision tranche; 
 and historical/historical remain experience-recall segments. `ambiguous|unsupported` rows stay in a bounded evidence-
 hydration queue. Changing the target lab or segment priorities changes reviewed policy/config, not Python branches.
 
+Candidate-value policy v2 replaces the old mandatory-Bio rule with an explicit `affiliation_profile_gate`: a row must
+have either a profile Bio or evidence that explicitly supports target-lab affiliation from the subject, the official
+lab account, or a colleague/team account. An ordinary third-party mention cannot satisfy that gate. Bio presence and
+its coverage remain descriptive diagnostics; missing Bio does not independently block precision or scale when the
+high-authority affiliation arm is satisfied. This gate does not weaken the separate precision requirements for
+high-authority target-lab and pretraining support, stable account id, high confidence, and current/current state. The
+four current/historical lab × pretraining combinations remain in the recall pool. New evaluations and hydration tasks
+emit v2 contracts; persisted v1 artifacts remain replayable against the original mandatory-Bio semantics.
+
 Mentioned organization accounts become reversible graph edges and follow-up tasks. Subject claims require organization
 or independent professional evidence before confirmation. Chinese-language professional/technical content is a weak
 China/Asia professional-experience proxy; subject-owned China digital-ecosystem professional activity is a strong
