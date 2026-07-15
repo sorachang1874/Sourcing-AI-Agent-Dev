@@ -187,14 +187,17 @@ def _normalized_source(source: str) -> str:
     return re.sub(r"\s+", " ", source).strip()
 
 
-def _numbered_markdown_items(section: str) -> dict[int, str]:
+def _numbered_markdown_items(section: str) -> tuple[tuple[int, str], ...]:
     starts = list(re.finditer(r"(?m)^(\d+)\. ", section))
-    return {
-        int(match.group(1)): _normalized_source(
-            section[match.end() : starts[index + 1].start() if index + 1 < len(starts) else len(section)]
+    return tuple(
+        (
+            int(match.group(1)),
+            _normalized_source(
+                section[match.end() : starts[index + 1].start() if index + 1 < len(starts) else len(section)]
+            ),
         )
         for index, match in enumerate(starts)
-    }
+    )
 
 
 def _markdown_bullet_items(section: str) -> tuple[str, ...]:
@@ -467,18 +470,22 @@ def test_d3b_migration_a_orders_activity_before_event_before_receipt_surfaces() 
     contract = D3B_CONTRACT_PATH.read_text(encoding="utf-8")
     migration_a = contract[contract.index("### 11.1 Migration A") : contract.index("### 11.2 Migration B")]
     items = _numbered_markdown_items(migration_a)
+    item_numbers = tuple(item_number for item_number, _ in items)
+    assert item_numbers == tuple(range(1, 11))
+    assert len(item_numbers) == len(set(item_numbers))
+    items_by_number = dict(items)
 
-    activity_item = items[5]
+    activity_item = items_by_number[5]
     activity_run_position = activity_item.index("`workflow_activity_runs`")
     activity_attempt_position = activity_item.index("`workflow_activity_attempts`")
     assert activity_run_position < activity_attempt_position
 
-    event_item = items[6]
+    event_item = items_by_number[6]
     event_position = event_item.index("reuses `workflow_events.operation_id`")
     intent_position = event_item.index("verification-intent source terminal tuple")
     assert event_position < intent_position
 
-    terminal_evidence_item = items[7]
+    terminal_evidence_item = items_by_number[7]
     response_position = terminal_evidence_item.index("creates `transport_response_receipts`")
     failure_position = terminal_evidence_item.index("`transport_attempt_failure_receipts`")
     quarantine_position = terminal_evidence_item.index("creates `workflow_late_result_quarantine`")
@@ -493,9 +500,11 @@ def test_d3b_migration_a_orders_activity_before_event_before_receipt_surfaces() 
         "`transport_attempt_failure_receipts`",
         "creates `workflow_late_result_quarantine`",
     )
+    observed_markers = tuple(marker for _, item in items for marker in ordered_markers if marker in item)
     observed_phase_numbers = tuple(
-        item_number for marker in ordered_markers for item_number, item in items.items() if marker in item
+        item_number for item_number, item in items for marker in ordered_markers if marker in item
     )
+    assert observed_markers == ordered_markers
     assert observed_phase_numbers == (5, 5, 6, 6, 7, 7, 7)
 
 

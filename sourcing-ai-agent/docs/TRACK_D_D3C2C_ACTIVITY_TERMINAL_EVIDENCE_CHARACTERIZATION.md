@@ -18,6 +18,14 @@ was closed. Its new actionable evidence is fixed here: the order oracle structur
 failure receipt -> quarantine` phase sequence, §7 asserts the complete exact non-closure tuple, and §8 supersedes the
 old seven-test count with the current eight-test baseline. `R-019/R-023/R-027/R-029` remain open.
 
+The first enclosing fixed-forward commit `045267d2519d43718b24ec0fde95090126b1def8` then received pinned advisory
+`NO-GO`, `P0/P1/P2/P3=0/1/1/0`. Its pin ended before the D3c1a batch that introduced the documented compatibility-only
+`get_activity_run` fallback, so that archived object had `25 = 24 external + 1 internal` reads and the claimed eight-test
+oracle was not self-contained. The same review also proved that the initial dictionary-based order parser rebuilt phase
+numbers in marker order instead of asserting unique source order. This fixed-forward is now based after the D3c1a
+dependency and requires source-ordered unique Migration-A items `1..10`, including physical `5 -> 6 -> 7`; neither
+finding is waived or represented as review `GO`.
+
 Original Scout snapshot: `e76d20e36fd34ffb6184079668b7c57deda0496f` on
 `governance-phase0-ttl-20260611` (2026-07-15). The enclosing implementation commit for this documentation/test batch is
 not assigned here. The exact read-call population is intentionally advanced when the later D3c1a bounded batch adds a
