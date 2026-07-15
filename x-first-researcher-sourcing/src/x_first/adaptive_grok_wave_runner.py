@@ -76,6 +76,7 @@ MAX_CONTRACT_SCHEMA_BYTES = 16_777_216
 MAX_EFFECTIVE_PROMPT_POLICY_BYTES = 4_194_304
 MAX_SESSION_TREE_DEPTH = 64
 FINAL_SESSION_TREE_SCAN_BUDGET_SECONDS = 5.0
+OAUTH_REFRESH_AVOIDANCE_MARGIN_SECONDS = 600
 DEFAULT_EFFECTIVE_PROMPT_POLICY = (
     Path(__file__).resolve().parents[2] / "configs/adaptive_grok_wave_effective_prompt_policy.v1.json"
 )
@@ -227,6 +228,10 @@ _SESSION_ID_RE = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f
 _CANONICAL_TIME_RE = re.compile(
     r"[0-9]{4}-(?:0[1-9]|1[0-2])-(?:[0-2][0-9]|3[01])T"
     r"(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]\.[0-9]{3}Z"
+)
+_OAUTH_EXPIRY_TIME_RE = re.compile(
+    r"[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T"
+    r"(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\.[0-9]{1,6})?Z"
 )
 _PENDING_RE = re.compile(r"\.pending-(?P<name>[a-z0-9_.-]{1,96})-[0-9a-f]{32}")
 _PERSON_SCOPED_FROM_RE = re.compile(r"(?i)(?:-?from:)")
@@ -3426,6 +3431,61 @@ def _auth_fingerprint(path: Path) -> str:
     return bytes_sha256(_read_regular_owned_bounded(path, maximum_bytes=64_000, required_mode=0o600))
 
 
+def _oauth_access_expires_at(path: Path) -> datetime:
+    """Read one active Grok OAuth row without ever exposing credential bytes."""
+
+    try:
+        payload = strict_json_loads(
+            _read_regular_owned_bounded(path, maximum_bytes=64_000, required_mode=0o600)
+        )
+    except (AdaptiveWaveValidationError, UnicodeError, ValueError) as exc:
+        raise AdaptiveWaveValidationError("grok_auth_session_invalid") from exc
+    if not isinstance(payload, dict) or len(payload) != 1:
+        raise AdaptiveWaveValidationError("grok_auth_session_invalid")
+    record = next(iter(payload.values()))
+    if (
+        not isinstance(record, dict)
+        or not isinstance(record.get("key"), str)
+        or not record["key"]
+        or not isinstance(record.get("expires_at"), str)
+        or _OAUTH_EXPIRY_TIME_RE.fullmatch(record["expires_at"]) is None
+    ):
+        raise AdaptiveWaveValidationError("grok_auth_session_invalid")
+    try:
+        expires_at = datetime.fromisoformat(record["expires_at"][:-1] + "+00:00")
+    except ValueError as exc:
+        raise AdaptiveWaveValidationError("grok_auth_session_invalid") from exc
+    if expires_at.tzinfo is None or expires_at.utcoffset() != timedelta(0):
+        raise AdaptiveWaveValidationError("grok_auth_session_invalid")
+    return expires_at.astimezone(UTC)
+
+
+def _live_auth_runtime_window(request: Mapping[str, Any]) -> timedelta:
+    emergency = request["emergency"]
+    return timedelta(
+        milliseconds=(
+            emergency["deadline_ms"]
+            + emergency["term_grace_ms"]
+            + emergency["kill_grace_ms"]
+        ),
+        seconds=OAUTH_REFRESH_AVOIDANCE_MARGIN_SECONDS,
+    )
+
+
+def _require_live_auth_freshness(
+    path: Path,
+    *,
+    request: Mapping[str, Any],
+    now: datetime,
+    grant_ttl_seconds: int = 0,
+) -> None:
+    required_until = now.astimezone(UTC) + _live_auth_runtime_window(request) + timedelta(
+        seconds=grant_ttl_seconds
+    )
+    if _oauth_access_expires_at(path) <= required_until:
+        raise AdaptiveWaveValidationError("grok_auth_access_window_insufficient")
+
+
 def _validate_grant(
     grant: Any,
     request: Mapping[str, Any],
@@ -3509,6 +3569,12 @@ def issue_live_grant(
     ):
         raise AdaptiveWaveValidationError("live_grant_request_invalid")
     now = wall_clock().astimezone(UTC)
+    _require_live_auth_freshness(
+        auth_source,
+        request=request,
+        now=now,
+        grant_ttl_seconds=ttl_seconds,
+    )
     grant_id_hash = bytes_sha256(grant_id.encode())
     grant = {
         "schema_version": GRANT_SCHEMA_VERSION,
@@ -4545,6 +4611,17 @@ def _run_adaptive_wave(
         effective_prompt_policy = _approved_effective_prompt_binding(request)
         _, grant_raw = _load_preissued_grant(approval_root, request=request, now=started_clock)
         grant_sha = bytes_sha256(grant_raw)
+        assert auth_source is not None
+        # A matching digest proves only which OAuth bytes would be copied.  It
+        # does not prove that their access token covers this run.  Avoid
+        # triggering one-time refresh-token rotation inside the disposable
+        # GROK_HOME, because that refreshed state is intentionally deleted.
+        if _auth_fingerprint(auth_source) == transport["oauth_auth_sha256"]:
+            _require_live_auth_freshness(
+                auth_source,
+                request=request,
+                now=started_clock,
+            )
     prompt_raw = _load_bound_bytes(
         request["prompt_source"]["path"],
         request["prompt_source"]["sha256"],
@@ -4674,6 +4751,11 @@ def _run_adaptive_wave(
                 copied_auth = _copy_private_auth(auth_source, ephemeral_home)
                 if _auth_fingerprint(copied_auth) != transport["oauth_auth_sha256"]:
                     raise AdaptiveWaveValidationError("copied_auth_fingerprint_mismatch")
+                _require_live_auth_freshness(
+                    copied_auth,
+                    request=request,
+                    now=wall_clock().astimezone(UTC),
+                )
                 consumed_grant = _load_and_consume_grant(
                     approval_root,
                     request=request,

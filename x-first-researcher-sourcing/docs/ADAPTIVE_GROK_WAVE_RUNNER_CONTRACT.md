@@ -294,15 +294,28 @@ The configured Grok locator may be an owner-controlled symlink. Before grant con
 6. executes only the staged copy.
 
 The canonical OAuth file must be a current-owner, one-link, regular `0600` file within the size ceiling and must match
-the request-pinned digest. It is descriptor-copied with pre/post identity checks. The durable intent is published
-before auth is copied. From the copy through grant consumption, executor completion, bounded session-tree measurement,
-and transcript capture, every exit deletes the complete ephemeral home in a `finally` boundary. Normal execution
-deletes it before raw stdout/stderr publication, structured-output parsing, sanitized-result publication, or terminal
-receipt construction. A terminal receipt requires `ephemeral_tree_deleted=true`; a post-executor publication failure
-can be recovered from the durable intent/spools without retaining OAuth bytes. Because the provider can write this
-tree, deletion restores owner-only traversal mode through no-follow directory descriptors and unlinks without
-following provider-created links. A provider that changes any directory away from `0700` or regular file away from
-`0600` fails the session-tree boundary; even mode-`000` nested directories are deleted without an operator chmod step.
+the request-pinned digest. Digest equality proves byte identity, not a usable login. Grant issuance therefore parses
+the duplicate-key-safe JSON as exactly one active credential row and requires its access-token `expires_at` to be
+strictly later than the complete grant TTL plus process deadline, TERM/KILL grace, and a fixed 600-second
+refresh-avoidance margin. Execution repeats the runtime-window check after loading the grant but before reading the
+prompt or creating a run root. The descriptor-copied auth is checked once more with a fresh wall clock before the
+single-use grant is consumed.
+
+The live lane does not rely on Grok refreshing an expired token inside the disposable home. A provider refresh can
+rotate credential state; deleting that home would discard the new state while leaving the canonical file stale for
+the next run. Refreshing or writing back canonical OAuth state is not part of this runner. A stale, malformed,
+multi-row, or near-horizon auth file therefore fails locally without a provider call and, at execution, before grant
+consumption.
+
+The auth file is descriptor-copied with pre/post identity checks. The durable intent is published before auth is
+copied. From the copy through grant consumption, executor completion, bounded session-tree measurement, and transcript
+capture, every exit deletes the complete ephemeral home in a `finally` boundary. Normal execution deletes it before
+raw stdout/stderr publication, structured-output parsing, sanitized-result publication, or terminal receipt
+construction. A terminal receipt requires `ephemeral_tree_deleted=true`; a post-executor publication failure can be
+recovered from the durable intent/spools without retaining OAuth bytes. Because the provider can write this tree,
+deletion restores owner-only traversal mode through no-follow directory descriptors and unlinks without following
+provider-created links. A provider that changes any directory away from `0700` or regular file away from `0600` fails
+the session-tree boundary; even mode-`000` nested directories are deleted without an operator chmod step.
 
 ## Preissued single-use live grant
 
@@ -566,8 +579,10 @@ PYTHONPATH=src ../sourcing-ai-agent/.venv/bin/python \
 ```
 
 The suite covers unbounded synthetic candidate arrays; 120 bound prior waves; strict overlap completion; v2
-schema/runtime key parity; staged symlinked binary; account/auth binding; missing, pre-link, post-link and gated-release
-expiry, wrong-scope, and consumed grants; launcher-time replay; exact closed tools; raw model/tool/usage/terminal proof; prompt-file argv privacy; stream/JSON/session
+schema/runtime key parity; staged symlinked binary; account/auth binding; malformed, multi-row, expired, boundary, and
+near-horizon OAuth state; pre-grant, pre-run-root, and copied-auth freshness checks; missing, pre-link, post-link and
+gated-release expiry, wrong-scope, and consumed grants; launcher-time replay; exact closed tools;
+raw model/tool/usage/terminal proof; prompt-file argv privacy; stream/JSON/session
 ceilings; entry-scoped prompt-policy append replay and purge; full actual-argument protected-boundary checks;
 strict 0.2.101 headless parsing; retry-state and progress/tool interleaving; outer/session/inner tamper; model-versus-ledger
 diagnostic disagreement; replay-only legacy plain command policy;

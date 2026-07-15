@@ -36,8 +36,9 @@ organization-level `from:GoogleDeepMind` keyword queries, all 20 native timestam
 row was mislabelled as Bio without topology, and two conflicting rows shared one handle. No candidate-scoped `from:`
 query occurred. Only one positive Reply query was attempted, so Reply discovery remains a measured weak cell.
 
-The v5 implementation now awaiting pinned independent review is designed around those facts rather than a fixed
-answer quota. Its append-only
+The v5 implementation passed pinned non-author review at `5005c75` with `P0=0 / P1=0 / P2=1 / GO`; the residual is
+that typed thread-fetch arguments do not prove how a thread first entered the discovery turn. It is designed around
+the v4 facts rather than a fixed answer quota. Its append-only
 effective-prompt row can bind a casefold-unique official-account allowlist for any lab; the v2 session policy accepts
 exactly one positive, entry-bound official handle only in keyword search and continues to reject candidate, negated,
 multiple, semantic, and unknown-handle `from:` forms. The current result policy can also convert only an exact
@@ -48,6 +49,16 @@ Discovery-only projection never applies the hydration surface gate and always ov
 with the operator-owned unproven reason: raw arguments can prove strategy cells were attempted, but not per-query yield
 or population convergence. Old v1-plus-artifact, normalization-only result-v3, pre-normalization v3, and result-v2
 bundles remain replay-only under their recorded digests.
+
+The first reviewed v5 process did not produce a search sample. It failed after `8.156s` with Grok CLI `Not signed in`,
+zero model events, zero native-X calls, no fallback/timeout/technical limit, and a bundle replay result of `[]`. The
+request had correctly copied and SHA-bound one OAuth file, but its access token had expired `17,107.869606s` before
+process start. The previous v4 process had used the same expired bytes successfully inside a disposable home, which is
+consistent with refresh-token state being rotated there and then deleted. A bounded local repair now requires the
+access token to cover the grant TTL plus the complete process/grace window and a 600-second margin; it checks before
+grant creation, before prompt/run-root work, and again on the copied auth before grant consumption. This attempt is
+excluded from every recall/precision/performance comparison and the consumed grant cannot be reused. See
+`docs/live-evidence/2026-07-15-google-deepmind-v5-oauth-lifecycle-failure.md`.
 
 The first vertical slice covers OpenAI with:
 

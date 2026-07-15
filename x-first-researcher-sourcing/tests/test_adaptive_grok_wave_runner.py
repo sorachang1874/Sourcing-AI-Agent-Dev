@@ -70,6 +70,23 @@ def _write_private(path: Path, value: bytes) -> None:
     os.chmod(path, 0o600)
 
 
+def _oauth_auth_bytes(
+    expires_at: datetime = datetime(2099, 1, 1, tzinfo=UTC),
+    *,
+    row_count: int = 1,
+) -> bytes:
+    payload = {
+        f"https://auth.x.ai::synthetic-{index}": {
+            "auth_mode": "oidc",
+            "expires_at": expires_at.astimezone(UTC).isoformat(timespec="microseconds").replace("+00:00", "Z"),
+            "key": f"synthetic-access-token-{index}",
+            "refresh_token": f"synthetic-refresh-token-{index}",
+        }
+        for index in range(row_count)
+    }
+    return (canonical_json(payload) + "\n").encode()
+
+
 def _empty_result() -> dict[str, Any]:
     return {
         "status": "X_SEARCH_PARTIAL",
@@ -238,7 +255,7 @@ def _live_material(root: Path) -> tuple[Path, Path, str]:
     binary_locator = root / "grok"
     binary_locator.symlink_to(canonical_binary.name)
     auth = root / "auth.json"
-    _write_private(auth, b'{"synthetic":"oauth"}\n')
+    _write_private(auth, _oauth_auth_bytes())
     return binary_locator, auth, _bytes_sha(canonical_binary.read_bytes())
 
 
@@ -2870,6 +2887,125 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
                     )
                 self.assertFalse((root / "approvals").exists())
 
+    def test_grant_issuance_requires_one_fresh_oauth_access_window(self) -> None:
+        runtime_window = timedelta(
+            milliseconds=1_800_000 + 1_000 + 1_000,
+            seconds=runner.OAUTH_REFRESH_AVOIDANCE_MARGIN_SECONDS,
+        )
+        issuance_horizon = FIXED_TIME + timedelta(seconds=900) + runtime_window
+        cases = (
+            ("expired", _oauth_auth_bytes(FIXED_TIME), "grok_auth_access_window_insufficient"),
+            (
+                "near_horizon",
+                _oauth_auth_bytes(issuance_horizon - timedelta(microseconds=1)),
+                "grok_auth_access_window_insufficient",
+            ),
+            ("exact_boundary", _oauth_auth_bytes(issuance_horizon), "grok_auth_access_window_insufficient"),
+            ("malformed", b'{"synthetic":{"expires_at":"not-a-time","key":"access"}}\n', "grok_auth_session_invalid"),
+            ("multiple_rows", _oauth_auth_bytes(row_count=2), "grok_auth_session_invalid"),
+        )
+        for label, auth_raw, expected_error in cases:
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                os.chmod(root, 0o700)
+                _, auth, binary_sha = _live_material(root)
+                _write_private(auth, auth_raw)
+                _, request_path = _build_request(root, binary_sha=binary_sha)
+                with self.assertRaisesRegex(AdaptiveWaveValidationError, expected_error):
+                    issue_live_grant(
+                        request_path=request_path,
+                        grant_root=root / "approvals",
+                        auth_source=auth,
+                        wall_clock=lambda: FIXED_TIME,
+                    )
+                self.assertFalse((root / "approvals").exists())
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            os.chmod(root, 0o700)
+            _, auth, binary_sha = _live_material(root)
+            _write_private(auth, _oauth_auth_bytes(issuance_horizon + timedelta(microseconds=1)))
+            _, request_path = _build_request(root, binary_sha=binary_sha)
+            _, grant_path = issue_live_grant(
+                request_path=request_path,
+                grant_root=root / "approvals",
+                auth_source=auth,
+                wall_clock=lambda: FIXED_TIME,
+            )
+            self.assertTrue(grant_path.is_file())
+
+    def test_legacy_stale_auth_grant_fails_before_prompt_or_run_root(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            os.chmod(root, 0o700)
+            binary, auth, binary_sha = _live_material(root)
+            _write_private(auth, _oauth_auth_bytes(FIXED_TIME))
+            request, request_path = _build_request(root, binary_sha=binary_sha)
+            approvals = root / "approvals"
+            with mock.patch.object(runner, "_require_live_auth_freshness"):
+                issue_live_grant(
+                    request_path=request_path,
+                    grant_root=approvals,
+                    auth_source=auth,
+                    wall_clock=lambda: FIXED_TIME,
+                )
+            fake = FakeExecutor(MutableClock(), (canonical_json(_empty_result()) + "\n").encode(), spawn=True)
+            with self.assertRaisesRegex(
+                AdaptiveWaveValidationError,
+                "grok_auth_access_window_insufficient",
+            ):
+                _run_adaptive_wave(
+                    request=request,
+                    execution_mode="live",
+                    runtime_root=root / "runtime",
+                    approval_root=approvals,
+                    binary=binary,
+                    auth_source=auth,
+                    executor=fake,
+                    monotonic=fake.clock,
+                    wall_clock=lambda: FIXED_TIME,
+                )
+            self.assertEqual(fake.commands, [])
+            self.assertFalse((root / "runtime").exists())
+            self.assertEqual(list(approvals.glob("consumption-*.json")), [])
+
+    def test_copied_auth_freshness_recheck_precedes_grant_consumption(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            os.chmod(root, 0o700)
+            binary, auth, binary_sha = _live_material(root)
+            _write_private(auth, _oauth_auth_bytes(FIXED_TIME + timedelta(hours=2)))
+            request, request_path = _build_request(root, binary_sha=binary_sha)
+            approvals = root / "approvals"
+            issue_live_grant(
+                request_path=request_path,
+                grant_root=approvals,
+                auth_source=auth,
+                wall_clock=lambda: FIXED_TIME,
+            )
+            values = iter((FIXED_TIME, FIXED_TIME + timedelta(hours=3)))
+            fake = FakeExecutor(MutableClock(), (canonical_json(_empty_result()) + "\n").encode(), spawn=True)
+            with self.assertRaisesRegex(
+                AdaptiveWaveValidationError,
+                "grok_auth_access_window_insufficient",
+            ):
+                _run_adaptive_wave(
+                    request=request,
+                    execution_mode="live",
+                    runtime_root=root / "runtime",
+                    approval_root=approvals,
+                    binary=binary,
+                    auth_source=auth,
+                    executor=fake,
+                    monotonic=fake.clock,
+                    wall_clock=lambda: next(values),
+                )
+            self.assertEqual(fake.commands, [])
+            self.assertEqual(list(approvals.glob("consumption-*.json")), [])
+            run_root = next((root / "runtime").iterdir())
+            self.assertTrue((run_root / "operator-intent.json").is_file())
+            self.assertFalse((run_root / "ephemeral-home").exists())
+
     def test_missing_expired_or_wrong_scope_grant_never_spawns_and_deletes_auth(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -3668,6 +3804,7 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
                     FIXED_TIME,
                     FIXED_TIME + timedelta(seconds=59),
                     FIXED_TIME + timedelta(seconds=59),
+                    FIXED_TIME + timedelta(seconds=59),
                     FIXED_TIME + timedelta(seconds=61),
                 )
             )
@@ -3708,6 +3845,7 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             values = iter(
                 (
                     FIXED_TIME,
+                    FIXED_TIME + timedelta(seconds=59),
                     FIXED_TIME + timedelta(seconds=59),
                     FIXED_TIME + timedelta(seconds=59),
                     FIXED_TIME + timedelta(seconds=59),
