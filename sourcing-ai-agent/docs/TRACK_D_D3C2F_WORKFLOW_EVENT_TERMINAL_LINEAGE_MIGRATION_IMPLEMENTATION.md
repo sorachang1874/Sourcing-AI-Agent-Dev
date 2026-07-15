@@ -105,6 +105,13 @@ Final stable-tree author evidence:
 
 These are author results, not an independent verdict.
 
+Pinned review record: commit `47a7f7db8582fef36afbeecf15fa6310f3e3c048` received a fresh non-author
+medium-effort **ADVISORY NO-GO** with P0/P1/P2/P3=`0/0/2/0`. The SQL/runtime boundary itself passed; the two findings
+were contract-evidence gaps: stale D3c2e wording still claimed `0006` absence, and the zero-PG static preflight did not
+exact-compare type/default/nullability plus complete constraint names/predicates. The immediate fixed-forward corrects
+both without changing migration or runtime behavior; a fresh pinned re-review is required. This advisory is not a
+formal highest-effort verdict and authorizes no live/signoff path.
+
 ## 7. Explicit non-closure and next bounded decision
 
 D3c2f does not complete Migration A. Event transport provenance, verification intent, response/failure receipts,

@@ -126,6 +126,59 @@ D3C2F_EVENT_COLUMNS = (
     "d3_business_fence_digest",
     "terminal_outcome_digest",
 )
+D3C2F_EVENT_COLUMN_DEFINITIONS = (
+    ("runtime_namespace", "text default ''::text not null"),
+    ("provider_mode", "text default ''::text not null"),
+    ("workspace_id", "text default ''::text not null"),
+    ("scope_digest", "text default ''::text not null"),
+    ("coordination_plan_review_id", "bigint"),
+    ("activity_run_id", "text default ''::text not null"),
+    ("claim_generation", "bigint default 0 not null"),
+    ("control_epoch", "bigint default 0 not null"),
+    ("claim_authority_spec_digest", "text default ''::text not null"),
+    ("d3_business_fence_digest", "text default ''::text not null"),
+    ("terminal_outcome_digest", "text"),
+)
+D3C2F_EVENT_CHECK_DEFINITIONS = (
+    (
+        "workflow_events_runtime_namespace_shape_ck",
+        "runtime_namespace = '' or runtime_namespace ~ '[^[:space:]]'",
+    ),
+    (
+        "workflow_events_provider_mode_shape_ck",
+        "provider_mode = '' or provider_mode in ('live', 'simulate', 'scripted', 'replay')",
+    ),
+    (
+        "workflow_events_workspace_id_shape_ck",
+        "workspace_id = '' or workspace_id ~ '[^[:space:]]'",
+    ),
+    (
+        "workflow_events_scope_digest_shape_ck",
+        "scope_digest = '' or scope_digest ~ '^[0-9a-f]{64}$'",
+    ),
+    (
+        "workflow_events_coordination_plan_review_id_shape_ck",
+        "coordination_plan_review_id is null or coordination_plan_review_id > 0",
+    ),
+    (
+        "workflow_events_activity_run_id_shape_ck",
+        "activity_run_id = '' or activity_run_id ~ '[^[:space:]]'",
+    ),
+    ("workflow_events_claim_generation_nonnegative_ck", "claim_generation >= 0"),
+    ("workflow_events_control_epoch_nonnegative_ck", "control_epoch >= 0"),
+    (
+        "workflow_events_claim_authority_spec_digest_shape_ck",
+        "claim_authority_spec_digest = '' or claim_authority_spec_digest ~ '^[0-9a-f]{64}$'",
+    ),
+    (
+        "workflow_events_d3_business_fence_digest_shape_ck",
+        "d3_business_fence_digest = '' or d3_business_fence_digest ~ '^[0-9a-f]{64}$'",
+    ),
+    (
+        "workflow_events_terminal_outcome_digest_shape_ck",
+        "terminal_outcome_digest is null or terminal_outcome_digest ~ '^[0-9a-f]{64}$'",
+    ),
+)
 
 # D3b is a characterization/decision batch. These CURRENT_* values intentionally
 # describe the debt at its pinned baseline; D3c must replace the assertions when
@@ -638,7 +691,25 @@ def test_d3c2f_migration_is_exactly_the_dormant_workflow_event_core_subbatch() -
 
     assert [table for table, _section in alter_sections] == ["workflow_events"]
     event_columns = tuple(re.findall(r"\bADD COLUMN ([a-z0-9_]+)\b", alter_sections[0][1], flags=re.IGNORECASE))
+    event_column_definitions = tuple(
+        (name.casefold(), _normalized(definition).casefold())
+        for name, definition in re.findall(
+            r"\bADD COLUMN ([a-z0-9_]+)\s+(.+?)(?=,\s*ADD (?:COLUMN|CONSTRAINT)\b)",
+            alter_sections[0][1],
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+    )
+    event_check_definitions = tuple(
+        (name.casefold(), _normalized(predicate).casefold())
+        for name, predicate in re.findall(
+            r"\bADD CONSTRAINT ([a-z0-9_]+)\s+CHECK\s*\((.*?)\)\s+NOT VALID",
+            alter_sections[0][1],
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+    )
     assert event_columns == D3C2F_EVENT_COLUMNS
+    assert event_column_definitions == D3C2F_EVENT_COLUMN_DEFINITIONS
+    assert event_check_definitions == D3C2F_EVENT_CHECK_DEFINITIONS
     assert len(event_columns) == 11
     assert "SET LOCAL lock_timeout = '5s'" in sql
     assert "SET LOCAL lock_timeout = DEFAULT" in sql

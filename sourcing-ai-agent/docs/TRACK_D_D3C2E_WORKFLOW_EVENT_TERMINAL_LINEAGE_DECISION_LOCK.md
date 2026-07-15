@@ -159,7 +159,7 @@ carried by a named D3c2e deferral. No new OB-ID is created: this batch remains u
 
 `tests/test_d3_workflow_event_terminal_lineage_decision_lock.py` mechanically locks:
 
-- the unchanged 17-column descriptor and absence of a `0006` migration;
+- the unchanged 17-column descriptor and the post-decision `0006` transition without descriptor/writer activation;
 - exact ordered column/type/default/nullability/sentinel and constraint-name/predicate tables;
 - logical-to-physical mapping and the four forbidden event aliases;
 - the D3b §5.2/§11.1 clarification that `source_command_attempt` belongs to the linked ActivityAttempt and verification

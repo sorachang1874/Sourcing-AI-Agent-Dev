@@ -56,7 +56,9 @@
   new fields. Transport provenance, verification intent, durable dispatch exposure, response/failure receipts, late
   quarantine, terminal UoW, registries/manifests/factory, Migration B-D, action-root, OB-10.1/10.2/10.3/10.4, and served
   population remain open. This candidate changes neither R-019 status nor the 26-call ratchet and authorizes no
-  runtime/live path; its exact implementation commit and fresh pinned review are recorded only after final validation.
+  runtime/live path. Commit `47a7f7db...` received a fresh pinned medium-effort advisory `NO-GO 0/0/2/0`; the migration
+  semantics passed, and its two contract-evidence findings (stale `0006` absence wording and incomplete zero-PG exact
+  DDL oracle) are immediate fixed-forward inputs with fresh re-review pending. This does not change any residual status.
 
 - **R-019 / D3c2e (2026-07-15):** decision-only batch ratifies the exact WorkflowEvent terminal-lineage core as
   **11 columns + 11 local `NOT VALID` checks**, reuses existing operation/command/attempt links, and forbids redundant

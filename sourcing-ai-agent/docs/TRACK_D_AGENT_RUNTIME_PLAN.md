@@ -322,7 +322,9 @@ serve、会话/事件层、planner loop），用一个垂直切片证明闭环�
   仅以 `0006_d3_workflow_event_terminal_lineage_foundation.sql` 安装该 dormant event core：one-table 11 columns/
   11 local checks/5s rollback，17-column descriptor 与 current writer 继续封闭。下一批只能先 Scout/ratify
   remaining Migration-A evidence surfaces。D3c2e commit `1fb052fe...` fresh pinned medium advisory=`GO 0/0/0/0`，
-  不是 formal GO；R-019/R-023/R-027/R-029、action-root、OB-10.1-10.4 与 served=0 不变。
+  不是 formal GO。D3c2f commit `47a7f7db...` fresh pinned medium advisory=`NO-GO 0/0/2/0`；两项均为
+  stale `0006` 文案/exact static-DDL evidence gap，SQL/runtime 边界通过且 fixed-forward 已落，fresh re-review
+  pending。R-019/R-023/R-027/R-029、action-root、OB-10.1-10.4 与 served=0 不变。
 
 ### D4 — 之后（本文只圈定，不展开）
 

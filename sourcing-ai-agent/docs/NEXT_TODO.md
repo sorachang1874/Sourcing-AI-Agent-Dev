@@ -431,7 +431,9 @@
   recovery-once/no-op。descriptor 保持 17 columns，current explicit INSERT 继续省略新字段；无 index/FK/
   validation/backfill/runtime/provenance/receipt/exposure/intent/quarantine/served 激活。完整记录见
   `TRACK_D_D3C2F_WORKFLOW_EVENT_TERMINAL_LINEAGE_MIGRATION_IMPLEMENTATION.md`；author validation/fresh pinned review
-  待记录。
+  已记录。commit `47a7f7db...` fresh pinned medium advisory=`NO-GO 0/0/2/0`；SQL/runtime 边界通过，两项 P2
+  为 stale `0006` absence 文案与 zero-PG exact-DDL oracle 缺口，均已 immediate fixed-forward，fresh re-review
+  pending；formal highest-effort 仍 pending。
 - [ ] D3c2g remaining Migration-A evidence-surface decision/Scout：从 D3b §6/§11、Plan §6 与 OB-10.1-10.4
   机械推导 verification intent、durable dispatch exposure、response/failure receipts、late quarantine 的完整
   owner/DDL/key/type/check/CAS/retention inventory；dispatch-exposure owner/table 或任一 receipt/intent/quarantine
