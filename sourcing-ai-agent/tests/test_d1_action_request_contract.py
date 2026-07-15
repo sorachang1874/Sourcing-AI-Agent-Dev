@@ -14,9 +14,13 @@ import pytest
 
 from sourcing_agent.model_tool_runtime import ModelToolSchemaError, ToolSpec
 from sourcing_agent.operation_runtime import (
+    ACTION_ADD_CRM_NOTE,
+    ACTION_CREATE_CRM_TASK,
     ACTION_EXTERNAL_INTAKE,
     ACTION_SEARCH_PROJECTION,
+    ACTION_SET_CRM_STAGE,
     APPROVAL_REQUIRED,
+    CRM_EXISTING_RECORD_ACTION_TYPES,
     DEFAULT_ACTION_REGISTRY,
     DISPATCH_ADAPTER_PROJECTION_READ,
     REQUEST_SCHEMA_COMPATIBILITY_EVENT_TYPE,
@@ -234,12 +238,37 @@ def test_action_request_spec_rejects_invalid_shape_and_owner_aliases(
 def test_action_request_spec_rejects_schema_version_partial_pairs() -> None:
     with pytest.raises(ValueError, match="schema-less action"):
         replace(_schema_spec(), request_schema=None)
+    with pytest.raises(ValueError, match="schema-less action"):
+        replace(
+            _schema_spec(),
+            request_schema=None,
+            request_schema_version="",
+            request_identity_target_fields=("projection_id",),
+            target_ref_field_aliases=(),
+        )
     with pytest.raises(ValueError, match="request_schema_version"):
         replace(_schema_spec(), request_schema_version="")
     with pytest.raises(ValueError, match="request_schema_version"):
         replace(_schema_spec(), request_schema_version="v" * 129)
     with pytest.raises(ValueError, match="request_schema_version"):
         replace(_schema_spec(), request_schema_version="v/1")
+
+
+@pytest.mark.parametrize(
+    "identity_fields",
+    [
+        ("missing_target",),
+        ("projection_id", "projection_id"),
+        (" projection_id",),
+        ("",),
+        (123,),
+    ],
+)
+def test_action_request_spec_rejects_invalid_request_identity_target_fields(
+    identity_fields: tuple[Any, ...],
+) -> None:
+    with pytest.raises(ValueError, match="identity target fields are invalid"):
+        replace(_schema_spec(), request_identity_target_fields=identity_fields)
 
 
 @pytest.mark.parametrize(
@@ -267,11 +296,18 @@ def test_action_request_spec_rejects_unknown_duplicate_or_caller_owned_aliases(
         replace(_schema_spec(), target_ref_field_aliases=aliases)
 
 
-def test_production_action_registry_remains_schema_less_and_unserved() -> None:
+def test_production_action_registry_activates_only_existing_crm_schemas_and_remains_unserved() -> None:
     records = DEFAULT_ACTION_REGISTRY.to_record(include_command_contracts=False)
     assert len(records) == 15
-    assert all(DEFAULT_ACTION_REGISTRY.spec_for(action_type).request_schema is None for action_type in records)
-    assert all(DEFAULT_ACTION_REGISTRY.spec_for(action_type).request_schema_digest == "" for action_type in records)
+    schema_defined = {
+        action_type for action_type in records if DEFAULT_ACTION_REGISTRY.spec_for(action_type).has_request_schema
+    }
+    assert schema_defined == set(CRM_EXISTING_RECORD_ACTION_TYPES)
+    assert sum(not DEFAULT_ACTION_REGISTRY.spec_for(action_type).has_request_schema for action_type in records) == 12
+    assert all(
+        bool(DEFAULT_ACTION_REGISTRY.spec_for(action_type).request_schema_digest) == (action_type in schema_defined)
+        for action_type in records
+    )
     assert all(
         not {
             "request_schema",
@@ -705,9 +741,55 @@ class D1ActionRequestContractPGTest(PGDurableRuntimeTestMixin, unittest.TestCase
         self.assertTrue(result.action["metadata"]["request_schema_compatibility_hit"])
         self.assertTrue(result.events[0]["payload"]["request_schema_compatibility_hit"])
 
+    def test_activated_crm_actions_reject_pre_d1c_blank_pin_replay_without_writes(self) -> None:
+        valid_inputs = {
+            ACTION_SET_CRM_STAGE: {"stage": "new"},
+            ACTION_ADD_CRM_NOTE: {"note": "Pinned request"},
+            ACTION_CREATE_CRM_TASK: {"title": "Pinned task"},
+        }
+        writer = self._writer()
+        for ordinal, action_type in enumerate(CRM_EXISTING_RECORD_ACTION_TYPES, start=1):
+            with self.subTest(action_type=action_type):
+                spec = DEFAULT_ACTION_REGISTRY.spec_for(action_type)
+                workspace_id = f"workspace-activated-crm-{ordinal}"
+                idempotency_key = f"activated-crm-{ordinal}"
+                action, _, budget = self._seed_pre_d1c_submission_records(
+                    spec=spec,
+                    workspace_id=workspace_id,
+                    idempotency_key=idempotency_key,
+                )
+                before = self._snapshot_action_runtime(action["action_id"])
+                with self.assertRaisesRegex(
+                    OperationRuntimeStateConflict,
+                    "operation_action_request_schema_pin_conflict",
+                ):
+                    writer.submit_action(
+                        action_type=action_type,
+                        workspace_id=workspace_id,
+                        owner_bound_target_ref=OwnerBoundTargetRef(
+                            owner_module=spec.owner_module,
+                            target_ref={
+                                "crm_record_id": f"crm-{ordinal}",
+                                "workspace_id": workspace_id,
+                                "owner_user_id": "owner",
+                                "crm_version": 1,
+                            },
+                        ),
+                        input_payload=valid_inputs[action_type],
+                        budget=budget,
+                        idempotency_key=idempotency_key,
+                    )
+                self.assertEqual(self._snapshot_action_runtime(action["action_id"]), before)
+
     def test_pre_d1c_blank_pin_submit_replay_is_observed_for_all_production_actions(self) -> None:
         writer = self._writer()
-        for ordinal, action_type in enumerate(sorted(DEFAULT_ACTION_REGISTRY.to_record()), start=1):
+        schema_less_actions = sorted(
+            action_type
+            for action_type in DEFAULT_ACTION_REGISTRY.to_record()
+            if not DEFAULT_ACTION_REGISTRY.spec_for(action_type).has_request_schema
+        )
+        self.assertEqual(len(schema_less_actions), 12)
+        for ordinal, action_type in enumerate(schema_less_actions, start=1):
             with self.subTest(action_type=action_type):
                 spec = DEFAULT_ACTION_REGISTRY.spec_for(action_type)
                 workspace_id = f"workspace-pre-d1c-{ordinal}"
@@ -770,7 +852,13 @@ class D1ActionRequestContractPGTest(PGDurableRuntimeTestMixin, unittest.TestCase
     def test_schema_less_continuation_observations_cover_every_action_and_path(self) -> None:
         writer = self._writer()
         observation_types = ("submit_replay", "approve", "retry", "dispatch")
-        for ordinal, action_type in enumerate(sorted(DEFAULT_ACTION_REGISTRY.to_record()), start=1):
+        schema_less_actions = sorted(
+            action_type
+            for action_type in DEFAULT_ACTION_REGISTRY.to_record()
+            if not DEFAULT_ACTION_REGISTRY.spec_for(action_type).has_request_schema
+        )
+        self.assertEqual(len(schema_less_actions), 12)
+        for ordinal, action_type in enumerate(schema_less_actions, start=1):
             with self.subTest(action_type=action_type):
                 spec = DEFAULT_ACTION_REGISTRY.spec_for(action_type)
                 workspace_id = f"workspace-observation-{ordinal}"
@@ -820,6 +908,7 @@ class D1ActionRequestContractPGTest(PGDurableRuntimeTestMixin, unittest.TestCase
             action_type
             for action_type in sorted(DEFAULT_ACTION_REGISTRY.to_record())
             if DEFAULT_ACTION_REGISTRY.spec_for(action_type).requires_approval
+            and not DEFAULT_ACTION_REGISTRY.spec_for(action_type).has_request_schema
         )
         spec = DEFAULT_ACTION_REGISTRY.spec_for(action_type)
         writer = self._writer()
@@ -855,6 +944,7 @@ class D1ActionRequestContractPGTest(PGDurableRuntimeTestMixin, unittest.TestCase
             action_type
             for action_type in sorted(DEFAULT_ACTION_REGISTRY.to_record())
             if not DEFAULT_ACTION_REGISTRY.spec_for(action_type).requires_approval
+            and not DEFAULT_ACTION_REGISTRY.spec_for(action_type).has_request_schema
         )
         spec = DEFAULT_ACTION_REGISTRY.spec_for(action_type)
         writer = self._writer()

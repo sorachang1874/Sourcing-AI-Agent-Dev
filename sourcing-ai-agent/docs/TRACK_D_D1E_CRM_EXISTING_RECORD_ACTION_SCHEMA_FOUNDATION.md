@@ -1,10 +1,11 @@
 # Track D D1e — CRM existing-record action schema/binder foundation
 
-> Status: `declared_not_activated` (2026-07-15). This bounded non-live batch declares and validates the first three
-> production action request contracts and their canonical owner binder, but deliberately does **not** copy them into
-> `DEFAULT_ACTION_REGISTRY`. Activation must be atomic with the shared HTTP/orchestrator binder and execution-side
-> exact owner/version revalidation. The production registry therefore remains 15/15 schema-less, R-029 remains open,
-> and the served Agent tool population remains zero.
+> Status: Foundation complete; activated by the bounded D1f current author candidate (2026-07-15). This D1e batch
+> declared and validated the first three production action request contracts and their canonical owner binder while
+> deliberately leaving them `declared_not_activated`. D1f now copies those exact declarations into
+> `DEFAULT_ACTION_REGISTRY` atomically with authenticated HTTP/orchestrator binding and dispatch/command-owner exact
+> owner/version revalidation. The current partition is 3 schema-defined / 12 schema-less; R-029 remains open and the
+> served Agent tool population remains zero. See `TRACK_D_D1F_CRM_EXISTING_RECORD_ACTION_ACTIVATION.md`.
 
 ## 1. Outcome
 
@@ -49,12 +50,11 @@ binder results fail closed.
 uses `crm_record_not_found`; a same-owner version change uses `crm_record_target_stale`. This method is a preflight,
 not an atomic command-effect claim.
 
-## 3. Activation gate
+## 3. D1f activation outcome
 
-The declarations in `CRM_EXISTING_RECORD_ACTION_REQUEST_CONTRACTS` are intentionally not active in
-`DEFAULT_ACTION_REGISTRY`. Activating them without the shared adapter would make the current generic submit path pass
-raw caller `target_ref` into `OperationRuntimeWriter`, which correctly rejects schema-defined actions. D1e therefore
-keeps the existing API behavior green and freezes this exact atomic follow-up:
+The original D1e checkpoint intentionally left the declarations out of `DEFAULT_ACTION_REGISTRY`: activating them
+without the shared adapter would have passed raw caller `target_ref` into `OperationRuntimeWriter`, which correctly
+rejects schema-defined actions. D1f satisfies that frozen atomic follow-up:
 
 1. the authenticated HTTP route derives workspace and user identity from request state; open mode derives an explicit
    operator context without fabricating a user;
@@ -64,14 +64,15 @@ keeps the existing API behavior green and freezes this exact atomic follow-up:
 4. the command payload carries the exact target pins and the CRM command owner revalidates them before its first
    domain effect. Existing R-028 command-effect atomicity limits remain explicit; a read-only preflight must not be
    described as a complete TOCTOU fence;
-5. only in that same patch are the three declarations copied into `DEFAULT_ACTION_REGISTRY`, existing direct/open and
-   authenticated transport tests migrated, and the R-029 denominator changed from 15 to 12;
+5. in that same patch the three declarations are copied into `DEFAULT_ACTION_REGISTRY`, direct/open and authenticated
+   transport behavior is migrated, and the R-029 denominator changes from 15 to 12;
 6. missing/foreign/forged, same-owner, blank-adjunct, open-mode, replay, schema collision, and stale-version matrices
    must prove action/run/event/command/CRM zero writes where applicable.
 
-Until all six items land together, `declared_not_activated` is the only valid status. This batch does not add a served
-predicate, result schema, simulate serializer preflight, model/provider call, new workflow command, API route, storage
-migration, transaction-lock caller, or CRM domain write.
+All six items are part of the D1f current candidate. Local advisory rounds `NO-GO 0/3/2/0` and `NO-GO 0/2/1/0` are
+fixed-forward input only; author closeout and fresh pinned review remain pending. D1f does not add a served predicate, result schema,
+simulate serializer preflight, model/provider call, new workflow command, storage migration, transaction-lock caller,
+or new CRM domain writer.
 
 ## 4. Owner/source-of-truth matrix
 
@@ -79,10 +80,10 @@ migration, transaction-lock caller, or CRM domain write.
 | --- | --- | --- | --- |
 | closed request shape | `action_request_schema.ActionRequestSchemaBuilder` | hand-written open root/segment | active utility |
 | CRM stage values | `crm_contract.CRM_STAGE_VALUES` / `CRM_STAGE_CATEGORIES` | copies in writer, storage, or action schema | centralized |
-| three request declarations | `operation_runtime.CRM_EXISTING_RECORD_ACTION_REQUEST_CONTRACTS` | API payload metadata or planner copy | declared, not activated |
+| three request declarations | `operation_runtime.CRM_EXISTING_RECORD_ACTION_REQUEST_CONTRACTS` | API payload metadata or planner copy | active through D1f exact registry copy |
 | CRM target authorization | `crm_records.workspace_id`; populated `owner_user_id` adjunct | caller workspace/owner, legacy read allowance | binder implemented |
 | target identity snapshot | `CRMRecordTargetBinder` exact canonical row | raw caller/model `target_ref` | binder implemented |
-| production request spec | future atomic copy into `DEFAULT_ACTION_REGISTRY` | declaration presence inferred as activation | pending shared batch |
+| production request spec | D1f atomic copy into `DEFAULT_ACTION_REGISTRY` | declaration presence inferred as activation | active for exact three |
 | served tool population | future full D1 predicate | schema or adapter presence alone | zero |
 
 ## 5. Verification
@@ -90,8 +91,8 @@ migration, transaction-lock caller, or CRM domain write.
 The focused test module covers closed builder behavior, exact versions/digests, field and alias rejection, target
 immutability, registry totality, missing/foreign parity, blank-adjunct compatibility, open-mode exact workspace,
 forged-selector zero lookup, cross-owner rejection, snapshot revalidation, and a real-PG bind/submit/replay/zero-write
-matrix using an isolated declared-spec registry. Adjacent D1a/D1c characterization continues to assert that the
-production registry is 15/15 schema-less.
+matrix using an isolated declared-spec registry. D1f updates the adjacent D1a/D1c characterization to assert the current
+3 schema-defined / 12 schema-less production partition.
 
 Run from `sourcing-ai-agent/`:
 

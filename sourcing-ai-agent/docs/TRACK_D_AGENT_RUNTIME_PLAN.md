@@ -110,6 +110,13 @@ serve、会话/事件层、planner loop），用一个垂直切片证明闭环�
 - 守卫改为语义断言（v2 修正 v1 的空断言）：对每个 served command 断言
   `activity_spine_policy.requirement != legacy-internal` 且 `agent_callable`（复用注册期校验）。
 - command 级字段复用 `command_type_manifest()` 序列化，不再第三处重组。
+- **Implementation status (2026-07-15):** D1c 已落 shared schema/pin foundation 与 R-029 bridge；D1e 声明
+  existing-record CRM binder/contracts；D1f current author candidate 将 exact
+  `set_crm_stage|add_crm_note|create_crm_task` 激活为 schema-defined，并从 authenticated request state 绑定
+  exact CRM owner，dispatch 与 command owner 各做一次只读 owner/version revalidation。当前 registry=
+  **3 schema-defined / 12 schema-less / served=0**；full served predicate 的 revisioned model-safe result schema 与
+  simulate serializer 尚未实现。D1f 不关闭 R-019/R-028，且 authenticated Operation list/get/control IDOR 由
+  R-031 阻断 hosted/live multi-user exposure。
 
 ### D2 — Agent 会话与事件层（与 C4/C5 合流）
 
@@ -495,6 +502,9 @@ TD-4 初始路由表已按 owner 2026-07-13 裁决落档（D0 §4）。
 2. `agent_events` 精确投影契约（D2 批）：stream 身份公式、source-event ordinal/基数、唯一约束、
    rebuild owner/顺序、cursor 授权、replay parity preflight。
 3. 宽松 action-schema 迁移桥启用前，先落 residual 台账行 + NEXT_TODO 条目（D1 批）。
+   **Implementation status (2026-07-15):** D1c 以 R-029 + NEXT_TODO 满足 bookkeeping；D1f exact 激活三项
+   CRM existing-record actions 并把 numerator 从 15 降到 12。bridge、release-window durable-hit audit、独立
+   `NOT VALID` validation 与 complete API-submittable-population 删除条件仍 open；served population 仍为零。
 4. tool-schema 版本/digest 在 turn 创建点钉住并贯穿 terminal result/journal → AgentAction →
    approve/retry run（D0/D2 批）。
 5. `judge_call_key` 追加 workspace/intent generation/有效路由/schema/policy revision 维度；

@@ -138,15 +138,16 @@ def test_schema_builder_always_closes_root_and_both_owner_segments() -> None:
         )
 
 
-def test_crm_action_schemas_are_exact_closed_digest_pinned_and_not_activated() -> None:
+def test_crm_action_schemas_are_exact_closed_digest_pinned_and_activated_only_for_three_actions() -> None:
     assert set(CRM_EXISTING_RECORD_ACTION_REQUEST_CONTRACTS) == set(CRM_ACTIONS)
-    assert all(
-        not DEFAULT_ACTION_REGISTRY.spec_for(action_type).has_request_schema
-        for action_type in DEFAULT_ACTION_REGISTRY.to_record(include_command_contracts=False)
-    )
+    records = DEFAULT_ACTION_REGISTRY.to_record(include_command_contracts=False)
+    assert {
+        action_type for action_type in records if DEFAULT_ACTION_REGISTRY.spec_for(action_type).has_request_schema
+    } == set(CRM_ACTIONS)
+    assert sum(not DEFAULT_ACTION_REGISTRY.spec_for(action_type).has_request_schema for action_type in records) == 12
 
     for action_type in CRM_ACTIONS:
-        spec = _declared_spec(action_type)
+        spec = DEFAULT_ACTION_REGISTRY.spec_for(action_type)
         schema = dict(spec.request_schema or {})
         segments = dict(schema["properties"])
         input_schema = dict(segments["input_payload"])
@@ -161,6 +162,7 @@ def test_crm_action_schemas_are_exact_closed_digest_pinned_and_not_activated() -
             "crm_version",
         }
         assert set(target_schema["required"]) == set(target_schema["properties"])
+        assert spec.request_identity_target_fields == ("crm_record_id", "workspace_id")
         assert spec.request_schema_digest == EXPECTED_SCHEMA_DIGESTS[action_type]
         assert spec.owner_module == "crm_writer"
         assert spec.validate_request(

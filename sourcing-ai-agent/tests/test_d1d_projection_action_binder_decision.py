@@ -80,13 +80,13 @@ def test_projection_writer_cannot_persist_a_workspace_or_access_scope_owner(meth
     assert parameters.isdisjoint(PROJECTION_OWNER_COLUMN_CANDIDATES)
 
 
-def test_generic_operation_submit_does_not_have_an_authenticated_projection_bind_context() -> None:
+def test_generic_operation_submit_only_derives_authenticated_scope_for_crm_owner_binding() -> None:
     api_tree = ast.parse(API_PATH.read_text(encoding="utf-8"), filename=str(API_PATH))
     handler = _function(api_tree, "post_operation_actions")
     identity_calls = _calls_named(handler, "_apply_server_identity")
     assert len(identity_calls) == 1
-    identity_keywords = {keyword.arg for keyword in identity_calls[0].keywords}
-    assert "workspace" not in identity_keywords
+    identity_keywords = {keyword.arg: keyword.value for keyword in identity_calls[0].keywords}
+    assert ast.unparse(identity_keywords["workspace"]) == "crm_owner_bound"
     assert "tenant" not in identity_keywords
 
     orchestrator_tree = ast.parse(
@@ -94,13 +94,35 @@ def test_generic_operation_submit_does_not_have_an_authenticated_projection_bind
         filename=str(ORCHESTRATOR_PATH),
     )
     submit_method = _class_method(orchestrator_tree, "SourcingOrchestrator", "submit_operation_action")
+    raw_input_assignments = [
+        node
+        for node in submit_method.body
+        if isinstance(node, ast.Assign)
+        and any(isinstance(target, ast.Name) and target.id == "raw_input_payload" for target in node.targets)
+    ]
+    assert len(raw_input_assignments) == 1
+    assert ast.unparse(raw_input_assignments[0].value) == ("payload.get('input') or payload.get('input_payload') or {}")
     writer_calls = _calls_named(submit_method, "submit_action")
     assert len(writer_calls) == 1
     writer_keywords = {keyword.arg: keyword.value for keyword in writer_calls[0].keywords}
-    assert "owner_bound_target_ref" not in writer_keywords
+    assert ast.unparse(writer_keywords["owner_bound_target_ref"]) == "owner_bound_target_ref"
     assert ast.unparse(writer_keywords["workspace_id"]) == (
         "str(payload.get('workspace_id') or 'default').strip() or 'default'"
     )
+
+    crm_binding_method = _class_method(
+        orchestrator_tree,
+        "SourcingOrchestrator",
+        "_bind_operation_crm_existing_record_target",
+    )
+    membership_checks = [
+        node
+        for node in ast.walk(crm_binding_method)
+        if isinstance(node, ast.Compare)
+        and ast.unparse(node.left) == "action_type"
+        and any(ast.unparse(comparator) == "CRM_EXISTING_RECORD_ACTION_TYPES" for comparator in node.comparators)
+    ]
+    assert membership_checks, "CRM binding must stay conditional on the exact CRM action allowlist"
 
 
 @pytest.mark.parametrize("action_type", PROJECTION_ACTIONS)

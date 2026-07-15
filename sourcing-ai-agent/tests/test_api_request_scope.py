@@ -169,6 +169,20 @@ class _ScopeOrchestrator:
     def _capture(self, name: str, payload: dict) -> None:
         self.captured.setdefault(name, []).append(dict(payload))
 
+    def submit_operation_action(self, payload, **owner):
+        self._capture("operation_action", {**dict(payload), **owner})
+        action_type = str(payload.get("action_type") or "").strip()
+        if action_type in {"set_crm_stage", "add_crm_note", "create_crm_task"}:
+            target_ref = dict(payload.get("target_ref") or {})
+            record = self.store.get_crm_record(str(target_ref.get("crm_record_id") or ""))
+            if owner and (
+                not record
+                or record.get("workspace_id") != owner.get("expected_workspace_id")
+                or str(record.get("owner_user_id") or "") not in {"", str(owner.get("expected_owner_user_id") or "")}
+            ):
+                return {"status": "not_found", "reason": "crm_record_not_found"}
+        return {"status": "queued", "module_state_mutated": False}
+
     def list_query_dispatches(self, payload):
         self._capture("query_dispatches", payload)
         return {"query_dispatches": [], "scope": dict(payload)}
@@ -723,6 +737,7 @@ class RequestScopeWiringTest(unittest.TestCase):
             ("POST", "/api/workers/daemon/systemd-unit"),
             ("POST", "/api/runtime/services/shutdown"),
             ("POST", "/api/jobs/{job_id}/cancel"),
+            ("POST", "/api/operations/actions"),
         }
         self.assertTrue(expected.issubset(AUTHENTICATED_REQUEST_SCOPE_REGISTRY))
         self.assertNotIn("unclassified", AUTHENTICATED_REQUEST_SCOPE_REGISTRY.values())
@@ -747,6 +762,7 @@ class RequestScopeWiringTest(unittest.TestCase):
                 or path == "/api/target-candidates/import-from-job"
                 or path == "/api/projections/backfill-from-job"
                 or path == "/api/runtime/services/shutdown"
+                or path == "/api/operations/actions"
             )
 
         discovered = set()
@@ -857,6 +873,73 @@ class RequestScopeWiringTest(unittest.TestCase):
             )
             self.assertEqual(status, 200)
             self.assertEqual(orchestrator.captured[capture_name][-1]["workspace_id"], "user-alice")
+
+    def test_operation_crm_action_transport_derives_owner_and_preserves_open_mode(self) -> None:
+        base, opener, orchestrator = self._start_server()
+        for action_type in ("set_crm_stage", "add_crm_note", "create_crm_task"):
+            with self.subTest(action_type=action_type):
+                status, _ = self._request(
+                    opener,
+                    f"{base}/api/operations/actions",
+                    method="POST",
+                    body={
+                        "action_type": action_type,
+                        "workspace_id": "user-bob",
+                        "actor": "bob",
+                        "target_ref": {"crm_record_id": "rec-alice-owned"},
+                        "input": {},
+                    },
+                )
+                self.assertEqual(status, 202)
+                captured = orchestrator.captured["operation_action"][-1]
+                self.assertEqual(captured["workspace_id"], "user-alice")
+                self.assertEqual(captured["actor"], "alice")
+                self.assertEqual(captured["expected_workspace_id"], "user-alice")
+                self.assertEqual(captured["expected_owner_user_id"], "alice")
+
+        foreign = self._request(
+            opener,
+            f"{base}/api/operations/actions",
+            method="POST",
+            body={
+                "action_type": "add_crm_note",
+                "target_ref": {"crm_record_id": "rec-bob"},
+                "input": {"note": "hidden"},
+            },
+        )
+        missing = self._request(
+            opener,
+            f"{base}/api/operations/actions",
+            method="POST",
+            body={
+                "action_type": "add_crm_note",
+                "target_ref": {"crm_record_id": "rec-missing"},
+                "input": {"note": "hidden"},
+            },
+        )
+        self.assertEqual(foreign, missing)
+        self.assertEqual(foreign, (404, {"status": "not_found", "reason": "crm_record_not_found"}))
+
+        open_base, open_opener, open_orchestrator = self._start_server(authenticated=False)
+        status, _ = self._request(
+            open_opener,
+            f"{open_base}/api/operations/actions",
+            method="POST",
+            body={
+                "action_type": "create_crm_task",
+                "workspace_id": "default",
+                "actor": "legacy-operator",
+                "target_ref": {"crm_record_id": "rec-legacy"},
+                "input": {"title": "Follow up"},
+            },
+            token=None,
+        )
+        self.assertEqual(status, 202)
+        captured = open_orchestrator.captured["operation_action"][-1]
+        self.assertEqual(captured["workspace_id"], "default")
+        self.assertEqual(captured["actor"], "legacy-operator")
+        self.assertNotIn("expected_workspace_id", captured)
+        self.assertNotIn("expected_owner_user_id", captured)
 
     def test_open_mode_preserves_read_and_write_payloads(self) -> None:
         base, opener, orchestrator = self._start_server(authenticated=False)

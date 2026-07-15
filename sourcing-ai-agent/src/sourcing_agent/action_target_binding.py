@@ -146,6 +146,8 @@ class CRMRecordTargetBinder:
 
     def __call__(self, context: ActionBindContext) -> OwnerBoundTargetRef:
         selector = dict(context.target_selector)
+        if not selector:
+            raise ActionTargetBindingError(CRM_RECORD_TARGET_NOT_FOUND)
         if set(selector) != {"crm_record_id"}:
             raise ActionTargetBindingError("crm_record_target_selector_invalid")
         crm_record_id = str(selector.get("crm_record_id") or "").strip()
@@ -228,8 +230,12 @@ class CRMRecordTargetBinder:
         return dict(record)
 
 
-def build_crm_existing_record_target_binder_registry(store: CRMRecordLookup) -> ActionTargetBinderRegistry:
-    binder = CRMRecordTargetBinder(store)
+def build_crm_existing_record_target_binder_registry(
+    store: CRMRecordLookup,
+    *,
+    binder: CRMRecordTargetBinder | None = None,
+) -> ActionTargetBinderRegistry:
+    binder = binder or CRMRecordTargetBinder(store)
     return ActionTargetBinderRegistry(
         tuple(
             ActionTargetBinderSpec(

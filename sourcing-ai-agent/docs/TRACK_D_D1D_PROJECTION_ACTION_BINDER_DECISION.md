@@ -4,6 +4,9 @@
 > (2026-07-15). `search_projection` and `filter_projection` deliberately remain on the R-029 schema-less bridge, and
 > the served Agent tool population remains zero. This document and its executable oracle authorize no schema, binder,
 > model/provider call, live path, manual/product signoff, or milestone closure.
+>
+> D1f follow-up: the generic submit route now derives authenticated workspace/user only for the exact three activated
+> CRM existing-record actions. That conditional path does not supply a projection owner or change this decision.
 
 ## 1. Outcome and boundary
 
@@ -46,9 +49,11 @@ collection and run projections disagree.
 
 ### 2.2 No server-owned generic action bind context
 
-The authenticated `POST /api/operations/actions` handler currently server-overrides only `actor`. It does not derive
-operation `workspace_id` or tenant for this route. `SourcingOrchestrator.submit_operation_action(...)` passes
-`payload.workspace_id` (defaulting to `default`) to the writer and does not pass an `OwnerBoundTargetRef`.
+For projection actions, the authenticated `POST /api/operations/actions` handler still server-overrides only `actor`.
+D1f conditionally derives `workspace_id` and user owner only when `action_type` is one of the exact three CRM
+existing-record actions; it does not derive operation workspace/tenant or pass an `OwnerBoundTargetRef` for either
+projection action. `SourcingOrchestrator.submit_operation_action(...)` therefore still uses the projection payload
+workspace (defaulting to `default`) on this branch.
 
 There is also no active `AgentConversation.scope_ref`/session owner at this boundary from which the projection owner
 could select a target. Treating `payload.target_ref.projection_id`, an input alias, or caller-supplied membership
@@ -95,7 +100,8 @@ After the owner choice is physical and reviewed, the bounded implementation must
 7. keep both actions non-live and `served=0` until revisioned model-safe result schemas and simulate serializer
    preflight complete the full served predicate.
 
-Only then may these two actions leave the R-029 numerator. That reduction does not close R-029 for the remaining
+Only then may these two actions leave the R-029 numerator. D1f has independently reduced that numerator to 12 by
+activating three CRM actions; projection activation would reduce it further but would not close R-029 for the remaining
 API-submittable actions or authorize removal of the compatibility epoch/evidence.
 
 ## 5. Executable oracle and validation

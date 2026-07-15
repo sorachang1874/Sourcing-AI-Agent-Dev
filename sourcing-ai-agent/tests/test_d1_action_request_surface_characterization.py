@@ -20,7 +20,11 @@ from sourcing_agent.durable_runtime import (
     workflow_command_activity_spine_policy,
     workflow_command_control_policy,
 )
-from sourcing_agent.operation_runtime import DEFAULT_ACTION_REGISTRY, OperationRuntimeWriter
+from sourcing_agent.operation_runtime import (
+    CRM_EXISTING_RECORD_ACTION_TYPES,
+    DEFAULT_ACTION_REGISTRY,
+    OperationRuntimeWriter,
+)
 from sourcing_agent.orchestrator import SourcingOrchestrator
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -89,7 +93,7 @@ EXPECTED_ACTION_DISPATCH_ADAPTERS = {
     "external_intake": "",
 }
 
-SUBMIT_ACTION_CALL_INVENTORY_SHA256 = "d2d65c9ca1ea86d4784ba8ad220ef7c2f695f75e02f7e41f3e2ca8c672a88ce6"
+SUBMIT_ACTION_CALL_INVENTORY_SHA256 = "cf133c88fd43bcd78e6c6cae88481d667e206dfa506df9ee3b508e561fcd4f2b"
 
 
 def _class_method(tree: ast.Module, class_name: str, method_name: str) -> ast.FunctionDef:
@@ -328,6 +332,7 @@ def test_action_request_spec_and_registry_record_freeze_the_schema_foundation_su
         "dispatch_adapter",
         "request_schema",
         "request_schema_version",
+        "request_identity_target_fields",
         "target_ref_field_aliases",
         "approval_policy",
         "budget_required",
@@ -351,12 +356,20 @@ def test_action_request_spec_and_registry_record_freeze_the_schema_foundation_su
     assert {
         action_type: DEFAULT_ACTION_REGISTRY.spec_for(action_type).dispatch_adapter for action_type in records
     } == EXPECTED_ACTION_DISPATCH_ADAPTERS
-    assert all(
-        DEFAULT_ACTION_REGISTRY.spec_for(action_type).request_schema is None
-        and DEFAULT_ACTION_REGISTRY.spec_for(action_type).request_schema_version == ""
-        and DEFAULT_ACTION_REGISTRY.spec_for(action_type).request_schema_digest == ""
-        for action_type in records
-    )
+    schema_defined = {
+        action_type for action_type in records if DEFAULT_ACTION_REGISTRY.spec_for(action_type).has_request_schema
+    }
+    assert schema_defined == set(CRM_EXISTING_RECORD_ACTION_TYPES)
+    for action_type in records:
+        spec = DEFAULT_ACTION_REGISTRY.spec_for(action_type)
+        if action_type in schema_defined:
+            assert spec.request_schema is not None
+            assert spec.request_schema_version
+            assert len(spec.request_schema_digest) == 64
+        else:
+            assert spec.request_schema is None
+            assert spec.request_schema_version == ""
+            assert spec.request_schema_digest == ""
 
     base_record_keys = {
         "owner_module",
@@ -450,7 +463,7 @@ def test_submit_action_ast_freezes_keyword_only_surface_and_write_order() -> Non
     assert _signature_contract(method) == expected_signature
 
     call_inventory = _call_inventory(method)
-    assert len(call_inventory) == 33
+    assert len(call_inventory) == 34
     assert _call_inventory_digest(method) == SUBMIT_ACTION_CALL_INVENTORY_SHA256, _call_inventory_roots(method)
     assert _call_inventory_roots(method).count("self.record_schema_less_compatibility_observation") == 1
 

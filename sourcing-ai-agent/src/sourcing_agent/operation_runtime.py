@@ -47,6 +47,11 @@ ACTION_ADD_TO_CRM = "add_to_crm"
 ACTION_SET_CRM_STAGE = "set_crm_stage"
 ACTION_ADD_CRM_NOTE = "add_crm_note"
 ACTION_CREATE_CRM_TASK = "create_crm_task"
+CRM_EXISTING_RECORD_ACTION_TYPES = (
+    ACTION_SET_CRM_STAGE,
+    ACTION_ADD_CRM_NOTE,
+    ACTION_CREATE_CRM_TASK,
+)
 ACTION_ENRICH_PERSON_PUBLIC_WEB = "enrich_person_public_web"
 ACTION_REFRESH_COMPANY_PUBLIC_WEB = "refresh_company_public_web_assets"
 ACTION_PROMOTE_PERSON_ASSERTION = "promote_person_assertion"
@@ -114,6 +119,7 @@ _CRM_RECORD_TARGET_PROPERTIES: dict[str, dict[str, Any]] = {
     "crm_version": {"type": "integer", "minimum": 1},
 }
 _CRM_RECORD_TARGET_REQUIRED = tuple(_CRM_RECORD_TARGET_PROPERTIES)
+_CRM_RECORD_REQUEST_IDENTITY_FIELDS = ("crm_record_id", "workspace_id")
 _CRM_RECORD_TARGET_ALIASES = (
     ("crm_record_id", ("record_id", "crm_record_ids", "record_ids")),
     ("workspace_id", ("tenant_id",)),
@@ -135,9 +141,9 @@ def _crm_record_action_request_schema(
     )
 
 
-# D1e declaration owner. Activation is deliberately separate: these entries
-# must be copied into DEFAULT_ACTION_REGISTRY only in the same atomic batch that
-# wires the HTTP/orchestrator binder and execution-side snapshot revalidation.
+# D1e declaration owner. D1f copies these entries into the production registry
+# in the same batch that wires the HTTP/orchestrator binder and execution-side
+# snapshot revalidation.
 CRM_EXISTING_RECORD_ACTION_REQUEST_CONTRACTS: Mapping[str, Mapping[str, Any]] = MappingProxyType(
     {
         ACTION_SET_CRM_STAGE: MappingProxyType(
@@ -153,6 +159,7 @@ CRM_EXISTING_RECORD_ACTION_REQUEST_CONTRACTS: Mapping[str, Mapping[str, Any]] = 
                     )
                 ),
                 "request_schema_version": "crm_set_stage_request_v1",
+                "request_identity_target_fields": _CRM_RECORD_REQUEST_IDENTITY_FIELDS,
                 "target_ref_field_aliases": _CRM_RECORD_TARGET_ALIASES,
             }
         ),
@@ -167,6 +174,7 @@ CRM_EXISTING_RECORD_ACTION_REQUEST_CONTRACTS: Mapping[str, Mapping[str, Any]] = 
                     )
                 ),
                 "request_schema_version": "crm_add_note_request_v1",
+                "request_identity_target_fields": _CRM_RECORD_REQUEST_IDENTITY_FIELDS,
                 "target_ref_field_aliases": _CRM_RECORD_TARGET_ALIASES,
             }
         ),
@@ -183,6 +191,7 @@ CRM_EXISTING_RECORD_ACTION_REQUEST_CONTRACTS: Mapping[str, Mapping[str, Any]] = 
                     )
                 ),
                 "request_schema_version": "crm_create_task_request_v1",
+                "request_identity_target_fields": _CRM_RECORD_REQUEST_IDENTITY_FIELDS,
                 "target_ref_field_aliases": _CRM_RECORD_TARGET_ALIASES,
             }
         ),
@@ -231,6 +240,7 @@ class ActionRequestSpec:
     dispatch_adapter: str = ""
     request_schema: Mapping[str, Any] | None = None
     request_schema_version: str = ""
+    request_identity_target_fields: tuple[str, ...] = ()
     target_ref_field_aliases: tuple[tuple[str, tuple[str, ...]], ...] = ()
     approval_policy: str = APPROVAL_NOT_REQUIRED
     budget_required: bool = False
@@ -243,7 +253,7 @@ class ActionRequestSpec:
     def __post_init__(self) -> None:
         normalized_version = str(self.request_schema_version or "").strip()
         if self.request_schema is None:
-            if normalized_version or self.target_ref_field_aliases:
+            if normalized_version or self.request_identity_target_fields or self.target_ref_field_aliases:
                 raise ValueError("schema-less action cannot declare request schema metadata")
             return
         if (
@@ -286,6 +296,19 @@ class ActionRequestSpec:
         overlap = sorted(input_fields & target_fields)
         if overlap:
             raise ValueError(f"action request fields cannot have dual owners: {','.join(overlap)}")
+        normalized_identity_fields = tuple(
+            field.strip() if isinstance(field, str) else "" for field in self.request_identity_target_fields
+        )
+        if (
+            any(
+                not isinstance(field, str) or field != normalized
+                for field, normalized in zip(self.request_identity_target_fields, normalized_identity_fields)
+            )
+            or any(not field for field in normalized_identity_fields)
+            or len(set(normalized_identity_fields)) != len(normalized_identity_fields)
+            or not set(normalized_identity_fields).issubset(target_fields)
+        ):
+            raise ValueError("action request identity target fields are invalid")
         seen_target_fields: set[str] = set()
         seen_aliases: set[str] = set()
         normalized_alias_rows: list[tuple[str, tuple[str, ...]]] = []
@@ -314,6 +337,7 @@ class ActionRequestSpec:
             normalized_alias_rows.append((normalized_target, normalized_aliases))
         object.__setattr__(self, "request_schema", tool_spec.input_schema)
         object.__setattr__(self, "request_schema_version", normalized_version)
+        object.__setattr__(self, "request_identity_target_fields", normalized_identity_fields)
         object.__setattr__(self, "target_ref_field_aliases", tuple(normalized_alias_rows))
 
     def _tool_spec(self) -> ToolSpec:
@@ -337,6 +361,32 @@ class ActionRequestSpec:
     @property
     def has_request_schema(self) -> bool:
         return self.request_schema is not None
+
+    @property
+    def owner_reserved_request_fields(self) -> frozenset[str]:
+        """Fields that only the target owner may mint for this request."""
+
+        if self.request_schema is None:
+            return frozenset()
+        root_properties = dict(dict(self.request_schema).get("properties") or {})
+        target_schema = dict(root_properties.get("target_ref") or {})
+        target_fields = set(dict(target_schema.get("properties") or {}))
+        target_aliases = {alias for _target_field, aliases in self.target_ref_field_aliases for alias in aliases}
+        return frozenset(target_fields | target_aliases)
+
+    def request_identity_target_ref(self, target_ref: Mapping[str, Any]) -> dict[str, Any]:
+        """Project an owner snapshot onto the stable request/replay identity.
+
+        Empty metadata preserves the original all-target-fields behavior. An
+        owner may explicitly exclude mutable authorization/version pins, which
+        remain persisted and revalidated but must not manufacture a new caller
+        intent after the first effect.
+        """
+
+        target = dict(target_ref)
+        if self.request_schema is None or not self.request_identity_target_fields:
+            return target
+        return {field: target[field] for field in self.request_identity_target_fields}
 
     def validate_request(
         self,
@@ -680,6 +730,7 @@ DEFAULT_ACTION_REGISTRY = ActionRegistry(
             display_category="crm",
             allowed_workflow_command_types=(CRM_RECORD_UPDATE_COMMAND_TYPE,),
             default_workflow_command_type=CRM_RECORD_UPDATE_COMMAND_TYPE,
+            **dict(CRM_EXISTING_RECORD_ACTION_REQUEST_CONTRACTS[ACTION_SET_CRM_STAGE]),
         ),
         ACTION_ADD_CRM_NOTE: ActionSpec(
             action_type=ACTION_ADD_CRM_NOTE,
@@ -691,6 +742,7 @@ DEFAULT_ACTION_REGISTRY = ActionRegistry(
             display_category="crm",
             allowed_workflow_command_types=(CRM_NOTE_ADD_COMMAND_TYPE,),
             default_workflow_command_type=CRM_NOTE_ADD_COMMAND_TYPE,
+            **dict(CRM_EXISTING_RECORD_ACTION_REQUEST_CONTRACTS[ACTION_ADD_CRM_NOTE]),
         ),
         ACTION_CREATE_CRM_TASK: ActionSpec(
             action_type=ACTION_CREATE_CRM_TASK,
@@ -702,6 +754,7 @@ DEFAULT_ACTION_REGISTRY = ActionRegistry(
             display_category="crm",
             allowed_workflow_command_types=(CRM_TASK_CREATE_COMMAND_TYPE,),
             default_workflow_command_type=CRM_TASK_CREATE_COMMAND_TYPE,
+            **dict(CRM_EXISTING_RECORD_ACTION_REQUEST_CONTRACTS[ACTION_CREATE_CRM_TASK]),
         ),
         ACTION_ENRICH_PERSON_PUBLIC_WEB: ActionSpec(
             action_type=ACTION_ENRICH_PERSON_PUBLIC_WEB,
@@ -1233,11 +1286,14 @@ class OperationRuntimeWriter:
                 "operation_action_request_schema_pin_conflict",
                 dict(action or {}),
             )
+        spec = self.validate_persisted_action_request(action=action)
         target_ref = action.get("target_ref")
+        expected_target_ref = expected_action.get("target_ref")
         input_payload = action.get("input")
         budget = action.get("budget")
         if (
             not isinstance(target_ref, Mapping)
+            or not isinstance(expected_target_ref, Mapping)
             or not isinstance(input_payload, Mapping)
             or not isinstance(budget, Mapping)
         ):
@@ -1252,7 +1308,7 @@ class OperationRuntimeWriter:
             "action_type": str(action.get("action_type") or "").strip(),
             "owner_module": str(action.get("owner_module") or "").strip(),
             "operation_type": str(action.get("operation_type") or "").strip(),
-            "target_ref": dict(target_ref),
+            "target_ref": spec.request_identity_target_ref(target_ref),
             "input": dict(input_payload),
             "budget": dict(budget),
             "request_schema_version": persisted_version,
@@ -1260,12 +1316,15 @@ class OperationRuntimeWriter:
             "approval_policy": str(action.get("approval_policy") or "").strip(),
             "idempotency_key": str(action.get("idempotency_key") or "").strip(),
         }
-        if persisted_identity != dict(expected_action):
+        expected_identity = {
+            **dict(expected_action),
+            "target_ref": spec.request_identity_target_ref(expected_target_ref),
+        }
+        if persisted_identity != expected_identity:
             raise OperationRuntimeStateConflict(
                 "operation_action_idempotency_payload_conflict",
                 dict(action or {}),
             )
-        self.validate_persisted_action_request(action=action)
 
     def _preflight_action_replay(self, *, expected_action: Mapping[str, Any]) -> dict[str, Any]:
         action_id = str(expected_action.get("action_id") or "").strip()
@@ -1388,7 +1447,7 @@ class OperationRuntimeWriter:
         normalized_idempotency = str(idempotency_key or "").strip() or default_action_idempotency_key(
             workspace_id=normalized_workspace_id,
             action_type=spec.action_type,
-            target_ref=normalized_target_ref,
+            target_ref=spec.request_identity_target_ref(normalized_target_ref),
             input_payload=normalized_input_payload,
         )
         budget_payload = dict(budget or {})

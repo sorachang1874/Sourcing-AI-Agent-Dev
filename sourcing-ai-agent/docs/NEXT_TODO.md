@@ -158,11 +158,30 @@
   `causal_binding.final_response_item_exact=false` 为 invalid；其中 substantive text 只作 fixed-forward 输入，不是
   formal `NO-GO`。fresh pinned formal review 必须绑定 enclosing commit，hash-bound valid artifact 存在前 formal
   status=pending，且不阻断无关 non-live Track D 开发。
+- [x] D1d projection action binder decision oracle（2026-07-15）：`search_projection` / `filter_projection` 当前
+  aggregate 无物理 workspace/access-scope owner，故 fail-closed 留在 R-029 bridge；D1f 仅对 exact 三项 CRM
+  action 条件化绑定 authenticated workspace/user，不改变 projection owner 决策。served=0。
+- [x] D1e CRM existing-record schema/binder foundation（2026-07-15）：声明 shared closed schema builder、typed
+  bind context、binder registry，以及 `set_crm_stage|add_crm_note|create_crm_task` exact 三项 contracts；初始
+  checkpoint=`declared_not_activated`，直到 HTTP/orchestrator + execution revalidation 可同批激活。
+- [x] D1f CRM existing-record action activation current author candidate（2026-07-15）：exact 三项 schema 已复制到
+  production registry，当前 **3 schema-defined / 12 schema-less / served=0**。authenticated submit 由 request state
+  exact 绑定 workspace/user；missing/foreign 同一 404 且 pre-submit 全域零写；open-mode exact workspace 正向保留。
+  owner snapshot 持久化 `crm_record_id/workspace_id/owner_user_id/crm_version`，stable request identity 仅
+  `crm_record_id+workspace_id`；dispatch 在新 plan 写前、CRM command owner 在首个 domain effect 前分别 revalidate，
+  canonical linked AgentAction 是 action discriminator，brownfield blank pins 对三项 fail closed。local advisory
+  rounds=`NO-GO 0/3/2/0`、`NO-GO 0/2/1/0`，均仅作 fixed-forward 输入，不是 formal verdict；author evidence=
+  D1f `7+27`、D1 adjacency `136+136`、operation `136+503`，fresh pinned non-author review pending。R-028 仍 open，不宣称 command/effect/terminal/EntityDelta 同 UoW、完整 TOCTOU 或
+  exactly-once；无 provider/model/live。
 - [ ] R-029：宽松 action-schema bridge 仅可在 production action 尚无 reviewed schema/owner binder 期间存在；
   删除条件 = 全部 API-submittable actions（不是只看 served subset）连续一个 release window durable hit=0。
   observation epoch 必须每个 release window bump，且 `NOT VALID` checks 的既有行 validation 在独立部署完成；
   任一 action 进入 served 集前必须满足完整 schema+adapter+Activity+revisioned model-safe result+simulate serializer
-  谓词；当前 15/15 schema-less、served=0。
+  谓词；D1f 后当前 12/15 schema-less、served=0。
+- [ ] R-031：authenticated Operation API exact-owner closure。D1f 仅绑定 exact 三项 CRM submit；actions/runs 的
+  list/get/provenance 及 approve/reject/dispatch/resume/retry/cancel 尚未全部以 server-derived workspace 做统一
+  exact-owner preflight，foreign/missing parity 与全路径零写矩阵未闭合。修复前阻断 hosted/live multi-user
+  Operation exposure；不阻断 bounded non-live implementation、fake/scripted 或 local open-mode testing。
 - [x] D3a characterize-first（2026-07-14；enclosing commit 由提交后 handoff 固定）：Plan §6#1 的 registry/snapshot
   Scout 作者批已完成，机械冻结 registry **2 writers/3 refresh/1 upsert** + physical-reader/semantic-consumer 链、
   seed catalog live-input 链、snapshot writers **5+3**、shared loader **19 calls/8 files**（fallback provenance

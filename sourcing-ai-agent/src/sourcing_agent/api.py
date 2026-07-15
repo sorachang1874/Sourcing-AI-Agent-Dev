@@ -31,6 +31,7 @@ from .cohort_selection import (
     prepare_external_criteria_request_payload,
     validate_external_cohort_selection_payload,
 )
+from .operation_runtime import CRM_EXISTING_RECORD_ACTION_TYPES
 from .orchestrator import SourcingOrchestrator
 from .plan_submit_contract import (
     LEGACY_PLAN_SUBMIT_HTTP_STATUS,
@@ -382,6 +383,7 @@ AUTHENTICATED_REQUEST_SCOPE_REGISTRY: dict[tuple[str, str], str] = {
     ("POST", "/api/criteria/recompile"): "criteria_write_with_optional_exact_job_derived_create",
     ("POST", "/api/target-candidates/import-from-job"): "exact_job_write",
     ("POST", "/api/projections/backfill-from-job"): "exact_job_write",
+    ("POST", "/api/operations/actions"): "owner_bound_crm_or_schema_less_operation_submit",
     ("GET", "/api/workers/recoverable"): "exact_job_read_or_global_admin",
     ("GET", "/api/workers/daemon/status"): "exact_job_read_or_global_admin",
     ("POST", "/api/workers/interrupt"): "exact_worker_job_write",
@@ -2032,11 +2034,24 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["POST"], "/api/company-assets/public-web", post_company_public_web, read_body=True)
 
     def post_operation_actions(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
-        _apply_server_identity(payload, request, actor_fields=("actor",))
-        result = orchestrator.submit_operation_action(payload)
-        status = (
-            HTTPStatus.ACCEPTED if result.get("status") in {"queued", "approval_required"} else HTTPStatus.BAD_REQUEST
+        crm_owner_bound = str(payload.get("action_type") or "").strip() in CRM_EXISTING_RECORD_ACTION_TYPES
+        _apply_server_identity(
+            payload,
+            request,
+            workspace=crm_owner_bound,
+            actor_fields=("actor",),
         )
+        owner_scope = _expected_crm_owner_kwargs(request) if crm_owner_bound else {}
+        result = orchestrator.submit_operation_action(payload, **owner_scope)
+        if result.get("status") in {"queued", "approval_required"}:
+            status = HTTPStatus.ACCEPTED
+        elif result.get("status") == "not_found" and result.get("reason") == "crm_record_not_found":
+            status = HTTPStatus.NOT_FOUND
+            result = dict(_CRM_RECORD_NOT_FOUND_BODY)
+        elif result.get("status") == "conflict":
+            status = HTTPStatus.CONFLICT
+        else:
+            status = HTTPStatus.BAD_REQUEST
         return _json_response(status, result)
 
     add(["POST"], "/api/operations/actions", post_operation_actions, read_body=True)

@@ -10,6 +10,26 @@
 
 ## 2026-07-15 (Asia/Singapore)
 
+### Track D D1f CRM existing-record action activation
+
+- Exact `set_crm_stage`, `add_crm_note`, and `create_crm_task` request contracts are active in the production registry;
+  the current partition is **3 schema-defined / 12 schema-less / served=0**. Authenticated submit derives workspace and
+  user from request state, maps missing/foreign to one 404, rejects forged target aliases before persistence, and keeps
+  explicit open-mode workspace compatibility.
+- The full owner snapshot (`crm_record_id/workspace_id/owner_user_id/crm_version`) remains the execution pin. Stable
+  request identity is only `crm_record_id+workspace_id`, so an action's own version increment cannot create a second
+  implicit action or break explicit-key replay. Dispatch and command-owner preflights follow the canonical
+  OperationRun→AgentAction link; a mutable command label or a command relinked to another valid action cannot bypass
+  the exact target/schema/command checks.
+- Stable author evidence: D1f PG matrix **7 passed + 27 subtests**; D1 request/adapter/binder/transport/CRM adjacency plus
+  R-019 caller ratchet **136 passed + 136 subtests**; full operation runtime **136 passed + 503 subtests**. One adjacent
+  frontend request-pin assertion failed identically on clean detached `HEAD=c260896`, outside the D1f file scope.
+  Ruff/format/compile/diff are green and global mypy remains the accepted **81 errors / 4 files** ceiling.
+- Local advisory rounds `NO-GO 0/3/2/0` then `NO-GO 0/2/1/0` are fixed-forward input only. R-019/R-028 stay open because
+  these are read-only preflights, not an effect/terminal UoW; R-029 falls only to 12; R-031 records the still-unscoped
+  authenticated Operation list/detail/control surface. Fresh pinned review is pending and no provider/model/live path
+  is authorized.
+
 ### Cohort CS3/CS5 runtime publication fixed-forward
 
 - The valid pinned Ultra review of `7d54a23..60e7e67` returned `NO-GO` with
@@ -44,7 +64,11 @@
   generations are immutable to legacy worker reconciliation. The new actual-boundary regression proves restore/progress/
   materializer/prefetch zero-read-or-write behavior and committed byte stability. Current focused evidence is **43 passed
   + 11 subtests**, exact legacy recovery **1 passed**, mandatory-PG CS5 **1 passed**; Ruff/compile/diff are green and mypy
-  remains **81 errors / 4 files**. Fresh pinned review remains outstanding; no paid provider/model or live environment was used.
+  remains **81 errors / 4 files**. The fresh pinned advisory of `b36cbcd` is still `NO-GO 0/2/2/0`: registry publication
+  classification is not yet centralized as legacy/committed/invalid, `apply_already_consumed` can continue after a
+  rejected canonical restore, raw worker entries can still leak into progress, and the claimed regression matrix is
+  incomplete. These findings require another fixed-forward before Cohort live/product signoff; no paid provider/model
+  or live environment was used.
 
 ## 2026-07-14 (Asia/Singapore)
 
