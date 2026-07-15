@@ -1,9 +1,10 @@
 # Track D D3c2h1 — Exact evidence-surface decision lock
 
-> Status: **decision lock only** (2026-07-15). This batch ratifies exact future manifests, owner/store paths,
-> full-PFX relations, occurrence encoders, state machines, and transaction composition. It adds no SQL, migration,
-> descriptor, repository, runtime writer, provider/model/Harvest call, served Agent tool, live activation, or product
-> gate. D0f is implemented at `539c689`; the five surfaces below remain physically absent.
+> Status: **decision-lock repair only** (2026-07-15). The first pinned highest-effort non-author review of commit
+> `1c4a2d9177dcb3470117700086b12fd533898bb7` returned formal `NO-GO 0/3/3/0`. This fixed-forward candidate ratifies
+> the six required lifecycle/relation/index/check repairs but still adds no SQL, migration, descriptor, repository,
+> runtime writer, provider/model/Harvest call, served Agent tool, live activation, or product gate. D0f is implemented
+> at `539c689`; the five evidence surfaces and the two D3c2g cost surfaces below remain physically absent.
 
 ## 1. Outcome and bounded impact
 
@@ -42,6 +43,11 @@ transport_attempt_failure_receipts_local_check_count = 9
 transport_response_classification_intents_local_check_count = 7
 workflow_late_result_quarantine_local_check_count = 12
 local_check_total = 47
+ratified_upstream_constraint_count = 13
+ratified_seven_table_constraint_count = 52
+ratified_seven_table_fk_count = 29
+combined_index_count = 11
+unratified_parent_prerequisite_count = 2
 response_occurrence_domain = transport-response-occurrence-v2
 failure_occurrence_domain = transport-attempt-failure-occurrence-v2
 classification_intent_domain = transport-response-classification-intent-v1
@@ -50,6 +56,12 @@ quarantine_retention_policy = quarantine_retention_30d_v1
 quarantine_retention_deadline = recorded_at + interval '30 days'
 exposure_first_quarantine_permission = forbidden
 classification_authority = stored_current_state_under_d3_dispatch_v2_global_lock_prefix
+classification_nonterminal_states = pending | claimed | current_pending_apply
+classification_terminal_states = applied_current | classified_stale | failed_terminal
+classification_max_attempts = 8
+post_network_ingress_composition_count = 2
+current_apply_continuation_count = 1
+migration_authority = blocked_pending_parent_decision_and_fresh_pinned_go
 implementation_status = decision_locked_not_implemented
 ```
 
@@ -65,7 +77,8 @@ ratified here. They are not represented as mechanically pre-existing prose or co
 | both transport receipt tables | `src/sourcing_agent/repositories/transport_evidence.py::TransportEvidenceRepository` | `store.repos.transport_evidence` | immutable future PG response/failure receipt rows | typed insert-or-exact-replay while the exact exposure is locked | envelope issuance, exposure SQL, quarantine SQL, command/domain/event writes |
 | `transport_response_classification_intents` | `src/sourcing_agent/repositories/response_classification_intents.py::ResponseClassificationIntentRepository` | `store.repos.response_classification_intents` | one future PG classification intent per response occurrence | typed create/claim/retry/reclaim/complete/fail CAS | caller current/stale flag, receipt mutation, quarantine insert, workflow/domain apply |
 | `workflow_late_result_quarantine` | `src/sourcing_agent/repositories/late_result_quarantine.py::LateResultQuarantineRepository` | `store.repos.late_result_quarantine` | one future PG non-authorizable response tombstone | insert/exact-replay plus disjoint cost and retention CAS entrypoints | attempt-failure/no-call insert, promotion, reducer/domain/public/model consumption, exposure SQL |
-| post-network composition | future `D3PostNetworkEvidenceCoordinator`, a transaction composition seam only | no `store.repos` entry and no table | one transaction order over the typed repositories above | compose the two orders in §10 and pass transaction-local classification capability | direct SQL, second ownership, network I/O in a PG transaction, serialized classification authority |
+| cost_reservations + dispatch_exposures | `src/sourcing_agent/repositories/cost_ledger.py::CostLedgerRepository` | `store.repos.cost_ledger` | future inseparable D3c2g 21/75-column reservation/exposure aggregate | typed reservation/exposure CAS, locked-prestate terminalize-or-exact-validate, credential-free settlement | receipt/quarantine SQL, caller money/evidence, rewriting an immutable terminal exposure |
+| post-network composition | future `D3PostNetworkEvidenceCoordinator`, a transaction composition seam only | no `store.repos` entry and no table | two ingress orders plus one recoverable current-apply continuation over the typed repositories | compose §11, pass only transaction-local stored-state proof, and invoke typed owners on one shared PG transaction | direct SQL, second ownership, network I/O in a PG transaction, serialized classification authority, caller-selected branch |
 
 `ModelInvocationEnvelopeV1` remains the sole canonical envelope shape/digest owner. D0f's
 `ModelInvocationEnvelopeRepository` at `store.repos.model_invocation_envelopes` remains the sole durable envelope-ref
@@ -304,8 +317,11 @@ response shape. Incomplete/truncated/protocol-parse failures cannot create this 
 
 The provider id is nullable only with `provider_call_id_state=not_observed_before_failure`. `retry_disposition` is
 exactly `retryable|terminal` from the historical failure spec. This row contains no envelope, response, result, or
-result-artifact field and can never create quarantine. One exposure may have one failure occurrence; a later valid
-response may still create its distinct response receipt and then be classified under the current stored fence.
+result-artifact field and can never create quarantine. One exposure may have one failure occurrence. If a terminal-
+disposition failure has already made the exposure terminal, a later valid response may still create a distinct response
+receipt and classification intent, but the immutable failure terminal/cost record is only exact-validated and never
+rewritten. The global stored-state proof can then reach only `classified_stale` plus response quarantine; it can never
+reach `current_pending_apply` or domain apply.
 
 ## 7. Exact `transport_response_classification_intents` manifest — 18 columns
 
@@ -333,7 +349,9 @@ response may still create its distinct response receipt and then be classified u
 ### 7.1 Classification lifecycle and recovery
 
 `classification_state` is exactly
-`pending|claimed|classified_current|classified_stale|failed_terminal`. Terminal states never reopen. The fixed checked-in
+`pending|claimed|current_pending_apply|applied_current|classified_stale|failed_terminal`.
+`pending|claimed|current_pending_apply` are nonterminal; `applied_current|classified_stale|failed_terminal` are terminal
+and never reopen. The fixed checked-in
 `response-classification-retry-v1` rule is not a tenant policy ladder: claim lease = 30 seconds, retry delay =
 `min(2 ** (attempt_count - 1), 60)` seconds after a failed claimed attempt, and maximum attempts = 8. A future policy
 change requires a new table/schema decision after all nonterminal v1 rows drain; callers cannot select it.
@@ -341,17 +359,37 @@ change requires a new table/schema decision after all nonterminal v1 rows drain;
 | Method | Exact transition/effect |
 |---|---|
 | `create_or_exact_replay_pending` | absent -> `pending`; DB clock sets `next_attempt_at`; exact receipt/PFX/occurrence replay joins |
-| `claim_due` | due `pending` -> `claimed`; attempt +1, version +1, DB clock sets the 30-second lease deadline; return a private non-serializable claim capability |
-| `retry_claim` | current `claimed` -> `pending`; registered transient error only, fixed DB-clock delay, version +1 |
-| `reclaim_expired_claim` | expired `claimed` -> `pending`; `last_error_code=claim_lease_expired`, DB-clock due time, version +1 |
-| `complete_current` | current claimed capability + global stored-state proof -> `classified_current`; set terminal DB clock, version +1; no quarantine |
+| `claim_due` | due `pending` with `attempt_count < 8` -> `claimed`; attempt +1, version +1, DB clock sets the 30-second lease deadline; return a private non-serializable claim capability |
+| `retry_claim` | current `claimed` at attempt 1..7 plus registered transient error -> `pending` with fixed DB-clock delay/version +1; attempt 8 -> `failed_terminal` with `classification_retry_exhausted` |
+| `reclaim_expired_claim` | expired `claimed` at attempt 1..7 -> `pending` with `claim_lease_expired`, DB-clock due time/version +1; attempt 8 -> `failed_terminal` with `classification_claim_lease_exhausted` |
+| `converge_exhausted_pending` | defensive owner-only convergence for an observed `pending, attempt_count=8` row -> `failed_terminal` with `classification_retry_exhausted`; it is never claimable |
+| `mark_current_pending_apply` | current claimed capability + locked stored-current proof -> `current_pending_apply`; set DB-clock `next_attempt_at`, terminal remains NULL, version +1; no domain write and no quarantine |
 | `complete_stale_with_quarantine` | current claimed capability + global stored-state proof -> `classified_stale`; same UoW inserts/exact-replays quarantine, sets terminal DB clock, version +1 |
-| `fail_terminal` | attempt 8 plus registered non-provable/permanent classification error -> `failed_terminal`; set terminal DB clock, version +1; authorizes neither apply nor quarantine |
+| `complete_current_apply` | `current_pending_apply` + fresh global stored-current proof -> `applied_current`; the same normal terminal/record UoW commits domain/attempt/command/event/source writes before this terminal CAS, then sets terminal DB clock/version +1 |
+| `reclassify_current_pending_stale_with_quarantine` | `current_pending_apply` + fresh global stored-stale proof -> `classified_stale`; same UoW inserts/exact-replays quarantine, writes zero domain state, and sets terminal DB clock/version +1 |
+| `fail_terminal` | current `claimed` plus registered permanent/non-provable error at any attempt, or registered attempt-8 transient/lease exhaustion -> `failed_terminal`; set terminal DB clock/version +1; authorizes neither apply nor quarantine |
 
 The private claim capability binds full PFX, classification id, receipt/exposure/occurrence, claimed state version,
 attempt count, and DB lease deadline. It is not stored, serialized, or reconstructed from ids. A failed global lock or
 unprovable classification rolls back the classification UoW first; only then may the classification owner perform its
 own row-only retry/fail CAS. That CAS records no current/stale label and grants no result authority.
+
+The attempt boundary is total and is a second machine-readable authority:
+
+| Source state / attempt | Owner-observed outcome | Exact target/effect |
+|---|---|---|
+| `pending / 0..7` | due claim | `claimed / 1..8`; never increments above 8 |
+| `pending / 8` | defensive convergence | `failed_terminal / classification_retry_exhausted` |
+| `claimed / 1..7` | registered transient error | `pending / same attempt`; fixed retry delay |
+| `claimed / 8` | registered transient error | `failed_terminal / classification_retry_exhausted` |
+| `claimed / 1..7` | lease expired | `pending / same attempt`; `claim_lease_expired` |
+| `claimed / 8` | lease expired | `failed_terminal / classification_claim_lease_exhausted` |
+| `claimed / 1..8` | permanent or non-provable error | `failed_terminal / exact registered error` |
+| `claimed / 1..8` | stored current | `current_pending_apply / same attempt`; no terminal/domain write |
+| `claimed / 1..8` | stored stale | `classified_stale`; quarantine and terminal CAS in one UoW |
+| `current_pending_apply / 1..8` | fresh stored current | normal terminal/record apply + `applied_current` in one UoW |
+| `current_pending_apply / 1..8` | fresh stored stale | zero domain write + quarantine + `classified_stale` in one UoW |
+| any terminal / 0..8 | replay or mismatch | exact replay is zero-write; mismatch fails closed; never reopens |
 
 ## 8. Exact `workflow_late_result_quarantine` manifest — 41 columns
 
@@ -421,45 +459,158 @@ The fixed policy is `quarantine_retention_30d_v1`. Insert sets both `recorded_at
 the deadline, and purge does not wait for cost. A retained row has `purged_at IS NULL`; a tombstone has
 `purged_at >= retention_until` and `result_artifact_ref IS NULL`. The artifact digest remains when one existed.
 
-## 9. Exact keys, full-PFX FKs, and rollback boundary
+## 9. Exact combined ratified-schema relations, indexes, and rollback boundary
 
-Every relation below expands `PFX` into the five physical columns in §3. Constraint names and column order are exact
-future migration inputs.
+This is one combined relation boundary for D3c2g's two cost tables and D3c2h1's five evidence tables. Every `PFX`
+below expands to the five columns in §3, in order. For the review-session parent only, the child
+`coordination_plan_review_id` maps to the parent's canonical `review_id`; no duplicate parent column is invented.
+
+All ordinary FKs use this exact action contract:
+
+```text
+FK_STD := MATCH SIMPLE DEFERRABLE INITIALLY IMMEDIATE ON UPDATE RESTRICT ON DELETE RESTRICT
+FK_CYCLE := MATCH SIMPLE DEFERRABLE INITIALLY DEFERRED ON UPDATE RESTRICT ON DELETE RESTRICT
+```
+
+`FK_CYCLE` is used only by the two nullable exposure-to-receipt reverse links. Their local terminal-shape checks require
+the link tuple to be all NULL or complete, and the deferred target must exist by commit. All other FKs use `FK_STD`.
+
+### 9.1 Ratified upstream parent constraints — exactly 13
+
+These are required additions to already-physical parents, except the already-present D0f envelope unique. They do not
+activate a strict-D3 row or reinterpret a brownfield sentinel.
+
+| Order | Name | Kind | Exact columns / target |
+|---:|---|---|---|
+| 1 | `plan_review_sessions_d3_scope_review_uk` | UNIQUE | `(runtime_namespace, provider_mode, workspace_id, scope_digest, review_id)` |
+| 2 | `operation_runs_d3_scope_operation_uk` | UNIQUE | `(PFX, operation_run_id)` |
+| 3 | `operation_runs_d3_review_fk` | FK_STD | operation `PFX` -> session `(runtime_namespace, provider_mode, workspace_id, scope_digest, review_id)` |
+| 4 | `workflow_commands_d3_scope_operation_command_uk` | UNIQUE | `(PFX, operation_id, command_id)` |
+| 5 | `workflow_commands_d3_operation_fk` | FK_STD | `(PFX, operation_id)` -> `operation_runs(PFX, operation_run_id)` |
+| 6 | `workflow_activity_runs_d3_scope_operation_command_run_uk` | UNIQUE | `(PFX, operation_run_id, command_id, activity_run_id)` |
+| 7 | `workflow_activity_runs_d3_command_fk` | FK_STD | `(PFX, operation_run_id, command_id)` -> `workflow_commands(PFX, operation_id, command_id)` |
+| 8 | `workflow_activity_attempts_d3_scope_operation_command_run_attempt_uk` | UNIQUE | `(PFX, operation_run_id, command_id, activity_run_id, attempt_id)` |
+| 9 | `workflow_activity_attempts_d3_run_fk` | FK_STD | `(PFX, operation_run_id, command_id, activity_run_id)` -> `workflow_activity_runs(PFX, operation_run_id, command_id, activity_run_id)` |
+| 10 | `workflow_events_d3_scope_event_uk` | UNIQUE | `(PFX, event_id)` |
+| 11 | `workflow_events_d3_terminal_event_uk` | UNIQUE | `(PFX, operation_id, command_id, event_id, terminal_outcome_digest)` |
+| 12 | `workflow_events_d3_attempt_fk` | FK_STD | `(PFX, operation_id, command_id, activity_run_id, activity_attempt_id)` -> `workflow_activity_attempts(PFX, operation_run_id, command_id, activity_run_id, attempt_id)` |
+| 13 | `model_invocation_envelopes_ref_digest_uk` | existing UNIQUE | `(PFX, model_invocation_envelope_ref, envelope_digest)` |
+
+The future upstream migration must first add D3b's ratified `workflow_commands.workspace_id`, adopt only strict rows,
+validate the complete full-PFX chain, build these uniques without weakening column order, and only then attach the FKs.
+
+### 9.2 Ratified seven-table constraints — exactly 52, including 29 FKs
 
 | Order | Name | Kind | Exact child columns / target |
 |---:|---|---|---|
-| 1 | `verification_intents_pkey` | PK | `(PFX, intent_id)` |
-| 2 | `verification_intents_operation_phase_uk` | UNIQUE | `(PFX, operation_run_id, phase_generation)` |
-| 3 | `verification_intents_operation_fk` | FK | `(PFX, operation_run_id)` -> `operation_runs(PFX, operation_run_id)` |
-| 4 | `verification_intents_source_attempt_fk` | FK | `(PFX, operation_run_id, source_verification_command_id, source_activity_run_id, source_activity_attempt_id)` -> `workflow_activity_attempts(PFX, operation_run_id, command_id, activity_run_id, attempt_id)` |
-| 5 | `verification_intents_source_event_fk` | nullable MATCH SIMPLE DEFERRABLE FK | `(PFX, operation_run_id, source_verification_command_id, expected_source_terminal_event_id, expected_source_terminal_outcome_digest)` -> `workflow_events(PFX, operation_id, command_id, event_id, terminal_outcome_digest)` |
-| 6 | `verification_intents_response_receipt_fk` | nullable MATCH SIMPLE DEFERRABLE FK | `(PFX, expected_source_dispatch_exposure_id, expected_source_response_occurrence_id, expected_source_transport_response_receipt_id)` -> response receipt exact identity below |
-| 7 | `verification_intents_failure_receipt_fk` | nullable MATCH SIMPLE DEFERRABLE FK | `(PFX, expected_source_dispatch_exposure_id, expected_source_failure_occurrence_id, expected_source_transport_attempt_failure_receipt_id)` -> failure receipt exact identity below |
-| 8 | `verification_intents_recorded_event_fk` | nullable MATCH SIMPLE DEFERRABLE FK | `(PFX, recorded_event_id)` -> `workflow_events(PFX, event_id)` |
-| 9 | `transport_response_receipts_pkey` | PK | `(PFX, transport_response_receipt_id)` |
-| 10 | `transport_response_receipts_delivery_uk` | UNIQUE | `(PFX, dispatch_exposure_id, canonical_delivery_identity)` |
-| 11 | `transport_response_receipts_occurrence_uk` | UNIQUE | `(PFX, dispatch_exposure_id, response_occurrence_id)` |
-| 12 | `transport_response_receipts_child_fk_uk` | UNIQUE | `(PFX, dispatch_exposure_id, response_occurrence_id, transport_response_receipt_id)` |
-| 13 | `transport_response_receipts_exposure_fk` | FK | `(PFX, dispatch_exposure_id)` -> `dispatch_exposures(PFX, dispatch_exposure_id)` |
-| 14 | `transport_response_receipts_attempt_fk` | FK | `(PFX, operation_run_id, command_id, activity_run_id, activity_attempt_id)` -> `workflow_activity_attempts(PFX, operation_run_id, command_id, activity_run_id, attempt_id)` |
-| 15 | `transport_response_receipts_envelope_fk` | FK | `(PFX, model_invocation_envelope_ref, model_invocation_envelope_digest)` -> `model_invocation_envelopes(PFX, model_invocation_envelope_ref, envelope_digest)` |
-| 16 | `transport_attempt_failure_receipts_pkey` | PK | `(PFX, transport_attempt_failure_receipt_id)` |
-| 17 | `transport_attempt_failure_receipts_exposure_uk` | UNIQUE | `(PFX, dispatch_exposure_id)` |
-| 18 | `transport_attempt_failure_receipts_occurrence_uk` | UNIQUE | `(PFX, dispatch_exposure_id, failure_occurrence_id)` |
-| 19 | `transport_attempt_failure_receipts_child_fk_uk` | UNIQUE | `(PFX, dispatch_exposure_id, failure_occurrence_id, transport_attempt_failure_receipt_id)` |
-| 20 | `transport_attempt_failure_receipts_exposure_fk` | FK | `(PFX, dispatch_exposure_id)` -> `dispatch_exposures(PFX, dispatch_exposure_id)` |
-| 21 | `transport_attempt_failure_receipts_attempt_fk` | FK | `(PFX, operation_run_id, command_id, activity_run_id, activity_attempt_id)` -> `workflow_activity_attempts(PFX, operation_run_id, command_id, activity_run_id, attempt_id)` |
-| 22 | `transport_response_classification_intents_pkey` | PK | `(PFX, classification_intent_id)` |
-| 23 | `transport_response_classification_intents_idempotency_uk` | UNIQUE | `(PFX, classification_idempotency_key)` |
-| 24 | `transport_response_classification_intents_occurrence_uk` | UNIQUE | `(PFX, dispatch_exposure_id, response_occurrence_id)` |
-| 25 | `transport_response_classification_intents_receipt_fk` | FK | `(PFX, dispatch_exposure_id, response_occurrence_id, transport_response_receipt_id)` -> response receipt child-FK unique identity |
-| 26 | `workflow_late_result_quarantine_pkey` | PK | `(PFX, quarantine_id)` |
-| 27 | `workflow_late_result_quarantine_idempotency_uk` | UNIQUE | `(PFX, idempotency_key)` |
-| 28 | `workflow_late_result_quarantine_occurrence_uk` | UNIQUE | `(PFX, dispatch_exposure_id, response_occurrence_id)` |
-| 29 | `workflow_late_result_quarantine_receipt_fk` | FK | `(PFX, dispatch_exposure_id, response_occurrence_id, transport_response_receipt_id)` -> response receipt child-FK unique identity |
-| 30 | `workflow_late_result_quarantine_envelope_fk` | FK | `(PFX, model_invocation_envelope_ref, model_invocation_envelope_digest)` -> `model_invocation_envelopes(PFX, model_invocation_envelope_ref, envelope_digest)` |
+| 1 | `cost_reservations_pkey` | PK | `(PFX, budget_reservation_ref)` |
+| 2 | `cost_reservations_operation_idempotency_uk` | UNIQUE | `(PFX, operation_run_id, reservation_idempotency_key)` |
+| 3 | `cost_reservations_review_fk` | FK_STD | `PFX` -> session scope/review unique |
+| 4 | `cost_reservations_operation_fk` | FK_STD | `(PFX, operation_run_id)` -> `operation_runs(PFX, operation_run_id)` |
+| 5 | `dispatch_exposures_pkey` | PK | `(PFX, dispatch_exposure_id)` |
+| 6 | `dispatch_exposures_physical_call_uk` | UNIQUE | `(PFX, budget_reservation_ref, activity_attempt_id, physical_call_index)` |
+| 7 | `dispatch_exposures_reservation_fk` | FK_STD | `(PFX, budget_reservation_ref)` -> `cost_reservations(PFX, budget_reservation_ref)` |
+| 8 | `dispatch_exposures_review_fk` | FK_STD | `PFX` -> session scope/review unique |
+| 9 | `dispatch_exposures_operation_fk` | FK_STD | `(PFX, operation_run_id)` -> operation unique |
+| 10 | `dispatch_exposures_command_fk` | FK_STD | `(PFX, operation_run_id, command_id)` -> command unique |
+| 11 | `dispatch_exposures_activity_run_fk` | FK_STD | `(PFX, operation_run_id, command_id, activity_run_id)` -> activity-run unique |
+| 12 | `dispatch_exposures_activity_attempt_fk` | FK_STD | `(PFX, operation_run_id, command_id, activity_run_id, activity_attempt_id)` -> activity-attempt unique |
+| 13 | `dispatch_exposures_base_intent_fk` | FK_STD | `(PFX, operation_run_id, base_intent_id, base_intent_phase_generation)` -> verification exposure-parent unique |
+| 14 | `dispatch_exposures_predecessor_intent_fk` | FK_STD | `(PFX, operation_run_id, expected_predecessor_intent_id, expected_predecessor_phase_generation)` -> verification exposure-parent unique |
+| 15 | `dispatch_exposures_decision_event_fk` | FK_STD | `(PFX, decision_source_event_id)` -> workflow-event scope unique |
+| 16 | `dispatch_exposures_predecessor_event_fk` | FK_STD | `(PFX, expected_predecessor_decision_source_event_id)` -> workflow-event scope unique |
+| 17 | `dispatch_exposures_response_receipt_fk` | FK_CYCLE | `(PFX, dispatch_exposure_id, transport_response_receipt_id)` -> response exposure-ref unique |
+| 18 | `dispatch_exposures_failure_receipt_fk` | FK_CYCLE | `(PFX, dispatch_exposure_id, transport_attempt_failure_receipt_id)` -> failure exposure-ref unique |
+| 19 | `verification_intents_pkey` | PK | `(PFX, intent_id)` |
+| 20 | `verification_intents_operation_phase_uk` | UNIQUE | `(PFX, operation_run_id, phase_generation)` |
+| 21 | `verification_intents_exposure_parent_uk` | UNIQUE | `(PFX, operation_run_id, intent_id, phase_generation)` |
+| 22 | `verification_intents_operation_fk` | FK_STD | `(PFX, operation_run_id)` -> operation unique |
+| 23 | `verification_intents_source_attempt_fk` | FK_STD | `(PFX, operation_run_id, source_verification_command_id, source_activity_run_id, source_activity_attempt_id)` -> activity-attempt unique |
+| 24 | `verification_intents_source_event_fk` | FK_STD | `(PFX, operation_run_id, source_verification_command_id, expected_source_terminal_event_id, expected_source_terminal_outcome_digest)` -> workflow terminal-event unique |
+| 25 | `verification_intents_response_receipt_fk` | FK_STD | `(PFX, expected_source_dispatch_exposure_id, expected_source_response_occurrence_id, expected_source_transport_response_receipt_id)` -> response child-FK unique |
+| 26 | `verification_intents_failure_receipt_fk` | FK_STD | `(PFX, expected_source_dispatch_exposure_id, expected_source_failure_occurrence_id, expected_source_transport_attempt_failure_receipt_id)` -> failure child-FK unique |
+| 27 | `verification_intents_recorded_event_fk` | FK_STD | `(PFX, recorded_event_id)` -> workflow-event scope unique |
+| 28 | `transport_response_receipts_pkey` | PK | `(PFX, transport_response_receipt_id)` |
+| 29 | `transport_response_receipts_delivery_uk` | UNIQUE | `(PFX, dispatch_exposure_id, canonical_delivery_identity)` |
+| 30 | `transport_response_receipts_occurrence_uk` | UNIQUE | `(PFX, dispatch_exposure_id, response_occurrence_id)` |
+| 31 | `transport_response_receipts_exposure_ref_uk` | UNIQUE | `(PFX, dispatch_exposure_id, transport_response_receipt_id)` |
+| 32 | `transport_response_receipts_child_fk_uk` | UNIQUE | `(PFX, dispatch_exposure_id, response_occurrence_id, transport_response_receipt_id)` |
+| 33 | `transport_response_receipts_exposure_fk` | FK_STD | `(PFX, dispatch_exposure_id)` -> dispatch exposure identity |
+| 34 | `transport_response_receipts_attempt_fk` | FK_STD | `(PFX, operation_run_id, command_id, activity_run_id, activity_attempt_id)` -> activity-attempt unique |
+| 35 | `transport_response_receipts_envelope_fk` | FK_STD | `(PFX, model_invocation_envelope_ref, model_invocation_envelope_digest)` -> envelope ref/digest unique |
+| 36 | `transport_attempt_failure_receipts_pkey` | PK | `(PFX, transport_attempt_failure_receipt_id)` |
+| 37 | `transport_attempt_failure_receipts_exposure_uk` | UNIQUE | `(PFX, dispatch_exposure_id)` |
+| 38 | `transport_attempt_failure_receipts_occurrence_uk` | UNIQUE | `(PFX, dispatch_exposure_id, failure_occurrence_id)` |
+| 39 | `transport_attempt_failure_receipts_exposure_ref_uk` | UNIQUE | `(PFX, dispatch_exposure_id, transport_attempt_failure_receipt_id)` |
+| 40 | `transport_attempt_failure_receipts_child_fk_uk` | UNIQUE | `(PFX, dispatch_exposure_id, failure_occurrence_id, transport_attempt_failure_receipt_id)` |
+| 41 | `transport_attempt_failure_receipts_exposure_fk` | FK_STD | `(PFX, dispatch_exposure_id)` -> dispatch exposure identity |
+| 42 | `transport_attempt_failure_receipts_attempt_fk` | FK_STD | `(PFX, operation_run_id, command_id, activity_run_id, activity_attempt_id)` -> activity-attempt unique |
+| 43 | `transport_response_classification_intents_pkey` | PK | `(PFX, classification_intent_id)` |
+| 44 | `transport_response_classification_intents_idempotency_uk` | UNIQUE | `(PFX, classification_idempotency_key)` |
+| 45 | `transport_response_classification_intents_occurrence_uk` | UNIQUE | `(PFX, dispatch_exposure_id, response_occurrence_id)` |
+| 46 | `transport_response_classification_intents_receipt_fk` | FK_STD | `(PFX, dispatch_exposure_id, response_occurrence_id, transport_response_receipt_id)` -> response child-FK unique |
+| 47 | `workflow_late_result_quarantine_pkey` | PK | `(PFX, quarantine_id)` |
+| 48 | `workflow_late_result_quarantine_idempotency_uk` | UNIQUE | `(PFX, idempotency_key)` |
+| 49 | `workflow_late_result_quarantine_occurrence_uk` | UNIQUE | `(PFX, dispatch_exposure_id, response_occurrence_id)` |
+| 50 | `workflow_late_result_quarantine_receipt_fk` | FK_STD | `(PFX, dispatch_exposure_id, response_occurrence_id, transport_response_receipt_id)` -> response child-FK unique |
+| 51 | `workflow_late_result_quarantine_classification_fk` | FK_STD | `(PFX, dispatch_exposure_id, response_occurrence_id)` -> classification occurrence unique |
+| 52 | `workflow_late_result_quarantine_envelope_fk` | FK_STD | `(PFX, model_invocation_envelope_ref, model_invocation_envelope_digest)` -> envelope ref/digest unique |
 
-### 9.1 Exact local CHECK inventory — 47 constraints
+The two nullable intent tuples on an exposure are each all NULL or complete under D3c2g's local checks. A terminal
+exposure's response/failure reverse tuple is likewise all NULL or complete and immutable after the first terminal CAS.
+
+### 9.3 Exact combined index inventory and access paths — exactly 11
+
+| Order | Name | Table | Exact ordered columns and predicate |
+|---:|---|---|---|
+| 1 | `cost_reservations_scope_operation_state_idx` | `cost_reservations` | `(PFX, operation_run_id, reservation_state)` |
+| 2 | `dispatch_exposures_parent_settlement_idx` | `dispatch_exposures` | `(PFX, budget_reservation_ref, parent_settlement_state, dispatch_exposure_id)` |
+| 3 | `dispatch_exposures_scope_attempt_call_idx` | `dispatch_exposures` | `(PFX, activity_attempt_id, physical_call_index)` |
+| 4 | `verification_intents_source_attempt_idx` | `verification_intents` | `(PFX, operation_run_id, source_verification_command_id, source_activity_run_id, source_activity_attempt_id)` |
+| 5 | `transport_response_receipts_attempt_idx` | `transport_response_receipts` | `(PFX, operation_run_id, command_id, activity_run_id, activity_attempt_id)` |
+| 6 | `transport_attempt_failure_receipts_attempt_idx` | `transport_attempt_failure_receipts` | `(PFX, operation_run_id, command_id, activity_run_id, activity_attempt_id)` |
+| 7 | `transport_response_classification_intents_pending_due_idx` | `transport_response_classification_intents` | `(PFX, next_attempt_at, classification_intent_id) WHERE classification_state = 'pending' AND attempt_count < 8` |
+| 8 | `transport_response_classification_intents_claimed_expiry_idx` | `transport_response_classification_intents` | `(PFX, next_attempt_at, classification_intent_id) WHERE classification_state = 'claimed'` |
+| 9 | `transport_response_classification_intents_current_apply_due_idx` | `transport_response_classification_intents` | `(PFX, next_attempt_at, classification_intent_id) WHERE classification_state = 'current_pending_apply'` |
+| 10 | `workflow_late_result_quarantine_pending_cost_idx` | `workflow_late_result_quarantine` | `(PFX, recorded_at, quarantine_id) WHERE cost_state = 'pending_reconciliation'` |
+| 11 | `workflow_late_result_quarantine_retention_idx` | `workflow_late_result_quarantine` | `(PFX, retention_until, quarantine_id) WHERE retention_state = 'retained'` |
+
+| Access path | Sole exact index |
+|---|---|
+| reservation state lookup and close | `cost_reservations_scope_operation_state_idx` |
+| child settlement scan in deterministic exposure order | `dispatch_exposures_parent_settlement_idx` |
+| exposure lookup by physical ActivityAttempt call | `dispatch_exposures_scope_attempt_call_idx` |
+| verification lookup by immutable source ActivityAttempt | `verification_intents_source_attempt_idx` |
+| response receipt audit by ActivityAttempt | `transport_response_receipts_attempt_idx` |
+| failure receipt audit by ActivityAttempt | `transport_attempt_failure_receipts_attempt_idx` |
+| `claim_due` oldest-due pending work | `transport_response_classification_intents_pending_due_idx` |
+| `reclaim_expired_claim` oldest expired lease | `transport_response_classification_intents_claimed_expiry_idx` |
+| current-apply continuation oldest-due work | `transport_response_classification_intents_current_apply_due_idx` |
+| quarantine cost reconciliation oldest-first | `workflow_late_result_quarantine_pending_cost_idx` |
+| quarantine purge deadline oldest-first | `workflow_late_result_quarantine_retention_idx` |
+
+No owner lookup may rely on a broader hidden scan. Real-PG acceptance must verify index names, ordered columns,
+predicates, eligible-row plans, bounded locks, and `SKIP LOCKED` recovery behavior.
+
+### 9.4 Two unresolved parent-owner prerequisites and exact DDL order
+
+| Blocker | Plan/OB owner | Missing decision | Required closure |
+|---|---|---|---|
+| typed plan/review/gate parent | Plan §6 item 6; R-019 | physical parent table or tables, typed key columns, and scope-aware unique target for exposure columns 19–25 are not ratified | separate owner decision lock plus pinned non-author `GO` |
+| Tier-2 grant parent | OB-10.2; Plan §6 item 7 | physical grant table, complete grant key, lifecycle, and scope-aware unique target for exposure columns 40–43 are not ratified | separate owner decision lock plus pinned non-author `GO` |
+
+No placeholder FK, JSON comparison, unscoped parent, nullable waiver, or application-only assertion is allowed. These
+two blockers mean this repair **does not authorize a dormant migration**, even if every relation above receives `GO`.
+
+Once both parent decisions and this repaired decision lock have matching pinned `GO` artifacts, the exact forward order
+is: (1) adopt/validate strict upstream rows and install §9.1; (2) create `cost_reservations`; (3) create
+`dispatch_exposures` without its two reverse receipt FKs; (4) create `verification_intents`; (5) create response
+receipts; (6) create failure receipts; (7) create classification intents; (8) create quarantine; (9) attach the two
+`FK_CYCLE` reverse receipt FKs; (10) attach the separately ratified typed plan/review/gate and Tier-2 grant FKs; (11)
+create all 11 indexes; and (12) run real-PG constraint, rollback, race, plan, and lock acceptance. Rollback drops those
+objects in exact reverse dependency order and does not remove or rewrite adopted upstream parent data.
+
+### 9.5 Exact local CHECK inventory — 47 constraints
 
 The following notation is only a compact documentation macro that the future migration generator must expand into the
 displayed SQL operators; it is not a database function or a runtime fallback:
@@ -474,7 +625,7 @@ PFX_VALID := NB(runtime_namespace)
              AND NB(workspace_id)
              AND SHA(scope_digest)
              AND coordination_plan_review_id > 0
-PAIR(a, b) := (a IS NULL AND b IS NULL) OR (a IS NOT NULL AND b IS NOT NULL)
+ARTIFACT_PAIR(ref, digest) := ((ref IS NULL AND digest IS NULL) OR (NB(ref) AND SHA(digest))) IS TRUE
 ```
 
 `TERMINAL_TUPLE_V1` means the exact four-way SQL disjunction mechanically generated from all 29 rows of §4.2: every
@@ -502,7 +653,7 @@ The executable oracle asserts the complete 29-row input and this one-to-one expa
 | 16 | `transport_response_receipts_envelope_ref_ck` | `transport_response_receipts` | `model_invocation_envelope_ref ~ '^mie:v1:[0-9a-f]{64}:[0-9a-f]{64}$'` |
 | 17 | `transport_response_receipts_terminal_reason_ck` | `transport_response_receipts` | `terminal_reason IN ('end_turn', 'tool_calls', 'length', 'content_filter')` |
 | 18 | `transport_response_receipts_occurrence_ck` | `transport_response_receipts` | `transport_response_receipt_id = concat('trr:v2:', response_occurrence_id)` |
-| 19 | `transport_response_receipts_artifact_pair_ck` | `transport_response_receipts` | `PAIR(result_artifact_ref, result_artifact_digest)` |
+| 19 | `transport_response_receipts_artifact_pair_ck` | `transport_response_receipts` | `ARTIFACT_PAIR(result_artifact_ref, result_artifact_digest)` |
 | 20 | `transport_attempt_failure_receipts_pfx_ck` | `transport_attempt_failure_receipts` | `PFX_VALID` |
 | 21 | `transport_attempt_failure_receipts_identity_ck` | `transport_attempt_failure_receipts` | `NB(transport_attempt_failure_receipt_id) AND NB(operation_run_id) AND NB(command_id) AND NB(activity_run_id) AND NB(activity_attempt_id) AND NB(dispatch_exposure_id)` |
 | 22 | `transport_attempt_failure_receipts_counter_ck` | `transport_attempt_failure_receipts` | `command_attempt > 0 AND claim_generation > 0 AND control_epoch >= 0 AND physical_call_index >= 0` |
@@ -515,16 +666,16 @@ The executable oracle asserts the complete 29-row input and this one-to-one expa
 | 29 | `transport_response_classification_intents_pfx_ck` | `transport_response_classification_intents` | `PFX_VALID` |
 | 30 | `transport_response_classification_intents_identity_ck` | `transport_response_classification_intents` | `classification_intent_id ~ '^trci:v1:[0-9a-f]{64}$' AND transport_response_receipt_id ~ '^trr:v2:[0-9a-f]{64}$' AND NB(dispatch_exposure_id) AND SHA(response_occurrence_id) AND classification_idempotency_key ~ '^classification-intent-v1:[0-9a-f]{64}$'` |
 | 31 | `transport_response_classification_intents_binding_ck` | `transport_response_classification_intents` | `substring(classification_intent_id from 9) = substring(classification_idempotency_key from 26)` |
-| 32 | `transport_response_classification_intents_state_ck` | `transport_response_classification_intents` | `classification_state IN ('pending', 'claimed', 'classified_current', 'classified_stale', 'failed_terminal')` |
+| 32 | `transport_response_classification_intents_state_ck` | `transport_response_classification_intents` | `classification_state IN ('pending', 'claimed', 'current_pending_apply', 'applied_current', 'classified_stale', 'failed_terminal')` |
 | 33 | `transport_response_classification_intents_counter_ck` | `transport_response_classification_intents` | `attempt_count >= 0 AND attempt_count <= 8 AND state_version >= 0` |
 | 34 | `transport_response_classification_intents_error_ck` | `transport_response_classification_intents` | `OPT_NB(last_error_code)` |
-| 35 | `transport_response_classification_intents_timestamp_ck` | `transport_response_classification_intents` | `updated_at >= created_at AND next_attempt_at >= created_at AND ((classification_state IN ('pending', 'claimed') AND terminal_at IS NULL) OR (classification_state IN ('classified_current', 'classified_stale', 'failed_terminal') AND terminal_at >= created_at))` |
+| 35 | `transport_response_classification_intents_timestamp_ck` | `transport_response_classification_intents` | `updated_at >= created_at AND next_attempt_at >= created_at AND ((classification_state IN ('pending', 'claimed', 'current_pending_apply') AND terminal_at IS NULL) OR (classification_state IN ('applied_current', 'classified_stale', 'failed_terminal') AND terminal_at >= created_at))` |
 | 36 | `workflow_late_result_quarantine_pfx_ck` | `workflow_late_result_quarantine` | `PFX_VALID` |
 | 37 | `workflow_late_result_quarantine_identity_ck` | `workflow_late_result_quarantine` | `quarantine_id ~ '^lrq:v2:[0-9a-f]{64}$' AND NB(operation_run_id) AND NB(command_id) AND NB(activity_run_id) AND NB(activity_attempt_id) AND NB(dispatch_exposure_id) AND transport_response_receipt_id ~ '^trr:v2:[0-9a-f]{64}$' AND NB(canonical_delivery_identity) AND idempotency_key ~ '^late-response-v2:[0-9a-f]{64}$'` |
 | 38 | `workflow_late_result_quarantine_counter_ck` | `workflow_late_result_quarantine` | `command_attempt > 0 AND claim_generation > 0 AND control_epoch >= 0 AND physical_call_index >= 0 AND cost_state_version >= 0 AND retention_state_version >= 0` |
 | 39 | `workflow_late_result_quarantine_digest_ck` | `workflow_late_result_quarantine` | `SHA(claim_authority_spec_digest) AND SHA(d3_business_fence_digest) AND SHA(response_occurrence_id) AND SHA(model_invocation_envelope_digest) AND SHA(canonical_response_digest) AND SHA(canonical_result_digest) AND OPT_SHA(result_artifact_digest)` |
 | 40 | `workflow_late_result_quarantine_provider_ck` | `workflow_late_result_quarantine` | `((provider_call_id_state = 'present' AND NB(provider_call_id)) OR (provider_call_id_state = 'missing_by_registered_transport' AND provider_call_id IS NULL)) IS TRUE` |
-| 41 | `workflow_late_result_quarantine_artifact_retention_ck` | `workflow_late_result_quarantine` | `((retention_state = 'retained' AND PAIR(result_artifact_ref, result_artifact_digest)) OR (retention_state = 'purged_tombstone' AND result_artifact_ref IS NULL)) IS TRUE` |
+| 41 | `workflow_late_result_quarantine_artifact_retention_ck` | `workflow_late_result_quarantine` | `((retention_state = 'retained' AND ARTIFACT_PAIR(result_artifact_ref, result_artifact_digest)) OR (retention_state = 'purged_tombstone' AND result_artifact_ref IS NULL AND OPT_SHA(result_artifact_digest))) IS TRUE` |
 | 42 | `workflow_late_result_quarantine_state_ck` | `workflow_late_result_quarantine` | `cost_state IN ('pending_reconciliation', 'reconciled_confirmed', 'reconciled_uncertain') AND retention_state IN ('retained', 'purged_tombstone')` |
 | 43 | `workflow_late_result_quarantine_authorizable_ck` | `workflow_late_result_quarantine` | `authorizable = false` |
 | 44 | `workflow_late_result_quarantine_rejection_ck` | `workflow_late_result_quarantine` | `rejection_reason IN ('stale_claim', 'business_precondition_conflict')` |
@@ -538,11 +689,11 @@ parent-row equality, exact SHA recomputation, state CAS, and DB-clock eligibilit
 because a local `CHECK` cannot truthfully prove another row, recompute owner registry semantics, or authorize a
 transition.
 
-The upstream full-PFX unique keys on OperationRun, ActivityAttempt, WorkflowEvent, and dispatch exposure remain required
-Migration-C prerequisites. The later migration must install those exact parent keys before these FKs; it may not weaken
-them to id-only, scope-digest-only, JSON, or application-only checks. All new-table shape checks must be installed valid
-at creation: nonblank ids, positive/nonnegative counters, lowercase digest shapes, provider-id and artifact-pair truth
-tables, exact terminal branch truth table, exact state enums, and DB-clock timestamp relations.
+Sections 9.1–9.4, not an implementation author's inference, own the complete currently-ratified relation, index, parent,
+and creation-order boundary. A later migration may not weaken it to id-only, scope-digest-only, JSON, or
+application-only checks. All new-table shape checks must be installed valid at creation: nonblank ids,
+positive/nonnegative counters, lowercase digest shapes, provider-id and artifact-pair truth tables, exact terminal
+branch truth table, exact state enums, and DB-clock timestamp relations.
 
 Any collision, FK/PFX/attempt mismatch, invalid state transition, optional quarantine failure, classification terminal
 CAS failure, or exposure terminalization mismatch rolls back every mutation in that UoW. Generic replace-all upsert is
@@ -603,27 +754,33 @@ canonical_failure_digest = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 | classification intent, using the response hash above | `34333a7472616e73706f72742d726573706f6e73652d636c617373696669636174696f6e2d696e74656e742d7631383a6167656e742d7631383a7363726970746564353a77732dceb136343a61616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161323a3137363a6578703a343236343a37666136633362383861333061373331636339636630653330656437313861373137636634313631626531393063366563303333623730323630366135346236` | `6468cb448058ff6cee00a8732fe8638b5f9e1b5ebd5f84bdd17ed4b0a01c07f7` |
 | quarantine idempotency | `31363a6c6174652d726573706f6e73652d7632383a6167656e742d7631383a7363726970746564353a77732dceb136343a61616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161323a3137363a6578703a343231343a63616c6c6261636b2f6576743a37` | `c607dcbd3972acedea835543d050f29b870e21a86381242cd3f2c04784ad6aeb` |
 
-## 11. Exactly two post-network compositions
+## 11. Two post-network ingress UoWs plus one recoverable current-apply continuation
 
 No PG transaction crosses DNS, connect, request bytes, response streaming, provider polling, or any network I/O.
 
-### 11.1 Exposure-first evidence UoW — never classifies and never quarantines
+### 11.1 Exposure-first evidence ingress — never classifies and never quarantines
 
 ```text
 dispatch_exposure_lock
 -> applicable_transport_receipt_insert_or_exact_replay
 -> response_only_classification_intent_create_or_exact_replay
--> dispatch_exposure_terminalization_or_exact_replay
+-> exposure_terminalize_if_nonterminal_or_exact_validate_terminal_unchanged
 -> commit
 ```
 
 The classification-intent step is mandatory for a response receipt and skipped for an attempt-failure receipt. This UoW
-does not lock OperationRun, plan/review/gate, command, verification intent, or Activity rows. It has zero current/stale
-classification authority and zero quarantine permission. It only ensures that a valid response cannot commit without a
-durable classification work item. Any classification-intent collision or exposure terminalization failure rolls the
-receipt back as well.
+does not lock OperationRun, plan/review/gate, command, verification intent, Activity, or domain rows. It has zero
+current/stale classification authority and zero quarantine permission. A valid response cannot commit without a durable
+classification work item. Any receipt/intent collision or cost-owner terminal validation failure rolls back every write.
 
-### 11.2 Response-classification UoW — stored-state proof only
+For a nonterminal exposure, the cost owner installs the applicable immutable response- or failure-backed terminal. For
+an already-terminal exposure it never rewrites the terminal or cost vector: exact redelivery validates the winning
+terminal, while an allowed late response after failure, retry, or a distinct earlier response exact-validates the prior
+terminal and records only the new response receipt/classification work. Attempt failure after a response terminal is
+rejected. The cost owner exposes one typed `terminalize_or_validate_immutable_terminal` method; the coordinator never
+selects or edits a cost evidence variant.
+
+### 11.2 Response-classification ingress — stored-state proof only
 
 ```text
 d3_dispatch_v2
@@ -635,21 +792,63 @@ d3_dispatch_v2
 -> dispatch_exposure_lock
 -> transport_response_receipt_exact_replay
 -> response_classification_intent_lock
--> optional_response_only_quarantine_insert_or_exact_replay_if_stale
--> response_classification_intent_terminal_CAS
--> dispatch_exposure_terminalization_exact_replay
+-> stored_state_branch
+-> current_mark_current_pending_apply_or_stale_quarantine_and_terminal_CAS
+-> exposure_terminal_exact_validate_unchanged
 -> commit
 ```
 
-Only a transaction-local proof derived from the locked stored rows can choose current or stale. Current completes the
-intent as `classified_current` with no quarantine; later normal terminal/record UoWs still perform their own current
-business fence. Stale inserts/exact-replays the response-only quarantine then completes `classified_stale`. Missing rows,
-lock-budget exhaustion, or an unprovable relation rolls this UoW back. A caller flag, callback label, stale
-`ClaimReceipt`, serialized capability, receipt field, or exposure field cannot choose the branch.
+Only a transaction-local proof derived from all locked stored rows can choose a branch. `current` additionally requires
+the immutable exposure terminal to be response-backed by this exact receipt. It moves the intent only to nonterminal
+`current_pending_apply`; it writes no terminal/domain/event/source result. Failure-backed terminals, retry/epoch drift,
+business-fence drift, and a distinct response receipt are necessarily stale. The stale branch inserts/exact-replays the
+response-only quarantine and completes `classified_stale` in this UoW. Missing rows, lock-budget exhaustion, or an
+unprovable relation rolls the UoW back. A caller flag, callback label, stale `ClaimReceipt`, serialized capability,
+receipt field, or exposure field cannot choose the branch.
 
-Once either composition enters `dispatch_exposure_lock`, it never returns to an earlier aggregate. Neither composition
-writes a workflow/domain event, EntityDelta, artifact publication, child command, verification/domain current state, or
-send/retry permission. Attempt failure and proven no-call never create a classification intent or quarantine row.
+### 11.3 Recoverable current-apply continuation — fresh proof in the normal terminal UoW
+
+```text
+d3_dispatch_v2
+-> operation_root
+-> optional_plan_review_gate
+-> participating_commands_sorted_and_terminal_identities_reserved
+-> verification_intent_and_predecessor
+-> activity_run_attempt
+-> dispatch_exposure_lock
+-> transport_response_receipt_exact_replay
+-> response_classification_current_pending_apply_lock
+-> fresh_stored_state_branch
+-> current_normal_terminal_record_apply_or_stale_quarantine
+-> response_classification_terminal_CAS
+-> exposure_terminal_exact_validate_unchanged
+-> commit
+```
+
+This is a normal global terminal/record UoW, not the transport-evidence-only exception. All deterministic command/event
+identities and every earlier row it can mutate are reserved or locked before the exposure segment; after entering the
+exposure segment it may update only those already-locked/reserved rows and may not discover, insert, or lock a new
+earlier identity. Fresh current proof atomically performs the normal terminal/record/domain/source writes and
+`applied_current`. Fresh stale proof performs zero domain/source/result writes and atomically inserts/exact-replays
+quarantine plus `classified_stale`. A crash before commit leaves `current_pending_apply` due and recoverable; there is no
+terminal `classified_current` state that can strand a response.
+
+### 11.4 Exact response/failure/retry race outcomes
+
+| First committed condition | Later ingress | Exact outcome |
+|---|---|---|
+| nonterminal exposure, response first | exact response redelivery | same receipt and classification intent exact-replay; zero new row |
+| nonterminal exposure, response first | failure or retry | reject; immutable response terminal and cost remain unchanged |
+| failure terminal first | distinct valid response | new response receipt + classification intent; exposure/cost exact-validated unchanged; classification must stale + quarantine; never apply |
+| retry/epoch advance first, exposure nonterminal | valid response | response receipt + response-backed cost terminal may commit; classification must stale + quarantine; never apply |
+| retry/epoch advance first, exposure already terminal | valid response | response receipt + classification intent; exposure/cost exact-validated unchanged; classification must stale + quarantine |
+| any response delivery | same delivery identity with drifted digest/shape | collision; entire ingress zero-write |
+| response terminal already names an earlier response | distinct second delivery | distinct receipt + classification intent; immutable exposure/cost unchanged; second response must stale + quarantine |
+| response marked current_pending_apply, then control/epoch/business advance | current-apply continuation | fresh proof chooses stale; zero domain/source/result write; quarantine + `classified_stale` |
+
+Attempt failure and proven no-call never create a classification intent or quarantine row. Distinct response delivery
+does not overwrite the exposure's winning receipt reference. Exact replay compares every immutable row field, and every
+mismatch fails closed without a partial receipt, classification, quarantine, cost, event, or domain write.
 
 ## 12. Mode/transport applicability and explicit deferral
 
@@ -665,21 +864,23 @@ Zero money is not zero evidence. Simulate/scripted use the same immutable identi
 Thinking Machines Lab/Harvest live work remains blocked from this Track-D evidence path until a later bounded decision
 ratifies its request/call/result identity, pricing relation, terminal provenance, receipt variant, and mode isolation.
 
-## 13. Mechanism × ten-invariant matrix — 90 populated cells
+## 13. Mechanism × ten-invariant matrix — 110 populated cells
 
 | mechanism | 1 owner | 2 tenant | 3 fence | 4 lifecycle | 5 late/partial | 6 cost | 7 physical identity | 8 provenance | 9 consistency | 10 mode isolation |
 |---|---|---|---|---|---|---|---|---|---|---|
 | verification intent | sole intent repository; §2/§4 | PFX in PK/FKs/CAS; §3/§9 | source 7 + state version; §4 | six states, no revival; §4.3 | 29-field append-once branch; §4.2 | no amount or send authority; §4 | operation/phase unique; §9 | exact event/receipt truth table; §4/§9 | one 52-column manifest; §4 | three model modes only; §12 |
 | response receipt | sole transport-evidence repository; §2/§5 | PFX in every identity; §3/§9 | exposure lock + attempt/gen/epoch; §5/§11 | immutable exact replay; §5 | valid late response retained; §11 | binds one committed exposure; §5 | v2 delivery/occurrence unique; §9/§10 | D0f ref/digest FK; §5/§9 | one 30-column manifest; §5 | PFX mode exact; §12 |
 | attempt-failure receipt | sole transport-evidence repository; §2/§6 | PFX in every identity; §3/§9 | exposure lock + attempt/gen/epoch; §6/§11 | immutable exact replay; §6 | never quarantine; §6/§11 | conservative exposure evidence; §6 | v2 failure occurrence unique; §9/§10 | registry failure spec only; §6 | one 28-column manifest; §6 | PFX mode exact; §12 |
-| response classification intent | sole classification repository; §2/§7 | PFX in PK/unique/FK; §7/§9 | private claimed version capability; §7 | pending/claimed/three terminals; §7 | durable retry/reclaim; §7 | no money mutation; §7 | one per response occurrence; §9/§10 | stored-state proof only; §7/§11 | one 18-column manifest; §7 | cross-mode replay impossible; §12 |
+| response classification intent | sole classification repository; §2/§7 | PFX in PK/unique/FK; §7/§9 | private claimed version capability; §7 | three nonterminals/three terminals; §7 | durable retry/reclaim/current-apply recovery; §7/§11 | no money mutation; §7 | one per response occurrence; §9/§10 | fresh stored-state proof only; §7/§11 | one 18-column manifest; §7 | cross-mode replay impossible; §12 |
 | late quarantine | sole quarantine repository; §2/§8 | PFX in PK/unique/FKs; §8/§9 | stale classification capability only; §11 | orthogonal monotonic axes; §8 | response-only tombstone; §8 | confirmed/uncertain, no no-call; §8 | v2 idempotency + receipt FK; §9/§10 | authorizable always false; §8 | one 41-column manifest; §8 | no non-live/live alias; §12 |
+| cost reservation and dispatch exposure | sole cost-ledger repository; §2/D3c2g | PFX in every relation/CAS; §9 | global locks + state version; §11/D3c2g | immutable terminal and split settlement; §11/D3c2g | late response validates, never rewrites; §11 | owner-only vectors; D3c2g | reservation/call/receipt relations; §9 | terminal evidence variants are owner-built; D3c2g | combined seven-table boundary; §9 | live positive, non-live zero; §12 |
 | full-PFX v2 encoders | each domain owner derives its id; §10 | all five PFX components encoded; §10 | canonical bytes reject aliases; §10 | immutable digest forever; §10 | redelivery joins exact row; §10 | one physical call identity; §10 | four golden vectors; §10.1 | NFC/UTF-8/decimal rules; §10 | scope-only v1 superseded; §10 | provider mode changes hash; §10 |
-| two post-network UoWs | coordinator owns order, repos own rows; §2/§11 | one exact PFX throughout; §11 | global prefix only for classification; §11 | atomic rollback at tail; §11 | pending intent prevents stranding; §7/§11 | exposure terminalizes through cost owner; §11 | receipt/intent/quarantine chain; §11 | caller classification forbidden; §11 | exactly two compositions; §11 | no cross-mode lookup; §3/§12 |
+| two ingress UoWs plus continuation | coordinator owns order, repos own rows; §2/§11 | one exact PFX throughout; §11 | global prefix for classification/apply; §11 | atomic rollback at tail; §11 | current pending apply prevents stranding; §7/§11 | immutable cost exact-validation; §11 | receipt/intent/quarantine chain; §9/§11 | caller classification forbidden; §11 | exactly two ingress plus one continuation; §11 | no cross-mode lookup; §3/§12 |
 | D0f envelope relation | D0f sole durable issuer; §2 | PFX-bound ref; §2/§9 | specialized exact replay; D0f | retained-to-tombstone; D0f | evidence never authorizes apply; §2 | exposure ref required; D0f/D3c2g | ref+digest FK; §9 | canonical schema remains one; §2 | no second envelope schema; §2 | live/simulate/scripted only; §12 |
+| combined relation and index boundary | each parent/child retains one owner; §2/§9 | all relations use PFX; §9 | exact FK actions and predicates; §9 | ordered create/rollback; §9.4 | recovery paths have exact partial indexes; §9.3 | cost and evidence co-ordered; §9 | 13 parent + 52 child constraints; §9 | no placeholder parent proof; §9.4 | one combined manifest; §9 | provider mode participates in every key; §9 |
 | transport/mode boundary | future variant owner only; §12 | mode is PFX identity; §3 | eligibility before row creation; §12 | replay remains absent; §12 | non-live keeps full chain; §12 | live positive, non-live zero; §12 | model and Harvest cannot alias; §12 | model-only pins never fabricated; §12 | Harvest explicitly deferred; §12 | exact three-mode closure; §12 |
 
-Every one of the 90 invariant cells is populated. No cell claims implementation, rollout, provider readiness, or formal
+Every one of the 110 invariant cells is populated. No cell claims implementation, rollout, provider readiness, or formal
 review approval.
 
 ## 14. Executable oracle, non-closure, and next order
@@ -689,24 +890,32 @@ review approval.
 - exact 52/30/28/18/41 ordered name/type/null/default manifests;
 - the exact source-seven list and 29-row terminal branch truth table;
 - all 47 named local CHECK predicates, their `10/9/9/7/12` table split, and same-create-table installation contract;
-- owner/store exclusivity, full-PFX PK/unique/FK shapes, and no weak scope-only identity;
-- classification-intent lifecycle, retry/reclaim/fail closure, and the two transaction orders;
+- owner/store exclusivity, 13 upstream constraints, 52 seven-table constraints including 29 FKs, exact FK actions, and
+  the two unresolved parent-owner blockers;
+- all 11 named indexes, their ordered columns/predicates, and one-to-one owner access-path mapping;
+- classification-intent six-state lifecycle, complete attempt-8 boundary, two ingress orders, recoverable current-apply
+  continuation, and the eight-row response/failure/retry race table;
+- response/quarantine artifact ref+digest SQL truth tables, including blank/whitespace rejection and retained-digest
+  tombstones;
 - v2 length-delimited golden bytes/digests and supersession of the old scope-only formulas;
 - fixed DB-clock 30-day quarantine retention and disjoint cost/retention mutation sets;
 - model-only three-mode eligibility, replay zero-write, and Harvest/provider-search deferral;
-- the complete 9×10 matrix and current physical absence of all five future tables/owners;
+- the complete 11×10 matrix and current physical absence of all seven future tables/owners;
 - actual D0f durable owner/migration presence at `539c689`, including the exact TIMESTAMPTZ substrate, without claiming
   a Decimal cost substrate.
 
-D3c2h1 closes no migration, repository, runtime, rollout, formal-review, provider, live, W6, manual, product, Migration
-A–D, served-action, or residual gate. It does not authorize SQL by itself. The next bounded order is:
+D3c2h1's first pinned `gpt-5.6-sol / ultra / priority` non-author review of `1c4a2d9177dcb3470117700086b12fd533898bb7`
+was formal `NO-GO 0/3/3/0`; this candidate is a fixed-forward author repair, not a review result. It closes no migration,
+repository, runtime, rollout, formal-review, provider, live, W6, manual, product, Migration A–D, served-action, or
+residual gate and does not authorize SQL by itself. The next bounded order is:
 
-1. fresh pinned non-author review of this decision lock;
-2. dormant new-table migration(s) plus exact upstream full-PFX keys/FKs, real-PG constraints, rollback, race, and lock
-   acceptance;
-3. specialized repositories/CAS and the two composition APIs, still with no provider call;
-4. strict writers and fake/simulate/scripted E2E;
-5. separately reviewed provider-search variant and only then a separately gated bounded live canary.
+1. fresh pinned non-author review of this repaired decision lock;
+2. separate typed plan/review/gate-parent and Tier-2 grant-parent owner decision lock, then its own pinned review;
+3. only after both scopes have matching formal `GO`, a dormant combined migration with real-PG
+   constraint/index/rollback/race/plan/lock acceptance;
+4. specialized repositories/CAS, two ingress APIs, and the current-apply continuation, still with no provider call;
+5. strict writers and fake/simulate/scripted E2E;
+6. separately reviewed provider-search variant and only then a separately gated bounded live canary.
 
 Local decision-oracle validation uses no provider/model credentials:
 

@@ -245,6 +245,11 @@ EXPECTED_DECLARATIONS = (
     "transport_response_classification_intents_local_check_count = 7",
     "workflow_late_result_quarantine_local_check_count = 12",
     "local_check_total = 47",
+    "ratified_upstream_constraint_count = 13",
+    "ratified_seven_table_constraint_count = 52",
+    "ratified_seven_table_fk_count = 29",
+    "combined_index_count = 11",
+    "unratified_parent_prerequisite_count = 2",
     "response_occurrence_domain = transport-response-occurrence-v2",
     "failure_occurrence_domain = transport-attempt-failure-occurrence-v2",
     "classification_intent_domain = transport-response-classification-intent-v1",
@@ -253,6 +258,12 @@ EXPECTED_DECLARATIONS = (
     "quarantine_retention_deadline = recorded_at + interval '30 days'",
     "exposure_first_quarantine_permission = forbidden",
     "classification_authority = stored_current_state_under_d3_dispatch_v2_global_lock_prefix",
+    "classification_nonterminal_states = pending | claimed | current_pending_apply",
+    "classification_terminal_states = applied_current | classified_stale | failed_terminal",
+    "classification_max_attempts = 8",
+    "post_network_ingress_composition_count = 2",
+    "current_apply_continuation_count = 1",
+    "migration_authority = blocked_pending_parent_decision_and_fresh_pinned_go",
     "implementation_status = decision_locked_not_implemented",
 )
 
@@ -305,11 +316,50 @@ EXPECTED_OWNER_PATHS = {
         "src/sourcing_agent/repositories/late_result_quarantine.py::LateResultQuarantineRepository",
         "store.repos.late_result_quarantine",
     ),
+    "cost_reservations + dispatch_exposures": (
+        "src/sourcing_agent/repositories/cost_ledger.py::CostLedgerRepository",
+        "store.repos.cost_ledger",
+    ),
 }
 
-EXPECTED_KEY_NAMES = (
+EXPECTED_UPSTREAM_CONSTRAINT_NAMES = (
+    "plan_review_sessions_d3_scope_review_uk",
+    "operation_runs_d3_scope_operation_uk",
+    "operation_runs_d3_review_fk",
+    "workflow_commands_d3_scope_operation_command_uk",
+    "workflow_commands_d3_operation_fk",
+    "workflow_activity_runs_d3_scope_operation_command_run_uk",
+    "workflow_activity_runs_d3_command_fk",
+    "workflow_activity_attempts_d3_scope_operation_command_run_attempt_uk",
+    "workflow_activity_attempts_d3_run_fk",
+    "workflow_events_d3_scope_event_uk",
+    "workflow_events_d3_terminal_event_uk",
+    "workflow_events_d3_attempt_fk",
+    "model_invocation_envelopes_ref_digest_uk",
+)
+
+EXPECTED_SEVEN_TABLE_CONSTRAINT_NAMES = (
+    "cost_reservations_pkey",
+    "cost_reservations_operation_idempotency_uk",
+    "cost_reservations_review_fk",
+    "cost_reservations_operation_fk",
+    "dispatch_exposures_pkey",
+    "dispatch_exposures_physical_call_uk",
+    "dispatch_exposures_reservation_fk",
+    "dispatch_exposures_review_fk",
+    "dispatch_exposures_operation_fk",
+    "dispatch_exposures_command_fk",
+    "dispatch_exposures_activity_run_fk",
+    "dispatch_exposures_activity_attempt_fk",
+    "dispatch_exposures_base_intent_fk",
+    "dispatch_exposures_predecessor_intent_fk",
+    "dispatch_exposures_decision_event_fk",
+    "dispatch_exposures_predecessor_event_fk",
+    "dispatch_exposures_response_receipt_fk",
+    "dispatch_exposures_failure_receipt_fk",
     "verification_intents_pkey",
     "verification_intents_operation_phase_uk",
+    "verification_intents_exposure_parent_uk",
     "verification_intents_operation_fk",
     "verification_intents_source_attempt_fk",
     "verification_intents_source_event_fk",
@@ -319,6 +369,7 @@ EXPECTED_KEY_NAMES = (
     "transport_response_receipts_pkey",
     "transport_response_receipts_delivery_uk",
     "transport_response_receipts_occurrence_uk",
+    "transport_response_receipts_exposure_ref_uk",
     "transport_response_receipts_child_fk_uk",
     "transport_response_receipts_exposure_fk",
     "transport_response_receipts_attempt_fk",
@@ -326,6 +377,7 @@ EXPECTED_KEY_NAMES = (
     "transport_attempt_failure_receipts_pkey",
     "transport_attempt_failure_receipts_exposure_uk",
     "transport_attempt_failure_receipts_occurrence_uk",
+    "transport_attempt_failure_receipts_exposure_ref_uk",
     "transport_attempt_failure_receipts_child_fk_uk",
     "transport_attempt_failure_receipts_exposure_fk",
     "transport_attempt_failure_receipts_attempt_fk",
@@ -337,7 +389,22 @@ EXPECTED_KEY_NAMES = (
     "workflow_late_result_quarantine_idempotency_uk",
     "workflow_late_result_quarantine_occurrence_uk",
     "workflow_late_result_quarantine_receipt_fk",
+    "workflow_late_result_quarantine_classification_fk",
     "workflow_late_result_quarantine_envelope_fk",
+)
+
+EXPECTED_INDEX_NAMES = (
+    "cost_reservations_scope_operation_state_idx",
+    "dispatch_exposures_parent_settlement_idx",
+    "dispatch_exposures_scope_attempt_call_idx",
+    "verification_intents_source_attempt_idx",
+    "transport_response_receipts_attempt_idx",
+    "transport_attempt_failure_receipts_attempt_idx",
+    "transport_response_classification_intents_pending_due_idx",
+    "transport_response_classification_intents_claimed_expiry_idx",
+    "transport_response_classification_intents_current_apply_due_idx",
+    "workflow_late_result_quarantine_pending_cost_idx",
+    "workflow_late_result_quarantine_retention_idx",
 )
 
 EXPECTED_LOCAL_CHECK_NAMES = (
@@ -398,7 +465,7 @@ EXPECTED_LOCAL_CHECK_COUNTS = {
     "workflow_late_result_quarantine": 12,
 }
 
-EXPECTED_LOCAL_CHECK_ROWS_SHA256 = "bb8ee3dbf87349000b2ec3400dc08187b18cd161d721ae7331f34779ab18d78d"
+EXPECTED_LOCAL_CHECK_ROWS_SHA256 = "144c94b6b3abe6f5e39bf5d9d9fd1b3278d4e577def7d29d7c7411e493272922"
 
 EXPECTED_MATRIX_MECHANISMS = (
     "verification intent",
@@ -406,9 +473,11 @@ EXPECTED_MATRIX_MECHANISMS = (
     "attempt-failure receipt",
     "response classification intent",
     "late quarantine",
+    "cost reservation and dispatch exposure",
     "full-PFX v2 encoders",
-    "two post-network UoWs",
+    "two ingress UoWs plus continuation",
     "D0f envelope relation",
+    "combined relation and index boundary",
     "transport/mode boundary",
 )
 
@@ -418,10 +487,13 @@ FUTURE_PHYSICAL_TOKENS = (
     "transport_attempt_failure_receipts",
     "transport_response_classification_intents",
     "workflow_late_result_quarantine",
+    "cost_reservations",
+    "dispatch_exposures",
     "VerificationIntentRepository",
     "TransportEvidenceRepository",
     "ResponseClassificationIntentRepository",
     "LateResultQuarantineRepository",
+    "CostLedgerRepository",
 )
 
 
@@ -481,6 +553,15 @@ def _length_delimited(*parts: str) -> bytes:
         encoded.extend(b":")
         encoded.extend(raw)
     return bytes(encoded)
+
+
+def _artifact_pair(ref: str | None, digest: str | None) -> bool:
+    return (ref is None and digest is None) or (
+        ref is not None
+        and bool(re.search(r"[^\s]", ref))
+        and digest is not None
+        and bool(re.fullmatch(r"[0-9a-f]{64}", digest))
+    )
 
 
 def test_declaration_block_and_all_five_manifests_are_exact() -> None:
@@ -563,7 +644,10 @@ def test_owner_paths_and_intent_classification_cas_surfaces_are_exact() -> None:
     assert "no same-row revival" in intent_methods[-1][1]
 
     classification_section = _section(document, "### 7.1 Classification lifecycle", "## 8.")
-    assert "pending|claimed|classified_current|classified_stale|failed_terminal" in classification_section
+    assert (
+        "pending|claimed|current_pending_apply|applied_current|classified_stale|failed_terminal"
+        in classification_section
+    )
     for marker in (
         "claim lease = 30 seconds",
         "min(2 ** (attempt_count - 1), 60)",
@@ -571,35 +655,116 @@ def test_owner_paths_and_intent_classification_cas_surfaces_are_exact() -> None:
         "private non-serializable claim capability",
         "authorizes neither apply nor quarantine",
         "rolls back the classification UoW first",
+        "attempt 8 -> `failed_terminal` with `classification_retry_exhausted`",
+        "attempt 8 -> `failed_terminal` with `classification_claim_lease_exhausted`",
     ):
         assert marker in classification_section
-    _, classification_methods = _table(classification_section)
+    lifecycle_section = _section(classification_section, "| Method |", "The private claim capability")
+    _, classification_methods = _table(lifecycle_section)
     assert tuple(row[0] for row in classification_methods) == (
         "create_or_exact_replay_pending",
         "claim_due",
         "retry_claim",
         "reclaim_expired_claim",
-        "complete_current",
+        "converge_exhausted_pending",
+        "mark_current_pending_apply",
         "complete_stale_with_quarantine",
+        "complete_current_apply",
+        "reclassify_current_pending_stale_with_quarantine",
         "fail_terminal",
     )
 
+    attempt_section = _section(classification_section, "The attempt boundary is total")
+    attempt_header, attempt_rows = _table(attempt_section)
+    assert attempt_header == ("Source state / attempt", "Owner-observed outcome", "Exact target/effect")
+    normalized_attempt_rows = tuple(tuple(cell.replace("`", "") for cell in row) for row in attempt_rows)
+    assert normalized_attempt_rows == (
+        ("pending / 0..7", "due claim", "claimed / 1..8; never increments above 8"),
+        ("pending / 8", "defensive convergence", "failed_terminal / classification_retry_exhausted"),
+        ("claimed / 1..7", "registered transient error", "pending / same attempt; fixed retry delay"),
+        ("claimed / 8", "registered transient error", "failed_terminal / classification_retry_exhausted"),
+        ("claimed / 1..7", "lease expired", "pending / same attempt; claim_lease_expired"),
+        ("claimed / 8", "lease expired", "failed_terminal / classification_claim_lease_exhausted"),
+        ("claimed / 1..8", "permanent or non-provable error", "failed_terminal / exact registered error"),
+        ("claimed / 1..8", "stored current", "current_pending_apply / same attempt; no terminal/domain write"),
+        ("claimed / 1..8", "stored stale", "classified_stale; quarantine and terminal CAS in one UoW"),
+        (
+            "current_pending_apply / 1..8",
+            "fresh stored current",
+            "normal terminal/record apply + applied_current in one UoW",
+        ),
+        (
+            "current_pending_apply / 1..8",
+            "fresh stored stale",
+            "zero domain write + quarantine + classified_stale in one UoW",
+        ),
+        (
+            "any terminal / 0..8",
+            "replay or mismatch",
+            "exact replay is zero-write; mismatch fails closed; never reopens",
+        ),
+    )
 
-def test_keys_and_foreign_keys_are_full_pfx_and_exhaustive() -> None:
+
+def test_combined_relations_foreign_keys_indexes_and_parent_blockers_are_exact() -> None:
     document = DECISION_PATH.read_text(encoding="utf-8")
-    section = _section(document, "## 9. Exact keys", "## 10. Full-PFX")
-    header, rows = _table(section)
+    section = _section(document, "## 9. Exact combined", "## 10. Full-PFX")
+    assert _fenced_lines_after(section, "exact action contract") == (
+        "FK_STD := MATCH SIMPLE DEFERRABLE INITIALLY IMMEDIATE ON UPDATE RESTRICT ON DELETE RESTRICT",
+        "FK_CYCLE := MATCH SIMPLE DEFERRABLE INITIALLY DEFERRED ON UPDATE RESTRICT ON DELETE RESTRICT",
+    )
+
+    upstream = _section(section, "### 9.1 Ratified upstream", "### 9.2 Ratified seven-table")
+    header, rows = _table(upstream)
+    assert header == ("Order", "Name", "Kind", "Exact columns / target")
+    assert tuple(int(row[0]) for row in rows) == tuple(range(1, 14))
+    assert tuple(row[1] for row in rows) == EXPECTED_UPSTREAM_CONSTRAINT_NAMES
+    assert sum("FK" in row[2] for row in rows) == 5
+    assert "review_id" in rows[0][3]
+    assert "D3b's ratified `workflow_commands.workspace_id`" in upstream
+
+    seven = _section(section, "### 9.2 Ratified seven-table", "### 9.3 Exact combined index")
+    header, rows = _table(seven)
     assert header == ("Order", "Name", "Kind", "Exact child columns / target")
-    assert tuple(int(row[0]) for row in rows) == tuple(range(1, 31))
-    assert tuple(row[1] for row in rows) == EXPECTED_KEY_NAMES
+    assert tuple(int(row[0]) for row in rows) == tuple(range(1, 53))
+    assert tuple(row[1] for row in rows) == EXPECTED_SEVEN_TABLE_CONSTRAINT_NAMES
+    assert sum("FK" in row[2] for row in rows) == 29
+    assert sum(row[2] == "FK_CYCLE" for row in rows) == 2
+    assert tuple(row[1] for row in rows if row[2] == "FK_CYCLE") == (
+        "dispatch_exposures_response_receipt_fk",
+        "dispatch_exposures_failure_receipt_fk",
+    )
     assert all("PFX" in row[3] for row in rows)
-    assert sum("FK" in row[2] for row in rows) == 14
-    assert "MATCH SIMPLE DEFERRABLE" in " ".join(row[2] for row in rows)
+
+    indexes = _section(section, "### 9.3 Exact combined index", "### 9.4 Two unresolved")
+    header, rows = _table(indexes)
+    assert header == ("Order", "Name", "Table", "Exact ordered columns and predicate")
+    assert tuple(int(row[0]) for row in rows) == tuple(range(1, 12))
+    assert tuple(row[1] for row in rows) == EXPECTED_INDEX_NAMES
+    assert all("PFX" in row[3] for row in rows)
+    assert sum("WHERE" in row[3] for row in rows) == 5
+
+    access_section = _section(indexes, "| Access path |")
+    access_header, access_rows = _table(access_section)
+    assert access_header == ("Access path", "Sole exact index")
+    assert tuple(row[1] for row in access_rows) == EXPECTED_INDEX_NAMES
+    assert "No owner lookup may rely on a broader hidden scan" in indexes
+
+    blockers = _section(section, "### 9.4 Two unresolved", "### 9.5 Exact local CHECK")
+    blocker_header, blocker_rows = _table(blockers)
+    assert blocker_header == ("Blocker", "Plan/OB owner", "Missing decision", "Required closure")
+    assert tuple(row[0] for row in blocker_rows) == (
+        "typed plan/review/gate parent",
+        "Tier-2 grant parent",
+    )
+    assert "Plan §6 item 6; R-019" in blocker_rows[0][1]
+    assert "OB-10.2; Plan §6 item 7" in blocker_rows[1][1]
+    assert all("separate owner decision lock plus pinned non-author `GO`" in row[3] for row in blocker_rows)
 
     for marker in (
-        "OperationRun, ActivityAttempt, WorkflowEvent, and dispatch exposure",
-        "must install those exact parent keys before these FKs",
-        "id-only, scope-digest-only, JSON, or application-only",
+        "does not authorize a dormant migration",
+        "No placeholder FK, JSON comparison, unscoped parent, nullable waiver, or application-only assertion",
+        "Rollback drops those objects in exact reverse dependency order",
         "Generic replace-all upsert is forbidden",
     ):
         assert marker in _normalized(section)
@@ -607,7 +772,7 @@ def test_keys_and_foreign_keys_are_full_pfx_and_exhaustive() -> None:
 
 def test_local_check_inventory_is_exact_and_installed_with_table_creation() -> None:
     document = DECISION_PATH.read_text(encoding="utf-8")
-    section = _section(document, "### 9.1 Exact local CHECK inventory", "The upstream full-PFX")
+    section = _section(document, "### 9.5 Exact local CHECK inventory", "Sections 9.1–9.4")
 
     assert _fenced_lines_after(section, "compact documentation macro") == (
         "NB(x)  := x ~ '[^[:space:]]'",
@@ -619,7 +784,7 @@ def test_local_check_inventory_is_exact_and_installed_with_table_creation() -> N
         "AND NB(workspace_id)",
         "AND SHA(scope_digest)",
         "AND coordination_plan_review_id > 0",
-        "PAIR(a, b) := (a IS NULL AND b IS NULL) OR (a IS NOT NULL AND b IS NOT NULL)",
+        "ARTIFACT_PAIR(ref, digest) := ((ref IS NULL AND digest IS NULL) OR (NB(ref) AND SHA(digest))) IS TRUE",
     )
 
     header, rows = _table(section)
@@ -647,9 +812,37 @@ def test_local_check_inventory_is_exact_and_installed_with_table_creation() -> N
         assert marker in normalized
 
 
+def test_response_and_quarantine_artifact_pairs_reject_blank_refs_and_preserve_tombstone_digest() -> None:
+    document = DECISION_PATH.read_text(encoding="utf-8")
+    section = _section(document, "### 9.5 Exact local CHECK inventory", "Sections 9.1–9.4")
+    _, rows = _table(section)
+    predicates = {row[1]: row[3] for row in rows}
+    assert predicates["transport_response_receipts_artifact_pair_ck"] == (
+        "ARTIFACT_PAIR(result_artifact_ref, result_artifact_digest)"
+    )
+    assert predicates["workflow_late_result_quarantine_artifact_retention_ck"] == (
+        "((retention_state = 'retained' AND ARTIFACT_PAIR(result_artifact_ref, result_artifact_digest)) OR "
+        "(retention_state = 'purged_tombstone' AND result_artifact_ref IS NULL AND "
+        "OPT_SHA(result_artifact_digest))) IS TRUE"
+    )
+
+    digest = "a" * 64
+    assert _artifact_pair(None, None)
+    assert _artifact_pair("artifact://result/1", digest)
+    assert not _artifact_pair("", digest)
+    assert not _artifact_pair("   \t", digest)
+    assert not _artifact_pair("artifact://result/1", None)
+    assert not _artifact_pair(None, digest)
+    assert not _artifact_pair("artifact://result/1", "A" * 64)
+
+    # Purge clears only the reference. A prior lowercase digest remains valid; an absent pair stays absent.
+    assert (None is None) and bool(re.fullmatch(r"[0-9a-f]{64}", digest))
+    assert (None is None) and (None is None)
+
+
 def test_full_pfx_v2_golden_vectors_are_byte_exact() -> None:
     document = DECISION_PATH.read_text(encoding="utf-8")
-    section = _section(document, "## 10. Full-PFX", "## 11. Exactly two")
+    section = _section(document, "## 10. Full-PFX", "## 11. Two post-network")
     pfx = ("agent-v1", "scripted", "ws-α", "a" * 64, "17")
 
     response_parts = (
@@ -712,17 +905,18 @@ def test_full_pfx_v2_golden_vectors_are_byte_exact() -> None:
     assert "Same logical ids in another namespace, mode, workspace, or coordination review" in _normalized(section)
 
 
-def test_two_uow_orders_close_pending_classification_without_caller_authority() -> None:
+def test_two_ingress_orders_and_current_apply_continuation_close_all_races() -> None:
     document = DECISION_PATH.read_text(encoding="utf-8")
-    section = _section(document, "## 11. Exactly two", "## 12. Mode/transport")
-    evidence_order = _fenced_lines_after(section, "Exposure-first evidence UoW")
-    classification_order = _fenced_lines_after(section, "Response-classification UoW")
+    section = _section(document, "## 11. Two post-network", "## 12. Mode/transport")
+    evidence_order = _fenced_lines_after(section, "Exposure-first evidence ingress")
+    classification_order = _fenced_lines_after(section, "Response-classification ingress")
+    continuation_order = _fenced_lines_after(section, "Recoverable current-apply continuation")
 
     assert evidence_order == (
         "dispatch_exposure_lock",
         "-> applicable_transport_receipt_insert_or_exact_replay",
         "-> response_only_classification_intent_create_or_exact_replay",
-        "-> dispatch_exposure_terminalization_or_exact_replay",
+        "-> exposure_terminalize_if_nonterminal_or_exact_validate_terminal_unchanged",
         "-> commit",
     )
     assert classification_order == (
@@ -735,21 +929,56 @@ def test_two_uow_orders_close_pending_classification_without_caller_authority() 
         "-> dispatch_exposure_lock",
         "-> transport_response_receipt_exact_replay",
         "-> response_classification_intent_lock",
-        "-> optional_response_only_quarantine_insert_or_exact_replay_if_stale",
-        "-> response_classification_intent_terminal_CAS",
-        "-> dispatch_exposure_terminalization_exact_replay",
+        "-> stored_state_branch",
+        "-> current_mark_current_pending_apply_or_stale_quarantine_and_terminal_CAS",
+        "-> exposure_terminal_exact_validate_unchanged",
+        "-> commit",
+    )
+    assert continuation_order == (
+        "d3_dispatch_v2",
+        "-> operation_root",
+        "-> optional_plan_review_gate",
+        "-> participating_commands_sorted_and_terminal_identities_reserved",
+        "-> verification_intent_and_predecessor",
+        "-> activity_run_attempt",
+        "-> dispatch_exposure_lock",
+        "-> transport_response_receipt_exact_replay",
+        "-> response_classification_current_pending_apply_lock",
+        "-> fresh_stored_state_branch",
+        "-> current_normal_terminal_record_apply_or_stale_quarantine",
+        "-> response_classification_terminal_CAS",
+        "-> exposure_terminal_exact_validate_unchanged",
         "-> commit",
     )
     for marker in (
         "zero current/stale classification authority and zero quarantine permission",
         "valid response cannot commit without a durable classification work item",
-        "transaction-local proof derived from the locked stored rows",
+        "transaction-local proof derived from all locked stored rows",
         "caller flag, callback label, stale `ClaimReceipt`",
-        "never returns to an earlier aggregate",
+        "no terminal `classified_current` state that can strand a response",
+        "A crash before commit leaves `current_pending_apply` due and recoverable",
         "Attempt failure and proven no-call never create a classification intent or quarantine row",
         "No PG transaction crosses DNS",
     ):
         assert marker in _normalized(section)
+
+    race_section = _section(section, "### 11.4 Exact response/failure/retry race outcomes")
+    race_header, race_rows = _table(race_section)
+    assert race_header == ("First committed condition", "Later ingress", "Exact outcome")
+    assert len(race_rows) == 8
+    assert tuple(row[0] for row in race_rows) == (
+        "nonterminal exposure, response first",
+        "nonterminal exposure, response first",
+        "failure terminal first",
+        "retry/epoch advance first, exposure nonterminal",
+        "retry/epoch advance first, exposure already terminal",
+        "any response delivery",
+        "response terminal already names an earlier response",
+        "response marked current_pending_apply, then control/epoch/business advance",
+    )
+    assert "never apply" in race_rows[2][2]
+    assert "fresh proof chooses stale" in race_rows[-1][2]
+    assert "zero domain/source/result write" in race_rows[-1][2]
 
 
 def test_quarantine_retention_and_cost_axes_are_fixed_db_clock_cas() -> None:
@@ -808,8 +1037,8 @@ def test_modes_matrix_physical_baseline_and_plan_integration() -> None:
     )
     assert tuple(row[0] for row in matrix_rows) == EXPECTED_MATRIX_MECHANISMS
     assert all(len(row) == 11 and all(cell for cell in row) for row in matrix_rows)
-    assert sum(len(row) - 1 for row in matrix_rows) == 90
-    assert "Every one of the 90 invariant cells is populated" in matrix_section
+    assert sum(len(row) - 1 for row in matrix_rows) == 110
+    assert "Every one of the 110 invariant cells is populated" in matrix_section
 
     checklist = CHECKLIST_PATH.read_text(encoding="utf-8")
     for marker in (
@@ -847,24 +1076,33 @@ def test_modes_matrix_physical_baseline_and_plan_integration() -> None:
     assert "D0f successor observation" in g
 
     plan = PLAN_PATH.read_text(encoding="utf-8")
-    assert "D3c2h1 exact evidence-surface decision-lock candidate" in plan
+    assert "D3c2h1 exact evidence-surface decision-lock" in plan
     assert "`52/30/28/18/41`" in plan
     assert "classification intent" in plan
+    assert "current_pending_apply" in plan
+    assert "13 upstream constraints" in plan
+    assert "52 seven-table constraints" in plan
+    assert "11 indexes" in plan
+    assert "typed plan/review/gate" in plan
+    assert "Tier-2 grant" in plan
     assert "decision_locked_not_implemented" in plan
 
 
 def test_nonclosure_and_validation_command_are_honest() -> None:
     document = DECISION_PATH.read_text(encoding="utf-8")
     section = _section(document, "## 14. Executable oracle")
+    normalized = _normalized(section)
     for marker in (
         "closes no migration, repository, runtime, rollout, formal-review, provider, live, W6, manual, product",
         "does not authorize SQL by itself",
-        "fresh pinned non-author review",
+        "fresh pinned non-author review of this repaired decision lock",
+        "formal `NO-GO 0/3/3/0`",
+        "separate typed plan/review/gate-parent and Tier-2 grant-parent owner decision lock",
         "fake/simulate/scripted E2E",
         "separately gated bounded live canary",
         "Author evidence is not a formal `GO`",
     ):
-        assert marker in section
+        assert marker in normalized
 
     assert "tests/test_d3c2h1_exact_evidence_surface_decision_lock.py" in section
     assert "tests/test_d3c2h0_evidence_cross_contract_ratification.py" in section

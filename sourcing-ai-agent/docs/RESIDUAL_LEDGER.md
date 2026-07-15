@@ -50,6 +50,18 @@
 
 ## Active candidate annotations
 
+- **R-019 / D3c2h1 fixed-forward (2026-07-15):** the first pinned highest-effort non-author review of
+  `1c4a2d9177dcb3470117700086b12fd533898bb7` returned formal `NO-GO 0/3/3/0`. The author repair addresses all six
+  findings without SQL/runtime: classification now has nonterminal `current_pending_apply` plus a fresh normal-terminal
+  continuation; failure-first/retry-first/distinct-response races preserve immutable cost and can only stale+quarantine;
+  attempt 8 transient/lease expiry converges terminally; response/quarantine artifact refs reject blank/whitespace; and
+  D3c2g's two cost tables plus D3c2h1's five evidence tables now share exact 13 upstream constraints, 52 seven-table
+  constraints including 29 FKs, 11 indexes, and one creation/rollback order. The typed plan/review/gate parent and the
+  OB-10.2 Tier-2 grant parent still lack ratified physical table/key/unique targets, so a separately reviewed owner
+  decision remains a hard predecessor and no dormant migration is authorized. Fresh pinned review of this repair is
+  pending. This annotation changes neither R-019's pending state nor its 26-call ratchet, and it does not alter or claim
+  closure of R-027, R-023, R-029, action-root, served=0, provider/live, Migration A-D, or any other residual.
+
 - **R-019 / D3c2g (2026-07-15):** decision-only cost-ledger/dispatch-exposure lock ratifies the sole future
   `CostLedgerRepository` aggregate and its exact parent/child `21/75` manifests, keys/indexes/checks, immutable
   pricing/reconciliation registry shapes, eight-method CAS surface, source-dependent terminal mapping, and parent-first

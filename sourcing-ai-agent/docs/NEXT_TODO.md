@@ -494,13 +494,15 @@
   nullable timezone-aware `TIMESTAMPTZ` codec。它不是 logical result-slot accept/consume、receipt/quarantine、cost
   ledger、runtime writer 或 live activation。author evidence=`83 + PG 1 + migration 15/65 + guards 64 + adjacent 22 +
   control-plane 17`，Ruff/format/diff clean，focused mypy clean，global mypy=`81/4`；fresh pinned formal review pending。
-- [ ] D3c2h1 exact evidence-surface decision lock：仅在 D0f 后 ratify `verification_intent`、response/failure
-  receipt 与 late-quarantine 的 exact ordered manifests/types/checks/full-PFX keys/FKs、sole physical owners、
-  insert/exact-replay/CAS/retention、两条 composition API，以及 pending response-classification owner/state、
-  retry/recovery、exact replay 与 idempotency；D0f `TIMESTAMPTZ`/durable ref 可复用，但仍须先补 Decimal 与这些
-  evidence/cost tables 自己的 specialized insert-once/CAS prerequisites。不得从 D3b prose 猜 schema，不得把
-  D3c2g/D3c2h0 当 SQL/migration 授权，且 Harvest/provider-search variant 未 owner-ratify 前不得进入该 evidence
-  path。
+- [ ] D3c2h1 exact evidence-surface decision-lock fixed-forward：首个 pinned
+  `gpt-5.6-sol/ultra/priority` non-author review 对 `1c4a2d9177dcb3470117700086b12fd533898bb7` 为 formal
+  `NO-GO 0/3/3/0`。当前 repair 将六项 finding 固定为：nonterminal `current_pending_apply` + fresh normal-terminal
+  continuation；failure/retry/second-response immutable-cost race table；attempt-8 transient/lease total convergence；
+  blank/whitespace artifact ref fail-closed；D3c2g+D3c2h1 combined 13 upstream constraints + 52 seven-table constraints
+  （29 FKs）+ 11 indexes + exact DDL/rollback order。typed plan/review/gate parent 与 Tier-2 grant parent 的物理
+  table/key/unique target 尚未 ratify，必须另做 owner decision lock + pinned review；不得猜 schema、用
+  JSON/application-only proof 或无 FK 绕过。当前仍为 `decision_locked_not_implemented`，零 migration/repository/
+  runtime/provider/live；本 repair 须 fresh pinned non-author review，且即使 `GO` 也不单独授权 dormant migration。
 - [x] Cohort CS1/CS2 foundation（Thinking Machines Lab live 前置）：versioned、registry-digest-pinned
   `CohortSelection` 已成为 request/plan-review/provider compiler 的唯一 owner；Researcher/Engineer/Product Manager
   等 role bucket 与 current/former 支持有序自由多选，`role_match=any|all`，用户显式选择优先于 raw text/model

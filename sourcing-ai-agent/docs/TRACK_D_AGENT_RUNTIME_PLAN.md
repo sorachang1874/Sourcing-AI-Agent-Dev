@@ -211,11 +211,14 @@ serve、会话/事件层、planner loop），用一个垂直切片证明闭环�
     command lock 下证明 exposure 缺席，不能锁一条必须不存在的 exposure。provider delivery id 或 durable inbound
     `TransportResponseReceipt` get-or-create stable response occurrence；redelivery 复用，digest mismatch collision；
     retry transition 也锁 exposure：response receipt 先赢则拒 retry，retry 先赢推进 epoch，后到 response 只可
-    receipt+quarantine。post-network 分成两条 UoW：pure exposure-first 仅 exposure→receipt→exposure terminalization，
+    receipt+quarantine。post-network 固定为两条 ingress UoW + 一个 recoverable current-apply continuation：pure
+    exposure-first 仅 exposure→receipt→response-only classification work→cost terminalize-or-immutable-validate，
     quarantine permission=0；response-classification 必须先取 `d3-dispatch-v2` 并锁/验 complete global owner-row
-    prefix、从 stored current state 判 current/stale，才可在 exposure tail optional quarantine。caller flag、callback、
-    stale `ClaimReceipt` 均无分类权；进入 exposure 后绝不回到 operation/command/intent/domain，也不授权 send/apply；
-    pending classification retry/recovery/idempotency 留 D3c2h1。
+    prefix、从 stored state 判 stale 或 nonterminal `current_pending_apply`，才可进入 exposure tail；current 的 normal
+    terminal/record/domain apply 只能由后续完整 global UoW fresh recheck 并与 `applied_current` 同提交，若其间
+    control/epoch/business 漂移则零 domain/source/result 写并 quarantine + `classified_stale`。failure-first、
+    retry-first 与 distinct second response 均保留 immutable exposure/cost，late response 只能 stale+quarantine；
+    caller flag、callback、stale `ClaimReceipt` 均无分类权。
   - **provenance**：机器验证 = 服务端引用（公共 ingress 禁携带）；人工 override 现字段不变；
     执行期付费 search+judge 路径「以消费代退役」+ **既有全局文件注册表收编为 PG canonical**
     （inventory 全部 4+ 写入方/快照重扫、backfill=needs_human、迁移桥+删除条件、precedence preflight）。
@@ -368,18 +371,18 @@ serve、会话/事件层、planner loop），用一个垂直切片证明闭环�
   retained→purged-tombstone CAS 与 exact `TIMESTAMPTZ` codec。它不实现 logical result-slot、receipt/quarantine、
   cost ledger/Decimal、strict runtime writer、provider call、live gate 或 served tool；author validation 已记录，fresh
   pinned formal review pending。
-- D3c2h1 exact evidence-surface decision-lock candidate 已以 full five-field PFX ratify future
+- D3c2h1 exact evidence-surface decision-lock 的首个 pinned `gpt-5.6-sol/ultra/priority` non-author review 对
+  `1c4a2d9177dcb3470117700086b12fd533898bb7` 为 formal `NO-GO 0/3/3/0`；fixed-forward repair 保留 future
   `verification_intents`、response/failure receipts、durable response classification intent 与 late quarantine 的 exact
-  `52/30/28/18/41` ordered manifests；source core=`7`、append-once terminal tuple=`29` 并有三 variant + unbound
-  truth table；五表 local CHECK 清单为 exact `10/9/9/7/12`=`47`。sole owners/store paths、full-PFX
-  PK/unique/FK、`transport-*-occurrence-v2` length-delimited golden
-  vectors、fixed DB-clock 30-day quarantine retention 与 split cost/retention CAS 均 decision-locked。pure
-  exposure-first response UoW 必须创建/exact-replay classification intent 后才 terminalize exposure，仍有
-  quarantine permission=0；classification UoW 仅在 `d3-dispatch-v2` complete global owner-row prefix 下从 stored
-  current state 分类并 terminal-CAS intent。initial v1 仍仅 `model_tool_v1` + live/simulate/scripted，replay
-  zero-write，Harvest/provider-search deferred。该批为 `decision_locked_not_implemented`：零 SQL/descriptor/
-  repository/runtime/provider/live，fresh pinned formal review pending；下一顺序是 reviewed dormant evidence-table
-  migration + upstream full-PFX keys/FKs，再落 repositories/composition、fake/scripted E2E 与后续 Migration B-D。
+  `52/30/28/18/41` manifests、source core=`7`、terminal tuple=`29`、local CHECK=`47`，并新增完整 attempt-8
+  convergence、nonterminal `current_pending_apply` + fresh-apply continuation、failure/retry/second-response race
+  boundary、blank artifact-ref rejection。D3c2g 两成本表与五 evidence 表现合并为 13 upstream constraints、
+  52 seven-table constraints（29 FKs）、11 indexes 及 exact DDL/rollback order；typed plan/review/gate parent 与
+  Tier-2 grant parent 的物理 owner/key 尚未 ratify，显式成为两个 hard prerequisites，禁止猜 schema 或以无 FK
+  绕过。initial v1 仍仅 `model_tool_v1` + live/simulate/scripted，replay zero-write，Harvest/provider-search deferred。
+  该批仍为 `decision_locked_not_implemented`：零 SQL/descriptor/repository/runtime/provider/live，fresh pinned formal
+  repair review pending；即使 repair `GO`，也须先 separate parent-owner decision lock + review，才可申请 dormant
+  combined migration。
 
 ### D4 — 之后（本文只圈定，不展开）
 
@@ -614,19 +617,23 @@ TD-4 初始路由表已按 owner 2026-07-13 裁决落档（D0 §4）。
    key；`late-response-v1` 只保留为 domain-separation tag，旧的 scope-digest-only grammar 已被 supersede；D3c2h1
    必须以 full five-field PFX + exact exposure/delivery identity ratify exact occurrence/idempotency encoder，digest
    mismatch 是 collision。
-   response/failure receipt 同时 exact-copy exposure 的 post-claim `command_attempt`。post-network 分成两条 UoW：
-   legacy `exposure→receipt→quarantine/cost-axis` shorthand 已被 supersede，不能再把 quarantine 当成无条件 tail；
-   pure exposure-first 仅 exposure lock→applicable receipt→exposure terminalization，quarantine permission=0；
-   response-classification 必须先持 `d3-dispatch-v2`，再按 operation root→optional plan/review/gate→all participating
-   commands（确定序）→intent/predecessor→ActivityRun/Attempt 锁/验 complete global owner-row prefix，从 stored current
-   state 判 current/stale，随后才可进入 exposure lock→response receipt→optional response-only quarantine→exposure
-   terminalization。caller flag/callback/stale `ClaimReceipt` 不具分类权；任一路径进入 exposure 后绝不回到
-   operation/command/intent/domain，也不授权 send/apply；D3c2h1 现已把 pending response-classification owner/state、
-   retry/recovery、exact replay 与 idempotency ratify 为 fifth durable surface：response exposure-first UoW 在 receipt
-   后 create-or-exact-replay classification intent，classification UoW 再于 receipt 后 lock 该 intent，并在 optional
-   response-only quarantine 后 terminal-CAS current/stale，最后 exact-replay exposure terminalization；失败的 global
-   classification transaction 先全回滚，随后仅 classification owner 可 row-only retry/fail CAS，仍无 caller
-   classification authority。stale application/business mismatch 只返回
+   response/failure receipt 同时 exact-copy exposure 的 post-claim `command_attempt`。post-network 是两条 ingress
+   UoW + 一个 recoverable current-apply continuation：legacy `exposure→receipt→quarantine/cost-axis` shorthand 已被
+   supersede，不能再把 quarantine 当成无条件 tail。pure exposure-first 固定为 exposure lock→applicable receipt→
+   response-only classification work→cost-owner terminalize-if-nonterminal / exact-validate-immutable-terminal，
+   quarantine permission=0；failure-first、retry-first 与 distinct second response 的 immutable exposure/cost 均不
+   重写，late response 仍创建 receipt/classification，但只能 stale+quarantine。response-classification 先持
+   `d3-dispatch-v2`，按 operation root→optional plan/review/gate→all participating commands（确定序）→intent/
+   predecessor→ActivityRun/Attempt 锁/验 complete global owner-row prefix，再进入 exposure→receipt→classification
+   tail；fresh current 只推进 nonterminal `current_pending_apply`，stale 同 UoW quarantine + `classified_stale`。
+   normal terminal/record/domain apply 只能由后续完整 global continuation fresh recheck，并与 `applied_current`
+   terminal CAS 同提交；若两次事务之间 control/epoch/business 漂移，必须零 domain/attempt/intent/event/command/
+   source/result 写并 quarantine + `classified_stale`，crash 则留下 due `current_pending_apply` 可恢复。所有能变更的
+   earlier identities 在进入 exposure 前 reserve/lock；tail 后不得 discover/insert/lock 新 earlier identity，只可在
+   normal terminal UoW 更新已锁/已 reserve 的 rows。caller flag/callback/stale `ClaimReceipt` 不具分类权；失败的
+   global transaction 先全回滚，随后仅 classification owner 可 row-only retry/fail CAS。attempt 8 transient 或
+   lease-expiry 直接 `failed_terminal`，defensive pending/8 convergence 亦不可再 claim。stale application/business
+   mismatch 只返回
    `not_applied(reason=stale_claim|business_precondition_conflict)`（不是 event/state），domain/attempt/intent/event/
    command/source/result 全零写；
    quarantine 由一个 SQL repository 拥有，immutable identity/digests insert-once，且禁止 unowned
@@ -638,7 +645,10 @@ TD-4 初始路由表已按 owner 2026-07-13 裁决落档（D0 §4）。
    `retention_state: retained -> purged_tombstone`；no-call exposure 没有 response receipt/
    quarantine。D0f 已落 sole durable `ModelInvocationEnvelopeV1` ref owner/ref grammar，D3c2h1 receipts 只 exact-copy
    并 full-PFX FK 绑定该 owner ref+digest，禁止 placeholder ref/hash 或第二 envelope schema；禁止持 PG transaction
-   跨网络。D3c2h1 仍只 decision-lock exact manifests/relations，不授权 migration、runtime 或 provider activation。
+   跨网络。D3c2h1/D3c2g 的 combined boundary 为 exact 13 upstream constraints + 52 seven-table constraints（29
+   FKs）+ 11 indexes + creation/rollback order；typed plan/review/gate parent 与 Tier-2 grant parent 的物理表/键仍是
+   Plan §6 item 6/R-019 与 OB-10.2/item 7 的 separately reviewed owner-decision prerequisites。不得猜 schema、用
+   JSON/application-only proof 或省略 FK；因此当前 decision repair 仍不授权 migration、runtime 或 provider activation。
    strict-D3 首次 `succeeded|failed_terminal` result command+event 取 common lock，在同一 UoW 写
    canonical nullable outcome digest/event pair；pair 在 result-terminal 期间不可变，仅 registered reopen 可在
    requeue 前清除；event composite unique + command `MATCH SIMPLE DEFERRABLE` FK + local both-null/both-non-null
