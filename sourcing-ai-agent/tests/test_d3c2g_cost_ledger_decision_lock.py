@@ -1,8 +1,23 @@
 from __future__ import annotations
 
 import ast
+import hashlib
+import json
 import re
+from decimal import (
+    ROUND_CEILING,
+    Decimal,
+    Inexact,
+    InvalidOperation,
+    Rounded,
+    localcontext,
+)
+from decimal import (
+    Overflow as DecimalOverflow,
+)
 from pathlib import Path
+
+import pytest
 
 from sourcing_agent.model_tool_runtime import MODEL_INVOCATION_ENVELOPE_RECORD_KEYS
 
@@ -122,10 +137,10 @@ EXPECTED_CHILD_ROWS = (
     ("63", "cost_reconciliation_spec_digest", "TEXT", "yes", "none"),
     ("64", "transport_response_receipt_id", "TEXT", "yes", "none"),
     ("65", "transport_attempt_failure_receipt_id", "TEXT", "yes", "none"),
-    ("66", "no_call_proof_ref", "TEXT", "yes", "none"),
-    ("67", "no_call_proof_digest", "TEXT", "yes", "none"),
-    ("68", "uncertain_reconciliation_ref", "TEXT", "yes", "none"),
-    ("69", "uncertain_reconciliation_digest", "TEXT", "yes", "none"),
+    ("66", "cost_terminal_evidence_variant", "TEXT", "yes", "none"),
+    ("67", "cost_terminal_evidence_id", "TEXT", "yes", "none"),
+    ("68", "cost_terminal_evidence_digest", "TEXT", "yes", "none"),
+    ("69", "cost_terminal_evidence_record", "JSONB", "yes", "none"),
     ("70", "created_at", "TIMESTAMPTZ", "no", "transaction_timestamp()"),
     ("71", "dispatching_at", "TIMESTAMPTZ", "yes", "none"),
     ("72", "sent_at", "TIMESTAMPTZ", "yes", "none"),
@@ -261,11 +276,11 @@ EXPECTED_CHILD_CHECKS = (
     ),
     (
         "dispatch_exposures_base_intent_tuple_ck",
-        "(base_intent_id IS NULL AND base_intent_phase_generation IS NULL) OR (base_intent_id ~ '[^[:space:]]' AND base_intent_phase_generation > 0)",
+        "((base_intent_id IS NULL AND base_intent_phase_generation IS NULL) OR (base_intent_id ~ '[^[:space:]]' AND base_intent_phase_generation > 0)) IS TRUE",
     ),
     (
         "dispatch_exposures_predecessor_tuple_ck",
-        "(expected_predecessor_intent_id IS NULL AND expected_predecessor_phase_generation IS NULL AND expected_predecessor_source_control_epoch IS NULL AND expected_predecessor_decision_source_event_id IS NULL) OR (expected_predecessor_intent_id ~ '[^[:space:]]' AND expected_predecessor_phase_generation > 0 AND expected_predecessor_source_control_epoch >= 0 AND expected_predecessor_decision_source_event_id ~ '[^[:space:]]')",
+        "((expected_predecessor_intent_id IS NULL AND expected_predecessor_phase_generation IS NULL AND expected_predecessor_source_control_epoch IS NULL AND expected_predecessor_decision_source_event_id IS NULL) OR (expected_predecessor_intent_id ~ '[^[:space:]]' AND expected_predecessor_phase_generation > 0 AND expected_predecessor_source_control_epoch >= 0 AND expected_predecessor_decision_source_event_id ~ '[^[:space:]]')) IS TRUE",
     ),
     (
         "dispatch_exposures_decision_pin_shape_ck",
@@ -273,7 +288,7 @@ EXPECTED_CHILD_CHECKS = (
     ),
     (
         "dispatch_exposures_grant_tuple_ck",
-        "(grant_tier = 'tier1' AND grant_id IS NULL AND grant_issuance_generation IS NULL AND grant_policy_revision IS NULL) OR (grant_tier = 'tier2' AND grant_id ~ '[^[:space:]]' AND grant_issuance_generation > 0 AND grant_policy_revision ~ '[^[:space:]]')",
+        "((grant_tier = 'tier1' AND grant_id IS NULL AND grant_issuance_generation IS NULL AND grant_policy_revision IS NULL) OR (grant_tier = 'tier2' AND grant_id ~ '[^[:space:]]' AND grant_issuance_generation > 0 AND grant_policy_revision ~ '[^[:space:]]')) IS TRUE",
     ),
     (
         "dispatch_exposures_transport_v1_shape_ck",
@@ -313,12 +328,12 @@ EXPECTED_CHILD_CHECKS = (
         "transport_response_receipt_id IS NULL OR transport_attempt_failure_receipt_id IS NULL",
     ),
     (
-        "dispatch_exposures_evidence_pair_shape_ck",
-        "(no_call_proof_ref IS NULL) = (no_call_proof_digest IS NULL) AND (uncertain_reconciliation_ref IS NULL) = (uncertain_reconciliation_digest IS NULL) AND (cost_reconciliation_spec_digest IS NULL OR cost_reconciliation_spec_digest ~ '^[0-9a-f]{64}$') AND (no_call_proof_digest IS NULL OR no_call_proof_digest ~ '^[0-9a-f]{64}$') AND (uncertain_reconciliation_digest IS NULL OR uncertain_reconciliation_digest ~ '^[0-9a-f]{64}$')",
+        "dispatch_exposures_cost_evidence_shape_ck",
+        "((cost_reconciliation_spec_digest IS NULL OR cost_reconciliation_spec_digest ~ '^[0-9a-f]{64}$') AND ((cost_terminal_evidence_variant IS NULL AND cost_terminal_evidence_id IS NULL AND cost_terminal_evidence_digest IS NULL AND cost_terminal_evidence_record IS NULL) OR (cost_terminal_evidence_variant IS NOT NULL AND cost_terminal_evidence_id IS NOT NULL AND cost_terminal_evidence_digest IS NOT NULL AND cost_terminal_evidence_record IS NOT NULL AND cost_terminal_evidence_variant IN ('response_reported_v1', 'response_usage_unavailable_v1', 'response_usage_invalid_v1', 'attempt_failure_conservative_v1', 'timeout_crash_conservative_v1', 'prepared_no_dispatch_v1', 'zero_wire_abort_v1') AND cost_terminal_evidence_id ~ '[^[:space:]]' AND cost_terminal_evidence_digest ~ '^[0-9a-f]{64}$' AND jsonb_typeof(cost_terminal_evidence_record) = 'object'))) IS TRUE",
     ),
     (
         "dispatch_exposures_terminal_evidence_shape_ck",
-        "(exposure_state IN ('prepared', 'dispatching', 'sent') AND observed_amount IS NULL AND accounted_amount IS NULL AND usage_status IS NULL AND cost_reconciliation_spec_digest IS NULL AND transport_response_receipt_id IS NULL AND transport_attempt_failure_receipt_id IS NULL AND no_call_proof_ref IS NULL AND uncertain_reconciliation_ref IS NULL AND reconciled_at IS NULL) OR (exposure_state = 'confirmed' AND observed_amount IS NOT NULL AND accounted_amount IS NOT NULL AND usage_status = 'reported' AND cost_reconciliation_spec_digest IS NOT NULL AND transport_response_receipt_id IS NOT NULL AND transport_attempt_failure_receipt_id IS NULL AND no_call_proof_ref IS NULL AND uncertain_reconciliation_ref IS NULL AND reconciled_at IS NOT NULL) OR (exposure_state = 'uncertain' AND accounted_amount = worst_case_amount AND usage_status IN ('reported', 'unavailable', 'invalid') AND cost_reconciliation_spec_digest IS NOT NULL AND no_call_proof_ref IS NULL AND uncertain_reconciliation_ref IS NOT NULL AND reconciled_at IS NOT NULL) OR (exposure_state = 'no_call' AND observed_amount = 0 AND accounted_amount = 0 AND usage_status IS NULL AND cost_reconciliation_spec_digest IS NOT NULL AND transport_response_receipt_id IS NULL AND transport_attempt_failure_receipt_id IS NULL AND no_call_proof_ref IS NOT NULL AND uncertain_reconciliation_ref IS NULL AND reconciled_at IS NOT NULL)",
+        "((exposure_state IN ('prepared', 'dispatching', 'sent') AND observed_amount IS NULL AND accounted_amount IS NULL AND usage_status IS NULL AND cost_reconciliation_spec_digest IS NULL AND transport_response_receipt_id IS NULL AND transport_attempt_failure_receipt_id IS NULL AND cost_terminal_evidence_variant IS NULL AND reconciled_at IS NULL) OR (exposure_state = 'confirmed' AND observed_amount IS NOT NULL AND accounted_amount = observed_amount AND usage_status = 'reported' AND cost_reconciliation_spec_digest IS NOT NULL AND transport_response_receipt_id IS NOT NULL AND transport_attempt_failure_receipt_id IS NULL AND cost_terminal_evidence_variant = 'response_reported_v1' AND reconciled_at IS NOT NULL) OR (exposure_state = 'uncertain' AND observed_amount IS NULL AND accounted_amount = worst_case_amount AND cost_reconciliation_spec_digest IS NOT NULL AND reconciled_at IS NOT NULL AND ((cost_terminal_evidence_variant = 'response_usage_unavailable_v1' AND usage_status = 'unavailable' AND transport_response_receipt_id IS NOT NULL AND transport_attempt_failure_receipt_id IS NULL) OR (cost_terminal_evidence_variant = 'response_usage_invalid_v1' AND usage_status = 'invalid' AND transport_response_receipt_id IS NOT NULL AND transport_attempt_failure_receipt_id IS NULL) OR (cost_terminal_evidence_variant = 'attempt_failure_conservative_v1' AND usage_status = 'unavailable' AND transport_response_receipt_id IS NULL AND transport_attempt_failure_receipt_id IS NOT NULL) OR (cost_terminal_evidence_variant = 'timeout_crash_conservative_v1' AND usage_status = 'unavailable' AND transport_response_receipt_id IS NULL AND transport_attempt_failure_receipt_id IS NULL))) OR (exposure_state = 'no_call' AND observed_amount = 0 AND accounted_amount = 0 AND usage_status IS NULL AND cost_reconciliation_spec_digest IS NOT NULL AND transport_response_receipt_id IS NULL AND transport_attempt_failure_receipt_id IS NULL AND cost_terminal_evidence_variant IN ('prepared_no_dispatch_v1', 'zero_wire_abort_v1') AND reconciled_at IS NOT NULL)) IS TRUE",
     ),
     (
         "dispatch_exposures_timestamp_order_ck",
@@ -326,7 +341,7 @@ EXPECTED_CHILD_CHECKS = (
     ),
     (
         "dispatch_exposures_state_timestamp_shape_ck",
-        "(exposure_state = 'prepared' AND dispatching_at IS NULL AND sent_at IS NULL AND reconciled_at IS NULL) OR (exposure_state = 'dispatching' AND dispatching_at IS NOT NULL AND sent_at IS NULL AND reconciled_at IS NULL) OR (exposure_state = 'sent' AND dispatching_at IS NOT NULL AND sent_at IS NOT NULL AND reconciled_at IS NULL) OR (exposure_state = 'confirmed' AND dispatching_at IS NOT NULL AND sent_at IS NOT NULL AND reconciled_at IS NOT NULL) OR (exposure_state = 'uncertain' AND dispatching_at IS NOT NULL AND reconciled_at IS NOT NULL) OR (exposure_state = 'no_call' AND sent_at IS NULL AND reconciled_at IS NOT NULL)",
+        "((exposure_state = 'prepared' AND dispatching_at IS NULL AND sent_at IS NULL AND reconciled_at IS NULL) OR (exposure_state = 'dispatching' AND dispatching_at IS NOT NULL AND sent_at IS NULL AND reconciled_at IS NULL) OR (exposure_state = 'sent' AND dispatching_at IS NOT NULL AND sent_at IS NOT NULL AND reconciled_at IS NULL) OR (exposure_state = 'confirmed' AND dispatching_at IS NOT NULL AND sent_at IS NOT NULL AND reconciled_at IS NOT NULL) OR (exposure_state = 'uncertain' AND dispatching_at IS NOT NULL AND reconciled_at IS NOT NULL AND (cost_terminal_evidence_variant NOT IN ('response_usage_unavailable_v1', 'response_usage_invalid_v1') OR sent_at IS NOT NULL)) OR (exposure_state = 'no_call' AND sent_at IS NULL AND reconciled_at IS NOT NULL AND ((cost_terminal_evidence_variant = 'prepared_no_dispatch_v1' AND dispatching_at IS NULL) OR (cost_terminal_evidence_variant = 'zero_wire_abort_v1' AND dispatching_at IS NOT NULL)))) IS TRUE",
     ),
     (
         "dispatch_exposures_parent_settled_at_shape_ck",
@@ -349,17 +364,17 @@ EXPECTED_METHOD_ROWS = (
     (
         "1",
         "create_or_exact_replay_reservation",
-        "absent to `open`; after exact mode/pricing proof install `(R,R,0,0,0,0)`, where live `R>0` and simulate/scripted `R=0`; replay ineligible",
+        "absent to `open`; exact budget-policy lookup derives `(R,R,0,0,0,0)`, where live `R>0` and simulate/scripted `R=0`; replay ineligible; caller money forbidden",
     ),
     (
         "2",
         "prepare_or_exact_replay_exposure",
-        "absent to `prepared/not_ready`; exact mode-specific `W` is live-positive or simulate/scripted-zero; parent vector unchanged",
+        "absent to `prepared/not_ready`; under the parent lock enforce the policy call-count cap and derive exact mode-specific `W` from ceiling quantities plus pricing; parent vector unchanged; caller money forbidden",
     ),
     (
         "3",
         "authorize_dispatch",
-        "`prepared/not_ready` to `dispatching/not_ready`; live atomically moves `available -= W`, `held += W`; simulate/scripted make the same authorization CAS with zero vector delta; commit is send authorization",
+        "`prepared/not_ready` to `dispatching/not_ready`; live atomically moves `available -= W`, `held += W`; simulate/scripted make the same authorization CAS with zero vector delta; after commit return the private exposure/version/request-bound dispatch capability",
     ),
     (
         "4",
@@ -369,7 +384,7 @@ EXPECTED_METHOD_ROWS = (
     (
         "5",
         "reconcile_exposure_terminal",
-        "source-dependent closed mapping only: `prepared -> no_call`; `dispatching -> confirmed/uncertain/no_call`; `sent -> confirmed/uncertain`; always `parent_settlement_state=pending`; parent unchanged",
+        "source/evidence-dependent closed mapping only: `prepared -> no_call(prepared_no_dispatch)`; `dispatching -> confirmed(response) / uncertain(response, failure, or timeout) / no_call(zero_wire)`; `sent -> confirmed(response) / uncertain(response, failure, or timeout)`; owner derives `A` or conservative `W/0`, installs the canonical evidence record, and sets `parent_settlement_state=pending`; parent unchanged",
     ),
     (
         "6",
@@ -400,6 +415,7 @@ EXPECTED_PRICING_KEYS = (
     "currency_code",
     "numeric_precision",
     "numeric_scale",
+    "rate_scale",
     "rounding_mode",
     "minimum_positive_quantum",
     "fx_policy",
@@ -410,20 +426,62 @@ EXPECTED_PRICING_MODE_ROWS = (
     (
         "live",
         "one",
-        "non-empty canonical sorted component/unit/USD-rate tuple",
-        "positive after ceiling quantization",
+        "exact four-record tuple, with at least one positive applicable rate",
+        "`R/W` positive; owner-derived `A` may be zero",
     ),
     (
         "simulate",
-        "one immutable zero-cost spec",
-        "exact empty tuple",
-        "exactly zero",
+        "one immutable zero-cost spec per eligible route/snapshot tuple",
+        "exact four-record tuple with all rates zero",
+        "`R/W/A` exactly zero",
     ),
     (
         "scripted",
-        "one immutable zero-cost spec",
-        "exact empty tuple",
-        "exactly zero",
+        "one immutable zero-cost spec per eligible route/snapshot tuple",
+        "exact four-record tuple with all rates zero",
+        "`R/W/A` exactly zero",
+    ),
+    ("replay", "zero in initial v1", "not applicable", "row creation fails closed"),
+)
+
+EXPECTED_BUDGET_POLICY_KEYS = (
+    "budget_policy_id",
+    "schema_version",
+    "transport_kind",
+    "provider_mode",
+    "budget_class",
+    "effective_route_snapshot_digest",
+    "cost_pricing_spec_digest",
+    "currency_code",
+    "monetary_ceiling",
+    "max_physical_calls",
+    "max_uncached_input_tokens_per_call",
+    "max_cached_input_tokens_per_call",
+    "max_non_reasoning_output_tokens_per_call",
+    "max_reasoning_output_tokens_per_call",
+    "max_total_tokens_per_call",
+    "reservation_amount_rule",
+    "per_call_worst_case_rule",
+)
+
+EXPECTED_BUDGET_MODE_ROWS = (
+    (
+        "live",
+        "one per route/snapshot/budget/pricing tuple",
+        "R > 0 and W > 0",
+        "`R >= max_physical_calls * W`, with exact Decimal multiplication and no overflow",
+    ),
+    (
+        "simulate",
+        "one immutable zero-money policy per eligible tuple",
+        "R = W = 0",
+        "applicable pricing has four zero rates; coverage is exactly zero",
+    ),
+    (
+        "scripted",
+        "one immutable zero-money policy per eligible tuple",
+        "R = W = 0",
+        "applicable pricing has four zero rates; coverage is exactly zero",
     ),
     ("replay", "zero in initial v1", "not applicable", "row creation fails closed"),
 )
@@ -432,38 +490,156 @@ EXPECTED_RECONCILIATION_KEYS = (
     "spec_id",
     "schema_version",
     "terminal_state",
-    "required_evidence_variant",
+    "evidence_variant",
+    "eligible_source_states",
+    "required_receipt_variant",
     "usage_status_policy",
     "accounted_amount_rule",
     "parent_delta_rule",
+    "sent_at_rule",
+    "minimum_age_seconds",
     "terminal",
     "late_invoice_policy",
 )
 
 EXPECTED_RECONCILIATION_ROWS = (
     (
-        "cost-reconciliation-confirmed-v1",
+        "cost-confirmed-response-reported-v1",
         "confirmed",
-        "authenticated response receipt plus reported usage",
-        "rounded observed amount",
-        "held to accounted, release unused, record positive overrun",
-        "future append-only adjustment only",
+        "response_reported_v1",
+        "dispatching or sent",
+        "response / complete valid reported usage",
+        "`A=price_v1(validated usage)`; held to accounted, release unused, record overrun",
+        "set_db_clock_if_dispatching_else_preserve",
+        "none / append-only adjustment",
     ),
     (
-        "cost-reconciliation-uncertain-v1",
+        "cost-uncertain-response-unavailable-v1",
         "uncertain",
-        "complete uncertain reconciliation proof; receipt optional but exclusive",
-        "worst-case amount",
-        "held to accounted at worst case",
-        "future append-only adjustment only",
+        "response_usage_unavailable_v1",
+        "dispatching or sent",
+        "response / unavailable",
+        "A=NULL; account W",
+        "set_db_clock_if_dispatching_else_preserve",
+        "none / append-only adjustment",
     ),
     (
-        "cost-reconciliation-no-call-v1",
+        "cost-uncertain-response-invalid-v1",
+        "uncertain",
+        "response_usage_invalid_v1",
+        "dispatching or sent",
+        "response / invalid",
+        "A=NULL; account W",
+        "set_db_clock_if_dispatching_else_preserve",
+        "none / append-only adjustment",
+    ),
+    (
+        "cost-uncertain-attempt-failure-v1",
+        "uncertain",
+        "attempt_failure_conservative_v1",
+        "dispatching or sent",
+        "attempt-failure / unavailable",
+        "A=NULL; account W",
+        "leave_null_if_dispatching_else_preserve",
+        "none / append-only adjustment",
+    ),
+    (
+        "cost-uncertain-timeout-crash-v1",
+        "uncertain",
+        "timeout_crash_conservative_v1",
+        "dispatching or sent",
+        "locked receipt absence / unavailable",
+        "A=NULL; account W",
+        "leave_null_if_dispatching_else_preserve",
+        "positive registry seconds / append-only adjustment",
+    ),
+    (
+        "cost-no-call-prepared-v1",
         "no_call",
-        "complete no-call proof and no receipt",
-        "zero",
-        "prepared parent unchanged; dispatching held to released",
-        "no adjustment",
+        "prepared_no_dispatch_v1",
+        "prepared",
+        "locked receipt absence / none",
+        "`A=0`; parent unchanged",
+        "remain_null",
+        "none / no adjustment",
+    ),
+    (
+        "cost-no-call-zero-wire-v1",
+        "no_call",
+        "zero_wire_abort_v1",
+        "dispatching",
+        "sealed zero-wire observation / none",
+        "`A=0`; held to released",
+        "remain_null",
+        "none / no adjustment",
+    ),
+)
+
+EXPECTED_EVIDENCE_RECORD_KEYS = (
+    "schema_version",
+    "variant",
+    "runtime_namespace",
+    "provider_mode",
+    "workspace_id",
+    "scope_digest",
+    "coordination_plan_review_id",
+    "dispatch_exposure_id",
+    "source_exposure_state",
+    "source_state_version",
+    "source_updated_at",
+    "evidence_observed_at",
+    "payload",
+)
+
+EXPECTED_EVIDENCE_ROWS = (
+    (
+        "response_reported_v1",
+        "dispatching or sent",
+        "authenticated response",
+        "transport_response_receipt_id, model_invocation_envelope_digest, canonical_usage_record, billing_quantities, derived_observed_amount",
+        "`confirmed`; dispatching source sets `sent_at` from this CAS DB clock, sent source preserves it",
+    ),
+    (
+        "response_usage_unavailable_v1",
+        "dispatching or sent",
+        "authenticated response",
+        "transport_response_receipt_id, model_invocation_envelope_digest, usage_status, usage_validation_code",
+        "`uncertain`; dispatching source sets `sent_at` from this CAS DB clock, sent source preserves it",
+    ),
+    (
+        "response_usage_invalid_v1",
+        "dispatching or sent",
+        "authenticated response",
+        "transport_response_receipt_id, model_invocation_envelope_digest, canonical_usage_record, usage_validation_code",
+        "`uncertain`; dispatching source sets `sent_at` from this CAS DB clock, sent source preserves it",
+    ),
+    (
+        "attempt_failure_conservative_v1",
+        "dispatching or sent",
+        "authenticated attempt-failure",
+        "transport_attempt_failure_receipt_id, failure_spec_digest, failure_code, retry_disposition",
+        "`uncertain`; dispatching source leaves `sent_at` NULL, sent source preserves it",
+    ),
+    (
+        "timeout_crash_conservative_v1",
+        "dispatching or sent",
+        "none; locked receipt absence",
+        "reconciliation_spec_digest, eligible_at, response_receipt_absent, failure_receipt_absent",
+        "`uncertain`; dispatching source leaves `sent_at` NULL, sent source preserves it",
+    ),
+    (
+        "prepared_no_dispatch_v1",
+        "prepared",
+        "none; locked receipt absence",
+        "dispatching_at, sent_at, response_receipt_absent, failure_receipt_absent",
+        "`no_call`; both timestamps are canonical JSON null and parent vector is unchanged",
+    ),
+    (
+        "zero_wire_abort_v1",
+        "dispatching",
+        "none",
+        "runtime_namespace, provider_mode, workspace_id, scope_digest, coordination_plan_review_id, dispatch_exposure_id, source_state_version, canonical_request_digest, transport_adapter_id, transport_adapter_revision, failure_phase, request_bytes_written, response_bytes_read, provider_call_id_state",
+        "`no_call`; `sent_at` remains NULL and the held amount is released",
     ),
 )
 
@@ -482,6 +658,10 @@ FUTURE_TABLES = frozenset({"cost_reservations", "dispatch_exposures"})
 FUTURE_SYMBOLS = frozenset(
     {
         "CostLedgerRepository",
+        "CostTerminalEvidenceRecord",
+        "DispatchAuthorizationCapabilityV1",
+        "ZeroWireObservationV1",
+        "COST_BUDGET_POLICY_SPECS",
         "COST_PRICING_SPECS",
         "COST_RECONCILIATION_SPECS",
     }
@@ -569,6 +749,228 @@ def _defined_top_level_symbols() -> frozenset[str]:
     return frozenset(symbols)
 
 
+MODEL_USAGE_FIELDS = (
+    "input_tokens",
+    "cached_input_tokens",
+    "output_tokens",
+    "reasoning_output_tokens",
+    "total_tokens",
+)
+BILLING_QUANTITY_ORDER = (
+    "uncached_input_tokens",
+    "cached_input_tokens",
+    "non_reasoning_output_tokens",
+    "reasoning_output_tokens",
+)
+USD_RATE_PATTERN = re.compile(r"(?:0\.[0-9]{18}|[1-9][0-9]*\.[0-9]{18})\Z")
+USD_QUANTUM = Decimal("0.000000000001")
+MAX_BIGINT = 9_223_372_036_854_775_807
+ZERO_WIRE_OBSERVATION_KEYS = EXPECTED_SCOPE_PREFIX + (
+    "dispatch_exposure_id",
+    "source_state_version",
+    "canonical_request_digest",
+    "transport_adapter_id",
+    "transport_adapter_revision",
+    "failure_phase",
+    "request_bytes_written",
+    "response_bytes_read",
+    "provider_call_id_state",
+)
+ZERO_WIRE_BINDING_KEYS = ZERO_WIRE_OBSERVATION_KEYS[:10]
+ZERO_WIRE_FAILURE_PHASES = frozenset({"dns", "connect", "tls", "before_first_request_byte"})
+
+
+def _canonical_json(value: object) -> bytes:
+    return json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode()
+
+
+def _domain_digest(domain_tag: str, value: object) -> str:
+    return hashlib.sha256(domain_tag.encode("ascii") + b"\x00" + _canonical_json(value)).hexdigest()
+
+
+def _cost_evidence_id(pfx: tuple[object, ...], exposure_id: str, source_version: int, variant: str) -> str:
+    return _domain_digest(
+        "cost-terminal-evidence-id-v1",
+        [*pfx, exposure_id, source_version, variant],
+    )
+
+
+def _usage_evidence_variant(usage: dict[str, object], rates: tuple[str, ...] | None = None) -> str:
+    if set(usage) != set(MODEL_USAGE_FIELDS):
+        return "response_usage_unavailable_v1"
+    if any(
+        type(usage[field]) is not int or usage[field] < 0 or usage[field] > MAX_BIGINT for field in MODEL_USAGE_FIELDS
+    ):
+        return "response_usage_unavailable_v1"
+    try:
+        quantities = _validated_billing_quantities(usage)
+        if rates is not None:
+            _price_v1(quantities, rates)
+    except (OverflowError, ValueError):
+        return "response_usage_invalid_v1"
+    return "response_reported_v1"
+
+
+def _validated_billing_quantities(usage: dict[str, object]) -> tuple[int, int, int, int]:
+    if set(usage) != set(MODEL_USAGE_FIELDS):
+        raise ValueError("usage keyset")
+    if any(
+        type(usage[field]) is not int or usage[field] < 0 or usage[field] > MAX_BIGINT for field in MODEL_USAGE_FIELDS
+    ):
+        raise ValueError("usage integer")
+    input_tokens = usage["input_tokens"]
+    cached_input_tokens = usage["cached_input_tokens"]
+    output_tokens = usage["output_tokens"]
+    reasoning_output_tokens = usage["reasoning_output_tokens"]
+    total_tokens = usage["total_tokens"]
+    assert isinstance(input_tokens, int)
+    assert isinstance(cached_input_tokens, int)
+    assert isinstance(output_tokens, int)
+    assert isinstance(reasoning_output_tokens, int)
+    assert isinstance(total_tokens, int)
+    if cached_input_tokens > input_tokens:
+        raise ValueError("cached overlap")
+    if reasoning_output_tokens > output_tokens:
+        raise ValueError("reasoning overlap")
+    if total_tokens != input_tokens + output_tokens:
+        raise ValueError("total validation")
+    return (
+        input_tokens - cached_input_tokens,
+        cached_input_tokens,
+        output_tokens - reasoning_output_tokens,
+        reasoning_output_tokens,
+    )
+
+
+def _price_v1(quantities: tuple[int, ...], rates: tuple[str, ...]) -> Decimal:
+    if len(quantities) != len(BILLING_QUANTITY_ORDER) or len(rates) != len(BILLING_QUANTITY_ORDER):
+        raise ValueError("four quantities")
+    if any(type(quantity) is not int or quantity < 0 or quantity > MAX_BIGINT for quantity in quantities):
+        raise ValueError("quantity integer")
+    if any(USD_RATE_PATTERN.fullmatch(rate) is None or len(rate.partition(".")[0]) > 20 for rate in rates):
+        raise ValueError("canonical rate")
+    try:
+        with localcontext() as context:
+            context.prec = 80
+            context.traps[InvalidOperation] = True
+            context.traps[DecimalOverflow] = True
+            context.traps[Inexact] = True
+            context.traps[Rounded] = True
+            raw = sum(
+                (Decimal(quantity) * Decimal(rate) for quantity, rate in zip(quantities, rates, strict=True)),
+                Decimal(0),
+            )
+            context.traps[Inexact] = False
+            context.traps[Rounded] = False
+            amount = raw.quantize(USD_QUANTUM, rounding=ROUND_CEILING)
+    except (InvalidOperation, DecimalOverflow) as exc:
+        raise ValueError("decimal amount") from exc
+    integer_part = format(amount, "f").partition(".")[0]
+    if amount < 0 or len(integer_part) > 26:
+        raise OverflowError("NUMERIC(38,12)")
+    return amount
+
+
+def _validate_budget_coverage(reserved: Decimal, worst_case: Decimal, max_physical_calls: int, mode: str) -> None:
+    if type(max_physical_calls) is not int or not 0 < max_physical_calls <= MAX_BIGINT:
+        raise ValueError("max physical calls")
+    if mode == "live":
+        with localcontext() as context:
+            context.prec = 80
+            context.traps[Inexact] = True
+            context.traps[Rounded] = True
+            required = Decimal(max_physical_calls) * worst_case
+        if reserved <= 0 or worst_case <= 0 or reserved < required:
+            raise ValueError("live coverage")
+        return
+    if mode in {"simulate", "scripted"}:
+        if reserved != 0 or worst_case != 0:
+            raise ValueError("non-live money")
+        return
+    raise ValueError("provider mode")
+
+
+def _sql_and(*values: bool | None) -> bool | None:
+    if False in values:
+        return False
+    if None in values:
+        return None
+    return True
+
+
+def _sql_or(*values: bool | None) -> bool | None:
+    if True in values:
+        return True
+    if None in values:
+        return None
+    return False
+
+
+def _postgres_check_accepts(value: bool | None) -> bool:
+    return value is not False
+
+
+def _validate_zero_wire_observation(exposure: dict[str, object], observation: dict[str, object]) -> None:
+    if set(observation) != set(ZERO_WIRE_OBSERVATION_KEYS):
+        raise ValueError("zero-wire keyset")
+    if any(observation[key] != exposure[key] for key in ZERO_WIRE_BINDING_KEYS):
+        raise ValueError("zero-wire exposure binding")
+    if observation["failure_phase"] not in ZERO_WIRE_FAILURE_PHASES:
+        raise ValueError("zero-wire phase")
+    for byte_field in ("request_bytes_written", "response_bytes_read"):
+        if type(observation[byte_field]) is not int or observation[byte_field] != 0:
+            raise ValueError("zero-wire bytes")
+    if observation["provider_call_id_state"] != "not_observed":
+        raise ValueError("zero-wire provider call")
+
+
+def _assert_cost_semantics_contract(document: str) -> None:
+    normalized = _normalized(document)
+    child_section = _section(document, "## 5. Exact `dispatch_exposures`", "## 6. Exact keys")
+    child_columns = {_strip_code(row[1]) for row in _markdown_tables(child_section)[0][1]}
+    assert {
+        "cost_terminal_evidence_variant",
+        "cost_terminal_evidence_id",
+        "cost_terminal_evidence_digest",
+        "cost_terminal_evidence_record",
+    }.issubset(child_columns)
+    assert {"no_call_proof_ref", "uncertain_reconciliation_ref"}.isdisjoint(child_columns)
+    for exact_rule in (
+        "uncached_input_tokens = input_tokens - cached_input_tokens",
+        "cached_input_tokens = cached_input_tokens",
+        "non_reasoning_output_tokens = output_tokens - reasoning_output_tokens",
+        "reasoning_output_tokens = reasoning_output_tokens",
+        "`total_tokens` is validation-only and is never a fifth billed component.",
+        "`total_tokens = input_tokens + output_tokens`",
+        "exact `Decimal` under a local precision-80 context",
+        "`cost-budget-policy-v1`, `cost-pricing-spec-v1`, and `cost-reconciliation-spec-v1` as the domain tag",
+        "R >= max_physical_calls * W",
+        "Callers may supply neither `R`, `W`, `A`, `accounted_amount`, a Decimal string, a billing vector, nor a pricing/budget record.",
+        "The sole persistent evidence owner is the private `CostTerminalEvidenceRecord` factory inside `CostLedgerRepository`.",
+        "Callers cannot supply a record, ref, id, digest, amount, timestamp, receipt classification, byte count, or boolean send claim.",
+        "Every `response_receipt_absent`/`failure_receipt_absent` payload value is owner-derived JSON `true`",
+        "exact integer `request_bytes_written=0`, exact integer `response_bytes_read=0`",
+        "A crash that did not persist this record can never be reconstructed as no-call.",
+        "cost-terminal-evidence-id-v1 + 0x00 + canonical_json([runtime_namespace, provider_mode, workspace_id, scope_digest, coordination_plan_review_id, dispatch_exposure_id, source_state_version, variant])",
+        "cost-terminal-evidence-record-v1' + 0x00 + canonical_json(the complete record)",
+        "A capability or observation from another PFX, exposure, state version, request digest, or adapter is a typed collision with zero writes",
+        "An authenticated response receipt proves wire send for both `confirmed` and response-backed `uncertain`.",
+        "A direct `dispatching -> uncertain` backed only by attempt failure or timeout/crash leaves `sent_at` NULL",
+    ):
+        assert exact_rule in normalized
+
+    evidence_section = _section(document, "### 8.4", "### 8.5")
+    evidence_header, evidence_rows = _markdown_tables(evidence_section)[0]
+    assert tuple(_strip_code(cell) for cell in evidence_header) == (
+        "evidence variant",
+        "eligible locked source",
+        "required receipt",
+        "exact payload keyset",
+        "terminal / `sent_at` rule",
+    )
+    assert _bare_rows(evidence_rows) == EXPECTED_EVIDENCE_ROWS
+
+
 def test_exact_ordered_parent_and_child_manifests_and_scope_prefix() -> None:
     document = DECISION_DOC_PATH.read_text(encoding="utf-8")
     parent_section = _section(document, "## 4. Exact `cost_reservations`", "## 5. Exact `dispatch_exposures`")
@@ -601,7 +1003,7 @@ def test_exact_ordered_parent_and_child_manifests_and_scope_prefix() -> None:
 def test_exact_key_index_and_local_check_manifests() -> None:
     document = DECISION_DOC_PATH.read_text(encoding="utf-8")
     key_section = _section(document, "## 6. Exact keys", "## 7. Exact local checks")
-    check_section = _section(document, "## 7. Exact local checks", "## 8. Immutable pricing")
+    check_section = _section(document, "## 7. Exact local checks", "## 8. Immutable budget")
     key_tables = _markdown_tables(key_section)
     check_tables = _markdown_tables(check_section)
 
@@ -618,50 +1020,277 @@ def test_exact_key_index_and_local_check_manifests() -> None:
 
 def test_registry_shapes_records_money_and_late_invoice_policy_are_exact() -> None:
     document = DECISION_DOC_PATH.read_text(encoding="utf-8")
-    section = _section(document, "## 8. Immutable pricing", "## 9. Repository CAS")
-    code_blocks = re.findall(r"```text\n(.*?)\n```", section, flags=re.DOTALL)
+    canonical = _section(document, "### 8.1", "### 8.2")
+    budget = _section(document, "### 8.2", "### 8.3")
+    pricing = _section(document, "### 8.3", "### 8.4")
+    evidence = _section(document, "### 8.4", "### 8.5")
+    reconciliation = _section(document, "### 8.5", "## 9. Repository CAS")
 
-    assert len(code_blocks) == 2
-    assert tuple(part.strip() for part in code_blocks[0].replace("\n", " ").split(",")) == EXPECTED_PRICING_KEYS
-    assert tuple(part.strip() for part in code_blocks[1].replace("\n", " ").split(",")) == EXPECTED_RECONCILIATION_KEYS
-    registry_tables = _markdown_tables(section)
-    assert len(registry_tables) == 2
-    pricing_header, pricing_rows = registry_tables[0]
+    budget_blocks = re.findall(r"```text\n(.*?)\n```", budget, flags=re.DOTALL)
+    pricing_blocks = re.findall(r"```text\n(.*?)\n```", pricing, flags=re.DOTALL)
+    evidence_blocks = re.findall(r"```text\n(.*?)\n```", evidence, flags=re.DOTALL)
+    reconciliation_blocks = re.findall(r"```text\n(.*?)\n```", reconciliation, flags=re.DOTALL)
+    assert len(budget_blocks) == 2
+    assert len(pricing_blocks) == 1
+    assert len(evidence_blocks) == 1
+    assert len(reconciliation_blocks) == 1
+    assert tuple(part.strip() for part in budget_blocks[0].replace("\n", " ").split(",")) == (
+        EXPECTED_BUDGET_POLICY_KEYS
+    )
+    assert tuple(part.strip() for part in pricing_blocks[0].replace("\n", " ").split(",")) == EXPECTED_PRICING_KEYS
+    assert tuple(part.strip() for part in evidence_blocks[0].replace("\n", " ").split(",")) == (
+        EXPECTED_EVIDENCE_RECORD_KEYS
+    )
+    assert tuple(part.strip() for part in reconciliation_blocks[0].replace("\n", " ").split(",")) == (
+        EXPECTED_RECONCILIATION_KEYS
+    )
+
+    budget_header, budget_rows = _markdown_tables(budget)[0]
+    assert tuple(_strip_code(cell) for cell in budget_header) == (
+        "provider mode",
+        "exact applicable-record count",
+        "exact `R/W` relation",
+        "reservation-coverage preflight",
+    )
+    assert _bare_rows(budget_rows) == EXPECTED_BUDGET_MODE_ROWS
+
+    pricing_header, pricing_rows = _markdown_tables(pricing)[0]
     assert tuple(_strip_code(cell) for cell in pricing_header) == (
         "provider mode",
         "exact applicable-record count",
         "component_rates",
-        "reservation / exposure money",
+        "policy `R/W` / observed `A`",
     )
     assert _bare_rows(pricing_rows) == EXPECTED_PRICING_MODE_ROWS
 
-    registry_header, registry_rows = registry_tables[1]
+    evidence_header, evidence_rows = _markdown_tables(evidence)[0]
+    assert tuple(_strip_code(cell) for cell in evidence_header) == (
+        "evidence variant",
+        "eligible locked source",
+        "required receipt",
+        "exact payload keyset",
+        "terminal / `sent_at` rule",
+    )
+    assert _bare_rows(evidence_rows) == EXPECTED_EVIDENCE_ROWS
+
+    registry_header, registry_rows = _markdown_tables(reconciliation)[0]
     assert tuple(_strip_code(cell) for cell in registry_header) == (
         "spec id",
-        "terminal state",
-        "required evidence",
-        "accounted amount rule",
-        "parent delta rule",
-        "late invoice policy",
+        "terminal",
+        "evidence variant",
+        "source",
+        "receipt / usage",
+        "amount and parent rule",
+        "`sent_at` rule",
+        "minimum age / late invoice",
     )
     assert _bare_rows(registry_rows) == EXPECTED_RECONCILIATION_ROWS
 
-    normalized = _normalized(section)
+    normalized = _normalized(canonical + budget + pricing + evidence + reconciliation)
     for exact_rule in (
         "`currency_code='USD'`",
         "`numeric_precision=38`",
         "`numeric_scale=12`",
+        "`rate_scale=18`",
         "`rounding_mode='ROUND_CEILING'`",
         "`minimum_positive_quantum='0.000000000001'`",
         "`fx_policy='forbidden'`",
-        "All three have `terminal=true` and apply to `live|simulate|scripted`",
+        "Every record has `terminal=true`.",
         "Price changes append a new immutable mode-specific spec/digest",
-        "simulate/scripted remain exactly zero",
+        "simulate/scripted usage may remain `reported`",
         "No wildcard mode/price, live settings lookup, floating point, implicit currency conversion, or FX fallback",
         "apply to `live|simulate|scripted` only through an exposure with the exact same PFX provider mode",
-        "Confirmed simulate/scripted usage may remain `reported`, but its observed/accounted money is exactly zero.",
+        "Confirmed simulate/scripted usage may remain `reported`, but its owner-derived observed/accounted money is exactly zero.",
+        "the caller cannot pass either value",
+        "an exact replay does not consume another slot",
+        "No caller deadline or clock is accepted.",
     ):
         assert exact_rule in normalized
+
+
+def test_decimal_billing_oracle_rejects_overlap_double_count_and_invalid_usage() -> None:
+    usage = {
+        "input_tokens": 100,
+        "cached_input_tokens": 40,
+        "output_tokens": 50,
+        "reasoning_output_tokens": 10,
+        "total_tokens": 150,
+    }
+    quantities = _validated_billing_quantities(usage)
+    assert quantities == (60, 40, 40, 10)
+    assert sum(quantities) == usage["total_tokens"]
+    worst_case = _price_v1(
+        quantities,
+        (
+            "0.000001000000000000",
+            "0.000000500000000000",
+            "0.000002000000000000",
+            "0.000003000000000000",
+        ),
+    )
+    assert worst_case == Decimal("0.000190000000")
+    assert _price_v1((1, 0, 0, 0), ("0.000000000000000001",) + ("0.000000000000000000",) * 3) == USD_QUANTUM
+    assert (
+        _price_v1(
+            (1, 1, 0, 0),
+            ("0.000000000000400000", "0.000000000000400000") + ("0.000000000000000000",) * 2,
+        )
+        == USD_QUANTUM
+    )
+    _validate_budget_coverage(Decimal(4) * worst_case, worst_case, 4, "live")
+    _validate_budget_coverage(Decimal(0), Decimal(0), 4, "simulate")
+    _validate_budget_coverage(Decimal(0), Decimal(0), 4, "scripted")
+    with pytest.raises(ValueError):
+        _validate_budget_coverage(Decimal(4) * worst_case - USD_QUANTUM, worst_case, 4, "live")
+    with pytest.raises(ValueError):
+        _validate_budget_coverage(USD_QUANTUM, Decimal(0), 4, "simulate")
+
+    invalid_usage = (
+        {**usage, "cached_input_tokens": 101},
+        {**usage, "reasoning_output_tokens": 51},
+        {**usage, "total_tokens": 149},
+        {**usage, "input_tokens": True},
+        {**usage, "input_tokens": MAX_BIGINT + 1},
+        {key: value for key, value in usage.items() if key != "cached_input_tokens"},
+        {**usage, "extra_tokens": 0},
+    )
+    for candidate in invalid_usage:
+        with pytest.raises(ValueError):
+            _validated_billing_quantities(candidate)
+    for rates in (
+        ("1e-18",) + ("0.000000000000000000",) * 3,
+        ("+0.000000000000000001",) + ("0.000000000000000000",) * 3,
+        ("0.00000000000000001",) + ("0.000000000000000000",) * 3,
+        ("100000000000000000000.000000000000000000",) + ("0.000000000000000000",) * 3,
+    ):
+        with pytest.raises(ValueError):
+            _price_v1((1, 0, 0, 0), rates)
+    with pytest.raises(ValueError):
+        _price_v1((MAX_BIGINT + 1, 0, 0, 0), ("0.000000000000000001",) * 4)
+
+
+def test_usage_variant_and_canonical_digest_golden_vectors_are_exact() -> None:
+    valid_usage: dict[str, object] = {
+        "input_tokens": 100,
+        "cached_input_tokens": 40,
+        "output_tokens": 50,
+        "reasoning_output_tokens": 10,
+        "total_tokens": 150,
+    }
+    assert _usage_evidence_variant(valid_usage) == "response_reported_v1"
+    assert _usage_evidence_variant({**valid_usage, "cached_input_tokens": 101}) == "response_usage_invalid_v1"
+    assert _usage_evidence_variant({**valid_usage, "total_tokens": 149}) == "response_usage_invalid_v1"
+    assert _usage_evidence_variant({**valid_usage, "input_tokens": True}) == "response_usage_unavailable_v1"
+    assert (
+        _usage_evidence_variant({key: value for key, value in valid_usage.items() if key != "cached_input_tokens"})
+        == "response_usage_unavailable_v1"
+    )
+    overflow_usage: dict[str, object] = {
+        "input_tokens": MAX_BIGINT,
+        "cached_input_tokens": 0,
+        "output_tokens": 0,
+        "reasoning_output_tokens": 0,
+        "total_tokens": MAX_BIGINT,
+    }
+    overflow_rates = ("99999999999999999999.999999999999999999",) + ("0.000000000000000000",) * 3
+    assert _usage_evidence_variant(overflow_usage, overflow_rates) == "response_usage_invalid_v1"
+
+    canonical_record = {"amount": "0.000000000001", "schema_version": "v1", "terminal": True}
+    assert _canonical_json(canonical_record) == b'{"amount":"0.000000000001","schema_version":"v1","terminal":true}'
+    expected_digests = {
+        "cost-budget-policy-v1": "3f1ec1b209ec25d248d795540ef160fe060249a31edeab5d63773be648170914",
+        "cost-pricing-spec-v1": "4d765a0ee095012c8d696d3ff19c3c2b177ad8bf0cebbc02997ae77b40bd23a3",
+        "cost-reconciliation-spec-v1": "e20ddaef7848f0043b4756c89cc92d223cc115fb16fce64399b3da0ae0543f67",
+        "cost-terminal-evidence-record-v1": "a1692c852bdc332032ae97d33234960fb50e07cfb9dac7bd0cb178c7d0d0d7c6",
+    }
+    assert {tag: _domain_digest(tag, canonical_record) for tag in expected_digests} == expected_digests
+    pfx = ("ns", "live", "ws", "a" * 64, 7)
+    assert _cost_evidence_id(pfx, "exp-1", 3, "zero_wire_abort_v1") == (
+        "1b7d9969bb2ffed23d81ff422c3cb1f47a22e48582e98726e89410c385d0b043"
+    )
+
+
+def test_nullable_terminal_checks_fail_closed_under_postgres_three_valued_logic() -> None:
+    guarded_checks = {
+        "dispatch_exposures_base_intent_tuple_ck",
+        "dispatch_exposures_predecessor_tuple_ck",
+        "dispatch_exposures_grant_tuple_ck",
+        "dispatch_exposures_cost_evidence_shape_ck",
+        "dispatch_exposures_terminal_evidence_shape_ck",
+        "dispatch_exposures_state_timestamp_shape_ck",
+    }
+    check_map = dict(EXPECTED_CHILD_CHECKS)
+    assert all(check_map[name].endswith(") IS TRUE") for name in guarded_checks)
+
+    legacy_no_call = _sql_and(True, None, None, True, True, True, True, None, True)
+    legacy_response_uncertain = _sql_and(True, True, None, True, True, True, None)
+    legacy_partial_tuple = _sql_or(False, _sql_and(None, True))
+    assert (legacy_no_call, legacy_response_uncertain, legacy_partial_tuple) == (None, None, None)
+    assert all(
+        _postgres_check_accepts(value) for value in (legacy_no_call, legacy_response_uncertain, legacy_partial_tuple)
+    )
+    assert all(
+        not _postgres_check_accepts(value is True)
+        for value in (legacy_no_call, legacy_response_uncertain, legacy_partial_tuple)
+    )
+
+
+def test_zero_wire_observation_is_bound_to_one_authorized_physical_call() -> None:
+    exposure: dict[str, object] = {
+        "runtime_namespace": "prod",
+        "provider_mode": "live",
+        "workspace_id": "ws-1",
+        "scope_digest": "a" * 64,
+        "coordination_plan_review_id": 7,
+        "dispatch_exposure_id": "exp-1",
+        "source_state_version": 3,
+        "canonical_request_digest": "b" * 64,
+        "transport_adapter_id": "adapter-1",
+        "transport_adapter_revision": "rev-1",
+    }
+    observation = {
+        **exposure,
+        "failure_phase": "connect",
+        "request_bytes_written": 0,
+        "response_bytes_read": 0,
+        "provider_call_id_state": "not_observed",
+    }
+    _validate_zero_wire_observation(exposure, observation)
+    for field, replacement in (
+        ("dispatch_exposure_id", "exp-2"),
+        ("source_state_version", 4),
+        ("canonical_request_digest", "c" * 64),
+        ("transport_adapter_revision", "rev-2"),
+        ("request_bytes_written", 1),
+        ("provider_call_id_state", "observed"),
+        ("caller_claimed_no_wire", True),
+    ):
+        with pytest.raises(ValueError):
+            _validate_zero_wire_observation(exposure, {**observation, field: replacement})
+
+
+def test_cost_owner_evidence_and_source_timestamp_semantics_survive_mutations() -> None:
+    document = DECISION_DOC_PATH.read_text(encoding="utf-8")
+    _assert_cost_semantics_contract(document)
+    mutations = (
+        ("input_tokens - cached_input_tokens", "input_tokens"),
+        ("output_tokens - reasoning_output_tokens", "output_tokens"),
+        ("total_tokens = input_tokens + output_tokens", "total_tokens = output_tokens"),
+        ("cost-terminal-evidence-id-v1", "cost-terminal-evidence-id-v2"),
+        ("R >= max_physical_calls * W", "R > 0"),
+        ("Callers may supply neither `R`, `W`, `A`", "Callers may supply `R`, `W`, `A`"),
+        ("cost_terminal_evidence_id", "caller_proof_id"),
+        ("request_bytes_written=0", "request_bytes_written>=0"),
+        (
+            "proves wire send for both `confirmed` and response-backed `uncertain`",
+            "proves wire send for `confirmed` only",
+        ),
+        ("failure or timeout/crash leaves `sent_at` NULL", "failure or timeout/crash sets `sent_at`"),
+    )
+    for original, replacement in mutations:
+        assert original in document
+        with pytest.raises(AssertionError):
+            _assert_cost_semantics_contract(document.replace(original, replacement))
 
 
 def test_repository_surface_lifecycle_amount_transitions_and_lock_orders_are_closed() -> None:
@@ -675,9 +1304,10 @@ def test_repository_surface_lifecycle_amount_transitions_and_lock_orders_are_clo
     assert _bare_rows(method_rows) == EXPECTED_METHOD_ROWS
     terminal_effect = _normalized(_strip_code(method_rows[4][2]))
     assert terminal_effect == _normalized(
-        "source-dependent closed mapping only: `prepared -> no_call`; "
-        "`dispatching -> confirmed/uncertain/no_call`; "
-        "`sent -> confirmed/uncertain`; always `parent_settlement_state=pending`; parent unchanged"
+        "source/evidence-dependent closed mapping only: `prepared -> no_call(prepared_no_dispatch)`; "
+        "`dispatching -> confirmed(response) / uncertain(response, failure, or timeout) / no_call(zero_wire)`; "
+        "`sent -> confirmed(response) / uncertain(response, failure, or timeout)`; owner derives `A` or conservative `W/0`, "
+        "installs the canonical evidence record, and sets `parent_settlement_state=pending`; parent unchanged"
     )
     normalized_lifecycle = _normalized(lifecycle)
     for exact_rule in (
@@ -687,8 +1317,8 @@ def test_repository_surface_lifecycle_amount_transitions_and_lock_orders_are_clo
         "dispatching -> sent | confirmed | uncertain | no_call",
         "sent -> confirmed | uncertain",
         "confirmed | uncertain | no_call -> terminal forever",
-        "`prepared -> no_call` has no prior hold",
-        "`dispatching -> no_call` has a committed hold",
+        "`prepared -> no_call` is admitted only by the owner-built locked `prepared_no_dispatch_v1` evidence and has no prior hold",
+        "`dispatching -> no_call` requires a complete owner-built `zero_wire_abort_v1` record",
         "`held -= W; released += W`",
         "`held -= W; accounted += A; released += max(W-A,0); overrun += max(A-W,0)`",
         "`held -= W; accounted += W`",
@@ -708,10 +1338,11 @@ def test_repository_surface_lifecycle_amount_transitions_and_lock_orders_are_clo
         "All lifecycle clocks are repository-owned PostgreSQL clocks.",
         "only from the current transaction's `transaction_timestamp()`",
         "callers may supply neither timestamps nor a boolean/flag that claims a send occurred",
-        "The direct `dispatching -> confirmed` branch is legal only when an authenticated response receipt proves that wire send occurred.",
-        "the repository fills the previously-null `sent_at` from PostgreSQL `transaction_timestamp()`",
-        "`dispatching -> uncertain` and `dispatching -> no_call` must leave `sent_at` NULL",
-        "A `sent`-origin terminal transition preserves the already committed `sent_at` exactly.",
+        "An authenticated response receipt proves wire send for both `confirmed` and response-backed `uncertain`.",
+        "the same terminal CAS fills the previously-null `sent_at` from PostgreSQL `transaction_timestamp()`",
+        "A direct `dispatching -> uncertain` backed only by attempt failure or timeout/crash leaves `sent_at` NULL",
+        "`dispatching -> no_call(zero_wire)` also leaves it NULL",
+        "A `sent`-origin response transition preserves the already committed `sent_at`.",
     ):
         assert exact_rule in normalized_lifecycle
 
@@ -725,6 +1356,7 @@ def test_repository_surface_lifecycle_amount_transitions_and_lock_orders_are_clo
     for exact_rule in (
         "`operation root -> optional plan/review/gate -> participating commands sorted -> intent/predecessor -> ActivityRun/Attempt -> optional grant -> cost_reservations -> dispatch_exposures`",
         "`dispatch_exposures FOR UPDATE -> applicable receipt -> optional response quarantine`",
+        "owner-build the embedded `CostTerminalEvidenceRecord`",
         "This UoW never locks or updates `cost_reservations`",
         "That restriction removes the exposure-to-parent lock inversion.",
         "`cost_reservations FOR UPDATE -> pending dispatch_exposures ORDER BY dispatch_exposure_id FOR UPDATE`",
@@ -790,6 +1422,16 @@ def test_decision_inventory_matrix_and_ob_status_are_complete_and_nonimplementin
     matrix = _section(document, "## 12. Mechanism", "## 13. Physical absence")
     _, decision_rows = _markdown_tables(provenance)[0]
     matrix_header, matrix_rows = _markdown_tables(matrix)[0]
+    normalized_document = _normalized(document.replace("\n> ", " "))
+
+    for review_marker in (
+        "4945ab7ae17764af0a0ca705ffd4257002c2f279",
+        "ADVISORY NO-GO",
+        "P0/P1/P2/P3 = 0/2/1/0",
+        "remains review-pending until a fresh pinned non-author verdict",
+        "Neither the advisory result nor author validation is a formal GO.",
+    ):
+        assert review_marker in normalized_document
 
     assert tuple(row[0] for row in decision_rows) == tuple(
         [f"A-{index}" for index in range(1, 9)] + [f"R-{index}" for index in range(1, 13)]
@@ -903,6 +1545,8 @@ def test_trackers_record_decision_lock_without_closing_runtime_or_rollout_gates(
         "source defines no `model_invocation_envelope_ref` issuer",
         "response-only quarantine `reconciled_no_call` reachability",
         "receipt-side `command_attempt` identity",
+        "their deferral blocks a cost-ledger migration too",
+        "no partial cost-only DDL",
     ):
         assert marker in normalized
 
