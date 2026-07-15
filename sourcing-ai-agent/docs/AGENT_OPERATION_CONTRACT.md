@@ -219,6 +219,14 @@ exactly-once claim; R-028 remains open. D1f also binds only the exact three CRM 
 list/get/provenance/control routes still require a server-derived exact-workspace closure before hosted/live multi-user
 exposure; R-031 records that boundary.
 
+D1g is the bounded follow-up candidate for that R-031 boundary. For authenticated Operation requests, canonical
+authorization ownership is `agent_actions.workspace_id` and `operation_runs.workspace_id`; a run additionally requires
+its linked action to exist in the same exact workspace. Server request state supplies the expected workspace, while
+`actor` is provenance only. Missing and foreign resources share one generic not-found transport shape per resource
+kind. Open mode keeps the existing explicit operator-workspace behavior. D1g does not add schemas for the remaining 12
+actions, change served=0, or close R-019/R-028; fresh pinned non-author review remains required before hosted/live
+multi-user Operation exposure.
+
 D1c adds zero-write pin-drift preflights but does not combine approval or retry state/event/run writes into one UoW.
 The generic operation/command atomicity, generation/lease fence, and transaction-lock budget limits in R-019 remain
 open and must not be inferred closed from this foundation. A concurrent identity insert after the read preflight can
@@ -228,24 +236,36 @@ still reach that pre-existing multi-write window; only preflight-observed drift 
 
 W9 backend control foundation is active; product Agent UI remains deferred.
 
-- `GET /api/operations/action-registry` exposes the typed action registry.
+- `GET /api/operations/action-registry` exposes the typed shared action registry; it is not a workspace aggregate.
 - `GET /api/operations/actions` lists bounded `AgentAction` rows by workspace/conversation/status/type/owner.
+  Authenticated transport overwrites caller workspace with the server-derived exact workspace; open mode preserves the
+  explicit operator workspace.
 - `POST /api/operations/actions` persists an `AgentAction` and, when no approval is required, a queued `OperationRun`.
   For the exact three D1f CRM existing-record actions, authenticated request state overrides workspace/user, missing and
   foreign rows share one HTTP 404 body, and raw owner/version aliases fail before persistence. Other action types retain
   their existing schema-less/open-mode behavior until their owner contract is reviewed.
-- `GET /api/operations/actions/{action_id}` and `GET /api/operations/runs/{operation_run_id}` expose bounded action/run state and append-only operation events.
-- `GET /api/operations/runs` lists bounded `OperationRun` rows by workspace/action/status/type/owner.
-- `GET /api/operations/runs/{operation_run_id}/provenance` returns the action, run, action/run events, action event timeline, and linked workflow commands without repairing or executing module state.
+- `GET /api/operations/actions/{action_id}` and `GET /api/operations/runs/{operation_run_id}` expose bounded action/run
+  state and append-only operation events. Authenticated detail requires the canonical row workspace to exact-match the
+  server workspace; an authenticated run also requires its linked action to exist in that workspace.
+- `GET /api/operations/runs` lists bounded `OperationRun` rows by workspace/action/status/type/owner. Authenticated
+  lists use the server workspace and exclude runs whose linked action is missing or foreign. The linked-action owner
+  predicate is a repository SQL `EXISTS`, so authorization does not add N+1 reads or post-filter an already paginated
+  result.
+- `GET /api/operations/runs/{operation_run_id}/provenance` returns the action, run, action/run events, action event
+  timeline, and linked workflow commands without repairing or executing module state, after the same authenticated
+  run-plus-linked-action owner preflight.
 - OperationRun records and control responses expose `control_state` from `operation_runtime.operation_run_control_state`; Agent/UI code must use its `allowed_actions` and `disabled_reasons` for dispatch/resume/retry/cancel buttons instead of local terminal-status sets. If retry returns a child OperationRun, the caller should continue with that child run id rather than mutating or re-dispatching the terminal parent.
   All controls fail closed when the linked action is missing, and the API/repository boundary rejects a linked action
   from another workspace rather than treating it as eligible control state.
-- `POST /api/operations/actions/{action_id}/approve` records approval and creates the idempotent queued `OperationRun` for approval-required actions.
+- `POST /api/operations/actions/{action_id}/approve` records approval and creates the idempotent queued `OperationRun`
+  for approval-required actions, after the authenticated exact-action-workspace preflight.
 - `POST /api/operations/actions/{action_id}/reject` atomically records `status=cancelled`,
-  `approval_status=rejected`, and `ActionRejected` in one PG UoW; it keeps the action non-executable.
+  `approval_status=rejected`, and `ActionRejected` in one PG UoW; it keeps the action non-executable. Authenticated
+  reject first exact-matches the action to the server workspace.
 - `POST /api/operations/runs/{operation_run_id}/cancel` atomically marks the operation and eligible linked action
   cancelled and appends `OperationCancelled` in one PG UoW. Event failure or workspace/entity/idempotency mismatch
   rolls back the entire transition; repeated calls reuse the event and repair legacy target-state-without-event rows.
+  Authenticated cancel first exact-matches both run and linked action to the server workspace.
 - Reject/cancel return success only from the committed target state. If another terminal transition wins the CAS,
   the API returns `status=conflict` / HTTP 409 and does not append the losing success event. Approve/resume/retry also
   validate their committed target before creating downstream events or child runs. The wider command-plan and owner
@@ -261,8 +281,12 @@ W9 backend control foundation is active; product Agent UI remains deferred.
   implemented, a stale owner may still attempt to create a new downstream child or ActivityAttempt after cancellation;
   linked OperationRun/AgentAction synchronization also remains outside this UoW. Both boundaries stay open under
   `RESIDUAL_LEDGER.md` R-019 and must not be inferred closed from R-020.
-- `POST /api/operations/runs/{operation_run_id}/resume` appends `OperationResumeRequested` and moves a non-terminal run back to queued control state; it does not execute the owner.
-- `POST /api/operations/runs/{operation_run_id}/retry` creates an idempotent queued child `OperationRun` for failed/cancelled runs; it does not mutate the terminal parent or execute the owner.
+- `POST /api/operations/runs/{operation_run_id}/resume` appends `OperationResumeRequested` and moves a non-terminal run
+  back to queued control state; it does not execute the owner. Authenticated resume first exact-matches the run and its
+  linked action to the server workspace.
+- `POST /api/operations/runs/{operation_run_id}/retry` creates an idempotent queued child `OperationRun` for
+  failed/cancelled runs; it does not mutate the terminal parent or execute the owner. Authenticated retry uses the same
+  run-plus-linked-action owner preflight before any child/event write.
   A linked `failed` action, or a normally cancelled action whose approval was not rejected, is requeued through the
   fixed `requeue_agent_action_for_operation_retry` PG primitive before child/event creation. Completed and rejected
   actions remain fail-closed. The action's `retry_operation_run_id` is a single-chain pointer: only the current chain
@@ -277,7 +301,13 @@ W9 backend control foundation is active; product Agent UI remains deferred.
   those steps can leave a reserved pointer without its child/events, or a child with only a subset of its events;
   exact replay exposes but does not repair that partial state. That remaining UoW is tracked by
   `RESIDUAL_LEDGER.md` R-019.
-- `POST /api/operations/runs/{operation_run_id}/dispatch` is the owner-adapter handoff. W9b.2 currently supports `export_candidates`: after approval, it plans `workflow_commands(command_type='export.projection.generate', owner='projection_exporter')` with `operation_id=<operation_run_id>` and appends `OperationCommandPlanned`. It does not run the export owner synchronously.
+- `POST /api/operations/runs/{operation_run_id}/dispatch` is the owner-adapter handoff. Authenticated dispatch first
+  exact-matches the run and linked action to the server workspace; lock-taking branches repeat that check inside the
+  dispatch lock before R-029 compatibility observation or any plan/event write. W9b.2 currently supports
+  `export_candidates`: after approval, it plans
+  `workflow_commands(command_type='export.projection.generate', owner='projection_exporter')` with
+  `operation_id=<operation_run_id>` and appends `OperationCommandPlanned`. It does not run the export owner
+  synchronously.
 - `POST /api/operations/runs/{operation_run_id}/dispatch` also supports read-only projection actions `filter_projection` and `search_projection`. These actions call the canonical projection reader, persist the bounded result in `OperationRun.result_ref`, and append `OperationReadCompleted` / `OperationReadFailed`; they do not create workflow commands or mutate projection/CRM/person-asset state.
 - `POST /api/operations/runs/{operation_run_id}/dispatch` supports `enrich_person_public_web` after approval/budget. Dispatch only plans `workflow_commands(command_type='crm.public_web.queue_batch', owner='crm_public_web_owner')` with `operation_id=<operation_run_id>`; the command owner creates CRM Public Web batch/run rows and queues workers. Operation dispatch must not call the synchronous CRM Public Web start route.
 - `POST /api/operations/runs/{operation_run_id}/dispatch` supports company Public Web refresh action `refresh_company_public_web_assets` after approval/budget. Dispatch only plans `workflow_commands(command_type='company.public_web.refresh', owner='company_public_web_owner')`; that root command only orchestrates phase commands. `company.public_web.source.collect` is the only Agent normal path that calls the company Public Web refresh service and writes source-specific rows/artifacts with canonical asset sync deferred. `company.public_web.assets.materialize` is the only Agent normal path that syncs canonical `CompanyAsset` / `CompanyEvidence` and records ActivityRun/Attempt/EntityDelta evidence for company asset effects.

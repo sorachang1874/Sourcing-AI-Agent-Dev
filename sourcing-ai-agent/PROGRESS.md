@@ -10,6 +10,25 @@
 
 ## 2026-07-15 (Asia/Singapore)
 
+### Track D D1g Operation API exact-owner closure
+
+- Authenticated Operation reads and controls now derive one server workspace and exact-match the canonical
+  `agent_actions` / `operation_runs` workspace owner. `actor` remains provenance only. The shared action registry is
+  unchanged; action/run lists are server-scoped, and authenticated run reads also reject a missing or foreign linked
+  action. Run-list linkage is enforced by one repository SQL `EXISTS`, avoiding N+1 reads and limit/offset post-filter
+  drift.
+- Action/run detail, provenance, approve/reject, cancel/retry/resume/dispatch all receive a keyword-only expected
+  workspace preflight. Dispatch rechecks in its existing lock-taking branch before any R-029 compatibility event.
+  Authenticated foreign/missing ids use one generic 404 body per resource kind and leave action/run/event/command/
+  Activity/EntityDelta/CRM state unchanged. Explicit open-mode operator behavior remains compatible.
+- Current confirmed evidence is **25 passed + 88 subtests** for request-scope transport plus the D1g real-PG matrix,
+  **4 passed** for exact adjacent Operation nodes, and full Operation runtime **136 passed + 503 subtests**, with
+  `make lint` green (**58 files**) and global mypy unchanged at **81 errors / 4 files**. Final stable commit and fresh
+  pinned non-author review remain pending; this is not a formal `GO` and authorizes no live/provider path.
+- R-031 is remediated by the current candidate but remains review-pending. R-019 stays open: D1g adds only
+  authorization reads/rechecks, no new state mutator or transaction-lock caller, and the **26** caller ratchet does not
+  rise. R-028 is unchanged/not triggered; the other 12 schema-less submissions and served=0 are unchanged.
+
 ### Track D D1f CRM existing-record action activation
 
 - Exact `set_crm_stage`, `add_crm_note`, and `create_crm_task` request contracts are active in the production registry;

@@ -183,6 +183,76 @@ class _ScopeOrchestrator:
                 return {"status": "not_found", "reason": "crm_record_not_found"}
         return {"status": "queued", "module_state_mutated": False}
 
+    def get_operation_action_registry(self):
+        return {"status": "ok", "actions": {}}
+
+    def list_operation_actions_api(self, payload, **owner):
+        self._capture("operation_actions", {**dict(payload), **owner})
+        return {"status": "ok", "actions": [], "module_state_mutated": False}
+
+    def list_operation_runs_api(self, payload, **owner):
+        self._capture("operation_runs", {**dict(payload), **owner})
+        return {"status": "ok", "operation_runs": [], "module_state_mutated": False}
+
+    @staticmethod
+    def _operation_owned(resource_id, owner):
+        expected = str(owner.get("expected_workspace_id") or "")
+        return not expected or str(resource_id).endswith("alice")
+
+    def get_operation_action_api(self, action_id, **owner):
+        self._capture("operation_action_get", {"action_id": action_id, **owner})
+        if not self._operation_owned(action_id, owner):
+            return {"status": "not_found", "action_id": action_id}
+        return {"status": "ok", "action": {"action_id": action_id}}
+
+    def get_operation_run_api(self, run_id, **owner):
+        self._capture("operation_run_get", {"run_id": run_id, **owner})
+        if not self._operation_owned(run_id, owner):
+            return {"status": "not_found", "operation_run_id": run_id}
+        return {"status": "ok", "operation_run": {"operation_run_id": run_id}}
+
+    def get_operation_run_provenance_api(self, run_id, **owner):
+        self._capture("operation_run_provenance", {"run_id": run_id, **owner})
+        if not self._operation_owned(run_id, owner):
+            return {"status": "not_found", "operation_run_id": run_id}
+        return {"status": "ok", "operation_run": {"operation_run_id": run_id}}
+
+    def approve_operation_action_api(self, action_id, payload, **owner):
+        self._capture("operation_action_approve", {"action_id": action_id, **dict(payload), **owner})
+        if not self._operation_owned(action_id, owner):
+            return {"status": "not_found", "action_id": action_id}
+        return {"status": "queued"}
+
+    def reject_operation_action_api(self, action_id, payload, **owner):
+        self._capture("operation_action_reject", {"action_id": action_id, **dict(payload), **owner})
+        if not self._operation_owned(action_id, owner):
+            return {"status": "not_found", "action_id": action_id}
+        return {"status": "rejected"}
+
+    def cancel_operation_run_api(self, run_id, payload, **owner):
+        self._capture("operation_run_cancel", {"run_id": run_id, **dict(payload), **owner})
+        if not self._operation_owned(run_id, owner):
+            return {"status": "not_found", "operation_run_id": run_id}
+        return {"status": "cancelled"}
+
+    def retry_operation_run_api(self, run_id, payload, **owner):
+        self._capture("operation_run_retry", {"run_id": run_id, **dict(payload), **owner})
+        if not self._operation_owned(run_id, owner):
+            return {"status": "not_found", "operation_run_id": run_id}
+        return {"status": "queued"}
+
+    def resume_operation_run_api(self, run_id, payload, **owner):
+        self._capture("operation_run_resume", {"run_id": run_id, **dict(payload), **owner})
+        if not self._operation_owned(run_id, owner):
+            return {"status": "not_found", "operation_run_id": run_id}
+        return {"status": "queued"}
+
+    def dispatch_operation_run_api(self, run_id, payload, **owner):
+        self._capture("operation_run_dispatch", {"run_id": run_id, **dict(payload), **owner})
+        if not self._operation_owned(run_id, owner):
+            return {"status": "not_found", "operation_run_id": run_id}
+        return {"status": "planned"}
+
     def list_query_dispatches(self, payload):
         self._capture("query_dispatches", payload)
         return {"query_dispatches": [], "scope": dict(payload)}
@@ -737,13 +807,27 @@ class RequestScopeWiringTest(unittest.TestCase):
             ("POST", "/api/workers/daemon/systemd-unit"),
             ("POST", "/api/runtime/services/shutdown"),
             ("POST", "/api/jobs/{job_id}/cancel"),
+            ("GET", "/api/operations/action-registry"),
+            ("GET", "/api/operations/actions"),
+            ("GET", "/api/operations/actions/{action_id}"),
+            ("GET", "/api/operations/runs"),
+            ("GET", "/api/operations/runs/{run_id}"),
+            ("GET", "/api/operations/runs/{run_id}/provenance"),
             ("POST", "/api/operations/actions"),
+            ("POST", "/api/operations/actions/{action_id}/approve"),
+            ("POST", "/api/operations/actions/{action_id}/reject"),
+            ("POST", "/api/operations/runs/{run_id}/cancel"),
+            ("POST", "/api/operations/runs/{run_id}/retry"),
+            ("POST", "/api/operations/runs/{run_id}/resume"),
+            ("POST", "/api/operations/runs/{run_id}/dispatch"),
         }
         self.assertTrue(expected.issubset(AUTHENTICATED_REQUEST_SCOPE_REGISTRY))
         self.assertNotIn("unclassified", AUTHENTICATED_REQUEST_SCOPE_REGISTRY.values())
 
         def in_inventory(method: str, path: str) -> bool:
             if path.startswith("/api/workers"):
+                return True
+            if path.startswith("/api/operations"):
                 return True
             if method != "POST":
                 return False
@@ -762,7 +846,6 @@ class RequestScopeWiringTest(unittest.TestCase):
                 or path == "/api/target-candidates/import-from-job"
                 or path == "/api/projections/backfill-from-job"
                 or path == "/api/runtime/services/shutdown"
-                or path == "/api/operations/actions"
             )
 
         discovered = set()
@@ -940,6 +1023,114 @@ class RequestScopeWiringTest(unittest.TestCase):
         self.assertEqual(captured["actor"], "legacy-operator")
         self.assertNotIn("expected_workspace_id", captured)
         self.assertNotIn("expected_owner_user_id", captured)
+
+    def test_authenticated_operation_reads_and_controls_use_exact_workspace_scope(self) -> None:
+        base, opener, orchestrator = self._start_server()
+
+        registry = self._request(opener, f"{base}/api/operations/action-registry")
+        self.assertEqual(registry[0], 200)
+        for path, capture_name in (
+            ("/api/operations/actions?workspace_id=user-bob", "operation_actions"),
+            ("/api/operations/runs?workspace_id=user-bob", "operation_runs"),
+        ):
+            status, _ = self._request(opener, f"{base}{path}")
+            self.assertEqual(status, 200)
+            self.assertEqual(orchestrator.captured[capture_name][-1]["workspace_id"], "user-alice")
+            self.assertEqual(orchestrator.captured[capture_name][-1]["expected_workspace_id"], "user-alice")
+
+        action_not_found = (404, {"status": "not_found", "reason": "operation_action_not_found"})
+        for suffix in ("", "/approve", "/reject"):
+            method = "GET" if not suffix else "POST"
+            foreign = self._request(
+                opener,
+                f"{base}/api/operations/actions/action-bob{suffix}",
+                method=method,
+                body={"actor": "bob"} if suffix else None,
+            )
+            missing = self._request(
+                opener,
+                f"{base}/api/operations/actions/action-missing{suffix}",
+                method=method,
+                body={"actor": "bob"} if suffix else None,
+            )
+            self.assertEqual(foreign, missing)
+            self.assertEqual(foreign, action_not_found)
+
+        run_not_found = (404, {"status": "not_found", "reason": "operation_run_not_found"})
+        run_suffixes = (
+            ("", "GET"),
+            ("/provenance", "GET"),
+            ("/cancel", "POST"),
+            ("/retry", "POST"),
+            ("/resume", "POST"),
+            ("/dispatch", "POST"),
+        )
+        for suffix, method in run_suffixes:
+            foreign = self._request(
+                opener,
+                f"{base}/api/operations/runs/run-bob{suffix}",
+                method=method,
+                body={"actor": "bob"} if method == "POST" else None,
+            )
+            missing = self._request(
+                opener,
+                f"{base}/api/operations/runs/run-missing{suffix}",
+                method=method,
+                body={"actor": "bob"} if method == "POST" else None,
+            )
+            self.assertEqual(foreign, missing)
+            self.assertEqual(foreign, run_not_found)
+
+        for path, method, expected_status in (
+            ("/api/operations/actions/action-alice", "GET", 200),
+            ("/api/operations/actions/action-alice/approve", "POST", 202),
+            ("/api/operations/actions/action-alice/reject", "POST", 200),
+            ("/api/operations/runs/run-alice", "GET", 200),
+            ("/api/operations/runs/run-alice/provenance", "GET", 200),
+            ("/api/operations/runs/run-alice/cancel", "POST", 200),
+            ("/api/operations/runs/run-alice/retry", "POST", 202),
+            ("/api/operations/runs/run-alice/resume", "POST", 202),
+            ("/api/operations/runs/run-alice/dispatch", "POST", 202),
+        ):
+            status, _ = self._request(
+                opener,
+                f"{base}{path}",
+                method=method,
+                body={"actor": "bob"} if method == "POST" else None,
+            )
+            self.assertEqual(status, expected_status)
+
+        for capture_name in (
+            "operation_action_approve",
+            "operation_action_reject",
+            "operation_run_cancel",
+            "operation_run_retry",
+            "operation_run_resume",
+            "operation_run_dispatch",
+        ):
+            captured = orchestrator.captured[capture_name][-1]
+            self.assertEqual(captured["actor"], "alice")
+            self.assertEqual(captured["expected_workspace_id"], "user-alice")
+
+        open_base, open_opener, open_orchestrator = self._start_server(authenticated=False)
+        status, _ = self._request(
+            open_opener,
+            f"{open_base}/api/operations/runs?workspace_id=operator-workspace",
+            token=None,
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(open_orchestrator.captured["operation_runs"][-1]["workspace_id"], "operator-workspace")
+        self.assertNotIn("expected_workspace_id", open_orchestrator.captured["operation_runs"][-1])
+        status, _ = self._request(
+            open_opener,
+            f"{open_base}/api/operations/runs/run-bob/resume",
+            method="POST",
+            body={"actor": "legacy-operator"},
+            token=None,
+        )
+        self.assertEqual(status, 202)
+        self.assertEqual(open_orchestrator.captured["operation_run_resume"][-1]["actor"], "legacy-operator")
+        self.assertNotIn("expected_workspace_id", open_orchestrator.captured["operation_run_resume"][-1])
 
     def test_open_mode_preserves_read_and_write_payloads(self) -> None:
         base, opener, orchestrator = self._start_server(authenticated=False)

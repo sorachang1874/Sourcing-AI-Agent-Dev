@@ -363,6 +363,14 @@ def _expected_crm_owner_kwargs(request: Request) -> dict[str, str]:
     }
 
 
+def _expected_operation_owner_kwargs(request: Request) -> dict[str, str]:
+    """Canonical aggregate-owner fence arguments for authenticated Operation APIs."""
+    identity = _server_identity(request)
+    if identity is None:
+        return {}
+    return {"expected_workspace_id": _user_namespace(identity["user_id"])}
+
+
 # C2.6 request-boundary inventory. Every public route that creates, reads via
 # POST, or mutates/controls a job/worker is classified here so additions cannot
 # silently bypass an ownership decision. ``global_admin`` routes deliberately
@@ -383,7 +391,19 @@ AUTHENTICATED_REQUEST_SCOPE_REGISTRY: dict[tuple[str, str], str] = {
     ("POST", "/api/criteria/recompile"): "criteria_write_with_optional_exact_job_derived_create",
     ("POST", "/api/target-candidates/import-from-job"): "exact_job_write",
     ("POST", "/api/projections/backfill-from-job"): "exact_job_write",
+    ("GET", "/api/operations/action-registry"): "shared_operation_registry_read",
+    ("GET", "/api/operations/actions"): "exact_operation_workspace_read",
+    ("GET", "/api/operations/actions/{action_id}"): "exact_operation_workspace_read",
+    ("GET", "/api/operations/runs"): "exact_operation_workspace_read",
+    ("GET", "/api/operations/runs/{run_id}"): "exact_operation_workspace_read",
+    ("GET", "/api/operations/runs/{run_id}/provenance"): "exact_operation_workspace_read",
     ("POST", "/api/operations/actions"): "owner_bound_crm_or_schema_less_operation_submit",
+    ("POST", "/api/operations/actions/{action_id}/approve"): "exact_operation_workspace_write",
+    ("POST", "/api/operations/actions/{action_id}/reject"): "exact_operation_workspace_write",
+    ("POST", "/api/operations/runs/{run_id}/cancel"): "exact_operation_workspace_write",
+    ("POST", "/api/operations/runs/{run_id}/retry"): "exact_operation_workspace_write",
+    ("POST", "/api/operations/runs/{run_id}/resume"): "exact_operation_workspace_write",
+    ("POST", "/api/operations/runs/{run_id}/dispatch"): "exact_operation_workspace_write",
     ("GET", "/api/workers/recoverable"): "exact_job_read_or_global_admin",
     ("GET", "/api/workers/daemon/status"): "exact_job_read_or_global_admin",
     ("POST", "/api/workers/interrupt"): "exact_worker_job_write",
@@ -397,7 +417,25 @@ AUTHENTICATED_REQUEST_SCOPE_REGISTRY: dict[tuple[str, str], str] = {
 
 _JOB_NOT_FOUND_BODY = {"status": "not_found", "reason": "job_not_found"}
 _CRM_RECORD_NOT_FOUND_BODY = {"status": "not_found", "reason": "crm_record_not_found"}
+_OPERATION_ACTION_NOT_FOUND_BODY = {"status": "not_found", "reason": "operation_action_not_found"}
+_OPERATION_RUN_NOT_FOUND_BODY = {"status": "not_found", "reason": "operation_run_not_found"}
 _ADMIN_SCOPE_REQUIRED_BODY = {"status": "forbidden", "reason": "admin_scope_required"}
+
+
+def _mask_authenticated_operation_not_found(
+    request: Request,
+    result: dict[str, Any],
+    *,
+    resource: str,
+) -> dict[str, Any]:
+    """Make authenticated missing/foreign Operation responses byte-identical."""
+    if _server_identity(request) is None or result.get("status") != "not_found":
+        return result
+    if resource == "action":
+        return dict(_OPERATION_ACTION_NOT_FOUND_BODY)
+    if resource == "run":
+        return dict(_OPERATION_RUN_NOT_FOUND_BODY)
+    raise ValueError(f"unsupported_operation_resource:{resource}")
 
 
 def _apply_server_identity(
@@ -1046,31 +1084,51 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["GET"], "/api/operations/action-registry", get_operation_action_registry)
 
     def get_operation_actions(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
-        return _json_response(HTTPStatus.OK, orchestrator.list_operation_actions_api(query))
+        _apply_server_identity(query, request, workspace=True)
+        return _json_response(
+            HTTPStatus.OK,
+            orchestrator.list_operation_actions_api(query, **_expected_operation_owner_kwargs(request)),
+        )
 
     add(["GET"], "/api/operations/actions", get_operation_actions)
 
     def get_operation_runs(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
-        return _json_response(HTTPStatus.OK, orchestrator.list_operation_runs_api(query))
+        _apply_server_identity(query, request, workspace=True)
+        return _json_response(
+            HTTPStatus.OK,
+            orchestrator.list_operation_runs_api(query, **_expected_operation_owner_kwargs(request)),
+        )
 
     add(["GET"], "/api/operations/runs", get_operation_runs)
 
     def get_operation_run_provenance(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
-        result = orchestrator.get_operation_run_provenance_api(_decode_path_param(request.path_params["run_id"]))
+        result = orchestrator.get_operation_run_provenance_api(
+            _decode_path_param(request.path_params["run_id"]),
+            **_expected_operation_owner_kwargs(request),
+        )
+        result = _mask_authenticated_operation_not_found(request, result, resource="run")
         status = HTTPStatus.OK if result.get("status") == "ok" else HTTPStatus.NOT_FOUND
         return _json_response(status, result)
 
     add(["GET"], "/api/operations/runs/{run_id}/provenance", get_operation_run_provenance)
 
     def get_operation_action(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
-        result = orchestrator.get_operation_action_api(_decode_path_param(request.path_params["action_id"]))
+        result = orchestrator.get_operation_action_api(
+            _decode_path_param(request.path_params["action_id"]),
+            **_expected_operation_owner_kwargs(request),
+        )
+        result = _mask_authenticated_operation_not_found(request, result, resource="action")
         status = HTTPStatus.OK if result.get("status") == "ok" else HTTPStatus.NOT_FOUND
         return _json_response(status, result)
 
     add(["GET"], "/api/operations/actions/{action_id}", get_operation_action)
 
     def get_operation_run(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
-        result = orchestrator.get_operation_run_api(_decode_path_param(request.path_params["run_id"]))
+        result = orchestrator.get_operation_run_api(
+            _decode_path_param(request.path_params["run_id"]),
+            **_expected_operation_owner_kwargs(request),
+        )
+        result = _mask_authenticated_operation_not_found(request, result, resource="run")
         status = HTTPStatus.OK if result.get("status") == "ok" else HTTPStatus.NOT_FOUND
         return _json_response(status, result)
 
@@ -2061,7 +2119,9 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
         result = orchestrator.approve_operation_action_api(
             _decode_path_param(request.path_params["action_id"]),
             payload,
+            **_expected_operation_owner_kwargs(request),
         )
+        result = _mask_authenticated_operation_not_found(request, result, resource="action")
         status = HTTPStatus.ACCEPTED if result.get("status") == "queued" else HTTPStatus.BAD_REQUEST
         if result.get("status") == "not_found":
             status = HTTPStatus.NOT_FOUND
@@ -2076,7 +2136,9 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
         result = orchestrator.reject_operation_action_api(
             _decode_path_param(request.path_params["action_id"]),
             payload,
+            **_expected_operation_owner_kwargs(request),
         )
+        result = _mask_authenticated_operation_not_found(request, result, resource="action")
         status = HTTPStatus.OK if result.get("status") == "rejected" else HTTPStatus.BAD_REQUEST
         if result.get("status") == "not_found":
             status = HTTPStatus.NOT_FOUND
@@ -2091,7 +2153,9 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
         result = orchestrator.cancel_operation_run_api(
             _decode_path_param(request.path_params["run_id"]),
             payload,
+            **_expected_operation_owner_kwargs(request),
         )
+        result = _mask_authenticated_operation_not_found(request, result, resource="run")
         status = HTTPStatus.OK if result.get("status") == "cancelled" else HTTPStatus.BAD_REQUEST
         if result.get("status") == "not_found":
             status = HTTPStatus.NOT_FOUND
@@ -2106,7 +2170,9 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
         result = orchestrator.retry_operation_run_api(
             _decode_path_param(request.path_params["run_id"]),
             payload,
+            **_expected_operation_owner_kwargs(request),
         )
+        result = _mask_authenticated_operation_not_found(request, result, resource="run")
         status = HTTPStatus.ACCEPTED if result.get("status") == "queued" else HTTPStatus.BAD_REQUEST
         if result.get("status") == "not_found":
             status = HTTPStatus.NOT_FOUND
@@ -2121,7 +2187,9 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
         result = orchestrator.resume_operation_run_api(
             _decode_path_param(request.path_params["run_id"]),
             payload,
+            **_expected_operation_owner_kwargs(request),
         )
+        result = _mask_authenticated_operation_not_found(request, result, resource="run")
         status = HTTPStatus.ACCEPTED if result.get("status") == "queued" else HTTPStatus.BAD_REQUEST
         if result.get("status") == "not_found":
             status = HTTPStatus.NOT_FOUND
@@ -2136,7 +2204,9 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
         result = orchestrator.dispatch_operation_run_api(
             _decode_path_param(request.path_params["run_id"]),
             payload,
+            **_expected_operation_owner_kwargs(request),
         )
+        result = _mask_authenticated_operation_not_found(request, result, resource="run")
         status = HTTPStatus.ACCEPTED if result.get("status") == "planned" else HTTPStatus.BAD_REQUEST
         if result.get("status") == "not_found":
             status = HTTPStatus.NOT_FOUND

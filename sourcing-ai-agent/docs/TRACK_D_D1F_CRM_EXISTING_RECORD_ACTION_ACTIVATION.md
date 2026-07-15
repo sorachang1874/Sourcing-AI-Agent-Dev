@@ -104,6 +104,10 @@ caller-controlled label.
   server-derived exact workspace in this batch. That IDOR boundary is recorded separately in R-031 and blocks hosted or
   live multi-user Operation exposure, but not bounded non-live implementation or local open-mode testing.
 
+Follow-up: D1g (`TRACK_D_D1G_OPERATION_API_EXACT_OWNER_CLOSURE.md`) remediates that downstream Operation API boundary
+in a later candidate. This D1f record intentionally preserves its original scope and does not inherit D1g's review
+status or broaden D1f's authorization claim.
+
 ## 6. Owner/source-of-truth matrix
 
 | contract | owner/source of truth | normal consumers | forbidden source/fallback | status |

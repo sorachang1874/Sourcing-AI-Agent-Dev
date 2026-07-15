@@ -48748,7 +48748,54 @@ class SourcingOrchestrator:
             "contract": "w11_workflow_command_control_v1",
         }
 
-    def list_operation_actions_api(self, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    @staticmethod
+    def _operation_record_matches_expected_workspace(
+        record: Mapping[str, Any],
+        *,
+        expected_workspace_id: str = "",
+    ) -> bool:
+        expected = str(expected_workspace_id or "").strip()
+        return not expected or str(record.get("workspace_id") or "").strip() == expected
+
+    def _operation_action_for_expected_workspace(
+        self,
+        action_id: str,
+        *,
+        expected_workspace_id: str = "",
+    ) -> dict[str, Any]:
+        action = self.store.repos.workflow_runtime.get_action(action_id)
+        if not action or not self._operation_record_matches_expected_workspace(
+            action,
+            expected_workspace_id=expected_workspace_id,
+        ):
+            return {}
+        return action
+
+    def _operation_run_for_expected_workspace(
+        self,
+        operation_run_id: str,
+        *,
+        expected_workspace_id: str = "",
+    ) -> dict[str, Any]:
+        operation_run = self.store.repos.workflow_runtime.get_operation(operation_run_id)
+        if not operation_run or not self._operation_record_matches_expected_workspace(
+            operation_run,
+            expected_workspace_id=expected_workspace_id,
+        ):
+            return {}
+        if str(expected_workspace_id or "").strip() and not self._operation_action_for_expected_workspace(
+            str(operation_run.get("action_id") or ""),
+            expected_workspace_id=expected_workspace_id,
+        ):
+            return {}
+        return operation_run
+
+    def list_operation_actions_api(
+        self,
+        payload: dict[str, Any] | None = None,
+        *,
+        expected_workspace_id: str = "",
+    ) -> dict[str, Any]:
         payload = dict(payload or {})
         statuses = payload.get("statuses")
         if statuses is None and payload.get("status") not in {None, ""}:
@@ -48757,8 +48804,9 @@ class SourcingOrchestrator:
             status_values = [item.strip() for item in statuses.split(",") if item.strip()]
         else:
             status_values = [str(item or "").strip() for item in list(statuses or []) if str(item or "").strip()]
+        workspace_id = str(expected_workspace_id or "").strip() or str(payload.get("workspace_id") or "default").strip()
         actions = self.store.repos.workflow_runtime.list_actions(
-            workspace_id=str(payload.get("workspace_id") or "default").strip() or "default",
+            workspace_id=workspace_id or "default",
             conversation_id=str(payload.get("conversation_id") or "").strip(),
             action_type=str(payload.get("action_type") or "").strip(),
             owner_module=str(payload.get("owner_module") or "").strip(),
@@ -48773,7 +48821,12 @@ class SourcingOrchestrator:
             "contract": "w9_operation_action_list_v1",
         }
 
-    def list_operation_runs_api(self, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    def list_operation_runs_api(
+        self,
+        payload: dict[str, Any] | None = None,
+        *,
+        expected_workspace_id: str = "",
+    ) -> dict[str, Any]:
         payload = dict(payload or {})
         statuses = payload.get("statuses")
         if statuses is None and payload.get("status") not in {None, ""}:
@@ -48782,8 +48835,10 @@ class SourcingOrchestrator:
             status_values = [item.strip() for item in statuses.split(",") if item.strip()]
         else:
             status_values = [str(item or "").strip() for item in list(statuses or []) if str(item or "").strip()]
+        workspace_id = str(expected_workspace_id or "").strip() or str(payload.get("workspace_id") or "default").strip()
         operation_runs = self.store.repos.workflow_runtime.list_operations(
-            workspace_id=str(payload.get("workspace_id") or "default").strip() or "default",
+            workspace_id=workspace_id or "default",
+            linked_action_workspace_id=str(expected_workspace_id or "").strip(),
             action_id=str(payload.get("action_id") or "").strip(),
             owner_module=str(payload.get("owner_module") or "").strip(),
             operation_type=str(payload.get("operation_type") or "").strip(),
@@ -49145,8 +49200,16 @@ class SourcingOrchestrator:
             "contract": contract,
         }
 
-    def get_operation_action_api(self, action_id: str) -> dict[str, Any]:
-        action = self.store.repos.workflow_runtime.get_action(action_id)
+    def get_operation_action_api(
+        self,
+        action_id: str,
+        *,
+        expected_workspace_id: str = "",
+    ) -> dict[str, Any]:
+        action = self._operation_action_for_expected_workspace(
+            action_id,
+            expected_workspace_id=expected_workspace_id,
+        )
         if not action:
             return {"status": "not_found", "action_id": str(action_id or "").strip()}
         return {
@@ -49159,8 +49222,16 @@ class SourcingOrchestrator:
             "contract": "w9_operation_action_query_v1",
         }
 
-    def get_operation_run_api(self, operation_run_id: str) -> dict[str, Any]:
-        operation_run = self.store.repos.workflow_runtime.get_operation(operation_run_id)
+    def get_operation_run_api(
+        self,
+        operation_run_id: str,
+        *,
+        expected_workspace_id: str = "",
+    ) -> dict[str, Any]:
+        operation_run = self._operation_run_for_expected_workspace(
+            operation_run_id,
+            expected_workspace_id=expected_workspace_id,
+        )
         if not operation_run:
             return {"status": "not_found", "operation_run_id": str(operation_run_id or "").strip()}
         return {
@@ -49436,11 +49507,24 @@ class SourcingOrchestrator:
         )
         return projected
 
-    def get_operation_run_provenance_api(self, operation_run_id: str) -> dict[str, Any]:
-        operation_run = self.store.repos.workflow_runtime.get_operation(operation_run_id)
+    def get_operation_run_provenance_api(
+        self,
+        operation_run_id: str,
+        *,
+        expected_workspace_id: str = "",
+    ) -> dict[str, Any]:
+        operation_run = self._operation_run_for_expected_workspace(
+            operation_run_id,
+            expected_workspace_id=expected_workspace_id,
+        )
         if not operation_run:
             return {"status": "not_found", "operation_run_id": str(operation_run_id or "").strip()}
-        action = self.store.repos.workflow_runtime.get_action(str(operation_run.get("action_id") or ""))
+        action = self._operation_action_for_expected_workspace(
+            str(operation_run.get("action_id") or ""),
+            expected_workspace_id=expected_workspace_id,
+        )
+        if str(expected_workspace_id or "").strip() and not action:
+            return {"status": "not_found", "operation_run_id": str(operation_run_id or "").strip()}
         workflow_ref = dict(operation_run.get("workflow_ref") or {})
         workflow_run_id = str(workflow_ref.get("workflow_run_id") or "").strip()
         commands = self.store.list_workflow_commands(operation_id=operation_run["operation_run_id"], limit=100)
@@ -49475,8 +49559,19 @@ class SourcingOrchestrator:
             "contract": "w9_operation_run_provenance_v1",
         }
 
-    def approve_operation_action_api(self, action_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    def approve_operation_action_api(
+        self,
+        action_id: str,
+        payload: dict[str, Any] | None = None,
+        *,
+        expected_workspace_id: str = "",
+    ) -> dict[str, Any]:
         payload = dict(payload or {})
+        if str(expected_workspace_id or "").strip() and not self._operation_action_for_expected_workspace(
+            action_id,
+            expected_workspace_id=expected_workspace_id,
+        ):
+            return {"status": "not_found", "action_id": str(action_id or "").strip()}
         try:
             result = self.operation_runtime_writer.approve_action(
                 action_id=action_id,
@@ -49511,8 +49606,19 @@ class SourcingOrchestrator:
             "contract": "w9_operation_action_approval_v1",
         }
 
-    def reject_operation_action_api(self, action_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    def reject_operation_action_api(
+        self,
+        action_id: str,
+        payload: dict[str, Any] | None = None,
+        *,
+        expected_workspace_id: str = "",
+    ) -> dict[str, Any]:
         payload = dict(payload or {})
+        if str(expected_workspace_id or "").strip() and not self._operation_action_for_expected_workspace(
+            action_id,
+            expected_workspace_id=expected_workspace_id,
+        ):
+            return {"status": "not_found", "action_id": str(action_id or "").strip()}
         try:
             action = self.operation_runtime_writer.reject_action(
                 action_id=action_id,
@@ -49538,8 +49644,19 @@ class SourcingOrchestrator:
             "contract": "w9_operation_action_rejection_v1",
         }
 
-    def cancel_operation_run_api(self, operation_run_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    def cancel_operation_run_api(
+        self,
+        operation_run_id: str,
+        payload: dict[str, Any] | None = None,
+        *,
+        expected_workspace_id: str = "",
+    ) -> dict[str, Any]:
         payload = dict(payload or {})
+        if str(expected_workspace_id or "").strip() and not self._operation_run_for_expected_workspace(
+            operation_run_id,
+            expected_workspace_id=expected_workspace_id,
+        ):
+            return {"status": "not_found", "operation_run_id": str(operation_run_id or "").strip()}
         try:
             operation_run = self.operation_runtime_writer.cancel_operation(
                 operation_run_id=operation_run_id,
@@ -49562,8 +49679,19 @@ class SourcingOrchestrator:
             "contract": "w9_operation_run_cancel_v1",
         }
 
-    def retry_operation_run_api(self, operation_run_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    def retry_operation_run_api(
+        self,
+        operation_run_id: str,
+        payload: dict[str, Any] | None = None,
+        *,
+        expected_workspace_id: str = "",
+    ) -> dict[str, Any]:
         payload = dict(payload or {})
+        if str(expected_workspace_id or "").strip() and not self._operation_run_for_expected_workspace(
+            operation_run_id,
+            expected_workspace_id=expected_workspace_id,
+        ):
+            return {"status": "not_found", "operation_run_id": str(operation_run_id or "").strip()}
         try:
             result = self.operation_runtime_writer.retry_operation(
                 operation_run_id=operation_run_id,
@@ -49594,8 +49722,19 @@ class SourcingOrchestrator:
             "contract": "w9_operation_run_retry_v1",
         }
 
-    def resume_operation_run_api(self, operation_run_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    def resume_operation_run_api(
+        self,
+        operation_run_id: str,
+        payload: dict[str, Any] | None = None,
+        *,
+        expected_workspace_id: str = "",
+    ) -> dict[str, Any]:
         payload = dict(payload or {})
+        if str(expected_workspace_id or "").strip() and not self._operation_run_for_expected_workspace(
+            operation_run_id,
+            expected_workspace_id=expected_workspace_id,
+        ):
+            return {"status": "not_found", "operation_run_id": str(operation_run_id or "").strip()}
         try:
             result = self.operation_runtime_writer.resume_operation(
                 operation_run_id=operation_run_id,
@@ -49633,10 +49772,15 @@ class SourcingOrchestrator:
         self,
         operation_run_id: str,
         payload: dict[str, Any] | None = None,
+        *,
+        expected_workspace_id: str = "",
     ) -> dict[str, Any]:
         payload = dict(payload or {})
         actor = str(payload.get("actor") or "api").strip() or "api"
-        operation_run = self.store.repos.workflow_runtime.get_operation(operation_run_id)
+        operation_run = self._operation_run_for_expected_workspace(
+            operation_run_id,
+            expected_workspace_id=expected_workspace_id,
+        )
         if not operation_run:
             return {"status": "not_found", "operation_run_id": str(operation_run_id or "").strip()}
         action = self.store.repos.workflow_runtime.get_action(str(operation_run.get("action_id") or ""))
@@ -49649,7 +49793,10 @@ class SourcingOrchestrator:
         action_type = str(action.get("action_type") or "").strip()
         if action_type in {ACTION_EXPORT_CANDIDATES, ACTION_ADD_TO_CRM}:
             with self.store.repos.workflow_runtime.hold_operation_dispatch_lock(operation_run_id):
-                operation_run = self.store.repos.workflow_runtime.get_operation(operation_run_id)
+                operation_run = self._operation_run_for_expected_workspace(
+                    operation_run_id,
+                    expected_workspace_id=expected_workspace_id,
+                )
                 if not operation_run:
                     return {"status": "not_found", "operation_run_id": str(operation_run_id or "").strip()}
                 action = self.store.repos.workflow_runtime.get_action(str(operation_run.get("action_id") or ""))

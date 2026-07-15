@@ -173,15 +173,25 @@
   rounds=`NO-GO 0/3/2/0`、`NO-GO 0/2/1/0`，均仅作 fixed-forward 输入，不是 formal verdict；author evidence=
   D1f `7+27`、D1 adjacency `136+136`、operation `136+503`，fresh pinned non-author review pending。R-028 仍 open，不宣称 command/effect/terminal/EntityDelta 同 UoW、完整 TOCTOU 或
   exactly-once；无 provider/model/live。
+- [x] D1g Operation API exact-owner closure current author candidate（2026-07-15）：canonical authorization owner=
+  `agent_actions/operation_runs.workspace_id`，run 额外要求 linked action 存在且 exact same workspace；actor 仅为
+  provenance。authenticated action/run list 使用 server workspace，detail/provenance 与
+  approve/reject/cancel/retry/resume/dispatch 均做 keyword-only expected-workspace preflight；dispatch 的既有锁分支
+  在锁内、R-029 compatibility event 前再验。foreign/missing 使用 action/run 各自 byte-identical generic 404 并
+  全域零写，open-mode operator compatibility 保留。当前证据=`25+88`、adjacent exact `4`、full operation
+  `136+503`、lint `58 files`、global mypy `81/4`；final stable commit 与 fresh pinned non-author review pending。该批不迁移 12 个 schema-less action、不
+  改 served=0、不授权 live/provider。
 - [ ] R-029：宽松 action-schema bridge 仅可在 production action 尚无 reviewed schema/owner binder 期间存在；
   删除条件 = 全部 API-submittable actions（不是只看 served subset）连续一个 release window durable hit=0。
   observation epoch 必须每个 release window bump，且 `NOT VALID` checks 的既有行 validation 在独立部署完成；
   任一 action 进入 served 集前必须满足完整 schema+adapter+Activity+revisioned model-safe result+simulate serializer
   谓词；D1f 后当前 12/15 schema-less、served=0。
-- [ ] R-031：authenticated Operation API exact-owner closure。D1f 仅绑定 exact 三项 CRM submit；actions/runs 的
-  list/get/provenance 及 approve/reject/dispatch/resume/retry/cancel 尚未全部以 server-derived workspace 做统一
-  exact-owner preflight，foreign/missing parity 与全路径零写矩阵未闭合。修复前阻断 hosted/live multi-user
-  Operation exposure；不阻断 bounded non-live implementation、fake/scripted 或 local open-mode testing。
+- [ ] R-031 review closeout：D1g current author candidate 已将 actions/runs list、detail、provenance 及
+  approve/reject/dispatch/resume/retry/cancel 统一到 server-derived exact-workspace preflight，run 同时校验 linked
+  action owner，并补 foreign/missing transport parity、全路径零写、same-owner 与 open-mode 矩阵。fresh pinned
+  non-author review 仍 pending；有效 scope-matched artifact 前继续阻断 hosted/live multi-user Operation exposure、
+  served-registry promotion及 manual/product/milestone signoff，但不阻断 bounded non-live implementation、
+  fake/scripted 或 local open-mode testing。
 - [x] D3a characterize-first（2026-07-14；enclosing commit 由提交后 handoff 固定）：Plan §6#1 的 registry/snapshot
   Scout 作者批已完成，机械冻结 registry **2 writers/3 refresh/1 upsert** + physical-reader/semantic-consumer 链、
   seed catalog live-input 链、snapshot writers **5+3**、shared loader **19 calls/8 files**（fallback provenance

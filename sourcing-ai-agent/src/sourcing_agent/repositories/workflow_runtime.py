@@ -2034,6 +2034,7 @@ class WorkflowRuntimeRepository(Repository):
         self,
         *,
         workspace_id: str = "default",
+        linked_action_workspace_id: str = "",
         action_id: str = "",
         owner_module: str = "",
         operation_type: str = "",
@@ -2052,6 +2053,18 @@ class WorkflowRuntimeRepository(Repository):
             params.append(normalized_workspace_id)
             pg_clauses.append("workspace_id = %s")
             pg_params.append(normalized_workspace_id)
+        normalized_linked_action_workspace_id = str(linked_action_workspace_id or "").strip()
+        if normalized_linked_action_workspace_id:
+            clauses.append(
+                "EXISTS (SELECT 1 FROM agent_actions AS linked_action "
+                "WHERE linked_action.action_id = operation_runs.action_id AND linked_action.workspace_id = ?)"
+            )
+            params.append(normalized_linked_action_workspace_id)
+            pg_clauses.append(
+                "EXISTS (SELECT 1 FROM agent_actions AS linked_action "
+                "WHERE linked_action.action_id = operation_runs.action_id AND linked_action.workspace_id = %s)"
+            )
+            pg_params.append(normalized_linked_action_workspace_id)
         normalized_action_id = str(action_id or "").strip()
         if normalized_action_id:
             clauses.append("action_id = ?")
