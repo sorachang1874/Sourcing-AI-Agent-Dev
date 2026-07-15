@@ -605,19 +605,28 @@ def test_causal_binding_requires_one_complete_root_exec_turn_and_exact_messages(
     final_output = "Reviewed exact prompt.\n\nGO\n"
     base_events = _completed_exec_rollout(prompt=prompt, final_output=final_output)
 
-    def causal(events: list[dict[str, object]]):
+    def causal(
+        events: list[dict[str, object]],
+        *,
+        expected_session_source: str = "exec",
+        expected_thread_source: str = "",
+    ):
         raw = "".join(json.dumps(event) + "\n" for event in events).encode("utf-8")
         runner_binding = runner._review_causal_binding(
             rollout_raw=raw,
             prompt_raw=prompt.encode("utf-8"),
             raw_output=final_output.encode("utf-8"),
             expected_thread_id=THREAD_ID,
+            expected_session_source=expected_session_source,
+            expected_thread_source=expected_thread_source,
         )
         verifier_binding, blockers = verifier._parse_independent_review_causal_binding(
             rollout_raw=raw,
             prompt_raw=prompt.encode("utf-8"),
             raw_output=final_output.encode("utf-8"),
             expected_thread_id=THREAD_ID,
+            expected_session_source=expected_session_source,
+            expected_thread_source=expected_thread_source,
         )
         assert verifier_binding == runner_binding
         return runner_binding, blockers
@@ -634,13 +643,45 @@ MEMORY.md:10-12|note=[pinned scope evidence]
 019f5c2a-7a5b-71f0-8ad4-14fe34740cf3
 </rollout_ids>
 </oai-mem-citation>"""
-    annotated_events = json.loads(json.dumps(base_events))
+    annotated_events = _completed_exec_rollout(
+        prompt=prompt,
+        final_output=final_output,
+        source="vscode",
+        thread_source=runner._APP_SERVER_THREAD_SOURCE,
+    )
     annotated_events[6]["payload"]["content"][0]["text"] = (
         final_output.rstrip("\r\n") + "\n\n" + memory_annotation
     )
-    annotated_binding, annotated_blockers = causal(annotated_events)
+    annotated_binding, annotated_blockers = causal(
+        annotated_events,
+        expected_session_source="vscode",
+        expected_thread_source=runner._APP_SERVER_THREAD_SOURCE,
+    )
     assert runner._review_causal_binding_valid(annotated_binding) is True
     assert annotated_blockers == []
+
+    raw_output_mentioning_tag = "Reviewer discussed the literal <oai-mem-citation> tag."
+    assert verifier.independent_review_response_item_matches_raw_output(
+        raw_output_mentioning_tag + "\n\n" + memory_annotation,
+        raw_output_mentioning_tag,
+    ) is True
+    assert verifier.independent_review_response_item_matches_raw_output(
+        final_output.rstrip("\r\n")
+        + "\n\n"
+        + memory_annotation.replace(
+            "019f5c2a-7a5b-71f0-8ad4-14fe34740cf3",
+            "019f5c2a-7a5b-71f0-8ad4-14fe34740cf3\n019F5C2A-7A5B-71F0-8AD4-14FE34740CF3",
+        ),
+        final_output,
+    ) is False
+
+    legacy_annotated_events = json.loads(json.dumps(base_events))
+    legacy_annotated_events[6]["payload"]["content"][0]["text"] = (
+        final_output.rstrip("\r\n") + "\n\n" + memory_annotation
+    )
+    legacy_binding, legacy_blockers = causal(legacy_annotated_events)
+    assert legacy_binding["final_response_item_exact"] is False
+    assert "review_artifact_rollout_causal_final_response_item_mismatch" in legacy_blockers
 
     scenarios = (
         ("non_exec", "session_source_exec", "review_artifact_rollout_causal_session_source_not_exec"),
@@ -666,6 +707,11 @@ MEMORY.md:10-12|note=[pinned scope evidence]
         ),
         (
             "malformed_memory_annotation",
+            "final_response_item_exact",
+            "review_artifact_rollout_causal_final_response_item_mismatch",
+        ),
+        (
+            "duplicate_arbitrary_final_response",
             "final_response_item_exact",
             "review_artifact_rollout_causal_final_response_item_mismatch",
         ),
@@ -696,6 +742,10 @@ MEMORY.md:10-12|note=[pinned scope evidence]
                 + "\n\n"
                 + memory_annotation.replace("</rollout_ids>", "</wrong_tag>")
             )
+        elif scenario == "duplicate_arbitrary_final_response":
+            duplicate_final = json.loads(json.dumps(events[6]))
+            duplicate_final["payload"]["content"][0]["text"] = "unbound second final"
+            events.insert(7, duplicate_final)
         elif scenario == "wrong_final_event":
             events[5]["payload"]["message"] = "different final"
         elif scenario == "wrong_task_complete":

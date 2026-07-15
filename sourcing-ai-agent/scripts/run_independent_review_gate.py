@@ -1060,11 +1060,13 @@ def _review_causal_binding(
         normalize_newlines: bool = False,
         allow_response_item_memory_annotation: bool = False,
     ) -> bool:
+        window_observations = [
+            observed for line_number, observed in observations if start_line < line_number < complete_line
+        ]
         matching = [
-            line_number
-            for line_number, observed in observations
-            if (start_line < line_number < complete_line)
-            and (
+            observed
+            for observed in window_observations
+            if (
                 independent_review_response_item_matches_raw_output(observed, expected)
                 if allow_response_item_memory_annotation
                 else _normalize_trailing_newlines(observed) == _normalize_trailing_newlines(expected)
@@ -1072,7 +1074,7 @@ def _review_causal_binding(
                 else observed == expected
             )
         ]
-        return single_task_turn and len(matching) == 1
+        return single_task_turn and len(window_observations) == 1 and len(matching) == 1
 
     task_complete_final_exact = (
         single_task_turn
@@ -1094,7 +1096,9 @@ def _review_causal_binding(
             final_response_items,
             final_output,
             normalize_newlines=True,
-            allow_response_item_memory_annotation=True,
+            allow_response_item_memory_annotation=(
+                expected_session_source == "vscode" and expected_thread_source == _APP_SERVER_THREAD_SOURCE
+            ),
         ),
         "final_event_message_exact": exact_between(
             final_event_messages,

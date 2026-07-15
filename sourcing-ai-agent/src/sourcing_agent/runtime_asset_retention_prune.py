@@ -2675,7 +2675,7 @@ _MEMORY_CITATION_ENTRY_PATTERN = re.compile(
     r"^[^<>\r\n]+:\d+-\d+\|note=\[[^<>\r\n]*\]$"
 )
 _MEMORY_CITATION_ROLLOUT_ID_PATTERN = re.compile(
-    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
 )
 _MEMORY_CITATION_SEPARATOR = "\n\n<oai-mem-citation>"
 
@@ -2695,15 +2695,14 @@ def independent_review_response_item_matches_raw_output(observed: str, expected:
     normalized_expected = _review_normalize_trailing_newlines(expected)
     if normalized_observed == normalized_expected:
         return True
-    if normalized_observed.count("<oai-mem-citation>") != 1:
-        return False
-    if normalized_observed.count("</oai-mem-citation>") != 1:
-        return False
     prefix, separator, suffix = normalized_observed.rpartition(_MEMORY_CITATION_SEPARATOR)
     if not separator or prefix != normalized_expected:
         return False
 
-    block_lines = ("<oai-mem-citation>" + suffix).split("\n")
+    block = "<oai-mem-citation>" + suffix
+    if block.count("<oai-mem-citation>") != 1 or block.count("</oai-mem-citation>") != 1:
+        return False
+    block_lines = block.split("\n")
     if len(block_lines) < 7:
         return False
     if block_lines[:2] != ["<oai-mem-citation>", "<citation_entries>"]:
@@ -2822,11 +2821,13 @@ def _parse_independent_review_causal_binding(
         normalize_newlines: bool = False,
         allow_response_item_memory_annotation: bool = False,
     ) -> bool:
+        window_observations = [
+            observed for line_number, observed in observations if start_line < line_number < complete_line
+        ]
         matches = [
-            line_number
-            for line_number, observed in observations
-            if start_line < line_number < complete_line
-            and (
+            observed
+            for observed in window_observations
+            if (
                 independent_review_response_item_matches_raw_output(observed, expected)
                 if allow_response_item_memory_annotation
                 else _review_normalize_trailing_newlines(observed) == _review_normalize_trailing_newlines(expected)
@@ -2834,7 +2835,7 @@ def _parse_independent_review_causal_binding(
                 else observed == expected
             )
         ]
-        return single_task_turn and len(matches) == 1
+        return single_task_turn and len(window_observations) == 1 and len(matches) == 1
 
     binding: dict[str, Any] = {
         "turn_id": turn_id,
@@ -2851,7 +2852,10 @@ def _parse_independent_review_causal_binding(
             response_final_messages,
             final_output,
             normalize_newlines=True,
-            allow_response_item_memory_annotation=True,
+            allow_response_item_memory_annotation=(
+                expected_session_source == "vscode"
+                and expected_thread_source == _INDEPENDENT_REVIEW_APP_SERVER_THREAD_SOURCE
+            ),
         ),
         "final_event_message_exact": exact_between(
             event_final_messages,
