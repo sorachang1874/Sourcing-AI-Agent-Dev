@@ -336,6 +336,17 @@ serve、会话/事件层、planner loop），用一个垂直切片证明闭环�
   commit `e7db34e...` fresh pinned medium re-review=`GO 0/0/0/0`，五种 mutation 均 fail closed；
   migration/runtime 不变，formal highest-effort pending。R-019/R-023/R-027/R-029、action-root、OB-10.1-10.4 与
   served=0 不变。
+- D3c2g decision-lock candidate 仅 ratify cost-ledger/dispatch-exposure physical contract：sole future
+  `CostLedgerRepository` 经 `store.repos.cost_ledger` 独占 inseparable `cost_reservations` +
+  `dispatch_exposures` aggregate；exact parent/child `21/75` manifests、keys/indexes、`16/29` checks、immutable
+  pricing/reconciliation registries、eight-method CAS、source-dependent terminal mapping 与 parent-first settlement
+  已关闭。strict-D3 live/simulate/scripted 均用 durable exposure；live money positive、simulate/scripted zero，
+  replay 等待 D0 envelope + schema revision。OB-2.2/OB-10.3 仅为 `decision_locked_not_implemented`；current baseline/
+  descriptor=`83/41`，两表与 owner/registries/store wiring 仍 physical absent；exact Decimal/TIMESTAMPTZ codec、
+  specialized insert-once/CAS 与 durable envelope ref grammar 仍 prerequisite。该 decision-only batch 零 SQL/
+  descriptor/repository/runtime/live，
+  不授权 migration 或 rollout step 3；verification intent、response/failure receipt、late quarantine 与其余 gates
+  继续 open。
 
 ### D4 — 之后（本文只圈定，不展开）
 
@@ -472,8 +483,12 @@ TD-4 初始路由表已按 owner 2026-07-13 裁决落档（D0 §4）。
    D3c2e 接着仅 ratify WorkflowEvent exact 11-column core、11 个 local checks 与 existing-link/no-alias mapping；
    transport provenance、verification intent、receipt/exposure/quarantine、index/FK/adoption/runtime 均留在
    D3c2e-D1..D10，零 SQL。D3c2f 已据此仅安装 one-table dormant event-core substrate，descriptor/runtime 未切换，
-   仍不允许 rollout step 3；remaining intent/exposure/receipt/quarantine batch 必须先完成 owner-ratified Scout/
-   decision lock，不能从 D3b prose 猜 schema。
+   仍不允许 rollout step 3。D3c2g 随后只把 cost reservation + dispatch exposure aggregate 的 owner、exact
+   `21/75` manifests、live-positive/simulate-scripted-zero CAS/settlement 与 OB-2.2/OB-10.3 状态锁为
+   `decision_locked_not_implemented`；replay 等待 D0+schema revision，physical tables/descriptors/repository/runtime
+   仍 absent，且该 decision lock 不授权 migration。remaining verification intent、response/failure receipt 与
+   late quarantine（含 response-only `reconciled_no_call` reachability/receipt `command_attempt` identity）仍须先完成
+   owner-ratified Scout/decision lock，不能从 D3b prose 猜 schema。
    canonical coordination lineage 为 `coordination_plan_review_id=plan_review_sessions.review_id`，物理类型同为
    positive `BIGINT`（brownfield `NULL`，strict `>0`，禁止 `TEXT`/empty）；poll-mode 的唯一 scope issuer 是
    private scoped review-session repository：它从 server-owned runtime context + authenticated workspace

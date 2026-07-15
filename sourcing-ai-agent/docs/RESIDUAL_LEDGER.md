@@ -49,6 +49,21 @@
 
 ## Active candidate annotations
 
+- **R-019 / D3c2g (2026-07-15):** decision-only cost-ledger/dispatch-exposure lock ratifies the sole future
+  `CostLedgerRepository` aggregate and its exact parent/child `21/75` manifests, keys/indexes/checks, immutable
+  pricing/reconciliation registry shapes, eight-method CAS surface, source-dependent terminal mapping, and parent-first
+  settlement order. Strict-D3 live/simulate/scripted all require a durable exposure so D3b receipts remain reachable;
+  live money is positive, simulate/scripted money is zero, and replay waits for a D0 envelope plus schema revision.
+  OB-2.2 and OB-10.3 advance only to `decision_locked_not_implemented`; the current `83` baseline
+  tables and `41` descriptors still contain neither physical table, and no future owner/registry/store wiring exists.
+  Exact Decimal/TIMESTAMPTZ codecs, specialized insert-once/CAS primitives, and durable envelope owner/ref grammar are
+  explicit implementation prerequisites; generic replace-all upsert is forbidden.
+  This candidate authorizes no SQL, descriptor, repository, runtime writer, settlement daemon, provider/model path,
+  live/W6/manual signoff, rollout step 3, or served tool. Verification intent, response/failure receipts, late
+  quarantine (including response-only `reconciled_no_call` and receipt `command_attempt` decisions), upstream FKs,
+  Migration B-D, adoption, and fresh pinned/formal review remain later gates. R-019, R-023,
+  R-027, R-029, action-root, the remaining OB gates, and served=0 retain their existing status.
+
 - **R-019 / D3c2f (2026-07-15):** the event-core Migration-A fragment adds only the dormant `workflow_events`
   eleven-column scope/claim/terminal-outcome shape plus eleven `NOT VALID` local checks. The 5s one-table timeout,
   populated/current-writer sentinel, malformed-new-write, descriptor invisibility, ledger rollback, exact-once recovery,

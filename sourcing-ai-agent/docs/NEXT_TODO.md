@@ -445,10 +445,21 @@
   whitespace 仍可绕过 name extractor；现已把所有 `ADD`/`CONSTRAINT` token 与 name/predicate extraction 独立计数
   并 exact-compare。commit `e7db34e...` fresh pinned medium re-review=`GO 0/0/0/0`，五种第 12 constraint mutation
   均 fail closed；migration/runtime 不变，formal highest-effort 仍 pending。
-- [ ] D3c2g remaining Migration-A evidence-surface decision/Scout：从 D3b §6/§11、Plan §6 与 OB-10.1-10.4
-  机械推导 verification intent、durable dispatch exposure、response/failure receipts、late quarantine 的完整
-  owner/DDL/key/type/check/CAS/retention inventory；dispatch-exposure owner/table 或任一 receipt/intent/quarantine
-  identity 未 ratify 前零 SQL，禁止猜 schema 或提前进入 rollout step 3。
+- [x] D3c2g cost-ledger/dispatch-exposure physical decision lock（2026-07-15；decision-only）：ratify sole future
+  `CostLedgerRepository` via `store.repos.cost_ledger`，以及 inseparable `cost_reservations` +
+  `dispatch_exposures` aggregate；锁定 exact `21/75` ordered columns、PK/unique/FK/index、`16/29` local checks、
+  pricing/reconciliation registries、eight-method CAS、source-dependent terminal mapping、money conservation 与
+  parent-first credential-free settlement。strict-D3 live/simulate/scripted 均创建 durable exposure；live money
+  positive，simulate/scripted zero，replay 因 current D0 envelope enum 不含 replay 而等待 D0+schema revision。
+  OB-2.2/OB-10.3 仅变为 `decision_locked_not_implemented`；当前 baseline/descriptor=`83/41` 且 future owner/tables/
+  registries/store wiring 全部 absent；Decimal/TIMESTAMPTZ codec、specialized insert-once/CAS 与 durable envelope
+  ref grammar 仍是 implementation prerequisites。完整记录见
+  `TRACK_D_D3C2G_COST_LEDGER_DISPATCH_EXPOSURE_DECISION_LOCK.md`；零 SQL/descriptor/repository/runtime/live，
+  本 decision lock 不授权 migration，R-019/R-023/R-027/R-029、action-root、其余 OB 与 served=0 不变。
+- [ ] D3c2h remaining evidence-surface decision lock：先 ratify verification-intent、response/failure receipt 与
+  late-quarantine 的 sole owners、exact manifests、CAS/retention 和 scope-prefixed relations，并解决 response-only
+  `reconciled_no_call` reachability 与 receipt `command_attempt` identity；不得从 D3b prose 猜 schema，也不得把
+  D3c2g cost-ledger decision lock 当作任一 surface 的 SQL/migration 授权。
 - [ ] Track D 后的 user-owned cohort selection contract（Thinking Machines Lab live 前置）：以一个 versioned、
   registry-digest-pinned `CohortSelection` 作为唯一 owner，显式承载 canonical ordered
   `role_bucket_ids[]`（Researcher/Engineer/Product Manager 可自由多选且 registry 可扩展）、
