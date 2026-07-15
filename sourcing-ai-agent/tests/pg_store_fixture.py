@@ -13,12 +13,12 @@ Two granularities:
   class (``setUpClass``/``tearDownClass``), amortizing the ~1-3s schema
   bootstrap across the class. This is the DEFAULT choice for migrations.
   Isolation contract under per-class schema: all tests in the class share the
-  schema's DDL, and the mixin's ``setUp`` truncates every table in the schema
-  (cheap, no re-bootstrap) so each test still starts from empty tables.
-  Tests must therefore not rely on data surviving between test methods, and
-  stores created via :meth:`PGControlPlaneStoreTestMixin.make_pg_store` are
-  closed automatically after each test so truncation never blocks on stale
-  connections.
+  schema's DDL and migration history, and the mixin's ``setUp`` truncates every
+  domain-data table in the schema (cheap, no re-bootstrap) so each test still
+  starts from empty domain state. Tests must therefore not rely on data
+  surviving between test methods, and stores created via
+  :meth:`PGControlPlaneStoreTestMixin.make_pg_store` are closed automatically
+  after each test so truncation never blocks on stale connections.
 
 - :func:`pg_backed_control_plane_store` — a context manager that provisions a
   FRESH per-test schema plus store. Use it for tests that need a pristine
@@ -45,6 +45,7 @@ from sourcing_agent.storage import ControlPlaneStore
 from tests.pg_durable_runtime import PGDurableRuntimeFixture, psycopg
 
 REQUIRE_PG_STORE_TESTS_ENV = "SOURCING_REQUIRE_PG_STORE_TESTS"
+_MIGRATION_HISTORY_TABLE = "schema_migrations"
 
 
 def pg_store_tests_required() -> bool:
@@ -74,17 +75,23 @@ def enter_pg_store_fixture(*, runtime_dir: str | Path, schema_label: str) -> PGD
 def truncate_pg_store_schema_tables(fixture: PGDurableRuntimeFixture | None) -> None:
     """Cheap between-test reset for the per-class schema granularity.
 
-    Truncates every table currently present in the fixture schema so the next
-    test starts from empty tables without paying schema re-bootstrap. The
-    table list is read from ``pg_tables`` (not a hardcoded list) so it stays
-    correct as ``ControlPlaneStore.init_schema`` evolves.
+    Truncates every domain-data table currently present in the fixture schema
+    so the next test starts from empty domain state without paying schema
+    re-bootstrap. The migration ledger is schema metadata owned by the shared
+    class fixture, so it must survive until ``tearDownClass`` drops the schema;
+    clearing it would make the next store reapply migrations against existing
+    DDL. The data-table list is read from ``pg_tables`` (not hardcoded) so it
+    stays correct as the control-plane schema evolves.
     """
 
     if psycopg is None or fixture is None or not fixture.dsn or not fixture.schema:
         return
     with psycopg.connect(fixture.dsn, autocommit=True, connect_timeout=5, client_encoding="utf8") as connection:
         with connection.cursor() as cursor:
-            cursor.execute("SELECT tablename FROM pg_tables WHERE schemaname = %s", (fixture.schema,))
+            cursor.execute(
+                "SELECT tablename FROM pg_tables WHERE schemaname = %s AND tablename <> %s",
+                (fixture.schema, _MIGRATION_HISTORY_TABLE),
+            )
             table_names = [str(row[0]) for row in cursor.fetchall()]
             if not table_names:
                 return
@@ -107,10 +114,11 @@ class PGControlPlaneStoreTestMixin:
                 self.store = self.make_pg_store(f"{self.tempdir.name}/test.db")
 
     ``setUpClass`` provisions the schema once (skip/fail semantics per module
-    docstring); ``setUp`` truncates all tables so tests do not observe each
-    other's rows; ``make_pg_store`` builds a ControlPlaneStore under the
-    fixture's patched env (PG-only mode) and registers ``store.close`` as a
-    cleanup so adapter pools never outlive the test.
+    docstring); ``setUp`` truncates all domain-data tables so tests do not
+    observe each other's rows while preserving the schema's migration history;
+    ``make_pg_store`` builds a ControlPlaneStore under the fixture's patched
+    env (PG-only mode) and registers ``store.close`` as a cleanup so adapter
+    pools never outlive the test.
     """
 
     pg_store_schema_label: str = ""
