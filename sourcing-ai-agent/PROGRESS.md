@@ -8,6 +8,28 @@
 > month-before-last out before appending. Keep this file under ~300 lines.
 > Archives: [2026-05](docs/archive/progress/PROGRESS_2026-05.md) · [2026-04 and earlier](docs/archive/progress/PROGRESS_2026-04_and_earlier.md)
 
+## 2026-07-15 (Asia/Singapore)
+
+### Cohort CS3/CS5 runtime publication fixed-forward
+
+- The valid pinned Ultra review of `7d54a23..60e7e67` returned `NO-GO` with
+  `P0/P1/P2/P3=0/6/4/0`. Commits `17e1607` and `c6c0fcd` fixed forward all ten findings: explicit
+  Cohort dispatch precedes legacy acquisition strategies; capability/cache execution is bound to the exact non-live
+  runtime mode and namespace; all-role proof uses the exact public headline; canonical profile identity is server-owned;
+  and zero/all-rejected attempts perform no canonical write.
+- Successful Cohort publication now has a typed result contract and a final candidate-document digest marker. Normal
+  search-seed readers reject staged summary/result files until that marker exact-matches, so a projector or process
+  failure remains inspectable but cannot become a readable partial publication. New plans emit one full-manifest task;
+  hydrated legacy former work may reuse only the exact committed full-manifest result.
+- Final stable-tree evidence: fast scope **85 passed + 69 subtests**; mandatory isolated-PG service E2E **1 passed**;
+  exact adjacent background-reconcile nodes **2 passed**; broader planning adjacency **164 passed + 69 subtests** with
+  its sole non-Cohort failure reproduced identically on clean `af4db41`. Ruff, Python compilation, and diff checks are
+  green; mypy remains the accepted **81 errors / 4 files** ceiling. No full `tests/test_pipeline.py`, paid provider/model,
+  or live environment was used.
+- This remains author fixed-forward evidence until a fresh pinned non-author review covers the enclosing commit. The
+  reviewer-exclusive home proved `gpt-5.6-sol/ultra/priority`, but the subsequent request hit `usageLimitExceeded` and
+  is invalid transport, not a verdict. Unrelated non-live Track D work continues asynchronously.
+
 ## 2026-07-14 (Asia/Singapore)
 
 ### Track C C1a: async transport and terminal-total frontend contract

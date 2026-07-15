@@ -519,9 +519,10 @@
   rows 只适配到既有 durable `SearchSeedSnapshot`/candidate documents，并持久化 `cohort_execution_result.v1` 的
   selection/manifest/result digest、capability、lane/count audit。missing/forged/stale manifest 零 provider call；live、retrieval-only
   `run_job` 仍 fail closed；non-live `role_match=all` 绑定 exact `cohort_headline_role_classifier.v1`，只接受 central registry
-  从 public headline 证明的 required roles；lane identity 在下一 provider call 前验证并绑定 exact attempt evidence。
-  author regression=`64 passed + 55 subtests`，fresh pinned
-  review pending，不得写成 formal GO。
+  从 exact public headline 证明的 required roles；capability 现绑定 validated isolated runtime namespace + provider mode，connector
+  在任何目录/cache/provider work 前重新推导 exact-match；Cohort raw cache 按 mode+runtime namespace 隔离并核 provenance，
+  server-owned canonical LinkedIn URL 贯穿 snapshot/candidate/prefetch。新计划只发一个全 manifest task；legacy former task
+  只能复用 exact committed full-manifest result。fixed-forward components=`17e1607` + `c6c0fcd`。
 - [x] Cohort CS4 user interaction：frontend picker 默认关闭，旧请求不发送 `cohort_selection`；options/labels/order/default
   全部来自 public endpoint，role 与 current/former 可有序多选，initial submit、revision、history recovery、plan review
   exact round-trip。已提交 explicit cohort 在 review 锁定，legacy plan 可显式升级。author evidence：frontend build
@@ -530,7 +531,13 @@
 - [x] Cohort CS5 scripted service E2E：isolated migrated PG + real orchestrator/plan/compiler/acquisition/materialization/
   result projection 已贯通；双角色 `role_match=all` 执行 2 个 profile-search lanes + 1 个 profile enrichment，最终
   `completed/completed`，public asset population 为 1 个 current 候选，durable candidate/result audit 保留 exact lane、
-  selection、manifest 与 versioned role proof。全程 live Harvest submit hard-fail sentinel 未触发；exact test=`1 passed`。
+  selection、manifest 与 versioned role proof。zero/all-rejected 在所有 canonical write 前 blocked；成功 publication 以
+  candidate documents 的 exact digest 为最终 commit marker，partial summary/result 对 normal loader 不可读。全程 live Harvest
+  submit hard-fail sentinel 覆盖 joined background work；public API/run projection/profile readiness、scripted-only invocations、
+  contamination clean、queued→terminal reconcile 均有 assertion。mandatory-PG E2E=`1 passed`，fast=`85 + 69 subtests`，
+  exact pipeline adjacency=`2`；planning adjacency=`164 + 69 subtests` 后唯一失败已在 clean `af4db41` 同节点复现。
+  `60e7e67` 的有效 Ultra formal review=`NO-GO 0/6/4/0`；当前 fixed-forward 尚待 fresh pinned non-author review，
+  reviewer-exclusive `gpt-5.6-sol/ultra/priority` 后续因 `usageLimitExceeded` fail-closed，绝不写成 formal GO。
 - [x] Cohort CS5a criteria-write provenance fixed-forward：`feedback`、`confidence-policy`、`recompile` 的
   `request|request_payload|metadata.request_payload` 统一由 external Cohort owner 验证并 exact canonical merge；caller
   `inferred|legacy_adapter`、malformed mirror 或 alias conflict 在 HTTP/orchestrator 两层均零写 fail-closed。feedback、
