@@ -17,6 +17,48 @@ from typing import Iterable, Mapping
 MODEL_ROUTE_REGISTRY_SCHEMA_VERSION = "model_route_registry_v1"
 MODEL_ROUTE_ROLLOUT_DRAFT = "draft"
 MODEL_ROUTE_FALLBACK_FAIL_CLOSED = "fail_closed"
+EFFECTIVE_MODEL_ROUTE_SNAPSHOT_SCHEMA_VERSION = "effective_model_route_snapshot_v1"
+EFFECTIVE_MODEL_ROUTE_SNAPSHOT_OWNER = "model_route_registry.issue_effective_model_route_snapshot"
+EFFECTIVE_MODEL_ROUTE_SNAPSHOT_REF_PREFIX = "model-route-snapshot:v1:"
+EFFECTIVE_MODEL_ROUTE_SETTINGS_SCHEMA_VERSION = "effective_model_route_settings_v1"
+EFFECTIVE_MODEL_ROUTE_SETTINGS_OWNER = "settings.load_settings"
+
+EFFECTIVE_MODEL_ROUTE_SETTINGS_RECORD_KEYS = frozenset(
+    {
+        "schema_version",
+        "settings_owner",
+        "settings_policy_revision",
+        "provider_family",
+        "live_gate_provider_name",
+        "endpoint_identity_digest",
+        "request_timeout_ms",
+        "pricing_class",
+        "circuit_policy_id",
+    }
+)
+
+EFFECTIVE_MODEL_ROUTE_SNAPSHOT_RECORD_KEYS = frozenset(
+    {
+        "schema_version",
+        "owner",
+        "route_id",
+        "route_revision",
+        "provider",
+        "model",
+        "api_style",
+        "budget_class",
+        "circuit_key",
+        "settings_owner",
+        "settings_policy_revision",
+        "settings_digest",
+        "provider_family",
+        "live_gate_provider_name",
+        "endpoint_identity_digest",
+        "request_timeout_ms",
+        "pricing_class",
+        "circuit_policy_id",
+    }
+)
 
 MODEL_ROUTE_SPEC_RECORD_KEYS = frozenset(
     {
@@ -133,6 +175,194 @@ class ModelRouteSpec:
         return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
+@dataclass(frozen=True, slots=True)
+class EffectiveModelRouteSettings:
+    """Typed, credential-free settings-owner input to snapshot issuance.
+
+    D0g does not read environment or settings itself. The future integration
+    must exact-copy these fields from the named settings owner and freeze the
+    returned snapshot at the durable action/approval/command creation point.
+    """
+
+    schema_version: str
+    settings_owner: str
+    settings_policy_revision: str
+    provider_family: str
+    live_gate_provider_name: str
+    endpoint_identity_digest: str
+    request_timeout_ms: int
+    pricing_class: str
+    circuit_policy_id: str
+
+    def __post_init__(self) -> None:
+        if self.schema_version != EFFECTIVE_MODEL_ROUTE_SETTINGS_SCHEMA_VERSION:
+            raise ModelRouteRegistryError("effective_model_route_settings_schema_invalid")
+        if self.settings_owner != EFFECTIVE_MODEL_ROUTE_SETTINGS_OWNER:
+            raise ModelRouteRegistryError("effective_model_route_settings_owner_invalid")
+        for field_name in (
+            "settings_policy_revision",
+            "provider_family",
+            "live_gate_provider_name",
+            "pricing_class",
+            "circuit_policy_id",
+        ):
+            value = getattr(self, field_name)
+            if type(value) is not str or not value or value != value.strip():
+                raise ModelRouteRegistryError(f"effective_model_route_settings_{field_name}_invalid")
+        if (
+            type(self.endpoint_identity_digest) is not str
+            or len(self.endpoint_identity_digest) != 64
+            or any(character not in "0123456789abcdef" for character in self.endpoint_identity_digest)
+        ):
+            raise ModelRouteRegistryError("effective_model_route_settings_endpoint_identity_digest_invalid")
+        if (
+            isinstance(self.request_timeout_ms, bool)
+            or not isinstance(self.request_timeout_ms, int)
+            or self.request_timeout_ms <= 0
+        ):
+            raise ModelRouteRegistryError("effective_model_route_settings_timeout_invalid")
+
+    def to_record(self) -> dict[str, object]:
+        return {
+            "schema_version": self.schema_version,
+            "settings_owner": self.settings_owner,
+            "settings_policy_revision": self.settings_policy_revision,
+            "provider_family": self.provider_family,
+            "live_gate_provider_name": self.live_gate_provider_name,
+            "endpoint_identity_digest": self.endpoint_identity_digest,
+            "request_timeout_ms": self.request_timeout_ms,
+            "pricing_class": self.pricing_class,
+            "circuit_policy_id": self.circuit_policy_id,
+        }
+
+    @property
+    def settings_digest(self) -> str:
+        encoded = json.dumps(
+            self.to_record(),
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
+@dataclass(frozen=True, slots=True)
+class EffectiveModelRouteSnapshot:
+    """Immutable non-secret effective route settings issued by one owner.
+
+    The snapshot deliberately excludes credentials and raw endpoint URLs. Its
+    deterministic ref is content-addressed, so queued retries keep the exact
+    endpoint identity, timeout, pricing class, and circuit policy that were
+    selected when their durable owner created the action/command.
+    """
+
+    schema_version: str
+    owner: str
+    route_id: str
+    route_revision: str
+    provider: str
+    model: str
+    api_style: str
+    budget_class: str
+    circuit_key: str
+    settings_owner: str
+    settings_policy_revision: str
+    settings_digest: str
+    provider_family: str
+    live_gate_provider_name: str
+    endpoint_identity_digest: str
+    request_timeout_ms: int
+    pricing_class: str
+    circuit_policy_id: str
+
+    def __post_init__(self) -> None:
+        if self.schema_version != EFFECTIVE_MODEL_ROUTE_SNAPSHOT_SCHEMA_VERSION:
+            raise ModelRouteRegistryError("effective_model_route_snapshot_schema_invalid")
+        if self.owner != EFFECTIVE_MODEL_ROUTE_SNAPSHOT_OWNER:
+            raise ModelRouteRegistryError("effective_model_route_snapshot_owner_invalid")
+        for field_name in (
+            "route_id",
+            "provider",
+            "model",
+            "api_style",
+            "budget_class",
+            "circuit_key",
+            "settings_policy_revision",
+            "provider_family",
+            "live_gate_provider_name",
+            "pricing_class",
+            "circuit_policy_id",
+        ):
+            value = getattr(self, field_name)
+            if type(value) is not str or not value or value != value.strip():
+                raise ModelRouteRegistryError(f"effective_model_route_snapshot_{field_name}_invalid")
+        if self.settings_owner != EFFECTIVE_MODEL_ROUTE_SETTINGS_OWNER:
+            raise ModelRouteRegistryError("effective_model_route_snapshot_settings_owner_invalid")
+        for field_name in ("route_revision", "settings_digest", "endpoint_identity_digest"):
+            value = getattr(self, field_name)
+            if (
+                type(value) is not str
+                or len(value) != 64
+                or any(character not in "0123456789abcdef" for character in value)
+            ):
+                raise ModelRouteRegistryError(f"effective_model_route_snapshot_{field_name}_invalid")
+        if (
+            isinstance(self.request_timeout_ms, bool)
+            or not isinstance(self.request_timeout_ms, int)
+            or self.request_timeout_ms <= 0
+        ):
+            raise ModelRouteRegistryError("effective_model_route_snapshot_timeout_invalid")
+        settings = EffectiveModelRouteSettings(
+            schema_version=EFFECTIVE_MODEL_ROUTE_SETTINGS_SCHEMA_VERSION,
+            settings_owner=self.settings_owner,
+            settings_policy_revision=self.settings_policy_revision,
+            provider_family=self.provider_family,
+            live_gate_provider_name=self.live_gate_provider_name,
+            endpoint_identity_digest=self.endpoint_identity_digest,
+            request_timeout_ms=self.request_timeout_ms,
+            pricing_class=self.pricing_class,
+            circuit_policy_id=self.circuit_policy_id,
+        )
+        if self.settings_digest != settings.settings_digest:
+            raise ModelRouteRegistryError("effective_model_route_snapshot_settings_digest_mismatch")
+
+    def to_record(self) -> dict[str, object]:
+        return {
+            "schema_version": self.schema_version,
+            "owner": self.owner,
+            "route_id": self.route_id,
+            "route_revision": self.route_revision,
+            "provider": self.provider,
+            "model": self.model,
+            "api_style": self.api_style,
+            "budget_class": self.budget_class,
+            "circuit_key": self.circuit_key,
+            "settings_owner": self.settings_owner,
+            "settings_policy_revision": self.settings_policy_revision,
+            "settings_digest": self.settings_digest,
+            "provider_family": self.provider_family,
+            "live_gate_provider_name": self.live_gate_provider_name,
+            "endpoint_identity_digest": self.endpoint_identity_digest,
+            "request_timeout_ms": self.request_timeout_ms,
+            "pricing_class": self.pricing_class,
+            "circuit_policy_id": self.circuit_policy_id,
+        }
+
+    @property
+    def snapshot_digest(self) -> str:
+        encoded = json.dumps(
+            self.to_record(),
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+    @property
+    def snapshot_ref(self) -> str:
+        return f"{EFFECTIVE_MODEL_ROUTE_SNAPSHOT_REF_PREFIX}{self.snapshot_digest}"
+
+
 DEFAULT_MODEL_ROUTE_SPECS = (
     ModelRouteSpec(
         route_id="agent.planner.loop",
@@ -197,6 +427,75 @@ def get_model_route_spec(route_id: str) -> ModelRouteSpec:
     if route is None:
         raise ModelRouteExecutionRejected(f"model_route_unknown:{normalized_route_id or '<missing>'}")
     return route
+
+
+def validate_effective_model_route_snapshot(
+    snapshot: EffectiveModelRouteSnapshot,
+    route: ModelRouteSpec,
+) -> None:
+    """Require an owner-issued snapshot to exactly bind one checked-in route."""
+
+    if type(snapshot) is not EffectiveModelRouteSnapshot:
+        raise ModelRouteRegistryError("effective_model_route_snapshot_type_invalid")
+    if type(route) is not ModelRouteSpec:
+        raise ModelRouteRegistryError("effective_model_route_snapshot_route_type_invalid")
+    expected = {
+        "route_id": route.route_id,
+        "route_revision": route.revision,
+        "provider": route.provider,
+        "model": route.model,
+        "api_style": route.api_style,
+        "budget_class": route.budget_class,
+        "circuit_key": route.circuit_key,
+    }
+    mismatches = sorted(
+        field_name for field_name, expected_value in expected.items() if getattr(snapshot, field_name) != expected_value
+    )
+    if mismatches:
+        raise ModelRouteRegistryError(f"effective_model_route_snapshot_route_mismatch:{','.join(mismatches)}")
+
+
+def issue_effective_model_route_snapshot(
+    *,
+    route_id: str,
+    route_revision: str,
+    effective_settings: EffectiveModelRouteSettings,
+) -> EffectiveModelRouteSnapshot:
+    """Issue one deterministic, credential-free snapshot for a checked-in route.
+
+    This is the sole D0g issuer. It accepts only the typed settings-owner value,
+    performs no settings lookup, and does not persist the result; the future
+    action/command owner is responsible for freezing the returned ref/digest at
+    its own creation boundary.
+    """
+
+    route = get_model_route_spec(route_id)
+    if route_revision != route.revision:
+        raise ModelRouteRegistryError("effective_model_route_snapshot_route_revision_mismatch")
+    if type(effective_settings) is not EffectiveModelRouteSettings:
+        raise ModelRouteRegistryError("effective_model_route_snapshot_settings_type_invalid")
+    snapshot = EffectiveModelRouteSnapshot(
+        schema_version=EFFECTIVE_MODEL_ROUTE_SNAPSHOT_SCHEMA_VERSION,
+        owner=EFFECTIVE_MODEL_ROUTE_SNAPSHOT_OWNER,
+        route_id=route.route_id,
+        route_revision=route.revision,
+        provider=route.provider,
+        model=route.model,
+        api_style=route.api_style,
+        budget_class=route.budget_class,
+        circuit_key=route.circuit_key,
+        settings_owner=effective_settings.settings_owner,
+        settings_policy_revision=effective_settings.settings_policy_revision,
+        settings_digest=effective_settings.settings_digest,
+        provider_family=effective_settings.provider_family,
+        live_gate_provider_name=effective_settings.live_gate_provider_name,
+        endpoint_identity_digest=effective_settings.endpoint_identity_digest,
+        request_timeout_ms=effective_settings.request_timeout_ms,
+        pricing_class=effective_settings.pricing_class,
+        circuit_policy_id=effective_settings.circuit_policy_id,
+    )
+    validate_effective_model_route_snapshot(snapshot, route)
+    return snapshot
 
 
 def assert_d0a_route_execution_allowed(

@@ -4,6 +4,7 @@ import ast
 import hashlib
 import json
 from dataclasses import FrozenInstanceError, fields, replace
+from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Mapping
@@ -14,11 +15,19 @@ import sourcing_agent.model_tool_runtime as model_tool_runtime_module
 from sourcing_agent.model_provider import OpenAIModelUsage
 from sourcing_agent.model_route_registry import (
     DEFAULT_MODEL_ROUTE_SPECS,
+    EFFECTIVE_MODEL_ROUTE_SETTINGS_OWNER,
+    EFFECTIVE_MODEL_ROUTE_SETTINGS_RECORD_KEYS,
+    EFFECTIVE_MODEL_ROUTE_SETTINGS_SCHEMA_VERSION,
+    EFFECTIVE_MODEL_ROUTE_SNAPSHOT_OWNER,
+    EFFECTIVE_MODEL_ROUTE_SNAPSHOT_RECORD_KEYS,
+    EFFECTIVE_MODEL_ROUTE_SNAPSHOT_REF_PREFIX,
     MODEL_ROUTE_SPECS_BY_ID,
+    EffectiveModelRouteSettings,
     ModelRouteExecutionRejected,
     ModelRouteRegistryError,
     ModelRouteSpec,
     assert_d0a_route_execution_allowed,
+    issue_effective_model_route_snapshot,
     model_route_registry_manifest,
     validate_model_route_specs,
 )
@@ -31,10 +40,13 @@ from sourcing_agent.model_tool_runtime import (
     MAX_TOOL_SCHEMA_BYTES,
     MAX_TOOL_SPECS,
     MAX_TOTAL_TOOL_SCHEMA_BYTES,
+    MODEL_TURN_BUDGET_SCHEMA_VERSION,
+    MODEL_TURN_IDEMPOTENCY_KEY_PREFIX,
     ModelToolProtocolError,
     ModelToolRequestBindingError,
     ModelToolRuntimeError,
     ModelToolSchemaError,
+    ModelTurnBudget,
     ParsedToolTurn,
     ScriptedToolReplayError,
     ScriptedToolTurnSession,
@@ -47,8 +59,10 @@ from sourcing_agent.model_tool_runtime import (
     canonical_model_turn_transcript_sha256,
     canonical_tool_turn_request_hash,
     canonical_tool_turn_request_payload,
+    model_turn_execution_context_for_route,
     parse_openai_chat_sse,
     request_for_model_route,
+    request_for_model_turn_execution_context,
     with_provider_mode,
 )
 from sourcing_agent.model_usage import ModelUsage, ModelUsageValidationError
@@ -87,6 +101,70 @@ def _request(
         permission_scope="agent:plan",
         runtime_namespace="test:model-tool-runtime",
         transcript_digest=canonical_model_turn_transcript_sha256(transcript_chunks),
+    )
+
+
+def _effective_route_settings() -> EffectiveModelRouteSettings:
+    return EffectiveModelRouteSettings(
+        schema_version=EFFECTIVE_MODEL_ROUTE_SETTINGS_SCHEMA_VERSION,
+        settings_owner=EFFECTIVE_MODEL_ROUTE_SETTINGS_OWNER,
+        settings_policy_revision="synthetic_settings_policy_v1",
+        provider_family="model",
+        live_gate_provider_name="model_provider",
+        endpoint_identity_digest=_digest("synthetic-relay-endpoint"),
+        request_timeout_ms=45_000,
+        pricing_class="synthetic_zero_cost",
+        circuit_policy_id="model_circuit_v1",
+    )
+
+
+def _effective_route_snapshot():
+    route = _route()
+    return issue_effective_model_route_snapshot(
+        route_id=route.route_id,
+        route_revision=route.revision,
+        effective_settings=_effective_route_settings(),
+    )
+
+
+def _turn_budget() -> ModelTurnBudget:
+    return ModelTurnBudget(
+        schema_version=MODEL_TURN_BUDGET_SCHEMA_VERSION,
+        budget_class=_route().budget_class,
+        max_input_tokens=4_096,
+        max_output_tokens=256,
+        max_total_tokens=4_352,
+        monetary_ceiling="0",
+        currency_code="USD",
+        deadline_at=datetime(2026, 7, 15, 4, 30, tzinfo=timezone.utc),
+    )
+
+
+def _execution_context(*, provider_mode: str = "scripted"):
+    return model_turn_execution_context_for_route(
+        _route(),
+        _effective_route_snapshot(),
+        runtime_namespace="test:model-tool-runtime",
+        provider_mode=provider_mode,  # type: ignore[arg-type]
+        workspace_id="workspace_test",
+        scope_digest=_digest("synthetic-scope"),
+        coordination_plan_review_id=73,
+        actor_id="actor_test",
+        permission_scope="agent:plan",
+        prompt_policy_version="prompt_policy_v1",
+        permission_scope_revision="permission_v1",
+        outbound_policy_revision="outbound_v1",
+        model_safe_schema_revision="model_safe_v1",
+        operation_run_id="operation_synthetic_001",
+        turn_id="turn_synthetic_001",
+        step_id="step_synthetic_001",
+        workflow_command_id="command_synthetic_001",
+        activity_run_id="activity_synthetic_001",
+        activity_attempt_id="activity_attempt_synthetic_001",
+        attempt=1,
+        budget=_turn_budget(),
+        budget_reservation_ref="cost-reservation:synthetic:001",
+        approval_ref=None,
     )
 
 
@@ -279,9 +357,7 @@ def _split_at_wire_boundaries(payload: bytes, line_wire_bytes: int) -> tuple[byt
         }
     )
     return tuple(
-        payload[start:end]
-        for start, end in zip(boundaries, boundaries[1:])
-        if 0 <= start < end <= len(payload)
+        payload[start:end] for start, end in zip(boundaries, boundaries[1:]) if 0 <= start < end <= len(payload)
     )
 
 
@@ -316,6 +392,141 @@ def test_public_route_registry_is_immutable() -> None:
     validated = validate_model_route_specs(DEFAULT_MODEL_ROUTE_SPECS, require_draft_only=True)
     with pytest.raises(TypeError):
         validated["agent.planner.mutable"] = _route()  # type: ignore[index]
+
+
+def test_effective_route_snapshot_has_one_deterministic_owner_and_content_ref() -> None:
+    snapshot = _effective_route_snapshot()
+    repeated = _effective_route_snapshot()
+
+    assert snapshot == repeated
+    assert snapshot.owner == EFFECTIVE_MODEL_ROUTE_SNAPSHOT_OWNER
+    assert set(snapshot.to_record()) == EFFECTIVE_MODEL_ROUTE_SNAPSHOT_RECORD_KEYS
+    assert set(_effective_route_settings().to_record()) == EFFECTIVE_MODEL_ROUTE_SETTINGS_RECORD_KEYS
+    assert snapshot.settings_owner == EFFECTIVE_MODEL_ROUTE_SETTINGS_OWNER
+    assert snapshot.settings_digest == _effective_route_settings().settings_digest
+    assert snapshot.snapshot_ref == f"{EFFECTIVE_MODEL_ROUTE_SNAPSHOT_REF_PREFIX}{snapshot.snapshot_digest}"
+    changed = issue_effective_model_route_snapshot(
+        route_id=_route().route_id,
+        route_revision=_route().revision,
+        effective_settings=replace(_effective_route_settings(), request_timeout_ms=45_001),
+    )
+    assert changed.snapshot_digest != snapshot.snapshot_digest
+    with pytest.raises(ModelRouteRegistryError, match="settings_digest_mismatch"):
+        replace(snapshot, request_timeout_ms=45_001)
+    with pytest.raises(FrozenInstanceError):
+        snapshot.request_timeout_ms = 1  # type: ignore[misc]
+    with pytest.raises(ModelRouteRegistryError, match="settings_owner_invalid"):
+        replace(_effective_route_settings(), settings_owner="caller_supplied")
+    with pytest.raises(ModelRouteRegistryError, match="route_revision_mismatch"):
+        issue_effective_model_route_snapshot(
+            route_id=_route().route_id,
+            route_revision=_digest("not-the-checked-in-route"),
+            effective_settings=_effective_route_settings(),
+        )
+
+
+def test_model_turn_budget_and_execution_context_are_canonical_and_fully_bound() -> None:
+    budget = _turn_budget()
+    context = _execution_context()
+
+    assert budget.to_record()["deadline_at"] == "2026-07-15T04:30:00.000000Z"
+    assert len(budget.budget_digest) == 64
+    assert context.budget is budget or context.budget == budget
+    assert context.effective_route_snapshot_ref == (
+        f"{EFFECTIVE_MODEL_ROUTE_SNAPSHOT_REF_PREFIX}{context.effective_route_snapshot_digest}"
+    )
+    assert context.pfx_record() == {
+        "runtime_namespace": "test:model-tool-runtime",
+        "provider_mode": "scripted",
+        "workspace_id": "workspace_test",
+        "scope_digest": _digest("synthetic-scope"),
+        "coordination_plan_review_id": 73,
+    }
+    assert len(context.context_digest) == 64
+    assert context.idempotency_key.startswith(MODEL_TURN_IDEMPOTENCY_KEY_PREFIX)
+    with pytest.raises(ModelToolRuntimeError, match="idempotency_key_mismatch"):
+        replace(context, activity_attempt_id="activity_attempt_synthetic_002")
+    with pytest.raises(ModelToolRuntimeError, match="idempotency_key_mismatch"):
+        replace(context, provider_mode="simulate")
+    simulate_context = _execution_context(provider_mode="simulate")
+    assert simulate_context.context_digest != context.context_digest
+    assert simulate_context.idempotency_key != context.idempotency_key
+
+    with pytest.raises(ModelToolRuntimeError, match="monetary_ceiling_noncanonical"):
+        replace(budget, monetary_ceiling="0.00")
+    with pytest.raises(ModelToolRuntimeError, match="snapshot_ref_mismatch"):
+        replace(context, effective_route_snapshot_ref="fixture-digest-is-not-an-owner-ref")
+    with pytest.raises(ModelToolRuntimeError, match="budget_class_mismatch"):
+        model_turn_execution_context_for_route(
+            _route(),
+            _effective_route_snapshot(),
+            **{
+                **{
+                    field_name: getattr(context, field_name)
+                    for field_name in (
+                        "runtime_namespace",
+                        "provider_mode",
+                        "workspace_id",
+                        "scope_digest",
+                        "coordination_plan_review_id",
+                        "actor_id",
+                        "permission_scope",
+                        "prompt_policy_version",
+                        "permission_scope_revision",
+                        "outbound_policy_revision",
+                        "model_safe_schema_revision",
+                        "operation_run_id",
+                        "turn_id",
+                        "step_id",
+                        "workflow_command_id",
+                        "activity_run_id",
+                        "activity_attempt_id",
+                        "attempt",
+                        "budget_reservation_ref",
+                        "approval_ref",
+                    )
+                },
+                "budget": replace(budget, budget_class="wrong_budget_class"),
+            },
+        )
+
+
+def test_tool_turn_request_is_a_fail_closed_context_derived_mirror() -> None:
+    context = _execution_context()
+    request = request_for_model_turn_execution_context(
+        context,
+        _route(),
+        transcript_digest=_digest("synthetic-context-bound-transcript"),
+    )
+
+    assert request.execution_context is context
+    assert request.route_id == context.route_id
+    assert request.max_tokens == context.budget.max_output_tokens
+    assert request.provider_mode == context.provider_mode
+    assert _request().execution_context is None
+    with pytest.raises(ModelToolRequestBindingError, match="execution_context_mismatch:route_id"):
+        replace(request, route_id="agent.planner.other")
+    with pytest.raises(ModelToolRequestBindingError, match="execution_context_mismatch:provider_mode"):
+        replace(request, provider_mode="simulate")
+
+    with pytest.raises(ModelToolRequestBindingError, match="execution_context_provider_mode_immutable"):
+        with_provider_mode(request, "live")
+
+    live_context = _execution_context(provider_mode="live")
+    live_request = request_for_model_turn_execution_context(
+        live_context,
+        _route(),
+        transcript_digest=_digest("synthetic-context-bound-transcript"),
+    )
+    assert live_request.execution_context is not None
+    assert live_request.execution_context is live_context
+    assert live_context.idempotency_key != context.idempotency_key
+    with pytest.raises(ModelRouteExecutionRejected, match="live_unavailable"):
+        assert_d0a_route_execution_allowed(
+            route_id=live_request.route_id,
+            provider_mode=live_request.provider_mode,
+            required_capabilities={"tools"},
+        )
 
 
 def test_route_registry_rejects_non_draft_declaration_for_d0a() -> None:

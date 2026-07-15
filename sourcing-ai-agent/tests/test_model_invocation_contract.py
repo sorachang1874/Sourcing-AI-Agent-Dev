@@ -4,18 +4,23 @@ import ast
 import hashlib
 import json
 from dataclasses import FrozenInstanceError, fields, replace
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
 
 from sourcing_agent.model_route_registry import (
     DEFAULT_MODEL_ROUTE_SPECS,
+    EFFECTIVE_MODEL_ROUTE_SETTINGS_OWNER,
+    EFFECTIVE_MODEL_ROUTE_SETTINGS_SCHEMA_VERSION,
     MODEL_ROUTE_MANIFEST_KEYS,
     MODEL_ROUTE_MANIFEST_ROUTE_KEYS,
     MODEL_ROUTE_SPEC_RECORD_KEYS,
+    EffectiveModelRouteSettings,
     ModelRouteExecutionRejected,
     ModelRouteRegistryError,
     assert_d0a_route_execution_allowed,
+    issue_effective_model_route_snapshot,
     model_route_registry_manifest,
     validate_model_route_registry_manifest,
     validate_model_route_specs,
@@ -24,17 +29,22 @@ from sourcing_agent.model_tool_runtime import (
     D0A_EFFECT_AUTHORIZATION_AVAILABLE,
     MODEL_INVOCATION_ENVELOPE_RECORD_KEYS,
     MODEL_INVOCATION_ENVELOPE_SCHEMA_VERSION,
+    MODEL_TURN_BUDGET_SCHEMA_VERSION,
     ModelIdentity,
     ModelInvocationEnvelopeError,
     ModelInvocationEnvelopeV1,
     ModelInvocationMirrorError,
     ModelToolRuntimeError,
+    ModelTurnBudget,
     SystemMessage,
     ToolSpec,
     ToolTurnResult,
     UserMessage,
     canonical_tool_turn_request_hash,
+    model_turn_execution_context_for_route,
     request_for_model_route,
+    request_for_model_turn_execution_context,
+    validate_model_turn_execution_context_envelope_mirror,
     validate_tool_turn_request_envelope_mirror,
     validate_tool_turn_result_envelope_mirror,
 )
@@ -164,6 +174,62 @@ def _request_fixture():
     )
 
 
+def _effective_route_snapshot():
+    route = _route()
+    return issue_effective_model_route_snapshot(
+        route_id=route.route_id,
+        route_revision=route.revision,
+        effective_settings=EffectiveModelRouteSettings(
+            schema_version=EFFECTIVE_MODEL_ROUTE_SETTINGS_SCHEMA_VERSION,
+            settings_owner=EFFECTIVE_MODEL_ROUTE_SETTINGS_OWNER,
+            settings_policy_revision="synthetic_settings_policy_v1",
+            provider_family="model",
+            live_gate_provider_name="model_provider",
+            endpoint_identity_digest=_digest("synthetic_context_endpoint"),
+            request_timeout_ms=30_000,
+            pricing_class="synthetic_zero_cost",
+            circuit_policy_id="synthetic_circuit_policy_v1",
+        ),
+    )
+
+
+def _execution_context():
+    return model_turn_execution_context_for_route(
+        _route(),
+        _effective_route_snapshot(),
+        runtime_namespace="test:model-invocation-envelope",
+        provider_mode="scripted",
+        workspace_id="synthetic_workspace",
+        scope_digest=_digest("synthetic_context_scope"),
+        coordination_plan_review_id=91,
+        actor_id="synthetic_actor",
+        permission_scope="agent:synthetic",
+        prompt_policy_version="synthetic_prompt_policy_v1",
+        permission_scope_revision="synthetic_permission_revision_v1",
+        outbound_policy_revision="synthetic_outbound_revision_v1",
+        model_safe_schema_revision="synthetic_model_safe_revision_v1",
+        operation_run_id="synthetic_operation_001",
+        turn_id="synthetic_turn_001",
+        step_id="synthetic_step_001",
+        workflow_command_id="synthetic_command_001",
+        activity_run_id="synthetic_activity_001",
+        activity_attempt_id="synthetic_attempt_001",
+        attempt=1,
+        budget=ModelTurnBudget(
+            schema_version=MODEL_TURN_BUDGET_SCHEMA_VERSION,
+            budget_class=_route().budget_class,
+            max_input_tokens=2_048,
+            max_output_tokens=256,
+            max_total_tokens=2_304,
+            monetary_ceiling="0",
+            currency_code="USD",
+            deadline_at=datetime(2026, 7, 15, 5, 0, tzinfo=timezone.utc),
+        ),
+        budget_reservation_ref="synthetic://cost-reservation/001",
+        approval_ref=None,
+    )
+
+
 def _request_messages():
     return (
         SystemMessage("Use only the declared synthetic tool."),
@@ -185,6 +251,43 @@ def _request_tools():
             schema_version="inspect_synthetic_evidence_v1",
             approval_policy="none_simulated",
             budget_required=False,
+        ),
+    )
+
+
+def _envelope_for_context():
+    context = _execution_context()
+    request = request_for_model_turn_execution_context(
+        context,
+        _route(),
+        transcript_digest=_digest("synthetic_context_transcript"),
+    )
+    return replace(
+        _envelope_for_result(_result()),
+        route_id=context.route_id,
+        route_revision=context.route_revision,
+        effective_route_snapshot_ref=context.effective_route_snapshot_ref,
+        effective_route_snapshot_digest=context.effective_route_snapshot_digest,
+        runtime_namespace=context.runtime_namespace,
+        provider_mode=context.provider_mode,
+        workspace_id=context.workspace_id,
+        actor_id=context.actor_id,
+        permission_scope=context.permission_scope,
+        prompt_policy_version=context.prompt_policy_version,
+        permission_scope_revision=context.permission_scope_revision,
+        outbound_policy_revision=context.outbound_policy_revision,
+        model_safe_schema_revision=context.model_safe_schema_revision,
+        operation_run_id=context.operation_run_id,
+        turn_id=context.turn_id,
+        step_id=context.step_id,
+        workflow_command_id=context.workflow_command_id,
+        activity_run_id=context.activity_run_id,
+        activity_attempt_id=context.activity_attempt_id,
+        cost_exposure_ref="synthetic://cost-exposure/001",
+        canonical_request_digest=canonical_tool_turn_request_hash(
+            request,
+            _request_messages(),
+            _request_tools(),
         ),
     )
 
@@ -539,6 +642,78 @@ def test_tool_turn_request_envelope_mirror_live_coherence_does_not_grant_executi
         )
 
 
+def test_model_turn_execution_context_envelope_mirror_binds_all_six_causality_pins() -> None:
+    context = _execution_context()
+    envelope = _envelope_for_context()
+
+    assert validate_model_turn_execution_context_envelope_mirror(context, envelope) is None
+    request = request_for_model_turn_execution_context(
+        context,
+        _route(),
+        transcript_digest=_digest("synthetic_context_transcript"),
+    )
+    assert (
+        validate_tool_turn_request_envelope_mirror(
+            request,
+            _request_messages(),
+            _request_tools(),
+            envelope,
+        )
+        is None
+    )
+
+
+@pytest.mark.parametrize(
+    ("field_name", "replacement"),
+    [
+        ("route_id", "agent.planner.other"),
+        ("route_revision", _digest("other-route")),
+        ("effective_route_snapshot_ref", "model-route-snapshot:v1:other"),
+        ("effective_route_snapshot_digest", _digest("other-snapshot")),
+        ("runtime_namespace", "test:model-invocation-other"),
+        ("provider_mode", "simulate"),
+        ("workspace_id", "synthetic_workspace_other"),
+        ("actor_id", "synthetic_actor_other"),
+        ("permission_scope", "agent:other"),
+        ("prompt_policy_version", "synthetic_prompt_policy_v2"),
+        ("permission_scope_revision", "synthetic_permission_revision_v2"),
+        ("outbound_policy_revision", "synthetic_outbound_revision_v2"),
+        ("model_safe_schema_revision", "synthetic_model_safe_revision_v2"),
+        ("operation_run_id", "synthetic_operation_other"),
+        ("turn_id", "synthetic_turn_other"),
+        ("step_id", "synthetic_step_other"),
+        ("workflow_command_id", "synthetic_command_other"),
+        ("activity_run_id", "synthetic_activity_other"),
+        ("activity_attempt_id", "synthetic_attempt_other"),
+    ],
+)
+def test_model_turn_execution_context_envelope_mirror_fails_closed(
+    field_name: str,
+    replacement: object,
+) -> None:
+    with pytest.raises(ModelInvocationMirrorError, match=rf"context_mirror_mismatch:.*{field_name}"):
+        validate_model_turn_execution_context_envelope_mirror(
+            _execution_context(),
+            replace(_envelope_for_context(), **{field_name: replacement}),
+        )
+
+
+def test_context_bound_request_envelope_mirror_rejects_causal_drift() -> None:
+    context = _execution_context()
+    request = request_for_model_turn_execution_context(
+        context,
+        _route(),
+        transcript_digest=_digest("synthetic_context_transcript"),
+    )
+    with pytest.raises(ModelInvocationMirrorError, match="context_mirror_mismatch:activity_attempt_id"):
+        validate_tool_turn_request_envelope_mirror(
+            request,
+            _request_messages(),
+            _request_tools(),
+            replace(_envelope_for_context(), activity_attempt_id="synthetic_attempt_other"),
+        )
+
+
 @pytest.mark.parametrize(
     ("field_name", "replacement", "error"),
     [
@@ -745,6 +920,7 @@ def test_d0c_contract_modules_have_no_transport_settings_environment_or_storage_
             "abc",
             "codecs",
             "dataclasses",
+            "datetime",
             "hashlib",
             "json",
             "math",

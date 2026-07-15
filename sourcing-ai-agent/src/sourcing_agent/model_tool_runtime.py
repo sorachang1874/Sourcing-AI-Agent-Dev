@@ -17,13 +17,17 @@ import json
 import math
 import re
 from dataclasses import dataclass, field, replace
+from datetime import datetime, timedelta, timezone
 from types import MappingProxyType
 from typing import Any, Iterable, Iterator, Literal, Mapping, TypeAlias, cast
 
 from .model_route_registry import (
+    EFFECTIVE_MODEL_ROUTE_SNAPSHOT_REF_PREFIX,
+    EffectiveModelRouteSnapshot,
     ModelRouteExecutionRejected,
     ModelRouteSpec,
     assert_d0a_route_execution_allowed,
+    validate_effective_model_route_snapshot,
 )
 from .model_usage import ModelUsage
 
@@ -31,6 +35,10 @@ MODEL_TURN_MESSAGE_SCHEMA_VERSION = "model_turn_message_v1"
 MODEL_TOOL_REQUEST_HASH_SCHEMA_VERSION = "model_tool_request_hash_v1"
 MODEL_TOOL_TRANSCRIPT_SCHEMA_VERSION = "model_tool_transcript_v1"
 MODEL_INVOCATION_ENVELOPE_SCHEMA_VERSION = "model_invocation_envelope_v1"
+MODEL_TURN_BUDGET_SCHEMA_VERSION = "model_turn_budget_v1"
+MODEL_TURN_EXECUTION_CONTEXT_SCHEMA_VERSION = "model_turn_execution_context_v1"
+MODEL_TURN_IDEMPOTENCY_KEY_SCHEMA_VERSION = "model_turn_idempotency_key_v1"
+MODEL_TURN_IDEMPOTENCY_KEY_PREFIX = "model-turn:v1:"
 D0A_EFFECT_AUTHORIZATION_AVAILABLE = False
 
 MODEL_INVOCATION_ENVELOPE_RECORD_KEYS = frozenset(
@@ -97,6 +105,8 @@ MAX_TOOL_ARGUMENT_BYTES = 64 * 1024
 MAX_TOOL_CALLS = 16
 MAX_TEXT_BYTES = 256 * 1024
 MAX_MODEL_OUTPUT_TOKENS = 1_000_000
+MAX_MODEL_INPUT_TOKENS = 10_000_000
+MAX_MODEL_TOTAL_TOKENS = MAX_MODEL_INPUT_TOKENS + MAX_MODEL_OUTPUT_TOKENS
 
 _SUPPORTED_SCHEMA_KEYS = frozenset(
     {
@@ -121,6 +131,7 @@ _SUPPORTED_SCHEMA_KEYS = frozenset(
 )
 _SUPPORTED_JSON_TYPES = frozenset({"object", "array", "string", "integer", "number", "boolean", "null"})
 _POLICY_EVALUABLE_TERMINAL_REASONS = frozenset({"end_turn", "tool_calls"})
+_CANONICAL_USD_AMOUNT = re.compile(r"(?:0|[1-9][0-9]*)(?:\.[0-9]{0,11}[1-9])?")
 
 
 class ModelToolRuntimeError(RuntimeError):
@@ -252,6 +263,355 @@ def _bounded_text(field_name: str, value: str, *, maximum_bytes: int = MAX_MESSA
     if len(normalized.encode("utf-8")) > maximum_bytes:
         raise ModelToolRuntimeError(f"model_tool_{field_name}_too_large")
     return normalized
+
+
+def derive_model_turn_idempotency_key(
+    *,
+    route_id: str,
+    route_revision: str,
+    effective_route_snapshot_digest: str,
+    runtime_namespace: str,
+    provider_mode: EnvelopeProviderMode,
+    workspace_id: str,
+    scope_digest: str,
+    coordination_plan_review_id: int,
+    operation_run_id: str,
+    turn_id: str,
+    step_id: str,
+    workflow_command_id: str,
+    activity_run_id: str,
+    activity_attempt_id: str,
+    attempt: int,
+) -> str:
+    """Derive the namespace/mode/PFX-bound physical model-turn identity."""
+
+    for field_name, value in (
+        ("route_id", route_id),
+        ("runtime_namespace", runtime_namespace),
+        ("workspace_id", workspace_id),
+        ("operation_run_id", operation_run_id),
+        ("turn_id", turn_id),
+        ("step_id", step_id),
+        ("workflow_command_id", workflow_command_id),
+        ("activity_run_id", activity_run_id),
+        ("activity_attempt_id", activity_attempt_id),
+    ):
+        _required_text(field_name, value)
+    _required_sha256("route_revision", route_revision)
+    _required_sha256("effective_route_snapshot_digest", effective_route_snapshot_digest)
+    _required_sha256("scope_digest", scope_digest)
+    if provider_mode not in {"live", "simulate", "scripted"} or provider_mode != provider_mode.lower():
+        raise ModelToolRuntimeError("model_turn_idempotency_provider_mode_invalid")
+    for numeric_field_name, numeric_value in (
+        ("coordination_plan_review_id", coordination_plan_review_id),
+        ("attempt", attempt),
+    ):
+        if isinstance(numeric_value, bool) or not isinstance(numeric_value, int) or numeric_value <= 0:
+            raise ModelToolRuntimeError(f"model_turn_idempotency_{numeric_field_name}_invalid")
+    record = {
+        "schema_version": MODEL_TURN_IDEMPOTENCY_KEY_SCHEMA_VERSION,
+        "route_id": route_id,
+        "route_revision": route_revision,
+        "effective_route_snapshot_digest": effective_route_snapshot_digest,
+        "runtime_namespace": runtime_namespace,
+        "provider_mode": provider_mode,
+        "workspace_id": workspace_id,
+        "scope_digest": scope_digest,
+        "coordination_plan_review_id": coordination_plan_review_id,
+        "operation_run_id": operation_run_id,
+        "turn_id": turn_id,
+        "step_id": step_id,
+        "workflow_command_id": workflow_command_id,
+        "activity_run_id": activity_run_id,
+        "activity_attempt_id": activity_attempt_id,
+        "attempt": attempt,
+    }
+    return f"{MODEL_TURN_IDEMPOTENCY_KEY_PREFIX}{_sha256_json(record)}"
+
+
+@dataclass(frozen=True, slots=True)
+class ModelTurnBudget:
+    """Immutable token, money, and wall-clock ceiling for one model turn.
+
+    This in-memory value does not reserve funds. ``budget_reservation_ref`` on
+    ``ModelTurnExecutionContext`` must point at the future cost-ledger owner;
+    the budget merely freezes the exact ceiling selected by that owner.
+    """
+
+    schema_version: str
+    budget_class: str
+    max_input_tokens: int
+    max_output_tokens: int
+    max_total_tokens: int
+    monetary_ceiling: str
+    currency_code: str
+    deadline_at: datetime
+
+    def __post_init__(self) -> None:
+        if self.schema_version != MODEL_TURN_BUDGET_SCHEMA_VERSION:
+            raise ModelToolRuntimeError("model_turn_budget_schema_invalid")
+        _required_text("budget_class", self.budget_class)
+        for field_name, value, upper_bound, allow_zero in (
+            ("max_input_tokens", self.max_input_tokens, MAX_MODEL_INPUT_TOKENS, True),
+            ("max_output_tokens", self.max_output_tokens, MAX_MODEL_OUTPUT_TOKENS, False),
+            ("max_total_tokens", self.max_total_tokens, MAX_MODEL_TOTAL_TOKENS, False),
+        ):
+            minimum = 0 if allow_zero else 1
+            if isinstance(value, bool) or not isinstance(value, int) or value < minimum or value > upper_bound:
+                raise ModelToolRuntimeError(f"model_turn_budget_{field_name}_invalid")
+        if self.max_total_tokens != self.max_input_tokens + self.max_output_tokens:
+            raise ModelToolRuntimeError("model_turn_budget_total_tokens_mismatch")
+        if type(self.monetary_ceiling) is not str or _CANONICAL_USD_AMOUNT.fullmatch(self.monetary_ceiling) is None:
+            raise ModelToolRuntimeError("model_turn_budget_monetary_ceiling_noncanonical")
+        if self.currency_code != "USD":
+            raise ModelToolRuntimeError("model_turn_budget_currency_unsupported")
+        if not isinstance(self.deadline_at, datetime):
+            raise ModelToolRuntimeError("model_turn_budget_deadline_type_invalid")
+        if self.deadline_at.tzinfo is None or self.deadline_at.utcoffset() is None:
+            raise ModelToolRuntimeError("model_turn_budget_deadline_timezone_required")
+        if self.deadline_at.utcoffset() != timedelta(0):
+            raise ModelToolRuntimeError("model_turn_budget_deadline_must_be_utc")
+        object.__setattr__(self, "deadline_at", self.deadline_at.astimezone(timezone.utc))
+
+    def to_record(self) -> dict[str, object]:
+        return {
+            "schema_version": self.schema_version,
+            "budget_class": self.budget_class,
+            "max_input_tokens": self.max_input_tokens,
+            "max_output_tokens": self.max_output_tokens,
+            "max_total_tokens": self.max_total_tokens,
+            "monetary_ceiling": self.monetary_ceiling,
+            "currency_code": self.currency_code,
+            "deadline_at": self.deadline_at.isoformat(timespec="microseconds").replace("+00:00", "Z"),
+        }
+
+    @property
+    def budget_digest(self) -> str:
+        return _sha256_json(self.to_record())
+
+
+@dataclass(frozen=True, slots=True)
+class ModelTurnExecutionContext:
+    """Complete immutable owner input for a future model transport.
+
+    The value may describe ``live`` for durable planning/evidence purposes, but
+    D0g adds no live executor or authorization. Existing D0 route predicates
+    continue to reject live before any caller-owned iterable or transport.
+    """
+
+    schema_version: str
+    route_id: str
+    route_revision: str
+    effective_route_snapshot_ref: str
+    effective_route_snapshot_digest: str
+    runtime_namespace: str
+    provider_mode: EnvelopeProviderMode
+    workspace_id: str
+    scope_digest: str
+    coordination_plan_review_id: int
+    actor_id: str
+    permission_scope: str
+    prompt_policy_version: str
+    permission_scope_revision: str
+    outbound_policy_revision: str
+    model_safe_schema_revision: str
+    operation_run_id: str
+    turn_id: str
+    step_id: str
+    workflow_command_id: str
+    activity_run_id: str
+    activity_attempt_id: str
+    attempt: int
+    idempotency_key: str
+    budget: ModelTurnBudget
+    budget_reservation_ref: str
+    approval_ref: str | None
+
+    def __post_init__(self) -> None:
+        if self.schema_version != MODEL_TURN_EXECUTION_CONTEXT_SCHEMA_VERSION:
+            raise ModelToolRuntimeError("model_turn_execution_context_schema_invalid")
+        for field_name in (
+            "route_id",
+            "effective_route_snapshot_ref",
+            "runtime_namespace",
+            "workspace_id",
+            "actor_id",
+            "permission_scope",
+            "prompt_policy_version",
+            "permission_scope_revision",
+            "outbound_policy_revision",
+            "model_safe_schema_revision",
+            "operation_run_id",
+            "turn_id",
+            "step_id",
+            "workflow_command_id",
+            "activity_run_id",
+            "activity_attempt_id",
+            "idempotency_key",
+            "budget_reservation_ref",
+        ):
+            _required_text(field_name, getattr(self, field_name))
+        _required_sha256("route_revision", self.route_revision)
+        _required_sha256("effective_route_snapshot_digest", self.effective_route_snapshot_digest)
+        _required_sha256("scope_digest", self.scope_digest)
+        expected_snapshot_ref = f"{EFFECTIVE_MODEL_ROUTE_SNAPSHOT_REF_PREFIX}{self.effective_route_snapshot_digest}"
+        if self.effective_route_snapshot_ref != expected_snapshot_ref:
+            raise ModelToolRuntimeError("model_turn_execution_context_snapshot_ref_mismatch")
+        if self.provider_mode not in {"live", "simulate", "scripted"}:
+            raise ModelToolRuntimeError("model_turn_execution_context_provider_mode_invalid")
+        if self.provider_mode != self.provider_mode.lower():
+            raise ModelToolRuntimeError("model_turn_execution_context_provider_mode_noncanonical")
+        if (
+            isinstance(self.coordination_plan_review_id, bool)
+            or not isinstance(self.coordination_plan_review_id, int)
+            or self.coordination_plan_review_id <= 0
+        ):
+            raise ModelToolRuntimeError("model_turn_execution_context_review_id_invalid")
+        if isinstance(self.attempt, bool) or not isinstance(self.attempt, int) or self.attempt <= 0:
+            raise ModelToolRuntimeError("model_turn_execution_context_attempt_invalid")
+        expected_idempotency_key = derive_model_turn_idempotency_key(
+            route_id=self.route_id,
+            route_revision=self.route_revision,
+            effective_route_snapshot_digest=self.effective_route_snapshot_digest,
+            runtime_namespace=self.runtime_namespace,
+            provider_mode=self.provider_mode,
+            workspace_id=self.workspace_id,
+            scope_digest=self.scope_digest,
+            coordination_plan_review_id=self.coordination_plan_review_id,
+            operation_run_id=self.operation_run_id,
+            turn_id=self.turn_id,
+            step_id=self.step_id,
+            workflow_command_id=self.workflow_command_id,
+            activity_run_id=self.activity_run_id,
+            activity_attempt_id=self.activity_attempt_id,
+            attempt=self.attempt,
+        )
+        if self.idempotency_key != expected_idempotency_key:
+            raise ModelToolRuntimeError("model_turn_execution_context_idempotency_key_mismatch")
+        if type(self.budget) is not ModelTurnBudget:
+            raise ModelToolRuntimeError("model_turn_execution_context_budget_type_invalid")
+        if self.approval_ref is not None:
+            _required_text("approval_ref", self.approval_ref)
+
+    def pfx_record(self) -> dict[str, object]:
+        return {
+            "runtime_namespace": self.runtime_namespace,
+            "provider_mode": self.provider_mode,
+            "workspace_id": self.workspace_id,
+            "scope_digest": self.scope_digest,
+            "coordination_plan_review_id": self.coordination_plan_review_id,
+        }
+
+    def to_record(self) -> dict[str, object]:
+        return {
+            "schema_version": self.schema_version,
+            "route_id": self.route_id,
+            "route_revision": self.route_revision,
+            "effective_route_snapshot_ref": self.effective_route_snapshot_ref,
+            "effective_route_snapshot_digest": self.effective_route_snapshot_digest,
+            **self.pfx_record(),
+            "actor_id": self.actor_id,
+            "permission_scope": self.permission_scope,
+            "prompt_policy_version": self.prompt_policy_version,
+            "permission_scope_revision": self.permission_scope_revision,
+            "outbound_policy_revision": self.outbound_policy_revision,
+            "model_safe_schema_revision": self.model_safe_schema_revision,
+            "operation_run_id": self.operation_run_id,
+            "turn_id": self.turn_id,
+            "step_id": self.step_id,
+            "workflow_command_id": self.workflow_command_id,
+            "activity_run_id": self.activity_run_id,
+            "activity_attempt_id": self.activity_attempt_id,
+            "attempt": self.attempt,
+            "idempotency_key": self.idempotency_key,
+            "budget": self.budget.to_record(),
+            "budget_reservation_ref": self.budget_reservation_ref,
+            "approval_ref": self.approval_ref,
+        }
+
+    @property
+    def context_digest(self) -> str:
+        return _sha256_json(self.to_record())
+
+
+def model_turn_execution_context_for_route(
+    route: ModelRouteSpec,
+    effective_route_snapshot: EffectiveModelRouteSnapshot,
+    *,
+    runtime_namespace: str,
+    provider_mode: EnvelopeProviderMode,
+    workspace_id: str,
+    scope_digest: str,
+    coordination_plan_review_id: int,
+    actor_id: str,
+    permission_scope: str,
+    prompt_policy_version: str,
+    permission_scope_revision: str,
+    outbound_policy_revision: str,
+    model_safe_schema_revision: str,
+    operation_run_id: str,
+    turn_id: str,
+    step_id: str,
+    workflow_command_id: str,
+    activity_run_id: str,
+    activity_attempt_id: str,
+    attempt: int,
+    budget: ModelTurnBudget,
+    budget_reservation_ref: str,
+    approval_ref: str | None,
+) -> ModelTurnExecutionContext:
+    """Build a complete context from owner-issued route and snapshot values."""
+
+    if type(route) is not ModelRouteSpec:
+        raise ModelToolRuntimeError("model_turn_execution_context_route_type_invalid")
+    validate_effective_model_route_snapshot(effective_route_snapshot, route)
+    if type(budget) is not ModelTurnBudget or budget.budget_class != route.budget_class:
+        raise ModelToolRuntimeError("model_turn_execution_context_budget_class_mismatch")
+    return ModelTurnExecutionContext(
+        schema_version=MODEL_TURN_EXECUTION_CONTEXT_SCHEMA_VERSION,
+        route_id=route.route_id,
+        route_revision=route.revision,
+        effective_route_snapshot_ref=effective_route_snapshot.snapshot_ref,
+        effective_route_snapshot_digest=effective_route_snapshot.snapshot_digest,
+        runtime_namespace=runtime_namespace,
+        provider_mode=provider_mode,
+        workspace_id=workspace_id,
+        scope_digest=scope_digest,
+        coordination_plan_review_id=coordination_plan_review_id,
+        actor_id=actor_id,
+        permission_scope=permission_scope,
+        prompt_policy_version=prompt_policy_version,
+        permission_scope_revision=permission_scope_revision,
+        outbound_policy_revision=outbound_policy_revision,
+        model_safe_schema_revision=model_safe_schema_revision,
+        operation_run_id=operation_run_id,
+        turn_id=turn_id,
+        step_id=step_id,
+        workflow_command_id=workflow_command_id,
+        activity_run_id=activity_run_id,
+        activity_attempt_id=activity_attempt_id,
+        attempt=attempt,
+        idempotency_key=derive_model_turn_idempotency_key(
+            route_id=route.route_id,
+            route_revision=route.revision,
+            effective_route_snapshot_digest=effective_route_snapshot.snapshot_digest,
+            runtime_namespace=runtime_namespace,
+            provider_mode=provider_mode,
+            workspace_id=workspace_id,
+            scope_digest=scope_digest,
+            coordination_plan_review_id=coordination_plan_review_id,
+            operation_run_id=operation_run_id,
+            turn_id=turn_id,
+            step_id=step_id,
+            workflow_command_id=workflow_command_id,
+            activity_run_id=activity_run_id,
+            activity_attempt_id=activity_attempt_id,
+            attempt=attempt,
+        ),
+        budget=budget,
+        budget_reservation_ref=budget_reservation_ref,
+        approval_ref=approval_ref,
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -901,6 +1261,63 @@ def validate_tool_turn_result_envelope_mirror(
         raise ModelInvocationMirrorError(f"model_invocation_mirror_mismatch:{','.join(mismatches)}")
 
 
+def validate_model_turn_execution_context_envelope_mirror(
+    context: ModelTurnExecutionContext,
+    envelope: ModelInvocationEnvelopeV1,
+) -> None:
+    """Exact-copy check for fields jointly owned by context and envelope.
+
+    Scope/review lineage belongs to the external policy/repository PFX and is
+    intentionally not fabricated into ``ModelInvocationEnvelopeV1``. Budget
+    reservation and physical cost-exposure refs are also distinct contracts.
+    Passing this mirror is evidence coherence, never execution authorization.
+    """
+
+    if type(context) is not ModelTurnExecutionContext:
+        raise ModelInvocationMirrorError("model_invocation_context_mirror_context_type_invalid")
+    if type(envelope) is not ModelInvocationEnvelopeV1:
+        raise ModelInvocationMirrorError("model_invocation_context_mirror_envelope_type_invalid")
+    shared = {
+        "route_id": (context.route_id, envelope.route_id),
+        "route_revision": (context.route_revision, envelope.route_revision),
+        "effective_route_snapshot_ref": (
+            context.effective_route_snapshot_ref,
+            envelope.effective_route_snapshot_ref,
+        ),
+        "effective_route_snapshot_digest": (
+            context.effective_route_snapshot_digest,
+            envelope.effective_route_snapshot_digest,
+        ),
+        "runtime_namespace": (context.runtime_namespace, envelope.runtime_namespace),
+        "provider_mode": (context.provider_mode, envelope.provider_mode),
+        "workspace_id": (context.workspace_id, envelope.workspace_id),
+        "actor_id": (context.actor_id, envelope.actor_id),
+        "permission_scope": (context.permission_scope, envelope.permission_scope),
+        "prompt_policy_version": (context.prompt_policy_version, envelope.prompt_policy_version),
+        "permission_scope_revision": (
+            context.permission_scope_revision,
+            envelope.permission_scope_revision,
+        ),
+        "outbound_policy_revision": (
+            context.outbound_policy_revision,
+            envelope.outbound_policy_revision,
+        ),
+        "model_safe_schema_revision": (
+            context.model_safe_schema_revision,
+            envelope.model_safe_schema_revision,
+        ),
+        "operation_run_id": (context.operation_run_id, envelope.operation_run_id),
+        "turn_id": (context.turn_id, envelope.turn_id),
+        "step_id": (context.step_id, envelope.step_id),
+        "workflow_command_id": (context.workflow_command_id, envelope.workflow_command_id),
+        "activity_run_id": (context.activity_run_id, envelope.activity_run_id),
+        "activity_attempt_id": (context.activity_attempt_id, envelope.activity_attempt_id),
+    }
+    mismatches = sorted(field_name for field_name, (actual, mirrored) in shared.items() if actual != mirrored)
+    if mismatches:
+        raise ModelInvocationMirrorError(f"model_invocation_context_mirror_mismatch:{','.join(mismatches)}")
+
+
 @dataclass(frozen=True, slots=True)
 class TextDeltaEvent:
     text: str
@@ -998,6 +1415,7 @@ class ToolTurnRequest:
     runtime_namespace: str
     provider_mode: str
     transcript_digest: str
+    _execution_context: ModelTurnExecutionContext | None = field(default=None, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         for field_name in (
@@ -1040,6 +1458,56 @@ class ToolTurnRequest:
         if copied_options != {"include_usage": True}:
             raise ModelToolRuntimeError("model_tool_stream_options_unsupported_d0a")
         object.__setattr__(self, "stream_options", _freeze_json(copied_options))
+        if self._execution_context is not None:
+            if type(self._execution_context) is not ModelTurnExecutionContext:
+                raise ModelToolRequestBindingError("model_tool_request_execution_context_type_invalid")
+            context_mirrors = {
+                "route_id": (self.route_id, self._execution_context.route_id),
+                "route_revision": (self.route_revision, self._execution_context.route_revision),
+                "effective_route_snapshot_digest": (
+                    self.effective_route_snapshot_digest,
+                    self._execution_context.effective_route_snapshot_digest,
+                ),
+                "max_tokens": (self.max_tokens, self._execution_context.budget.max_output_tokens),
+                "prompt_policy_version": (
+                    self.prompt_policy_version,
+                    self._execution_context.prompt_policy_version,
+                ),
+                "permission_scope_revision": (
+                    self.permission_scope_revision,
+                    self._execution_context.permission_scope_revision,
+                ),
+                "outbound_policy_revision": (
+                    self.outbound_policy_revision,
+                    self._execution_context.outbound_policy_revision,
+                ),
+                "model_safe_schema_revision": (
+                    self.model_safe_schema_revision,
+                    self._execution_context.model_safe_schema_revision,
+                ),
+                "workspace_id": (self.workspace_id, self._execution_context.workspace_id),
+                "actor_id": (self.actor_id, self._execution_context.actor_id),
+                "permission_scope": (self.permission_scope, self._execution_context.permission_scope),
+                "runtime_namespace": (self.runtime_namespace, self._execution_context.runtime_namespace),
+                "provider_mode": (self.provider_mode, self._execution_context.provider_mode),
+            }
+            mismatches = sorted(
+                field_name for field_name, (actual, expected) in context_mirrors.items() if actual != expected
+            )
+            if mismatches:
+                raise ModelToolRequestBindingError(
+                    f"model_tool_request_execution_context_mismatch:{','.join(mismatches)}"
+                )
+
+    @property
+    def execution_context(self) -> ModelTurnExecutionContext | None:
+        """Return the immutable owner context for the canonical D0g path.
+
+        ``None`` identifies the pre-D0g scripted/simulate compatibility builder;
+        it does not authorize live execution or durable result acceptance.
+        """
+
+        return self._execution_context
 
 
 def _assert_d0a_request_route_binding(request: ToolTurnRequest) -> ModelRouteSpec:
@@ -1189,8 +1657,10 @@ def validate_tool_turn_request_envelope_mirror(
     the complete request, messages, and tool registry, consuming each supplied
     iterable exactly once. Callers that need to reuse those values must pass
     materialized tuples. Passing this check does not validate response evidence,
-    durable causality, circuit/cost state, budget, execution permission, or
-    effect authority.
+    circuit/cost state, execution permission, or effect authority. A canonical
+    D0g context-bound request additionally exact-compares its six causal pins
+    through the retained execution context; the legacy compatibility request
+    has no such context and therefore keeps the narrower D0e check.
     """
 
     if type(request) is not ToolTurnRequest:
@@ -1226,6 +1696,8 @@ def validate_tool_turn_request_envelope_mirror(
     mismatches = sorted(field_name for field_name, (actual, mirrored) in direct_shared.items() if actual != mirrored)
     if mismatches:
         raise ModelInvocationMirrorError(f"model_invocation_request_mirror_mismatch:{','.join(mismatches)}")
+    if request.execution_context is not None:
+        validate_model_turn_execution_context_envelope_mirror(request.execution_context, envelope)
     canonical_request_digest = canonical_tool_turn_request_hash(request, messages, tools)
     if canonical_request_digest != envelope.canonical_request_digest:
         raise ModelInvocationMirrorError("model_invocation_request_mirror_mismatch:canonical_request_digest")
@@ -1897,6 +2369,54 @@ class ScriptedToolTurnSession(ToolCallingSessionBase):
         return parsed
 
 
+def request_for_model_turn_execution_context(
+    context: ModelTurnExecutionContext,
+    route: ModelRouteSpec,
+    *,
+    transcript_digest: str,
+) -> ToolTurnRequest:
+    """Derive the request mirror from the complete immutable owner context."""
+
+    if type(context) is not ModelTurnExecutionContext:
+        raise ModelToolRequestBindingError("model_tool_request_execution_context_type_invalid")
+    if type(route) is not ModelRouteSpec:
+        raise ModelToolRequestBindingError("model_tool_request_route_type_invalid")
+    expected_route_fields = {
+        "route_id": (context.route_id, route.route_id),
+        "route_revision": (context.route_revision, route.revision),
+        "budget_class": (context.budget.budget_class, route.budget_class),
+    }
+    mismatches = sorted(
+        field_name for field_name, (actual, expected) in expected_route_fields.items() if actual != expected
+    )
+    if mismatches:
+        raise ModelToolRequestBindingError(
+            f"model_tool_request_execution_context_route_mismatch:{','.join(mismatches)}"
+        )
+    return ToolTurnRequest(
+        route_id=context.route_id,
+        route_revision=context.route_revision,
+        effective_route_snapshot_digest=context.effective_route_snapshot_digest,
+        provider=route.provider,
+        requested_model=route.model,
+        api_style=route.api_style,
+        max_tokens=context.budget.max_output_tokens,
+        tool_choice="auto",
+        stream_options={"include_usage": True},
+        prompt_policy_version=context.prompt_policy_version,
+        permission_scope_revision=context.permission_scope_revision,
+        outbound_policy_revision=context.outbound_policy_revision,
+        model_safe_schema_revision=context.model_safe_schema_revision,
+        workspace_id=context.workspace_id,
+        actor_id=context.actor_id,
+        permission_scope=context.permission_scope,
+        runtime_namespace=context.runtime_namespace,
+        provider_mode=context.provider_mode,
+        transcript_digest=transcript_digest,
+        _execution_context=context,
+    )
+
+
 def request_for_model_route(
     route: ModelRouteSpec,
     *,
@@ -1913,7 +2433,12 @@ def request_for_model_route(
     runtime_namespace: str,
     transcript_digest: str,
 ) -> ToolTurnRequest:
-    """Build a request from checked-in route fields without reading runtime settings."""
+    """Build the pre-D0g scripted/simulate compatibility request.
+
+    This legacy shape has no complete execution context, causality, budget
+    reservation, or durable snapshot ref. It remains for the characterized D0a
+    parser/replay contract only and never authorizes live execution.
+    """
 
     return ToolTurnRequest(
         route_id=route.route_id,
@@ -1939,8 +2464,10 @@ def request_for_model_route(
 
 
 def with_provider_mode(request: ToolTurnRequest, provider_mode: str) -> ToolTurnRequest:
-    """Testing helper that preserves every request field except the explicit mode."""
+    """Legacy-fixture helper; canonical context mode is physical identity."""
 
+    if request.execution_context is not None:
+        raise ModelToolRequestBindingError("model_tool_request_execution_context_provider_mode_immutable")
     return replace(request, provider_mode=provider_mode)
 
 
@@ -1952,6 +2479,10 @@ __all__ = [
     "ErrorEvent",
     "MODEL_INVOCATION_ENVELOPE_RECORD_KEYS",
     "MODEL_INVOCATION_ENVELOPE_SCHEMA_VERSION",
+    "MODEL_TURN_BUDGET_SCHEMA_VERSION",
+    "MODEL_TURN_EXECUTION_CONTEXT_SCHEMA_VERSION",
+    "MODEL_TURN_IDEMPOTENCY_KEY_PREFIX",
+    "MODEL_TURN_IDEMPOTENCY_KEY_SCHEMA_VERSION",
     "ModelIdentity",
     "ModelInvocationEnvelopeError",
     "ModelInvocationEnvelopeV1",
@@ -1961,6 +2492,8 @@ __all__ = [
     "ModelToolRequestBindingError",
     "ModelToolRuntimeError",
     "ModelToolSchemaError",
+    "ModelTurnBudget",
+    "ModelTurnExecutionContext",
     "ModelTurnMessage",
     "ModelUsage",
     "ParsedToolTurn",
@@ -1983,8 +2516,12 @@ __all__ = [
     "canonical_model_turn_transcript_sha256",
     "canonical_tool_turn_request_hash",
     "canonical_tool_turn_request_payload",
+    "derive_model_turn_idempotency_key",
+    "model_turn_execution_context_for_route",
     "parse_openai_chat_sse",
     "request_for_model_route",
+    "request_for_model_turn_execution_context",
+    "validate_model_turn_execution_context_envelope_mirror",
     "validate_tool_turn_request_envelope_mirror",
     "validate_tool_turn_result_envelope_mirror",
     "with_provider_mode",
