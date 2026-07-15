@@ -96,6 +96,11 @@ class TestcontainersWorkflowBrowserGateTest(unittest.TestCase):
                     }
                     with mock.patch.dict(os.environ, env, clear=False):
                         store = ControlPlaneStore(runtime_dir / "sourcing_agent.db")
+                        # PG-only reads intentionally fail closed on missing authoritative tables.
+                        # This fresh-schema product gate probes /health before its first write, so
+                        # provision the versioned schema explicitly just like the canonical PG
+                        # contract fixture does.
+                        store._control_plane_postgres.ensure_bootstrapped()  # noqa: SLF001
                         orchestrator = _build_orchestrator(
                             project_root=project_root,
                             runtime_dir=runtime_dir,
@@ -149,6 +154,7 @@ class TestcontainersWorkflowBrowserGateTest(unittest.TestCase):
                             server.shutdown()
                             server.server_close()
                             api_thread.join(timeout=5)
+                            store.close()
             finally:
                 postgres.stop()
 
