@@ -403,7 +403,8 @@
   `20260714T232853Z_*` 因 `final_response_item_exact=false` invalid、不是 formal `NO-GO`；其 lexical exposure-zero
   advisory 已 fixed-forward。retry `20260714T234336Z_*` 同样因 Desktop response-item memory annotation invalid；
   其完整 item 5/6/7 Migration-A member order、exact non-closure tuple 与 stale 7-test evidence 已 fixed-forward，
-  current full oracle=`8 passed`，fresh highest-effort pinned retry pending。
+  current full oracle=`8 passed`；`e01e9f0` 的 fresh pinned medium-effort advisory=`GO 0/0/0/0`，formal
+  highest-effort retry pending。
 - [x] D3c2d dormant ActivityRun / ActivityAttempt claim-chain foundation（2026-07-15；implementation candidate）：
   `0005_d3_activity_claim_chain_foundation.sql` 按 D3b §5.2/§11.1 ratify 并安装 ActivityRun `6` columns 与
   ActivityAttempt `10` columns，保留 existing workspace/operation/command links；`command_attempt` 为 future
@@ -414,6 +415,19 @@
   workflow event、intent/terminal registry/dispatch exposure/response-failure receipt/quarantine、Migration B-D、
   R-019/R-023/R-027/R-029、action-root/OB-10.1-10.4 与 served=0 继续 open；完整记录见
   `TRACK_D_D3C2D_ACTIVITY_CLAIM_CHAIN_MIGRATION_IMPLEMENTATION.md`，author validation/fresh pinned review 待记录。
+- [x] D3c2e WorkflowEvent terminal-lineage physical decision lock（2026-07-15；零 SQL/产品码）：ratify exact
+  `11 columns + 11 NOT VALID local checks`，复用 existing `workflow_run_id/operation_id/command_id/
+  activity_attempt_id`，禁止 event-side `operation_run_id`、`source_verification_command_id`、
+  `source_activity_attempt_id`、`source_command_attempt` aliases；linked ActivityAttempt 继续拥有 post-claim
+  `command_attempt`，verification intent 单独 exact-copy。D3c2e-D1..D10 显式 defer transport provenance、
+  receipt/exposure/quarantine、完整 verification-intent DDL、index/FK/population checks、adoption 与 runtime UoW。
+  mechanism×10 invariant matrix 与 executable oracle 见
+  `TRACK_D_D3C2E_WORKFLOW_EVENT_TERMINAL_LINEAGE_DECISION_LOCK.md`；R-019/R-023/R-027/R-029、action-root、
+  OB-10.1-10.4、完整 Migration A 与 served=0 不变。
+- [ ] D3c2f dormant WorkflowEvent terminal-lineage foundation：只允许 one-table `workflow_events` ALTER、exact
+  11 columns + 11 `NOT VALID` checks、5s lock budget、populated sentinel/malformed-write/timeout full rollback/
+  ledger rollback/recovery-once/no-op real-PG proof。descriptor 保持 17 columns，current INSERT 继续省略新字段；
+  禁止 index/FK/validation/backfill/runtime/provenance/receipt/exposure/intent/quarantine/served 激活。
 - [ ] Track D 后的 user-owned cohort selection contract（Thinking Machines Lab live 前置）：以一个 versioned、
   registry-digest-pinned `CohortSelection` 作为唯一 owner，显式承载 canonical ordered
   `role_bucket_ids[]`（Researcher/Engineer/Product Manager 可自由多选且 registry 可扩展）、

@@ -542,8 +542,16 @@ Every downstream row physically copies the scoped review/operation root at its o
 | `workflow_commands` | reuse existing `operation_id`; add namespace, mode, workspace, `scope_digest`, coordination review id, authority-spec digest, four typed expected-predecessor pins, D3 business-fence digest, selection/consumed-authority, and claim/epoch/heartbeat columns from this section | `workflow_commands.operation_id = operation_runs.operation_run_id` plus exact operation scope/coordination lineage; command creation exact-copies the typed predecessor shape before hashing it; canonical registry type/owner/stage/digest; no operation-link alias |
 | `workflow_activity_runs` | namespace, mode, existing workspace, `scope_digest`, coordination review id, authority-spec and business-fence digests | exact command operation/scope/type/coordination/business fence; `command_id` already physical |
 | `workflow_activity_attempts` | `operation_run_id`, namespace, mode, existing workspace, `scope_digest`, coordination review id, authority-spec and business-fence digests, `claim_generation`, `command_attempt`, `control_epoch` | exact ActivityRun + command + current `ClaimIdentity`; `command_attempt` exact-copies the post-claim `workflow_commands.attempt`; token/digest never copied |
-| `workflow_events` terminal rows | reuse existing `operation_id`; add namespace, mode, workspace, `activity_run_id`, generation, epoch, authority/business digests, terminal outcome digest, and typed response-receipt/attempt-failure-receipt/no-exposure provenance | `workflow_events.operation_id = workflow_commands.operation_id = operation_runs.operation_run_id`; exact command/attempt plus exactly one registered terminal provenance variant in the terminal UoW; event id/digest atomically copied to command |
+| `workflow_events` terminal rows | reuse existing `workflow_run_id`, `operation_id`, `command_id`, and `activity_attempt_id`; the first dormant event-core fragment adds exactly `runtime_namespace`, `provider_mode`, `workspace_id`, `scope_digest`, `coordination_plan_review_id`, `activity_run_id`, `claim_generation`, `control_epoch`, `claim_authority_spec_digest`, `d3_business_fence_digest`, and nullable `terminal_outcome_digest`; later Migration-A provenance fragments add the separately ratified typed response-receipt/attempt-failure-receipt/no-exposure fields | `workflow_events.operation_id = workflow_commands.operation_id = operation_runs.operation_run_id`; exact command/attempt plus exactly one registered terminal provenance variant in the terminal UoW; event id/digest atomically copied to command |
 | `verification_intent` | namespace, mode, workspace, operation/review/source-command/source-attempt binding, source generation/epoch, and typed business/predecessor pins | exact source verification Stage B and same coordination review lineage; OB-10.1 remains carried until implemented |
+
+The event core does not duplicate `operation_run_id`, `source_verification_command_id`, `source_activity_attempt_id`, or
+`source_command_attempt`. Existing `operation_id`, `command_id`, and `activity_attempt_id` are the physical event links.
+The linked `workflow_activity_attempts.command_attempt` remains the post-claim attempt source of truth, while the
+verification-intent immutable source core separately exact-copies that value as `source_command_attempt`. The terminal
+UoW must compare the linked attempt; a second event-side attempt alias would add no independent authority and is
+forbidden. Typed transport provenance remains mandatory before strict terminal activation, but its columns cannot be
+inferred from the eleven-column core or from JSON payload.
 
 Creation UoWs compare every copied field; no downstream repository defaults a missing workspace to `default`, reads
 ambient environment, or trusts payload JSON. Composite scope indexes and foreign keys described in section 11 make the
@@ -1909,11 +1917,14 @@ Migration A:
 5. adds scope/coordination/spec/business-fence columns to `workflow_activity_runs`, and
    operation/scope/coordination/spec/business-fence/generation/post-claim `command_attempt`/epoch columns to
    `workflow_activity_attempts`;
-6. reuses `workflow_events.operation_id` and adds scope/nullable-BIGINT-coordination/activity-run/generation/epoch/spec/
-   business-fence/outcome-digest plus the seven-field immutable source core and complete §6.2.1
-   response/failure/no-exposure provenance columns—including
-   historical terminal-provenance policy, response-spec, and terminal-reason pins—to
-   `workflow_events` and the verification-intent source terminal tuple;
+6. reuses `workflow_events.operation_id` and first adds the exact eleven-column terminal-lineage core ratified in
+   section 5.2: namespace, mode, workspace, scope digest, nullable-BIGINT coordination, activity-run id, generation,
+   epoch, authority/business digests, and nullable outcome digest. It adds no event-side `operation_run_id`,
+   `source_verification_command_id`, `source_activity_attempt_id`, or `source_command_attempt` alias. The seven-field
+   immutable source core belongs to verification intent; its `source_command_attempt` exact-copies the linked
+   ActivityAttempt value. A later separately ratified Migration-A fragment adds the complete §6.2.1
+   response/failure/no-exposure provenance columns—including historical terminal-provenance policy, response-spec, and
+   terminal-reason pins—to `workflow_events` and the verification-intent source terminal tuple;
 7. creates `transport_response_receipts` with the §6.6 stable delivery/occurrence/exposure/envelope identities plus
    `terminal_provenance_policy_digest`, `response_spec_digest`, and `terminal_reason`,
    `transport_attempt_failure_receipts` with the stable failure occurrence/spec/artifact identity plus

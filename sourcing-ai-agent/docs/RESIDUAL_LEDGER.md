@@ -49,6 +49,13 @@
 
 ## Active candidate annotations
 
+- **R-019 / D3c2e (2026-07-15):** decision-only batch ratifies the exact WorkflowEvent terminal-lineage core as
+  **11 columns + 11 local `NOT VALID` checks**, reuses existing operation/command/attempt links, and forbids redundant
+  event-side `operation_run_id`/`source_*`/`source_command_attempt` aliases. D3c2e-D1..D10 explicitly retain transport
+  provenance, verification-intent/receipt/exposure/quarantine physical ownership, indexes/FKs/population checks,
+  adoption, and the terminal command/attempt/event/source-intent one-PG UoW. D3c2f may install only the dormant core;
+  this annotation does not change R-019, R-023, R-027, R-029, action-root, OB-10.1-10.4, or served=0.
+
 - **R-019 / D3c1a (2026-07-15):** the row's D3c1a summary includes the five direct findings from the invalid D3c1
   artifact. The later `20260714T215839Z` artifact also remains **invalid/advisory** because
   `final_response_item_exact=false`; its substantive #1/#2/#4-#11 findings are fixed-forwarded by an exact-built-in

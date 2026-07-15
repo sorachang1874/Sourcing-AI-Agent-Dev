@@ -308,12 +308,18 @@ serve、会话/事件层、planner loop），用一个垂直切片证明闭环�
   `final_response_item_exact=false` invalid；其 exposure lexical-zero advisory 已 fixed-forward。retry
   `20260714T234336Z_*` 也仅因同一 Desktop response-item annotation mismatch invalid；其 incomplete Migration-A
   order oracle、non-closure exactness 与 stale 7-test evidence 已 fixed-forward，current oracle=`8 passed`，fresh
-  highest-effort pinned retry pending。
+  fixed-forward `e01e9f0` 的 pinned medium-effort advisory=`GO 0/0/0/0`；formal highest-effort retry pending。
 - D3c2d implementation candidate 已据 §5.2/§11.1 ratify 并安装 dormant ActivityRun `6` columns +
   ActivityAttempt `10` columns，以及 `7+11` 个 `NOT VALID` local checks；5s second-table contention 必须回滚
   first-table DDL 与 ledger。existing `attempt_number` 与 future post-claim exact-copy `command_attempt` 明确分离，
   current 20/22-column descriptors 和全部 runtime writers 保持 dormant。event/intent/receipt/quarantine、完整
   Migration A、R-019/R-023/R-027/R-029、action-root、OB-10.1-10.4 与 served=0 继续 open。
+- D3c2e decision-lock candidate 将 WorkflowEvent fragment 拆为 exact **11-column terminal-lineage core + 11 local
+  checks**，复用 existing `operation_id`/`command_id`/`activity_attempt_id`，禁止 event-side
+  `operation_run_id`/`source_*`/`source_command_attempt` aliases；post-claim command attempt 仍由 linked
+  ActivityAttempt 拥有并由 verification intent 单独 exact-copy。transport provenance、intent/receipt/exposure/
+  quarantine、index/FK/population/adoption/runtime UoW 全部显式 deferred；零 SQL/descriptor/runtime。D3c2f 才可
+  安装 dormant event core，R-019/R-023/R-027/R-029、action-root、OB-10.1-10.4 与 served=0 不变。
 
 ### D4 — 之后（本文只圈定，不展开）
 
@@ -445,6 +451,9 @@ TD-4 初始路由表已按 owner 2026-07-13 裁决落档（D0 §4）。
    D3c2d candidate 已完成该 owner decision 并只安装 `0005_d3_activity_claim_chain_foundation.sql` 的
    ActivityRun/Attempt `6+10` columns、`7+11` local checks 与 both-table rollback proof；descriptors/runtime 未切换，
    因此 rollout step 3 仍须等待 workflow-event 与 intent/receipt/quarantine 等其余 Migration-A fragments。
+   D3c2e 接着仅 ratify WorkflowEvent exact 11-column core、11 个 local checks 与 existing-link/no-alias mapping；
+   transport provenance、verification intent、receipt/exposure/quarantine、index/FK/adoption/runtime 均留在
+   D3c2e-D1..D10，零 SQL。D3c2f 才能安装 dormant event-core substrate，仍不允许 rollout step 3。
    canonical coordination lineage 为 `coordination_plan_review_id=plan_review_sessions.review_id`，物理类型同为
    positive `BIGINT`（brownfield `NULL`，strict `>0`，禁止 `TEXT`/empty）；poll-mode 的唯一 scope issuer 是
    private scoped review-session repository：它从 server-owned runtime context + authenticated workspace

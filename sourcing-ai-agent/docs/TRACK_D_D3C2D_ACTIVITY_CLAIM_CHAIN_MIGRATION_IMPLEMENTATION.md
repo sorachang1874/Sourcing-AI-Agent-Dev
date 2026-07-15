@@ -112,3 +112,5 @@ generation/token/epoch CAS, heartbeat, business/terminal/dispatch paths, the act
 `OB-10.1/10.2/10.3/10.4`, `R-019`, `R-023`, `R-027`, `R-029`, provider/model execution, live/W6/manual signoff, and
 served population remain open or zero. The next bounded Track D slice is the workflow-event physical decision and
 dormant migration fragment; it must not guess the still-unratified dispatch-exposure or receipt/quarantine schema.
+D3c2e is that decision lock and changes no SQL. It ratifies only the exact eleven-column event core and eleven local
+checks while carrying every transport/intent/evidence deferral. D3c2f is the subsequent dormant migration batch.

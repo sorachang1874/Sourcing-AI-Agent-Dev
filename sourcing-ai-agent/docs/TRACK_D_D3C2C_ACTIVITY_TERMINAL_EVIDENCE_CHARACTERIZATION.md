@@ -166,6 +166,11 @@ The follow-up D3c2d candidate performs that owner decision and installs only thi
 `TRACK_D_D3C2D_ACTIVITY_CLAIM_CHAIN_MIGRATION_IMPLEMENTATION.md`. It does not retroactively broaden this
 characterization or authorize the event/receipt/quarantine items below it.
 
+D3c2e then performs the next decision-only step: it ratifies the exact eleven-column WorkflowEvent terminal-lineage
+core, its eleven local check names, and the no-alias physical mapping while explicitly deferring transport provenance,
+verification intent, receipts, exposure, quarantine, indexes, FKs, adoption, and runtime UoW. It installs no SQL. Only
+after that decision lock may D3c2f install the dormant event-core fragment.
+
 This order does not authorize the later items and does not move registry/manifests/bootstrap factory work ahead of a
 complete Migration A. Event terminal-UoW design, verification-intent owner/CAS, response/failure receipt owner, late
 quarantine gateways, terminal registry, and durable dispatch-exposure table/owner all remain decisions for their
