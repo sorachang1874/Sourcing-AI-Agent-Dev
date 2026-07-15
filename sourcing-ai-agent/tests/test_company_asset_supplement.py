@@ -12,7 +12,6 @@ from sourcing_agent.connectors import CompanyIdentity
 from sourcing_agent.domain import Candidate, EvidenceRecord
 from sourcing_agent.seed_discovery import SearchSeedSnapshot
 from sourcing_agent.settings import load_settings
-
 from tests.pg_store_fixture import PGControlPlaneStoreTestMixin
 
 
@@ -464,6 +463,52 @@ class CompanyAssetSupplementTest(PGControlPlaneStoreTestMixin, unittest.TestCase
         self.assertEqual(updated.linkedin_url, "https://www.linkedin.com/in/opaque-alice")
         self.assertEqual(updated.metadata.get("profile_url"), "https://www.linkedin.com/in/opaque-alice")
         self.assertIn("https://www.linkedin.com/in/alice-example", updated.metadata.get("more_profiles") or [])
+
+    def test_rebuild_rejects_uncommitted_cohort_search_seed_generation(self) -> None:
+        manager = CompanyAssetSupplementManager(
+            runtime_dir=self.runtime_dir,
+            store=self.store,
+            settings=self.settings,
+            asset_completion_manager=CompanyAssetCompletionManager(
+                runtime_dir=self.runtime_dir,
+                store=self.store,
+                settings=self.settings,
+            ),
+        )
+        snapshot_dir = self.runtime_dir / "company_assets" / "acme" / "20260406T120000"
+        discovery_dir = snapshot_dir / "search_seed_discovery"
+        discovery_dir.mkdir(parents=True, exist_ok=True)
+        (discovery_dir / "summary.json").write_text(
+            json.dumps(
+                {
+                    "target_company": "Acme",
+                    "company_identity": json.loads((snapshot_dir / "identity.json").read_text(encoding="utf-8")),
+                    "cohort_publication_digest": "a" * 64,
+                    "query_summaries": [],
+                }
+            ),
+            encoding="utf-8",
+        )
+        (discovery_dir / "entries.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "full_name": "Partial Cohort Person",
+                        "profile_url": "https://www.linkedin.com/in/partial-cohort-person/",
+                    }
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        result = manager.rebuild_linkedin_stage_1_snapshot(
+            target_company="Acme",
+            snapshot_id="20260406T120000",
+        )
+
+        self.assertEqual(result["status"], "skipped")
+        self.assertEqual(result["reason"], "missing_roster_and_search_seed_snapshots")
+        self.assertFalse((snapshot_dir / "candidate_documents.linkedin_stage_1.json").exists())
 
     def test_merge_candidates_into_snapshot_retargets_cross_company_candidate_and_refreshes_registry(self) -> None:
         manager = CompanyAssetSupplementManager(

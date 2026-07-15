@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 from sourcing_agent.acquisition import AcquisitionEngine
 from sourcing_agent.asset_catalog import AssetCatalog
+from sourcing_agent.durable_runtime import legacy_job_workflow_run_id
 from sourcing_agent.model_provider import DeterministicModelClient
 from sourcing_agent.orchestrator import SourcingOrchestrator
 from sourcing_agent.runtime_contamination_audit import build_runtime_contamination_report
@@ -172,6 +173,14 @@ class CohortWorkflowScriptedE2ETest(unittest.TestCase):
                             run_projection = store.repos.serving_projection.get(
                                 str(dict(run_projection_link or {}).get("projection_id") or "")
                             )
+                            workflow_run_id = legacy_job_workflow_run_id(job_id)
+                            workflow_current_state = (
+                                store.repos.workflow_runtime.get_workflow_current_state(workflow_run_id) or {}
+                            )
+                            workflow_events = store.repos.workflow_runtime.list_workflow_events(
+                                workflow_run_id,
+                                limit=0,
+                            )
                             contamination_report = build_runtime_contamination_report(
                                 workspace_root=root,
                                 target_runtime_dir=runtime_dir,
@@ -191,6 +200,27 @@ class CohortWorkflowScriptedE2ETest(unittest.TestCase):
             self.assertEqual(str(dict(run_projection.get("readiness") or {}).get("profile") or ""), "complete")
             self.assertEqual(contamination_report["status"], "clean")
             self.assertEqual(contamination_report["finding_count"], 0)
+            serving_finalized = dict(
+                dict(workflow_current_state.get("completion_proofs") or {}).get("serving_finalized") or {}
+            )
+            self.assertEqual(serving_finalized.get("status"), "proved")
+            self.assertTrue(str(serving_finalized.get("event_id") or ""))
+            self.assertGreater(int(serving_finalized.get("sequence_number") or 0), 0)
+            serving_proof_events = [
+                event
+                for event in workflow_events
+                if str(event.get("event_id") or "") == str(serving_finalized.get("event_id") or "")
+            ]
+            self.assertEqual(len(serving_proof_events), 1)
+            self.assertEqual(serving_proof_events[0]["event_type"], "CompletionProofRecorded")
+            self.assertEqual(
+                dict(serving_proof_events[0].get("payload") or {}).get("proof_key"),
+                "serving_finalized",
+            )
+            self.assertEqual(
+                int(serving_proof_events[0].get("sequence_number") or 0),
+                int(serving_finalized.get("sequence_number") or 0),
+            )
 
             event_details = [str(item.get("detail") or "") for item in job_events]
             self.assertTrue(

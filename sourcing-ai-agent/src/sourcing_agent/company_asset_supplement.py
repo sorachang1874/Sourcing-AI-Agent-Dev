@@ -34,6 +34,7 @@ from .ingestion import load_bootstrap_bundle
 from .model_provider import DeterministicModelClient, ModelClient
 from .profile_registry_utils import extract_profile_registry_aliases_from_payload
 from .search_provider import build_search_provider
+from .search_seed_registry import COHORT_PUBLICATION_DIGEST_FIELD, load_search_seed_snapshot_from_snapshot_dir
 from .seed_discovery import SearchSeedAcquirer, SearchSeedSnapshot, build_candidates_from_seed_snapshot
 from .settings import AppSettings
 from .snapshot_state import candidate_records_from_payload as _snapshot_candidate_records_from_payload
@@ -1199,6 +1200,16 @@ def _restore_search_seed_snapshot_from_snapshot_dir(
     snapshot_dir: Path,
     identity: CompanyIdentity,
 ) -> SearchSeedSnapshot | None:
+    try:
+        restored = load_search_seed_snapshot_from_snapshot_dir(
+            snapshot_dir,
+            identity=identity,
+            auto_backfill_lanes=False,
+        )
+    except Exception:
+        restored = None
+    if restored is not None:
+        return restored
     discovery_dir = snapshot_dir / "search_seed_discovery"
     summary_path = discovery_dir / "summary.json"
     entries_path = discovery_dir / "entries.json"
@@ -1210,6 +1221,10 @@ def _restore_search_seed_snapshot_from_snapshot_dir(
     except (OSError, json.JSONDecodeError):
         return None
     if not isinstance(summary_payload, dict) or not isinstance(entries_payload, list):
+        return None
+    if str(summary_payload.get(COHORT_PUBLICATION_DIGEST_FIELD) or "").strip():
+        # A Cohort generation rejected by the canonical loader is uncommitted. The legacy
+        # supplement/rebuild path may remain for pre-Cohort assets but cannot bypass its marker.
         return None
     return SearchSeedSnapshot(
         snapshot_id=snapshot_dir.name,

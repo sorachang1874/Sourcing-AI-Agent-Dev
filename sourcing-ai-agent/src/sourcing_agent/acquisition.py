@@ -3361,18 +3361,15 @@ class AcquisitionEngine:
             for query in self._task_execution_list(task, job_request, "search_seed_queries")
             if str(query or "").strip()
         ]
-        existing_search_seed_snapshot = state.get("search_seed_snapshot")
-        durable_search_seed_snapshot = _registry_load_search_seed_snapshot_from_snapshot_dir(
-            snapshot_dir,
-            identity=identity,
-            auto_backfill_lanes=True,
-        )
-        reusable_search_seed_snapshot = _merge_search_seed_snapshots(
-            existing_search_seed_snapshot if isinstance(existing_search_seed_snapshot, SearchSeedSnapshot) else None,
-            durable_search_seed_snapshot,
-        )
         explicit_cohort = explicit_cohort_selection(_effective_request_payload(job_request))
-        if explicit_cohort is not None and str(explicit_cohort.get("source") or "") == "user_explicit":
+        explicit_user_cohort = bool(
+            explicit_cohort is not None and str(explicit_cohort.get("source") or "") == "user_explicit"
+        )
+        plan_acquisition_strategy: dict[str, Any] = {}
+        stored_manifest: dict[str, Any] = {}
+        if explicit_user_cohort:
+            # Loading with lane backfill and merging snapshots are both durable writers. The exact
+            # plan-owned manifest must therefore be authorized before either compatibility action.
             plan_acquisition_strategy = dict(dict(state.get("plan_payload") or {}).get("acquisition_strategy") or {})
             stored_manifest = dict(plan_acquisition_strategy.get("provider_execution_manifest") or {})
             expected_manifest = CohortProviderCompiler().compile(
@@ -3391,6 +3388,23 @@ class AcquisitionEngine:
                     },
                 )
 
+        existing_search_seed_snapshot = state.get("search_seed_snapshot")
+        durable_search_seed_snapshot = _registry_load_search_seed_snapshot_from_snapshot_dir(
+            snapshot_dir,
+            identity=identity,
+            auto_backfill_lanes=not explicit_user_cohort,
+        )
+        reusable_search_seed_snapshot = (
+            durable_search_seed_snapshot
+            if explicit_user_cohort
+            else _merge_search_seed_snapshots(
+                existing_search_seed_snapshot
+                if isinstance(existing_search_seed_snapshot, SearchSeedSnapshot)
+                else None,
+                durable_search_seed_snapshot,
+            )
+        )
+        if explicit_user_cohort:
             summary_payload = (
                 dict(reusable_search_seed_snapshot.summary_payload or {})
                 if isinstance(reusable_search_seed_snapshot, SearchSeedSnapshot)

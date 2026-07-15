@@ -37,10 +37,12 @@ from sourcing_agent.harvest_connectors import (
     parse_harvest_search_rows,
 )
 from sourcing_agent.model_provider import DeterministicModelClient
+from sourcing_agent.orchestrator import _restore_search_seed_snapshot_from_snapshot_dir
 from sourcing_agent.planning import build_sourcing_plan, hydrate_sourcing_plan
 from sourcing_agent.runtime_environment import RuntimeEnvironment
 from sourcing_agent.search_seed_registry import load_search_seed_snapshot_from_snapshot_dir
 from sourcing_agent.settings import HarvestActorSettings
+from sourcing_agent.snapshot_materializer import SnapshotMaterializer
 
 
 def _cohort(
@@ -1313,6 +1315,11 @@ class CohortAcquisitionRuntimeTest(unittest.TestCase):
                     "filter_hints": {"past_companies": ["Acme"]},
                 },
             )
+            committed_files_before_compatibility_reuse = {
+                str(path.relative_to(snapshot_dir)): path.read_bytes()
+                for path in snapshot_dir.rglob("*")
+                if path.is_file()
+            }
             compatibility_execution = engine._acquire_former_search_seed(
                 compatibility_former_task,
                 runtime_state,
@@ -1321,6 +1328,60 @@ class CohortAcquisitionRuntimeTest(unittest.TestCase):
             self.assertEqual(compatibility_execution.status, "completed")
             self.assertTrue(compatibility_execution.payload["reused_existing_full_manifest"])
             self.assertEqual(len(captured), 1)
+            self.assertEqual(
+                {
+                    str(path.relative_to(snapshot_dir)): path.read_bytes()
+                    for path in snapshot_dir.rglob("*")
+                    if path.is_file()
+                },
+                committed_files_before_compatibility_reuse,
+            )
+
+            committed_files_before_invalid_compatibility = {
+                str(path.relative_to(snapshot_dir)): path.read_bytes()
+                for path in snapshot_dir.rglob("*")
+                if path.is_file()
+            }
+            invalid_compatibility_plans = {
+                "missing": {
+                    "acquisition_strategy": {"filter_hints": preview_manifest["compiler_inputs"]["base_filter_hints"]}
+                },
+                "forged": {
+                    "acquisition_strategy": {
+                        "filter_hints": preview_manifest["compiler_inputs"]["base_filter_hints"],
+                        "provider_execution_manifest": {"forged": True},
+                    }
+                },
+            }
+            for label, invalid_plan_payload in invalid_compatibility_plans.items():
+                with (
+                    self.subTest(compatibility_manifest=label),
+                    patch("sourcing_agent.acquisition._registry_load_search_seed_snapshot_from_snapshot_dir") as load,
+                    patch("sourcing_agent.acquisition._merge_search_seed_snapshots") as merge,
+                ):
+                    blocked_compatibility = engine._acquire_former_search_seed(
+                        compatibility_former_task,
+                        {
+                            **runtime_state,
+                            "plan_payload": invalid_plan_payload,
+                        },
+                        request,
+                    )
+                    self.assertEqual(blocked_compatibility.status, "blocked")
+                    self.assertEqual(
+                        blocked_compatibility.payload["reason"],
+                        "cohort_provider_manifest_semantic_mismatch",
+                    )
+                    load.assert_not_called()
+                    merge.assert_not_called()
+                    self.assertEqual(
+                        {
+                            str(path.relative_to(snapshot_dir)): path.read_bytes()
+                            for path in snapshot_dir.rglob("*")
+                            if path.is_file()
+                        },
+                        committed_files_before_invalid_compatibility,
+                    )
 
             invalid_plan_payloads = {
                 "missing": {},
@@ -1477,9 +1538,46 @@ class CohortAcquisitionRuntimeTest(unittest.TestCase):
             self.assertTrue((partial_snapshot_dir / "search_seed_discovery" / "summary.json").exists())
             self.assertFalse((partial_snapshot_dir / "candidate_documents.json").exists())
             self.assertIsNone(load_search_seed_snapshot_from_snapshot_dir(partial_snapshot_dir, identity=identity))
+            self.assertIsNone(
+                _restore_search_seed_snapshot_from_snapshot_dir(
+                    snapshot_dir=partial_snapshot_dir,
+                    identity=identity,
+                )
+            )
+            partial_files_before_recovery = {
+                str(path.relative_to(partial_snapshot_dir)): path.read_bytes()
+                for path in partial_snapshot_dir.rglob("*")
+                if path.is_file()
+            }
+            recovery_result = object.__new__(SnapshotMaterializer).apply_search_seed_workers_to_snapshot(
+                snapshot_dir=partial_snapshot_dir,
+                pending_workers=[
+                    {
+                        "worker_id": 1,
+                        "output": {
+                            "entries": [
+                                {
+                                    "full_name": "Must Not Recover",
+                                    "profile_url": "https://www.linkedin.com/in/must-not-recover/",
+                                }
+                            ]
+                        },
+                    }
+                ],
+            )
+            self.assertEqual(recovery_result, {"status": "skipped", "reason": "cohort_publication_uncommitted"})
+            self.assertEqual(
+                {
+                    str(path.relative_to(partial_snapshot_dir)): path.read_bytes()
+                    for path in partial_snapshot_dir.rglob("*")
+                    if path.is_file()
+                },
+                partial_files_before_recovery,
+            )
 
     def test_scripted_runtime_executes_real_harvest_boundary_without_live_submission(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
+            prefetch_calls: list[dict[str, Any]] = []
             runtime_dir = Path(tempdir) / "scripted_runtime"
             snapshot_dir = runtime_dir / "company_assets" / "acme" / "snap-scripted"
             snapshot_dir.mkdir(parents=True)
@@ -1537,11 +1635,16 @@ class CohortAcquisitionRuntimeTest(unittest.TestCase):
             engine.store = SimpleNamespace()
             engine.worker_runtime = None
             engine.harvest_profile_search_connector = HarvestProfileSearchConnector(HarvestActorSettings(enabled=False))
-            engine._queue_background_profile_prefetch_for_search_seed_entries = lambda **_kwargs: {
-                "status": "completed",
-                "requested_url_count": 1,
-                "dispatched_url_count": 0,
-            }
+
+            def _capture_prefetch(**kwargs):
+                prefetch_calls.append(copy.deepcopy(kwargs))
+                return {
+                    "status": "completed",
+                    "requested_url_count": 1,
+                    "dispatched_url_count": 0,
+                }
+
+            engine._queue_background_profile_prefetch_for_search_seed_entries = _capture_prefetch
             identity = CompanyIdentity(
                 requested_name="Acme",
                 canonical_name="Acme",
@@ -1603,6 +1706,17 @@ class CohortAcquisitionRuntimeTest(unittest.TestCase):
             self.assertEqual(
                 persisted[0]["metadata"]["cohort_role_proof"]["verifier_id"],
                 CohortHeadlineRoleProofVerifier.verifier_id,
+            )
+            candidate_documents = json.loads((snapshot_dir / "candidate_documents.json").read_text(encoding="utf-8"))
+            self.assertEqual(candidate_documents["candidate_count"], 1)
+            self.assertEqual(
+                candidate_documents["candidates"][0]["linkedin_url"],
+                "https://linkedin.com/in/scripted-researcher",
+            )
+            self.assertEqual(len(prefetch_calls), 1)
+            self.assertEqual(
+                prefetch_calls[0]["entries"][0]["profile_url"],
+                "https://linkedin.com/in/scripted-researcher",
             )
 
 

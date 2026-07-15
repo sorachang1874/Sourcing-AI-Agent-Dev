@@ -498,7 +498,7 @@ from .runtime_tuning import (
 )
 from .scoring import score_candidates
 from .search_provider import build_search_provider
-from .search_seed_registry import load_search_seed_snapshot_from_snapshot_dir
+from .search_seed_registry import COHORT_PUBLICATION_DIGEST_FIELD, load_search_seed_snapshot_from_snapshot_dir
 from .seed_discovery import (
     SearchSeedSnapshot,
     _search_seed_discovery_query_item_id,
@@ -77035,7 +77035,11 @@ def _restore_search_seed_snapshot_from_snapshot_dir(
     if effective_identity is None:
         return None
     try:
-        restored = load_search_seed_snapshot_from_snapshot_dir(snapshot_dir, identity=effective_identity)
+        restored = load_search_seed_snapshot_from_snapshot_dir(
+            snapshot_dir,
+            identity=effective_identity,
+            auto_backfill_lanes=False,
+        )
     except Exception:
         restored = None
     if restored is not None:
@@ -77043,6 +77047,12 @@ def _restore_search_seed_snapshot_from_snapshot_dir(
     summary_path = snapshot_dir / "search_seed_discovery" / "summary.json"
     entries_path = snapshot_dir / "search_seed_discovery" / "entries.json"
     if not summary_path.exists() or not entries_path.exists():
+        return None
+    summary_payload = _read_json_dict(summary_path)
+    if str(summary_payload.get(COHORT_PUBLICATION_DIGEST_FIELD) or "").strip():
+        # The registry loader is the sole publication verifier for Cohort generations. If it
+        # rejected the summary, a direct legacy-file restore must not make that partial generation
+        # readable to recovery, profile-prefetch, or any other normal consumer.
         return None
     return _restore_search_seed_snapshot(
         {
