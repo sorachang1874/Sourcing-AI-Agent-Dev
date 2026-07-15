@@ -97,7 +97,7 @@
         "research_focus_id": "pretraining",
         "scope": "Public professional evidence of current or historical OpenAI affiliation and current or historical pre-training or base-model training relevance."
       },
-      "source_prompt_sha256": "47c2e97a381e19897aa5327ec57baf590fe8e0bf8765a027ea1a87ed79387f5e",
+      "source_prompt_sha256": "5318d0baedd1b7fe6ec0057c01dfceccff5296d0e1f85dbf5642a094ec85164b",
       "authority": "live_authorized",
       "session_query_policy_id": "discovery_only_official_accounts_no_person_hydration_v2",
       "session_query_policy_sha256": "26305c1bd1529e51bb35e9ce1533b64f09b2ed87f99981f14be5dde0718101fc",

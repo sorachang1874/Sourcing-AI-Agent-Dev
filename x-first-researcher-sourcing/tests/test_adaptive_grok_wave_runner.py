@@ -1166,6 +1166,11 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             + f", and `{user_search_terms[-1]}`."
         )
         self.assertIn(expected_user_search_vocabulary, " ".join(openai_official_prompt.split()))
+        self.assertIn(
+            "Bare `OpenAI` and `@OpenAI` are not valid queries in keyword, semantic, user, or thread search.",
+            " ".join(openai_official_prompt.split()),
+        )
+        self.assertIn("`OpenAI pretraining` and `@OpenAI pretraining`", openai_official_prompt)
         for term in user_search_terms:
             arguments = {"query": f"OpenAI {term}", "count": "50"}
             self.assertTrue(
@@ -1191,6 +1196,40 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
                 ),
                 query,
             )
+        for tool_name, argument_key in (
+            ("x_keyword_search", "limit"),
+            ("x_semantic_search", "limit"),
+        ):
+            for query in ("OpenAI", "@OpenAI"):
+                arguments = {"query": query, argument_key: "50"}
+                if tool_name == "x_keyword_search":
+                    arguments["mode"] = "Latest"
+                self.assertFalse(
+                    runner.base_discovery_tool_arguments_allowed(arguments, tool_name)
+                    and runner._session_query_phase_arguments_allowed(
+                        arguments,
+                        tool_name,
+                        session_query_policy_id=openai_official_entry["session_query_policy_id"],
+                        discovery_target_lab_id="openai",
+                        approved_official_account_handles=openai_official_entry["official_account_handles"],
+                    ),
+                    (tool_name, query),
+                )
+            for query in ("OpenAI pretraining", "@OpenAI pretraining"):
+                arguments = {"query": query, argument_key: "50"}
+                if tool_name == "x_keyword_search":
+                    arguments["mode"] = "Latest"
+                self.assertTrue(
+                    runner.base_discovery_tool_arguments_allowed(arguments, tool_name)
+                    and runner._session_query_phase_arguments_allowed(
+                        arguments,
+                        tool_name,
+                        session_query_policy_id=openai_official_entry["session_query_policy_id"],
+                        discovery_target_lab_id="openai",
+                        approved_official_account_handles=openai_official_entry["official_account_handles"],
+                    ),
+                    (tool_name, query),
+                )
         for tool_name, arguments in (
             ("x_keyword_search", {"query": "OpenAI data", "limit": "50", "mode": "Latest"}),
             ("x_semantic_search", {"query": "OpenAI training data", "limit": "50"}),

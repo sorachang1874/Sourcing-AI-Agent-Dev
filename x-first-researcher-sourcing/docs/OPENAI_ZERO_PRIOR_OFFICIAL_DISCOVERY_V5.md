@@ -18,8 +18,9 @@ discovery method. It does not issue a grant, call Grok/X, read OAuth state, or p
   `filter:replies` cells, semantic and broad user discovery, and attributable thread expansion.
 - User-search grammar: `OpenAI` plus at least one of the exact prompt-enumerated runtime terms `researcher`,
   `scientist`, `engineer`, `research`, `pretraining`, `training`, `model`, `scaling`, `tokenization`, `infrastructure`,
-  `safety`, `multimodal`, or `robotics`. Bare `OpenAI`, bare `@OpenAI`, and topic-only `data` are not user searches;
-  data discovery remains available through keyword and semantic queries.
+  `safety`, `multimodal`, or `robotics`. Bare `OpenAI` and bare `@OpenAI` are rejected across every query tool;
+  keyword/semantic organization literals must also be combined with professional terms. Topic-only `data` is not a
+  user search, while multi-term data discovery remains available through keyword and semantic queries.
 - Scale: no candidate, observation, query, or native-X-call business cap. A future operator request must still own the
   independent deadline, resource ceiling, private retention, one-shot grant, no-fallback policy, and kill boundary.
 

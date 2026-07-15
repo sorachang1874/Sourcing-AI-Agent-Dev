@@ -33,12 +33,14 @@ Broad role/organization user searches are allowed only in the closed form "OpenA
 role/function terms. The exact `x_user_search` professional terms are `researcher`, `scientist`, `engineer`, `research`,
 `pretraining`, `training`, `model`, `scaling`, `tokenization`, `infrastructure`, `safety`, `multimodal`, and `robotics`.
 Do not add person-name tokens or a bare `data` term to a user search. Search data functions and data topics only with
-keyword or semantic search. A discovery user query must include `OpenAI` plus at least one listed professional term;
-bare `OpenAI` and `@OpenAI` are keyword/semantic organization literals, not valid user-search queries. Do not use any
-handle-like single-token query in keyword, semantic, user, or thread search. A profile ID or Bio may be retained only
-when it is incidentally returned by such a broad native-X discovery result. Otherwise set optional profile fields to
-null. Constructing the canonical `https://x.com/<handle>` profile URL from an observed handle is allowed. Hydration is
-a separate operator-generated stage after this discovery result is mechanically reconciled.
+keyword or semantic search. A discovery user query must include `OpenAI` plus at least one listed professional term.
+Bare `OpenAI` and `@OpenAI` are not valid queries in keyword, semantic, user, or thread search. In keyword and semantic
+search, combine either organization literal with one or more professional role, function, project, model, training,
+data, or research terms; for example, use `OpenAI pretraining` or `@OpenAI pretraining`, never either literal alone.
+Do not use any other handle-like single-token query. A profile ID or Bio may be retained only when it is incidentally
+returned by such a broad native-X discovery result. Otherwise set optional profile fields to null. Constructing the
+canonical `https://x.com/<handle>` profile URL from an observed handle is allowed. Hydration is a separate operator-
+generated stage after this discovery result is mechanically reconciled.
 
 ## Coverage matrix
 
@@ -47,8 +49,8 @@ candidate, observation, or answer-length quota. Use materially different query w
 sparse, and keep expanding while new evidence-bearing handles or material temporal corrections continue to appear.
 
 1. Organization and time:
-   - `OpenAI`, `@OpenAI`, the entry-bound official-account `from:OpenAI` surface, and attributable historical OpenAI
-     conversations;
+   - multi-term organization queries such as `OpenAI pretraining` and `@OpenAI pretraining`, the entry-bound official-
+     account `from:OpenAI` surface combined with professional terms, and attributable historical OpenAI conversations;
    - current, recent-historical, and older-historical shards using explicit `since:`/`until:` ranges;
    - both `mode=Top` and `mode=Latest` for each major organization/era family.
 2. Official, project, and colleague graph:
