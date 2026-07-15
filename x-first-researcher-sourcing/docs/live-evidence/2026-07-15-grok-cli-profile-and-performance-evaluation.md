@@ -283,3 +283,75 @@ Thinking Machines. It should precommit the broad-wave profile-observation keys, 
 technical-only query per handle, and escalate under the conservative semantic route. Success is live-measured recall
 against a frozen reviewed subset plus fewer raw calls per qualified handle; the projected 70-call result is not itself
 accepted evidence until reproduced.
+
+## Google DeepMind large-lab challenger
+
+The first Google DeepMind adaptive wave exercised a materially larger organization than Thinking Machines. Grok
+finished normally in 237.446 seconds with exit zero, no timeout, no kill, no fallback, and 94 completed native-X calls
+in the retained session trace. The runner rejected the result as `structured_output_noncompliant`: the CLI plain-mode
+stdout contained a progress prefix, its 0.2.101 event dialect had no accepted terminal row, and the model's local
+reconciliation disagreed with the mechanical payload. The bundle is therefore diagnostic author evidence, not a
+formal KPI baseline or provider-replayable X dataset. Its retained `session-updates.jsonl` digest is
+`e1121e9874450cf5366e4dfdfd33e09274bb226fb40df8b45ad8ee68b9b5662e`.
+
+The diagnostic payload still answers the Bio-versus-Post question clearly:
+
+| Measure | Mechanically parsed or payload value |
+| --- | ---: |
+| Retained candidates | 18 |
+| Evidence rows | 62 |
+| Post / Bio / mention evidence | 36 / 17 / 9 |
+| Candidates with Post-class pretraining support | 18/18 |
+| Candidates with any Reply or thread-Reply evidence | 7/18 |
+| Candidates whose technical support did not depend on Bio | 5/18 |
+| Current/current lab and pretraining | 9 |
+| Current/ambiguous | 3 |
+| Historical/historical | 5 |
+| Historical/ambiguous | 1 |
+| Current/historical or historical/current | 0 |
+
+The method was not Bio-first for technical relevance: every retained row had Post-class evidence, and five retained
+rows needed non-Bio technical evidence. The remaining recall weakness was retrieval allocation and topology:
+
+- actual tool mix was 50 keyword, 39 user, 5 semantic, and 0 thread calls;
+- all 50 keyword calls used `Latest`; none used `Top` and none used explicit historical date shards;
+- 57/94 calls (`60.6%`) were explicit person/profile or handle-scoped searches;
+- only two calls were positive Reply searches, while three negative `-filter:replies` calls targeted authored Posts;
+- exact-profile and known-handle hydration began before broad project, era, and professional-graph coverage completed;
+- nine lab-related public accounts were excluded when pretraining remained unresolved, even though the recall contract
+  says incomplete lab leads should be retained for later technical verification;
+- the result contained no current-lab/historical-pretraining or historical-lab/current-pretraining rows, a warning
+  that cross-temporal recall was not saturated.
+
+The model reported 97 calls, 58 evidence rows, and 40 Post URLs; the mechanical trace/payload contained 94 calls, 62
+evidence rows, and 45 structurally valid Post URLs. Overall diagnostic yield was `18/94 = 0.191` candidates per call,
+between the older OpenAI campaign (`98/702 = 0.140`) and Thinking Machines broad wave (`41/132 = 0.311`). That ratio
+must not be promoted to a formal comparable KPI until the structured transport and session replay pass.
+
+### Large-lab method correction
+
+Google DeepMind wave2-v2 changes the ordering rather than merely adding keywords:
+
+1. complete a discovery matrix over organization eras, model/project families, training functions, official/team
+   graphs, Post/Reply/thread surfaces, and both Top and Latest before exact-person hydration;
+2. keep lab affiliation and pretraining as independent handle-joined ledgers, retaining an incomplete candidate when
+   either dimension has source-bound professional evidence;
+3. use official and contributor threads to harvest handles before profile resolution;
+4. perform one cached bare-handle profile lookup per novel handle, then selectively query authored Posts and Replies
+   only for unresolved technical states;
+5. count only genuinely different discovery expansions toward convergence; hydration and corroboration cannot
+   masquerade as zero-yield discovery passes.
+
+The prior total of 18 is an under-coverage alarm, not a quota or stopping target. The challenger remains uncapped at
+the candidate, evidence, and provider-call business level; the external deadline and emergency ceilings remain
+operator-owned. The next accepted comparison requires a schema-valid, ledger-reconciled receipt and reports discovery
+calls separately from person-scoped hydration calls.
+
+### Native-result attribution limit
+
+Grok CLI 0.2.101 stores native-X tool names and input arguments but not the returned X result bodies in its local
+session files. Completed updates echo `{call_id, id, input, name}`; the inspected `chat_history` tool-result rows are
+generic hidden-tool metadata and do not bind X call IDs, Posts, or users. Therefore per-query candidate yield cannot
+be called native-verified. A future model-attributed evidence-to-query reference can be hash-checked against the
+session's exact argument ledger, but must remain labelled model-attributed. Native per-call attribution requires a
+future CLI/ACP surface or another supported provider interface that actually returns and persists X result payloads.

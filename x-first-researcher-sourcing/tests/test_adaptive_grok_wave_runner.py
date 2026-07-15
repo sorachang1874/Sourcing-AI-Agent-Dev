@@ -233,6 +233,7 @@ class FakeExecutor:
         session_mutator: Any = None,
         session_tree_mutator: Any = None,
         extra_session_bytes: int = 0,
+        headless_total_cost_usd: int | float = 0.0002,
     ) -> None:
         self.clock = clock
         self.raw = raw
@@ -247,6 +248,7 @@ class FakeExecutor:
         self.session_mutator = session_mutator
         self.session_tree_mutator = session_tree_mutator
         self.extra_session_bytes = extra_session_bytes
+        self.headless_total_cost_usd = headless_total_cost_usd
         self.commands: list[list[str]] = []
         self.environments: list[dict[str, str]] = []
         self.deadlines: list[float] = []
@@ -293,6 +295,7 @@ class FakeExecutor:
         process_group_id = child_pid
         kernel_birth_identity = "synthetic-kernel-birth-42424" if self.spawn else None
         identity_token = "a" * 64 if self.spawn else None
+        emitted_stdout = self.raw
         if self.spawn:
             on_spawn(child_pid, process_group_id, kernel_birth_identity, identity_token)
             self.target_release_count += 1
@@ -314,6 +317,18 @@ class FakeExecutor:
                 "modelCalls": 1,
                 "apiDurationMs": 1_000,
             }
+            assistant_text = self.raw.decode().strip()
+            if command[command.index("--output-format") + 1] == "json":
+                outer = {
+                    "text": assistant_text,
+                    "stopReason": "EndTurn",
+                    "sessionId": session_id,
+                    "requestId": "synthetic-provider-request",
+                    "num_turns": 1,
+                    "usage": {"input_tokens": 100, "output_tokens": 50, "total_tokens": 150},
+                    "total_cost_usd": self.headless_total_cost_usd,
+                }
+                emitted_stdout = (canonical_json(outer) + "\n").encode()
             updates = [
                 {
                     "params": {
@@ -355,7 +370,7 @@ class FakeExecutor:
                         **common,
                         "update": {
                             "sessionUpdate": "agent_message_chunk",
-                            "content": {"type": "text", "text": self.raw.decode().strip()},
+                            "content": {"type": "text", "text": assistant_text},
                         },
                     }
                 },
@@ -375,17 +390,21 @@ class FakeExecutor:
                     }
                 },
             ]
+            if self.session_mutator is not None:
+                self.session_mutator(updates)
             for index, event in enumerate(updates, start=1):
                 update_kind = event["params"]["update"]["sessionUpdate"]
-                event["method"] = "_x.ai/session/update" if update_kind == "turn_completed" else "session/update"
+                event["method"] = (
+                    "_x.ai/session/update"
+                    if update_kind in {"retry_state", "turn_completed"}
+                    else "session/update"
+                )
                 event["timestamp"] = index
                 event["params"]["_meta"] = {
                     **event["params"]["_meta"],
                     "eventId": f"{session_id}-{index}",
                     "agentTimestampMs": index,
                 }
-            if self.session_mutator is not None:
-                self.session_mutator(updates)
             session_updates_path.write_text("".join(canonical_json(row) + "\n" for row in updates))
             os.chmod(session_updates_path, 0o600)
             if self.extra_session_bytes:
@@ -395,7 +414,7 @@ class FakeExecutor:
             if self.session_tree_mutator is not None:
                 self.session_tree_mutator(session_tree_root, session_updates_path)
             self.assert_session_tree_root = session_tree_root
-        _write_private(stdout_spool, self.raw)
+        _write_private(stdout_spool, emitted_stdout)
         _write_private(stderr_spool, self.stderr)
         self.clock.advance(2.5)
         return ProcessResult(
@@ -480,6 +499,7 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             "x.grok.adaptive_recall_wave.deletion_receipt.v1.schema.json",
             "x.grok.adaptive_recall_wave.campaign_bridge.v1.schema.json",
             "x.grok.adaptive_recall_wave.effective_prompt_policy.v1.schema.json",
+            "x.grok.adaptive_recall_wave.headless_envelope.v1.schema.json",
         )
         for name in schema_names:
             schema = json.loads((ROOT / "contracts" / name).read_text())
@@ -525,6 +545,18 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             set(request_schema["properties"]["technical_limits"]["required"]),
             runner._TECHNICAL_LIMIT_KEYS,
         )
+        headless_schema = json.loads(
+            (ROOT / "contracts/x.grok.adaptive_recall_wave.headless_envelope.v1.schema.json").read_text()
+        )
+        self.assertEqual(set(headless_schema["required"]), runner._HEADLESS_ENVELOPE_KEYS)
+        self.assertEqual(
+            set(headless_schema["properties"]),
+            runner._HEADLESS_ENVELOPE_KEYS | runner._HEADLESS_OPTIONAL_KEYS,
+        )
+        self.assertEqual(
+            set(headless_schema["properties"]["usage"]["required"]),
+            runner._HEADLESS_USAGE_KEYS,
+        )
 
     def test_production_effective_prompt_policy_owns_exact_openai_and_google_deepmind_waves(self) -> None:
         policy = json.loads(PRODUCTION_EFFECTIVE_PROMPT_POLICY.read_text())
@@ -560,8 +592,8 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             entry for entry in live_entries if entry["target"]["lab_id"] == "google_deepmind"
         ]
         self.assertEqual(len(openai_entries), len(openai_prompt_paths), 7)
-        self.assertEqual(len(google_deepmind_entries), len(google_deepmind_prompt_paths), 3)
-        self.assertEqual(len(live_entries), 10)
+        self.assertEqual(len(google_deepmind_entries), len(google_deepmind_prompt_paths), 4)
+        self.assertEqual(len(live_entries), 11)
         self.assertEqual({canonical_json(entry["target"]) for entry in openai_entries}, {canonical_json(openai_target)})
         self.assertEqual(
             {canonical_json(entry["target"]) for entry in google_deepmind_entries},
@@ -1100,7 +1132,12 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             self.assertEqual(command[command.index("--permission-mode") + 1], "dontAsk")
             self.assertNotIn("--always-approve", command)
             self.assertNotIn("bypassPermissions", command)
-            self.assertNotIn("--json-schema", command)
+            self.assertEqual(command[command.index("--output-format") + 1], "json")
+            self.assertIn("--json-schema", command)
+            self.assertEqual(
+                json.loads(command[command.index("--json-schema") + 1]),
+                json.loads((ROOT / "contracts/x.grok.adaptive_recall_wave.result.v2.schema.json").read_text()),
+            )
             self.assertNotIn("Find a broad", " ".join(command))
             self.assertTrue(Path(command[0]).is_relative_to(run_root / "executable"))
             self.assertEqual(stat.S_IMODE(Path(command[0]).stat().st_mode), 0o700)
@@ -1139,6 +1176,251 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
                 "staged_binary_request_hash_mismatch",
                 validate_operator_bundle(run_root, approval_root=approvals),
             )
+
+    def test_headless_outer_owns_terminal_while_session_owns_tool_ledger(self) -> None:
+        def modern_updates(updates: list[dict[str, Any]]) -> None:
+            user, first_start, first_complete, final_message, _terminal = updates
+            retry = {
+                "params": {
+                    "sessionId": user["params"]["sessionId"],
+                    "_meta": {},
+                    "update": {
+                        "sessionUpdate": "retry_state",
+                        "type": "retrying",
+                        "attempt": 1,
+                        "max_retries": 15,
+                        "reason": "synthetic transient request error",
+                    },
+                }
+            }
+            progress = copy.deepcopy(final_message)
+            progress["params"]["update"]["content"]["text"] = "Progress: expanding a second query family."
+            second_start = copy.deepcopy(first_start)
+            second_start["params"]["update"]["toolCallId"] = "tool-2"
+            second_complete = copy.deepcopy(first_complete)
+            second_complete["params"]["update"]["toolCallId"] = "tool-2"
+            second_complete["params"]["update"]["rawOutput"].update(
+                {
+                    "call_id": "provider-call-2",
+                    "id": "tool-2",
+                    "input": canonical_json(
+                        {"query": "synthetic second query", "limit": "100", "mode": "Latest"}
+                    ),
+                }
+            )
+            updates[:] = [
+                retry,
+                user,
+                first_start,
+                first_complete,
+                progress,
+                second_start,
+                second_complete,
+                final_message,
+            ]
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            os.chmod(root, 0o700)
+            binary, auth, binary_sha = _live_material(root)
+            request, request_path = _build_request(root, binary_sha=binary_sha)
+            approvals = root / "approvals"
+            issue_live_grant(
+                request_path=request_path,
+                grant_root=approvals,
+                auth_source=auth,
+                wall_clock=lambda: FIXED_TIME,
+            )
+            model_result = _empty_result()
+            model_result["native_x_tool_provenance"].update(
+                {
+                    "tools_reported": ["x_keyword_search", "x_semantic_search"],
+                    "tool_calls_reported": 0,
+                    "queries": ["synthetic query", "synthetic second query"],
+                }
+            )
+            model_result["local_reconciliation"].update(
+                {
+                    "candidate_records_validated": 18,
+                    "evidence_items_validated": 58,
+                    "post_urls_structurally_validated": 40,
+                    "tool_calls_completed": 3,
+                    "tool_counts": {"x_keyword_search": 2},
+                }
+            )
+            fake = FakeExecutor(
+                MutableClock(),
+                (canonical_json(model_result) + "\n").encode(),
+                spawn=True,
+                session_mutator=modern_updates,
+                headless_total_cost_usd=10**400,
+            )
+            receipt, run_root = _run_adaptive_wave(
+                request=request,
+                execution_mode="live",
+                runtime_root=root / "runtime",
+                approval_root=approvals,
+                binary=binary,
+                auth_source=auth,
+                executor=fake,
+                monotonic=fake.clock,
+                wall_clock=lambda: FIXED_TIME,
+            )
+            self.assertEqual(receipt["status"], "completed")
+            self.assertEqual(receipt["session_proof"]["completed_tool_calls"], 2)
+            self.assertEqual(receipt["session_proof"]["tool_counts"], {"x_keyword_search": 2})
+            self.assertEqual(receipt["reconciliation"]["model_reported_tool_calls"], 0)
+            self.assertEqual(receipt["reconciliation"]["mechanically_verified_tool_calls"], 2)
+            raw_outer = json.loads((run_root / "raw.stdout").read_text())
+            self.assertEqual(json.loads(raw_outer["text"])["local_reconciliation"]["evidence_items_validated"], 58)
+            sanitized = json.loads((run_root / "sanitized.json").read_text())
+            self.assertEqual(sanitized["native_x_tool_provenance"]["tool_calls_reported"], 0)
+            self.assertEqual(len(sanitized["native_x_tool_provenance"]["queries"]), 2)
+            self.assertEqual(
+                sanitized["local_reconciliation"],
+                {
+                    "candidate_records_validated": 0,
+                    "evidence_items_validated": 0,
+                    "post_urls_structurally_validated": 0,
+                    "provider_post_bodies_replayable": False,
+                    "tool_calls_completed": 2,
+                    "tool_counts": {"x_keyword_search": 2},
+                },
+            )
+            self.assertEqual(validate_operator_bundle(run_root, approval_root=approvals), [])
+
+            original_raw = (run_root / "raw.stdout").read_bytes()
+            raw_outer["usage"]["input_tokens"] += 1
+            raw_outer["usage"]["total_tokens"] += 1
+            tampered_raw = (canonical_json(raw_outer) + "\n").encode()
+            _write_private(run_root / "raw.stdout", tampered_raw)
+            forged = copy.deepcopy(receipt)
+            forged["artifacts"]["raw_stdout_sha256"] = _bytes_sha(tampered_raw)
+            self.assertIn(
+                "session_proof_replay_mismatch",
+                validate_operator_bundle(run_root, approval_root=approvals, receipt_override=forged),
+            )
+            _write_private(run_root / "raw.stdout", original_raw)
+
+            invalid_cost_outer = copy.deepcopy(raw_outer)
+            invalid_cost_outer["total_cost_usd"] = float("inf")
+            with self.assertRaisesRegex(AdaptiveWaveValidationError, "headless_envelope_value_invalid"):
+                runner._parse_headless_envelope(
+                    invalid_cost_outer,
+                    expected_session_id=raw_outer["sessionId"],
+                    max_turns=64,
+                    max_inner_bytes=16_777_216,
+                )
+
+    def test_operator_projection_accepts_exact_observed_model_ledger_disagreement(self) -> None:
+        model_result = _empty_result()
+        candidates = [_candidate(f"candidate_{index:02d}", profile_host="x.com") for index in range(18)]
+        for evidence_index in range(62):
+            candidate = candidates[evidence_index % len(candidates)]
+            handle = candidate["handle"]
+            post_id = str(100_000 + evidence_index)
+            candidate["evidence"].append(
+                {
+                    "kind": "post",
+                    "relationship": "self",
+                    "subject_handle": handle,
+                    "author_handle": handle,
+                    "post_id": post_id,
+                    "url": f"https://x.com/{handle}/status/{post_id}",
+                    "published_at": "2026-07-15T00:00:00Z",
+                    "excerpt": f"Synthetic professional evidence {evidence_index}.",
+                    "thread_relation": "self_post",
+                    "supports": [
+                        {
+                            "dimension": "pretraining_experience_state",
+                            "asserted_value": "ambiguous",
+                        }
+                    ],
+                }
+            )
+        model_result["candidates"] = candidates
+        model_result["counts"] = {"observations_inspected_reported": 58, "candidates_retained": 18}
+        model_result["native_x_tool_provenance"] = {
+            "tools_reported": ["x_keyword_search", "x_semantic_search", "x_user_search"],
+            "tool_calls_reported": 97,
+            "queries": [f"reported query {index}" for index in range(94)],
+            "generic_web_used": False,
+        }
+        model_result["local_reconciliation"] = {
+            "candidate_records_validated": 18,
+            "evidence_items_validated": 58,
+            "post_urls_structurally_validated": 40,
+            "provider_post_bodies_replayable": False,
+            "tool_calls_completed": 97,
+            "tool_counts": {"x_keyword_search": 56, "x_semantic_search": 36, "x_user_search": 5},
+        }
+        self.assertEqual(
+            validate_model_result(model_result, live_mode=True, require_operator_projection=False),
+            [],
+        )
+        proof = runner.SessionProof(
+            updates_sha256="a" * 64,
+            update_bytes=1,
+            event_count=1,
+            provider_prompt_id_sha256="b" * 64,
+            effective_model_id="grok-4.5",
+            started_tool_calls=94,
+            completed_tool_calls=94,
+            tool_counts={"x_keyword_search": 50, "x_semantic_search": 39, "x_user_search": 5},
+            query_argument_sha256s=tuple(f"{index:064x}" for index in range(94)),
+            candidate_surface_attempts=(),
+            terminal_stop_reason="end_turn",
+            input_tokens=1,
+            output_tokens=1,
+            total_tokens=2,
+            model_turns=1,
+            estimated_cost_usd_micros=1,
+        )
+        projected = runner._operator_project_model_result(model_result, session_proof=proof, fixture=False)
+        self.assertEqual(validate_model_result(projected, live_mode=True), [])
+        self.assertEqual(projected["counts"]["candidates_retained"], 18)
+        self.assertEqual(projected["local_reconciliation"]["evidence_items_validated"], 62)
+        self.assertEqual(projected["local_reconciliation"]["post_urls_structurally_validated"], 62)
+        self.assertEqual(projected["local_reconciliation"]["tool_calls_completed"], 94)
+        self.assertEqual(
+            projected["local_reconciliation"]["tool_counts"],
+            {"x_keyword_search": 50, "x_semantic_search": 39, "x_user_search": 5},
+        )
+        self.assertEqual(projected["native_x_tool_provenance"]["tool_calls_reported"], 97)
+        self.assertEqual(len(projected["native_x_tool_provenance"]["queries"]), 94)
+
+    def test_legacy_plain_fixture_bundle_remains_replayable(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            os.chmod(root, 0o700)
+            request, request_path = _build_request(root)
+            receipt, run_root = run_adaptive_grok_wave_fixture(
+                request_path=request_path,
+                runtime_root=root / "runtime",
+            )
+            intent_path = run_root / "operator-intent.json"
+            receipt_path = run_root / "operator-receipt.json"
+            intent = json.loads(intent_path.read_text())
+            legacy_command = runner._build_legacy_plain_grok_command(
+                binary=Path("fixture-grok.invalid"),
+                cwd=run_root / "workspace",
+                request=request,
+                prompt_file=run_root / "compiled-prompt.txt",
+                leader_socket=run_root / "ephemeral-home/leader.sock",
+                session_id=intent["command_binding"]["session_id"],
+                result_schema=runner._load_result_schema(),
+            )
+            legacy_policy_sha = runner._legacy_command_policy_sha256(request)
+            for artifact in (intent, receipt):
+                artifact["command_binding"]["argv_sha256"] = runner.canonical_sha256(legacy_command)
+                artifact["command_binding"]["command_policy_sha256"] = legacy_policy_sha
+            _write_private(intent_path, (canonical_json(intent) + "\n").encode())
+            _write_private(receipt_path, (canonical_json(receipt) + "\n").encode())
+            self.assertEqual(validate_operator_receipt(receipt), [])
+            self.assertEqual(validate_operator_bundle(run_root), [])
+            relative_run_root = Path(os.path.relpath(run_root, Path.cwd()))
+            self.assertFalse(relative_run_root.is_absolute())
+            self.assertEqual(validate_operator_bundle(relative_run_root), [])
 
     def test_campaign_bridge_is_source_bound_but_always_blocked_without_native_payloads(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

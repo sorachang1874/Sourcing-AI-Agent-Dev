@@ -43,8 +43,10 @@ CRM, export, billing, permission, or outreach state. Protected-identity inferenc
 | Run ownership | Random durable `run.lock` token plus nonblocking `flock` | Execution owns the lease for the whole run; recovery/purge mutate nothing while an active owner exists |
 | Process identity | Gated launcher, kernel birth identity, inherited random token, process-group ledger, and run lease | Target exec is released only after durable ledger; recovery never kills a numeric PGID alone |
 | Process cleanup | Monotonic operator | All normal, timeout, output-limit, callback-error, and exception paths are bounded |
-| Output truth | Raw private bytes plus local validator | Prefix/suffix, duplicate keys, nonfinite numbers, shape drift, or bad reconciliation fails |
-| Tool-call facts | Raw Grok session `updates.jsonl` | Effective model, native-X starts/completions, arguments, terminal causality, turns, token usage, and cost are replayed; model-reported counts must match |
+| Output transport | Strict Grok headless envelope plus raw private bytes | Exact outer object, `EndTurn`, command session, request ID, turns, token totals, inner JSON, duplicate keys, nonfinite numbers, prefix, and suffix are replayed; the inner result alone cannot claim terminal success |
+| Model diagnostics | Raw outer `text`, plus diagnostic provenance retained in the normalized inner result | Model-reported calls, queries, observations, and original `local_reconciliation` are never tool-ledger truth; the unmodified original remains in `raw.stdout` |
+| Operator projections | Inner candidate/evidence arrays plus verified session proof | `sanitized.json` rewrites candidate, evidence, post-URL, tool-call, and per-tool counts from local structure/transcript facts; it preserves model provenance only as diagnostics |
+| Tool-call facts | Raw Grok session `updates.jsonl` | Effective model, native-X starts/completions, names, and exact arguments are replayed. On Grok 0.2.101 the outer envelope owns terminal/usage; a legacy transcript `turn_completed` is additionally reconciled when present |
 | Candidate authored-surface attempts | Completed `x_keyword_search` arguments in the raw session transcript | Only one exact positive `from:<handle>` can be attributed; positive `filter:replies` means `authored_reply`, absent/negated reply filter means `authored_post`, and global, multi-handle, semantic, user, or thread calls remain unattributed |
 | Retention/deletion | Request TTL, terminal receipt, external deletion journal and receipt | Expired bundle is validated and journaled before recursive deletion; a crash between delete and receipt is reconcilable |
 
@@ -149,7 +151,7 @@ semantic binding over the binding version, schema version, policy ID, owner, glo
 and exact selected entry. It is deliberately not the complete mutable registry-file digest: appending an unrelated
 valid row cannot invalidate an issued grant, retained bundle, or TTL purge, while changing the selected row or any
 immutable owner semantic fails replay. The production registry currently authorizes seven tracked OpenAI prompts
-and three tracked Google DeepMind prompts. Each lab has its own exact target tuple; prompt digests cannot be swapped
+and four tracked Google DeepMind prompts. Each lab has its own exact target tuple; prompt digests cannot be swapped
 between them. The OpenAI tuple is:
 
 ```text
@@ -176,7 +178,8 @@ configuration, shell state, or proxy environment variables. The base prompt is i
 The relevant policy is:
 
 ```text
---output-format plain
+--output-format json
+--json-schema <exact result-v2 schema>
 --disable-web-search
 --disallowed-tools run_terminal_cmd,grep,read_file,search_replace,list_dir,web_search,web_fetch,todo_write,task,Agent
 --no-subagents
@@ -189,7 +192,7 @@ The relevant policy is:
 ```
 
 There is no `--always-approve`, `bypassPermissions`, generic browser/search tool, connector, subagent, shell, or local
-file tool. Grok CLI 0.2.99 does **not** map the hosted `x_keyword_search`, `x_semantic_search`, `x_user_search`, or
+file tool. Grok CLI does **not** map the hosted `x_keyword_search`, `x_semantic_search`, `x_user_search`, or
 `x_thread_fetch` names through its built-in `--tools` allowlist. A 2026-07-15 live A/B produced zero native-X calls
 when those names were passed and immediately exposed `x_user_search` when the flag was removed. The command therefore
 does not pass `--tools`. `--disable-web-search` plus the local-tool denylist constrain the launch surface, and the
@@ -197,10 +200,18 @@ retained session proof accepts only the four registered native-X tool names and 
 the result can complete. The registry digest explicitly binds both `cli_native_x_allowlist_enforced=false` and
 `native_x_session_proof_required=true` so replay cannot silently restore the broken flag or weaken evidence checks.
 
-The operator intentionally uses `--output-format plain` and embeds the result schema in the compiled prompt. On the
-locally inspected Grok CLI, `--json-schema` changes output to a CLI envelope; plain mode is needed to preserve exact
-model stdout and detect non-JSON prefixes. The executable digest, result-schema digest, and redacted flag-policy digest
-are all bound into the receipt.
+Grok 0.2.101 is invoked with `--output-format json --json-schema <exact schema>`. Stdout must be one strict headless
+envelope matching `contracts/x.grok.adaptive_recall_wave.headless_envelope.v1.schema.json`; its `text` is then parsed
+as the result-v2 object. The outer `sessionId`, `EndTurn`, turns, and usage are the terminal authority and must bind the
+command session. Session updates own native-X starts, completions, names, arguments, and query-surface attempts. They
+may contain a closed pre-user `_x.ai/session/update` `retry_state`, progress `agent_message_chunk` events interleaved
+with later tool calls, and no `turn_completed`; the final assistant suffix must exactly equal outer `text`. If a
+legacy `turn_completed` exists, its terminal/usage must agree with the outer envelope.
+
+Retained pre-headless bundles remain replayable under an explicit replay-only legacy plain command-policy digest and
+their original self-reconciliation semantics. New grant issuance and execution accept only the structured command
+policy, so an old grant cannot authorize a changed command. The executable digest, result-schema digest, exact argv,
+and versioned redacted command-policy digest are bound into the receipt.
 
 ## Binary and OAuth preflight
 
@@ -276,12 +287,17 @@ Prior handles are completion exclusions, not permanent suppression:
   fingerprint or a strict dated transition proof for a current/historical state;
 - zero-evidence `ambiguous/ambiguous`, merely repeating an old source, or changing model-editable excerpt prose fails.
 
-The result's candidate, evidence, post-URL, query, tool-count, and observation counts are locally reconciled. A live
-`completed` state additionally requires the raw Grok session transcript to prove the effective model, one closed set
-of native-X tool starts/completions, exact parsed arguments, a unique prompt chain, terminal `end_turn`, model turns,
-token usage, and estimated cost. Transcript tool counts must exactly equal the model result. Post bodies remain
-model-mediated (`provider_post_bodies_replayable=false`); transcript proof authenticates execution facts, not every
-quoted X payload.
+The raw inner result's reported calls, query list, observations, and `local_reconciliation` are diagnostic and may
+disagree with each other or the transport ledger. They remain unmodified inside raw outer `text`. After the session
+proof validates, the operator writes `sanitized.json` with `counts.candidates_retained` and all
+`local_reconciliation` candidate/evidence/post-URL/tool fields recomputed from the inner arrays and completed raw
+session calls. The reported provenance fields remain diagnostic so KPI analysis can expose, rather than erase, model
+versus-ledger discrepancies.
+
+A live `completed` state additionally requires the headless envelope and raw Grok session transcript to prove the
+effective model, one closed set of native-X tool starts/completions, exact parsed arguments, a unique prompt chain,
+outer terminal `end_turn`, model turns, token usage, and estimated cost. Post bodies remain model-mediated
+(`provider_post_bodies_replayable=false`); transcript proof authenticates execution facts, not every quoted X payload.
 
 `contracts/x.grok.adaptive_recall_wave.operator_receipt.v3.schema.json` additionally records unique mechanically
 classified keyword-query attempts in `session_proof.candidate_surface_attempts`. Reconciliation projects those exact
@@ -384,7 +400,7 @@ null.
 | State | Meaning |
 |---|---|
 | `fixture_complete` | Strict deterministic result; zero external process/provider call |
-| `completed` | Live child spawned, exit 0, exact JSON, strict result valid, and session transcript fully verified |
+| `completed` | Live child spawned, exit 0, strict headless envelope/inner JSON valid, operator projection written, and session tool transcript fully verified |
 | `process_failed` | Spawn/execution error or nonzero exit |
 | `timed_out` | The process monotonic deadline fired and cleanup ran; a final scan deadline cannot override this owner |
 | `technical_limit_exceeded` | Stream, JSON-complexity, or session-tree ceiling fired and cleanup ran |
@@ -460,6 +476,8 @@ The suite covers unbounded synthetic candidate arrays; 120 bound prior waves; st
 schema/runtime key parity; staged symlinked binary; account/auth binding; missing, pre-link, post-link and gated-release
 expiry, wrong-scope, and consumed grants; launcher-time replay; exact closed tools; raw model/tool/usage/terminal proof; prompt-file argv privacy; stream/JSON/session
 ceilings; entry-scoped prompt-policy append replay and purge; full actual-argument protected-boundary checks;
+strict 0.2.101 headless parsing; retry-state and progress/tool interleaving; outer/session/inner tamper; model-versus-ledger
+diagnostic disagreement; replay-only legacy plain command policy;
 transactional pre-intent root rollback; independent timeout/cleanup-scan ownership; exact session-tree modes and
 mode-`000` no-follow auth deletion/recovery; measurement/schema parity; descriptor symlink rejection; TERM-to-KILL;
 active-owner recovery exclusion; full recovery replay; deletion
@@ -469,9 +487,13 @@ redacted CLI output. It performs no Grok or X live call.
 
 ## Residual boundary
 
-- No real Grok/X execution was performed by this implementation slice.
+- This repair made no additional Grok/X call. It is grounded in the retained 0.2.101 Google DeepMind wave that
+  exposed the former plain-prefix, retry/progress, missing-terminal-update, and model-ledger disagreement failures.
 - Native-X tool execution counts, model identity, terminal causality, and usage are transcript-verified. X post bodies
   and candidate evidence remain model-mediated discovery leads until a separate source-bound hydration/replay lane
   proves them.
+- The outer provider request ID and provider-reported optional cost remain raw-stdout diagnostics bound by the raw
+  artifact digest; they are not separate receipt fields. The receipt binds the operator session and computes the
+  budget charge from verified input/output usage plus the request-pinned pricing policy.
 - `completed` proves the local execution contract only. It is not an independent-review `GO`, product-quality verdict,
   milestone signoff, identity decision, or outreach authorization.
