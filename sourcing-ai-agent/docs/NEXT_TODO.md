@@ -376,6 +376,14 @@
   signoff fail closed，但不冻结无关 non-live batch。该批零 storage/runtime write、migration、claim/CAS、Stage A/B、
   dispatch 或 served 激活；完整非闭合边界见
   `TRACK_D_D3C1A_WORKFLOW_COMMAND_PUBLIC_PROJECTION_FIXED_FORWARD.md`，R-019、action-root、OB gates 与 served=0 不变。
+- [ ] R-030 frontend demo `raw` compatibility retirement（owner=`frontend API / OperationsPage`）：先机械盘点
+  `WorkflowCommandRecord`、Activity/Attempt/Delta、Operation Action/Run/Event/Provenance 的全部 `raw` 读者，给每个
+  读者迁移到既有 typed DTO field 或一个单独命名且独立有界的 wire snapshot；迁移期间禁止 `raw` enumerable、
+  spread/`Object.assign`、Response body/cache key/transport serializer 使用。所有读者清零后，在同一有界批删除
+  `attachDemoRaw`、全部 exported `raw` interface members 与 compatibility projection，并删除 `R-030` ledger row。
+  exit evidence 必须包含：静态 consumer inventory `>0 -> 0`、frontend type/build、全部 workflow/operation endpoint
+  snapshot regressions、无 `raw` public serializer 的 source scan，以及 scope-matched independent review GO。在这些
+  条件满足前 R-030 保持 accepted residual，不阻断与该 compatibility surface 无关的 non-live Track D 开发。
 - [x] D3c2a dormant workflow-command claim-fence migration foundation（2026-07-15；仅 D3b Migration A 的 command
   subbatch）：`0003_workflow_command_claim_fence_foundation.sql` 精确新增 20 列 + 16 个 `NOT VALID` local checks，
   5s transaction-local lock budget；populated

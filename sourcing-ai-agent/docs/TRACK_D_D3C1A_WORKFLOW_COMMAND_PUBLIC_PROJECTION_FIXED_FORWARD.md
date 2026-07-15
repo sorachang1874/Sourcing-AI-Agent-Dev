@@ -245,7 +245,35 @@ arbitrary-Proxy sources may still be accepted, but only their descriptor-derived
 serialized. `R-030` preserves the old non-enumerable `raw` reference only as an explicitly unsealed compatibility
 view; it is not part of the Response JSON graph or the final footprint.
 
-### 3.5 Earlier precommit adversarial author-audit fixes
+### 3.5 Second valid Ultra review fixed-forward
+
+The isolated reviewer home next bound
+`b54ef9c735612c228a0b803a892be0f6ba7b64d0..f5c33b0a28bb82f6a979d928dcb21eb907836fde`
+and produced the valid artifact
+`runtime/reviews/20260715T034542Z_Track_D_D3c1a_trusted_JSON_snapshot_fixed-forward_f5c33b0.md` with formal
+**NO-GO**, P0/P1/P2/P3=`0/0/4/4`. Its four P2 mechanisms are fixed-forwarded in this candidate:
+
+1. Every project-and-admit source-array loop checks the aggregate `blocked` bit before reading the next numeric
+   descriptor. The exact-1-MiB regression now places a trapping Proxy immediately after the cap-closing item in the
+   same array and proves that neither the tail descriptor nor any tail Proxy trap is touched.
+2. Ordinary object own keys and actually serialized enumerable entries each have an independent exact 256 cap. The
+   only keys allowed outside the ordinary-key cap are the exact validated non-enumerable `toJSON=undefined` shadow and
+   the existing non-enumerable `raw` compatibility key. Executable 256/257/258 cases prove 256 and recapture succeed,
+   257/258 arbitrary properties reject, and 256 plus both compatibility descriptors remains recapturable.
+3. The exported workflow/operation DTOs, every nested record/list, and all related list endpoint results are now
+   readonly in TypeScript, matching the deeply frozen runtime snapshots. A checked-in compile-only contract uses
+   `@ts-expect-error` assertions for root, nested record, raw compatibility, nested JSON array, and endpoint-list
+   mutation attempts; the production TypeScript build is the enforcing oracle.
+4. `docs/NEXT_TODO.md` now contains an explicit unchecked `R-030` retirement item with the frontend owner, full consumer
+   inventory/migration, `attachDemoRaw` and interface deletion conditions, serializer prohibition, and exact exit
+   evidence. The accepted residual is visible rather than silently permanent.
+
+The four P3 items are not promoted into this bounded implementation batch: the transport streaming-allocation issue
+remains `R-019`, non-enumerable `raw` remains `R-030`, revoked-Proxy availability hardening is non-blocking, and broader
+endpoint-specific snapshot parameterization remains regression-depth follow-up. A fresh pinned Ultra review must bind
+the enclosing fixed-forward commit; author tests and a successful frontend build are not a verdict.
+
+### 3.6 Earlier precommit adversarial author-audit fixes
 
 After implementing the five direct findings, adversarial passes in the author session exposed additional bounded
 cross-layer gaps. They are fixed in the same D3c1a candidate because leaving them open would make the advertised public
@@ -557,6 +585,18 @@ Current Ultra-review fixed-forward evidence, before creating its enclosing commi
   projection, executable frontend oracle, and docs; it changes no backend, repository, storage, migration, or PG path;
 - fresh formal pinned re-review of the enclosing commit remains pending. Author validation is not a verdict.
 
+Second Ultra-review fixed-forward evidence, before creating its enclosing commit:
+
+- valid formal review artifact against `f5c33b0`: **NO-GO**, P0/P1/P2/P3=`0/0/4/4`;
+- full D3c1a projection contract after the four P2 fixes: **19 passed**, including 256/257/258 object-cap and
+  same-source-array exact-cap tail zero-touch regressions;
+- frontend production build: **82 modules transformed**, `551.65 kB` / gzip `164.40 kB`; the existing `>500 kB`
+  chunk warning remains informational;
+- the compile-only readonly contract rejects root, nested, compatibility-record, nested-array, and endpoint-list
+  mutations through checked `@ts-expect-error` assertions;
+- fresh formal pinned re-review of the new enclosing commit remains pending. These author results do not override the
+  recorded NO-GO.
+
 The advisory also exercised hostile hash-collision keys with zero equality-hook calls, alternating carrier depth 40 in
 9 command projections, and a binary depth-10 carrier tree in 99 projections; budget cutoffs omitted the member rather
 than emitting an empty canonical carrier. This is author/advisory evidence, not a formal pinned verdict.
@@ -569,7 +609,8 @@ accepted residual `R-019` remains open. No invalid artifact is formal `NO-GO` or
 recorded above. The two valid medium-effort reviews of `4919990` are advisory `NO-GO` inputs and are fixed-forwarded
 in §3.3. The valid `gpt-5.6-sol / ultra / priority` artifact for `b54ef9c...` is formal **NO-GO** and its five P2
 findings are fixed-forwarded in §3.4; `R-019` and `R-030` remain explicit P3 residuals. A fresh formal pinned re-review
-must bind the enclosing commit. Until that scope-matched artifact returns GO, live/W6/manual validation, promotion,
+for `f5c33b0...` is also formal **NO-GO**, with its four P2 findings fixed-forwarded in §3.5. A fresh formal pinned
+re-review must bind the enclosing commit. Until that scope-matched artifact returns GO, live/W6/manual validation, promotion,
 and milestone signoff remain fail closed for this scope.
 
 ## 10. Explicit non-closure

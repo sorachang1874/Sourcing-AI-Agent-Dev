@@ -26,10 +26,10 @@ import {
 } from "../lib/api";
 
 interface CommandDrilldown {
-  commandId: string;
-  activities: WorkflowActivityRecord[];
-  attempts: WorkflowActivityAttemptRecord[];
-  deltas: WorkflowEntityDeltaRecord[];
+  readonly commandId: string;
+  readonly activities: readonly WorkflowActivityRecord[];
+  readonly attempts: readonly WorkflowActivityAttemptRecord[];
+  readonly deltas: readonly WorkflowEntityDeltaRecord[];
 }
 
 function statusLabel(value: string): string {
@@ -122,7 +122,7 @@ function commandControlSummary(command: { controlState?: Record<string, unknown>
 function commandControlPolicySummary(command: {
   controlPolicy?: {
     runningControlCategory?: string;
-    runningControlCategories?: string[];
+    runningControlCategories?: readonly string[];
     runningControlMaturity?: string;
     runningControlGapStatus?: string;
     fallbackStatus?: string;
@@ -333,8 +333,8 @@ function operationDisplayDescription(operation: { displayContract?: Record<strin
 }
 
 export function OperationsPage() {
-  const [pendingActions, setPendingActions] = useState<OperationActionRecord[]>([]);
-  const [runs, setRuns] = useState<OperationRunRecord[]>([]);
+  const [pendingActions, setPendingActions] = useState<readonly OperationActionRecord[]>([]);
+  const [runs, setRuns] = useState<readonly OperationRunRecord[]>([]);
   const [selectedRunId, setSelectedRunId] = useState("");
   const [provenance, setProvenance] = useState<OperationRunProvenance | null>(null);
   const [commandDrilldown, setCommandDrilldown] = useState<CommandDrilldown | null>(null);

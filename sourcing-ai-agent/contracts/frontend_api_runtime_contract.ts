@@ -289,17 +289,26 @@ function captureWorkflowPublicFinalJsonValue(
       } catch {
         return undefined;
       }
+      // At most two keys may sit outside the ordinary collection cap, and those keys are
+      // admitted below only when they are the exact non-enumerable compatibility fields owned by
+      // this serializer (`toJSON` and, for demo DTOs, `raw`).  Do not let the +2 allowance become
+      // an implicit 258-entry JSON collection limit.
       if (ownKeys.length > WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxCollectionEntries + 2) {
         return undefined;
       }
       let nodes = 1;
       let bytes = 2;
+      let ordinaryOwnKeyCount = 0;
       let serializedEntryCount = 0;
       let maxRelativeDepth = 0;
       const snapshot: Record<string, unknown> = {};
       let compatibilityRaw: unknown | undefined;
       for (const key of ownKeys) {
         if (typeof key !== "string") {
+          ordinaryOwnKeyCount += 1;
+          if (ordinaryOwnKeyCount > WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxCollectionEntries) {
+            return undefined;
+          }
           continue;
         }
         let descriptor: PropertyDescriptor | undefined;
@@ -328,6 +337,10 @@ function captureWorkflowPublicFinalJsonValue(
           compatibilityRaw = descriptor.value;
           continue;
         }
+        ordinaryOwnKeyCount += 1;
+        if (ordinaryOwnKeyCount > WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxCollectionEntries) {
+          return undefined;
+        }
         if (!descriptor.enumerable) {
           continue;
         }
@@ -349,6 +362,9 @@ function captureWorkflowPublicFinalJsonValue(
         }
         if (item === WORKFLOW_PUBLIC_JSON_OMITTED) {
           continue;
+        }
+        if (serializedEntryCount >= WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxCollectionEntries) {
+          return undefined;
         }
         nodes += item.nodes;
         bytes += workflowPublicJsonStringByteLength(key) + 1 + item.bytes +

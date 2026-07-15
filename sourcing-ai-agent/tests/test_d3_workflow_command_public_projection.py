@@ -528,7 +528,13 @@ def _typescript_interface_fields(source: str, interface_name: str, next_interfac
         f"export interface {interface_name}",
         f"export interface {next_interface_name}",
     )
-    return frozenset(re.findall(r"^\s{2}([A-Za-z_][A-Za-z0-9_]*)\??:", segment, flags=re.MULTILINE))
+    return frozenset(
+        re.findall(
+            r"^\s{2}(?:readonly\s+)?([A-Za-z_][A-Za-z0-9_]*)\??:",
+            segment,
+            flags=re.MULTILINE,
+        )
+    )
 
 
 def _typescript_mapper_fields(source: str, function_name: str, next_function_name: str) -> frozenset[str]:
@@ -3621,6 +3627,55 @@ assert.equal(
 );
 assert.equal(finalFootprintProxyReads.get, 0);
 
+const collectionLimitObject = Object.fromEntries(
+  Array.from(
+    { length: projectionLimits.maxCollectionEntries },
+    (_, index) => [`key_${index}`, index],
+  ),
+);
+const collectionLimitSnapshot = runtimeContract.captureWorkflowPublicFinalJsonSnapshot(
+  collectionLimitObject,
+);
+assert.ok(collectionLimitSnapshot);
+assert.equal(Object.keys(collectionLimitSnapshot.value).length, projectionLimits.maxCollectionEntries);
+assert.ok(
+  runtimeContract.captureWorkflowPublicFinalJsonSnapshot(collectionLimitSnapshot.value),
+);
+for (const overage of [1, 2]) {
+  const overLimitObject = Object.fromEntries(
+    Array.from(
+      { length: projectionLimits.maxCollectionEntries + overage },
+      (_, index) => [`over_${index}`, index],
+    ),
+  );
+  assert.equal(
+    runtimeContract.captureWorkflowPublicFinalJsonSnapshot(overLimitObject),
+    undefined,
+  );
+}
+const compatibilityLimitObject = { ...collectionLimitObject };
+Object.defineProperty(compatibilityLimitObject, "raw", {
+  value: { compatibility: true },
+  enumerable: false,
+  configurable: false,
+  writable: false,
+});
+Object.defineProperty(compatibilityLimitObject, "toJSON", {
+  value: undefined,
+  enumerable: false,
+  configurable: false,
+  writable: false,
+});
+const compatibilityLimitSnapshot = runtimeContract.captureWorkflowPublicFinalJsonSnapshot(
+  compatibilityLimitObject,
+);
+assert.ok(compatibilityLimitSnapshot);
+assert.equal(Object.keys(compatibilityLimitSnapshot.value).length, projectionLimits.maxCollectionEntries);
+assert.equal(compatibilityLimitSnapshot.value.raw.compatibility, true);
+assert.ok(
+  runtimeContract.captureWorkflowPublicFinalJsonSnapshot(compatibilityLimitSnapshot.value),
+);
+
 let callableToJsonCalls = 0;
 function hostileCallable() {}
 Object.defineProperty(hostileCallable, "toJSON", {
@@ -5415,6 +5470,43 @@ for (const [value, expected] of diagnosticCases) {
     remainingExactCapStringBytes -= stringBytes;
   }
   assert.equal(remainingExactCapStringBytes, 0);
+  const exactCapSameListTailTraps = {
+    get: 0,
+    getPrototypeOf: 0,
+    ownKeys: 0,
+    getOwnPropertyDescriptor: 0,
+  };
+  const exactCapSameListTail = new Proxy(
+    { event_id: "must-not-read-after-same-list-exact-cap" },
+    {
+      get(target, key, receiver) {
+        exactCapSameListTailTraps.get += 1;
+        return Reflect.get(target, key, receiver);
+      },
+      getPrototypeOf(target) {
+        exactCapSameListTailTraps.getPrototypeOf += 1;
+        return Reflect.getPrototypeOf(target);
+      },
+      ownKeys(target) {
+        exactCapSameListTailTraps.ownKeys += 1;
+        return Reflect.ownKeys(target);
+      },
+      getOwnPropertyDescriptor(target, key) {
+        exactCapSameListTailTraps.getOwnPropertyDescriptor += 1;
+        return Reflect.getOwnPropertyDescriptor(target, key);
+      },
+    },
+  );
+  const exactCapSameListDescriptorKeys = [];
+  const exactCapActionEventSource = new Proxy(
+    [...exactCapActionEvents, exactCapSameListTail],
+    {
+      getOwnPropertyDescriptor(target, key) {
+        exactCapSameListDescriptorKeys.push(String(key));
+        return Reflect.getOwnPropertyDescriptor(target, key);
+      },
+    },
+  );
   const exactCapLaterListTraps = {
     get: 0,
     getPrototypeOf: 0,
@@ -5444,7 +5536,7 @@ for (const [value, expected] of diagnosticCases) {
   );
   const exactCapPayload = {
     status: "ok",
-    action_events: exactCapActionEvents,
+    action_events: exactCapActionEventSource,
     operation_events: exactCapLaterList,
   };
   const exactCapOriginalJsonParse = JSON.parse;
@@ -5477,6 +5569,16 @@ for (const [value, expected] of diagnosticCases) {
       projectionLimits.maxOccurrenceBytes,
     );
     assert.deepEqual(exactCapProvenance.operationEvents, []);
+    assert.deepEqual(
+      exactCapSameListDescriptorKeys,
+      ["length", ...Array.from({ length: exactCapEventCount }, (_, index) => String(index))],
+    );
+    assert.deepEqual(exactCapSameListTailTraps, {
+      get: 0,
+      getPrototypeOf: 0,
+      ownKeys: 0,
+      getOwnPropertyDescriptor: 0,
+    });
     assert.deepEqual(exactCapLaterListTraps, {
       get: 0,
       getPrototypeOf: 0,
