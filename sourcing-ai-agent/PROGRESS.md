@@ -27,7 +27,9 @@
   snapshot. Empty expected workspace preserves operator/open-mode behavior.
 - Current D1g evidence is **6 passed + 29 subtests** for the exact PG matrix, **28 + 97 subtests** with request-scope
   transport, **4** exact Operation adjacency nodes, and full Operation runtime **136 + 503 subtests**. R-031 remains
-  review-pending; R-019's **26**-caller ratchet and R-028 remain unchanged. No provider/model/live path is authorized.
+  review-pending: pinned `646e596` advisory=`NO-GO 0/0/1/1` because valid planned replay still precedes persisted
+  request validation and approval; its invalid-reference matrix passed. The P2 and post-D1h count wording P3 are being
+  fixed-forward. R-019's **26**-caller ratchet and R-028 remain unchanged. No provider/model/live path is authorized.
 
 ### Track D D1h CRM Public Web action activation
 
@@ -41,12 +43,18 @@
   generic `:start:` API-start/retry commands retain their pre-D1h path. A missing forced-refresh nonce is derived
   deterministically from operation/action identity and persisted, so retry cannot mint a second batch identity after
   a crash.
+- Pinned `a36333b` advisory=`NO-GO 0/1/2/1`. The fixed-forward now preserves empty input after selector-only alias
+  removal, requires an input selector to have an empty target and a target selector to have no owner/unknown extras,
+  attributes queue requests to the stable service principal, and validates the complete explicit continuation against
+  the canonical request's deterministic batch id plus persisted options/nonce/runs/job. Partial/foreign owner fields
+  fail closed, and action-bound continuation never falls back to mutable payload runs/job.
 - The current production partition is **4 schema-defined / 11 schema-less / served=0**. Confirmed author evidence is
-  D1h PG **5 passed**, combined D1 adjacency **116 passed + 188 subtests**, and exact Operation/transport adjacency
-  **4 passed + 4 subtests**; full Operation runtime is **136 passed + 503 subtests**, and the CRM Public Web boundary
-  file is **34 passed**. Lint is green across **58 files**; global mypy remains at the accepted **81 errors / 4 files**
-  ceiling. Final stable commit and fresh pinned non-author review remain pending; this is not a formal `GO` and
-  authorizes no provider/model/live path.
+  D1h fixed-forward PG **6 passed + 3 subtests**, exact Operation/transport **4 passed + 11 subtests**, generic retry
+  **1 passed**, CRM Public Web boundary **34 passed**, and mypy **81 errors / 4 files**. The combined D1 run reached
+  **117 passed + 198 subtests** with two separately tracked D1g characterization-probe failures (missing planned helper
+  / keyword owner response seam); they join the D1g approval-order fixed-forward rather than being hidden as D1h green
+  evidence. The pre-review candidate's full Operation runtime was **136 passed + 503 subtests**. Final commit and fresh pinned
+  non-author review remain pending; this is not a formal `GO` and authorizes no provider/model/live path.
 - R-019/R-028/R-029 remain open. The command-owner rejection happens after its existing claim/running transition, so
   D1h claims only batch/run/EntityDelta zero-write there, not a cross-table UoW or exactly-once closure. R-031 remains
   the separately review-pending D1g boundary.

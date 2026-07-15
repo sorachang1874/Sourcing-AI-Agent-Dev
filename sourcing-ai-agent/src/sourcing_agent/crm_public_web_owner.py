@@ -28,6 +28,7 @@ from concurrent.futures import (
     ThreadPoolExecutor,
     as_completed,
 )
+from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
@@ -48,6 +49,7 @@ from .crm_public_web_runtime import (
     PUBLIC_WEB_WORKER_LANE,
     build_crm_public_web_batch_idempotency_key,
     cancel_crm_public_web_run,
+    crm_public_web_batch_id_for_idempotency_key,
     execute_crm_public_web_run_once,
     public_web_options_from_record,
     public_web_signal_identity_key,
@@ -1380,7 +1382,7 @@ class CrmPublicWebOwner:
                 "workspace_id": workspace_id,
                 "crm_record_ids": normalized_record_ids,
                 "record_ids": normalized_record_ids,
-                "requested_by": str(actor or "operation_runtime").strip() or "operation_runtime",
+                "requested_by": CRM_PUBLIC_WEB_QUEUE_BATCH_OWNER,
                 "metadata": {
                     **dict(normalized_request_payload.get("metadata") or {}),
                     "operation_run_id": operation_run_id,
@@ -5197,7 +5199,7 @@ class CrmPublicWebOwner:
             "detail": None,
         }
 
-    def _ensure_crm_public_web_job(
+    def _crm_public_web_job_payload(
         self,
         *,
         batch: dict[str, Any],
@@ -5216,12 +5218,34 @@ class CrmPublicWebOwner:
             "default_workflow_stage": "not_enabled",
             "execution_backend": CRM_PUBLIC_WEB_EXECUTION_BACKEND,
         }
+        return {
+            "job_id": job_id,
+            "request": request.to_record(),
+            "plan": plan_payload,
+        }
+
+    def _ensure_crm_public_web_job(
+        self,
+        *,
+        batch: dict[str, Any],
+        runs: list[dict[str, Any]],
+        request_payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        job_payload = self._crm_public_web_job_payload(
+            batch=batch,
+            runs=runs,
+            request_payload=request_payload,
+        )
+        job_id = str(job_payload.get("job_id") or "").strip()
+        batch_id = str(batch.get("batch_id") or "").strip()
+        request_record = dict(job_payload.get("request") or {})
+        plan_payload = dict(job_payload.get("plan") or {})
         self.store.save_job(
             job_id,
             CRM_PUBLIC_WEB_JOB_TYPE,
             "running",
             "public_web_search",
-            request.to_record(),
+            request_record,
             plan_payload=plan_payload,
             summary_payload={
                 "batch_id": batch_id,
@@ -5233,10 +5257,156 @@ class CrmPublicWebOwner:
             artifact_path=str(dict(batch.get("metadata") or {}).get("artifact_root") or ""),
             idempotency_key=str(batch.get("idempotency_key") or ""),
         )
+        return job_payload
+
+    def _revalidate_crm_public_web_operation_action_continuation(
+        self,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        continuation_fields = {
+            "batch_id",
+            "job_payload",
+            "operation_planning_status",
+            "run_ids",
+            "runs",
+        }
+        present_continuation_fields = continuation_fields & set(payload)
+        batch_id = str(payload.get("batch_id") or "").strip()
+        if not batch_id:
+            if present_continuation_fields:
+                return {
+                    "status": "invalid",
+                    "reason": "crm_record_batch_command_owner_fields_invalid",
+                }
+            return {"status": "ready"}
+        if present_continuation_fields != continuation_fields:
+            return {
+                "status": "invalid",
+                "reason": "crm_record_batch_command_continuation_invalid",
+            }
+
+        workspace_id = str(payload.get("workspace_id") or "default").strip() or "default"
+        record_ids = _coerce_public_web_record_ids(
+            payload.get("crm_record_ids") or payload.get("record_ids") or payload.get("record_id")
+        )
+        raw_request_payload = payload.get("request_payload")
+        if not record_ids or not isinstance(raw_request_payload, dict):
+            return {
+                "status": "invalid",
+                "reason": "crm_record_batch_command_continuation_invalid",
+            }
+        request_payload = dict(raw_request_payload)
+        options = public_web_options_from_record(request_payload)
+        expected_options = _storage_json_safe_payload(asdict(options))
+        force_refresh = bool(request_payload.get("force_refresh"))
+        refresh_nonce = str(request_payload.get("refresh_nonce") or request_payload.get("nonce") or "").strip()
+        expected_idempotency_key = build_crm_public_web_batch_idempotency_key(
+            workspace_id=workspace_id,
+            requested_record_ids=record_ids,
+            options=options,
+            force_refresh=force_refresh,
+            nonce=refresh_nonce,
+        )
+        expected_batch_id = crm_public_web_batch_id_for_idempotency_key(expected_idempotency_key)
+        if batch_id != expected_batch_id:
+            return {
+                "status": "invalid",
+                "reason": "crm_record_batch_command_continuation_invalid",
+            }
+        batch = self.store.get_crm_public_web_batch(batch_id=batch_id)
+        if not batch:
+            return {
+                "status": "invalid",
+                "reason": "crm_record_batch_command_continuation_invalid",
+            }
+        batch_record_ids = _coerce_public_web_record_ids(batch.get("requested_crm_record_ids"))
+        batch_run_ids = _dedupe_texts(str(run_id or "").strip() for run_id in list(batch.get("run_ids") or []))
+        if (
+            str(batch.get("batch_id") or "").strip() != expected_batch_id
+            or str(batch.get("idempotency_key") or "").strip() != expected_idempotency_key
+            or str(batch.get("workspace_id") or "default").strip() != workspace_id
+            or batch_record_ids != record_ids
+            or _storage_json_safe_payload(dict(batch.get("options") or {})) != expected_options
+            or bool(batch.get("force_refresh")) != force_refresh
+            or str(batch.get("requested_by") or "").strip() != CRM_PUBLIC_WEB_QUEUE_BATCH_OWNER
+            or str(dict(batch.get("metadata") or {}).get("refresh_nonce") or "").strip() != refresh_nonce
+        ):
+            return {
+                "status": "invalid",
+                "reason": "crm_record_batch_command_continuation_invalid",
+            }
+
+        runs = self.store.list_crm_public_web_runs(batch_id=batch_id, workspace_id=workspace_id)
+        persisted_runs_by_id = {
+            str(run.get("run_id") or "").strip(): dict(run) for run in runs if str(run.get("run_id") or "").strip()
+        }
+        persisted_record_ids = sorted(
+            str(run.get("crm_record_id") or "").strip()
+            for run in persisted_runs_by_id.values()
+            if str(run.get("crm_record_id") or "").strip()
+        )
+        payload_run_ids = _dedupe_texts(str(run_id or "").strip() for run_id in list(payload.get("run_ids") or []))
+        raw_payload_runs = payload.get("runs")
+        if not isinstance(raw_payload_runs, list) or not persisted_runs_by_id:
+            return {
+                "status": "invalid",
+                "reason": "crm_record_batch_command_continuation_invalid",
+            }
+        payload_runs_by_id = {
+            str(run.get("run_id") or "").strip(): dict(run)
+            for run in raw_payload_runs
+            if isinstance(run, dict) and str(run.get("run_id") or "").strip()
+        }
+        if (
+            len(payload_runs_by_id) != len(raw_payload_runs)
+            or sorted(persisted_runs_by_id) != sorted(batch_run_ids)
+            or sorted(persisted_runs_by_id) != sorted(payload_run_ids)
+            or sorted(persisted_runs_by_id) != sorted(payload_runs_by_id)
+            or persisted_record_ids != record_ids
+        ):
+            return {
+                "status": "invalid",
+                "reason": "crm_record_batch_command_continuation_invalid",
+            }
+        for run_id, persisted_run in persisted_runs_by_id.items():
+            payload_run = payload_runs_by_id[run_id]
+            for field in ("run_id", "batch_id", "crm_record_id", "workspace_id", "idempotency_key"):
+                if str(payload_run.get(field) or "").strip() != str(persisted_run.get(field) or "").strip():
+                    return {
+                        "status": "invalid",
+                        "reason": "crm_record_batch_command_continuation_invalid",
+                    }
+            if (
+                str(persisted_run.get("batch_id") or "").strip() != batch_id
+                or str(persisted_run.get("workspace_id") or "default").strip() != workspace_id
+                or _storage_json_safe_payload(dict(persisted_run.get("options") or {})) != expected_options
+            ):
+                return {
+                    "status": "invalid",
+                    "reason": "crm_record_batch_command_continuation_invalid",
+                }
+
+        raw_job_payload = payload.get("job_payload")
+        expected_job_payload = self._crm_public_web_job_payload(
+            batch=dict(batch),
+            runs=[dict(run) for run in runs],
+            request_payload=request_payload,
+        )
+        if not isinstance(raw_job_payload, dict) or dict(raw_job_payload) != expected_job_payload:
+            return {
+                "status": "invalid",
+                "reason": "crm_record_batch_command_continuation_invalid",
+            }
+        if str(payload.get("operation_planning_status") or "").strip() not in {"joined", "queued"}:
+            return {
+                "status": "invalid",
+                "reason": "crm_record_batch_command_continuation_invalid",
+            }
         return {
-            "job_id": job_id,
-            "request": request.to_record(),
-            "plan": plan_payload,
+            "status": "ready",
+            "batch": dict(batch),
+            "runs": [dict(run) for run in runs],
+            "job_payload": expected_job_payload,
         }
 
     def _run_crm_public_web_queue_batch_command(
@@ -5283,12 +5453,19 @@ class CrmPublicWebOwner:
             .strip()
             .startswith(CRM_PUBLIC_WEB_OPERATION_ACTION_COMMAND_IDEMPOTENCY_PREFIX)
         )
+        operation_action_mode = (
+            operation_action_command and operation_planning_mode == CRM_PUBLIC_WEB_OPERATION_ACTION_PLANNING_MODE
+        )
+        trusted_continuation: dict[str, Any] = {}
         if operation_action_command or operation_planning_mode == CRM_PUBLIC_WEB_OPERATION_ACTION_PLANNING_MODE:
             target_preflight = (
                 self._revalidate_operation_action_target(latest_command)
-                if operation_action_command and operation_planning_mode == CRM_PUBLIC_WEB_OPERATION_ACTION_PLANNING_MODE
+                if operation_action_mode
                 else {"status": "invalid", "reason": "crm_record_batch_target_command_mismatch"}
             )
+            if str(target_preflight.get("status") or "") == "ready" and operation_action_mode:
+                trusted_continuation = self._revalidate_crm_public_web_operation_action_continuation(payload)
+                target_preflight = trusted_continuation
             if str(target_preflight.get("status") or "") != "ready":
                 failure_reason = str(
                     target_preflight.get("reason") or "crm_record_batch_action_target_conflict"
@@ -5386,6 +5563,13 @@ class CrmPublicWebOwner:
                 runs=runs,
                 request_payload=request_payload,
             )
+            if operation_action_mode:
+                trusted_continuation = {
+                    "status": "ready",
+                    "batch": dict(batch),
+                    "runs": [dict(run) for run in runs],
+                    "job_payload": dict(job_payload),
+                }
             payload = {
                 **payload,
                 "batch_id": batch_id,
@@ -5417,7 +5601,7 @@ class CrmPublicWebOwner:
                     migration_phase="W7_crm_public_web_queue_batch",
                 ),
             }
-        batch = self.store.get_crm_public_web_batch(batch_id=batch_id)
+        batch = dict(trusted_continuation.get("batch") or {}) or self.store.get_crm_public_web_batch(batch_id=batch_id)
         if not batch:
             failed = self.store.mark_workflow_command_failed(
                 command_id,
@@ -5461,8 +5645,10 @@ class CrmPublicWebOwner:
                     migration_phase="W7_crm_public_web_queue_batch",
                 ),
             }
-        runs = self.store.list_crm_public_web_runs(batch_id=batch_id, workspace_id=workspace_id)
+        runs = [dict(run) for run in list(trusted_continuation.get("runs") or []) if isinstance(run, dict)]
         if not runs:
+            runs = self.store.list_crm_public_web_runs(batch_id=batch_id, workspace_id=workspace_id)
+        if not runs and not operation_action_mode:
             runs = [dict(run) for run in list(payload.get("runs") or []) if isinstance(run, dict)]
         if not runs:
             failed = self.store.mark_workflow_command_failed(
@@ -5484,7 +5670,9 @@ class CrmPublicWebOwner:
                     migration_phase="W7_crm_public_web_queue_batch",
                 ),
             }
-        job_payload = dict(payload.get("job_payload") or {})
+        job_payload = dict(trusted_continuation.get("job_payload") or {})
+        if not job_payload and not operation_action_mode:
+            job_payload = dict(payload.get("job_payload") or {})
         if not job_payload:
             job_payload = self._ensure_crm_public_web_job(
                 batch=dict(batch),

@@ -194,8 +194,10 @@
   predicate 下推到 SQL `LIMIT` 前，并在任何 compatibility observation/write 前 exact-bind planned command 到当前
   run；foreign/missing/blank/same-workspace-other reference 同一 not-found/零写，open-mode 保留。当前证据=
   `28+97`（D1g alone `6+29`）、adjacent exact `4`、full operation
-  `136+503`、lint `58 files`、global mypy `81/4`；final stable commit 与 fresh pinned non-author review pending。该批不迁移 12 个 schema-less action、不
-  改 served=0、不授权 live/provider。
+  `136+503`、lint `58 files`、global mypy `81/4`。Pinned `646e596` advisory=`NO-GO 0/0/1/1`：positive
+  planned replay 仍过早绕过 persisted request validation 与 approval guard；invalid-reference preflight 已通过。
+  该 P2 与 post-D1h 计数 wording 正在 fixed-forward，R-031 仍 review-pending。D1g checkpoint 不迁移当时其余
+  12 个 schema-less action；post-D1h current 为 11，不改 served=0、不授权 live/provider。
 - [x] D1h CRM Public Web action activation current author candidate（2026-07-16）：将
   `enrich_person_public_web` 作为第 4 个 schema-defined action 激活，当前 **4 schema-defined / 11 schema-less /
   served=0**。exact one batch/single/person-identity selector 绑定 authenticated server workspace+user，canonical
@@ -205,9 +207,12 @@
   terminalize command，故只主张 batch/run/EntityDelta 零写，不宣称 command/Operation 全域零写。`force_refresh=true`
   且 caller 未给 nonce 时，planning 从 operation/action identity 铸稳定 `operation-...` nonce 并持久化，重试不随机
   重建批。当前 author evidence=`5` PG、D1 adjacency `116+188 subtests`、exact adjacent Operation/transport
-  `4+4 subtests`、full operation `136+503 subtests`、CRM Public Web boundary `34`、lint `58`、mypy `81/4`；final
-  stable commit 与 fresh pinned non-author review pending。R-019/R-028/R-029/R-031 均不因本批关闭；无
-  provider/model/live。
+  `4+4 subtests`、full operation `136+503 subtests`、CRM Public Web boundary `34`、lint `58`、mypy `81/4`。
+  Pinned `a36333b` advisory=`NO-GO 0/1/2/1`；fixed-forward 现令 selector-only input 正确保留空 input、input
+  selector 与 target 严格互斥、`requested_by` 由 queue service principal 固定拥有，并把显式 continuation
+  exact-bind 到 canonical request 派生 batch + persisted options/nonce/runs/job，拒绝 partial/foreign owner fields
+  且 action path 不回退 mutable payload runs/job。新增 D1h exact evidence=`6+3 subtests`；broader adjacency 与 fresh
+  pinned review 待 final stable commit 刷新。R-019/R-028/R-029/R-031 均不因本批关闭；无 provider/model/live。
 - [ ] R-029：宽松 action-schema bridge 仅可在 production action 尚无 reviewed schema/owner binder 期间存在；
   删除条件 = 全部 API-submittable actions（不是只看 served subset）连续一个 release window durable hit=0。
   observation epoch 必须每个 release window bump，且 `NOT VALID` checks 的既有行 validation 在独立部署完成；
@@ -217,8 +222,9 @@
   approve/reject/dispatch/resume/retry/cancel 统一到 server-derived exact-workspace preflight，run 同时校验 linked
   action owner；nested commands/events 分别按 linked operation+action owner 与 physical event workspace 在 SQL
   limit 前过滤，planned CRM/export command ref exact-bind 当前 run 且失败在所有写前。并补 foreign/missing
-  transport parity、全路径零写、same-owner 与 open-mode 矩阵。fresh pinned
-  non-author review 仍 pending；有效 scope-matched artifact 前继续阻断 hosted/live multi-user Operation exposure、
+  transport parity、全路径零写、same-owner 与 open-mode 矩阵。Pinned `646e596` advisory 的 invalid-reference
+  部分通过，但 positive planned replay 仍必须先经过 schema/request validator 与 approval guard；该 P2 fixed-forward
+  与 fresh pinned review pending。有效 scope-matched artifact 前继续阻断 hosted/live multi-user Operation exposure、
   served-registry promotion及 manual/product/milestone signoff，但不阻断 bounded non-live implementation、
   fake/scripted 或 local open-mode testing。
 - [x] D3a characterize-first（2026-07-14；enclosing commit 由提交后 handoff 固定）：Plan §6#1 的 registry/snapshot

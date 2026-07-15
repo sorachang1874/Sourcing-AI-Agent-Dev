@@ -2,9 +2,10 @@
 
 > Status: Current author implementation candidate (2026-07-16). This bounded non-live batch activates a closed
 > request schema and CRM batch target binder for exactly `enrich_person_public_web`. The production partition becomes
-> **4 schema-defined / 11 schema-less / served=0**. Author tests are evidence, not an independent verdict; a fresh
-> pinned non-author review must bind the enclosing commit before live/manual/product/milestone signoff. No provider,
-> model, credential, or live environment is used by this batch.
+> **4 schema-defined / 11 schema-less / served=0**. A pinned non-author advisory against `a36333b` returned
+> `NO-GO 0/1/2/1`; the current fixed-forward closes its four findings and requires a fresh pinned review against the
+> enclosing commit. Neither advisory nor author evidence is a formal verdict. No provider, model, credential, or live
+> environment is used by this batch.
 
 ## 1. Outcome and bounded scope
 
@@ -55,8 +56,10 @@ The request boundary accepts exactly one selector across `target_ref` and `input
 - owner lookup selector: `person_identity_key`.
 
 The selected ids are normalized, deduplicated, sorted, and bounded to 1–1000 records. A selector supplied in
-`input_payload` is removed before request-schema validation and persistence. Caller/model supplied workspace, owner,
-version, snapshot, or a second selector is not accepted as target authority. The existing resource-bound input
+`input_payload` is removed before request-schema validation and persistence, including a selector-only object whose
+remaining input is correctly empty. When the selector lives in `input_payload`, `target_ref` must be empty; when it
+lives in `target_ref`, that object must contain only the selector. Caller/model supplied workspace, owner, version,
+snapshot, unknown target keys, or a second selector is not accepted as target authority. The existing resource-bound input
 envelope rule also applies: exactly zero or one of `input` / `input_payload` may be present, and every present envelope
 must be an object.
 
@@ -115,13 +118,20 @@ existing queue owner materializes a CRM Public Web batch or per-record runs for 
 3. that OperationRun exists and links the exact persisted `enrich_person_public_web` AgentAction;
 4. action id/type, request schema pins, command type, action/run/workspace identity, both record-id carriers, target
    snapshot, caller options, metadata, and deterministic nonce carriers all agree with the persisted action;
-5. every current CRM row still exact-matches the persisted workspace/owner/version snapshot.
+5. every current CRM row still exact-matches the persisted workspace/owner/version snapshot;
+6. `requested_by` is the stable queue-batch service principal, never the mutable submit/dispatch actor;
+7. an explicit continuation carries the complete owner field set and its `batch_id` is the deterministic derivative of
+   the canonical request. Persisted batch workspace, records, options, nonce, idempotency key, service principal,
+   runs, run identity carriers, and derived job payload must all agree. Missing/partial/foreign owner fields fail
+   closed; the action-bound path never falls back to mutable payload runs or job data.
 
 The queue-owner preflight occurs after its existing command claim/running transition. A failed preflight therefore
 terminalizes the command and may synchronize its linked OperationRun; it is deliberately **not** described as a
 full-table zero-write path. The bounded guarantee is that no `crm_public_web_batches`, `crm_public_web_runs`, or
 `workflow_entity_deltas` rows are created. On an exact positive, the existing owner creates one batch and one run per
-canonical CRM record only after this preflight.
+canonical CRM record only after this preflight. A valid persisted continuation rehydrates those domain rows from the
+store only after the deterministic binding check; command-owned copies cannot redirect the owner to an unrelated
+same-workspace batch.
 
 ## 5. Owner/source-of-truth matrix
 
@@ -136,7 +146,7 @@ canonical CRM record only after this preflight.
 | stable replay identity | `ActionRequestSpec.request_identity_target_fields` | action idempotency identity | mutable owner/version snapshot | ids + workspace |
 | Public Web option shape | closed v1 input schema | existing planner/queue owner | unknown option or permissive extra field | active |
 | forced-refresh retry identity | operation planner from explicit `refresh_nonce` or stable operation/action hash | command payload and existing queue owner | random/timestamp nonce minted on command retry | stable and persisted |
-| action command carrier | persisted action input/target plus physical `:operation:` prefix and dedicated planning mode | queue-command owner preflight | mutable label, record alias, nested option, or nonce copy | exact-copy checked before materialization |
+| action command carrier | persisted action input/target plus physical `:operation:` prefix and dedicated planning mode | queue-command owner preflight | mutable label, record alias, nested option, nonce, actor attribution, batch/run, or job copy | exact-copy checked before materialization/continuation |
 | batch/run materialization | existing CRM Public Web queue-command owner | non-live owner drain; future runtime | preflight described as effect/UoW closure | R-019/R-028 open |
 | served tool predicate | future full D1 predicate | future tool registry/planner | schema, adapter, or command presence alone | zero |
 
@@ -148,6 +158,9 @@ canonical CRM record only after this preflight.
 - Brownfield empty-pin `enrich_person_public_web` rows now fail closed rather than re-entering the schema-less
   continuation path. The remaining 11 actions retain their prior compatibility behavior until their own reviewed
   schema/owner decisions land.
+- Brownfield action-command continuations produced before the stable service-principal and deterministic continuation
+  contract may fail closed and require an operator replay through the canonical action command. This is intentional;
+  mutable legacy owner fields are not accepted as execution authority.
 - R-019 remains open. Submit/dispatch/queue-owner checks are bounded preflights; action approval, command planning,
   claim/running/failure, batch/run effects, terminal state, EntityDelta, and linked Operation synchronization are not
   one PG UoW with one total lock budget.
@@ -187,24 +200,33 @@ PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src .venv/bin/python -m pytest -q \
   src/sourcing_agent/action_target_binding.py \
   src/sourcing_agent/api.py \
   src/sourcing_agent/crm_public_web_owner.py \
+  src/sourcing_agent/crm_public_web_runtime.py \
   src/sourcing_agent/operation_runtime.py \
   src/sourcing_agent/orchestrator.py \
+  src/sourcing_agent/public_web_runtime_core.py \
   tests/test_d1h_crm_public_web_action_activation.py
 .venv/bin/ruff format --check \
   src/sourcing_agent/action_target_binding.py \
   src/sourcing_agent/api.py \
   src/sourcing_agent/crm_public_web_owner.py \
+  src/sourcing_agent/crm_public_web_runtime.py \
   src/sourcing_agent/operation_runtime.py \
   src/sourcing_agent/orchestrator.py \
+  src/sourcing_agent/public_web_runtime_core.py \
   tests/test_d1h_crm_public_web_action_activation.py
 make typecheck PYTHON_BIN=.venv/bin/python
 git diff --check
 ```
 
-Current author evidence is **5 passed** for the D1h PG matrix, **116 passed + 188 subtests** for the listed combined D1
-adjacency set, **4 passed + 4 subtests** for the exact adjacent Operation/transport nodes, **136 passed + 503 subtests**
-for full Operation runtime, and **34 passed** for the CRM Public Web boundary file. Lint is green for **58 files**;
-global mypy remains at the accepted **81 errors / 4 files** ceiling; `git diff --check` is clean. Final commit and fresh
-pinned non-author review status must be appended against the stable enclosing candidate. The pre-D1h generic
+Current fixed-forward evidence is **6 passed + 3 subtests** for the D1h PG matrix, **4 passed + 11 subtests** for the
+exact adjacent Operation/transport nodes, **1 passed** for the pre-D1h generic retry node, and **34 passed** for the CRM
+Public Web boundary file. The listed combined D1 run reached **117 passed + 198 subtests** but exposed two D1g
+characterization-probe failures: the committed probes do not yet implement the planned-command helper / keyword-only
+owner response seam. Those are tracked with the separate D1g approval-order fixed-forward and are not hidden as D1h
+green evidence. The pre-review candidate's full Operation runtime was **136 passed + 503 subtests**. Scoped lint,
+format, compile, and diff checks are green; global mypy remains at the accepted **81 errors / 4 files** ceiling. Final diff, commit,
+and fresh pinned review status must be appended against the stable enclosing candidate. The `a36333b` pinned advisory
+was `NO-GO 0/1/2/1` for continuation authority, selector alias/target strictness, and mutable requester attribution;
+the current fixed-forward is not a verdict. The pre-D1h generic
 API-start/retry compatibility node also passes independently. Author evidence or any local advisory output must not
 be represented as a formal `GO`.

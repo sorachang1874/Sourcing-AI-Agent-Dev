@@ -224,7 +224,7 @@ def start_crm_public_web_batch(
     batch_id = str(request_payload.get("batch_id") or "").strip()
     if not batch_id:
         if not force_refresh or caller_refresh_nonce:
-            batch_id = f"crm-public-web-batch-{short_hash(idempotency_key)}"
+            batch_id = crm_public_web_batch_id_for_idempotency_key(idempotency_key)
         else:
             batch_id = f"crm-public-web-batch-{utc_compact_timestamp()}-{short_hash(idempotency_key)}"
     batch_artifact_root = Path(runtime_dir).expanduser() / "public_web" / CRM_PUBLIC_WEB_OWNER.artifact_scope / batch_id
@@ -1734,6 +1734,13 @@ def build_crm_public_web_batch_idempotency_key(
         "nonce": str(nonce or "") if force_refresh else "",
     }
     return "crm-public-web-batch:" + short_hash(json.dumps(payload, sort_keys=True, ensure_ascii=False))
+
+
+def crm_public_web_batch_id_for_idempotency_key(idempotency_key: str) -> str:
+    normalized_idempotency_key = str(idempotency_key or "").strip()
+    if not normalized_idempotency_key:
+        return ""
+    return f"crm-public-web-batch-{short_hash(normalized_idempotency_key)}"
 
 
 def build_public_web_run_idempotency_key(

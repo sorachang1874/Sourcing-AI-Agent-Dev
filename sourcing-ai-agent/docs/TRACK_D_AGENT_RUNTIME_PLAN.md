@@ -131,13 +131,17 @@ serve、会话/事件层、planner loop），用一个垂直切片证明闭环�
   command ref 三项直接证据；fixed-forward 现把 nested command 的 physical operation→run+action owner 与 event
   workspace predicate 下推到 SQL limit 前，并在任何 compatibility observation/write 前 exact-bind planned
   CRM/export command 到当前 run，blank/missing/foreign/same-workspace-other ref 均 not-found/零写。
-  D1g 仍不关闭 R-019/R-028、不迁移 12 个 schema-less action、不改变 served=0；fresh pinned review pending，
-  reviewed artifact 前不得据此宣称 hosted/live multi-user signoff。D1h current author candidate 随后将
+  D1g checkpoint 仍不关闭 R-019/R-028、不迁移当时其余 12 个 schema-less action、不改变 served=0。Pinned
+  `646e596` advisory=`NO-GO 0/0/1/1`：invalid-reference closure 通过，但 positive planned replay 必须继续经过
+  schema/request validator 与 approval guard；该 P2 正在 fixed-forward。Reviewed artifact 前不得据此宣称
+  hosted/live multi-user signoff。D1h current author candidate 随后将
   `enrich_person_public_web` 作为第 4 个 schema-defined action 激活：authenticated exact-owner CRM batch binder
   生成 per-record workspace/owner/version snapshot，dispatch 写新 plan 前与 queue-command owner 建 batch/run 前
   分别 revalidate；command-owner 拒绝发生在既有 claim/running 后，故只主张 batch/run/EntityDelta 零写，不主张
-  全域零写或 UoW 闭合。当前 registry=**4 schema-defined / 11 schema-less / served=0**；R-019/R-028/R-029 仍
-  open，D1h fresh pinned review pending，且不授权 provider/model/live。
+  全域零写或 UoW 闭合。Pinned `a36333b` advisory=`NO-GO 0/1/2/1`；D1h fixed-forward 现闭合 selector-only
+  alias/target strictness、稳定 service-principal attribution 与 deterministic batch/run/job continuation authority，
+  exact matrix=`6+3 subtests`，fresh pinned review pending。当前 registry=**4 schema-defined / 11 schema-less /
+  served=0**；R-019/R-028/R-029 仍 open，且不授权 provider/model/live。
 
 ### D2 — Agent 会话与事件层（与 C4/C5 合流）
 

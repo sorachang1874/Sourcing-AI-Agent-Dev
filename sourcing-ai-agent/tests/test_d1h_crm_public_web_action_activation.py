@@ -7,6 +7,8 @@ from typing import Any
 
 from sourcing_agent.acquisition import AcquisitionEngine
 from sourcing_agent.asset_catalog import AssetCatalog
+from sourcing_agent.crm_public_web_runtime import start_crm_public_web_batch
+from sourcing_agent.durable_runtime import CRM_PUBLIC_WEB_QUEUE_BATCH_OWNER
 from sourcing_agent.local_postgres import quote_control_plane_postgres_identifier
 from sourcing_agent.model_provider import DeterministicModelClient
 from sourcing_agent.operation_runtime import (
@@ -202,6 +204,9 @@ class D1hCRMPublicWebActionActivationPGTest(PGDurableRuntimeTestMixin, unittest.
             ({"crm_record_ids": ["owned-a", 7]}, {}),
             ({"person_identity_key": 7}, {}),
             ({"crm_record_id": "owned-a", "workspace_id": "user-alice"}, {}),
+            ({"workspace_id": "user-alice"}, {"crm_record_id": "owned-a"}),
+            ({"crm_record_snapshots": []}, {"crm_record_id": "owned-a"}),
+            ({"unknown_target": True}, {"crm_record_id": "owned-a"}),
             ({"crm_record_id": "owned-a"}, {"unknown_option": True}),
             ({"crm_record_id": "owned-a"}, {"max_queries_per_candidate": 17}),
         )
@@ -272,6 +277,22 @@ class D1hCRMPublicWebActionActivationPGTest(PGDurableRuntimeTestMixin, unittest.
         self.assertEqual(input_alias.get("status"), "approval_required", input_alias)
         self.assertEqual(input_alias["action"]["input"], {"ai_extraction": "auto"})
         self.assertEqual(input_alias["action"]["target_ref"]["crm_record_ids"], ["owned-a"])
+
+        selector_only_inputs = (
+            ({"crm_record_id": "owned-a"}, ["owned-a"]),
+            ({"crm_record_ids": ["owned-b", "owned-a"]}, ["owned-a", "owned-b"]),
+            ({"person_identity_key": "person::owned-a"}, ["owned-a"]),
+        )
+        for index, (selector_input, expected_record_ids) in enumerate(selector_only_inputs):
+            with self.subTest(selector_input=selector_input):
+                selector_only = self._submit(
+                    selector={},
+                    input_payload=selector_input,
+                    idempotency_key=f"same-owner:selector-only:{index}",
+                )
+                self.assertEqual(selector_only.get("status"), "approval_required", selector_only)
+                self.assertEqual(selector_only["action"]["input"], {})
+                self.assertEqual(selector_only["action"]["target_ref"]["crm_record_ids"], expected_record_ids)
 
         identity = self._submit(
             selector={"person_identity_key": "person::owned-a"},
@@ -413,6 +434,164 @@ class D1hCRMPublicWebActionActivationPGTest(PGDurableRuntimeTestMixin, unittest.
         self.assertEqual(input_drain["items"][0].get("reason"), "crm_record_batch_command_payload_mismatch")
         self.assertEqual(self._table_state(guarded_tables), before_input_owner)
 
+        requester_record = self._seed_record("command-requester")
+        requester_submission = self._submit(
+            selector={"crm_record_id": requester_record["crm_record_id"]},
+            idempotency_key="command:requester-drift",
+        )
+        requester_approved = self._approve(requester_submission)
+        requester_dispatched = self.orchestrator.dispatch_operation_run_api(
+            requester_approved["operation_run"]["operation_run_id"],
+            {"actor": "alice"},
+        )
+        requester_command = self.store.get_workflow_command(requester_dispatched["workflow_command"]["command_id"])
+        requester_payload = dict(requester_command.get("payload") or {})
+        self.store.update_workflow_command_payload(
+            requester_command["command_id"],
+            payload={
+                **requester_payload,
+                "request_payload": {
+                    **dict(requester_payload.get("request_payload") or {}),
+                    "requested_by": "bob",
+                },
+            },
+        )
+        before_requester_owner = self._table_state(guarded_tables)
+        requester_drain = self.orchestrator._drain_crm_public_web_queue_batch_commands(  # noqa: SLF001
+            {"workflow_run_id": requester_command["workflow_run_id"], "command_limit": 1}
+        )
+        self.assertEqual(requester_drain.get("completed_count"), 0, requester_drain)
+        self.assertEqual(
+            requester_drain["items"][0].get("reason"),
+            "crm_record_batch_command_payload_invalid",
+        )
+        self.assertEqual(self._table_state(guarded_tables), before_requester_owner)
+
+    def test_action_command_rejects_forged_owner_continuation_fields(self) -> None:
+        target_record = self._seed_record("continuation-target")
+        unrelated_record = self._seed_record("continuation-unrelated")
+        unrelated = start_crm_public_web_batch(
+            store=self.store,
+            crm_records=[
+                self.orchestrator._crm_public_web_owner._public_crm_record_payload(unrelated_record)  # noqa: SLF001
+            ],
+            runtime_dir=self.runtime_dir,
+            payload={"workspace_id": "user-alice", "requested_by": "fixture"},
+        )
+        unrelated_batch_id = unrelated["batch"]["batch_id"]
+
+        complete_submission = self._submit(
+            selector={"crm_record_id": target_record["crm_record_id"]},
+            idempotency_key="command:complete-foreign-continuation",
+        )
+        complete_approved = self._approve(complete_submission)
+        complete_dispatched = self.orchestrator.dispatch_operation_run_api(
+            complete_approved["operation_run"]["operation_run_id"],
+            {"actor": "alice"},
+        )
+        complete_command = self.store.get_workflow_command(complete_dispatched["workflow_command"]["command_id"])
+        unrelated_runs = [dict(run) for run in list(unrelated.get("runs") or [])]
+        unrelated_request = {
+            "workspace_id": "user-alice",
+            "crm_record_ids": [unrelated_record["crm_record_id"]],
+            "record_ids": [unrelated_record["crm_record_id"]],
+            "requested_by": CRM_PUBLIC_WEB_QUEUE_BATCH_OWNER,
+        }
+        unrelated_job = self.orchestrator._crm_public_web_owner._crm_public_web_job_payload(  # noqa: SLF001
+            batch=dict(unrelated["batch"]),
+            runs=unrelated_runs,
+            request_payload=unrelated_request,
+        )
+        self.store.update_workflow_command_payload(
+            complete_command["command_id"],
+            payload={
+                **dict(complete_command.get("payload") or {}),
+                "batch_id": unrelated_batch_id,
+                "job_payload": unrelated_job,
+                "operation_planning_status": "joined",
+                "run_ids": [run["run_id"] for run in unrelated_runs],
+                "runs": unrelated_runs,
+            },
+        )
+        guarded_tables = ("crm_public_web_batches", "crm_public_web_runs", "workflow_entity_deltas")
+        before_complete_owner = self._table_state(guarded_tables)
+        complete_drain = self.orchestrator._drain_crm_public_web_queue_batch_commands(  # noqa: SLF001
+            {"workflow_run_id": complete_command["workflow_run_id"], "command_limit": 1}
+        )
+        self.assertEqual(complete_drain.get("completed_count"), 0, complete_drain)
+        self.assertEqual(
+            complete_drain["items"][0].get("reason"),
+            "crm_record_batch_command_continuation_invalid",
+        )
+        self.assertEqual(self._table_state(guarded_tables), before_complete_owner)
+
+        submission = self._submit(
+            selector={"crm_record_id": target_record["crm_record_id"]},
+            idempotency_key="command:foreign-continuation",
+        )
+        approved = self._approve(submission)
+        dispatched = self.orchestrator.dispatch_operation_run_api(
+            approved["operation_run"]["operation_run_id"],
+            {"actor": "alice"},
+        )
+        command = self.store.get_workflow_command(dispatched["workflow_command"]["command_id"])
+        self.store.update_workflow_command_payload(
+            command["command_id"],
+            payload={**dict(command.get("payload") or {}), "batch_id": unrelated_batch_id},
+        )
+        before_owner = self._table_state(guarded_tables)
+        command_ids_before = {
+            item["command_id"]
+            for item in self.store.list_workflow_commands(
+                workflow_run_id=command["workflow_run_id"],
+                limit=100,
+            )
+        }
+        drain = self.orchestrator._drain_crm_public_web_queue_batch_commands(  # noqa: SLF001
+            {"workflow_run_id": command["workflow_run_id"], "command_limit": 1}
+        )
+        self.assertEqual(drain.get("completed_count"), 0, drain)
+        self.assertEqual(
+            drain["items"][0].get("reason"),
+            "crm_record_batch_command_continuation_invalid",
+        )
+        self.assertEqual(self._table_state(guarded_tables), before_owner)
+        self.assertEqual(
+            {
+                item["command_id"]
+                for item in self.store.list_workflow_commands(
+                    workflow_run_id=command["workflow_run_id"],
+                    limit=100,
+                )
+            },
+            command_ids_before,
+        )
+
+        owner_field_submission = self._submit(
+            selector={"crm_record_id": target_record["crm_record_id"]},
+            idempotency_key="command:owner-field-without-batch",
+        )
+        owner_field_approved = self._approve(owner_field_submission)
+        owner_field_dispatched = self.orchestrator.dispatch_operation_run_api(
+            owner_field_approved["operation_run"]["operation_run_id"],
+            {"actor": "alice"},
+        )
+        owner_field_command = self.store.get_workflow_command(owner_field_dispatched["workflow_command"]["command_id"])
+        self.store.update_workflow_command_payload(
+            owner_field_command["command_id"],
+            payload={**dict(owner_field_command.get("payload") or {}), "runs": []},
+        )
+        before_owner_field = self._table_state(guarded_tables)
+        owner_field_drain = self.orchestrator._drain_crm_public_web_queue_batch_commands(  # noqa: SLF001
+            {"workflow_run_id": owner_field_command["workflow_run_id"], "command_limit": 1}
+        )
+        self.assertEqual(owner_field_drain.get("completed_count"), 0, owner_field_drain)
+        self.assertEqual(
+            owner_field_drain["items"][0].get("reason"),
+            "crm_record_batch_command_owner_fields_invalid",
+        )
+        self.assertEqual(self._table_state(guarded_tables), before_owner_field)
+
     def test_same_owner_dispatch_plans_and_queue_owner_materializes_only_after_revalidation(self) -> None:
         self._seed_record("positive-a")
         self._seed_record("positive-b")
@@ -443,8 +622,14 @@ class D1hCRMPublicWebActionActivationPGTest(PGDurableRuntimeTestMixin, unittest.
         self.assertEqual(drain.get("completed_count"), 1, drain)
         batches = self.store.list_crm_public_web_batches(workspace_id="user-alice")
         self.assertEqual(len(batches), 1)
+        self.assertEqual(batches[0]["requested_by"], CRM_PUBLIC_WEB_QUEUE_BATCH_OWNER)
         runs = self.store.list_crm_public_web_runs(batch_id=batches[0]["batch_id"], workspace_id="user-alice")
         self.assertEqual(sorted(run["crm_record_id"] for run in runs), ["positive-a", "positive-b"])
+        completed_command = self.store.get_workflow_command(dispatched["workflow_command"]["command_id"])
+        continuation = self.orchestrator._crm_public_web_owner._revalidate_crm_public_web_operation_action_continuation(  # noqa: SLF001
+            dict(completed_command.get("payload") or {})
+        )
+        self.assertEqual(continuation.get("status"), "ready", continuation)
 
 
 if __name__ == "__main__":

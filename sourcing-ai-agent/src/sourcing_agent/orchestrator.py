@@ -48951,7 +48951,8 @@ class SourcingOrchestrator:
         if str(batch_binding.get("status") or "") != "ready":
             return batch_binding
         target_ref = dict(batch_binding.get("target_ref") or {})
-        input_payload = dict(batch_binding.get("input_payload") or input_payload)
+        if "input_payload" in batch_binding:
+            input_payload = dict(batch_binding["input_payload"] or {})
         owner_bound_target_ref = batch_binding.get("owner_bound_target_ref") or owner_bound_target_ref
         try:
             result = self.operation_runtime_writer.submit_action(
@@ -49094,6 +49095,8 @@ class SourcingOrchestrator:
         if len(target_selectors) + len(input_selectors) != 1:
             return {"status": "invalid", "reason": "crm_record_batch_target_selector_invalid"}
         if target_selectors and set(target_ref) != {target_selectors[0]}:
+            return {"status": "invalid", "reason": "crm_record_batch_target_selector_invalid"}
+        if input_selectors and target_ref:
             return {"status": "invalid", "reason": "crm_record_batch_target_selector_invalid"}
         selector_field = (target_selectors or input_selectors)[0]
         selector_value = (target_ref if target_selectors else input_payload).get(selector_field)
@@ -52891,7 +52894,7 @@ class SourcingOrchestrator:
             return {"status": "invalid", "reason": "crm_record_batch_command_payload_invalid"}
         request_payload = dict(raw_request_payload)
         requested_by = str(request_payload.get("requested_by") or "").strip()
-        if not requested_by:
+        if requested_by != CRM_PUBLIC_WEB_QUEUE_BATCH_OWNER:
             return {"status": "invalid", "reason": "crm_record_batch_command_payload_invalid"}
         expected_request_payload = {
             **dict(action_input),
@@ -52899,7 +52902,7 @@ class SourcingOrchestrator:
             "crm_record_ids": target_record_ids,
             "record_ids": target_record_ids,
             "crm_record_target": target_ref,
-            "requested_by": requested_by,
+            "requested_by": CRM_PUBLIC_WEB_QUEUE_BATCH_OWNER,
             "metadata": {
                 "operation_run_id": command_operation_id,
                 "action_id": action_id,
