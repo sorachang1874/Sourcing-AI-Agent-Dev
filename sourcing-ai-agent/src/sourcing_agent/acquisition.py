@@ -27,6 +27,12 @@ from .candidate_artifacts import (
     load_snapshot_candidate_artifact_payload,
 )
 from .canonicalization import canonicalize_company_records
+from .cohort_provider_compiler import (
+    CohortHeadlineRoleProofVerifier,
+    CohortProviderCompiler,
+    cohort_execution_capability_for_runtime,
+)
+from .cohort_selection import explicit_cohort_selection
 from .company_registry import upsert_company_identity_registry_entry
 from .company_shard_planning import (
     normalize_company_employee_shard_policy,
@@ -262,7 +268,9 @@ def _merge_profile_prefetch_dispatch_summaries(
     *,
     requested_profile_urls: set[str] | None = None,
 ) -> dict[str, Any]:
-    normalized_summaries = [dict(item or {}) for item in list(summaries or []) if isinstance(item, dict) and dict(item or {})]
+    normalized_summaries = [
+        dict(item or {}) for item in list(summaries or []) if isinstance(item, dict) and dict(item or {})
+    ]
     if not normalized_summaries:
         return {"status": "skipped", "reason": "no_prefetch_dispatch"}
 
@@ -348,9 +356,7 @@ def _merge_profile_prefetch_dispatch_summaries(
         for event in prefetch_events
         if dict(dict(event or {}).get("candidate_documents_projection") or {})
     ]
-    errors = _dedupe_string_values(
-        [error for item in normalized_summaries for error in list(item.get("errors") or [])]
-    )
+    errors = _dedupe_string_values([error for item in normalized_summaries for error in list(item.get("errors") or [])])
     queued_worker_count = sum(int(item.get("queued_worker_count") or 0) for item in normalized_summaries)
     cached_profile_count = sum(int(item.get("cached_profile_count") or 0) for item in normalized_summaries)
     dispatched_url_count = sum(int(item.get("dispatched_url_count") or 0) for item in normalized_summaries)
@@ -361,11 +367,7 @@ def _merge_profile_prefetch_dispatch_summaries(
     # every other merged status and its two-signal shape is preserved so the
     # recovery chain can tell "infrastructure missing" from "nothing to do".
     blocked_urls_merged = _dedupe_string_values(
-        [
-            profile_url
-            for item in normalized_summaries
-            for profile_url in list(item.get("blocked_urls") or [])
-        ]
+        [profile_url for item in normalized_summaries for profile_url in list(item.get("blocked_urls") or [])]
     )
     blocked_inputs = [
         item
@@ -458,11 +460,7 @@ def _profile_prefetch_terminal_proof_summary(
     terminal_queue: dict[str, Any] = {}
     for item in reversed([dict(summary or {}) for summary in list(summaries or []) if isinstance(summary, dict)]):
         candidate_terminal_summary = dict(item.get("registry_terminal_summary") or {})
-        candidate_queue = dict(
-            item.get("latest_profile_prefetch_queue")
-            or item.get("profile_prefetch_queue")
-            or {}
-        )
+        candidate_queue = dict(item.get("latest_profile_prefetch_queue") or item.get("profile_prefetch_queue") or {})
         all_requested_terminal = bool(
             candidate_terminal_summary.get("all_requested_terminal")
             or candidate_queue.get("registry_all_requested_terminal")
@@ -476,14 +474,10 @@ def _profile_prefetch_terminal_proof_summary(
         return {}
 
     unrecoverable_count = int(
-        terminal_summary.get("unrecoverable_url_count")
-        or terminal_queue.get("registry_unrecoverable_url_count")
-        or 0
+        terminal_summary.get("unrecoverable_url_count") or terminal_queue.get("registry_unrecoverable_url_count") or 0
     )
     fetched_count = int(
-        terminal_summary.get("fetched_url_count")
-        or terminal_queue.get("registry_fetched_url_count")
-        or 0
+        terminal_summary.get("fetched_url_count") or terminal_queue.get("registry_fetched_url_count") or 0
     )
     terminal_count = int(
         terminal_summary.get("terminal_url_count")
@@ -492,15 +486,9 @@ def _profile_prefetch_terminal_proof_summary(
         or 0
     )
     missing_count = int(
-        terminal_summary.get("missing_url_count")
-        or terminal_queue.get("registry_missing_url_count")
-        or 0
+        terminal_summary.get("missing_url_count") or terminal_queue.get("registry_missing_url_count") or 0
     )
-    open_count = int(
-        terminal_summary.get("open_url_count")
-        or terminal_queue.get("registry_open_url_count")
-        or 0
-    )
+    open_count = int(terminal_summary.get("open_url_count") or terminal_queue.get("registry_open_url_count") or 0)
     reason = (
         "registry_all_requested_profiles_terminal"
         if unrecoverable_count > 0
@@ -628,12 +616,11 @@ def _snapshot_query_tokens_for_lane(snapshot: SearchSeedSnapshot | None, lane: s
     for summary in list(snapshot.query_summaries or []):
         if not isinstance(summary, dict):
             continue
-        summary_lane = str(
-            summary.get("employment_status")
-            or summary.get("employment_scope")
-            or summary.get("lane")
-            or ""
-        ).strip().lower()
+        summary_lane = (
+            str(summary.get("employment_status") or summary.get("employment_scope") or summary.get("lane") or "")
+            .strip()
+            .lower()
+        )
         if normalized_lane and summary_lane and summary_lane != normalized_lane:
             continue
         for key in ("query", "source_query", "effective_query_text", "seed_query"):
@@ -662,9 +649,7 @@ def _search_seed_snapshot_satisfies_lane_queries(
     if not _search_seed_snapshot_lane_entries(snapshot, lane):
         return False
     normalized_expected = [
-        str(query or "").strip().lower()
-        for query in list(expected_queries or [])
-        if str(query or "").strip()
+        str(query or "").strip().lower() for query in list(expected_queries or []) if str(query or "").strip()
     ]
     if not normalized_expected:
         return True
@@ -708,6 +693,7 @@ class AcquisitionEngine:
             settings.harvest.company_employees, legacy_harvest_token
         )
         harvest_profile_search_connector = HarvestProfileSearchConnector(profile_search_settings)
+        self.harvest_profile_search_connector = harvest_profile_search_connector
         search_provider = build_search_provider(settings.search)
         self.model_client = model_client
         self.search_provider = search_provider
@@ -791,7 +777,9 @@ class AcquisitionEngine:
             return {"status": "skipped", "reason": "no_incremental_entries"}
         discovery_dir = snapshot_dir / "search_seed_discovery"
         summary_path = discovery_dir / "summary.json"
-        entries_path = Path(str(raw_path or "")).expanduser() if str(raw_path or "").strip() else discovery_dir / "entries.json"
+        entries_path = (
+            Path(str(raw_path or "")).expanduser() if str(raw_path or "").strip() else discovery_dir / "entries.json"
+        )
         query_summary = dict(summary or {})
         if raw_path and not str(query_summary.get("raw_path") or "").strip():
             query_summary["raw_path"] = str(raw_path)
@@ -896,10 +884,11 @@ class AcquisitionEngine:
         if (
             company_key == "anthropic"
             and use_local_anthropic_assets
-            and task.task_type in {
-            "acquire_full_roster",
-            "normalize_asset_snapshot",
-            "build_retrieval_index",
+            and task.task_type
+            in {
+                "acquire_full_roster",
+                "normalize_asset_snapshot",
+                "build_retrieval_index",
             }
         ):
             self._ensure_anthropic_local_candidate_documents(
@@ -1493,7 +1482,9 @@ class AcquisitionEngine:
                     "manifest": str(baseline_artifact_dir / "manifest.json"),
                     "artifact_summary": str(baseline_artifact_dir / "artifact_summary.json"),
                     "strict_manifest": str(baseline_artifact_dir / "strict_roster_only" / "manifest.json"),
-                    "strict_artifact_summary": str(baseline_artifact_dir / "strict_roster_only" / "artifact_summary.json"),
+                    "strict_artifact_summary": str(
+                        baseline_artifact_dir / "strict_roster_only" / "artifact_summary.json"
+                    ),
                     "retrieval_index_summary": str(baseline_retrieval_index_path),
                 },
                 "sync_status": {
@@ -1946,7 +1937,9 @@ class AcquisitionEngine:
             }
 
         authoritative_candidates = [
-            candidate.to_record() for candidate in list(snapshot_payload.get("candidates") or []) if isinstance(candidate, Candidate)
+            candidate.to_record()
+            for candidate in list(snapshot_payload.get("candidates") or [])
+            if isinstance(candidate, Candidate)
         ]
         authoritative_evidence = [dict(item or {}) for item in list(snapshot_payload.get("evidence") or [])]
         authoritative_document_payload = {
@@ -2081,10 +2074,10 @@ class AcquisitionEngine:
                     acquisition_mode = "reused_cached_roster"
                 else:
                     reuse_existing_roster_miss = True
-            if acquisition_mode != "reused_cached_roster" and harvest_connector_available(
-                self.harvest_company_connector.settings
-            ) and bool(
-                cost_policy.get("allow_company_employee_api", True)
+            if (
+                acquisition_mode != "reused_cached_roster"
+                and harvest_connector_available(self.harvest_company_connector.settings)
+                and bool(cost_policy.get("allow_company_employee_api", True))
             ):
                 adaptive_shard_plan: dict[str, Any] = {}
                 if not company_employee_shards and company_employee_shard_policy:
@@ -2145,7 +2138,9 @@ class AcquisitionEngine:
                             queued_state_updates: dict[str, Any] = {}
                             if isinstance(former_search_seed_snapshot, SearchSeedSnapshot):
                                 queued_payload["former_search_seed_snapshot"] = former_search_seed_snapshot.to_record()
-                                queued_payload["former_search_seed_entry_count"] = len(former_search_seed_snapshot.entries)
+                                queued_payload["former_search_seed_entry_count"] = len(
+                                    former_search_seed_snapshot.entries
+                                )
                                 queued_state_updates["search_seed_snapshot"] = former_search_seed_snapshot
                             return self._continue_full_roster_with_available_baseline(
                                 task=task,
@@ -2495,7 +2490,9 @@ class AcquisitionEngine:
         skipped_terminal_count = 0
         for retry_item in retry_items:
             retry_item = dict(retry_item)
-            snapshot_id = str(retry_item.get("snapshot_id") or snapshot.snapshot_id or snapshot.snapshot_dir.name).strip()
+            snapshot_id = str(
+                retry_item.get("snapshot_id") or snapshot.snapshot_id or snapshot.snapshot_dir.name
+            ).strip()
             item_id = self._provider_search_retry_materialization_item_id(
                 job_id=normalized_job_id,
                 snapshot_id=snapshot_id,
@@ -2510,9 +2507,7 @@ class AcquisitionEngine:
             queue_status = str(retry_item.get("queue_status") or "").strip().lower()
             if not queue_status:
                 queue_status = (
-                    "failed"
-                    if str(retry_item.get("status") or "").strip().lower() == "exhausted"
-                    else "queued"
+                    "failed" if str(retry_item.get("status") or "").strip().lower() == "exhausted" else "queued"
                 )
             phase = str(retry_item.get("phase") or "").strip().lower()
             if not phase:
@@ -2566,12 +2561,284 @@ class AcquisitionEngine:
                 [
                     item
                     for item in persisted_items
-                    if str(item.get("status") or "").strip().lower()
-                    in {"queued", "deferred", "failed_retryable"}
+                    if str(item.get("status") or "").strip().lower() in {"queued", "deferred", "failed_retryable"}
                 ]
             ),
             "skipped_terminal_count": skipped_terminal_count,
             "item_ids": [str(item.get("item_id") or "") for item in persisted_items if str(item.get("item_id") or "")],
+        }
+
+    def _acquire_cohort_search_seed_pool(
+        self,
+        *,
+        task: AcquisitionTask,
+        state: dict[str, Any],
+        job_request: JobRequest,
+        identity: CompanyIdentity,
+        snapshot_dir: Path,
+    ) -> AcquisitionExecution:
+        """Execute the canonical cohort lanes in isolated non-live runtimes.
+
+        The provider compiler remains the sole owner of the physical lane set.
+        This adapter only turns its bounded, combined result into the existing
+        durable SearchSeedSnapshot contract so downstream acquisition and
+        retrieval do not gain a second candidate representation.
+        """
+
+        request_payload = _effective_request_payload(job_request)
+        filter_hints = self._task_filter_hints(task, job_request)
+        compiler = CohortProviderCompiler()
+        preview_manifest = compiler.compile(
+            request_payload,
+            base_filter_hints=filter_hints,
+        )
+        stored_manifest = dict(
+            dict(dict(state.get("plan_payload") or {}).get("acquisition_strategy") or {}).get(
+                "provider_execution_manifest"
+            )
+            or {}
+        )
+        if stored_manifest != preview_manifest:
+            return AcquisitionExecution(
+                task_id=task.task_id,
+                status="blocked",
+                detail="Stored cohort provider manifest no longer matches the canonical request and plan inputs.",
+                payload={
+                    "reason": "cohort_provider_manifest_semantic_mismatch",
+                    "cohort_provider_manifest": stored_manifest,
+                    "expected_cohort_provider_manifest": preview_manifest,
+                },
+            )
+        capability = cohort_execution_capability_for_runtime(
+            runtime_dir=self.settings.runtime_dir,
+        )
+        manifest = compiler.compile(
+            request_payload,
+            base_filter_hints=filter_hints,
+            execution_capability=capability,
+        )
+        if capability is None or not bool(manifest.get("execution_ready")):
+            return AcquisitionExecution(
+                task_id=task.task_id,
+                status="blocked",
+                detail="Cohort execution is not enabled for this provider runtime.",
+                payload={
+                    "reason": str(manifest.get("execution_blocker") or "cohort_selection_execution_not_ready"),
+                    "cohort_provider_manifest": manifest,
+                },
+            )
+
+        cost_policy = self._task_cost_policy(task, job_request)
+        allow_shared_provider_cache = bool(cost_policy.get("allow_shared_provider_cache", True))
+        execution = self.harvest_profile_search_connector.search_profiles_for_cohort_manifest(
+            manifest=manifest,
+            execution_capability=capability,
+            discovery_dir=snapshot_dir / "cohort_provider_discovery",
+            role_proof_verifier=CohortHeadlineRoleProofVerifier(),
+            asset_logger=AssetLogger(snapshot_dir),
+            allow_shared_provider_cache=allow_shared_provider_cache,
+            runtime_timing_overrides=_runtime_timing_overrides_from_request_payload(request_payload),
+        )
+        entries = [
+            self._cohort_provider_row_to_search_seed_entry(
+                row,
+                manifest_digest=str(manifest.get("manifest_digest") or ""),
+            )
+            for row in list(execution.get("rows") or [])
+            if isinstance(row, dict)
+        ]
+        lane_summaries = [dict(item) for item in list(execution.get("lane_summaries") or [])]
+        query_summaries = [
+            {
+                "index": index,
+                "lane": "profile_search",
+                "lane_id": str(item.get("lane_id") or ""),
+                "status": "completed",
+                "employment_scope": str(item.get("employment_status") or "all"),
+                "employment_status": str(item.get("employment_status") or "all"),
+                "role_bucket_id": str(item.get("role_bucket_id") or ""),
+                "result_count": int(item.get("row_count") or 0),
+                "raw_path": str(item.get("raw_path") or ""),
+                "strategy_type": self._task_strategy_type(task, job_request),
+            }
+            for index, item in enumerate(lane_summaries, start=1)
+        ]
+        lane_entries: dict[str, list[dict[str, Any]]] = {}
+        for entry in entries:
+            memberships = [
+                dict(item) for item in list(dict(entry.get("metadata") or {}).get("cohort_lane_membership") or [])
+            ]
+            statuses = {
+                str(item.get("employment_status") or "").strip().lower()
+                for item in memberships
+                if str(item.get("employment_status") or "").strip()
+            }
+            for status in sorted(statuses or {str(entry.get("employment_status") or "all")}):
+                lane_entries.setdefault(status, []).append(dict(entry))
+        lane_payloads = {
+            status: {
+                "lane": "profile_search",
+                "employment_scope": status,
+                "employment_status": status,
+                "strategy_type": self._task_strategy_type(task, job_request),
+                "query_summaries": [
+                    dict(item) for item in query_summaries if str(item.get("employment_status") or "all") == status
+                ],
+                "requested_filter_hints": dict(filter_hints),
+                "effective_filter_hints": dict(filter_hints),
+                "cohort_provider_manifest_digest": str(manifest.get("manifest_digest") or ""),
+            }
+            for status in lane_entries
+        }
+        result_summary = {
+            "schema_version": "cohort_execution_result.v1",
+            "provider": str(manifest.get("provider") or ""),
+            "cohort_selection_digest": str(manifest.get("cohort_selection_digest") or ""),
+            "cohort_provider_manifest_digest": str(manifest.get("manifest_digest") or ""),
+            "result_digest": str(execution.get("result_digest") or ""),
+            "candidate_count": len(entries),
+            "truncated_count": int(execution.get("truncated_count") or 0),
+            "rejected_unverified_count": int(execution.get("rejected_unverified_count") or 0),
+            "missing_required_lane_count": int(execution.get("missing_required_lane_count") or 0),
+            "lane_summaries": lane_summaries,
+            "execution_capability": capability.to_record(),
+        }
+        result_summary_path = snapshot_dir / "cohort_provider_discovery" / "cohort_execution_result.json"
+        AssetLogger(snapshot_dir).write_json(
+            result_summary_path,
+            result_summary,
+            asset_type="cohort_execution_result",
+            source_kind="cohort_provider_runtime",
+            is_raw_asset=False,
+            model_safe=True,
+        )
+        summary_path = snapshot_dir / "search_seed_discovery" / "summary.json"
+        snapshot = _persist_search_seed_snapshot(
+            SearchSeedSnapshot(
+                snapshot_id=snapshot_dir.name,
+                target_company=identity.canonical_name,
+                company_identity=identity,
+                snapshot_dir=snapshot_dir,
+                entries=entries,
+                query_summaries=query_summaries,
+                accounts_used=[str(manifest.get("provider") or "harvest_profile_search")],
+                errors=[],
+                stop_reason="cohort_provider_completed" if entries else "cohort_provider_no_results",
+                summary_path=summary_path,
+                entries_path=summary_path.parent / "entries.json",
+                summary_payload={
+                    "strategy_type": self._task_strategy_type(task, job_request),
+                    "requested_filter_hints": dict(filter_hints),
+                    "effective_filter_hints": dict(filter_hints),
+                    "cohort_provider_manifest": manifest,
+                    "cohort_execution_result": result_summary,
+                    "cohort_execution_result_path": str(result_summary_path),
+                },
+                lane_payloads=lane_payloads,
+                lane_entries=lane_entries,
+            )
+        )
+        candidate_documents_projection = self._reawaken_waiting_prerequisite_after_candidate_documents_write(
+            job_id=str(state.get("job_id") or ""),
+            snapshot=snapshot,
+        )
+        if not entries:
+            return AcquisitionExecution(
+                task_id=task.task_id,
+                status="blocked",
+                detail="Cohort provider execution completed but returned no candidate leads.",
+                payload={
+                    **snapshot.to_record(),
+                    "cohort_execution_result": result_summary,
+                    "cohort_execution_result_path": str(result_summary_path),
+                    "candidate_documents_projection": candidate_documents_projection,
+                },
+                state_updates={"search_seed_snapshot": snapshot},
+            )
+
+        profile_prefetch = self._queue_background_profile_prefetch_for_search_seed_entries(
+            identity=identity,
+            entries=entries,
+            source_path=str(snapshot.summary_path),
+            snapshot_dir=snapshot_dir,
+            job_id=str(state.get("job_id") or ""),
+            request_payload=request_payload,
+            plan_payload=dict(state.get("plan_payload") or {}),
+            runtime_mode=str(state.get("runtime_mode") or "workflow"),
+            allow_shared_provider_cache=allow_shared_provider_cache,
+            priority=True,
+        )
+        return AcquisitionExecution(
+            task_id=task.task_id,
+            status="completed",
+            detail=(
+                f"Recovered {len(entries)} cohort candidates across {len(lane_summaries)} deterministic provider lanes."
+            ),
+            payload={
+                **snapshot.to_record(),
+                "strategy_type": self._task_strategy_type(task, job_request),
+                "cost_policy": cost_policy,
+                "profile_prefetch": dict(profile_prefetch),
+                "candidate_documents_projection": candidate_documents_projection,
+                "cohort_provider_manifest": manifest,
+                "cohort_execution_result": result_summary,
+                "cohort_execution_result_path": str(result_summary_path),
+            },
+            state_updates={"search_seed_snapshot": snapshot},
+        )
+
+    @staticmethod
+    def _cohort_provider_row_to_search_seed_entry(
+        row: dict[str, Any],
+        *,
+        manifest_digest: str,
+    ) -> dict[str, Any]:
+        normalized = dict(row or {})
+        memberships = [dict(item) for item in list(normalized.get("cohort_lane_membership") or [])]
+        statuses = list(
+            dict.fromkeys(
+                str(item.get("employment_status") or "").strip().lower()
+                for item in memberships
+                if str(item.get("employment_status") or "").strip()
+            )
+        )
+        role_bucket_ids = list(
+            dict.fromkeys(
+                str(item.get("role_bucket_id") or "").strip()
+                for item in memberships
+                if str(item.get("role_bucket_id") or "").strip()
+            )
+        )
+        username = str(normalized.get("username") or "").strip().strip("/")
+        profile_url = str(
+            normalized.get("profile_url") or normalized.get("linkedin_url") or normalized.get("url") or ""
+        ).strip()
+        if not profile_url and username:
+            profile_url = f"https://www.linkedin.com/in/{username}/"
+        metadata = {
+            **dict(normalized.get("metadata") or {}),
+            "cohort_provider_manifest_digest": manifest_digest,
+            "cohort_lane_membership": memberships,
+            "cohort_role_bucket_ids": role_bucket_ids,
+            "cohort_employment_statuses": statuses,
+            **(
+                {"cohort_role_proof": dict(normalized.get("cohort_role_proof") or {})}
+                if normalized.get("cohort_role_proof")
+                else {}
+            ),
+        }
+        return {
+            **normalized,
+            "profile_url": profile_url,
+            "slug": username,
+            "employment_status": (
+                statuses[0]
+                if len(statuses) == 1
+                else ("current" if "current" in statuses else (statuses[0] if statuses else "all"))
+            ),
+            "source_query": f"cohort:{manifest_digest}",
+            "source_type": "harvest_profile_search",
+            "metadata": metadata,
         }
 
     def _acquire_search_seed_pool(
@@ -2588,6 +2855,16 @@ class AcquisitionEngine:
                 status="blocked",
                 detail="Company identity must be resolved before search-seed acquisition.",
                 payload={},
+            )
+
+        cohort = explicit_cohort_selection(_effective_request_payload(job_request))
+        if cohort is not None and str(cohort.get("source") or "") == "user_explicit":
+            return self._acquire_cohort_search_seed_pool(
+                task=task,
+                state=state,
+                job_request=job_request,
+                identity=identity,
+                snapshot_dir=snapshot_dir,
             )
 
         filter_hints = self._task_filter_hints(task, job_request)
@@ -2898,9 +3175,9 @@ class AcquisitionEngine:
                     f"Search-seed acquisition queued {queued_query_count} background web searches; "
                     "resume the worker daemon to finish remote task_get before fallback or downstream enrichment."
                 ),
-                    payload=payload,
-                    state_updates={"search_seed_snapshot": snapshot},
-                )
+                payload=payload,
+                state_updates={"search_seed_snapshot": snapshot},
+            )
         if snapshot.stop_reason == "provider_people_search_incomplete" or incomplete_provider_query_count > 0:
             payload = {
                 **snapshot.to_record(),
@@ -3260,7 +3537,9 @@ class AcquisitionEngine:
                 delta_baseline_material.get("authoritative_candidate_document_payload") or {}
             )
             baseline_source_candidate_doc_path = str(delta_baseline_material.get("source_candidate_doc_path") or "")
-            authoritative_source_candidate_doc_path = str(delta_baseline_material.get("authoritative_source_path") or "")
+            authoritative_source_candidate_doc_path = str(
+                delta_baseline_material.get("authoritative_source_path") or ""
+            )
             downstream_document_payload = dict(baseline_document_payload)
             downstream_source_candidate_doc_path = baseline_source_candidate_doc_path
             downstream_public_web_ready = False
@@ -3279,12 +3558,10 @@ class AcquisitionEngine:
                 payload_enrichment_scope: str,
             ) -> tuple[dict[str, Any], int, int]:
                 materialized_candidate_count = int(
-                    source_payload.get("candidate_count")
-                    or len(list(source_payload.get("candidates") or []))
+                    source_payload.get("candidate_count") or len(list(source_payload.get("candidates") or []))
                 )
                 materialized_evidence_count = int(
-                    source_payload.get("evidence_count")
-                    or len(list(source_payload.get("evidence") or []))
+                    source_payload.get("evidence_count") or len(list(source_payload.get("evidence") or []))
                 )
                 return (
                     {
@@ -3313,10 +3590,14 @@ class AcquisitionEngine:
                 downstream_document_payload,
                 source_candidate_doc_path=downstream_source_candidate_doc_path,
                 payload_stage_mode=(
-                    "linkedin_plus_public_web" if downstream_public_web_ready and enrichment_scope == "linkedin_stage_1" else stage_mode
+                    "linkedin_plus_public_web"
+                    if downstream_public_web_ready and enrichment_scope == "linkedin_stage_1"
+                    else stage_mode
                 ),
                 payload_enrichment_scope=(
-                    "public_web_stage_2" if downstream_public_web_ready and enrichment_scope == "linkedin_stage_1" else enrichment_scope
+                    "public_web_stage_2"
+                    if downstream_public_web_ready and enrichment_scope == "linkedin_stage_1"
+                    else enrichment_scope
                 ),
             )
             logger.write_json(
@@ -3552,9 +3833,7 @@ class AcquisitionEngine:
                             candidate,
                         )
                     merged_evidence = {
-                        item.evidence_id: item
-                        for item in existing_evidence
-                        if str(item.evidence_id or "").strip()
+                        item.evidence_id: item for item in existing_evidence if str(item.evidence_id or "").strip()
                     }
                     for item in stage_evidence:
                         evidence_id = str(item.evidence_id or "").strip()
@@ -3922,11 +4201,15 @@ class AcquisitionEngine:
         if isinstance(search_seed_snapshot, SearchSeedSnapshot):
             search_seed_candidates, _ = build_candidates_from_seed_snapshot(search_seed_snapshot)
             baseline_candidates.extend(search_seed_candidates)
-        raw_search_seed_profile_urls = [
-            str(entry.get("profile_url") or "").strip()
-            for entry in list(getattr(search_seed_snapshot, "entries", []) or [])
-            if str(entry.get("profile_url") or "").strip()
-        ] if isinstance(search_seed_snapshot, SearchSeedSnapshot) else []
+        raw_search_seed_profile_urls = (
+            [
+                str(entry.get("profile_url") or "").strip()
+                for entry in list(getattr(search_seed_snapshot, "entries", []) or [])
+                if str(entry.get("profile_url") or "").strip()
+            ]
+            if isinstance(search_seed_snapshot, SearchSeedSnapshot)
+            else []
+        )
         return self._queue_background_profile_prefetch_for_candidates(
             candidates=baseline_candidates,
             snapshot_dir=snapshot_dir,
@@ -4302,7 +4585,9 @@ class AcquisitionEngine:
             ),
             "estimated_total_count": int(probe_context.get("estimated_total_count") or 0),
             "provider_result_cap": int(probe_context.get("provider_result_cap") or 2500),
-            "provider_cap_hit": bool(probe_context.get("provider_cap_hit") or probe_context.get("provider_result_limited")),
+            "provider_cap_hit": bool(
+                probe_context.get("provider_cap_hit") or probe_context.get("provider_result_limited")
+            ),
             "requested_limit_would_truncate": bool(probe_context.get("requested_limit_would_truncate")),
             "probe": probe_context,
             "company_filters": normalized_company_filters,
@@ -4460,11 +4745,7 @@ class AcquisitionEngine:
                 completed_summaries.append(summary)
                 if int(result.get("worker_id") or 0) > 0:
                     completed_worker_results.append(result)
-        if (
-            queued_summaries
-            and completed_worker_results
-            and callable(self.inline_worker_completion_callback)
-        ):
+        if queued_summaries and completed_worker_results and callable(self.inline_worker_completion_callback):
             self.inline_worker_completion_callback(
                 {
                     "worker_id": int(completed_worker_results[0].get("worker_id") or 0),
@@ -4651,9 +4932,7 @@ class AcquisitionEngine:
                 "expected_shard_count": int(expected_shard_count or len(shards)),
                 "available_shard_count": len(shard_summaries),
                 "completion_status": (
-                    "completed"
-                    if int(expected_shard_count or len(shards)) <= len(shard_summaries)
-                    else "partial"
+                    "completed" if int(expected_shard_count or len(shards)) <= len(shard_summaries) else "partial"
                 ),
                 "shards": shard_summaries,
             },
@@ -4697,9 +4976,7 @@ class AcquisitionEngine:
                 "expected_shard_count": int(expected_shard_count or len(shards)),
                 "available_shard_count": len(shard_summaries),
                 "completion_status": (
-                    "completed"
-                    if int(expected_shard_count or len(shards)) <= len(shard_summaries)
-                    else "partial"
+                    "completed" if int(expected_shard_count or len(shards)) <= len(shard_summaries) else "partial"
                 ),
                 "raw_entry_count": len(merged_entries),
                 "visible_entry_count": len(visible_entries),
@@ -5080,9 +5357,12 @@ class AcquisitionEngine:
             )
             if str(item or "").strip()
         ]
-        build_profile = str(
-            dict(getattr(job_request, "execution_preferences", {}) or {}).get("artifact_build_profile") or ""
-        ).strip() or "full"
+        build_profile = (
+            str(
+                dict(getattr(job_request, "execution_preferences", {}) or {}).get("artifact_build_profile") or ""
+            ).strip()
+            or "full"
+        )
         build_kwargs: dict[str, Any] = {
             "runtime_dir": self.settings.runtime_dir,
             "store": self.store,
@@ -5311,9 +5591,11 @@ class AcquisitionEngine:
                 continue
             try:
                 summary = json.loads(summary_path.read_text())
-                completion_status = str(
-                    summary.get("completion_status") or summary.get("segmented_completion_status") or "completed"
-                ).strip().lower()
+                completion_status = (
+                    str(summary.get("completion_status") or summary.get("segmented_completion_status") or "completed")
+                    .strip()
+                    .lower()
+                )
                 if completion_status and completion_status not in {"completed", "ready"}:
                     continue
                 if is_harvest_snapshot:
@@ -5389,16 +5671,16 @@ class AcquisitionEngine:
                 raw_entries=_read_company_asset_json_list(merged_path) if merged_path.exists() else visible_entries,
                 visible_entries=visible_entries,
                 headless_entries=_read_company_asset_json_list(headless_path) if headless_path.exists() else [],
-                page_summaries=[dict(item) for item in list(summary.get("page_summaries") or []) if isinstance(item, dict)],
+                page_summaries=[
+                    dict(item) for item in list(summary.get("page_summaries") or []) if isinstance(item, dict)
+                ],
                 accounts_used=[
                     str(item or "").strip()
                     for item in list(summary.get("accounts_used") or [])
                     if str(item or "").strip()
                 ],
                 errors=[
-                    str(item or "").strip()
-                    for item in list(summary.get("errors") or [])
-                    if str(item or "").strip()
+                    str(item or "").strip() for item in list(summary.get("errors") or []) if str(item or "").strip()
                 ],
                 stop_reason=str(summary.get("stop_reason") or "restored_snapshot_roster"),
                 merged_path=merged_path,
@@ -5872,7 +6154,9 @@ def _load_snapshot_candidate_payload(
         and "normalized_artifacts" in payload_path.parts
     ):
         artifact_dir = payload_path.parent
-        snapshot_dir = artifact_dir.parent if artifact_dir.name == "normalized_artifacts" else artifact_dir.parent.parent
+        snapshot_dir = (
+            artifact_dir.parent if artifact_dir.name == "normalized_artifacts" else artifact_dir.parent.parent
+        )
         try:
             loaded = load_snapshot_candidate_artifact_payload(
                 snapshot_dir=snapshot_dir,

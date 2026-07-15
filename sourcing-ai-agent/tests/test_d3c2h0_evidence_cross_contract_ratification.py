@@ -525,7 +525,7 @@ def test_current_physical_absence_and_prerequisite_evidence_are_mechanical() -> 
     todo_current = _section(
         todo,
         "- [x] D3c2h0 evidence cross-contract ratification",
-        "- [ ] Track D 后的 user-owned cohort selection contract",
+        "- [x] Cohort CS1/CS2 foundation",
     )
     ledger_active = _section(ledger, "## Active candidate annotations")
     current_surfaces = (index, plan_candidate, plan_obligations, todo_current, ledger_active)

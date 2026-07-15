@@ -6,6 +6,7 @@ import hashlib
 import json
 import re
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Iterable, Protocol
 from urllib import parse
 
@@ -20,13 +21,18 @@ from .query_signal_knowledge import (
     ROLE_BUCKET_KNOWLEDGE,
     role_bucket_function_ids,
     role_bucket_role_hints,
+    role_buckets_from_text,
 )
+from .runtime_environment import NON_LIVE_PROVIDER_MODES, current_runtime_environment
 
 COHORT_PROVIDER_MANIFEST_VERSION = "cohort_provider_manifest.v1"
 COHORT_PROVIDER = "harvest_profile_search"
 COHORT_EXECUTION_NOT_READY = "cohort_selection_execution_not_ready"
 COHORT_EXECUTION_CAPABILITY_VERSION = "cohort_execution_capability.v1"
 COHORT_EXECUTION_CAPABILITY_OWNER = "cohort_runtime"
+COHORT_NON_LIVE_RUNTIME_POLICY_VERSION = "cohort_non_live_runtime.v1"
+COHORT_HEADLINE_ROLE_PROOF_VERIFIER_ID = "cohort_headline_role_classifier"
+COHORT_HEADLINE_ROLE_PROOF_VERIFIER_REVISION = "cohort_headline_role_classifier.v1"
 DEFAULT_COHORT_RESULT_LIMIT = 25
 MAX_COHORT_PROVIDER_LANES = 10
 
@@ -183,6 +189,33 @@ class CohortRoleProofVerifier(Protocol):
     verifier_revision: str
 
     def verify(self, row: dict[str, Any]) -> VerifiedCohortRoleProof | None: ...
+
+
+class CohortHeadlineRoleProofVerifier:
+    """Deterministic proof owner for the provider's public headline field."""
+
+    verifier_id = COHORT_HEADLINE_ROLE_PROOF_VERIFIER_ID
+    verifier_revision = COHORT_HEADLINE_ROLE_PROOF_VERIFIER_REVISION
+
+    @staticmethod
+    def verify(row: dict[str, Any]) -> VerifiedCohortRoleProof | None:
+        headline = " ".join(str(dict(row or {}).get("headline") or "").split()).strip()
+        if not headline:
+            return None
+        role_bucket_ids = tuple(role_buckets_from_text(headline))
+        if not role_bucket_ids:
+            return None
+        return VerifiedCohortRoleProof(
+            role_bucket_ids=role_bucket_ids,
+            evidence_digest=_sha256_json(
+                {
+                    "verifier_id": COHORT_HEADLINE_ROLE_PROOF_VERIFIER_ID,
+                    "verifier_revision": COHORT_HEADLINE_ROLE_PROOF_VERIFIER_REVISION,
+                    "headline": headline,
+                    "role_bucket_ids": list(role_bucket_ids),
+                }
+            ),
+        )
 
 
 def resolve_effective_role_targeting(
@@ -369,6 +402,16 @@ class CohortProviderCompiler:
                 "cohort_selection_all_role_proof_unavailable",
                 "role_proof_verifier",
             )
+
+    @staticmethod
+    def validate_lane_result_rows(
+        rows: list[dict[str, Any]],
+        *,
+        lane_id: str,
+    ) -> list[dict[str, Any]]:
+        """Validate one lane before the connector is allowed to call the next."""
+
+        return _normalize_lane_rows(rows, lane_id=lane_id)
 
     def combine_lane_results(
         self,
@@ -567,7 +610,38 @@ def cohort_execution_not_ready_result(
     request_payload: dict[str, Any] | None,
     *,
     base_filter_hints: dict[str, Any] | None = None,
+    runtime_dir: str | Path | None = None,
 ) -> dict[str, Any] | None:
+    cohort = explicit_cohort_selection(request_payload)
+    if cohort is None or str(cohort.get("source") or "") != "user_explicit":
+        return None
+    execution_capability = cohort_execution_capability_for_runtime(runtime_dir=runtime_dir)
+    if execution_capability is None:
+        return cohort_execution_unavailable_result(
+            request_payload,
+            base_filter_hints=base_filter_hints,
+        )
+    manifest = CohortProviderCompiler().compile(
+        request_payload,
+        base_filter_hints=base_filter_hints,
+        execution_capability=execution_capability,
+    )
+    if bool(manifest.get("execution_ready")):
+        return None
+    return {
+        "status": "invalid",
+        "reason": str(manifest.get("execution_blocker") or COHORT_EXECUTION_NOT_READY),
+        "cohort_provider_manifest": manifest,
+    }
+
+
+def cohort_execution_unavailable_result(
+    request_payload: dict[str, Any] | None,
+    *,
+    base_filter_hints: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    """Return the stable gate for a surface that cannot execute cohort lanes."""
+
     cohort = explicit_cohort_selection(request_payload)
     if cohort is None or str(cohort.get("source") or "") != "user_explicit":
         return None
@@ -577,9 +651,31 @@ def cohort_execution_not_ready_result(
     )
     return {
         "status": "invalid",
-        "reason": COHORT_EXECUTION_NOT_READY,
+        "reason": str(manifest.get("execution_blocker") or COHORT_EXECUTION_NOT_READY),
         "cohort_provider_manifest": manifest,
     }
+
+
+def cohort_execution_capability_for_runtime(
+    *,
+    runtime_dir: str | Path | None = None,
+) -> CohortExecutionCapability | None:
+    """Issue the server-owned capability for the currently isolated runtime.
+
+    Non-live providers are deterministic and do not create a billed remote run,
+    so they may execute the complete cohort manifest while the durable live-lane
+    checkpoint is still being built.  Live intentionally receives no capability:
+    callers cannot promote it with a request flag or a serialized manifest edit.
+    """
+
+    runtime = current_runtime_environment(runtime_dir=runtime_dir)
+    if runtime.provider_mode not in NON_LIVE_PROVIDER_MODES:
+        return None
+    return CohortExecutionCapability(
+        policy_revision=f"{COHORT_NON_LIVE_RUNTIME_POLICY_VERSION}:{runtime.provider_mode}",
+        role_proof_verifier_id=COHORT_HEADLINE_ROLE_PROOF_VERIFIER_ID,
+        role_proof_verifier_revision=COHORT_HEADLINE_ROLE_PROOF_VERIFIER_REVISION,
+    )
 
 
 def _role_target_group(role_bucket_id: str) -> dict[str, Any]:

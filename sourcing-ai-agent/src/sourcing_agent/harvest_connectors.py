@@ -1246,7 +1246,18 @@ class HarvestProfileSearchConnector:
                     lane_id=lane_id,
                     completed_lane_ids=tuple(lane_results),
                 )
-            rows = [dict(item) for item in raw_rows]
+            try:
+                rows = compiler.validate_lane_result_rows(
+                    [dict(item) for item in raw_rows],
+                    lane_id=lane_id,
+                )
+            except CohortProviderExecutionError as exc:
+                raise CohortProviderExecutionError(
+                    exc.code,
+                    lane_id=lane_id,
+                    completed_lane_ids=tuple(lane_results),
+                    detail=exc.detail,
+                ) from exc
             lane_results[lane_id] = rows
             lane_summaries.append(
                 {
@@ -1259,12 +1270,22 @@ class HarvestProfileSearchConnector:
                     "raw_path": str(dict(result or {}).get("raw_path") or ""),
                 }
             )
-        combined = compiler.combine_lane_results(
-            manifest_snapshot,
-            lane_results,
-            execution_capability=execution_capability,
-            role_proof_verifier=role_proof_verifier,
-        )
+        try:
+            combined = compiler.combine_lane_results(
+                manifest_snapshot,
+                lane_results,
+                execution_capability=execution_capability,
+                role_proof_verifier=role_proof_verifier,
+            )
+        except CohortProviderExecutionError as exc:
+            if exc.completed_lane_ids:
+                raise
+            raise CohortProviderExecutionError(
+                exc.code,
+                lane_id=exc.lane_id,
+                completed_lane_ids=tuple(lane_results),
+                detail=exc.detail,
+            ) from exc
         return {
             **combined,
             "cohort_provider_manifest": manifest_snapshot,

@@ -661,13 +661,17 @@ class CohortSelectionIngressTest(unittest.TestCase):
         orchestrator.store = _Exploding()
         orchestrator.acquisition_engine = _Exploding()
 
-        results = {
-            "queue": orchestrator.queue_workflow(payload),
-            "hosted": orchestrator.start_workflow(payload),
-            "managed": orchestrator.start_workflow_runner_managed(payload),
-            "blocking": orchestrator.run_workflow_blocking(payload),
-            "run_job": orchestrator.run_job(payload),
-        }
+        with patch(
+            "sourcing_agent.cohort_provider_compiler.cohort_execution_capability_for_runtime",
+            return_value=None,
+        ):
+            results = {
+                "queue": orchestrator.queue_workflow(payload),
+                "hosted": orchestrator.start_workflow(payload),
+                "managed": orchestrator.start_workflow_runner_managed(payload),
+                "blocking": orchestrator.run_workflow_blocking(payload),
+                "run_job": orchestrator.run_job(payload),
+            }
         self.assertEqual(
             {name: result["reason"] for name, result in results.items()},
             {name: "cohort_selection_execution_not_ready" for name in results},
@@ -679,9 +683,15 @@ class CohortSelectionIngressTest(unittest.TestCase):
         class _Plan:
             acquisition_strategy = _Strategy()
 
-        with self.assertRaisesRegex(
-            CohortProviderCompilationError,
-            "cohort_selection_execution_not_ready",
+        with (
+            patch(
+                "sourcing_agent.cohort_provider_compiler.cohort_execution_capability_for_runtime",
+                return_value=None,
+            ),
+            self.assertRaisesRegex(
+                CohortProviderCompilationError,
+                "cohort_selection_execution_not_ready",
+            ),
         ):
             orchestrator._run_workflow_from_acquisition(
                 "existing-job",

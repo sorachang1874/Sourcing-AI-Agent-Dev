@@ -506,11 +506,27 @@
   等 role bucket 与 current/former 支持有序自由多选，`role_match=any|all`，用户显式选择优先于 raw text/model
   patch，unknown 值 fail closed。Harvest scalar status/role 已编译成独立有界 lanes 后确定性 merge/dedupe；全局
   budget、strict result envelope、all-role verifier、request/feedback/baseline/snapshot/authoritative projection reuse
-  identity fence 已有 fast regression。normal acquisition runtime 仍 fail closed，不能把 foundation 写成产品可用。
-- [ ] Cohort runtime/frontend/result/scripted E2E：runtime 必须 exact-copy compiler manifest 并把 manifest/lane identity
-  与 durable submission state + provider run id 绑定，闭合 ambiguous-submit、resume、exact replay、terminal reuse，避免
-  进程重启重复付费；随后实现 UI 多选、result/audit effective cohort projection，并用 fake/scripted E2E 覆盖
-  单选/多选、顺序不变 hash、model 不可覆盖、lane budget/cost、partial failure/zero result/retry 与结果可审计。
+  identity fence 已有 fast regression；该 foundation 本身不包含 runtime activation，后续状态见 CS3。
+- [x] Cohort CS3 isolated non-live runtime/result foundation：`simulate|replay|scripted` workflow 由 server-owned typed
+  capability 激活，stored capability-free plan manifest 先 exact-recompile/compare，再执行 deterministic Harvest lanes；combined
+  rows 只适配到既有 durable `SearchSeedSnapshot`/candidate documents，并持久化 `cohort_execution_result.v1` 的
+  selection/manifest/result digest、capability、lane/count audit。missing/forged/stale manifest 零 provider call；live、retrieval-only
+  `run_job` 仍 fail closed；non-live `role_match=all` 绑定 exact `cohort_headline_role_classifier.v1`，只接受 central registry
+  从 public headline 证明的 required roles；lane identity 在下一 provider call 前验证并绑定 exact attempt evidence。
+  author regression=`64 passed + 55 subtests`，fresh pinned
+  review pending，不得写成 formal GO。
+- [x] Cohort CS4 user interaction：frontend picker 默认关闭，旧请求不发送 `cohort_selection`；options/labels/order/default
+  全部来自 public endpoint，role 与 current/former 可有序多选，initial submit、revision、history recovery、plan review
+  exact round-trip。已提交 explicit cohort 在 review 锁定，legacy plan 可显式升级。author evidence：frontend build
+  `84 modules`、contract `7 passed`、backend/options exact `5 passed + 3 subtests`、Playwright transport legacy omission +
+  explicit exact payload green；fresh pinned review pending。
+- [x] Cohort CS5 scripted service E2E：isolated migrated PG + real orchestrator/plan/compiler/acquisition/materialization/
+  result projection 已贯通；双角色 `role_match=all` 执行 2 个 profile-search lanes + 1 个 profile enrichment，最终
+  `completed/completed`，public asset population 为 1 个 current 候选，durable candidate/result audit 保留 exact lane、
+  selection、manifest 与 versioned role proof。全程 live Harvest submit hard-fail sentinel 未触发；exact test=`1 passed`。
+- [ ] Cohort CS6 live checkpoint：runtime 必须把 manifest/lane identity 与 durable submission state + provider run id
+  绑定，闭合 ambiguous-submit、resume、exact replay、terminal reuse，避免进程重启重复付费；再补 live-boundary
+  partial failure/zero result/retry 与 cost audit。CS3/CS5 fresh pinned review 仍 pending；有效 GO 前不做 paid canary。
 - [ ] Track D 落地后的首个 live canary：fake/scripted 与 scope-matched review gate 全绿后，仅使用 operator 外置、
   不入库/不落日志的凭据做 **Thinking Machines Lab-only** 有界尝试，目标为华人 pre-training researcher mapping；
   OpenAI/Anthropic/Google DeepMind/xAI/Meta 及全量扩展另行 gating，不与首轮 canary 合并。

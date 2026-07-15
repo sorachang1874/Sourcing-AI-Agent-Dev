@@ -65,6 +65,7 @@ from .canonicalization import canonicalize_company_records
 from .cohort_provider_compiler import (
     CohortProviderCompilationError,
     cohort_execution_not_ready_result,
+    cohort_execution_unavailable_result,
 )
 from .cohort_selection import (
     CohortSelectionValidationError,
@@ -2861,7 +2862,10 @@ class SourcingOrchestrator:
         except CohortSelectionValidationError as exc:
             return exc.to_result()
         if not int(payload.get("plan_review_id") or 0):
-            execution_gate = cohort_execution_not_ready_result(payload)
+            execution_gate = cohort_execution_not_ready_result(
+                payload,
+                runtime_dir=getattr(self, "runtime_dir", None),
+            )
             if execution_gate is not None:
                 return execution_gate
         resolved = self._resolve_workflow_plan(payload)
@@ -2872,6 +2876,7 @@ class SourcingOrchestrator:
             base_filter_hints=dict(dict(resolved.get("plan") or {}).get("acquisition_strategy") or {}).get(
                 "filter_hints"
             ),
+            runtime_dir=getattr(self, "runtime_dir", None),
         )
         if execution_gate is not None:
             return execution_gate
@@ -4195,7 +4200,10 @@ class SourcingOrchestrator:
         except CohortSelectionValidationError as exc:
             return exc.to_result()
         if not int(payload.get("plan_review_id") or 0):
-            execution_gate = cohort_execution_not_ready_result(payload)
+            execution_gate = cohort_execution_not_ready_result(
+                payload,
+                runtime_dir=getattr(self, "runtime_dir", None),
+            )
             if execution_gate is not None:
                 return execution_gate
         resolved = self._resolve_workflow_plan(payload)
@@ -4206,6 +4214,7 @@ class SourcingOrchestrator:
             base_filter_hints=dict(dict(resolved.get("plan") or {}).get("acquisition_strategy") or {}).get(
                 "filter_hints"
             ),
+            runtime_dir=getattr(self, "runtime_dir", None),
         )
         if execution_gate is not None:
             return execution_gate
@@ -4253,7 +4262,7 @@ class SourcingOrchestrator:
             payload = validate_external_cohort_selection_payload(payload)
         except CohortSelectionValidationError as exc:
             return exc.to_result()
-        execution_gate = cohort_execution_not_ready_result(payload)
+        execution_gate = cohort_execution_unavailable_result(payload)
         if execution_gate is not None:
             return execution_gate
         request = JobRequest.from_payload(self._prepare_request_payload(payload))
@@ -57638,6 +57647,7 @@ class SourcingOrchestrator:
         execution_gate = cohort_execution_not_ready_result(
             request.to_record(),
             base_filter_hints=dict(acquisition_strategy.filter_hints or {}) if acquisition_strategy is not None else {},
+            runtime_dir=getattr(self, "runtime_dir", None),
         )
         if execution_gate is not None:
             raise CohortProviderCompilationError(

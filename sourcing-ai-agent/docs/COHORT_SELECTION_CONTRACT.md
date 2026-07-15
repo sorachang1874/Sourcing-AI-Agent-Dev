@@ -1,6 +1,6 @@
 # Cohort Selection Contract
 
-> Status: CS1 contract and CS2 deterministic provider compiler implemented. Normal workflow execution remains deliberately fail-closed until the acquisition runtime delegates to the compiled Harvest lane boundary; frontend controls, result projection, and live validation remain separate batches.
+> Status: CS1 contract, CS2 deterministic provider compiler, CS3 isolated non-live runtime adapter, CS4 user interaction, and the CS5 scripted service E2E are implemented. `simulate`/`replay`/`scripted` workflows delegate to the compiled Harvest lane boundary and persist one canonical search-seed/result audit contract; the default-off frontend picker round-trips explicit selections through submit/revision/recovery/review. Paid live execution and the retrieval-only `run_job` helper remain fail-closed.
 
 ## Product behavior
 
@@ -37,8 +37,10 @@ The v1 wire object is:
 | explicit request authority | canonical `cohort_selection` object | normalized/effective request and later compiler | model normalization and refinement model patches | flat fields remain exact compatibility mirrors | flat mirrors may be removed only after every planner, matcher, retrieval path, artifact, and stored request reader consumes the canonical object |
 | effective role targeting | `resolve_effective_role_targeting()` in `cohort_provider_compiler.py` | acquisition strategy and provider compiler | raw text, categories, role-like facets, model patches, and provider-local inference when `source=user_explicit` | absent canonical object retains the legacy resolver unchanged | remove legacy branch only after old request retirement |
 | physical provider lanes and merge semantics | `CohortProviderCompiler` | planning manifest and `HarvestProfileSearchConnector.search_profiles_for_cohort_manifest()` | multi-role or multi-status assumptions inside one Harvest call | one lane per `(employment status, role)` or status-only lane for all roles | not applicable |
-| execution readiness and provider budget | typed `CohortExecutionCapability`, owned by the cohort runtime cutover | compiler exact-copy plus connector preflight | caller booleans or manifest-authored readiness | absent capability produces `cohort_selection_execution_not_ready`; one manifest-wide call/item/output budget is allocated before the first lane | not applicable |
-| all-role proof | versioned `CohortRoleProofVerifier` matching the capability's exact verifier id/revision | compiler combiner after connector preflight | provider-authored `normalized_role_bucket_ids`, metadata flags, or a caller boolean | absent/mismatched verifier fails before the first provider call | not applicable |
+| execution readiness and provider budget | typed `CohortExecutionCapability`, issued by `cohort_execution_capability_for_runtime()` | compiler exact-copy, workflow gate, acquisition adapter, and connector preflight | caller booleans, request fields, or manifest-authored readiness | only isolated `simulate|replay|scripted` runtimes currently receive a capability; live and non-executing surfaces produce `cohort_selection_execution_not_ready`; one manifest-wide call/item/output budget is allocated before the first lane | replace the non-live-only policy only after durable live lane checkpoint acceptance |
+| provider plan authority | capability-free `provider_execution_manifest` emitted by the planner and exact-recompiled by the acquisition adapter | plan/explain/review payloads and workflow acquisition state | missing, edited, or capability-bearing stored manifests | stored manifest must exist and equal the exact capability-free recompilation before any provider call; runtime then recompiles from the same canonical inputs plus the server capability | no alternate manifest source |
+| runtime result projection | canonical `SearchSeedSnapshot` plus `cohort_execution_result.v1` written by `AcquisitionEngine` | downstream candidate documents, acquisition progress/events, result audit | a parallel cohort candidate store or provider row shape | combined rows are adapted once into the existing search-seed contract; no-cohort acquisition is unchanged | not applicable |
+| all-role proof | versioned `CohortRoleProofVerifier` matching the capability's exact verifier id/revision; non-live owner is `CohortHeadlineRoleProofVerifier` | compiler combiner after connector preflight | provider-authored `normalized_role_bucket_ids`, metadata flags, or a caller boolean | absent/mismatched verifier fails before the first provider call; headline proof reuses the central role classifier and rejects missing/insufficient evidence | not applicable |
 | plan-review cohort merge | `merge_plan_review_cohort_selection()` | review approval and approved-review execution override | ad hoc field overlay or swallowed validation errors | stored explicit permits absent/exact replay; stored legacy can atomically upgrade to explicit | not applicable |
 | request-family reuse fence | registry-pinned explicit selection digest in `request_matching.py` plus `source_request_covers_explicit_cohort()` | criteria rerun baselines, idempotency candidates, asset-reuse plans, snapshot/authoritative projection reuse, and feedback-family weighting | similarity score, company fallback, or latest-company fallback across a different/absent explicit selection | no explicit object preserves legacy matching; stale bundles are rebuilt from their request payload; malformed historical requests are ignored rather than aborting the current request | remove only with a replacement execution-identity owner |
 | legacy request adaptation | `effective_cohort_selection(...)` | future consumers that explicitly request an effective object | normal request serialization and signatures | lazy `source=legacy_adapter`; no write-back | remove after persisted legacy requests and all old clients are retired |
@@ -71,7 +73,9 @@ For `source=user_explicit`, `role_bucket_ids` is the complete role authority. Ra
 - Cohort execution enables strict raw-result validation before the legacy parser can discard malformed items. Non-object/mixed envelopes and null async dataset pages fail the whole lane, while a genuine empty array remains a successful zero-result lane; a malformed suffix can never publish a parsed partial prefix.
 - A later-lane failure returns a stable whole-manifest error with completed lane ids; it publishes no combined result. Per-lane stable ids/directories and provider cache make retry bounded and inspectable, but prior external calls cannot be rolled back and remain explicit partial-attempt evidence.
 
-The current general acquisition runtime has not yet been cut over to that boundary. Therefore `queue_workflow`, blocking workflow, synchronous `run_job`, and acquisition resume return or raise stable `cohort_selection_execution_not_ready` before provider execution. Planning/explain/review remain usable and expose the exact compiled manifest; this gate must be removed only in the runtime cutover that delegates every cohort acquisition lane to the compiler boundary.
+The workflow acquisition runtime now delegates explicit cohorts to that boundary only when the server-owned runtime mode is `simulate`, `replay`, or `scripted`. It first exact-recompiles the capability-free planning manifest from the frozen request and acquisition filter hints and compares it with the stored plan manifest. Any stale/forged plan is blocked before provider work. It then recompiles with the runtime capability, executes the exact lane set, and adapts the combined rows once into the existing durable `SearchSeedSnapshot` and candidate-document projection. `cohort_execution_result.v1` records the selection/manifest/result digests, capability, lane summaries, counts, and artifact path; raw lane results remain in their normal provider assets.
+
+Paid `live` receives no capability until manifest/lane identity, provider submission state, run id, ambiguous submission, resume, exact replay, and terminal reuse have a durable owner. The retrieval-only `run_job` helper also remains unavailable because it cannot execute provider lanes. Non-live capabilities bind the exact `cohort_headline_role_classifier.v1` proof owner: it classifies only the normalized public headline through the central role registry, hashes that evidence, and rejects an `all` candidate unless the required roles are proven across the qualifying rows. Missing or ambiguous headline evidence is exclusion, never provider-authored proof. Planning/explain/review continue to expose the capability-free manifest in every mode.
 
 ## Plan review
 
@@ -85,11 +89,17 @@ An explicit criteria rerun baseline is owner-checked first and then cohort-check
 
 ## Read API
 
-`GET /api/cohort-selection/options` returns the stable role, employment, and role-match option catalog plus `registry_version` and `registry_digest`. Role options are derived from `ROLE_BUCKET_KNOWLEDGE`; the endpoint does not maintain another registry. Provider compilation binds `cohort_selection_digest()` today, and future result projection must copy it without adding caller-controlled fields to the v1 object.
+`GET /api/cohort-selection/options` returns the stable role, employment, and role-match option catalog plus `registry_version` and `registry_digest`. Role options are derived from `ROLE_BUCKET_KNOWLEDGE`; the endpoint does not maintain another registry. Provider compilation binds `cohort_selection_digest()`, and the non-live acquisition result copies that identity into `cohort_execution_result.v1` without adding caller-controlled fields to the v1 request object.
 
-## Bounded CS1 exclusions
+## Frontend interaction
 
-This batch does not make live provider/model calls, add SQL, render frontend controls, or project cohort/result audit fields. The general acquisition-runtime cutover is also still gated. That cutover must add a durable per-lane submission checkpoint (manifest/lane identity, submission state, provider run id, ambiguous-submit handling, resume, exact replay, and terminal reuse) before paid live validation. Those follow-ups must consume the canonical object, compiler manifest, and digests rather than re-derive role or employment semantics.
+The optional picker is default-off, so a legacy user action omits `cohort_selection` rather than sending an inferred or empty compatibility object. Once enabled, the frontend consumes only the public options projection for ids, labels, ordering, employment values, and the default role-match value. It may select multiple roles and both current/former statuses; the explicit `All roles` control serializes the canonical empty role list without introducing a frontend-owned registry.
+
+The same canonical object is copied without re-derivation through initial submit, revision submit, history recovery, and plan review. An already explicit reviewed plan displays the frozen selection read-only; a legacy plan may opt in and atomically upgrade through the backend merge contract. Frontend model, recovery, or display helpers cannot add role/status values that were not in the canonical object.
+
+## Bounded CS3 exclusions
+
+These batches do not make live provider/model calls, add SQL, or activate the retrieval-only helper. The next live-runtime batch must add a durable per-lane submission checkpoint (manifest/lane identity, submission state, provider run id, ambiguous-submit handling, resume, exact replay, and terminal reuse) before paid validation. Every follow-up must consume the canonical object, compiler manifest, and digests rather than re-derive role or employment semantics.
 
 ## Foundation validation evidence
 
@@ -97,5 +107,30 @@ This batch does not make live provider/model calls, add SQL, render frontend con
 - Extended planning/refinement/Cohort/owner-fencing regression: `215 passed + 64 subtests`, with one failure reproduced identically on clean `e04faf8` (`test_acquisition_strategy_prefers_intent_view_over_conflicting_flat_fields`).
 - Harvest connector regression: `121 passed`, with one failure reproduced identically on clean `e04faf8` (`test_profile_match_accepts_requested_opaque_identifier_even_when_profile_name_is_blank`).
 - Ruff check/format passed on all 20 changed Python files; focused mypy passed on five Cohort/matching/confidence/asset-reuse owners. The repository ratchet remains exactly `81 errors / 4 files` under `make typecheck`.
-- The adjacent PG organization-profile class produced `1 passed / 14 failed` on both this tree and clean `aa53ba7`; every failure occurs during repeated schema bootstrap because the shared test fixture truncates migration history, before Cohort/asset-reuse code runs. The exact affected node passes when run alone on clean `aa53ba7`; this pre-existing harness defect remains a separate Track D test-infrastructure repair.
+- At the CS1/CS2 foundation anchor, the adjacent PG organization-profile class produced `1 passed / 14 failed` on both that tree and clean `aa53ba7`; every failure occurred during repeated schema bootstrap because the shared test fixture truncated migration history before Cohort/asset-reuse code ran. The independent fixture repair is recorded in the CS3 evidence below.
 - No full `tests/test_pipeline.py`, paid provider/model, or live environment was used. This is author evidence only; fresh pinned independent review remains required before runtime/live signoff.
+
+## CS3 non-live runtime validation evidence
+
+- Compiler/gate/acquisition adapter plus full Cohort ingress regression: `64 passed + 55 subtests`.
+- The adapter regression proves a four-lane current/former × research/engineering manifest becomes one durable search-seed snapshot, candidate-document projection, and `cohort_execution_result.v1`; a forged stored planning manifest performs zero connector calls.
+- The adapter also executes the real Harvest boundary under a temporary two-role `role_match=all` scripted scenario, proves the versioned headline evidence, and proves no live submit function is reached.
+- Invalid candidate identity is now validated inside each lane before the next call; a first-lane failure records its lane with zero completed lanes, and a verifier failure records the exact completed-lane tuple.
+- Ruff format/check and Python compilation passed on the runtime/compiler/orchestrator/test scope. Broader acquisition/transport and scripted product E2E are required before this batch is promoted.
+- The PG fixture defect cited above was repaired independently in `ccd704a`: `schema_migrations` is preserved while domain tables are reset, with `2` dedicated and `8` adjacent PG tests passing.
+- No full `tests/test_pipeline.py`, paid provider/model, or live environment was used. This is author evidence, and the fresh pinned review of the prior CS1/CS2 commit remains asynchronous rather than being represented as a review of this new runtime diff.
+
+## CS4 frontend validation evidence
+
+- Frontend production build passed with `84 modules`; frontend plan contract passed `7 tests`.
+- Backend options/ingress and exact registry/review-copy nodes passed `5 tests + 3 subtests`.
+- A Playwright transport smoke proved the legacy action omits the field and an explicit action sends the exact canonical research+engineering/current/any object.
+- Ruff format/check passed on the transport contract scope. This is author evidence; fresh pinned non-author review remains required before manual/live signoff.
+
+## CS5 scripted service E2E validation evidence
+
+- `tests/test_cohort_workflow_e2e.py`: `1 passed` against an isolated, version-migrated PG schema; combined CS3/CS5 scope: `65 passed + 55 subtests`.
+- The test enters through `SourcingOrchestrator.run_workflow_blocking()`, uses the real plan/compiler/acquisition/materialization/result path, executes two scripted Harvest profile-search lanes plus one scripted profile-enrichment batch, and finishes `completed/completed` with one `current` candidate in the public asset population.
+- The public card carries the selected employment outcome, while the durable candidate document retains the exact `research+engineering` lane membership, employment selection, manifest digest, and `cohort_headline_role_classifier.v1` proof. `cohort_execution_result.v1` records two one-row lanes and one deduplicated candidate.
+- The live Harvest submit function is replaced by a hard-failing sentinel for the entire workflow, so this evidence also proves the scripted path cannot silently cross into paid submission. Background reconcile is joined before PG teardown rather than being hidden by a daemon thread.
+- No full `tests/test_pipeline.py`, paid provider/model, or live environment was used. This remains author evidence until a fresh pinned non-author review covers the CS3/CS5 implementation diff.

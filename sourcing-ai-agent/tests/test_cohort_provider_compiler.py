@@ -1,25 +1,32 @@
 from __future__ import annotations
 
 import copy
+import json
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import patch
 
+from sourcing_agent.acquisition import AcquisitionEngine
 from sourcing_agent.acquisition_strategy import compile_acquisition_strategy
 from sourcing_agent.asset_catalog import AssetCatalog
 from sourcing_agent.cohort_provider_compiler import (
     COHORT_EXECUTION_NOT_READY,
     CohortExecutionCapability,
+    CohortHeadlineRoleProofVerifier,
     CohortProviderCompilationError,
     CohortProviderCompiler,
     CohortProviderExecutionError,
     VerifiedCohortRoleProof,
     _sha256_json,
+    cohort_execution_capability_for_runtime,
+    cohort_execution_not_ready_result,
     resolve_effective_role_targeting,
 )
-from sourcing_agent.domain import JobRequest, RetrievalPlan
+from sourcing_agent.connectors import CompanyIdentity
+from sourcing_agent.domain import AcquisitionTask, JobRequest, RetrievalPlan
 from sourcing_agent.harvest_connectors import (
     HarvestProfileSearchConnector,
     HarvestProfileSearchResultError,
@@ -29,6 +36,7 @@ from sourcing_agent.harvest_connectors import (
 )
 from sourcing_agent.model_provider import DeterministicModelClient
 from sourcing_agent.planning import build_sourcing_plan, hydrate_sourcing_plan
+from sourcing_agent.runtime_environment import RuntimeEnvironment
 from sourcing_agent.settings import HarvestActorSettings
 
 
@@ -136,6 +144,84 @@ class CohortProviderCompilerTest(unittest.TestCase):
             "keywords": ["Product Manager", "Pre-train"],
             "scope_keywords": ["Platform Engineering", "Foundation Models"],
         }
+
+    def test_runtime_capability_is_server_owned_and_non_live_only(self) -> None:
+        scripted_runtime = RuntimeEnvironment(
+            name="scripted",
+            provider_mode="scripted",
+            runtime_dir=Path("/tmp/scripted-runtime"),
+        )
+        live_runtime = RuntimeEnvironment(
+            name="production",
+            provider_mode="live",
+            runtime_dir=Path("/tmp/live-runtime"),
+        )
+        payload = _request_payload(roles=["research"], statuses=["current"])
+
+        with patch(
+            "sourcing_agent.cohort_provider_compiler.current_runtime_environment",
+            return_value=scripted_runtime,
+        ):
+            capability = cohort_execution_capability_for_runtime(runtime_dir="/tmp/scripted-runtime")
+            gate = cohort_execution_not_ready_result(
+                payload,
+                runtime_dir="/tmp/scripted-runtime",
+            )
+
+        self.assertIsNotNone(capability)
+        assert capability is not None
+        self.assertEqual(capability.owner, "cohort_runtime")
+        self.assertEqual(
+            capability.policy_revision,
+            "cohort_non_live_runtime.v1:scripted",
+        )
+        self.assertIsNone(gate)
+
+        with patch(
+            "sourcing_agent.cohort_provider_compiler.current_runtime_environment",
+            return_value=live_runtime,
+        ):
+            self.assertIsNone(cohort_execution_capability_for_runtime(runtime_dir="/tmp/live-runtime"))
+            live_gate = cohort_execution_not_ready_result(
+                payload,
+                runtime_dir="/tmp/live-runtime",
+            )
+
+        self.assertEqual(live_gate["reason"], "cohort_selection_execution_not_ready")
+        self.assertFalse(live_gate["cohort_provider_manifest"]["execution_ready"])
+
+    def test_non_live_runtime_installs_exact_all_role_proof_owner(self) -> None:
+        scripted_runtime = RuntimeEnvironment(
+            name="scripted",
+            provider_mode="scripted",
+            runtime_dir=Path("/tmp/scripted-runtime"),
+        )
+        with patch(
+            "sourcing_agent.cohort_provider_compiler.current_runtime_environment",
+            return_value=scripted_runtime,
+        ):
+            capability = cohort_execution_capability_for_runtime(runtime_dir="/tmp/scripted-runtime")
+            gate = cohort_execution_not_ready_result(
+                _request_payload(
+                    roles=["research", "engineering"],
+                    statuses=["current"],
+                    role_match="all",
+                ),
+                runtime_dir="/tmp/scripted-runtime",
+            )
+
+        self.assertIsNone(gate)
+        assert capability is not None
+        self.assertEqual(capability.role_proof_verifier_id, CohortHeadlineRoleProofVerifier.verifier_id)
+        self.assertEqual(
+            capability.role_proof_verifier_revision,
+            CohortHeadlineRoleProofVerifier.verifier_revision,
+        )
+        proof = CohortHeadlineRoleProofVerifier().verify({"headline": "Research Scientist and Software Engineer"})
+        self.assertIsNotNone(proof)
+        assert proof is not None
+        self.assertEqual(proof.role_bucket_ids, ("research", "engineering"))
+        self.assertEqual(len(proof.evidence_digest), 64)
 
     def test_manifest_has_one_physical_lane_per_status_role_and_stable_payloads(self) -> None:
         manifest = self.compiler.compile(
@@ -623,6 +709,77 @@ class CohortProviderCompilerTest(unittest.TestCase):
                 )
         self.assertEqual(empty["candidate_count"], 0)
 
+    def test_harvest_boundary_stops_after_invalid_identity_and_binds_attempt_evidence(self) -> None:
+        manifest = self.compiler.compile(
+            _request_payload(roles=["research", "engineering"], statuses=["current"]),
+            execution_capability=self.capability,
+        )
+
+        class _InvalidFirstLaneConnector(HarvestProfileSearchConnector):
+            calls = 0
+
+            def search_profiles(self, **_kwargs):
+                self.calls += 1
+                if self.calls > 1:
+                    raise AssertionError("invalid first-lane identity must stop later provider calls")
+                return {"rows": [{"full_name": "Identity-free"}]}
+
+        connector = _InvalidFirstLaneConnector(HarvestActorSettings())
+        with tempfile.TemporaryDirectory() as tempdir:
+            with self.assertRaises(CohortProviderExecutionError) as caught:
+                connector.search_profiles_for_cohort_manifest(
+                    manifest=manifest,
+                    execution_capability=self.capability,
+                    discovery_dir=Path(tempdir),
+                )
+
+        self.assertEqual(connector.calls, 1)
+        self.assertEqual(caught.exception.code, "cohort_provider_candidate_identity_missing")
+        self.assertEqual(caught.exception.lane_id, manifest["lanes"][0]["lane_id"])
+        self.assertEqual(caught.exception.completed_lane_ids, ())
+
+    def test_harvest_boundary_binds_completed_lanes_to_role_verifier_failure(self) -> None:
+        capability = CohortExecutionCapability(
+            policy_revision="test.proof-attempt-evidence.v1",
+            role_proof_verifier_id="failing_role_verifier",
+            role_proof_verifier_revision="v1",
+        )
+        manifest = self.compiler.compile(
+            _request_payload(
+                roles=["research", "engineering"],
+                statuses=["current"],
+                role_match="all",
+            ),
+            execution_capability=capability,
+        )
+
+        class _Connector(HarvestProfileSearchConnector):
+            def search_profiles(self, **_kwargs):
+                return {"rows": [{"candidate_id": "same-person", "headline": "Research Engineer"}]}
+
+        class _FailingVerifier:
+            verifier_id = "failing_role_verifier"
+            verifier_revision = "v1"
+
+            @staticmethod
+            def verify(_row):
+                raise RuntimeError("proof unavailable")
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            with self.assertRaises(CohortProviderExecutionError) as caught:
+                _Connector(HarvestActorSettings()).search_profiles_for_cohort_manifest(
+                    manifest=manifest,
+                    execution_capability=capability,
+                    role_proof_verifier=_FailingVerifier(),
+                    discovery_dir=Path(tempdir),
+                )
+
+        self.assertEqual(caught.exception.code, "cohort_role_proof_verification_failed")
+        self.assertEqual(
+            caught.exception.completed_lane_ids,
+            tuple(lane["lane_id"] for lane in manifest["lanes"]),
+        )
+
     def test_strict_cohort_dataset_fetch_distinguishes_null_from_empty_page(self) -> None:
         settings = HarvestActorSettings(enabled=True, api_token="test", actor_id="actor")
         with patch("sourcing_agent.harvest_connectors._get_harvest_dataset_items_page", return_value=None):
@@ -862,6 +1019,294 @@ class CohortProviderCompilerTest(unittest.TestCase):
             ],
         )
         self.assertEqual(len(manifest["manifest_digest"]), 64)
+
+
+class CohortAcquisitionRuntimeTest(unittest.TestCase):
+    def test_non_live_manifest_flows_into_one_durable_search_seed_contract(self) -> None:
+        captured: list[dict[str, Any]] = []
+
+        class _Connector:
+            @staticmethod
+            def search_profiles_for_cohort_manifest(**kwargs):
+                manifest = dict(kwargs["manifest"])
+                captured.append(dict(kwargs))
+                memberships = [
+                    {
+                        "lane_id": str(lane["lane_id"]),
+                        "employment_status": str(lane["employment_status"]),
+                        "role_bucket_id": str(lane["role_bucket_id"]),
+                    }
+                    for lane in manifest["lanes"]
+                ]
+                return {
+                    "rows": [
+                        {
+                            "full_name": "Ada Researcher",
+                            "headline": "Research Engineer",
+                            "profile_url": "https://www.linkedin.com/in/ada-researcher/",
+                            "username": "ada-researcher",
+                            "cohort_lane_membership": memberships,
+                        }
+                    ],
+                    "candidate_count": 1,
+                    "truncated_count": 0,
+                    "rejected_unverified_count": 0,
+                    "missing_required_lane_count": 0,
+                    "result_digest": "result-digest",
+                    "cohort_provider_manifest": manifest,
+                    "lane_summaries": [
+                        {
+                            "lane_id": lane["lane_id"],
+                            "lane_digest": lane["lane_digest"],
+                            "employment_status": lane["employment_status"],
+                            "role_bucket_id": lane["role_bucket_id"],
+                            "provider_item_limit": lane["provider_item_limit"],
+                            "row_count": 1,
+                            "raw_path": f"/tmp/{lane['lane_id']}.json",
+                        }
+                        for lane in manifest["lanes"]
+                    ],
+                }
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            runtime_dir = Path(tempdir) / "simulate_runtime"
+            snapshot_dir = runtime_dir / "company_assets" / "acme" / "snap-test"
+            snapshot_dir.mkdir(parents=True)
+            engine = object.__new__(AcquisitionEngine)
+            engine.settings = SimpleNamespace(runtime_dir=runtime_dir)
+            engine.store = SimpleNamespace()
+            engine.worker_runtime = None
+            engine.harvest_profile_search_connector = _Connector()
+            engine._queue_background_profile_prefetch_for_search_seed_entries = lambda **_kwargs: {
+                "status": "completed",
+                "requested_url_count": 1,
+                "dispatched_url_count": 1,
+            }
+            identity = CompanyIdentity(
+                requested_name="Acme",
+                canonical_name="Acme",
+                company_key="acme",
+                linkedin_slug="acme",
+                linkedin_company_url="https://www.linkedin.com/company/acme/",
+            )
+            request = JobRequest.from_payload(
+                _request_payload(
+                    roles=["research", "engineering"],
+                    statuses=["current", "former"],
+                )
+            )
+            task = AcquisitionTask(
+                task_id="cohort-search",
+                task_type="acquire_full_roster",
+                title="Acquire cohort",
+                description="test",
+                status="ready",
+                blocking=True,
+                metadata={
+                    "strategy_type": "scoped_search_roster",
+                    "filter_hints": {"current_companies": ["Acme"], "past_companies": ["Acme"]},
+                    "cost_policy": {"allow_shared_provider_cache": False},
+                },
+            )
+            preview_manifest = CohortProviderCompiler().compile(
+                request.to_record(),
+                base_filter_hints={"current_companies": ["Acme"], "past_companies": ["Acme"]},
+            )
+
+            execution = engine._acquire_search_seed_pool(
+                task,
+                {
+                    "company_identity": identity,
+                    "snapshot_dir": snapshot_dir,
+                    "job_id": "job-cohort",
+                    "plan_payload": {
+                        "acquisition_strategy": {
+                            "provider_execution_manifest": preview_manifest,
+                        }
+                    },
+                    "runtime_mode": "workflow",
+                },
+                request,
+            )
+
+            self.assertEqual(execution.status, "completed")
+            self.assertEqual(execution.payload["entry_count"], 1)
+            self.assertEqual(execution.payload["cohort_execution_result"]["candidate_count"], 1)
+            self.assertEqual(len(captured), 1)
+            manifest = captured[0]["manifest"]
+            self.assertTrue(manifest["execution_ready"])
+            self.assertEqual(
+                {(lane["employment_status"], lane["role_bucket_id"]) for lane in manifest["lanes"]},
+                {
+                    ("current", "research"),
+                    ("current", "engineering"),
+                    ("former", "research"),
+                    ("former", "engineering"),
+                },
+            )
+            entries = json.loads((snapshot_dir / "search_seed_discovery" / "entries.json").read_text(encoding="utf-8"))
+            self.assertEqual(entries[0]["full_name"], "Ada Researcher")
+            self.assertEqual(
+                entries[0]["metadata"]["cohort_role_bucket_ids"],
+                ["research", "engineering"],
+            )
+            candidate_documents = json.loads((snapshot_dir / "candidate_documents.json").read_text(encoding="utf-8"))
+            self.assertEqual(candidate_documents["candidate_count"], 1)
+            result_summary = json.loads(
+                (snapshot_dir / "cohort_provider_discovery" / "cohort_execution_result.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(result_summary["result_digest"], "result-digest")
+
+            invalid_plan_payloads = {
+                "missing": {},
+                "forged": {
+                    "acquisition_strategy": {
+                        "provider_execution_manifest": {"forged": True},
+                    }
+                },
+            }
+            for label, plan_payload in invalid_plan_payloads.items():
+                with self.subTest(plan_manifest=label):
+                    blocked = engine._acquire_search_seed_pool(
+                        task,
+                        {
+                            "company_identity": identity,
+                            "snapshot_dir": snapshot_dir,
+                            "job_id": f"job-{label}-plan",
+                            "plan_payload": plan_payload,
+                            "runtime_mode": "workflow",
+                        },
+                        request,
+                    )
+                    self.assertEqual(blocked.status, "blocked")
+                    self.assertEqual(blocked.payload["reason"], "cohort_provider_manifest_semantic_mismatch")
+            self.assertEqual(len(captured), 1)
+
+    def test_scripted_runtime_executes_real_harvest_boundary_without_live_submission(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            runtime_dir = Path(tempdir) / "scripted_runtime"
+            snapshot_dir = runtime_dir / "company_assets" / "acme" / "snap-scripted"
+            snapshot_dir.mkdir(parents=True)
+            scenario_path = Path(tempdir) / "cohort_scenario.json"
+            scenario_path.write_text(
+                json.dumps(
+                    {
+                        "harvest": {
+                            "rules": [
+                                {
+                                    "name": "cohort_profile_search",
+                                    "match": {"logical_name": "harvest_profile_search"},
+                                    "body": [
+                                        {
+                                            "linkedinUrl": "https://www.linkedin.com/in/scripted-researcher/",
+                                            "publicIdentifier": "scripted-researcher",
+                                            "fullName": "Scripted Researcher",
+                                            "headline": "Research Scientist and Software Engineer",
+                                            "currentCompany": "Acme",
+                                        }
+                                    ],
+                                }
+                            ]
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            request = JobRequest.from_payload(
+                _request_payload(
+                    roles=["research", "engineering"],
+                    statuses=["current"],
+                    role_match="all",
+                )
+            )
+            task = AcquisitionTask(
+                task_id="cohort-scripted",
+                task_type="acquire_full_roster",
+                title="Acquire scripted cohort",
+                description="test",
+                status="ready",
+                blocking=True,
+                metadata={
+                    "strategy_type": "scoped_search_roster",
+                    "filter_hints": {"current_companies": ["Acme"]},
+                    "cost_policy": {"allow_shared_provider_cache": False},
+                },
+            )
+            preview_manifest = CohortProviderCompiler().compile(
+                request.to_record(),
+                base_filter_hints={"current_companies": ["Acme"]},
+            )
+            engine = object.__new__(AcquisitionEngine)
+            engine.settings = SimpleNamespace(runtime_dir=runtime_dir)
+            engine.store = SimpleNamespace()
+            engine.worker_runtime = None
+            engine.harvest_profile_search_connector = HarvestProfileSearchConnector(HarvestActorSettings(enabled=False))
+            engine._queue_background_profile_prefetch_for_search_seed_entries = lambda **_kwargs: {
+                "status": "completed",
+                "requested_url_count": 1,
+                "dispatched_url_count": 0,
+            }
+            identity = CompanyIdentity(
+                requested_name="Acme",
+                canonical_name="Acme",
+                company_key="acme",
+                linkedin_slug="acme",
+                linkedin_company_url="https://www.linkedin.com/company/acme/",
+            )
+            with (
+                patch.dict(
+                    "os.environ",
+                    {
+                        "SOURCING_RUNTIME_DIR": str(runtime_dir),
+                        "SOURCING_EXTERNAL_PROVIDER_MODE": "scripted",
+                        "SOURCING_SCRIPTED_PROVIDER_SCENARIO": str(scenario_path),
+                        "SOURCING_SCRIPTED_HARVEST_SLEEP_SECONDS_CAP": "0",
+                    },
+                ),
+                patch(
+                    "sourcing_agent.harvest_connectors._submit_harvest_actor_run",
+                    side_effect=AssertionError("scripted cohort runtime must not submit a live Harvest run"),
+                ),
+            ):
+                execution = engine._acquire_search_seed_pool(
+                    task,
+                    {
+                        "company_identity": identity,
+                        "snapshot_dir": snapshot_dir,
+                        "job_id": "job-scripted-cohort",
+                        "plan_payload": {
+                            "acquisition_strategy": {
+                                "provider_execution_manifest": preview_manifest,
+                            }
+                        },
+                        "runtime_mode": "workflow",
+                    },
+                    request,
+                )
+
+            self.assertEqual(execution.status, "completed")
+            self.assertEqual(execution.payload["cohort_execution_result"]["candidate_count"], 1)
+            self.assertEqual(len(execution.payload["cohort_execution_result"]["lane_summaries"]), 2)
+            self.assertTrue(
+                all(
+                    summary["row_count"] == 1
+                    for summary in execution.payload["cohort_execution_result"]["lane_summaries"]
+                )
+            )
+            persisted = json.loads(
+                (snapshot_dir / "search_seed_discovery" / "entries.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(persisted[0]["full_name"], "Scripted Researcher")
+            self.assertEqual(
+                persisted[0]["metadata"]["cohort_role_bucket_ids"],
+                ["research", "engineering"],
+            )
+            self.assertEqual(
+                persisted[0]["metadata"]["cohort_role_proof"]["verifier_id"],
+                CohortHeadlineRoleProofVerifier.verifier_id,
+            )
 
 
 if __name__ == "__main__":
