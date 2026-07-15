@@ -573,6 +573,63 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
         all_schema_text = "".join((ROOT / "contracts" / name).read_text() for name in schema_names)
         self.assertNotIn("maxItems", all_schema_text)
 
+    def test_discovery_only_session_query_policy_rejects_mechanical_person_hydration(self) -> None:
+        allowed = (
+            (
+                {"query": "Google DeepMind pretraining researchers", "limit": "50", "mode": "Latest"},
+                "x_keyword_search",
+            ),
+            ({"query": "large scale model training engineer", "limit": "50"}, "x_semantic_search"),
+            ({"query": "Google DeepMind researcher", "count": "50"}, "x_user_search"),
+            ({"post_id": "123456"}, "x_thread_fetch"),
+        )
+        rejected = (
+            (
+                {"query": "from:TargetPerson pretraining", "limit": "50", "mode": "Latest"},
+                "x_keyword_search",
+            ),
+            (
+                {"query": "-from:TargetPerson pretraining", "limit": "50", "mode": "Top"},
+                "x_keyword_search",
+            ),
+            ({"query": "TargetPerson", "count": "50"}, "x_user_search"),
+            ({"query": "Known Person", "count": "50"}, "x_user_search"),
+            (
+                {"query": "Known Person Google DeepMind researcher", "count": "50"},
+                "x_user_search",
+            ),
+            ({"query": "@TargetPerson", "limit": "50"}, "x_semantic_search"),
+        )
+        for arguments, tool_name in allowed:
+            self.assertTrue(
+                runner._session_query_phase_arguments_allowed(
+                    arguments,
+                    tool_name,
+                    session_query_policy_id=runner.DISCOVERY_ONLY_SESSION_QUERY_POLICY_ID,
+                    discovery_target_lab_id="google_deepmind",
+                ),
+                (tool_name, arguments),
+            )
+        for arguments, tool_name in rejected:
+            self.assertFalse(
+                runner._session_query_phase_arguments_allowed(
+                    arguments,
+                    tool_name,
+                    session_query_policy_id=runner.DISCOVERY_ONLY_SESSION_QUERY_POLICY_ID,
+                    discovery_target_lab_id="google_deepmind",
+                ),
+                (tool_name, arguments),
+            )
+            self.assertTrue(
+                runner._session_query_phase_arguments_allowed(
+                    arguments,
+                    tool_name,
+                    session_query_policy_id=runner.MIXED_SESSION_QUERY_POLICY_ID,
+                    discovery_target_lab_id="google_deepmind",
+                ),
+                (tool_name, arguments),
+            )
+
     def test_schema_top_level_keys_match_runtime_registries(self) -> None:
         mappings = {
             "x.grok.adaptive_recall_wave.request.v2.schema.json": runner._REQUEST_KEYS,
@@ -685,6 +742,19 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
         discovery_only_prompt = next(
             path for path in google_deepmind_prompt_paths if "v4-discovery-only" in path.name
         ).read_text()
+        discovery_only_entry = next(
+            entry
+            for entry in google_deepmind_entries
+            if entry["policy_entry_id"] == "google_deepmind_pretraining_recall_wave2_discovery_only.v4"
+        )
+        self.assertEqual(
+            discovery_only_entry["session_query_policy_id"],
+            runner.DISCOVERY_ONLY_SESSION_QUERY_POLICY_ID,
+        )
+        self.assertEqual(
+            discovery_only_entry["session_query_policy_sha256"],
+            runner.session_query_policy_semantics_sha256(runner.DISCOVERY_ONLY_SESSION_QUERY_POLICY_ID),
+        )
         self.assertIn("This wave is Phase D only", discovery_only_prompt)
         self.assertIn("do not issue any `from:<handle>` query", discovery_only_prompt)
         self.assertIn("Hydration will be a separate operator-generated stage", discovery_only_prompt)
@@ -757,6 +827,121 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
                     grant["effective_prompt_policy_entry_id"],
                     "google_deepmind_pretraining_recall_wave1.v1",
                 )
+
+    def test_discovery_only_effective_policy_fails_closed_on_person_scoped_session_query(self) -> None:
+        def run_case(
+            root: Path,
+            *,
+            forbidden_tool_call: tuple[str, dict[str, str]] | None = None,
+        ) -> tuple[dict[str, Any], Path, Path]:
+            root.mkdir(mode=0o700)
+            binary, auth, binary_sha = _live_material(root)
+            request, request_path = _build_request(root, binary_sha=binary_sha)
+            approvals = root / "approvals"
+            issue_live_grant(
+                request_path=request_path,
+                grant_root=approvals,
+                auth_source=auth,
+                wall_clock=lambda: FIXED_TIME,
+            )
+
+            def mutate(updates: list[dict[str, Any]]) -> list[dict[str, Any]]:
+                if forbidden_tool_call is not None:
+                    for envelope in updates:
+                        update = envelope.get("params", {}).get("update", {})
+                        raw_output = update.get("rawOutput")
+                        if isinstance(raw_output, dict) and raw_output.get("name") == "x_keyword_search":
+                            raw_output["name"], arguments = forbidden_tool_call
+                            raw_output["input"] = canonical_json(arguments)
+                return updates
+
+            model_result = _empty_result()
+            model_result["status"] = "X_SEARCH_OK"
+            model_result["status_reason"] = "Synthetic model claimed discovery convergence."
+            model_result["candidates"] = [_candidate("TargetPerson", profile_host="x.com")]
+            model_result["counts"]["candidates_retained"] = 1
+            model_result["local_reconciliation"]["candidate_records_validated"] = 1
+            clock = MutableClock()
+            executor = FakeExecutor(
+                clock,
+                (canonical_json(model_result) + "\n").encode(),
+                spawn=True,
+                session_mutator=mutate,
+            )
+            receipt, run_root = _run_adaptive_wave(
+                request=request,
+                execution_mode="live",
+                runtime_root=root / "runtime",
+                approval_root=approvals,
+                binary=binary,
+                auth_source=auth,
+                executor=executor,
+                monotonic=clock,
+                wall_clock=lambda: FIXED_TIME,
+            )
+            return receipt, run_root, approvals
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            policy = json.loads(TEST_EFFECTIVE_PROMPT_POLICY.read_text())
+            policy["entries"][0]["session_query_policy_id"] = runner.DISCOVERY_ONLY_SESSION_QUERY_POLICY_ID
+            policy["entries"][0]["session_query_policy_sha256"] = runner.session_query_policy_semantics_sha256(
+                runner.DISCOVERY_ONLY_SESSION_QUERY_POLICY_ID
+            )
+            forged_policy = copy.deepcopy(policy)
+            forged_policy["entries"][0]["session_query_policy_sha256"] = "0" * 64
+            forged_policy_path = root / "forged-discovery-policy.json"
+            _write_private(forged_policy_path, (canonical_json(forged_policy) + "\n").encode())
+            with mock.patch.object(runner, "DEFAULT_EFFECTIVE_PROMPT_POLICY", forged_policy_path):
+                with self.assertRaisesRegex(
+                    runner.AdaptiveWaveValidationError,
+                    "effective_prompt_policy_invalid",
+                ):
+                    runner._load_effective_prompt_policy()
+            policy_path = root / "discovery-policy.json"
+            _write_private(policy_path, (canonical_json(policy) + "\n").encode())
+            with mock.patch.object(runner, "DEFAULT_EFFECTIVE_PROMPT_POLICY", policy_path):
+                valid, valid_root, valid_approvals = run_case(root / "valid")
+                self.assertEqual(valid["status"], "completed")
+                self.assertEqual(valid["session_proof"]["status"], "verified")
+                valid_sanitized = json.loads((valid_root / "sanitized.json").read_text())
+                self.assertEqual(valid_sanitized["status"], "X_SEARCH_PARTIAL")
+                self.assertEqual(
+                    valid_sanitized["status_reason"],
+                    runner._DISCOVERY_CONVERGENCE_UNPROVEN_REASON,
+                )
+                self.assertIn(runner._DISCOVERY_CONVERGENCE_UNPROVEN_REASON, valid_sanitized["limitations"])
+                self.assertFalse(
+                    any("required per-handle authored Post/Reply" in row for row in valid_sanitized["limitations"])
+                )
+                self.assertEqual(validate_operator_bundle(valid_root, approval_root=valid_approvals), [])
+
+                forbidden_cases = (
+                    (
+                        "from-query",
+                        "x_keyword_search",
+                        {"query": "from:TargetPerson pretraining", "limit": "100", "mode": "Latest"},
+                    ),
+                    ("bare-user-query", "x_user_search", {"query": "TargetPerson", "count": "50"}),
+                    ("exact-name-user-query", "x_user_search", {"query": "Known Person", "count": "50"}),
+                    (
+                        "disguised-name-user-query",
+                        "x_user_search",
+                        {"query": "Known Person synthetic researcher", "count": "50"},
+                    ),
+                )
+                for case_id, tool_name, arguments in forbidden_cases:
+                    invalid, invalid_root, invalid_approvals = run_case(
+                        root / case_id,
+                        forbidden_tool_call=(tool_name, arguments),
+                    )
+                    self.assertEqual(invalid["status"], "provider_evidence_invalid", case_id)
+                    self.assertEqual(invalid["session_proof"]["status"], "invalid", case_id)
+                    self.assertEqual(
+                        validate_operator_bundle(invalid_root, approval_root=invalid_approvals),
+                        [],
+                        case_id,
+                    )
 
     def test_effective_prompt_binding_survives_unrelated_append_and_purge_replay(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -1899,6 +2084,31 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
         )
         self.assertEqual(validate_model_result(complete, live_mode=True), [])
 
+        discovery = runner._operator_project_model_result(
+            result,
+            session_proof=proof_with_surfaces(()),
+            fixture=False,
+            session_query_policy_id=runner.DISCOVERY_ONLY_SESSION_QUERY_POLICY_ID,
+        )
+        self.assertEqual(discovery["status"], "X_SEARCH_PARTIAL")
+        self.assertEqual(discovery["status_reason"], runner._DISCOVERY_CONVERGENCE_UNPROVEN_REASON)
+        self.assertIn(runner._DISCOVERY_CONVERGENCE_UNPROVEN_REASON, discovery["limitations"])
+        self.assertFalse(any("authored Post/Reply" in row for row in discovery["limitations"]))
+        self.assertEqual(validate_model_result(discovery, live_mode=True), [])
+
+        blocked = _empty_result()
+        blocked["status"] = "X_SEARCH_BLOCKED"
+        blocked["status_reason"] = "Synthetic provider blocked the search."
+        blocked_projection = runner._operator_project_model_result(
+            blocked,
+            session_proof=proof_with_surfaces(()),
+            fixture=False,
+            session_query_policy_id=runner.DISCOVERY_ONLY_SESSION_QUERY_POLICY_ID,
+        )
+        self.assertEqual(blocked_projection["status"], "X_SEARCH_BLOCKED")
+        self.assertEqual(blocked_projection["status_reason"], "Synthetic provider blocked the search.")
+        self.assertNotIn(runner._DISCOVERY_CONVERGENCE_UNPROVEN_REASON, blocked_projection["limitations"])
+
     def test_legacy_plain_fixture_bundle_remains_replayable(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -2407,6 +2617,117 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             self.assertEqual(receipt["status"], "technical_limit_exceeded")
             self.assertEqual(receipt["process"]["technical_limit_kind"], "json_structure")
             self.assertEqual(validate_operator_bundle(run_root), [])
+
+    def test_operator_transforms_reapply_json_byte_and_structure_ceilings(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            os.chmod(root, 0o700)
+            request, _ = _build_request(root)
+            result = _relationship_mismatch_result()
+            result["limitations"].extend(
+                f"{index:03d}:" + ("p" * 3_980)
+                for index in range(260)
+            )
+            raw = (canonical_json(result) + "\n").encode()
+            self.assertGreater(len(raw), 1_000_000)
+            request["technical_limits"]["max_json_bytes"] = len(raw)
+            request["technical_limits"]["max_stdout_bytes"] = len(raw)
+            fake = FakeExecutor(MutableClock(), raw)
+
+            receipt, run_root = _run_adaptive_wave(
+                request=request,
+                execution_mode="fixture",
+                runtime_root=root / "runtime",
+                approval_root=root / "unused",
+                binary=Path("fixture.invalid"),
+                auth_source=None,
+                executor=fake,
+                monotonic=fake.clock,
+                wall_clock=lambda: FIXED_TIME,
+            )
+
+            self.assertEqual(receipt["status"], "technical_limit_exceeded")
+            self.assertEqual(receipt["process"]["technical_limit_kind"], "json_bytes")
+            self.assertFalse((run_root / "sanitized.json").exists())
+            self.assertEqual(validate_operator_bundle(run_root), [])
+
+            terminal_proof = runner.SessionProof(
+                updates_sha256="a" * 64,
+                update_bytes=1,
+                event_count=1,
+                provider_prompt_id_sha256="b" * 64,
+                effective_model_id="grok-4.5",
+                started_tool_calls=1,
+                completed_tool_calls=1,
+                tool_counts={"x_keyword_search": 1},
+                query_argument_sha256s=("c" * 64,),
+                candidate_surface_attempts=(),
+                terminal_stop_reason="end_turn",
+                input_tokens=1,
+                output_tokens=1,
+                total_tokens=2,
+                model_turns=1,
+                estimated_cost_usd_micros=1,
+                terminal_assistant_text=raw.decode().strip(),
+            )
+            recovered_terminal, terminal_limit_kind = runner._terminal_session_model_result(
+                terminal_proof,
+                technical_limits=request["technical_limits"],
+                prior_candidates={},
+                apply_result_normalization=True,
+            )
+            self.assertIsNone(recovered_terminal)
+            self.assertEqual(terminal_limit_kind, "json_bytes")
+
+            (run_root / "operator-receipt.json").unlink()
+            recovered_receipt = recover_incomplete_run(
+                run_root,
+                process_group_is_alive=lambda group: False,
+                wall_clock=lambda: FIXED_TIME + timedelta(minutes=5),
+            )
+            self.assertEqual(recovered_receipt["status"], "crash_recovered")
+            self.assertTrue(recovered_receipt["process"]["technical_limit_exceeded"])
+            self.assertEqual(recovered_receipt["process"]["technical_limit_kind"], "json_bytes")
+            self.assertEqual(validate_operator_bundle(run_root), [])
+
+        serialized, limit_kind = runner._serialize_operator_result(
+            {"nested": ["one", "two"]},
+            technical_limits={"max_json_depth": 64, "max_json_nodes": 2, "max_json_bytes": 1_000_000},
+        )
+        self.assertIsNone(serialized)
+        self.assertEqual(limit_kind, "json_structure")
+
+        discovery_result = _empty_result()
+        discovery_result["status"] = "X_SEARCH_OK"
+        discovery_result["status_reason"] = "Synthetic discovery convergence claim."
+        discovery_result["candidates"] = [_candidate("TargetPerson", profile_host="x.com")]
+        discovery_result["counts"]["candidates_retained"] = 1
+        pre_projection_raw = (canonical_json(discovery_result) + "\n").encode()
+        projected = runner._operator_project_model_result(
+            discovery_result,
+            session_proof=terminal_proof,
+            fixture=False,
+            session_query_policy_id=runner.DISCOVERY_ONLY_SESSION_QUERY_POLICY_ID,
+        )
+        serialized, limit_kind = runner._serialize_operator_result(
+            projected,
+            technical_limits={
+                "max_json_depth": 64,
+                "max_json_nodes": 250_000,
+                "max_json_bytes": len(pre_projection_raw),
+            },
+        )
+        self.assertIsNone(serialized)
+        self.assertEqual(limit_kind, "json_bytes")
+        nested: Any = "leaf"
+        for _ in range(8):
+            nested = [nested]
+        serialized, limit_kind = runner._serialize_operator_result(
+            nested,
+            technical_limits={"max_json_depth": 4, "max_json_nodes": 100, "max_json_bytes": 1_000_000},
+        )
+        self.assertIsNone(serialized)
+        self.assertEqual(limit_kind, "json_structure")
 
     def test_prompt_and_prior_inputs_enforce_byte_depth_and_node_ceilings(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

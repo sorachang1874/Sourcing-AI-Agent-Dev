@@ -80,6 +80,57 @@ EFFECTIVE_PROMPT_POLICY_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.effective_
 EFFECTIVE_PROMPT_POLICY_ID = "adaptive_base_discovery_effective_prompts.v1"
 EFFECTIVE_PROMPT_POLICY_OWNER = "x_first_adaptive_wave_operator"
 EFFECTIVE_PROMPT_POLICY_BINDING_VERSION = "adaptive-effective-prompt-entry-semantics-v1"
+MIXED_SESSION_QUERY_POLICY_ID = "mixed_discovery_hydration_v1"
+DISCOVERY_ONLY_SESSION_QUERY_POLICY_ID = "discovery_only_no_person_hydration_v1"
+SESSION_QUERY_POLICY_IDS = frozenset(
+    {MIXED_SESSION_QUERY_POLICY_ID, DISCOVERY_ONLY_SESSION_QUERY_POLICY_ID}
+)
+SESSION_QUERY_POLICY_SEMANTICS = {
+    MIXED_SESSION_QUERY_POLICY_ID: {
+        "policy_id": MIXED_SESSION_QUERY_POLICY_ID,
+        "native_x_query_phase": "mixed_discovery_and_person_hydration_v1",
+        "result_projection": "unresolved_candidate_authored_surface_gate_v1",
+    },
+    DISCOVERY_ONLY_SESSION_QUERY_POLICY_ID: {
+        "policy_id": DISCOVERY_ONLY_SESSION_QUERY_POLICY_ID,
+        "from_query": "forbidden_case_insensitive_v1",
+        "handle_like_single_token_query": "forbidden_x_handle_grammar_v1",
+        "x_user_search": "closed_target_lab_and_professional_context_token_allowlist_v1",
+        "multiword_keyword_or_semantic_person_intent": "post_run_audit_residual_v1",
+        "result_projection": "force_partial_without_hydration_surface_gate_v1",
+    },
+}
+_DISCOVERY_USER_SEARCH_PROFESSIONAL_TERMS = frozenset(
+    {
+        "alignment",
+        "applied",
+        "architect",
+        "base",
+        "engineer",
+        "engineering",
+        "inference",
+        "infrastructure",
+        "language",
+        "learning",
+        "member",
+        "model",
+        "multimodal",
+        "people",
+        "pretrain",
+        "pretraining",
+        "research",
+        "researcher",
+        "robotics",
+        "safety",
+        "scaling",
+        "scientist",
+        "staff",
+        "team",
+        "tokenization",
+        "training",
+    }
+)
+_DISCOVERY_USER_SEARCH_CONNECTOR_TERMS = frozenset({"ai", "and", "at", "lab", "labs", "or"})
 ALLOWED_DISCOVERY_DIMENSIONS = (
     "target_lab_affiliation",
     "professional_role_or_function",
@@ -117,6 +168,10 @@ _SURFACE_COVERAGE_DOWNGRADE_REASON = (
     "Operator downgraded the result to partial because required per-handle authored Post/Reply coverage "
     "is incomplete for unresolved pretraining leads."
 )
+_DISCOVERY_CONVERGENCE_UNPROVEN_REASON = (
+    "Operator kept the discovery-only result partial because strategy coverage and population convergence "
+    "have not been mechanically proven from the retained native-X arguments."
+)
 RESULT_NORMALIZATION_POLICY_VERSION = "mechanical-evidence-relationship-downgrade-v1"
 _RELATIONSHIP_DOWNGRADE_CAVEAT = (
     "Operator normalized a mechanically impossible self relationship to third_party because the evidence author "
@@ -141,6 +196,8 @@ _CANONICAL_TIME_RE = re.compile(
     r"(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]\.[0-9]{3}Z"
 )
 _PENDING_RE = re.compile(r"\.pending-(?P<name>[a-z0-9_.-]{1,96})-[0-9a-f]{32}")
+_PERSON_SCOPED_FROM_RE = re.compile(r"(?i)(?:-?from:)")
+_BARE_HANDLE_LIKE_QUERY_RE = re.compile(r"@?[A-Za-z0-9_]{1,15}")
 
 _REQUEST_KEYS = {
     "schema_version",
@@ -590,6 +647,7 @@ class SessionTreeMeasurement:
 class EffectivePromptPolicyBinding:
     policy_sha256: str
     policy_entry_id: str
+    session_query_policy_id: str
 
 
 class Executor(Protocol):
@@ -623,6 +681,13 @@ def canonical_json(value: Any) -> str:
 
 def canonical_sha256(value: Any) -> str:
     return hashlib.sha256(canonical_json(value).encode()).hexdigest()
+
+
+def session_query_policy_semantics_sha256(policy_id: str) -> str:
+    semantics = SESSION_QUERY_POLICY_SEMANTICS.get(policy_id)
+    if semantics is None:
+        raise AdaptiveWaveValidationError("session_query_policy_invalid")
+    return canonical_sha256(semantics)
 
 
 def bytes_sha256(value: bytes) -> str:
@@ -1396,6 +1461,7 @@ def _operator_project_model_result(
     *,
     session_proof: SessionProof | None,
     fixture: bool,
+    session_query_policy_id: str = MIXED_SESSION_QUERY_POLICY_ID,
 ) -> dict[str, Any]:
     """Replace model-authored ledger claims with replayable operator facts.
 
@@ -1431,7 +1497,21 @@ def _operator_project_model_result(
         "tool_calls_completed": completed_tool_calls,
         "tool_counts": tool_counts,
     }
-    if not fixture and session_proof is not None:
+    if session_query_policy_id not in SESSION_QUERY_POLICY_IDS:
+        raise AdaptiveWaveValidationError("session_query_policy_invalid")
+    if (
+        not fixture
+        and session_proof is not None
+        and session_query_policy_id == DISCOVERY_ONLY_SESSION_QUERY_POLICY_ID
+        and projected.get("status") in {"X_SEARCH_OK", "X_SEARCH_PARTIAL"}
+    ):
+        if projected["status"] == "X_SEARCH_OK":
+            projected["status"] = "X_SEARCH_PARTIAL"
+            projected["status_reason"] = _DISCOVERY_CONVERGENCE_UNPROVEN_REASON
+        limitations = projected.get("limitations")
+        if isinstance(limitations, list) and _DISCOVERY_CONVERGENCE_UNPROVEN_REASON not in limitations:
+            limitations.append(_DISCOVERY_CONVERGENCE_UNPROVEN_REASON)
+    elif not fixture and session_proof is not None:
         attempted_surfaces = {
             (attempt["handle_key"], attempt["surface"])
             for attempt in session_proof.candidate_surface_attempts
@@ -1750,11 +1830,19 @@ def _load_effective_prompt_policy() -> dict[str, Any]:
     entry_ids: set[str] = set()
     bindings: set[tuple[str, str]] = set()
     for entry in policy["entries"]:
-        if not isinstance(entry, dict) or set(entry) != {
+        base_entry_keys = {
             "policy_entry_id",
             "target",
             "source_prompt_sha256",
             "authority",
+        }
+        session_policy_keys = {
+            "session_query_policy_id",
+            "session_query_policy_sha256",
+        }
+        if not isinstance(entry, dict) or frozenset(entry) not in {
+            frozenset(base_entry_keys),
+            frozenset(base_entry_keys | session_policy_keys),
         }:
             raise AdaptiveWaveValidationError("effective_prompt_policy_invalid")
         entry_id = entry.get("policy_entry_id")
@@ -1773,6 +1861,13 @@ def _load_effective_prompt_policy() -> dict[str, Any]:
             or not _is_text(target.get("scope"), maximum=20_000)
             or not _is_sha(source_prompt_sha)
             or entry.get("authority") not in {"fixture_only", "live_authorized"}
+            or entry.get("session_query_policy_id", MIXED_SESSION_QUERY_POLICY_ID)
+            not in SESSION_QUERY_POLICY_IDS
+            or (
+                "session_query_policy_id" in entry
+                and entry.get("session_query_policy_sha256")
+                != session_query_policy_semantics_sha256(entry["session_query_policy_id"])
+            )
         ):
             raise AdaptiveWaveValidationError("effective_prompt_policy_invalid")
         binding = (canonical_sha256(target), source_prompt_sha)
@@ -1824,6 +1919,10 @@ def _approved_effective_prompt_binding(request: Mapping[str, Any]) -> EffectiveP
     return EffectivePromptPolicyBinding(
         policy_sha256=_effective_prompt_policy_entry_sha256(policy, selected_entry),
         policy_entry_id=selected_entry["policy_entry_id"],
+        session_query_policy_id=selected_entry.get(
+            "session_query_policy_id",
+            MIXED_SESSION_QUERY_POLICY_ID,
+        ),
     )
 
 
@@ -2995,6 +3094,25 @@ def _parse_headless_envelope(
     )
 
 
+def _serialize_operator_result(
+    result: Any,
+    *,
+    technical_limits: Mapping[str, Any],
+) -> tuple[bytes | None, str | None]:
+    """Serialize an operator transform only when it remains inside its bound envelope."""
+
+    if not _structure_within_limits(
+        result,
+        max_depth=technical_limits["max_json_depth"],
+        max_nodes=technical_limits["max_json_nodes"],
+    ):
+        return None, "json_structure"
+    raw = (canonical_json(result) + "\n").encode()
+    if len(raw) > technical_limits["max_json_bytes"]:
+        return None, "json_bytes"
+    return raw, None
+
+
 def _parse_structured_stdout(
     raw: bytes,
     *,
@@ -3071,7 +3189,21 @@ def _parse_structured_stdout(
             live_mode=live_mode,
             require_operator_projection=headless is None,
         )
-    sanitized = (canonical_json(model_payload) + "\n").encode()
+    sanitized, transform_limit_kind = _serialize_operator_result(
+        model_payload,
+        technical_limits=technical_limits,
+    )
+    if transform_limit_kind is not None:
+        return (
+            model_payload,
+            None,
+            prefix_bytes,
+            suffix_bytes,
+            syntax_compliant,
+            False,
+            transform_limit_kind,
+            headless,
+        )
     contract_valid = not validate_model_result(
         model_payload,
         prior_candidates=prior_candidates,
@@ -3429,6 +3561,52 @@ def _estimated_cost_usd_micros(input_tokens: int, output_tokens: int, budget: Ma
     return (numerator + 999_999) // 1_000_000
 
 
+def _session_query_phase_arguments_allowed(
+    arguments: Mapping[str, Any],
+    tool_name: str,
+    *,
+    session_query_policy_id: str,
+    discovery_target_lab_id: str | None = None,
+) -> bool:
+    """Enforce the effective-prompt entry's mechanically provable phase boundary."""
+
+    if tool_name not in NATIVE_X_TOOLS:
+        return False
+    if session_query_policy_id == MIXED_SESSION_QUERY_POLICY_ID:
+        return True
+    if session_query_policy_id != DISCOVERY_ONLY_SESSION_QUERY_POLICY_ID:
+        return False
+    query = arguments.get("query")
+    if not isinstance(query, str):
+        return True
+    normalized_query = query.strip()
+    if (
+        _PERSON_SCOPED_FROM_RE.search(normalized_query) is not None
+        or _BARE_HANDLE_LIKE_QUERY_RE.fullmatch(normalized_query) is not None
+    ):
+        return False
+    if tool_name != "x_user_search":
+        return True
+    if not isinstance(discovery_target_lab_id, str) or _ID_RE.fullmatch(discovery_target_lab_id) is None:
+        return False
+    query_tokens = frozenset(re.findall(r"[a-z0-9]+", normalized_query.casefold()))
+    target_tokens = frozenset(
+        token
+        for token in re.findall(r"[a-z0-9]+", discovery_target_lab_id.casefold())
+        if token not in {"ai", "lab", "labs"}
+    )
+    return bool(
+        target_tokens
+        and query_tokens.intersection(target_tokens)
+        and query_tokens.intersection(_DISCOVERY_USER_SEARCH_PROFESSIONAL_TERMS)
+        and query_tokens.issubset(
+            target_tokens
+            | _DISCOVERY_USER_SEARCH_PROFESSIONAL_TERMS
+            | _DISCOVERY_USER_SEARCH_CONNECTOR_TERMS
+        )
+    )
+
+
 def _parse_session_proof(
     raw: bytes,
     *,
@@ -3439,6 +3617,8 @@ def _parse_session_proof(
     max_line_bytes: int,
     max_turns: int,
     budget: Mapping[str, Any],
+    session_query_policy_id: str = MIXED_SESSION_QUERY_POLICY_ID,
+    discovery_target_lab_id: str | None = None,
 ) -> SessionProof:
     if not raw or not raw.endswith(b"\n"):
         raise AdaptiveWaveValidationError("session_updates_incomplete")
@@ -3628,6 +3808,13 @@ def _parse_session_proof(
                 raise AdaptiveWaveValidationError("session_tool_arguments_invalid")
             if not base_discovery_tool_arguments_allowed(arguments, raw_output["name"]):
                 raise AdaptiveWaveValidationError("session_tool_subject_boundary_invalid")
+            if not _session_query_phase_arguments_allowed(
+                arguments,
+                raw_output["name"],
+                session_query_policy_id=session_query_policy_id,
+                discovery_target_lab_id=discovery_target_lab_id,
+            ):
+                raise AdaptiveWaveValidationError("session_query_phase_policy_invalid")
             provider_call_ids.add(raw_output["call_id"])
             completed.add(call_id)
             tool_name = raw_output["name"]
@@ -3751,7 +3938,7 @@ def _terminal_session_model_result(
     technical_limits: Mapping[str, Any],
     prior_candidates: Mapping[str, PriorCandidateFacts],
     apply_result_normalization: bool,
-) -> dict[str, Any] | None:
+) -> tuple[dict[str, Any] | None, str | None]:
     """Return only a transcript-proven terminal structured model result.
 
     Grok CLI 0.2.101 can concatenate an interim structured assistant message
@@ -3764,7 +3951,7 @@ def _terminal_session_model_result(
 
     terminal_text = session_proof.terminal_assistant_text
     if not terminal_text:
-        return None
+        return None, None
     try:
         payload = strict_json_loads_bounded(
             terminal_text,
@@ -3773,7 +3960,7 @@ def _terminal_session_model_result(
             max_nodes=technical_limits["max_json_nodes"],
         )
     except (AdaptiveWaveValidationError, UnicodeError, ValueError, RecursionError):
-        return None
+        return None, None
     if apply_result_normalization:
         payload = _operator_normalize_mechanical_evidence_relationships(
             payload,
@@ -3781,14 +3968,22 @@ def _terminal_session_model_result(
             live_mode=True,
             require_operator_projection=False,
         )
-    if not isinstance(payload, dict) or validate_model_result(
+    if not isinstance(payload, dict):
+        return None, None
+    _, transform_limit_kind = _serialize_operator_result(
+        payload,
+        technical_limits=technical_limits,
+    )
+    if transform_limit_kind is not None:
+        return None, transform_limit_kind
+    if validate_model_result(
         payload,
         prior_candidates=prior_candidates,
         live_mode=True,
         require_operator_projection=False,
     ):
-        return None
-    return payload
+        return None, None
+    return payload, None
 
 
 def _recover_transcript_terminal_result(
@@ -3802,18 +3997,26 @@ def _recover_transcript_terminal_result(
     prior_candidates: Mapping[str, PriorCandidateFacts],
     allow_recovery: bool,
     apply_result_normalization: bool,
-) -> tuple[Any | None, bytes | None, bool]:
+) -> tuple[Any | None, bytes | None, bool, str | None]:
     if contract_valid or not allow_recovery or headless_envelope is None or session_proof is None:
-        return parsed_result, sanitized, contract_valid
-    recovered = _terminal_session_model_result(
+        return parsed_result, sanitized, contract_valid, None
+    recovered, transform_limit_kind = _terminal_session_model_result(
         session_proof,
         technical_limits=technical_limits,
         prior_candidates=prior_candidates,
         apply_result_normalization=apply_result_normalization,
     )
+    if transform_limit_kind is not None:
+        return parsed_result, None, False, transform_limit_kind
     if recovered is None:
-        return parsed_result, sanitized, contract_valid
-    return recovered, (canonical_json(recovered) + "\n").encode(), True
+        return parsed_result, sanitized, contract_valid, None
+    recovered_raw, recovered_limit_kind = _serialize_operator_result(
+        recovered,
+        technical_limits=technical_limits,
+    )
+    if recovered_limit_kind is not None:
+        return parsed_result, None, False, recovered_limit_kind
+    return recovered, recovered_raw, True, None
 
 
 def _session_proof_payload(proof: SessionProof | None, *, status: str, raw: bytes | None) -> dict[str, Any]:
@@ -4438,6 +4641,12 @@ def _run_adaptive_wave(
                     max_line_bytes=request["technical_limits"]["max_session_update_line_bytes"],
                     max_turns=request["emergency"]["max_turns"],
                     budget=request["budget"],
+                    session_query_policy_id=(
+                        effective_prompt_policy.session_query_policy_id
+                        if effective_prompt_policy is not None
+                        else MIXED_SESSION_QUERY_POLICY_ID
+                    ),
+                    discovery_target_lab_id=request["target"]["lab_id"],
                 )
                 session_proof_status = "verified"
             except (AdaptiveWaveValidationError, OSError, UnicodeError, ValueError):
@@ -4446,7 +4655,7 @@ def _run_adaptive_wave(
         elif execution_mode == "live" and session_capture_status == "invalid":
             session_proof_status = "invalid"
 
-        parsed_result, sanitized, contract_valid = _recover_transcript_terminal_result(
+        parsed_result, sanitized, contract_valid, recovery_limit_kind = _recover_transcript_terminal_result(
             parsed_result,
             sanitized,
             contract_valid,
@@ -4457,6 +4666,7 @@ def _run_adaptive_wave(
             allow_recovery=execution_mode == "live",
             apply_result_normalization=apply_result_normalization,
         )
+        technical_limit_kind = technical_limit_kind or recovery_limit_kind
         if contract_valid and isinstance(parsed_result, dict) and (
             execution_mode == "fixture" or session_proof is not None
         ):
@@ -4464,13 +4674,24 @@ def _run_adaptive_wave(
                 parsed_result,
                 session_proof=session_proof,
                 fixture=execution_mode == "fixture",
+                session_query_policy_id=(
+                    effective_prompt_policy.session_query_policy_id
+                    if effective_prompt_policy is not None
+                    else MIXED_SESSION_QUERY_POLICY_ID
+                ),
             )
             contract_valid = not validate_model_result(
                 parsed_result,
                 prior_candidates=prior_candidates,
                 live_mode=execution_mode == "live",
             )
-            sanitized = (canonical_json(parsed_result) + "\n").encode()
+            sanitized, projection_limit_kind = _serialize_operator_result(
+                parsed_result,
+                technical_limits=request["technical_limits"],
+            )
+            if projection_limit_kind is not None:
+                contract_valid = False
+                technical_limit_kind = technical_limit_kind or projection_limit_kind
         sanitized_sha: str | None = None
         if sanitized is not None:
             _atomic_publish(run_root / "sanitized.json", sanitized)
@@ -5250,7 +5471,9 @@ def validate_operator_receipt(receipt: Any) -> list[str]:
             errors.append("receipt_timeout_ownership_invalid")
         if status == "technical_limit_exceeded" and process.get("technical_limit_exceeded") is not True:
             errors.append("receipt_technical_limit_claim_invalid")
-        if status != "technical_limit_exceeded" and process.get("technical_limit_exceeded") is True:
+        if status not in {"technical_limit_exceeded", "crash_recovered"} and process.get(
+            "technical_limit_exceeded"
+        ) is True:
             errors.append("receipt_unclaimed_technical_limit")
         if status == "structured_output_noncompliant" and artifacts.get("structured_output_compliant") is not False:
             errors.append("receipt_noncompliance_claim_invalid")
@@ -5695,9 +5918,6 @@ def validate_operator_bundle(
             errors.append("structured_boundary_mismatch")
         if artifacts.get("structured_output_compliant") is not compliant:
             errors.append("structured_compliance_mismatch")
-        recorded_limit = process.get("technical_limit_kind") if isinstance(process, dict) else None
-        if limit_kind is not None and recorded_limit != limit_kind:
-            errors.append("structured_technical_limit_mismatch")
     session_proof: SessionProof | None = None
     session_raw: bytes | None = None
     session_status = "not_applicable" if mode == "fixture" else "missing"
@@ -5730,12 +5950,18 @@ def validate_operator_bundle(
                 max_line_bytes=limits["max_session_update_line_bytes"],
                 max_turns=request["emergency"]["max_turns"],
                 budget=request["budget"],
+                session_query_policy_id=(
+                    effective_prompt_policy.session_query_policy_id
+                    if effective_prompt_policy is not None
+                    else MIXED_SESSION_QUERY_POLICY_ID
+                ),
+                discovery_target_lab_id=request["target"]["lab_id"],
             )
             session_status = "verified"
         except (AdaptiveWaveValidationError, KeyError, UnicodeError, ValueError):
             session_proof = None
             session_status = "invalid"
-    parsed_result, sanitized, contract_valid = _recover_transcript_terminal_result(
+    parsed_result, sanitized, contract_valid, recovery_limit_kind = _recover_transcript_terminal_result(
         parsed_result,
         sanitized,
         contract_valid,
@@ -5748,18 +5974,36 @@ def validate_operator_bundle(
         allow_recovery=mode == "live" and receipt.get("status") == "completed",
         apply_result_normalization=current_normalization_replay,
     )
+    limit_kind = limit_kind or recovery_limit_kind
     if contract_valid and isinstance(parsed_result, dict) and (mode == "fixture" or session_proof is not None):
         parsed_result = _operator_project_model_result(
             parsed_result,
             session_proof=session_proof,
             fixture=mode == "fixture",
+            session_query_policy_id=(
+                effective_prompt_policy.session_query_policy_id
+                if effective_prompt_policy is not None
+                else MIXED_SESSION_QUERY_POLICY_ID
+            ),
         )
         contract_valid = not validate_model_result(
             parsed_result,
             prior_candidates=prior_candidates,
             live_mode=mode == "live",
         )
-        sanitized = (canonical_json(parsed_result) + "\n").encode()
+        sanitized, projection_limit_kind = _serialize_operator_result(
+            parsed_result,
+            technical_limits=limits,
+        )
+        if projection_limit_kind is not None:
+            contract_valid = False
+            limit_kind = limit_kind or projection_limit_kind
+    recorded_limit = process.get("technical_limit_kind") if isinstance(process, dict) else None
+    if receipt.get("status") == "crash_recovered":
+        if recorded_limit != limit_kind:
+            errors.append("structured_technical_limit_mismatch")
+    elif limit_kind is not None and recorded_limit != limit_kind:
+        errors.append("structured_technical_limit_mismatch")
     if receipt.get("status") != "crash_recovered" and (
         artifacts.get("structured_output_contract_valid") is not contract_valid
     ):
@@ -6008,6 +6252,16 @@ def _recover_incomplete_run_locked(
     request = _read_private_json(run_root / "operator-request.json")
     if validate_request(request) or canonical_sha256(request) != intent["request_sha256"]:
         raise AdaptiveWaveValidationError("recovery_request_invalid")
+    recovery_effective_prompt_policy: EffectivePromptPolicyBinding | None = None
+    if intent["execution_mode"] == "live":
+        recovery_effective_prompt_policy = _approved_effective_prompt_binding(request)
+        if (
+            intent["command_binding"]["effective_prompt_policy_sha256"]
+            != recovery_effective_prompt_policy.policy_sha256
+            or intent["command_binding"]["effective_prompt_policy_entry_id"]
+            != recovery_effective_prompt_policy.policy_entry_id
+        ):
+            raise AdaptiveWaveValidationError("recovery_effective_prompt_policy_invalid")
     prior_handles, _, prior_candidates = load_prior_context(request)
     del prior_handles
     ledger_path = run_root / "process-ledger.json"
@@ -6126,7 +6380,16 @@ def _recover_incomplete_run_locked(
     recovery_current_normalization = (
         intent["command_binding"].get("command_policy_sha256") == command_policy_sha256(request)
     )
-    parsed_result, sanitized, _, _, _, contract_valid, _, headless_envelope = _parse_structured_stdout(
+    (
+        parsed_result,
+        sanitized,
+        _,
+        _,
+        _,
+        contract_valid,
+        recovery_limit_kind,
+        headless_envelope,
+    ) = _parse_structured_stdout(
         raw,
         technical_limits=intent["technical_limits"],
         prior_candidates=prior_candidates,
@@ -6176,6 +6439,12 @@ def _recover_incomplete_run_locked(
                 max_line_bytes=intent["technical_limits"]["max_session_update_line_bytes"],
                 max_turns=intent["emergency"]["max_turns"],
                 budget=intent["budget"],
+                session_query_policy_id=(
+                    recovery_effective_prompt_policy.session_query_policy_id
+                    if recovery_effective_prompt_policy is not None
+                    else MIXED_SESSION_QUERY_POLICY_ID
+                ),
+                discovery_target_lab_id=request["target"]["lab_id"],
             )
             session_status = "verified"
         except (AdaptiveWaveValidationError, KeyError, UnicodeError, ValueError):
@@ -6188,13 +6457,24 @@ def _recover_incomplete_run_locked(
             parsed_result,
             session_proof=session_proof,
             fixture=intent["execution_mode"] == "fixture",
+            session_query_policy_id=(
+                recovery_effective_prompt_policy.session_query_policy_id
+                if recovery_effective_prompt_policy is not None
+                else MIXED_SESSION_QUERY_POLICY_ID
+            ),
         )
         contract_valid = not validate_model_result(
             parsed_result,
             prior_candidates=prior_candidates,
             live_mode=intent["execution_mode"] == "live",
         )
-        sanitized = (canonical_json(parsed_result) + "\n").encode()
+        sanitized, projection_limit_kind = _serialize_operator_result(
+            parsed_result,
+            technical_limits=intent["technical_limits"],
+        )
+        if projection_limit_kind is not None:
+            contract_valid = False
+            recovery_limit_kind = recovery_limit_kind or projection_limit_kind
     if sanitized_path.exists():
         try:
             sanitized_actual = _read_regular_owned_bounded(
@@ -6248,8 +6528,8 @@ def _recover_incomplete_run_locked(
             "term_grace_ms": intent["emergency"]["term_grace_ms"],
             "kill_grace_ms": intent["emergency"]["kill_grace_ms"],
             "fallback_used": False,
-            "technical_limit_exceeded": False,
-            "technical_limit_kind": None,
+            "technical_limit_exceeded": recovery_limit_kind is not None,
+            "technical_limit_kind": recovery_limit_kind,
         },
         "artifacts": {
             "raw_stdout_sha256": bytes_sha256(raw),

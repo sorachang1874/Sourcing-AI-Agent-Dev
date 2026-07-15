@@ -440,9 +440,31 @@ reliable owner for the hydration pair.
 The next challenger is `wave2-v4-discovery-only`. It removes person hydration from the Grok turn entirely: no
 `from:<handle>`, exact-name, bare-handle, or per-person corroboration query is allowed. Its work is broad organization,
 era, project, technical-function, official/team Reply, semantic, user and thread expansion, with no business count
-cap. This makes discovery-call allocation and marginal unique-handle yield observable. If that result is accepted,
+cap. This makes discovery-call allocation and overall unique-handle yield observable, while per-query marginal yield
+remains model-mediated and unverified. If that result is accepted,
 the operator will generate a separate hydration stage with exact, independently issued conjunctive Post and Reply
 queries rather than asking one long model prompt to self-schedule both phases.
+
+The selected effective-prompt entry now binds `discovery_only_no_person_hydration_v1`. Transcript replay rejects every
+positive or negated `from:` form and every handle-like single-token query across the native-X query tools, so a provider
+cannot repeat the mechanically visible hydration pattern and still produce a verified session proof. User search also
+uses a closed grammar: a query needs both a target-lab token and a professional-context token, and no token outside the
+versioned allowlist is accepted. Multiword person intent in keyword/semantic search remains an explicit manual audit
+residual. The phase/query/projection semantics have their own digest inside the effective-entry binding. The v4 prompt
+SHA-256 is
+`9b9bf931bb3cc27d12c10eda65a98b5d070ef136a4d7d8735dd61a48580c85f2`.
+
+A completed v4 transport will not prove discovery convergence. The performance review must recompute Top/Latest,
+historical shards, positive Reply discovery, thread fetches, strategy-family coverage, and other query-attempt cells
+from raw session arguments. Because the retained transcript lacks native-X result payloads and query-to-new-lead
+attribution, marginal yield, zero-yield sequences, and population convergence remain unproven. The phase-aware
+projector therefore keeps the discovery-only result at `X_SEARCH_PARTIAL` and deliberately skips the later hydration
+stage's per-handle Post/Reply surface downgrade. That status is expected and is not evidence that discovery failed.
+
+Normalization, transcript-terminal recovery, and phase projection are all reserialized under the request-frozen JSON
+byte/depth/node envelope before `sanitized.json` publication. An operator-added audit string that crosses a ceiling now
+produces a replayable technical-limit bundle rather than an oversized terminal artifact. Crash recovery records the
+same exact JSON limit kind instead of silently dropping it.
 
 The current command policy adds a versioned, monotonic operator normalization for the isolated relationship error:
 only a non-Bio `self` row whose author differs from the candidate may be downgraded to `third_party`; raw stdout stays

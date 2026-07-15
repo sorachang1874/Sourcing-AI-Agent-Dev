@@ -45,6 +45,14 @@
           "source_prompt_sha256",
           "authority"
         ],
+        "dependentRequired": {
+          "session_query_policy_id": [
+            "session_query_policy_sha256"
+          ],
+          "session_query_policy_sha256": [
+            "session_query_policy_id"
+          ]
+        },
         "properties": {
           "policy_entry_id": {
             "type": "string",
@@ -83,6 +91,16 @@
               "fixture_only",
               "live_authorized"
             ]
+          },
+          "session_query_policy_id": {
+            "enum": [
+              "mixed_discovery_hydration_v1",
+              "discovery_only_no_person_hydration_v1"
+            ]
+          },
+          "session_query_policy_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
           }
         }
       }

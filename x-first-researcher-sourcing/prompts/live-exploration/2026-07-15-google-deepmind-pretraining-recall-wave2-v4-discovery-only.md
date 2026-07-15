@@ -15,7 +15,12 @@ This wave is Phase D only. Do not perform person-scoped hydration:
 - do not run per-person Post/Reply corroboration;
 - do not spend calls trying to force an ambiguous lead into a confident state.
 
-Broad role/organization user searches are allowed when they can return multiple previously unknown accounts. A
+Broad role/organization user searches are allowed only in the closed form "Google DeepMind" plus one or more
+professional role/function terms such as researcher, scientist, engineer, research, pretraining, training, model,
+scaling, tokenization, infrastructure, safety, multimodal, or robotics. Do not add person-name tokens to a user search. A
+discovery query must contain multiple professional-context terms; do not use any handle-like single-token query in
+keyword, semantic, user, or thread search. The operator will mechanically reject `from:` and handle-like single-token
+queries under this prompt's bound session-query policy. A
 profile ID or Bio may be retained only when it is incidentally returned by such a broad native-X discovery result.
 Otherwise set the optional profile fields to null. Constructing the canonical `https://x.com/<handle>` profile URL
 from an observed handle is allowed. Hydration will be a separate operator-generated stage after this discovery result
@@ -72,12 +77,19 @@ valid discovery seeds but must use their lower-authority relationship. Use `rela
 author handle equals the candidate handle case-insensitively. Never invent an ID, Bio, Post, URL, timestamp, excerpt,
 relationship, or support claim.
 
-Complete an explicit gap audit after the first matrix pass. Discovery convergence requires all configured families,
-Top and Latest, historical shards, Reply surfaces, and at least one attributable thread expansion to have been
-exercised, followed by three materially different discovery expansions from different strategy cells that add no
-novel evidence-bearing handle or material temporal correction. If the external deadline arrives first, return a
-schema-valid partial result and list uncovered cells. Exact profile lookup and person hydration are intentionally out
-of scope and must not be counted as missing discovery work.
+Complete an explicit gap audit after the first matrix pass. As a model-side stopping heuristic, exercise all configured
+families, Top and Latest, historical shards, Reply surfaces, and at least one attributable thread expansion, then try
+three materially different discovery expansions from different strategy cells after you observe zero novel
+evidence-bearing handles or material temporal corrections. The operator cannot verify per-query yield from the retained
+arguments and will never treat that heuristic as proven population convergence. If the external deadline arrives
+first, return a schema-valid partial result and list uncovered cells. Exact profile lookup and person hydration are
+intentionally out of scope and must not be counted as missing discovery work.
+
+Because this phase intentionally omits per-handle Post/Reply hydration and does not mechanically own the complete
+strategy matrix, the operator will keep the overall result at `X_SEARCH_PARTIAL`. That readiness status is expected
+and does not by itself mean discovery failed or converged. The operator will independently audit raw session arguments
+for attempted coverage cells; per-query yield and population convergence remain unproven in this transport version.
+List every materially uncovered or deadline-truncated strategy cell in `limitations`.
 
 Use only Grok native X keyword, semantic, user, and thread tools. No generic web search/fetch, browser, filesystem,
 shell, connectors, memory, subagents, mutations, or contact. Use public professional evidence only and never query or

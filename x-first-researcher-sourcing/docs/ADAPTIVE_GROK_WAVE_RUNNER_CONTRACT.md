@@ -9,9 +9,10 @@ operator-triggered and review-gated.
 tools exposed by the local Grok CLI. Its goal is broad, evidence-bearing discovery. It does **not** cap the number of
 candidates, observations, search queries, evidence items, excluded examples, or native-X calls as a business rule.
 
-The model should continue varying X-native search strategies while they produce materially new evidence. Search
-saturation and marginal yield are evaluated after the wave; they are not encoded as an arbitrary `25 candidates`,
-`200 observations`, or `16 calls` cutoff.
+The model should continue varying X-native search strategies while they appear to produce materially new evidence.
+Overall wave yield and model-reported saturation are evaluated after the wave; per-query marginal yield is not native-
+result-bound in the current transport. None is encoded as an arbitrary `25 candidates`, `200 observations`, or
+`16 calls` cutoff.
 
 The operator still has non-business safety boundaries:
 
@@ -48,6 +49,8 @@ CRM, export, billing, permission, or outreach state. Protected-identity inferenc
 | Operator projections | Inner candidate/evidence arrays plus verified session proof | `sanitized.json` rewrites candidate, evidence, post-URL, tool-call, and per-tool counts from local structure/transcript facts; it preserves model provenance only as diagnostics |
 | Mechanical relationship normalization | `mechanical-evidence-relationship-downgrade-v1`, bound into the command-policy digest | A current-policy result may change only a non-Bio `self` row whose author differs from the candidate to `third_party`; the candidate and global audit strings are appended, raw stdout is unchanged, and the normalized copy is admitted only when the complete result then passes runtime validation. No support, state, confidence, or evidence row can be upgraded. Pre-normalization result-v3 and result-v2 bundles remain replay-only under their recorded policy digests |
 | Tool-call facts | Raw Grok session `updates.jsonl` | Effective model, native-X starts/completions, names, and exact arguments are replayed. On Grok 0.2.101 the outer envelope owns terminal/usage; a legacy transcript `turn_completed` is additionally reconciled when present |
+| Session query phase | Selected effective-prompt entry plus raw native-X arguments | Entries default to `mixed_discovery_hydration_v1`; a `discovery_only_no_person_hydration_v1` entry rejects every `from:` form and every handle-like single-token query. Its `x_user_search` grammar requires target-lab and professional-context tokens and rejects every token outside the versioned allowlist; multiword person intent in keyword/semantic search remains a named post-run residual |
+| Post-transform technical envelope | Request-frozen `max_json_bytes`, `max_json_depth`, and `max_json_nodes` | Normalization, transcript-terminal recovery, and phase-aware projection are serialized and structurally rechecked before publication. An expanded result that crosses a bound becomes a truthful `technical_limit_exceeded` bundle with no oversized `sanitized.json` |
 | Candidate authored-surface attempts | Completed `x_keyword_search` arguments in the raw session transcript | Only one exact positive `from:<handle>` can be attributed; positive `filter:replies` means `authored_reply`, absent/negated reply filter means `authored_post`, and global, multi-handle, semantic, user, or thread calls remain unattributed |
 | Retention/deletion | Request TTL, terminal receipt, external deletion journal and receipt | Expired bundle is validated and journaled before recursive deletion; a crash between delete and receipt is reconcilable |
 
@@ -76,6 +79,33 @@ mechanically impossible authority label `self` to the generic lower-authority `t
 bytes, appends a deterministic per-candidate caveat and global count, and accepts the transformed copy only if no
 other runtime contract error remains. Bio rows and case-insensitive self authors are never rewritten; malformed
 subject/URL/Post ID/time/thread/support bindings, duplicate evidence, and every other invalid result still fail closed.
+
+The effective-prompt entry may also own the pair `session_query_policy_id` plus
+`session_query_policy_sha256`. Existing rows omit both and retain the mixed discovery/hydration behavior under their
+unchanged entry digests. A discovery-only row binds the stricter phase/query/projection semantic digest into the
+selected-entry digest used by the grant, intent, receipt, and replay. The loader recomputes the semantic digest from a
+versioned registry and fails closed on disagreement, preventing an existing ID from silently acquiring new behavior.
+The session parser rejects all positive or negated `from:` forms and handle-like single-token query subjects. User
+search is narrower: it must contain a target-lab token and a professional-context token and every token must belong to
+the closed target/professional/connector grammar. Arbitrary multiword person intent in keyword or semantic search
+remains a post-run audit residual because rejecting all such phrases would also remove useful project/topic discovery.
+
+Discovery-only transport completion proves the mechanically enforced phase boundary, not strategy-matrix completion
+or population convergence. Raw session arguments can derive Top/Latest, historical-shard, positive-Reply, thread,
+tool-family, and other query-attempt cells. They do not retain native-X tool result payloads or query-to-new-lead
+attribution, so zero-yield sequences and population convergence remain permanently unproven for this version. The
+phase-aware projector therefore keeps every otherwise successful discovery-only result at `X_SEARCH_PARTIAL`, does
+not apply the later hydration stage's per-handle Post/Reply surface limitation, and prohibits a
+`discovery_converged` claim. That partial status is expected and is distinct from discovery failure; the outer operator
+receipt may still be `completed` because it describes verified transport completion rather than population
+convergence.
+
+All operator-owned transformations reuse one post-transform serializer. It reapplies the request-frozen JSON byte,
+depth, and node ceilings after mechanical relationship normalization, transcript-terminal recovery, and ledger/status
+projection. Crossing a ceiling sets the corresponding technical-limit terminal state and suppresses publication of an
+oversized or structurally invalid `sanitized.json`; replay derives the same outcome. Crash recovery retains
+`crash_recovered` as the lifecycle state but records the same `technical_limit_exceeded` flag and exact JSON limit kind
+instead of discarding the reason.
 
 Example fixture request shape:
 
