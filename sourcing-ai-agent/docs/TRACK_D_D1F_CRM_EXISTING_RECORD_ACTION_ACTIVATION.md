@@ -7,8 +7,12 @@
 > `NO-GO 0/1/2/1`; all are fixed-forward inputs, not formal verdicts. The current fixed-forward candidate closes the
 > third round's dangling-operation authorization bypass, falsy/dual input-envelope ambiguity, stale submit replay
 > status/HTTP mapping, and duplicate binder allowlist. The prior mutable-version replay, transport, and R-031 findings
-> remain fixed or separately bounded. Author validation and a fresh pinned non-author review must bind the enclosing commit before this scope can
-> enter live/manual/product/milestone signoff. No provider, model, or live environment is used by this batch.
+> remain fixed or separately bounded. A later pinned advisory against `1cb829f81b4c060d0af0a1059af0d6a271264a1d`
+> reported `NO-GO 0/0/1/1`: fresh HTTP 202 accepted a missing/non-boolean replay discriminator, and the frontend
+> submit union did not compose the nested detail contract. The current fixed-forward requires literal false for fresh
+> 202 and composes both union branches with `OperationActionDetailResponse`, including executable malformed-nested
+> negatives. Author validation and a fresh pinned non-author review must bind the enclosing commit before this scope
+> can enter live/manual/product/milestone signoff. No provider, model, or live environment is used by this batch.
 
 ## 1. Outcome and bounded scope
 
@@ -222,10 +226,12 @@ Final author evidence on the stable worktree:
 - full operation runtime: **136 passed + 503 subtests**;
 - frontend response schema/type/adapter executable nodes: **3 passed**; production frontend build: **84 modules**
   transformed and built (the existing `>500 kB` chunk warning remains non-blocking);
+- latest replay-discriminator plus nested-response fixed-forward: **25 passed + 68 subtests** across the request-scope
+  transport matrix and three exact frontend schema/type/adapter nodes;
 - repo lint/format: **58 files** green; final diff checks are green; global mypy remains at the accepted
   **81 errors / 4 files** ceiling (non-zero by baseline), with no new error at this batch's changed contracts.
 
-The local advisory rounds `0/3/2/0`, `0/2/1/0`, and pinned-`22055aa` `0/1/2/1` are fixed-forward inputs only. They
-cannot be promoted to formal verdicts, and author tests cannot replace a fresh pinned non-author review. Pending review
-blocks this scope's live/manual/product/milestone signoff only; unrelated non-live Track D work may continue
-asynchronously.
+The local advisory rounds `0/3/2/0`, `0/2/1/0`, pinned-`22055aa` `0/1/2/1`, and pinned-`1cb829f` `0/0/1/1` are
+fixed-forward inputs only. They cannot be promoted to formal verdicts, and author tests cannot replace a fresh pinned
+non-author review. Pending review blocks this scope's live/manual/product/milestone signoff only; unrelated non-live
+Track D work may continue asynchronously.

@@ -2110,7 +2110,10 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
             and str(result.get("status") or "").strip() in OPERATION_ACTION_SUBMISSION_STATUSES
         ):
             status = HTTPStatus.OK
-        elif result.get("status") in OPERATION_ACTION_FRESH_SUBMISSION_STATUSES:
+        elif (
+            result.get("idempotent_replay") is False
+            and result.get("status") in OPERATION_ACTION_FRESH_SUBMISSION_STATUSES
+        ):
             status = HTTPStatus.ACCEPTED
         elif result.get("status") == "not_found" and result.get("reason") == "crm_record_not_found":
             status = HTTPStatus.NOT_FOUND

@@ -1340,37 +1340,47 @@
     "OperationActionSubmitResponse": {
       "oneOf": [
         {
-          "type": "object",
-          "additionalProperties": true,
-          "required": ["status", "idempotent_replay"],
-          "properties": {
-            "status": {
-              "type": "string",
-              "enum": ["queued", "approval_required"]
-            },
-            "idempotent_replay": { "const": false }
-          }
+          "allOf": [
+            { "$ref": "#/$defs/OperationActionDetailResponse" },
+            {
+              "type": "object",
+              "additionalProperties": true,
+              "required": ["status", "idempotent_replay"],
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": ["queued", "approval_required"]
+                },
+                "idempotent_replay": { "const": false }
+              }
+            }
+          ]
         },
         {
-          "type": "object",
-          "additionalProperties": true,
-          "required": ["status", "idempotent_replay"],
-          "properties": {
-            "status": {
-              "type": "string",
-              "enum": [
-                "queued",
-                "approval_required",
-                "planned",
-                "running",
-                "completed",
-                "failed",
-                "cancelled",
-                "rejected"
-              ]
-            },
-            "idempotent_replay": { "const": true }
-          }
+          "allOf": [
+            { "$ref": "#/$defs/OperationActionDetailResponse" },
+            {
+              "type": "object",
+              "additionalProperties": true,
+              "required": ["status", "idempotent_replay"],
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "queued",
+                    "approval_required",
+                    "planned",
+                    "running",
+                    "completed",
+                    "failed",
+                    "cancelled",
+                    "rejected"
+                  ]
+                },
+                "idempotent_replay": { "const": true }
+              }
+            }
+          ]
         }
       ]
     },

@@ -141,6 +141,82 @@ EXPECTED_ACTIVITY_CONTROL_TARGET_FIELDS = (
     "activity_spine_policy",
     "fallback_status",
 )
+
+
+def _frontend_json_schema_accepts(bundle: dict[str, Any], contract: dict[str, Any], value: Any) -> bool:
+    """Evaluate the JSON Schema subset used by the public response contracts."""
+
+    ref = contract.get("$ref")
+    if ref is not None:
+        prefix = "#/$defs/"
+        if not isinstance(ref, str) or not ref.startswith(prefix):
+            return False
+        referenced = bundle.get("$defs", {}).get(ref.removeprefix(prefix))
+        if not isinstance(referenced, dict) or not _frontend_json_schema_accepts(bundle, referenced, value):
+            return False
+    all_of = contract.get("allOf")
+    if all_of is not None:
+        if not isinstance(all_of, list) or not all(
+            isinstance(child, dict) and _frontend_json_schema_accepts(bundle, child, value) for child in all_of
+        ):
+            return False
+    one_of = contract.get("oneOf")
+    if one_of is not None:
+        if not isinstance(one_of, list):
+            return False
+        matches = sum(
+            isinstance(child, dict) and _frontend_json_schema_accepts(bundle, child, value) for child in one_of
+        )
+        if matches != 1:
+            return False
+    if "const" in contract and value != contract["const"]:
+        return False
+    if "enum" in contract and value not in contract["enum"]:
+        return False
+
+    expected_type = contract.get("type")
+    if expected_type is not None:
+        type_matches = {
+            "object": isinstance(value, dict),
+            "array": isinstance(value, list),
+            "string": isinstance(value, str),
+            "number": isinstance(value, (int, float)) and not isinstance(value, bool),
+            "integer": isinstance(value, int) and not isinstance(value, bool),
+            "boolean": isinstance(value, bool),
+            "null": value is None,
+        }
+        if type_matches.get(expected_type) is not True:
+            return False
+
+    if isinstance(value, dict):
+        required = contract.get("required", [])
+        if not isinstance(required, list) or any(field not in value for field in required):
+            return False
+        properties = contract.get("properties", {})
+        if not isinstance(properties, dict):
+            return False
+        for field, child in properties.items():
+            if field in value and (
+                not isinstance(child, dict) or not _frontend_json_schema_accepts(bundle, child, value[field])
+            ):
+                return False
+        extras = set(value) - set(properties)
+        additional = contract.get("additionalProperties", True)
+        if extras and additional is False:
+            return False
+        if isinstance(additional, dict) and any(
+            not _frontend_json_schema_accepts(bundle, additional, value[field]) for field in extras
+        ):
+            return False
+    if isinstance(value, list) and "items" in contract:
+        items = contract["items"]
+        if not isinstance(items, dict) or any(
+            not _frontend_json_schema_accepts(bundle, items, child) for child in value
+        ):
+            return False
+    return True
+
+
 EXPECTED_RECURSIVE_ACTIVITY_CARRIER_FIELDS = frozenset(
     {
         "workflow_activity",
@@ -2798,36 +2874,62 @@ def test_frontend_schema_and_mappers_are_closed_and_operation_sync_is_typed() ->
     submit_response_branches = schema["$defs"]["OperationActionSubmitResponse"]["oneOf"]
     assert submit_response_branches == [
         {
-            "type": "object",
-            "additionalProperties": True,
-            "required": ["status", "idempotent_replay"],
-            "properties": {
-                "status": {"type": "string", "enum": ["queued", "approval_required"]},
-                "idempotent_replay": {"const": False},
-            },
+            "allOf": [
+                {"$ref": "#/$defs/OperationActionDetailResponse"},
+                {
+                    "type": "object",
+                    "additionalProperties": True,
+                    "required": ["status", "idempotent_replay"],
+                    "properties": {
+                        "status": {"type": "string", "enum": ["queued", "approval_required"]},
+                        "idempotent_replay": {"const": False},
+                    },
+                },
+            ],
         },
         {
-            "type": "object",
-            "additionalProperties": True,
-            "required": ["status", "idempotent_replay"],
-            "properties": {
-                "status": {
-                    "type": "string",
-                    "enum": [
-                        "queued",
-                        "approval_required",
-                        "planned",
-                        "running",
-                        "completed",
-                        "failed",
-                        "cancelled",
-                        "rejected",
-                    ],
+            "allOf": [
+                {"$ref": "#/$defs/OperationActionDetailResponse"},
+                {
+                    "type": "object",
+                    "additionalProperties": True,
+                    "required": ["status", "idempotent_replay"],
+                    "properties": {
+                        "status": {
+                            "type": "string",
+                            "enum": [
+                                "queued",
+                                "approval_required",
+                                "planned",
+                                "running",
+                                "completed",
+                                "failed",
+                                "cancelled",
+                                "rejected",
+                            ],
+                        },
+                        "idempotent_replay": {"const": True},
+                    },
                 },
-                "idempotent_replay": {"const": True},
-            },
+            ],
         },
     ]
+    submit_response_contract = schema["$defs"]["OperationActionSubmitResponse"]
+    valid_submit_response = {
+        "status": "queued",
+        "idempotent_replay": False,
+        "action": {"action_id": "action-1", "status": "queued"},
+        "operation_run": {"operation_run_id": "run-1", "status": "queued"},
+        "events": [{"event_id": "event-1", "sequence_number": 1}],
+    }
+    assert _frontend_json_schema_accepts(schema, submit_response_contract, valid_submit_response)
+    malformed_nested_responses = (
+        {**valid_submit_response, "action": []},
+        {**valid_submit_response, "operation_run": "run-1"},
+        {**valid_submit_response, "events": [{"event_id": 1}]},
+    )
+    for malformed_response in malformed_nested_responses:
+        assert not _frontend_json_schema_accepts(schema, submit_response_contract, malformed_response)
     for symbol in (
         "OPERATION_ACTION_DECISION_APPLIED_OUTCOMES",
         "OPERATION_RUN_CONTROL_APPLIED_OUTCOMES",

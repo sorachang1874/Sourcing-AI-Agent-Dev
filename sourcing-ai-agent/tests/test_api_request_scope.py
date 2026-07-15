@@ -197,6 +197,12 @@ class _ScopeOrchestrator:
             }
         if str(payload.get("idempotency_key") or "").strip() == "invalid-replay-flag":
             return {"status": "invalid", "idempotent_replay": True, "reason": "stub-invalid"}
+        if str(payload.get("idempotency_key") or "").strip() == "fresh-replay-flag-missing":
+            return {"status": "queued", "module_state_mutated": False}
+        if str(payload.get("idempotency_key") or "").strip() == "fresh-replay-flag-null":
+            return {"status": "queued", "idempotent_replay": None, "module_state_mutated": False}
+        if str(payload.get("idempotency_key") or "").strip() == "fresh-replay-flag-string":
+            return {"status": "queued", "idempotent_replay": "false", "module_state_mutated": False}
         return {"status": "queued", "idempotent_replay": False, "module_state_mutated": False}
 
     def get_operation_action_registry(self):
@@ -1031,6 +1037,35 @@ class RequestScopeWiringTest(unittest.TestCase):
         )
         self.assertEqual(invalid_replay_status, 400)
         self.assertEqual(invalid_replay.get("status"), "invalid", invalid_replay)
+
+        malformed_fresh_results = {
+            "fresh-replay-flag-missing": {"status": "queued", "module_state_mutated": False},
+            "fresh-replay-flag-null": {
+                "status": "queued",
+                "idempotent_replay": None,
+                "module_state_mutated": False,
+            },
+            "fresh-replay-flag-string": {
+                "status": "queued",
+                "idempotent_replay": "false",
+                "module_state_mutated": False,
+            },
+        }
+        for idempotency_key, expected_body in malformed_fresh_results.items():
+            with self.subTest(idempotency_key=idempotency_key):
+                malformed_status, malformed_body = self._request(
+                    opener,
+                    f"{base}/api/operations/actions",
+                    method="POST",
+                    body={
+                        "action_type": "add_crm_note",
+                        "target_ref": {"crm_record_id": "rec-alice-owned"},
+                        "input": {"note": "malformed fresh replay marker"},
+                        "idempotency_key": idempotency_key,
+                    },
+                )
+                self.assertEqual(malformed_status, 400)
+                self.assertEqual(malformed_body, expected_body)
 
         foreign = self._request(
             opener,
