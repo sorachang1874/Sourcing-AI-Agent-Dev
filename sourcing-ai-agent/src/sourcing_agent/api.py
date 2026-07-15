@@ -2105,10 +2105,7 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
         )
         owner_scope = _expected_crm_owner_kwargs(request) if crm_owner_bound else {}
         result = orchestrator.submit_operation_action(payload, **owner_scope)
-        if (
-            result.get("idempotent_replay") is True
-            and str(result.get("status") or "").strip() in OPERATION_ACTION_SUBMISSION_STATUSES
-        ):
+        if result.get("idempotent_replay") is True and result.get("status") in OPERATION_ACTION_SUBMISSION_STATUSES:
             status = HTTPStatus.OK
         elif (
             result.get("idempotent_replay") is False

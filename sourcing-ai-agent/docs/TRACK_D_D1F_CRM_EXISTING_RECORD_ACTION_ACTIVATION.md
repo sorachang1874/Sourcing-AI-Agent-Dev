@@ -11,7 +11,11 @@
 > reported `NO-GO 0/0/1/1`: fresh HTTP 202 accepted a missing/non-boolean replay discriminator, and the frontend
 > submit union did not compose the nested detail contract. The current fixed-forward requires literal false for fresh
 > 202 and composes both union branches with `OperationActionDetailResponse`, including executable malformed-nested
-> negatives. Author validation and a fresh pinned non-author review must bind the enclosing commit before this scope
+> negatives. A fresh pinned re-review of `d5b0a31fecb6e56c0333575cc75b2b019f30bb0a` closed both prior findings but
+> returned `NO-GO 0/0/1/0`: replay transport stripped whitespace only for its status decision, allowing an unchanged
+> schema-invalid body such as `" completed "` to receive HTTP 200. The current fixed-forward uses exact raw enum
+> membership for replay and covers the whitespace-negative 400 body. Author validation and a fresh pinned non-author
+> review must bind the enclosing commit before this scope
 > can enter live/manual/product/milestone signoff. No provider, model, or live environment is used by this batch.
 
 ## 1. Outcome and bounded scope
@@ -231,7 +235,7 @@ Final author evidence on the stable worktree:
 - repo lint/format: **58 files** green; final diff checks are green; global mypy remains at the accepted
   **81 errors / 4 files** ceiling (non-zero by baseline), with no new error at this batch's changed contracts.
 
-The local advisory rounds `0/3/2/0`, `0/2/1/0`, pinned-`22055aa` `0/1/2/1`, and pinned-`1cb829f` `0/0/1/1` are
-fixed-forward inputs only. They cannot be promoted to formal verdicts, and author tests cannot replace a fresh pinned
-non-author review. Pending review blocks this scope's live/manual/product/milestone signoff only; unrelated non-live
-Track D work may continue asynchronously.
+The local advisory rounds `0/3/2/0`, `0/2/1/0`, pinned-`22055aa` `0/1/2/1`, pinned-`1cb829f` `0/0/1/1`, and
+pinned-`d5b0a31` `0/0/1/0` are fixed-forward inputs only. They cannot be promoted to formal verdicts, and author tests
+cannot replace a fresh pinned non-author review. Pending review blocks this scope's live/manual/product/milestone
+signoff only; unrelated non-live Track D work may continue asynchronously.

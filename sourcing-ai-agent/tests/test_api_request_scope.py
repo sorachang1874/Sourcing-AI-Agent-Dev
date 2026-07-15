@@ -197,6 +197,8 @@ class _ScopeOrchestrator:
             }
         if str(payload.get("idempotency_key") or "").strip() == "invalid-replay-flag":
             return {"status": "invalid", "idempotent_replay": True, "reason": "stub-invalid"}
+        if str(payload.get("idempotency_key") or "").strip() == "replay-status-whitespace":
+            return {"status": " completed ", "idempotent_replay": True, "module_state_mutated": False}
         if str(payload.get("idempotency_key") or "").strip() == "fresh-replay-flag-missing":
             return {"status": "queued", "module_state_mutated": False}
         if str(payload.get("idempotency_key") or "").strip() == "fresh-replay-flag-null":
@@ -1037,6 +1039,23 @@ class RequestScopeWiringTest(unittest.TestCase):
         )
         self.assertEqual(invalid_replay_status, 400)
         self.assertEqual(invalid_replay.get("status"), "invalid", invalid_replay)
+
+        whitespace_replay_status, whitespace_replay = self._request(
+            opener,
+            f"{base}/api/operations/actions",
+            method="POST",
+            body={
+                "action_type": "add_crm_note",
+                "target_ref": {"crm_record_id": "rec-alice-owned"},
+                "input": {"note": "malformed replay status"},
+                "idempotency_key": "replay-status-whitespace",
+            },
+        )
+        self.assertEqual(whitespace_replay_status, 400)
+        self.assertEqual(
+            whitespace_replay,
+            {"status": " completed ", "idempotent_replay": True, "module_state_mutated": False},
+        )
 
         malformed_fresh_results = {
             "fresh-replay-flag-missing": {"status": "queued", "module_state_mutated": False},
