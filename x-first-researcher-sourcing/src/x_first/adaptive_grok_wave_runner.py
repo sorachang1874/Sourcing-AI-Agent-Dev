@@ -7986,6 +7986,70 @@ def _terminate_existing_group(
     return term_sent, kill_sent
 
 
+def _load_bound_recovery_process_evidence(
+    run_root: Path,
+    *,
+    intent: Mapping[str, Any],
+    held_lease_sha: str,
+    current_process_evidence: bool,
+) -> tuple[dict[str, Any] | None, bytes | None, dict[str, Any] | None, str | None]:
+    """Read and bind recovery journal/ledger without mutating their directory."""
+
+    process_result_journal: dict[str, Any] | None = None
+    process_result_journal_raw: bytes | None = None
+    process_result_path = run_root / "process-result.json"
+    if process_result_path.exists() or process_result_path.is_symlink():
+        process_result_value = _read_private_json(process_result_path)
+        if not _process_result_journal_valid(
+            process_result_value,
+            allow_legacy=not current_process_evidence,
+        ):
+            raise AdaptiveWaveValidationError("process_result_journal_invalid")
+        process_result_journal = process_result_value
+        process_result_journal_raw = _read_regular_owned_bounded(
+            process_result_path,
+            maximum_bytes=1_048_576,
+            required_mode=0o600,
+        )
+        if (
+            process_result_journal["run_id"] != intent["run_id"]
+            or process_result_journal["request_id"] != intent["request_id"]
+            or process_result_journal["run_lease_sha256"] != held_lease_sha
+            or process_result_journal["session_id"]
+            != intent["command_binding"]["session_id"]
+        ):
+            raise AdaptiveWaveValidationError("process_result_journal_binding_invalid")
+
+    ledger: dict[str, Any] | None = None
+    process_ledger_sha: str | None = None
+    ledger_path = run_root / "process-ledger.json"
+    if ledger_path.exists() or ledger_path.is_symlink():
+        ledger_value = _read_private_json(ledger_path)
+        if not _process_ledger_valid(ledger_value):
+            raise AdaptiveWaveValidationError("process_ledger_invalid")
+        ledger = ledger_value
+        if (
+            ledger["run_id"] != intent["run_id"]
+            or ledger["request_id"] != intent["request_id"]
+            or ledger["run_lease_sha256"] != held_lease_sha
+            or ledger["session_id"] != intent["command_binding"]["session_id"]
+        ):
+            raise AdaptiveWaveValidationError("process_ledger_binding_invalid")
+        process_ledger_sha = bytes_sha256(
+            _read_regular_owned_bounded(
+                ledger_path,
+                maximum_bytes=1_048_576,
+                required_mode=0o600,
+            )
+        )
+    return (
+        process_result_journal,
+        process_result_journal_raw,
+        ledger,
+        process_ledger_sha,
+    )
+
+
 def recover_incomplete_run(
     run_root: Path,
     *,
@@ -8028,7 +8092,6 @@ def _recover_incomplete_run_locked(
 ) -> dict[str, Any]:
     """Seal an interrupted run only after its recorded process group is dead."""
 
-    recover_pending_publications(run_root)
     if (run_root / "operator-receipt.json").exists():
         raise AdaptiveWaveValidationError("run_already_terminal")
     intent = _read_private_json(run_root / "operator-intent.json")
@@ -8078,6 +8141,43 @@ def _recover_incomplete_run_locked(
         raise AdaptiveWaveValidationError("recovery_legacy_process_evidence_shape_mismatch")
     else:
         current_process_evidence = False
+
+    # Read and bind every durable process-boundary artifact before recovery is
+    # allowed to publish a replacement auth claim, inspect a process group, or
+    # mutate any retained run artifact.  In particular, a deleted consumption
+    # ledger must not be downgraded to a pre-consumption crash merely by also
+    # deleting or origin-rewriting the active-use claim.
+    process_result_path = run_root / "process-result.json"
+    ledger_path = run_root / "process-ledger.json"
+    (
+        process_result_journal,
+        process_result_journal_raw,
+        ledger,
+        process_ledger_sha,
+    ) = _load_bound_recovery_process_evidence(
+        run_root,
+        intent=intent,
+        held_lease_sha=held_lease_sha,
+        current_process_evidence=current_process_evidence,
+    )
+
+    stdout_spool_path = run_root / intent["runtime_layout"]["stdout_spool_name"]
+    stderr_spool_path = run_root / intent["runtime_layout"]["stderr_spool_name"]
+    process_evidence_names = {
+        process_result_path.name,
+        ledger_path.name,
+        stdout_spool_path.name,
+        stderr_spool_path.name,
+    }
+    pending_process_evidence_present = any(
+        match is not None and match.group("name") in process_evidence_names
+        for path in run_root.iterdir()
+        for match in (_PENDING_RE.fullmatch(path.name),)
+    )
+    process_spool_evidence_present = pending_process_evidence_present or any(
+        path.exists() or path.is_symlink()
+        for path in (stdout_spool_path, stderr_spool_path)
+    )
     recovery_effective_prompt_policy: EffectivePromptPolicyBinding | None = None
     recovery_auth_sha256: str | None = None
     recovery_grant_sha256: str | None = None
@@ -8147,6 +8247,34 @@ def _recover_incomplete_run_locked(
             ):
                 raise AdaptiveWaveValidationError("recovery_grant_replay_invalid")
             active_claim = _load_auth_active_use(approval_root, recovery_auth_sha256)
+            if active_claim is not None:
+                if not _auth_active_use_matches(
+                    active_claim,
+                    run_id=intent["run_id"],
+                    request_sha256=intent["request_sha256"],
+                    run_lease_sha256=held_lease_sha,
+                    grant_sha256=recovery_grant_sha256,
+                ):
+                    raise PermissionError("grok_auth_digest_in_use")
+
+            crossed_consumption_boundary = (
+                (
+                    active_claim is not None
+                    and active_claim.get("claim_origin") == "live_consumption"
+                )
+                or (current_process_evidence and process_result_journal is not None)
+                or ledger is not None
+                or process_spool_evidence_present
+            )
+            if recovery_consumption is None and crossed_consumption_boundary:
+                # Each evidence family is independent of the mutable claim
+                # origin.  Once any current process evidence exists, deleting
+                # consumption and either deleting the claim or rewriting it to
+                # legacy_recovery must remain a typed pre-mutation failure.
+                raise AdaptiveWaveValidationError(
+                    "recovery_grant_consumption_missing"
+                )
+
             if active_claim is None:
                 _publish_auth_active_use_unlocked(
                     approval_root,
@@ -8161,73 +8289,29 @@ def _recover_incomplete_run_locked(
                 recovery_active_auth_claim = True
                 recovery_auth_claim_origin = "legacy_recovery"
             else:
-                if not _auth_active_use_matches(
-                    active_claim,
-                    run_id=intent["run_id"],
-                    request_sha256=intent["request_sha256"],
-                    run_lease_sha256=held_lease_sha,
-                    grant_sha256=recovery_grant_sha256,
-                ):
-                    raise PermissionError("grok_auth_digest_in_use")
-                if (
-                    active_claim.get("claim_origin") == "live_consumption"
-                    and recovery_consumption is None
-                ):
-                    # A live-consumption claim is published immediately before
-                    # its single-use consumption ledger.  Treating a missing
-                    # ledger as an unconsumed crash would make deletion a
-                    # downgrade.  Preserve every artifact/claim for operator
-                    # reconciliation instead of mutating recovery state.
-                    raise AdaptiveWaveValidationError(
-                        "recovery_grant_consumption_missing"
-                    )
                 recovery_active_auth_claim = True
                 recovery_auth_claim_origin = active_claim["claim_origin"]
-    prior_handles, _, prior_candidates = load_prior_context(request)
-    del prior_handles
-    process_result_path = run_root / "process-result.json"
-    process_result_journal: dict[str, Any] | None = None
-    process_result_journal_raw: bytes | None = None
-    if process_result_path.exists() or process_result_path.is_symlink():
-        process_result_value = _read_private_json(process_result_path)
-        if not _process_result_journal_valid(
-            process_result_value,
-            allow_legacy=not current_process_evidence,
-        ):
-            raise AdaptiveWaveValidationError("process_result_journal_invalid")
-        process_result_journal = process_result_value
-        process_result_journal_raw = _read_regular_owned_bounded(
-            process_result_path,
-            maximum_bytes=1_048_576,
-            required_mode=0o600,
-        )
-        if (
-            process_result_journal["run_id"] != intent["run_id"]
-            or process_result_journal["request_id"] != intent["request_id"]
-            or process_result_journal["run_lease_sha256"] != held_lease_sha
-            or process_result_journal["session_id"] != intent["command_binding"]["session_id"]
-        ):
-            raise AdaptiveWaveValidationError("process_result_journal_binding_invalid")
-    ledger_path = run_root / "process-ledger.json"
-    ledger: dict[str, Any] | None = None
-    process_ledger_sha: str | None = None
+
+    # Pending publication cleanup is mutation.  It is safe only after the
+    # missing-consumption downgrade classification above has either accepted a
+    # genuine pre-consumption state or proved exact consumption.
+    recover_pending_publications(run_root)
+    (
+        process_result_journal,
+        process_result_journal_raw,
+        ledger,
+        process_ledger_sha,
+    ) = _load_bound_recovery_process_evidence(
+        run_root,
+        intent=intent,
+        held_lease_sha=held_lease_sha,
+        current_process_evidence=current_process_evidence,
+    )
     term_sent = bool(process_result_journal and process_result_journal["term_sent"])
     kill_sent = bool(process_result_journal and process_result_journal["kill_sent"])
-    if ledger_path.exists():
-        ledger_value = _read_private_json(ledger_path)
-        if not _process_ledger_valid(ledger_value):
-            raise AdaptiveWaveValidationError("process_ledger_invalid")
-        ledger = ledger_value
-        if (
-            ledger["run_id"] != intent["run_id"]
-            or ledger["request_id"] != intent["request_id"]
-            or ledger["run_lease_sha256"] != held_lease_sha
-            or ledger["session_id"] != intent["command_binding"]["session_id"]
-        ):
-            raise AdaptiveWaveValidationError("process_ledger_binding_invalid")
-        process_ledger_sha = bytes_sha256(
-            _read_regular_owned_bounded(ledger_path, maximum_bytes=1_048_576, required_mode=0o600)
-        )
+    prior_handles, _, prior_candidates = load_prior_context(request)
+    del prior_handles
+    if ledger is not None:
         group_id = ledger["process_group_id"]
         if process_group_is_alive(group_id):
             if not terminate_orphan:

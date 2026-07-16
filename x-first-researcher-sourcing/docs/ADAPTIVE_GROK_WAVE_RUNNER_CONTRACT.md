@@ -332,8 +332,12 @@ The approval root owns two closed, replay-independent records per auth digest. A
 digest, grant digest, and closed `live_consumption|legacy_recovery` origin. It is published before grant consumption
 and remains durable across process death; grant
 issuance, live execution, and sibling consumption all fail while it exists. Recovery acquires the run lease first,
-then validates that exact claim under the auth lock. For a pre-D2 incomplete live run with no claim, recovery publishes
-the same exact claim before it reads consumption state, closing the legacy reuse window.
+then read-binds the consumption record and every independently durable process-boundary artifact before it may mutate
+the claim or retained run. Missing exact consumption plus a bound `live_consumption` claim, current executor-return
+journal (including no-spawn), process ledger, process spool, or pending publication fails with the typed
+`recovery_grant_consumption_missing`; deleting the claim or rewriting its origin to `legacy_recovery` cannot downgrade
+that state. Only a genuine pre-D2/pre-consumption incomplete run with no such evidence may receive the synthesized
+`legacy_recovery` claim that closes its reuse window.
 
 The separate `auth-taint-<original-auth-sha256>.json` marker contains only the original digest, source run/request
 digests, detection time, closed reason, and blocking state—never a token, claim value, profile field, or refreshed
@@ -544,9 +548,12 @@ PYTHONPATH=src ../sourcing-ai-agent/.venv/bin/python \
   scripts/run_adaptive_grok_wave.py --recover-incomplete-run <private-run-directory> --terminate-orphan
 ```
 
-Recovery first acquires the nonblocking run lease, before cleaning pending publications or reading mutable run state.
-For a live run it next validates—or creates for a legacy incomplete run—the exact auth active-use claim under the
-short per-digest lock, then validates any consumption record as belonging to the same request/run/lease/grant. A
+Recovery first acquires the nonblocking run lease. Before pending-publication cleanup, claim publication, process
+liveness/termination hooks, spool promotion, copied-home audit/deletion, tainting, or receipt output, it read-binds the
+current executor-return journal, process ledger, process spools/pending publications, exact grant consumption, and
+active-use claim. A missing consumption record is a typed pre-mutation failure whenever any independently bound
+current evidence exists; a `legacy_recovery` claim origin is not authority to override that evidence. Only an actual
+pre-consumption state with no current evidence may synthesize a legacy claim and retain the former recovery path. A
 sibling claim blocks recovery without mutation. After any recorded process group is confirmed dead, recovery audits
 the copied auth before measuring retained session state, durably deletes the ephemeral home, and only then resolves
 the claim. Audit/taint or deletion failure leaves the claim blocking retries. If recovery finds a

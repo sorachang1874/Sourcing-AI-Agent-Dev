@@ -73,6 +73,30 @@ def _write_private(path: Path, value: bytes) -> None:
     os.chmod(path, 0o600)
 
 
+def _tree_snapshot(path: Path) -> dict[str, tuple[str, int, bytes | str | None]] | None:
+    """Capture one retained tree without following symlinks."""
+
+    try:
+        path.lstat()
+    except FileNotFoundError:
+        return None
+    entries = [path, *sorted(path.rglob("*"), key=lambda item: str(item.relative_to(path)))]
+    snapshot: dict[str, tuple[str, int, bytes | str | None]] = {}
+    for entry in entries:
+        info = entry.lstat()
+        key = "." if entry == path else str(entry.relative_to(path))
+        mode = stat.S_IMODE(info.st_mode)
+        if stat.S_ISLNK(info.st_mode):
+            snapshot[key] = ("symlink", mode, os.readlink(entry))
+        elif stat.S_ISDIR(info.st_mode):
+            snapshot[key] = ("directory", mode, None)
+        elif stat.S_ISREG(info.st_mode):
+            snapshot[key] = ("file", mode, entry.read_bytes())
+        else:
+            snapshot[key] = ("other", mode, None)
+    return snapshot
+
+
 def _oauth_auth_bytes(
     expires_at: datetime = datetime(2099, 1, 1, tzinfo=UTC),
     *,
@@ -596,6 +620,131 @@ def _completed_live_run(root: Path, *, model_result: dict[str, Any] | None = Non
         _write_private(receipt_path, (canonical_json(receipt) + "\n").encode())
         (run_root / "process-result.json").unlink()
     return run_root, approvals
+
+
+def _incomplete_live_run_after_executor_return(
+    root: Path,
+    *,
+    spawn: bool,
+) -> dict[str, Any]:
+    """Produce current recovery artifacts through the real live runner path."""
+
+    os.chmod(root, 0o700)
+    binary, auth, binary_sha = _live_material(root)
+    auth_sha = _bytes_sha(auth.read_bytes())
+    request, request_path = _build_request(root, binary_sha=binary_sha)
+    approvals = root / "approvals"
+    issue_live_grant(
+        request_path=request_path,
+        grant_root=approvals,
+        auth_source=auth,
+        wall_clock=lambda: FIXED_TIME,
+    )
+    fake = FakeExecutor(
+        MutableClock(),
+        (canonical_json(_empty_result()) + "\n").encode(),
+        spawn=spawn,
+    )
+    with mock.patch.object(
+        runner,
+        "_measure_session_tree",
+        side_effect=RuntimeError("synthetic_session_measurement_failure"),
+    ):
+        try:
+            _run_adaptive_wave(
+                request=request,
+                execution_mode="live",
+                runtime_root=root / "runtime",
+                approval_root=approvals,
+                binary=binary,
+                auth_source=auth,
+                executor=fake,
+                monotonic=fake.clock,
+                wall_clock=lambda: FIXED_TIME,
+            )
+        except RuntimeError as exc:
+            if str(exc) != "synthetic_session_measurement_failure":
+                raise
+        else:
+            raise AssertionError("incomplete live producer unexpectedly completed")
+    run_root = next((root / "runtime").iterdir())
+    grant_id_hash = _bytes_sha(request["approval"]["grant_id"].encode())
+    _, consumption_path = runner._grant_paths(approvals, grant_id_hash)
+    return {
+        "run_root": run_root,
+        "approvals": approvals,
+        "request": request,
+        "request_path": request_path,
+        "auth": auth,
+        "auth_sha": auth_sha,
+        "consumption_path": consumption_path,
+        "active_claim": approvals / f"auth-active-use-{auth_sha}.json",
+        "fake": fake,
+    }
+
+
+def _incomplete_live_run_before_consumption(root: Path) -> dict[str, Any]:
+    """Retain the real producer state from an abrupt pre-consumption stop."""
+
+    os.chmod(root, 0o700)
+    binary, auth, binary_sha = _live_material(root)
+    auth_sha = _bytes_sha(auth.read_bytes())
+    request, request_path = _build_request(root, binary_sha=binary_sha)
+    approvals = root / "approvals"
+    issue_live_grant(
+        request_path=request_path,
+        grant_root=approvals,
+        auth_source=auth,
+        wall_clock=lambda: FIXED_TIME,
+    )
+    fake = FakeExecutor(
+        MutableClock(),
+        (canonical_json(_empty_result()) + "\n").encode(),
+        spawn=True,
+    )
+    with (
+        mock.patch.object(
+            runner,
+            "_load_and_consume_grant",
+            side_effect=RuntimeError("synthetic_before_consumption"),
+        ),
+        mock.patch.object(
+            runner,
+            "_delete_ephemeral_tree",
+            side_effect=RuntimeError("synthetic_abrupt_process_stop"),
+        ),
+    ):
+        try:
+            _run_adaptive_wave(
+                request=request,
+                execution_mode="live",
+                runtime_root=root / "runtime",
+                approval_root=approvals,
+                binary=binary,
+                auth_source=auth,
+                executor=fake,
+                monotonic=fake.clock,
+                wall_clock=lambda: FIXED_TIME,
+            )
+        except RuntimeError as exc:
+            if str(exc) != "synthetic_abrupt_process_stop":
+                raise
+        else:
+            raise AssertionError("pre-consumption producer unexpectedly completed")
+    run_root = next((root / "runtime").iterdir())
+    grant_id_hash = _bytes_sha(request["approval"]["grant_id"].encode())
+    _, consumption_path = runner._grant_paths(approvals, grant_id_hash)
+    return {
+        "run_root": run_root,
+        "approvals": approvals,
+        "request": request,
+        "request_path": request_path,
+        "auth": auth,
+        "auth_sha": auth_sha,
+        "consumption_path": consumption_path,
+        "active_claim": approvals / f"auth-active-use-{auth_sha}.json",
+        "fake": fake,
+    }
 
 
 class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
@@ -5658,6 +5807,227 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             self.assertEqual(active_claim.read_bytes(), claim_raw)
             self.assertEqual(journal_path.read_bytes(), journal_raw)
             self.assertFalse((run_root / "operator-receipt.json").exists())
+            self.assertFalse(runner._auth_digest_is_tainted(approvals, auth_sha))
+
+    def test_recovery_missing_consumption_and_claim_fails_before_any_mutation(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            state = _incomplete_live_run_after_executor_return(
+                Path(directory),
+                spawn=True,
+            )
+            run_root = state["run_root"]
+            approvals = state["approvals"]
+            auth_sha = state["auth_sha"]
+            consumption_path = state["consumption_path"]
+            active_claim = state["active_claim"]
+            consumption_path.unlink()
+            active_claim.unlink()
+            run_snapshot = _tree_snapshot(run_root)
+            approvals_snapshot = _tree_snapshot(approvals)
+            process_group_is_alive = mock.Mock(return_value=False)
+            process_group_identity_matches = mock.Mock(return_value=True)
+            terminate_process_group = mock.Mock(return_value=(False, False))
+
+            with self.assertRaisesRegex(
+                AdaptiveWaveValidationError,
+                "recovery_grant_consumption_missing",
+            ):
+                recover_incomplete_run(
+                    run_root,
+                    approval_root=approvals,
+                    process_group_is_alive=process_group_is_alive,
+                    process_group_identity_matches=process_group_identity_matches,
+                    terminate_process_group=terminate_process_group,
+                    wall_clock=lambda: FIXED_TIME + timedelta(minutes=5),
+                )
+
+            process_group_is_alive.assert_not_called()
+            process_group_identity_matches.assert_not_called()
+            terminate_process_group.assert_not_called()
+            self.assertEqual(_tree_snapshot(run_root), run_snapshot)
+            self.assertEqual(_tree_snapshot(approvals), approvals_snapshot)
+            self.assertFalse(active_claim.exists())
+            for name in (
+                "raw.stdout",
+                "stderr.txt",
+                "sanitized.json",
+                "session-updates.jsonl",
+                "operator-receipt.json",
+            ):
+                self.assertFalse((run_root / name).exists(), name)
+            self.assertFalse(runner._auth_digest_is_tainted(approvals, auth_sha))
+
+    def test_recovery_missing_consumption_origin_rewrite_cannot_downgrade_evidence(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            state = _incomplete_live_run_after_executor_return(
+                Path(directory),
+                spawn=True,
+            )
+            run_root = state["run_root"]
+            approvals = state["approvals"]
+            auth_sha = state["auth_sha"]
+            consumption_path = state["consumption_path"]
+            active_claim = state["active_claim"]
+            consumption_path.unlink()
+            claim = json.loads(active_claim.read_text())
+            claim["claim_origin"] = "legacy_recovery"
+            _write_private(active_claim, (canonical_json(claim) + "\n").encode())
+            run_snapshot = _tree_snapshot(run_root)
+            approvals_snapshot = _tree_snapshot(approvals)
+            process_group_is_alive = mock.Mock(return_value=False)
+            process_group_identity_matches = mock.Mock(return_value=True)
+            terminate_process_group = mock.Mock(return_value=(False, False))
+
+            with self.assertRaisesRegex(
+                AdaptiveWaveValidationError,
+                "recovery_grant_consumption_missing",
+            ):
+                recover_incomplete_run(
+                    run_root,
+                    approval_root=approvals,
+                    process_group_is_alive=process_group_is_alive,
+                    process_group_identity_matches=process_group_identity_matches,
+                    terminate_process_group=terminate_process_group,
+                    wall_clock=lambda: FIXED_TIME + timedelta(minutes=5),
+                )
+
+            process_group_is_alive.assert_not_called()
+            process_group_identity_matches.assert_not_called()
+            terminate_process_group.assert_not_called()
+            self.assertEqual(_tree_snapshot(run_root), run_snapshot)
+            self.assertEqual(_tree_snapshot(approvals), approvals_snapshot)
+            self.assertEqual(
+                json.loads(active_claim.read_text())["claim_origin"],
+                "legacy_recovery",
+            )
+            for name in (
+                "raw.stdout",
+                "stderr.txt",
+                "sanitized.json",
+                "session-updates.jsonl",
+                "operator-receipt.json",
+            ):
+                self.assertFalse((run_root / name).exists(), name)
+            self.assertFalse(runner._auth_digest_is_tainted(approvals, auth_sha))
+
+    def test_recovery_missing_consumption_current_no_spawn_journal_is_pre_mutation(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            state = _incomplete_live_run_after_executor_return(
+                Path(directory),
+                spawn=False,
+            )
+            run_root = state["run_root"]
+            approvals = state["approvals"]
+            auth_sha = state["auth_sha"]
+            consumption_path = state["consumption_path"]
+            active_claim = state["active_claim"]
+            consumption_path.unlink()
+            active_claim.unlink()
+            (run_root / ".stdout-spool").unlink()
+            (run_root / ".stderr-spool").unlink()
+            self.assertTrue((run_root / "process-result.json").is_file())
+            self.assertFalse((run_root / "process-ledger.json").exists())
+            run_snapshot = _tree_snapshot(run_root)
+            approvals_snapshot = _tree_snapshot(approvals)
+            process_group_is_alive = mock.Mock(return_value=False)
+            process_group_identity_matches = mock.Mock(return_value=True)
+            terminate_process_group = mock.Mock(return_value=(False, False))
+
+            with self.assertRaisesRegex(
+                AdaptiveWaveValidationError,
+                "recovery_grant_consumption_missing",
+            ):
+                recover_incomplete_run(
+                    run_root,
+                    approval_root=approvals,
+                    process_group_is_alive=process_group_is_alive,
+                    process_group_identity_matches=process_group_identity_matches,
+                    terminate_process_group=terminate_process_group,
+                    wall_clock=lambda: FIXED_TIME + timedelta(minutes=5),
+                )
+
+            process_group_is_alive.assert_not_called()
+            process_group_identity_matches.assert_not_called()
+            terminate_process_group.assert_not_called()
+            self.assertEqual(_tree_snapshot(run_root), run_snapshot)
+            self.assertEqual(_tree_snapshot(approvals), approvals_snapshot)
+            self.assertFalse(active_claim.exists())
+            for name in (
+                ".stdout-spool",
+                ".stderr-spool",
+                "process-ledger.json",
+                "raw.stdout",
+                "stderr.txt",
+                "sanitized.json",
+                "session-updates.jsonl",
+                "operator-receipt.json",
+            ):
+                self.assertFalse((run_root / name).exists(), name)
+            self.assertFalse(runner._auth_digest_is_tainted(approvals, auth_sha))
+
+    def test_recovery_genuine_pre_consumption_crash_retains_legacy_path(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            state = _incomplete_live_run_before_consumption(Path(directory))
+            run_root = state["run_root"]
+            approvals = state["approvals"]
+            auth_sha = state["auth_sha"]
+            consumption_path = state["consumption_path"]
+            active_claim = state["active_claim"]
+            self.assertFalse(consumption_path.exists())
+            self.assertFalse(active_claim.exists())
+            for name in (
+                "process-result.json",
+                "process-ledger.json",
+                ".stdout-spool",
+                ".stderr-spool",
+            ):
+                self.assertFalse((run_root / name).exists(), name)
+            home_snapshot = _tree_snapshot(run_root / "ephemeral-home")
+            process_group_is_alive = mock.Mock(return_value=False)
+            process_group_identity_matches = mock.Mock(return_value=True)
+            terminate_process_group = mock.Mock(return_value=(False, False))
+
+            with self.assertRaisesRegex(
+                AdaptiveWaveValidationError,
+                "recovery_process_identity_unavailable",
+            ):
+                recover_incomplete_run(
+                    run_root,
+                    approval_root=approvals,
+                    process_group_is_alive=process_group_is_alive,
+                    process_group_identity_matches=process_group_identity_matches,
+                    terminate_process_group=terminate_process_group,
+                    wall_clock=lambda: FIXED_TIME + timedelta(minutes=5),
+                )
+
+            process_group_is_alive.assert_not_called()
+            process_group_identity_matches.assert_not_called()
+            terminate_process_group.assert_not_called()
+            self.assertEqual(
+                _tree_snapshot(run_root / "ephemeral-home"),
+                home_snapshot,
+            )
+            self.assertFalse(consumption_path.exists())
+            self.assertEqual(
+                json.loads(active_claim.read_text())["claim_origin"],
+                "legacy_recovery",
+            )
+            for name in (
+                "process-result.json",
+                "process-ledger.json",
+                ".stdout-spool",
+                ".stderr-spool",
+                "raw.stdout",
+                "stderr.txt",
+                "sanitized.json",
+                "session-updates.jsonl",
+                "operator-receipt.json",
+            ):
+                self.assertFalse((run_root / name).exists(), name)
             self.assertFalse(runner._auth_digest_is_tainted(approvals, auth_sha))
 
     def test_distinct_keyless_legacy_incomplete_fixture_recovery_emits_legacy_receipt_shape(self) -> None:
