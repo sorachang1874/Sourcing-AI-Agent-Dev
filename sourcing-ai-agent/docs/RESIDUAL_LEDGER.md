@@ -121,11 +121,17 @@
   container/scalar/schema checks apply to the persisted root, event, child, causality, payload, and result. The
   root-plan event, deterministic intent child, and root terminal now commit or roll back in one PG transaction; exact
   succeeded replay validates the full persisted tuple before repairing current-state/recovery wakeup/Operation sync.
+  The D1i fixed-forward additionally writes the physical downstream edge in that UoW, treats retry scheduling as
+  mutable lifecycle state, reconciles successful-COMMIT driver ambiguity only through fresh authoritative exact replay,
+  and installs actual-root-scoped child shape/uniqueness via trigger plus parent identity advisory locking; the
+  constraint blocks unknown-owner/cross-workflow alternate children and wrong-type children under an
+  `acquisition.run.create` root, while non-root fan-out remains legal. Locked conflict reread accepts only the
+  canonical winner. This is not a global parent-generation fence for other command families.
   R-019 remains open because Operation/action preflight is outside that UoW, the repair path is post-commit, and a
   committed failure CAS can lose its acknowledgement; the 26-call ratchet must not rise. Original pinned advisory=
-  `NO-GO 0/2/1/0`; current candidate locally reconciles its three findings, with exact evidence
-  `20+54 subtests` plus the three-node R-019 ratchet and the adjacent stable lanes recorded above. Fresh pinned review is
-  still pending; local evidence is not formal
+  `NO-GO 0/2/1/0`; `dce094e` fresh pinned advisory=`NO-GO 0/2/2/0` for commit acknowledgement, parent uniqueness,
+  physical causality, and mutable retry state. The current fixed-forward locally reconciles those four findings; fresh
+  review of its new commit is still pending. Local evidence is not formal
   `GO`, and no served/provider/model/live authorization follows.
 
 - **R-019 / D3c2i (2026-07-15):** decision-only parent lock ratifies one future plan-review-owner aggregate:

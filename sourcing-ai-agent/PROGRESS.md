@@ -22,21 +22,28 @@
   repository clock with naive persisted timestamps interpreted as UTC. Cancelled, foreign, missing, malformed, forged,
   stale-claim, or type-confused commands cannot create an intent child or synchronize an untrusted Operation.
 - Root success now locks the root command and workflow stream, exact-reuses/appends one `CommandPlanRequested` event,
-  exact-reuses/creates one deterministic `acquisition.intent.resolve` child, and terminalizes the root in one PG
-  transaction. Exact succeeded replay validates the persisted root result/event/child/order/full envelopes before
-  repairing post-commit current-state/recovery wakeup and linked Operation synchronization. The root stage still creates
-  no job/run/review/provider effect.
-- The original pinned advisory was **NO-GO P0/P1/P2/P3=0/2/1/0**. The current working-tree fixed-forward locally closes
-  its stale-claim, forged/empty replay, and canonical-causality findings plus the follow-on race/type audit, but fresh
-  pinned non-author review remains pending. Current exact candidate evidence is D1i **20 passed + 54 subtests** and the
-  R-019 characterization ratchet **3 passed**. Final stable author evidence additionally includes combined D1
+  exact-reuses/creates one deterministic `acquisition.intent.resolve` child, writes its physical downstream edge, and
+  terminalizes the root in one PG transaction. Migration `0008` installs an actual-root-scoped trigger with parent
+  identity advisory locking: only `acquisition.run.create` parents are fenced, those roots may have exactly one child,
+  and the only legal child type is `acquisition.intent.resolve`. Non-root workflow fan-out remains legal. Conflict
+  reread exact-reuses only the canonical winner. Exact succeeded replay validates the
+  persisted root result/event/child/order/full envelopes while preserving scheduler-owned retry state. A real driver
+  exception after successful commit is reconciled only through a fresh authoritative succeeded read plus exact replay;
+  pre-commit errors remain rollback-and-re-raise. The root stage still creates no job/run/review/provider effect.
+- The original pinned advisory was **NO-GO P0/P1/P2/P3=0/2/1/0**. Candidate `dce094e` locally closed those findings,
+  but its fresh pinned non-author advisory was **NO-GO 0/2/2/0** for successful-COMMIT acknowledgement loss, missing
+  cross-producer parent uniqueness, empty physical downstream causality, and immutable retry scheduling. The current
+  fixed-forward locally closes all four; a fresh pinned review of the remediation commit remains pending. The prior
+  latest local remediation evidence is D1i PG **24 passed** and migration runner **22 passed**. The prior stable
+  `dce094e` author evidence was D1i **20 passed + 54 subtests** and R-019 ratchet **3 passed**; it also included combined D1
   **160 passed + 289 subtests**, command/control adjacency **175 passed + 503 subtests**, durable runtime + CRM batch
   adjacency **61 passed + 12 subtests**, storage guardrails **60 passed**, lint **58 files**, unchanged mypy
   **81 errors / 4 files**, and green compile/diff checks. This is not formal `GO`.
 - Current production partition is **5 schema-defined / 10 schema-less / served=0**. R-029 remains open at 10/15 and
   keeps epoch `d1f_r029_20260715_v2`. R-019 remains open for the Operation/action preflight-to-root-UoW race,
   post-commit current-state/recovery/Operation synchronization, and committed failure-CAS acknowledgement ambiguity;
-  do not claim aggregate-cancel atomicity or four-table exactly-once completion. No provider/model/live path is authorized.
+  the D1i actual-root child trigger is not a global command-generation fence. Do not claim aggregate-cancel atomicity or
+  four-table exactly-once completion. No provider/model/live path is authorized.
 
 ### Track D D1f/D1g review fixed-forward
 

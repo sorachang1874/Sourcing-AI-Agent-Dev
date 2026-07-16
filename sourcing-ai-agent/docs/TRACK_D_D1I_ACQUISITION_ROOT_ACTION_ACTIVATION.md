@@ -1,6 +1,7 @@
 # Track D D1i — acquisition root action activation
 
-> Status: fixed-forward bounded non-live implementation candidate, fresh pinned review pending (2026-07-16). This batch activates only
+> Status: bounded non-live fixed-forward remediation candidate after pinned `dce094e` advisory
+> `NO-GO P0/P1/P2/P3=0/2/2/0`; fresh review of the remediation commit is pending (2026-07-16). This batch activates only
 > `start_acquisition_run` as the fifth schema-defined production action. The production partition is
 > **5 schema-defined / 10 schema-less / served=0**. It does not authorize a provider/model call, live validation,
 > product signoff, or closure of R-019/R-029. Author tests are evidence, not an independent-review verdict.
@@ -70,14 +71,31 @@ closed; there is no discovered legitimate non-Operation producer for this root t
   appends or exact-reuses one `CommandPlanRequested` event, creates or exact-reuses one deterministic
   `acquisition.intent.resolve` child, and terminalizes the root in one PG transaction. Any mismatch or injected fault
   rolls back the event, child, and root terminal together;
+- migration `0008_acquisition_intent_parent_uniqueness.sql` adds an actual-root-scoped trigger plus parent identity
+  advisory locking and a non-unique parent support index. Only a real `acquisition.run.create` parent is fenced: it may
+  have exactly one child, and that child must be `acquisition.intent.resolve`. Generic workflow fan-out, including
+  multiple intent-typed children under a non-root parent, remains legal. Brownfield wrong-type children or duplicate
+  children under an acquisition root make migration application and its ledger row roll back fail-closed. The UoW uses
+  conflict-do-nothing plus a locked exact reread, so a concurrent canonical winner is reusable while an alternate
+  winner is rejected;
+- root terminalization atomically writes the deterministic child id to both the terminal result and physical
+  `downstream_command_ids_json`. Terminal authority expects that physical edge only for `succeeded`; creation-time
+  payload causality remains unchanged, and empty/foreign/extra terminal edges fail closed;
 - succeeded replay must exact-match the persisted root result, root-plan event, deterministic child, ordering, and full
-  envelopes before it can repair post-commit current-state/recovery wakeup and linked Operation synchronization. Replay
-  creates no duplicate, and the root stage itself creates no job, plan review, acquisition run, or provider work.
+  envelopes before it can repair post-commit current-state/recovery wakeup and linked Operation synchronization.
+  Scheduler-owned child fields such as `not_before_at` are lifecycle state rather than immutable creation identity, so
+  valid retry-wait/running/succeeded children remain replayable without clearing their schedule;
+- if the driver raises after the PG root UoW commit, the owner performs a fresh authoritative read and enters the same
+  exact succeeded replay only when the root is durably `succeeded`; a pre-commit exception is re-raised and the UoW
+  remains rolled back. Replay creates no duplicate, and the root stage itself creates no job, plan review, acquisition
+  run, or provider work.
 
 ## Residual boundaries
 
-R-019 remains open, but the former root event/child/root partial-completion gap is closed inside the candidate's
-specialized PG transaction. The OperationRun/AgentAction authority preflight is still outside that UoW, so a concurrent
+R-019 remains open, but the former root event/child/root partial-completion gap, this typed root's parent-child phantom
+window, and successful-COMMIT acknowledgement recovery are closed inside the D1i specialization. This does not install
+a global generation fence for other command families. The OperationRun/AgentAction authority preflight is still
+outside that UoW, so a concurrent
 aggregate cancel can race between the preflight and the locked root completion. `workflow_current_state`, recovery
 wakeup, and linked Operation synchronization also remain post-commit repair work rather than members of the root UoW.
 The approve/retry/resume read-only preflights remain outside their existing writer UoWs, although normal repository APIs
@@ -108,8 +126,9 @@ Final stable candidate author evidence:
 - `make typecheck`: unchanged accepted ceiling, `81 errors / 4 files`;
 - Python compilation and `git diff --check`: green.
 
-The original pinned advisory was `NO-GO P0/P1/P2/P3=0/2/1/0`: it identified stale-claim completion, forged/empty
-succeeded replay, and non-canonical root-causality acceptance. The current candidate locally closes
-those three findings, including the later race/type audit, but that reconciliation is not a review artifact or a `GO`.
-A fresh pinned non-author review remains required before promotion; no formal review or live/provider gate is authorized
-by the local evidence.
+The first pinned advisory was `NO-GO P0/P1/P2/P3=0/2/1/0`; `dce094e` closed those findings locally. Its fresh pinned
+non-author review then returned advisory `NO-GO 0/2/2/0`: successful-COMMIT acknowledgement loss was not reconciled,
+the typed parent had no cross-producer uniqueness fence, physical root causality stayed empty, and child retry
+scheduling was incorrectly immutable. This fixed-forward candidate implements all four remediations, but author tests
+and this reconciliation are not a review artifact or a `GO`. A fresh pinned review of the new commit remains required
+before promotion; no formal review or live/provider gate is authorized by the local evidence.

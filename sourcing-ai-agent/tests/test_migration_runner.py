@@ -45,6 +45,7 @@ _D3_SCOPED_ROOT_MIGRATION = "0004_d3_scoped_root_foundation"
 _D3_ACTIVITY_MIGRATION = "0005_d3_activity_claim_chain_foundation"
 _D3_EVENT_MIGRATION = "0006_d3_workflow_event_terminal_lineage_foundation"
 _D0F_ENVELOPE_MIGRATION = "0007_model_invocation_envelopes"
+_D1I_PARENT_UNIQUENESS_MIGRATION = "0008_acquisition_intent_parent_uniqueness"
 _ALL_MIGRATIONS = [
     "0001_baseline",
     "0002_action_request_schema_pins",
@@ -53,6 +54,7 @@ _ALL_MIGRATIONS = [
     _D3_ACTIVITY_MIGRATION,
     _D3_EVENT_MIGRATION,
     _D0F_ENVELOPE_MIGRATION,
+    _D1I_PARENT_UNIQUENESS_MIGRATION,
 ]
 _D3_COMMAND_COLUMNS = (
     ("runtime_namespace", "text", "NO", "''::text"),
@@ -441,6 +443,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 _D3_ACTIVITY_MIGRATION,
                 _D3_EVENT_MIGRATION,
                 _D0F_ENVELOPE_MIGRATION,
+                _D1I_PARENT_UNIQUENESS_MIGRATION,
             ],
         )
         self.assertEqual(ledger, _ALL_MIGRATIONS)
@@ -489,6 +492,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 _D3_ACTIVITY_MIGRATION,
                 _D3_EVENT_MIGRATION,
                 _D0F_ENVELOPE_MIGRATION,
+                _D1I_PARENT_UNIQUENESS_MIGRATION,
             ],
         )
         self.assertEqual(
@@ -710,6 +714,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 _D3_ACTIVITY_MIGRATION,
                 _D3_EVENT_MIGRATION,
                 _D0F_ENVELOPE_MIGRATION,
+                _D1I_PARENT_UNIQUENESS_MIGRATION,
             ],
         )
         self.assertEqual(columns, list(_D3_COMMAND_COLUMNS))
@@ -880,6 +885,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 _D3_ACTIVITY_MIGRATION,
                 _D3_EVENT_MIGRATION,
                 _D0F_ENVELOPE_MIGRATION,
+                _D1I_PARENT_UNIQUENESS_MIGRATION,
             ],
         )
         self.assertEqual(again.applied, [])
@@ -967,6 +973,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 _D3_ACTIVITY_MIGRATION,
                 _D3_EVENT_MIGRATION,
                 _D0F_ENVELOPE_MIGRATION,
+                _D1I_PARENT_UNIQUENESS_MIGRATION,
             ],
         )
         self.assertEqual(session_columns, list(_D3_SCOPED_SESSION_COLUMNS))
@@ -1163,6 +1170,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 _D3_ACTIVITY_MIGRATION,
                 _D3_EVENT_MIGRATION,
                 _D0F_ENVELOPE_MIGRATION,
+                _D1I_PARENT_UNIQUENESS_MIGRATION,
             ],
         )
         self.assertEqual(again.applied, [])
@@ -1245,7 +1253,12 @@ class MigrationRunnerTest(unittest.TestCase):
 
         self.assertEqual(
             result.applied,
-            [_D3_ACTIVITY_MIGRATION, _D3_EVENT_MIGRATION, _D0F_ENVELOPE_MIGRATION],
+            [
+                _D3_ACTIVITY_MIGRATION,
+                _D3_EVENT_MIGRATION,
+                _D0F_ENVELOPE_MIGRATION,
+                _D1I_PARENT_UNIQUENESS_MIGRATION,
+            ],
         )
         self.assertEqual(run_columns, list(_D3_ACTIVITY_RUN_COLUMNS))
         self.assertEqual(attempt_columns, list(_D3_ACTIVITY_ATTEMPT_COLUMNS))
@@ -1450,7 +1463,12 @@ class MigrationRunnerTest(unittest.TestCase):
             again = mr.apply_pending_migrations(conn, schema=schema)
         self.assertEqual(
             recovered.applied,
-            [_D3_ACTIVITY_MIGRATION, _D3_EVENT_MIGRATION, _D0F_ENVELOPE_MIGRATION],
+            [
+                _D3_ACTIVITY_MIGRATION,
+                _D3_EVENT_MIGRATION,
+                _D0F_ENVELOPE_MIGRATION,
+                _D1I_PARENT_UNIQUENESS_MIGRATION,
+            ],
         )
         self.assertEqual(again.applied, [])
         self.assertEqual(again.already_applied, _ALL_MIGRATIONS)
@@ -1522,7 +1540,10 @@ class MigrationRunnerTest(unittest.TestCase):
             conn.commit()
 
         sentinel = ("", "", "", "", None, "", 0, 0, "", "", None)
-        self.assertEqual(result.applied, [_D3_EVENT_MIGRATION, _D0F_ENVELOPE_MIGRATION])
+        self.assertEqual(
+            result.applied,
+            [_D3_EVENT_MIGRATION, _D0F_ENVELOPE_MIGRATION, _D1I_PARENT_UNIQUENESS_MIGRATION],
+        )
         self.assertEqual(columns, list(_D3_EVENT_COLUMNS))
         self.assertEqual(legacy_sentinel, sentinel)
         self.assertEqual(current_writer_sentinel, sentinel)
@@ -1653,9 +1674,537 @@ class MigrationRunnerTest(unittest.TestCase):
         with psycopg.connect(self.dsn, client_encoding="utf8") as conn:
             recovered = mr.apply_pending_migrations(conn, schema=schema)
             again = mr.apply_pending_migrations(conn, schema=schema)
-        self.assertEqual(recovered.applied, [_D3_EVENT_MIGRATION, _D0F_ENVELOPE_MIGRATION])
+        self.assertEqual(
+            recovered.applied,
+            [_D3_EVENT_MIGRATION, _D0F_ENVELOPE_MIGRATION, _D1I_PARENT_UNIQUENESS_MIGRATION],
+        )
         self.assertEqual(again.applied, [])
         self.assertEqual(again.already_applied, _ALL_MIGRATIONS)
+
+    def test_acquisition_root_child_shape_trigger_has_exact_scope(self) -> None:
+        schema = self._fresh_schema("d1i_parent_unique")
+        with psycopg.connect(self.dsn, client_encoding="utf8") as conn:
+            result = mr.apply_pending_migrations(conn, schema=schema)
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT indexdef FROM pg_indexes "
+                    "WHERE schemaname = %s AND tablename = 'workflow_commands' "
+                    "AND indexname = 'workflow_commands_parent_command_idx'",
+                    (schema,),
+                )
+                support_index_row = cur.fetchone()
+                cur.execute(
+                    "SELECT indexdef FROM pg_indexes "
+                    "WHERE schemaname = %s AND tablename = 'workflow_commands' "
+                    "AND indexname = 'workflow_commands_acquisition_intent_parent_uk'",
+                    (schema,),
+                )
+                old_unique_index_row = cur.fetchone()
+                cur.execute(
+                    "SELECT pg_get_triggerdef(t.oid) "
+                    "FROM pg_trigger t "
+                    "JOIN pg_class c ON c.oid = t.tgrelid "
+                    "JOIN pg_namespace n ON n.oid = c.relnamespace "
+                    "WHERE n.nspname = %s AND c.relname = 'workflow_commands' "
+                    "AND t.tgname = 'workflow_commands_acquisition_root_child_shape_trg' "
+                    "AND NOT t.tgisinternal",
+                    (schema,),
+                )
+                trigger_row = cur.fetchone()
+                cur.execute(
+                    "SELECT pg_get_functiondef(p.oid) "
+                    "FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace "
+                    "WHERE n.nspname = %s AND p.proname = 'enforce_acquisition_root_child_shape'",
+                    (schema,),
+                )
+                function_row = cur.fetchone()
+
+        self.assertEqual(result.applied, _ALL_MIGRATIONS)
+        self.assertIsNotNone(support_index_row)
+        self.assertIsNone(old_unique_index_row)
+        normalized = " ".join(str((support_index_row or [""])[0]).replace(f"{schema}.", "").split())
+        self.assertEqual(
+            normalized,
+            "CREATE INDEX workflow_commands_parent_command_idx "
+            "ON workflow_commands USING btree (parent_command_id) "
+            "WHERE (parent_command_id <> ''::text)",
+        )
+        self.assertIsNotNone(trigger_row)
+        self.assertIn(
+            "BEFORE INSERT OR UPDATE OF command_id, command_type, parent_command_id",
+            str((trigger_row or [""])[0]),
+        )
+        function_definition = str((function_row or [""])[0])
+        self.assertIn("SET search_path", function_definition)
+        self.assertIn("acquisition-root-child-shape-v1:", function_definition)
+        self.assertIn("workflow_commands_acquisition_root_child_shape_ck", function_definition)
+        self.assertIn("workflow_commands_acquisition_root_single_child_uk", function_definition)
+        self.assertIn("NEW.command_type <> 'acquisition.intent.resolve'", function_definition)
+
+    def test_acquisition_root_child_shape_is_scoped_and_closes_orphan_type_bypass(self) -> None:
+        schema = self._fresh_schema("d1i_parent_shape")
+        quoted = quote_control_plane_postgres_identifier(schema)
+        with psycopg.connect(self.dsn, client_encoding="utf8") as conn:
+            mr.apply_pending_migrations(conn, schema=schema)
+            with conn.cursor() as cur:
+                cur.execute(f"SET search_path TO {quoted}")
+                cur.execute(
+                    """
+                    INSERT INTO workflow_commands (
+                        command_id, workflow_run_id, operation_id, command_type,
+                        owner, parent_command_id, idempotency_key
+                    ) VALUES
+                        ('cmd_generic_parent', 'wf_generic', 'op_generic',
+                         'generic.multi.child.parent', 'generic-owner', '', 'generic-parent'),
+                        ('cmd_generic_child_a', 'wf_generic', 'op_generic',
+                         'generic.child.a', 'generic-owner', 'cmd_generic_parent', 'generic-child-a'),
+                        ('cmd_generic_child_b', 'wf_generic', 'op_generic',
+                         'generic.child.b', 'generic-owner', 'cmd_generic_parent', 'generic-child-b'),
+                        ('cmd_generic_intent_child_a', 'wf_generic', 'op_generic',
+                         'acquisition.intent.resolve', 'generic-owner',
+                         'cmd_generic_parent', 'generic-intent-child-a'),
+                        ('cmd_generic_intent_child_b', 'wf_generic', 'op_generic',
+                         'acquisition.intent.resolve', 'generic-owner',
+                         'cmd_generic_parent', 'generic-intent-child-b')
+                    """
+                )
+                cur.execute(
+                    """
+                    INSERT INTO workflow_commands (
+                        command_id, workflow_run_id, operation_id, command_type,
+                        owner, parent_command_id, idempotency_key
+                    ) VALUES (
+                        'cmd_orphan_wrong_type', 'wf_orphan', 'op_orphan',
+                        'generic.child.bypass', 'unknown-producer',
+                        'cmd_future_acquisition_root', 'orphan-wrong-type'
+                    )
+                    """
+                )
+                with self.assertRaises(psycopg.errors.CheckViolation) as orphan_bypass:
+                    cur.execute(
+                        """
+                        INSERT INTO workflow_commands (
+                            command_id, workflow_run_id, operation_id, command_type,
+                            owner, idempotency_key
+                        ) VALUES (
+                            'cmd_future_acquisition_root', 'wf_orphan', 'op_orphan',
+                            'acquisition.run.create', 'acquisition_run_writer', 'future-root'
+                        )
+                        """
+                    )
+            conn.rollback()
+
+        self.assertEqual(
+            orphan_bypass.exception.diag.constraint_name,
+            "workflow_commands_acquisition_root_child_shape_ck",
+        )
+
+    def test_acquisition_root_child_shape_blocks_update_bypasses(self) -> None:
+        schema = self._fresh_schema("d1i_parent_update")
+        quoted = quote_control_plane_postgres_identifier(schema)
+        with psycopg.connect(self.dsn, client_encoding="utf8") as conn:
+            mr.apply_pending_migrations(conn, schema=schema)
+            with conn.cursor() as cur:
+                cur.execute(f"SET search_path TO {quoted}")
+                cur.execute(
+                    """
+                    INSERT INTO workflow_commands (
+                        command_id, workflow_run_id, operation_id, command_type,
+                        owner, parent_command_id, idempotency_key
+                    ) VALUES
+                        ('cmd_update_root', 'wf_update', 'op_update',
+                         'acquisition.run.create', 'acquisition_run_writer', '', 'update-root'),
+                        ('cmd_update_intent_child', 'wf_update', 'op_update',
+                         'acquisition.intent.resolve', 'acquisition_planner',
+                         'cmd_update_root', 'update-intent-child'),
+                        ('cmd_update_generic_parent', 'wf_update', 'op_update',
+                         'generic.multi.child.parent', 'generic-owner', '', 'update-generic-parent'),
+                        ('cmd_update_moving_child', 'wf_update', 'op_update',
+                         'acquisition.intent.resolve', 'generic-owner',
+                         'cmd_update_generic_parent', 'update-moving-child'),
+                        ('cmd_update_wrong_type_child', 'wf_update', 'op_update',
+                         'generic.child.bypass', 'generic-owner',
+                         'cmd_update_generic_parent', 'update-wrong-type-child'),
+                        ('cmd_update_future_root', 'wf_update', 'op_update',
+                         'generic.multi.child.parent', 'generic-owner', '', 'update-future-root'),
+                        ('cmd_update_future_child_a', 'wf_update', 'op_update',
+                         'acquisition.intent.resolve', 'generic-owner',
+                         'cmd_update_future_root', 'update-future-child-a'),
+                        ('cmd_update_future_child_b', 'wf_update', 'op_update',
+                         'acquisition.intent.resolve', 'generic-owner',
+                         'cmd_update_future_root', 'update-future-child-b')
+                    """
+                )
+
+                cur.execute("SAVEPOINT move_child")
+                with self.assertRaises(psycopg.errors.UniqueViolation) as move_child:
+                    cur.execute(
+                        "UPDATE workflow_commands "
+                        "SET parent_command_id = 'cmd_update_root' "
+                        "WHERE command_id = 'cmd_update_moving_child'"
+                    )
+                self.assertEqual(
+                    move_child.exception.diag.constraint_name,
+                    "workflow_commands_acquisition_root_single_child_uk",
+                )
+                cur.execute("ROLLBACK TO SAVEPOINT move_child")
+
+                cur.execute("SAVEPOINT wrong_type")
+                with self.assertRaises(psycopg.errors.CheckViolation) as wrong_type:
+                    cur.execute(
+                        "UPDATE workflow_commands "
+                        "SET parent_command_id = 'cmd_update_root' "
+                        "WHERE command_id = 'cmd_update_wrong_type_child'"
+                    )
+                self.assertEqual(
+                    wrong_type.exception.diag.constraint_name,
+                    "workflow_commands_acquisition_root_child_shape_ck",
+                )
+                cur.execute("ROLLBACK TO SAVEPOINT wrong_type")
+
+                cur.execute("SAVEPOINT promote_root")
+                with self.assertRaises(psycopg.errors.UniqueViolation) as promote_root:
+                    cur.execute(
+                        "UPDATE workflow_commands "
+                        "SET command_type = 'acquisition.run.create' "
+                        "WHERE command_id = 'cmd_update_future_root'"
+                    )
+                self.assertEqual(
+                    promote_root.exception.diag.constraint_name,
+                    "workflow_commands_acquisition_root_single_child_uk",
+                )
+                cur.execute("ROLLBACK TO SAVEPOINT promote_root")
+            conn.rollback()
+
+    def test_acquisition_root_child_shape_migration_rejects_brownfield_wrong_type_child(self) -> None:
+        schema = self._fresh_schema("d1i_parent_wrong_type")
+        quoted = quote_control_plane_postgres_identifier(schema)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            migrations_dir = Path(temp_dir)
+            _copy_migrations_through(migrations_dir, 7)
+            with psycopg.connect(self.dsn, client_encoding="utf8") as conn:
+                prefix = mr.apply_pending_migrations(conn, schema=schema, migrations_dir=migrations_dir)
+                with conn.cursor() as cur:
+                    cur.execute(f"SET search_path TO {quoted}")
+                    cur.execute(
+                        """
+                        INSERT INTO workflow_commands (
+                            command_id, workflow_run_id, operation_id, command_type,
+                            owner, parent_command_id, idempotency_key
+                        ) VALUES
+                            ('cmd_brownfield_root', 'wf_brownfield', 'op_brownfield',
+                             'acquisition.run.create', 'acquisition_run_writer', '', 'brownfield-root'),
+                            ('cmd_brownfield_wrong_child', 'wf_brownfield', 'op_brownfield',
+                             'generic.child.bypass', 'unknown-producer',
+                             'cmd_brownfield_root', 'brownfield-wrong-child')
+                        """
+                    )
+                conn.commit()
+                with self.assertRaises(psycopg.errors.CheckViolation) as raised:
+                    mr.apply_pending_migrations(conn, schema=schema)
+
+        self.assertEqual(prefix.applied, _ALL_MIGRATIONS[:-1])
+        self.assertEqual(
+            raised.exception.diag.constraint_name,
+            "workflow_commands_acquisition_root_child_shape_ck",
+        )
+        with psycopg.connect(self.dsn, autocommit=True, client_encoding="utf8") as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"SET search_path TO {quoted}")
+                cur.execute("SELECT version FROM schema_migrations ORDER BY version")
+                ledger = [row[0] for row in cur.fetchall()]
+                cur.execute("SELECT to_regclass('workflow_commands_parent_command_idx')")
+                index_name = cur.fetchone()[0]
+                cur.execute("SELECT to_regclass('workflow_commands_acquisition_intent_parent_uk')")
+                old_unique_index_name = cur.fetchone()[0]
+                cur.execute(
+                    "SELECT COUNT(*) FROM pg_trigger t "
+                    "JOIN pg_class c ON c.oid = t.tgrelid "
+                    "JOIN pg_namespace n ON n.oid = c.relnamespace "
+                    "WHERE n.nspname = %s AND c.relname = 'workflow_commands' "
+                    "AND t.tgname = 'workflow_commands_acquisition_root_child_shape_trg'",
+                    (schema,),
+                )
+                trigger_count = int(cur.fetchone()[0])
+        self.assertEqual(ledger, _ALL_MIGRATIONS[:-1])
+        self.assertIsNone(index_name)
+        self.assertIsNone(old_unique_index_name)
+        self.assertEqual(trigger_count, 0)
+
+    def test_acquisition_root_child_shape_migration_fails_closed_on_brownfield_duplicate_root_children(
+        self,
+    ) -> None:
+        schema = self._fresh_schema("d1i_parent_duplicate")
+        quoted = quote_control_plane_postgres_identifier(schema)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            migrations_dir = Path(temp_dir)
+            _copy_migrations_through(migrations_dir, 7)
+            with psycopg.connect(self.dsn, client_encoding="utf8") as conn:
+                prefix = mr.apply_pending_migrations(conn, schema=schema, migrations_dir=migrations_dir)
+                with conn.cursor() as cur:
+                    cur.execute(f"SET search_path TO {quoted}")
+                    cur.execute(
+                        """
+                        INSERT INTO workflow_commands (
+                            command_id, workflow_run_id, operation_id, command_type,
+                            owner, parent_command_id, idempotency_key
+                        ) VALUES
+                            ('cmd_brownfield_parent', 'wf_brownfield_root', 'op_brownfield_root',
+                             'acquisition.run.create', 'acquisition_run_writer',
+                             '', 'brownfield-parent'),
+                            ('cmd_brownfield_intent_a', 'wf_brownfield_a', 'op_brownfield_a',
+                             'acquisition.intent.resolve', 'acquisition_planner',
+                             'cmd_brownfield_parent', 'brownfield-intent-a'),
+                            ('cmd_brownfield_intent_b', 'wf_brownfield_b', 'op_brownfield_b',
+                             'acquisition.intent.resolve', 'forged-owner',
+                             'cmd_brownfield_parent', 'brownfield-intent-b')
+                        """
+                    )
+                conn.commit()
+                with self.assertRaises(psycopg.errors.UniqueViolation) as raised:
+                    mr.apply_pending_migrations(conn, schema=schema)
+
+        self.assertEqual(prefix.applied, _ALL_MIGRATIONS[:-1])
+        self.assertEqual(
+            raised.exception.diag.constraint_name,
+            "workflow_commands_acquisition_root_single_child_uk",
+        )
+        with psycopg.connect(self.dsn, autocommit=True, client_encoding="utf8") as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"SET search_path TO {quoted}")
+                cur.execute("SELECT version FROM schema_migrations ORDER BY version")
+                ledger = [row[0] for row in cur.fetchall()]
+                cur.execute(
+                    "SELECT COUNT(*) FROM workflow_commands "
+                    "WHERE command_type = 'acquisition.intent.resolve' "
+                    "AND parent_command_id = 'cmd_brownfield_parent'"
+                )
+                duplicate_count = int(cur.fetchone()[0])
+                cur.execute("SELECT to_regclass('workflow_commands_parent_command_idx')")
+                index_name = cur.fetchone()[0]
+                cur.execute("SELECT to_regclass('workflow_commands_acquisition_intent_parent_uk')")
+                old_unique_index_name = cur.fetchone()[0]
+        self.assertEqual(ledger, _ALL_MIGRATIONS[:-1])
+        self.assertEqual(duplicate_count, 2)
+        self.assertIsNone(index_name)
+        self.assertIsNone(old_unique_index_name)
+
+    def test_acquisition_intent_parent_uniqueness_serializes_competing_transactions(self) -> None:
+        schema = self._fresh_schema("d1i_parent_race")
+        quoted = quote_control_plane_postgres_identifier(schema)
+        with psycopg.connect(self.dsn, client_encoding="utf8") as setup:
+            mr.apply_pending_migrations(setup, schema=schema)
+            with setup.cursor() as cur:
+                cur.execute(f"SET search_path TO {quoted}")
+                cur.execute(
+                    "INSERT INTO workflow_commands "
+                    "(command_id, workflow_run_id, operation_id, command_type, owner, idempotency_key) "
+                    "VALUES ('cmd_race_parent', 'wf_race_parent', 'op_race_parent', "
+                    "'acquisition.run.create', 'acquisition_run_writer', 'race-parent')"
+                )
+            setup.commit()
+
+        second_started = threading.Event()
+        second_finished = threading.Event()
+        second_outcome: dict[str, object] = {}
+
+        def insert_competing_child() -> None:
+            try:
+                with psycopg.connect(
+                    self.dsn,
+                    client_encoding="utf8",
+                    application_name="d1i-parent-unique-t2",
+                ) as second:
+                    with second.cursor() as cur:
+                        cur.execute(f"SET search_path TO {quoted}")
+                        second_started.set()
+                        cur.execute(
+                            """
+                            INSERT INTO workflow_commands (
+                                command_id, workflow_run_id, operation_id, command_type,
+                                owner, parent_command_id, idempotency_key
+                            ) VALUES (%s, %s, %s, 'acquisition.intent.resolve', %s, %s, %s)
+                            """,
+                            (
+                                "cmd_race_child_b",
+                                "wf_race_b",
+                                "op_race_b",
+                                "forged-owner",
+                                "cmd_race_parent",
+                                "race-child-b",
+                            ),
+                        )
+                    second.commit()
+                    second_outcome["status"] = "committed"
+            except Exception as exc:  # pragma: no cover - asserted below
+                second_outcome["error"] = exc
+            finally:
+                second_finished.set()
+
+        with psycopg.connect(self.dsn, client_encoding="utf8") as first:
+            with first.cursor() as cur:
+                cur.execute(f"SET search_path TO {quoted}")
+                cur.execute(
+                    """
+                    INSERT INTO workflow_commands (
+                        command_id, workflow_run_id, operation_id, command_type,
+                        owner, parent_command_id, idempotency_key
+                    ) VALUES (%s, %s, %s, 'acquisition.intent.resolve', %s, %s, %s)
+                    """,
+                    (
+                        "cmd_race_child_a",
+                        "wf_race_a",
+                        "op_race_a",
+                        "acquisition_planner",
+                        "cmd_race_parent",
+                        "race-child-a",
+                    ),
+                )
+
+            thread = threading.Thread(target=insert_competing_child, daemon=True)
+            thread.start()
+            self.assertTrue(second_started.wait(timeout=5), "second parent-unique writer did not start")
+            deadline = time.monotonic() + 5
+            observed_lock_wait = False
+            while time.monotonic() < deadline and not observed_lock_wait:
+                with psycopg.connect(self.dsn, autocommit=True, client_encoding="utf8") as observer:
+                    with observer.cursor() as cur:
+                        cur.execute(
+                            "SELECT wait_event_type FROM pg_stat_activity "
+                            "WHERE application_name = 'd1i-parent-unique-t2'"
+                        )
+                        observed_lock_wait = any(row[0] == "Lock" for row in cur.fetchall())
+                if not observed_lock_wait:
+                    time.sleep(0.02)
+            self.assertTrue(observed_lock_wait, "second writer never waited on the unique parent fence")
+            self.assertFalse(second_finished.is_set())
+            first.commit()
+
+        self.assertTrue(second_finished.wait(timeout=5), "second parent-unique writer did not finish")
+        thread.join(timeout=5)
+        self.assertFalse(thread.is_alive())
+        self.assertIsInstance(second_outcome.get("error"), psycopg.errors.UniqueViolation)
+        self.assertNotIn("status", second_outcome)
+        with psycopg.connect(self.dsn, autocommit=True, client_encoding="utf8") as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"SET search_path TO {quoted}")
+                cur.execute(
+                    "SELECT COUNT(*) FROM workflow_commands "
+                    "WHERE command_type = 'acquisition.intent.resolve' "
+                    "AND parent_command_id = 'cmd_race_parent'"
+                )
+                child_count = int(cur.fetchone()[0])
+        self.assertEqual(child_count, 1)
+
+    def test_acquisition_root_child_shape_serializes_a_different_type_competitor(self) -> None:
+        schema = self._fresh_schema("d1i_parent_type_race")
+        quoted = quote_control_plane_postgres_identifier(schema)
+        with psycopg.connect(self.dsn, client_encoding="utf8") as setup:
+            mr.apply_pending_migrations(setup, schema=schema)
+            with setup.cursor() as cur:
+                cur.execute(f"SET search_path TO {quoted}")
+                cur.execute(
+                    "INSERT INTO workflow_commands "
+                    "(command_id, workflow_run_id, operation_id, command_type, owner, idempotency_key) "
+                    "VALUES ('cmd_type_race_parent', 'wf_type_race', 'op_type_race', "
+                    "'acquisition.run.create', 'acquisition_run_writer', 'type-race-parent')"
+                )
+            setup.commit()
+
+        second_started = threading.Event()
+        second_finished = threading.Event()
+        second_outcome: dict[str, object] = {}
+
+        def insert_different_type_child() -> None:
+            try:
+                with psycopg.connect(
+                    self.dsn,
+                    client_encoding="utf8",
+                    application_name="d1i-parent-type-t2",
+                ) as second:
+                    with second.cursor() as cur:
+                        cur.execute(f"SET search_path TO {quoted}")
+                        second_started.set()
+                        cur.execute(
+                            """
+                            INSERT INTO workflow_commands (
+                                command_id, workflow_run_id, operation_id, command_type,
+                                owner, parent_command_id, idempotency_key
+                            ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                            """,
+                            (
+                                "cmd_type_race_wrong_child",
+                                "wf_type_race",
+                                "op_type_race",
+                                "generic.child.bypass",
+                                "unknown-producer",
+                                "cmd_type_race_parent",
+                                "type-race-wrong-child",
+                            ),
+                        )
+                    second.commit()
+                    second_outcome["status"] = "committed"
+            except Exception as exc:  # pragma: no cover - asserted below
+                second_outcome["error"] = exc
+            finally:
+                second_finished.set()
+
+        with psycopg.connect(self.dsn, client_encoding="utf8") as first:
+            with first.cursor() as cur:
+                cur.execute(f"SET search_path TO {quoted}")
+                cur.execute(
+                    """
+                    INSERT INTO workflow_commands (
+                        command_id, workflow_run_id, operation_id, command_type,
+                        owner, parent_command_id, idempotency_key
+                    ) VALUES (%s, %s, %s, 'acquisition.intent.resolve', %s, %s, %s)
+                    """,
+                    (
+                        "cmd_type_race_intent_child",
+                        "wf_type_race",
+                        "op_type_race",
+                        "acquisition_planner",
+                        "cmd_type_race_parent",
+                        "type-race-intent-child",
+                    ),
+                )
+
+            thread = threading.Thread(target=insert_different_type_child, daemon=True)
+            thread.start()
+            self.assertTrue(second_started.wait(timeout=5), "different-type writer did not start")
+            deadline = time.monotonic() + 5
+            observed_lock_wait = False
+            while time.monotonic() < deadline and not observed_lock_wait:
+                with psycopg.connect(self.dsn, autocommit=True, client_encoding="utf8") as observer:
+                    with observer.cursor() as cur:
+                        cur.execute(
+                            "SELECT wait_event_type FROM pg_stat_activity WHERE application_name = 'd1i-parent-type-t2'"
+                        )
+                        observed_lock_wait = any(row[0] == "Lock" for row in cur.fetchall())
+                if not observed_lock_wait:
+                    time.sleep(0.02)
+            self.assertTrue(observed_lock_wait, "different-type writer never waited on the parent identity fence")
+            self.assertFalse(second_finished.is_set())
+            first.commit()
+
+        self.assertTrue(second_finished.wait(timeout=5), "different-type writer did not finish")
+        thread.join(timeout=5)
+        self.assertFalse(thread.is_alive())
+        self.assertIsInstance(second_outcome.get("error"), psycopg.errors.CheckViolation)
+        self.assertEqual(
+            getattr(second_outcome.get("error"), "diag", None).constraint_name,
+            "workflow_commands_acquisition_root_child_shape_ck",
+        )
+        self.assertNotIn("status", second_outcome)
+        with psycopg.connect(self.dsn, autocommit=True, client_encoding="utf8") as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"SET search_path TO {quoted}")
+                cur.execute(
+                    "SELECT command_type FROM workflow_commands "
+                    "WHERE parent_command_id = 'cmd_type_race_parent' ORDER BY command_id"
+                )
+                child_types = [row[0] for row in cur.fetchall()]
+        self.assertEqual(child_types, ["acquisition.intent.resolve"])
 
     def test_applied_migration_checksum_change_fails_closed(self) -> None:
         schema = self._fresh_schema("checksum")

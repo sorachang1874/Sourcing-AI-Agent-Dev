@@ -159,13 +159,19 @@ serve、会话/事件层、planner loop），用一个垂直切片证明闭环�
   root owner 还要求 exact operation/action/canonical envelope、canonical source/causality 与 exact current
   claim/attempt/lease；lease 由 PG repository clock 判定并按 UTC 解释。strict JSON/type/schema contract 拒绝容器、
   scalar 与 deterministic identity 漂移。positive 以 root+stream locks 在一个 PG transaction 内 exact-reuse/append
-  plan event、exact-reuse/create 唯一 intent child 并 terminalize root；succeeded replay exact-check result/event/child/
-  ordering 后才修复 post-commit state/wakeup/Operation sync。原 pinned advisory=`NO-GO 0/2/1/0`；current local
-  fixed-forward 已闭合三项 finding，但 fresh pinned review pending，不是 `GO`。Final stable author evidence=D1i=
+  plan event、exact-reuse/create 唯一 intent child、写 physical downstream edge 并 terminalize root。`0008` 用
+  actual-root-scoped trigger、parent identity advisory lock 与 non-unique support index 阻止 unknown producer 给
+  `acquisition.run.create` root 追加第二 child 或 wrong-type child；non-root fan-out 保持合法，conflict locked reread
+  只接受 exact canonical winner；succeeded replay exact-check result/event/child/ordering 且允许 scheduler-owned retry state 演进，
+  successful-COMMIT driver error 只凭 fresh authoritative succeeded row 进入 exact replay。原 pinned advisory=
+  `NO-GO 0/2/1/0`；`dce094e` fresh pinned advisory=`NO-GO 0/2/2/0`（commit acknowledgement、parent uniqueness、
+  physical causality、mutable retry state）。current local fixed-forward 已闭合四项 finding，但新 commit 的 fresh
+  pinned review pending，不是 `GO`。Prior stable author evidence=D1i=
   `20+54 subtests`、combined D1=`160+289 subtests`、command/control=`175+503 subtests`、durable+CRM batch=
   `61+12 subtests`、storage guardrails=`60`、R-019 ratchet=`3`、lint=`58 files`、mypy=`81/4`、compile/diff green。当前 registry=
   **5 schema-defined / 10 schema-less / served=0**；R-019 仍保留 Operation/action preflight→root-UoW race、
-  current-state/recovery/Operation post-commit sync 与 failure-CAS acknowledgement ambiguity；R-028/R-029 仍 open，
+  current-state/recovery/Operation post-commit sync 与 failure-CAS acknowledgement ambiguity；typed D1i uniqueness
+  不扩张为其它 command family 的 global generation fence；R-028/R-029 仍 open，
   且不授权 provider/model/live。
 
 ### D2 — Agent 会话与事件层（与 C4/C5 合流）

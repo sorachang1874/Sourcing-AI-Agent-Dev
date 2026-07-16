@@ -146,6 +146,7 @@ from .domain import (
     normalize_candidate,
 )
 from .durable_runtime import (
+    ACQUISITION_INTENT_RESOLVE_COMMAND_TYPE,
     ACQUISITION_RUN_CREATE_COMMAND_TYPE,
     COLLECTION_AUTHORITATIVE_MERGE_COMMAND_TYPE,
     COLLECTION_AUTHORITATIVE_MERGE_OWNER,
@@ -50765,6 +50766,10 @@ class SourcingOrchestrator:
             command_payload=expected_event_command_payload,
             artifact_refs=(),
         ).to_payload()
+        expected_downstream_command_ids = list(expected_causality.get("downstream_command_ids") or [])
+        if str(command_record.get("status") or "").strip() == "succeeded":
+            child_idempotency_key = f"{ACQUISITION_INTENT_RESOLVE_COMMAND_TYPE}:parent:{expected_command_id}"
+            expected_downstream_command_ids = [command_id_for(expected_workflow_run_id, child_idempotency_key)]
         expected_stored_payload = {
             **expected_event_command_payload,
             "causality": expected_causality,
@@ -50807,12 +50812,13 @@ class SourcingOrchestrator:
                 dict(command_record.get("produced_entity_counts") or {}),
                 dict(expected_causality.get("produced_entity_counts") or {}),
             )
-            and json_contract_equal(
-                list(command_record.get("downstream_command_ids") or []),
-                list(expected_causality.get("downstream_command_ids") or []),
-            )
         ):
             return {"status": "invalid", "reason": "acquisition_root_command_causality_mismatch"}
+        if not json_contract_equal(
+            list(command_record.get("downstream_command_ids") or []),
+            expected_downstream_command_ids,
+        ):
+            return {"status": "invalid", "reason": "acquisition_root_physical_causality_mismatch"}
         raw_max_attempts = command_record.get("max_attempts")
         raw_retry_policy = command_record.get("retry_policy")
         if (

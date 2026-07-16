@@ -519,6 +519,10 @@ class D1iAcquisitionRootActionActivationPGTest(PGDurableRuntimeTestMixin, unitte
         self.assertEqual(self._table_state(domain_tables), before_domain)
 
         terminal_root = self.store.get_workflow_command(dispatched["workflow_command"]["command_id"])
+        self.assertEqual(
+            (terminal_root or {}).get("downstream_command_ids"),
+            [children[0]["command_id"]],
+        )
         replay = self.orchestrator._run_acquisition_run_create_command(dict(terminal_root or {}))  # noqa: SLF001
         self.assertEqual(replay.get("status"), "completed", replay)
         self.assertEqual(
@@ -530,6 +534,141 @@ class D1iAcquisitionRootActionActivationPGTest(PGDurableRuntimeTestMixin, unitte
             ),
             2,
         )
+
+    def test_intent_child_parent_uniqueness_rejects_an_unknown_followup_producer(self) -> None:
+        submission = self._submit(idempotency_key="child-uniqueness:root")
+        _, dispatched = self._approve_dispatch(submission)
+        workflow_run_id = str(dispatched["workflow_command"]["workflow_run_id"])
+        root_command_id = str(dispatched["workflow_command"]["command_id"])
+        drained = self.orchestrator._drain_acquisition_run_create_commands(  # noqa: SLF001
+            {"workflow_run_id": workflow_run_id, "command_limit": 1}
+        )
+        self.assertEqual(drained.get("completed_count"), 1, drained)
+
+        self.assertIsNotNone(psycopg)
+        assert psycopg is not None
+        with self.assertRaises(psycopg.errors.UniqueViolation) as raised:
+            self._execute_pg(
+                """
+                INSERT INTO {schema}.workflow_commands (
+                    command_id,
+                    workflow_run_id,
+                    operation_id,
+                    command_type,
+                    owner,
+                    parent_command_id,
+                    idempotency_key
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    "cmd_unknown_competing_intent_child",
+                    workflow_run_id,
+                    dispatched["workflow_command"]["operation_id"],
+                    ACQUISITION_INTENT_RESOLVE_COMMAND_TYPE,
+                    "unknown-producer",
+                    root_command_id,
+                    "unknown-producer:alternate-idempotency",
+                ),
+            )
+
+        self.assertEqual(str(raised.exception.sqlstate or ""), "23505")
+        self.assertEqual(
+            raised.exception.diag.constraint_name,
+            "workflow_commands_acquisition_root_single_child_uk",
+        )
+        commands = self.store.list_workflow_commands(workflow_run_id=workflow_run_id, limit=0)
+        self.assertEqual(len(commands), 2, commands)
+        self.assertEqual(
+            sum(command["command_type"] == ACQUISITION_INTENT_RESOLVE_COMMAND_TYPE for command in commands),
+            1,
+        )
+
+    def test_acquisition_root_rejects_a_different_type_child_from_an_unknown_producer(self) -> None:
+        submission = self._submit(idempotency_key="child-shape:root")
+        _, dispatched = self._approve_dispatch(submission)
+        workflow_run_id = str(dispatched["workflow_command"]["workflow_run_id"])
+        root_command_id = str(dispatched["workflow_command"]["command_id"])
+        drained = self.orchestrator._drain_acquisition_run_create_commands(  # noqa: SLF001
+            {"workflow_run_id": workflow_run_id, "command_limit": 1}
+        )
+        self.assertEqual(drained.get("completed_count"), 1, drained)
+
+        self.assertIsNotNone(psycopg)
+        assert psycopg is not None
+        with self.assertRaises(psycopg.errors.CheckViolation) as raised:
+            self._execute_pg(
+                """
+                INSERT INTO {schema}.workflow_commands (
+                    command_id,
+                    workflow_run_id,
+                    operation_id,
+                    command_type,
+                    owner,
+                    parent_command_id,
+                    idempotency_key
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    "cmd_unknown_competing_wrong_type_child",
+                    workflow_run_id,
+                    dispatched["workflow_command"]["operation_id"],
+                    ACQUISITION_RUN_CREATE_COMMAND_TYPE,
+                    "unknown-producer",
+                    root_command_id,
+                    "unknown-producer:wrong-type",
+                ),
+            )
+
+        self.assertEqual(str(raised.exception.sqlstate or ""), "23514")
+        self.assertEqual(
+            raised.exception.diag.constraint_name,
+            "workflow_commands_acquisition_root_child_shape_ck",
+        )
+        commands = self.store.list_workflow_commands(workflow_run_id=workflow_run_id, limit=0)
+        self.assertEqual(len(commands), 2, commands)
+        self.assertEqual(
+            sum(command["command_type"] == ACQUISITION_INTENT_RESOLVE_COMMAND_TYPE for command in commands),
+            1,
+        )
+
+    def test_succeeded_root_replay_accepts_legitimate_child_retry_schedule_mutation(self) -> None:
+        submission = self._submit(idempotency_key="mutable-retry-schedule:root")
+        _, dispatched = self._approve_dispatch(submission)
+        workflow_run_id = str(dispatched["workflow_command"]["workflow_run_id"])
+        drained = self.orchestrator._drain_acquisition_run_create_commands(  # noqa: SLF001
+            {"workflow_run_id": workflow_run_id, "command_limit": 1}
+        )
+        self.assertEqual(drained.get("completed_count"), 1, drained)
+        commands = self.store.list_workflow_commands(workflow_run_id=workflow_run_id, limit=0)
+        child = next(
+            command for command in commands if command["command_type"] == ACQUISITION_INTENT_RESOLVE_COMMAND_TYPE
+        )
+        claimed = self.store.claim_workflow_command(
+            child["command_id"],
+            lease_owner="acquisition-planner-retry",
+            lease_seconds=300,
+        )
+        self.assertTrue(claimed, child)
+        retry_waiting = self.store.mark_workflow_command_failed(
+            child["command_id"],
+            error_text="injected retryable planner failure",
+            retryable=True,
+            retry_delay_seconds=60,
+        )
+        self.assertEqual(retry_waiting.get("status"), "retry_wait", retry_waiting)
+        self.assertTrue(str(retry_waiting.get("not_before_at") or "").strip(), retry_waiting)
+
+        terminal_root = self.store.get_workflow_command(dispatched["workflow_command"]["command_id"])
+        replay = self.orchestrator._run_acquisition_run_create_command(dict(terminal_root or {}))  # noqa: SLF001
+
+        self.assertEqual(replay.get("status"), "completed", replay)
+        persisted_child = self.store.get_workflow_command(child["command_id"])
+        self.assertEqual((persisted_child or {}).get("status"), "retry_wait", persisted_child)
+        self.assertEqual(
+            (persisted_child or {}).get("not_before_at"),
+            retry_waiting.get("not_before_at"),
+        )
+        self.assertEqual(len(self.store.list_workflow_commands(workflow_run_id=workflow_run_id, limit=0)), 2)
 
     def test_root_uow_rejects_expired_and_reclaimed_claims_without_any_write(self) -> None:
         expired_submission = self._submit(idempotency_key="claim-fence:expired")
@@ -677,6 +816,50 @@ class D1iAcquisitionRootActionActivationPGTest(PGDurableRuntimeTestMixin, unitte
 
         self.assertEqual(self._table_state(FULL_ZERO_WRITE_TABLES), before)
 
+    def test_precommit_uow_exception_is_not_reconciled_as_success(self) -> None:
+        submission = self._submit(idempotency_key="root-uow:owner-precommit-failure")
+        _, dispatched = self._approve_dispatch(submission)
+        workflow_run_id = str(dispatched["workflow_command"]["workflow_run_id"])
+        root_command_id = str(dispatched["workflow_command"]["command_id"])
+        guarded_tables = tuple(table for table in FULL_ZERO_WRITE_TABLES if table != "workflow_commands")
+        before = self._table_state(guarded_tables)
+        adapter = self.store._control_plane_postgres
+        with adapter._connect() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    CREATE FUNCTION d1i_fail_root_owner_completion() RETURNS trigger AS $$
+                    BEGIN
+                        IF NEW.status = 'succeeded'
+                           AND NEW.command_type = 'acquisition.run.create' THEN
+                            RAISE EXCEPTION 'd1i injected owner precommit failure';
+                        END IF;
+                        RETURN NEW;
+                    END;
+                    $$ LANGUAGE plpgsql
+                    """
+                )
+                cursor.execute(
+                    """
+                    CREATE TRIGGER d1i_fail_root_owner_completion
+                    BEFORE UPDATE ON workflow_commands
+                    FOR EACH ROW EXECUTE FUNCTION d1i_fail_root_owner_completion()
+                    """
+                )
+            connection.commit()
+
+        with self.assertRaisesRegex(RuntimeError, "d1i injected owner precommit failure"):
+            self.orchestrator._drain_acquisition_run_create_commands(  # noqa: SLF001
+                {"workflow_run_id": workflow_run_id, "command_limit": 1}
+            )
+
+        self.assertEqual(self._table_state(guarded_tables), before)
+        commands = self.store.list_workflow_commands(workflow_run_id=workflow_run_id, limit=0)
+        self.assertEqual(len(commands), 1, commands)
+        self.assertEqual(commands[0]["command_id"], root_command_id)
+        self.assertEqual(commands[0]["status"], "running")
+        self.assertEqual(commands[0]["downstream_command_ids"], [])
+
     def test_root_child_plan_uses_actual_locked_stream_sequence_not_a_fixed_slot(self) -> None:
         submission = self._submit(idempotency_key="stream-sequence:shared")
         _, dispatched = self._approve_dispatch(submission)
@@ -796,6 +979,76 @@ class D1iAcquisitionRootActionActivationPGTest(PGDurableRuntimeTestMixin, unitte
         self.assertEqual(result.get("reason"), "acquisition_root_intent_child_json_invalid", result)
         self.assertEqual(self._table_state(FULL_ZERO_WRITE_TABLES), before)
 
+    def test_root_uow_exact_reuse_preserves_preexisting_child_retry_schedule(self) -> None:
+        submission = self._submit(idempotency_key="preexisting-child-retry:root")
+        _, dispatched = self._approve_dispatch(submission)
+        root = self._claim_running_root(
+            dispatched,
+            lease_owner="acquisition-run-writer-preexisting-retry",
+        )
+        contract = self._root_uow_contract(root)
+        event_spec = dict(contract["plan_event"])
+        event = self.store.repos.workflow_runtime.append_workflow_event(
+            workflow_run_id=str(event_spec["workflow_run_id"]),
+            operation_id=str(event_spec["operation_id"]),
+            command_id=str(event_spec["command_id"]),
+            event_family=str(event_spec["event_family"]),
+            event_type=str(event_spec["event_type"]),
+            idempotency_key=str(event_spec["idempotency_key"]),
+            actor=str(event_spec["actor"]),
+            source=str(event_spec["source"]),
+            payload=dict(event_spec["payload"]),
+            artifact_refs=list(event_spec["artifact_refs"]),
+        )
+        child_spec = dict(contract["child_command"])
+        child_causality = {
+            **dict(contract["child_causality"]),
+            "source_event_id": str(event["event_id"]),
+            "source_event_type": "CommandPlanRequested",
+        }
+        child = self.store.upsert_workflow_command(
+            command_id=str(child_spec["command_id"]),
+            workflow_run_id=str(child_spec["workflow_run_id"]),
+            operation_id=str(child_spec["operation_id"]),
+            command_type=str(child_spec["command_type"]),
+            owner=str(child_spec["owner"]),
+            idempotency_key=str(child_spec["idempotency_key"]),
+            payload={**dict(child_spec["payload"]), "causality": child_causality},
+            artifact_refs=list(child_spec["artifact_refs"]),
+            max_attempts=int(child_spec["max_attempts"]),
+            retry_policy=dict(child_spec["retry_policy"]),
+        )
+        claimed = self.store.claim_workflow_command(
+            child["command_id"],
+            lease_owner="acquisition-planner-preexisting-retry",
+            lease_seconds=300,
+        )
+        self.assertTrue(claimed, child)
+        retry_waiting = self.store.mark_workflow_command_failed(
+            child["command_id"],
+            error_text="injected retry before root terminalization",
+            retryable=True,
+            retry_delay_seconds=60,
+        )
+        self.assertEqual(retry_waiting.get("status"), "retry_wait", retry_waiting)
+        self.assertTrue(str(retry_waiting.get("not_before_at") or "").strip(), retry_waiting)
+
+        result = self._complete_root_direct(root)
+
+        self.assertEqual(result.get("outcome"), "applied", result)
+        persisted_child = self.store.get_workflow_command(child["command_id"])
+        self.assertEqual((persisted_child or {}).get("status"), "retry_wait", persisted_child)
+        self.assertEqual(
+            (persisted_child or {}).get("not_before_at"),
+            retry_waiting.get("not_before_at"),
+        )
+        persisted_root = self.store.get_workflow_command(root["command_id"])
+        self.assertEqual((persisted_root or {}).get("status"), "succeeded", persisted_root)
+        self.assertEqual(
+            (persisted_root or {}).get("downstream_command_ids"),
+            [child["command_id"]],
+        )
+
     def test_postcommit_reducer_failure_is_repaired_by_exact_succeeded_replay(self) -> None:
         submission = self._submit(idempotency_key="postcommit-repair:root")
         _, dispatched = self._approve_dispatch(submission)
@@ -871,6 +1124,112 @@ class D1iAcquisitionRootActionActivationPGTest(PGDurableRuntimeTestMixin, unitte
         )
         root = self.store.get_workflow_command(dispatched["workflow_command"]["command_id"])
         self.assertEqual((root or {}).get("status"), "succeeded", root)
+        self.assertEqual(
+            self.store.repos.workflow_runtime.get_operation(approved["operation_run"]["operation_run_id"])["status"],
+            "running",
+        )
+        self.assertEqual(
+            len(
+                self.store.list_workflow_commands(
+                    workflow_run_id=dispatched["workflow_command"]["workflow_run_id"],
+                    limit=0,
+                )
+            ),
+            2,
+        )
+
+    def test_successful_commit_exception_routes_authoritative_row_through_exact_replay(self) -> None:
+        submission = self._submit(idempotency_key="commit-exception:root")
+        approved, dispatched = self._approve_dispatch(submission)
+        repository = self.store.repos.workflow_runtime
+        real_complete = repository.complete_acquisition_root_command
+        adapter = self.store._control_plane_postgres
+        original_connect = adapter._connect
+        fixture = self._pg_durable_runtime_fixture
+        self.assertIsNotNone(fixture)
+        self.assertIsNotNone(psycopg)
+        assert fixture is not None
+        assert psycopg is not None
+        disconnect_injected = False
+
+        class _PostCommitDisconnect:
+            def __init__(self, delegate: Any) -> None:
+                self.delegate = delegate
+
+            def __enter__(self) -> _PostCommitDisconnect:
+                self.delegate.__enter__()
+                return self
+
+            def __exit__(self, exc_type: Any, exc: Any, traceback: Any) -> bool:
+                return bool(self.delegate.__exit__(exc_type, exc, traceback))
+
+            def commit(self) -> None:
+                nonlocal disconnect_injected
+                self.delegate.commit()
+                if disconnect_injected:
+                    return
+                disconnect_injected = True
+                backend_pid = int(self.delegate.info.backend_pid)
+                with psycopg.connect(
+                    fixture.dsn,
+                    autocommit=True,
+                    connect_timeout=5,
+                    client_encoding="utf8",
+                ) as killer:
+                    with killer.cursor() as cursor:
+                        cursor.execute("SELECT pg_terminate_backend(%s)", (backend_pid,))
+                        if not bool(cursor.fetchone()[0]):
+                            raise AssertionError("failed to terminate committed root UoW backend")
+                # The server-side COMMIT above is durable. This next round trip
+                # turns the killed session into a real psycopg connection error
+                # at the adapter commit boundary, modeling a lost acknowledgement.
+                with self.delegate.cursor() as cursor:
+                    cursor.execute("SELECT 1")
+
+            def __getattr__(self, name: str) -> Any:
+                return getattr(self.delegate, name)
+
+        def commit_then_disconnect(*args: Any, **kwargs: Any) -> dict[str, Any]:
+            with mock.patch.object(
+                adapter,
+                "_connect",
+                side_effect=lambda: _PostCommitDisconnect(original_connect()),
+            ):
+                return real_complete(*args, **kwargs)
+
+        with mock.patch.object(
+            repository,
+            "complete_acquisition_root_command",
+            side_effect=commit_then_disconnect,
+        ):
+            drained = self.orchestrator._drain_acquisition_run_create_commands(  # noqa: SLF001
+                {
+                    "workflow_run_id": dispatched["workflow_command"]["workflow_run_id"],
+                    "command_limit": 1,
+                }
+            )
+
+        self.assertTrue(disconnect_injected)
+        self.assertEqual(drained.get("completed_count"), 1, drained)
+        self.assertEqual(
+            drained["items"][0].get("reason"),
+            "acquisition_run_create_command_already_succeeded",
+        )
+        root = self.store.get_workflow_command(dispatched["workflow_command"]["command_id"])
+        self.assertEqual((root or {}).get("status"), "succeeded", root)
+        children = [
+            command
+            for command in self.store.list_workflow_commands(
+                workflow_run_id=dispatched["workflow_command"]["workflow_run_id"],
+                limit=0,
+            )
+            if command["command_type"] == ACQUISITION_INTENT_RESOLVE_COMMAND_TYPE
+        ]
+        self.assertEqual(len(children), 1, children)
+        self.assertEqual(
+            (root or {}).get("downstream_command_ids"),
+            [children[0]["command_id"]],
+        )
         self.assertEqual(
             self.store.repos.workflow_runtime.get_operation(approved["operation_run"]["operation_run_id"])["status"],
             "running",
@@ -968,13 +1327,15 @@ class D1iAcquisitionRootActionActivationPGTest(PGDurableRuntimeTestMixin, unitte
             "forged_result",
             "result_count_bool",
             "result_boolean_int",
+            "root_physical_causality",
+            "root_physical_foreign_child",
+            "root_physical_extra_child",
             "missing_plan_event",
             "forged_plan_event",
             "blank_plan_event_schema",
             "reordered_plan_event",
             "missing_child",
             "foreign_child",
-            "ambiguous_child",
             "child_count_bool",
             "child_artifact_container_object",
         )
@@ -1011,6 +1372,24 @@ class D1iAcquisitionRootActionActivationPGTest(PGDurableRuntimeTestMixin, unitte
                     self._execute_pg(
                         "UPDATE {schema}.workflow_commands SET result_json = %s WHERE command_id = %s",
                         (json.dumps(forged_result), root["command_id"]),
+                    )
+                elif variant == "root_physical_causality":
+                    self._execute_pg(
+                        "UPDATE {schema}.workflow_commands SET downstream_command_ids_json = '[]' WHERE command_id = %s",
+                        (root["command_id"],),
+                    )
+                elif variant == "root_physical_foreign_child":
+                    self._execute_pg(
+                        "UPDATE {schema}.workflow_commands SET downstream_command_ids_json = %s WHERE command_id = %s",
+                        (json.dumps(["cmd_foreign_child"]), root["command_id"]),
+                    )
+                elif variant == "root_physical_extra_child":
+                    self._execute_pg(
+                        "UPDATE {schema}.workflow_commands SET downstream_command_ids_json = %s WHERE command_id = %s",
+                        (
+                            json.dumps([child["command_id"], "cmd_extra_child"]),
+                            root["command_id"],
+                        ),
                     )
                 elif variant == "missing_plan_event":
                     self._execute_pg(
@@ -1105,24 +1484,6 @@ class D1iAcquisitionRootActionActivationPGTest(PGDurableRuntimeTestMixin, unitte
                         """,
                         ("cmd_foreign_root", json.dumps(payload), child["command_id"]),
                     )
-                elif variant == "ambiguous_child":
-                    duplicate_idempotency = f"{child['idempotency_key']}:duplicate"
-                    duplicate_payload = dict(child.get("payload") or {})
-                    duplicate_payload["causality"] = {
-                        **dict(duplicate_payload.get("causality") or {}),
-                        "idempotency_key": duplicate_idempotency,
-                    }
-                    duplicate = self.store.upsert_workflow_command(
-                        workflow_run_id=str(child["workflow_run_id"]),
-                        operation_id=str(child["operation_id"]),
-                        command_type=str(child["command_type"]),
-                        owner=str(child["owner"]),
-                        idempotency_key=duplicate_idempotency,
-                        payload=duplicate_payload,
-                        max_attempts=int(child["max_attempts"]),
-                        retry_policy=dict(child["retry_policy"]),
-                    )
-                    self.assertNotEqual(duplicate.get("command_id"), child["command_id"], duplicate)
                 elif variant == "child_count_bool":
                     child_payload = {
                         **dict(child.get("payload") or {}),
@@ -1147,6 +1508,7 @@ class D1iAcquisitionRootActionActivationPGTest(PGDurableRuntimeTestMixin, unitte
                     replay.get("reason"),
                     {
                         "acquisition_root_terminal_result_mismatch",
+                        "acquisition_root_physical_causality_mismatch",
                         "acquisition_root_plan_event_ambiguous",
                         "acquisition_root_plan_event_identity_mismatch",
                         "acquisition_root_plan_event_json_contract_invalid",

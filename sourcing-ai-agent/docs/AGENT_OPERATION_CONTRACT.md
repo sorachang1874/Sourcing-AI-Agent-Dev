@@ -244,8 +244,13 @@ workspace/user scope; open mode preserves explicit operator workspace. The owner
 workflow/job/review/retry/identity fields, derives the complete `acquisition.run.create` command, and revalidates
 target plus exact OperationRun→AgentAction/envelope authority before the first child. An authority failure may
 terminalize only the root command and never synchronizes an aggregate through an untrusted `operation_id`. A positive
-root creates exactly one `acquisition.intent.resolve` child and no job/run/review/provider effect. R-019 remains open:
-post-claim preflight and child append are not one PG UoW, so concurrent-cancel atomicity is not claimed.
+root commits its plan event, exactly one `acquisition.intent.resolve` child, physical downstream edge, and root terminal
+in one PG UoW and creates no job/run/review/provider effect. An actual-root-scoped trigger plus parent identity
+advisory locking fences unknown producers from attaching a second child or wrong-type child to that root; conflict
+reread accepts only the exact canonical winner. Successful-COMMIT driver ambiguity is reconciled through fresh
+authoritative exact replay, and child retry scheduling is mutable lifecycle state. R-019 remains open: aggregate
+Operation/action authority preflight is still outside the root UoW, other command families do not inherit this
+root-specific fence, and concurrent-cancel atomicity is not claimed.
 
 D1c adds zero-write pin-drift preflights but does not combine approval or retry state/event/run writes into one UoW.
 The generic operation/command atomicity, generation/lease fence, and transaction-lock budget limits in R-019 remain

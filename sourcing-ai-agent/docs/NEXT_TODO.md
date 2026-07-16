@@ -239,14 +239,19 @@
   claim owner/attempt/unexpired lease；lease 由 PG repo clock 判定并按 UTC 解释 naive timestamp。persisted JSON
   container/type、schema 与 deterministic identity 全部 strict fail-closed。positive 在一个 PG transaction 内锁 root
   + stream、exact-reuse/append `CommandPlanRequested`、exact-reuse/create 一个 deterministic
-  `acquisition.intent.resolve` child 并 terminalize root；fault/mismatch 全回滚。succeeded replay exact-check root
-  result/event/child/order/full envelope 后才 repair post-commit state/wakeup/Operation sync。原 pinned advisory=
-  `NO-GO 0/2/1/0`；当前 working-tree 已本地闭合三项 finding，但 fresh pinned non-author review 仍 pending，不能写成
-  `GO`。final stable author evidence=D1i `20+54 subtests`、combined D1 `160+289 subtests`、command/control
+  `acquisition.intent.resolve` child、写 physical downstream edge 并 terminalize root；fault/mismatch 全回滚。
+  Migration `0008` 以 actual-root-scoped trigger、parent identity advisory lock 与 non-unique support index 阻止
+  unknown producer 给 `acquisition.run.create` root 写第二 child 或 wrong-type child；non-root fan-out 保持合法，
+  conflict 后 locked reread 只接受 exact canonical winner。succeeded replay exact-check root result/event/child/order/full envelope，同时不冻结
+  scheduler-owned `not_before_at`；successful-COMMIT driver exception 只在 fresh authoritative root=`succeeded` 后走
+  exact replay，pre-commit exception 保持 rollback/re-raise。原 pinned advisory=`NO-GO 0/2/1/0`；`dce094e` fresh pinned
+  advisory=`NO-GO 0/2/2/0`，四项 finding 为 commit-ack、parent uniqueness、physical causality、mutable retry state。
+  当前 fixed-forward 已本地闭合四项，但新提交的 fresh pinned non-author review 仍 pending，不能写成 `GO`。
+  Prior stable `dce094e` author evidence=D1i `20+54 subtests`、combined D1 `160+289 subtests`、command/control
   `175+503 subtests`、durable+CRM batch adjacency `61+12 subtests`、storage guardrails `60`、R-019 ratchet `3`、
   lint `58 files`、mypy `81/4`、compile/diff green。
   R-019 仍保留 Operation/action preflight→root-UoW race、current-state/recovery/Operation post-commit sync 与 failure-CAS
-  acknowledgement ambiguity；R-029 降至 10/15、epoch 仍为
+  acknowledgement ambiguity；typed intent uniqueness 不冒充其它 command family 的 global fence。R-029 降至 10/15、epoch 仍为
   `d1f_r029_20260715_v2`；无 served/provider/model/live。
 - [ ] R-029：宽松 action-schema bridge 仅可在 production action 尚无 reviewed schema/owner binder 期间存在；
   删除条件 = 全部 API-submittable actions（不是只看 served subset）连续一个 release window durable hit=0。

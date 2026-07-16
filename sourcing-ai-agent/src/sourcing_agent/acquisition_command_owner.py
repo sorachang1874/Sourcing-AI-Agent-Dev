@@ -371,6 +371,9 @@ class AcquisitionCommandOwner:
         child_spec = dict(contract.get("child_command") or {})
         workflow_run_id = str(root.get("workflow_run_id") or "").strip()
         root_command_id = str(root.get("command_id") or "").strip()
+        child_command_id = str(child_spec.get("command_id") or "").strip()
+        if list(root.get("downstream_command_ids") or []) != [child_command_id]:
+            return {"status": "invalid", "reason": "acquisition_root_physical_causality_mismatch"}
         events = self.store.repos.workflow_runtime.list_workflow_events(workflow_run_id, limit=0)
         root_source_events = [
             dict(event or {})
@@ -456,7 +459,6 @@ class AcquisitionCommandOwner:
             "source_event_id": expected_event_id,
             "source_event_type": "CommandPlanRequested",
             "idempotency_key": str(child_spec.get("idempotency_key") or "").strip(),
-            "not_before_at": str(child_spec.get("not_before_at") or "").strip(),
             "no_op_reason": str(expected_causality.get("no_op_reason") or "").strip(),
             "readiness_effect": str(expected_causality.get("readiness_effect") or "").strip(),
             "causality_schema_version": str(expected_causality.get("schema_version") or "").strip(),
@@ -3252,12 +3254,27 @@ class AcquisitionCommandOwner:
                 expected_attempt=claim_attempt,
             )
         latest = dict(execution_preflight.get("workflow_command") or latest)
-        result = self._execute_acquisition_run_create_command_payload(
-            latest,
-            lease_owner=lease_owner,
-            lease_expires_at=lease_expires_at,
-            claim_attempt=claim_attempt,
-        )
+        try:
+            result = self._execute_acquisition_run_create_command_payload(
+                latest,
+                lease_owner=lease_owner,
+                lease_expires_at=lease_expires_at,
+                claim_attempt=claim_attempt,
+            )
+        except Exception as completion_error:
+            # A transport/driver failure can be raised after PostgreSQL has
+            # durably committed the root UoW but before the acknowledgement is
+            # observable here. Re-read on a fresh repository transaction and
+            # accept only the exact succeeded replay contract. If no durable
+            # success exists, preserve the original exception for retry/error
+            # handling instead of guessing whether the effect committed.
+            try:
+                observed_after_error = self.store.get_workflow_command(command_id)
+            except Exception:
+                raise completion_error
+            if str((observed_after_error or {}).get("status") or "").strip() == "succeeded":
+                return self._replay_succeeded_acquisition_root_command(dict(observed_after_error or {}))
+            raise
         result_status = str(result.get("status") or "").strip()
         completion = dict(result.pop("_completion", {}) or {})
         if result_status == "stale_claim":

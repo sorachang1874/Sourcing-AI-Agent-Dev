@@ -68,10 +68,15 @@ W8 operation persistence contract:
   causality and current claim-owner/attempt/lease authority. Lease validity uses the PG repository clock with persisted
   naive timestamps interpreted as UTC, and persisted root/event/child/result contracts use strict JSON container and
   scalar-type checks. The specialized completion locks root + stream and commits the root-plan event, deterministic
-  intent child, and root terminal in one PG transaction; succeeded replay exact-matches that complete persisted tuple
-  before repairing post-commit state/wakeup/Operation synchronization. R-019 and its 26-call ratchet remain open because
-  OperationRun/AgentAction preflight is outside this UoW, state/wakeup/linked-Operation sync remains post-commit, and a
-  committed failure CAS can still lose its acknowledgement. No provider/model/live authorization follows.
+  intent child, physical downstream edge, and root terminal in one PG transaction. An actual-root-scoped trigger plus
+  parent identity advisory locking prevents any producer from attaching a second child or wrong-type child to that
+  root, while preserving generic workflow fan-out; conflict reread accepts only the exact canonical winner. Succeeded
+  replay exact-matches that complete persisted tuple while treating scheduler
+  fields as mutable lifecycle state. A driver exception after successful commit is reconciled only by a fresh
+  authoritative succeeded read plus exact replay; pre-commit failures are re-raised. R-019 and its 26-call ratchet remain
+  open because this is not a global command-generation fence, OperationRun/AgentAction preflight is outside this UoW,
+  state/wakeup/linked-Operation sync remains post-commit, and a committed failure CAS can still lose its acknowledgement.
+  No provider/model/live authorization follows.
 - Operation-layer persistence must not create `workflow_commands`, CRM rows, projection rows, person assets/evidence/assertions, provider registry rows, or export artifacts. Those remain module-owner effects.
 - W9 backend operation controls may approve, reject, query, and cancel operation state through operation runtime tables and append-only events. They must still not execute module side effects or bypass workflow command owners.
 - `store.repos.workflow_runtime` is the public storage owner for `agent_actions`, `operation_runs`, `operation_events`,

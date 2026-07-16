@@ -8126,16 +8126,53 @@ class LiveControlPlanePostgresAdapter:
                                 event=event,
                             )
                         child = candidate_children[0] if candidate_children else None
+                        child_requires_validation = child is not None
                         if child is None:
                             columns = list(child_row)
                             cursor.execute(
                                 f"INSERT INTO workflow_commands "
                                 f"({', '.join(_quote_identifier(column) for column in columns)}) "
-                                f"VALUES ({', '.join(['%s'] * len(columns))}) RETURNING *",
+                                f"VALUES ({', '.join(['%s'] * len(columns))}) "
+                                f"ON CONFLICT DO NOTHING RETURNING *",
                                 tuple(child_row[column] for column in columns),
                             )
                             child = _fetch_one_dict_row(cursor, cursor.fetchone())
-                        else:
+                            if child is None:
+                                # A concurrent producer won one of the command-id,
+                                # run-idempotency, or acquisition-intent-parent
+                                # uniqueness constraints after our initial read.
+                                # Re-read under lock and accept only the same exact
+                                # immutable child contract; an alternate winner is a
+                                # durable conflict rather than a second child.
+                                cursor.execute(
+                                    """
+                                    SELECT * FROM workflow_commands
+                                    WHERE parent_command_id = %s
+                                       OR command_id = %s
+                                       OR (workflow_run_id = %s AND idempotency_key = %s)
+                                    ORDER BY command_id
+                                    FOR UPDATE
+                                    """,
+                                    (
+                                        normalized_command_id,
+                                        child_command_id,
+                                        workflow_run_id,
+                                        child_idempotency_key,
+                                    ),
+                                )
+                                raced_children = _fetch_all_dict_rows(cursor)
+                                if len(raced_children) != 1:
+                                    connection.rollback()
+                                    return response(
+                                        outcome="conflict",
+                                        reason_code="acquisition_root_intent_child_unique_conflict",
+                                        command=root,
+                                        event=event,
+                                    )
+                                child = raced_children[0]
+                                child_requires_validation = True
+                        if child_requires_validation:
+                            assert child is not None
                             try:
                                 persisted_child_payload = decode_json_contract(
                                     child.get("payload_json"),
@@ -8192,7 +8229,6 @@ class LiveControlPlanePostgresAdapter:
                                 "no_op_reason",
                                 "readiness_effect",
                                 "idempotency_key",
-                                "not_before_at",
                                 "causality_schema_version",
                                 "schema_version",
                             )
@@ -8250,6 +8286,7 @@ class LiveControlPlanePostgresAdapter:
                                 heartbeat_at = %s,
                                 not_before_at = '',
                                 last_error = '',
+                                downstream_command_ids_json = %s,
                                 result_json = %s,
                                 updated_at = %s
                             WHERE command_id = %s
@@ -8264,6 +8301,7 @@ class LiveControlPlanePostgresAdapter:
                             """,
                             (
                                 repository_now,
+                                _json_dump([child_command_id]),
                                 _json_dump(terminal_result),
                                 repository_now,
                                 normalized_command_id,
