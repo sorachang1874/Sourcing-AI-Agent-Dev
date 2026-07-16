@@ -31,7 +31,10 @@ from x_first.compact_grok_discovery import (
 from x_first.compact_grok_discovery import (
     project_compact_execution_limitations as _project_compact_execution_limitations,
 )
-from x_first.grok_operator_session_replay import GrokOperatorExecutionFacts
+from x_first.grok_operator_session_replay import (
+    ASSISTANT_JSON_MAX_NODES,
+    GrokOperatorExecutionFacts,
+)
 from x_first.grok_profile_hydration import (
     build_profile_hydration_expectation_from_union,
 )
@@ -195,6 +198,12 @@ class CompactGrokDiscoveryContractTests(unittest.TestCase):
         self.assertFalse(schema["additionalProperties"])
         self.assertNotIn("maxItems", schema["properties"]["leads"])
         self.assertNotIn("maxItems", schema["$defs"]["lead"]["properties"]["source_refs"])
+        self.assertEqual(
+            schema["$defs"]["identity_resolution_sidecar"]["properties"][
+                "candidate_platform_user_ids"
+            ]["minItems"],
+            1,
+        )
         self.assertIn("origin_shard_ids", schema["$defs"]["source_ref"]["required"])
         self.assertIn("handle_history_proposals", schema["$defs"]["lead"]["required"])
 
@@ -759,6 +768,72 @@ class CompactGrokDiscoveryContractTests(unittest.TestCase):
                 )
             )
 
+    def test_raw_session_replay_requires_user_turn_as_first_registered_update(self) -> None:
+        payload = _result([_lead("FxUserFirst01")])
+        calls = [
+            (
+                "x_keyword_search",
+                {"query": "fixture", "limit": "100", "mode": "Latest"},
+            )
+        ]
+        with self.assertRaisesRegex(
+            CompactDiscoveryContractError,
+            "raw_session_user_turn_order_invalid",
+        ):
+            build_compact_operator_projection(
+                raw_grok_session(
+                    payload,
+                    calls=calls,
+                    thought_texts=(),
+                    user_message_after_tools=True,
+                )
+            )
+
+    def test_raw_session_replay_bounds_assistant_json_before_recursive_decode(self) -> None:
+        payload = _result([_lead("FxJsonBound01")])
+        calls = [
+            (
+                "x_keyword_search",
+                {"query": "fixture", "limit": "100", "mode": "Latest"},
+            )
+        ]
+        deeply_nested = '{"x":' * 10_000 + "0" + "}" * 10_000
+        with self.assertRaisesRegex(
+            CompactDiscoveryContractError,
+            "assistant_output_json_depth_budget_exceeded",
+        ) as caught:
+            build_compact_operator_projection(
+                raw_grok_session(
+                    payload,
+                    calls=calls,
+                    terminal_text_override=deeply_nested,
+                )
+            )
+        self.assertEqual(
+            str(caught.exception),
+            "operator_raw_session_invalid:assistant_output_json_depth_budget_exceeded",
+        )
+        too_many_nodes = (
+            '{"x":['
+            + ",".join("0" for _ in range(ASSISTANT_JSON_MAX_NODES))
+            + "]}"
+        )
+        with self.assertRaisesRegex(
+            CompactDiscoveryContractError,
+            "assistant_output_json_node_budget_exceeded",
+        ) as caught:
+            build_compact_operator_projection(
+                raw_grok_session(
+                    payload,
+                    calls=calls,
+                    terminal_text_override=too_many_nodes,
+                )
+            )
+        self.assertEqual(
+            str(caught.exception),
+            "operator_raw_session_invalid:assistant_output_json_node_budget_exceeded",
+        )
+
     def test_raw_session_replay_rejects_each_source_mutation_bad_call_order_and_trailing_output(
         self,
     ) -> None:
@@ -906,11 +981,15 @@ class CompactGrokDiscoveryContractTests(unittest.TestCase):
         self.assertTrue(all(len(lead["source_refs"]) == 2 for lead in merged.result["leads"]))
         self.assertEqual(validate_compact_discovery_result(merged.result), [])
 
-    def test_same_handle_stable_and_provisional_preserves_evidence_without_double_count(self) -> None:
+    def test_same_handle_stable_and_provisional_isolates_unresolved_evidence(self) -> None:
         stable = _projection(
             _result([_lead("FxMaybeSame01", platform_user_id="93001")], shard_id="fixture.shard-a")
         )
-        provisional_lead = _lead("fxmaybesame01")
+        provisional_lead = _lead(
+            "fxmaybesame01",
+            lab_state="historical",
+            pretraining_state="historical",
+        )
         provisional_lead["source_refs"].append(
             {
                 "surface": "reply",
@@ -924,30 +1003,55 @@ class CompactGrokDiscoveryContractTests(unittest.TestCase):
         provisional = _projection(
             _result([provisional_lead], shard_id="fixture.shard-b")
         )
+        stable_only = merge_compact_discovery_results([stable])
         merged = merge_compact_discovery_results([stable, provisional])
+        reversed_merge = merge_compact_discovery_results([provisional, stable])
+        self.assertEqual(merged.result, reversed_merge.result)
+        self.assertEqual(merged.summary, reversed_merge.summary)
         self.assertEqual(merged.summary.unique_lead_count, 1)
         self.assertEqual(merged.summary.provisional_identity_count, 0)
         self.assertEqual(merged.summary.absorbed_provisional_observation_count, 1)
+        self.assertEqual(merged.summary.unresolved_identity_sidecar_count, 1)
         lead = merged.result["leads"][0]
+        self.assertEqual(lead, stable_only.result["leads"][0])
         self.assertEqual(lead["platform_user_id"], "93001")
         self.assertEqual(lead["lookup_handle"].casefold(), "fxmaybesame01")
+        self.assertEqual(lead["identity_conflicts"], [])
+        self.assertEqual(lead["origin_shard_ids"], ["fixture.shard-a"])
+        self.assertEqual(lead["target_lab_affiliation_state"], "current")
+        self.assertEqual(lead["pretraining_experience_state"], "current")
+        self.assertFalse(
+            any(ref["url"].endswith("/3993001") for ref in lead["source_refs"])
+        )
+        projected_provisional_lead = provisional.result["leads"][0]
+        sidecar = merged.result["identity_resolution_sidecars"][0]
+        self.assertEqual(sidecar["candidate_platform_user_ids"], ["93001"])
+        self.assertEqual(sidecar["origin_shard_ids"], ["fixture.shard-b"])
         self.assertEqual(
-            lead["identity_conflicts"],
-            ["same_handle_provisional_evidence_absorbed"],
+            sidecar["provisional_lead_sha256s"],
+            [canonical_json_sha256(projected_provisional_lead)],
         )
-        self.assertEqual(lead["origin_shard_ids"], ["fixture.shard-a", "fixture.shard-b"])
-        retained_reply = next(
-            ref for ref in lead["source_refs"] if ref["url"].endswith("/3993001")
+        self.assertEqual(
+            sidecar["provisional_source_ref_sha256s"],
+            sorted(
+                canonical_json_sha256(ref)
+                for ref in projected_provisional_lead["source_refs"]
+            ),
         )
-        self.assertEqual(retained_reply["origin_shard_ids"], ["fixture.shard-b"])
         expectation = build_profile_hydration_expectation_from_union(
             merged.result,
             run_id="fixture.profile-run-v1",
             batch_id="fixture.profile-batch-v1",
         )
         self.assertEqual(len(expectation.input_identities), 1)
-        self.assertEqual(expectation.input_identities[0].lookup_handle.casefold(), "fxmaybesame01")
-        self.assertEqual(expectation.input_identities[0].expected_platform_user_id, "93001")
+        hydration_identity = expectation.input_identities[0]
+        self.assertEqual(hydration_identity.lead_identity, "platform:93001")
+        self.assertEqual(hydration_identity.lookup_handle.casefold(), "fxmaybesame01")
+        self.assertEqual(hydration_identity.expected_platform_user_id, "93001")
+        self.assertEqual(hydration_identity.identity_state, "stable_platform_id")
+        self.assertEqual(validate_compact_discovery_result(merged.result), [])
+        schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+        self.assertEqual(schema_errors(merged.result, schema), [])
 
     def test_same_handle_multiple_stable_ids_preserves_provisional_evidence_in_sidecar(self) -> None:
         stable_a = _projection(

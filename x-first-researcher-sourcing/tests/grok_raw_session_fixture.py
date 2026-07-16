@@ -145,6 +145,7 @@ def raw_grok_session(
     completion_before_start_indices: frozenset[int] = frozenset(),
     trailing_assistant_text: str | None = None,
     terminal_text_override: str | None = None,
+    user_message_after_tools: bool = False,
 ) -> dict[str, bytes]:
     event_ordinal = 1
     updates: list[dict[str, Any]] = [
@@ -329,6 +330,19 @@ def raw_grok_session(
             updates.append(start_update)
             if index not in omit_completion_indices:
                 updates.append(completion_update)
+    if user_message_after_tools:
+        user_update = updates.pop(0)
+        prior_timestamps = [
+            row["params"]["_meta"]["agentTimestampMs"]
+            for row in updates
+            if isinstance(row.get("params", {}).get("_meta"), dict)
+            and type(row["params"]["_meta"].get("agentTimestampMs")) is int
+        ]
+        if prior_timestamps:
+            user_update["params"]["_meta"]["agentTimestampMs"] = max(
+                prior_timestamps
+            )
+        updates.append(user_update)
     if not terminal_before_tools:
         updates.append(
             assistant_update(terminal_payloads, text=terminal_text_override)

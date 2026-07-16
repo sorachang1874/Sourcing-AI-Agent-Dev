@@ -93,6 +93,10 @@ tool-event record, validates each tool family's closed argument shape, exhaustiv
 unsupported tools or omitted calls, and selects the unique contract-valid terminal whose raw byte range begins after
 the final tool completion. Registry `x.grok.raw_session_shape.v1` accepts only
 `user_message_chunk|agent_thought_chunk|agent_message_chunk|tool_call|tool_call_update` and exact per-kind envelopes.
+A single `user_message_chunk` must be the first registered update; every thought, native-X start/completion, and
+assistant chunk is rejected until that turn-opening event is present. Before recursive decoding, a deterministic
+lexical preflight bounds the complete assistant stream to depth 64 and 50,000 JSON-like nodes; decoder recursion is
+also translated into a stable replay error.
 A separate closed event registry requires exact `turn_started`, `loop_started`, initial
 `phase_changed(waiting_for_model)`, `first_token`, subsequent reasoning/text phases, and final completed
 `turn_ended` order with sorted timestamps; unregistered intermediate events fail closed. Summary update and chat
@@ -140,11 +144,12 @@ Identity reconciliation is platform-id first:
 - one handle observed under multiple non-null platform ids becomes separate `quarantined_handle_reuse` leads, and
   their states or evidence are never combined;
 - a missing/model-mediated platform-id observation under the same case-folded handle as exactly one stable identity is
-  retained as `same_handle_provisional_evidence_absorbed` evidence beside that stable lead; its source references and
-  origin membership are preserved, but it does not inflate unique-lead or hydration-input counts;
-- a provisional observation colliding with multiple stable ids remains a candidate-free unresolved sidecar with no
-  lookup handle; the sidecar binds the exact provisional lead/reference digests, candidate stable ids, and origin
-  shards back to the retained projected inputs without adding a third lead or hydration request;
+  retained in a candidate-free unresolved sidecar whose candidate-id set contains that one stable id. Its temporal
+  axes, source references, handle history, and origin membership never rewrite the stable lead; it adds neither a
+  second lead nor a second hydration lookup;
+- a provisional observation colliding with multiple stable ids uses the same generalized no-lookup sidecar. For both
+  one-id and multiple-id collisions, the sidecar binds exact provisional lead/reference digests, candidate stable ids,
+  and origin shards back to retained projected inputs until a separate identity-resolution contract exists;
 - this is external-account identity only and never a canonical-person merge.
 
 State reconciliation is deterministic:

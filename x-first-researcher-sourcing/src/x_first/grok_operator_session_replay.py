@@ -34,6 +34,9 @@ class GrokOperatorSessionReplayError(ValueError):
 
 _SHA256_RE = re.compile(r"[0-9a-f]{64}")
 
+ASSISTANT_JSON_MAX_DEPTH = 64
+ASSISTANT_JSON_MAX_NODES = 50_000
+
 RAW_SESSION_SHAPE_REGISTRY_VERSION = "x.grok.raw_session_shape.v1"
 SUPPORTED_SESSION_UPDATE_KINDS = frozenset(
     {
@@ -686,6 +689,7 @@ def _json_object_slices(raw: bytes) -> list[tuple[dict[str, Any], int, int]]:
         text = raw.decode("utf-8")
     except UnicodeError as exc:
         raise GrokOperatorSessionReplayError("assistant_output_utf8_invalid") from exc
+    _preflight_assistant_json_structure(text)
     decoder = json.JSONDecoder()
     slices: list[tuple[dict[str, Any], int, int]] = []
     seen_ranges: set[tuple[int, int]] = set()
@@ -694,6 +698,10 @@ def _json_object_slices(raw: bytes) -> list[tuple[dict[str, Any], int, int]]:
             value, end = decoder.raw_decode(text, match.start())
         except json.JSONDecodeError:
             continue
+        except RecursionError as exc:
+            raise GrokOperatorSessionReplayError(
+                "assistant_output_json_recursion_invalid"
+            ) from exc
         if not isinstance(value, dict):
             continue
         start_byte = len(text[: match.start()].encode("utf-8"))
@@ -705,6 +713,10 @@ def _json_object_slices(raw: bytes) -> list[tuple[dict[str, Any], int, int]]:
             )
         except CampaignValidationError:
             continue
+        except RecursionError as exc:
+            raise GrokOperatorSessionReplayError(
+                "assistant_output_json_recursion_invalid"
+            ) from exc
         if not isinstance(strict_value, dict):
             continue
         if (start_byte, end_byte) in seen_ranges:
@@ -712,6 +724,63 @@ def _json_object_slices(raw: bytes) -> list[tuple[dict[str, Any], int, int]]:
         seen_ranges.add((start_byte, end_byte))
         slices.append((strict_value, start_byte, end_byte))
     return slices
+
+
+def _preflight_assistant_json_structure(text: str) -> None:
+    """Bound JSON-like structure before Python's recursive decoder sees it.
+
+    Assistant output may contain prose and more than one JSON object.  This
+    linear lexical pass ignores text outside a container, honors JSON string
+    escaping inside a container, and counts containers, strings, and scalar
+    tokens across the complete assistant stream.  Syntax remains the strict
+    decoder's responsibility after the resource envelope is known to be safe.
+    """
+
+    depth = 0
+    nodes = 0
+    in_string = False
+    escaped = False
+    scalar_token_open = False
+    for character in text:
+        if depth == 0:
+            if character not in "[{":
+                continue
+            depth = 1
+            nodes += 1
+            scalar_token_open = False
+        elif in_string:
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == '"':
+                in_string = False
+            continue
+        elif character == '"':
+            in_string = True
+            scalar_token_open = False
+            nodes += 1
+        elif character in "[{":
+            depth += 1
+            scalar_token_open = False
+            nodes += 1
+        elif character in "]}":
+            depth -= 1
+            scalar_token_open = False
+        elif character in ",:" or character.isspace():
+            scalar_token_open = False
+        elif not scalar_token_open:
+            scalar_token_open = True
+            nodes += 1
+
+        if depth > ASSISTANT_JSON_MAX_DEPTH:
+            raise GrokOperatorSessionReplayError(
+                "assistant_output_json_depth_budget_exceeded"
+            )
+        if nodes > ASSISTANT_JSON_MAX_NODES:
+            raise GrokOperatorSessionReplayError(
+                "assistant_output_json_node_budget_exceeded"
+            )
 
 
 def replay_grok_operator_session(
@@ -883,6 +952,8 @@ def replay_grok_operator_session(
         kind = update.get("sessionUpdate")
         if not isinstance(kind, str) or kind not in SUPPORTED_SESSION_UPDATE_KINDS:
             raise GrokOperatorSessionReplayError("raw_session_update_kind_invalid")
+        if (update_index == 0) != (kind == "user_message_chunk"):
+            raise GrokOperatorSessionReplayError("raw_session_user_turn_order_invalid")
         if kind == "user_message_chunk":
             user_message_count += 1
             metadata = update.get("_meta")
@@ -979,6 +1050,7 @@ def replay_grok_operator_session(
                     "rawInput",
                     "_meta",
                 }
+                or user_message_count != 1
                 or not _event_metadata_valid(
                     metadata,
                     expected_keys=_EVENT_METADATA_BASE_KEYS | {"updateParams"},
@@ -1027,6 +1099,7 @@ def replay_grok_operator_session(
                 set(params) != {"sessionId", "update", "_meta"}
                 or set(update)
                 != {"sessionUpdate", "toolCallId", "status", "title", "rawOutput"}
+                or user_message_count != 1
                 or not _event_metadata_valid(
                     metadata,
                     expected_keys=_EVENT_METADATA_BASE_KEYS | {"updateParams"},

@@ -389,6 +389,43 @@ class GrokProfileHydrationContractTests(unittest.TestCase):
                 raw_session_files=raw,
             )
 
+    def test_raw_session_replay_requires_user_turn_as_first_registered_update(self) -> None:
+        handle = "FxUserFirst02"
+        payload = _result([_matched_record(handle)])
+        calls = [("x_user_search", {"query": handle, "count": "20"})]
+        with self.assertRaisesRegex(
+            ProfileHydrationContractError,
+            "raw_session_user_turn_order_invalid",
+        ):
+            build_profile_hydration_operator_projection(
+                raw_grok_session(
+                    payload,
+                    calls=calls,
+                    thought_texts=(),
+                    user_message_after_tools=True,
+                )
+            )
+
+    def test_raw_session_replay_bounds_assistant_json_before_recursive_decode(self) -> None:
+        handle = "FxJsonBound02"
+        payload = _result([_matched_record(handle)])
+        deeply_nested = '{"x":' * 10_000 + "0" + "}" * 10_000
+        with self.assertRaisesRegex(
+            ProfileHydrationContractError,
+            "assistant_output_json_depth_budget_exceeded",
+        ) as caught:
+            build_profile_hydration_operator_projection(
+                raw_grok_session(
+                    payload,
+                    calls=[("x_user_search", {"query": handle, "count": "20"})],
+                    terminal_text_override=deeply_nested,
+                )
+            )
+        self.assertEqual(
+            str(caught.exception),
+            "operator_raw_session_invalid:assistant_output_json_depth_budget_exceeded",
+        )
+
     def test_receipt_binds_session_terminal_campaign_batch_and_input_set(self) -> None:
         payload = _result([_matched_record("FxReceipt01")])
         projection = _projection(payload)

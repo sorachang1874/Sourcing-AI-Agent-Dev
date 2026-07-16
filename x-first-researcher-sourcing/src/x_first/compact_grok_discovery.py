@@ -688,7 +688,7 @@ def _validate_compact_discovery_result(
         platform_ids = sidecar.get("candidate_platform_user_ids")
         if (
             not isinstance(platform_ids, list)
-            or len(platform_ids) < 2
+            or not platform_ids
             or platform_ids != sorted(platform_ids)
             or len(platform_ids) != len(set(platform_ids))
             or any(
@@ -1345,7 +1345,6 @@ def merge_compact_discovery_results(
         handle for handle, platform_ids in stable_ids_by_alias.items() if len(platform_ids) > 1
     }
     absorbed_provisional_observation_count = 0
-    absorbed_platform_ids: set[str] = set()
     unresolved_sidecar_inputs: dict[
         str, tuple[list[Mapping[str, Any]], set[str]]
     ] = {}
@@ -1354,17 +1353,18 @@ def merge_compact_discovery_results(
             continue
         alias_key = identity_key[1]
         stable_ids = stable_ids_by_alias.get(alias_key, set())
-        if len(stable_ids) == 1:
-            platform_id = next(iter(stable_ids))
-            absorbed = identity_groups.pop(identity_key)
-            identity_groups[("platform", platform_id)].extend(absorbed)
-            absorbed_provisional_observation_count += len(absorbed)
-            absorbed_platform_ids.add(platform_id)
-        elif len(stable_ids) > 1:
+        if stable_ids:
+            provisional_leads = identity_groups.pop(identity_key)
             unresolved_sidecar_inputs[alias_key] = (
-                identity_groups.pop(identity_key),
+                provisional_leads,
                 set(stable_ids),
             )
+            if len(stable_ids) == 1:
+                # Preserve the existing non-double-count diagnostic while the
+                # observation remains unresolved and evidence-only.  It must
+                # never enter the stable lead or produce another hydration
+                # lookup until an explicit identity-resolution contract exists.
+                absorbed_provisional_observation_count += len(provisional_leads)
     merged_leads: list[dict[str, Any]] = []
     renamed_stable_identity_count = 0
     quarantined_handle_reuse_identity_count = 0
@@ -1379,8 +1379,6 @@ def merge_compact_discovery_results(
         platform_user_id = None if identity_key[0] == "provisional" else identity_key[1]
         alias_keys = {proposal["handle"].casefold() for proposal in history}
         identity_conflicts: list[str] = []
-        if platform_user_id in absorbed_platform_ids:
-            identity_conflicts.append("same_handle_provisional_evidence_absorbed")
         if platform_user_id is None:
             identity_status = "provisional_handle"
             provisional_identity_count += 1

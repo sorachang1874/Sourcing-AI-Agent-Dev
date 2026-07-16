@@ -198,6 +198,8 @@ Compact discovery and profile hydration now share one operator raw-session repla
 artifacts used by recall-pool evidence. Projection builders derive source/transcript hashes, exhaustive native-X
 start/completion pairs, event digests, and the post-tool contract-valid terminal byte range from immutable bytes;
 strict terminal parsing rejects duplicate keys, and closed per-tool argument validation rejects malformed calls.
+The shared shape requires the unique user update first, before thought/tool/completion/assistant updates, and applies
+a depth-64/node-50,000 lexical preflight before recursive assistant JSON decoding.
 An immutable owner precommit binds expected session/request/model/reasoning-effort values, exact prompt bytes, the
 exact five-row user-visible chat prefix bytes/digest, and system/context hashes. The final chat file is not called a
 precommit: its model-generated suffix is retained and hashed only as raw transcript evidence. A versioned closed
@@ -206,9 +208,10 @@ binds its call id/title to the later concrete native-X completion, and reconcile
 chat rows with the ledger and selected terminal. The event ledger separately enforces the observed
 start/loop/phase/first-token/completed-turn order. Unknown update, event, or chat-row shapes fail closed;
 operator execution facts are retained separately and cannot be copied from a forged result receipt during replay.
-Caller-authored receipt dataclasses are not accepted without those bindings and replay. The compact union absorbs same-handle
-provisional evidence beside a unique stable account without double-counting, requires explicit lookup-alias resolution
-for renamed stable ids, and emits closed hydration identity tuples. Hydration fails closed on a stable platform-id
+Caller-authored receipt dataclasses are not accepted without those bindings and replay. The compact union routes
+same-handle provisional evidence into a generalized one-or-more-candidate unresolved sidecar without rewriting a
+stable lead or adding hydration work, requires explicit lookup-alias resolution for renamed stable ids, and emits
+closed hydration identity tuples. Hydration fails closed on a stable platform-id
 mismatch and returns candidate-free stable errors for malformed nested envelopes. See
 `docs/GROK_COMPACT_DISCOVERY_AND_PROFILE_HYDRATION.md`.
 
