@@ -17,6 +17,19 @@ from dataclasses import asdict, dataclass
 from typing import Any
 from urllib.parse import urlsplit
 
+from x_first.compact_grok_discovery import validate_compact_discovery_result
+from x_first.grok_operator_session_replay import (
+    RAW_SESSION_SHAPE_REGISTRY_VERSION,
+    FrozenRawSessionArtifact,
+    GrokOperatorExecutionFacts,
+    GrokOperatorSessionPrecommit,
+    GrokOperatorSessionReplay,
+    GrokOperatorSessionReplayError,
+    operator_execution_facts_sha256,
+    replay_grok_operator_session,
+    session_precommit_sha256,
+    thaw_raw_session_artifacts,
+)
 from x_first.recall_pool_schema import load_contract_schema, schema_errors
 
 CONTRACT_VERSION = "x.grok.profile_hydration.result.v1"
@@ -122,6 +135,9 @@ _PLATFORM_USER_ID_RE = re.compile(r"[1-9][0-9]{0,19}")
 _SHA256_RE = re.compile(r"[0-9a-f]{64}")
 _SESSION_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,255}")
 _CALL_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,255}")
+_LEAD_IDENTITY_RE = re.compile(
+    r"(?:platform:[1-9][0-9]{0,19}|provisional:[a-z0-9_]{1,15})"
+)
 
 
 class ProfileHydrationContractError(ValueError):
@@ -133,8 +149,10 @@ class ProfileHydrationToolCompletion:
     """One start/completion-paired native call from the session ledger."""
 
     call_id: str
+    provider_call_id: str
     tool_name: str
     query: str
+    arguments_json: str
     started_ledger_sequence: int
     completed_ledger_sequence: int
     start_event_sha256: str
@@ -156,9 +174,24 @@ class ProfileHydrationExecutionReceipt:
     run_id: str
     batch_id: str
     session_id: str
+    request_id: str
+    model_id: str
     transcript_sha256: str
+    session_precommit_sha256: str
+    raw_session_shape_registry_version: str
+    operator_execution_facts_sha256: str
+    system_prompt_sha256: str
+    prompt_context_sha256: str
+    user_prompt_sha256: str
+    raw_session_artifact_sha256s: tuple[tuple[str, str], ...]
     terminal_sha256: str
-    terminal_ledger_sequence: int
+    terminal_start_byte_offset: int
+    terminal_end_byte_offset_exclusive: int
+    terminal_start_update_index: int
+    terminal_end_update_index: int
+    final_assistant_update_index: int
+    last_native_tool_update_index: int | None
+    session_event_count: int
     result_truncated: bool
     execution_deadline_reached: bool
     transport_failure: bool
@@ -177,7 +210,17 @@ class ProfileHydrationBatchExpectation:
     discovery_union_sha256: str
     run_id: str
     batch_id: str
-    input_handles: tuple[str, ...]
+    input_identities: tuple[ProfileHydrationIdentityExpectation, ...]
+
+
+@dataclass(frozen=True)
+class ProfileHydrationIdentityExpectation:
+    """Closed union-to-lookup identity tuple owned by the operator."""
+
+    lead_identity: str
+    lookup_handle: str
+    expected_platform_user_id: str | None
+    identity_state: str
 
 
 @dataclass(frozen=True)
@@ -187,6 +230,9 @@ class ProfileHydrationOperatorProjection:
     raw_terminal: dict[str, Any]
     result: dict[str, Any]
     receipt: ProfileHydrationExecutionReceipt
+    session_precommit: GrokOperatorSessionPrecommit
+    operator_execution_facts: GrokOperatorExecutionFacts
+    raw_session_artifacts: tuple[FrozenRawSessionArtifact, ...]
     receipt_sha256: str
     terminal_sha256: str
     projected_result_sha256: str
@@ -227,15 +273,135 @@ def _valid_closed_array(value: Any, allowed: Sequence[str]) -> bool:
     )
 
 
-def profile_input_set_sha256(handles: Sequence[str]) -> str:
-    """Hash a case-insensitive, order-independent hydration input set."""
+def _identity_expectation_errors(value: Any) -> list[str]:
+    if not isinstance(value, ProfileHydrationIdentityExpectation):
+        return ["expectation_identity_type_invalid"]
+    errors: list[str] = []
+    if (
+        not isinstance(value.lead_identity, str)
+        or _LEAD_IDENTITY_RE.fullmatch(value.lead_identity) is None
+    ):
+        errors.append("expectation_lead_identity_invalid")
+    if not _valid_handle(value.lookup_handle):
+        errors.append("expectation_lookup_handle_invalid")
+    if value.identity_state == "stable_platform_id":
+        if (
+            not isinstance(value.expected_platform_user_id, str)
+            or _PLATFORM_USER_ID_RE.fullmatch(value.expected_platform_user_id) is None
+            or value.lead_identity != f"platform:{value.expected_platform_user_id}"
+        ):
+            errors.append("expectation_stable_identity_binding_invalid")
+    elif value.identity_state == "provisional_handle":
+        if (
+            value.expected_platform_user_id is not None
+            or not _valid_handle(value.lookup_handle)
+            or value.lead_identity != f"provisional:{value.lookup_handle.casefold()}"
+        ):
+            errors.append("expectation_provisional_identity_binding_invalid")
+    else:
+        errors.append("expectation_identity_state_invalid")
+    return errors
 
-    if isinstance(handles, (str, bytes)):
-        raise ProfileHydrationContractError("expected_handles_invalid")
-    normalized = [handle.casefold() for handle in handles if _valid_handle(handle)]
-    if len(normalized) != len(handles) or not normalized or len(normalized) != len(set(normalized)):
-        raise ProfileHydrationContractError("expected_handles_invalid")
-    return canonical_json_sha256(sorted(normalized))
+
+def profile_identity_input_set_sha256(
+    identities: Sequence[ProfileHydrationIdentityExpectation],
+) -> str:
+    """Hash the closed, order-independent discovery-to-lookup identity set."""
+
+    if isinstance(identities, (str, bytes)) or not isinstance(identities, Sequence):
+        raise ProfileHydrationContractError("expected_identities_invalid")
+    values = tuple(identities)
+    if not values:
+        raise ProfileHydrationContractError("expected_identities_invalid")
+    errors = [error for value in values for error in _identity_expectation_errors(value)]
+    handles = [
+        value.lookup_handle.casefold()
+        for value in values
+        if isinstance(value, ProfileHydrationIdentityExpectation)
+    ]
+    lead_ids = [
+        value.lead_identity
+        for value in values
+        if isinstance(value, ProfileHydrationIdentityExpectation)
+    ]
+    if (
+        errors
+        or len(handles) != len(values)
+        or len(handles) != len(set(handles))
+        or len(lead_ids) != len(set(lead_ids))
+    ):
+        raise ProfileHydrationContractError("expected_identities_invalid")
+    rows = sorted(
+        (
+            {
+                "lead_identity": value.lead_identity,
+                "lookup_handle": value.lookup_handle.casefold(),
+                "expected_platform_user_id": value.expected_platform_user_id,
+                "identity_state": value.identity_state,
+            }
+            for value in values
+        ),
+        key=lambda row: (row["lookup_handle"], row["lead_identity"]),
+    )
+    return canonical_json_sha256(rows)
+
+
+def profile_input_set_sha256(handles: Sequence[str]) -> str:
+    """Legacy handle-only digest is closed; callers must carry identity tuples."""
+
+    raise ProfileHydrationContractError("handle_only_input_set_retired")
+
+
+def build_profile_hydration_expectation_from_union(
+    discovery_union: Mapping[str, Any],
+    *,
+    run_id: str,
+    batch_id: str,
+) -> ProfileHydrationBatchExpectation:
+    """Build the only normal hydration input from an exact compact union."""
+
+    errors = validate_compact_discovery_result(discovery_union)
+    if errors:
+        raise ProfileHydrationContractError("discovery_union_invalid")
+    if discovery_union.get("result_kind") != "union":
+        raise ProfileHydrationContractError("discovery_union_required")
+    if not _valid_identifier(run_id) or not _valid_identifier(batch_id):
+        raise ProfileHydrationContractError("hydration_run_identity_invalid")
+    identities: list[ProfileHydrationIdentityExpectation] = []
+    for lead in discovery_union["leads"]:
+        lookup_handle = lead["lookup_handle"]
+        identity_status = lead["identity_status"]
+        if lookup_handle is None or identity_status == "quarantined_handle_reuse":
+            continue
+        platform_user_id = lead["platform_user_id"]
+        if platform_user_id is None:
+            identity = ProfileHydrationIdentityExpectation(
+                lead_identity=f"provisional:{lookup_handle.casefold()}",
+                lookup_handle=lookup_handle,
+                expected_platform_user_id=None,
+                identity_state="provisional_handle",
+            )
+        else:
+            identity = ProfileHydrationIdentityExpectation(
+                lead_identity=f"platform:{platform_user_id}",
+                lookup_handle=lookup_handle,
+                expected_platform_user_id=platform_user_id,
+                identity_state="stable_platform_id",
+            )
+        identities.append(identity)
+    if not identities:
+        raise ProfileHydrationContractError("discovery_union_has_no_resolved_lookup_inputs")
+    profile_identity_input_set_sha256(identities)
+    return ProfileHydrationBatchExpectation(
+        campaign_id=discovery_union["campaign_id"],
+        target_descriptor_id=discovery_union["target_descriptor_id"],
+        target_descriptor_sha256=discovery_union["target_descriptor_sha256"],
+        prompt_policy_sha256=discovery_union["prompt_policy_sha256"],
+        discovery_union_sha256=canonical_json_sha256(discovery_union),
+        run_id=run_id,
+        batch_id=batch_id,
+        input_identities=tuple(identities),
+    )
 
 
 def _valid_external_url(value: Any) -> bool:
@@ -484,8 +650,13 @@ def _validate_execution_receipt(
     if not isinstance(receipt, ProfileHydrationExecutionReceipt):
         return ["operator_receipt_type_invalid"]
     errors: list[str] = []
-    if receipt.receipt_version != "x.grok.profile_hydration.execution_receipt.v1":
+    if receipt.receipt_version != "x.grok.profile_hydration.execution_receipt.v3":
         errors.append("operator_receipt_version_invalid")
+    if (
+        receipt.raw_session_shape_registry_version
+        != RAW_SESSION_SHAPE_REGISTRY_VERSION
+    ):
+        errors.append("operator_receipt_raw_session_shape_registry_version_invalid")
     for field in ("campaign_id", "target_descriptor_id", "run_id", "batch_id"):
         value = getattr(receipt, field)
         if not _valid_identifier(value):
@@ -505,18 +676,59 @@ def _validate_execution_receipt(
             errors.append(f"operator_receipt_{field}_mismatch")
     if not isinstance(receipt.session_id, str) or _SESSION_ID_RE.fullmatch(receipt.session_id) is None:
         errors.append("operator_receipt_session_id_invalid")
-    if not _valid_sha256(receipt.transcript_sha256):
-        errors.append("operator_receipt_transcript_sha256_invalid")
+    for field in ("request_id", "model_id"):
+        value = getattr(receipt, field)
+        if not isinstance(value, str) or _SESSION_ID_RE.fullmatch(value) is None:
+            errors.append(f"operator_receipt_{field}_invalid")
+    for field in (
+        "transcript_sha256",
+        "session_precommit_sha256",
+        "operator_execution_facts_sha256",
+    ):
+        if not _valid_sha256(getattr(receipt, field)):
+            errors.append(f"operator_receipt_{field}_invalid")
+    for field in ("system_prompt_sha256", "prompt_context_sha256", "user_prompt_sha256"):
+        if not _valid_sha256(getattr(receipt, field)):
+            errors.append(f"operator_receipt_{field}_invalid")
+    if (
+        not isinstance(receipt.raw_session_artifact_sha256s, tuple)
+        or not receipt.raw_session_artifact_sha256s
+        or any(
+            not isinstance(binding, tuple)
+            or len(binding) != 2
+            or not isinstance(binding[0], str)
+            or not _valid_sha256(binding[1])
+            for binding in receipt.raw_session_artifact_sha256s
+        )
+    ):
+        errors.append("operator_receipt_raw_session_artifacts_invalid")
     if not _valid_sha256(receipt.terminal_sha256):
         errors.append("operator_receipt_terminal_sha256_invalid")
     elif receipt.terminal_sha256 != canonical_json_sha256(result):
         errors.append("operator_receipt_terminal_sha256_mismatch")
-    terminal_sequence_valid = (
-        type(receipt.terminal_ledger_sequence) is int
-        and receipt.terminal_ledger_sequence > 0
+    integer_fields = (
+        "terminal_start_byte_offset",
+        "terminal_end_byte_offset_exclusive",
+        "terminal_start_update_index",
+        "terminal_end_update_index",
+        "final_assistant_update_index",
+        "session_event_count",
     )
-    if not terminal_sequence_valid:
-        errors.append("operator_receipt_terminal_sequence_invalid")
+    if any(type(getattr(receipt, field)) is not int for field in integer_fields):
+        errors.append("operator_receipt_replay_indices_invalid")
+    elif (
+        receipt.terminal_start_byte_offset < 0
+        or receipt.terminal_end_byte_offset_exclusive <= receipt.terminal_start_byte_offset
+        or receipt.terminal_start_update_index > receipt.terminal_end_update_index
+        or receipt.terminal_end_update_index > receipt.final_assistant_update_index
+        or receipt.session_event_count <= 0
+    ):
+        errors.append("operator_receipt_replay_indices_invalid")
+    if receipt.last_native_tool_update_index is not None and (
+        type(receipt.last_native_tool_update_index) is not int
+        or receipt.last_native_tool_update_index >= receipt.terminal_start_update_index
+    ):
+        errors.append("operator_receipt_terminal_order_invalid")
     for field in (
         "result_truncated",
         "execution_deadline_reached",
@@ -531,7 +743,7 @@ def _validate_execution_receipt(
     else:
         completions = receipt.tool_completions
     call_ids: set[str] = set()
-    ledger_sequences: set[int] = set()
+    update_indices: set[int] = set()
     event_digests: set[str] = set()
     previous_start = 0
     for index, completion in enumerate(completions):
@@ -545,12 +757,37 @@ def _validate_execution_receipt(
             errors.append(f"{prefix}:call_id_duplicate")
         else:
             call_ids.add(completion.call_id)
+        if (
+            not isinstance(completion.provider_call_id, str)
+            or _CALL_ID_RE.fullmatch(completion.provider_call_id) is None
+        ):
+            errors.append(f"{prefix}:provider_call_id_invalid")
         if completion.completion_status != "completed":
             errors.append(f"{prefix}:completion_status_invalid")
         if completion.tool_name != "x_user_search":
             errors.append(f"{prefix}:unexpected_tool")
         if not _valid_handle(completion.query):
             errors.append(f"{prefix}:query_not_bare_handle")
+        if not isinstance(completion.arguments_json, str):
+            errors.append(f"{prefix}:arguments_json_invalid")
+        else:
+            try:
+                arguments = json.loads(completion.arguments_json)
+            except (TypeError, ValueError):
+                arguments = None
+            if (
+                not isinstance(arguments, dict)
+                or arguments.get("query") != completion.query
+                or json.dumps(
+                    arguments,
+                    ensure_ascii=False,
+                    allow_nan=False,
+                    separators=(",", ":"),
+                    sort_keys=True,
+                )
+                != completion.arguments_json
+            ):
+                errors.append(f"{prefix}:arguments_json_invalid")
         for digest_field in ("start_event_sha256", "completion_event_sha256"):
             digest = getattr(completion, digest_field)
             if not _valid_sha256(digest):
@@ -564,17 +801,17 @@ def _validate_execution_receipt(
         sequences_valid = (
             type(start) is int
             and type(end) is int
-            and start > 0
+            and start >= 0
             and end > start
         )
         if not sequences_valid:
             errors.append(f"{prefix}:lifecycle_sequence_invalid")
-        elif terminal_sequence_valid and end >= receipt.terminal_ledger_sequence:
+        elif end >= receipt.terminal_start_update_index:
             errors.append(f"{prefix}:terminal_order_invalid")
         if sequences_valid:
-            if start in ledger_sequences or end in ledger_sequences:
-                errors.append(f"{prefix}:ledger_sequence_duplicate")
-            ledger_sequences.update((start, end))
+            if start in update_indices or end in update_indices:
+                errors.append(f"{prefix}:update_index_duplicate")
+            update_indices.update((start, end))
         if type(start) is int and start < previous_start:
             errors.append(f"{prefix}:ledger_order_invalid")
         if type(start) is int:
@@ -582,10 +819,72 @@ def _validate_execution_receipt(
     return list(dict.fromkeys(errors))
 
 
-def project_profile_execution_limitations(
+def _receipt_from_replay(
+    result: Mapping[str, Any],
+    replay: GrokOperatorSessionReplay,
+    *,
+    operator_execution_facts: GrokOperatorExecutionFacts,
+) -> ProfileHydrationExecutionReceipt:
+    completions = tuple(
+        ProfileHydrationToolCompletion(
+            call_id=item.call_id,
+            provider_call_id=item.provider_call_id,
+            tool_name=item.tool_name,
+            query=item.query if isinstance(item.query, str) else "",
+            arguments_json=item.arguments_json,
+            started_ledger_sequence=item.started_update_index,
+            completed_ledger_sequence=item.completed_update_index,
+            start_event_sha256=item.start_event_sha256,
+            completion_event_sha256=item.completion_event_sha256,
+        )
+        for item in replay.tool_completions
+    )
+    return ProfileHydrationExecutionReceipt(
+        receipt_version="x.grok.profile_hydration.execution_receipt.v3",
+        campaign_id=result["campaign_id"],
+        target_descriptor_id=result["target_descriptor_id"],
+        target_descriptor_sha256=result["target_descriptor_sha256"],
+        prompt_policy_sha256=result["prompt_policy_sha256"],
+        discovery_union_sha256=result["discovery_union_sha256"],
+        input_set_sha256=result["input_set_sha256"],
+        run_id=result["run_id"],
+        batch_id=result["batch_id"],
+        session_id=replay.session_id,
+        request_id=replay.request_id,
+        model_id=replay.model_id,
+        transcript_sha256=replay.transcript_sha256,
+        session_precommit_sha256=replay.session_precommit_sha256,
+        raw_session_shape_registry_version=replay.raw_session_shape_registry_version,
+        operator_execution_facts_sha256=operator_execution_facts_sha256(
+            operator_execution_facts
+        ),
+        system_prompt_sha256=replay.system_prompt_sha256,
+        prompt_context_sha256=replay.prompt_context_sha256,
+        user_prompt_sha256=replay.user_prompt_sha256,
+        raw_session_artifact_sha256s=replay.source_artifact_sha256s,
+        terminal_sha256=canonical_json_sha256(result),
+        terminal_start_byte_offset=replay.terminal_start_byte_offset,
+        terminal_end_byte_offset_exclusive=replay.terminal_end_byte_offset_exclusive,
+        terminal_start_update_index=replay.terminal_start_update_index,
+        terminal_end_update_index=replay.terminal_end_update_index,
+        final_assistant_update_index=replay.final_assistant_update_index,
+        last_native_tool_update_index=replay.last_native_tool_update_index,
+        session_event_count=replay.session_event_count,
+        result_truncated=operator_execution_facts.result_truncated,
+        execution_deadline_reached=operator_execution_facts.execution_deadline_reached,
+        transport_failure=operator_execution_facts.transport_failure,
+        model_output_repaired=operator_execution_facts.model_output_repaired,
+        tool_completions=completions,
+    )
+
+
+def _project_profile_execution_limitations(
     result: Mapping[str, Any],
     *,
     receipt: ProfileHydrationExecutionReceipt,
+    session_precommit: GrokOperatorSessionPrecommit,
+    operator_execution_facts: GrokOperatorExecutionFacts,
+    raw_session_artifacts: tuple[FrozenRawSessionArtifact, ...],
 ) -> ProfileHydrationOperatorProjection:
     """Replace technical and record-repair claims using a bound receipt."""
 
@@ -597,14 +896,25 @@ def project_profile_execution_limitations(
     if structural_errors:
         raise ProfileHydrationContractError(";".join(structural_errors))
     receipt_errors = _validate_execution_receipt(result, receipt)
+    try:
+        if receipt.session_precommit_sha256 != session_precommit_sha256(
+            session_precommit
+        ):
+            receipt_errors.append("operator_receipt_session_precommit_mismatch")
+        if receipt.operator_execution_facts_sha256 != operator_execution_facts_sha256(
+            operator_execution_facts
+        ):
+            receipt_errors.append("operator_receipt_execution_facts_mismatch")
+    except GrokOperatorSessionReplayError as exc:
+        receipt_errors.append(str(exc))
     if receipt_errors:
         raise ProfileHydrationContractError(";".join(receipt_errors))
 
     operator_facts = {
-        "execution_deadline_reached": receipt.execution_deadline_reached,
-        "transport_failure": receipt.transport_failure,
-        "result_truncated": receipt.result_truncated,
-        "model_output_repaired": receipt.model_output_repaired,
+        "execution_deadline_reached": operator_execution_facts.execution_deadline_reached,
+        "transport_failure": operator_execution_facts.transport_failure,
+        "result_truncated": operator_execution_facts.result_truncated,
+        "model_output_repaired": operator_execution_facts.model_output_repaired,
     }
     model_limitations = set(result["limitations"])
     removed = tuple(code for code in OPERATOR_OWNED_BATCH_LIMITATIONS if code in model_limitations)
@@ -624,7 +934,7 @@ def project_profile_execution_limitations(
         ]
         if "model_output_repaired" in record["limitations"]:
             removed_record_repairs += 1
-        if receipt.model_output_repaired:
+        if operator_execution_facts.model_output_repaired:
             record_limitations.append("model_output_repaired")
             added_record_repairs += 1
         record["limitations"] = [
@@ -632,7 +942,10 @@ def project_profile_execution_limitations(
         ]
 
     lookup_statuses = [record["lookup_status"] for record in projected["records"]]
-    hard_execution_failure = receipt.execution_deadline_reached or receipt.transport_failure
+    hard_execution_failure = (
+        operator_execution_facts.execution_deadline_reached
+        or operator_execution_facts.transport_failure
+    )
     if hard_execution_failure and (
         not lookup_statuses or all(status == "blocked" for status in lookup_statuses)
     ):
@@ -648,6 +961,9 @@ def project_profile_execution_limitations(
         raw_terminal=copy.deepcopy(dict(result)),
         result=projected,
         receipt=receipt,
+        session_precommit=session_precommit,
+        operator_execution_facts=operator_execution_facts,
+        raw_session_artifacts=raw_session_artifacts,
         receipt_sha256=canonical_json_sha256(asdict(receipt)),
         terminal_sha256=receipt.terminal_sha256,
         projected_result_sha256=canonical_json_sha256(projected),
@@ -658,18 +974,129 @@ def project_profile_execution_limitations(
     )
 
 
+def project_profile_execution_limitations(
+    result: Mapping[str, Any],
+    *,
+    receipt: ProfileHydrationExecutionReceipt,
+    session_precommit: GrokOperatorSessionPrecommit,
+    operator_execution_facts: GrokOperatorExecutionFacts,
+    raw_session_files: Mapping[str, bytes] | None = None,
+) -> ProfileHydrationOperatorProjection:
+    """Replay exact raw sources before accepting a supplied receipt."""
+
+    if raw_session_files is None:
+        raise ProfileHydrationContractError("operator_raw_session_required")
+    try:
+        replay = replay_grok_operator_session(
+            raw_session_files,
+            session_precommit=session_precommit,
+            allowed_tool_names=frozenset({"x_user_search"}),
+            expected_terminal=result,
+            terminal_validator=lambda value: _validate_profile_hydration_result(
+                value,
+                enforce_status_coherence=False,
+                enforce_repair_ownership=False,
+            ),
+        )
+    except GrokOperatorSessionReplayError as exc:
+        raise ProfileHydrationContractError(f"operator_raw_session_invalid:{exc}") from exc
+    expected_receipt = _receipt_from_replay(
+        result,
+        replay,
+        operator_execution_facts=operator_execution_facts,
+    )
+    if receipt != expected_receipt:
+        raise ProfileHydrationContractError("operator_receipt_replay_mismatch")
+    return _project_profile_execution_limitations(
+        result,
+        receipt=receipt,
+        session_precommit=session_precommit,
+        operator_execution_facts=operator_execution_facts,
+        raw_session_artifacts=replay.source_artifacts,
+    )
+
+
+def build_profile_hydration_operator_projection(
+    raw_session_files: Mapping[str, bytes],
+    *,
+    session_precommit: GrokOperatorSessionPrecommit,
+    result_truncated: bool = False,
+    execution_deadline_reached: bool = False,
+    transport_failure: bool = False,
+    model_output_repaired: bool = False,
+) -> ProfileHydrationOperatorProjection:
+    """Operator-owned builder deriving a profile projection from raw bytes."""
+
+    for value in (
+        result_truncated,
+        execution_deadline_reached,
+        transport_failure,
+        model_output_repaired,
+    ):
+        if type(value) is not bool:
+            raise ProfileHydrationContractError("operator_execution_fact_invalid")
+    try:
+        operator_execution_facts = GrokOperatorExecutionFacts(
+            result_truncated=result_truncated,
+            execution_deadline_reached=execution_deadline_reached,
+            transport_failure=transport_failure,
+            model_output_repaired=model_output_repaired,
+        )
+        replay = replay_grok_operator_session(
+            raw_session_files,
+            session_precommit=session_precommit,
+            allowed_tool_names=frozenset({"x_user_search"}),
+            terminal_validator=lambda value: _validate_profile_hydration_result(
+                value,
+                enforce_status_coherence=False,
+                enforce_repair_ownership=False,
+            ),
+        )
+    except GrokOperatorSessionReplayError as exc:
+        raise ProfileHydrationContractError(f"operator_raw_session_invalid:{exc}") from exc
+    result = replay.terminal
+    receipt = _receipt_from_replay(
+        result,
+        replay,
+        operator_execution_facts=operator_execution_facts,
+    )
+    return _project_profile_execution_limitations(
+        result,
+        receipt=receipt,
+        session_precommit=session_precommit,
+        operator_execution_facts=operator_execution_facts,
+        raw_session_artifacts=replay.source_artifacts,
+    )
+
+
 def _assert_projection(projection: Any) -> ProfileHydrationOperatorProjection:
     if not isinstance(projection, ProfileHydrationOperatorProjection):
         raise ProfileHydrationContractError("hydration_projection_required")
+    if not isinstance(projection.result, dict) or not isinstance(projection.raw_terminal, dict):
+        raise ProfileHydrationContractError("hydration_projection_result_type_invalid")
+    if not isinstance(projection.receipt, ProfileHydrationExecutionReceipt):
+        raise ProfileHydrationContractError("hydration_projection_receipt_type_invalid")
+    if not isinstance(projection.session_precommit, GrokOperatorSessionPrecommit):
+        raise ProfileHydrationContractError(
+            "hydration_projection_session_precommit_type_invalid"
+        )
+    if not isinstance(projection.operator_execution_facts, GrokOperatorExecutionFacts):
+        raise ProfileHydrationContractError(
+            "hydration_projection_execution_facts_type_invalid"
+        )
     errors = validate_profile_hydration_result(projection.result)
     if errors:
         raise ProfileHydrationContractError(";".join(errors))
     try:
+        raw_session_files = thaw_raw_session_artifacts(projection.raw_session_artifacts)
         recomputed = project_profile_execution_limitations(
             projection.raw_terminal,
             receipt=projection.receipt,
+            session_precommit=projection.session_precommit,
+            operator_execution_facts=projection.operator_execution_facts,
+            raw_session_files=raw_session_files,
         )
-    except ProfileHydrationContractError as exc:
+    except (ProfileHydrationContractError, GrokOperatorSessionReplayError) as exc:
         raise ProfileHydrationContractError(f"hydration_projection_revalidation_failed:{exc}") from exc
     if recomputed != projection:
         if projection.receipt_sha256 != recomputed.receipt_sha256:
@@ -701,6 +1128,30 @@ def _field_coverage(records: Sequence[Mapping[str, Any]]) -> dict[str, dict[str,
     return coverage
 
 
+_CANDIDATE_FREE_PROJECTION_ERROR_CODES = (
+    "hydration_projection_required",
+    "hydration_projection_result_type_invalid",
+    "hydration_projection_receipt_type_invalid",
+    "hydration_projection_session_precommit_type_invalid",
+    "hydration_projection_execution_facts_type_invalid",
+    "hydration_projection_receipt_digest_mismatch",
+    "hydration_projection_terminal_digest_mismatch",
+    "hydration_projection_result_digest_mismatch",
+    "hydration_projection_content_mismatch",
+    "hydration_projection_revalidation_failed",
+)
+
+
+def _candidate_free_projection_error(exc: Exception) -> str:
+    """Map internal validation details to a closed candidate-free error code."""
+
+    message = str(exc)
+    for code in _CANDIDATE_FREE_PROJECTION_ERROR_CODES:
+        if message == code or message.startswith(f"{code}:"):
+            return code
+    return "hydration_projection_invalid"
+
+
 def evaluate_profile_hydration_batch(
     projection: ProfileHydrationOperatorProjection,
     expectation: ProfileHydrationBatchExpectation,
@@ -712,18 +1163,30 @@ def evaluate_profile_hydration_batch(
     """
 
     errors: list[str] = []
+    checked: ProfileHydrationOperatorProjection | None = None
     try:
         checked = _assert_projection(projection)
         result: Mapping[str, Any] = checked.result
         completions = checked.receipt.tool_completions
-    except ProfileHydrationContractError as exc:
-        result = projection.result if isinstance(projection, ProfileHydrationOperatorProjection) else {}
+    except (ProfileHydrationContractError, TypeError, AttributeError, ValueError) as exc:
+        result = {}
         completions = ()
-        errors.extend(str(exc).split(";"))
+        errors.append(_candidate_free_projection_error(exc))
 
-    expected_values: list[Any]
+    expected_values: list[ProfileHydrationIdentityExpectation]
+    expected_by_handle: dict[str, ProfileHydrationIdentityExpectation] = {}
     if isinstance(expectation, ProfileHydrationBatchExpectation):
-        expected_values = list(expectation.input_handles)
+        if not isinstance(expectation.input_identities, tuple):
+            expected_values = []
+            errors.append("expectation_identities_type_invalid")
+        else:
+            expected_values = [
+                item
+                for item in expectation.input_identities
+                if isinstance(item, ProfileHydrationIdentityExpectation)
+            ]
+            if len(expected_values) != len(expectation.input_identities):
+                errors.append("expectation_identity_type_invalid")
         binding_fields = (
             "campaign_id",
             "target_descriptor_id",
@@ -743,31 +1206,45 @@ def evaluate_profile_hydration_batch(
                 errors.append(f"expectation_{field}_invalid")
             if result.get(field) != expected_value:
                 errors.append(f"result_expectation_{field}_mismatch")
-            if isinstance(projection, ProfileHydrationOperatorProjection) and (
-                getattr(projection.receipt, field) != expected_value
-            ):
+            if checked is not None and getattr(checked.receipt, field) != expected_value:
                 errors.append(f"receipt_expectation_{field}_mismatch")
     else:
         expected_values = []
         errors.append("hydration_expectation_required")
     expected_counts: Counter[str] = Counter()
-    for index, handle in enumerate(expected_values):
-        if not _valid_handle(handle):
-            errors.append(f"expected_handle:{index}:invalid")
+    lead_identity_counts: Counter[str] = Counter()
+    for index, identity in enumerate(expected_values):
+        identity_errors = _identity_expectation_errors(identity)
+        if identity_errors:
+            errors.extend(f"expected_identity:{index}:{error}" for error in identity_errors)
             continue
-        expected_counts[handle.casefold()] += 1
+        handle_key = identity.lookup_handle.casefold()
+        expected_counts[handle_key] += 1
+        lead_identity_counts[identity.lead_identity] += 1
+        expected_by_handle.setdefault(handle_key, identity)
     expected_keys = set(expected_counts)
     expected_duplicate_count = sum(count - 1 for count in expected_counts.values() if count > 1)
+    expected_lead_identity_duplicate_count = sum(
+        count - 1 for count in lead_identity_counts.values() if count > 1
+    )
     if not expected_keys:
-        errors.append("expected_handles_empty")
+        errors.append("expected_identities_empty")
     if expected_duplicate_count:
-        errors.append("expected_handles_casefold_duplicate")
-    if expected_keys and not expected_duplicate_count:
-        expected_digest = canonical_json_sha256(sorted(expected_keys))
-        if result.get("input_set_sha256") != expected_digest:
+        errors.append("expected_lookup_handles_casefold_duplicate")
+    if expected_lead_identity_duplicate_count:
+        errors.append("expected_lead_identity_duplicate")
+    if expected_keys and not expected_duplicate_count and not expected_lead_identity_duplicate_count:
+        try:
+            expected_digest = profile_identity_input_set_sha256(expected_values)
+        except ProfileHydrationContractError:
+            expected_digest = None
+            errors.append("expected_identities_invalid")
+        if expected_digest is not None and result.get("input_set_sha256") != expected_digest:
             errors.append("result_input_set_digest_mismatch")
-        if isinstance(projection, ProfileHydrationOperatorProjection) and (
-            projection.receipt.input_set_sha256 != expected_digest
+        if (
+            expected_digest is not None
+            and checked is not None
+            and checked.receipt.input_set_sha256 != expected_digest
         ):
             errors.append("receipt_input_set_digest_mismatch")
 
@@ -836,7 +1313,27 @@ def evaluate_profile_hydration_batch(
     affiliation_temporal_counts: Counter[str] = Counter()
     affiliation_source_counts: Counter[str] = Counter()
     verification_counts: Counter[str] = Counter()
+    stable_platform_id_missing_count = 0
+    platform_id_mismatch_quarantine_count = 0
     for record in records:
+        input_handle = record.get("input_handle")
+        expectation_row = (
+            expected_by_handle.get(input_handle.casefold())
+            if _valid_handle(input_handle)
+            else None
+        )
+        if (
+            expectation_row is not None
+            and expectation_row.identity_state == "stable_platform_id"
+            and record.get("lookup_status") == "matched"
+        ):
+            returned_platform_id = record.get("platform_user_id")
+            if returned_platform_id is None:
+                errors.append("stable_identity_platform_user_id_missing")
+                stable_platform_id_missing_count += 1
+            elif returned_platform_id != expectation_row.expected_platform_user_id:
+                errors.append("stable_identity_platform_user_id_mismatch")
+                platform_id_mismatch_quarantine_count += 1
         affiliations = record.get("affiliations")
         if isinstance(affiliations, list):
             for affiliation in affiliations:
@@ -866,6 +1363,8 @@ def evaluate_profile_hydration_batch(
                 "record_duplicate_count": record_duplicate_count,
                 "missing_record_count": missing_record_count,
                 "extra_record_count": extra_record_count,
+                "stable_platform_id_missing_count": stable_platform_id_missing_count,
+                "platform_id_mismatch_quarantine_count": platform_id_mismatch_quarantine_count,
             },
             "call_reconciliation": {
                 "native_tool_call_count": len(completions),

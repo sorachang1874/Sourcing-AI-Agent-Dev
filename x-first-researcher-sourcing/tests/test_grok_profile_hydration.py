@@ -7,18 +7,28 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
+from tests.grok_raw_session_fixture import (
+    fixture_grok_session_precommit,
+    raw_grok_session,
+)
+from x_first.grok_operator_session_replay import GrokOperatorExecutionFacts
 from x_first.grok_profile_hydration import (
     CONTRACT_VERSION,
     HYDRATION_FIELDS,
     ProfileHydrationBatchExpectation,
     ProfileHydrationContractError,
-    ProfileHydrationExecutionReceipt,
+    ProfileHydrationIdentityExpectation,
     ProfileHydrationToolCompletion,
     canonical_json_sha256,
     evaluate_profile_hydration_batch,
-    profile_input_set_sha256,
-    project_profile_execution_limitations,
+    profile_identity_input_set_sha256,
     validate_profile_hydration_result,
+)
+from x_first.grok_profile_hydration import (
+    build_profile_hydration_operator_projection as _build_profile_hydration_operator_projection,
+)
+from x_first.grok_profile_hydration import (
+    project_profile_execution_limitations as _project_profile_execution_limitations,
 )
 from x_first.recall_pool_schema import schema_errors
 
@@ -27,7 +37,37 @@ SCHEMA_PATH = PROJECT_ROOT / "contracts" / "x.grok.profile_hydration.result.v1.s
 TARGET_DIGEST = "1" * 64
 PROMPT_DIGEST = "4" * 64
 UNION_DIGEST = "5" * 64
-TRANSCRIPT_DIGEST = "6" * 64
+
+
+def build_profile_hydration_operator_projection(
+    raw_session_files: dict[str, bytes],
+    *,
+    session_precommit=None,
+    **facts: bool,
+):
+    return _build_profile_hydration_operator_projection(
+        raw_session_files,
+        session_precommit=session_precommit or fixture_grok_session_precommit(),
+        **facts,
+    )
+
+
+def project_profile_execution_limitations(
+    result,
+    *,
+    receipt,
+    raw_session_files=None,
+    session_precommit=None,
+    operator_execution_facts=None,
+):
+    return _project_profile_execution_limitations(
+        result,
+        receipt=receipt,
+        session_precommit=session_precommit or fixture_grok_session_precommit(),
+        operator_execution_facts=operator_execution_facts
+        or GrokOperatorExecutionFacts(False, False, False, False),
+        raw_session_files=raw_session_files,
+    )
 
 
 def _matched_record(handle: str, *, sequence: int = 1) -> dict[str, Any]:
@@ -82,7 +122,27 @@ def _result(
     campaign_id: str = "fixture.gdm-campaign-v1",
 ) -> dict[str, Any]:
     handles = [record["input_handle"] for record in records]
-    input_digest = profile_input_set_sha256(handles) if handles else "7" * 64
+    identities = [
+        ProfileHydrationIdentityExpectation(
+            lead_identity=(
+                f"platform:{record['platform_user_id']}"
+                if record["platform_user_id"] is not None
+                else f"provisional:{record['input_handle'].casefold()}"
+            ),
+            lookup_handle=record["input_handle"],
+            expected_platform_user_id=record["platform_user_id"],
+            identity_state=(
+                "stable_platform_id"
+                if record["platform_user_id"] is not None
+                else "provisional_handle"
+            ),
+        )
+        for record in records
+    ]
+    try:
+        input_digest = profile_identity_input_set_sha256(identities) if handles else "7" * 64
+    except ProfileHydrationContractError:
+        input_digest = "7" * 64
     return {
         "contract_version": CONTRACT_VERSION,
         "campaign_id": campaign_id,
@@ -103,8 +163,14 @@ def _completions(handles: list[str]) -> tuple[ProfileHydrationToolCompletion, ..
     return tuple(
         ProfileHydrationToolCompletion(
             call_id=f"call:{index}",
+            provider_call_id=f"provider-call:{index}",
             tool_name="x_user_search",
             query=handle,
+            arguments_json=json.dumps(
+                {"count": "20", "query": handle},
+                separators=(",", ":"),
+                sort_keys=True,
+            ),
             started_ledger_sequence=index * 2 - 1,
             completed_ledger_sequence=index * 2,
             start_event_sha256=canonical_json_sha256(
@@ -126,38 +192,51 @@ def _projection(
 ):
     handles = [record["input_handle"] for record in result["records"]]
     calls = _completions(handles) if completions is None else completions
-    terminal_sequence = max(
-        (completion.completed_ledger_sequence for completion in calls),
-        default=0,
-    ) + 1
-    receipt = ProfileHydrationExecutionReceipt(
-        receipt_version="x.grok.profile_hydration.execution_receipt.v1",
-        campaign_id=result["campaign_id"],
-        target_descriptor_id=result["target_descriptor_id"],
-        target_descriptor_sha256=result["target_descriptor_sha256"],
-        prompt_policy_sha256=result["prompt_policy_sha256"],
-        discovery_union_sha256=result["discovery_union_sha256"],
-        input_set_sha256=result["input_set_sha256"],
-        run_id=result["run_id"],
-        batch_id=result["batch_id"],
-        session_id=f"session:{result['batch_id']}",
-        transcript_sha256=TRANSCRIPT_DIGEST,
-        terminal_sha256=canonical_json_sha256(result),
-        terminal_ledger_sequence=terminal_sequence,
+    session_id = f"session:{result['batch_id']}"
+    raw = raw_grok_session(
+        result,
+        calls=[
+            (completion.tool_name, {"query": completion.query, "count": "20"})
+            for completion in calls
+        ],
+        session_id=session_id,
+    )
+    return build_profile_hydration_operator_projection(
+        raw,
+        session_precommit=fixture_grok_session_precommit(session_id=session_id),
         result_truncated=facts.get("result_truncated", False),
         execution_deadline_reached=facts.get("execution_deadline_reached", False),
         transport_failure=facts.get("transport_failure", False),
         model_output_repaired=facts.get("model_output_repaired", False),
-        tool_completions=calls,
     )
-    return project_profile_execution_limitations(result, receipt=receipt)
 
 
 def _expectation(
     result: dict[str, Any],
     handles: list[str],
+    expected_platform_user_ids: dict[str, str | None] | None = None,
     **overrides: str,
 ) -> ProfileHydrationBatchExpectation:
+    result_ids = {
+        record["input_handle"].casefold(): record["platform_user_id"]
+        for record in result["records"]
+    }
+    expected_platform_user_ids = expected_platform_user_ids or {}
+    identities = []
+    for handle in handles:
+        platform_id = expected_platform_user_ids.get(handle.casefold(), result_ids.get(handle.casefold()))
+        identities.append(
+            ProfileHydrationIdentityExpectation(
+                lead_identity=(
+                    f"platform:{platform_id}"
+                    if platform_id is not None
+                    else f"provisional:{handle.casefold()}"
+                ),
+                lookup_handle=handle,
+                expected_platform_user_id=platform_id,
+                identity_state="stable_platform_id" if platform_id is not None else "provisional_handle",
+            )
+        )
     return ProfileHydrationBatchExpectation(
         campaign_id=overrides.get("campaign_id", result["campaign_id"]),
         target_descriptor_id=overrides.get(
@@ -174,7 +253,7 @@ def _expectation(
         ),
         run_id=overrides.get("run_id", result["run_id"]),
         batch_id=overrides.get("batch_id", result["batch_id"]),
-        input_handles=tuple(handles),
+        input_identities=tuple(identities),
     )
 
 
@@ -240,68 +319,106 @@ class GrokProfileHydrationContractTests(unittest.TestCase):
         expectation = _expectation(payload, [])
         evaluation = evaluate_profile_hydration_batch(projection, expectation)
         self.assertEqual(evaluation["status"], "invalid")
-        self.assertIn("expected_handles_empty", evaluation["errors"])
+        self.assertIn("expected_identities_empty", evaluation["errors"])
 
     def test_completed_lifecycle_requires_pairing_unique_sequences_and_terminal_order(self) -> None:
         handle = "FxLife0001"
         payload = _result([_matched_record(handle)])
-        base = _completions([handle])[0]
-        for broken, expected in (
-            (replace(base, completion_status="started"), "completion_status_invalid"),
-            (replace(base, completed_ledger_sequence=base.started_ledger_sequence), "lifecycle_sequence_invalid"),
-            (replace(base, tool_name="x_keyword_search"), "unexpected_tool"),
-            (replace(base, query=f"@{handle}"), "query_not_bare_handle"),
-        ):
-            with self.subTest(expected=expected):
-                with self.assertRaisesRegex(ProfileHydrationContractError, expected):
-                    _projection(payload, completions=(broken,))
-
-        receipt_projection = _projection(payload)
-        receipt = replace(receipt_projection.receipt, terminal_ledger_sequence=2)
-        with self.assertRaisesRegex(ProfileHydrationContractError, "terminal_order_invalid"):
-            project_profile_execution_limitations(payload, receipt=receipt)
-
-        malformed = replace(
-            base,
-            call_id=1,  # type: ignore[arg-type]
-            started_ledger_sequence=[],  # type: ignore[arg-type]
-            completed_ledger_sequence={},  # type: ignore[arg-type]
+        calls = [("x_user_search", {"query": handle, "count": "20"})]
+        raw = raw_grok_session(payload, calls=calls, progress_payloads=({}, {}, {}))
+        projection = build_profile_hydration_operator_projection(raw)
+        forged_completion = replace(
+            projection.receipt.tool_completions[0],
+            completion_event_sha256="f" * 64,
         )
-        with self.assertRaisesRegex(ProfileHydrationContractError, "call_id_invalid"):
+        forged_receipt = replace(
+            projection.receipt,
+            tool_completions=(forged_completion,),
+        )
+        with self.assertRaisesRegex(ProfileHydrationContractError, "receipt_replay_mismatch"):
             project_profile_execution_limitations(
                 payload,
-                receipt=replace(
-                    receipt_projection.receipt,
-                    terminal_ledger_sequence=3,
-                    tool_completions=(malformed,),
-                ),
+                receipt=forged_receipt,
+                raw_session_files=raw,
             )
-
-        two_handles = ["FxLife0002", "FxLife0003"]
-        two_payload = _result(
-            [_matched_record(handle, sequence=index) for index, handle in enumerate(two_handles, 1)]
-        )
-        first, second = _completions(two_handles)
-        duplicate_event = replace(second, start_event_sha256=first.start_event_sha256)
-        with self.assertRaisesRegex(ProfileHydrationContractError, "event_digest_duplicate"):
-            _projection(two_payload, completions=(first, duplicate_event))
+        with self.assertRaisesRegex(ProfileHydrationContractError, "receipt_replay_mismatch"):
+            project_profile_execution_limitations(
+                payload,
+                receipt=replace(projection.receipt, result_truncated=True),
+                session_precommit=projection.session_precommit,
+                operator_execution_facts=projection.operator_execution_facts,
+                raw_session_files=raw,
+            )
+        with self.assertRaisesRegex(ProfileHydrationContractError, "terminal_pairing_invalid"):
+            build_profile_hydration_operator_projection(
+                raw_grok_session(
+                    payload,
+                    calls=calls,
+                    omit_completion_indices=frozenset({1}),
+                )
+            )
+        with self.assertRaisesRegex(ProfileHydrationContractError, "causality_invalid"):
+            build_profile_hydration_operator_projection(
+                raw_grok_session(payload, calls=calls, terminal_before_tools=True)
+            )
+        with self.assertRaisesRegex(ProfileHydrationContractError, "unsupported_tool"):
+            build_profile_hydration_operator_projection(
+                raw_grok_session(payload, calls=[("x_keyword_search", {"query": handle})])
+            )
+        for bad_arguments in (
+            {"query": handle},
+            {"query": handle, "count": "-1"},
+            {"query": handle, "count": "20", "extra": True},
+        ):
+            with self.subTest(bad_arguments=bad_arguments):
+                with self.assertRaisesRegex(
+                    ProfileHydrationContractError,
+                    "tool_arguments_invalid",
+                ):
+                    build_profile_hydration_operator_projection(
+                        raw_grok_session(
+                            payload,
+                            calls=[("x_user_search", bad_arguments)],
+                        )
+                    )
+        bad_query = replace(projection.receipt.tool_completions[0], query=f"@{handle}")
+        with self.assertRaisesRegex(ProfileHydrationContractError, "receipt_replay_mismatch"):
+            project_profile_execution_limitations(
+                payload,
+                receipt=replace(projection.receipt, tool_completions=(bad_query,)),
+                raw_session_files=raw,
+            )
 
     def test_receipt_binds_session_terminal_campaign_batch_and_input_set(self) -> None:
         payload = _result([_matched_record("FxReceipt01")])
         projection = _projection(payload)
+        raw = {
+            artifact.name: artifact.content
+            for artifact in projection.raw_session_artifacts
+        }
         mismatches = (
             ("campaign_id", "fixture.other-campaign", "campaign_id_mismatch"),
             ("batch_id", "fixture.other-batch", "batch_id_mismatch"),
             ("input_set_sha256", "8" * 64, "input_set_sha256_mismatch"),
             ("terminal_sha256", "9" * 64, "terminal_sha256_mismatch"),
         )
-        for field, value, error in mismatches:
+        for field, value, _error in mismatches:
             with self.subTest(field=field):
-                with self.assertRaisesRegex(ProfileHydrationContractError, error):
+                with self.assertRaisesRegex(ProfileHydrationContractError, "receipt_replay_mismatch"):
                     project_profile_execution_limitations(
                         payload,
                         receipt=replace(projection.receipt, **{field: value}),
+                        session_precommit=projection.session_precommit,
+                        operator_execution_facts=projection.operator_execution_facts,
+                        raw_session_files=raw,
                     )
+        with self.assertRaisesRegex(ProfileHydrationContractError, "operator_raw_session_required"):
+            project_profile_execution_limitations(
+                payload,
+                receipt=projection.receipt,
+                session_precommit=projection.session_precommit,
+                operator_execution_facts=projection.operator_execution_facts,
+            )
 
         cross_campaign = evaluate_profile_hydration_batch(
             projection,
@@ -320,13 +437,16 @@ class GrokProfileHydrationContractTests(unittest.TestCase):
             "receipt_expectation_campaign_id_mismatch",
             cross_campaign["errors"],
         )
-        with self.assertRaisesRegex(ProfileHydrationContractError, "transport_failure_invalid"):
+        with self.assertRaisesRegex(ProfileHydrationContractError, "receipt_replay_mismatch"):
             project_profile_execution_limitations(
                 payload,
                 receipt=replace(
                     projection.receipt,
                     transport_failure=1,  # type: ignore[arg-type]
                 ),
+                session_precommit=projection.session_precommit,
+                operator_execution_facts=projection.operator_execution_facts,
+                raw_session_files=raw,
             )
 
     def test_more_than_one_hundred_rows_calls_urls_and_affiliations_have_no_cap(self) -> None:
@@ -407,6 +527,137 @@ class GrokProfileHydrationContractTests(unittest.TestCase):
         self.assertIn("result_input_set_digest_mismatch", evaluation["errors"])
         self.assertIn("records_input_missing", evaluation["errors"])
         self.assertIn("records_input_extra", evaluation["errors"])
+
+    def test_stable_platform_identity_mismatch_is_quarantined_fail_closed(self) -> None:
+        handle = "FxStable001"
+        payload = _result([_matched_record(handle)])
+        expected_id = "999001"
+        expectation = _expectation(
+            payload,
+            [handle],
+            expected_platform_user_ids={handle.casefold(): expected_id},
+        )
+        payload["input_set_sha256"] = profile_identity_input_set_sha256(
+            expectation.input_identities
+        )
+        evaluation = evaluate_profile_hydration_batch(
+            _projection(payload), expectation
+        )
+        self.assertEqual(evaluation["status"], "invalid")
+        self.assertIn(
+            "stable_identity_platform_user_id_mismatch", evaluation["errors"]
+        )
+        self.assertEqual(
+            evaluation["aggregate"]["input_record_reconciliation"][
+                "platform_id_mismatch_quarantine_count"
+            ],
+            1,
+        )
+
+    def test_stable_platform_identity_missing_is_fail_closed(self) -> None:
+        handle = "FxStable002"
+        record = _matched_record(handle)
+        record["platform_user_id"] = None
+        record["missing_fields"] = ["platform_user_id"]
+        record["limitations"] = ["profile_fields_not_exposed"]
+        payload = _result([record])
+        expected_id = "999002"
+        expectation = _expectation(
+            payload,
+            [handle],
+            expected_platform_user_ids={handle.casefold(): expected_id},
+        )
+        payload["input_set_sha256"] = profile_identity_input_set_sha256(
+            expectation.input_identities
+        )
+        evaluation = evaluate_profile_hydration_batch(
+            _projection(payload), expectation
+        )
+        self.assertEqual(evaluation["status"], "invalid")
+        self.assertIn(
+            "stable_identity_platform_user_id_missing", evaluation["errors"]
+        )
+        self.assertEqual(
+            evaluation["aggregate"]["input_record_reconciliation"][
+                "stable_platform_id_missing_count"
+            ],
+            1,
+        )
+
+    def test_wrong_nested_projection_and_expectation_types_fail_closed_candidate_free(self) -> None:
+        handle = "FxNested001"
+        payload = _result([_matched_record(handle)])
+        projection = _projection(payload)
+        expectation = _expectation(payload, [handle])
+        malformed_projection = replace(
+            projection,
+            receipt={"forged": True},  # type: ignore[arg-type]
+        )
+        evaluation = evaluate_profile_hydration_batch(
+            malformed_projection, expectation
+        )
+        self.assertEqual(evaluation["status"], "invalid")
+        self.assertIn("hydration_projection_receipt_type_invalid", evaluation["errors"])
+        self.assertNotIn(handle, json.dumps(evaluation, sort_keys=True))
+
+        malformed_result = replace(
+            projection,
+            result=[],  # type: ignore[arg-type]
+        )
+        evaluation = evaluate_profile_hydration_batch(
+            malformed_result, expectation
+        )
+        self.assertEqual(evaluation["status"], "invalid")
+        self.assertIn("hydration_projection_result_type_invalid", evaluation["errors"])
+        self.assertNotIn(handle, json.dumps(evaluation, sort_keys=True))
+
+        malformed_precommit = replace(
+            projection,
+            session_precommit={"forged": True},  # type: ignore[arg-type]
+        )
+        evaluation = evaluate_profile_hydration_batch(
+            malformed_precommit, expectation
+        )
+        self.assertEqual(evaluation["status"], "invalid")
+        self.assertIn(
+            "hydration_projection_session_precommit_type_invalid",
+            evaluation["errors"],
+        )
+        self.assertNotIn(handle, json.dumps(evaluation, sort_keys=True))
+
+        malformed_execution_facts = replace(
+            projection,
+            operator_execution_facts={"result_truncated": True},  # type: ignore[arg-type]
+        )
+        evaluation = evaluate_profile_hydration_batch(
+            malformed_execution_facts, expectation
+        )
+        self.assertEqual(evaluation["status"], "invalid")
+        self.assertIn(
+            "hydration_projection_execution_facts_type_invalid",
+            evaluation["errors"],
+        )
+        self.assertNotIn(handle, json.dumps(evaluation, sort_keys=True))
+
+        malformed_expectation = replace(
+            expectation,
+            input_identities=({"lookup_handle": handle},),  # type: ignore[arg-type]
+        )
+        evaluation = evaluate_profile_hydration_batch(
+            projection, malformed_expectation
+        )
+        self.assertEqual(evaluation["status"], "invalid")
+        self.assertIn("expectation_identity_type_invalid", evaluation["errors"])
+        self.assertNotIn(handle, json.dumps(evaluation, sort_keys=True))
+
+        leaked_result = copy.deepcopy(projection.result)
+        leaked_result["records"][0][handle] = True
+        evaluation = evaluate_profile_hydration_batch(
+            replace(projection, result=leaked_result), expectation
+        )
+        self.assertEqual(evaluation["status"], "invalid")
+        self.assertIn("hydration_projection_invalid", evaluation["errors"])
+        self.assertNotIn(handle, json.dumps(evaluation, sort_keys=True))
 
     def test_matched_handle_must_bind_to_exact_input_identity(self) -> None:
         handle = "FxMatch0001"

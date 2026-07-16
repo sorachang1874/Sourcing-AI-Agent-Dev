@@ -25,7 +25,10 @@
     "target_descriptor_sha256": {"$ref": "#/$defs/sha256"},
     "prompt_policy_sha256": {"$ref": "#/$defs/sha256"},
     "discovery_union_sha256": {"$ref": "#/$defs/sha256"},
-    "input_set_sha256": {"$ref": "#/$defs/sha256"},
+    "input_set_sha256": {
+      "allOf": [{"$ref": "#/$defs/sha256"}],
+      "description": "Digest of the closed operator expectation tuples: lead identity, resolved lookup handle, expected stable platform id or explicit provisional state."
+    },
     "run_id": {"$ref": "#/$defs/identifier"},
     "batch_id": {
       "type": "string",
@@ -198,7 +201,10 @@
         "input_handle": {"$ref": "#/$defs/handle"},
         "lookup_status": {"enum": ["matched", "not_found", "blocked", "error"]},
         "matched_handle": {"$ref": "#/$defs/nullable_handle"},
-        "platform_user_id": {"$ref": "#/$defs/nullable_platform_user_id"},
+        "platform_user_id": {
+          "allOf": [{"$ref": "#/$defs/nullable_platform_user_id"}],
+          "description": "Model-mediated returned id; the evaluator fail-closes and quarantines a non-null mismatch against a stable discovery expectation."
+        },
         "display_name": {"$ref": "#/$defs/nullable_display_name"},
         "bio": {"$ref": "#/$defs/nullable_bio"},
         "location": {"$ref": "#/$defs/nullable_location"},

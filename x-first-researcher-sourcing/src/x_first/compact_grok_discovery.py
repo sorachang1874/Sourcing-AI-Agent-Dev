@@ -17,6 +17,20 @@ from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
 from typing import Any
 
+from x_first.grok_operator_session_replay import (
+    RAW_SESSION_SHAPE_REGISTRY_VERSION,
+    FrozenRawSessionArtifact,
+    GrokOperatorExecutionFacts,
+    GrokOperatorSessionPrecommit,
+    GrokOperatorSessionReplay,
+    GrokOperatorSessionReplayError,
+    ReplayedNativeToolCompletion,
+    operator_execution_facts_sha256,
+    replay_grok_operator_session,
+    session_precommit_sha256,
+    thaw_raw_session_artifacts,
+)
+
 CONTRACT_VERSION = "x.grok.compact_discovery.result.v1"
 RESULT_KEYS = frozenset(
     {
@@ -31,6 +45,7 @@ RESULT_KEYS = frozenset(
         "status",
         "strategy_id",
         "leads",
+        "identity_resolution_sidecars",
         "coverage_cells",
         "uncovered_cells",
         "limitations",
@@ -43,6 +58,8 @@ LEAD_KEYS = frozenset(
         "profile_url",
         "platform_user_id",
         "identity_status",
+        "lookup_handle",
+        "identity_conflicts",
         "handle_history_proposals",
         "origin_shard_ids",
         "target_lab_affiliation_state",
@@ -63,6 +80,15 @@ SOURCE_REF_KEYS = frozenset(
         "origin_shard_ids",
     }
 )
+IDENTITY_RESOLUTION_SIDECAR_KEYS = frozenset(
+    {
+        "handle",
+        "candidate_platform_user_ids",
+        "provisional_lead_sha256s",
+        "provisional_source_ref_sha256s",
+        "origin_shard_ids",
+    }
+)
 
 STATUSES = frozenset({"X_DISCOVERY_OK", "X_DISCOVERY_PARTIAL", "X_DISCOVERY_BLOCKED"})
 RESULT_KINDS = frozenset({"shard", "union"})
@@ -70,6 +96,10 @@ IDENTITY_STATUSES = (
     "stable_platform_id",
     "provisional_handle",
     "quarantined_handle_reuse",
+)
+IDENTITY_CONFLICT_CODES = (
+    "same_handle_provisional_evidence_absorbed",
+    "same_handle_multiple_stable_ids_unresolved",
 )
 TEMPORAL_STATES = ("current", "historical", "ambiguous")
 SOURCE_STATUS = "model_mediated_unverified"
@@ -86,6 +116,9 @@ SOURCE_SURFACES = (
 PROFILE_SURFACES = frozenset({"profile", "bio"})
 STATUS_SURFACES = frozenset(set(SOURCE_SURFACES) - PROFILE_SURFACES)
 SUPPORT_DIMENSIONS = ("lab_affiliation", "pretraining_relevance")
+COMPACT_ALLOWED_NATIVE_X_TOOLS = frozenset(
+    {"x_keyword_search", "x_semantic_search", "x_thread_fetch"}
+)
 COVERAGE_CELLS = (
     "official_account_profiles",
     "official_account_posts",
@@ -130,6 +163,7 @@ _STATUS_URL_RE = re.compile(
 _IDENTIFIER_RE = re.compile(r"[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*")
 _SHA256_RE = re.compile(r"[0-9a-f]{64}")
 _SESSION_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,255}")
+_EXACT_HANDLE_QUERY_RE = re.compile(r"\s*@[A-Za-z0-9_]{1,15}\s*")
 _RESERVED_OR_PLACEHOLDER_HANDLES = frozenset(
     {
         "account",
@@ -172,9 +206,27 @@ class CompactDiscoveryExecutionReceipt:
     prompt_policy_sha256: str
     shard_id: str
     session_id: str
+    request_id: str
+    model_id: str
     transcript_sha256: str
+    session_precommit_sha256: str
+    raw_session_shape_registry_version: str
+    operator_execution_facts_sha256: str
+    system_prompt_sha256: str
+    prompt_context_sha256: str
+    user_prompt_sha256: str
+    raw_session_artifact_sha256s: tuple[tuple[str, str], ...]
     terminal_sha256: str
-    terminal_selected_after_last_tool_completion: bool
+    terminal_start_byte_offset: int
+    terminal_end_byte_offset_exclusive: int
+    terminal_start_update_index: int
+    terminal_end_update_index: int
+    final_assistant_update_index: int
+    last_native_tool_update_index: int | None
+    session_event_count: int
+    started_tool_call_count: int
+    completed_tool_call_count: int
+    tool_completions: tuple[ReplayedNativeToolCompletion, ...]
     result_truncated: bool
     execution_deadline_reached: bool
     transport_failure: bool
@@ -188,6 +240,9 @@ class CompactDiscoveryOperatorProjection:
     raw_terminal: dict[str, Any]
     result: dict[str, Any]
     receipt: CompactDiscoveryExecutionReceipt
+    session_precommit: GrokOperatorSessionPrecommit
+    operator_execution_facts: GrokOperatorExecutionFacts
+    raw_session_artifacts: tuple[FrozenRawSessionArtifact, ...]
     receipt_sha256: str
     terminal_sha256: str
     projected_result_sha256: str
@@ -207,6 +262,8 @@ class CompactDiscoveryMergeSummary:
     renamed_stable_identity_count: int
     quarantined_handle_reuse_identity_count: int
     provisional_identity_count: int
+    absorbed_provisional_observation_count: int
+    unresolved_identity_sidecar_count: int
     lab_affiliation_state_conflict_count: int
     pretraining_experience_state_conflict_count: int
     input_source_ref_count: int
@@ -396,6 +453,20 @@ def _validate_compact_discovery_result(
             errors.append("union_id_collides_with_input_shard")
         allowed_origin_ids = input_shard_ids
 
+    identity_resolution_sidecars = result.get("identity_resolution_sidecars")
+    if not isinstance(identity_resolution_sidecars, list):
+        errors.append("identity_resolution_sidecars_invalid")
+        identity_resolution_sidecars = []
+    if result_kind == "shard" and identity_resolution_sidecars:
+        errors.append("shard_identity_resolution_sidecars_must_be_empty")
+    if identity_resolution_sidecars != sorted(
+        identity_resolution_sidecars,
+        key=lambda item: item.get("handle", "").casefold()
+        if isinstance(item, dict) and isinstance(item.get("handle"), str)
+        else "",
+    ):
+        errors.append("identity_resolution_sidecars_order_invalid")
+
     status = result.get("status")
     if status not in STATUSES:
         errors.append("status_invalid")
@@ -434,6 +505,7 @@ def _validate_compact_discovery_result(
     stable_ids: dict[str, int] = {}
     provisional_handles: dict[str, int] = {}
     handle_owners: dict[str, list[tuple[int, str | None, str]]] = {}
+    lookup_handle_owners: dict[str, int] = {}
     for lead_index, lead in enumerate(leads):
         prefix = f"lead:{lead_index}"
         if not isinstance(lead, dict) or set(lead) != LEAD_KEYS:
@@ -471,6 +543,18 @@ def _validate_compact_discovery_result(
         else:
             provisional_handles[handle_key] = lead_index
 
+        lookup_handle = lead.get("lookup_handle")
+        identity_conflicts = lead.get("identity_conflicts")
+        conflicts_valid = _valid_closed_array(identity_conflicts, IDENTITY_CONFLICT_CODES)
+        if not conflicts_valid:
+            errors.append(f"{prefix}:identity_conflicts_invalid")
+            identity_conflicts = []
+        if result_kind == "shard":
+            if lookup_handle is not None:
+                errors.append(f"{prefix}:shard_lookup_handle_must_be_null")
+            if identity_conflicts:
+                errors.append(f"{prefix}:shard_identity_conflicts_must_be_empty")
+
         history = lead.get("handle_history_proposals")
         history_handles: set[str] = set()
         history_origins: set[str] = set()
@@ -503,6 +587,29 @@ def _validate_compact_discovery_result(
                 history_origins.update(origins)
         if handle_key not in history_handles:
             errors.append(f"{prefix}:canonical_handle_missing_from_history")
+        if result_kind == "union":
+            lookup_is_unresolved = (
+                identity_status == "quarantined_handle_reuse"
+                or "same_handle_multiple_stable_ids_unresolved" in identity_conflicts
+            )
+            if lookup_is_unresolved:
+                if lookup_handle is not None:
+                    errors.append(f"{prefix}:quarantined_lookup_handle_must_be_null")
+            elif not _valid_handle(lookup_handle):
+                errors.append(f"{prefix}:lookup_handle_invalid")
+            elif lookup_handle.casefold() not in history_handles:
+                errors.append(f"{prefix}:lookup_handle_not_in_history")
+            else:
+                lookup_key = lookup_handle.casefold()
+                if lookup_key in lookup_handle_owners:
+                    errors.append(f"{prefix}:lookup_handle_casefold_duplicate")
+                else:
+                    lookup_handle_owners[lookup_key] = lead_index
+        if (
+            "same_handle_provisional_evidence_absorbed" in identity_conflicts
+            and not isinstance(platform_user_id, str)
+        ):
+            errors.append(f"{prefix}:absorbed_provisional_without_stable_identity")
 
         lead_origins = lead.get("origin_shard_ids")
         if not _valid_origin_ids(lead_origins, allowed_origin_ids):
@@ -564,6 +671,54 @@ def _validate_compact_discovery_result(
         ):
             errors.append("handle_reuse_not_quarantined")
 
+    seen_sidecar_handles: set[str] = set()
+    for sidecar_index, sidecar in enumerate(identity_resolution_sidecars):
+        prefix = f"identity_resolution_sidecar:{sidecar_index}"
+        if not isinstance(sidecar, dict) or set(sidecar) != IDENTITY_RESOLUTION_SIDECAR_KEYS:
+            errors.append(f"{prefix}:shape_invalid")
+            continue
+        handle = sidecar.get("handle")
+        if not _valid_handle(handle):
+            errors.append(f"{prefix}:handle_invalid")
+            continue
+        handle_key = handle.casefold()
+        if handle_key in seen_sidecar_handles:
+            errors.append(f"{prefix}:handle_duplicate")
+        seen_sidecar_handles.add(handle_key)
+        platform_ids = sidecar.get("candidate_platform_user_ids")
+        if (
+            not isinstance(platform_ids, list)
+            or len(platform_ids) < 2
+            or platform_ids != sorted(platform_ids)
+            or len(platform_ids) != len(set(platform_ids))
+            or any(
+                not isinstance(value, str)
+                or _PLATFORM_USER_ID_RE.fullmatch(value) is None
+                for value in platform_ids
+            )
+        ):
+            errors.append(f"{prefix}:candidate_platform_user_ids_invalid")
+        else:
+            observed_platform_ids = {
+                owner_id
+                for _, owner_id, _ in handle_owners.get(handle_key, [])
+                if owner_id is not None
+            }
+            if set(platform_ids) != observed_platform_ids:
+                errors.append(f"{prefix}:candidate_platform_user_ids_mismatch")
+        if not _valid_origin_ids(sidecar.get("origin_shard_ids"), allowed_origin_ids):
+            errors.append(f"{prefix}:origin_binding_invalid")
+        for field in ("provisional_lead_sha256s", "provisional_source_ref_sha256s"):
+            digests = sidecar.get(field)
+            if (
+                not isinstance(digests, list)
+                or not digests
+                or digests != sorted(digests)
+                or len(digests) != len(set(digests))
+                or any(not _valid_sha256(value) for value in digests)
+            ):
+                errors.append(f"{prefix}:{field}_invalid")
+
     return list(dict.fromkeys(errors))
 
 
@@ -586,8 +741,13 @@ def _validate_compact_receipt(
     if not isinstance(receipt, CompactDiscoveryExecutionReceipt):
         return ["operator_receipt_type_invalid"]
     errors: list[str] = []
-    if receipt.receipt_version != "x.grok.compact_discovery.execution_receipt.v1":
+    if receipt.receipt_version != "x.grok.compact_discovery.execution_receipt.v3":
         errors.append("operator_receipt_version_invalid")
+    if (
+        receipt.raw_session_shape_registry_version
+        != RAW_SESSION_SHAPE_REGISTRY_VERSION
+    ):
+        errors.append("operator_receipt_raw_session_shape_registry_version_invalid")
     for field in ("campaign_id", "target_descriptor_id", "shard_id"):
         value = getattr(receipt, field)
         if not _valid_identifier(value):
@@ -602,14 +762,71 @@ def _validate_compact_receipt(
             errors.append(f"operator_receipt_{field}_mismatch")
     if not isinstance(receipt.session_id, str) or _SESSION_ID_RE.fullmatch(receipt.session_id) is None:
         errors.append("operator_receipt_session_id_invalid")
-    if not _valid_sha256(receipt.transcript_sha256):
-        errors.append("operator_receipt_transcript_sha256_invalid")
+    for field in ("request_id", "model_id"):
+        value = getattr(receipt, field)
+        if not isinstance(value, str) or _SESSION_ID_RE.fullmatch(value) is None:
+            errors.append(f"operator_receipt_{field}_invalid")
+    for field in (
+        "transcript_sha256",
+        "session_precommit_sha256",
+        "operator_execution_facts_sha256",
+    ):
+        if not _valid_sha256(getattr(receipt, field)):
+            errors.append(f"operator_receipt_{field}_invalid")
+    for field in ("system_prompt_sha256", "prompt_context_sha256", "user_prompt_sha256"):
+        if not _valid_sha256(getattr(receipt, field)):
+            errors.append(f"operator_receipt_{field}_invalid")
+    if (
+        not isinstance(receipt.raw_session_artifact_sha256s, tuple)
+        or not receipt.raw_session_artifact_sha256s
+        or any(
+            not isinstance(binding, tuple)
+            or len(binding) != 2
+            or not isinstance(binding[0], str)
+            or not _valid_sha256(binding[1])
+            for binding in receipt.raw_session_artifact_sha256s
+        )
+    ):
+        errors.append("operator_receipt_raw_session_artifacts_invalid")
     if not _valid_sha256(receipt.terminal_sha256):
         errors.append("operator_receipt_terminal_sha256_invalid")
     elif receipt.terminal_sha256 != canonical_json_sha256(result):
         errors.append("operator_receipt_terminal_sha256_mismatch")
-    if receipt.terminal_selected_after_last_tool_completion is not True:
+    integer_fields = (
+        "terminal_start_byte_offset",
+        "terminal_end_byte_offset_exclusive",
+        "terminal_start_update_index",
+        "terminal_end_update_index",
+        "final_assistant_update_index",
+        "session_event_count",
+        "started_tool_call_count",
+        "completed_tool_call_count",
+    )
+    if any(type(getattr(receipt, field)) is not int for field in integer_fields):
+        errors.append("operator_receipt_replay_indices_invalid")
+    elif (
+        receipt.terminal_start_byte_offset < 0
+        or receipt.terminal_end_byte_offset_exclusive <= receipt.terminal_start_byte_offset
+        or receipt.terminal_start_update_index > receipt.terminal_end_update_index
+        or receipt.terminal_end_update_index > receipt.final_assistant_update_index
+        or receipt.session_event_count <= 0
+        or receipt.started_tool_call_count < 0
+        or receipt.completed_tool_call_count < 0
+        or receipt.started_tool_call_count != receipt.completed_tool_call_count
+    ):
+        errors.append("operator_receipt_replay_indices_invalid")
+    if receipt.last_native_tool_update_index is not None and (
+        type(receipt.last_native_tool_update_index) is not int
+        or receipt.last_native_tool_update_index >= receipt.terminal_start_update_index
+    ):
         errors.append("operator_receipt_terminal_order_unproven")
+    if not isinstance(receipt.tool_completions, tuple) or any(
+        not isinstance(item, ReplayedNativeToolCompletion)
+        for item in receipt.tool_completions
+    ):
+        errors.append("operator_receipt_tool_completions_invalid")
+    elif len(receipt.tool_completions) != receipt.completed_tool_call_count:
+        errors.append("operator_receipt_tool_completion_count_mismatch")
     for field in (
         "result_truncated",
         "execution_deadline_reached",
@@ -618,13 +835,80 @@ def _validate_compact_receipt(
     ):
         if type(getattr(receipt, field)) is not bool:
             errors.append(f"operator_receipt_{field}_invalid")
+    if (
+        receipt.completed_tool_call_count == 0
+        and receipt.execution_deadline_reached is False
+        and receipt.transport_failure is False
+    ):
+        errors.append("operator_receipt_native_tool_call_empty")
     return errors
 
 
-def project_compact_execution_limitations(
+def _receipt_from_replay(
+    result: Mapping[str, Any],
+    replay: GrokOperatorSessionReplay,
+    *,
+    operator_execution_facts: GrokOperatorExecutionFacts,
+) -> CompactDiscoveryExecutionReceipt:
+    return CompactDiscoveryExecutionReceipt(
+        receipt_version="x.grok.compact_discovery.execution_receipt.v3",
+        campaign_id=result["campaign_id"],
+        target_descriptor_id=result["target_descriptor_id"],
+        target_descriptor_sha256=result["target_descriptor_sha256"],
+        prompt_policy_sha256=result["prompt_policy_sha256"],
+        shard_id=result["shard_id"],
+        session_id=replay.session_id,
+        request_id=replay.request_id,
+        model_id=replay.model_id,
+        transcript_sha256=replay.transcript_sha256,
+        session_precommit_sha256=replay.session_precommit_sha256,
+        raw_session_shape_registry_version=replay.raw_session_shape_registry_version,
+        operator_execution_facts_sha256=operator_execution_facts_sha256(
+            operator_execution_facts
+        ),
+        system_prompt_sha256=replay.system_prompt_sha256,
+        prompt_context_sha256=replay.prompt_context_sha256,
+        user_prompt_sha256=replay.user_prompt_sha256,
+        raw_session_artifact_sha256s=replay.source_artifact_sha256s,
+        terminal_sha256=canonical_json_sha256(result),
+        terminal_start_byte_offset=replay.terminal_start_byte_offset,
+        terminal_end_byte_offset_exclusive=replay.terminal_end_byte_offset_exclusive,
+        terminal_start_update_index=replay.terminal_start_update_index,
+        terminal_end_update_index=replay.terminal_end_update_index,
+        final_assistant_update_index=replay.final_assistant_update_index,
+        last_native_tool_update_index=replay.last_native_tool_update_index,
+        session_event_count=replay.session_event_count,
+        started_tool_call_count=len(replay.tool_completions),
+        completed_tool_call_count=len(replay.tool_completions),
+        tool_completions=replay.tool_completions,
+        result_truncated=operator_execution_facts.result_truncated,
+        execution_deadline_reached=operator_execution_facts.execution_deadline_reached,
+        transport_failure=operator_execution_facts.transport_failure,
+        model_output_repaired=operator_execution_facts.model_output_repaired,
+    )
+
+
+def _assert_compact_native_call_policy(replay: GrokOperatorSessionReplay) -> None:
+    """Reject mechanically identifiable person-only discovery lookups."""
+
+    for completion in replay.tool_completions:
+        if (
+            completion.tool_name in {"x_keyword_search", "x_semantic_search"}
+            and isinstance(completion.query, str)
+            and _EXACT_HANDLE_QUERY_RE.fullmatch(completion.query) is not None
+        ):
+            raise CompactDiscoveryContractError(
+                "operator_raw_session_invalid:compact_exact_handle_query_forbidden"
+            )
+
+
+def _project_compact_execution_limitations(
     result: Mapping[str, Any],
     *,
     receipt: CompactDiscoveryExecutionReceipt,
+    session_precommit: GrokOperatorSessionPrecommit,
+    operator_execution_facts: GrokOperatorExecutionFacts,
+    raw_session_artifacts: tuple[FrozenRawSessionArtifact, ...],
 ) -> CompactDiscoveryOperatorProjection:
     """Normalize operator-owned claims using a terminal-bound receipt.
 
@@ -640,16 +924,27 @@ def project_compact_execution_limitations(
     if structural_errors:
         raise CompactDiscoveryContractError(";".join(structural_errors))
     receipt_errors = _validate_compact_receipt(result, receipt)
+    try:
+        if receipt.session_precommit_sha256 != session_precommit_sha256(
+            session_precommit
+        ):
+            receipt_errors.append("operator_receipt_session_precommit_mismatch")
+        if receipt.operator_execution_facts_sha256 != operator_execution_facts_sha256(
+            operator_execution_facts
+        ):
+            receipt_errors.append("operator_receipt_execution_facts_mismatch")
+    except GrokOperatorSessionReplayError as exc:
+        receipt_errors.append(str(exc))
     if receipt_errors:
         raise CompactDiscoveryContractError(";".join(receipt_errors))
     if result.get("result_kind") != "shard":
         raise CompactDiscoveryContractError("projection_requires_shard_result")
 
     operator_facts = {
-        "result_truncated": receipt.result_truncated,
-        "execution_deadline_reached": receipt.execution_deadline_reached,
-        "transport_failure": receipt.transport_failure,
-        "model_output_repaired": receipt.model_output_repaired,
+        "result_truncated": operator_execution_facts.result_truncated,
+        "execution_deadline_reached": operator_execution_facts.execution_deadline_reached,
+        "transport_failure": operator_execution_facts.transport_failure,
+        "model_output_repaired": operator_execution_facts.model_output_repaired,
     }
     model_limitations = set(result["limitations"])
     removed = tuple(code for code in OPERATOR_OWNED_LIMITATION_CODES if code in model_limitations)
@@ -677,6 +972,9 @@ def project_compact_execution_limitations(
         raw_terminal=copy.deepcopy(dict(result)),
         result=projected,
         receipt=receipt,
+        session_precommit=session_precommit,
+        operator_execution_facts=operator_execution_facts,
+        raw_session_artifacts=raw_session_artifacts,
         receipt_sha256=canonical_json_sha256(asdict(receipt)),
         terminal_sha256=receipt.terminal_sha256,
         projected_result_sha256=canonical_json_sha256(projected),
@@ -685,16 +983,121 @@ def project_compact_execution_limitations(
     )
 
 
+def project_compact_execution_limitations(
+    result: Mapping[str, Any],
+    *,
+    receipt: CompactDiscoveryExecutionReceipt,
+    session_precommit: GrokOperatorSessionPrecommit,
+    operator_execution_facts: GrokOperatorExecutionFacts,
+    raw_session_files: Mapping[str, bytes] | None = None,
+) -> CompactDiscoveryOperatorProjection:
+    """Replay raw bytes before accepting a receipt supplied at this boundary."""
+
+    if raw_session_files is None:
+        raise CompactDiscoveryContractError("operator_raw_session_required")
+    try:
+        replay = replay_grok_operator_session(
+            raw_session_files,
+            session_precommit=session_precommit,
+            allowed_tool_names=COMPACT_ALLOWED_NATIVE_X_TOOLS,
+            expected_terminal=result,
+            terminal_validator=lambda value: _validate_compact_discovery_result(
+                value, enforce_status_coherence=False
+            ),
+        )
+    except GrokOperatorSessionReplayError as exc:
+        raise CompactDiscoveryContractError(f"operator_raw_session_invalid:{exc}") from exc
+    _assert_compact_native_call_policy(replay)
+    expected_receipt = _receipt_from_replay(
+        result,
+        replay,
+        operator_execution_facts=operator_execution_facts,
+    )
+    if receipt != expected_receipt:
+        raise CompactDiscoveryContractError("operator_receipt_replay_mismatch")
+    return _project_compact_execution_limitations(
+        result,
+        receipt=receipt,
+        session_precommit=session_precommit,
+        operator_execution_facts=operator_execution_facts,
+        raw_session_artifacts=replay.source_artifacts,
+    )
+
+
+def build_compact_operator_projection(
+    raw_session_files: Mapping[str, bytes],
+    *,
+    session_precommit: GrokOperatorSessionPrecommit,
+    result_truncated: bool = False,
+    execution_deadline_reached: bool = False,
+    transport_failure: bool = False,
+    model_output_repaired: bool = False,
+) -> CompactDiscoveryOperatorProjection:
+    """Operator-owned builder deriving terminal, receipt, and projection."""
+
+    for value in (
+        result_truncated,
+        execution_deadline_reached,
+        transport_failure,
+        model_output_repaired,
+    ):
+        if type(value) is not bool:
+            raise CompactDiscoveryContractError("operator_execution_fact_invalid")
+    try:
+        operator_execution_facts = GrokOperatorExecutionFacts(
+            result_truncated=result_truncated,
+            execution_deadline_reached=execution_deadline_reached,
+            transport_failure=transport_failure,
+            model_output_repaired=model_output_repaired,
+        )
+        replay = replay_grok_operator_session(
+            raw_session_files,
+            session_precommit=session_precommit,
+            allowed_tool_names=COMPACT_ALLOWED_NATIVE_X_TOOLS,
+            terminal_validator=lambda value: _validate_compact_discovery_result(
+                value, enforce_status_coherence=False
+            ),
+        )
+    except GrokOperatorSessionReplayError as exc:
+        raise CompactDiscoveryContractError(f"operator_raw_session_invalid:{exc}") from exc
+    _assert_compact_native_call_policy(replay)
+    result = replay.terminal
+    receipt = _receipt_from_replay(
+        result,
+        replay,
+        operator_execution_facts=operator_execution_facts,
+    )
+    return _project_compact_execution_limitations(
+        result,
+        receipt=receipt,
+        session_precommit=session_precommit,
+        operator_execution_facts=operator_execution_facts,
+        raw_session_artifacts=replay.source_artifacts,
+    )
+
+
 def _assert_projection(projection: Any) -> CompactDiscoveryOperatorProjection:
     if not isinstance(projection, CompactDiscoveryOperatorProjection):
         raise CompactDiscoveryContractError("merge_projection_required")
+    if not isinstance(projection.result, dict) or not isinstance(projection.raw_terminal, dict):
+        raise CompactDiscoveryContractError("merge_projection_result_type_invalid")
+    if not isinstance(projection.receipt, CompactDiscoveryExecutionReceipt):
+        raise CompactDiscoveryContractError("merge_projection_receipt_type_invalid")
+    if not isinstance(projection.session_precommit, GrokOperatorSessionPrecommit):
+        raise CompactDiscoveryContractError("merge_projection_session_precommit_type_invalid")
+    if not isinstance(projection.operator_execution_facts, GrokOperatorExecutionFacts):
+        raise CompactDiscoveryContractError("merge_projection_execution_facts_type_invalid")
     assert_compact_discovery_result(projection.result)
     try:
+        raw_session_files = thaw_raw_session_artifacts(projection.raw_session_artifacts)
         recomputed = project_compact_execution_limitations(
             projection.raw_terminal,
             receipt=projection.receipt,
+            session_precommit=projection.session_precommit,
+            operator_execution_facts=projection.operator_execution_facts,
+            raw_session_files=raw_session_files,
         )
-    except CompactDiscoveryContractError as exc:
+    except (CompactDiscoveryContractError, GrokOperatorSessionReplayError) as exc:
         raise CompactDiscoveryContractError(f"merge_projection_revalidation_failed:{exc}") from exc
     if recomputed != projection:
         if projection.receipt_sha256 != recomputed.receipt_sha256:
@@ -867,6 +1270,7 @@ def merge_compact_discovery_results(
     *,
     union_id: str = "operator.compact-discovery-union-v1",
     strategy_id: str = "operator.compact-discovery-union-v1",
+    resolved_lookup_handles: Mapping[str, str] | None = None,
 ) -> MergedCompactDiscovery:
     """Union receipt-projected, binding-compatible shards by platform identity.
 
@@ -875,7 +1279,8 @@ def merge_compact_discovery_results(
     proposals.  The same handle observed under multiple stable ids yields
     separate quarantined leads; their evidence is never combined.  Null ids
     remain explicit provisional-handle identities and never weaken a stable-id
-    fence.
+    fence.  A stable identity observed under more than one alias requires an
+    explicit operator-resolved lookup handle keyed by platform user id.
     """
 
     if isinstance(projections, (str, bytes)):
@@ -885,6 +1290,14 @@ def merge_compact_discovery_results(
         raise CompactDiscoveryContractError("merge_results_empty")
     if not _valid_identifier(union_id) or not _valid_identifier(strategy_id):
         raise CompactDiscoveryContractError("merge_output_identity_invalid")
+    if resolved_lookup_handles is None:
+        resolved_lookup_handles = {}
+    if not isinstance(resolved_lookup_handles, Mapping) or any(
+        not isinstance(key, str) or not _valid_handle(value)
+        for key, value in resolved_lookup_handles.items()
+    ):
+        raise CompactDiscoveryContractError("merge_resolved_lookup_handles_invalid")
+    resolved_lookup_handles = dict(resolved_lookup_handles)
 
     checked = tuple(_assert_projection(projection) for projection in inputs)
     results = tuple(projection.result for projection in checked)
@@ -931,18 +1344,43 @@ def merge_compact_discovery_results(
     reused_aliases = {
         handle for handle, platform_ids in stable_ids_by_alias.items() if len(platform_ids) > 1
     }
+    absorbed_provisional_observation_count = 0
+    absorbed_platform_ids: set[str] = set()
+    unresolved_sidecar_inputs: dict[
+        str, tuple[list[Mapping[str, Any]], set[str]]
+    ] = {}
+    for identity_key in tuple(identity_groups):
+        if identity_key[0] != "provisional":
+            continue
+        alias_key = identity_key[1]
+        stable_ids = stable_ids_by_alias.get(alias_key, set())
+        if len(stable_ids) == 1:
+            platform_id = next(iter(stable_ids))
+            absorbed = identity_groups.pop(identity_key)
+            identity_groups[("platform", platform_id)].extend(absorbed)
+            absorbed_provisional_observation_count += len(absorbed)
+            absorbed_platform_ids.add(platform_id)
+        elif len(stable_ids) > 1:
+            unresolved_sidecar_inputs[alias_key] = (
+                identity_groups.pop(identity_key),
+                set(stable_ids),
+            )
     merged_leads: list[dict[str, Any]] = []
     renamed_stable_identity_count = 0
     quarantined_handle_reuse_identity_count = 0
     provisional_identity_count = 0
     lab_conflicts = 0
     pretraining_conflicts = 0
+    consumed_lookup_resolution_ids: set[str] = set()
     for identity_key in sorted(identity_groups):
         lead_group = identity_groups[identity_key]
         history = _merge_history(lead_group)
         canonical_handle = min(proposal["handle"] for proposal in history)
         platform_user_id = None if identity_key[0] == "provisional" else identity_key[1]
         alias_keys = {proposal["handle"].casefold() for proposal in history}
+        identity_conflicts: list[str] = []
+        if platform_user_id in absorbed_platform_ids:
+            identity_conflicts.append("same_handle_provisional_evidence_absorbed")
         if platform_user_id is None:
             identity_status = "provisional_handle"
             provisional_identity_count += 1
@@ -953,6 +1391,32 @@ def merge_compact_discovery_results(
             identity_status = "stable_platform_id"
             if len(alias_keys) > 1:
                 renamed_stable_identity_count += 1
+
+        lookup_handle: str | None
+        if (
+            identity_status == "quarantined_handle_reuse"
+        ):
+            lookup_handle = None
+        elif platform_user_id is not None and len(alias_keys) > 1:
+            lookup_handle = resolved_lookup_handles.get(platform_user_id)
+            if lookup_handle is None:
+                raise CompactDiscoveryContractError(
+                    f"merge_resolved_lookup_handle_required:{platform_user_id}"
+                )
+            if lookup_handle.casefold() not in alias_keys:
+                raise CompactDiscoveryContractError(
+                    f"merge_resolved_lookup_handle_not_in_history:{platform_user_id}"
+                )
+            consumed_lookup_resolution_ids.add(platform_user_id)
+        else:
+            lookup_handle = history[0]["handle"]
+            if platform_user_id is not None and platform_user_id in resolved_lookup_handles:
+                if resolved_lookup_handles[platform_user_id].casefold() not in alias_keys:
+                    raise CompactDiscoveryContractError(
+                        f"merge_resolved_lookup_handle_not_in_history:{platform_user_id}"
+                    )
+                lookup_handle = resolved_lookup_handles[platform_user_id]
+                consumed_lookup_resolution_ids.add(platform_user_id)
 
         lab_states = [lead["target_lab_affiliation_state"] for lead in lead_group]
         pretraining_states = [lead["pretraining_experience_state"] for lead in lead_group]
@@ -974,6 +1438,8 @@ def merge_compact_discovery_results(
                 "profile_url": canonical_profile_url(canonical_handle),
                 "platform_user_id": platform_user_id,
                 "identity_status": identity_status,
+                "lookup_handle": lookup_handle,
+                "identity_conflicts": identity_conflicts,
                 "handle_history_proposals": history,
                 "origin_shard_ids": origins,
                 "target_lab_affiliation_state": lab_state,
@@ -984,6 +1450,38 @@ def merge_compact_discovery_results(
                     f"lab_affiliation_{lab_state}_signal",
                     f"pretraining_relevance_{pretraining_state}_signal",
                 ],
+            }
+        )
+
+    unused_resolution_ids = set(resolved_lookup_handles) - consumed_lookup_resolution_ids
+    if unused_resolution_ids:
+        raise CompactDiscoveryContractError("merge_resolved_lookup_handle_unused")
+
+    identity_resolution_sidecars = []
+    for alias_key, (provisional_leads, stable_ids) in sorted(
+        unresolved_sidecar_inputs.items()
+    ):
+        identity_resolution_sidecars.append(
+            {
+                "handle": min(lead["handle"] for lead in provisional_leads),
+                "candidate_platform_user_ids": sorted(stable_ids),
+                "provisional_lead_sha256s": sorted(
+                    {canonical_json_sha256(lead) for lead in provisional_leads}
+                ),
+                "provisional_source_ref_sha256s": sorted(
+                    {
+                        canonical_json_sha256(source_ref)
+                        for lead in provisional_leads
+                        for source_ref in lead["source_refs"]
+                    }
+                ),
+                "origin_shard_ids": sorted(
+                    {
+                        origin
+                        for lead in provisional_leads
+                        for origin in lead["origin_shard_ids"]
+                    }
+                ),
             }
         )
 
@@ -1027,6 +1525,7 @@ def merge_compact_discovery_results(
                 lead["handle"].casefold(),
             ),
         ),
+        "identity_resolution_sidecars": identity_resolution_sidecars,
         "coverage_cells": coverage_cells,
         "uncovered_cells": uncovered_cells,
         "limitations": limitations,
@@ -1041,6 +1540,8 @@ def merge_compact_discovery_results(
         renamed_stable_identity_count=renamed_stable_identity_count,
         quarantined_handle_reuse_identity_count=quarantined_handle_reuse_identity_count,
         provisional_identity_count=provisional_identity_count,
+        absorbed_provisional_observation_count=absorbed_provisional_observation_count,
+        unresolved_identity_sidecar_count=len(identity_resolution_sidecars),
         lab_affiliation_state_conflict_count=lab_conflicts,
         pretraining_experience_state_conflict_count=pretraining_conflicts,
         input_source_ref_count=input_source_ref_count,

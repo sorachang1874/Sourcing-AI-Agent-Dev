@@ -39,8 +39,9 @@ and reviewed prompt binding. It does not change merge or scoring code.
 
 Every discovery shard serializes the immutable `campaign_id`, `target_descriptor_id`, descriptor SHA-256, shared
 discovery prompt-policy SHA-256, contract version, and a unique `shard_id`. Hydration repeats the campaign and target
-binding, adds its own phase-policy digest, and binds both the discovery-union digest and the case-folded input-set
-digest. A missing or unequal binding is a contract error; a shard from another lab or descriptor revision cannot be
+binding, adds its own phase-policy digest, and binds both the discovery-union digest and the closed identity-input-set
+digest. That set hashes `(lead identity, operator-resolved lookup handle, expected stable platform id or explicit
+provisional state)`, not handles alone. A missing or unequal binding is a contract error; a shard from another lab or descriptor revision cannot be
 unioned merely because its JSON shape is valid.
 
 ## Phase contract
@@ -48,8 +49,9 @@ unioned merely because its JSON shape is valid.
 ### Phase 1: compact discovery
 
 Discovery uses native X keyword, semantic, and thread tools. `x_user_search` is disabled at the tool layer so the model
-cannot spend the discovery budget re-hydrating people it has already found. No exact-name, bare-handle, or
-person-scoped query is permitted in this phase.
+cannot spend the discovery budget re-hydrating people it has already found. Exact `@handle` keyword/semantic queries
+are mechanically rejected. Broader exact-name, bare-handle, or person-scoped exclusions remain versioned prompt-policy
+requirements until a descriptor-aware query classifier can enforce them without rejecting legitimate topic terms.
 
 Each strategy shard explores a materially different search topology:
 
@@ -64,6 +66,7 @@ tool-call totals. Those metrics come from the Grok session ledger. Each retained
 - X handle and canonical profile URL;
 - nullable platform user id plus an explicit `stable_platform_id|provisional_handle|quarantined_handle_reuse`
   identity status;
+- an operator-only `lookup_handle` (null in model shards) and closed identity-conflict codes in the union;
 - reversible handle-history proposals and per-lead/per-reference origin-shard membership;
 - independent `current|historical|ambiguous` lab-affiliation and pretraining-relevance proposals;
 - one or more candidate-bound profile or stable status references;
@@ -75,18 +78,55 @@ An unresolved axis remains `ambiguous`; it does not cause the lead to disappear.
 weak, conflicting, or temporally unresolved signal, so it must have a source reference supporting that dimension.
 No evidence is an unassessed input, not an `*_ambiguous_signal`, and is excluded before this result contract.
 
-Before a valid terminal object can enter the union, the operator projects execution limitations from a typed process
-receipt. The receipt binds campaign, descriptor, policy, shard, session, transcript SHA-256, raw-terminal SHA-256,
-terminal-after-last-tool ordering, and the four technical facts. Grok may report the domain limitations
+Before a valid terminal object can enter the union, the operator fixes an immutable session precommit containing the
+expected session/request/model/reasoning-effort values, exact user-prompt bytes and digest, expected
+system/prompt-context digests, and the exact five-row user-visible `chat_history.jsonl` prefix bytes and digest. The
+prefix is the system row, ordinary user row, project-instructions synthetic row, system-reminder synthetic row, and
+the `prompt_index=0` prompt row. Closed `verbatim_prompt_row_v1` binds that row to the exact prompt-file bytes after
+removing one terminal LF; named legacy `legacy_user_query_envelope_v1` binds the earlier `<user_query>` envelope.
+Arbitrary open text is not a prompt-binding mode. The final chat file is deliberately not described as precommitted
+because its reasoning/tool/assistant suffix is generated during execution.
+One operator builder then replays the immutable six-file Grok session
+(`summary.json`, `updates.jsonl`, `events.jsonl`, `chat_history.jsonl`, `system_prompt.txt`, and
+`prompt_context.json`) and derives the typed process receipt. It hashes every exact source byte stream and each
+tool-event record, validates each tool family's closed argument shape, exhaustively pairs starts/completions, rejects
+unsupported tools or omitted calls, and selects the unique contract-valid terminal whose raw byte range begins after
+the final tool completion. Registry `x.grok.raw_session_shape.v1` accepts only
+`user_message_chunk|agent_thought_chunk|agent_message_chunk|tool_call|tool_call_update` and exact per-kind envelopes.
+A separate closed event registry requires exact `turn_started`, `loop_started`, initial
+`phase_changed(waiting_for_model)`, `first_token`, subsequent reasoning/text phases, and final completed
+`turn_ended` order with sorted timestamps; unregistered intermediate events fail closed. Summary update and chat
+message counts must equal the two replayed JSONL ledgers.
+A native-X start proves only `kind=search` with exact `{backend:true,variant:"XSearch"}` raw input; the concrete
+`x_*` family and arguments arrive at completion and must reconcile by call id, equal non-empty title, exact event
+metadata, and start/completion hashes. The post-prefix chat registry permits only exact completed reasoning rows,
+native-X backend-tool rows, and one final assistant row. Backend call identity/arguments must equal the completion
+ledger, while final model/reasoning effort and assistant content must equal the precommit/session and selected raw
+terminal. Any later system/user row or unknown update/chat kind fails closed. The exact terminal byte slice is
+strict-parsed again, so duplicate keys and non-strict JSON
+cannot become a valid terminal. Earlier schema-invalid progress JSON is allowed; multiple contract-valid terminals
+after the final completion fail closed, and any contract-shaped candidate before the final completion is rejected as
+ambiguous provenance rather than reinterpreted as harmless progress. Wrapper `structuredOutput` is not evidence. A fresh but borrowed internally
+consistent session fails when any precommitted identity, prompt, system, or context binding differs. The v3 receipt
+binds the precommit digest, campaign, descriptor, policy, shard, session, raw-source manifest/transcript SHA-256,
+terminal SHA-256 and byte/update range, exhaustive ordered calls, and a separate operator-execution-facts digest. Grok may report the domain limitations
 `native_x_search_incomplete`, `profile_hydration_incomplete`, and
 `thread_hydration_incomplete`. Only the supervising operator owns `result_truncated`,
-`execution_deadline_reached`, `transport_failure`, and `model_output_repaired`. The operator removes every model-
-authored value in that technical set, re-adds only receipt-backed facts, and deterministically recomputes status. The
-unmodified terminal and receipt remain inside the typed projection envelope as private audit evidence. Union accepts
-that envelope only, recomputes every digest and the normalized result at consumption, and rejects a raw mapping or a
-forged wrapper. A model statement cannot turn a normal exit into a deadline, and a normal exit cannot erase a model's
+`execution_deadline_reached`, `transport_failure`, and `model_output_repaired`. Those four values live in an immutable
+operator-owned facts object retained separately from the model/result receipt. The operator removes every model-
+authored value in that technical set, re-adds only those facts, and deterministically recomputes status. Revalidation
+compares the receipt against the retained facts rather than copying booleans out of the receipt. The unmodified
+terminal, precommit, operator facts, immutable raw sources, and receipt remain inside the typed projection envelope as private audit
+evidence. Union accepts that envelope only, replays the retained source bytes, recomputes every digest and normalized
+result at consumption, and rejects a raw mapping, transcript-free dataclass, or forged wrapper. A model statement cannot turn a normal exit into a deadline, and a normal exit cannot erase a model's
 explicit domain-coverage limitation. Structural/domain validation runs before projection; full status coherence runs
 after it, so a false model-authored timeout cannot make an otherwise usable terminal un-normalizable.
+
+The shape registry was calibrated against `grok 0.2.101 (5bc4b5dfadcf)` with binary SHA-256
+`8431538dbd99379240f558b48b779c651d668b06d793c87311ad532c4395a4e2`, but the current six-file artifact set does not
+contain CLI version or binary identity. Therefore the replay proves exact `x.grok.raw_session_shape.v1` conformance,
+not that the bytes were produced by that binary. Binding executable/version evidence requires a future
+operator-owned execution receipt or expanded source set; an unknown future shape fails closed in the meantime.
 
 ### Phase 2: operator union
 
@@ -96,11 +136,15 @@ and preserves every distinct evidence reference. It never trusts model-authored 
 Identity reconciliation is platform-id first:
 
 - one non-null stable platform id observed under multiple handles becomes one external-account lead with reversible
-  handle-history proposals;
+  handle-history proposals; hydration remains closed until the operator selects one observed current lookup alias;
 - one handle observed under multiple non-null platform ids becomes separate `quarantined_handle_reuse` leads, and
   their states or evidence are never combined;
-- a missing/model-mediated platform id remains a separate `provisional_handle` identity even when the same handle
-  appears beside a stable-id lead; it cannot weaken the stable-id fence;
+- a missing/model-mediated platform-id observation under the same case-folded handle as exactly one stable identity is
+  retained as `same_handle_provisional_evidence_absorbed` evidence beside that stable lead; its source references and
+  origin membership are preserved, but it does not inflate unique-lead or hydration-input counts;
+- a provisional observation colliding with multiple stable ids remains a candidate-free unresolved sidecar with no
+  lookup handle; the sidecar binds the exact provisional lead/reference digests, candidate stable ids, and origin
+  shards back to the retained projected inputs without adding a third lead or hydration request;
 - this is external-account identity only and never a canonical-person merge.
 
 State reconciliation is deterministic:
@@ -118,15 +162,19 @@ recomputed after the merge.
 
 ### Phase 3: profile hydration
 
-Profile hydration runs only after the discovery union. It uses exactly one canonical `x_user_search` lookup per input
-handle in a normal attempt. Repeating equivalent handle, URL, and display-name variants is not a default strategy;
+Profile hydration runs only after the discovery union. Its owner-built expectation carries one closed identity tuple
+per resolved, non-quarantined union lead and uses exactly one canonical `x_user_search` lookup per resolved lookup
+handle in a normal attempt. A renamed stable account cannot use lexical alias order as evidence: an operator must
+select an observed alias. Repeating equivalent handle, URL, and display-name variants is not a default strategy;
 additional calls require a typed lookup failure or a separate challenger experiment.
 
 The generic output contract is `x.grok.profile_hydration.result.v1`. Its operator evaluator accepts only a typed
-projection envelope, not a model object plus caller-supplied call dictionaries. The envelope binds campaign/target,
-run, batch, discovery union, case-folded input set, session, transcript, raw terminal, and paired tool lifecycles; a model
+projection envelope, not a model object plus caller-supplied call dictionaries. The envelope binds the operator
+session precommit and execution facts, campaign/target,
+run, batch, discovery union, closed identity input set, session, raw-source manifest/transcript, raw terminal byte
+range, and paired tool lifecycles; a model
 object alone cannot claim X-native hydration. Evaluation additionally requires an owner-supplied typed expectation
-for campaign, target, policy, discovery union, batch, and exact input handles; a self-consistent batch borrowed from a
+for campaign, target, policy, discovery union, batch, and exact identity tuples; a self-consistent batch borrowed from a
 different campaign therefore still fails closed.
 
 The desired open profile field set is:
@@ -149,6 +197,12 @@ semantic review, but they are not silently relabelled as source-bound truth.
 Batch boundaries are chosen from response-byte and turn estimates. Every input must produce exactly one output row;
 the operator checks missing rows, duplicates, case-insensitive misbinding, and unexpected extra rows before merging
 batches.
+
+For every matched stable expectation, a null returned platform id is invalid and a different non-null platform id is
+fail-closed into the mismatch quarantine count. A provisional expectation may surface a new model-mediated id, but it
+does not retroactively rewrite discovery identity. Evaluator error output is candidate-free; malformed nested
+projection, receipt, result, completion, or expectation members return stable invalid codes rather than exceptions;
+internal schema details and unexpected key names are collapsed to a closed candidate-free projection error.
 
 Tool compliance is not inferred from a valid model object. The typed ledger receipt must contain a unique call id,
 unique start/completion event digests and sequences, `started < completed < selected terminal`, and
@@ -195,12 +249,14 @@ relevance remain separate outputs so one signal cannot overwrite another.
 
 | Contract | Owner | Source of truth | Failure behavior |
 |---|---|---|---|
-| Native tool lifecycle and arguments | Operator | Batch/session-bound start/completion receipt and transcript order | Missing, unpaired, borrowed, or malformed evidence invalidates the batch |
-| Technical execution limitations | Operator | Process receipt and transcript capture | Model-authored technical claims are replaced, not trusted |
+| Native tool lifecycle and arguments | Operator | Replay of immutable six-file session bytes; exact start/completion record digests | Missing, unpaired, borrowed, unsupported, or malformed evidence invalidates the batch |
+| Session identity and execution context | Operator | Immutable expected ids, prompt bytes/hash, and system/context hashes | Borrowed or freshly rebuilt mismatched sessions fail before projection |
+| Technical execution limitations | Operator | Immutable process facts retained separately from the result receipt | Model-authored or receipt-forged technical claims are replaced/rejected |
 | Domain coverage limitations | Grok, then operator validation | Valid terminal object | Preserved as partial until a later shard or hydration closes them |
 | Discovery lead proposal | Grok | Valid compact terminal object | Invalid object is excluded |
 | Source URL shape and handle binding | Operator | Compact validator | Bad reference or lead fails closed |
 | Cross-shard membership and marginal yield | Operator | Input projected-result digests plus lead/ref origin ids | Recomputed; model totals ignored |
+| Hydration lookup alias and expected platform id | Operator | Exact compact union plus explicit alias resolution for renamed identities | Missing alias, duplicate lookup, null stable id, or id mismatch fails closed/quarantines |
 | Temporal proposal | Grok, then semantic reviewer | Evidence-linked proposal history | Concrete conflict becomes ambiguous |
 | Profile field observation | Grok user-search hydration | Per-handle row inside a receipt-projected batch | Missing, duplicate, or misbound row invalidates the batch |
 | Source-bound profile truth | Future payload-returning transport | Replayable raw provider record | Model-mediated fields cannot upgrade it |
@@ -250,8 +306,19 @@ length, candidate count, call count, or model statement that search is complete 
 
 ## Current limitation
 
-Grok CLI is a practical AI-native exploration transport, but its headless wrapper may concatenate intermediate and
-terminal JSON while leaving `structuredOutput` null, and current session evidence does not persist native X result
-bodies. Formal promotion therefore requires transcript-bound terminal selection and, for source-bound field truth, a
+Grok CLI is a practical AI-native exploration transport, but its headless wrapper may concatenate intermediate
+progress JSON and the final terminal while leaving `structuredOutput` null. The operator replay now selects only the
+unique contract-valid terminal after the final native-X completion; it does not treat wrapper structured output as
+required evidence. An owner-run aggregate replay of the retained v2 diagnostic session crossed the prompt-prefix,
+event, chat, update, and 61-call lifecycle registries, then deliberately failed
+`raw_session_terminal_assistant_causality_invalid`: three pre-tool objects were contract-shaped before the one
+post-tool final object. That result is a compatibility canary and remains diagnostic-only; it produced no projection
+and is not relabelled as a passing real session. Current session evidence still does not persist native X result bodies. Formal promotion therefore
+requires, for source-bound field truth, a
 transport that exposes replayable provider payloads. These limits do not erase the measured discovery utility; they
 define which claims the output can support.
+
+The receipt intentionally retains the exhaustive ordered call ledger as the extension point for a future
+operator-derived `call_id -> lead/reference` attribution sidecar. The current compact terminal does not carry enough
+mechanical provenance to derive that mapping, so acknowledgement/artifact/thread marginal yield must not be attributed
+from model prose.

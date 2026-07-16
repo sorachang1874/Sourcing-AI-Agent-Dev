@@ -1,26 +1,39 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import unittest
 from dataclasses import replace
 from itertools import product
 from pathlib import Path
 
+from tests.grok_raw_session_fixture import (
+    fixture_grok_session_precommit,
+    raw_grok_session,
+)
 from x_first.compact_grok_discovery import (
     CONTRACT_VERSION,
     COVERAGE_CELLS,
     SOURCE_SURFACES,
     CompactDiscoveryContractError,
-    CompactDiscoveryExecutionReceipt,
     canonical_json_sha256,
     canonical_profile_url,
     compare_compact_discovery_results,
     compare_lead_sets,
     merge_compact_discovery_results,
-    project_compact_execution_limitations,
     summarize_compact_discovery,
     validate_compact_discovery_result,
+)
+from x_first.compact_grok_discovery import (
+    build_compact_operator_projection as _build_compact_operator_projection,
+)
+from x_first.compact_grok_discovery import (
+    project_compact_execution_limitations as _project_compact_execution_limitations,
+)
+from x_first.grok_operator_session_replay import GrokOperatorExecutionFacts
+from x_first.grok_profile_hydration import (
+    build_profile_hydration_expectation_from_union,
 )
 from x_first.recall_pool_schema import schema_errors
 
@@ -34,7 +47,37 @@ AGGREGATE_RECEIPT_PATH = (
 )
 TARGET_DIGEST = "1" * 64
 PROMPT_DIGEST = "2" * 64
-TRANSCRIPT_DIGEST = "3" * 64
+
+
+def build_compact_operator_projection(
+    raw_session_files: dict[str, bytes],
+    *,
+    session_precommit=None,
+    **facts: bool,
+):
+    return _build_compact_operator_projection(
+        raw_session_files,
+        session_precommit=session_precommit or fixture_grok_session_precommit(),
+        **facts,
+    )
+
+
+def project_compact_execution_limitations(
+    result,
+    *,
+    receipt,
+    raw_session_files=None,
+    session_precommit=None,
+    operator_execution_facts=None,
+):
+    return _project_compact_execution_limitations(
+        result,
+        receipt=receipt,
+        session_precommit=session_precommit or fixture_grok_session_precommit(),
+        operator_execution_facts=operator_execution_facts
+        or GrokOperatorExecutionFacts(False, False, False, False),
+        raw_session_files=raw_session_files,
+    )
 
 
 def _reason_codes(lab_state: str, pretraining_state: str) -> list[str]:
@@ -59,6 +102,8 @@ def _lead(
         "profile_url": f"https://x.com/{handle}",
         "platform_user_id": platform_user_id,
         "identity_status": "stable_platform_id" if platform_user_id else "provisional_handle",
+        "lookup_handle": None,
+        "identity_conflicts": [],
         "handle_history_proposals": [
             {
                 "handle": handle,
@@ -119,6 +164,7 @@ def _result(
         "status": "X_DISCOVERY_OK",
         "strategy_id": "gdm.compact.discovery-v1",
         "leads": normalized,
+        "identity_resolution_sidecars": [],
         "coverage_cells": list(COVERAGE_CELLS),
         "uncovered_cells": [],
         "limitations": [],
@@ -126,23 +172,20 @@ def _result(
 
 
 def _projection(result: dict[str, object], **facts: bool):
-    receipt = CompactDiscoveryExecutionReceipt(
-        receipt_version="x.grok.compact_discovery.execution_receipt.v1",
-        campaign_id=result["campaign_id"],
-        target_descriptor_id=result["target_descriptor_id"],
-        target_descriptor_sha256=result["target_descriptor_sha256"],
-        prompt_policy_sha256=result["prompt_policy_sha256"],
-        shard_id=result["shard_id"],
-        session_id=f"session:{result['shard_id']}",
-        transcript_sha256=TRANSCRIPT_DIGEST,
-        terminal_sha256=canonical_json_sha256(result),
-        terminal_selected_after_last_tool_completion=True,
+    session_id = f"session:{result['shard_id']}"
+    raw = raw_grok_session(
+        result,
+        calls=[("x_keyword_search", {"query": "fixture pretraining", "limit": "100", "mode": "Latest"})],
+        session_id=session_id,
+    )
+    return build_compact_operator_projection(
+        raw,
+        session_precommit=fixture_grok_session_precommit(session_id=session_id),
         result_truncated=facts.get("result_truncated", False),
         execution_deadline_reached=facts.get("execution_deadline_reached", False),
         transport_failure=facts.get("transport_failure", False),
         model_output_repaired=facts.get("model_output_repaired", False),
     )
-    return project_compact_execution_limitations(result, receipt=receipt)
 
 
 class CompactGrokDiscoveryContractTests(unittest.TestCase):
@@ -320,27 +363,266 @@ class CompactGrokDiscoveryContractTests(unittest.TestCase):
 
     def test_operator_projection_requires_terminal_and_receipt_binding(self) -> None:
         payload = _result([_lead("FxProject002")])
-        receipt = CompactDiscoveryExecutionReceipt(
-            receipt_version="x.grok.compact_discovery.execution_receipt.v1",
-            campaign_id="fixture.other-campaign",
-            target_descriptor_id=payload["target_descriptor_id"],
-            target_descriptor_sha256=payload["target_descriptor_sha256"],
-            prompt_policy_sha256=payload["prompt_policy_sha256"],
-            shard_id=payload["shard_id"],
-            session_id="session:bad",
-            transcript_sha256=TRANSCRIPT_DIGEST,
-            terminal_sha256=canonical_json_sha256(payload),
-            terminal_selected_after_last_tool_completion=True,
-            result_truncated=False,
-            execution_deadline_reached=False,
-            transport_failure=False,
-            model_output_repaired=False,
+        raw = raw_grok_session(
+            payload,
+            calls=[("x_keyword_search", {"query": "fixture", "limit": "100", "mode": "Latest"})],
         )
-        with self.assertRaisesRegex(CompactDiscoveryContractError, "campaign_id_mismatch"):
-            project_compact_execution_limitations(payload, receipt=receipt)
-        receipt = replace(receipt, campaign_id=payload["campaign_id"], terminal_sha256="4" * 64)
-        with self.assertRaisesRegex(CompactDiscoveryContractError, "terminal_sha256_mismatch"):
-            project_compact_execution_limitations(payload, receipt=receipt)
+        projection = build_compact_operator_projection(raw)
+        with self.assertRaisesRegex(CompactDiscoveryContractError, "operator_raw_session_required"):
+            project_compact_execution_limitations(payload, receipt=projection.receipt)
+        forged = replace(projection.receipt, campaign_id="fixture.other-campaign")
+        with self.assertRaisesRegex(CompactDiscoveryContractError, "receipt_replay_mismatch"):
+            project_compact_execution_limitations(
+                payload,
+                receipt=forged,
+                raw_session_files=raw,
+            )
+        forged = replace(projection.receipt, terminal_sha256="4" * 64)
+        with self.assertRaisesRegex(CompactDiscoveryContractError, "receipt_replay_mismatch"):
+            project_compact_execution_limitations(
+                payload,
+                receipt=forged,
+                raw_session_files=raw,
+            )
+        for fact_name in (
+            "result_truncated",
+            "execution_deadline_reached",
+            "transport_failure",
+            "model_output_repaired",
+        ):
+            with self.subTest(fact_name=fact_name):
+                with self.assertRaisesRegex(
+                    CompactDiscoveryContractError,
+                    "receipt_replay_mismatch",
+                ):
+                    project_compact_execution_limitations(
+                        payload,
+                        receipt=replace(projection.receipt, **{fact_name: True}),
+                        session_precommit=projection.session_precommit,
+                        operator_execution_facts=projection.operator_execution_facts,
+                        raw_session_files=raw,
+                    )
+
+    def test_fresh_builder_rejects_borrowed_operator_context(self) -> None:
+        payload = _result([_lead("FxOwner001")])
+        calls = [
+            (
+                "x_keyword_search",
+                {"query": "fixture pretraining", "limit": "100", "mode": "Latest"},
+            )
+        ]
+        borrowed_cases = (
+            (
+                "session",
+                raw_grok_session(payload, calls=calls, session_id="borrowed-session"),
+                "summary_identity_mismatch",
+            ),
+            (
+                "request",
+                raw_grok_session(payload, calls=calls, request_id="borrowed-request"),
+                "summary_identity_mismatch",
+            ),
+            (
+                "model",
+                raw_grok_session(payload, calls=calls, model_id="borrowed-model"),
+                "summary_identity_mismatch",
+            ),
+            (
+                "reasoning_effort",
+                raw_grok_session(payload, calls=calls, reasoning_effort="low"),
+                "summary_identity_mismatch",
+            ),
+            (
+                "prompt",
+                raw_grok_session(
+                    payload,
+                    calls=calls,
+                    user_prompt_text="unrelated borrowed session",
+                ),
+                "chat_history_prefix_mismatch",
+            ),
+            (
+                "system",
+                raw_grok_session(
+                    payload,
+                    calls=calls,
+                    system_prompt=b"Borrowed system prompt.\n",
+                ),
+                "chat_history_prefix_mismatch",
+            ),
+            (
+                "context",
+                raw_grok_session(payload, calls=calls, prompt_mode="borrowed"),
+                "execution_context_hash_mismatch",
+            ),
+            (
+                "prior_chat_context",
+                raw_grok_session(
+                    payload,
+                    calls=calls,
+                    extra_chat_rows=(
+                        {
+                            "type": "user",
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "borrowed prior user-visible context",
+                                }
+                            ],
+                        },
+                    ),
+                ),
+                "chat_history_prefix_mismatch",
+            ),
+        )
+        for label, raw, error in borrowed_cases:
+            with self.subTest(label=label):
+                with self.assertRaisesRegex(CompactDiscoveryContractError, error):
+                    _build_compact_operator_projection(
+                        raw,
+                        session_precommit=fixture_grok_session_precommit(),
+                    )
+        raw = raw_grok_session(payload, calls=calls)
+        posthoc_full_chat = replace(
+            fixture_grok_session_precommit(),
+            expected_chat_history_prefix=raw["chat_history.jsonl"],
+            expected_chat_history_prefix_sha256=hashlib.sha256(
+                raw["chat_history.jsonl"]
+            ).hexdigest(),
+        )
+        with self.assertRaisesRegex(
+            CompactDiscoveryContractError,
+            "operator_session_precommit_chat_history_invalid",
+        ):
+            _build_compact_operator_projection(
+                raw,
+                session_precommit=posthoc_full_chat,
+            )
+
+    def test_post_prefix_chat_registry_and_ledger_binding_fail_closed(self) -> None:
+        payload = _result([_lead("FxChatRegistry001")])
+        calls = [
+            (
+                "x_keyword_search",
+                {"query": "fixture", "limit": "100", "mode": "Latest"},
+            )
+        ]
+        raw = raw_grok_session(payload, calls=calls)
+
+        def mutate_chat(mutator):
+            mutated = dict(raw)
+            rows = [json.loads(line) for line in raw["chat_history.jsonl"].splitlines()]
+            mutator(rows)
+            mutated["chat_history.jsonl"] = (
+                "\n".join(
+                    json.dumps(
+                        row,
+                        ensure_ascii=False,
+                        allow_nan=False,
+                        separators=(",", ":"),
+                        sort_keys=True,
+                    )
+                    for row in rows
+                )
+                + "\n"
+            ).encode("utf-8")
+            summary = json.loads(raw["summary.json"])
+            summary["num_chat_messages"] = len(rows)
+            mutated["summary.json"] = (
+                json.dumps(
+                    summary,
+                    ensure_ascii=False,
+                    allow_nan=False,
+                    separators=(",", ":"),
+                    sort_keys=True,
+                )
+                + "\n"
+            ).encode("utf-8")
+            return mutated
+
+        cases = (
+            (
+                "unknown_model_kind",
+                lambda rows: rows.insert(
+                    -1,
+                    {"type": "mcp_call", "content": "synthetic unsupported row"},
+                ),
+                "chat_history_model_kind_invalid",
+            ),
+            (
+                "late_user_row",
+                lambda rows: rows.insert(
+                    -1,
+                    {
+                        "type": "user",
+                        "content": [{"type": "text", "text": "borrowed late user"}],
+                    },
+                ),
+                "chat_history_user_prefix_boundary_invalid",
+            ),
+            (
+                "backend_arguments_drift",
+                lambda rows: next(
+                    row for row in rows if row.get("type") == "backend_tool_call"
+                )["kind"].update(
+                    {
+                        "input": json.dumps(
+                            {
+                                "query": "different valid query",
+                                "limit": "100",
+                                "mode": "Latest",
+                            },
+                            separators=(",", ":"),
+                            sort_keys=True,
+                        )
+                    }
+                ),
+                "backend_tool_binding_mismatch",
+            ),
+            (
+                "assistant_effort_drift",
+                lambda rows: next(
+                    row for row in rows if row.get("type") == "assistant"
+                ).update({"reasoning_effort": "low"}),
+                "chat_history_assistant_invalid",
+            ),
+        )
+        for label, mutator, error in cases:
+            with self.subTest(label=label):
+                with self.assertRaisesRegex(CompactDiscoveryContractError, error):
+                    build_compact_operator_projection(mutate_chat(mutator))
+
+    def test_prompt_binding_modes_are_explicit_and_verbatim_is_not_open_text(self) -> None:
+        payload = _result([_lead("FxPromptMode001")])
+        calls = [
+            (
+                "x_keyword_search",
+                {"query": "fixture", "limit": "100", "mode": "Latest"},
+            )
+        ]
+        legacy_mode = "legacy_user_query_envelope_v1"
+        legacy = _build_compact_operator_projection(
+            raw_grok_session(
+                payload,
+                calls=calls,
+                prompt_binding_mode=legacy_mode,
+            ),
+            session_precommit=fixture_grok_session_precommit(
+                prompt_binding_mode=legacy_mode,
+            ),
+        )
+        self.assertEqual(legacy.result, payload)
+        with self.assertRaisesRegex(
+            CompactDiscoveryContractError,
+            "prompt_binding_mode_invalid",
+        ):
+            _build_compact_operator_projection(
+                raw_grok_session(payload, calls=calls),
+                session_precommit=replace(
+                    fixture_grok_session_precommit(),
+                    prompt_binding_mode="open_text",
+                ),
+            )
 
     def test_operator_projection_adds_true_facts_and_blocks_empty_hard_failure(self) -> None:
         payload = _result([_lead("FxProject003")])
@@ -357,6 +639,178 @@ class CompactGrokDiscoveryContractTests(unittest.TestCase):
         self.assertEqual(projection.result["status"], "X_DISCOVERY_PARTIAL")
         empty = _projection(_result([]), execution_deadline_reached=True)
         self.assertEqual(empty.result["status"], "X_DISCOVERY_BLOCKED")
+
+    def test_raw_session_replay_rejects_forged_omitted_early_multiple_and_unsupported(self) -> None:
+        payload = _result([_lead("FxReplay001")])
+        calls = [("x_keyword_search", {"query": "fixture", "limit": "100", "mode": "Latest"})]
+        raw = raw_grok_session(payload, calls=calls, progress_payloads=({}, {}, {}))
+        projection = build_compact_operator_projection(raw)
+        forged = replace(projection.receipt, transcript_sha256="f" * 64)
+        with self.assertRaisesRegex(CompactDiscoveryContractError, "receipt_replay_mismatch"):
+            project_compact_execution_limitations(
+                payload, receipt=forged, raw_session_files=raw
+            )
+        with self.assertRaisesRegex(CompactDiscoveryContractError, "terminal_pairing_invalid"):
+            build_compact_operator_projection(
+                raw_grok_session(
+                    payload,
+                    calls=calls,
+                    omit_completion_indices=frozenset({1}),
+                )
+            )
+        with self.assertRaisesRegex(CompactDiscoveryContractError, "causality_invalid"):
+            build_compact_operator_projection(
+                raw_grok_session(payload, calls=calls, terminal_before_tools=True)
+            )
+        with self.assertRaisesRegex(CompactDiscoveryContractError, "terminal_count_invalid"):
+            build_compact_operator_projection(
+                raw_grok_session(
+                    payload,
+                    calls=calls,
+                    additional_schema_valid_terminals=(copy.deepcopy(payload),),
+                )
+            )
+        with self.assertRaisesRegex(CompactDiscoveryContractError, "unsupported_tool"):
+            build_compact_operator_projection(
+                raw_grok_session(payload, calls=[("web_search", {"query": "fixture"})])
+            )
+        with self.assertRaisesRegex(CompactDiscoveryContractError, "unsupported_tool"):
+            build_compact_operator_projection(
+                raw_grok_session(
+                    payload,
+                    calls=[("x_user_search", {"query": "FxReplay001", "count": "20"})],
+                )
+            )
+        with self.assertRaisesRegex(CompactDiscoveryContractError, "tool_arguments_invalid"):
+            build_compact_operator_projection(
+                raw_grok_session(
+                    payload,
+                    calls=[("x_keyword_search", {"query": "fixture", "limit": "100"})],
+                )
+            )
+        with self.assertRaisesRegex(CompactDiscoveryContractError, "update_kind_invalid"):
+            build_compact_operator_projection(
+                raw_grok_session(
+                    payload,
+                    calls=calls,
+                    extra_session_update_kinds=("mcp_call",),
+                )
+            )
+        with self.assertRaisesRegex(CompactDiscoveryContractError, "started_call_invalid"):
+            build_compact_operator_projection(
+                raw_grok_session(
+                    payload,
+                    calls=calls,
+                    start_update_overrides={
+                        "kind": "other",
+                        "rawInput": {
+                            "backend": True,
+                            "variant": "WebSearch",
+                        },
+                    },
+                )
+            )
+        with self.assertRaisesRegex(CompactDiscoveryContractError, "event_kind_invalid"):
+            build_compact_operator_projection(
+                raw_grok_session(
+                    payload,
+                    calls=calls,
+                    extra_event_rows=(
+                        {
+                            "type": "provider_unknown",
+                            "ts": "2026-01-01T00:00:00.000005Z",
+                            "toolCallId": "hidden-call",
+                            "name": "web_search",
+                        },
+                    ),
+                )
+            )
+        with self.assertRaisesRegex(CompactDiscoveryContractError, "exact_handle_query_forbidden"):
+            build_compact_operator_projection(
+                raw_grok_session(
+                    payload,
+                    calls=[
+                        (
+                            "x_keyword_search",
+                            {"query": "@FxPersonAudit", "limit": "100", "mode": "Latest"},
+                        )
+                    ],
+                )
+            )
+        terminal_text = json.dumps(
+            payload,
+            ensure_ascii=False,
+            allow_nan=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+        campaign_member = f'"campaign_id":"{payload["campaign_id"]}"'
+        duplicate_key_terminal = terminal_text.replace(
+            campaign_member,
+            f'"campaign_id":"evil.borrowed","campaign_id":"{payload["campaign_id"]}"',
+            1,
+        )
+        with self.assertRaisesRegex(CompactDiscoveryContractError, "terminal_count_invalid"):
+            build_compact_operator_projection(
+                raw_grok_session(
+                    payload,
+                    calls=calls,
+                    terminal_text_override=duplicate_key_terminal,
+                )
+            )
+
+    def test_raw_session_replay_rejects_each_source_mutation_bad_call_order_and_trailing_output(
+        self,
+    ) -> None:
+        payload = _result([_lead("FxReplay002")])
+        calls = [("x_keyword_search", {"query": "fixture", "limit": "100", "mode": "Latest"})]
+        raw = raw_grok_session(payload, calls=calls)
+        projection = build_compact_operator_projection(raw)
+        for source_name in sorted(raw):
+            with self.subTest(source_name=source_name):
+                mutated = dict(raw)
+                changed = bytearray(raw[source_name])
+                changed[-2] ^= 1
+                mutated[source_name] = bytes(changed)
+                with self.assertRaises(CompactDiscoveryContractError):
+                    project_compact_execution_limitations(
+                        payload,
+                        receipt=projection.receipt,
+                        raw_session_files=mutated,
+                    )
+        with self.assertRaisesRegex(
+            CompactDiscoveryContractError,
+            "completed_call_identity_invalid",
+        ):
+            build_compact_operator_projection(
+                raw_grok_session(
+                    payload,
+                    calls=calls,
+                    completion_before_start_indices=frozenset({1}),
+                )
+            )
+        with self.assertRaisesRegex(
+            CompactDiscoveryContractError,
+            "after_terminal_invalid",
+        ):
+            build_compact_operator_projection(
+                raw_grok_session(
+                    payload,
+                    calls=calls,
+                    trailing_assistant_text="trailing assistant output",
+                )
+            )
+        with self.assertRaisesRegex(
+            CompactDiscoveryContractError,
+            "causality_invalid",
+        ):
+            build_compact_operator_projection(
+                raw_grok_session(
+                    payload,
+                    calls=calls,
+                    schema_valid_terminal_before_tools=True,
+                )
+            )
 
     def test_merge_rejects_raw_mapping_and_forged_projection_digest(self) -> None:
         payload = _result([_lead("FxEnvelope001")])
@@ -401,17 +855,34 @@ class CompactGrokDiscoveryContractTests(unittest.TestCase):
         second = _projection(
             _result([_lead("FxNewHandle01", platform_user_id="91001")], shard_id="fixture.shard-b")
         )
-        merged = merge_compact_discovery_results([first, second])
+        with self.assertRaisesRegex(
+            CompactDiscoveryContractError, "merge_resolved_lookup_handle_required"
+        ):
+            merge_compact_discovery_results([first, second])
+        merged = merge_compact_discovery_results(
+            [first, second], resolved_lookup_handles={"91001": "FxNewHandle01"}
+        )
         self.assertEqual(merged.summary.unique_lead_count, 1)
         self.assertEqual(merged.summary.renamed_stable_identity_count, 1)
         lead = merged.result["leads"][0]
         self.assertEqual(lead["platform_user_id"], "91001")
         self.assertEqual(lead["identity_status"], "stable_platform_id")
+        self.assertEqual(lead["lookup_handle"], "FxNewHandle01")
         self.assertEqual(
             {item["handle"] for item in lead["handle_history_proposals"]},
             {"FxOldHandle01", "FxNewHandle01"},
         )
         self.assertEqual(lead["origin_shard_ids"], ["fixture.shard-a", "fixture.shard-b"])
+        expectation = build_profile_hydration_expectation_from_union(
+            merged.result,
+            run_id="fixture.profile-run-v1",
+            batch_id="fixture.profile-batch-v1",
+        )
+        self.assertEqual(len(expectation.input_identities), 1)
+        self.assertEqual(
+            expectation.input_identities[0].expected_platform_user_id,
+            "91001",
+        )
         self.assertEqual(validate_compact_discovery_result(merged.result), [])
 
     def test_recycled_handle_is_quarantined_without_evidence_merge(self) -> None:
@@ -435,20 +906,86 @@ class CompactGrokDiscoveryContractTests(unittest.TestCase):
         self.assertTrue(all(len(lead["source_refs"]) == 2 for lead in merged.result["leads"]))
         self.assertEqual(validate_compact_discovery_result(merged.result), [])
 
-    def test_missing_id_remains_separate_explicit_provisional_identity(self) -> None:
+    def test_same_handle_stable_and_provisional_preserves_evidence_without_double_count(self) -> None:
         stable = _projection(
             _result([_lead("FxMaybeSame01", platform_user_id="93001")], shard_id="fixture.shard-a")
         )
+        provisional_lead = _lead("fxmaybesame01")
+        provisional_lead["source_refs"].append(
+            {
+                "surface": "reply",
+                "url": "https://x.com/fxmaybesame01/status/3993001",
+                "subject_handle": "fxmaybesame01",
+                "author_handle": "fxmaybesame01",
+                "support_dimensions": ["pretraining_relevance"],
+                "origin_shard_ids": ["fixture.shard-b"],
+            }
+        )
         provisional = _projection(
-            _result([_lead("fxmaybesame01")], shard_id="fixture.shard-b")
+            _result([provisional_lead], shard_id="fixture.shard-b")
         )
         merged = merge_compact_discovery_results([stable, provisional])
-        self.assertEqual(merged.summary.unique_lead_count, 2)
-        self.assertEqual(merged.summary.provisional_identity_count, 1)
+        self.assertEqual(merged.summary.unique_lead_count, 1)
+        self.assertEqual(merged.summary.provisional_identity_count, 0)
+        self.assertEqual(merged.summary.absorbed_provisional_observation_count, 1)
+        lead = merged.result["leads"][0]
+        self.assertEqual(lead["platform_user_id"], "93001")
+        self.assertEqual(lead["lookup_handle"].casefold(), "fxmaybesame01")
         self.assertEqual(
-            {lead["identity_status"] for lead in merged.result["leads"]},
-            {"stable_platform_id", "provisional_handle"},
+            lead["identity_conflicts"],
+            ["same_handle_provisional_evidence_absorbed"],
         )
+        self.assertEqual(lead["origin_shard_ids"], ["fixture.shard-a", "fixture.shard-b"])
+        retained_reply = next(
+            ref for ref in lead["source_refs"] if ref["url"].endswith("/3993001")
+        )
+        self.assertEqual(retained_reply["origin_shard_ids"], ["fixture.shard-b"])
+        expectation = build_profile_hydration_expectation_from_union(
+            merged.result,
+            run_id="fixture.profile-run-v1",
+            batch_id="fixture.profile-batch-v1",
+        )
+        self.assertEqual(len(expectation.input_identities), 1)
+        self.assertEqual(expectation.input_identities[0].lookup_handle.casefold(), "fxmaybesame01")
+        self.assertEqual(expectation.input_identities[0].expected_platform_user_id, "93001")
+
+    def test_same_handle_multiple_stable_ids_preserves_provisional_evidence_in_sidecar(self) -> None:
+        stable_a = _projection(
+            _result(
+                [_lead("FxAmbiguous01", platform_user_id="93011")],
+                shard_id="fixture.shard-a",
+            )
+        )
+        stable_b = _projection(
+            _result(
+                [_lead("fxambiguous01", platform_user_id="93012")],
+                shard_id="fixture.shard-b",
+            )
+        )
+        provisional = _projection(
+            _result([_lead("FXAMBIGUOUS01")], shard_id="fixture.shard-c")
+        )
+        provisional_lead = provisional.result["leads"][0]
+        merged = merge_compact_discovery_results([stable_a, stable_b, provisional])
+        self.assertEqual(merged.summary.input_lead_count, 3)
+        self.assertEqual(merged.summary.unique_lead_count, 2)
+        self.assertEqual(merged.summary.provisional_identity_count, 0)
+        self.assertEqual(merged.summary.unresolved_identity_sidecar_count, 1)
+        self.assertTrue(all(lead["lookup_handle"] is None for lead in merged.result["leads"]))
+        sidecar = merged.result["identity_resolution_sidecars"][0]
+        self.assertEqual(sidecar["candidate_platform_user_ids"], ["93011", "93012"])
+        self.assertEqual(sidecar["origin_shard_ids"], ["fixture.shard-c"])
+        self.assertEqual(
+            sidecar["provisional_lead_sha256s"],
+            [canonical_json_sha256(provisional_lead)],
+        )
+        self.assertEqual(
+            sidecar["provisional_source_ref_sha256s"],
+            sorted(canonical_json_sha256(ref) for ref in provisional_lead["source_refs"]),
+        )
+        self.assertEqual(validate_compact_discovery_result(merged.result), [])
+        schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+        self.assertEqual(schema_errors(merged.result, schema), [])
 
     def test_merge_persists_input_digests_and_lead_ref_membership(self) -> None:
         first = _projection(
