@@ -5,8 +5,11 @@ discovery method. It does not issue a grant, call Grok/X, read OAuth state, or p
 
 The original v5 prompt and registry row remain immutable for replay. A v5.1 append-only successor retains the exact
 query strategy and zero-prior contract but adds an operational 240-code-point target plus a final all-evidence audit
-under the unchanged 280-code-point result-v3 hard maximum. The operator does not truncate evidence. This successor is
-not live-authorized for use until its own pinned non-author review returns `GO`.
+under the unchanged 280-code-point result-v3 hard maximum. The prompt does not rely on operator truncation. The current
+runner's separately versioned v3 transport may replace only a strict-UTF-8 `281..560`-code-point model-reported excerpt
+with its exact first 280-code-point display prefix, while preserving hash-bound raw output and adding an explicit
+semantic-incompleteness caveat. This successor is not live-authorized for use until the matching runner scope receives
+a pinned non-author review `GO`.
 
 ## Experiment identity
 

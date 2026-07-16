@@ -41,14 +41,16 @@ that typed thread-fetch arguments do not prove how a thread first entered the di
 the v4 facts rather than a fixed answer quota. Its append-only
 effective-prompt row can bind a casefold-unique official-account allowlist for any lab; the v2 session policy accepts
 exactly one positive, entry-bound official handle only in keyword search and continues to reject candidate, negated,
-multiple, semantic, and unknown-handle `from:` forms. The current result policy can also convert only an exact
-round-trippable native-X IMF-fixdate `GMT` timestamp to canonical UTC ISO-8601 `Z`, while preserving raw bytes. It does
-not repair malformed Bio/Post topology or merge duplicate handles. The v5 prompt requires four distinct positive Reply
+multiple, semantic, and unknown-handle `from:` forms. The current result policy can convert only an exact
+round-trippable native-X IMF-fixdate `GMT` timestamp to canonical UTC ISO-8601 `Z` and can replace only a strict-UTF-8
+`281..560`-code-point model-reported excerpt with its exact first 280-code-point display prefix, while preserving
+hash-bound raw bytes and adding deterministic caveats. It does not repair malformed Bio/Post topology, select semantic
+windows, change typed supports/states/confidence, or merge duplicate handles. The v5 prompt requires four distinct positive Reply
 cells and a terminal casefold-dedup/topology preflight, with no business candidate, observation, query, or call cap.
 Discovery-only projection never applies the hydration surface gate and always overwrites model OK/PARTIAL status text
 with the operator-owned unproven reason: raw arguments can prove strategy cells were attempted, but not per-query yield
-or population convergence. Old v1-plus-artifact, normalization-only result-v3, pre-normalization v3, and result-v2
-bundles remain replay-only under their recorded digests.
+or population convergence. Old normalization v2/v1-plus-artifact, normalization-only result-v3, pre-normalization v3,
+and result-v2 bundles remain replay-only under their recorded digests.
 
 The first reviewed v5 process did not produce a search sample. It failed after `8.156s` with Grok CLI `Not signed in`,
 zero model events, zero native-X calls, no fallback/timeout/technical limit, and a bundle replay result of `[]`. The
@@ -76,9 +78,13 @@ maximum. The only validator error was `evidence_value_invalid:7:1`, so the entir
 `result_contract_invalid` and is excluded from campaign and formal quality metrics. Relative to the invalid v4
 diagnostic, candidate yield per call improved 25.2%, evidence count increased 85.0%, seconds per candidate improved
 3.6%, and cost per candidate increased 2.1%; positive Reply queries increased from one to five. An append-only v5.1
-successor now keeps the query strategy intact while targeting 240-code-point excerpts and auditing every row before
-terminal output. It requires a new pinned `GO`, request, and one-shot grant before retry. See
+successor kept the query strategy intact while targeting 240-code-point excerpts and auditing every row before terminal
+output. Its exact retry completed `40/40` native-X calls and returned `17` candidates / `32` evidence rows, but one
+excerpt still had `297` code points; prompt-only enforcement therefore remained unreliable. A normalization v3 now
+implements the narrow audited display-prefix repair above, with complete-result atomic validation and legacy v2 replay.
+It requires a new pinned `GO`, request, and one-shot grant before another retry. See
 `docs/live-evidence/2026-07-16-google-deepmind-v5-replacement-diagnostic.md`.
+See also `docs/live-evidence/2026-07-16-google-deepmind-v5-1-excerpt-preflight-diagnostic.md`.
 
 The first vertical slice covers OpenAI with:
 

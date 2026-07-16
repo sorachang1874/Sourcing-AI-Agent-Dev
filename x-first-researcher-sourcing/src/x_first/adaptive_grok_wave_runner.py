@@ -229,8 +229,15 @@ _DISCOVERY_CONVERGENCE_UNPROVEN_REASON = (
     "Operator kept the discovery-only result partial because strategy coverage and population convergence "
     "have not been mechanically proven from the retained native-X arguments."
 )
+_EVIDENCE_EXCERPT_MAX_CODEPOINTS = 280
+_EVIDENCE_EXCERPT_MAX_NORMALIZABLE_CODEPOINTS = 560
 LEGACY_RESULT_NORMALIZATION_POLICY_VERSION_V1 = "mechanical-evidence-relationship-downgrade-v1"
-RESULT_NORMALIZATION_POLICY_VERSION = "mechanical-evidence-relationship-and-x-rfc2822-timestamp-v2"
+LEGACY_RESULT_NORMALIZATION_POLICY_VERSION_V2 = (
+    "mechanical-evidence-relationship-and-x-rfc2822-timestamp-v2"
+)
+RESULT_NORMALIZATION_POLICY_VERSION = (
+    "mechanical-evidence-relationship-x-rfc2822-timestamp-and-model-reported-excerpt-prefix-v3"
+)
 OPERATOR_RESULT_ARTIFACT_POLICY_VERSION = "post-transform-json-envelope-and-terminal-limit-replay-v1"
 _RELATIONSHIP_DOWNGRADE_CAVEAT = (
     "Operator normalized a mechanically impossible self relationship to third_party because the evidence author "
@@ -240,6 +247,20 @@ _TIMESTAMP_NORMALIZATION_LIMITATION = (
     "Operator normalization {policy_version} converted {count} strict native-X IMF-fixdate GMT evidence timestamp(s) "
     "to canonical UTC ISO-8601 Z. Raw model output is unchanged; no evidence, support claim, candidate state, or "
     "confidence value was added or upgraded."
+)
+_EXCERPT_PREFIX_NORMALIZATION_CAVEAT = (
+    "Operator mechanically replaced one or more over-limit model-reported evidence excerpts with verbatim "
+    "first-280-code-point display prefixes. Full model text remains in hash-bound raw output; prefix semantic "
+    "completeness is not guaranteed, and typed supports remain model_mediated_unverified pending linked-X-source "
+    "review."
+)
+_EXCERPT_PREFIX_NORMALIZATION_LIMITATION = (
+    "Operator normalization {policy_version} replaced {count} over-limit model-reported evidence excerpt(s) across "
+    "{candidate_count} candidate(s) with verbatim first-{maximum}-code-point display prefixes; maximum original "
+    "length was {maximum_original}. No ellipsis or semantic window was inserted. Raw model output is unchanged and "
+    "hash-bound. Prefix semantic completeness is not guaranteed; this step changed no typed supports, candidate "
+    "states, confidence, or immutable source-identity fields. All such values remain model_mediated_unverified and "
+    "require linked-X-source review."
 )
 AUTHORITY = {
     "canonical_identity_write_authorized": False,
@@ -1398,7 +1419,7 @@ def validate_model_result(
                 or (evidence.get("post_id") is not None and not _is_text(evidence["post_id"], maximum=32))
                 or (evidence.get("url") is not None and not _is_text(evidence["url"], maximum=2_048))
                 or (evidence.get("published_at") is not None and not _is_text(evidence["published_at"], maximum=64))
-                or not _is_text(evidence.get("excerpt"), maximum=280)
+                or not _is_text(evidence.get("excerpt"), maximum=_EVIDENCE_EXCERPT_MAX_CODEPOINTS)
                 or not support_claims
                 or not _evidence_binding_valid(evidence, candidate, live_mode=live_mode)
             ):
@@ -1506,6 +1527,26 @@ def _canonicalize_native_x_rfc2822_timestamp(value: Any) -> str | None:
     return parsed.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def _mechanically_bound_model_reported_excerpt(value: Any) -> str | None:
+    """Return the exact display prefix only for a narrowly over-limit UTF-8 scalar string."""
+
+    if (
+        not isinstance(value, str)
+        or "\x00" in value
+        or not (
+            _EVIDENCE_EXCERPT_MAX_CODEPOINTS
+            < len(value)
+            <= _EVIDENCE_EXCERPT_MAX_NORMALIZABLE_CODEPOINTS
+        )
+    ):
+        return None
+    try:
+        value.encode("utf-8", errors="strict")
+    except UnicodeEncodeError:
+        return None
+    return value[:_EVIDENCE_EXCERPT_MAX_CODEPOINTS]
+
+
 def _operator_normalize_mechanical_result(
     result: Any,
     *,
@@ -1516,14 +1557,16 @@ def _operator_normalize_mechanical_result(
 ) -> Any:
     """Apply one recorded result policy to a copy and admit it only atomically.
 
-    Both versions may downgrade a mechanically impossible ``self`` relationship
-    to ``third_party``.  V2 may additionally convert an exact native-X
-    IMF-fixdate GMT timestamp to canonical UTC ISO-8601 Z.  The raw envelope is
-    untouched, and a partially repaired result is never admitted.
+    Every version may downgrade a mechanically impossible ``self`` relationship
+    to ``third_party``. V2 and V3 may additionally convert an exact native-X
+    IMF-fixdate GMT timestamp to canonical UTC ISO-8601 Z. V3 may additionally
+    retain only the first 280 code points of an over-limit model excerpt. The
+    raw envelope is untouched, and a partially repaired result is never admitted.
     """
 
     if policy_version not in {
         LEGACY_RESULT_NORMALIZATION_POLICY_VERSION_V1,
+        LEGACY_RESULT_NORMALIZATION_POLICY_VERSION_V2,
         RESULT_NORMALIZATION_POLICY_VERSION,
     }:
         raise AdaptiveWaveValidationError("result_normalization_policy_invalid")
@@ -1540,6 +1583,9 @@ def _operator_normalize_mechanical_result(
     normalized = strict_json_loads(canonical_json(result))
     relationship_count = 0
     timestamp_count = 0
+    excerpt_prefix_count = 0
+    excerpt_prefix_candidate_count = 0
+    excerpt_prefix_maximum_original = 0
     for candidate in normalized["candidates"]:
         if not isinstance(candidate, dict) or set(candidate) != _CANDIDATE_KEYS:
             continue
@@ -1554,9 +1600,14 @@ def _operator_normalize_mechanical_result(
         ):
             continue
         candidate_downgrade_count = 0
+        candidate_excerpt_prefix_count = 0
         for evidence in evidence_rows:
             if (
-                policy_version == RESULT_NORMALIZATION_POLICY_VERSION
+                policy_version
+                in {
+                    LEGACY_RESULT_NORMALIZATION_POLICY_VERSION_V2,
+                    RESULT_NORMALIZATION_POLICY_VERSION,
+                }
                 and isinstance(evidence, dict)
                 and set(evidence) == _EVIDENCE_KEYS
                 and _parse_evidence_timestamp(evidence.get("published_at")) is None
@@ -1567,6 +1618,22 @@ def _operator_normalize_mechanical_result(
                 if canonical_timestamp is not None:
                     evidence["published_at"] = canonical_timestamp
                     timestamp_count += 1
+            bounded_excerpt = (
+                _mechanically_bound_model_reported_excerpt(evidence.get("excerpt"))
+                if policy_version == RESULT_NORMALIZATION_POLICY_VERSION
+                and isinstance(evidence, dict)
+                and set(evidence) == _EVIDENCE_KEYS
+                else None
+            )
+            if bounded_excerpt is not None:
+                original_excerpt = evidence["excerpt"]
+                evidence["excerpt"] = bounded_excerpt
+                candidate_excerpt_prefix_count += 1
+                excerpt_prefix_count += 1
+                excerpt_prefix_maximum_original = max(
+                    excerpt_prefix_maximum_original,
+                    len(original_excerpt),
+                )
             if (
                 not isinstance(evidence, dict)
                 or set(evidence) != _EVIDENCE_KEYS
@@ -1582,6 +1649,10 @@ def _operator_normalize_mechanical_result(
             relationship_count += candidate_downgrade_count
             if _RELATIONSHIP_DOWNGRADE_CAVEAT not in caveats:
                 caveats.append(_RELATIONSHIP_DOWNGRADE_CAVEAT)
+        if candidate_excerpt_prefix_count:
+            excerpt_prefix_candidate_count += 1
+            if _EXCERPT_PREFIX_NORMALIZATION_CAVEAT not in caveats:
+                caveats.append(_EXCERPT_PREFIX_NORMALIZATION_CAVEAT)
     if relationship_count:
         limitation = (
             f"Operator normalization {policy_version} downgraded {relationship_count} "
@@ -1597,7 +1668,17 @@ def _operator_normalize_mechanical_result(
                 count=timestamp_count,
             )
         )
-    if relationship_count or timestamp_count:
+    if excerpt_prefix_count:
+        normalized["limitations"].append(
+            _EXCERPT_PREFIX_NORMALIZATION_LIMITATION.format(
+                policy_version=policy_version,
+                maximum=_EVIDENCE_EXCERPT_MAX_CODEPOINTS,
+                count=excerpt_prefix_count,
+                candidate_count=excerpt_prefix_candidate_count,
+                maximum_original=excerpt_prefix_maximum_original,
+            )
+        )
+    if relationship_count or timestamp_count or excerpt_prefix_count:
         if not validate_model_result(
             normalized,
             prior_candidates=prior_candidates,
@@ -2192,6 +2273,18 @@ def _legacy_operator_result_v1_command_policy_sha256(request: Mapping[str, Any])
     )
 
 
+def _legacy_operator_result_v2_command_policy_sha256(request: Mapping[str, Any]) -> str:
+    """Replay-only digest for v2 timestamp normalization plus the artifact policy."""
+
+    return canonical_sha256(
+        {
+            "argv_template": _command_policy(request),
+            "result_normalization_policy_version": LEGACY_RESULT_NORMALIZATION_POLICY_VERSION_V2,
+            "operator_result_artifact_policy_version": OPERATOR_RESULT_ARTIFACT_POLICY_VERSION,
+        }
+    )
+
+
 def _current_operator_result_command_policy_sha256(request: Mapping[str, Any]) -> str:
     return canonical_sha256(
         {
@@ -2232,6 +2325,7 @@ def _redacted_policy_from_bindings(
     legacy_result_v2: bool = False,
     legacy_normalization_only_result_v3: bool = False,
     legacy_operator_result_v1: bool = False,
+    legacy_operator_result_v2: bool = False,
     legacy_pre_normalization_result_v3: bool = False,
 ) -> list[str] | dict[str, Any]:
     del input_binding
@@ -2254,6 +2348,8 @@ def _redacted_policy_from_bindings(
         "result_normalization_policy_version": (
             LEGACY_RESULT_NORMALIZATION_POLICY_VERSION_V1
             if legacy_normalization_only_result_v3 or legacy_operator_result_v1
+            else LEGACY_RESULT_NORMALIZATION_POLICY_VERSION_V2
+            if legacy_operator_result_v2
             else RESULT_NORMALIZATION_POLICY_VERSION
         ),
     }
@@ -5372,6 +5468,8 @@ def _run_adaptive_wave(
         result_normalization_policy_version = (
             RESULT_NORMALIZATION_POLICY_VERSION
             if recorded_command_policy == _current_operator_result_command_policy_sha256(request)
+            else LEGACY_RESULT_NORMALIZATION_POLICY_VERSION_V2
+            if recorded_command_policy == _legacy_operator_result_v2_command_policy_sha256(request)
             else LEGACY_RESULT_NORMALIZATION_POLICY_VERSION_V1
             if recorded_command_policy
             in {
@@ -6422,6 +6520,13 @@ def validate_operator_receipt(receipt: Any) -> list[str]:
                 legacy_operator_result_v1=True,
             )
         )
+        legacy_operator_result_v2_policy = canonical_sha256(
+            _redacted_policy_from_bindings(
+                input_binding,
+                command_binding,
+                legacy_operator_result_v2=True,
+            )
+        )
         normalization_only_result_v3_policy = canonical_sha256(
             _redacted_policy_from_bindings(
                 input_binding,
@@ -6451,6 +6556,7 @@ def validate_operator_receipt(receipt: Any) -> list[str]:
             in {
                 current_policy,
                 legacy_operator_result_v1_policy,
+                legacy_operator_result_v2_policy,
                 normalization_only_result_v3_policy,
                 pre_normalization_result_v3_policy,
             }
@@ -6683,6 +6789,7 @@ def validate_operator_bundle(
     input_binding = receipt.get("input_binding", {})
     new_command_policy = command_policy_sha256(request)
     legacy_operator_result_v1_policy = _legacy_operator_result_v1_command_policy_sha256(request)
+    legacy_operator_result_v2_policy = _legacy_operator_result_v2_command_policy_sha256(request)
     normalization_only_result_v3_policy = _legacy_normalization_only_result_v3_command_policy_sha256(request)
     pre_normalization_result_v3_policy = _legacy_pre_normalization_result_v3_command_policy_sha256(request)
     legacy_command_policy = _legacy_command_policy_sha256(request)
@@ -6692,21 +6799,29 @@ def validate_operator_bundle(
     )
     current_operator_result_replay = recorded_command_policy == new_command_policy
     legacy_operator_result_v1_replay = recorded_command_policy == legacy_operator_result_v1_policy
+    legacy_operator_result_v2_replay = recorded_command_policy == legacy_operator_result_v2_policy
     normalization_only_result_v3_replay = recorded_command_policy == normalization_only_result_v3_policy
     result_normalization_policy_version = (
         RESULT_NORMALIZATION_POLICY_VERSION
         if current_operator_result_replay
+        else LEGACY_RESULT_NORMALIZATION_POLICY_VERSION_V2
+        if legacy_operator_result_v2_replay
         else LEGACY_RESULT_NORMALIZATION_POLICY_VERSION_V1
         if legacy_operator_result_v1_replay or normalization_only_result_v3_replay
         else None
     )
-    operator_artifact_policy_replay = current_operator_result_replay or legacy_operator_result_v1_replay
+    operator_artifact_policy_replay = (
+        current_operator_result_replay
+        or legacy_operator_result_v2_replay
+        or legacy_operator_result_v1_replay
+    )
     pre_normalization_result_v3_replay = recorded_command_policy == pre_normalization_result_v3_policy
     legacy_plain_replay = recorded_command_policy == legacy_command_policy
     legacy_result_policy_replay = recorded_command_policy == legacy_result_command_policy
     if recorded_command_policy not in {
         new_command_policy,
         legacy_operator_result_v1_policy,
+        legacy_operator_result_v2_policy,
         normalization_only_result_v3_policy,
         pre_normalization_result_v3_policy,
         legacy_command_policy,
@@ -6720,6 +6835,7 @@ def validate_operator_bundle(
         not legacy_result_schema_replay
         and not (
             current_operator_result_replay
+            or legacy_operator_result_v2_replay
             or legacy_operator_result_v1_replay
             or normalization_only_result_v3_replay
             or pre_normalization_result_v3_replay
@@ -6783,6 +6899,8 @@ def validate_operator_bundle(
                 if pre_normalization_result_v3_replay
                 else normalization_only_result_v3_policy
                 if normalization_only_result_v3_replay
+                else legacy_operator_result_v2_policy
+                if legacy_operator_result_v2_replay
                 else legacy_operator_result_v1_policy
                 if legacy_operator_result_v1_replay
                 else new_command_policy
@@ -6849,6 +6967,8 @@ def validate_operator_bundle(
                                 if pre_normalization_result_v3_replay
                                 else normalization_only_result_v3_policy
                                 if normalization_only_result_v3_replay
+                                else legacy_operator_result_v2_policy
+                                if legacy_operator_result_v2_replay
                                 else legacy_operator_result_v1_policy
                                 if legacy_operator_result_v1_replay
                                 else new_command_policy
@@ -7134,6 +7254,7 @@ def validate_operator_bundle(
         if command_binding["command_policy_sha256"] not in {
             command_policy_sha256(request),
             _legacy_operator_result_v1_command_policy_sha256(request),
+            _legacy_operator_result_v2_command_policy_sha256(request),
             _legacy_normalization_only_result_v3_command_policy_sha256(request),
             _legacy_pre_normalization_result_v3_command_policy_sha256(request),
             _legacy_command_policy_sha256(request),
@@ -7569,6 +7690,8 @@ def _recover_incomplete_run_locked(
     recovery_result_normalization_policy_version = (
         RESULT_NORMALIZATION_POLICY_VERSION
         if recovery_recorded_policy == command_policy_sha256(request)
+        else LEGACY_RESULT_NORMALIZATION_POLICY_VERSION_V2
+        if recovery_recorded_policy == _legacy_operator_result_v2_command_policy_sha256(request)
         else LEGACY_RESULT_NORMALIZATION_POLICY_VERSION_V1
         if recovery_recorded_policy
         in {

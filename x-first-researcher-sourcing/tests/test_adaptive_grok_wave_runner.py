@@ -1870,7 +1870,7 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
         )
         self.assertIn("evidence_value_invalid:0:0", validate_model_result(bio_mismatch, live_mode=True))
 
-    def test_current_v2_normalization_atomically_repairs_strict_x_time_and_relationship(self) -> None:
+    def test_current_v3_normalization_atomically_repairs_strict_x_time_and_relationship(self) -> None:
         raw = _relationship_mismatch_result()
         raw["candidates"][0]["evidence"][0]["published_at"] = "Wed, 01 Jul 2026 00:00:00 GMT"
         raw_before = canonical_json(raw)
@@ -1894,6 +1894,18 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
         )
         self.assertEqual(validate_model_result(normalized, live_mode=True), [])
 
+        legacy_v2 = runner._operator_normalize_mechanical_result(
+            raw,
+            policy_version=runner.LEGACY_RESULT_NORMALIZATION_POLICY_VERSION_V2,
+            live_mode=True,
+            require_operator_projection=True,
+        )
+        self.assertEqual(
+            legacy_v2["candidates"][0]["evidence"][0],
+            normalized["candidates"][0]["evidence"][0],
+        )
+        self.assertEqual(validate_model_result(legacy_v2, live_mode=True), [])
+
         legacy = runner._operator_normalize_mechanical_result(
             raw,
             policy_version=runner.LEGACY_RESULT_NORMALIZATION_POLICY_VERSION_V1,
@@ -1903,7 +1915,7 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
         self.assertEqual(legacy, raw)
         self.assertIn("evidence_value_invalid:0:0", validate_model_result(legacy, live_mode=True))
 
-    def test_current_v2_timestamp_normalization_is_strict_and_does_not_merge_duplicates(self) -> None:
+    def test_current_v3_timestamp_normalization_is_strict_and_does_not_merge_duplicates(self) -> None:
         invalid_values = (
             "Tue, 01 Jul 2026 00:00:00 GMT",
             "Wed, 01 Jul 2026 00:00:00 +0000",
@@ -1955,6 +1967,184 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             duplicate,
         )
         self.assertIn("candidate_handle_duplicate:1", validate_model_result(duplicate, live_mode=True))
+
+    def test_current_v3_bounds_only_narrow_utf8_model_reported_excerpt_prefixes(self) -> None:
+        for original_length in (281, 560):
+            with self.subTest(original_length=original_length):
+                raw = _relationship_mismatch_result()
+                evidence = raw["candidates"][0]["evidence"][0]
+                evidence["relationship"] = "third_party"
+                evidence["excerpt"] = "证" * original_length
+                raw_before = canonical_json(raw)
+
+                normalized = runner._operator_normalize_mechanical_result(
+                    raw,
+                    policy_version=runner.RESULT_NORMALIZATION_POLICY_VERSION,
+                    live_mode=True,
+                    require_operator_projection=True,
+                )
+
+                self.assertEqual(canonical_json(raw), raw_before)
+                self.assertEqual(normalized["candidates"][0]["evidence"][0]["excerpt"], "证" * 280)
+                self.assertIn(
+                    runner._EXCERPT_PREFIX_NORMALIZATION_CAVEAT,
+                    normalized["candidates"][0]["caveats"],
+                )
+                self.assertTrue(
+                    any(
+                        runner.RESULT_NORMALIZATION_POLICY_VERSION in limitation
+                        and "replaced 1" in limitation
+                        and f"maximum original length was {original_length}" in limitation
+                        for limitation in normalized["limitations"]
+                    )
+                )
+                self.assertEqual(
+                    runner._evidence_source_sha256(evidence, "TargetPerson"),
+                    runner._evidence_source_sha256(
+                        normalized["candidates"][0]["evidence"][0],
+                        "TargetPerson",
+                    ),
+                )
+                self.assertEqual(validate_model_result(normalized, live_mode=True), [])
+
+        exact = _relationship_mismatch_result()
+        exact_evidence = exact["candidates"][0]["evidence"][0]
+        exact_evidence["relationship"] = "third_party"
+        exact_evidence["excerpt"] = "x" * 280
+        self.assertEqual(
+            runner._operator_normalize_mechanical_result(
+                exact,
+                policy_version=runner.RESULT_NORMALIZATION_POLICY_VERSION,
+                live_mode=True,
+                require_operator_projection=True,
+            ),
+            exact,
+        )
+
+        for invalid_excerpt in ("x" * 561, "x" * 281 + "\ud800"):
+            with self.subTest(invalid_length=len(invalid_excerpt)):
+                invalid = _relationship_mismatch_result()
+                invalid_evidence = invalid["candidates"][0]["evidence"][0]
+                invalid_evidence["relationship"] = "third_party"
+                invalid_evidence["excerpt"] = invalid_excerpt
+                self.assertEqual(
+                    runner._operator_normalize_mechanical_result(
+                        invalid,
+                        policy_version=runner.RESULT_NORMALIZATION_POLICY_VERSION,
+                        live_mode=True,
+                        require_operator_projection=True,
+                    ),
+                    invalid,
+                )
+                self.assertIn("evidence_value_invalid:0:0", validate_model_result(invalid, live_mode=True))
+
+    def test_current_v3_excerpt_prefix_is_audited_and_admitted_only_atomically(self) -> None:
+        raw = _relationship_mismatch_result()
+        evidence = raw["candidates"][0]["evidence"][0]
+        evidence["published_at"] = "Wed, 01 Jul 2026 00:00:00 GMT"
+        evidence["excerpt"] = "context " * 35 + "claim-bearing tail"
+        self.assertGreater(len(evidence["excerpt"]), 280)
+        raw_before = canonical_json(raw)
+
+        normalized = runner._operator_normalize_mechanical_result(
+            raw,
+            policy_version=runner.RESULT_NORMALIZATION_POLICY_VERSION,
+            live_mode=True,
+            require_operator_projection=True,
+        )
+
+        self.assertEqual(canonical_json(raw), raw_before)
+        normalized_evidence = normalized["candidates"][0]["evidence"][0]
+        self.assertEqual(normalized_evidence["relationship"], "third_party")
+        self.assertEqual(normalized_evidence["published_at"], "2026-07-01T00:00:00Z")
+        self.assertEqual(normalized_evidence["excerpt"], evidence["excerpt"][:280])
+        self.assertNotIn("claim-bearing tail", normalized_evidence["excerpt"])
+        self.assertIn("semantic completeness is not guaranteed", canonical_json(normalized))
+        self.assertEqual(validate_model_result(normalized, live_mode=True), [])
+
+        legacy_v2 = runner._operator_normalize_mechanical_result(
+            raw,
+            policy_version=runner.LEGACY_RESULT_NORMALIZATION_POLICY_VERSION_V2,
+            live_mode=True,
+            require_operator_projection=True,
+        )
+        self.assertEqual(legacy_v2, raw)
+        self.assertIn("evidence_value_invalid:0:0", validate_model_result(legacy_v2, live_mode=True))
+
+        other_error = copy.deepcopy(raw)
+        other_error["candidates"][0]["evidence"][0]["url"] = (
+            "https://x.com/DifferentAuthor/status/123456"
+        )
+        self.assertEqual(
+            runner._operator_normalize_mechanical_result(
+                other_error,
+                policy_version=runner.RESULT_NORMALIZATION_POLICY_VERSION,
+                live_mode=True,
+                require_operator_projection=True,
+            ),
+            other_error,
+        )
+
+        collision = _relationship_mismatch_result()
+        first = collision["candidates"][0]["evidence"][0]
+        first["relationship"] = "third_party"
+        first["excerpt"] = "p" * 280 + "A"
+        second = copy.deepcopy(first)
+        second["excerpt"] = "p" * 280 + "B"
+        collision["candidates"][0]["evidence"] = [first, second]
+        collision["local_reconciliation"]["evidence_items_validated"] = 2
+        collision["local_reconciliation"]["post_urls_structurally_validated"] = 2
+        self.assertEqual(
+            runner._operator_normalize_mechanical_result(
+                collision,
+                policy_version=runner.RESULT_NORMALIZATION_POLICY_VERSION,
+                live_mode=True,
+                require_operator_projection=True,
+            ),
+            collision,
+        )
+
+    def test_current_v3_terminal_transcript_recovery_applies_excerpt_prefix_policy(self) -> None:
+        terminal = _relationship_mismatch_result()
+        evidence = terminal["candidates"][0]["evidence"][0]
+        evidence["relationship"] = "third_party"
+        evidence["excerpt"] = "z" * 297
+        proof = runner.SessionProof(
+            updates_sha256="a" * 64,
+            update_bytes=1,
+            event_count=1,
+            provider_prompt_id_sha256="b" * 64,
+            effective_model_id="grok-4.5",
+            started_tool_calls=1,
+            completed_tool_calls=1,
+            tool_counts={"x_keyword_search": 1},
+            query_argument_sha256s=("c" * 64,),
+            candidate_surface_attempts=(),
+            terminal_stop_reason="end_turn",
+            input_tokens=1,
+            output_tokens=1,
+            total_tokens=2,
+            model_turns=1,
+            estimated_cost_usd_micros=1,
+            terminal_assistant_text=canonical_json(terminal),
+        )
+
+        recovered, limit_kind = runner._terminal_session_model_result(
+            proof,
+            technical_limits={
+                "max_json_bytes": 1_000_000,
+                "max_json_depth": 64,
+                "max_json_nodes": 250_000,
+            },
+            prior_candidates={},
+            result_normalization_policy_version=runner.RESULT_NORMALIZATION_POLICY_VERSION,
+        )
+
+        self.assertIsNone(limit_kind)
+        self.assertIsNotNone(recovered)
+        assert recovered is not None
+        self.assertEqual(recovered["candidates"][0]["evidence"][0]["excerpt"], "z" * 280)
+        self.assertEqual(validate_model_result(recovered, live_mode=True, require_operator_projection=False), [])
 
     def test_bio_requires_null_thread_relation_and_typed_temporal_support(self) -> None:
         result = _empty_result()
@@ -3043,7 +3233,7 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             self.assertEqual(sanitized["candidates"][0]["evidence"][0]["relationship"], "third_party")
             self.assertEqual(validate_operator_bundle(run_root, approval_root=approvals), [])
 
-    def test_current_v2_live_bundle_keeps_raw_x_time_and_publishes_canonical_time(self) -> None:
+    def test_current_v3_live_bundle_keeps_raw_x_time_and_publishes_canonical_time(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             model_result = _relationship_mismatch_result()
@@ -3067,6 +3257,55 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             self.assertEqual(
                 sanitized["candidates"][0]["evidence"][0]["relationship"],
                 "third_party",
+            )
+            self.assertEqual(validate_operator_bundle(run_root, approval_root=approvals), [])
+
+    def test_current_v3_live_bundle_keeps_raw_excerpt_and_publishes_audited_prefix(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            model_result = _relationship_mismatch_result()
+            evidence = model_result["candidates"][0]["evidence"][0]
+            evidence["relationship"] = "third_party"
+            evidence["excerpt"] = "界" * 297
+            run_root, approvals = _completed_live_run(root, model_result=model_result)
+
+            receipt = json.loads((run_root / "operator-receipt.json").read_text())
+            raw_model = json.loads(json.loads((run_root / "raw.stdout").read_text())["text"])
+            sanitized = json.loads((run_root / "sanitized.json").read_text())
+            self.assertEqual(receipt["status"], "completed")
+            self.assertEqual(len(raw_model["candidates"][0]["evidence"][0]["excerpt"]), 297)
+            self.assertEqual(
+                sanitized["candidates"][0]["evidence"][0]["excerpt"],
+                "界" * 280,
+            )
+            self.assertIn(
+                runner._EXCERPT_PREFIX_NORMALIZATION_CAVEAT,
+                sanitized["candidates"][0]["caveats"],
+            )
+            self.assertEqual(validate_operator_bundle(run_root, approval_root=approvals), [])
+
+    def test_legacy_operator_v2_bundle_does_not_gain_excerpt_prefix_normalization(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            model_result = _relationship_mismatch_result()
+            evidence = model_result["candidates"][0]["evidence"][0]
+            evidence["relationship"] = "third_party"
+            evidence["published_at"] = "Wed, 01 Jul 2026 00:00:00 GMT"
+            evidence["excerpt"] = "x" * 297
+            with mock.patch.object(
+                runner,
+                "command_policy_sha256",
+                side_effect=runner._legacy_operator_result_v2_command_policy_sha256,
+            ):
+                run_root, approvals = _completed_live_run(root, model_result=model_result)
+
+            receipt = json.loads((run_root / "operator-receipt.json").read_text())
+            sanitized = json.loads((run_root / "sanitized.json").read_text())
+            self.assertEqual(receipt["status"], "result_contract_invalid")
+            self.assertEqual(sanitized["candidates"][0]["evidence"][0]["excerpt"], "x" * 297)
+            self.assertEqual(
+                sanitized["candidates"][0]["evidence"][0]["published_at"],
+                "Wed, 01 Jul 2026 00:00:00 GMT",
             )
             self.assertEqual(validate_operator_bundle(run_root, approval_root=approvals), [])
 
