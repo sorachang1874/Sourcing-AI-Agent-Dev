@@ -1,0 +1,230 @@
+{
+  "artifact_id": "gdm-marginal37-profile-status-hydration-2026-07-16",
+  "claim_status": "live_hydration_complete_model_mediated_unverified_not_qualified",
+  "contract_version": "x-first.live-hydration.aggregate-receipt.v1",
+  "privacy_class": "candidate_free_aggregate",
+  "source": {
+    "private_queue_count": 37,
+    "private_queue_sha256": "8a6463c5f9437d06459738bb288616236f1ac2bb6a9498f77b4a95f56f0b78f7",
+    "source_ref_count": 57,
+    "distinct_status_id_count": 20,
+    "source_surface_counts": {
+      "mention": 3,
+      "official_post": 47,
+      "quote": 0,
+      "reply": 1,
+      "thread": 6
+    }
+  },
+  "runtime": {
+    "grok_cli_version": "0.2.101",
+    "grok_cli_build": "5bc4b5dfadcf",
+    "model_id": "grok-4.5",
+    "reasoning_effort": "high",
+    "single_execution_per_attempt": true,
+    "fallback_allowed": false,
+    "generic_web_allowed": false,
+    "attempt_deadline_seconds": 300,
+    "max_stdout_bytes_per_attempt": 2000000,
+    "combined_attempt_elapsed_ms": 847696,
+    "combined_current_resume_wall_ms": 851194,
+    "deadline_or_output_ceiling_failure_count": 0,
+    "oauth_or_transport_failure_count": 0,
+    "workspace_head_at_receipt": "fcd560fdd5493417eb7e0e08acdf54594a9ebd65",
+    "schema_helper_sha256": "5c3c15fda2b0c98d292f1435c04351964398e226dc0a6db6afc3771f863f155d"
+  },
+  "phase_a_profile": {
+    "allowed_native_tool": "x_user_search",
+    "input_count": 37,
+    "casefold_unique_input_count": 37,
+    "accepted_exact_row_count": 37,
+    "input_coverage_valid": true,
+    "input_sequence_valid": true,
+    "lookup_status_counts": {
+      "ambiguous": 0,
+      "matched": 33,
+      "not_found": 4,
+      "tool_error": 0
+    },
+    "expected_platform_id_input_count": 0,
+    "expected_platform_id_binding_error_count": 0,
+    "stable_platform_id_resolved_row_count": 33,
+    "stable_platform_id_distinct_count": 33,
+    "remaining_handle_keyed_row_count": 4,
+    "identity_resolution_count_before": 37,
+    "identity_resolution_count_after": 37,
+    "identity_resolution_count_delta": 0,
+    "platform_id_duplicate_count": 0,
+    "attempt_count": 12,
+    "accepted_attempt_count": 7,
+    "rejected_attempt_count": 5,
+    "accepted_attempt_input_counts": [19, 4, 4, 2, 3, 2, 3],
+    "rejected_attempt_input_counts": [18, 9, 9, 5, 5],
+    "model_without_tool_rejected_attempt_count": 1,
+    "native_call_counts": {
+      "other_native_x": 0,
+      "rejected": 41,
+      "total": 78,
+      "useful": 37
+    },
+    "rejected_reason_counts": {
+      "first_assistant_action_not_tool_call": 3,
+      "ledger_call_count_mismatch": 1,
+      "ledger_query_sequence_mismatch": 1,
+      "missing_field_consistency_invalid": 3,
+      "terminal_not_after_last_native_completion": 3
+    },
+    "field_coverage_all_inputs": {
+      "affiliations": {"denominator": 37, "present": 27, "rate_pct": 73.0},
+      "bio": {"denominator": 37, "present": 31, "rate_pct": 83.8},
+      "display_name": {"denominator": 37, "present": 33, "rate_pct": 89.2},
+      "external_urls": {"denominator": 37, "present": 2, "rate_pct": 5.4},
+      "location": {"denominator": 37, "present": 0, "rate_pct": 0.0},
+      "organization_affiliation_signals": {"denominator": 37, "present": 27, "rate_pct": 73.0},
+      "platform_user_id": {"denominator": 37, "present": 33, "rate_pct": 89.2},
+      "professional_category": {"denominator": 37, "present": 0, "rate_pct": 0.0},
+      "verification": {"denominator": 37, "present": 12, "rate_pct": 32.4}
+    },
+    "field_coverage_matched": {
+      "affiliations": {"denominator": 33, "present": 27, "rate_pct": 81.8},
+      "bio": {"denominator": 33, "present": 31, "rate_pct": 93.9},
+      "display_name": {"denominator": 33, "present": 33, "rate_pct": 100.0},
+      "external_urls": {"denominator": 33, "present": 2, "rate_pct": 6.1},
+      "location": {"denominator": 33, "present": 0, "rate_pct": 0.0},
+      "organization_affiliation_signals": {"denominator": 33, "present": 27, "rate_pct": 81.8},
+      "platform_user_id": {"denominator": 33, "present": 33, "rate_pct": 100.0},
+      "professional_category": {"denominator": 33, "present": 0, "rate_pct": 0.0},
+      "verification": {"denominator": 33, "present": 12, "rate_pct": 36.4}
+    },
+    "exact_gate_results": {
+      "accepted_completed_calls_equal_input": true,
+      "all_accepted_first_actions_native_tool": true,
+      "all_accepted_terminals_after_last_native_completion": true,
+      "all_accepted_tool_and_row_sequences_exact": true,
+      "failed_batch_records_committed": 0,
+      "failed_leaf_count": 0,
+      "handle_or_expected_id_binding_error_count": 0
+    },
+    "elapsed_ms": 670572
+  },
+  "phase_b_status_evidence": {
+    "allowed_native_tool": "x_thread_fetch",
+    "input_status_id_count": 20,
+    "source_ref_count": 57,
+    "accepted_exact_row_count": 20,
+    "source_ref_reconciled_count": 57,
+    "input_coverage_valid": true,
+    "input_sequence_valid": true,
+    "source_ref_reconciliation_valid": true,
+    "lookup_status_counts": {
+      "ambiguous": 0,
+      "matched": 20,
+      "not_found": 0,
+      "tool_error": 0
+    },
+    "attempt_count": 6,
+    "accepted_attempt_count": 4,
+    "rejected_attempt_count": 2,
+    "accepted_attempt_input_counts": [5, 5, 5, 5],
+    "rejected_attempt_input_counts": [10, 10],
+    "model_without_tool_rejected_attempt_count": 2,
+    "native_call_counts": {
+      "other_native_x": 0,
+      "rejected": 0,
+      "total": 20,
+      "useful": 20
+    },
+    "field_coverage": {
+      "author_handle": {"denominator": 20, "present": 20, "rate_pct": 100.0},
+      "full_text": {"denominator": 20, "present": 20, "rate_pct": 100.0},
+      "published_at": {"denominator": 20, "present": 20, "rate_pct": 100.0},
+      "relationship": {"denominator": 20, "present": 1, "rate_pct": 5.0}
+    },
+    "status_hydration_post_rate_pct": 100.0,
+    "status_hydration_source_ref_rate_pct": 100.0,
+    "exact_gate_results": {
+      "accepted_completed_calls_equal_input": true,
+      "all_accepted_first_actions_native_tool": true,
+      "all_accepted_terminals_after_last_native_completion": true,
+      "all_accepted_tool_and_row_sequences_exact": true,
+      "failed_batch_records_committed": 0,
+      "failed_leaf_count": 0,
+      "post_id_binding_error_count": 0
+    },
+    "elapsed_ms": 177124
+  },
+  "combined": {
+    "accepted_native_call_count": 57,
+    "completed_native_call_count": 98,
+    "rejected_native_call_count": 41,
+    "useful_native_call_rate_pct": 58.163265,
+    "luna_called": false,
+    "luna_eligible_exact_text_status_count": 20,
+    "luna_eligible_source_ref_count": 57,
+    "luna_eligible_distinct_candidate_count": 37,
+    "luna_eligibility_rule": "exact_post_id_matched_and_full_text_present"
+  },
+  "limitations": [
+    "model_mediated_unverified_not_source_bound",
+    "expected_platform_ids_unavailable_on_all_profile_inputs",
+    "location_unavailable_on_all_profile_rows",
+    "professional_category_unavailable_on_all_profile_rows",
+    "structural_relationship_unavailable_on_19_of_20_status_rows",
+    "no_luna_semantic_judgment",
+    "no_candidate_qualification_or_promotion"
+  ],
+  "source_artifact_bindings": [
+    {
+      "owner_private_path": "/Users/changyuyi/.local/state/x-first-researcher-sourcing/direct-grok-diagnostics/gdm-artifact-ack-topology-v2-hooked-20260716T140814Z/unhooked-live/marginal-hydration-queue.private.json",
+      "sha256": "8a6463c5f9437d06459738bb288616236f1ac2bb6a9498f77b4a95f56f0b78f7",
+      "source_id": "private-marginal-hydration-queue"
+    },
+    {
+      "owner_private_path": "/Users/changyuyi/.local/state/x-first-researcher-sourcing/direct-grok-diagnostics/gdm-marginal37-evidence-validation-20260716T150010Z/phase-a-profile/adaptive_operator.py",
+      "sha256": "02d4e2aee1f333821908b93c940725f7dc1faa6bbd811deb50529bd67258870d",
+      "source_id": "phase-a-operator"
+    },
+    {
+      "owner_private_path": "/Users/changyuyi/.local/state/x-first-researcher-sourcing/direct-grok-diagnostics/gdm-marginal37-evidence-validation-20260716T150010Z/phase-a-profile/campaign-summary.json",
+      "sha256": "aba7b535bd89d0d4eb95588f6fb6c233d61ebeabbf49d20ea7152d3b6361bed0",
+      "source_id": "phase-a-candidate-free-summary"
+    },
+    {
+      "owner_private_path": "/Users/changyuyi/.local/state/x-first-researcher-sourcing/direct-grok-diagnostics/gdm-marginal37-evidence-validation-20260716T150010Z/phase-a-profile/accepted-records.json",
+      "sha256": "ca8ade7cd711cdcda5df16d9ba1bd26d1849d033a37731b2a32107eee6d34db8",
+      "source_id": "phase-a-private-records"
+    },
+    {
+      "digest_scope": "sha256_of_canonical_sorted_attempt_directory_and_operator_receipt_sha256_manifest",
+      "owner_private_path": "/Users/changyuyi/.local/state/x-first-researcher-sourcing/direct-grok-diagnostics/gdm-marginal37-evidence-validation-20260716T150010Z/phase-a-profile/attempts",
+      "sha256": "698a67fe2b83fcb3e8c9abdd70d551e28d1aa8b4b6ad6842a8c5c632c4b466c6",
+      "source_id": "phase-a-operator-receipt-manifest"
+    },
+    {
+      "owner_private_path": "/Users/changyuyi/.local/state/x-first-researcher-sourcing/direct-grok-diagnostics/gdm-marginal37-evidence-validation-20260716T150010Z/phase-b-evidence/adaptive_evidence_operator.py",
+      "sha256": "64981f40238ad6a86d02b6fb312103511d5db259a08f222c832591cd5d662ac7",
+      "source_id": "phase-b-operator"
+    },
+    {
+      "owner_private_path": "/Users/changyuyi/.local/state/x-first-researcher-sourcing/direct-grok-diagnostics/gdm-marginal37-evidence-validation-20260716T150010Z/phase-b-evidence/campaign-summary.json",
+      "sha256": "bad04a63fb9dcf0100d83c148bc949c4d54d0754bc956bf311d8b6ef29477ccb",
+      "source_id": "phase-b-candidate-free-summary"
+    },
+    {
+      "owner_private_path": "/Users/changyuyi/.local/state/x-first-researcher-sourcing/direct-grok-diagnostics/gdm-marginal37-evidence-validation-20260716T150010Z/phase-b-evidence/source-ref-map.private.json",
+      "sha256": "969849a7d172804fc63011ce6ec0d7fa2ae09ef5a4df67ea0207665a67f3b0eb",
+      "source_id": "phase-b-private-source-ref-map"
+    },
+    {
+      "owner_private_path": "/Users/changyuyi/.local/state/x-first-researcher-sourcing/direct-grok-diagnostics/gdm-marginal37-evidence-validation-20260716T150010Z/phase-b-evidence/hydrated-evidence-records.private.json",
+      "sha256": "11d83b3afd6cce9cc0d852342ebaa4278fc1f3a23fd2552d956417bf03d9f4b8",
+      "source_id": "phase-b-private-hydrated-evidence"
+    },
+    {
+      "digest_scope": "sha256_of_canonical_sorted_attempt_directory_and_operator_receipt_sha256_manifest",
+      "owner_private_path": "/Users/changyuyi/.local/state/x-first-researcher-sourcing/direct-grok-diagnostics/gdm-marginal37-evidence-validation-20260716T150010Z/phase-b-evidence/attempts",
+      "sha256": "5a582d9ce3598b0f7d1c28f6ffd669e90a74c8cf6d46c470f67548ecf92c587b",
+      "source_id": "phase-b-operator-receipt-manifest"
+    }
+  ]
+}
