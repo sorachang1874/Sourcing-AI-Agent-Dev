@@ -181,9 +181,20 @@ terminal, row, or binding reconciliation fails, discard the whole batch and bise
 children are obtained or a single-handle leaf fails. A guessed static maximum batch size would not explain these
 observations.
 
-At this checkpoint, 44/93 discovery-union handles have accepted X-native profile hydration. The invalid 49-account
-batch remains to be replayed through adaptive splitting; it cannot borrow fields from its schema-valid model-only
-answer.
+The remaining 49 inputs were subsequently replayed through deterministic adaptive splitting. Across the original
+accepted 44 and the replayed 49, all 93 inputs now have compliant completed-tool evidence: 91 exact matches and two
+not-found rows. The replay did not borrow any field from the rejected model-only answer. Across the 91 exact matches,
+platform id and display-name coverage were 100%, Bio 96.7%, explicit affiliation 89.0%, verification 60.4%, external
+URLs 5.5%, and location/professional category remained zero. These are diagnostic field-availability observations,
+not source-bound profile truth or a population-exhaustion claim.
+
+The tracked candidate-free machine receipt
+`2026-07-16-gdm-compact-strategy-matrix.aggregate-receipt.v1.json` binds these aggregate metrics to SHA-256 hashes of
+the owner-private discovery execution receipts, initial hydration aggregate, and adaptive campaign summary. It
+contains no candidate handle or Bio, Post, Reply, location, URL, or organization value. Reviewers can now verify the
+tracked aggregate-to-private-source binding without receiving candidate data; availability and interpretation of the
+private sources remain owner-controlled. The tracked receipt SHA-256 is
+`0eb5e2cd3db4ed1c5d7e1e35351d3734ee09536d019647105ac97cd6d68b07f0`.
 
 ## Function/role negative-space shard
 

@@ -1,0 +1,61 @@
+{
+  "contract_version": "x-first.live-diagnostic.aggregate-receipt.v1",
+  "artifact_id": "gdm-compact-strategy-matrix-2026-07-16",
+  "claim_status": "diagnostic_only",
+  "privacy_class": "candidate_free_aggregate",
+  "source_artifact_bindings": [
+    {
+      "source_id": "discovery-base-execution-receipt",
+      "owner_private_path": "/Users/changyuyi/.local/state/x-first-researcher-sourcing/direct-grok-diagnostics/gdm-compact-matrix-20260716T111822Z/execution-receipt-run4-no-user.json",
+      "sha256": "98615ecb56f6e2ce9478360894024a0ab7ef58e3bbcdec6c44844febd3d121f8"
+    },
+    {
+      "source_id": "discovery-topology-execution-receipt",
+      "owner_private_path": "/Users/changyuyi/.local/state/x-first-researcher-sourcing/direct-grok-diagnostics/gdm-compact-matrix-20260716T111822Z/execution-receipt-run5-topology.json",
+      "sha256": "a3c7d007d9efc58d4c69bc2e63352438ac515174a363a3f822e21acb58bdf9c9"
+    },
+    {
+      "source_id": "discovery-historical-project-execution-receipt",
+      "owner_private_path": "/Users/changyuyi/.local/state/x-first-researcher-sourcing/direct-grok-diagnostics/gdm-compact-matrix-20260716T111822Z/execution-receipt.json",
+      "sha256": "dc8764a0a2ca0836b57852d70944d6e55ace127295bb1230c2c1003957d25e51"
+    },
+    {
+      "source_id": "discovery-function-negative-space-v2-execution-receipt",
+      "owner_private_path": "/Users/changyuyi/.local/state/x-first-researcher-sourcing/direct-grok-diagnostics/gdm-function-negative-space-v2-20260716T125048Z/execution-receipt.json",
+      "sha256": "b3ff96c6973cc35de5c964d2010c4aa3fb5e17ae07684498c4a9d143dc4f4cc9"
+    },
+    {
+      "source_id": "hydration-initial-aggregate",
+      "owner_private_path": "/Users/changyuyi/.local/state/x-first-researcher-sourcing/direct-grok-diagnostics/gdm-profile-hydration-20260716T122541Z/final-aggregate.json",
+      "sha256": "8ec50156d489eb00e11da4fbb7d515c365809bdf824c711de5c08be6264d99a9"
+    },
+    {
+      "source_id": "hydration-adaptive-campaign-summary",
+      "owner_private_path": "/Users/changyuyi/.local/state/x-first-researcher-sourcing/direct-grok-diagnostics/gdm-profile-hydration-adaptive-20260716T125907Z/campaign-summary.json",
+      "sha256": "fa442a93adb545635ae423de4b6636354ee6dfca697fdba14b70a97b59d822ba"
+    }
+  ],
+  "aggregate_metrics": {
+    "discovery": {
+      "projected_union_lead_count": 96,
+      "accepted_native_call_count": 165,
+      "population_exhaustion_proven": false
+    },
+    "profile_hydration": {
+      "input_count": 93,
+      "tool_evidence_compliant_input_count": 93,
+      "exact_match_count": 91,
+      "not_found_count": 2,
+      "matched_field_coverage": {
+        "platform_user_id": {"count": 91, "rate": 1.0},
+        "display_name": {"count": 91, "rate": 1.0},
+        "bio": {"count": 88, "rate": 0.967033},
+        "affiliation": {"count": 81, "rate": 0.89011},
+        "verification": {"count": 55, "rate": 0.604396},
+        "external_urls": {"count": 5, "rate": 0.054945},
+        "location": {"count": 0, "rate": 0.0},
+        "professional_category": {"count": 0, "rate": 0.0}
+      }
+    }
+  }
+}

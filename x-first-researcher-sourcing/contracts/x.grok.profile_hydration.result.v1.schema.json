@@ -4,8 +4,29 @@
   "title": "Grok profile hydration result v1",
   "type": "object",
   "additionalProperties": false,
-  "required": ["batch_id", "status", "records", "limitations"],
+  "required": [
+    "contract_version",
+    "campaign_id",
+    "target_descriptor_id",
+    "target_descriptor_sha256",
+    "prompt_policy_sha256",
+    "discovery_union_sha256",
+    "input_set_sha256",
+    "run_id",
+    "batch_id",
+    "status",
+    "records",
+    "limitations"
+  ],
   "properties": {
+    "contract_version": {"const": "x.grok.profile_hydration.result.v1"},
+    "campaign_id": {"$ref": "#/$defs/identifier"},
+    "target_descriptor_id": {"$ref": "#/$defs/identifier"},
+    "target_descriptor_sha256": {"$ref": "#/$defs/sha256"},
+    "prompt_policy_sha256": {"$ref": "#/$defs/sha256"},
+    "discovery_union_sha256": {"$ref": "#/$defs/sha256"},
+    "input_set_sha256": {"$ref": "#/$defs/sha256"},
+    "run_id": {"$ref": "#/$defs/identifier"},
     "batch_id": {
       "type": "string",
       "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
@@ -29,6 +50,15 @@
     }
   },
   "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+      "maxLength": 128
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
     "handle": {
       "type": "string",
       "pattern": "^[A-Za-z0-9_]{1,15}$"

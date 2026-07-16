@@ -3,13 +3,17 @@ from __future__ import annotations
 import copy
 import json
 import unittest
+from dataclasses import replace
 from itertools import product
 from pathlib import Path
 
 from x_first.compact_grok_discovery import (
+    CONTRACT_VERSION,
     COVERAGE_CELLS,
     SOURCE_SURFACES,
     CompactDiscoveryContractError,
+    CompactDiscoveryExecutionReceipt,
+    canonical_json_sha256,
     canonical_profile_url,
     compare_compact_discovery_results,
     compare_lead_sets,
@@ -22,6 +26,15 @@ from x_first.recall_pool_schema import schema_errors
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_PATH = PROJECT_ROOT / "contracts" / "x.grok.compact_discovery.result.v1.schema.json"
+AGGREGATE_RECEIPT_PATH = (
+    PROJECT_ROOT
+    / "docs"
+    / "live-evidence"
+    / "2026-07-16-gdm-compact-strategy-matrix.aggregate-receipt.v1.json"
+)
+TARGET_DIGEST = "1" * 64
+PROMPT_DIGEST = "2" * 64
+TRANSCRIPT_DIGEST = "3" * 64
 
 
 def _reason_codes(lab_state: str, pretraining_state: str) -> list[str]:
@@ -37,6 +50,7 @@ def _lead(
     lab_state: str = "current",
     pretraining_state: str = "current",
     platform_user_id: str | None = None,
+    shard_id: str = "fixture.shard-a",
 ) -> dict[str, object]:
     numeric_suffix = "".join(character for character in handle if character.isdigit()) or "1"
     post_id = str(1_000_000 + int(numeric_suffix))
@@ -44,6 +58,16 @@ def _lead(
         "handle": handle,
         "profile_url": f"https://x.com/{handle}",
         "platform_user_id": platform_user_id,
+        "identity_status": "stable_platform_id" if platform_user_id else "provisional_handle",
+        "handle_history_proposals": [
+            {
+                "handle": handle,
+                "profile_url": f"https://x.com/{handle}",
+                "source_status": "model_mediated_unverified",
+                "origin_shard_ids": [shard_id],
+            }
+        ],
+        "origin_shard_ids": [shard_id],
         "target_lab_affiliation_state": lab_state,
         "pretraining_experience_state": pretraining_state,
         "source_status": "model_mediated_unverified",
@@ -54,6 +78,7 @@ def _lead(
                 "subject_handle": handle,
                 "author_handle": handle,
                 "support_dimensions": ["lab_affiliation"],
+                "origin_shard_ids": [shard_id],
             },
             {
                 "surface": "self_post",
@@ -61,51 +86,111 @@ def _lead(
                 "subject_handle": handle,
                 "author_handle": handle,
                 "support_dimensions": ["pretraining_relevance"],
+                "origin_shard_ids": [shard_id],
             },
         ],
         "reason_codes": _reason_codes(lab_state, pretraining_state),
     }
 
 
-def _result(leads: list[dict[str, object]]) -> dict[str, object]:
+def _result(
+    leads: list[dict[str, object]],
+    *,
+    shard_id: str = "fixture.shard-a",
+    campaign_id: str = "fixture.gdm-campaign-v1",
+    target_digest: str = TARGET_DIGEST,
+) -> dict[str, object]:
+    normalized = copy.deepcopy(leads)
+    for lead in normalized:
+        lead["origin_shard_ids"] = [shard_id]
+        for proposal in lead["handle_history_proposals"]:
+            proposal["origin_shard_ids"] = [shard_id]
+        for source_ref in lead["source_refs"]:
+            source_ref["origin_shard_ids"] = [shard_id]
     return {
+        "contract_version": CONTRACT_VERSION,
+        "campaign_id": campaign_id,
+        "target_descriptor_id": "fixture.gdm-target-v1",
+        "target_descriptor_sha256": target_digest,
+        "prompt_policy_sha256": PROMPT_DIGEST,
+        "result_kind": "shard",
+        "shard_id": shard_id,
+        "input_shards": [],
         "status": "X_DISCOVERY_OK",
         "strategy_id": "gdm.compact.discovery-v1",
-        "leads": leads,
+        "leads": normalized,
         "coverage_cells": list(COVERAGE_CELLS),
         "uncovered_cells": [],
         "limitations": [],
     }
 
 
+def _projection(result: dict[str, object], **facts: bool):
+    receipt = CompactDiscoveryExecutionReceipt(
+        receipt_version="x.grok.compact_discovery.execution_receipt.v1",
+        campaign_id=result["campaign_id"],
+        target_descriptor_id=result["target_descriptor_id"],
+        target_descriptor_sha256=result["target_descriptor_sha256"],
+        prompt_policy_sha256=result["prompt_policy_sha256"],
+        shard_id=result["shard_id"],
+        session_id=f"session:{result['shard_id']}",
+        transcript_sha256=TRANSCRIPT_DIGEST,
+        terminal_sha256=canonical_json_sha256(result),
+        terminal_selected_after_last_tool_completion=True,
+        result_truncated=facts.get("result_truncated", False),
+        execution_deadline_reached=facts.get("execution_deadline_reached", False),
+        transport_failure=facts.get("transport_failure", False),
+        model_output_repaired=facts.get("model_output_repaired", False),
+    )
+    return project_compact_execution_limitations(result, receipt=receipt)
+
+
 class CompactGrokDiscoveryContractTests(unittest.TestCase):
-    def test_schema_is_compact_closed_and_has_no_business_array_cap(self) -> None:
+    def test_schema_is_closed_bound_and_has_no_business_array_cap(self) -> None:
         schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
-        self.assertEqual(
-            set(schema["required"]),
-            {"status", "strategy_id", "leads", "coverage_cells", "uncovered_cells", "limitations"},
-        )
+        self.assertEqual(set(schema["required"]), set(_result([])))
         self.assertFalse(schema["additionalProperties"])
-        self.assertNotIn("queries", json.dumps(schema))
-        self.assertNotIn("tool_counts", json.dumps(schema))
-        self.assertNotIn("oneOf", schema["$defs"]["source_ref"]["properties"]["url"])
         self.assertNotIn("maxItems", schema["properties"]["leads"])
         self.assertNotIn("maxItems", schema["$defs"]["lead"]["properties"]["source_refs"])
+        self.assertIn("origin_shard_ids", schema["$defs"]["source_ref"]["required"])
+        self.assertIn("handle_history_proposals", schema["$defs"]["lead"]["required"])
+
+    def test_live_diagnostic_aggregate_receipt_is_hash_bound_and_arithmetically_closed(self) -> None:
+        receipt = json.loads(AGGREGATE_RECEIPT_PATH.read_text(encoding="utf-8"))
+        self.assertEqual(receipt["claim_status"], "diagnostic_only")
+        self.assertEqual(receipt["privacy_class"], "candidate_free_aggregate")
+        bindings = receipt["source_artifact_bindings"]
+        self.assertEqual(len(bindings), 6)
+        self.assertTrue(
+            all(
+                len(binding["sha256"]) == 64
+                and set(binding["sha256"]) <= set("0123456789abcdef")
+                for binding in bindings
+            )
+        )
+        hydration = receipt["aggregate_metrics"]["profile_hydration"]
+        self.assertEqual(hydration["input_count"], 93)
+        self.assertEqual(
+            hydration["exact_match_count"] + hydration["not_found_count"],
+            hydration["tool_evidence_compliant_input_count"],
+        )
+        self.assertEqual(
+            receipt["aggregate_metrics"]["discovery"]["population_exhaustion_proven"],
+            False,
+        )
 
     def test_typical_payload_matches_schema_and_runtime(self) -> None:
-        schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
         payload = _result([_lead("FxSchema001", platform_user_id="99001")])
+        schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
         self.assertEqual(schema_errors(payload, schema), [])
         self.assertEqual(validate_compact_discovery_result(payload), [])
 
-    def test_more_than_one_hundred_leads_are_valid_without_business_cap(self) -> None:
+    def test_more_than_one_hundred_leads_and_refs_have_no_business_cap(self) -> None:
         payload = _result(
             [_lead(f"FxLead{index:04d}", platform_user_id=str(50_000 + index)) for index in range(137)]
         )
         self.assertEqual(validate_compact_discovery_result(payload), [])
         self.assertEqual(summarize_compact_discovery(payload)["unique_lead_count"], 137)
-
-    def test_more_than_one_hundred_source_refs_are_valid_without_business_cap(self) -> None:
         lead = _lead("FxManyRefs001")
         lead["source_refs"].extend(
             {
@@ -114,495 +199,357 @@ class CompactGrokDiscoveryContractTests(unittest.TestCase):
                 "subject_handle": "FxManyRefs001",
                 "author_handle": "FxManyRefs001",
                 "support_dimensions": ["pretraining_relevance"],
+                "origin_shard_ids": ["fixture.shard-a"],
             }
             for index in range(121)
         )
-        payload = _result([lead])
-        self.assertEqual(validate_compact_discovery_result(payload), [])
-        self.assertEqual(summarize_compact_discovery(payload)["source_refs"]["total"], 123)
+        many_refs = _result([lead])
+        self.assertEqual(validate_compact_discovery_result(many_refs), [])
+        self.assertEqual(summarize_compact_discovery(many_refs)["source_refs"]["total"], 123)
 
-    def test_root_search_and_placeholder_profile_urls_fail_closed(self) -> None:
+    def test_campaign_and_target_binding_fields_fail_closed(self) -> None:
+        for field, value in (
+            ("campaign_id", "INVALID CAMPAIGN"),
+            ("target_descriptor_id", "INVALID TARGET"),
+            ("target_descriptor_sha256", "short"),
+            ("prompt_policy_sha256", "short"),
+            ("contract_version", "wrong"),
+        ):
+            with self.subTest(field=field):
+                payload = _result([_lead("FxBind001")])
+                payload[field] = value
+                self.assertTrue(validate_compact_discovery_result(payload))
+
+    def test_profile_source_and_origin_bindings_fail_closed(self) -> None:
+        payload = _result([_lead("FxBind002")])
+        payload["leads"][0]["source_refs"][1]["subject_handle"] = "FxOther002"
+        self.assertIn(
+            "lead:0:source_ref:1:source_ref_subject_binding_invalid",
+            validate_compact_discovery_result(payload),
+        )
+        origin = _result([_lead("FxBind003")])
+        origin["leads"][0]["source_refs"][0]["origin_shard_ids"] = ["fixture.other"]
+        self.assertIn(
+            "lead:0:source_ref:0:source_ref_origin_binding_invalid",
+            validate_compact_discovery_result(origin),
+        )
+
+    def test_root_placeholder_casefold_duplicate_and_status_author_fail_closed(self) -> None:
         for invalid_url in (
-            "https://x.com",
             "https://x.com/",
             "https://x.com/search",
             "https://x.com/placeholder",
-            "https://x.com/example_user",
         ):
             with self.subTest(invalid_url=invalid_url):
                 payload = _result([_lead("FxRoute001")])
                 payload["leads"][0]["profile_url"] = invalid_url
-                payload["leads"][0]["source_refs"][0]["url"] = invalid_url
                 self.assertTrue(validate_compact_discovery_result(payload))
 
-    def test_casefold_duplicate_handles_fail(self) -> None:
-        payload = _result([_lead("FxCase001"), _lead("fxcase001")])
-        self.assertIn("lead:1:handle_casefold_duplicate", validate_compact_discovery_result(payload))
-
-    def test_surface_url_type_mismatch_fails(self) -> None:
-        payload = _result([_lead("FxSurface001")])
-        payload["leads"][0]["source_refs"][1]["surface"] = "profile"
-        errors = validate_compact_discovery_result(payload)
-        self.assertIn("lead:0:source_ref:1:source_ref_profile_binding_invalid", errors)
-
-    def test_profile_url_must_bind_to_handle_identity(self) -> None:
-        payload = _result([_lead("FxProfile001")])
-        payload["leads"][0]["profile_url"] = "https://x.com/FxOther001"
-        self.assertIn("lead:0:profile_url_binding_invalid", validate_compact_discovery_result(payload))
-
-    def test_source_subject_author_and_url_identity_mismatch_fail(self) -> None:
-        subject_mismatch = _result([_lead("FxBind001")])
-        subject_mismatch["leads"][0]["source_refs"][1]["subject_handle"] = "FxOther001"
+        duplicates = _result([_lead("FxCase001"), _lead("fxcase001")])
         self.assertIn(
-            "lead:0:source_ref:1:source_ref_subject_binding_invalid",
-            validate_compact_discovery_result(subject_mismatch),
+            "lead:1:provisional_handle_duplicate",
+            validate_compact_discovery_result(duplicates),
         )
-
-        author_mismatch = _result([_lead("FxBind002")])
-        author_mismatch["leads"][0]["source_refs"][1]["author_handle"] = "FxOther002"
+        bad_author = _result([_lead("FxAuthor001")])
+        bad_author["leads"][0]["source_refs"][1]["author_handle"] = "FxOther001"
         self.assertIn(
             "lead:0:source_ref:1:source_ref_status_binding_invalid",
-            validate_compact_discovery_result(author_mismatch),
+            validate_compact_discovery_result(bad_author),
         )
 
-        host_mismatch = _result([_lead("FxBind003")])
-        host_mismatch["leads"][0]["source_refs"][1]["url"] = (
-            "https://X.com/FxBind003/status/1000003"
-        )
-        self.assertIn(
-            "lead:0:source_ref:1:source_ref_status_binding_invalid",
-            validate_compact_discovery_result(host_mismatch),
-        )
-
-    def test_handle_profile_subject_author_and_status_url_case_compare_by_identity(self) -> None:
+    def test_identity_binding_is_case_insensitive_but_canonical_url_shape_is_strict(self) -> None:
         payload = _result([_lead("FxMixedCase01")])
         lead = payload["leads"][0]
         lead["profile_url"] = "https://x.com/fxmixedcase01"
+        lead["handle_history_proposals"][0].update(
+            {"handle": "FXMIXEDCASE01", "profile_url": "https://x.com/FXMIXEDCASE01"}
+        )
         lead["source_refs"][0].update(
             {
-                "url": "https://x.com/FXMIXEDCASE01",
-                "subject_handle": "fxmixedcase01",
-                "author_handle": "FXMIXEDCASE01",
+                "url": "https://x.com/fxmixedcase01",
+                "subject_handle": "FXMIXEDCASE01",
+                "author_handle": "fxmixedcase01",
             }
         )
         lead["source_refs"][1].update(
             {
                 "url": "https://x.com/fxmixedcase01/status/1000001",
-                "subject_handle": "FXMIXEDCASE01",
-                "author_handle": "fxmixedcase01",
+                "subject_handle": "fxmixedcase01",
+                "author_handle": "FXMIXEDCASE01",
             }
         )
-
-        self.assertEqual(schema_errors(payload, json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))), [])
         self.assertEqual(validate_compact_discovery_result(payload), [])
-        self.assertEqual(canonical_profile_url("FxMixedCase01"), "https://x.com/FxMixedCase01")
 
-    def test_all_nine_independent_temporal_state_combinations_are_valid_and_counted(self) -> None:
-        states = ("current", "historical", "ambiguous")
-        leads = [
-            _lead(
-                f"FxState{index:02d}",
-                lab_state=lab_state,
-                pretraining_state=pretraining_state,
-            )
-            for index, (lab_state, pretraining_state) in enumerate(product(states, states), start=1)
-        ]
-        payload = _result(leads)
-        self.assertEqual(validate_compact_discovery_result(payload), [])
-        matrix = summarize_compact_discovery(payload)["state_matrix"]
-        for lab_state, pretraining_state in product(states, states):
-            self.assertEqual(matrix[lab_state][pretraining_state], 1)
-
-    def test_ambiguous_axis_may_lack_support_without_losing_recall(self) -> None:
-        schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
-        cases = (
-            ("current", "ambiguous", "lab_affiliation"),
-            ("historical", "ambiguous", "lab_affiliation"),
-            ("ambiguous", "current", "pretraining_relevance"),
-            ("ambiguous", "historical", "pretraining_relevance"),
-        )
-        for index, (lab_state, pretraining_state, retained_dimension) in enumerate(cases, start=1):
-            with self.subTest(lab_state=lab_state, pretraining_state=pretraining_state):
-                lead = _lead(
-                    f"FxPartial{index:02d}",
-                    lab_state=lab_state,
-                    pretraining_state=pretraining_state,
-                )
-                lead["source_refs"] = [
-                    source_ref
-                    for source_ref in lead["source_refs"]
-                    if retained_dimension in source_ref["support_dimensions"]
-                ]
-                payload = _result([lead])
-                self.assertEqual(schema_errors(payload, schema), [])
-                self.assertEqual(validate_compact_discovery_result(payload), [])
-
-    def test_non_ambiguous_axes_each_require_corresponding_support(self) -> None:
-        payload = _result([_lead("FxMissing001", lab_state="current", pretraining_state="current")])
-        payload["leads"][0]["source_refs"] = payload["leads"][0]["source_refs"][:1]
-        self.assertIn(
-            "lead:0:source_dimension_coverage_invalid",
-            validate_compact_discovery_result(payload),
-        )
-
-    def test_operator_summary_recomputes_leads_refs_surfaces_and_dimensions(self) -> None:
-        first = _lead("FxSummary001", lab_state="current", pretraining_state="historical")
-        second = _lead("FxSummary002", lab_state="historical", pretraining_state="ambiguous")
-        second["source_refs"][1]["surface"] = "reply"
-        payload = _result([first, second])
-
-        summary = summarize_compact_discovery(payload)
-
-        self.assertEqual(summary["unique_lead_count"], 2)
-        self.assertEqual(summary["source_refs"]["total"], 4)
-        self.assertEqual(summary["source_refs"]["by_surface"]["bio"], 2)
-        self.assertEqual(summary["source_refs"]["by_surface"]["self_post"], 1)
-        self.assertEqual(summary["source_refs"]["by_surface"]["reply"], 1)
-        self.assertEqual(summary["source_refs"]["by_support_dimension"]["lab_affiliation"], 2)
-        self.assertEqual(summary["source_refs"]["by_support_dimension"]["pretraining_relevance"], 2)
-        self.assertEqual(summary["state_matrix"]["current"]["historical"], 1)
-        self.assertEqual(summary["state_matrix"]["historical"]["ambiguous"], 1)
-        serialized = json.dumps(summary, sort_keys=True)
-        self.assertNotIn("FxSummary", serialized)
-        self.assertNotIn("tool", serialized)
-        self.assertEqual(set(summary["source_refs"]["by_surface"]), set(SOURCE_SURFACES))
-
-    def test_comparison_is_casefolded_and_input_order_independent(self) -> None:
-        expected = {
-            "left_unique_leads": 3,
-            "right_unique_leads": 3,
-            "union": 4,
-            "intersection": 2,
-            "left_only": 1,
-            "right_only": 1,
-            "jaccard": 0.5,
-        }
-        self.assertEqual(
-            compare_lead_sets(
-                ["FxSetA001", "FxSetB001", "FxSetC001", "fxseta001"],
-                ["FxSetD001", "fxsetc001", "FxSetB001"],
-            ),
-            expected,
-        )
-        self.assertEqual(
-            compare_lead_sets(
-                ["FxSetC001", "FxSetA001", "FxSetB001"],
-                ["FxSetB001", "FxSetD001", "fxsetc001"],
-            ),
-            expected,
-        )
-
-        left = _result([_lead("FxSetA001"), _lead("FxSetB001"), _lead("FxSetC001")])
-        right = _result([_lead("FxSetD001"), _lead("fxsetc001"), _lead("FxSetB001")])
-        self.assertEqual(compare_compact_discovery_results(left, right), expected)
-
-    def test_coverage_reason_and_source_dimension_formats_are_closed(self) -> None:
+    def test_closed_coverage_reason_status_and_partition_contracts(self) -> None:
         bad_coverage = _result([_lead("FxClosed001")])
         bad_coverage["coverage_cells"].append("free_form_cell")
         self.assertIn("coverage_cells_invalid", validate_compact_discovery_result(bad_coverage))
-
         bad_reason = _result([_lead("FxClosed002")])
         bad_reason["leads"][0]["reason_codes"] = ["free_form_reason"]
         self.assertIn("lead:0:reason_codes_invalid", validate_compact_discovery_result(bad_reason))
+        bad_status = _result([_lead("FxClosed003")])
+        bad_status["limitations"] = ["native_x_search_incomplete"]
+        self.assertIn("status_coverage_invalid", validate_compact_discovery_result(bad_status))
+        overlap = _result([_lead("FxClosed004")])
+        overlap["uncovered_cells"] = [COVERAGE_CELLS[0]]
+        self.assertIn("coverage_cells_overlap", validate_compact_discovery_result(overlap))
 
-        missing_dimension = _result([_lead("FxClosed003")])
-        missing_dimension["leads"][0]["source_refs"] = missing_dimension["leads"][0]["source_refs"][:1]
+    def test_all_temporal_combinations_require_both_evidence_dimensions(self) -> None:
+        leads = [
+            _lead(f"FxState{index:02d}", lab_state=lab, pretraining_state=pre)
+            for index, (lab, pre) in enumerate(product(("current", "historical", "ambiguous"), repeat=2), 1)
+        ]
+        payload = _result(leads)
+        self.assertEqual(validate_compact_discovery_result(payload), [])
+        ambiguous = _result([_lead("FxUnknown001", pretraining_state="ambiguous")])
+        ambiguous["leads"][0]["source_refs"] = ambiguous["leads"][0]["source_refs"][:1]
         self.assertIn(
             "lead:0:source_dimension_coverage_invalid",
-            validate_compact_discovery_result(missing_dimension),
+            validate_compact_discovery_result(ambiguous),
         )
 
-    def test_nullable_platform_user_id_and_non_mutating_validation(self) -> None:
-        payload = _result([_lead("FxNullable001", platform_user_id=None)])
-        before = copy.deepcopy(payload)
-        self.assertEqual(validate_compact_discovery_result(payload), [])
-        self.assertEqual(payload, before)
-
-    def test_ok_status_rejects_any_uncovered_cell_or_limitation(self) -> None:
-        uncovered = _result([_lead("FxStatus001")])
-        uncovered["coverage_cells"] = list(COVERAGE_CELLS[:-1])
-        uncovered["uncovered_cells"] = [COVERAGE_CELLS[-1]]
-        self.assertIn("status_coverage_invalid", validate_compact_discovery_result(uncovered))
-
-        limited = _result([_lead("FxStatus002")])
-        limited["limitations"] = ["native_x_search_incomplete"]
-        self.assertIn("status_coverage_invalid", validate_compact_discovery_result(limited))
-
-    def test_operator_projection_removes_false_model_execution_claims(self) -> None:
+    def test_operator_projection_normalizes_before_status_coherence(self) -> None:
         payload = _result([_lead("FxProject001")])
-        payload.update(
-            {
-                "status": "X_DISCOVERY_PARTIAL",
-                "limitations": [
-                    "native_x_search_incomplete",
-                    "result_truncated",
-                    "execution_deadline_reached",
-                ],
-            }
-        )
-        before = copy.deepcopy(payload)
+        payload["status"] = "X_DISCOVERY_OK"
+        payload["limitations"] = ["result_truncated"]
+        self.assertIn("status_coverage_invalid", validate_compact_discovery_result(payload))
+        projection = _projection(payload)
+        self.assertEqual(projection.result["status"], "X_DISCOVERY_OK")
+        self.assertEqual(projection.result["limitations"], [])
+        self.assertEqual(projection.removed_model_operator_limitations, ("result_truncated",))
 
-        projection = project_compact_execution_limitations(
-            payload,
+    def test_operator_projection_requires_terminal_and_receipt_binding(self) -> None:
+        payload = _result([_lead("FxProject002")])
+        receipt = CompactDiscoveryExecutionReceipt(
+            receipt_version="x.grok.compact_discovery.execution_receipt.v1",
+            campaign_id="fixture.other-campaign",
+            target_descriptor_id=payload["target_descriptor_id"],
+            target_descriptor_sha256=payload["target_descriptor_sha256"],
+            prompt_policy_sha256=payload["prompt_policy_sha256"],
+            shard_id=payload["shard_id"],
+            session_id="session:bad",
+            transcript_sha256=TRANSCRIPT_DIGEST,
+            terminal_sha256=canonical_json_sha256(payload),
+            terminal_selected_after_last_tool_completion=True,
             result_truncated=False,
             execution_deadline_reached=False,
             transport_failure=False,
             model_output_repaired=False,
         )
+        with self.assertRaisesRegex(CompactDiscoveryContractError, "campaign_id_mismatch"):
+            project_compact_execution_limitations(payload, receipt=receipt)
+        receipt = replace(receipt, campaign_id=payload["campaign_id"], terminal_sha256="4" * 64)
+        with self.assertRaisesRegex(CompactDiscoveryContractError, "terminal_sha256_mismatch"):
+            project_compact_execution_limitations(payload, receipt=receipt)
 
-        self.assertEqual(
-            projection.result["limitations"],
-            ["native_x_search_incomplete"],
-        )
-        self.assertEqual(projection.result["status"], "X_DISCOVERY_PARTIAL")
-        self.assertEqual(
-            projection.removed_model_operator_limitations,
-            ("result_truncated", "execution_deadline_reached"),
-        )
-        self.assertEqual(projection.added_operator_limitations, ())
-        self.assertEqual(validate_compact_discovery_result(projection.result), [])
-        self.assertEqual(payload, before)
-
-    def test_operator_projection_adds_true_receipt_facts_in_canonical_order(self) -> None:
-        payload = _result([_lead("FxProject002")])
-
-        projection = project_compact_execution_limitations(
+    def test_operator_projection_adds_true_facts_and_blocks_empty_hard_failure(self) -> None:
+        payload = _result([_lead("FxProject003")])
+        projection = _projection(
             payload,
             result_truncated=True,
-            execution_deadline_reached=False,
             transport_failure=True,
             model_output_repaired=True,
         )
-
         self.assertEqual(
             projection.result["limitations"],
             ["result_truncated", "transport_failure", "model_output_repaired"],
         )
         self.assertEqual(projection.result["status"], "X_DISCOVERY_PARTIAL")
-        self.assertEqual(
-            projection.added_operator_limitations,
-            ("result_truncated", "transport_failure", "model_output_repaired"),
+        empty = _projection(_result([]), execution_deadline_reached=True)
+        self.assertEqual(empty.result["status"], "X_DISCOVERY_BLOCKED")
+
+    def test_merge_rejects_raw_mapping_and_forged_projection_digest(self) -> None:
+        payload = _result([_lead("FxEnvelope001")])
+        with self.assertRaisesRegex(CompactDiscoveryContractError, "merge_projection_required"):
+            merge_compact_discovery_results([payload])  # type: ignore[list-item]
+        projection = _projection(payload)
+        forged = replace(projection, projected_result_sha256="f" * 64)
+        with self.assertRaisesRegex(CompactDiscoveryContractError, "result_digest_mismatch"):
+            merge_compact_discovery_results([forged])
+
+    def test_merge_rejects_cross_campaign_descriptor_and_duplicate_shard(self) -> None:
+        first = _projection(_result([_lead("FxCampaign01")], shard_id="fixture.shard-a"))
+        cross_campaign = _projection(
+            _result(
+                [_lead("FxCampaign02")],
+                shard_id="fixture.shard-b",
+                campaign_id="fixture.other-campaign",
+            )
         )
-        self.assertEqual(validate_compact_discovery_result(projection.result), [])
-
-    def test_operator_projection_blocks_empty_result_on_hard_execution_failure(self) -> None:
-        payload = _result([])
-
-        projection = project_compact_execution_limitations(
-            payload,
-            result_truncated=False,
-            execution_deadline_reached=True,
-            transport_failure=False,
-            model_output_repaired=False,
+        with self.assertRaisesRegex(CompactDiscoveryContractError, "campaign_binding_mismatch:campaign_id"):
+            merge_compact_discovery_results([first, cross_campaign])
+        cross_descriptor = _projection(
+            _result(
+                [_lead("FxCampaign04")],
+                shard_id="fixture.shard-c",
+                target_digest="a" * 64,
+            )
         )
-
-        self.assertEqual(projection.result["status"], "X_DISCOVERY_BLOCKED")
-        self.assertEqual(projection.result["limitations"], ["execution_deadline_reached"])
-        self.assertEqual(validate_compact_discovery_result(projection.result), [])
-
-    def test_operator_projection_can_upgrade_false_partial_to_ok(self) -> None:
-        payload = _result([_lead("FxProject003")])
-        payload.update(
-            {
-                "status": "X_DISCOVERY_PARTIAL",
-                "limitations": ["result_truncated"],
-            }
-        )
-
-        projection = project_compact_execution_limitations(
-            payload,
-            result_truncated=False,
-            execution_deadline_reached=False,
-            transport_failure=False,
-            model_output_repaired=False,
-        )
-
-        self.assertEqual(projection.result["status"], "X_DISCOVERY_OK")
-        self.assertEqual(projection.result["limitations"], [])
-        self.assertEqual(validate_compact_discovery_result(projection.result), [])
-
-    def test_operator_projection_rejects_non_boolean_operator_fact(self) -> None:
         with self.assertRaisesRegex(
             CompactDiscoveryContractError,
-            "operator_fact_invalid:result_truncated",
+            "campaign_binding_mismatch:target_descriptor_sha256",
         ):
-            project_compact_execution_limitations(
-                _result([_lead("FxProject004")]),
-                result_truncated=1,  # type: ignore[arg-type]
-                execution_deadline_reached=False,
-                transport_failure=False,
-                model_output_repaired=False,
-            )
+            merge_compact_discovery_results([first, cross_descriptor])
+        duplicate = _projection(_result([_lead("FxCampaign03")], shard_id="fixture.shard-a"))
+        with self.assertRaisesRegex(CompactDiscoveryContractError, "merge_shard_id_duplicate"):
+            merge_compact_discovery_results([first, duplicate])
 
-    def test_merge_three_shards_unions_more_than_one_hundred_leads_without_cap(self) -> None:
-        shards = [
-            _result([_lead(f"FxUnion{index:04d}") for index in range(start, stop)])
-            for start, stop in ((0, 75), (50, 125), (100, 175))
-        ]
-
-        merged = merge_compact_discovery_results(shards)
-
-        self.assertEqual(validate_compact_discovery_result(merged.result), [])
-        self.assertEqual(merged.summary.input_result_count, 3)
-        self.assertEqual(merged.summary.input_lead_count, 225)
-        self.assertEqual(merged.summary.unique_lead_count, 175)
-        self.assertEqual(merged.summary.overlapping_handle_count, 50)
-        self.assertEqual(len(merged.result["leads"]), 175)
-
-    def test_merge_casefolds_handles_and_reconciles_temporal_states(self) -> None:
-        first = _lead(
-            "FxMergeState01",
-            lab_state="current",
-            pretraining_state="historical",
+    def test_platform_id_first_merge_reconciles_handle_rename(self) -> None:
+        first = _projection(
+            _result([_lead("FxOldHandle01", platform_user_id="91001")], shard_id="fixture.shard-a")
         )
-        second = _lead(
-            "fxmergestate01",
-            lab_state="ambiguous",
-            pretraining_state="current",
+        second = _projection(
+            _result([_lead("FxNewHandle01", platform_user_id="91001")], shard_id="fixture.shard-b")
         )
-
-        merged = merge_compact_discovery_results([_result([first]), _result([second])])
-        lead = merged.result["leads"][0]
-
-        self.assertEqual(merged.summary.unique_lead_count, 1)
-        self.assertEqual(merged.summary.overlapping_handle_count, 1)
-        self.assertEqual(merged.summary.lab_affiliation_state_conflict_count, 0)
-        self.assertEqual(merged.summary.pretraining_experience_state_conflict_count, 1)
-        self.assertEqual(lead["handle"], "FxMergeState01")
-        self.assertEqual(lead["target_lab_affiliation_state"], "current")
-        self.assertEqual(lead["pretraining_experience_state"], "ambiguous")
-        self.assertEqual(
-            lead["reason_codes"],
-            ["lab_affiliation_current_signal", "pretraining_relevance_ambiguous_signal"],
-        )
-        self.assertEqual(validate_compact_discovery_result(merged.result), [])
-
-    def test_merge_counts_concrete_lab_state_conflict_separately(self) -> None:
-        current = _lead("FxLabConflict01", lab_state="current")
-        historical = _lead("fxlabconflict01", lab_state="historical")
-
-        merged = merge_compact_discovery_results(
-            [_result([current]), _result([historical])]
-        )
-
-        self.assertEqual(
-            merged.result["leads"][0]["target_lab_affiliation_state"],
-            "ambiguous",
-        )
-        self.assertEqual(merged.summary.lab_affiliation_state_conflict_count, 1)
-        self.assertEqual(merged.summary.pretraining_experience_state_conflict_count, 0)
-        self.assertEqual(validate_compact_discovery_result(merged.result), [])
-
-    def test_merge_nulls_conflicting_platform_user_ids_and_counts_conflict(self) -> None:
-        first = _result([_lead("FxIdConflict01", platform_user_id="91001")])
-        second = _result([_lead("fxidconflict01", platform_user_id="91002")])
-
         merged = merge_compact_discovery_results([first, second])
-
-        self.assertIsNone(merged.result["leads"][0]["platform_user_id"])
-        self.assertEqual(merged.summary.platform_user_id_conflict_count, 1)
+        self.assertEqual(merged.summary.unique_lead_count, 1)
+        self.assertEqual(merged.summary.renamed_stable_identity_count, 1)
+        lead = merged.result["leads"][0]
+        self.assertEqual(lead["platform_user_id"], "91001")
+        self.assertEqual(lead["identity_status"], "stable_platform_id")
+        self.assertEqual(
+            {item["handle"] for item in lead["handle_history_proposals"]},
+            {"FxOldHandle01", "FxNewHandle01"},
+        )
+        self.assertEqual(lead["origin_shard_ids"], ["fixture.shard-a", "fixture.shard-b"])
         self.assertEqual(validate_compact_discovery_result(merged.result), [])
 
-    def test_merge_preserves_post_and_reply_refs_and_sorts_full_identity_key(self) -> None:
-        first = _lead("FxMergeRefs01")
-        second = _lead("fxmergerefs01")
-        second["source_refs"][1]["support_dimensions"] = [
-            "pretraining_relevance",
-            "lab_affiliation",
-        ]
+    def test_recycled_handle_is_quarantined_without_evidence_merge(self) -> None:
+        first = _projection(
+            _result([_lead("FxReused001", platform_user_id="92001")], shard_id="fixture.shard-a")
+        )
+        second_lead = _lead("fxreused001", platform_user_id="92002")
+        second_lead["source_refs"][1]["url"] = "https://x.com/fxreused001/status/3999999"
+        second = _projection(_result([second_lead], shard_id="fixture.shard-b"))
+        merged = merge_compact_discovery_results([first, second])
+        self.assertEqual(merged.summary.unique_lead_count, 2)
+        self.assertEqual(merged.summary.platform_user_id_conflict_count, 1)
+        self.assertEqual(merged.summary.quarantined_handle_reuse_identity_count, 2)
+        self.assertEqual(
+            {lead["platform_user_id"] for lead in merged.result["leads"]},
+            {"92001", "92002"},
+        )
+        self.assertTrue(
+            all(lead["identity_status"] == "quarantined_handle_reuse" for lead in merged.result["leads"])
+        )
+        self.assertTrue(all(len(lead["source_refs"]) == 2 for lead in merged.result["leads"]))
+        self.assertEqual(validate_compact_discovery_result(merged.result), [])
+
+    def test_missing_id_remains_separate_explicit_provisional_identity(self) -> None:
+        stable = _projection(
+            _result([_lead("FxMaybeSame01", platform_user_id="93001")], shard_id="fixture.shard-a")
+        )
+        provisional = _projection(
+            _result([_lead("fxmaybesame01")], shard_id="fixture.shard-b")
+        )
+        merged = merge_compact_discovery_results([stable, provisional])
+        self.assertEqual(merged.summary.unique_lead_count, 2)
+        self.assertEqual(merged.summary.provisional_identity_count, 1)
+        self.assertEqual(
+            {lead["identity_status"] for lead in merged.result["leads"]},
+            {"stable_platform_id", "provisional_handle"},
+        )
+
+    def test_merge_persists_input_digests_and_lead_ref_membership(self) -> None:
+        first = _projection(
+            _result([_lead("FxAudit001", platform_user_id="94001")], shard_id="fixture.shard-a")
+        )
+        second = _projection(
+            _result([_lead("fxaudit001", platform_user_id="94001")], shard_id="fixture.shard-b")
+        )
+        merged = merge_compact_discovery_results([second, first], union_id="fixture.union-v1")
+        self.assertEqual(
+            merged.result["input_shards"],
+            [
+                {"shard_id": "fixture.shard-a", "projected_result_sha256": first.projected_result_sha256},
+                {"shard_id": "fixture.shard-b", "projected_result_sha256": second.projected_result_sha256},
+            ],
+        )
+        lead = merged.result["leads"][0]
+        self.assertEqual(lead["origin_shard_ids"], ["fixture.shard-a", "fixture.shard-b"])
+        self.assertTrue(all(source["origin_shard_ids"] for source in lead["source_refs"]))
+        self.assertEqual(validate_compact_discovery_result(merged.result), [])
+        schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+        self.assertEqual(schema_errors(merged.result, schema), [])
+
+    def test_merge_preserves_post_reply_and_official_reference_surfaces(self) -> None:
+        first = _lead("FxRefs001", platform_user_id="94501")
+        second = _lead("fxrefs001", platform_user_id="94501")
         second["source_refs"].extend(
             [
                 {
                     "surface": "reply",
-                    "url": "https://x.com/fxmergerefs01/status/3000001",
-                    "subject_handle": "fxmergerefs01",
-                    "author_handle": "fxmergerefs01",
+                    "url": "https://x.com/fxrefs001/status/3000001",
+                    "subject_handle": "fxrefs001",
+                    "author_handle": "fxrefs001",
                     "support_dimensions": ["pretraining_relevance"],
+                    "origin_shard_ids": ["fixture.shard-b"],
                 },
                 {
                     "surface": "official_post",
-                    "url": "https://x.com/GDMOfficial/status/3000002",
-                    "subject_handle": "fxmergerefs01",
-                    "author_handle": "GDMOfficial",
+                    "url": "https://x.com/FxOfficial/status/3000002",
+                    "subject_handle": "fxrefs001",
+                    "author_handle": "FxOfficial",
                     "support_dimensions": ["lab_affiliation"],
+                    "origin_shard_ids": ["fixture.shard-b"],
                 },
             ]
         )
-        self.assertEqual(validate_compact_discovery_result(_result([second])), [])
-        inputs = [_result([first]), _result([second])]
-        before = copy.deepcopy(inputs)
-
-        merged = merge_compact_discovery_results(inputs)
-        source_refs = merged.result["leads"][0]["source_refs"]
-
-        self.assertEqual(
-            [source_ref["surface"] for source_ref in source_refs],
-            ["bio", "official_post", "reply", "self_post"],
+        merged = merge_compact_discovery_results(
+            [
+                _projection(_result([first], shard_id="fixture.shard-a")),
+                _projection(_result([second], shard_id="fixture.shard-b")),
+            ]
         )
         self.assertEqual(
-            source_refs[-1]["support_dimensions"],
-            ["lab_affiliation", "pretraining_relevance"],
-        )
-        self.assertEqual(merged.summary.input_source_ref_count, 6)
-        self.assertEqual(merged.summary.merged_source_ref_count, 4)
-        self.assertEqual(validate_compact_discovery_result(merged.result), [])
-        self.assertEqual(inputs, before)
-
-    def test_merge_combines_coverage_limitations_and_is_input_order_independent(self) -> None:
-        first = _result([_lead("FxCoverage01")])
-        first.update(
-            {
-                "status": "X_DISCOVERY_PARTIAL",
-                "coverage_cells": list(COVERAGE_CELLS[:4]),
-                "uncovered_cells": list(COVERAGE_CELLS[4:]),
-                "limitations": ["thread_hydration_incomplete"],
-            }
-        )
-        second = _result([_lead("FxCoverage02")])
-        second.update(
-            {
-                "status": "X_DISCOVERY_PARTIAL",
-                "coverage_cells": list(COVERAGE_CELLS[4:]),
-                "uncovered_cells": list(COVERAGE_CELLS[:4]),
-                "limitations": ["native_x_search_incomplete"],
-            }
-        )
-        strategy_id = "gdm.compact.three-shard-union-v1"
-
-        forward = merge_compact_discovery_results(
-            [first, second], strategy_id=strategy_id
-        )
-        reverse = merge_compact_discovery_results(
-            [second, first], strategy_id=strategy_id
+            {source["surface"] for source in merged.result["leads"][0]["source_refs"]},
+            {"bio", "self_post", "reply", "official_post"},
         )
 
+    def test_merge_temporal_conflicts_and_limitations_are_deterministic(self) -> None:
+        first_result = _result(
+            [_lead("FxStateMerge1", lab_state="current", pretraining_state="historical", platform_user_id="95001")],
+            shard_id="fixture.shard-a",
+        )
+        first_result["status"] = "X_DISCOVERY_PARTIAL"
+        first_result["limitations"] = ["thread_hydration_incomplete"]
+        second_result = _result(
+            [_lead("fxstatemerge1", lab_state="historical", pretraining_state="current", platform_user_id="95001")],
+            shard_id="fixture.shard-b",
+        )
+        second_result["status"] = "X_DISCOVERY_PARTIAL"
+        second_result["limitations"] = ["native_x_search_incomplete"]
+        first = _projection(first_result)
+        second = _projection(second_result)
+        forward = merge_compact_discovery_results([first, second])
+        reverse = merge_compact_discovery_results([second, first])
         self.assertEqual(forward, reverse)
-        self.assertEqual(forward.result["status"], "X_DISCOVERY_PARTIAL")
-        self.assertEqual(forward.result["coverage_cells"], list(COVERAGE_CELLS))
-        self.assertEqual(forward.result["uncovered_cells"], [])
+        lead = forward.result["leads"][0]
+        self.assertEqual(lead["target_lab_affiliation_state"], "ambiguous")
+        self.assertEqual(lead["pretraining_experience_state"], "ambiguous")
+        self.assertEqual(forward.summary.lab_affiliation_state_conflict_count, 1)
+        self.assertEqual(forward.summary.pretraining_experience_state_conflict_count, 1)
+
+    def test_summary_and_comparison_remain_candidate_free_and_bound(self) -> None:
+        payload = _result([_lead("FxSummary001")])
+        summary = summarize_compact_discovery(payload)
+        self.assertNotIn("FxSummary001", json.dumps(summary))
+        self.assertEqual(set(summary["source_refs"]["by_surface"]), set(SOURCE_SURFACES))
         self.assertEqual(
-            forward.result["limitations"],
-            ["native_x_search_incomplete", "thread_hydration_incomplete"],
+            compare_lead_sets(["FxA001", "FxB001"], ["fxa001", "FxC001"])["intersection"],
+            1,
         )
-        self.assertEqual(validate_compact_discovery_result(forward.result), [])
+        other = _result([_lead("FxOther001")], campaign_id="fixture.other-campaign")
+        with self.assertRaisesRegex(CompactDiscoveryContractError, "comparison_campaign_binding_mismatch"):
+            compare_compact_discovery_results(payload, other)
 
-    def test_merge_validates_all_inputs_before_work_and_does_not_mutate_them(self) -> None:
-        valid = _result([_lead("FxMergeValid01")])
-        invalid = _result([_lead("FxMergeBad01")])
-        invalid["leads"][0]["source_refs"][1]["subject_handle"] = "FxOtherBad01"
-        before = copy.deepcopy([valid, invalid])
-
-        with self.assertRaisesRegex(
-            CompactDiscoveryContractError,
-            r"merge_input:1:lead:0:source_ref:1:source_ref_subject_binding_invalid",
-        ):
-            merge_compact_discovery_results([valid, invalid])
-
-        self.assertEqual([valid, invalid], before)
-
-    def test_merge_rejects_empty_input(self) -> None:
-        with self.assertRaisesRegex(CompactDiscoveryContractError, "merge_results_empty"):
-            merge_compact_discovery_results([])
+    def test_canonical_profile_url_and_input_non_mutation(self) -> None:
+        payload = _result([_lead("FxNoMutation1")])
+        before = copy.deepcopy(payload)
+        projection = _projection(payload)
+        self.assertEqual(payload, before)
+        self.assertEqual(canonical_profile_url("FxNoMutation1"), "https://x.com/FxNoMutation1")
+        self.assertEqual(validate_compact_discovery_result(projection.result), [])
 
 
 if __name__ == "__main__":

@@ -37,6 +37,12 @@ Every campaign supplies a versioned target descriptor. The descriptor, rather th
 Changing Google DeepMind to OpenAI, Anthropic, xAI, Meta, Thinking Machines Lab, or another lab changes the descriptor
 and reviewed prompt binding. It does not change merge or scoring code.
 
+Every discovery shard serializes the immutable `campaign_id`, `target_descriptor_id`, descriptor SHA-256, shared
+discovery prompt-policy SHA-256, contract version, and a unique `shard_id`. Hydration repeats the campaign and target
+binding, adds its own phase-policy digest, and binds both the discovery-union digest and the case-folded input-set
+digest. A missing or unequal binding is a contract error; a shard from another lab or descriptor revision cannot be
+unioned merely because its JSON shape is valid.
+
 ## Phase contract
 
 ### Phase 1: compact discovery
@@ -56,37 +62,58 @@ The compact output contract is `x.grok.compact_discovery.result.v1`. It contains
 tool-call totals. Those metrics come from the Grok session ledger. Each retained lead has:
 
 - X handle and canonical profile URL;
-- nullable platform user id;
+- nullable platform user id plus an explicit `stable_platform_id|provisional_handle|quarantined_handle_reuse`
+  identity status;
+- reversible handle-history proposals and per-lead/per-reference origin-shard membership;
 - independent `current|historical|ambiguous` lab-affiliation and pretraining-relevance proposals;
 - one or more candidate-bound profile or stable status references;
 - explicit source surface and supported dimension;
 - `model_mediated_unverified` source status.
 
 A Post, Reply, quote, mention, official Post, or thread can establish a discovery path even when the Bio is silent.
-An unresolved axis remains `ambiguous`; it does not cause the lead to disappear.
+An unresolved axis remains `ambiguous`; it does not cause the lead to disappear. `ambiguous` still means an observed
+weak, conflicting, or temporally unresolved signal, so it must have a source reference supporting that dimension.
+No evidence is an unassessed input, not an `*_ambiguous_signal`, and is excluded before this result contract.
 
-Before a valid terminal object can enter the union, the operator projects execution limitations from the process
-receipt. Grok may report the domain limitations `native_x_search_incomplete`, `profile_hydration_incomplete`, and
+Before a valid terminal object can enter the union, the operator projects execution limitations from a typed process
+receipt. The receipt binds campaign, descriptor, policy, shard, session, transcript SHA-256, raw-terminal SHA-256,
+terminal-after-last-tool ordering, and the four technical facts. Grok may report the domain limitations
+`native_x_search_incomplete`, `profile_hydration_incomplete`, and
 `thread_hydration_incomplete`. Only the supervising operator owns `result_truncated`,
 `execution_deadline_reached`, `transport_failure`, and `model_output_repaired`. The operator removes every model-
 authored value in that technical set, re-adds only receipt-backed facts, and deterministically recomputes status. The
-unmodified terminal and receipt remain private audit evidence. A model statement cannot turn a normal exit into a
-deadline, and a normal exit cannot erase a model's explicit domain-coverage limitation.
+unmodified terminal and receipt remain inside the typed projection envelope as private audit evidence. Union accepts
+that envelope only, recomputes every digest and the normalized result at consumption, and rejects a raw mapping or a
+forged wrapper. A model statement cannot turn a normal exit into a deadline, and a normal exit cannot erase a model's
+explicit domain-coverage limitation. Structural/domain validation runs before projection; full status coherence runs
+after it, so a false model-authored timeout cannot make an otherwise usable terminal un-normalizable.
 
 ### Phase 2: operator union
 
-The operator validates every shard, case-folds handles, unions all leads, and preserves every distinct evidence
-reference. It never trusts model-authored aggregate counts.
+The operator validates every receipt-projected shard, reconciles stable platform identity, unions compatible leads,
+and preserves every distinct evidence reference. It never trusts model-authored aggregate counts.
+
+Identity reconciliation is platform-id first:
+
+- one non-null stable platform id observed under multiple handles becomes one external-account lead with reversible
+  handle-history proposals;
+- one handle observed under multiple non-null platform ids becomes separate `quarantined_handle_reuse` leads, and
+  their states or evidence are never combined;
+- a missing/model-mediated platform id remains a separate `provisional_handle` identity even when the same handle
+  appears beside a stable-id lead; it cannot weaken the stable-id fence;
+- this is external-account identity only and never a canonical-person merge.
 
 State reconciliation is deterministic:
 
 - one concrete state plus any number of `ambiguous` observations retains the concrete state;
 - conflicting `current` and `historical` observations resolve to `ambiguous` until evidence review;
-- conflicting non-null platform user ids are not selected by first-writer order;
+- conflicting non-null platform user ids for one handle quarantine rather than null-and-merge;
 - no merge may remove the only source supporting a non-ambiguous axis;
 - input order cannot change the merged result.
 
-Per-shard membership remains inspectable so marginal unique leads, overlap, and strategy-specific failure can be
+The union stores each input shard id and projected-result SHA-256, while every handle-history proposal, lead, and
+source reference retains sorted origin-shard ids. Per-shard membership therefore remains inspectable and bound to the
+exact projected inputs, so marginal unique leads, overlap, cross-shard evidence, and strategy-specific failure can be
 recomputed after the merge.
 
 ### Phase 3: profile hydration
@@ -95,9 +122,12 @@ Profile hydration runs only after the discovery union. It uses exactly one canon
 handle in a normal attempt. Repeating equivalent handle, URL, and display-name variants is not a default strategy;
 additional calls require a typed lookup failure or a separate challenger experiment.
 
-The generic output contract is `x.grok.profile_hydration.result.v1`. Its operator evaluator combines the model object,
-the exact expected-handle set, and ledger-derived native tool calls; a model object alone cannot claim X-native
-hydration.
+The generic output contract is `x.grok.profile_hydration.result.v1`. Its operator evaluator accepts only a typed
+projection envelope, not a model object plus caller-supplied call dictionaries. The envelope binds campaign/target,
+run, batch, discovery union, case-folded input set, session, transcript, raw terminal, and paired tool lifecycles; a model
+object alone cannot claim X-native hydration. Evaluation additionally requires an owner-supplied typed expectation
+for campaign, target, policy, discovery union, batch, and exact input handles; a self-consistent batch borrowed from a
+different campaign therefore still fails closed.
 
 The desired open profile field set is:
 
@@ -120,8 +150,11 @@ Batch boundaries are chosen from response-byte and turn estimates. Every input m
 the operator checks missing rows, duplicates, case-insensitive misbinding, and unexpected extra rows before merging
 batches.
 
-Tool compliance is not inferred from a valid model object. The session ledger must contain exactly one completed
-`x_user_search` for every expected bare handle and no other native-X call. A schema-valid batch with zero, missing,
+Tool compliance is not inferred from a valid model object. The typed ledger receipt must contain a unique call id,
+unique start/completion event digests and sequences, `started < completed < selected terminal`, and
+`completion_status=completed` for
+exactly one `x_user_search` per expected bare handle, with no other native-X call. The receipt batch/session/input-set
+and terminal digest must equal the result envelope. A schema-valid batch with zero, missing,
 duplicate, or extra calls is discarded in full. Because observed compliance is not monotonic in batch size, the
 operator does not configure one guessed "maximum batch size": it attempts a response-byte-sized batch and recursively
 splits a failed batch until compliant children are obtained or a single-handle leaf returns a typed tool-compliance
@@ -129,8 +162,11 @@ failure. This adaptive split is a recovery strategy, not a business cap on the c
 
 Profile hydration uses the same execution-ownership rule as discovery. The model may retain
 `native_x_lookup_incomplete`; the operator replaces deadline, transport, truncation, and repair claims with process-
-receipt facts and recomputes `OK|PARTIAL|BLOCKED` before ledger reconciliation. This prevents a schema-valid model
-answer from inventing a timeout or concealing a real one.
+receipt facts and recomputes `OK|PARTIAL|BLOCKED` before ledger reconciliation. Record-level
+`model_output_repaired` is also removed from model ownership and projected consistently across every row from the one
+receipt fact. Non-matched rows must contain exactly the lookup-failure limitation implied by
+`not_found|blocked|error`; contradictory failure codes are invalid. This prevents a schema-valid model answer from
+inventing a timeout, repair, or recovery route, or concealing a real one.
 
 ### Phase 4: Post and conversation hydration
 
@@ -159,14 +195,14 @@ relevance remain separate outputs so one signal cannot overwrite another.
 
 | Contract | Owner | Source of truth | Failure behavior |
 |---|---|---|---|
-| Native tool invocation count and arguments | Operator | Grok session ledger | Missing or malformed ledger is unmeasured |
+| Native tool lifecycle and arguments | Operator | Batch/session-bound start/completion receipt and transcript order | Missing, unpaired, borrowed, or malformed evidence invalidates the batch |
 | Technical execution limitations | Operator | Process receipt and transcript capture | Model-authored technical claims are replaced, not trusted |
 | Domain coverage limitations | Grok, then operator validation | Valid terminal object | Preserved as partial until a later shard or hydration closes them |
 | Discovery lead proposal | Grok | Valid compact terminal object | Invalid object is excluded |
 | Source URL shape and handle binding | Operator | Compact validator | Bad reference or lead fails closed |
-| Cross-shard membership and marginal yield | Operator | Validated handle sets | Recomputed; model totals ignored |
+| Cross-shard membership and marginal yield | Operator | Input projected-result digests plus lead/ref origin ids | Recomputed; model totals ignored |
 | Temporal proposal | Grok, then semantic reviewer | Evidence-linked proposal history | Concrete conflict becomes ambiguous |
-| Profile field observation | Grok user-search hydration | Per-handle hydration row | Missing, duplicate, or misbound row is quarantined |
+| Profile field observation | Grok user-search hydration | Per-handle row inside a receipt-projected batch | Missing, duplicate, or misbound row invalidates the batch |
 | Source-bound profile truth | Future payload-returning transport | Replayable raw provider record | Model-mediated fields cannot upgrade it |
 | Business precision tranche | Configured policy | Independent lab and pretraining axes | Default tranche requires supported current/current |
 | Population convergence | Operator evaluation | Multi-shard marginal and benchmark evidence | A single low-yield shard never proves exhaustion |

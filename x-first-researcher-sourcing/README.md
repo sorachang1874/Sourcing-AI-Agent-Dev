@@ -106,6 +106,19 @@ across 1/4/8/44/49-input trials, so the reusable method is ledger-gated adaptive
 maximum. See `docs/GROK_COMPACT_DISCOVERY_AND_PROFILE_HYDRATION.md` and
 `docs/live-evidence/2026-07-16-gdm-compact-strategy-matrix.md`.
 
+Adaptive replay later closed the original 49-input gap without borrowing its model-only fields: all 93 inputs have
+compliant completed-tool evidence, with 91 exact matches and two not-found rows. Aggregate matched-field coverage is
+bound in the candidate-free machine receipt beside the live-evidence document; it remains diagnostic, not
+source-bound profile truth.
+
+The repaired compact/hydration contracts bind every shard and batch to campaign, target descriptor, policy and
+source-union/input-set digests. Discovery union accepts only receipt-projected shards, reconciles non-null platform
+ids before handles, records reversible handle-history proposals, quarantines handle reuse without mixing evidence,
+and preserves input-shard digests plus lead/reference membership. Null ids remain explicit provisional identities.
+Hydration accepts only a typed session/batch receipt with paired completed call lifecycles and terminal ordering; raw
+call-shaped dictionaries cannot prove X-native execution. Operator projection now owns batch and record repair claims
+and runs before full status coherence.
+
 The first vertical slice covers OpenAI with:
 
 - 24 completely synthetic external accounts;
