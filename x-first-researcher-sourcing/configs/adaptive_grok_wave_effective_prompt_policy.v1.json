@@ -108,6 +108,23 @@
       ]
     },
     {
+      "policy_entry_id": "openai_pretraining_zero_prior_official_discovery_excerpt_preflight.v5_1",
+      "target": {
+        "lab_id": "openai",
+        "research_focus_id": "pretraining",
+        "scope": "Public professional evidence of current or historical OpenAI affiliation and current or historical pre-training or base-model training relevance."
+      },
+      "source_prompt_sha256": "2fcf57a05cf788a564cf17f6ab84194a391d7322133503afebc9ddad7cb3e180",
+      "authority": "live_authorized",
+      "session_query_policy_id": "discovery_only_official_accounts_no_person_hydration_v2",
+      "session_query_policy_sha256": "26305c1bd1529e51bb35e9ce1533b64f09b2ed87f99981f14be5dde0718101fc",
+      "prior_input_policy_id": "require_empty_prior_waves_v1",
+      "prior_input_policy_sha256": "8b2e6ed95ad3574903a2d459c0bcafb92cfa293020fd716ad311e115144ec47c",
+      "official_account_handles": [
+        "OpenAI"
+      ]
+    },
+    {
       "policy_entry_id": "google_deepmind_pretraining_recall_wave1.v1",
       "target": {
         "lab_id": "google_deepmind",
@@ -167,6 +184,22 @@
         "scope": "Public professional evidence of current or historical Google DeepMind affiliation and current or historical pre-training or base-model training relevance."
       },
       "source_prompt_sha256": "09991dbb9420309628f36794a79268a3ecb1aa67439f5e3d42169cb9795c8978",
+      "authority": "live_authorized",
+      "session_query_policy_id": "discovery_only_official_accounts_no_person_hydration_v2",
+      "session_query_policy_sha256": "26305c1bd1529e51bb35e9ce1533b64f09b2ed87f99981f14be5dde0718101fc",
+      "official_account_handles": [
+        "GoogleDeepMind",
+        "DeepMind"
+      ]
+    },
+    {
+      "policy_entry_id": "google_deepmind_pretraining_recall_wave2_official_discovery_excerpt_preflight.v5_1",
+      "target": {
+        "lab_id": "google_deepmind",
+        "research_focus_id": "pretraining",
+        "scope": "Public professional evidence of current or historical Google DeepMind affiliation and current or historical pre-training or base-model training relevance."
+      },
+      "source_prompt_sha256": "1ba6e53538ac851f1f160a80e63aec3787f31ce7c2711541450800a3cd2836d5",
       "authority": "live_authorized",
       "session_query_policy_id": "discovery_only_official_accounts_no_person_hydration_v2",
       "session_query_policy_sha256": "26305c1bd1529e51bb35e9ce1533b64f09b2ed87f99981f14be5dde0718101fc",

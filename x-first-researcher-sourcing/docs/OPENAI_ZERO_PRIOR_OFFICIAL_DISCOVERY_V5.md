@@ -1,7 +1,12 @@
-# OpenAI zero-prior official discovery v5
+# OpenAI zero-prior official discovery v5 family
 
 Status: offline transfer only. This slice registers and tests an OpenAI adaptation of the reviewed Google DeepMind v5
 discovery method. It does not issue a grant, call Grok/X, read OAuth state, or prove live capability.
+
+The original v5 prompt and registry row remain immutable for replay. A v5.1 append-only successor retains the exact
+query strategy and zero-prior contract but adds an operational 240-code-point target plus a final all-evidence audit
+under the unchanged 280-code-point result-v3 hard maximum. The operator does not truncate evidence. This successor is
+not live-authorized for use until its own pinned non-author review returns `GO`.
 
 ## Experiment identity
 
@@ -43,10 +48,12 @@ remain possible.
 
 The transfer is ready for pinned non-author review when:
 
-1. the production registry owns exactly one OpenAI zero-prior v5 prompt digest;
+1. the production registry preserves the reviewed OpenAI zero-prior v5 prompt digest and owns exactly one append-only
+   v5.1 excerpt-preflight successor digest;
 2. the row binds `official_account_handles=["OpenAI"]`, the reviewed official-discovery v2 policy digest, and the
    `require_empty_prior_waves_v1` semantic digest;
-3. shared v5 prompt assertions cover phase boundary, four Reply cells, timestamp normalization, no business caps,
-   non-Bio-first evidence, temporal-axis independence, Top and Latest, and time shards;
+3. shared prompt assertions cover phase boundary, four Reply cells, timestamp normalization, no business caps,
+   non-Bio-first evidence, temporal-axis independence, Top and Latest, time shards, the 240-code-point operating target,
+   the unchanged 280-code-point hard maximum, and the final all-excerpt audit;
 4. the production policy schema, targeted runner tests, Ruff, and diff-check pass; and
 5. no provider call or live grant is issued before a matching pinned independent-review GO.

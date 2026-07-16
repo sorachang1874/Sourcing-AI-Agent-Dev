@@ -1,7 +1,7 @@
 # Adaptive Grok Native-X Recall-Wave Contract
 
-Status: offline implementation and fake-live contract tests complete; real Grok/X execution remains explicitly
-operator-triggered and review-gated.
+Status: offline and fake-live contract tests complete; real Grok/X diagnostics exist, while every new execution remains
+explicitly operator-triggered and review-gated.
 
 ## Product outcome
 
@@ -46,6 +46,7 @@ CRM, export, billing, permission, or outreach state. Protected-identity inferenc
 | Process cleanup | Monotonic operator | All normal, timeout, output-limit, callback-error, and exception paths are bounded |
 | Output transport | Strict Grok headless envelope plus raw private bytes | Exact outer object, `EndTurn`, command session, request ID, turns, token totals, inner JSON, duplicate keys, nonfinite numbers, prefix, and suffix are replayed; the inner result alone cannot claim terminal success |
 | Model diagnostics | Raw outer `text`, plus diagnostic provenance retained in the normalized inner result | Model-reported calls, queries, observations, and original `local_reconciliation` are never tool-ledger truth; the unmodified original remains in `raw.stdout` |
+| Evidence excerpt output | Result-v3 schema and validator own a 280-code-point hard maximum; append-only v5.1 discovery prompts target 240 and require a final all-row audit | One over-limit row rejects the complete result. The operator never truncates, paraphrases, or otherwise rewrites evidence; older prompt bytes and rows remain replayable |
 | Operator projections | Inner candidate/evidence arrays plus verified session proof | `sanitized.json` rewrites candidate, evidence, post-URL, tool-call, and per-tool counts from local structure/transcript facts; it preserves model provenance only as diagnostics |
 | Mechanical result normalization | `mechanical-evidence-relationship-and-x-rfc2822-timestamp-v2`, bound into the command-policy digest | The current policy may downgrade only a non-Bio `self` row whose author differs from the candidate to `third_party`, and may convert only an exact round-trippable native-X IMF-fixdate `GMT` timestamp to canonical UTC ISO-8601 `Z`. Raw bytes stay unchanged, deterministic audit text is appended, and all changes are admitted atomically only when the complete result passes. The v1 relationship-only policy, normalization-only result-v3, pre-normalization result-v3, and result-v2 remain replay-only under their recorded digests; duplicates and malformed Bio/Post topology still fail closed |
 | Tool-call facts | Raw Grok session `updates.jsonl` | Effective model, native-X starts/completions, names, and exact arguments are replayed. On Grok 0.2.101 the outer envelope owns terminal/usage; a legacy transcript `turn_completed` is additionally reconciled when present |

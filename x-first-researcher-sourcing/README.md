@@ -69,6 +69,17 @@ is copied back. This attempt is
 excluded from every recall/precision/performance comparison and the consumed grant cannot be reused. See
 `docs/live-evidence/2026-07-15-google-deepmind-v5-oauth-lifecycle-failure.md`.
 
+After a fresh user OAuth login and the reviewed D2 lifecycle repair, one replacement v5 run completed 43/43 native-X
+calls in 166.160 seconds with no fallback, timeout, stderr, or technical-limit event. Its terminal diagnostic contained
+20 unique candidate handles and 37 evidence rows, but one excerpt was 319 Unicode code points against the 280 hard
+maximum. The only validator error was `evidence_value_invalid:7:1`, so the entire result correctly remained
+`result_contract_invalid` and is excluded from campaign and formal quality metrics. Relative to the invalid v4
+diagnostic, candidate yield per call improved 25.2%, evidence count increased 85.0%, seconds per candidate improved
+3.6%, and cost per candidate increased 2.1%; positive Reply queries increased from one to five. An append-only v5.1
+successor now keeps the query strategy intact while targeting 240-code-point excerpts and auditing every row before
+terminal output. It requires a new pinned `GO`, request, and one-shot grant before retry. See
+`docs/live-evidence/2026-07-16-google-deepmind-v5-replacement-diagnostic.md`.
+
 The first vertical slice covers OpenAI with:
 
 - 24 completely synthetic external accounts;
@@ -190,9 +201,10 @@ hydration, not because a volume cap fired or formal exhaustion was proved; the r
 `insufficient_proof / continue_expansion`. The offline reported-text semantic contract and adjudicator are ready for
 supplied model outputs while preserving that trust level; they have not run the 95 real model-mediated texts and do
 not include a Luna transport. They cannot replace the next gate of source-bound account/Bio/Post hydration.
-The Stage 2A offline contract now defines what that source binding must prove, but it does not make the live call. A
-future reviewed canary should use a supported xAI SDK/API-key path with explicit X search call-output inclusion; no
-approved API-key path or live field runner exists in this slice.
-Provider-costing batch review and precision/conditional-recall measurement remain separately review-gated. Workflow
-evaluation and champion/challenger rules are defined in
-`docs/X_FIRST_EVALUATION_CONTRACT.md`.
+The Stage 2A offline contract defines what source binding must prove. The reviewed OAuth Grok CLI runner now proves
+bounded native-X execution and session-argument reconciliation, but Grok CLI 0.2.101 still does not retain native-X
+result bodies or query-to-lead attribution. The immediate gate is a reviewed v5.1 GDM retry followed by the reviewed
+OpenAI zero-prior large-lab experiment. A future supported transport that exposes native result payloads is still
+needed for replayable source binding and true per-query yield. Provider-costing batch review and
+precision/conditional-coverage measurement remain separately review-gated. Workflow evaluation and
+champion/challenger rules are defined in `docs/X_FIRST_EVALUATION_CONTRACT.md`.

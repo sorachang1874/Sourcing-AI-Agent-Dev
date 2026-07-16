@@ -1101,6 +1101,22 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
                 normalized_prompt,
             )
 
+        def assert_excerpt_preflight_successor(prompt: str) -> None:
+            normalized_prompt = " ".join(prompt.split())
+            self.assertIn(
+                "Every `candidates[].evidence[].excerpt` must be non-empty and no longer than 240 Unicode code "
+                "points after JSON decoding.",
+                normalized_prompt,
+            )
+            self.assertIn(
+                "The authoritative schema hard maximum remains 280; one excerpt over 280 invalidates the entire "
+                "result.",
+                normalized_prompt,
+            )
+            self.assertIn("source-faithful contiguous span rather than paraphrasing", normalized_prompt)
+            self.assertIn("audit every evidence excerpt and do not emit until all are at most 240", normalized_prompt)
+            self.assertIn("`candidate.bio_excerpt` retains its separate 2,000-character contract", normalized_prompt)
+
         google_deepmind_official_prompt = next(
             path for path in google_deepmind_prompt_paths if "v5-official-discovery" in path.name
         ).read_text()
@@ -1114,6 +1130,25 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             entry=google_deepmind_official_entry,
             official_handles=["GoogleDeepMind", "DeepMind"],
         )
+        self.assertEqual(
+            google_deepmind_official_entry["source_prompt_sha256"],
+            "09991dbb9420309628f36794a79268a3ecb1aa67439f5e3d42169cb9795c8978",
+        )
+        google_deepmind_excerpt_prompt = next(
+            path for path in google_deepmind_prompt_paths if "v5-1-excerpt-preflight" in path.name
+        ).read_text()
+        google_deepmind_excerpt_entry = next(
+            entry
+            for entry in google_deepmind_entries
+            if entry["policy_entry_id"]
+            == "google_deepmind_pretraining_recall_wave2_official_discovery_excerpt_preflight.v5_1"
+        )
+        assert_official_discovery_v5(
+            prompt=google_deepmind_excerpt_prompt,
+            entry=google_deepmind_excerpt_entry,
+            official_handles=["GoogleDeepMind", "DeepMind"],
+        )
+        assert_excerpt_preflight_successor(google_deepmind_excerpt_prompt)
 
         openai_official_prompt_path = next(
             path for path in openai_prompt_paths if "wave0-v5-official-discovery" in path.name
@@ -1130,15 +1165,36 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             official_handles=["OpenAI"],
         )
         self.assertEqual(
-            openai_official_entry["prior_input_policy_id"],
-            runner.REQUIRE_EMPTY_PRIOR_WAVES_POLICY_ID,
+            openai_official_entry["source_prompt_sha256"],
+            "5318d0baedd1b7fe6ec0057c01dfceccff5296d0e1f85dbf5642a094ec85164b",
         )
-        self.assertEqual(
-            openai_official_entry["prior_input_policy_sha256"],
-            runner.prior_input_policy_semantics_sha256(
-                runner.REQUIRE_EMPTY_PRIOR_WAVES_POLICY_ID
-            ),
+        openai_excerpt_prompt_path = next(
+            path for path in openai_prompt_paths if "v5-1-excerpt-preflight" in path.name
         )
+        openai_excerpt_prompt = openai_excerpt_prompt_path.read_text()
+        openai_excerpt_entry = next(
+            entry
+            for entry in openai_entries
+            if entry["policy_entry_id"]
+            == "openai_pretraining_zero_prior_official_discovery_excerpt_preflight.v5_1"
+        )
+        assert_official_discovery_v5(
+            prompt=openai_excerpt_prompt,
+            entry=openai_excerpt_entry,
+            official_handles=["OpenAI"],
+        )
+        assert_excerpt_preflight_successor(openai_excerpt_prompt)
+        for entry in (openai_official_entry, openai_excerpt_entry):
+            self.assertEqual(
+                entry["prior_input_policy_id"],
+                runner.REQUIRE_EMPTY_PRIOR_WAVES_POLICY_ID,
+            )
+            self.assertEqual(
+                entry["prior_input_policy_sha256"],
+                runner.prior_input_policy_semantics_sha256(
+                    runner.REQUIRE_EMPTY_PRIOR_WAVES_POLICY_ID
+                ),
+            )
         self.assertIn("Treat this execution as `prior_waves=[]`", openai_official_prompt)
         self.assertNotIn("98-handle", openai_official_prompt)
         self.assertNotIn("frozen-union conditional coverage", openai_official_prompt)
@@ -1292,6 +1348,23 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
                 )
                 self.assertEqual(request["prior_waves"], [])
 
+                openai_excerpt_prompt_raw = openai_excerpt_prompt_path.read_bytes()
+                _write_private(Path(request["prompt_source"]["path"]), openai_excerpt_prompt_raw)
+                request["prompt_source"]["sha256"] = _bytes_sha(openai_excerpt_prompt_raw)
+                request["approval"]["grant_id"] = "openai-v5-1-excerpt-preflight"
+                _write_private(request_path, (canonical_json(request) + "\n").encode())
+                grant, _ = issue_live_grant(
+                    request_path=request_path,
+                    grant_root=root / "openai-v5-1-approvals",
+                    auth_source=auth,
+                    wall_clock=lambda: FIXED_TIME,
+                )
+                self.assertEqual(
+                    grant["effective_prompt_policy_entry_id"],
+                    "openai_pretraining_zero_prior_official_discovery_excerpt_preflight.v5_1",
+                )
+                self.assertEqual(request["prior_waves"], [])
+
                 prior_raw = (canonical_json({"candidates": [{"handle": "KnownPrior"}]}) + "\n").encode()
                 prior_path = root / "known-prior.json"
                 _write_private(prior_path, prior_raw)
@@ -1302,10 +1375,10 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
                         "sha256": _bytes_sha(prior_raw),
                     }
                 ]
-                request["approval"]["grant_id"] = "openai-v5-nonempty-prior-must-fail"
+                request["approval"]["grant_id"] = "openai-v5-1-nonempty-prior-must-fail"
                 _write_private(request_path, (canonical_json(request) + "\n").encode())
                 auth.unlink()
-                rejected_grant_root = root / "openai-v5-nonempty-prior-approvals"
+                rejected_grant_root = root / "openai-v5-1-nonempty-prior-approvals"
                 with self.assertRaisesRegex(
                     PermissionError,
                     "effective_prompt_prior_input_not_approved",
@@ -1317,7 +1390,7 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
                         wall_clock=lambda: FIXED_TIME,
                     )
                 self.assertFalse(rejected_grant_root.exists())
-                rejected_runtime_root = root / "openai-v5-nonempty-prior-runtime"
+                rejected_runtime_root = root / "openai-v5-1-nonempty-prior-runtime"
                 with self.assertRaisesRegex(
                     PermissionError,
                     "effective_prompt_prior_input_not_approved",
@@ -1677,6 +1750,12 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             }
         )
         self.assertEqual(validate_model_result(result), [])
+        hard_maximum = copy.deepcopy(result)
+        hard_maximum["candidates"][0]["evidence"][0]["excerpt"] = "x" * 280
+        self.assertEqual(validate_model_result(hard_maximum), [])
+        oversized = copy.deepcopy(hard_maximum)
+        oversized["candidates"][0]["evidence"][0]["excerpt"] += "x"
+        self.assertIn("evidence_value_invalid:0:0", validate_model_result(oversized))
         reply_classification = copy.deepcopy(evidence)
         reply_classification["thread_relation"] = "reply"
         self.assertEqual(
