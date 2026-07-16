@@ -266,6 +266,7 @@ from .operation_runtime import (
     OPERATION_RUN_TERMINAL_STATUSES,
     OperationRuntimeStateConflict,
     OperationRuntimeWriter,
+    OwnerBoundTargetRef,
     operation_run_control_state,
     operation_submission_current_status,
 )
@@ -48979,8 +48980,11 @@ class SourcingOrchestrator:
         )
         if str(binding.get("status") or "") != "ready":
             return binding
-        target_ref = dict(binding.get("target_ref") or target_ref)
-        input_payload = dict(binding.get("input_payload") or input_payload)
+        if "target_ref" in binding:
+            target_ref = dict(binding.get("target_ref") or {})
+        if "input_payload" in binding:
+            input_payload = dict(binding.get("input_payload") or {})
+        owner_bound_target_ref = binding.get("owner_bound_target_ref") or owner_bound_target_ref
         crm_binding = self._bind_operation_crm_existing_record_target(
             action_type=action_type,
             workspace_id=str(payload.get("workspace_id") or "default").strip() or "default",
@@ -49346,6 +49350,19 @@ class SourcingOrchestrator:
     ) -> dict[str, Any]:
         if action_type != ACTION_EXPORT_CANDIDATES:
             return {"status": "ready", "target_ref": target_ref, "input_payload": input_payload}
+        selector_aliases = {
+            "projection_id",
+            "serving_projection_id",
+            "expected_membership_revision",
+            "membership_revision",
+            "candidate_identity_keys",
+            "candidateIdentityKeys",
+            "candidate_ids",
+            "candidate_identity_key",
+            "candidate_id",
+        }
+        if set(target_ref) - selector_aliases:
+            return {"status": "invalid", "reason": "projection_export_target_selector_invalid"}
         projection_id = str(
             input_payload.get("projection_id")
             or target_ref.get("projection_id")
@@ -49398,19 +49415,27 @@ class SourcingOrchestrator:
                 "expected_membership_revision": requested_revision,
                 "membership_revision": membership_revision,
             }
-        binding_fields = {
+        normalized_candidate_keys = sorted(candidate_keys)
+        owner_bound_target_ref = {
             "projection_id": projection_id,
-            "expected_membership_revision": membership_revision,
+            "membership_revision": membership_revision,
             "source_candidate_count": source_candidate_count,
+            "candidate_identity_keys": normalized_candidate_keys,
         }
+        normalized_input = {field: value for field, value in input_payload.items() if field not in selector_aliases}
         return {
             "status": "ready",
-            "target_ref": {**target_ref, **binding_fields},
-            "input_payload": {**input_payload, **binding_fields},
+            "target_ref": {},
+            "input_payload": normalized_input,
+            "owner_bound_target_ref": OwnerBoundTargetRef(
+                owner_module="export_service",
+                target_ref=owner_bound_target_ref,
+            ),
             "metadata": {
                 "projection_membership_binding": {
-                    **binding_fields,
-                    "candidate_selection_count": len(candidate_keys),
+                    **owner_bound_target_ref,
+                    "candidate_selection_count": len(normalized_candidate_keys),
+                    "destination_owner": "export_service",
                     "source": "serving_projection_members",
                     "fallback_used": False,
                     "fail_closed": True,
@@ -52952,8 +52977,8 @@ class SourcingOrchestrator:
         target_ref = dict(action.get("target_ref") or {})
         input_payload = dict(action.get("input") or {})
         projection_id = str(
-            input_payload.get("projection_id")
-            or target_ref.get("projection_id")
+            target_ref.get("projection_id")
+            or input_payload.get("projection_id")
             or target_ref.get("serving_projection_id")
             or ""
         ).strip()
@@ -52966,9 +52991,36 @@ class SourcingOrchestrator:
                 "module_state_mutated": False,
                 "contract": "w9_operation_run_dispatch_v1",
             }
+        membership_revision = str(
+            target_ref.get("membership_revision")
+            or input_payload.get("expected_membership_revision")
+            or input_payload.get("membership_revision")
+            or ""
+        ).strip()
+        source_candidate_count = target_ref.get("source_candidate_count")
+        candidate_identity_keys = list(target_ref.get("candidate_identity_keys") or [])
+        if (
+            not membership_revision
+            or isinstance(source_candidate_count, bool)
+            or not isinstance(source_candidate_count, int)
+            or source_candidate_count < 0
+            or any(not isinstance(item, str) or not item.strip() for item in candidate_identity_keys)
+            or candidate_identity_keys != sorted(set(candidate_identity_keys))
+        ):
+            return {
+                "status": "invalid",
+                "reason": "projection_export_bound_target_invalid",
+                "operation_run": operation_run,
+                "action": action,
+                "module_state_mutated": False,
+                "contract": "w9_operation_run_dispatch_v1",
+            }
         command_payload = {
             **input_payload,
             "projection_id": projection_id,
+            "expected_membership_revision": membership_revision,
+            "source_candidate_count": source_candidate_count,
+            "candidate_identity_keys": candidate_identity_keys,
             "operation_id": operation_run.get("operation_run_id"),
             "export_scope": str(
                 input_payload.get("export_scope") or f"operation:{operation_run.get('operation_run_id')}"
@@ -53222,6 +53274,35 @@ class SourcingOrchestrator:
         latest_command = self.store.get_workflow_command(command_id) or claimed
         command_type = str(latest_command.get("command_type") or command_payload.get("command_type") or "").strip()
         command_input = dict(latest_command.get("payload") or command_payload.get("payload") or {})
+        target_preflight = (
+            self._revalidate_crm_projection_selection_command_target(command=latest_command)
+            if command_type == CRM_RECORD_ADD_FROM_PROJECTION_COMMAND_TYPE
+            else self._revalidate_crm_existing_record_command_target(command=latest_command)
+        )
+        if str(target_preflight.get("status") or "") != "ready":
+            failed = self.store.mark_workflow_command_failed(
+                command_id,
+                error_text=str(
+                    target_preflight.get("reason")
+                    or target_preflight.get("status")
+                    or "crm_writer_command_target_preflight_failed"
+                ),
+                retryable=False,
+            )
+            self._sync_operation_run_from_workflow_command(
+                failed or latest_command,
+                actor=CRM_WRITER_OWNER,
+                source="crm_writer.command_owner",
+            )
+            return {
+                **target_preflight,
+                "status": "failed",
+                "crm_writer_owner": CRM_WRITER_OWNER,
+                "workflow_command": self._workflow_command_observation(
+                    failed or latest_command,
+                    migration_phase="W9_operation_crm_writer",
+                ),
+            }
         activity, attempt = self._start_workflow_command_activity_attempt(
             latest_command,
             activity_type=command_type,
@@ -53654,6 +53735,7 @@ class SourcingOrchestrator:
         workspace_id = str(target.get("workspace_id") or "").strip()
         candidate_identity_keys = list(target.get("candidate_identity_keys") or [])
         action_input = dict(action.get("input") or {})
+        dispatch_actor = str(dict(operation_run.get("metadata") or {}).get("dispatch_actor") or "").strip()
         expected_fields = {
             "workspace_id": workspace_id,
             "projection_id": str(target.get("projection_id") or "").strip(),
@@ -53661,6 +53743,9 @@ class SourcingOrchestrator:
             "source_candidate_count": target.get("source_candidate_count"),
             "candidate_identity_keys": candidate_identity_keys,
             "candidate_count": len(candidate_identity_keys),
+            "actor_type": str(action_input.get("actor_type") or "agent").strip() or "agent",
+            "actor_id": str(action_input.get("actor_id") or dispatch_actor).strip(),
+            "requested_by": dispatch_actor,
             "pipeline_id": str(action_input.get("pipeline_id") or "default_sourcing").strip() or "default_sourcing",
             "stage": str(action_input.get("stage") or "new").strip() or "new",
             "source_reason": str(action_input.get("source_reason") or "selected_from_projection").strip()
@@ -53669,6 +53754,7 @@ class SourcingOrchestrator:
         }
         if (
             not workspace_id
+            or not dispatch_actor
             or workspace_id != str(operation_run.get("workspace_id") or "").strip()
             or workspace_id != str(action.get("workspace_id") or "").strip()
             or any(not json_contract_equal(payload.get(field), expected) for field, expected in expected_fields.items())

@@ -57,7 +57,7 @@ W8 operation persistence contract:
   scan populated tables; validation of existing rows is a later, separately deployed transaction. The database CHECK
   owns pair shape; repository/upsert and runtime preflight own immutable replay identity. No direct-SQL
   immutability-trigger guarantee is claimed.
-- After D1j, six production actions have reviewed closed schemas and owner-minted targets; the remaining **9/15**
+- After D1k, seven production actions have reviewed closed schemas and owner-minted targets; the remaining **8/15**
   stay on the R-029 schema-less compatibility bridge with empty/empty physical pins. Schema-less submissions record
   `request_schema_status=schema_less_compatibility` and `request_schema_compatibility_hit=true`, while their
   replay/approve/retry/dispatch continuations record a pre-mutation, release-epoch-scoped

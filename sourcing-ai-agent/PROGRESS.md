@@ -10,6 +10,24 @@
 
 ## 2026-07-16 (Asia/Singapore)
 
+### Track D D1k export-candidates projection membership action activation
+
+- `export_candidates` is now the seventh schema-defined production action. Submit accepts the legacy projection
+  selector (`projection_id`/`serving_projection_id`, one membership revision alias, and optional selected candidate
+  key(s)); the export owner mints a canonical projection membership target containing exact projection id, membership
+  revision, source candidate count, and sorted candidate identity keys. Closed input is limited to export options
+  (`include_llm_reviewed_unconfirmed_assertions`, `include_crm_notes`, `limit`, `page_size`, `export_scope`).
+- Dispatch reads only the persisted owner-bound target to plan `export.projection.generate`; stale projection
+  membership still fails with reselection before command planning. Whole-projection export remains legal by persisting
+  an empty selected-candidate list.
+- Current D1k/fixed-forward author evidence is targeted D1j/D1k + D1 action surface **10 passed**, writer-control
+  regression **6 passed**, full Operation runtime **137 passed**, lint green, and typecheck still at the accepted
+  ceiling **81 errors / 4 files**. Fresh pinned non-author review remains required before live/W6/manual or product
+  signoff. This is not formal `GO`.
+- Current production partition is **7 schema-defined / 8 schema-less / served=0**. R-029 remains open at 8/15.
+  R-028 is unchanged because this batch does not alter CRM mutation UoWs or command terminal/effect synchronization.
+  No provider/model/live path is authorized.
+
 ### Track D D1j add-to-CRM projection selection action activation
 
 - `add_to_crm` is now the sixth schema-defined production action. Submit accepts only a projection-member selector

@@ -107,6 +107,7 @@ from sourcing_agent.operation_runtime import (
     ActionSpec,
     OperationRuntimeStateConflict,
     OperationRuntimeWriter,
+    OwnerBoundTargetRef,
     operation_retry_run_id_for,
     operation_run_control_state,
 )
@@ -134,6 +135,24 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
     def tearDown(self) -> None:
         self._stop_pg_durable_runtime()
         self.tempdir.cleanup()
+
+    def _projection_export_owner_target(
+        self,
+        projection_id: str,
+        *,
+        membership_revision: str = "revision-a",
+        source_candidate_count: int = 0,
+        candidate_identity_keys: list[str] | None = None,
+    ) -> OwnerBoundTargetRef:
+        return OwnerBoundTargetRef(
+            owner_module="export_service",
+            target_ref={
+                "projection_id": projection_id,
+                "membership_revision": membership_revision,
+                "source_candidate_count": source_candidate_count,
+                "candidate_identity_keys": sorted(candidate_identity_keys or []),
+            },
+        )
 
     def _build_r020_orchestrator(self) -> SourcingOrchestrator:
         settings = AppSettings(
@@ -3451,7 +3470,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         result = self.writer.submit_action(
             action_type=ACTION_EXPORT_CANDIDATES,
             workspace_id="default",
-            target_ref={"projection_id": "proj-sensitive"},
+            owner_bound_target_ref=self._projection_export_owner_target("proj-sensitive"),
             input_payload={"include_crm_notes": True},
             idempotency_key="export:proj-sensitive",
             actor="unit-test",
@@ -3492,7 +3511,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         submitted = self.writer.submit_action(
             action_type=ACTION_EXPORT_CANDIDATES,
             workspace_id="default",
-            target_ref={"projection_id": "proj-approval"},
+            owner_bound_target_ref=self._projection_export_owner_target("proj-approval"),
             input_payload={"include_crm_notes": True},
             idempotency_key="export:proj-approval",
         )
@@ -3520,7 +3539,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 event["event_type"]
                 for event in self.store.repos.workflow_runtime.list_operation_events(submitted.action["action_id"])
             ],
-            ["ActionApprovalRequired", REQUEST_SCHEMA_COMPATIBILITY_EVENT_TYPE, "ActionApproved"],
+            ["ActionApprovalRequired", "ActionApproved"],
         )
         self.assertEqual(
             [
@@ -3573,7 +3592,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         submitted = self.writer.submit_action(
             action_type=ACTION_EXPORT_CANDIDATES,
             workspace_id="default",
-            target_ref={"projection_id": "proj-reject"},
+            owner_bound_target_ref=self._projection_export_owner_target("proj-reject"),
             input_payload={"include_crm_notes": True},
             idempotency_key="export:proj-reject",
         )
@@ -3604,7 +3623,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         partial = self.writer.submit_action(
             action_type=ACTION_EXPORT_CANDIDATES,
             workspace_id="default",
-            target_ref={"projection_id": "proj-reject-repair"},
+            owner_bound_target_ref=self._projection_export_owner_target("proj-reject-repair"),
             input_payload={"include_crm_notes": True},
             idempotency_key="export:proj-reject-repair",
         )
@@ -3664,7 +3683,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         reject_submission = self.writer.submit_action(
             action_type=ACTION_EXPORT_CANDIDATES,
             workspace_id="default",
-            target_ref={"projection_id": "proj-reject-rollback"},
+            owner_bound_target_ref=self._projection_export_owner_target("proj-reject-rollback"),
             input_payload={"include_crm_notes": True},
             idempotency_key="export:proj-reject-rollback",
         )
@@ -3831,7 +3850,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         reject_submission = self.writer.submit_action(
             action_type=ACTION_EXPORT_CANDIDATES,
             workspace_id="default",
-            target_ref={"projection_id": "proj-reject-race"},
+            owner_bound_target_ref=self._projection_export_owner_target("proj-reject-race"),
             input_payload={"include_crm_notes": True},
             idempotency_key="export:proj-reject-race",
         )
@@ -4063,7 +4082,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         approval = self.writer.submit_action(
             action_type=ACTION_EXPORT_CANDIDATES,
             workspace_id="default",
-            target_ref={"projection_id": "proj-approve-race"},
+            owner_bound_target_ref=self._projection_export_owner_target("proj-approve-race"),
             input_payload={"include_crm_notes": True},
             idempotency_key="export:proj-approve-race",
         )
@@ -4086,7 +4105,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         self.assertEqual(repository.list_operations(action_id=approval.action["action_id"]), [])
         self.assertEqual(
             [event["event_type"] for event in repository.list_operation_events(approval.action["action_id"])],
-            ["ActionApprovalRequired", REQUEST_SCHEMA_COMPATIBILITY_EVENT_TYPE, "ActionRejected"],
+            ["ActionApprovalRequired", "ActionRejected"],
         )
 
         resumable = self.writer.submit_action(
@@ -4785,6 +4804,16 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                     "idempotency_key": "export:proj-dispatch",
                 }
             )
+            self.assertEqual(
+                submitted["action"]["target_ref"],
+                {
+                    "projection_id": "proj-dispatch",
+                    "membership_revision": membership_revision,
+                    "source_candidate_count": 1,
+                    "candidate_identity_keys": ["person-a"],
+                },
+            )
+            self.assertEqual(submitted["action"]["input"], {"limit": 10})
             approved = orchestrator.approve_operation_action_api(
                 submitted["action"]["action_id"],
                 {"actor": "unit-test"},
@@ -4821,6 +4850,10 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(dispatched["workflow_command"]["command_type"], "export.projection.generate")
             self.assertEqual(dispatched["workflow_command"]["owner"], "projection_exporter")
             self.assertEqual(dispatched["workflow_command"]["operation_id"], operation_run_id)
+            self.assertEqual(
+                dict(dispatched["workflow_command"]["payload"])["candidate_identity_keys"],
+                ["person-a"],
+            )
             self.assertEqual(
                 dispatched["workflow_command"]["agent_exposure_gate"],
                 "operation_runtime.ActionRegistry.allowed_workflow_command_types",
@@ -4933,8 +4966,12 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 }
             )
             self.assertEqual(
-                export_submitted["action"]["input"]["expected_membership_revision"],
+                export_submitted["action"]["target_ref"]["membership_revision"],
                 export_revision_a,
+            )
+            self.assertEqual(
+                export_submitted["action"]["target_ref"]["candidate_identity_keys"],
+                ["person-export"],
             )
             export_revision_b = publish("proj-export-stale-op", "person-export", "Export B")
             self.assertNotEqual(export_revision_a, export_revision_b)
@@ -10653,10 +10690,64 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 api_store.get_crm_record_by_person_identity("linkedin:crm-forged-op", workspace_id="default"),
                 {},
             )
+            self.assertEqual(
+                api_store.repos.workflow_runtime.list_activity_runs(command_id=command["command_id"]),
+                [],
+            )
+            self.assertEqual(
+                api_store.repos.workflow_runtime.list_activity_attempts(command_id=command["command_id"]),
+                [],
+            )
+            self.assertEqual(
+                api_store.repos.workflow_runtime.list_entity_deltas(command_id=command["command_id"]),
+                [],
+            )
             self.assertEqual(api_store.repos.workflow_runtime.get_operation(operation_run_id)["status"], "failed")
             self.assertEqual(
                 api_store.repos.workflow_runtime.get_action(submitted["action"]["action_id"])["status"],
                 "failed",
+            )
+
+            actor_forged = orchestrator.submit_operation_action(
+                {
+                    "action_type": ACTION_ADD_TO_CRM,
+                    "target_ref": {
+                        "projection_id": "proj-crm-forged-op",
+                        "candidate_identity_keys": ["linkedin:crm-forged-op"],
+                        "expected_membership_revision": membership_revision,
+                    },
+                    "idempotency_key": "add-to-crm:forged-actor",
+                }
+            )
+            actor_operation_id = actor_forged["operation_run"]["operation_run_id"]
+            actor_planned = orchestrator.dispatch_operation_run_api(actor_operation_id, {"actor": "unit-test"})
+            actor_command = actor_planned["workflow_command"]
+            actor_payload = dict(actor_command["payload"])
+            actor_payload["requested_by"] = "forged-actor"
+            api_store.update_workflow_command_payload(actor_command["command_id"], payload=actor_payload)
+
+            actor_drain = orchestrator._drain_crm_writer_commands(  # noqa: SLF001
+                {"workflow_run_id": actor_command["workflow_run_id"], "command_limit": 1}
+            )
+
+            self.assertEqual(actor_drain["completed_count"], 0, actor_drain)
+            self.assertEqual(actor_drain["failed_count"], 1, actor_drain)
+            self.assertEqual(actor_drain["items"][0]["reason"], "crm_projection_selection_command_payload_mismatch")
+            self.assertEqual(
+                api_store.get_crm_record_by_person_identity("linkedin:crm-forged-op", workspace_id="default"),
+                {},
+            )
+            self.assertEqual(
+                api_store.repos.workflow_runtime.list_activity_runs(command_id=actor_command["command_id"]),
+                [],
+            )
+            self.assertEqual(
+                api_store.repos.workflow_runtime.list_activity_attempts(command_id=actor_command["command_id"]),
+                [],
+            )
+            self.assertEqual(
+                api_store.repos.workflow_runtime.list_entity_deltas(command_id=actor_command["command_id"]),
+                [],
             )
         finally:
             api_store.close()

@@ -167,8 +167,9 @@ W8 foundation is active.
 ### D1 Request Schema, Owner Binding, And Physical Pins
 
 The D1c foundation and D1e binder declarations are active. D1f activated three existing-record CRM request schemas,
-D1h activated CRM Public Web enrichment, D1i activated the acquisition root, and D1j activated `add_to_crm`. Six
-actions are schema-defined, 9 remain on the R-029 bridge, and no production action is served to a model.
+D1h activated CRM Public Web enrichment, D1i activated the acquisition root, D1j activated `add_to_crm`, and D1k
+activated `export_candidates`. Seven actions are schema-defined, 8 remain on the R-029 bridge, and no production
+action is served to a model.
 
 - `operation_runtime.ActionRequestSpec` is the checked-in action request-contract owner. `ActionSpec` is an
   object-identical compatibility alias, not a second schema model. A non-empty request schema is a closed root object
@@ -177,9 +178,9 @@ actions are schema-defined, 9 remain on the R-029 bridge, and no production acti
 - D0 `ToolSpec.validate_input(...)` and `ToolSpec.input_schema_digest` are the shared schema validator and canonical
   digest owner. D1 must not add a second JSON-schema evaluator or digest algorithm.
 - For a schema-defined action, normalized caller/model values enter only the request schema's `input_payload` segment.
-  The six current schema-defined HTTP actions accept one object envelope named `input` or compatibility alias `input_payload`;
+  The seven current schema-defined HTTP actions accept one object envelope named `input` or compatibility alias `input_payload`;
   selection is by key presence, every supplied envelope is validated, and supplying both is ambiguous even when equal
-  or empty. This rule does not silently migrate the 9 R-029 actions, which retain their existing truthy precedence.
+  or empty. This rule does not silently migrate the 8 R-029 actions, which retain their existing truthy precedence.
   The action owner must mint an `OwnerBoundTargetRef` whose owner equals `ActionRequestSpec.owner_module`; raw
   caller/model `target_ref`, a duplicate owner field, or a declared alias override fails before persistence. The API
   and writer also reject caller-supplied `request_schema_version` / `request_schema_digest` fields.
@@ -199,10 +200,10 @@ actions are schema-defined, 9 remain on the R-029 bridge, and no production acti
   immediately guarding new writes; validation of existing rows is a separately deployed transaction and remains
   pending. The CHECK constrains physical shape; repository/upsert and runtime preflight enforce immutable identity.
   This is not a claim that unrestricted direct SQL is protected by an immutability trigger.
-- Exactly six production actions are schema-defined: `add_to_crm`, `set_crm_stage`, `add_crm_note`,
-  `create_crm_task`, `enrich_person_public_web`, and `start_acquisition_run`. The CRM-resource/projection-selection
-  contracts use their CRM/projection owner binders; the acquisition root accepts only nonblank company/query intent and
-  mints exactly one workspace target. The existing-record CRM
+- Exactly seven production actions are schema-defined: `add_to_crm`, `set_crm_stage`, `add_crm_note`,
+  `create_crm_task`, `enrich_person_public_web`, `start_acquisition_run`, and `export_candidates`. The
+  CRM-resource/projection-selection/projection-export contracts use their CRM/projection owner binders; the acquisition
+  root accepts only nonblank company/query intent and mints exactly one workspace target. The existing-record CRM
   request contracts and versions come from `CRM_EXISTING_RECORD_ACTION_REQUEST_CONTRACTS`; the authenticated submit
   route derives workspace/user, the binder mints the complete CRM target snapshot, and dispatch plus the CRM command
   owner revalidate current ownership/version before new plan/domain writes. Authenticated missing and foreign CRM rows
@@ -211,7 +212,7 @@ actions are schema-defined, 9 remain on the R-029 bridge, and no production acti
   allowlist. The CRM command fence reconciles physical `workflow_command.operation_id` with payload
   `operation_run_id`; any non-empty dangling id fails before mutable action-label inspection, and the legacy
   owner-internal path is available only when both carriers are absent.
-- The other 9 production actions remain schema-less. Their physical pins are empty/empty and each submission records
+- The other 8 production actions remain schema-less. Their physical pins are empty/empty and each submission records
   `request_schema_status=schema_less_compatibility` plus `request_schema_compatibility_hit=true` in action metadata and
   the submission event payload. Any replay, approve, retry, or dispatch continuation also records an idempotent
   `ActionRequestSchemaCompatibilityObserved` event before its first domain mutation/handler; its checked-in epoch must
@@ -235,7 +236,7 @@ authorization ownership is `agent_actions.workspace_id` and `operation_runs.work
 its linked action to exist in the same exact workspace. Server request state supplies the expected workspace, while
 `actor` is provenance only. Missing and foreign resources share one generic not-found transport shape per resource
 kind. Open mode keeps the existing explicit operator-workspace behavior. At its checkpoint D1g did not add schemas for
-the remaining 12 actions; D1h/D1i/D1j later reduce the current bridge to 9. D1g does not change served=0 or close
+the remaining 12 actions; D1h/D1i/D1j/D1k later reduce the current bridge to 8. D1g does not change served=0 or close
 R-019/R-028; fresh pinned non-author review remains required before hosted/live
 multi-user Operation exposure.
 
@@ -258,6 +259,13 @@ candidate count, and sorted selected candidate keys. Dispatch and the CRM writer
 schema-defined request plus current projection snapshot before planning or applying `crm.record.add_from_projection`.
 Forged command targets and stale revisions fail before CRM record/engagement/event/Activity/EntityDelta writes. R-028
 remains open because this does not move every CRM mutation caller behind one repository/effect/terminal UoW.
+
+D1k activates only `export_candidates`. Submit resolves the caller projection selector through the canonical serving
+projection reader and stores an owner-bound `target_ref` containing projection id, membership revision, source candidate
+count, and sorted selected candidate keys; whole-projection export is represented by an empty selected-candidate list.
+Input is limited to export options. Dispatch plans `export.projection.generate` from that persisted target only, while
+stale membership still fails before command planning. R-028 is unchanged because this is not a CRM mutation or command
+terminal/effect UoW change.
 
 D1c adds zero-write pin-drift preflights but does not combine approval or retry state/event/run writes into one UoW.
 The generic operation/command atomicity, generation/lease fence, and transaction-lock budget limits in R-019 remain

@@ -477,6 +477,7 @@ class CRMProjectionSelectionTargetBinder:
         normalized = [item.strip() for item in raw_values]
         if (
             any(not item for item in normalized)
+            or any(len(item) > 500 for item in normalized)
             or len(normalized) > CRM_PROJECTION_SELECTION_LIMIT
             or len(set(normalized)) != len(normalized)
         ):
@@ -487,10 +488,21 @@ class CRMProjectionSelectionTargetBinder:
         selector = dict(context.target_selector)
         if set(selector) != self._SELECTOR_FIELDS:
             raise ActionTargetBindingError(CRM_PROJECTION_SELECTION_TARGET_INVALID)
-        projection_id = str(selector.get("projection_id") or "").strip()
-        expected_revision = str(selector.get("expected_membership_revision") or "").strip()
+        raw_projection_id = selector.get("projection_id")
+        raw_expected_revision = selector.get("expected_membership_revision")
+        if not isinstance(raw_projection_id, str) or not isinstance(raw_expected_revision, str):
+            raise ActionTargetBindingError(CRM_PROJECTION_SELECTION_TARGET_INVALID)
+        projection_id = raw_projection_id.strip()
+        expected_revision = raw_expected_revision.strip()
         candidate_identity_keys = self._normalize_candidate_identity_keys(selector.get("candidate_identity_keys"))
-        if not projection_id or projection_id != selector.get("projection_id") or not expected_revision:
+        if (
+            not projection_id
+            or projection_id != raw_projection_id
+            or len(projection_id) > 200
+            or not expected_revision
+            or expected_revision != raw_expected_revision
+            or len(expected_revision) > 200
+        ):
             raise ActionTargetBindingError(CRM_PROJECTION_SELECTION_TARGET_INVALID)
         snapshot = self.reader.get_projection_member_snapshot(
             projection_id,

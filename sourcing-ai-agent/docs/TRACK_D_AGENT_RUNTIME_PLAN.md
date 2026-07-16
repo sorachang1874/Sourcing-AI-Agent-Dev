@@ -172,7 +172,10 @@ serve、会话/事件层、planner loop），用一个垂直切片证明闭环�
   D1j candidate 又将 `add_to_crm` 作为第 6 个 schema-defined action：submit mint owner-bound projection-selection
   target，dispatch/command-owner 重验 current projection snapshot，forged command target 与 stale revision 在 CRM write
   前失败；author evidence=Operation runtime `137 passed`、targeted D1j `3 passed`、D1 action request surface
-  `6 passed`。当前 registry=**6 schema-defined / 9 schema-less / served=0**；R-019 仍保留 Operation/action preflight→root-UoW race、
+  `6 passed`。D1k candidate 又将 `export_candidates` 作为第 7 个 schema-defined action：submit mint owner-bound
+  projection membership export target，dispatch 只从 persisted target 规划 `export.projection.generate`，stale
+  membership 在 command planning 前 reselection fail-closed；targeted export/stale + D1 surface author evidence=
+  `8 passed`。当前 registry=**7 schema-defined / 8 schema-less / served=0**；R-019 仍保留 Operation/action preflight→root-UoW race、
   current-state/recovery/Operation post-commit sync 与 failure-CAS acknowledgement ambiguity；typed D1i uniqueness
   不扩张为其它 command family 的 global generation fence；R-028/R-029 仍 open，
   且不授权 provider/model/live。

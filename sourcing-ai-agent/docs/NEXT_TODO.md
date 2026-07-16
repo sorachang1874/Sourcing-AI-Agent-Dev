@@ -267,11 +267,20 @@
   前失败。Author evidence=full Operation runtime `137 passed`、targeted D1j `3 passed`、D1 action request surface
   `6 passed`；fresh pinned review pending，不是 `GO`。R-028 不关闭：temporary Store facade、legacy CRM writers、
   command terminal/effect/linked Operation sync 仍未统一为 global exactly-once UoW；无 served/provider/model/live。
+- [x] D1k export_candidates projection membership action activation candidate（2026-07-16）：将
+  `export_candidates` 作为第 7 个 schema-defined action 激活，当前 **7 schema-defined / 8 schema-less /
+  served=0**。Submit 只接受 projection selector/revision alias/optional selected candidate keys，由 export owner
+  mint canonical projection/revision/source-count/selected-candidates target；input 仅保留 export options。
+  Dispatch 只从 persisted owner-bound target 规划 `export.projection.generate`，stale membership 仍在 command planning
+  前 reselection fail-closed。Whole-projection export 通过空 selected-candidate list 保持兼容。Author evidence=
+  targeted D1j/D1k + D1 action surface `10 passed`、writer-control regression `6 passed`、full Operation runtime
+  `137 passed`、lint green、typecheck `81/4`；fresh pinned review required，不是 `GO`。R-028 不变；
+  无 served/provider/model/live。
 - [ ] R-029：宽松 action-schema bridge 仅可在 production action 尚无 reviewed schema/owner binder 期间存在；
   删除条件 = 全部 API-submittable actions（不是只看 served subset）连续一个 release window durable hit=0。
   observation epoch 必须每个 release window bump，且 `NOT VALID` checks 的既有行 validation 在独立部署完成；
   任一 action 进入 served 集前必须满足完整 schema+adapter+Activity+revisioned model-safe result+simulate serializer
-  谓词；D1j 后当前 9/15 schema-less、served=0。
+  谓词；D1k 后当前 8/15 schema-less、served=0。
 - [ ] R-031 review closeout：D1g current author candidate 已将 actions/runs list、detail、provenance 及
   approve/reject/dispatch/resume/retry/cancel 统一到 server-derived exact-workspace preflight，run 同时校验 linked
   action owner；nested commands/events 分别按 linked operation+action owner 与 physical event workspace 在 SQL

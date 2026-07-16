@@ -49,6 +49,10 @@ ACTION_SET_CRM_STAGE = "set_crm_stage"
 ACTION_ADD_CRM_NOTE = "add_crm_note"
 ACTION_CREATE_CRM_TASK = "create_crm_task"
 ACTION_ENRICH_PERSON_PUBLIC_WEB = "enrich_person_public_web"
+ACTION_REFRESH_COMPANY_PUBLIC_WEB = "refresh_company_public_web_assets"
+ACTION_PROMOTE_PERSON_ASSERTION = "promote_person_assertion"
+ACTION_EXPORT_CANDIDATES = "export_candidates"
+ACTION_EXTERNAL_INTAKE = "external_intake"
 CRM_EXISTING_RECORD_ACTION_TYPES = (
     ACTION_SET_CRM_STAGE,
     ACTION_ADD_CRM_NOTE,
@@ -57,14 +61,14 @@ CRM_EXISTING_RECORD_ACTION_TYPES = (
 CRM_RECORD_BATCH_ACTION_TYPES = (ACTION_ENRICH_PERSON_PUBLIC_WEB,)
 CRM_PROJECTION_SELECTION_ACTION_TYPES = (ACTION_ADD_TO_CRM,)
 ACQUISITION_ROOT_ACTION_TYPES = (ACTION_START_ACQUISITION_RUN,)
+PROJECTION_EXPORT_ACTION_TYPES = (ACTION_EXPORT_CANDIDATES,)
 CRM_RESOURCE_BOUND_ACTION_TYPES = CRM_EXISTING_RECORD_ACTION_TYPES + CRM_RECORD_BATCH_ACTION_TYPES
 OPERATION_OWNER_BOUND_ACTION_TYPES = (
-    CRM_RESOURCE_BOUND_ACTION_TYPES + CRM_PROJECTION_SELECTION_ACTION_TYPES + ACQUISITION_ROOT_ACTION_TYPES
+    CRM_RESOURCE_BOUND_ACTION_TYPES
+    + CRM_PROJECTION_SELECTION_ACTION_TYPES
+    + ACQUISITION_ROOT_ACTION_TYPES
+    + PROJECTION_EXPORT_ACTION_TYPES
 )
-ACTION_REFRESH_COMPANY_PUBLIC_WEB = "refresh_company_public_web_assets"
-ACTION_PROMOTE_PERSON_ASSERTION = "promote_person_assertion"
-ACTION_EXPORT_CANDIDATES = "export_candidates"
-ACTION_EXTERNAL_INTAKE = "external_intake"
 
 APPROVAL_NOT_REQUIRED = "not_required"
 APPROVAL_REQUIRED = "required"
@@ -283,11 +287,10 @@ CRM_PROJECTION_SELECTION_ACTION_REQUEST_CONTRACTS: Mapping[str, Mapping[str, Any
                     )
                 ),
                 "request_schema_version": "crm_projection_selection_request_v1",
-                # Membership revision/count are mutable owner pins. Stable replay
-                # identity is the destination workspace plus the selected source rows.
                 "request_identity_target_fields": (
                     "workspace_id",
                     "projection_id",
+                    "membership_revision",
                     "candidate_identity_keys",
                 ),
                 "target_ref_field_aliases": (
@@ -379,6 +382,51 @@ CRM_RECORD_BATCH_ACTION_REQUEST_CONTRACTS: Mapping[str, Mapping[str, Any]] = Map
                         ("record_ids", "crm_record_id", "record_id", "person_identity_key"),
                     ),
                     ("workspace_id", ("tenant_id",)),
+                ),
+            }
+        )
+    }
+)
+
+_PROJECTION_EXPORT_INPUT_PROPERTIES: dict[str, dict[str, Any]] = {
+    "include_llm_reviewed_unconfirmed_assertions": {"type": "boolean"},
+    "include_crm_notes": {"type": "boolean"},
+    "limit": {"type": "integer", "minimum": 1, "maximum": 100_000},
+    "page_size": {"type": "integer", "minimum": 1, "maximum": 1000},
+    "export_scope": {"type": "string", "minLength": 1, "maxLength": 500, "pattern": r"\S"},
+}
+_PROJECTION_EXPORT_TARGET_PROPERTIES: dict[str, dict[str, Any]] = {
+    "projection_id": {"type": "string", "minLength": 1, "maxLength": 200, "pattern": r"\S"},
+    "membership_revision": {"type": "string", "minLength": 1, "maxLength": 200, "pattern": r"\S"},
+    "source_candidate_count": {"type": "integer", "minimum": 0},
+    "candidate_identity_keys": {
+        "type": "array",
+        "items": {"type": "string", "minLength": 1, "maxLength": 500, "pattern": r"\S"},
+        "maxItems": 100_000,
+    },
+}
+
+PROJECTION_EXPORT_ACTION_REQUEST_CONTRACTS: Mapping[str, Mapping[str, Any]] = MappingProxyType(
+    {
+        ACTION_EXPORT_CANDIDATES: MappingProxyType(
+            {
+                "request_schema": _freeze_action_request_json(
+                    DEFAULT_ACTION_REQUEST_SCHEMA_BUILDER.build(
+                        input_properties=_PROJECTION_EXPORT_INPUT_PROPERTIES,
+                        target_properties=_PROJECTION_EXPORT_TARGET_PROPERTIES,
+                        target_required=tuple(_PROJECTION_EXPORT_TARGET_PROPERTIES),
+                    )
+                ),
+                "request_schema_version": "projection_export_request_v1",
+                "request_identity_target_fields": (
+                    "projection_id",
+                    "membership_revision",
+                    "candidate_identity_keys",
+                ),
+                "target_ref_field_aliases": (
+                    ("projection_id", ("serving_projection_id",)),
+                    ("membership_revision", ("expected_membership_revision",)),
+                    ("candidate_identity_keys", ("candidate_ids", "candidate_identity_key", "candidate_id")),
                 ),
             }
         )
@@ -995,6 +1043,7 @@ DEFAULT_ACTION_REGISTRY = ActionRegistry(
                 EXPORT_CRM_PUBLIC_WEB_GENERATE_COMMAND_TYPE,
             ),
             default_workflow_command_type=EXPORT_PROJECTION_GENERATE_COMMAND_TYPE,
+            **dict(PROJECTION_EXPORT_ACTION_REQUEST_CONTRACTS[ACTION_EXPORT_CANDIDATES]),
         ),
         ACTION_EXTERNAL_INTAKE: ActionSpec(
             action_type=ACTION_EXTERNAL_INTAKE,
