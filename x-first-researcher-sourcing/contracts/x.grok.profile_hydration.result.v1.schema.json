@@ -1,0 +1,194 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sourcing-ai-agent.invalid/contracts/x.grok.profile_hydration.result.v1.schema.json",
+  "title": "Grok profile hydration result v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["batch_id", "status", "records", "limitations"],
+  "properties": {
+    "batch_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+      "maxLength": 128
+    },
+    "status": {
+      "enum": [
+        "X_PROFILE_HYDRATION_OK",
+        "X_PROFILE_HYDRATION_PARTIAL",
+        "X_PROFILE_HYDRATION_BLOCKED"
+      ]
+    },
+    "records": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/record"}
+    },
+    "limitations": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/batch_limitation"}
+    }
+  },
+  "$defs": {
+    "handle": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_]{1,15}$"
+    },
+    "nullable_handle": {
+      "type": ["string", "null"],
+      "pattern": "^[A-Za-z0-9_]{1,15}$"
+    },
+    "nullable_platform_user_id": {
+      "type": ["string", "null"],
+      "pattern": "^[1-9][0-9]{0,19}$"
+    },
+    "nullable_display_name": {
+      "type": ["string", "null"],
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "nullable_bio": {
+      "type": ["string", "null"],
+      "maxLength": 4096
+    },
+    "nullable_location": {
+      "type": ["string", "null"],
+      "maxLength": 256
+    },
+    "nullable_professional_category": {
+      "type": ["string", "null"],
+      "maxLength": 256
+    },
+    "external_url": {
+      "type": "string",
+      "pattern": "^https?://[^\\s]+$",
+      "maxLength": 2048
+    },
+    "nullable_external_urls": {
+      "type": ["array", "null"],
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/external_url"}
+    },
+    "temporal_state": {
+      "enum": ["current", "historical", "ambiguous"]
+    },
+    "affiliation_evidence_source": {
+      "enum": ["bio_explicit", "profile_field", "profile_affiliation_badge"]
+    },
+    "affiliation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "organization_name",
+        "organization_handle",
+        "temporal_state",
+        "evidence_source"
+      ],
+      "properties": {
+        "organization_name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "organization_handle": {"$ref": "#/$defs/nullable_handle"},
+        "temporal_state": {"$ref": "#/$defs/temporal_state"},
+        "evidence_source": {"$ref": "#/$defs/affiliation_evidence_source"}
+      }
+    },
+    "nullable_affiliations": {
+      "type": ["array", "null"],
+      "items": {"$ref": "#/$defs/affiliation"}
+    },
+    "nullable_verification": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["account_verified", "organization_affiliation_badge_observed"],
+      "properties": {
+        "account_verified": {"type": ["boolean", "null"]},
+        "organization_affiliation_badge_observed": {"type": ["boolean", "null"]}
+      }
+    },
+    "nullable_org_affiliation_signals": {
+      "type": ["array", "null"],
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/affiliation_evidence_source"}
+    },
+    "missing_field": {
+      "enum": [
+        "platform_user_id",
+        "display_name",
+        "bio",
+        "location",
+        "external_urls",
+        "professional_category",
+        "affiliations",
+        "verification",
+        "org_affiliation_signals"
+      ]
+    },
+    "record_limitation": {
+      "enum": [
+        "profile_fields_not_exposed",
+        "ambiguous_profile_match",
+        "lookup_not_found",
+        "lookup_blocked",
+        "lookup_error",
+        "model_output_repaired"
+      ]
+    },
+    "batch_limitation": {
+      "enum": [
+        "native_x_lookup_incomplete",
+        "execution_deadline_reached",
+        "transport_failure",
+        "result_truncated",
+        "model_output_repaired"
+      ]
+    },
+    "record": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "input_handle",
+        "lookup_status",
+        "matched_handle",
+        "platform_user_id",
+        "display_name",
+        "bio",
+        "location",
+        "external_urls",
+        "professional_category",
+        "affiliations",
+        "verification",
+        "org_affiliation_signals",
+        "source_status",
+        "missing_fields",
+        "limitations"
+      ],
+      "properties": {
+        "input_handle": {"$ref": "#/$defs/handle"},
+        "lookup_status": {"enum": ["matched", "not_found", "blocked", "error"]},
+        "matched_handle": {"$ref": "#/$defs/nullable_handle"},
+        "platform_user_id": {"$ref": "#/$defs/nullable_platform_user_id"},
+        "display_name": {"$ref": "#/$defs/nullable_display_name"},
+        "bio": {"$ref": "#/$defs/nullable_bio"},
+        "location": {"$ref": "#/$defs/nullable_location"},
+        "external_urls": {"$ref": "#/$defs/nullable_external_urls"},
+        "professional_category": {"$ref": "#/$defs/nullable_professional_category"},
+        "affiliations": {"$ref": "#/$defs/nullable_affiliations"},
+        "verification": {"$ref": "#/$defs/nullable_verification"},
+        "org_affiliation_signals": {"$ref": "#/$defs/nullable_org_affiliation_signals"},
+        "source_status": {"const": "model_mediated_unverified"},
+        "missing_fields": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/missing_field"}
+        },
+        "limitations": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/record_limitation"}
+        }
+      }
+    }
+  }
+}

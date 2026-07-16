@@ -86,6 +86,26 @@ It requires a new pinned `GO`, request, and one-shot grant before another retry.
 `docs/live-evidence/2026-07-16-google-deepmind-v5-replacement-diagnostic.md`.
 See also `docs/live-evidence/2026-07-16-google-deepmind-v5-1-excerpt-preflight-diagnostic.md`.
 
+A later direct compact-discovery matrix separated native-X discovery from profile/evidence hydration. Three
+tool-separated Google DeepMind strategy shards (broad, topology-first, and historical/project-first) used 142
+ledger-confirmed policy-valid native-X calls and produced a 93-handle case-insensitive union. Topology added 21 leads
+over the broad shard; historical/project added another 26. A policy-clean function/role negative-space retry then
+added three from 23 calls, raising the validated diagnostic union to 96. Its model terminal falsely claimed truncation
+and a deadline; receipt-owned projection removed those claims while preserving three domain-coverage limitations and
+`PARTIAL` status. The merged three-base-shard evidence mix is not Bio-led: 139/181 distinct
+candidate reference signatures (76.8%) are status surfaces, including self-Posts, mentions, Replies, official Posts,
+and quotes. A new compact schema/runtime/merge lane removes model-authored call counts, requires exact profile/status
+references plus subject/author binding, preserves independent lab/pretraining temporal proposals, and has no business
+lead or source-reference cap.
+
+Profile hydration then exposed a separate tool-compliance failure mode. One schema-valid 49-row response made zero
+native-X calls and was discarded; another 44-row response made exactly 44 `x_user_search` calls and retained 42 exact
+matches. Among those exact matches, id/display-name/Bio coverage was 100%/100%/95.2%, while location, external URL,
+professional category, and X organization-affiliation badge coverage were all zero. Tool compliance was non-monotonic
+across 1/4/8/44/49-input trials, so the reusable method is ledger-gated adaptive splitting, not a guessed static batch
+maximum. See `docs/GROK_COMPACT_DISCOVERY_AND_PROFILE_HYDRATION.md` and
+`docs/live-evidence/2026-07-16-gdm-compact-strategy-matrix.md`.
+
 The first vertical slice covers OpenAI with:
 
 - 24 completely synthetic external accounts;
@@ -175,6 +195,8 @@ PYTHONPATH=src ../sourcing-ai-agent/.venv/bin/python scripts/generate_capability
 PYTHONPATH=src ../sourcing-ai-agent/.venv/bin/python -m unittest tests.test_luna_live_canary -v
 PYTHONPATH=src ../sourcing-ai-agent/.venv/bin/python -m unittest tests.test_luna_live_canary_v2 -v
 PYTHONPATH=src ../sourcing-ai-agent/.venv/bin/python -m unittest tests.test_grok_cli_exploration -v
+PYTHONPATH=src ../sourcing-ai-agent/.venv/bin/python -m unittest tests.test_compact_grok_discovery -v
+PYTHONPATH=src ../sourcing-ai-agent/.venv/bin/python -m unittest tests.test_grok_profile_hydration -v
 PYTHONPATH=src ../sourcing-ai-agent/.venv/bin/python -m unittest tests.test_reported_profile_text_semantic -v
 PYTHONPATH=src ../sourcing-ai-agent/.venv/bin/python scripts/generate_stage2_field_capability_fixture.py --check
 PYTHONPATH=src ../sourcing-ai-agent/.venv/bin/python -m unittest tests.test_stage2_field_capability -v
@@ -207,10 +229,12 @@ hydration, not because a volume cap fired or formal exhaustion was proved; the r
 `insufficient_proof / continue_expansion`. The offline reported-text semantic contract and adjudicator are ready for
 supplied model outputs while preserving that trust level; they have not run the 95 real model-mediated texts and do
 not include a Luna transport. They cannot replace the next gate of source-bound account/Bio/Post hydration.
-The Stage 2A offline contract defines what source binding must prove. The reviewed OAuth Grok CLI runner now proves
-bounded native-X execution and session-argument reconciliation, but Grok CLI 0.2.101 still does not retain native-X
-result bodies or query-to-lead attribution. The immediate gate is a reviewed v5.1 GDM retry followed by the reviewed
-OpenAI zero-prior large-lab experiment. A future supported transport that exposes native result payloads is still
-needed for replayable source binding and true per-query yield. Provider-costing batch review and
-precision/conditional-coverage measurement remain separately review-gated. Workflow evaluation and
+The Stage 2A offline contract defines what source binding must prove. The reviewed OAuth Grok CLI runner proves bounded
+native-X execution and session-argument reconciliation, but Grok CLI 0.2.101 still does not retain native-X result
+bodies or query-to-lead attribution. The immediate engineering gate is independent review of the compact discovery
+contract, deterministic multi-shard union, ledger-gated profile-hydration contract, and runner recovery repair. The
+adaptive replay of the 49 rejected profile inputs may continue as explicitly labelled exploration; neither the
+96-lead diagnostic union nor that replay is a formal promotion gate. A future supported transport that exposes
+native result payloads is still needed for replayable source binding and true per-query yield. Provider-costing batch
+promotion and precision/conditional-coverage measurement remain separately review-gated. Workflow evaluation and
 champion/challenger rules are defined in `docs/X_FIRST_EVALUATION_CONTRACT.md`.

@@ -1,0 +1,157 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sourcing-ai-agent.invalid/contracts/x.grok.compact_discovery.result.v1.schema.json",
+  "title": "Compact Grok discovery result v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "status",
+    "strategy_id",
+    "leads",
+    "coverage_cells",
+    "uncovered_cells",
+    "limitations"
+  ],
+  "properties": {
+    "status": {
+      "enum": ["X_DISCOVERY_OK", "X_DISCOVERY_PARTIAL", "X_DISCOVERY_BLOCKED"]
+    },
+    "strategy_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+      "maxLength": 128
+    },
+    "leads": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/lead"}
+    },
+    "coverage_cells": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/coverage_cell"}
+    },
+    "uncovered_cells": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/coverage_cell"}
+    },
+    "limitations": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/limitation"}
+    }
+  },
+  "$defs": {
+    "handle": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_]{1,15}$"
+    },
+    "temporal_state": {
+      "enum": ["current", "historical", "ambiguous"]
+    },
+    "coverage_cell": {
+      "enum": [
+        "official_account_profiles",
+        "official_account_posts",
+        "official_account_mentions",
+        "candidate_profiles",
+        "candidate_authored_posts",
+        "candidate_replies",
+        "candidate_quotes_and_threads",
+        "research_artifact_author_graph"
+      ]
+    },
+    "limitation": {
+      "enum": [
+        "native_x_search_incomplete",
+        "profile_hydration_incomplete",
+        "thread_hydration_incomplete",
+        "result_truncated",
+        "execution_deadline_reached",
+        "transport_failure",
+        "model_output_repaired"
+      ]
+    },
+    "reason_code": {
+      "enum": [
+        "lab_affiliation_current_signal",
+        "lab_affiliation_historical_signal",
+        "lab_affiliation_ambiguous_signal",
+        "pretraining_relevance_current_signal",
+        "pretraining_relevance_historical_signal",
+        "pretraining_relevance_ambiguous_signal"
+      ]
+    },
+    "source_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["surface", "url", "subject_handle", "author_handle", "support_dimensions"],
+      "properties": {
+        "surface": {
+          "enum": [
+            "profile",
+            "bio",
+            "self_post",
+            "reply",
+            "quote",
+            "mention",
+            "official_post",
+            "thread"
+          ]
+        },
+        "url": {
+          "type": "string",
+          "pattern": "^https://x\\.com/[A-Za-z0-9_]{1,15}(?:/status/[1-9][0-9]{0,19})?$"
+        },
+        "subject_handle": {"$ref": "#/$defs/handle"},
+        "author_handle": {"$ref": "#/$defs/handle"},
+        "support_dimensions": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"enum": ["lab_affiliation", "pretraining_relevance"]}
+        }
+      }
+    },
+    "lead": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "handle",
+        "profile_url",
+        "platform_user_id",
+        "target_lab_affiliation_state",
+        "pretraining_experience_state",
+        "source_status",
+        "source_refs",
+        "reason_codes"
+      ],
+      "properties": {
+        "handle": {"$ref": "#/$defs/handle"},
+        "profile_url": {
+          "type": "string",
+          "pattern": "^https://x\\.com/[A-Za-z0-9_]{1,15}$"
+        },
+        "platform_user_id": {
+          "type": ["string", "null"],
+          "pattern": "^[1-9][0-9]{0,19}$"
+        },
+        "target_lab_affiliation_state": {"$ref": "#/$defs/temporal_state"},
+        "pretraining_experience_state": {"$ref": "#/$defs/temporal_state"},
+        "source_status": {"const": "model_mediated_unverified"},
+        "source_refs": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/source_ref"}
+        },
+        "reason_codes": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/reason_code"}
+        }
+      }
+    }
+  }
+}
