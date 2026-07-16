@@ -270,6 +270,7 @@
         "non_json_suffix_bytes",
         "compiled_prompt_sha256",
         "session_updates_sha256",
+        "process_result_journal_sha256",
         "ephemeral_tree_deleted",
         "session_tree_file_count",
         "session_tree_entry_count",
@@ -315,6 +316,13 @@
           "$ref": "#/$defs/sha256"
         },
         "session_updates_sha256": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "process_result_journal_sha256": {
           "type": [
             "string",
             "null"

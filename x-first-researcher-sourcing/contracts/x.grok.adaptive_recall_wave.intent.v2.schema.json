@@ -17,6 +17,7 @@
     "emergency",
     "technical_limits",
     "runtime_layout",
+    "process_evidence_generation",
     "authority",
     "run_lease_sha256",
     "budget",
@@ -94,6 +95,9 @@
           "const": "run.lock"
         }
       }
+    },
+    "process_evidence_generation": {
+      "const": "journal_spool_bound_v1"
     },
     "authority": {
       "$ref": "x.grok.adaptive_recall_wave.request.v2.schema.json#/properties/authority"

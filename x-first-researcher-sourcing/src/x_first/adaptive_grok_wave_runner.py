@@ -63,7 +63,9 @@ RECEIPT_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.operator_receipt.v3"
 GRANT_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.live_grant.v2"
 CONSUMPTION_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.live_grant_consumption.v2"
 PROCESS_LEDGER_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.process_ledger.v2"
-PROCESS_RESULT_JOURNAL_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.process_result_journal.v1"
+LEGACY_PROCESS_RESULT_JOURNAL_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.process_result_journal.v1"
+PROCESS_RESULT_JOURNAL_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.process_result_journal.v2"
+PROCESS_EVIDENCE_GENERATION = "journal_spool_bound_v1"
 DELETION_JOURNAL_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.deletion_journal.v1"
 DELETION_RECEIPT_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.deletion_receipt.v1"
 AUTH_TAINT_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.auth_taint.v1"
@@ -419,8 +421,10 @@ _INTENT_KEYS = {
     "budget",
     "retention",
     "runtime_layout",
+    "process_evidence_generation",
     "authority",
 }
+_LEGACY_INTENT_KEYS = _INTENT_KEYS - {"process_evidence_generation"}
 _RECEIPT_KEYS = {
     "schema_version",
     "run_id",
@@ -498,6 +502,7 @@ _ARTIFACT_KEYS = {
     "non_json_suffix_bytes",
     "compiled_prompt_sha256",
     "session_updates_sha256",
+    "process_result_journal_sha256",
     "ephemeral_tree_deleted",
     "session_tree_file_count",
     "session_tree_entry_count",
@@ -505,6 +510,7 @@ _ARTIFACT_KEYS = {
     "session_tree_total_bytes",
     "session_tree_max_file_bytes",
 }
+_LEGACY_ARTIFACT_KEYS = _ARTIFACT_KEYS - {"process_result_journal_sha256"}
 _SESSION_PROOF_KEYS = {
     "status",
     "updates_sha256",
@@ -582,6 +588,16 @@ _PROCESS_RESULT_JOURNAL_KEYS = {
     "process_group_cleanup_confirmed",
     "execution_error_code",
     "technical_limit_kind",
+    "stdout_sha256",
+    "stdout_bytes",
+    "stderr_sha256",
+    "stderr_bytes",
+}
+_LEGACY_PROCESS_RESULT_JOURNAL_KEYS = _PROCESS_RESULT_JOURNAL_KEYS - {
+    "stdout_sha256",
+    "stdout_bytes",
+    "stderr_sha256",
+    "stderr_bytes",
 }
 _GRANT_KEYS = {
     "schema_version",
@@ -852,8 +868,11 @@ def _process_result_journal_payload(
     request_id: str,
     run_lease_sha256: str,
     session_id: str,
+    stdout_raw: bytes,
+    stderr_raw: bytes,
+    phase: str = "executor_returned",
 ) -> dict[str, Any]:
-    """Project executor facts without retaining provider or candidate text."""
+    """Project executor facts and bind the exact closed process spools."""
 
     return {
         "schema_version": PROCESS_RESULT_JOURNAL_SCHEMA_VERSION,
@@ -861,7 +880,7 @@ def _process_result_journal_payload(
         "request_id": request_id,
         "run_lease_sha256": run_lease_sha256,
         "session_id": session_id,
-        "phase": "executor_returned",
+        "phase": phase,
         "exit_code": process_result.exit_code,
         "timed_out": process_result.timed_out,
         "term_sent": process_result.term_sent,
@@ -882,6 +901,10 @@ def _process_result_journal_payload(
         "process_group_cleanup_confirmed": process_result.process_group_cleanup_confirmed,
         "execution_error_code": process_result.execution_error_code,
         "technical_limit_kind": process_result.technical_limit_kind,
+        "stdout_sha256": bytes_sha256(stdout_raw),
+        "stdout_bytes": len(stdout_raw),
+        "stderr_sha256": bytes_sha256(stderr_raw),
+        "stderr_bytes": len(stderr_raw),
     }
 
 
@@ -5611,6 +5634,7 @@ def _run_adaptive_wave(
             "budget": request["budget"],
             "retention": request["retention"],
             "runtime_layout": runtime_layout,
+            "process_evidence_generation": PROCESS_EVIDENCE_GENERATION,
             "authority": AUTHORITY,
         }
         _atomic_publish(run_root / "operator-request.json", (canonical_json(request) + "\n").encode())
@@ -5630,6 +5654,7 @@ def _run_adaptive_wave(
         provider_phase_completed_cleanly = False
         process_result: ProcessResult | None = None
         defer_cleanup_to_recovery = False
+        process_result_journal_sha: str | None = None
         stdout_raw: bytes | None = None
         stderr_raw: bytes | None = None
         if execution_mode == "live":
@@ -5752,17 +5777,39 @@ def _run_adaptive_wave(
                 monotonic=monotonic,
                 on_spawn=persist_spawn,
             )
+            # Executor return and durable evidence sealing are distinct
+            # phases.  From this point forward, any exception belongs to
+            # recovery: the live auth claim and ephemeral session tree must
+            # remain intact until the journal, spools and session evidence are
+            # all durably promoted.
+            defer_cleanup_to_recovery = True
+            journal_stdout = _read_regular_owned_bounded(
+                stdout_spool,
+                maximum_bytes=request["technical_limits"]["max_stdout_bytes"],
+                required_mode=0o600,
+            )
+            journal_stderr = _read_regular_owned_bounded(
+                stderr_spool,
+                maximum_bytes=request["technical_limits"]["max_stderr_bytes"],
+                required_mode=0o600,
+            )
             process_result_journal = _process_result_journal_payload(
                 process_result,
                 run_id=actual_run_id,
                 request_id=request["request_id"],
                 run_lease_sha256=run_lease_sha,
                 session_id=actual_session_id,
+                stdout_raw=journal_stdout,
+                stderr_raw=journal_stderr,
             )
+            if not _process_result_journal_valid(process_result_journal):
+                raise AdaptiveWaveValidationError("process_result_unrecoverable")
+            process_result_journal_raw = (canonical_json(process_result_journal) + "\n").encode()
             _atomic_publish(
                 run_root / "process-result.json",
-                (canonical_json(process_result_journal) + "\n").encode(),
+                process_result_journal_raw,
             )
+            process_result_journal_sha = bytes_sha256(process_result_journal_raw)
             if not process_result.process_group_cleanup_confirmed:
                 # The recorded process group may still be alive. Keep its
                 # session tree and auth active-use claim intact so the
@@ -5789,7 +5836,7 @@ def _run_adaptive_wave(
                     )
                     _atomic_publish(retained_updates_path, updates_raw)
                     session_capture_status = "captured"
-                except (AdaptiveWaveValidationError, OSError, UnicodeError, ValueError):
+                except (AdaptiveWaveValidationError, UnicodeError, ValueError):
                     updates_raw = None
                     session_capture_status = "invalid"
             stdout_raw, stderr_raw = _publish_process_spools(
@@ -5800,6 +5847,8 @@ def _run_adaptive_wave(
                 max_stderr_bytes=request["technical_limits"]["max_stderr_bytes"],
                 allow_missing=False,
             )
+            if stdout_raw != journal_stdout or stderr_raw != journal_stderr:
+                raise AdaptiveWaveValidationError("process_result_journal_spool_mismatch")
             provider_phase_completed_cleanly = (
                 process_result.exit_code == 0
                 and not process_result.timed_out
@@ -5807,6 +5856,9 @@ def _run_adaptive_wave(
                 and process_result.technical_limit_kind is None
                 and measurement.limit_kind is None
             )
+            # Every post-executor evidence owner has now been durably sealed;
+            # ordinary auth audit/deletion may safely proceed.
+            defer_cleanup_to_recovery = False
         finally:
             if defer_cleanup_to_recovery:
                 pass
@@ -6017,6 +6069,7 @@ def _run_adaptive_wave(
                 "non_json_suffix_bytes": suffix_bytes,
                 "compiled_prompt_sha256": bytes_sha256(compiled_prompt_raw),
                 "session_updates_sha256": bytes_sha256(updates_raw) if updates_raw is not None else None,
+                "process_result_journal_sha256": process_result_journal_sha,
                 "ephemeral_tree_deleted": True,
                 "session_tree_file_count": measurement.file_count,
                 "session_tree_entry_count": measurement.entry_count,
@@ -6087,8 +6140,9 @@ def run_adaptive_grok_wave_live(
 
 
 def _intent_valid(intent: Any) -> bool:
-    if not isinstance(intent, dict) or set(intent) != _INTENT_KEYS:
+    if not isinstance(intent, dict) or set(intent) not in (_INTENT_KEYS, _LEGACY_INTENT_KEYS):
         return False
+    current_process_evidence = set(intent) == _INTENT_KEYS
     return (
         intent.get("schema_version") == INTENT_SCHEMA_VERSION
         and isinstance(intent.get("run_id"), str)
@@ -6108,6 +6162,11 @@ def _intent_valid(intent: Any) -> bool:
         and _budget_valid(intent.get("budget"))
         and _retention_valid(intent.get("retention"))
         and _runtime_layout_valid(intent.get("runtime_layout"))
+        and (
+            intent.get("process_evidence_generation") == PROCESS_EVIDENCE_GENERATION
+            if current_process_evidence
+            else "process_evidence_generation" not in intent
+        )
         and intent.get("authority") == AUTHORITY
     )
 
@@ -6338,8 +6397,13 @@ def _process_ledger_valid(value: Any) -> bool:
     )
 
 
-def _process_result_journal_valid(value: Any) -> bool:
-    if not isinstance(value, dict) or set(value) != _PROCESS_RESULT_JOURNAL_KEYS:
+def _process_result_journal_valid(value: Any, *, allow_legacy: bool = False) -> bool:
+    if not isinstance(value, dict):
+        return False
+    keys = set(value)
+    current = keys == _PROCESS_RESULT_JOURNAL_KEYS
+    legacy = allow_legacy and keys == _LEGACY_PROCESS_RESULT_JOURNAL_KEYS
+    if not (current or legacy):
         return False
     child_values = (value.get("child_pid"), value.get("process_group_id"))
     identity_hashes = (
@@ -6350,8 +6414,16 @@ def _process_result_journal_valid(value: Any) -> bool:
     process_spawn_attempted = value.get("process_spawn_attempted")
     spawn_binding_complete = all(item is not None for item in spawn_bindings)
     spawn_binding_empty = all(item is None for item in spawn_bindings)
+    cleanup_confirmed = value.get("process_group_cleanup_confirmed")
+    phase = value.get("phase")
+    execution_error_code = value.get("execution_error_code")
     return (
-        value.get("schema_version") == PROCESS_RESULT_JOURNAL_SCHEMA_VERSION
+        value.get("schema_version")
+        == (
+            PROCESS_RESULT_JOURNAL_SCHEMA_VERSION
+            if current
+            else LEGACY_PROCESS_RESULT_JOURNAL_SCHEMA_VERSION
+        )
         and isinstance(value.get("run_id"), str)
         and _RUN_ID_RE.fullmatch(value["run_id"]) is not None
         and isinstance(value.get("request_id"), str)
@@ -6359,7 +6431,7 @@ def _process_result_journal_valid(value: Any) -> bool:
         and _is_sha(value.get("run_lease_sha256"))
         and isinstance(value.get("session_id"), str)
         and _SESSION_ID_RE.fullmatch(value["session_id"]) is not None
-        and value.get("phase") == "executor_returned"
+        and phase in ({"executor_returned", "recovery_sealed"} if current else {"executor_returned"})
         and (value.get("exit_code") is None or _is_int(value["exit_code"]))
         and all(
             type(value.get(key)) is bool
@@ -6377,14 +6449,42 @@ def _process_result_journal_valid(value: Any) -> bool:
             (process_spawn_attempted is True and spawn_binding_complete)
             or (process_spawn_attempted is False and spawn_binding_empty)
         )
-        and value.get("execution_error_code")
+        # Cleanup may never become an unbound assertion.  An executor result
+        # that cannot confirm cleanup must carry the complete ledger identity
+        # recovery needs to verify and terminate the group.
+        and (cleanup_confirmed is True or process_spawn_attempted is True)
+        and execution_error_code
         in {
             "none",
             "spawn_failed",
             "process_execution_failed",
             "process_group_cleanup_failed",
+            "crash_recovered",
         }
         and value.get("technical_limit_kind") in _TECHNICAL_LIMIT_KINDS | {None}
+        and (
+            not current
+            or (
+                _is_sha(value.get("stdout_sha256"))
+                and _validate_nonnegative_int(value.get("stdout_bytes"))
+                and _is_sha(value.get("stderr_sha256"))
+                and _validate_nonnegative_int(value.get("stderr_bytes"))
+            )
+        )
+        and (
+            (
+                phase == "executor_returned"
+                and execution_error_code != "crash_recovered"
+            )
+            or (
+                phase == "recovery_sealed"
+                and process_spawn_attempted is True
+                and cleanup_confirmed is True
+                and value.get("exit_code") is None
+                and execution_error_code == "crash_recovered"
+                and value.get("technical_limit_kind") is None
+            )
+        )
     )
 
 
@@ -6613,7 +6713,10 @@ def validate_operator_receipt(receipt: Any) -> list[str]:
             errors.append("receipt_process_value_invalid")
 
     artifacts = receipt.get("artifacts")
-    artifacts_shape_valid = isinstance(artifacts, dict) and set(artifacts) == _ARTIFACT_KEYS
+    artifacts_shape_valid = isinstance(artifacts, dict) and set(artifacts) in (
+        _ARTIFACT_KEYS,
+        _LEGACY_ARTIFACT_KEYS,
+    )
     if not artifacts_shape_valid:
         errors.append("receipt_artifacts_shape_invalid")
     elif (
@@ -6632,6 +6735,11 @@ def validate_operator_receipt(receipt: Any) -> list[str]:
         )
         or not _is_sha(artifacts.get("compiled_prompt_sha256"))
         or (artifacts.get("session_updates_sha256") is not None and not _is_sha(artifacts["session_updates_sha256"]))
+        or (
+            "process_result_journal_sha256" in artifacts
+            and artifacts.get("process_result_journal_sha256") is not None
+            and not _is_sha(artifacts["process_result_journal_sha256"])
+        )
         or artifacts.get("ephemeral_tree_deleted") is not True
         or any(
             not _validate_nonnegative_int(artifacts.get(key))
@@ -6867,6 +6975,9 @@ def validate_operator_bundle(
         return errors + ["bundle_object_invalid"]
     if request_contract_errors:
         return errors
+    current_process_evidence = (
+        intent.get("process_evidence_generation") == PROCESS_EVIDENCE_GENERATION
+    )
     recorded_binding = receipt.get("command_binding")
     recorded_schema_sha = (
         recorded_binding.get("structured_output_schema_sha256")
@@ -7239,13 +7350,23 @@ def validate_operator_bundle(
         errors.append("unexpected_process_ledger")
 
     process_result_path = run_root / "process-result.json"
+    process_result_journal: dict[str, Any] | None = None
+    process_result_journal_raw: bytes | None = None
     if process_result_path.exists() or process_result_path.is_symlink():
         try:
             process_result_journal = _read_private_json(process_result_path)
+            process_result_journal_raw = _read_regular_owned_bounded(
+                process_result_path,
+                maximum_bytes=1_048_576,
+                required_mode=0o600,
+            )
         except AdaptiveWaveValidationError:
             errors.append("process_result_journal_unavailable")
         else:
-            if not _process_result_journal_valid(process_result_journal):
+            if not _process_result_journal_valid(
+                process_result_journal,
+                allow_legacy=not current_process_evidence,
+            ):
                 errors.append("process_result_journal_invalid")
             expected_journal_binding = {
                 "run_id": receipt.get("run_id"),
@@ -7258,6 +7379,19 @@ def validate_operator_bundle(
                 for key, expected in expected_journal_binding.items()
             ):
                 errors.append("process_result_journal_binding_mismatch")
+            if isinstance(process, dict):
+                expected_identity_result = {
+                    "process_spawn_attempted": process.get("process_spawn_attempted"),
+                    "child_pid": process.get("child_pid"),
+                    "process_group_id": process.get("process_group_id"),
+                    "kernel_birth_identity_sha256": process.get("kernel_birth_identity_sha256"),
+                    "process_identity_token_sha256": process.get("process_identity_token_sha256"),
+                }
+                if any(
+                    process_result_journal.get(key) != expected
+                    for key, expected in expected_identity_result.items()
+                ):
+                    errors.append("process_result_journal_receipt_identity_mismatch")
             if isinstance(process, dict) and receipt.get("status") != "crash_recovered":
                 expected_process_result = {
                     "exit_code": process.get("exit_code"),
@@ -7281,6 +7415,8 @@ def validate_operator_bundle(
                     != process.get("technical_limit_kind")
                 ):
                     errors.append("process_result_journal_receipt_mismatch")
+    elif current_process_evidence:
+        errors.append("process_result_journal_missing")
 
     raw_path = run_root / "raw.stdout"
     stderr_path = run_root / "stderr.txt"
@@ -7298,6 +7434,23 @@ def validate_operator_bundle(
         errors.append("raw_stdout_hash_mismatch")
     if bytes_sha256(stderr) != artifacts.get("stderr_sha256"):
         errors.append("stderr_hash_mismatch")
+    if current_process_evidence:
+        if set(artifacts) != _ARTIFACT_KEYS:
+            errors.append("current_process_evidence_receipt_shape_invalid")
+        if process_result_journal_raw is None:
+            if artifacts.get("process_result_journal_sha256") is not None:
+                errors.append("process_result_journal_hash_without_artifact")
+        elif bytes_sha256(process_result_journal_raw) != artifacts.get(
+            "process_result_journal_sha256"
+        ):
+            errors.append("process_result_journal_hash_mismatch")
+        if isinstance(process_result_journal, dict) and (
+            process_result_journal.get("stdout_sha256") != bytes_sha256(raw)
+            or process_result_journal.get("stdout_bytes") != len(raw)
+            or process_result_journal.get("stderr_sha256") != bytes_sha256(stderr)
+            or process_result_journal.get("stderr_bytes") != len(stderr)
+        ):
+            errors.append("process_result_journal_spool_binding_mismatch")
     (
         parsed_result,
         sanitized,
@@ -7674,6 +7827,9 @@ def _recover_incomplete_run_locked(
     intent = _read_private_json(run_root / "operator-intent.json")
     if not _intent_valid(intent):
         raise AdaptiveWaveValidationError("intent_invalid")
+    current_process_evidence = (
+        intent.get("process_evidence_generation") == PROCESS_EVIDENCE_GENERATION
+    )
     if intent["run_lease_sha256"] != held_lease_sha:
         raise AdaptiveWaveValidationError("recovery_run_lease_binding_invalid")
     request = _read_private_json(run_root / "operator-request.json")
@@ -7736,11 +7892,20 @@ def _recover_incomplete_run_locked(
     del prior_handles
     process_result_path = run_root / "process-result.json"
     process_result_journal: dict[str, Any] | None = None
+    process_result_journal_raw: bytes | None = None
     if process_result_path.exists() or process_result_path.is_symlink():
         process_result_value = _read_private_json(process_result_path)
-        if not _process_result_journal_valid(process_result_value):
+        if not _process_result_journal_valid(
+            process_result_value,
+            allow_legacy=not current_process_evidence,
+        ):
             raise AdaptiveWaveValidationError("process_result_journal_invalid")
         process_result_journal = process_result_value
+        process_result_journal_raw = _read_regular_owned_bounded(
+            process_result_path,
+            maximum_bytes=1_048_576,
+            required_mode=0o600,
+        )
         if (
             process_result_journal["run_id"] != intent["run_id"]
             or process_result_journal["request_id"] != intent["request_id"]
@@ -7798,6 +7963,11 @@ def _recover_incomplete_run_locked(
             != bytes_sha256(ledger["process_identity_token"].encode())
         ):
             raise AdaptiveWaveValidationError("process_result_journal_ledger_mismatch")
+    elif current_process_evidence and ledger is None:
+        # A current run without either an executor-return journal or a durable
+        # spawn ledger has no process identity on which recovery can base a
+        # cleanup-confirmed claim.  Preserve the home/claim and fail closed.
+        raise AdaptiveWaveValidationError("recovery_process_identity_unavailable")
     try:
         raw, stderr = _publish_process_spools(
             run_root,
@@ -7810,10 +7980,48 @@ def _recover_incomplete_run_locked(
             # the executor returned, silently replacing a missing spool with
             # empty bytes would destroy the evidence the journal was added to
             # preserve.
-            allow_missing=process_result_journal is None,
+            allow_missing=not current_process_evidence and process_result_journal is None,
         )
     except AdaptiveWaveValidationError as exc:
         raise AdaptiveWaveValidationError("recovery_spool_invalid") from exc
+    if current_process_evidence and process_result_journal is None:
+        assert ledger is not None
+        recovered_process_result = ProcessResult(
+            exit_code=None,
+            timed_out=False,
+            term_sent=term_sent,
+            kill_sent=kill_sent,
+            process_spawn_attempted=True,
+            child_pid=ledger["child_pid"],
+            process_group_id=ledger["process_group_id"],
+            kernel_birth_identity=ledger["kernel_birth_identity"],
+            process_identity_token=ledger["process_identity_token"],
+            process_group_cleanup_confirmed=True,
+            execution_error_code="crash_recovered",
+            technical_limit_kind=None,
+        )
+        process_result_journal = _process_result_journal_payload(
+            recovered_process_result,
+            run_id=intent["run_id"],
+            request_id=intent["request_id"],
+            run_lease_sha256=held_lease_sha,
+            session_id=intent["command_binding"]["session_id"],
+            stdout_raw=raw,
+            stderr_raw=stderr,
+            phase="recovery_sealed",
+        )
+        if not _process_result_journal_valid(process_result_journal):
+            raise AdaptiveWaveValidationError("recovery_process_result_journal_invalid")
+        process_result_journal_raw = (canonical_json(process_result_journal) + "\n").encode()
+        _atomic_publish(process_result_path, process_result_journal_raw)
+    elif current_process_evidence and isinstance(process_result_journal, dict):
+        if (
+            process_result_journal.get("stdout_sha256") != bytes_sha256(raw)
+            or process_result_journal.get("stdout_bytes") != len(raw)
+            or process_result_journal.get("stderr_sha256") != bytes_sha256(stderr)
+            or process_result_journal.get("stderr_bytes") != len(stderr)
+        ):
+            raise AdaptiveWaveValidationError("recovery_process_spool_binding_mismatch")
     ephemeral_home = run_root / intent["runtime_layout"]["ephemeral_home_name"]
     retained_updates_path = run_root / intent["runtime_layout"]["session_updates_name"]
     measurement = SessionTreeMeasurement(0, 0, 0, 0, 0, None)
@@ -8089,6 +8297,11 @@ def _recover_incomplete_run_locked(
             "non_json_suffix_bytes": None,
             "compiled_prompt_sha256": bytes_sha256(compiled_raw),
             "session_updates_sha256": bytes_sha256(session_raw) if session_raw is not None else None,
+            "process_result_journal_sha256": (
+                bytes_sha256(process_result_journal_raw)
+                if process_result_journal_raw is not None
+                else None
+            ),
             "ephemeral_tree_deleted": not ephemeral_home.exists() and not ephemeral_home.is_symlink(),
             "session_tree_file_count": measurement.file_count,
             "session_tree_entry_count": measurement.entry_count,

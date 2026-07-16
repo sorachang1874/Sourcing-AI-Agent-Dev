@@ -4698,16 +4698,14 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
 
             run_root = next((root / "runtime").iterdir())
             self.assertTrue((run_root / "process-ledger.json").is_file())
-            recovered = recover_incomplete_run(
-                run_root,
-                approval_root=approvals,
-                process_group_is_alive=lambda group: False,
-                wall_clock=lambda: FIXED_TIME + timedelta(minutes=5),
-            )
-            self.assertEqual(recovered["status"], "crash_recovered")
-            self.assertEqual(validate_operator_bundle(run_root, approval_root=approvals), [])
-            marker = json.loads((approvals / f"auth-taint-{auth_sha}.json").read_text())
-            self.assertEqual(marker["reason"], "post_consumption_execution_not_clean")
+            with self.assertRaisesRegex(AdaptiveWaveValidationError, "recovery_spool_invalid"):
+                recover_incomplete_run(
+                    run_root,
+                    approval_root=approvals,
+                    process_group_is_alive=lambda group: False,
+                    wall_clock=lambda: FIXED_TIME + timedelta(minutes=5),
+                )
+            self.assertFalse((run_root / "operator-receipt.json").exists())
 
     def test_bundle_replay_rejects_launcher_verification_outside_grant_window(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -5200,6 +5198,277 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
 
             self.assertFalse(runner._process_result_journal_valid(journal))
 
+    def test_current_bundle_requires_hash_bound_process_result_journal(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            run_root, approvals = _completed_live_run(Path(directory))
+            journal_path = run_root / "process-result.json"
+            journal_raw = journal_path.read_bytes()
+            receipt = json.loads((run_root / "operator-receipt.json").read_text())
+            self.assertEqual(
+                receipt["artifacts"]["process_result_journal_sha256"],
+                _bytes_sha(journal_raw),
+            )
+            journal = json.loads(journal_raw)
+            self.assertEqual(
+                journal["stdout_sha256"],
+                _bytes_sha((run_root / "raw.stdout").read_bytes()),
+            )
+            self.assertEqual(journal["stdout_bytes"], (run_root / "raw.stdout").stat().st_size)
+            self.assertEqual(
+                journal["stderr_sha256"],
+                _bytes_sha((run_root / "stderr.txt").read_bytes()),
+            )
+            self.assertEqual(journal["stderr_bytes"], (run_root / "stderr.txt").stat().st_size)
+
+            journal_path.unlink()
+
+            errors = validate_operator_bundle(run_root, approval_root=approvals)
+            self.assertIn("process_result_journal_missing", errors)
+            self.assertIn("process_result_journal_hash_without_artifact", errors)
+
+    def test_journal_publish_failure_preserves_claim_and_recovery_seals_from_ledger(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            os.chmod(root, 0o700)
+            binary, auth, binary_sha = _live_material(root)
+            auth_sha = _bytes_sha(auth.read_bytes())
+            request, request_path = _build_request(root, binary_sha=binary_sha)
+            approvals = root / "approvals"
+            issue_live_grant(
+                request_path=request_path,
+                grant_root=approvals,
+                auth_source=auth,
+                wall_clock=lambda: FIXED_TIME,
+            )
+            fake = FakeExecutor(
+                MutableClock(),
+                (canonical_json(_empty_result()) + "\n").encode(),
+                spawn=True,
+                execution_error="process_group_cleanup_failed",
+                process_group_cleanup_confirmed=False,
+            )
+            original_publish = runner._atomic_publish
+
+            def fail_process_result(path: Path, value: bytes, *, pre_publish: Any = None) -> None:
+                if path.name == "process-result.json":
+                    raise OSError("synthetic_process_result_publish_failure")
+                original_publish(path, value, pre_publish=pre_publish)
+
+            with mock.patch.object(runner, "_atomic_publish", side_effect=fail_process_result):
+                with self.assertRaisesRegex(OSError, "synthetic_process_result_publish_failure"):
+                    _run_adaptive_wave(
+                        request=request,
+                        execution_mode="live",
+                        runtime_root=root / "runtime",
+                        approval_root=approvals,
+                        binary=binary,
+                        auth_source=auth,
+                        executor=fake,
+                        monotonic=fake.clock,
+                        wall_clock=lambda: FIXED_TIME,
+                    )
+            run_root = next((root / "runtime").iterdir())
+            active_claim = approvals / f"auth-active-use-{auth_sha}.json"
+            self.assertTrue((run_root / "ephemeral-home/auth.json").is_file())
+            self.assertTrue(active_claim.is_file())
+            self.assertTrue((run_root / "process-ledger.json").is_file())
+            self.assertTrue((run_root / ".stdout-spool").is_file())
+            self.assertFalse((run_root / "process-result.json").exists())
+
+            recovered = recover_incomplete_run(
+                run_root,
+                approval_root=approvals,
+                process_group_is_alive=lambda group: False,
+                wall_clock=lambda: FIXED_TIME + timedelta(minutes=5),
+            )
+            self.assertEqual(recovered["status"], "crash_recovered")
+            journal_path = run_root / "process-result.json"
+            journal = json.loads(journal_path.read_text())
+            self.assertEqual(journal["phase"], "recovery_sealed")
+            self.assertEqual(
+                recovered["artifacts"]["process_result_journal_sha256"],
+                _bytes_sha(journal_path.read_bytes()),
+            )
+            self.assertFalse((run_root / "ephemeral-home").exists())
+            self.assertFalse(active_claim.exists())
+            self.assertEqual(validate_operator_bundle(run_root, approval_root=approvals), [])
+
+            journal["timed_out"] = True
+            _write_private(journal_path, (canonical_json(journal) + "\n").encode())
+            self.assertIn(
+                "process_result_journal_hash_mismatch",
+                validate_operator_bundle(run_root, approval_root=approvals),
+            )
+
+    def test_unconfirmed_result_without_process_identity_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            os.chmod(root, 0o700)
+            binary, auth, binary_sha = _live_material(root)
+            auth_sha = _bytes_sha(auth.read_bytes())
+            request, request_path = _build_request(root, binary_sha=binary_sha)
+            approvals = root / "approvals"
+            issue_live_grant(
+                request_path=request_path,
+                grant_root=approvals,
+                auth_source=auth,
+                wall_clock=lambda: FIXED_TIME,
+            )
+            fake = FakeExecutor(
+                MutableClock(),
+                (canonical_json(_empty_result()) + "\n").encode(),
+                spawn=False,
+                execution_error="spawn_failed",
+                process_group_cleanup_confirmed=False,
+            )
+            with self.assertRaisesRegex(AdaptiveWaveValidationError, "process_result_unrecoverable"):
+                _run_adaptive_wave(
+                    request=request,
+                    execution_mode="live",
+                    runtime_root=root / "runtime",
+                    approval_root=approvals,
+                    binary=binary,
+                    auth_source=auth,
+                    executor=fake,
+                    monotonic=fake.clock,
+                    wall_clock=lambda: FIXED_TIME,
+                )
+            run_root = next((root / "runtime").iterdir())
+            active_claim = approvals / f"auth-active-use-{auth_sha}.json"
+            self.assertTrue((run_root / "ephemeral-home/auth.json").is_file())
+            self.assertTrue(active_claim.is_file())
+            self.assertFalse((run_root / "process-ledger.json").exists())
+            self.assertFalse((run_root / "process-result.json").exists())
+            with self.assertRaisesRegex(
+                AdaptiveWaveValidationError,
+                "recovery_process_identity_unavailable",
+            ):
+                recover_incomplete_run(
+                    run_root,
+                    approval_root=approvals,
+                    process_group_is_alive=lambda group: True,
+                    wall_clock=lambda: FIXED_TIME + timedelta(minutes=5),
+                )
+            self.assertTrue(active_claim.is_file())
+
+    def test_session_sealing_exception_preserves_home_claim_and_transcript(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            os.chmod(root, 0o700)
+            binary, auth, binary_sha = _live_material(root)
+            auth_sha = _bytes_sha(auth.read_bytes())
+            request, request_path = _build_request(root, binary_sha=binary_sha)
+            approvals = root / "approvals"
+            issue_live_grant(
+                request_path=request_path,
+                grant_root=approvals,
+                auth_source=auth,
+                wall_clock=lambda: FIXED_TIME,
+            )
+            fake = FakeExecutor(
+                MutableClock(),
+                (canonical_json(_empty_result()) + "\n").encode(),
+                spawn=True,
+            )
+            with mock.patch.object(
+                runner,
+                "_measure_session_tree",
+                side_effect=RuntimeError("synthetic_session_measurement_failure"),
+            ):
+                with self.assertRaisesRegex(RuntimeError, "synthetic_session_measurement_failure"):
+                    _run_adaptive_wave(
+                        request=request,
+                        execution_mode="live",
+                        runtime_root=root / "runtime",
+                        approval_root=approvals,
+                        binary=binary,
+                        auth_source=auth,
+                        executor=fake,
+                        monotonic=fake.clock,
+                        wall_clock=lambda: FIXED_TIME,
+                    )
+            run_root = next((root / "runtime").iterdir())
+            active_claim = approvals / f"auth-active-use-{auth_sha}.json"
+            source_updates = runner._session_updates_path(
+                run_root / "ephemeral-home",
+                run_root / "workspace",
+                json.loads((run_root / "operator-intent.json").read_text())["command_binding"]["session_id"],
+            )
+            self.assertTrue(source_updates.is_file())
+            self.assertTrue((run_root / "ephemeral-home/auth.json").is_file())
+            self.assertTrue(active_claim.is_file())
+            self.assertTrue((run_root / "process-result.json").is_file())
+            self.assertFalse((run_root / "session-updates.jsonl").exists())
+
+            recovered = recover_incomplete_run(
+                run_root,
+                approval_root=approvals,
+                process_group_is_alive=lambda group: False,
+                wall_clock=lambda: FIXED_TIME + timedelta(minutes=5),
+            )
+            self.assertEqual(recovered["status"], "crash_recovered")
+            self.assertEqual(recovered["session_proof"]["status"], "verified")
+            self.assertTrue((run_root / "session-updates.jsonl").is_file())
+            self.assertFalse((run_root / "ephemeral-home").exists())
+            self.assertFalse(active_claim.exists())
+            self.assertEqual(validate_operator_bundle(run_root, approval_root=approvals), [])
+
+    def test_session_publication_oserror_preserves_recoverable_source_transcript(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            os.chmod(root, 0o700)
+            binary, auth, binary_sha = _live_material(root)
+            auth_sha = _bytes_sha(auth.read_bytes())
+            request, request_path = _build_request(root, binary_sha=binary_sha)
+            approvals = root / "approvals"
+            issue_live_grant(
+                request_path=request_path,
+                grant_root=approvals,
+                auth_source=auth,
+                wall_clock=lambda: FIXED_TIME,
+            )
+            fake = FakeExecutor(
+                MutableClock(),
+                (canonical_json(_empty_result()) + "\n").encode(),
+                spawn=True,
+            )
+            original_publish = runner._atomic_publish
+
+            def fail_retained_updates(path: Path, value: bytes, *, pre_publish: Any = None) -> None:
+                if path.name == "session-updates.jsonl" and path.parent.name.startswith("grok_wave_live_"):
+                    raise OSError("synthetic_session_publication_failure")
+                original_publish(path, value, pre_publish=pre_publish)
+
+            with mock.patch.object(runner, "_atomic_publish", side_effect=fail_retained_updates):
+                with self.assertRaisesRegex(OSError, "synthetic_session_publication_failure"):
+                    _run_adaptive_wave(
+                        request=request,
+                        execution_mode="live",
+                        runtime_root=root / "runtime",
+                        approval_root=approvals,
+                        binary=binary,
+                        auth_source=auth,
+                        executor=fake,
+                        monotonic=fake.clock,
+                        wall_clock=lambda: FIXED_TIME,
+                    )
+            run_root = next((root / "runtime").iterdir())
+            active_claim = approvals / f"auth-active-use-{auth_sha}.json"
+            self.assertTrue((run_root / "ephemeral-home/auth.json").is_file())
+            self.assertTrue(active_claim.is_file())
+            self.assertFalse((run_root / "session-updates.jsonl").exists())
+
+            recovered = recover_incomplete_run(
+                run_root,
+                approval_root=approvals,
+                process_group_is_alive=lambda group: False,
+                wall_clock=lambda: FIXED_TIME + timedelta(minutes=5),
+            )
+            self.assertEqual(recovered["session_proof"]["status"], "verified")
+            self.assertTrue((run_root / "session-updates.jsonl").is_file())
+            self.assertFalse(active_claim.exists())
+            self.assertEqual(validate_operator_bundle(run_root, approval_root=approvals), [])
+
     def test_recovery_with_executor_journal_does_not_replace_missing_spool_with_empty_bytes(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -5297,43 +5566,20 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             next_request["request_id"] = "xwave_req_22222222222222222222222222222222"
             next_request["approval"]["grant_id"] = "clean-recovery-retry"
             _write_private(request_path, (canonical_json(next_request) + "\n").encode())
-            original_audit = runner._audit_copied_auth_after_provider
-
-            def assert_recovery_claim_then_audit(*args: Any, **kwargs: Any) -> None:
-                self.assertTrue(active_claim.is_file())
-                with self.assertRaisesRegex(PermissionError, "grok_auth_digest_in_use"):
-                    issue_live_grant(
-                        request_path=request_path,
-                        grant_root=approvals,
-                        auth_source=auth,
-                        wall_clock=lambda: FIXED_TIME,
-                    )
-                original_audit(*args, **kwargs)
-
-            with mock.patch.object(
-                runner,
-                "_audit_copied_auth_after_provider",
-                side_effect=assert_recovery_claim_then_audit,
+            with self.assertRaisesRegex(
+                AdaptiveWaveValidationError,
+                "recovery_process_identity_unavailable",
             ):
-                recovered = recover_incomplete_run(
+                recover_incomplete_run(
                     run_root,
                     approval_root=approvals,
                     process_group_is_alive=lambda group: False,
                     wall_clock=lambda: FIXED_TIME + timedelta(minutes=5),
                 )
-            self.assertEqual(recovered["status"], "crash_recovered")
-            self.assertFalse((approvals / f"auth-active-use-{auth_sha}.json").exists())
+            self.assertTrue(active_claim.is_file())
             self.assertFalse((approvals / f"auth-taint-{auth_sha}.json").exists())
-            self.assertFalse((run_root / "ephemeral-home").exists())
-            self.assertEqual(validate_operator_bundle(run_root, approval_root=approvals), [])
-
-            _, next_grant_path = issue_live_grant(
-                request_path=request_path,
-                grant_root=approvals,
-                auth_source=auth,
-                wall_clock=lambda: FIXED_TIME,
-            )
-            self.assertTrue(next_grant_path.is_file())
+            self.assertTrue((run_root / "ephemeral-home/auth.json").is_file())
+            self.assertFalse((run_root / "operator-receipt.json").exists())
 
     def test_taint_publication_failure_retains_auth_and_claim_until_recovery(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -5457,25 +5703,19 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
                     wall_clock=lambda: FIXED_TIME,
                 )
 
-            recovered = recover_incomplete_run(
-                run_root,
-                approval_root=approvals,
-                process_group_is_alive=lambda group: False,
-                wall_clock=lambda: FIXED_TIME + timedelta(minutes=5),
-            )
-            self.assertEqual(recovered["status"], "crash_recovered")
-            self.assertFalse((run_root / "ephemeral-home").exists())
-            self.assertFalse(active_claim.exists())
+            with self.assertRaisesRegex(
+                AdaptiveWaveValidationError,
+                "recovery_process_identity_unavailable",
+            ):
+                recover_incomplete_run(
+                    run_root,
+                    approval_root=approvals,
+                    process_group_is_alive=lambda group: False,
+                    wall_clock=lambda: FIXED_TIME + timedelta(minutes=5),
+                )
+            self.assertTrue((run_root / "ephemeral-home/auth.json").is_file())
+            self.assertTrue(active_claim.is_file())
             self.assertFalse((approvals / f"auth-taint-{auth_sha}.json").exists())
-            self.assertEqual(validate_operator_bundle(run_root, approval_root=approvals), [])
-
-            _, next_grant_path = issue_live_grant(
-                request_path=request_path,
-                grant_root=approvals,
-                auth_source=auth,
-                wall_clock=lambda: FIXED_TIME,
-            )
-            self.assertTrue(next_grant_path.is_file())
 
     def test_recovery_missing_ephemeral_resolves_claim_without_forging_taint(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -5947,7 +6187,7 @@ sys.stdin.buffer.read(1)
                     wall_clock=lambda: FIXED_TIME,
                 )
 
-    def test_post_executor_publication_failure_deletes_auth_immediately_and_recovers(self) -> None:
+    def test_post_executor_publication_failure_preserves_auth_until_recovery(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             os.chmod(root, 0o700)
@@ -5983,7 +6223,10 @@ sys.stdin.buffer.read(1)
                     )
             run_root = next((root / "runtime").iterdir())
             self.assertTrue((run_root / "operator-intent.json").is_file())
-            self.assertFalse((run_root / "ephemeral-home").exists())
+            self.assertTrue((run_root / "ephemeral-home/auth.json").is_file())
+            auth_sha = _bytes_sha(auth.read_bytes())
+            active_claim = approvals / f"auth-active-use-{auth_sha}.json"
+            self.assertTrue(active_claim.is_file())
             recovered = recover_incomplete_run(
                 run_root,
                 approval_root=approvals,
@@ -5991,6 +6234,8 @@ sys.stdin.buffer.read(1)
                 wall_clock=lambda: FIXED_TIME + timedelta(minutes=5),
             )
             self.assertEqual(recovered["status"], "crash_recovered")
+            self.assertFalse((run_root / "ephemeral-home").exists())
+            self.assertFalse(active_claim.exists())
             self.assertEqual(validate_operator_bundle(run_root, approval_root=approvals), [])
 
     def test_run_root_creation_failure_rolls_back_before_purge_inventory(self) -> None:
