@@ -10,6 +10,24 @@
 
 ## 2026-07-16 (Asia/Singapore)
 
+### Track D D1j add-to-CRM projection selection action activation
+
+- `add_to_crm` is now the sixth schema-defined production action. Submit accepts only a projection-member selector
+  (`projection_id`, one membership revision alias, and selected candidate key(s)); the owner mints the server workspace,
+  exact membership revision, source candidate count, and sorted candidate identity keys into `target_ref`. Closed input
+  is limited to CRM destination fields (`pipeline_id`, `stage`, `source_reason`).
+- Dispatch and the CRM writer command owner both revalidate the persisted action/run request and current projection
+  snapshot before any CRM write. The planned `crm.record.add_from_projection` command carries the exact
+  `projection_selection_target`; forged command payload targets, stale revisions, missing/foreign projection members,
+  or operation/action mismatches fail before CRM record/engagement/event/Activity/EntityDelta writes.
+- Current D1j author evidence is full Operation runtime **137 passed**, targeted D1j nodes **3 passed**, and D1 action
+  request surface characterization **6 passed**. Fresh pinned non-author review remains required before live/W6/manual
+  or product signoff. This is not formal `GO`.
+- Current production partition is **6 schema-defined / 9 schema-less / served=0**. R-029 remains open at 9/15. R-028
+  remains open because the projection-to-CRM UoW still sits behind the temporary Store facade, legacy CRM mutation
+  writers do not all share one identity-lock repository, and command terminal/effect/linked Operation synchronization
+  are not one global exactly-once transaction. No provider/model/live path is authorized.
+
 ### Track D D1i acquisition root action activation
 
 - `start_acquisition_run` is now the fifth schema-defined production action. Its closed input is exactly nonblank
@@ -39,7 +57,7 @@
   **160 passed + 289 subtests**, command/control adjacency **175 passed + 503 subtests**, durable runtime + CRM batch
   adjacency **61 passed + 12 subtests**, storage guardrails **60 passed**, lint **58 files**, unchanged mypy
   **81 errors / 4 files**, and green compile/diff checks. This is not formal `GO`.
-- Current production partition is **5 schema-defined / 10 schema-less / served=0**. R-029 remains open at 10/15 and
+- D1i checkpoint production partition was **5 schema-defined / 10 schema-less / served=0**. R-029 remained open at 10/15 and
   keeps epoch `d1f_r029_20260715_v2`. R-019 remains open for the Operation/action preflight-to-root-UoW race,
   post-commit current-state/recovery/Operation synchronization, and committed failure-CAS acknowledgement ambiguity;
   the D1i actual-root child trigger is not a global command-generation fence. Do not claim aggregate-cancel atomicity or

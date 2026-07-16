@@ -11,6 +11,7 @@ from typing import Any, Literal, Protocol
 from sourcing_agent.operation_runtime import (
     ACQUISITION_ROOT_ACTION_TYPES,
     CRM_EXISTING_RECORD_ACTION_TYPES,
+    CRM_PROJECTION_SELECTION_ACTION_TYPES,
     CRM_RECORD_BATCH_ACTION_TYPES,
     OwnerBoundTargetRef,
 )
@@ -31,6 +32,21 @@ CRM_RECORD_BATCH_TARGET_SELECTOR_FIELDS = (
     "person_identity_key",
 )
 CRM_RECORD_BATCH_LIMIT = 1000
+CRM_PROJECTION_SELECTION_TARGET_OWNER = "crm_writer"
+CRM_PROJECTION_SELECTION_TARGET_INVALID = "crm_projection_selection_target_invalid"
+CRM_PROJECTION_SELECTION_TARGET_NOT_FOUND = "crm_projection_selection_not_found"
+CRM_PROJECTION_SELECTION_LIMIT = 100_000
+CRM_PROJECTION_SELECTION_SELECTOR_ALIASES = (
+    ("projection_id", ("projection_id", "serving_projection_id")),
+    (
+        "expected_membership_revision",
+        ("expected_membership_revision", "membership_revision"),
+    ),
+    (
+        "candidate_identity_keys",
+        ("candidate_identity_keys", "candidate_ids", "candidate_identity_key", "candidate_id"),
+    ),
+)
 ACQUISITION_ROOT_TARGET_OWNER = "acquisition_run_writer"
 ACQUISITION_ROOT_TARGET_INVALID = "acquisition_root_target_invalid"
 
@@ -153,6 +169,18 @@ class CRMRecordLookup(Protocol):
         person_identity_key: str,
         *,
         workspace_id: str,
+    ) -> dict[str, Any]: ...
+
+
+class ProjectionMemberSnapshotReader(Protocol):
+    def get_projection_member_snapshot(
+        self,
+        projection_id: str,
+        *,
+        candidate_identity_keys: list[str] | tuple[str, ...] | None = None,
+        limit: int = 100_000,
+        page_size: int = 500,
+        require_all_requested: bool = True,
     ) -> dict[str, Any]: ...
 
 
@@ -422,6 +450,130 @@ class CRMRecordBatchTargetBinder:
         return records
 
 
+class CRMProjectionSelectionTargetBinder:
+    """Mint a CRM destination scope plus an exact shared projection-member snapshot."""
+
+    _SELECTOR_FIELDS = {
+        "projection_id",
+        "expected_membership_revision",
+        "candidate_identity_keys",
+    }
+    _TARGET_FIELDS = {
+        "workspace_id",
+        "projection_id",
+        "membership_revision",
+        "source_candidate_count",
+        "candidate_identity_keys",
+    }
+
+    def __init__(self, reader: ProjectionMemberSnapshotReader) -> None:
+        self.reader = reader
+
+    @staticmethod
+    def _normalize_candidate_identity_keys(value: Any) -> list[str]:
+        raw_values = list(value) if isinstance(value, (list, tuple)) else [value]
+        if not raw_values or any(not isinstance(item, str) for item in raw_values):
+            raise ActionTargetBindingError(CRM_PROJECTION_SELECTION_TARGET_INVALID)
+        normalized = [item.strip() for item in raw_values]
+        if (
+            any(not item for item in normalized)
+            or len(normalized) > CRM_PROJECTION_SELECTION_LIMIT
+            or len(set(normalized)) != len(normalized)
+        ):
+            raise ActionTargetBindingError(CRM_PROJECTION_SELECTION_TARGET_INVALID)
+        return sorted(normalized)
+
+    def __call__(self, context: ActionBindContext) -> OwnerBoundTargetRef:
+        selector = dict(context.target_selector)
+        if set(selector) != self._SELECTOR_FIELDS:
+            raise ActionTargetBindingError(CRM_PROJECTION_SELECTION_TARGET_INVALID)
+        projection_id = str(selector.get("projection_id") or "").strip()
+        expected_revision = str(selector.get("expected_membership_revision") or "").strip()
+        candidate_identity_keys = self._normalize_candidate_identity_keys(selector.get("candidate_identity_keys"))
+        if not projection_id or projection_id != selector.get("projection_id") or not expected_revision:
+            raise ActionTargetBindingError(CRM_PROJECTION_SELECTION_TARGET_INVALID)
+        snapshot = self.reader.get_projection_member_snapshot(
+            projection_id,
+            candidate_identity_keys=candidate_identity_keys,
+            limit=len(candidate_identity_keys),
+            require_all_requested=True,
+        )
+        if str(snapshot.get("status") or "").strip() != "ready":
+            raise ActionTargetBindingError(
+                str(snapshot.get("reason") or "crm_projection_selection_not_ready").strip()
+                or "crm_projection_selection_not_ready"
+            )
+        membership_revision = str(snapshot.get("membership_revision") or "").strip()
+        source_candidate_count = snapshot.get("source_candidate_count")
+        member_keys = sorted(
+            str(dict(member or {}).get("candidate_identity_key") or "").strip()
+            for member in list(snapshot.get("members") or [])
+        )
+        if (
+            membership_revision != expected_revision
+            or isinstance(source_candidate_count, bool)
+            or not isinstance(source_candidate_count, int)
+            or source_candidate_count < len(candidate_identity_keys)
+            or member_keys != candidate_identity_keys
+        ):
+            raise ActionTargetBindingError("projection_membership_revision_stale")
+        return OwnerBoundTargetRef(
+            owner_module=CRM_PROJECTION_SELECTION_TARGET_OWNER,
+            target_ref={
+                "workspace_id": context.workspace_id,
+                "projection_id": projection_id,
+                "membership_revision": membership_revision,
+                "source_candidate_count": source_candidate_count,
+                "candidate_identity_keys": candidate_identity_keys,
+            },
+        )
+
+    def revalidate_snapshot(
+        self,
+        *,
+        target_ref: Mapping[str, Any],
+        operation_workspace_id: str,
+    ) -> dict[str, Any]:
+        target = dict(target_ref)
+        if set(target) != self._TARGET_FIELDS:
+            raise ActionTargetBindingError(CRM_PROJECTION_SELECTION_TARGET_INVALID)
+        workspace_id = str(target.get("workspace_id") or "").strip()
+        projection_id = str(target.get("projection_id") or "").strip()
+        membership_revision = str(target.get("membership_revision") or "").strip()
+        source_candidate_count = target.get("source_candidate_count")
+        candidate_identity_keys = self._normalize_candidate_identity_keys(target.get("candidate_identity_keys"))
+        if (
+            not workspace_id
+            or workspace_id != str(operation_workspace_id or "").strip()
+            or not projection_id
+            or projection_id != target.get("projection_id")
+            or not membership_revision
+            or isinstance(source_candidate_count, bool)
+            or not isinstance(source_candidate_count, int)
+            or source_candidate_count < len(candidate_identity_keys)
+            or list(target.get("candidate_identity_keys") or []) != candidate_identity_keys
+        ):
+            raise ActionTargetBindingError(CRM_PROJECTION_SELECTION_TARGET_INVALID)
+        snapshot = self.reader.get_projection_member_snapshot(
+            projection_id,
+            candidate_identity_keys=candidate_identity_keys,
+            limit=len(candidate_identity_keys),
+            require_all_requested=True,
+        )
+        member_keys = sorted(
+            str(dict(member or {}).get("candidate_identity_key") or "").strip()
+            for member in list(snapshot.get("members") or [])
+        )
+        if (
+            str(snapshot.get("status") or "").strip() != "ready"
+            or str(snapshot.get("membership_revision") or "").strip() != membership_revision
+            or snapshot.get("source_candidate_count") != source_candidate_count
+            or member_keys != candidate_identity_keys
+        ):
+            raise ActionTargetBindingError("projection_membership_revision_stale")
+        return dict(snapshot)
+
+
 def build_crm_existing_record_target_binder_registry(
     store: CRMRecordLookup,
     *,
@@ -471,5 +623,23 @@ def build_crm_record_batch_target_binder_registry(
                 binder=binder,
             )
             for action_type in CRM_RECORD_BATCH_ACTION_TYPES
+        )
+    )
+
+
+def build_crm_projection_selection_target_binder_registry(
+    reader: ProjectionMemberSnapshotReader,
+    *,
+    binder: CRMProjectionSelectionTargetBinder | None = None,
+) -> ActionTargetBinderRegistry:
+    binder = binder or CRMProjectionSelectionTargetBinder(reader)
+    return ActionTargetBinderRegistry(
+        tuple(
+            ActionTargetBinderSpec(
+                action_type=action_type,
+                owner_module=CRM_PROJECTION_SELECTION_TARGET_OWNER,
+                binder=binder,
+            )
+            for action_type in CRM_PROJECTION_SELECTION_ACTION_TYPES
         )
     )

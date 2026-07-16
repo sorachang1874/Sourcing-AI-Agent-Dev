@@ -4961,13 +4961,13 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                     "target_ref": {
                         "projection_id": "proj-crm-stale-op",
                         "candidate_identity_key": "person-crm",
+                        "expected_membership_revision": crm_revision_a,
                     },
-                    "input": {"expected_membership_revision": crm_revision_a},
                     "idempotency_key": "crm:stale-membership",
                 }
             )
             self.assertEqual(
-                crm_submitted["action"]["input"]["expected_membership_revision"],
+                crm_submitted["action"]["target_ref"]["membership_revision"],
                 crm_revision_a,
             )
             crm_revision_b = publish("proj-crm-stale-op", "person-crm", "CRM B")
@@ -10475,11 +10475,23 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                     "action_type": ACTION_ADD_TO_CRM,
                     "target_ref": {
                         "projection_id": "proj-crm-op",
-                        "candidate_identity_key": "linkedin:crm-op",
+                        "candidate_identity_keys": ["linkedin:crm-op"],
+                        "expected_membership_revision": membership_revision,
                     },
-                    "input": {"expected_membership_revision": membership_revision},
+                    "input": {"pipeline_id": "default_sourcing", "stage": "new"},
                     "idempotency_key": "add-to-crm:proj-crm-op",
                 }
+            )
+            self.assertEqual(submitted["status"], "queued", submitted)
+            self.assertEqual(
+                submitted["action"]["target_ref"],
+                {
+                    "workspace_id": "default",
+                    "projection_id": "proj-crm-op",
+                    "membership_revision": membership_revision,
+                    "source_candidate_count": 1,
+                    "candidate_identity_keys": ["linkedin:crm-op"],
+                },
             )
             operation_run_id = submitted["operation_run"]["operation_run_id"]
 
@@ -10516,6 +10528,10 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 ],
             )
             command_after_owner = api_store.get_workflow_command(dispatched["workflow_command"]["command_id"])
+            self.assertEqual(
+                command_after_owner["payload"]["projection_selection_target"],
+                submitted["action"]["target_ref"],
+            )
             activity_run_id = command_after_owner["result"]["activity_run_id"]
             self.assertTrue(activity_run_id.startswith("actrun_"))
             activities = api_store.repos.workflow_runtime.list_activity_runs(
@@ -10545,6 +10561,102 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(
                 crm_record_deltas[0]["entity_payload"]["source_candidate_count"],
                 command_payload["source_candidate_count"],
+            )
+        finally:
+            api_store.close()
+
+    def test_add_to_crm_command_owner_rejects_forged_projection_selection_target_without_writes(self) -> None:
+        settings = AppSettings(
+            project_root=self.runtime_dir,
+            runtime_dir=self.runtime_dir,
+            secrets_file=self.runtime_dir / "secrets.toml",
+            db_path=self.runtime_dir / "crm-operation-forged-selection.db",
+            jobs_dir=self.runtime_dir / "jobs",
+            company_assets_dir=self.runtime_dir / "company_assets",
+            qwen=QwenSettings(enabled=False),
+            semantic=SemanticProviderSettings(enabled=False),
+            harvest=HarvestSettings(profile_scraper=HarvestActorSettings(enabled=False)),
+        )
+        api_store = ControlPlaneStore(settings.db_path)
+        catalog = AssetCatalog.discover()
+        model_client = DeterministicModelClient()
+        orchestrator = SourcingOrchestrator(
+            catalog=catalog,
+            store=api_store,
+            jobs_dir=settings.jobs_dir,
+            model_client=model_client,
+            semantic_provider=LocalSemanticProvider(),
+            acquisition_engine=AcquisitionEngine(catalog, settings, api_store, model_client),
+        )
+        try:
+            api_store.repos.serving_projection.upsert(
+                {
+                    "projection_id": "proj-crm-forged-op",
+                    "projection_type": "run_scope_projection",
+                    "collection_id": "company:test",
+                    "source_run_id": "job-crm-forged-op",
+                    "state": "serving",
+                }
+            )
+            api_store.repos.serving_projection.upsert_members(
+                "proj-crm-forged-op",
+                [
+                    {
+                        "candidate_identity_key": "linkedin:crm-forged-op",
+                        "person_identity_key": "linkedin:crm-forged-op",
+                        "profile_url_key": "crm-forged-op",
+                        "rank_index": 1,
+                        "public_summary": {"name": "Forged CRM Person"},
+                    }
+                ],
+            )
+            membership_revision = str(
+                dict(
+                    orchestrator.serving_projection_reader.get_projection("proj-crm-forged-op").get("projection") or {}
+                ).get("membership_revision")
+                or ""
+            )
+            submitted = orchestrator.submit_operation_action(
+                {
+                    "action_type": ACTION_ADD_TO_CRM,
+                    "target_ref": {
+                        "projection_id": "proj-crm-forged-op",
+                        "candidate_identity_keys": ["linkedin:crm-forged-op"],
+                        "expected_membership_revision": membership_revision,
+                    },
+                    "idempotency_key": "add-to-crm:forged-selection",
+                }
+            )
+            operation_run_id = submitted["operation_run"]["operation_run_id"]
+            planned = orchestrator.dispatch_operation_run_api(operation_run_id, {"actor": "unit-test"})
+            self.assertEqual(planned["status"], "planned")
+            command = planned["workflow_command"]
+            forged_payload = dict(command["payload"])
+            forged_target = dict(forged_payload["projection_selection_target"])
+            forged_target["membership_revision"] = "forged-revision"
+            forged_payload["projection_selection_target"] = forged_target
+            api_store.update_workflow_command_payload(command["command_id"], payload=forged_payload)
+
+            drain = orchestrator._drain_crm_writer_commands(  # noqa: SLF001
+                {"workflow_run_id": command["workflow_run_id"], "command_limit": 1}
+            )
+
+            self.assertEqual(drain["completed_count"], 0, drain)
+            self.assertEqual(drain["failed_count"], 1, drain)
+            self.assertEqual(
+                drain["items"][0]["reason"],
+                "crm_projection_selection_bound_target_mismatch",
+            )
+            failed_command = api_store.get_workflow_command(command["command_id"])
+            self.assertEqual(failed_command["status"], "failed_terminal")
+            self.assertEqual(
+                api_store.get_crm_record_by_person_identity("linkedin:crm-forged-op", workspace_id="default"),
+                {},
+            )
+            self.assertEqual(api_store.repos.workflow_runtime.get_operation(operation_run_id)["status"], "failed")
+            self.assertEqual(
+                api_store.repos.workflow_runtime.get_action(submitted["action"]["action_id"])["status"],
+                "failed",
             )
         finally:
             api_store.close()

@@ -50,7 +50,12 @@
   **58+4**、frontend Python **50** + build、workflow **187/1 baseline-identical +3**、lint **58 files**、mypy
   **81/4**，contract lane **349+2+11+1+2** + `dry_run_ready`。正式 Codex review artifact 仍 pending；有效 GO 前只冻结 D-3 的
   live/W6/manual/product/里程碑签收，不阻断下一批 Track C C1a。
-- [ ] R-028：D-3 已把 projection selection 的 CRM record/engagement/event 收进 revision-fenced fixed PG UoW，但 legacy CRM add/update 没有共享 identity-lock UoW，durable cancel/entity-delta/command terminal CAS 也仍在 domain commit 之外。下一次 CRM Repository 或 workflow command-completion 分子批统一这些入口、清理 person 重复后加唯一约束，并删除临时 `ControlPlaneStore.apply_projection_crm_selection` facade；修复前不宣称 global CRM exactly-once，也不做 D-3 CRM mutation live/manual 签收。
+- [ ] R-028：D-3 已把 projection selection 的 CRM record/engagement/event 收进 revision-fenced fixed PG UoW；D1j
+  又把 Operation `add_to_crm` 迁为 schema-defined owner-bound projection selection，并在 submit/dispatch/command owner
+  复验 exact snapshot。legacy CRM add/update 仍没有共享 identity-lock UoW，临时
+  `ControlPlaneStore.apply_projection_crm_selection` facade 仍未删除，durable cancel/entity-delta/command terminal CAS
+  也仍在 domain commit 之外。下一次 CRM Repository 或 workflow command-completion 分子批统一这些入口、清理 person
+  重复后加唯一约束，并删除临时 facade；修复前不宣称 global CRM exactly-once，也不做 CRM mutation live/manual 签收。
 - [x] 测试环境契约 v2（2026-06-11）：每 run = (PG schema + runtime dir) 配对 + `.ephemeral-test-env.json` 标记；teardown `DROP SCHEMA CASCADE`（仅删自建 schema，`pre_existing` 守卫）；孤儿 janitor `scripts/prune_test_schemas.py`（先快照后扫描、活跃连接守卫、仅限本地 DSN、dry-run 默认）。
 - [x] Mac 本地 PG Docker 方案（2026-06-11）：`local_postgres_docker.py` + `make local-pg-up/down/status`；容器 55432 复用既有 DSN 发现机制零侵入；PG 强制模式下 durable runtime 套件真实执行验证。
 - [x] PG 测试 fixture 试点（2026-06-12）：`tests/pg_store_fixture.py`（`PGControlPlaneStoreTestMixin`：per-class schema + `pg_tables` 截断复用）；8 个文件先行迁移；试点即捕获一个生产缺陷（见下条）。
@@ -230,8 +235,8 @@
   compile/diff clean；fresh pinned review pending。
   R-019/R-028/R-029/R-031 均不因本批关闭；无 provider/model/live。
 - [x] D1i acquisition root action activation fixed-forward candidate（2026-07-16）：将
-  `start_acquisition_run` 作为第 5 个 schema-defined action 激活，当前 **5 schema-defined / 10 schema-less /
-  served=0**。closed input 仅接受 nonblank `target_company+query`，`raw_user_request` 仅作 exclusive query alias；
+  `start_acquisition_run` 作为第 5 个 schema-defined action 激活，D1i checkpoint 为 **5 schema-defined / 10
+  schema-less / served=0**。closed input 仅接受 nonblank `target_company+query`，`raw_user_request` 仅作 exclusive query alias；
   caller command/workflow/job/review/retry/identity aliases 与非空 raw target 均 pre-write reject。authenticated
   transport mint server workspace/actor + exact owner scope；open-mode explicit workspace 保持。approve/retry/resume/
   dispatch/root owner 重验 persisted workspace target；root command 还需 exact OperationRun→AgentAction、canonical
@@ -253,11 +258,20 @@
   R-019 仍保留 Operation/action preflight→root-UoW race、current-state/recovery/Operation post-commit sync 与 failure-CAS
   acknowledgement ambiguity；typed intent uniqueness 不冒充其它 command family 的 global fence。R-029 降至 10/15、epoch 仍为
   `d1f_r029_20260715_v2`；无 served/provider/model/live。
+- [x] D1j add_to_crm projection selection action activation candidate（2026-07-16）：将 `add_to_crm` 作为第 6 个
+  schema-defined action 激活，当前 **6 schema-defined / 9 schema-less / served=0**。Submit 只接受
+  `projection_id + membership_revision alias + candidate_identity_keys` selector，并由 canonical serving projection
+  reader mint workspace/projection/revision/source-count/selected-candidates owner-bound target；input 仅保留 CRM
+  destination fields。Dispatch 与 CRM writer command owner 均重验 persisted action/run request 和 current projection
+  snapshot；forged command target、stale revision、missing/foreign projection member 在 CRM write/Activity/EntityDelta
+  前失败。Author evidence=full Operation runtime `137 passed`、targeted D1j `3 passed`、D1 action request surface
+  `6 passed`；fresh pinned review pending，不是 `GO`。R-028 不关闭：temporary Store facade、legacy CRM writers、
+  command terminal/effect/linked Operation sync 仍未统一为 global exactly-once UoW；无 served/provider/model/live。
 - [ ] R-029：宽松 action-schema bridge 仅可在 production action 尚无 reviewed schema/owner binder 期间存在；
   删除条件 = 全部 API-submittable actions（不是只看 served subset）连续一个 release window durable hit=0。
   observation epoch 必须每个 release window bump，且 `NOT VALID` checks 的既有行 validation 在独立部署完成；
   任一 action 进入 served 集前必须满足完整 schema+adapter+Activity+revisioned model-safe result+simulate serializer
-  谓词；D1i 后当前 10/15 schema-less、served=0。
+  谓词；D1j 后当前 9/15 schema-less、served=0。
 - [ ] R-031 review closeout：D1g current author candidate 已将 actions/runs list、detail、provenance 及
   approve/reject/dispatch/resume/retry/cancel 统一到 server-derived exact-workspace preflight，run 同时校验 linked
   action owner；nested commands/events 分别按 linked operation+action owner 与 physical event workspace 在 SQL

@@ -55,9 +55,12 @@ CRM_EXISTING_RECORD_ACTION_TYPES = (
     ACTION_CREATE_CRM_TASK,
 )
 CRM_RECORD_BATCH_ACTION_TYPES = (ACTION_ENRICH_PERSON_PUBLIC_WEB,)
+CRM_PROJECTION_SELECTION_ACTION_TYPES = (ACTION_ADD_TO_CRM,)
 ACQUISITION_ROOT_ACTION_TYPES = (ACTION_START_ACQUISITION_RUN,)
 CRM_RESOURCE_BOUND_ACTION_TYPES = CRM_EXISTING_RECORD_ACTION_TYPES + CRM_RECORD_BATCH_ACTION_TYPES
-OPERATION_OWNER_BOUND_ACTION_TYPES = CRM_RESOURCE_BOUND_ACTION_TYPES + ACQUISITION_ROOT_ACTION_TYPES
+OPERATION_OWNER_BOUND_ACTION_TYPES = (
+    CRM_RESOURCE_BOUND_ACTION_TYPES + CRM_PROJECTION_SELECTION_ACTION_TYPES + ACQUISITION_ROOT_ACTION_TYPES
+)
 ACTION_REFRESH_COMPANY_PUBLIC_WEB = "refresh_company_public_web_assets"
 ACTION_PROMOTE_PERSON_ASSERTION = "promote_person_assertion"
 ACTION_EXPORT_CANDIDATES = "export_candidates"
@@ -247,6 +250,57 @@ CRM_EXISTING_RECORD_ACTION_REQUEST_CONTRACTS: Mapping[str, Mapping[str, Any]] = 
                 "target_ref_field_aliases": _CRM_RECORD_TARGET_ALIASES,
             }
         ),
+    }
+)
+
+_CRM_PROJECTION_SELECTION_INPUT_PROPERTIES: dict[str, dict[str, Any]] = {
+    "pipeline_id": {"type": "string", "minLength": 1, "maxLength": 200, "pattern": r"\S"},
+    "stage": {"type": "string", "enum": list(CRM_STAGE_VALUES)},
+    "source_reason": {"type": "string", "minLength": 1, "maxLength": 500, "pattern": r"\S"},
+}
+_CRM_PROJECTION_SELECTION_TARGET_PROPERTIES: dict[str, dict[str, Any]] = {
+    "workspace_id": {"type": "string", "minLength": 1, "maxLength": 200, "pattern": r"\S"},
+    "projection_id": {"type": "string", "minLength": 1, "maxLength": 200, "pattern": r"\S"},
+    "membership_revision": {"type": "string", "minLength": 1, "maxLength": 200, "pattern": r"\S"},
+    "source_candidate_count": {"type": "integer", "minimum": 1},
+    "candidate_identity_keys": {
+        "type": "array",
+        "items": {"type": "string", "minLength": 1, "maxLength": 500, "pattern": r"\S"},
+        "minItems": 1,
+        "maxItems": 100_000,
+    },
+}
+
+CRM_PROJECTION_SELECTION_ACTION_REQUEST_CONTRACTS: Mapping[str, Mapping[str, Any]] = MappingProxyType(
+    {
+        ACTION_ADD_TO_CRM: MappingProxyType(
+            {
+                "request_schema": _freeze_action_request_json(
+                    DEFAULT_ACTION_REQUEST_SCHEMA_BUILDER.build(
+                        input_properties=_CRM_PROJECTION_SELECTION_INPUT_PROPERTIES,
+                        target_properties=_CRM_PROJECTION_SELECTION_TARGET_PROPERTIES,
+                        target_required=tuple(_CRM_PROJECTION_SELECTION_TARGET_PROPERTIES),
+                    )
+                ),
+                "request_schema_version": "crm_projection_selection_request_v1",
+                # Membership revision/count are mutable owner pins. Stable replay
+                # identity is the destination workspace plus the selected source rows.
+                "request_identity_target_fields": (
+                    "workspace_id",
+                    "projection_id",
+                    "candidate_identity_keys",
+                ),
+                "target_ref_field_aliases": (
+                    ("workspace_id", ("tenant_id",)),
+                    ("projection_id", ("serving_projection_id",)),
+                    ("membership_revision", ("expected_membership_revision",)),
+                    (
+                        "candidate_identity_keys",
+                        ("candidate_ids", "candidate_identity_key", "candidate_id"),
+                    ),
+                ),
+            }
+        )
     }
 )
 
@@ -853,6 +907,7 @@ DEFAULT_ACTION_REGISTRY = ActionRegistry(
             display_category="crm",
             allowed_workflow_command_types=(CRM_RECORD_ADD_FROM_PROJECTION_COMMAND_TYPE,),
             default_workflow_command_type=CRM_RECORD_ADD_FROM_PROJECTION_COMMAND_TYPE,
+            **dict(CRM_PROJECTION_SELECTION_ACTION_REQUEST_CONTRACTS[ACTION_ADD_TO_CRM]),
         ),
         ACTION_SET_CRM_STAGE: ActionSpec(
             action_type=ACTION_SET_CRM_STAGE,

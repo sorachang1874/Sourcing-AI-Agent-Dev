@@ -32,16 +32,21 @@ from .action_target_binding import (
     ACQUISITION_ROOT_TARGET_INVALID,
     AUTHORIZATION_MODE_AUTHENTICATED,
     AUTHORIZATION_MODE_OPEN_OPERATOR,
+    CRM_PROJECTION_SELECTION_SELECTOR_ALIASES,
+    CRM_PROJECTION_SELECTION_TARGET_INVALID,
+    CRM_PROJECTION_SELECTION_TARGET_NOT_FOUND,
     CRM_RECORD_BATCH_TARGET_SELECTOR_FIELDS,
     CRM_RECORD_TARGET_NOT_FOUND,
     CRM_RECORD_TARGET_STALE,
     AcquisitionRootTargetBinder,
     ActionBindContext,
     ActionTargetBindingError,
+    CRMProjectionSelectionTargetBinder,
     CRMRecordBatchTargetBinder,
     CRMRecordTargetBinder,
     build_acquisition_root_target_binder_registry,
     build_crm_existing_record_target_binder_registry,
+    build_crm_projection_selection_target_binder_registry,
     build_crm_record_batch_target_binder_registry,
 )
 from .agent_runtime import AgentRuntimeCoordinator
@@ -246,6 +251,7 @@ from .operation_runtime import (
     ACTION_SET_CRM_STAGE,
     ACTION_START_ACQUISITION_RUN,
     CRM_EXISTING_RECORD_ACTION_TYPES,
+    CRM_PROJECTION_SELECTION_ACTION_TYPES,
     CRM_RECORD_BATCH_ACTION_TYPES,
     CRM_RESOURCE_BOUND_ACTION_TYPES,
     DEFAULT_ACTION_REGISTRY,
@@ -981,6 +987,13 @@ class SourcingOrchestrator:
         )
         self.serving_projection_writer = ServingProjectionWriter(self.store)
         self.serving_projection_reader = ServingProjectionReader(self.store)
+        self._crm_projection_selection_target_binder = CRMProjectionSelectionTargetBinder(
+            self.serving_projection_reader
+        )
+        self._crm_projection_selection_target_binder_registry = build_crm_projection_selection_target_binder_registry(
+            self.serving_projection_reader,
+            binder=self._crm_projection_selection_target_binder,
+        )
         self.crm_writer = CRMWriter(self.store)
         self.person_asset_writer = PersonAssetWriter(self.store)
         self._crm_public_web_owner = CrmPublicWebOwner(
@@ -48927,6 +48940,8 @@ class SourcingOrchestrator:
                     "reason": (
                         "crm_record_target_selector_invalid"
                         if action_type in CRM_RESOURCE_BOUND_ACTION_TYPES
+                        else CRM_PROJECTION_SELECTION_TARGET_INVALID
+                        if action_type in CRM_PROJECTION_SELECTION_ACTION_TYPES
                         else ACQUISITION_ROOT_TARGET_INVALID
                     ),
                 }
@@ -48944,6 +48959,19 @@ class SourcingOrchestrator:
             raw_input_payload = payload.get("input") or payload.get("input_payload") or {}
         target_ref = dict(raw_target_ref or {})
         input_payload = dict(raw_input_payload or {})
+        projection_selection_binding = self._bind_operation_crm_projection_selection_target(
+            action_type=action_type,
+            workspace_id=str(payload.get("workspace_id") or "default").strip() or "default",
+            expected_workspace_id=expected_workspace_id,
+            expected_owner_user_id=expected_owner_user_id,
+            target_ref=target_ref,
+            input_payload=input_payload,
+        )
+        if str(projection_selection_binding.get("status") or "") != "ready":
+            return projection_selection_binding
+        target_ref = dict(projection_selection_binding.get("target_ref") or {})
+        input_payload = dict(projection_selection_binding.get("input_payload") or input_payload)
+        owner_bound_target_ref = projection_selection_binding.get("owner_bound_target_ref")
         binding = self._bind_operation_projection_membership(
             action_type=action_type,
             target_ref=target_ref,
@@ -48964,7 +48992,7 @@ class SourcingOrchestrator:
         if str(crm_binding.get("status") or "") != "ready":
             return crm_binding
         target_ref = dict(crm_binding.get("target_ref") or {})
-        owner_bound_target_ref = crm_binding.get("owner_bound_target_ref")
+        owner_bound_target_ref = crm_binding.get("owner_bound_target_ref") or owner_bound_target_ref
         batch_binding = self._bind_operation_crm_record_batch_target(
             action_type=action_type,
             workspace_id=str(payload.get("workspace_id") or "default").strip() or "default",
@@ -49006,6 +49034,7 @@ class SourcingOrchestrator:
                 source="api.operation_action_submit",
                 metadata={
                     **caller_metadata,
+                    **dict(projection_selection_binding.get("metadata") or {}),
                     **dict(binding.get("metadata") or {}),
                 },
             )
@@ -49228,6 +49257,86 @@ class SourcingOrchestrator:
             "owner_bound_target_ref": owner_bound_target_ref,
         }
 
+    def _bind_operation_crm_projection_selection_target(
+        self,
+        *,
+        action_type: str,
+        workspace_id: str,
+        expected_workspace_id: str,
+        expected_owner_user_id: str,
+        target_ref: dict[str, Any],
+        input_payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        if action_type not in CRM_PROJECTION_SELECTION_ACTION_TYPES:
+            return {
+                "status": "ready",
+                "target_ref": target_ref,
+                "input_payload": input_payload,
+                "owner_bound_target_ref": None,
+            }
+        expected_workspace = str(expected_workspace_id or "").strip()
+        expected_owner = str(expected_owner_user_id or "").strip()
+        if bool(expected_workspace) != bool(expected_owner):
+            return {"status": "invalid", "reason": "action_bind_context_owner_incomplete"}
+        normalized_workspace = str(workspace_id or "default").strip() or "default"
+        if expected_workspace and normalized_workspace != expected_workspace:
+            return {"status": "not_found", "reason": CRM_PROJECTION_SELECTION_TARGET_NOT_FOUND}
+        all_aliases = {
+            alias for _canonical_field, aliases in CRM_PROJECTION_SELECTION_SELECTOR_ALIASES for alias in aliases
+        }
+        if set(target_ref) - all_aliases:
+            return {"status": "invalid", "reason": CRM_PROJECTION_SELECTION_TARGET_INVALID}
+        selector: dict[str, Any] = {}
+        for canonical_field, aliases in CRM_PROJECTION_SELECTION_SELECTOR_ALIASES:
+            occurrences = [
+                (carrier, alias)
+                for carrier, values in (("target_ref", target_ref), ("input_payload", input_payload))
+                for alias in aliases
+                if alias in values
+            ]
+            if len(occurrences) != 1:
+                return {"status": "invalid", "reason": CRM_PROJECTION_SELECTION_TARGET_INVALID}
+            carrier, alias = occurrences[0]
+            selector[canonical_field] = (target_ref if carrier == "target_ref" else input_payload)[alias]
+        normalized_input = {field: value for field, value in input_payload.items() if field not in all_aliases}
+        try:
+            context = ActionBindContext(
+                authorization_mode=(
+                    AUTHORIZATION_MODE_AUTHENTICATED if expected_workspace else AUTHORIZATION_MODE_OPEN_OPERATOR
+                ),
+                workspace_id=expected_workspace or normalized_workspace,
+                owner_user_id=expected_owner,
+                target_selector=selector,
+            )
+            owner_bound_target_ref = self._crm_projection_selection_target_binder_registry.bind(
+                action_type=action_type,
+                context=context,
+            )
+        except ActionTargetBindingError as exc:
+            if exc.reason in {
+                "projection_not_found",
+                "projection_member_selection_not_visible",
+                CRM_PROJECTION_SELECTION_TARGET_NOT_FOUND,
+            }:
+                return {"status": "not_found", "reason": CRM_PROJECTION_SELECTION_TARGET_NOT_FOUND}
+            if exc.reason == "projection_membership_revision_stale":
+                return {"status": "not_ready", "reason": exc.reason}
+            return {"status": "invalid", "reason": exc.reason}
+        return {
+            "status": "ready",
+            "target_ref": {},
+            "input_payload": normalized_input,
+            "owner_bound_target_ref": owner_bound_target_ref,
+            "metadata": {
+                "projection_selection_binding": {
+                    "source": "serving_projection_members",
+                    "access_scope": "shared_canonical_read",
+                    "destination_owner": "crm_writer",
+                    "fallback_used": False,
+                }
+            },
+        }
+
     def _bind_operation_projection_membership(
         self,
         *,
@@ -49235,7 +49344,7 @@ class SourcingOrchestrator:
         target_ref: dict[str, Any],
         input_payload: dict[str, Any],
     ) -> dict[str, Any]:
-        if action_type not in {ACTION_EXPORT_CANDIDATES, ACTION_ADD_TO_CRM}:
+        if action_type != ACTION_EXPORT_CANDIDATES:
             return {"status": "ready", "target_ref": target_ref, "input_payload": input_payload}
         projection_id = str(
             input_payload.get("projection_id")
@@ -49262,11 +49371,6 @@ class SourcingOrchestrator:
                 "projection_id": projection_id,
             }
         candidate_keys = self._operation_candidate_identity_keys(input_payload, target_ref)
-        if action_type == ACTION_ADD_TO_CRM and not candidate_keys:
-            return {
-                "status": "invalid",
-                "reason": "candidate_identity_key_required_for_revision_bound_action",
-            }
         if len(candidate_keys) > 100_000:
             return {"status": "invalid", "reason": "projection_selection_limit_exceeded", "limit": 100_000}
         if candidate_keys:
@@ -52149,6 +52253,25 @@ class SourcingOrchestrator:
                 "module_state_mutated": False,
                 "contract": "w9_operation_run_dispatch_v1",
             }
+        projection_selection_preflight = self._revalidate_crm_projection_selection_action_target(
+            operation_run=operation_run,
+            action=action,
+        )
+        if str(projection_selection_preflight.get("status") or "") != "ready":
+            if str(projection_selection_preflight.get("reason") or "") == "projection_membership_revision_stale":
+                return self._fail_projection_bound_operation_reselection(
+                    operation_run=operation_run,
+                    action=action,
+                    failure=projection_selection_preflight,
+                    actor=actor,
+                )
+            return {
+                **projection_selection_preflight,
+                "operation_run": operation_run,
+                "action": action,
+                "module_state_mutated": False,
+                "contract": "w9_operation_run_dispatch_v1",
+            }
         approval_reason = self._crm_writer_operation_approval_reason(action)
         if approval_reason and str(action.get("approval_status") or "").strip() != "approved":
             if preflighted_existing_plan:
@@ -52200,6 +52323,7 @@ class SourcingOrchestrator:
             operation_run=operation_run,
             action=action,
             actor=actor,
+            projection_selection_snapshot=dict(projection_selection_preflight.get("projection_snapshot") or {}),
         )
         if str(plan.get("status") or "") != "ok":
             if str(plan.get("reason") or "") == "projection_membership_revision_stale":
@@ -52301,6 +52425,44 @@ class SourcingOrchestrator:
             }
         return {"status": "ready", "crm_record": record}
 
+    def _revalidate_crm_projection_selection_action_target(
+        self,
+        *,
+        operation_run: Mapping[str, Any],
+        action: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        if str(action.get("action_type") or "").strip() not in CRM_PROJECTION_SELECTION_ACTION_TYPES:
+            return {"status": "ready"}
+        try:
+            spec = self.operation_runtime_writer.validate_persisted_action_request(
+                action=action,
+                operation_run=operation_run,
+            )
+        except OperationRuntimeStateConflict:
+            return {"status": "invalid", "reason": "crm_projection_selection_request_conflict"}
+        workspace_id = str(operation_run.get("workspace_id") or "").strip()
+        if (
+            str(operation_run.get("action_id") or "").strip() != str(action.get("action_id") or "").strip()
+            or str(operation_run.get("operation_type") or "").strip() != spec.operation_type
+            or str(action.get("operation_type") or "").strip() != spec.operation_type
+            or str(operation_run.get("status") or "").strip() in OPERATION_RUN_TERMINAL_STATUSES
+            or str(action.get("status") or "").strip() in OPERATION_ACTION_TERMINAL_STATUSES
+            or not workspace_id
+            or str(action.get("workspace_id") or "").strip() != workspace_id
+        ):
+            return {"status": "invalid", "reason": "crm_projection_selection_operation_conflict"}
+        try:
+            snapshot = self._crm_projection_selection_target_binder.revalidate_snapshot(
+                target_ref=dict(action.get("target_ref") or {}),
+                operation_workspace_id=workspace_id,
+            )
+        except ActionTargetBindingError as exc:
+            return {
+                "status": "not_ready",
+                "reason": str(exc.reason or "projection_membership_revision_stale"),
+            }
+        return {"status": "ready", "projection_snapshot": snapshot}
+
     def _crm_writer_operation_approval_reason(self, action: dict[str, Any]) -> str:
         action_type = str(action.get("action_type") or "").strip()
         input_payload = dict(action.get("input") or {})
@@ -52325,6 +52487,7 @@ class SourcingOrchestrator:
         operation_run: dict[str, Any],
         action: dict[str, Any],
         actor: str,
+        projection_selection_snapshot: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         action_type = str(action.get("action_type") or "").strip()
         input_payload = dict(action.get("input") or {})
@@ -52343,12 +52506,22 @@ class SourcingOrchestrator:
             "migration_phase": "W9_operation_crm_writer",
         }
         if action_type == ACTION_ADD_TO_CRM:
-            projection_id = str(input_payload.get("projection_id") or target_ref.get("projection_id") or "").strip()
-            candidate_keys = self._operation_candidate_identity_keys(input_payload, target_ref)
-            if not projection_id or not candidate_keys:
+            projection_id = str(target_ref.get("projection_id") or "").strip()
+            candidate_keys = [str(item or "").strip() for item in list(target_ref.get("candidate_identity_keys") or [])]
+            membership_revision = str(target_ref.get("membership_revision") or "").strip()
+            source_candidate_count = target_ref.get("source_candidate_count")
+            if (
+                not projection_id
+                or not candidate_keys
+                or candidate_keys != sorted(set(candidate_keys))
+                or not membership_revision
+                or isinstance(source_candidate_count, bool)
+                or not isinstance(source_candidate_count, int)
+                or source_candidate_count < len(candidate_keys)
+            ):
                 return {
                     "status": "invalid",
-                    "reason": "add_to_crm requires projection_id and candidate_identity_key",
+                    "reason": CRM_PROJECTION_SELECTION_TARGET_INVALID,
                 }
             if len(candidate_keys) > 100_000:
                 return {
@@ -52356,38 +52529,37 @@ class SourcingOrchestrator:
                     "reason": "projection_crm_selection_limit_exceeded",
                     "limit": 100_000,
                 }
-            snapshot = self.serving_projection_reader.get_projection_member_snapshot(
-                projection_id,
-                candidate_identity_keys=candidate_keys,
-                limit=min(len(candidate_keys), 100_000),
-                require_all_requested=True,
-            )
+            snapshot = dict(projection_selection_snapshot or {})
+            if not snapshot:
+                preflight = self._revalidate_crm_projection_selection_action_target(
+                    operation_run=operation_run,
+                    action=action,
+                )
+                if str(preflight.get("status") or "") != "ready":
+                    return preflight
+                snapshot = dict(preflight.get("projection_snapshot") or {})
             if str(snapshot.get("status") or "") != "ready":
                 return snapshot
-            membership_revision = str(snapshot.get("membership_revision") or "").strip()
-            requested_revision = str(
-                input_payload.get("expected_membership_revision")
-                or target_ref.get("expected_membership_revision")
-                or input_payload.get("membership_revision")
-                or target_ref.get("membership_revision")
-                or ""
-            ).strip()
-            if requested_revision and requested_revision != membership_revision:
+            if (
+                str(snapshot.get("membership_revision") or "").strip() != membership_revision
+                or snapshot.get("source_candidate_count") != source_candidate_count
+            ):
                 return {
                     "status": "not_ready",
                     "reason": "projection_membership_revision_stale",
                     "projection_id": projection_id,
-                    "expected_membership_revision": requested_revision,
-                    "membership_revision": membership_revision,
+                    "expected_membership_revision": membership_revision,
+                    "membership_revision": str(snapshot.get("membership_revision") or ""),
                 }
             return {
                 "status": "ok",
                 "command_type": CRM_RECORD_ADD_FROM_PROJECTION_COMMAND_TYPE,
                 "command_payload": {
                     **base_payload,
+                    "projection_selection_target": target_ref,
                     "projection_id": projection_id,
                     "membership_revision": membership_revision,
-                    "source_candidate_count": int(snapshot.get("source_candidate_count") or 0),
+                    "source_candidate_count": source_candidate_count,
                     "candidate_identity_keys": candidate_keys,
                     "candidate_count": len(candidate_keys),
                     "pipeline_id": str(input_payload.get("pipeline_id") or "default_sourcing").strip()
@@ -53187,51 +53359,20 @@ class SourcingOrchestrator:
         actor_type = str(payload.get("actor_type") or "agent").strip() or "agent"
         actor_id = str(payload.get("actor_id") or payload.get("requested_by") or CRM_WRITER_OWNER).strip()
         command_key = str(command.get("idempotency_key") or command.get("command_id") or "").strip()
-        target_preflight = self._revalidate_crm_existing_record_command_target(
-            command=command,
+        target_preflight = (
+            self._revalidate_crm_projection_selection_command_target(command=command)
+            if command_type == CRM_RECORD_ADD_FROM_PROJECTION_COMMAND_TYPE
+            else self._revalidate_crm_existing_record_command_target(command=command)
         )
         if str(target_preflight.get("status") or "") != "ready":
             return {**target_preflight, "crm_writer_owner": CRM_WRITER_OWNER}
         results: list[dict[str, Any]] = []
         if command_type == CRM_RECORD_ADD_FROM_PROJECTION_COMMAND_TYPE:
-            projection_id = str(payload.get("projection_id") or "").strip()
-            candidate_keys = _dedupe_texts(
-                str(item or "").strip()
-                for item in list(payload.get("candidate_identity_keys") or [])
-                if str(item or "").strip()
-            )
-            membership_revision = str(payload.get("membership_revision") or "").strip()
-            if not membership_revision:
-                return {
-                    "status": "invalid",
-                    "reason": "projection_membership_revision_required",
-                    "crm_writer_owner": CRM_WRITER_OWNER,
-                }
-            if not candidate_keys or len(candidate_keys) > 100_000:
-                return {
-                    "status": "invalid",
-                    "reason": "projection_crm_selection_invalid",
-                    "crm_writer_owner": CRM_WRITER_OWNER,
-                }
-            snapshot = self.serving_projection_reader.get_projection_member_snapshot(
-                projection_id,
-                candidate_identity_keys=candidate_keys,
-                limit=len(candidate_keys),
-                require_all_requested=True,
-            )
-            if str(snapshot.get("status") or "") != "ready":
-                return {**snapshot, "crm_writer_owner": CRM_WRITER_OWNER}
-            if str(snapshot.get("membership_revision") or "").strip() != membership_revision or int(
-                snapshot.get("source_candidate_count") or 0
-            ) != int(payload.get("source_candidate_count") or 0):
-                return {
-                    "status": "not_ready",
-                    "reason": "projection_membership_revision_stale",
-                    "projection_id": projection_id,
-                    "expected_membership_revision": membership_revision,
-                    "membership_revision": str(snapshot.get("membership_revision") or ""),
-                    "crm_writer_owner": CRM_WRITER_OWNER,
-                }
+            projection_target = dict(target_preflight.get("projection_selection_target") or {})
+            projection_id = str(projection_target.get("projection_id") or "").strip()
+            candidate_keys = list(projection_target.get("candidate_identity_keys") or [])
+            membership_revision = str(projection_target.get("membership_revision") or "").strip()
+            snapshot = dict(target_preflight.get("projection_snapshot") or {})
             batch_result = self.crm_writer.add_projection_members_to_crm(
                 projection_id=projection_id,
                 candidate_identity_keys=candidate_keys,
@@ -53450,6 +53591,111 @@ class SourcingOrchestrator:
             operation_run=operation_run,
             action=action,
         )
+
+    def _revalidate_crm_projection_selection_command_target(
+        self,
+        *,
+        command: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        command_record = dict(command)
+        raw_payload = command_record.get("payload")
+        if not isinstance(raw_payload, Mapping):
+            return {"status": "invalid", "reason": "crm_projection_selection_command_payload_invalid"}
+        payload = dict(raw_payload)
+        operation_run_id = str(command_record.get("operation_id") or "").strip()
+        if not operation_run_id or operation_run_id != str(payload.get("operation_run_id") or "").strip():
+            return {"status": "invalid", "reason": "crm_projection_selection_command_operation_mismatch"}
+        operation_run = self.store.repos.workflow_runtime.get_operation(operation_run_id)
+        if not operation_run:
+            return {"status": "invalid", "reason": "crm_projection_selection_command_operation_missing"}
+        action_id = str(operation_run.get("action_id") or "").strip()
+        action = self.store.repos.workflow_runtime.get_action(action_id) if action_id else {}
+        if (
+            not action
+            or str(action.get("action_type") or "").strip() != ACTION_ADD_TO_CRM
+            or str(payload.get("action_id") or "").strip() != action_id
+            or str(payload.get("action_type") or "").strip() != ACTION_ADD_TO_CRM
+        ):
+            return {"status": "invalid", "reason": "crm_projection_selection_command_action_mismatch"}
+        try:
+            spec = self.operation_runtime_writer.validate_persisted_action_request(
+                action=action,
+                operation_run=operation_run,
+            )
+        except OperationRuntimeStateConflict:
+            return {"status": "invalid", "reason": "crm_projection_selection_request_conflict"}
+        if (
+            str(command_record.get("command_type") or "").strip() != spec.default_workflow_command_type
+            or str(command_record.get("owner") or "").strip() != spec.owner_module
+            or spec.default_workflow_command_type not in spec.allowed_workflow_command_types
+            or str(operation_run.get("operation_type") or "").strip() != spec.operation_type
+            or str(action.get("operation_type") or "").strip() != spec.operation_type
+            or str(operation_run.get("status") or "").strip() in OPERATION_RUN_TERMINAL_STATUSES
+            or str(action.get("status") or "").strip() in OPERATION_ACTION_TERMINAL_STATUSES
+        ):
+            return {"status": "invalid", "reason": "crm_projection_selection_command_contract_mismatch"}
+        workflow_ref = {
+            "workflow_run_id": str(command_record.get("workflow_run_id") or "").strip(),
+            "command_id": str(command_record.get("command_id") or "").strip(),
+            "command_type": str(command_record.get("command_type") or "").strip(),
+            "owner": str(command_record.get("owner") or "").strip(),
+        }
+        if not json_contract_equal(dict(operation_run.get("workflow_ref") or {}), workflow_ref):
+            return {"status": "invalid", "reason": "crm_projection_selection_command_workflow_ref_mismatch"}
+        raw_target = payload.get("projection_selection_target")
+        persisted_target = action.get("target_ref")
+        if (
+            not isinstance(raw_target, Mapping)
+            or not isinstance(persisted_target, Mapping)
+            or not json_contract_equal(dict(raw_target), dict(persisted_target))
+        ):
+            return {"status": "invalid", "reason": "crm_projection_selection_bound_target_mismatch"}
+        target = dict(raw_target)
+        workspace_id = str(target.get("workspace_id") or "").strip()
+        candidate_identity_keys = list(target.get("candidate_identity_keys") or [])
+        action_input = dict(action.get("input") or {})
+        expected_fields = {
+            "workspace_id": workspace_id,
+            "projection_id": str(target.get("projection_id") or "").strip(),
+            "membership_revision": str(target.get("membership_revision") or "").strip(),
+            "source_candidate_count": target.get("source_candidate_count"),
+            "candidate_identity_keys": candidate_identity_keys,
+            "candidate_count": len(candidate_identity_keys),
+            "pipeline_id": str(action_input.get("pipeline_id") or "default_sourcing").strip() or "default_sourcing",
+            "stage": str(action_input.get("stage") or "new").strip() or "new",
+            "source_reason": str(action_input.get("source_reason") or "selected_from_projection").strip()
+            or "selected_from_projection",
+            "produced_entity_counts": {"candidate": len(candidate_identity_keys)},
+        }
+        if (
+            not workspace_id
+            or workspace_id != str(operation_run.get("workspace_id") or "").strip()
+            or workspace_id != str(action.get("workspace_id") or "").strip()
+            or any(not json_contract_equal(payload.get(field), expected) for field, expected in expected_fields.items())
+            or str(payload.get("source") or "").strip() != "operation_run_dispatch"
+            or str(payload.get("migration_phase") or "").strip() != "W9_operation_crm_writer"
+            or not json_contract_equal(
+                dict(payload.get("materialization_metadata") or {}),
+                {
+                    "command_payload_storage": "workflow_commands",
+                    "write_owner": CRM_WRITER_OWNER,
+                    "migration_phase": "W9_operation_crm_writer",
+                },
+            )
+        ):
+            return {"status": "invalid", "reason": "crm_projection_selection_command_payload_mismatch"}
+        try:
+            snapshot = self._crm_projection_selection_target_binder.revalidate_snapshot(
+                target_ref=target,
+                operation_workspace_id=workspace_id,
+            )
+        except ActionTargetBindingError as exc:
+            return {"status": "not_ready", "reason": exc.reason}
+        return {
+            "status": "ready",
+            "projection_selection_target": target,
+            "projection_snapshot": snapshot,
+        }
 
     def _revalidate_crm_existing_record_command_target(
         self,
