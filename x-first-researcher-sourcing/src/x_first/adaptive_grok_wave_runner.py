@@ -6290,17 +6290,9 @@ def _intent_valid(intent: Any) -> bool:
             )
             or (
                 process_evidence_generation == "transitional"
-                and (
-                    (
-                        current_process_evidence
-                        and intent.get("process_evidence_generation")
-                        == PROCESS_EVIDENCE_GENERATION
-                    )
-                    or (
-                        not current_process_evidence
-                        and "process_evidence_generation" not in intent
-                    )
-                )
+                and current_process_evidence
+                and intent.get("process_evidence_generation")
+                == PROCESS_EVIDENCE_GENERATION
             )
             or (
                 process_evidence_generation == "legacy"
@@ -6995,16 +6987,15 @@ def validate_operator_receipt(receipt: Any) -> list[str]:
             ):
                 errors.append("receipt_process_evidence_generation_mismatch")
         elif process_evidence_generation == "transitional":
-            transitional_current_shape = (
+            # Three historical implementations shared this policy digest:
+            # keyless, v1 journal, and v2 hash-bound journal.  Absence is
+            # therefore indistinguishable from deletion.  Only the strongest
+            # v2 shape may replay; weaker same-digest objects are quarantined.
+            if not (
                 isinstance(artifacts, dict)
                 and set(artifacts) == _ARTIFACT_KEYS
                 and _is_sha(artifacts.get("process_result_journal_sha256"))
-            )
-            transitional_legacy_shape = (
-                isinstance(artifacts, dict)
-                and set(artifacts) == _LEGACY_ARTIFACT_KEYS
-            )
-            if not (transitional_current_shape or transitional_legacy_shape):
+            ):
                 errors.append("receipt_transitional_process_evidence_shape_mismatch")
         elif process_evidence_generation == "legacy":
             if not isinstance(artifacts, dict) or set(artifacts) != _LEGACY_ARTIFACT_KEYS:
@@ -7265,9 +7256,9 @@ def validate_operator_bundle(
         recorded_command_policy == legacy_pre_process_evidence_policy
     )
     # The independently replayed command/artifact policy owns all new process
-    # evidence.  One bounded direct-parent digest straddled the journal rollout;
-    # only that historical digest may use its mutually consistent artifact
-    # shape to distinguish transitional journal evidence from keyless legacy.
+    # evidence.  One historical digest straddled three journal generations, so
+    # absence cannot distinguish an old keyless bundle from deletion.  That
+    # transitional digest therefore admits only the strongest v2 shape.
     receipt_artifacts = receipt.get("artifacts")
     intent_declares_current_process_evidence = (
         intent.get("process_evidence_generation") == PROCESS_EVIDENCE_GENERATION
@@ -7283,18 +7274,11 @@ def validate_operator_bundle(
         if not receipt_declares_current_process_evidence:
             errors.append("receipt_process_evidence_generation_missing")
     elif legacy_pre_process_evidence_replay:
-        if (
+        current_process_evidence = True
+        if not (
             intent_declares_current_process_evidence
             and receipt_declares_current_process_evidence
         ):
-            current_process_evidence = True
-        elif (
-            not intent_declares_current_process_evidence
-            and not receipt_declares_current_process_evidence
-        ):
-            current_process_evidence = False
-        else:
-            current_process_evidence = False
             errors.append("transitional_process_evidence_shape_mismatch")
     elif intent_declares_current_process_evidence or receipt_declares_current_process_evidence:
         current_process_evidence = False
@@ -8085,7 +8069,11 @@ def _recover_incomplete_run_locked(
             raise AdaptiveWaveValidationError("recovery_process_evidence_generation_missing")
         current_process_evidence = True
     elif transitional_process_evidence_policy:
-        current_process_evidence = intent_declares_current_process_evidence
+        if not intent_declares_current_process_evidence:
+            raise AdaptiveWaveValidationError(
+                "recovery_transitional_process_evidence_untrusted"
+            )
+        current_process_evidence = True
     elif "process_evidence_generation" in intent:
         raise AdaptiveWaveValidationError("recovery_legacy_process_evidence_shape_mismatch")
     else:
@@ -8110,6 +8098,54 @@ def _recover_incomplete_run_locked(
         if not _is_sha(recovery_auth_sha256) or not _is_sha(recovery_grant_sha256):
             raise AdaptiveWaveValidationError("recovery_auth_binding_invalid")
         with _auth_digest_lock(approval_root, recovery_auth_sha256):
+            grant_id = request["approval"]["grant_id"]
+            if not isinstance(grant_id, str):
+                raise AdaptiveWaveValidationError("recovery_grant_id_invalid")
+            grant_id_hash = bytes_sha256(grant_id.encode())
+            if intent["approval"]["grant_id_sha256"] != grant_id_hash:
+                raise AdaptiveWaveValidationError("recovery_grant_id_binding_invalid")
+            grant_path, _ = _grant_paths(approval_root, grant_id_hash)
+            try:
+                grant_raw = _read_regular_owned_bounded(
+                    grant_path,
+                    maximum_bytes=1_048_576,
+                    required_mode=0o600,
+                )
+                grant = strict_json_loads(grant_raw)
+            except (AdaptiveWaveValidationError, OSError, UnicodeError, ValueError) as exc:
+                raise AdaptiveWaveValidationError("recovery_grant_invalid") from exc
+            if bytes_sha256(grant_raw) != recovery_grant_sha256:
+                raise AdaptiveWaveValidationError("recovery_grant_hash_mismatch")
+            recovery_consumption = _load_bound_recovery_consumption(
+                approval_root,
+                request=request,
+                run_id=intent["run_id"],
+                run_lease_sha256=held_lease_sha,
+                request_sha256=intent["request_sha256"],
+                grant_sha256=recovery_grant_sha256,
+            )
+            try:
+                grant_validation_clock = _parse_timestamp(
+                    recovery_consumption[0]["consumed_at"]
+                    if recovery_consumption is not None
+                    else intent["started_at"]
+                )
+            except (AdaptiveWaveValidationError, KeyError, TypeError) as exc:
+                raise AdaptiveWaveValidationError("recovery_grant_clock_invalid") from exc
+            recovery_result_schema_sha256 = (
+                result_schema_sha256(legacy_v2=True)
+                if recovery_recorded_command_policy
+                == _legacy_structured_result_command_policy_sha256(request)
+                else result_schema_sha256()
+            )
+            if _validate_grant(
+                grant,
+                request,
+                now=grant_validation_clock,
+                replay_command_policy_sha256=recovery_recorded_command_policy,
+                replay_result_schema_sha256=recovery_result_schema_sha256,
+            ):
+                raise AdaptiveWaveValidationError("recovery_grant_replay_invalid")
             active_claim = _load_auth_active_use(approval_root, recovery_auth_sha256)
             if active_claim is None:
                 _publish_auth_active_use_unlocked(
@@ -8135,14 +8171,6 @@ def _recover_incomplete_run_locked(
                     raise PermissionError("grok_auth_digest_in_use")
                 recovery_active_auth_claim = True
                 recovery_auth_claim_origin = active_claim["claim_origin"]
-            recovery_consumption = _load_bound_recovery_consumption(
-                approval_root,
-                request=request,
-                run_id=intent["run_id"],
-                run_lease_sha256=held_lease_sha,
-                request_sha256=intent["request_sha256"],
-                grant_sha256=recovery_grant_sha256,
-            )
     prior_handles, _, prior_candidates = load_prior_context(request)
     del prior_handles
     process_result_path = run_root / "process-result.json"

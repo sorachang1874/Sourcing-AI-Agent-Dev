@@ -5288,7 +5288,7 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             self.assertIn("intent_process_evidence_generation_missing", errors)
             self.assertIn("receipt_process_evidence_generation_missing", errors)
 
-    def test_pre_generation_intent_and_receipt_validate_in_schema_and_runtime(self) -> None:
+    def test_same_digest_pre_generation_shape_is_schema_compatible_but_runtime_quarantined(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             request, request_path = _build_request(root)
@@ -5330,9 +5330,14 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             }
             self.assertEqual(schema_errors(intent, intent_shape_schema), [])
             assert_schema_valid(receipt, "x.grok.adaptive_recall_wave.operator_receipt.v3.schema.json")
-            self.assertTrue(runner._intent_valid(intent))
-            self.assertEqual(validate_operator_receipt(receipt), [])
-            self.assertEqual(validate_operator_bundle(run_root, approval_root=root / "approvals"), [])
+            self.assertFalse(runner._intent_valid(intent))
+            self.assertIn(
+                "receipt_transitional_process_evidence_shape_mismatch",
+                validate_operator_receipt(receipt),
+            )
+            errors = validate_operator_bundle(run_root, approval_root=root / "approvals")
+            self.assertIn("transitional_process_evidence_shape_mismatch", errors)
+            self.assertIn("process_result_journal_missing", errors)
 
     def test_direct_parent_transitional_journal_bundle_replays_without_current_trust(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -5372,6 +5377,80 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
                 validate_operator_bundle(run_root, approval_root=root / "approvals"),
                 [],
             )
+
+    def test_transitional_optional_key_deletion_cannot_downgrade_to_legacy(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            request, _ = _build_request(root)
+            receipt, run_root = _run_adaptive_wave(
+                request=request,
+                execution_mode="fixture",
+                runtime_root=root / "runtime",
+                approval_root=root / "approvals",
+                binary=Path("fixture-grok.invalid"),
+                auth_source=None,
+                executor=runner.OfflineFixtureExecutor(),
+                monotonic=MutableClock(),
+                wall_clock=lambda: FIXED_TIME,
+            )
+            transitional_policy = runner._legacy_pre_process_evidence_command_policy_sha256(
+                request
+            )
+            intent_path = run_root / "operator-intent.json"
+            receipt_path = run_root / "operator-receipt.json"
+            intent = json.loads(intent_path.read_text())
+            intent["command_binding"]["command_policy_sha256"] = transitional_policy
+            receipt["command_binding"]["command_policy_sha256"] = transitional_policy
+            intent.pop("process_evidence_generation")
+            receipt["artifacts"].pop("process_result_journal_sha256")
+            _write_private(intent_path, (canonical_json(intent) + "\n").encode())
+            _write_private(receipt_path, (canonical_json(receipt) + "\n").encode())
+            (run_root / "process-result.json").unlink()
+
+            self.assertFalse(runner._intent_valid(intent))
+            self.assertIn(
+                "receipt_transitional_process_evidence_shape_mismatch",
+                validate_operator_receipt(receipt),
+            )
+            errors = validate_operator_bundle(run_root, approval_root=root / "approvals")
+            self.assertIn("transitional_process_evidence_shape_mismatch", errors)
+            self.assertIn("process_result_journal_missing", errors)
+
+    def test_transitional_keyless_recovery_fails_without_mutating_retained_journal(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            request, _ = _build_request(root)
+            _, run_root = _run_adaptive_wave(
+                request=request,
+                execution_mode="fixture",
+                runtime_root=root / "runtime",
+                approval_root=root / "approvals",
+                binary=Path("fixture-grok.invalid"),
+                auth_source=None,
+                executor=runner.OfflineFixtureExecutor(),
+                monotonic=MutableClock(),
+                wall_clock=lambda: FIXED_TIME,
+            )
+            intent_path = run_root / "operator-intent.json"
+            intent = json.loads(intent_path.read_text())
+            intent["command_binding"]["command_policy_sha256"] = (
+                runner._legacy_pre_process_evidence_command_policy_sha256(request)
+            )
+            intent.pop("process_evidence_generation")
+            _write_private(intent_path, (canonical_json(intent) + "\n").encode())
+            (run_root / "operator-receipt.json").unlink()
+            journal_path = run_root / "process-result.json"
+            journal_raw = journal_path.read_bytes()
+
+            with self.assertRaisesRegex(AdaptiveWaveValidationError, "intent_invalid"):
+                recover_incomplete_run(
+                    run_root,
+                    approval_root=root / "approvals",
+                    wall_clock=lambda: FIXED_TIME + timedelta(minutes=5),
+                )
+
+            self.assertEqual(journal_path.read_bytes(), journal_raw)
+            self.assertFalse((run_root / "operator-receipt.json").exists())
 
     def test_direct_parent_transitional_incomplete_live_run_recovers(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -5453,7 +5532,72 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             self.assertEqual(validate_operator_receipt(recovered), [])
             self.assertEqual(validate_operator_bundle(run_root, approval_root=approvals), [])
 
-    def test_keyless_legacy_incomplete_fixture_recovery_emits_legacy_receipt_shape(self) -> None:
+    def test_recovery_grant_tamper_preserves_home_claim_and_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            os.chmod(root, 0o700)
+            binary, auth, binary_sha = _live_material(root)
+            auth_sha = _bytes_sha(auth.read_bytes())
+            request, request_path = _build_request(root, binary_sha=binary_sha)
+            approvals = root / "approvals"
+            issue_live_grant(
+                request_path=request_path,
+                grant_root=approvals,
+                auth_source=auth,
+                wall_clock=lambda: FIXED_TIME,
+            )
+            fake = FakeExecutor(
+                MutableClock(),
+                (canonical_json(_empty_result()) + "\n").encode(),
+                spawn=True,
+            )
+            with mock.patch.object(
+                runner,
+                "_measure_session_tree",
+                side_effect=RuntimeError("synthetic_session_measurement_failure"),
+            ):
+                with self.assertRaisesRegex(RuntimeError, "synthetic_session_measurement_failure"):
+                    _run_adaptive_wave(
+                        request=request,
+                        execution_mode="live",
+                        runtime_root=root / "runtime",
+                        approval_root=approvals,
+                        binary=binary,
+                        auth_source=auth,
+                        executor=fake,
+                        monotonic=fake.clock,
+                        wall_clock=lambda: FIXED_TIME,
+                    )
+            run_root = next((root / "runtime").iterdir())
+            grant_id_hash = _bytes_sha(request["approval"]["grant_id"].encode())
+            grant_path, _ = runner._grant_paths(approvals, grant_id_hash)
+            grant = json.loads(grant_path.read_text())
+            grant["state"] = "synthetic_tamper"
+            _write_private(grant_path, (canonical_json(grant) + "\n").encode())
+            active_claim = approvals / f"auth-active-use-{auth_sha}.json"
+            home = run_root / "ephemeral-home"
+            journal_path = run_root / "process-result.json"
+            claim_raw = active_claim.read_bytes()
+            journal_raw = journal_path.read_bytes()
+
+            with self.assertRaisesRegex(
+                AdaptiveWaveValidationError,
+                "recovery_grant_hash_mismatch",
+            ):
+                recover_incomplete_run(
+                    run_root,
+                    approval_root=approvals,
+                    process_group_is_alive=lambda group: False,
+                    wall_clock=lambda: FIXED_TIME + timedelta(minutes=5),
+                )
+
+            self.assertTrue((home / "auth.json").is_file())
+            self.assertEqual(active_claim.read_bytes(), claim_raw)
+            self.assertEqual(journal_path.read_bytes(), journal_raw)
+            self.assertFalse((run_root / "operator-receipt.json").exists())
+            self.assertFalse(runner._auth_digest_is_tainted(approvals, auth_sha))
+
+    def test_distinct_keyless_legacy_incomplete_fixture_recovery_emits_legacy_receipt_shape(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             request, _ = _build_request(root)
@@ -5468,13 +5612,13 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
                 monotonic=MutableClock(),
                 wall_clock=lambda: FIXED_TIME,
             )
-            transitional_policy = runner._legacy_pre_process_evidence_command_policy_sha256(
+            distinct_legacy_policy = runner._legacy_operator_result_v2_command_policy_sha256(
                 request
             )
             intent_path = run_root / "operator-intent.json"
             intent = json.loads(intent_path.read_text())
             intent.pop("process_evidence_generation")
-            intent["command_binding"]["command_policy_sha256"] = transitional_policy
+            intent["command_binding"]["command_policy_sha256"] = distinct_legacy_policy
             _write_private(intent_path, (canonical_json(intent) + "\n").encode())
             (run_root / "operator-receipt.json").unlink()
             (run_root / "process-result.json").unlink()
