@@ -61,8 +61,8 @@ def test_demo_mapper_preserves_optional_and_empty_schema_less_pins() -> None:
 
     for mapper_name in ("deriveOperationActionRecord", "deriveOperationRunRecord"):
         mapper = _typescript_function(demo_source, mapper_name)
-        assert "requestSchemaVersion: asOptionalString(record.request_schema_version)" in mapper
-        assert "requestSchemaDigest: asOptionalString(record.request_schema_digest)" in mapper
+        assert "requestSchemaVersion: asOptionalString(publicRecord.request_schema_version)" in mapper
+        assert "requestSchemaDigest: asOptionalString(publicRecord.request_schema_digest)" in mapper
 
     optional_string = _typescript_function(demo_source, "asOptionalString")
     assert 'typeof value === "string" ? value : undefined' in optional_string

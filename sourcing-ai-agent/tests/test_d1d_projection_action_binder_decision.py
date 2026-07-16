@@ -80,13 +80,13 @@ def test_projection_writer_cannot_persist_a_workspace_or_access_scope_owner(meth
     assert parameters.isdisjoint(PROJECTION_OWNER_COLUMN_CANDIDATES)
 
 
-def test_generic_operation_submit_only_derives_authenticated_scope_for_crm_owner_binding() -> None:
+def test_generic_operation_submit_only_derives_authenticated_scope_for_owner_bound_actions() -> None:
     api_tree = ast.parse(API_PATH.read_text(encoding="utf-8"), filename=str(API_PATH))
     handler = _function(api_tree, "post_operation_actions")
     identity_calls = _calls_named(handler, "_apply_server_identity")
     assert len(identity_calls) == 1
     identity_keywords = {keyword.arg: keyword.value for keyword in identity_calls[0].keywords}
-    assert ast.unparse(identity_keywords["workspace"]) == "crm_owner_bound"
+    assert ast.unparse(identity_keywords["workspace"]) == "owner_bound"
     assert "tenant" not in identity_keywords
 
     orchestrator_tree = ast.parse(

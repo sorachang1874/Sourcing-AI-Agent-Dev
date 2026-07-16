@@ -26,6 +26,7 @@ from .control_plane_postgres import (
     ensure_acquisition_shard_registry_split_schema,
     upsert_acquisition_shard_registry_rows,
 )
+from .json_contract import JsonContractShapeError, decode_json_contract, json_contract_equal
 from .local_postgres import (
     configure_control_plane_postgres_session,
     ensure_local_postgres_started,
@@ -7617,6 +7618,682 @@ class LiveControlPlanePostgresAdapter:
                 str(command_id or "").strip(),
             ),
         )
+
+    def fail_acquisition_root_command_claim(
+        self,
+        command_id: str,
+        *,
+        table_name: str = "workflow_commands",
+        expected_lease_owner: str,
+        expected_lease_expires_at: str,
+        expected_attempt: int,
+        reason: str = "",
+    ) -> dict[str, Any] | None:
+        """Fail only an unexpired, exact acquisition-root claim."""
+
+        if _normalize_postgres_identifier(table_name) != "workflow_commands":
+            raise ValueError("fail_acquisition_root_command_claim requires table_name=workflow_commands")
+        if not self.should_prefer_read("workflow_commands"):
+            return None
+        normalized_command_id = str(command_id or "").strip()
+        normalized_lease_owner = str(expected_lease_owner or "").strip()
+        normalized_lease_expires_at = str(expected_lease_expires_at or "").strip()
+        normalized_attempt = max(0, int(expected_attempt or 0))
+        normalized_reason = str(reason or "acquisition_root_command_target_conflict").strip()
+        if (
+            not normalized_command_id
+            or not normalized_lease_owner
+            or not normalized_lease_expires_at
+            or normalized_attempt <= 0
+        ):
+            return None
+        now = _utc_now_sql_timestamp()
+        command = self._execute_returning_one(
+            """
+            UPDATE workflow_commands
+            SET status = 'failed_terminal',
+                lease_owner = '',
+                lease_expires_at = '',
+                heartbeat_at = %s,
+                not_before_at = '',
+                last_error = %s,
+                updated_at = %s
+            WHERE command_id = %s
+              AND command_type = 'acquisition.run.create'
+              AND owner = 'acquisition_run_writer'
+              AND status = 'running'
+              AND lease_owner = %s
+              AND lease_expires_at = %s
+              AND attempt = %s
+              AND (NULLIF(lease_expires_at, '')::timestamp AT TIME ZONE 'UTC') > clock_timestamp()
+            RETURNING *
+            """,
+            (
+                now,
+                normalized_reason,
+                now,
+                normalized_command_id,
+                normalized_lease_owner,
+                normalized_lease_expires_at,
+                normalized_attempt,
+            ),
+        )
+        if command is not None:
+            return {
+                "outcome": "applied",
+                "reason": "acquisition_root_command_failed_for_exact_claim",
+                "command": command,
+            }
+        current = self.select_one(
+            "workflow_commands",
+            where_sql="command_id = %s",
+            params=[normalized_command_id],
+        )
+        return {
+            "outcome": "stale_claim" if current is not None else "not_found",
+            "reason": (
+                "acquisition_root_command_claim_not_current" if current is not None else "workflow_command_not_found"
+            ),
+            "command": current,
+        }
+
+    def complete_acquisition_root_command(
+        self,
+        command_id: str,
+        *,
+        table_name: str = "workflow_commands",
+        expected_lease_owner: str,
+        expected_lease_expires_at: str,
+        expected_attempt: int,
+        expected_root_command: dict[str, Any] | None = None,
+        plan_event: dict[str, Any] | None = None,
+        child_command: dict[str, Any] | None = None,
+        child_causality: dict[str, Any] | None = None,
+        root_result: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
+        """Commit one acquisition root's plan event, intent child, and terminal row atomically."""
+
+        if _normalize_postgres_identifier(table_name) != "workflow_commands":
+            raise ValueError("complete_acquisition_root_command requires table_name=workflow_commands")
+        if not self.should_prefer_read("workflow_commands"):
+            return None
+        self._ensure_runtime_coordination_schema()
+        normalized_command_id = str(command_id or "").strip()
+        normalized_lease_owner = str(expected_lease_owner or "").strip()
+        normalized_lease_expires_at = str(expected_lease_expires_at or "").strip()
+        normalized_attempt = max(0, int(expected_attempt or 0))
+        event_spec = dict(plan_event or {})
+        child_spec = dict(child_command or {})
+        causality_template = dict(child_causality or {})
+        expected_root = dict(expected_root_command or {})
+        terminal_result = dict(root_result or {})
+        workflow_run_id = str(event_spec.get("workflow_run_id") or "").strip()
+        operation_id = str(event_spec.get("operation_id") or "").strip()
+        event_idempotency_key = str(event_spec.get("idempotency_key") or "").strip()
+        child_command_id = str(child_spec.get("command_id") or "").strip()
+        child_idempotency_key = str(child_spec.get("idempotency_key") or "").strip()
+        if (
+            not normalized_command_id
+            or not normalized_lease_owner
+            or not normalized_lease_expires_at
+            or normalized_attempt <= 0
+            or not workflow_run_id
+            or not operation_id
+            or not event_idempotency_key
+            or not child_command_id
+            or not child_idempotency_key
+            or not expected_root
+        ):
+            return None
+        if (
+            str(event_spec.get("command_id") or "").strip() != normalized_command_id
+            or str(event_spec.get("event_family") or "").strip() != "workflow_event"
+            or str(event_spec.get("event_type") or "").strip() != "CommandPlanRequested"
+            or str(child_spec.get("workflow_run_id") or "").strip() != workflow_run_id
+            or str(child_spec.get("operation_id") or "").strip() != operation_id
+            or str(child_spec.get("command_type") or "").strip() != "acquisition.intent.resolve"
+            or str(child_spec.get("owner") or "").strip() != "acquisition_planner"
+            or str(causality_template.get("workflow_run_id") or "").strip() != workflow_run_id
+            or str(causality_template.get("operation_id") or "").strip() != operation_id
+            or str(causality_template.get("command_type") or "").strip() != "acquisition.intent.resolve"
+            or str(causality_template.get("owner") or "").strip() != "acquisition_planner"
+            or str(causality_template.get("parent_command_id") or "").strip() != normalized_command_id
+            or str(causality_template.get("idempotency_key") or "").strip() != child_idempotency_key
+            or str(causality_template.get("source_event_id") or "").strip()
+            or str(causality_template.get("source_event_type") or "").strip() != "CommandPlanRequested"
+            or list(terminal_result.get("downstream_command_ids") or []) != [child_command_id]
+            or int(terminal_result.get("completed_claim_attempt") or 0) != normalized_attempt
+        ):
+            raise ValueError("acquisition root UoW contract mismatch")
+
+        def response(
+            *,
+            outcome: str,
+            reason_code: str,
+            command: dict[str, Any] | None,
+            child: dict[str, Any] | None = None,
+            event: dict[str, Any] | None = None,
+        ) -> dict[str, Any]:
+            return {
+                "outcome": outcome,
+                "reason": reason_code,
+                "command": command,
+                "child_command": child,
+                "event": event,
+            }
+
+        attempt = 0
+        while True:
+            try:
+                with self._connect() as connection:
+                    with connection.cursor() as cursor:
+                        cursor.execute(
+                            "SELECT * FROM workflow_commands WHERE command_id = %s FOR UPDATE",
+                            (normalized_command_id,),
+                        )
+                        root = _fetch_one_dict_row(cursor, cursor.fetchone())
+                        if root is None:
+                            connection.commit()
+                            return response(
+                                outcome="not_found",
+                                reason_code="workflow_command_not_found",
+                                command=None,
+                            )
+                        cursor.execute("SELECT TO_CHAR(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS')")
+                        repository_now_row = cursor.fetchone()
+                        repository_now = str(
+                            repository_now_row[0]
+                            if isinstance(repository_now_row, (list, tuple)) and repository_now_row
+                            else repository_now_row or ""
+                        ).strip()
+                        cursor.execute(
+                            "SELECT (NULLIF(%s, '')::timestamp AT TIME ZONE 'UTC') > clock_timestamp()",
+                            (str(root.get("lease_expires_at") or "").strip(),),
+                        )
+                        lease_active_row = cursor.fetchone()
+                        lease_active = bool(
+                            lease_active_row[0]
+                            if isinstance(lease_active_row, (list, tuple)) and lease_active_row
+                            else next(iter(lease_active_row.values()), False)
+                            if isinstance(lease_active_row, dict)
+                            else lease_active_row
+                        )
+                        claim_is_current = bool(
+                            str(root.get("command_type") or "").strip() == "acquisition.run.create"
+                            and str(root.get("owner") or "").strip() == "acquisition_run_writer"
+                            and str(root.get("workflow_run_id") or "").strip() == workflow_run_id
+                            and str(root.get("operation_id") or "").strip() == operation_id
+                            and str(root.get("status") or "").strip() == "running"
+                            and str(root.get("lease_owner") or "").strip() == normalized_lease_owner
+                            and str(root.get("lease_expires_at") or "").strip() == normalized_lease_expires_at
+                            and int(root.get("attempt") or 0) == normalized_attempt
+                            and lease_active
+                        )
+                        if not claim_is_current:
+                            connection.commit()
+                            return response(
+                                outcome="stale_claim",
+                                reason_code="acquisition_root_command_claim_not_current",
+                                command=root,
+                            )
+                        try:
+                            root_input_artifact_refs = decode_json_contract(
+                                root.get("input_artifact_refs_json"),
+                                expected_type=list,
+                            )
+                            root_output_artifact_refs = decode_json_contract(
+                                root.get("output_artifact_refs_json"),
+                                expected_type=list,
+                            )
+                            root_produced_entity_counts = decode_json_contract(
+                                root.get("produced_entity_counts_json"),
+                                expected_type=dict,
+                            )
+                            root_downstream_command_ids = decode_json_contract(
+                                root.get("downstream_command_ids_json"),
+                                expected_type=list,
+                            )
+                            root_payload = decode_json_contract(
+                                root.get("payload_json"),
+                                expected_type=dict,
+                            )
+                            root_artifact_refs = decode_json_contract(
+                                root.get("artifact_refs_json"),
+                                expected_type=list,
+                            )
+                            root_retry_policy = decode_json_contract(
+                                root.get("retry_policy_json"),
+                                expected_type=dict,
+                            )
+                            root_result_payload = decode_json_contract(
+                                root.get("result_json"),
+                                expected_type=dict,
+                            )
+                        except JsonContractShapeError:
+                            connection.commit()
+                            return response(
+                                outcome="conflict",
+                                reason_code="acquisition_root_command_persisted_json_invalid",
+                                command=root,
+                            )
+                        locked_root_identity = {
+                            "command_id": str(root.get("command_id") or "").strip(),
+                            "workflow_run_id": str(root.get("workflow_run_id") or "").strip(),
+                            "operation_id": str(root.get("operation_id") or "").strip(),
+                            "command_type": str(root.get("command_type") or "").strip(),
+                            "owner": str(root.get("owner") or "").strip(),
+                            "stage_id": str(root.get("stage_id") or "").strip(),
+                            "causal_group_id": str(root.get("causal_group_id") or "").strip(),
+                            "parent_command_id": str(root.get("parent_command_id") or "").strip(),
+                            "source_event_id": str(root.get("source_event_id") or "").strip(),
+                            "source_event_type": str(root.get("source_event_type") or "").strip(),
+                            "input_artifact_refs": root_input_artifact_refs,
+                            "output_artifact_refs": root_output_artifact_refs,
+                            "produced_entity_counts": root_produced_entity_counts,
+                            "no_op_reason": str(root.get("no_op_reason") or "").strip(),
+                            "readiness_effect": str(root.get("readiness_effect") or "").strip(),
+                            "downstream_command_ids": root_downstream_command_ids,
+                            "causality_schema_version": str(root.get("causality_schema_version") or "").strip(),
+                            "idempotency_key": str(root.get("idempotency_key") or "").strip(),
+                            "payload": root_payload,
+                            "artifact_refs": root_artifact_refs,
+                            "not_before_at": str(root.get("not_before_at") or "").strip(),
+                            "max_attempts": max(0, int(root.get("max_attempts") or 0)),
+                            "retry_policy": root_retry_policy,
+                            "result": root_result_payload,
+                            "schema_version": str(root.get("schema_version") or "").strip(),
+                        }
+                        root_identity_matches = json_contract_equal(locked_root_identity, expected_root)
+                        if not root_identity_matches:
+                            connection.commit()
+                            return response(
+                                outcome="conflict",
+                                reason_code="acquisition_root_command_locked_identity_mismatch",
+                                command=root,
+                            )
+
+                        self._acquire_transaction_lock(cursor, f"workflow_events:{workflow_run_id}")
+                        cursor.execute(
+                            """
+                            SELECT * FROM workflow_events
+                            WHERE workflow_run_id = %s AND event_id = %s
+                            LIMIT 1
+                            FOR UPDATE
+                            """,
+                            (
+                                workflow_run_id,
+                                str(locked_root_identity.get("source_event_id") or "").strip(),
+                            ),
+                        )
+                        root_source_event = _fetch_one_dict_row(cursor, cursor.fetchone())
+                        root_source_sequence = max(
+                            0,
+                            int((root_source_event or {}).get("sequence_number") or 0),
+                        )
+                        if root_source_event is None or root_source_sequence <= 0:
+                            connection.rollback()
+                            return response(
+                                outcome="conflict",
+                                reason_code="acquisition_root_source_event_missing",
+                                command=root,
+                            )
+                        cursor.execute(
+                            """
+                            SELECT * FROM workflow_events
+                            WHERE workflow_run_id = %s
+                              AND (
+                                  idempotency_key = %s
+                                  OR (command_id = %s AND event_type = 'CommandPlanRequested')
+                              )
+                            ORDER BY event_id
+                            FOR UPDATE
+                            """,
+                            (
+                                workflow_run_id,
+                                event_idempotency_key,
+                                normalized_command_id,
+                            ),
+                        )
+                        candidate_events = _fetch_all_dict_rows(cursor)
+                        if len(candidate_events) > 1:
+                            connection.rollback()
+                            return response(
+                                outcome="conflict",
+                                reason_code="acquisition_root_plan_event_ambiguous",
+                                command=root,
+                            )
+                        event = candidate_events[0] if candidate_events else None
+                        event_payload = dict(event_spec.get("payload") or {})
+                        event_artifact_refs = list(event_spec.get("artifact_refs") or [])
+                        if event is None:
+                            cursor.execute(
+                                "SELECT COALESCE(MAX(sequence_number), 0) FROM workflow_events WHERE workflow_run_id = %s",
+                                (workflow_run_id,),
+                            )
+                            row_value = cursor.fetchone()
+                            max_sequence = int(
+                                (row_value[0] if isinstance(row_value, (list, tuple)) and row_value else row_value) or 0
+                            )
+                            sequence_number = max_sequence + 1
+                            event_id = (
+                                "evt_"
+                                + sha1(
+                                    f"{workflow_run_id}:{sequence_number}:{event_idempotency_key}".encode("utf-8")
+                                ).hexdigest()[:24]
+                            )
+                            event_row = {
+                                "event_id": event_id,
+                                "workflow_run_id": workflow_run_id,
+                                "operation_id": operation_id,
+                                "command_id": normalized_command_id,
+                                "activity_attempt_id": "",
+                                "event_family": "workflow_event",
+                                "event_type": "CommandPlanRequested",
+                                "sequence_number": sequence_number,
+                                "idempotency_key": event_idempotency_key,
+                                "occurred_at": repository_now,
+                                "recorded_at": repository_now,
+                                "actor": str(event_spec.get("actor") or "").strip(),
+                                "source": str(event_spec.get("source") or "").strip(),
+                                "payload_json": _json_dump(event_payload),
+                                "artifact_refs_json": _json_dump(event_artifact_refs),
+                                "schema_version": "workflow_event_v1",
+                                "created_at": repository_now,
+                            }
+                            columns = list(event_row)
+                            cursor.execute(
+                                f"INSERT INTO workflow_events "
+                                f"({', '.join(_quote_identifier(column) for column in columns)}) "
+                                f"VALUES ({', '.join(['%s'] * len(columns))}) RETURNING *",
+                                tuple(event_row[column] for column in columns),
+                            )
+                            event = _fetch_one_dict_row(cursor, cursor.fetchone())
+                        else:
+                            sequence_number = int(event.get("sequence_number") or 0)
+                            try:
+                                persisted_event_payload = decode_json_contract(
+                                    event.get("payload_json"),
+                                    expected_type=dict,
+                                )
+                                persisted_event_artifact_refs = decode_json_contract(
+                                    event.get("artifact_refs_json"),
+                                    expected_type=list,
+                                )
+                            except JsonContractShapeError:
+                                connection.rollback()
+                                return response(
+                                    outcome="conflict",
+                                    reason_code="acquisition_root_plan_event_json_invalid",
+                                    command=root,
+                                    event=event,
+                                )
+                            expected_event_id = (
+                                "evt_"
+                                + sha1(
+                                    f"{workflow_run_id}:{sequence_number}:{event_idempotency_key}".encode("utf-8")
+                                ).hexdigest()[:24]
+                            )
+                            event_matches = bool(
+                                sequence_number > 0
+                                and sequence_number > root_source_sequence
+                                and str(event.get("event_id") or "").strip() == expected_event_id
+                                and str(event.get("operation_id") or "").strip() == operation_id
+                                and str(event.get("command_id") or "").strip() == normalized_command_id
+                                and str(event.get("activity_attempt_id") or "").strip() == ""
+                                and str(event.get("event_family") or "").strip() == "workflow_event"
+                                and str(event.get("event_type") or "").strip() == "CommandPlanRequested"
+                                and str(event.get("idempotency_key") or "").strip() == event_idempotency_key
+                                and str(event.get("actor") or "").strip() == str(event_spec.get("actor") or "").strip()
+                                and str(event.get("source") or "").strip()
+                                == str(event_spec.get("source") or "").strip()
+                                and json_contract_equal(
+                                    persisted_event_payload,
+                                    event_payload,
+                                )
+                                and json_contract_equal(
+                                    persisted_event_artifact_refs,
+                                    event_artifact_refs,
+                                )
+                                and str(event.get("schema_version") or "").strip() == "workflow_event_v1"
+                            )
+                            if not event_matches:
+                                connection.rollback()
+                                return response(
+                                    outcome="conflict",
+                                    reason_code="acquisition_root_plan_event_identity_conflict",
+                                    command=root,
+                                    event=event,
+                                )
+
+                        assert event is not None
+                        child_causality_payload = {
+                            **causality_template,
+                            "source_event_id": str(event.get("event_id") or "").strip(),
+                            "source_event_type": "CommandPlanRequested",
+                        }
+                        child_payload = {
+                            **dict(child_spec.get("payload") or {}),
+                            "causality": child_causality_payload,
+                        }
+                        causality_columns = _workflow_command_causality_columns_from_payload(child_payload)
+                        child_row = {
+                            "command_id": child_command_id,
+                            "workflow_run_id": workflow_run_id,
+                            "operation_id": operation_id,
+                            "command_type": "acquisition.intent.resolve",
+                            "owner": "acquisition_planner",
+                            **causality_columns,
+                            "status": "queued",
+                            "idempotency_key": child_idempotency_key,
+                            "payload_json": _json_dump(child_payload),
+                            "artifact_refs_json": _json_dump(list(child_spec.get("artifact_refs") or [])),
+                            "not_before_at": str(child_spec.get("not_before_at") or "").strip(),
+                            "attempt": 0,
+                            "max_attempts": max(1, int(child_spec.get("max_attempts") or 3)),
+                            "retry_policy_json": _json_dump(dict(child_spec.get("retry_policy") or {})),
+                            "lease_owner": "",
+                            "lease_expires_at": "",
+                            "heartbeat_at": "",
+                            "last_error": "",
+                            "result_json": "{}",
+                            "schema_version": "workflow_command_v1",
+                            "created_at": repository_now,
+                            "updated_at": repository_now,
+                        }
+                        cursor.execute(
+                            """
+                            SELECT * FROM workflow_commands
+                            WHERE parent_command_id = %s
+                               OR command_id = %s
+                               OR (workflow_run_id = %s AND idempotency_key = %s)
+                            ORDER BY command_id
+                            FOR UPDATE
+                            """,
+                            (
+                                normalized_command_id,
+                                child_command_id,
+                                workflow_run_id,
+                                child_idempotency_key,
+                            ),
+                        )
+                        candidate_children = _fetch_all_dict_rows(cursor)
+                        if len(candidate_children) > 1:
+                            connection.rollback()
+                            return response(
+                                outcome="conflict",
+                                reason_code="acquisition_root_intent_child_ambiguous",
+                                command=root,
+                                event=event,
+                            )
+                        child = candidate_children[0] if candidate_children else None
+                        if child is None:
+                            columns = list(child_row)
+                            cursor.execute(
+                                f"INSERT INTO workflow_commands "
+                                f"({', '.join(_quote_identifier(column) for column in columns)}) "
+                                f"VALUES ({', '.join(['%s'] * len(columns))}) RETURNING *",
+                                tuple(child_row[column] for column in columns),
+                            )
+                            child = _fetch_one_dict_row(cursor, cursor.fetchone())
+                        else:
+                            try:
+                                persisted_child_payload = decode_json_contract(
+                                    child.get("payload_json"),
+                                    expected_type=dict,
+                                )
+                                persisted_child_artifact_refs = decode_json_contract(
+                                    child.get("artifact_refs_json"),
+                                    expected_type=list,
+                                )
+                                persisted_child_input_artifact_refs = decode_json_contract(
+                                    child.get("input_artifact_refs_json"),
+                                    expected_type=list,
+                                )
+                                persisted_child_output_artifact_refs = decode_json_contract(
+                                    child.get("output_artifact_refs_json"),
+                                    expected_type=list,
+                                )
+                                persisted_child_produced_counts = decode_json_contract(
+                                    child.get("produced_entity_counts_json"),
+                                    expected_type=dict,
+                                )
+                                persisted_child_downstream_ids = decode_json_contract(
+                                    child.get("downstream_command_ids_json"),
+                                    expected_type=list,
+                                )
+                                persisted_child_retry_policy = decode_json_contract(
+                                    child.get("retry_policy_json"),
+                                    expected_type=dict,
+                                )
+                                decode_json_contract(
+                                    child.get("result_json"),
+                                    expected_type=dict,
+                                )
+                            except JsonContractShapeError:
+                                connection.rollback()
+                                return response(
+                                    outcome="conflict",
+                                    reason_code="acquisition_root_intent_child_json_invalid",
+                                    command=root,
+                                    child=child,
+                                    event=event,
+                                )
+                            immutable_child_fields = (
+                                "command_id",
+                                "workflow_run_id",
+                                "operation_id",
+                                "command_type",
+                                "owner",
+                                "stage_id",
+                                "causal_group_id",
+                                "parent_command_id",
+                                "source_event_id",
+                                "source_event_type",
+                                "no_op_reason",
+                                "readiness_effect",
+                                "idempotency_key",
+                                "not_before_at",
+                                "causality_schema_version",
+                                "schema_version",
+                            )
+                            child_matches = all(
+                                str(child.get(field) or "").strip() == str(child_row.get(field) or "").strip()
+                                for field in immutable_child_fields
+                            ) and bool(
+                                json_contract_equal(
+                                    persisted_child_payload,
+                                    child_payload,
+                                )
+                                and json_contract_equal(
+                                    persisted_child_artifact_refs,
+                                    list(child_spec.get("artifact_refs") or []),
+                                )
+                                and json_contract_equal(
+                                    persisted_child_input_artifact_refs,
+                                    list(child_causality_payload.get("input_artifact_refs") or []),
+                                )
+                                and json_contract_equal(
+                                    persisted_child_output_artifact_refs,
+                                    list(child_causality_payload.get("output_artifact_refs") or []),
+                                )
+                                and json_contract_equal(
+                                    persisted_child_produced_counts,
+                                    dict(child_causality_payload.get("produced_entity_counts") or {}),
+                                )
+                                and json_contract_equal(
+                                    persisted_child_downstream_ids,
+                                    list(child_causality_payload.get("downstream_command_ids") or []),
+                                )
+                                and int(child.get("max_attempts") or 0)
+                                == max(1, int(child_spec.get("max_attempts") or 3))
+                                and json_contract_equal(
+                                    persisted_child_retry_policy,
+                                    dict(child_spec.get("retry_policy") or {}),
+                                )
+                            )
+                            if not child_matches:
+                                connection.rollback()
+                                return response(
+                                    outcome="conflict",
+                                    reason_code="acquisition_root_intent_child_identity_conflict",
+                                    command=root,
+                                    child=child,
+                                    event=event,
+                                )
+
+                        cursor.execute(
+                            """
+                            UPDATE workflow_commands
+                            SET status = 'succeeded',
+                                lease_owner = '',
+                                lease_expires_at = '',
+                                heartbeat_at = %s,
+                                not_before_at = '',
+                                last_error = '',
+                                result_json = %s,
+                                updated_at = %s
+                            WHERE command_id = %s
+                              AND command_type = 'acquisition.run.create'
+                              AND owner = 'acquisition_run_writer'
+                              AND status = 'running'
+                              AND lease_owner = %s
+                              AND lease_expires_at = %s
+                              AND attempt = %s
+                              AND (NULLIF(lease_expires_at, '')::timestamp AT TIME ZONE 'UTC') > clock_timestamp()
+                            RETURNING *
+                            """,
+                            (
+                                repository_now,
+                                _json_dump(terminal_result),
+                                repository_now,
+                                normalized_command_id,
+                                normalized_lease_owner,
+                                normalized_lease_expires_at,
+                                normalized_attempt,
+                            ),
+                        )
+                        completed_root = _fetch_one_dict_row(cursor, cursor.fetchone())
+                        if completed_root is None:
+                            connection.rollback()
+                            return response(
+                                outcome="stale_claim",
+                                reason_code="acquisition_root_command_claim_not_current",
+                                command=root,
+                            )
+
+                    connection.commit()
+                    return response(
+                        outcome="applied",
+                        reason_code="acquisition_root_intent_child_committed",
+                        command=completed_root,
+                        child=child,
+                        event=event,
+                    )
+            except Exception as exc:
+                attempt += 1
+                if not _is_retryable_postgres_exception(exc) or attempt >= _CONTROL_PLANE_POSTGRES_MAX_RETRIES:
+                    raise
+                time.sleep(_control_plane_postgres_retry_delay_seconds(attempt))
 
     def mark_workflow_command_partial_progress(
         self,

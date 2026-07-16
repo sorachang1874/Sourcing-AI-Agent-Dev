@@ -153,16 +153,20 @@ serve、会话/事件层、planner loop），用一个垂直切片证明闭环�
   lease-fenced checkpoint/recovery 与 strict native-error propagation。Exact action/boundary/checkpoint=`20+7 subtests`、
   adjacent=`5+11 subtests`、CRM boundary=`34`、combined D1=`121+202 subtests`、final stable-tree Operation=`136+503 subtests`、lint=`58 files`、
   mypy=`81/4`、compile/diff clean；fresh pinned review pending。D1h checkpoint registry=**4 schema-defined / 11
-  schema-less / served=0**。D1i current author candidate 随后将 `start_acquisition_run` 作为第 5 个
+  schema-less / served=0**。D1i fixed-forward candidate 随后将 `start_acquisition_run` 作为第 5 个
   schema-defined action 激活：closed input=`target_company+query`，owner-minted target 仅 workspace；authenticated
   transport 使用 server workspace/actor，open-mode 保留。approve/retry/resume/dispatch/root owner 重验 target，
-  root owner 还要求 exact operation/action/canonical envelope、approved nonterminal action、nonterminal operation 与
-  currently-valid running lease；authority failure 仅 terminalize root，不通过未可信 operation id sync aggregate，
-  不创建 child/domain。positive 只创建一个 intent child。Final stable-tree author evidence=D1i=`9+28 subtests`、
-  combined D1=`153+228 subtests`、command/control=`175`、exact acquisition+ratchet=`2`、full Operation=
-  `136+503 subtests`、lint=`58 files`、mypy=`81/4`、compile/diff green；fresh pinned review pending。当前 registry=
-  **5 schema-defined / 10 schema-less / served=0**；R-019
-  仍保留 preflight→child 非同一 PG UoW 的并发 cancel race，R-028/R-029 仍 open，且不授权 provider/model/live。
+  root owner 还要求 exact operation/action/canonical envelope、canonical source/causality 与 exact current
+  claim/attempt/lease；lease 由 PG repository clock 判定并按 UTC 解释。strict JSON/type/schema contract 拒绝容器、
+  scalar 与 deterministic identity 漂移。positive 以 root+stream locks 在一个 PG transaction 内 exact-reuse/append
+  plan event、exact-reuse/create 唯一 intent child 并 terminalize root；succeeded replay exact-check result/event/child/
+  ordering 后才修复 post-commit state/wakeup/Operation sync。原 pinned advisory=`NO-GO 0/2/1/0`；current local
+  fixed-forward 已闭合三项 finding，但 fresh pinned review pending，不是 `GO`。Final stable author evidence=D1i=
+  `20+54 subtests`、combined D1=`160+289 subtests`、command/control=`175+503 subtests`、durable+CRM batch=
+  `61+12 subtests`、storage guardrails=`60`、R-019 ratchet=`3`、lint=`58 files`、mypy=`81/4`、compile/diff green。当前 registry=
+  **5 schema-defined / 10 schema-less / served=0**；R-019 仍保留 Operation/action preflight→root-UoW race、
+  current-state/recovery/Operation post-commit sync 与 failure-CAS acknowledgement ambiguity；R-028/R-029 仍 open，
+  且不授权 provider/model/live。
 
 ### D2 — Agent 会话与事件层（与 C4/C5 合流）
 

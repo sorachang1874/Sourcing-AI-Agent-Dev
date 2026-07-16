@@ -16,6 +16,7 @@ from typing import Any
 from ..control_plane_repository import Column, Kind, Repository, TableDescriptor
 from ..control_plane_serde import json_safe_payload
 from ..control_plane_time import utc_now_timestamp
+from ..json_contract import JsonContractShapeError, decode_json_contract
 
 WORKFLOW_PUBLIC_EVIDENCE_BATCH_LIMIT = 500
 
@@ -110,7 +111,7 @@ WORKFLOW_EVENTS = TableDescriptor(
         Column("source"),
         Column("payload_json", Kind.JSON, field="payload"),
         Column("artifact_refs_json", Kind.JSON_LIST, field="artifact_refs"),
-        Column("schema_version", read_default="workflow_event_v1"),
+        Column("schema_version"),
         Column("created_at"),
     ),
 )
@@ -378,7 +379,7 @@ WORKFLOW_COMMANDS = TableDescriptor(
         Column("no_op_reason"),
         Column("readiness_effect"),
         Column("downstream_command_ids_json", Kind.JSON_LIST, field="downstream_command_ids"),
-        Column("causality_schema_version", read_default="command_causality_v1"),
+        Column("causality_schema_version"),
         Column("status"),
         Column("idempotency_key"),
         Column("payload_json", Kind.JSON, field="payload"),
@@ -392,7 +393,7 @@ WORKFLOW_COMMANDS = TableDescriptor(
         Column("heartbeat_at"),
         Column("last_error"),
         Column("result_json", Kind.JSON, field="result"),
-        Column("schema_version", read_default="workflow_command_v1"),
+        Column("schema_version"),
         Column("created_at"),
         Column("updated_at"),
     ),
@@ -429,6 +430,63 @@ RUNTIME_OUTBOX = TableDescriptor(
 FROM_ROW_DESCRIPTORS = {
     "_workflow_command_from_row": WORKFLOW_COMMANDS,
 }
+
+
+def _persisted_json_contract_row(
+    row: Any,
+    *,
+    descriptor: TableDescriptor,
+    json_columns: tuple[tuple[str, str, type[dict] | type[list]], ...],
+) -> dict[str, Any]:
+    raw = dict(row or {})
+    identity = {
+        "command_id": str(raw.get("command_id") or "").strip(),
+        "event_id": str(raw.get("event_id") or "").strip(),
+    }
+    try:
+        decoded = {
+            field: decode_json_contract(raw.get(column), expected_type=expected_type)
+            for column, field, expected_type in json_columns
+        }
+    except JsonContractShapeError as exc:
+        return {
+            **identity,
+            "persisted_json_contract_valid": False,
+            "persisted_json_contract_error": str(exc),
+        }
+    mapped = descriptor.from_row(raw)
+    mapped.update(decoded)
+    mapped["persisted_json_contract_valid"] = True
+    mapped["persisted_json_contract_error"] = ""
+    return mapped
+
+
+def _persisted_workflow_command_contract_row(row: Any) -> dict[str, Any]:
+    return _persisted_json_contract_row(
+        row,
+        descriptor=WORKFLOW_COMMANDS,
+        json_columns=(
+            ("input_artifact_refs_json", "input_artifact_refs", list),
+            ("output_artifact_refs_json", "output_artifact_refs", list),
+            ("produced_entity_counts_json", "produced_entity_counts", dict),
+            ("downstream_command_ids_json", "downstream_command_ids", list),
+            ("payload_json", "payload", dict),
+            ("artifact_refs_json", "artifact_refs", list),
+            ("retry_policy_json", "retry_policy", dict),
+            ("result_json", "result", dict),
+        ),
+    )
+
+
+def _persisted_workflow_event_contract_row(row: Any) -> dict[str, Any]:
+    return _persisted_json_contract_row(
+        row,
+        descriptor=WORKFLOW_EVENTS,
+        json_columns=(
+            ("payload_json", "payload", dict),
+            ("artifact_refs_json", "artifact_refs", list),
+        ),
+    )
 
 
 class WorkflowRuntimeRepository(Repository):
@@ -747,6 +805,36 @@ class WorkflowRuntimeRepository(Repository):
             return postgres_rows
         return []
 
+    def get_persisted_workflow_event_contract(self, event_id: str) -> dict[str, Any]:
+        """Read one event without normalizing malformed persisted JSON containers."""
+
+        self._require_postgres_for_durable_runtime("workflow_events")
+        normalized_event_id = str(event_id or "").strip()
+        if not normalized_event_id:
+            return {}
+        row = self._select_row(
+            "workflow_events",
+            row_builder=_persisted_workflow_event_contract_row,
+            where_sql="event_id = %s",
+            params=[normalized_event_id],
+        )
+        return row if row is not None else {}
+
+    def get_persisted_workflow_command_contract(self, command_id: str) -> dict[str, Any]:
+        """Read one command without normalizing malformed persisted JSON containers."""
+
+        self._require_postgres_for_durable_runtime("workflow_commands")
+        normalized_command_id = str(command_id or "").strip()
+        if not normalized_command_id:
+            return {}
+        row = self._select_row(
+            "workflow_commands",
+            row_builder=_persisted_workflow_command_contract_row,
+            where_sql="command_id = %s",
+            params=[normalized_command_id],
+        )
+        return row if row is not None else {}
+
     def upsert_workflow_current_state(
         self,
         *,
@@ -1006,6 +1094,120 @@ class WorkflowRuntimeRepository(Repository):
         self._raise_postgres_only_invariant(
             table_name="workflow_commands",
             method_name="cancel_acquisition_owner_command",
+        )
+        raise AssertionError("unreachable")
+
+    def complete_acquisition_root_command(
+        self,
+        command_id: str,
+        *,
+        expected_lease_owner: str,
+        expected_lease_expires_at: str,
+        expected_attempt: int,
+        expected_root_command: dict[str, Any],
+        plan_event: dict[str, Any],
+        child_command: dict[str, Any],
+        child_causality: dict[str, Any],
+        root_result: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Plan the deterministic intent child and terminalize its root in one PG transaction."""
+
+        self._require_postgres_for_durable_runtime("workflow_commands")
+        normalized_command_id = str(command_id or "").strip()
+        normalized_lease_owner = str(expected_lease_owner or "").strip()
+        normalized_lease_expires_at = str(expected_lease_expires_at or "").strip()
+        normalized_attempt = max(0, int(expected_attempt or 0))
+        if (
+            not normalized_command_id
+            or not normalized_lease_owner
+            or not normalized_lease_expires_at
+            or normalized_attempt <= 0
+        ):
+            return {}
+        if self._should_prefer_read("workflow_commands"):
+            result = self._call_native_write(
+                "complete_acquisition_root_command",
+                table_name="workflow_commands",
+                command_id=normalized_command_id,
+                expected_lease_owner=normalized_lease_owner,
+                expected_lease_expires_at=normalized_lease_expires_at,
+                expected_attempt=normalized_attempt,
+                expected_root_command=dict(expected_root_command or {}),
+                plan_event=dict(plan_event or {}),
+                child_command=dict(child_command or {}),
+                child_causality=dict(child_causality or {}),
+                root_result=dict(root_result or {}),
+            )
+            if result is not None:
+                payload = dict(result)
+                return {
+                    "outcome": str(payload.get("outcome") or "conflict").strip() or "conflict",
+                    "reason": str(payload.get("reason") or "").strip(),
+                    "workflow_command": WORKFLOW_COMMANDS.from_row(payload.get("command")),
+                    "child_command": WORKFLOW_COMMANDS.from_row(payload.get("child_command")),
+                    "event": WORKFLOW_EVENTS.from_row(payload.get("event")),
+                }
+            if self._strict_authoritative("workflow_commands"):
+                self._raise_write_failure(
+                    table_name="workflow_commands",
+                    method_name="complete_acquisition_root_command",
+                    reason="postgres-only: authoritative acquisition-root UoW returned no result",
+                )
+        self._raise_postgres_only_invariant(
+            table_name="workflow_commands",
+            method_name="complete_acquisition_root_command",
+        )
+        raise AssertionError("unreachable")
+
+    def fail_acquisition_root_command_claim(
+        self,
+        command_id: str,
+        *,
+        expected_lease_owner: str,
+        expected_lease_expires_at: str,
+        expected_attempt: int,
+        reason: str,
+    ) -> dict[str, Any]:
+        """Terminalize only the exact current acquisition-root claim."""
+
+        self._require_postgres_for_durable_runtime("workflow_commands")
+        normalized_command_id = str(command_id or "").strip()
+        normalized_lease_owner = str(expected_lease_owner or "").strip()
+        normalized_lease_expires_at = str(expected_lease_expires_at or "").strip()
+        normalized_attempt = max(0, int(expected_attempt or 0))
+        if (
+            not normalized_command_id
+            or not normalized_lease_owner
+            or not normalized_lease_expires_at
+            or normalized_attempt <= 0
+        ):
+            return {}
+        if self._should_prefer_read("workflow_commands"):
+            result = self._call_native_write(
+                "fail_acquisition_root_command_claim",
+                table_name="workflow_commands",
+                command_id=normalized_command_id,
+                expected_lease_owner=normalized_lease_owner,
+                expected_lease_expires_at=normalized_lease_expires_at,
+                expected_attempt=normalized_attempt,
+                reason=str(reason or "").strip(),
+            )
+            if result is not None:
+                payload = dict(result)
+                return {
+                    "outcome": str(payload.get("outcome") or "conflict").strip() or "conflict",
+                    "reason": str(payload.get("reason") or "").strip(),
+                    "workflow_command": WORKFLOW_COMMANDS.from_row(payload.get("command")),
+                }
+            if self._strict_authoritative("workflow_commands"):
+                self._raise_write_failure(
+                    table_name="workflow_commands",
+                    method_name="fail_acquisition_root_command_claim",
+                    reason="postgres-only: authoritative acquisition-root fail CAS returned no result",
+                )
+        self._raise_postgres_only_invariant(
+            table_name="workflow_commands",
+            method_name="fail_acquisition_root_command_claim",
         )
         raise AssertionError("unreachable")
 

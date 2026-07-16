@@ -196,10 +196,10 @@ CURRENT_FRONTEND_WORKFLOW_COMMAND_REF_COUNT = 7
 CURRENT_COMMAND_EFFECT_CALL_COUNTS = {
     "append_event_and_reduce": 62,
     "claim_workflow_command": 29,
-    "mark_workflow_command_failed": 71,
+    "mark_workflow_command_failed": 75,
     "mark_workflow_command_partial_progress": 15,
     "mark_workflow_command_running": 29,
-    "mark_workflow_command_succeeded": 39,
+    "mark_workflow_command_succeeded": 38,
     "mark_workflow_command_waiting_prerequisite": 3,
 }
 CURRENT_COMMAND_PLAN_REQUESTED_CALL_COUNT = 34
@@ -215,7 +215,10 @@ EXPECTED_PHYSICAL_WORKFLOW_COMMAND_MUTATORS = frozenset(
     {
         "cancel_acquisition_owner_command",
         "cancel_workflow_command",
+        "checkpoint_running_workflow_command_payload",
         "claim_workflow_command",
+        "complete_acquisition_root_command",
+        "fail_acquisition_root_command_claim",
         "mark_workflow_command_failed",
         "mark_workflow_command_partial_progress",
         "mark_workflow_command_running",
@@ -3029,7 +3032,7 @@ def test_current_descriptors_freeze_private_capability_absence_and_generic_carri
 def test_current_command_effect_and_r019_populations_are_mechanically_frozen() -> None:
     physical_mutators = _physical_workflow_command_sql_mutators()
     assert physical_mutators == EXPECTED_PHYSICAL_WORKFLOW_COMMAND_MUTATORS
-    assert len(physical_mutators) == 13
+    assert len(physical_mutators) == 16
 
     calls, state_sync_counts = _command_effect_and_r019_populations(frozenset(CURRENT_COMMAND_EFFECT_CALL_COUNTS))
     assert {name: len(call_sites) for name, call_sites in calls.items()} == CURRENT_COMMAND_EFFECT_CALL_COUNTS

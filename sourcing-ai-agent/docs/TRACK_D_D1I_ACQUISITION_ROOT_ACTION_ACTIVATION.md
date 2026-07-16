@@ -1,6 +1,6 @@
 # Track D D1i — acquisition root action activation
 
-> Status: bounded non-live implementation candidate (2026-07-16). This batch activates only
+> Status: fixed-forward bounded non-live implementation candidate, fresh pinned review pending (2026-07-16). This batch activates only
 > `start_acquisition_run` as the fifth schema-defined production action. The production partition is
 > **5 schema-defined / 10 schema-less / served=0**. It does not authorize a provider/model call, live validation,
 > product signoff, or closure of R-019/R-029. Author tests are evidence, not an independent-review verdict.
@@ -55,23 +55,36 @@ closed; there is no discovered legitimate non-Operation producer for this root t
 - submit validates the closed request plus owner target before action/run/event writes;
 - approve, retry, and resume revalidate the persisted schema pins and target workspace before their state/event writes;
 - dispatch revalidates the same target before command planning;
-- the root owner requires exact command operation/action/payload/canonical-envelope parity, an approved nonterminal
-  action, a nonterminal operation, and a successfully acquired currently valid running lease before it may plan the
-  child;
-- authority/preflight failure may terminalize only the root command. It never uses the untrusted command
-  `operation_id` to synchronize an OperationRun/AgentAction and creates no child, workflow event/outbox/current-state,
-  plan review, acquisition run, job, Activity, or EntityDelta;
+- the root owner requires exact command operation/action/payload/canonical-envelope parity, canonical source-event and
+  causality identity, an approved nonterminal action, a nonterminal operation, and the exact current claim owner,
+  attempt, and unexpired lease. Lease validity uses the PG repository clock and parses persisted naive timestamps as
+  UTC rather than inheriting the database session timezone;
+- persisted root, source-event, plan-event, child-command, causality, payload, and result contracts are decoded with
+  strict JSON container and type checks. Missing schema pins, object/list substitution, boolean/integer confusion, or
+  forged deterministic identities fail closed;
+- authority/preflight failure may terminalize only the root command through an exact-current-claim failure CAS. It
+  never uses the untrusted command `operation_id` to synchronize an OperationRun/AgentAction and creates no child,
+  workflow event/outbox/current-state, plan review, acquisition run, job, Activity, or EntityDelta;
 - cancel-after-dispatch-before-drain leaves the operation/action cancelled and the root owner creates no child;
-- the positive root owner creates exactly one deterministic `acquisition.intent.resolve` child. Replay creates no
-  duplicate and the root stage itself creates no job, plan review, acquisition run, or provider work.
+- the positive root completion locks the root command and workflow stream, revalidates the canonical root source event,
+  appends or exact-reuses one `CommandPlanRequested` event, creates or exact-reuses one deterministic
+  `acquisition.intent.resolve` child, and terminalizes the root in one PG transaction. Any mismatch or injected fault
+  rolls back the event, child, and root terminal together;
+- succeeded replay must exact-match the persisted root result, root-plan event, deterministic child, ordering, and full
+  envelopes before it can repair post-commit current-state/recovery wakeup and linked Operation synchronization. Replay
+  creates no duplicate, and the root stage itself creates no job, plan review, acquisition run, or provider work.
 
 ## Residual boundaries
 
-R-019 remains open. The post-claim authority check and child `CommandPlanRequested` append are not one PG UoW, so a
-concurrent cancel can still race between them. The approve/retry/resume read-only preflights are also outside their
-existing writer UoWs, although normal repository APIs do not mutate the persisted request/target. This batch neither
-claims concurrent-cancel atomicity nor adds a new operation state-mutator or transaction-lock caller; the existing
-26-call ratchet must not rise.
+R-019 remains open, but the former root event/child/root partial-completion gap is closed inside the candidate's
+specialized PG transaction. The OperationRun/AgentAction authority preflight is still outside that UoW, so a concurrent
+aggregate cancel can race between the preflight and the locked root completion. `workflow_current_state`, recovery
+wakeup, and linked Operation synchronization also remain post-commit repair work rather than members of the root UoW.
+The approve/retry/resume read-only preflights remain outside their existing writer UoWs, although normal repository APIs
+do not mutate the persisted request/target. Exact failure CAS removes stale-claim terminal writes, but an acknowledgement
+loss after a committed failure can still leave the caller with an ambiguous stale/queued observation until recovery.
+This batch does not claim aggregate-cancel atomicity or four-table exactly-once completion and adds no operation
+state-mutator; the existing 26-call ratchet must not rise.
 
 R-029 falls from 11 to **10** schema-less actions but remains open. The compatibility observation epoch stays
 `d1f_r029_20260715_v2` because D1i does not start a new release window. The deletion condition is unchanged: all
@@ -83,16 +96,20 @@ provider/model transport, cost authorization, live path, or product UI exposure.
 
 ## Validation
 
-Final stable-tree author evidence:
+Final stable candidate author evidence:
 
-- D1i PG action/transport/owner matrix: `9 passed + 28 subtests`;
-- combined D1 request/schema/binder/transport matrix: `153 passed + 228 subtests`;
-- command/control adjacency: `175 passed`;
-- exact acquisition Operation + R-019 state-sync ratchet nodes: `2 passed`;
-- full Operation runtime: `136 passed + 503 subtests`;
+- exact D1i PG action/transport/owner/fencing matrix: `20 passed + 54 subtests`;
+- combined D1 request/schema/binder/transport matrix: `160 passed + 289 subtests`;
+- command/control adjacency: `175 passed + 503 subtests`;
+- durable runtime + CRM Public Web batch adjacency: `61 passed + 12 subtests`;
+- storage-surface guardrails: `60 passed`;
+- exact R-019 characterization ratchet nodes: `3 passed`;
 - `make lint`: green across `58 files`;
 - `make typecheck`: unchanged accepted ceiling, `81 errors / 4 files`;
-- `git diff --check` and Python compilation: green.
+- Python compilation and `git diff --check`: green.
 
-Fresh pinned non-author review remains required before promotion. Author tests and the unchanged mypy ceiling are not
-an independent-review verdict.
+The original pinned advisory was `NO-GO P0/P1/P2/P3=0/2/1/0`: it identified stale-claim completion, forged/empty
+succeeded replay, and non-canonical root-causality acceptance. The current candidate locally closes
+those three findings, including the later race/type audit, but that reconciliation is not a review artifact or a `GO`.
+A fresh pinned non-author review remains required before promotion; no formal review or live/provider gate is authorized
+by the local evidence.

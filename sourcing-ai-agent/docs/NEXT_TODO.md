@@ -229,19 +229,24 @@
   `121+202 subtests`、final stable-tree Operation `136+503 subtests`、lint `58 files`、global mypy `81/4`、
   compile/diff clean；fresh pinned review pending。
   R-019/R-028/R-029/R-031 均不因本批关闭；无 provider/model/live。
-- [x] D1i acquisition root action activation current author candidate（2026-07-16）：将
+- [x] D1i acquisition root action activation fixed-forward candidate（2026-07-16）：将
   `start_acquisition_run` 作为第 5 个 schema-defined action 激活，当前 **5 schema-defined / 10 schema-less /
   served=0**。closed input 仅接受 nonblank `target_company+query`，`raw_user_request` 仅作 exclusive query alias；
   caller command/workflow/job/review/retry/identity aliases 与非空 raw target 均 pre-write reject。authenticated
   transport mint server workspace/actor + exact owner scope；open-mode explicit workspace 保持。approve/retry/resume/
   dispatch/root owner 重验 persisted workspace target；root command 还需 exact OperationRun→AgentAction、canonical
-  payload/envelope、approved nonterminal action、nonterminal operation 与 currently-valid running lease。authority failure 仅可
-  terminalize root command，不能用未可信 operation id 回写 aggregate，也不创建 child/event/outbox/current-state/
-  review/run/job/Activity/Delta；positive 仅创建一个 deterministic `acquisition.intent.resolve` child。Final
-  stable-tree author evidence=D1i `9+28 subtests`、combined D1 `153+228 subtests`、command/control `175`、exact
-  acquisition+ratchet `2`、full Operation `136+503 subtests`、lint `58 files`、mypy `81/4`、compile/diff green；
-  fresh pinned review pending。R-019 仍保留
-  preflight→child 非同一 PG UoW 的 concurrent-cancel race；R-029 降至 10/15、epoch 仍为
+  payload/envelope/source event/causality、approved nonterminal action、nonterminal operation 与 exact current
+  claim owner/attempt/unexpired lease；lease 由 PG repo clock 判定并按 UTC 解释 naive timestamp。persisted JSON
+  container/type、schema 与 deterministic identity 全部 strict fail-closed。positive 在一个 PG transaction 内锁 root
+  + stream、exact-reuse/append `CommandPlanRequested`、exact-reuse/create 一个 deterministic
+  `acquisition.intent.resolve` child 并 terminalize root；fault/mismatch 全回滚。succeeded replay exact-check root
+  result/event/child/order/full envelope 后才 repair post-commit state/wakeup/Operation sync。原 pinned advisory=
+  `NO-GO 0/2/1/0`；当前 working-tree 已本地闭合三项 finding，但 fresh pinned non-author review 仍 pending，不能写成
+  `GO`。final stable author evidence=D1i `20+54 subtests`、combined D1 `160+289 subtests`、command/control
+  `175+503 subtests`、durable+CRM batch adjacency `61+12 subtests`、storage guardrails `60`、R-019 ratchet `3`、
+  lint `58 files`、mypy `81/4`、compile/diff green。
+  R-019 仍保留 Operation/action preflight→root-UoW race、current-state/recovery/Operation post-commit sync 与 failure-CAS
+  acknowledgement ambiguity；R-029 降至 10/15、epoch 仍为
   `d1f_r029_20260715_v2`；无 served/provider/model/live。
 - [ ] R-029：宽松 action-schema bridge 仅可在 production action 尚无 reviewed schema/owner binder 期间存在；
   删除条件 = 全部 API-submittable actions（不是只看 served subset）连续一个 release window durable hit=0。

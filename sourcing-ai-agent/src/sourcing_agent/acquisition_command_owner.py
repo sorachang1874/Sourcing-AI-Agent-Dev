@@ -67,8 +67,11 @@ from .durable_runtime import (
     PROJECTION_PROFILE_ADMISSION_APPLY_COMMAND_TYPE,
     PROJECTION_RUN_SCOPE_FINALIZE_COMMAND_TYPE,
     SNAPSHOT_COMPACTION_RUN_COMMAND_TYPE,
+    command_causality_for,
+    command_id_for,
     default_stage_id_for_command_type,
 )
+from .json_contract import json_contract_equal
 
 # NOTE: the helpers below duplicate small module-level helpers in
 # ``orchestrator.py`` (which imports this module — importing them back from
@@ -161,22 +164,405 @@ class AcquisitionCommandOwner:
         *,
         reason: str,
         mark_failed: bool,
+        expected_lease_owner: str = "",
+        expected_lease_expires_at: str = "",
+        expected_attempt: int = 0,
     ) -> dict[str, Any]:
         command_record = dict(command)
         command_id = str(command_record.get("command_id") or "").strip()
         failed: dict[str, Any] | None = None
         if mark_failed and command_id:
-            failed = self.store.mark_workflow_command_failed(
+            failure = self.store.repos.workflow_runtime.fail_acquisition_root_command_claim(
                 command_id,
-                error_text=reason,
-                retryable=False,
+                expected_lease_owner=str(expected_lease_owner or "").strip(),
+                expected_lease_expires_at=str(expected_lease_expires_at or "").strip(),
+                expected_attempt=max(0, int(expected_attempt or 0)),
+                reason=reason,
             )
+            if str(failure.get("outcome") or "").strip() != "applied":
+                observed = dict(failure.get("workflow_command") or command_record)
+                if str(observed.get("status") or "").strip() == "succeeded":
+                    return self._replay_succeeded_acquisition_root_command(observed)
+                return {
+                    "status": "queued",
+                    "reason": str(failure.get("reason") or "acquisition_root_command_claim_not_current").strip(),
+                    "workflow_command": self._kernel._workflow_command_observation(
+                        observed,
+                        migration_phase="W11a_acquisition_run_create_root",
+                    ),
+                }
+            failed = dict(failure.get("workflow_command") or {})
         observed = failed or command_record
         return {
             "status": "failed",
             "reason": reason,
             "workflow_command": self._kernel._workflow_command_observation(
                 observed,
+                migration_phase="W11a_acquisition_run_create_root",
+            ),
+        }
+
+    def _acquisition_root_intent_plan_contract(
+        self,
+        command: Mapping[str, Any],
+        *,
+        claim_attempt: int,
+    ) -> dict[str, Any]:
+        root = dict(command or {})
+        payload = dict(root.get("payload") or {})
+        workflow_payload = dict(payload.get("workflow_payload") or {})
+        workflow_run_id = str(root.get("workflow_run_id") or "").strip()
+        operation_id = str(root.get("operation_id") or "").strip()
+        root_command_id = str(root.get("command_id") or "").strip()
+        target_company = str(payload.get("target_company") or workflow_payload.get("target_company") or "").strip()
+        query_text = str(
+            payload.get("query") or workflow_payload.get("query") or workflow_payload.get("raw_user_request") or ""
+        ).strip()
+        plan_review_id = str(payload.get("plan_review_id") or workflow_payload.get("plan_review_id") or "").strip()
+        normalized_attempt = max(0, int(claim_attempt or 0))
+        if (
+            not workflow_run_id
+            or not operation_id
+            or not root_command_id
+            or normalized_attempt <= 0
+            or (not plan_review_id and not target_company and not query_text)
+        ):
+            return {}
+        child_idempotency_key = f"{ACQUISITION_INTENT_RESOLVE_COMMAND_TYPE}:parent:{root_command_id}"
+        child_command_id = command_id_for(workflow_run_id, child_idempotency_key)
+        root_causality = dict(payload.get("causality") or {})
+        causal_group_id = (
+            str(root_causality.get("causal_group_id") or "").strip()
+            or str(root.get("causal_group_id") or "").strip()
+            or root_command_id
+        )
+        child_payload = {
+            "workflow_payload": workflow_payload,
+            "target_company": target_company,
+            "query": query_text,
+            "plan_review_id": plan_review_id,
+            "intent_count": 1,
+            "query_count": 1 if query_text else 0,
+            "parent_command_id": root_command_id,
+            "causal_group_id": causal_group_id,
+            "operation_run_id": operation_id,
+            "action_id": str(payload.get("action_id") or "").strip(),
+            "source": "acquisition_run_create.command_owner",
+            "migration_phase": "W11b_acquisition_intent_resolve",
+            "normal_path_executes_queue_workflow_inline": False,
+        }
+        stage_id = default_stage_id_for_command_type(ACQUISITION_INTENT_RESOLVE_COMMAND_TYPE)
+        child_owner = DEFAULT_COMMAND_OWNER_REGISTRY.owner_for(ACQUISITION_INTENT_RESOLVE_COMMAND_TYPE)
+        plan_event_payload = {
+            "workflow_type": "agent_callable_acquisition",
+            "stage_key": stage_id,
+            "stage_id": stage_id,
+            "command_type": ACQUISITION_INTENT_RESOLVE_COMMAND_TYPE,
+            "idempotency_key": child_idempotency_key,
+            "parent_command_id": root_command_id,
+            "causal_group_id": causal_group_id,
+            "payload": child_payload,
+            "max_attempts": 3,
+            "retry_policy": {
+                "kind": "acquisition_intent_resolve",
+                "retry_delay_seconds": 10,
+            },
+        }
+        source_event_template = {
+            "event_id": "",
+            "workflow_run_id": workflow_run_id,
+            "operation_id": operation_id,
+            "command_id": root_command_id,
+            "event_type": "CommandPlanRequested",
+            "payload": plan_event_payload,
+        }
+        child_causality = command_causality_for(
+            workflow_run_id=workflow_run_id,
+            operation_id=operation_id,
+            stage_id=stage_id,
+            command_type=ACQUISITION_INTENT_RESOLVE_COMMAND_TYPE,
+            owner=child_owner,
+            idempotency_key=child_idempotency_key,
+            source_event=source_event_template,
+            command_payload=child_payload,
+            artifact_refs=(),
+        ).to_payload()
+        child_ref = {
+            "workflow_run_id": workflow_run_id,
+            "operation_id": operation_id,
+            "command_id": child_command_id,
+            "command_type": ACQUISITION_INTENT_RESOLVE_COMMAND_TYPE,
+            "owner": child_owner,
+            "idempotency_key": child_idempotency_key,
+            "parent_command_id": root_command_id,
+        }
+        root_result = {
+            "status": "ready_for_downstream_commands",
+            "reason": "acquisition_run_root_recorded",
+            "operation_completion_deferred": True,
+            "module_state_mutated": False,
+            "normal_path_executes_queue_workflow_inline": False,
+            "queue_workflow_called": False,
+            "target_company": target_company,
+            "query": query_text,
+            "plan_review_id": plan_review_id,
+            "workflow_payload": workflow_payload,
+            "downstream_command_required": True,
+            "downstream_command_count": 1,
+            "downstream_command_ids": [child_command_id],
+            "downstream_command_ref": child_ref,
+            "downstream_command_types": [ACQUISITION_INTENT_RESOLVE_COMMAND_TYPE],
+            "next_phase": "W11b_acquisition_intent_plan_commands",
+            "created_or_reused_job_id": "",
+            "legacy_job_shell_created": False,
+            "completed_claim_attempt": normalized_attempt,
+            "migration_phase": "W11a_acquisition_run_create_root",
+            "terminal_result_schema_version": "acquisition_root_terminal_result_v1",
+            "contract": "w11a_acquisition_run_create_root_owner_v2",
+        }
+        return {
+            "plan_event": {
+                "workflow_run_id": workflow_run_id,
+                "operation_id": operation_id,
+                "command_id": root_command_id,
+                "event_family": "workflow_event",
+                "event_type": "CommandPlanRequested",
+                "idempotency_key": f"{child_idempotency_key}:plan",
+                "actor": "acquisition_run_create_owner",
+                "source": "acquisition_run_create.command_owner",
+                "payload": plan_event_payload,
+                "artifact_refs": [],
+            },
+            "child_command": {
+                **child_ref,
+                "payload": child_payload,
+                "artifact_refs": [],
+                "not_before_at": "",
+                "max_attempts": 3,
+                "retry_policy": {
+                    "kind": "acquisition_intent_resolve",
+                    "retry_delay_seconds": 10,
+                },
+            },
+            "child_causality": child_causality,
+            "root_result": root_result,
+        }
+
+    def _validate_acquisition_root_succeeded_replay(
+        self,
+        command: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        root = dict(command or {})
+        root = self.store.repos.workflow_runtime.get_persisted_workflow_command_contract(
+            str(root.get("command_id") or "").strip()
+        )
+        if not root or not bool(root.get("persisted_json_contract_valid")):
+            return {"status": "invalid", "reason": "acquisition_root_persisted_json_contract_invalid"}
+        contract = self._acquisition_root_intent_plan_contract(
+            root,
+            claim_attempt=max(0, int(root.get("attempt") or 0)),
+        )
+        if not contract or not json_contract_equal(
+            dict(root.get("result") or {}),
+            dict(contract.get("root_result") or {}),
+        ):
+            return {"status": "invalid", "reason": "acquisition_root_terminal_result_mismatch"}
+        event_spec = dict(contract.get("plan_event") or {})
+        child_spec = dict(contract.get("child_command") or {})
+        workflow_run_id = str(root.get("workflow_run_id") or "").strip()
+        root_command_id = str(root.get("command_id") or "").strip()
+        events = self.store.repos.workflow_runtime.list_workflow_events(workflow_run_id, limit=0)
+        root_source_events = [
+            dict(event or {})
+            for event in events
+            if str(dict(event or {}).get("event_id") or "").strip() == str(root.get("source_event_id") or "").strip()
+        ]
+        if len(root_source_events) != 1:
+            return {"status": "invalid", "reason": "acquisition_root_source_event_ambiguous"}
+        root_source_sequence = max(0, int(root_source_events[0].get("sequence_number") or 0))
+        root_plan_events = [
+            dict(event or {})
+            for event in events
+            if str(dict(event or {}).get("command_id") or "").strip() == root_command_id
+            and str(dict(event or {}).get("event_type") or "").strip() == "CommandPlanRequested"
+        ]
+        if len(root_plan_events) != 1:
+            return {"status": "invalid", "reason": "acquisition_root_plan_event_ambiguous"}
+        event = self.store.repos.workflow_runtime.get_persisted_workflow_event_contract(
+            str(root_plan_events[0].get("event_id") or "").strip()
+        )
+        if not event or not bool(event.get("persisted_json_contract_valid")):
+            return {"status": "invalid", "reason": "acquisition_root_plan_event_json_contract_invalid"}
+        event_sequence = max(0, int(event.get("sequence_number") or 0))
+        expected_event_id = (
+            "evt_"
+            + hashlib.sha1(
+                f"{workflow_run_id}:{event_sequence}:{event_spec.get('idempotency_key')}".encode("utf-8")
+            ).hexdigest()[:24]
+        )
+        event_matches = bool(
+            event_sequence > 0
+            and root_source_sequence > 0
+            and event_sequence > root_source_sequence
+            and str(event.get("event_id") or "").strip() == expected_event_id
+            and str(event.get("workflow_run_id") or "").strip() == workflow_run_id
+            and str(event.get("operation_id") or "").strip() == str(event_spec.get("operation_id") or "").strip()
+            and str(event.get("event_family") or "").strip() == "workflow_event"
+            and str(event.get("event_type") or "").strip() == "CommandPlanRequested"
+            and str(event.get("activity_attempt_id") or "").strip() == ""
+            and str(event.get("idempotency_key") or "").strip() == str(event_spec.get("idempotency_key") or "").strip()
+            and str(event.get("actor") or "").strip() == str(event_spec.get("actor") or "").strip()
+            and str(event.get("source") or "").strip() == str(event_spec.get("source") or "").strip()
+            and json_contract_equal(
+                dict(event.get("payload") or {}),
+                dict(event_spec.get("payload") or {}),
+            )
+            and json_contract_equal(list(event.get("artifact_refs") or []), [])
+            and str(event.get("schema_version") or "").strip() == "workflow_event_v1"
+        )
+        if not event_matches:
+            return {"status": "invalid", "reason": "acquisition_root_plan_event_identity_mismatch"}
+        commands = self.store.list_workflow_commands(workflow_run_id=workflow_run_id, limit=0)
+        children = [
+            dict(item or {})
+            for item in commands
+            if str(dict(item or {}).get("parent_command_id") or "").strip() == root_command_id
+        ]
+        if len(children) != 1:
+            return {"status": "invalid", "reason": "acquisition_root_intent_child_ambiguous"}
+        child = self.store.repos.workflow_runtime.get_persisted_workflow_command_contract(
+            str(children[0].get("command_id") or "").strip()
+        )
+        if not child or not bool(child.get("persisted_json_contract_valid")):
+            return {"status": "invalid", "reason": "acquisition_root_intent_child_json_contract_invalid"}
+        expected_causality = {
+            **dict(contract.get("child_causality") or {}),
+            "source_event_id": expected_event_id,
+            "source_event_type": "CommandPlanRequested",
+        }
+        expected_child_payload = {
+            **dict(child_spec.get("payload") or {}),
+            "causality": expected_causality,
+        }
+        immutable_fields = {
+            "workflow_run_id": str(child_spec.get("workflow_run_id") or "").strip(),
+            "operation_id": str(child_spec.get("operation_id") or "").strip(),
+            "command_id": str(child_spec.get("command_id") or "").strip(),
+            "command_type": str(child_spec.get("command_type") or "").strip(),
+            "owner": str(child_spec.get("owner") or "").strip(),
+            "stage_id": str(expected_causality.get("stage_id") or "").strip(),
+            "causal_group_id": str(expected_causality.get("causal_group_id") or "").strip(),
+            "parent_command_id": root_command_id,
+            "source_event_id": expected_event_id,
+            "source_event_type": "CommandPlanRequested",
+            "idempotency_key": str(child_spec.get("idempotency_key") or "").strip(),
+            "not_before_at": str(child_spec.get("not_before_at") or "").strip(),
+            "no_op_reason": str(expected_causality.get("no_op_reason") or "").strip(),
+            "readiness_effect": str(expected_causality.get("readiness_effect") or "").strip(),
+            "causality_schema_version": str(expected_causality.get("schema_version") or "").strip(),
+            "schema_version": "workflow_command_v1",
+        }
+        child_matches = all(
+            str(child.get(field) or "").strip() == expected for field, expected in immutable_fields.items()
+        ) and bool(
+            json_contract_equal(dict(child.get("payload") or {}), expected_child_payload)
+            and json_contract_equal(list(child.get("artifact_refs") or []), [])
+            and json_contract_equal(
+                list(child.get("input_artifact_refs") or []),
+                list(expected_causality.get("input_artifact_refs") or []),
+            )
+            and json_contract_equal(
+                list(child.get("output_artifact_refs") or []),
+                list(expected_causality.get("output_artifact_refs") or []),
+            )
+            and json_contract_equal(
+                dict(child.get("produced_entity_counts") or {}),
+                dict(expected_causality.get("produced_entity_counts") or {}),
+            )
+            and json_contract_equal(
+                list(child.get("downstream_command_ids") or []),
+                list(expected_causality.get("downstream_command_ids") or []),
+            )
+            and int(child.get("max_attempts") or 0) == int(child_spec.get("max_attempts") or 0)
+            and json_contract_equal(
+                dict(child.get("retry_policy") or {}),
+                dict(child_spec.get("retry_policy") or {}),
+            )
+        )
+        if not child_matches:
+            return {"status": "invalid", "reason": "acquisition_root_intent_child_identity_mismatch"}
+        return {"status": "ready", "event": event, "child_command": child}
+
+    @staticmethod
+    def _acquisition_root_locked_identity(command: Mapping[str, Any]) -> dict[str, Any]:
+        root = dict(command or {})
+        return {
+            "command_id": str(root.get("command_id") or "").strip(),
+            "workflow_run_id": str(root.get("workflow_run_id") or "").strip(),
+            "operation_id": str(root.get("operation_id") or "").strip(),
+            "command_type": str(root.get("command_type") or "").strip(),
+            "owner": str(root.get("owner") or "").strip(),
+            "stage_id": str(root.get("stage_id") or "").strip(),
+            "causal_group_id": str(root.get("causal_group_id") or "").strip(),
+            "parent_command_id": str(root.get("parent_command_id") or "").strip(),
+            "source_event_id": str(root.get("source_event_id") or "").strip(),
+            "source_event_type": str(root.get("source_event_type") or "").strip(),
+            "input_artifact_refs": list(root.get("input_artifact_refs") or []),
+            "output_artifact_refs": list(root.get("output_artifact_refs") or []),
+            "produced_entity_counts": dict(root.get("produced_entity_counts") or {}),
+            "no_op_reason": str(root.get("no_op_reason") or "").strip(),
+            "readiness_effect": str(root.get("readiness_effect") or "").strip(),
+            "downstream_command_ids": list(root.get("downstream_command_ids") or []),
+            "causality_schema_version": str(root.get("causality_schema_version") or "").strip(),
+            "idempotency_key": str(root.get("idempotency_key") or "").strip(),
+            "payload": dict(root.get("payload") or {}),
+            "artifact_refs": list(root.get("artifact_refs") or []),
+            "not_before_at": str(root.get("not_before_at") or "").strip(),
+            "max_attempts": max(0, int(root.get("max_attempts") or 0)),
+            "retry_policy": dict(root.get("retry_policy") or {}),
+            "result": dict(root.get("result") or {}),
+            "schema_version": str(root.get("schema_version") or "").strip(),
+        }
+
+    def _replay_succeeded_acquisition_root_command(self, command: Mapping[str, Any]) -> dict[str, Any]:
+        root = dict(command or {})
+        authority = self._preflight_acquisition_root_operation_action_command(root)
+        if str(authority.get("status") or "").strip() != "ready":
+            return self._acquisition_root_preflight_failure(
+                root,
+                reason=str(authority.get("reason") or "acquisition_root_command_target_conflict").strip(),
+                mark_failed=False,
+            )
+        root = dict(authority.get("workflow_command") or root)
+        terminal = self._validate_acquisition_root_succeeded_replay(root)
+        if str(terminal.get("status") or "").strip() != "ready":
+            return self._acquisition_root_preflight_failure(
+                root,
+                reason=str(terminal.get("reason") or "acquisition_root_terminal_replay_invalid").strip(),
+                mark_failed=False,
+            )
+        try:
+            self.durable_runtime_writer.reduce_and_persist(
+                workflow_run_id=str(root.get("workflow_run_id") or "").strip(),
+                event=dict(terminal.get("event") or {}),
+            )
+            self.durable_runtime_writer.signal_recovery_for_committed_commands(
+                (dict(terminal.get("child_command") or {}),)
+            )
+        except Exception:
+            # The root/child/event transaction is already committed. The shared recovery
+            # sweep or another exact replay repairs this derived checkpoint/wakeup layer.
+            pass
+        self._kernel._sync_operation_run_from_workflow_command(
+            root,
+            actor=ACQUISITION_RUN_CREATE_OWNER,
+            source="acquisition_run_create.command_owner",
+        )
+        return {
+            "status": "completed",
+            "reason": "acquisition_run_create_command_already_succeeded",
+            "workflow_command": self._kernel._workflow_command_observation(
+                root,
                 migration_phase="W11a_acquisition_run_create_root",
             ),
         }
@@ -2751,62 +3137,53 @@ class AcquisitionCommandOwner:
         command: dict[str, Any],
         *,
         lease_owner: str,
+        lease_expires_at: str,
+        claim_attempt: int,
     ) -> dict[str, Any]:
-        command_payload = dict(command or {})
-        payload = dict(command_payload.get("payload") or {})
-        workflow_payload = dict(payload.get("workflow_payload") or {})
-        target_company = str(payload.get("target_company") or workflow_payload.get("target_company") or "").strip()
-        query_text = str(
-            payload.get("query") or workflow_payload.get("query") or workflow_payload.get("raw_user_request") or ""
-        ).strip()
-        plan_review_id = str(payload.get("plan_review_id") or workflow_payload.get("plan_review_id") or "").strip()
-        if not plan_review_id and not target_company and not query_text:
+        root = dict(command or {})
+        contract = self._acquisition_root_intent_plan_contract(
+            root,
+            claim_attempt=max(0, int(claim_attempt or 0)),
+        )
+        if not contract:
             return {
                 "status": "invalid",
                 "reason": "acquisition_run_create_payload_missing_scope",
                 "operation_completion_deferred": False,
             }
-        downstream_command = self._plan_acquisition_intent_resolve_command(
-            parent_command=command_payload,
-            workflow_payload=workflow_payload,
-            target_company=target_company,
-            query_text=query_text,
-            plan_review_id=plan_review_id,
+        completion = self.store.repos.workflow_runtime.complete_acquisition_root_command(
+            str(root.get("command_id") or "").strip(),
+            expected_lease_owner=str(lease_owner or "").strip(),
+            expected_lease_expires_at=str(lease_expires_at or "").strip(),
+            expected_attempt=max(0, int(claim_attempt or 0)),
+            expected_root_command=self._acquisition_root_locked_identity(root),
+            plan_event=dict(contract.get("plan_event") or {}),
+            child_command=dict(contract.get("child_command") or {}),
+            child_causality=dict(contract.get("child_causality") or {}),
+            root_result=dict(contract.get("root_result") or {}),
         )
-        if not downstream_command:
+        outcome = str(completion.get("outcome") or "").strip()
+        if outcome != "applied":
             return {
-                "status": "invalid",
-                "reason": "acquisition_intent_resolve_command_enqueue_failed",
+                "status": "stale_claim" if outcome in {"stale_claim", "not_found"} else "invalid",
+                "reason": str(completion.get("reason") or "acquisition_intent_resolve_command_enqueue_failed").strip(),
                 "operation_completion_deferred": False,
+                "_completion": completion,
             }
-        downstream_types = self._acquisition_decomposition_downstream_command_types()
+        child = dict(completion.get("child_command") or {})
+        event = dict(completion.get("event") or {})
+        try:
+            self.durable_runtime_writer.reduce_and_persist(
+                workflow_run_id=str(root.get("workflow_run_id") or "").strip(),
+                event=event,
+            )
+            self.durable_runtime_writer.signal_recovery_for_committed_commands((child,))
+        except Exception:
+            # Post-commit derived checkpoint/wakeup repair is replayable and poll-backed.
+            pass
         return {
-            "status": "ready_for_downstream_commands",
-            "reason": "acquisition_run_root_recorded",
-            "operation_completion_deferred": True,
-            "module_state_mutated": False,
-            "normal_path_executes_queue_workflow_inline": False,
-            "queue_workflow_called": False,
-            "target_company": target_company,
-            "query": query_text,
-            "plan_review_id": plan_review_id,
-            "workflow_payload": workflow_payload,
-            "downstream_command_required": True,
-            "downstream_command_count": 1,
-            "downstream_command_ids": [str(downstream_command.get("command_id") or "").strip()],
-            "downstream_commands": [
-                self._kernel._workflow_command_observation(
-                    downstream_command,
-                    migration_phase="W11b_acquisition_intent_resolve",
-                )
-            ],
-            "downstream_command_types": downstream_types,
-            "next_phase": "W11b_acquisition_intent_plan_commands",
-            "created_or_reused_job_id": "",
-            "legacy_job_shell_created": False,
-            "completed_by": str(lease_owner or "").strip(),
-            "migration_phase": "W11a_acquisition_run_create_root",
-            "contract": "w11a_acquisition_run_create_root_owner_v1",
+            **dict(contract.get("root_result") or {}),
+            "_completion": completion,
         }
 
     def _run_acquisition_run_create_command(self, command: dict[str, Any]) -> dict[str, Any]:
@@ -2817,53 +3194,13 @@ class AcquisitionCommandOwner:
         latest_initial = self.store.get_workflow_command(command_id) or command_payload
         command_payload = latest_initial
         if str(command_payload.get("status") or "").strip() == "succeeded":
-            terminal_preflight = self._preflight_acquisition_root_operation_action_command(command_payload)
-            if str(terminal_preflight.get("status") or "") != "ready":
-                return self._acquisition_root_preflight_failure(
-                    command_payload,
-                    reason=str(terminal_preflight.get("reason") or "acquisition_root_command_target_conflict").strip(),
-                    mark_failed=False,
-                )
-            self._kernel._sync_operation_run_from_workflow_command(
-                command_payload,
-                actor=ACQUISITION_RUN_CREATE_OWNER,
-                source="acquisition_run_create.command_owner",
-            )
-            return {
-                "status": "completed",
-                "reason": "acquisition_run_create_command_already_succeeded",
-                "workflow_command": self._kernel._workflow_command_observation(
-                    command_payload,
-                    migration_phase="W11a_acquisition_run_create_root",
-                ),
-            }
-        lease_owner = f"{ACQUISITION_RUN_CREATE_OWNER}-{uuid.uuid4().hex[:8]}"
+            return self._replay_succeeded_acquisition_root_command(command_payload)
+        lease_owner = f"{ACQUISITION_RUN_CREATE_OWNER}-{uuid.uuid4().hex}"
         claimed = self.store.claim_workflow_command(command_id, lease_owner=lease_owner, lease_seconds=300)
         if not claimed:
             latest = self.store.get_workflow_command(command_id) or command_payload
             if str(latest.get("status") or "").strip() == "succeeded":
-                latest_preflight = self._preflight_acquisition_root_operation_action_command(latest)
-                if str(latest_preflight.get("status") or "") != "ready":
-                    return self._acquisition_root_preflight_failure(
-                        latest,
-                        reason=str(
-                            latest_preflight.get("reason") or "acquisition_root_command_target_conflict"
-                        ).strip(),
-                        mark_failed=False,
-                    )
-                self._kernel._sync_operation_run_from_workflow_command(
-                    latest,
-                    actor=ACQUISITION_RUN_CREATE_OWNER,
-                    source="acquisition_run_create.command_owner",
-                )
-                return {
-                    "status": "completed",
-                    "reason": "acquisition_run_create_command_already_succeeded",
-                    "workflow_command": self._kernel._workflow_command_observation(
-                        latest,
-                        migration_phase="W11a_acquisition_run_create_root",
-                    ),
-                }
+                return self._replay_succeeded_acquisition_root_command(latest)
             return {
                 "status": "queued",
                 "reason": "acquisition_run_create_command_not_claimed",
@@ -2875,6 +3212,8 @@ class AcquisitionCommandOwner:
         running = self.store.mark_workflow_command_running(command_id, lease_owner=lease_owner)
         if not running:
             latest = self.store.get_workflow_command(command_id) or claimed
+            if str(latest.get("status") or "").strip() == "succeeded":
+                return self._replay_succeeded_acquisition_root_command(latest)
             return {
                 "status": "queued",
                 "reason": "acquisition_run_create_command_running_transition_not_applied",
@@ -2884,10 +3223,16 @@ class AcquisitionCommandOwner:
                 ),
             }
         latest = self.store.get_workflow_command(command_id) or running
+        lease_expires_at = str(latest.get("lease_expires_at") or "").strip()
+        claim_attempt = max(0, int(latest.get("attempt") or 0))
         if (
             str(latest.get("status") or "").strip() != "running"
             or str(latest.get("lease_owner") or "").strip() != lease_owner
+            or not lease_expires_at
+            or claim_attempt <= 0
         ):
+            if str(latest.get("status") or "").strip() == "succeeded":
+                return self._replay_succeeded_acquisition_root_command(latest)
             return {
                 "status": "queued",
                 "reason": "acquisition_run_create_command_live_lease_lost",
@@ -2902,31 +3247,50 @@ class AcquisitionCommandOwner:
                 latest,
                 reason=str(execution_preflight.get("reason") or "acquisition_root_command_target_conflict").strip(),
                 mark_failed=True,
+                expected_lease_owner=lease_owner,
+                expected_lease_expires_at=lease_expires_at,
+                expected_attempt=claim_attempt,
             )
-        result = self._execute_acquisition_run_create_command_payload(latest, lease_owner=lease_owner)
+        latest = dict(execution_preflight.get("workflow_command") or latest)
+        result = self._execute_acquisition_run_create_command_payload(
+            latest,
+            lease_owner=lease_owner,
+            lease_expires_at=lease_expires_at,
+            claim_attempt=claim_attempt,
+        )
         result_status = str(result.get("status") or "").strip()
-        if result_status not in {"ready_for_downstream_commands"}:
-            failed = self.store.mark_workflow_command_failed(
-                command_id,
-                error_text=str(result.get("reason") or "acquisition_run_create_invalid"),
-                retryable=False,
-            )
-            self._kernel._sync_operation_run_from_workflow_command(
-                failed or latest,
-                actor=ACQUISITION_RUN_CREATE_OWNER,
-                source="acquisition_run_create.command_owner",
-            )
+        completion = dict(result.pop("_completion", {}) or {})
+        if result_status == "stale_claim":
+            observed = dict(completion.get("workflow_command") or self.store.get_workflow_command(command_id) or latest)
+            if str(observed.get("status") or "").strip() == "succeeded":
+                return self._replay_succeeded_acquisition_root_command(observed)
             return {
-                "status": "failed",
-                "reason": str(result.get("reason") or "acquisition_run_create_invalid"),
+                "status": "queued",
+                "reason": str(result.get("reason") or "acquisition_root_command_claim_not_current").strip(),
                 "workflow_command": self._kernel._workflow_command_observation(
-                    failed or latest,
+                    observed,
                     migration_phase="W11a_acquisition_run_create_root",
                 ),
             }
-        succeeded = self.store.mark_workflow_command_succeeded(command_id, result=result)
+        if result_status != "ready_for_downstream_commands":
+            return self._acquisition_root_preflight_failure(
+                latest,
+                reason=str(result.get("reason") or "acquisition_run_create_invalid"),
+                mark_failed=True,
+                expected_lease_owner=lease_owner,
+                expected_lease_expires_at=lease_expires_at,
+                expected_attempt=claim_attempt,
+            )
+        succeeded = dict(completion.get("workflow_command") or self.store.get_workflow_command(command_id) or {})
+        terminal_validation = self._validate_acquisition_root_succeeded_replay(succeeded)
+        if str(terminal_validation.get("status") or "").strip() != "ready":
+            return self._acquisition_root_preflight_failure(
+                succeeded,
+                reason=str(terminal_validation.get("reason") or "acquisition_root_terminal_replay_invalid").strip(),
+                mark_failed=False,
+            )
         self._kernel._sync_operation_run_from_workflow_command(
-            succeeded or latest,
+            succeeded,
             actor=ACQUISITION_RUN_CREATE_OWNER,
             source="acquisition_run_create.command_owner",
         )
@@ -2935,7 +3299,7 @@ class AcquisitionCommandOwner:
             "reason": "acquisition_run_create_root_recorded",
             "result": result,
             "workflow_command": self._kernel._workflow_command_observation(
-                succeeded or latest,
+                succeeded,
                 migration_phase="W11a_acquisition_run_create_root",
             ),
         }

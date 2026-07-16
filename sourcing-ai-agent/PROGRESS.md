@@ -17,20 +17,26 @@
   review/retry/identity aliases and every nonempty raw target are rejected before writes. Authenticated HTTP mints the
   server workspace/actor and exact owner scope; explicit open-mode workspace remains compatible.
 - Dispatch server-derives the complete `acquisition.run.create` envelope. Approve/retry/resume/dispatch and the root
-  owner revalidate the persisted workspace target. The owner requires exact operation/action/envelope linkage, an
-  approved nonterminal action, nonterminal operation, and a currently valid running lease. Cancelled, foreign,
-  missing, malformed,
-  or forged commands may terminalize only their root command and cannot create an intent child or sync an untrusted
-  Operation. The positive path creates exactly one `acquisition.intent.resolve` child and no job/run/review/provider
-  effect.
-- Final stable-tree author evidence is D1i PG **9 passed + 28 subtests**, combined request/binder/transport D1
-  **153 passed + 228 subtests**, command/control adjacency **175 passed**, exact acquisition + R-019 ratchet nodes
-  **2 passed**, and full Operation runtime **136 passed + 503 subtests**. Lint is green across **58 files**;
-  global mypy remains exactly **81 errors / 4 files**; compile and diff checks are green. Fresh pinned non-author review
-  remains pending. This is author evidence, not formal `GO`.
+  owner revalidate the persisted workspace target. The fixed-forward root additionally requires canonical source-event/
+  causality, strict JSON/container/scalar contracts, and exact current claim owner/attempt/unexpired lease using the PG
+  repository clock with naive persisted timestamps interpreted as UTC. Cancelled, foreign, missing, malformed, forged,
+  stale-claim, or type-confused commands cannot create an intent child or synchronize an untrusted Operation.
+- Root success now locks the root command and workflow stream, exact-reuses/appends one `CommandPlanRequested` event,
+  exact-reuses/creates one deterministic `acquisition.intent.resolve` child, and terminalizes the root in one PG
+  transaction. Exact succeeded replay validates the persisted root result/event/child/order/full envelopes before
+  repairing post-commit current-state/recovery wakeup and linked Operation synchronization. The root stage still creates
+  no job/run/review/provider effect.
+- The original pinned advisory was **NO-GO P0/P1/P2/P3=0/2/1/0**. The current working-tree fixed-forward locally closes
+  its stale-claim, forged/empty replay, and canonical-causality findings plus the follow-on race/type audit, but fresh
+  pinned non-author review remains pending. Current exact candidate evidence is D1i **20 passed + 54 subtests** and the
+  R-019 characterization ratchet **3 passed**. Final stable author evidence additionally includes combined D1
+  **160 passed + 289 subtests**, command/control adjacency **175 passed + 503 subtests**, durable runtime + CRM batch
+  adjacency **61 passed + 12 subtests**, storage guardrails **60 passed**, lint **58 files**, unchanged mypy
+  **81 errors / 4 files**, and green compile/diff checks. This is not formal `GO`.
 - Current production partition is **5 schema-defined / 10 schema-less / served=0**. R-029 remains open at 10/15 and
-  keeps epoch `d1f_r029_20260715_v2`. R-019 remains open because post-claim preflight and child planning are not one PG
-  UoW; do not claim concurrent-cancel atomicity. No provider/model/live path is authorized.
+  keeps epoch `d1f_r029_20260715_v2`. R-019 remains open for the Operation/action preflight-to-root-UoW race,
+  post-commit current-state/recovery/Operation synchronization, and committed failure-CAS acknowledgement ambiguity;
+  do not claim aggregate-cancel atomicity or four-table exactly-once completion. No provider/model/live path is authorized.
 
 ### Track D D1f/D1g review fixed-forward
 

@@ -195,6 +195,8 @@ from .durable_runtime import (
     SNAPSHOT_COMPACTION_RUN_OWNER,
     DurableRuntimeWriter,
     collection_authoritative_merge_idempotency_key,
+    command_causality_for,
+    command_id_for,
     default_readiness_effect_for_command_type,
     default_stage_id_for_command_type,
     export_projection_generate_idempotency_key,
@@ -223,6 +225,7 @@ from .execution_semantics import (
     requested_dispatch_lane_requirements,
 )
 from .ingestion import load_bootstrap_bundle
+from .json_contract import json_contract_equal
 from .legacy_public_web_retirement_audit import audit_legacy_public_web_retirement
 from .linkedin_url_normalization import normalize_linkedin_profile_url_key
 from .manual_review import build_manual_review_items
@@ -50605,6 +50608,11 @@ class SourcingOrchestrator:
         command: Mapping[str, Any],
     ) -> dict[str, Any]:
         command_record = dict(command)
+        command_record = self.store.repos.workflow_runtime.get_persisted_workflow_command_contract(
+            str(command_record.get("command_id") or "").strip()
+        )
+        if not command_record or not bool(command_record.get("persisted_json_contract_valid")):
+            return {"status": "invalid", "reason": "acquisition_root_command_persisted_json_invalid"}
         raw_payload = command_record.get("payload")
         if not isinstance(raw_payload, Mapping):
             return {"status": "invalid", "reason": "acquisition_root_command_payload_invalid"}
@@ -50638,6 +50646,11 @@ class SourcingOrchestrator:
             spec = DEFAULT_ACTION_REGISTRY.spec_for(ACTION_START_ACQUISITION_RUN)
         except (KeyError, OperationRuntimeStateConflict):
             return {"status": "invalid", "reason": "acquisition_root_action_request_conflict"}
+        if (
+            str(action.get("operation_type") or "").strip() != str(spec.operation_type or "").strip()
+            or str(operation_run.get("operation_type") or "").strip() != str(spec.operation_type or "").strip()
+        ):
+            return {"status": "invalid", "reason": "acquisition_root_operation_type_mismatch"}
         target_preflight = self._revalidate_acquisition_root_action_target(
             operation_run=operation_run,
             action=action,
@@ -50663,33 +50676,143 @@ class SourcingOrchestrator:
         if (
             not isinstance(raw_bound_target, Mapping)
             or not isinstance(raw_action_target, Mapping)
-            or dict(raw_bound_target) != dict(raw_action_target)
+            or not json_contract_equal(dict(raw_bound_target), dict(raw_action_target))
         ):
             return {"status": "invalid", "reason": "acquisition_root_bound_target_mismatch"}
-        causality = payload.pop("causality", None)
-        if not isinstance(causality, Mapping) or any(
-            str(causality.get(field) or "").strip() != str(command_record.get(field) or "").strip()
-            for field in (
-                "workflow_run_id",
-                "operation_id",
-                "command_type",
-                "owner",
-                "stage_id",
-                "causal_group_id",
-                "source_event_id",
-                "source_event_type",
-                "idempotency_key",
-            )
-        ):
-            return {"status": "invalid", "reason": "acquisition_root_command_causality_mismatch"}
-        if payload != {**expected_command_payload, "operation_id": operation_run_id}:
-            return {"status": "invalid", "reason": "acquisition_root_command_payload_mismatch"}
         expected_payload_hash = hashlib.sha1(
             json.dumps(expected_command_payload, ensure_ascii=False, sort_keys=True).encode("utf-8")
         ).hexdigest()[:24]
         expected_idempotency_key = (
             f"{spec.default_workflow_command_type}:operation:{operation_run_id}:{expected_payload_hash}"
         )
+        expected_workflow_run_id = str(plan.get("workflow_run_id") or "").strip()
+        expected_command_id = command_id_for(expected_workflow_run_id, expected_idempotency_key)
+        expected_workflow_ref = {
+            "workflow_run_id": expected_workflow_run_id,
+            "command_id": expected_command_id,
+            "command_type": spec.default_workflow_command_type,
+            "owner": spec.owner_module,
+        }
+        if not json_contract_equal(dict(operation_run.get("workflow_ref") or {}), expected_workflow_ref):
+            return {"status": "invalid", "reason": "acquisition_root_operation_workflow_ref_mismatch"}
+        expected_event_command_payload = {
+            **expected_command_payload,
+            "operation_id": operation_run_id,
+            "causality": {
+                "operation_id": operation_run_id,
+                "action_id": action_id,
+                "action_type": ACTION_START_ACQUISITION_RUN,
+                "migration_phase": "W11_agent_callable_workflow_command",
+            },
+        }
+        expected_source_event_payload = {
+            "workflow_type": "agent_callable_workflow_command",
+            "stage_key": default_stage_id_for_command_type(spec.default_workflow_command_type),
+            "command_type": spec.default_workflow_command_type,
+            "idempotency_key": expected_idempotency_key,
+            "payload": expected_event_command_payload,
+            "max_attempts": int(plan.get("max_attempts") or 0),
+            "retry_policy": dict(plan.get("retry_policy") or {}),
+        }
+        expected_source_event_idempotency = f"{expected_idempotency_key}:plan"
+        source_events = [
+            dict(event or {})
+            for event in self.store.repos.workflow_runtime.list_workflow_events(expected_workflow_run_id, limit=0)
+            if str(dict(event or {}).get("idempotency_key") or "").strip() == expected_source_event_idempotency
+        ]
+        if len(source_events) != 1:
+            return {"status": "invalid", "reason": "acquisition_root_command_source_event_ambiguous"}
+        source_event = self.store.repos.workflow_runtime.get_persisted_workflow_event_contract(
+            str(source_events[0].get("event_id") or "").strip()
+        )
+        if not source_event or not bool(source_event.get("persisted_json_contract_valid")):
+            return {"status": "invalid", "reason": "acquisition_root_command_source_event_json_invalid"}
+        source_sequence = max(0, int(source_event.get("sequence_number") or 0))
+        expected_source_event_id = (
+            "evt_"
+            + hashlib.sha1(
+                f"{expected_workflow_run_id}:{source_sequence}:{expected_source_event_idempotency}".encode("utf-8")
+            ).hexdigest()[:24]
+        )
+        source_event_matches = bool(
+            source_sequence > 0
+            and str(source_event.get("event_id") or "").strip() == expected_source_event_id
+            and str(source_event.get("workflow_run_id") or "").strip() == expected_workflow_run_id
+            and str(source_event.get("operation_id") or "").strip() == operation_run_id
+            and str(source_event.get("command_id") or "").strip() == ""
+            and str(source_event.get("activity_attempt_id") or "").strip() == ""
+            and str(source_event.get("event_family") or "").strip() == "workflow_event"
+            and str(source_event.get("event_type") or "").strip() == "CommandPlanRequested"
+            and str(source_event.get("actor") or "").strip() == "operation_workflow_command_planner"
+            and str(source_event.get("source") or "").strip() == "operation_run_dispatch"
+            and json_contract_equal(
+                dict(source_event.get("payload") or {}),
+                expected_source_event_payload,
+            )
+            and json_contract_equal(list(source_event.get("artifact_refs") or []), [])
+            and str(source_event.get("schema_version") or "").strip() == "workflow_event_v1"
+        )
+        if not source_event_matches:
+            return {"status": "invalid", "reason": "acquisition_root_command_source_event_mismatch"}
+        expected_causality = command_causality_for(
+            workflow_run_id=expected_workflow_run_id,
+            operation_id=operation_run_id,
+            stage_id=default_stage_id_for_command_type(spec.default_workflow_command_type),
+            command_type=spec.default_workflow_command_type,
+            owner=spec.owner_module,
+            idempotency_key=expected_idempotency_key,
+            source_event=source_event,
+            command_payload=expected_event_command_payload,
+            artifact_refs=(),
+        ).to_payload()
+        expected_stored_payload = {
+            **expected_event_command_payload,
+            "causality": expected_causality,
+        }
+        if not json_contract_equal(payload, expected_stored_payload):
+            return {"status": "invalid", "reason": "acquisition_root_command_payload_mismatch"}
+        expected_text_fields = {
+            "command_id": expected_command_id,
+            "workflow_run_id": expected_workflow_run_id,
+            "operation_id": operation_run_id,
+            "command_type": spec.default_workflow_command_type,
+            "owner": spec.owner_module,
+            "stage_id": str(expected_causality.get("stage_id") or "").strip(),
+            "causal_group_id": str(expected_causality.get("causal_group_id") or "").strip(),
+            "parent_command_id": str(expected_causality.get("parent_command_id") or "").strip(),
+            "source_event_id": expected_source_event_id,
+            "source_event_type": "CommandPlanRequested",
+            "idempotency_key": expected_idempotency_key,
+            "no_op_reason": str(expected_causality.get("no_op_reason") or "").strip(),
+            "readiness_effect": str(expected_causality.get("readiness_effect") or "").strip(),
+            "causality_schema_version": str(expected_causality.get("schema_version") or "").strip(),
+            "not_before_at": "",
+            "schema_version": "workflow_command_v1",
+        }
+        if any(
+            str(command_record.get(field) or "").strip() != expected for field, expected in expected_text_fields.items()
+        ):
+            return {"status": "invalid", "reason": "acquisition_root_command_causality_mismatch"}
+        if not (
+            json_contract_equal(list(command_record.get("artifact_refs") or []), [])
+            and json_contract_equal(
+                list(command_record.get("input_artifact_refs") or []),
+                list(expected_causality.get("input_artifact_refs") or []),
+            )
+            and json_contract_equal(
+                list(command_record.get("output_artifact_refs") or []),
+                list(expected_causality.get("output_artifact_refs") or []),
+            )
+            and json_contract_equal(
+                dict(command_record.get("produced_entity_counts") or {}),
+                dict(expected_causality.get("produced_entity_counts") or {}),
+            )
+            and json_contract_equal(
+                list(command_record.get("downstream_command_ids") or []),
+                list(expected_causality.get("downstream_command_ids") or []),
+            )
+        ):
+            return {"status": "invalid", "reason": "acquisition_root_command_causality_mismatch"}
         raw_max_attempts = command_record.get("max_attempts")
         raw_retry_policy = command_record.get("retry_policy")
         if (
@@ -50698,17 +50821,16 @@ class SourcingOrchestrator:
             or not isinstance(raw_retry_policy, Mapping)
         ):
             return {"status": "invalid", "reason": "acquisition_root_command_envelope_mismatch"}
-        if (
-            str(command_record.get("workflow_run_id") or "").strip() != str(plan.get("workflow_run_id") or "").strip()
-            or str(command_record.get("idempotency_key") or "").strip() != expected_idempotency_key
-            or raw_max_attempts != int(plan.get("max_attempts") or 0)
-            or dict(raw_retry_policy) != dict(plan.get("retry_policy") or {})
+        if raw_max_attempts != int(plan.get("max_attempts") or 0) or not json_contract_equal(
+            dict(raw_retry_policy),
+            dict(plan.get("retry_policy") or {}),
         ):
             return {"status": "invalid", "reason": "acquisition_root_command_envelope_mismatch"}
         return {
             "status": "ready",
             "operation_run": operation_run,
             "action": action,
+            "workflow_command": command_record,
             "acquisition_root_target": dict(target_preflight.get("acquisition_root_target") or {}),
         }
 

@@ -3372,6 +3372,18 @@ class DurableRuntimeWriter:
             # Acceleration only — never let a wake-file failure break the durable write.
             return None
 
+    def signal_recovery_for_committed_commands(
+        self,
+        commands: list[dict[str, Any]] | tuple[dict[str, Any], ...],
+    ) -> dict[str, Any] | None:
+        """Wake the shared recovery daemon after a specialized PG UoW commits commands."""
+
+        committed_commands = tuple(dict(command or {}) for command in commands if dict(command or {}))
+        return self._signal_recovery_wakeup(
+            committed_commands=committed_commands,
+            committed_outbox=(),
+        )
+
 
 def reduce_workflow_events(
     *,
