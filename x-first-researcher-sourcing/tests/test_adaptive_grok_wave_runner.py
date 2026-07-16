@@ -5597,6 +5597,69 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             self.assertFalse((run_root / "operator-receipt.json").exists())
             self.assertFalse(runner._auth_digest_is_tainted(approvals, auth_sha))
 
+    def test_recovery_missing_consumption_preserves_home_claim_and_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            os.chmod(root, 0o700)
+            binary, auth, binary_sha = _live_material(root)
+            auth_sha = _bytes_sha(auth.read_bytes())
+            request, request_path = _build_request(root, binary_sha=binary_sha)
+            approvals = root / "approvals"
+            issue_live_grant(
+                request_path=request_path,
+                grant_root=approvals,
+                auth_source=auth,
+                wall_clock=lambda: FIXED_TIME,
+            )
+            fake = FakeExecutor(
+                MutableClock(),
+                (canonical_json(_empty_result()) + "\n").encode(),
+                spawn=True,
+            )
+            with mock.patch.object(
+                runner,
+                "_measure_session_tree",
+                side_effect=RuntimeError("synthetic_session_measurement_failure"),
+            ):
+                with self.assertRaisesRegex(RuntimeError, "synthetic_session_measurement_failure"):
+                    _run_adaptive_wave(
+                        request=request,
+                        execution_mode="live",
+                        runtime_root=root / "runtime",
+                        approval_root=approvals,
+                        binary=binary,
+                        auth_source=auth,
+                        executor=fake,
+                        monotonic=fake.clock,
+                        wall_clock=lambda: FIXED_TIME,
+                    )
+            run_root = next((root / "runtime").iterdir())
+            grant_id_hash = _bytes_sha(request["approval"]["grant_id"].encode())
+            _, consumption_path = runner._grant_paths(approvals, grant_id_hash)
+            consumption_path.unlink()
+            active_claim = approvals / f"auth-active-use-{auth_sha}.json"
+            home = run_root / "ephemeral-home"
+            journal_path = run_root / "process-result.json"
+            claim_raw = active_claim.read_bytes()
+            journal_raw = journal_path.read_bytes()
+
+            with self.assertRaisesRegex(
+                AdaptiveWaveValidationError,
+                "recovery_grant_consumption_missing",
+            ):
+                recover_incomplete_run(
+                    run_root,
+                    approval_root=approvals,
+                    process_group_is_alive=lambda group: False,
+                    wall_clock=lambda: FIXED_TIME + timedelta(minutes=5),
+                )
+
+            self.assertTrue((home / "auth.json").is_file())
+            self.assertEqual(active_claim.read_bytes(), claim_raw)
+            self.assertEqual(journal_path.read_bytes(), journal_raw)
+            self.assertFalse((run_root / "operator-receipt.json").exists())
+            self.assertFalse(runner._auth_digest_is_tainted(approvals, auth_sha))
+
     def test_distinct_keyless_legacy_incomplete_fixture_recovery_emits_legacy_receipt_shape(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

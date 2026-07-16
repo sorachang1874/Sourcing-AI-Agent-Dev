@@ -8169,6 +8169,18 @@ def _recover_incomplete_run_locked(
                     grant_sha256=recovery_grant_sha256,
                 ):
                     raise PermissionError("grok_auth_digest_in_use")
+                if (
+                    active_claim.get("claim_origin") == "live_consumption"
+                    and recovery_consumption is None
+                ):
+                    # A live-consumption claim is published immediately before
+                    # its single-use consumption ledger.  Treating a missing
+                    # ledger as an unconsumed crash would make deletion a
+                    # downgrade.  Preserve every artifact/claim for operator
+                    # reconciliation instead of mutating recovery state.
+                    raise AdaptiveWaveValidationError(
+                        "recovery_grant_consumption_missing"
+                    )
                 recovery_active_auth_claim = True
                 recovery_auth_claim_origin = active_claim["claim_origin"]
     prior_handles, _, prior_candidates = load_prior_context(request)
