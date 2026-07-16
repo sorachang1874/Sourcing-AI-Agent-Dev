@@ -63,6 +63,7 @@ RECEIPT_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.operator_receipt.v3"
 GRANT_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.live_grant.v2"
 CONSUMPTION_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.live_grant_consumption.v2"
 PROCESS_LEDGER_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.process_ledger.v2"
+PROCESS_RESULT_JOURNAL_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.process_result_journal.v1"
 DELETION_JOURNAL_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.deletion_journal.v1"
 DELETION_RECEIPT_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.deletion_receipt.v1"
 AUTH_TAINT_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.auth_taint.v1"
@@ -562,6 +563,26 @@ _PROCESS_LEDGER_KEYS = {
     "process_identity_token",
     "spawned_at",
 }
+_PROCESS_RESULT_JOURNAL_KEYS = {
+    "schema_version",
+    "run_id",
+    "request_id",
+    "run_lease_sha256",
+    "session_id",
+    "phase",
+    "exit_code",
+    "timed_out",
+    "term_sent",
+    "kill_sent",
+    "process_spawn_attempted",
+    "child_pid",
+    "process_group_id",
+    "kernel_birth_identity_sha256",
+    "process_identity_token_sha256",
+    "process_group_cleanup_confirmed",
+    "execution_error_code",
+    "technical_limit_kind",
+}
 _GRANT_KEYS = {
     "schema_version",
     "grant_id_hash",
@@ -822,6 +843,46 @@ def prior_input_policy_semantics_sha256(policy_id: str) -> str:
 
 def bytes_sha256(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
+
+
+def _process_result_journal_payload(
+    process_result: ProcessResult,
+    *,
+    run_id: str,
+    request_id: str,
+    run_lease_sha256: str,
+    session_id: str,
+) -> dict[str, Any]:
+    """Project executor facts without retaining provider or candidate text."""
+
+    return {
+        "schema_version": PROCESS_RESULT_JOURNAL_SCHEMA_VERSION,
+        "run_id": run_id,
+        "request_id": request_id,
+        "run_lease_sha256": run_lease_sha256,
+        "session_id": session_id,
+        "phase": "executor_returned",
+        "exit_code": process_result.exit_code,
+        "timed_out": process_result.timed_out,
+        "term_sent": process_result.term_sent,
+        "kill_sent": process_result.kill_sent,
+        "process_spawn_attempted": process_result.process_spawn_attempted,
+        "child_pid": process_result.child_pid,
+        "process_group_id": process_result.process_group_id,
+        "kernel_birth_identity_sha256": (
+            bytes_sha256(process_result.kernel_birth_identity.encode())
+            if process_result.kernel_birth_identity is not None
+            else None
+        ),
+        "process_identity_token_sha256": (
+            bytes_sha256(process_result.process_identity_token.encode())
+            if process_result.process_identity_token is not None
+            else None
+        ),
+        "process_group_cleanup_confirmed": process_result.process_group_cleanup_confirmed,
+        "execution_error_code": process_result.execution_error_code,
+        "technical_limit_kind": process_result.technical_limit_kind,
+    }
 
 
 def _strict_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -5345,6 +5406,55 @@ def _discard_run_root_without_intent_on_failure(run_root: Path) -> Any:
         raise
 
 
+def _publish_process_spools(
+    run_root: Path,
+    *,
+    stdout_spool: Path,
+    stderr_spool: Path,
+    max_stdout_bytes: int,
+    max_stderr_bytes: int,
+    allow_missing: bool,
+) -> tuple[bytes, bytes]:
+    """Promote process spools before credential cleanup can interrupt sealing."""
+
+    promoted: list[bytes] = []
+    removed_spool = False
+    for final_path, spool_path, ceiling in (
+        (run_root / "raw.stdout", stdout_spool, max_stdout_bytes),
+        (run_root / "stderr.txt", stderr_spool, max_stderr_bytes),
+    ):
+        final_raw: bytes | None = None
+        spool_raw: bytes | None = None
+        if final_path.exists() or final_path.is_symlink():
+            final_raw = _read_regular_owned_bounded(
+                final_path,
+                maximum_bytes=ceiling,
+                required_mode=0o600,
+            )
+        if spool_path.exists() or spool_path.is_symlink():
+            spool_raw = _read_regular_owned_bounded(
+                spool_path,
+                maximum_bytes=ceiling,
+                required_mode=0o600,
+            )
+        if final_raw is not None and spool_raw is not None and final_raw != spool_raw:
+            raise AdaptiveWaveValidationError("process_spool_published_mismatch")
+        raw = final_raw if final_raw is not None else spool_raw
+        if raw is None:
+            if not allow_missing:
+                raise AdaptiveWaveValidationError("process_spool_missing")
+            raw = b""
+        if final_raw is None:
+            _atomic_publish(final_path, raw)
+        if spool_raw is not None:
+            spool_path.unlink()
+            removed_spool = True
+        promoted.append(raw)
+    if removed_spool:
+        _fsync_directory(run_root)
+    return promoted[0], promoted[1]
+
+
 def _run_adaptive_wave(
     *,
     request: Mapping[str, Any],
@@ -5518,6 +5628,10 @@ def _run_adaptive_wave(
         session_capture_status = "not_applicable" if execution_mode == "fixture" else "missing"
         measurement = SessionTreeMeasurement(0, 0, 0, 0, 0, None)
         provider_phase_completed_cleanly = False
+        process_result: ProcessResult | None = None
+        defer_cleanup_to_recovery = False
+        stdout_raw: bytes | None = None
+        stderr_raw: bytes | None = None
         if execution_mode == "live":
             assert auth_source is not None
             try:
@@ -5638,7 +5752,22 @@ def _run_adaptive_wave(
                 monotonic=monotonic,
                 on_spawn=persist_spawn,
             )
-            if process_result.execution_error_code == "process_group_cleanup_failed":
+            process_result_journal = _process_result_journal_payload(
+                process_result,
+                run_id=actual_run_id,
+                request_id=request["request_id"],
+                run_lease_sha256=run_lease_sha,
+                session_id=actual_session_id,
+            )
+            _atomic_publish(
+                run_root / "process-result.json",
+                (canonical_json(process_result_journal) + "\n").encode(),
+            )
+            if not process_result.process_group_cleanup_confirmed:
+                # The recorded process group may still be alive. Keep its
+                # session tree and auth active-use claim intact so the
+                # recovery owner can terminate it before auditing/deleting.
+                defer_cleanup_to_recovery = True
                 raise AdaptiveWaveValidationError("process_group_cleanup_incomplete")
             measurement = _measure_session_tree(
                 ephemeral_home,
@@ -5663,6 +5792,14 @@ def _run_adaptive_wave(
                 except (AdaptiveWaveValidationError, OSError, UnicodeError, ValueError):
                     updates_raw = None
                     session_capture_status = "invalid"
+            stdout_raw, stderr_raw = _publish_process_spools(
+                run_root,
+                stdout_spool=stdout_spool,
+                stderr_spool=stderr_spool,
+                max_stdout_bytes=request["technical_limits"]["max_stdout_bytes"],
+                max_stderr_bytes=request["technical_limits"]["max_stderr_bytes"],
+                allow_missing=False,
+            )
             provider_phase_completed_cleanly = (
                 process_result.exit_code == 0
                 and not process_result.timed_out
@@ -5671,7 +5808,9 @@ def _run_adaptive_wave(
                 and measurement.limit_kind is None
             )
         finally:
-            if execution_mode == "live":
+            if defer_cleanup_to_recovery:
+                pass
+            elif execution_mode == "live":
                 if consumed_grant is None or copied_auth is None or grant_sha is None:
                     raise AdaptiveWaveValidationError("grok_auth_active_use_binding_invalid")
                 _finalize_copied_auth_use(
@@ -5692,6 +5831,8 @@ def _run_adaptive_wave(
                 )
             else:
                 _delete_ephemeral_tree(ephemeral_home)
+        if process_result is None or stdout_raw is None or stderr_raw is None:
+            raise AdaptiveWaveValidationError("process_evidence_publication_incomplete")
         elapsed_ms = max(0, round((monotonic() - started_monotonic) * 1000))
         completed_clock = wall_clock().astimezone(UTC)
         completed_at = _timestamp(completed_clock)
@@ -5702,20 +5843,6 @@ def _run_adaptive_wave(
             # relabel an actual timeout as its own cleanup deadline.
             final_measurement_limit = None
         technical_limit_kind = process_result.technical_limit_kind or final_measurement_limit
-        stdout_raw = _read_regular_owned_bounded(
-            stdout_spool,
-            maximum_bytes=request["technical_limits"]["max_stdout_bytes"],
-            required_mode=0o600,
-        )
-        stderr_raw = _read_regular_owned_bounded(
-            stderr_spool,
-            maximum_bytes=request["technical_limits"]["max_stderr_bytes"],
-            required_mode=0o600,
-        )
-        _atomic_publish(run_root / "raw.stdout", stdout_raw)
-        _atomic_publish(run_root / "stderr.txt", stderr_raw)
-        stdout_spool.unlink()
-        stderr_spool.unlink()
         (
             parsed_result,
             sanitized,
@@ -6208,6 +6335,56 @@ def _process_ledger_valid(value: Any) -> bool:
         and isinstance(value.get("process_identity_token"), str)
         and _SHA256_RE.fullmatch(value["process_identity_token"]) is not None
         and _timestamp_valid(value.get("spawned_at"))
+    )
+
+
+def _process_result_journal_valid(value: Any) -> bool:
+    if not isinstance(value, dict) or set(value) != _PROCESS_RESULT_JOURNAL_KEYS:
+        return False
+    child_values = (value.get("child_pid"), value.get("process_group_id"))
+    identity_hashes = (
+        value.get("kernel_birth_identity_sha256"),
+        value.get("process_identity_token_sha256"),
+    )
+    spawn_bindings = (*child_values, *identity_hashes)
+    process_spawn_attempted = value.get("process_spawn_attempted")
+    spawn_binding_complete = all(item is not None for item in spawn_bindings)
+    spawn_binding_empty = all(item is None for item in spawn_bindings)
+    return (
+        value.get("schema_version") == PROCESS_RESULT_JOURNAL_SCHEMA_VERSION
+        and isinstance(value.get("run_id"), str)
+        and _RUN_ID_RE.fullmatch(value["run_id"]) is not None
+        and isinstance(value.get("request_id"), str)
+        and _REQUEST_ID_RE.fullmatch(value["request_id"]) is not None
+        and _is_sha(value.get("run_lease_sha256"))
+        and isinstance(value.get("session_id"), str)
+        and _SESSION_ID_RE.fullmatch(value["session_id"]) is not None
+        and value.get("phase") == "executor_returned"
+        and (value.get("exit_code") is None or _is_int(value["exit_code"]))
+        and all(
+            type(value.get(key)) is bool
+            for key in (
+                "timed_out",
+                "term_sent",
+                "kill_sent",
+                "process_spawn_attempted",
+                "process_group_cleanup_confirmed",
+            )
+        )
+        and all(item is None or (_is_int(item) and item > 0) for item in child_values)
+        and all(item is None or _is_sha(item) for item in identity_hashes)
+        and (
+            (process_spawn_attempted is True and spawn_binding_complete)
+            or (process_spawn_attempted is False and spawn_binding_empty)
+        )
+        and value.get("execution_error_code")
+        in {
+            "none",
+            "spawn_failed",
+            "process_execution_failed",
+            "process_group_cleanup_failed",
+        }
+        and value.get("technical_limit_kind") in _TECHNICAL_LIMIT_KINDS | {None}
     )
 
 
@@ -7061,6 +7238,50 @@ def validate_operator_bundle(
     elif ledger_path.exists():
         errors.append("unexpected_process_ledger")
 
+    process_result_path = run_root / "process-result.json"
+    if process_result_path.exists() or process_result_path.is_symlink():
+        try:
+            process_result_journal = _read_private_json(process_result_path)
+        except AdaptiveWaveValidationError:
+            errors.append("process_result_journal_unavailable")
+        else:
+            if not _process_result_journal_valid(process_result_journal):
+                errors.append("process_result_journal_invalid")
+            expected_journal_binding = {
+                "run_id": receipt.get("run_id"),
+                "request_id": receipt.get("request_id"),
+                "run_lease_sha256": receipt.get("run_lease_sha256"),
+                "session_id": receipt.get("command_binding", {}).get("session_id"),
+            }
+            if any(
+                process_result_journal.get(key) != expected
+                for key, expected in expected_journal_binding.items()
+            ):
+                errors.append("process_result_journal_binding_mismatch")
+            if isinstance(process, dict) and receipt.get("status") != "crash_recovered":
+                expected_process_result = {
+                    "exit_code": process.get("exit_code"),
+                    "timed_out": process.get("timed_out"),
+                    "term_sent": process.get("term_sent"),
+                    "kill_sent": process.get("kill_sent"),
+                    "process_spawn_attempted": process.get("process_spawn_attempted"),
+                    "child_pid": process.get("child_pid"),
+                    "process_group_id": process.get("process_group_id"),
+                    "kernel_birth_identity_sha256": process.get("kernel_birth_identity_sha256"),
+                    "process_identity_token_sha256": process.get("process_identity_token_sha256"),
+                    "process_group_cleanup_confirmed": process.get("process_group_cleanup_confirmed"),
+                    "execution_error_code": process.get("execution_error_code"),
+                }
+                if any(
+                    process_result_journal.get(key) != expected
+                    for key, expected in expected_process_result.items()
+                ) or (
+                    process_result_journal.get("technical_limit_kind") is not None
+                    and process_result_journal.get("technical_limit_kind")
+                    != process.get("technical_limit_kind")
+                ):
+                    errors.append("process_result_journal_receipt_mismatch")
+
     raw_path = run_root / "raw.stdout"
     stderr_path = run_root / "stderr.txt"
     limits = request.get("technical_limits", {})
@@ -7513,11 +7734,25 @@ def _recover_incomplete_run_locked(
             )
     prior_handles, _, prior_candidates = load_prior_context(request)
     del prior_handles
+    process_result_path = run_root / "process-result.json"
+    process_result_journal: dict[str, Any] | None = None
+    if process_result_path.exists() or process_result_path.is_symlink():
+        process_result_value = _read_private_json(process_result_path)
+        if not _process_result_journal_valid(process_result_value):
+            raise AdaptiveWaveValidationError("process_result_journal_invalid")
+        process_result_journal = process_result_value
+        if (
+            process_result_journal["run_id"] != intent["run_id"]
+            or process_result_journal["request_id"] != intent["request_id"]
+            or process_result_journal["run_lease_sha256"] != held_lease_sha
+            or process_result_journal["session_id"] != intent["command_binding"]["session_id"]
+        ):
+            raise AdaptiveWaveValidationError("process_result_journal_binding_invalid")
     ledger_path = run_root / "process-ledger.json"
     ledger: dict[str, Any] | None = None
     process_ledger_sha: str | None = None
-    term_sent = False
-    kill_sent = False
+    term_sent = bool(process_result_journal and process_result_journal["term_sent"])
+    kill_sent = bool(process_result_journal and process_result_journal["kill_sent"])
     if ledger_path.exists():
         ledger_value = _read_private_json(ledger_path)
         if not _process_ledger_valid(ledger_value):
@@ -7539,7 +7774,7 @@ def _recover_incomplete_run_locked(
                 raise AdaptiveWaveValidationError("run_process_group_still_alive")
             if not process_group_identity_matches(ledger):
                 raise AdaptiveWaveValidationError("recovery_process_identity_mismatch")
-            term_sent, kill_sent = terminate_process_group(
+            recovery_term_sent, recovery_kill_sent = terminate_process_group(
                 group_id,
                 term_grace_ms=intent["emergency"]["term_grace_ms"],
                 kill_grace_ms=intent["emergency"]["kill_grace_ms"],
@@ -7547,8 +7782,38 @@ def _recover_incomplete_run_locked(
                 identity_still_matches=lambda: process_group_identity_matches(ledger),
                 monotonic=monotonic,
             )
+            term_sent = term_sent or recovery_term_sent
+            kill_sent = kill_sent or recovery_kill_sent
         if process_group_is_alive(group_id):
             raise AdaptiveWaveValidationError("run_process_group_still_alive")
+    if process_result_journal is not None:
+        if process_result_journal["process_spawn_attempted"] is not (ledger is not None):
+            raise AdaptiveWaveValidationError("process_result_journal_spawn_binding_invalid")
+        if ledger is not None and (
+            process_result_journal["child_pid"] != ledger["child_pid"]
+            or process_result_journal["process_group_id"] != ledger["process_group_id"]
+            or process_result_journal["kernel_birth_identity_sha256"]
+            != bytes_sha256(ledger["kernel_birth_identity"].encode())
+            or process_result_journal["process_identity_token_sha256"]
+            != bytes_sha256(ledger["process_identity_token"].encode())
+        ):
+            raise AdaptiveWaveValidationError("process_result_journal_ledger_mismatch")
+    try:
+        raw, stderr = _publish_process_spools(
+            run_root,
+            stdout_spool=run_root / intent["runtime_layout"]["stdout_spool_name"],
+            stderr_spool=run_root / intent["runtime_layout"]["stderr_spool_name"],
+            max_stdout_bytes=intent["technical_limits"]["max_stdout_bytes"],
+            max_stderr_bytes=intent["technical_limits"]["max_stderr_bytes"],
+            # Legacy recovery intents predate the executor-return journal and
+            # may legitimately have no retained spool.  Once the journal says
+            # the executor returned, silently replacing a missing spool with
+            # empty bytes would destroy the evidence the journal was added to
+            # preserve.
+            allow_missing=process_result_journal is None,
+        )
+    except AdaptiveWaveValidationError as exc:
+        raise AdaptiveWaveValidationError("recovery_spool_invalid") from exc
     ephemeral_home = run_root / intent["runtime_layout"]["ephemeral_home_name"]
     retained_updates_path = run_root / intent["runtime_layout"]["session_updates_name"]
     measurement = SessionTreeMeasurement(0, 0, 0, 0, 0, None)
@@ -7560,21 +7825,6 @@ def _recover_incomplete_run_locked(
     except OSError as exc:
         raise AdaptiveWaveValidationError("recovery_ephemeral_tree_invalid") from exc
     if ephemeral_home_present:
-        if intent["execution_mode"] == "live" and (
-            recovery_active_auth_claim or recovery_consumption is not None or process_ledger_sha is not None
-        ):
-            assert recovery_auth_sha256 is not None
-            _audit_copied_auth_after_provider(
-                ephemeral_home / "auth.json",
-                expected_sha256=recovery_auth_sha256,
-                source_run_id=intent["run_id"],
-                source_request_sha256=intent["request_sha256"],
-                grant_root=approval_root,
-                wall_clock=wall_clock,
-                force_taint_reason=(
-                    "post_consumption_execution_not_clean" if process_ledger_sha is not None else None
-                ),
-            )
         source_updates_path = _session_updates_path(
             ephemeral_home,
             run_root / "workspace",
@@ -7609,6 +7859,21 @@ def _recover_incomplete_run_locked(
                     raise AdaptiveWaveValidationError("recovery_session_updates_mismatch")
             else:
                 _atomic_publish(retained_updates_path, updates_raw)
+        if intent["execution_mode"] == "live" and (
+            recovery_active_auth_claim or recovery_consumption is not None or process_ledger_sha is not None
+        ):
+            assert recovery_auth_sha256 is not None
+            _audit_copied_auth_after_provider(
+                ephemeral_home / "auth.json",
+                expected_sha256=recovery_auth_sha256,
+                source_run_id=intent["run_id"],
+                source_request_sha256=intent["request_sha256"],
+                grant_root=approval_root,
+                wall_clock=wall_clock,
+                force_taint_reason=(
+                    "post_consumption_execution_not_clean" if process_ledger_sha is not None else None
+                ),
+            )
         _delete_ephemeral_tree(ephemeral_home)
         if recovery_active_auth_claim:
             assert recovery_auth_sha256 is not None and recovery_grant_sha256 is not None
@@ -7648,41 +7913,6 @@ def _recover_incomplete_run_locked(
             grant_sha256=recovery_grant_sha256,
         )
         recovery_active_auth_claim = False
-    raw_path = run_root / "raw.stdout"
-    stderr_path = run_root / "stderr.txt"
-    for final_path, spool_name, ceiling in (
-        (raw_path, intent["runtime_layout"]["stdout_spool_name"], intent["technical_limits"]["max_stdout_bytes"]),
-        (
-            stderr_path,
-            intent["runtime_layout"]["stderr_spool_name"],
-            intent["technical_limits"]["max_stderr_bytes"],
-        ),
-    ):
-        spool_path = run_root / spool_name
-        if not final_path.exists() and spool_path.exists():
-            try:
-                spool_raw = _read_regular_owned_bounded(spool_path, maximum_bytes=ceiling, required_mode=0o600)
-            except AdaptiveWaveValidationError:
-                raise AdaptiveWaveValidationError("recovery_spool_invalid")
-            _atomic_publish(final_path, spool_raw)
-            spool_path.unlink()
-    if not raw_path.exists():
-        _atomic_publish(raw_path, b"")
-    if not stderr_path.exists():
-        _atomic_publish(stderr_path, b"")
-    try:
-        raw = _read_regular_owned_bounded(
-            raw_path,
-            maximum_bytes=intent["technical_limits"]["max_stdout_bytes"],
-            required_mode=0o600,
-        )
-        stderr = _read_regular_owned_bounded(
-            stderr_path,
-            maximum_bytes=intent["technical_limits"]["max_stderr_bytes"],
-            required_mode=0o600,
-        )
-    except AdaptiveWaveValidationError:
-        raise AdaptiveWaveValidationError("recovery_artifact_permissions_invalid")
     recovery_legacy_plain = intent["command_binding"].get("command_policy_sha256") == _legacy_command_policy_sha256(
         request
     )
