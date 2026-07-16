@@ -2471,20 +2471,29 @@ def _process_evidence_generation_from_bindings(
     input_binding: Mapping[str, Any],
     command_binding: Mapping[str, Any],
 ) -> str | None:
-    """Select process-evidence generation from the existing policy digest."""
+    """Select the policy generation without trusting optional artifact keys.
+
+    ``transitional`` is the bounded direct-parent digest used both before and
+    during the journal rollout.  Its artifact shape therefore has to be
+    reconciled separately.  New bundles use the independently bound current
+    digest, so optional-key deletion can never downgrade them into this
+    compatibility branch.
+    """
 
     recorded = command_binding.get("command_policy_sha256")
     current = canonical_sha256(_redacted_policy_from_bindings(input_binding, command_binding))
     if recorded == current:
         return "current"
+    transitional = canonical_sha256(
+        _redacted_policy_from_bindings(
+            input_binding,
+            command_binding,
+            legacy_pre_process_evidence=True,
+        )
+    )
+    if recorded == transitional:
+        return "transitional"
     legacy = {
-        canonical_sha256(
-            _redacted_policy_from_bindings(
-                input_binding,
-                command_binding,
-                legacy_pre_process_evidence=True,
-            )
-        ),
         canonical_sha256(
             _redacted_policy_from_bindings(
                 input_binding,
@@ -6280,6 +6289,20 @@ def _intent_valid(intent: Any) -> bool:
                 and intent.get("process_evidence_generation") == PROCESS_EVIDENCE_GENERATION
             )
             or (
+                process_evidence_generation == "transitional"
+                and (
+                    (
+                        current_process_evidence
+                        and intent.get("process_evidence_generation")
+                        == PROCESS_EVIDENCE_GENERATION
+                    )
+                    or (
+                        not current_process_evidence
+                        and "process_evidence_generation" not in intent
+                    )
+                )
+            )
+            or (
                 process_evidence_generation == "legacy"
                 and not current_process_evidence
                 and "process_evidence_generation" not in intent
@@ -6971,6 +6994,18 @@ def validate_operator_receipt(receipt: Any) -> list[str]:
                 and _is_sha(artifacts.get("process_result_journal_sha256"))
             ):
                 errors.append("receipt_process_evidence_generation_mismatch")
+        elif process_evidence_generation == "transitional":
+            transitional_current_shape = (
+                isinstance(artifacts, dict)
+                and set(artifacts) == _ARTIFACT_KEYS
+                and _is_sha(artifacts.get("process_result_journal_sha256"))
+            )
+            transitional_legacy_shape = (
+                isinstance(artifacts, dict)
+                and set(artifacts) == _LEGACY_ARTIFACT_KEYS
+            )
+            if not (transitional_current_shape or transitional_legacy_shape):
+                errors.append("receipt_transitional_process_evidence_shape_mismatch")
         elif process_evidence_generation == "legacy":
             if not isinstance(artifacts, dict) or set(artifacts) != _LEGACY_ARTIFACT_KEYS:
                 errors.append("receipt_legacy_process_evidence_shape_mismatch")
@@ -7229,10 +7264,10 @@ def validate_operator_bundle(
     legacy_pre_process_evidence_replay = (
         recorded_command_policy == legacy_pre_process_evidence_policy
     )
-    # The independently replayed command/artifact policy owns the process
-    # evidence generation. Optional intent/receipt keys are checked against
-    # this decision below and can never select a weaker branch themselves.
-    current_process_evidence = current_operator_result_replay
+    # The independently replayed command/artifact policy owns all new process
+    # evidence.  One bounded direct-parent digest straddled the journal rollout;
+    # only that historical digest may use its mutually consistent artifact
+    # shape to distinguish transitional journal evidence from keyless legacy.
     receipt_artifacts = receipt.get("artifacts")
     intent_declares_current_process_evidence = (
         intent.get("process_evidence_generation") == PROCESS_EVIDENCE_GENERATION
@@ -7241,13 +7276,31 @@ def validate_operator_bundle(
         isinstance(receipt_artifacts, dict)
         and "process_result_journal_sha256" in receipt_artifacts
     )
-    if current_process_evidence:
+    if current_operator_result_replay:
+        current_process_evidence = True
         if not intent_declares_current_process_evidence:
             errors.append("intent_process_evidence_generation_missing")
         if not receipt_declares_current_process_evidence:
             errors.append("receipt_process_evidence_generation_missing")
+    elif legacy_pre_process_evidence_replay:
+        if (
+            intent_declares_current_process_evidence
+            and receipt_declares_current_process_evidence
+        ):
+            current_process_evidence = True
+        elif (
+            not intent_declares_current_process_evidence
+            and not receipt_declares_current_process_evidence
+        ):
+            current_process_evidence = False
+        else:
+            current_process_evidence = False
+            errors.append("transitional_process_evidence_shape_mismatch")
     elif intent_declares_current_process_evidence or receipt_declares_current_process_evidence:
+        current_process_evidence = False
         errors.append("legacy_process_evidence_shape_mismatch")
+    else:
+        current_process_evidence = False
     legacy_operator_result_v1_replay = recorded_command_policy == legacy_operator_result_v1_policy
     legacy_operator_result_v2_replay = recorded_command_policy == legacy_operator_result_v2_policy
     normalization_only_result_v3_replay = recorded_command_policy == normalization_only_result_v3_policy
@@ -8003,11 +8056,14 @@ def _recover_incomplete_run_locked(
     if validate_request(request) or canonical_sha256(request) != intent["request_sha256"]:
         raise AdaptiveWaveValidationError("recovery_request_invalid")
     recovery_recorded_command_policy = intent["command_binding"]["command_policy_sha256"]
-    current_process_evidence = (
+    current_process_evidence_policy = (
         recovery_recorded_command_policy == command_policy_sha256(request)
     )
+    transitional_process_evidence_policy = (
+        recovery_recorded_command_policy
+        == _legacy_pre_process_evidence_command_policy_sha256(request)
+    )
     recognized_legacy_process_evidence_policy = recovery_recorded_command_policy in {
-        _legacy_pre_process_evidence_command_policy_sha256(request),
         _legacy_operator_result_v1_command_policy_sha256(request),
         _legacy_operator_result_v2_command_policy_sha256(request),
         _legacy_normalization_only_result_v3_command_policy_sha256(request),
@@ -8015,13 +8071,25 @@ def _recover_incomplete_run_locked(
         _legacy_command_policy_sha256(request),
         _legacy_structured_result_command_policy_sha256(request),
     }
-    if not current_process_evidence and not recognized_legacy_process_evidence_policy:
+    if not (
+        current_process_evidence_policy
+        or transitional_process_evidence_policy
+        or recognized_legacy_process_evidence_policy
+    ):
         raise AdaptiveWaveValidationError("recovery_command_policy_unrecognized")
-    if current_process_evidence:
+    intent_declares_current_process_evidence = (
+        intent.get("process_evidence_generation") == PROCESS_EVIDENCE_GENERATION
+    )
+    if current_process_evidence_policy:
         if intent.get("process_evidence_generation") != PROCESS_EVIDENCE_GENERATION:
             raise AdaptiveWaveValidationError("recovery_process_evidence_generation_missing")
+        current_process_evidence = True
+    elif transitional_process_evidence_policy:
+        current_process_evidence = intent_declares_current_process_evidence
     elif "process_evidence_generation" in intent:
         raise AdaptiveWaveValidationError("recovery_legacy_process_evidence_shape_mismatch")
+    else:
+        current_process_evidence = False
     recovery_effective_prompt_policy: EffectivePromptPolicyBinding | None = None
     recovery_auth_sha256: str | None = None
     recovery_grant_sha256: str | None = None
@@ -8516,6 +8584,8 @@ def _recover_incomplete_run_locked(
         ),
         "authority": AUTHORITY,
     }
+    if not current_process_evidence:
+        receipt["artifacts"].pop("process_result_journal_sha256")
     if validate_operator_receipt(receipt):
         raise AdaptiveWaveValidationError("recovery_receipt_invalid")
     replay_errors = validate_operator_bundle(

@@ -5334,6 +5334,168 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             self.assertEqual(validate_operator_receipt(receipt), [])
             self.assertEqual(validate_operator_bundle(run_root, approval_root=root / "approvals"), [])
 
+    def test_direct_parent_transitional_journal_bundle_replays_without_current_trust(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            request, _ = _build_request(root)
+            receipt, run_root = _run_adaptive_wave(
+                request=request,
+                execution_mode="fixture",
+                runtime_root=root / "runtime",
+                approval_root=root / "approvals",
+                binary=Path("fixture-grok.invalid"),
+                auth_source=None,
+                executor=runner.OfflineFixtureExecutor(),
+                monotonic=MutableClock(),
+                wall_clock=lambda: FIXED_TIME,
+            )
+            transitional_policy = runner._legacy_pre_process_evidence_command_policy_sha256(
+                request
+            )
+            intent_path = run_root / "operator-intent.json"
+            receipt_path = run_root / "operator-receipt.json"
+            intent = json.loads(intent_path.read_text())
+            intent["command_binding"]["command_policy_sha256"] = transitional_policy
+            receipt["command_binding"]["command_policy_sha256"] = transitional_policy
+            _write_private(intent_path, (canonical_json(intent) + "\n").encode())
+            _write_private(receipt_path, (canonical_json(receipt) + "\n").encode())
+
+            self.assertEqual(
+                runner._process_evidence_generation_from_bindings(
+                    intent["input_binding"], intent["command_binding"]
+                ),
+                "transitional",
+            )
+            self.assertTrue(runner._intent_valid(intent))
+            self.assertEqual(validate_operator_receipt(receipt), [])
+            self.assertEqual(
+                validate_operator_bundle(run_root, approval_root=root / "approvals"),
+                [],
+            )
+
+    def test_direct_parent_transitional_incomplete_live_run_recovers(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            os.chmod(root, 0o700)
+            binary, auth, binary_sha = _live_material(root)
+            auth_sha = _bytes_sha(auth.read_bytes())
+            request, request_path = _build_request(root, binary_sha=binary_sha)
+            approvals = root / "approvals"
+            issue_live_grant(
+                request_path=request_path,
+                grant_root=approvals,
+                auth_source=auth,
+                wall_clock=lambda: FIXED_TIME,
+            )
+            fake = FakeExecutor(
+                MutableClock(),
+                (canonical_json(_empty_result()) + "\n").encode(),
+                spawn=True,
+            )
+            with mock.patch.object(
+                runner,
+                "_measure_session_tree",
+                side_effect=RuntimeError("synthetic_session_measurement_failure"),
+            ):
+                with self.assertRaisesRegex(RuntimeError, "synthetic_session_measurement_failure"):
+                    _run_adaptive_wave(
+                        request=request,
+                        execution_mode="live",
+                        runtime_root=root / "runtime",
+                        approval_root=approvals,
+                        binary=binary,
+                        auth_source=auth,
+                        executor=fake,
+                        monotonic=fake.clock,
+                        wall_clock=lambda: FIXED_TIME,
+                    )
+            run_root = next((root / "runtime").iterdir())
+            intent_path = run_root / "operator-intent.json"
+            intent = json.loads(intent_path.read_text())
+            transitional_policy = runner._legacy_pre_process_evidence_command_policy_sha256(
+                request
+            )
+            intent["command_binding"]["command_policy_sha256"] = transitional_policy
+            grant_id_hash = _bytes_sha(request["approval"]["grant_id"].encode())
+            grant_path, consumption_path = runner._grant_paths(approvals, grant_id_hash)
+            grant = json.loads(grant_path.read_text())
+            grant["command_policy_sha256"] = transitional_policy
+            grant_raw = (canonical_json(grant) + "\n").encode()
+            _write_private(grant_path, grant_raw)
+            transitional_grant_sha = _bytes_sha(grant_raw)
+            consumption = json.loads(consumption_path.read_text())
+            consumption["grant_sha256"] = transitional_grant_sha
+            _write_private(consumption_path, (canonical_json(consumption) + "\n").encode())
+            active_claim = approvals / f"auth-active-use-{auth_sha}.json"
+            claim = json.loads(active_claim.read_text())
+            claim["grant_sha256"] = transitional_grant_sha
+            _write_private(active_claim, (canonical_json(claim) + "\n").encode())
+            intent["approval"]["grant_sha256"] = transitional_grant_sha
+            _write_private(intent_path, (canonical_json(intent) + "\n").encode())
+            self.assertTrue((run_root / "process-result.json").is_file())
+            self.assertTrue((run_root / "ephemeral-home/auth.json").is_file())
+            self.assertTrue(active_claim.is_file())
+
+            recovered = recover_incomplete_run(
+                run_root,
+                approval_root=approvals,
+                process_group_is_alive=lambda group: False,
+                wall_clock=lambda: FIXED_TIME + timedelta(minutes=5),
+            )
+
+            self.assertEqual(recovered["status"], "crash_recovered")
+            self.assertIn(
+                "process_result_journal_sha256",
+                recovered["artifacts"],
+            )
+            self.assertFalse((run_root / "ephemeral-home").exists())
+            self.assertFalse(active_claim.exists())
+            self.assertEqual(validate_operator_receipt(recovered), [])
+            self.assertEqual(validate_operator_bundle(run_root, approval_root=approvals), [])
+
+    def test_keyless_legacy_incomplete_fixture_recovery_emits_legacy_receipt_shape(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            request, _ = _build_request(root)
+            _, run_root = _run_adaptive_wave(
+                request=request,
+                execution_mode="fixture",
+                runtime_root=root / "runtime",
+                approval_root=root / "approvals",
+                binary=Path("fixture-grok.invalid"),
+                auth_source=None,
+                executor=runner.OfflineFixtureExecutor(),
+                monotonic=MutableClock(),
+                wall_clock=lambda: FIXED_TIME,
+            )
+            transitional_policy = runner._legacy_pre_process_evidence_command_policy_sha256(
+                request
+            )
+            intent_path = run_root / "operator-intent.json"
+            intent = json.loads(intent_path.read_text())
+            intent.pop("process_evidence_generation")
+            intent["command_binding"]["command_policy_sha256"] = transitional_policy
+            _write_private(intent_path, (canonical_json(intent) + "\n").encode())
+            (run_root / "operator-receipt.json").unlink()
+            (run_root / "process-result.json").unlink()
+
+            recovered = recover_incomplete_run(
+                run_root,
+                approval_root=root / "approvals",
+                wall_clock=lambda: FIXED_TIME + timedelta(minutes=5),
+            )
+
+            self.assertEqual(recovered["status"], "crash_recovered")
+            self.assertNotIn(
+                "process_result_journal_sha256",
+                recovered["artifacts"],
+            )
+            self.assertEqual(validate_operator_receipt(recovered), [])
+            self.assertEqual(
+                validate_operator_bundle(run_root, approval_root=root / "approvals"),
+                [],
+            )
+
     def test_journal_publish_failure_preserves_claim_and_recovery_seals_from_ledger(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
