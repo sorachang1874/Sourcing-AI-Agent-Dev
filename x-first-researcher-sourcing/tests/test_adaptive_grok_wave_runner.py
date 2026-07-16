@@ -56,6 +56,7 @@ from x_first.recall_pool_schema import (  # noqa: E402
     MiniDraft202012Error,
     assert_schema_valid,
     contract_schema_sha256,
+    schema_errors,
 )
 
 FIXED_TIME = datetime(2026, 7, 14, 10, 0, 0, tzinfo=UTC)
@@ -569,7 +570,7 @@ def _completed_live_run(root: Path, *, model_result: dict[str, Any] | None = Non
         (canonical_json(model_result if model_result is not None else _empty_result()) + "\n").encode(),
         spawn=True,
     )
-    _, run_root = _run_adaptive_wave(
+    receipt, run_root = _run_adaptive_wave(
         request=request,
         execution_mode="live",
         runtime_root=root / "runtime",
@@ -580,6 +581,20 @@ def _completed_live_run(root: Path, *, model_result: dict[str, Any] | None = Non
         monotonic=clock,
         wall_clock=lambda: FIXED_TIME,
     )
+    if (
+        receipt["command_binding"]["command_policy_sha256"]
+        != runner._current_operator_result_command_policy_sha256(request)
+    ):
+        # Build a genuine pre-process-evidence retained bundle rather than a
+        # hybrid that combines an old command policy with new-only artifacts.
+        intent_path = run_root / "operator-intent.json"
+        receipt_path = run_root / "operator-receipt.json"
+        intent = json.loads(intent_path.read_text())
+        intent.pop("process_evidence_generation", None)
+        receipt["artifacts"].pop("process_result_journal_sha256", None)
+        _write_private(intent_path, (canonical_json(intent) + "\n").encode())
+        _write_private(receipt_path, (canonical_json(receipt) + "\n").encode())
+        (run_root / "process-result.json").unlink()
     return run_root, approvals
 
 
@@ -928,7 +943,6 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             "x.grok.adaptive_recall_wave.request.v2.schema.json": runner._REQUEST_KEYS,
             "x.grok.adaptive_recall_wave.result.v2.schema.json": runner._RESULT_KEYS,
             "x.grok.adaptive_recall_wave.result.v3.schema.json": runner._RESULT_KEYS,
-            "x.grok.adaptive_recall_wave.intent.v2.schema.json": runner._INTENT_KEYS,
             "x.grok.adaptive_recall_wave.operator_receipt.v3.schema.json": runner._RECEIPT_KEYS,
             "x.grok.adaptive_recall_wave.live_grant.v2.schema.json": runner._GRANT_KEYS,
             "x.grok.adaptive_recall_wave.live_grant_consumption.v2.schema.json": runner._CONSUMPTION_KEYS,
@@ -940,6 +954,11 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             schema = json.loads((ROOT / "contracts" / name).read_text())
             self.assertEqual(set(schema["required"]), keys, name)
             self.assertEqual(set(schema["properties"]), keys, name)
+        intent_schema = json.loads(
+            (ROOT / "contracts/x.grok.adaptive_recall_wave.intent.v2.schema.json").read_text()
+        )
+        self.assertEqual(set(intent_schema["required"]), runner._LEGACY_INTENT_KEYS)
+        self.assertEqual(set(intent_schema["properties"]), runner._INTENT_KEYS)
         receipt_schema = json.loads(
             (ROOT / "contracts/x.grok.adaptive_recall_wave.operator_receipt.v3.schema.json").read_text()
         )
@@ -948,6 +967,14 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
         )
         self.assertEqual(set(receipt_v2_schema["$defs"]["command_binding"]["required"]), runner._COMMAND_BINDING_KEYS)
         self.assertEqual(set(receipt_v2_schema["properties"]["process"]["required"]), runner._PROCESS_KEYS)
+        self.assertEqual(
+            set(receipt_schema["properties"]["artifacts"]["required"]),
+            runner._LEGACY_ARTIFACT_KEYS,
+        )
+        self.assertEqual(
+            set(receipt_schema["properties"]["artifacts"]["properties"]),
+            runner._ARTIFACT_KEYS,
+        )
         self.assertEqual(set(receipt_schema["properties"]["session_proof"]["required"]), runner._SESSION_PROOF_KEYS)
         self.assertEqual(
             set(receipt_schema["properties"]["session_proof"]["properties"]),
@@ -2926,6 +2953,16 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
 
             self.assertEqual(receipt["status"], "result_contract_invalid")
             self.assertEqual(receipt["session_proof"]["status"], "verified")
+            intent_path = run_root / "operator-intent.json"
+            intent = json.loads(intent_path.read_text())
+            intent.pop("process_evidence_generation", None)
+            receipt["artifacts"].pop("process_result_journal_sha256", None)
+            _write_private(intent_path, (canonical_json(intent) + "\n").encode())
+            _write_private(
+                run_root / "operator-receipt.json",
+                (canonical_json(receipt) + "\n").encode(),
+            )
+            (run_root / "process-result.json").unlink()
             self.assertEqual(validate_operator_bundle(run_root, approval_root=approvals), [])
 
     def test_operator_projection_accepts_exact_observed_model_ledger_disagreement(self) -> None:
@@ -3140,8 +3177,11 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             for artifact in (intent, receipt):
                 artifact["command_binding"]["argv_sha256"] = runner.canonical_sha256(legacy_command)
                 artifact["command_binding"]["command_policy_sha256"] = legacy_policy_sha
+            intent.pop("process_evidence_generation", None)
+            receipt["artifacts"].pop("process_result_journal_sha256", None)
             _write_private(intent_path, (canonical_json(intent) + "\n").encode())
             _write_private(receipt_path, (canonical_json(receipt) + "\n").encode())
+            (run_root / "process-result.json").unlink()
             self.assertEqual(validate_operator_receipt(receipt), [])
             self.assertEqual(validate_operator_bundle(run_root), [])
             relative_run_root = Path(os.path.relpath(run_root, Path.cwd()))
@@ -4679,22 +4719,23 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             self.assertEqual(fake.target_release_count, 0)
             self.assertEqual(len(list(approvals.glob("consumption-*.json"))), 1)
             self.assertFalse((approvals / f"auth-taint-{auth_sha}.json").exists())
-            self.assertFalse((approvals / f"auth-active-use-{auth_sha}.json").exists())
+            active_claim = approvals / f"auth-active-use-{auth_sha}.json"
+            self.assertTrue(active_claim.is_file())
 
-            # The live process knows the release callback failed and therefore
-            # leaves unchanged OAuth reusable. Once that proof is gone, legacy
-            # recovery must conservatively classify the ledger below.
+            # Durable launcher identity now transfers cleanup ownership before
+            # target release. Missing process spools leave this rare expiry
+            # window fail-closed rather than releasing the shared auth digest.
             next_request = copy.deepcopy(request)
             next_request["request_id"] = "xwave_req_22222222222222222222222222222222"
             next_request["approval"]["grant_id"] = "clean-after-unreleased-ledger"
             _write_private(request_path, (canonical_json(next_request) + "\n").encode())
-            _, next_grant_path = issue_live_grant(
-                request_path=request_path,
-                grant_root=approvals,
-                auth_source=auth,
-                wall_clock=lambda: FIXED_TIME,
-            )
-            self.assertTrue(next_grant_path.is_file())
+            with self.assertRaisesRegex(PermissionError, "grok_auth_digest_in_use"):
+                issue_live_grant(
+                    request_path=request_path,
+                    grant_root=approvals,
+                    auth_source=auth,
+                    wall_clock=lambda: FIXED_TIME,
+                )
 
             run_root = next((root / "runtime").iterdir())
             self.assertTrue((run_root / "process-ledger.json").is_file())
@@ -4706,6 +4747,8 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
                     wall_clock=lambda: FIXED_TIME + timedelta(minutes=5),
                 )
             self.assertFalse((run_root / "operator-receipt.json").exists())
+            self.assertTrue((run_root / "ephemeral-home/auth.json").is_file())
+            self.assertTrue(active_claim.is_file())
 
     def test_bundle_replay_rejects_launcher_verification_outside_grant_window(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -5203,6 +5246,12 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             run_root, approvals = _completed_live_run(Path(directory))
             journal_path = run_root / "process-result.json"
             journal_raw = journal_path.read_bytes()
+            intent_path = run_root / "operator-intent.json"
+            intent = json.loads(intent_path.read_text())
+            self.assertEqual(
+                intent["process_evidence_generation"],
+                runner.PROCESS_EVIDENCE_GENERATION,
+            )
             receipt = json.loads((run_root / "operator-receipt.json").read_text())
             self.assertEqual(
                 receipt["artifacts"]["process_result_journal_sha256"],
@@ -5221,10 +5270,69 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             self.assertEqual(journal["stderr_bytes"], (run_root / "stderr.txt").stat().st_size)
 
             journal_path.unlink()
+            intent.pop("process_evidence_generation")
+            _write_private(intent_path, (canonical_json(intent) + "\n").encode())
+            receipt["artifacts"].pop("process_result_journal_sha256")
+            _write_private(
+                run_root / "operator-receipt.json",
+                (canonical_json(receipt) + "\n").encode(),
+            )
+            self.assertFalse(runner._intent_valid(intent))
+            self.assertIn(
+                "receipt_process_evidence_generation_mismatch",
+                validate_operator_receipt(receipt),
+            )
 
             errors = validate_operator_bundle(run_root, approval_root=approvals)
             self.assertIn("process_result_journal_missing", errors)
-            self.assertIn("process_result_journal_hash_without_artifact", errors)
+            self.assertIn("intent_process_evidence_generation_missing", errors)
+            self.assertIn("receipt_process_evidence_generation_missing", errors)
+
+    def test_pre_generation_intent_and_receipt_validate_in_schema_and_runtime(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            request, request_path = _build_request(root)
+            receipt, run_root = _run_adaptive_wave(
+                request=request,
+                execution_mode="fixture",
+                runtime_root=root / "runtime",
+                approval_root=root / "approvals",
+                binary=Path("fixture-grok.invalid"),
+                auth_source=None,
+                executor=runner.OfflineFixtureExecutor(),
+                monotonic=MutableClock(),
+                wall_clock=lambda: FIXED_TIME,
+            )
+            del request_path
+            legacy_policy = runner._legacy_pre_process_evidence_command_policy_sha256(request)
+            intent_path = run_root / "operator-intent.json"
+            intent = json.loads(intent_path.read_text())
+            intent.pop("process_evidence_generation")
+            intent["command_binding"]["command_policy_sha256"] = legacy_policy
+            receipt["command_binding"]["command_policy_sha256"] = legacy_policy
+            receipt["artifacts"].pop("process_result_journal_sha256")
+            _write_private(intent_path, (canonical_json(intent) + "\n").encode())
+            _write_private(
+                run_root / "operator-receipt.json",
+                (canonical_json(receipt) + "\n").encode(),
+            )
+            (run_root / "process-result.json").unlink()
+
+            intent_shape_schema = json.loads(
+                (ROOT / "contracts/x.grok.adaptive_recall_wave.intent.v2.schema.json").read_text()
+            )
+            # The project mini-validator intentionally supports only local
+            # refs; validate the compatibility branch at the schema entrypoint
+            # while runtime validation below replays every externally-reffed
+            # value contract.
+            intent_shape_schema["properties"] = {
+                key: True for key in intent_shape_schema["properties"]
+            }
+            self.assertEqual(schema_errors(intent, intent_shape_schema), [])
+            assert_schema_valid(receipt, "x.grok.adaptive_recall_wave.operator_receipt.v3.schema.json")
+            self.assertTrue(runner._intent_valid(intent))
+            self.assertEqual(validate_operator_receipt(receipt), [])
+            self.assertEqual(validate_operator_bundle(run_root, approval_root=root / "approvals"), [])
 
     def test_journal_publish_failure_preserves_claim_and_recovery_seals_from_ledger(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -5299,6 +5407,67 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
                 "process_result_journal_hash_mismatch",
                 validate_operator_bundle(run_root, approval_root=approvals),
             )
+
+    def test_durable_spawn_transfers_cleanup_to_recovery_before_executor_return(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            os.chmod(root, 0o700)
+            binary, auth, binary_sha = _live_material(root)
+            auth_sha = _bytes_sha(auth.read_bytes())
+            request, request_path = _build_request(root, binary_sha=binary_sha)
+            approvals = root / "approvals"
+            issue_live_grant(
+                request_path=request_path,
+                grant_root=approvals,
+                auth_source=auth,
+                wall_clock=lambda: FIXED_TIME,
+            )
+
+            def spawn_then_raise(command: list[str], **kwargs: Any) -> ProcessResult:
+                del command
+                _write_private(kwargs["stdout_spool"], (canonical_json(_empty_result()) + "\n").encode())
+                _write_private(kwargs["stderr_spool"], b"synthetic executor finalization failure")
+                kwargs["on_spawn"](
+                    42_425,
+                    42_425,
+                    "synthetic-kernel-birth-42425",
+                    "b" * 64,
+                )
+                raise OSError("synthetic_post_spawn_executor_failure")
+
+            with self.assertRaisesRegex(OSError, "synthetic_post_spawn_executor_failure"):
+                _run_adaptive_wave(
+                    request=request,
+                    execution_mode="live",
+                    runtime_root=root / "runtime",
+                    approval_root=approvals,
+                    binary=binary,
+                    auth_source=auth,
+                    executor=spawn_then_raise,
+                    monotonic=MutableClock(),
+                    wall_clock=lambda: FIXED_TIME,
+                )
+            run_root = next((root / "runtime").iterdir())
+            active_claim = approvals / f"auth-active-use-{auth_sha}.json"
+            self.assertTrue((run_root / "process-ledger.json").is_file())
+            self.assertTrue((run_root / "ephemeral-home/auth.json").is_file())
+            self.assertTrue(active_claim.is_file())
+            self.assertFalse((run_root / "operator-receipt.json").exists())
+
+            recovered = recover_incomplete_run(
+                run_root,
+                approval_root=approvals,
+                process_group_is_alive=lambda group: False,
+                wall_clock=lambda: FIXED_TIME + timedelta(minutes=5),
+            )
+            self.assertEqual(recovered["status"], "crash_recovered")
+            self.assertEqual(
+                json.loads((run_root / "process-result.json").read_text())["phase"],
+                "recovery_sealed",
+            )
+            self.assertFalse((run_root / "ephemeral-home").exists())
+            self.assertFalse(active_claim.exists())
+            self.assertEqual(validate_operator_bundle(run_root, approval_root=approvals), [])
 
     def test_unconfirmed_result_without_process_identity_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -6176,7 +6345,26 @@ sys.stdin.buffer.read(1)
                 )
             run_root = next((root / "runtime").iterdir())
             self.assertTrue((run_root / "operator-intent.json").is_file())
+            active_claim = approvals / f"auth-active-use-{auth_sha}.json"
+            self.assertTrue((run_root / "ephemeral-home/auth.json").is_file())
+            self.assertTrue(active_claim.is_file())
+            with self.assertRaisesRegex(PermissionError, "grok_auth_digest_in_use"):
+                issue_live_grant(
+                    request_path=request_path,
+                    grant_root=approvals,
+                    auth_source=auth,
+                    wall_clock=lambda: FIXED_TIME,
+                )
+
+            recovered = recover_incomplete_run(
+                run_root,
+                approval_root=approvals,
+                process_group_is_alive=lambda group: False,
+                wall_clock=lambda: FIXED_TIME + timedelta(minutes=5),
+            )
+            self.assertEqual(recovered["status"], "crash_recovered")
             self.assertFalse((run_root / "ephemeral-home").exists())
+            self.assertFalse(active_claim.exists())
             marker = json.loads((approvals / f"auth-taint-{auth_sha}.json").read_text())
             self.assertEqual(marker["reason"], "copied_auth_mutated")
             with self.assertRaisesRegex(PermissionError, "grok_auth_digest_tainted"):

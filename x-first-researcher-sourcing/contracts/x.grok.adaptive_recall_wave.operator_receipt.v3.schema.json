@@ -260,6 +260,17 @@
     "artifacts": {
       "type": "object",
       "additionalProperties": false,
+      "oneOf": [
+        {
+          "required": ["process_result_journal_sha256"],
+          "minProperties": 16,
+          "maxProperties": 16
+        },
+        {
+          "minProperties": 15,
+          "maxProperties": 15
+        }
+      ],
       "required": [
         "raw_stdout_sha256",
         "stderr_sha256",
@@ -270,7 +281,6 @@
         "non_json_suffix_bytes",
         "compiled_prompt_sha256",
         "session_updates_sha256",
-        "process_result_journal_sha256",
         "ephemeral_tree_deleted",
         "session_tree_file_count",
         "session_tree_entry_count",

@@ -66,6 +66,7 @@ PROCESS_LEDGER_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.process_ledger.v2"
 LEGACY_PROCESS_RESULT_JOURNAL_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.process_result_journal.v1"
 PROCESS_RESULT_JOURNAL_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.process_result_journal.v2"
 PROCESS_EVIDENCE_GENERATION = "journal_spool_bound_v1"
+PROCESS_EVIDENCE_POLICY_VERSION = "process-evidence-journal-spool-bound-v1"
 DELETION_JOURNAL_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.deletion_journal.v1"
 DELETION_RECEIPT_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.deletion_receipt.v1"
 AUTH_TAINT_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.auth_taint.v1"
@@ -2375,6 +2376,19 @@ def _current_operator_result_command_policy_sha256(request: Mapping[str, Any]) -
             "argv_template": _command_policy(request),
             "result_normalization_policy_version": RESULT_NORMALIZATION_POLICY_VERSION,
             "operator_result_artifact_policy_version": OPERATOR_RESULT_ARTIFACT_POLICY_VERSION,
+            "process_evidence_policy_version": PROCESS_EVIDENCE_POLICY_VERSION,
+        }
+    )
+
+
+def _legacy_pre_process_evidence_command_policy_sha256(request: Mapping[str, Any]) -> str:
+    """Replay-only digest for bundles sealed before journal-generation binding."""
+
+    return canonical_sha256(
+        {
+            "argv_template": _command_policy(request),
+            "result_normalization_policy_version": RESULT_NORMALIZATION_POLICY_VERSION,
+            "operator_result_artifact_policy_version": OPERATOR_RESULT_ARTIFACT_POLICY_VERSION,
         }
     )
 
@@ -2411,6 +2425,7 @@ def _redacted_policy_from_bindings(
     legacy_operator_result_v1: bool = False,
     legacy_operator_result_v2: bool = False,
     legacy_pre_normalization_result_v3: bool = False,
+    legacy_pre_process_evidence: bool = False,
 ) -> list[str] | dict[str, Any]:
     del input_binding
     synthetic_request = {
@@ -2439,7 +2454,81 @@ def _redacted_policy_from_bindings(
     }
     if not legacy_normalization_only_result_v3:
         policy["operator_result_artifact_policy_version"] = OPERATOR_RESULT_ARTIFACT_POLICY_VERSION
+    if not (
+        legacy_plain
+        or legacy_result_v2
+        or legacy_pre_normalization_result_v3
+        or legacy_normalization_only_result_v3
+        or legacy_operator_result_v1
+        or legacy_operator_result_v2
+        or legacy_pre_process_evidence
+    ):
+        policy["process_evidence_policy_version"] = PROCESS_EVIDENCE_POLICY_VERSION
     return policy
+
+
+def _process_evidence_generation_from_bindings(
+    input_binding: Mapping[str, Any],
+    command_binding: Mapping[str, Any],
+) -> str | None:
+    """Select process-evidence generation from the existing policy digest."""
+
+    recorded = command_binding.get("command_policy_sha256")
+    current = canonical_sha256(_redacted_policy_from_bindings(input_binding, command_binding))
+    if recorded == current:
+        return "current"
+    legacy = {
+        canonical_sha256(
+            _redacted_policy_from_bindings(
+                input_binding,
+                command_binding,
+                legacy_pre_process_evidence=True,
+            )
+        ),
+        canonical_sha256(
+            _redacted_policy_from_bindings(
+                input_binding,
+                command_binding,
+                legacy_operator_result_v1=True,
+            )
+        ),
+        canonical_sha256(
+            _redacted_policy_from_bindings(
+                input_binding,
+                command_binding,
+                legacy_operator_result_v2=True,
+            )
+        ),
+        canonical_sha256(
+            _redacted_policy_from_bindings(
+                input_binding,
+                command_binding,
+                legacy_normalization_only_result_v3=True,
+            )
+        ),
+        canonical_sha256(
+            _redacted_policy_from_bindings(
+                input_binding,
+                command_binding,
+                legacy_pre_normalization_result_v3=True,
+            )
+        ),
+        canonical_sha256(
+            _redacted_policy_from_bindings(
+                input_binding,
+                command_binding,
+                legacy_plain=True,
+            )
+        ),
+        canonical_sha256(
+            _redacted_policy_from_bindings(
+                input_binding,
+                command_binding,
+                legacy_result_v2=True,
+            )
+        ),
+    }
+    return "legacy" if recorded in legacy else None
 
 
 def _redacted_environment_policy() -> dict[str, str]:
@@ -5598,9 +5687,17 @@ def _run_adaptive_wave(
             effective_prompt_policy=effective_prompt_policy,
         )
         recorded_command_policy = command_binding["command_policy_sha256"]
+        current_process_evidence_generation = (
+            _process_evidence_generation_from_bindings(input_binding, command_binding)
+            == "current"
+        )
         result_normalization_policy_version = (
             RESULT_NORMALIZATION_POLICY_VERSION
-            if recorded_command_policy == _current_operator_result_command_policy_sha256(request)
+            if recorded_command_policy
+            in {
+                _current_operator_result_command_policy_sha256(request),
+                _legacy_pre_process_evidence_command_policy_sha256(request),
+            }
             else LEGACY_RESULT_NORMALIZATION_POLICY_VERSION_V2
             if recorded_command_policy == _legacy_operator_result_v2_command_policy_sha256(request)
             else LEGACY_RESULT_NORMALIZATION_POLICY_VERSION_V1
@@ -5634,9 +5731,10 @@ def _run_adaptive_wave(
             "budget": request["budget"],
             "retention": request["retention"],
             "runtime_layout": runtime_layout,
-            "process_evidence_generation": PROCESS_EVIDENCE_GENERATION,
             "authority": AUTHORITY,
         }
+        if current_process_evidence_generation:
+            intent["process_evidence_generation"] = PROCESS_EVIDENCE_GENERATION
         _atomic_publish(run_root / "operator-request.json", (canonical_json(request) + "\n").encode())
         _atomic_publish(run_root / "operator-intent.json", (canonical_json(intent) + "\n").encode())
 
@@ -5719,7 +5817,7 @@ def _run_adaptive_wave(
             kernel_birth_identity: str,
             process_identity_token: str,
         ) -> None:
-            nonlocal process_ledger_sha, target_release_authorized
+            nonlocal defer_cleanup_to_recovery, process_ledger_sha, target_release_authorized
             launcher_verified_clock = wall_clock().astimezone(UTC)
             ledger = {
                 "schema_version": PROCESS_LEDGER_SCHEMA_VERSION,
@@ -5736,6 +5834,11 @@ def _run_adaptive_wave(
             raw_ledger = (canonical_json(ledger) + "\n").encode()
             _atomic_publish(run_root / "process-ledger.json", raw_ledger)
             process_ledger_sha = bytes_sha256(raw_ledger)
+            # Durable spawn identity transfers all process/session/auth cleanup
+            # to recovery immediately.  The executor may still raise before
+            # returning a ProcessResult (including during its own fsync/close
+            # finalization), so ordinary cleanup cannot safely resume here.
+            defer_cleanup_to_recovery = True
             # The gated launcher has not exec'd the target yet. Recheck after
             # durable ledger publication, immediately before the executor
             # releases the gate; no provider work occurs if this fails.
@@ -6088,6 +6191,8 @@ def _run_adaptive_wave(
             "reconciliation": reconciliation,
             "authority": AUTHORITY,
         }
+        if not current_process_evidence_generation:
+            receipt["artifacts"].pop("process_result_journal_sha256")
         receipt_errors = validate_operator_receipt(receipt)
         if receipt_errors:
             raise AdaptiveWaveValidationError("generated_receipt_invalid:" + ",".join(receipt_errors))
@@ -6143,6 +6248,14 @@ def _intent_valid(intent: Any) -> bool:
     if not isinstance(intent, dict) or set(intent) not in (_INTENT_KEYS, _LEGACY_INTENT_KEYS):
         return False
     current_process_evidence = set(intent) == _INTENT_KEYS
+    input_binding = intent.get("input_binding")
+    command_binding = intent.get("command_binding")
+    if not _input_binding_valid(input_binding) or not _command_binding_valid(command_binding):
+        return False
+    process_evidence_generation = _process_evidence_generation_from_bindings(
+        input_binding,
+        command_binding,
+    )
     return (
         intent.get("schema_version") == INTENT_SCHEMA_VERSION
         and isinstance(intent.get("run_id"), str)
@@ -6154,8 +6267,6 @@ def _intent_valid(intent: Any) -> bool:
         and intent.get("execution_mode") in {"fixture", "live"}
         and _timestamp_valid(intent.get("started_at"))
         and _is_sha(intent.get("run_lease_sha256"))
-        and _input_binding_valid(intent.get("input_binding"))
-        and _command_binding_valid(intent.get("command_binding"))
         and _approval_binding_valid(intent.get("approval"), intent.get("execution_mode"), terminal=False)
         and _emergency_valid(intent.get("emergency"))
         and _technical_limits_valid(intent.get("technical_limits"))
@@ -6163,9 +6274,16 @@ def _intent_valid(intent: Any) -> bool:
         and _retention_valid(intent.get("retention"))
         and _runtime_layout_valid(intent.get("runtime_layout"))
         and (
-            intent.get("process_evidence_generation") == PROCESS_EVIDENCE_GENERATION
-            if current_process_evidence
-            else "process_evidence_generation" not in intent
+            (
+                process_evidence_generation == "current"
+                and current_process_evidence
+                and intent.get("process_evidence_generation") == PROCESS_EVIDENCE_GENERATION
+            )
+            or (
+                process_evidence_generation == "legacy"
+                and not current_process_evidence
+                and "process_evidence_generation" not in intent
+            )
         )
         and intent.get("authority") == AUTHORITY
     )
@@ -6798,6 +6916,13 @@ def validate_operator_receipt(receipt: Any) -> list[str]:
         current_schema_sha = result_schema_sha256()
         legacy_schema_sha = result_schema_sha256(legacy_v2=True)
         current_policy = canonical_sha256(_redacted_policy_from_bindings(input_binding, command_binding))
+        legacy_pre_process_evidence_policy = canonical_sha256(
+            _redacted_policy_from_bindings(
+                input_binding,
+                command_binding,
+                legacy_pre_process_evidence=True,
+            )
+        )
         legacy_operator_result_v1_policy = canonical_sha256(
             _redacted_policy_from_bindings(
                 input_binding,
@@ -6835,11 +6960,26 @@ def validate_operator_receipt(receipt: Any) -> list[str]:
         if recorded_schema_sha not in {current_schema_sha, legacy_schema_sha}:
             errors.append("receipt_result_schema_hash_invalid")
         recorded_policy = command_binding["command_policy_sha256"]
+        process_evidence_generation = _process_evidence_generation_from_bindings(
+            input_binding,
+            command_binding,
+        )
+        if process_evidence_generation == "current":
+            if not (
+                isinstance(artifacts, dict)
+                and set(artifacts) == _ARTIFACT_KEYS
+                and _is_sha(artifacts.get("process_result_journal_sha256"))
+            ):
+                errors.append("receipt_process_evidence_generation_mismatch")
+        elif process_evidence_generation == "legacy":
+            if not isinstance(artifacts, dict) or set(artifacts) != _LEGACY_ARTIFACT_KEYS:
+                errors.append("receipt_legacy_process_evidence_shape_mismatch")
         schema_policy_pair_valid = (
             recorded_schema_sha == current_schema_sha
             and recorded_policy
             in {
                 current_policy,
+                legacy_pre_process_evidence_policy,
                 legacy_operator_result_v1_policy,
                 legacy_operator_result_v2_policy,
                 normalization_only_result_v3_policy,
@@ -6975,9 +7115,6 @@ def validate_operator_bundle(
         return errors + ["bundle_object_invalid"]
     if request_contract_errors:
         return errors
-    current_process_evidence = (
-        intent.get("process_evidence_generation") == PROCESS_EVIDENCE_GENERATION
-    )
     recorded_binding = receipt.get("command_binding")
     recorded_schema_sha = (
         recorded_binding.get("structured_output_schema_sha256")
@@ -7076,6 +7213,9 @@ def validate_operator_bundle(
     command_binding = receipt.get("command_binding", {})
     input_binding = receipt.get("input_binding", {})
     new_command_policy = command_policy_sha256(request)
+    legacy_pre_process_evidence_policy = _legacy_pre_process_evidence_command_policy_sha256(
+        request
+    )
     legacy_operator_result_v1_policy = _legacy_operator_result_v1_command_policy_sha256(request)
     legacy_operator_result_v2_policy = _legacy_operator_result_v2_command_policy_sha256(request)
     normalization_only_result_v3_policy = _legacy_normalization_only_result_v3_command_policy_sha256(request)
@@ -7086,12 +7226,34 @@ def validate_operator_bundle(
         command_binding.get("command_policy_sha256") if isinstance(command_binding, dict) else None
     )
     current_operator_result_replay = recorded_command_policy == new_command_policy
+    legacy_pre_process_evidence_replay = (
+        recorded_command_policy == legacy_pre_process_evidence_policy
+    )
+    # The independently replayed command/artifact policy owns the process
+    # evidence generation. Optional intent/receipt keys are checked against
+    # this decision below and can never select a weaker branch themselves.
+    current_process_evidence = current_operator_result_replay
+    receipt_artifacts = receipt.get("artifacts")
+    intent_declares_current_process_evidence = (
+        intent.get("process_evidence_generation") == PROCESS_EVIDENCE_GENERATION
+    )
+    receipt_declares_current_process_evidence = (
+        isinstance(receipt_artifacts, dict)
+        and "process_result_journal_sha256" in receipt_artifacts
+    )
+    if current_process_evidence:
+        if not intent_declares_current_process_evidence:
+            errors.append("intent_process_evidence_generation_missing")
+        if not receipt_declares_current_process_evidence:
+            errors.append("receipt_process_evidence_generation_missing")
+    elif intent_declares_current_process_evidence or receipt_declares_current_process_evidence:
+        errors.append("legacy_process_evidence_shape_mismatch")
     legacy_operator_result_v1_replay = recorded_command_policy == legacy_operator_result_v1_policy
     legacy_operator_result_v2_replay = recorded_command_policy == legacy_operator_result_v2_policy
     normalization_only_result_v3_replay = recorded_command_policy == normalization_only_result_v3_policy
     result_normalization_policy_version = (
         RESULT_NORMALIZATION_POLICY_VERSION
-        if current_operator_result_replay
+        if current_operator_result_replay or legacy_pre_process_evidence_replay
         else LEGACY_RESULT_NORMALIZATION_POLICY_VERSION_V2
         if legacy_operator_result_v2_replay
         else LEGACY_RESULT_NORMALIZATION_POLICY_VERSION_V1
@@ -7100,6 +7262,7 @@ def validate_operator_bundle(
     )
     operator_artifact_policy_replay = (
         current_operator_result_replay
+        or legacy_pre_process_evidence_replay
         or legacy_operator_result_v2_replay
         or legacy_operator_result_v1_replay
     )
@@ -7108,6 +7271,7 @@ def validate_operator_bundle(
     legacy_result_policy_replay = recorded_command_policy == legacy_result_command_policy
     if recorded_command_policy not in {
         new_command_policy,
+        legacy_pre_process_evidence_policy,
         legacy_operator_result_v1_policy,
         legacy_operator_result_v2_policy,
         normalization_only_result_v3_policy,
@@ -7123,6 +7287,7 @@ def validate_operator_bundle(
         not legacy_result_schema_replay
         and not (
             current_operator_result_replay
+            or legacy_pre_process_evidence_replay
             or legacy_operator_result_v2_replay
             or legacy_operator_result_v1_replay
             or normalization_only_result_v3_replay
@@ -7191,6 +7356,8 @@ def validate_operator_bundle(
                 if legacy_operator_result_v2_replay
                 else legacy_operator_result_v1_policy
                 if legacy_operator_result_v1_replay
+                else legacy_pre_process_evidence_policy
+                if legacy_pre_process_evidence_replay
                 else new_command_policy
             ),
             "environment_policy_sha256": canonical_sha256(_redacted_environment_policy()),
@@ -7259,6 +7426,8 @@ def validate_operator_bundle(
                                 if legacy_operator_result_v2_replay
                                 else legacy_operator_result_v1_policy
                                 if legacy_operator_result_v1_replay
+                                else legacy_pre_process_evidence_policy
+                                if legacy_pre_process_evidence_replay
                                 else new_command_policy
                             ),
                             replay_result_schema_sha256=(
@@ -7627,6 +7796,7 @@ def validate_operator_bundle(
             errors.append("structured_output_schema_hash_mismatch")
         if command_binding["command_policy_sha256"] not in {
             command_policy_sha256(request),
+            _legacy_pre_process_evidence_command_policy_sha256(request),
             _legacy_operator_result_v1_command_policy_sha256(request),
             _legacy_operator_result_v2_command_policy_sha256(request),
             _legacy_normalization_only_result_v3_command_policy_sha256(request),
@@ -7827,14 +7997,31 @@ def _recover_incomplete_run_locked(
     intent = _read_private_json(run_root / "operator-intent.json")
     if not _intent_valid(intent):
         raise AdaptiveWaveValidationError("intent_invalid")
-    current_process_evidence = (
-        intent.get("process_evidence_generation") == PROCESS_EVIDENCE_GENERATION
-    )
     if intent["run_lease_sha256"] != held_lease_sha:
         raise AdaptiveWaveValidationError("recovery_run_lease_binding_invalid")
     request = _read_private_json(run_root / "operator-request.json")
     if validate_request(request) or canonical_sha256(request) != intent["request_sha256"]:
         raise AdaptiveWaveValidationError("recovery_request_invalid")
+    recovery_recorded_command_policy = intent["command_binding"]["command_policy_sha256"]
+    current_process_evidence = (
+        recovery_recorded_command_policy == command_policy_sha256(request)
+    )
+    recognized_legacy_process_evidence_policy = recovery_recorded_command_policy in {
+        _legacy_pre_process_evidence_command_policy_sha256(request),
+        _legacy_operator_result_v1_command_policy_sha256(request),
+        _legacy_operator_result_v2_command_policy_sha256(request),
+        _legacy_normalization_only_result_v3_command_policy_sha256(request),
+        _legacy_pre_normalization_result_v3_command_policy_sha256(request),
+        _legacy_command_policy_sha256(request),
+        _legacy_structured_result_command_policy_sha256(request),
+    }
+    if not current_process_evidence and not recognized_legacy_process_evidence_policy:
+        raise AdaptiveWaveValidationError("recovery_command_policy_unrecognized")
+    if current_process_evidence:
+        if intent.get("process_evidence_generation") != PROCESS_EVIDENCE_GENERATION:
+            raise AdaptiveWaveValidationError("recovery_process_evidence_generation_missing")
+    elif "process_evidence_generation" in intent:
+        raise AdaptiveWaveValidationError("recovery_legacy_process_evidence_shape_mismatch")
     recovery_effective_prompt_policy: EffectivePromptPolicyBinding | None = None
     recovery_auth_sha256: str | None = None
     recovery_grant_sha256: str | None = None
@@ -8127,7 +8314,11 @@ def _recover_incomplete_run_locked(
     recovery_recorded_policy = intent["command_binding"].get("command_policy_sha256")
     recovery_result_normalization_policy_version = (
         RESULT_NORMALIZATION_POLICY_VERSION
-        if recovery_recorded_policy == command_policy_sha256(request)
+        if recovery_recorded_policy
+        in {
+            command_policy_sha256(request),
+            _legacy_pre_process_evidence_command_policy_sha256(request),
+        }
         else LEGACY_RESULT_NORMALIZATION_POLICY_VERSION_V2
         if recovery_recorded_policy == _legacy_operator_result_v2_command_policy_sha256(request)
         else LEGACY_RESULT_NORMALIZATION_POLICY_VERSION_V1

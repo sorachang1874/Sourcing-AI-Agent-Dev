@@ -4,6 +4,17 @@
   "title": "Adaptive Grok recall-wave crash-recovery intent v2",
   "type": "object",
   "additionalProperties": false,
+  "oneOf": [
+    {
+      "required": ["process_evidence_generation"],
+      "minProperties": 17,
+      "maxProperties": 17
+    },
+    {
+      "minProperties": 16,
+      "maxProperties": 16
+    }
+  ],
   "required": [
     "schema_version",
     "run_id",
@@ -17,7 +28,6 @@
     "emergency",
     "technical_limits",
     "runtime_layout",
-    "process_evidence_generation",
     "authority",
     "run_lease_sha256",
     "budget",
