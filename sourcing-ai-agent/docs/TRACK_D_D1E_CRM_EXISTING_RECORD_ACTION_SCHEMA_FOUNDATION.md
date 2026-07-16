@@ -4,7 +4,7 @@
 > declared and validated the first three production action request contracts and their canonical owner binder while
 > deliberately leaving them `declared_not_activated`. D1f now copies those exact declarations into
 > `DEFAULT_ACTION_REGISTRY` atomically with authenticated HTTP/orchestrator binding and dispatch/command-owner exact
-> owner/version revalidation. The current partition is 3 schema-defined / 12 schema-less; R-029 remains open and the
+> owner/version revalidation. The D1f checkpoint partition was 3 schema-defined / 12 schema-less; R-029 remains open and the
 > served Agent tool population remains zero. See `TRACK_D_D1F_CRM_EXISTING_RECORD_ACTION_ACTIVATION.md`.
 
 ## 1. Outcome

@@ -432,6 +432,48 @@ class _ScopeOrchestrator:
         )
         return {"status": "ready", "workspace_id": workspace_id}
 
+    def search_projection_person_index_api(
+        self,
+        projection_id,
+        *,
+        search_keyword="",
+        offset=0,
+        limit=120,
+        workspace_id="default",
+    ):
+        self._capture(
+            "projection_search",
+            {
+                "projection_id": projection_id,
+                "search_keyword": search_keyword,
+                "offset": offset,
+                "limit": limit,
+                "workspace_id": workspace_id,
+            },
+        )
+        return {"status": "ready", "workspace_id": workspace_id, "candidates": []}
+
+    def get_serving_projection_candidate_page(
+        self,
+        projection_id,
+        *,
+        offset=0,
+        limit=120,
+        candidate_filter=None,
+        workspace_id="default",
+    ):
+        self._capture(
+            "projection_candidates",
+            {
+                "projection_id": projection_id,
+                "offset": offset,
+                "limit": limit,
+                "candidate_filter": dict(candidate_filter or {}),
+                "workspace_id": workspace_id,
+            },
+        )
+        return {"status": "ready", "workspace_id": workspace_id, "candidates": []}
+
     def get_serving_projection_person_detail_api(self, projection_id, person_key, *, workspace_id="default"):
         self._capture(
             "projection_person",
@@ -454,6 +496,50 @@ class _ScopeOrchestrator:
     def get_job_candidate_details_batch(self, job_id, candidate_ids):
         self._capture("candidate_batch", {"job_id": job_id, "candidate_ids": list(candidate_ids)})
         return {"status": "ready", "candidates": []}
+
+    def get_job_dashboard(
+        self,
+        job_id,
+        *,
+        include_asset_population_preview=True,
+        workspace_id="default",
+    ):
+        self._capture(
+            "job_dashboard",
+            {
+                "job_id": job_id,
+                "include_asset_population_preview": include_asset_population_preview,
+                "workspace_id": workspace_id,
+            },
+        )
+        return {"status": "ready", "workspace_id": workspace_id}
+
+    def get_job_candidate_page(
+        self,
+        job_id,
+        *,
+        offset=0,
+        limit=120,
+        lightweight=True,
+        candidate_filter=None,
+        workspace_id="default",
+    ):
+        self._capture(
+            "job_candidates",
+            {
+                "job_id": job_id,
+                "offset": offset,
+                "limit": limit,
+                "lightweight": lightweight,
+                "candidate_filter": dict(candidate_filter or {}),
+                "workspace_id": workspace_id,
+            },
+        )
+        return {"status": "ready", "workspace_id": workspace_id, "candidates": []}
+
+    def get_legacy_result_endpoint_retirement_status(self, payload):
+        self._capture("legacy_result_retirement", dict(payload))
+        return {"status": "ready", "cutover_enforced": False}
 
     def cancel_workflow_job(self, job_id, payload, **owner):
         self._capture("job_cancel", {"job_id": job_id, **dict(payload), **owner})
@@ -559,6 +645,90 @@ class RequestScopeWiringTest(unittest.TestCase):
                 )
                 self.assertEqual(status, 200)
                 self.assertEqual(result["workspace_id"], "default")
+
+    def test_job_projection_overlay_reads_use_authenticated_and_open_mode_workspace(self) -> None:
+        base, opener, orchestrator = self._start_server()
+        for path, capture_name in (
+            ("/api/jobs/job-alice/dashboard", "job_dashboard"),
+            ("/api/jobs/job-alice/candidates", "job_candidates"),
+        ):
+            with self.subTest(path=path, scope="authenticated"):
+                status, result = self._request(
+                    opener,
+                    self._url(base, path, {"workspace_id": "user-bob"}),
+                )
+                self.assertEqual(status, 200)
+                self.assertEqual(result["workspace_id"], "user-alice")
+                self.assertEqual(orchestrator.captured[capture_name][-1]["workspace_id"], "user-alice")
+            with self.subTest(path=path, scope="legacy"):
+                status, result = self._request(
+                    opener,
+                    self._url(base, path, {"workspace_id": "default"}),
+                )
+                self.assertEqual(status, 200)
+                self.assertEqual(result["workspace_id"], "default")
+
+        open_base, open_opener, open_orchestrator = self._start_server(authenticated=False)
+        for path, capture_name in (
+            ("/api/jobs/job-alice/dashboard", "job_dashboard"),
+            ("/api/jobs/job-alice/candidates", "job_candidates"),
+        ):
+            with self.subTest(path=path, scope="open_mode"):
+                status, result = self._request(
+                    open_opener,
+                    self._url(open_base, path, {"workspace_id": "operator-workspace"}),
+                    token="",
+                )
+                self.assertEqual(status, 200)
+                self.assertEqual(result["workspace_id"], "operator-workspace")
+                self.assertEqual(
+                    open_orchestrator.captured[capture_name][-1]["workspace_id"],
+                    "operator-workspace",
+                )
+
+    def test_direct_projection_candidate_and_search_reads_cover_all_workspace_modes(self) -> None:
+        base, opener, orchestrator = self._start_server()
+        for path, capture_name in (
+            ("/api/projections/proj1/candidates", "projection_candidates"),
+            ("/api/projections/proj1/search", "projection_search"),
+        ):
+            with self.subTest(path=path, scope="authenticated"):
+                status, result = self._request(
+                    opener,
+                    self._url(base, path, {"workspace_id": "user-bob", "search": "Ada"}),
+                )
+                self.assertEqual(status, 200)
+                self.assertEqual(result["workspace_id"], "user-alice")
+                self.assertEqual(orchestrator.captured[capture_name][-1]["workspace_id"], "user-alice")
+            with self.subTest(path=path, scope="legacy"):
+                status, result = self._request(
+                    opener,
+                    self._url(base, path, {"workspace_id": "default", "search": "Ada"}),
+                )
+                self.assertEqual(status, 200)
+                self.assertEqual(result["workspace_id"], "default")
+
+        open_base, open_opener, open_orchestrator = self._start_server(authenticated=False)
+        for path, capture_name in (
+            ("/api/projections/proj1/candidates", "projection_candidates"),
+            ("/api/projections/proj1/search", "projection_search"),
+        ):
+            with self.subTest(path=path, scope="open_mode"):
+                status, result = self._request(
+                    open_opener,
+                    self._url(
+                        open_base,
+                        path,
+                        {"workspace_id": "operator-workspace", "search": "Ada"},
+                    ),
+                    token="",
+                )
+                self.assertEqual(status, 200)
+                self.assertEqual(result["workspace_id"], "operator-workspace")
+                self.assertEqual(
+                    open_orchestrator.captured[capture_name][-1]["workspace_id"],
+                    "operator-workspace",
+                )
 
     def test_query_dispatch_get_and_post_are_server_scoped(self) -> None:
         base, opener, orchestrator = self._start_server()

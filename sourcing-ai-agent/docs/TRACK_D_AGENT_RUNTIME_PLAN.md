@@ -168,17 +168,41 @@ serve、会话/事件层、planner loop），用一个垂直切片证明闭环�
   physical causality、mutable retry state）。current local fixed-forward 已闭合四项 finding，但新 commit 的 fresh
   pinned review pending，不是 `GO`。Prior stable author evidence=D1i=
   `20+54 subtests`、combined D1=`160+289 subtests`、command/control=`175+503 subtests`、durable+CRM batch=
-  `61+12 subtests`、storage guardrails=`60`、R-019 ratchet=`3`、lint=`58 files`、mypy=`81/4`、compile/diff green。当前 registry=
-  D1j candidate 又将 `add_to_crm` 作为第 6 个 schema-defined action：submit mint owner-bound projection-selection
+  `61+12 subtests`、storage guardrails=`60`、R-019 ratchet=`3`、lint=`58 files`、mypy=`81/4`、compile/diff green。随后
+  D1j candidate 将 `add_to_crm` 作为第 6 个 schema-defined action：submit mint owner-bound projection-selection
   target，dispatch/command-owner 重验 current projection snapshot，forged command target 与 stale revision 在 CRM write
   前失败；author evidence=Operation runtime `137 passed`、targeted D1j `3 passed`、D1 action request surface
   `6 passed`。D1k candidate 又将 `export_candidates` 作为第 7 个 schema-defined action：submit mint owner-bound
   projection membership export target，dispatch 只从 persisted target 规划 `export.projection.generate`，stale
-  membership 在 command planning 前 reselection fail-closed；targeted export/stale + D1 surface author evidence=
-  `8 passed`。当前 registry=**7 schema-defined / 8 schema-less / served=0**；R-019 仍保留 Operation/action preflight→root-UoW race、
+  membership 在 command planning 前 reselection fail-closed；targeted D1j/D1k + D1 surface author evidence=
+  `10 passed`，writer-control=`6 passed`，full Operation runtime=`137 passed`。Combined D1j/D1k pinned `354e979`
+  runner-backed advisory=`NO-GO 0/9/7/1`；其 findings 仍需 fixed-forward + fresh pinned re-review，不是 formal `GO`。
+  D1l candidate 又将 `search_projection` 与 `filter_projection` 作为第 8/9 个 schema-defined action：
+  submit 由 shared-canonical public reader mint owner-bound projection read target，search/filter aliases exact-one 后
+  canonicalize；Operation dispatch 使用 persisted exact workspace 隔离 CRM overlay，authenticated direct/job reads
+  默认使用 server-derived workspace、显式 `default` 保留 pre-auth legacy selector、open mode 保留 explicit
+  workspace；direct candidates/search 覆盖三种模式。Dispatch 以单一 monotonic 5s total deadline 获取 Operation
+  dispatch + projection publication locks（不是 each 5s；past deadline connect 前 fail），busy 分别返回
+  `operation_dispatch_lock_busy` / `projection_publication_lock_busy` + HTTP 409，并持有至 read result 持久化；
+  terminal action+Operation+event 在一个 commandless PG UoW 提交；persisted input/target strict JSON 拒绝 tuple
+  等 Python-only container；pre-read + reader-pinned post-read revision fence 阻断 TOCTOU，generic
+  changed-during-read/page-read/search-read 统一 stale/reselection 且 replay 保留 flag；
+  missing/non-shared/unprovable projection 统一 masked `projection_not_found`/HTTP 404 且 submit-time 零
+  action/operation，caller-supplied stale revision submit-time 零写，成功 submit 后 observation 到的 stale 才持久化
+  Operation failure/reselection evidence。Final stable author evidence=adversarial `5+9 subtests`、API+writer
+  `50+87 subtests`、D1 contract `133+176 subtests`、full Operation runtime `139`、lint `58 files`、mypy `81/4`、
+  compile/diff clean；fresh dirty-tree non-author read-only re-audit=`GO 0/0/0/0`，但未 pin、不是 formal `GO`，
+  fresh hash-bound review pending。当前 registry=**9 schema-defined / 6 schema-less / served=0**。D1l 不新增
+  direct state-sync caller，26 棘轮不升；因无 workflow
+  command，command generation/lease fence 不适用。该 bounded specialization 不关闭 R-019：其它路径仍保留
+  Operation/action preflight→root-UoW race、
   current-state/recovery/Operation post-commit sync 与 failure-CAS acknowledgement ambiguity；typed D1i uniqueness
   不扩张为其它 command family 的 global generation fence；R-028/R-029 仍 open，
   且不授权 provider/model/live。
+  四个 production generic projection patch caller 已统一迁至 `patch_publication_fields_under_lock`：helper 持
+  publication session key，native `SELECT ... FOR UPDATE` merge 当前 row，拒绝三个 search-index
+  build/input-revision binding keys，production raw projection `upsert` 静态 guard 为零；public counts/readiness
+  patch 不能再绕过 D1l read/result exclusion。
 
 ### D2 — Agent 会话与事件层（与 C4/C5 合流）
 
@@ -572,10 +596,11 @@ TD-4 初始路由表已按 owner 2026-07-13 裁决落档（D0 §4）。
    **Implementation status (2026-07-16):** D1c 以 R-029 + NEXT_TODO 满足 bookkeeping；D1f exact 激活三项
    CRM existing-record actions 并把 numerator 从 15 降到 12；D1h 再激活 `enrich_person_public_web` 的 CRM
    batch schema/binder，把 numerator 降到 11；D1i 激活 `start_acquisition_run` 的 acquisition-root workspace
-   binder，把 numerator 降到 10。bridge、release-window durable-hit audit、独立
+   binder，把 numerator 降到 10；D1j 激活 `add_to_crm`，降到 9；D1k 激活 `export_candidates`，降到 8；D1l
+   激活 `search_projection` / `filter_projection`，将当前 numerator 降到 6。bridge、release-window durable-hit audit、独立
    `NOT VALID` validation 与 complete API-submittable-population 删除条件仍 open；served population 仍为零。
    D1g 仅闭合 downstream Operation API authorization，不改变其所在 checkpoint 的 schema
-   numerator/deletion condition；D1h/D1i 也不改变该 deletion condition。
+   numerator/deletion condition；D1h/D1i/D1j/D1k/D1l 也不改变该 deletion condition。
 4. tool-schema 版本/digest 在 turn 创建点钉住并贯穿 terminal result/journal → AgentAction →
    approve/retry run（D0/D2 批）。
 5. `judge_call_key` 追加 workspace/intent generation/有效路由/schema/policy revision 维度；

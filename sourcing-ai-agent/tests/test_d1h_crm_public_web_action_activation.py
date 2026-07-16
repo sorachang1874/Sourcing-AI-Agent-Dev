@@ -56,8 +56,8 @@ def test_crm_public_web_action_remains_in_the_schema_defined_unserved_set() -> N
     assert set(CRM_RECORD_BATCH_ACTION_REQUEST_CONTRACTS) == {ACTION_ENRICH_PERSON_PUBLIC_WEB}
     assert set(CRM_RESOURCE_BOUND_ACTION_TYPES).issubset(schema_defined)
     assert schema_defined == set(OPERATION_OWNER_BOUND_ACTION_TYPES)
-    assert len(schema_defined) == 5
-    assert sum(not DEFAULT_ACTION_REGISTRY.spec_for(action_type).has_request_schema for action_type in records) == 10
+    assert len(schema_defined) == 9
+    assert sum(not DEFAULT_ACTION_REGISTRY.spec_for(action_type).has_request_schema for action_type in records) == 6
     assert spec.request_schema_version == "crm_public_web_enrichment_request_v1"
     assert len(spec.request_schema_digest) == 64
     assert spec.request_identity_target_fields == ("crm_record_ids", "workspace_id")

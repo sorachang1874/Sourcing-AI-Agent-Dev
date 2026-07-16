@@ -30,6 +30,7 @@ from ..person_identity import (
     resolve_profile_url_key,
 )
 from ..projection_search_index_contract import (
+    PROJECTION_SEARCH_INDEX_BINDING_KEYS,
     PROJECTION_SEARCH_INDEX_BUILD_GENERATION_KEY,
     PROJECTION_SEARCH_INDEX_BUILD_INPUT_REVISION_KEY,
     PROJECTION_SEARCH_INDEX_INPUT_REVISION_KEY,
@@ -343,7 +344,12 @@ class ServingProjectionRepository(Repository):
     """PG-only repository for projection catalog, members, links, pointers, and manifest shards."""
 
     @contextmanager
-    def hold_publication_lock(self, projection_id: str) -> Any:
+    def hold_publication_lock(
+        self,
+        projection_id: str,
+        *,
+        deadline_monotonic: float | None = None,
+    ) -> Any:
         normalized_projection_id = str(projection_id or "").strip()
         if not normalized_projection_id:
             raise ValueError("projection_id is required")
@@ -362,6 +368,7 @@ class ServingProjectionRepository(Repository):
         with method(
             table_name="serving_projections",
             projection_id=normalized_projection_id,
+            deadline_monotonic=deadline_monotonic,
         ):
             yield
 
@@ -1685,6 +1692,56 @@ class ServingProjectionRepository(Repository):
             method_name="upsert_serving_projection",
             reason="postgres-only: write returned no confirmation; legacy SQLite mirror tail retired (B4)",
         )
+
+    def patch_publication_fields_under_lock(
+        self,
+        projection_id: str,
+        *,
+        collection_id_if_empty: str = "",
+        counts_patch: dict[str, Any] | None = None,
+        counts_remove: tuple[str, ...] = (),
+        readiness_patch: dict[str, Any] | None = None,
+        metadata_patch: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Merge non-membership publication fields from an authoritative row snapshot.
+
+        Member/publish UoWs take the same advisory key on their own transaction
+        connection, so callers invoke this only after those UoWs return. The
+        native patch does not reacquire that key; it locks and merges the current
+        projection row in one PG transaction so search-index writers cannot be
+        overwritten by a stale read/upsert pair.
+        """
+
+        normalized_projection_id = str(projection_id or "").strip()
+        if not normalized_projection_id:
+            raise ValueError("projection_id is required")
+        normalized_remove = tuple(str(key or "").strip() for key in counts_remove if str(key or "").strip())
+        normalized_metadata_patch = dict(metadata_patch or {})
+        reserved_metadata_keys = sorted(set(normalized_metadata_patch) & set(PROJECTION_SEARCH_INDEX_BINDING_KEYS))
+        if reserved_metadata_keys:
+            raise ValueError(
+                "projection publication patch cannot overwrite search-index binding metadata: "
+                + ", ".join(reserved_metadata_keys)
+            )
+        with self.hold_publication_lock(normalized_projection_id):
+            row = self._call_native_write(
+                "patch_serving_projection_publication_fields",
+                table_name="serving_projections",
+                projection_id=normalized_projection_id,
+                collection_id_if_empty=str(collection_id_if_empty or "").strip(),
+                counts_patch=dict(counts_patch or {}),
+                counts_remove=list(normalized_remove),
+                readiness_patch=dict(readiness_patch or {}),
+                metadata_patch=normalized_metadata_patch,
+            )
+            if row is not None:
+                return self._projection_from_row(row)
+            self._raise_write_failure(
+                table_name="serving_projections",
+                method_name="patch_publication_fields_under_lock",
+                reason="authoritative projection row is missing or native patch returned no row",
+            )
+            raise RuntimeError("projection publication patch returned no authoritative row")
 
     def upsert_with_replaced_members(
         self,

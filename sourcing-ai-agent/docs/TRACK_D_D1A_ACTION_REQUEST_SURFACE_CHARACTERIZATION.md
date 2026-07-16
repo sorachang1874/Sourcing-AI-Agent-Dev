@@ -14,8 +14,9 @@
 > and the current D1f candidate activates exactly those three with authenticated owner binding and two execution-side
 > revalidations. D1h subsequently activates `enrich_person_public_web` with a CRM batch owner/version snapshot and
 > two execution-side revalidations. D1i then activates `start_acquisition_run` with a server-owned workspace target
-> and canonical root-command envelope. The current partition is 5 schema-defined / 10 schema-less; the served population
-> remains zero.
+> and canonical root-command envelope. D1j/D1k then activate projection-to-CRM and projection export; D1l activates
+> projection search/filter through the shared-canonical public reader. The current partition is 9 schema-defined / 6
+> schema-less; the served population remains zero.
 
 ## 1. Outcome and boundary
 
@@ -50,7 +51,7 @@ adapter and remains unsupported.
 |---|---|---|---|
 | Action metadata | `operation_runtime.ActionRequestSpec` (`ActionSpec` is an object-identical alias) | D1a froze the exact ten-field pre-schema surface | D1b added `dispatch_adapter`; D1c adds `request_schema`, `request_schema_version`, and target aliases; model-safe result schema remains deferred |
 | Registry serialization | `operation_runtime.ActionRegistry.to_record()` | action constant↔registry parity; exact compact record keys; optional command contract projection | adapter and request schema remain internal; physical pins live on action/run rows rather than this public registry record |
-| Submission | `OperationRuntimeWriter.submit_action` | D1a froze the old complete signature/call inventory, fail-closed gates, payload replay fence, write order, and approval boundary | D1c intentionally updates the signature/inventory and validates schema-defined requests before write; D1f activates three CRM existing-record schemas, D1h adds the CRM Public Web batch schema, and D1i adds the acquisition root schema, while the other 10 remain on the recorded bridge |
+| Submission | `OperationRuntimeWriter.submit_action` | D1a froze the old complete signature/call inventory, fail-closed gates, payload replay fence, write order, and approval boundary | D1c intentionally updates the signature/inventory and validates schema-defined requests before write; D1f/D1h/D1i/D1j/D1k/D1l activate nine explicit owner-bound schemas, while the other 6 remain on the recorded bridge |
 | Dispatch | `ActionRegistry` declaration + `SourcingOrchestrator` adapter bindings | D1a froze the old branch classification for every discovered action; D1b preserves the same 12 supported/three unsupported result | D1c adds pin/request preflight before adapter invocation; the full served-tool predicate remains deferred |
 | Command exposure mirror | `_agent_callable_workflow_command_types_for_action` | exact set projection of `ActionSpec.allowed_workflow_command_types`; unknown action returns empty | no served-tool predicate or result-schema gate |
 | Command plan selection | `_build_agent_callable_workflow_command_plan` | command selection is `input.command_type` → `target.command_type` → registry default; a present but disallowed higher-priority value fails closed instead of falling back | input and target remain dual behavior-driving sources pending D1 normalization |
@@ -127,7 +128,8 @@ D1c now provides the single validator/digest owner, strict two-segment schema fo
 action/run pins, submit/approve/retry/dispatch copy/verify foundation, and epoch-scoped brownfield compatibility
 observations. The remaining D1 work must still:
 
-- define reviewed per-action schemas and owner target binders for the remaining 10 production actions, then retire the
+- define per-action schemas and owner target binders for the remaining 6 production actions, obtain the required scoped
+  reviews, then retire the
   R-029 schema-less bridge only after all API-submittable actions record zero compatibility hits for one release window; bump the
   checked-in observation epoch for each window and validate the installed `NOT VALID` checks in a separate deployment;
 - use the D1b registry-owned adapter as one necessary served-subset input, then derive the served subset only after

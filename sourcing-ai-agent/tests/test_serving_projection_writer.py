@@ -1,3 +1,5 @@
+import ast
+import json
 import os
 import tempfile
 import threading
@@ -28,6 +30,31 @@ class ServingProjectionWriterTest(PGControlPlaneStoreTestMixin, unittest.TestCas
     def tearDown(self) -> None:
         self.tempdir.cleanup()
         super().tearDown()
+
+    def test_production_callers_do_not_bypass_projection_publication_owners_with_generic_upsert(self) -> None:
+        source_root = Path(__file__).resolve().parents[1] / "src" / "sourcing_agent"
+        violations: list[str] = []
+        for source_path in sorted(source_root.rglob("*.py")):
+            tree = ast.parse(source_path.read_text(encoding="utf-8"), filename=str(source_path))
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+                    continue
+                repository = node.func.value
+                if node.func.attr != "upsert" or not isinstance(repository, ast.Attribute):
+                    continue
+                repos = repository.value
+                if (
+                    repository.attr == "serving_projection"
+                    and isinstance(repos, ast.Attribute)
+                    and repos.attr == "repos"
+                ):
+                    violations.append(f"{source_path.relative_to(source_root)}:{node.lineno}")
+        self.assertEqual(
+            violations,
+            [],
+            "production projection publication must use a lock-owning publish/upsert_with_* method or "
+            "patch_publication_fields_under_lock",
+        )
 
     def test_publish_run_scope_projection_creates_projection_members_and_link(self) -> None:
         result = self.writer.publish_run_scope_projection(
@@ -65,6 +92,121 @@ class ServingProjectionWriterTest(PGControlPlaneStoreTestMixin, unittest.TestCas
             projection["projection_id"],
         )
         self.assertEqual([member["candidate_identity_key"] for member in members], ["linkedin:ada", "linkedin:grace"])
+
+    def test_publication_field_patch_waits_for_lock_and_merges_authoritative_row(self) -> None:
+        publication = self.writer.publish_run_scope_projection(
+            run_id="job-publication-field-lock",
+            collection_id="company:test",
+            members=[{"candidate_identity_key": "linkedin:ada"}],
+            replace_members=True,
+        )
+        projection_id = publication["projection"]["projection_id"]
+        with self.assertRaisesRegex(ValueError, "cannot overwrite search-index binding metadata"):
+            self.store.repos.serving_projection.patch_publication_fields_under_lock(
+                projection_id,
+                metadata_patch={PROJECTION_SEARCH_INDEX_INPUT_REVISION_KEY: "forged-revision"},
+            )
+        current = self.store.repos.serving_projection.get(projection_id)
+        self.store.repos.serving_projection.upsert(
+            {
+                **current,
+                "metadata": {
+                    **dict(current.get("metadata") or {}),
+                    "authoritative_marker": "preserve-me",
+                },
+            }
+        )
+        patch_started = threading.Event()
+        patch_finished = threading.Event()
+        patch_result: dict[str, object] = {}
+        thread_errors: list[BaseException] = []
+
+        def _patch_publication_fields() -> None:
+            try:
+                patch_started.set()
+                patch_result.update(
+                    self.store.repos.serving_projection.patch_publication_fields_under_lock(
+                        projection_id,
+                        counts_patch={"visible_member_count": 1},
+                        readiness_patch={"layering": "complete"},
+                        metadata_patch={"patch_marker": "applied"},
+                    )
+                )
+            except BaseException as exc:  # pragma: no cover - surfaced below
+                thread_errors.append(exc)
+            finally:
+                patch_finished.set()
+
+        with self.store.repos.serving_projection.hold_publication_lock(projection_id):
+            patch_thread = threading.Thread(target=_patch_publication_fields, daemon=True)
+            patch_thread.start()
+            self.assertTrue(patch_started.wait(timeout=1))
+            self.assertFalse(patch_finished.wait(timeout=0.1))
+        patch_thread.join(timeout=2)
+
+        self.assertFalse(patch_thread.is_alive())
+        self.assertEqual(thread_errors, [])
+        self.assertEqual(patch_result["counts"]["visible_member_count"], 1)
+        self.assertEqual(patch_result["readiness"]["layering"], "complete")
+        self.assertEqual(patch_result["metadata"]["authoritative_marker"], "preserve-me")
+        self.assertEqual(patch_result["metadata"]["patch_marker"], "applied")
+
+        row_patch_started = threading.Event()
+        row_patch_finished = threading.Event()
+        row_patch_result: dict[str, object] = {}
+        row_patch_errors: list[BaseException] = []
+
+        def _patch_after_concurrent_row_writer() -> None:
+            try:
+                row_patch_started.set()
+                row_patch_result.update(
+                    self.store.repos.serving_projection.patch_publication_fields_under_lock(
+                        projection_id,
+                        counts_patch={"visible_member_count": 2},
+                        metadata_patch={"row_patch_marker": "applied"},
+                    )
+                )
+            except BaseException as exc:  # pragma: no cover - surfaced below
+                row_patch_errors.append(exc)
+            finally:
+                row_patch_finished.set()
+
+        with self.store._control_plane_postgres._connect() as row_lock_connection:
+            with row_lock_connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT projection_id FROM serving_projections WHERE projection_id = %s FOR UPDATE",
+                    (projection_id,),
+                )
+                self.assertIsNotNone(cursor.fetchone())
+                row_patch_thread = threading.Thread(target=_patch_after_concurrent_row_writer, daemon=True)
+                row_patch_thread.start()
+                self.assertTrue(row_patch_started.wait(timeout=1))
+                self.assertFalse(row_patch_finished.wait(timeout=0.1))
+                cursor.execute(
+                    """
+                    UPDATE serving_projections
+                    SET counts_json = %s,
+                        readiness_json = %s,
+                        metadata_json = %s
+                    WHERE projection_id = %s
+                    """,
+                    (
+                        json.dumps({"search_index_candidate_count": 7}),
+                        json.dumps({"search_index": "ready"}),
+                        json.dumps({"search_index_generation": "generation-concurrent"}),
+                        projection_id,
+                    ),
+                )
+            row_lock_connection.commit()
+        row_patch_thread.join(timeout=2)
+
+        self.assertFalse(row_patch_thread.is_alive())
+        self.assertEqual(row_patch_errors, [])
+        self.assertEqual(row_patch_result["counts"]["search_index_candidate_count"], 7)
+        self.assertEqual(row_patch_result["counts"]["visible_member_count"], 2)
+        self.assertEqual(row_patch_result["readiness"]["search_index"], "ready")
+        self.assertEqual(row_patch_result["metadata"]["search_index_generation"], "generation-concurrent")
+        self.assertEqual(row_patch_result["metadata"]["row_patch_marker"], "applied")
 
     def test_projection_reader_aggregates_only_explicit_member_quality_evidence(self) -> None:
         exact = self.writer.publish_run_scope_projection(
@@ -298,6 +440,7 @@ class ServingProjectionWriterTest(PGControlPlaneStoreTestMixin, unittest.TestCas
 
         self.assertEqual(page["status"], "not_ready")
         self.assertEqual(page["reason"], "projection_membership_revision_changed_during_page_read")
+        self.assertTrue(page["membership_revision"])
 
     def test_person_detail_fails_closed_when_membership_changes_during_read(self) -> None:
         first = self.writer.publish_run_scope_projection(
@@ -862,8 +1005,23 @@ class ServingProjectionWriterTest(PGControlPlaneStoreTestMixin, unittest.TestCas
     def test_reader_fails_closed_and_serves_only_public_projection_fields(self) -> None:
         missing = self.reader.get_projection("proj_missing")
         self.assertEqual(missing["status"], "not_ready")
+        self.assertEqual(missing["reason"], "projection_not_found")
         self.assertTrue(missing["read_contract"]["fail_closed"])
         self.assertFalse(missing["read_contract"]["fallback_used"])
+
+        with mock.patch.object(
+            self.store.repos.serving_projection,
+            "get",
+            return_value={
+                "projection_id": "proj_non_shared",
+                "projection_type": "tenant_private_projection",
+                "state": "serving",
+            },
+        ):
+            non_shared = self.reader.get_projection("proj_non_shared")
+        self.assertEqual(non_shared["status"], "not_ready")
+        self.assertEqual(non_shared["reason"], "projection_not_found")
+        self.assertNotIn("projection_state", non_shared)
 
         self.store.repos.serving_projection.upsert(
             {

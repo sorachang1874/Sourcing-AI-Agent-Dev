@@ -741,6 +741,8 @@ except Exception:  # pragma: no cover - optional dependency missing
     _PSYCOPG_POOL_TIMEOUT = None
 
 _CONTROL_PLANE_POSTGRES_MAX_RETRIES = 3
+SESSION_ADVISORY_LOCK_ACQUISITION_TIMEOUT_SECONDS = 5.0
+_SESSION_ADVISORY_LOCK_POLL_SECONDS = 0.05
 _BULK_UPSERT_DIRECT_ROW_LIMIT = 1000
 _BULK_UPSERT_DIRECT_PARAM_LIMIT = 20000
 _SERIAL_SEQUENCE_NAMES = {
@@ -768,6 +770,15 @@ _SERIAL_SEQUENCE_NAMES = {
 
 class _TransactionAdvisoryLockBusy(RuntimeError):
     """Internal signal used to retry without holding a pooled connection."""
+
+
+class ControlPlaneAdvisoryLockBusy(RuntimeError):
+    """Typed finite-budget failure for a direct session advisory lock."""
+
+    def __init__(self, *, lock_key: str, timeout_seconds: float) -> None:
+        self.lock_key = str(lock_key or "").strip()
+        self.timeout_seconds = max(0.0, float(timeout_seconds))
+        super().__init__(f"control-plane advisory lock busy after {self.timeout_seconds:.3f}s: {self.lock_key}")
 
 
 def resolve_control_plane_postgres_live_mode(value: Any) -> str:
@@ -1757,6 +1768,92 @@ class LiveControlPlanePostgresAdapter:
         resolved_id_column = _normalize_postgres_identifier(id_column or configured[0] or "")
         resolved_sequence_name = _normalize_postgres_identifier(sequence_name or configured[1] or "")
         return resolved_id_column, resolved_sequence_name
+
+    def patch_serving_projection_publication_fields(
+        self,
+        *,
+        table_name: str = "serving_projections",
+        projection_id: str,
+        collection_id_if_empty: str = "",
+        counts_patch: dict[str, Any] | None = None,
+        counts_remove: list[str] | tuple[str, ...] = (),
+        readiness_patch: dict[str, Any] | None = None,
+        metadata_patch: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
+        """Row-lock and patch one projection while the caller owns its publication key."""
+
+        if _normalize_postgres_identifier(table_name) != "serving_projections":
+            raise ValueError("projection publication patch requires table_name=serving_projections")
+        if not self.should_prefer_read("serving_projections"):
+            return None
+        normalized_projection_id = str(projection_id or "").strip()
+        if not normalized_projection_id:
+            raise ValueError("projection_id is required")
+        normalized_remove = tuple(str(key or "").strip() for key in counts_remove if str(key or "").strip())
+        normalized_metadata_patch = dict(metadata_patch or {})
+        reserved_metadata_keys = sorted(set(normalized_metadata_patch) & set(PROJECTION_SEARCH_INDEX_BINDING_KEYS))
+        if reserved_metadata_keys:
+            raise ValueError(
+                "projection publication patch cannot overwrite search-index binding metadata: "
+                + ", ".join(reserved_metadata_keys)
+            )
+        self._ensure_control_plane_writer_schema()
+        attempt = 0
+        while True:
+            try:
+                with self._connect() as connection:
+                    with connection.cursor() as cursor:
+                        cursor.execute(
+                            "SELECT * FROM serving_projections WHERE projection_id = %s FOR UPDATE",
+                            (normalized_projection_id,),
+                        )
+                        current = _fetch_one_dict_row(cursor, cursor.fetchone())
+                        if current is None:
+                            connection.rollback()
+                            return None
+                        counts = _json_load_dict(current.get("counts_json"))
+                        for key in normalized_remove:
+                            counts.pop(key, None)
+                        counts.update(dict(counts_patch or {}))
+                        readiness = {
+                            **_json_load_dict(current.get("readiness_json")),
+                            **dict(readiness_patch or {}),
+                        }
+                        metadata = {
+                            **_json_load_dict(current.get("metadata_json")),
+                            **normalized_metadata_patch,
+                        }
+                        collection_id = (
+                            str(current.get("collection_id") or "").strip() or str(collection_id_if_empty or "").strip()
+                        )
+                        cursor.execute(
+                            """
+                            UPDATE serving_projections
+                            SET collection_id = %s,
+                                counts_json = %s,
+                                readiness_json = %s,
+                                metadata_json = %s,
+                                updated_at = %s
+                            WHERE projection_id = %s
+                            RETURNING *
+                            """,
+                            (
+                                collection_id,
+                                _json_dump(counts),
+                                _json_dump(readiness),
+                                _json_dump(metadata),
+                                _utc_now_sql_timestamp(),
+                                normalized_projection_id,
+                            ),
+                        )
+                        updated = _fetch_one_dict_row(cursor, cursor.fetchone())
+                    connection.commit()
+                    return updated
+            except Exception as exc:
+                attempt += 1
+                if not _is_retryable_postgres_exception(exc) or attempt >= _CONTROL_PLANE_POSTGRES_MAX_RETRIES:
+                    raise
+                time.sleep(_control_plane_postgres_retry_delay_seconds(attempt))
 
     def upsert_row(self, table_name: str, row: dict[str, Any] | None) -> None:
         normalized_table = _normalize_postgres_identifier(table_name)
@@ -6541,19 +6638,73 @@ class LiveControlPlanePostgresAdapter:
         )
 
     @contextmanager
-    def _hold_session_advisory_lock(self, lock_key: str) -> Any:
+    def _hold_session_advisory_lock(
+        self,
+        lock_key: str,
+        *,
+        timeout_seconds: float | None = None,
+        deadline_monotonic: float | None = None,
+    ) -> Any:
         normalized_lock_key = str(lock_key or "").strip()
         if not normalized_lock_key:
             raise ValueError("session advisory lock key is required")
+        now_monotonic = time.monotonic()
+        if deadline_monotonic is None:
+            acquisition_timeout_seconds = max(
+                0.0,
+                float(
+                    SESSION_ADVISORY_LOCK_ACQUISITION_TIMEOUT_SECONDS if timeout_seconds is None else timeout_seconds
+                ),
+            )
+            deadline = now_monotonic + acquisition_timeout_seconds
+        else:
+            deadline = float(deadline_monotonic)
+            acquisition_timeout_seconds = max(0.0, deadline - now_monotonic)
+            if deadline <= now_monotonic:
+                raise ControlPlaneAdvisoryLockBusy(
+                    lock_key=normalized_lock_key,
+                    timeout_seconds=acquisition_timeout_seconds,
+                )
         psycopg_module = self._psycopg or _import_psycopg()
         connection = self._direct_connect(psycopg_module)
+        acquired = False
         try:
-            with connection.cursor() as cursor:
-                cursor.execute(
-                    "SELECT pg_advisory_lock(hashtext(%s))",
-                    (self._advisory_lock_key(normalized_lock_key),),
-                )
-            connection.commit()
+            while True:
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        "SELECT pg_try_advisory_lock(hashtext(%s))",
+                        (self._advisory_lock_key(normalized_lock_key),),
+                    )
+                    lock_row = cursor.fetchone()
+                if isinstance(lock_row, dict):
+                    acquired = bool(next(iter(lock_row.values()), False))
+                elif isinstance(lock_row, (list, tuple)):
+                    acquired = bool(lock_row[0]) if lock_row else False
+                else:
+                    acquired = bool(lock_row)
+                if acquired:
+                    if deadline_monotonic is not None and time.monotonic() > deadline:
+                        with connection.cursor() as cursor:
+                            cursor.execute(
+                                "SELECT pg_advisory_unlock(hashtext(%s))",
+                                (self._advisory_lock_key(normalized_lock_key),),
+                            )
+                        connection.commit()
+                        acquired = False
+                        raise ControlPlaneAdvisoryLockBusy(
+                            lock_key=normalized_lock_key,
+                            timeout_seconds=acquisition_timeout_seconds,
+                        )
+                    connection.commit()
+                    break
+                connection.rollback()
+                remaining_seconds = deadline - time.monotonic()
+                if remaining_seconds <= 0:
+                    raise ControlPlaneAdvisoryLockBusy(
+                        lock_key=normalized_lock_key,
+                        timeout_seconds=acquisition_timeout_seconds,
+                    )
+                time.sleep(min(_SESSION_ADVISORY_LOCK_POLL_SECONDS, remaining_seconds))
             try:
                 yield
             finally:
@@ -6568,7 +6719,7 @@ class LiveControlPlanePostgresAdapter:
                     unlocked = bool(next(iter(unlock_row.values()), False))
                 else:
                     unlocked = bool(unlock_row and unlock_row[0])
-                if not unlocked:
+                if acquired and not unlocked:
                     raise RuntimeError(f"session advisory lock was not held: {normalized_lock_key}")
         finally:
             connection.close()
@@ -6579,6 +6730,7 @@ class LiveControlPlanePostgresAdapter:
         *,
         table_name: str = "operation_runs",
         operation_run_id: str,
+        deadline_monotonic: float | None = None,
     ) -> Any:
         if _normalize_postgres_identifier(table_name) != "operation_runs":
             raise ValueError("hold_operation_dispatch_lock requires table_name=operation_runs")
@@ -6587,7 +6739,10 @@ class LiveControlPlanePostgresAdapter:
         normalized_operation_id = str(operation_run_id or "").strip()
         if not normalized_operation_id:
             raise ValueError("operation_run_id is required")
-        with self._hold_session_advisory_lock(f"operation_dispatch:{normalized_operation_id}"):
+        with self._hold_session_advisory_lock(
+            f"operation_dispatch:{normalized_operation_id}",
+            deadline_monotonic=deadline_monotonic,
+        ):
             yield
 
     @contextmanager
@@ -6596,6 +6751,7 @@ class LiveControlPlanePostgresAdapter:
         *,
         table_name: str = "serving_projections",
         projection_id: str,
+        deadline_monotonic: float | None = None,
     ) -> Any:
         if _normalize_postgres_identifier(table_name) != "serving_projections":
             raise ValueError("hold_serving_projection_publication_lock requires table_name=serving_projections")
@@ -6604,7 +6760,10 @@ class LiveControlPlanePostgresAdapter:
         normalized_projection_id = str(projection_id or "").strip()
         if not normalized_projection_id:
             raise ValueError("projection_id is required")
-        with self._hold_session_advisory_lock(f"serving_projection_publication:{normalized_projection_id}"):
+        with self._hold_session_advisory_lock(
+            f"serving_projection_publication:{normalized_projection_id}",
+            deadline_monotonic=deadline_monotonic,
+        ):
             yield
 
     def _get_operation_event_with_cursor(
@@ -6939,6 +7098,7 @@ class LiveControlPlanePostgresAdapter:
             workflow_ref_patch=workflow_ref_patch,
             result_ref_patch=result_ref_patch,
             metadata_patch=metadata_patch,
+            linked_action_result_ref_patch=None,
             linked_action_metadata_patch=linked_action_metadata_patch,
             event_row=event_row,
             require_linked_action=False,
@@ -6969,6 +7129,48 @@ class LiveControlPlanePostgresAdapter:
             workflow_ref_patch=workflow_ref_patch,
             result_ref_patch=result_ref_patch,
             metadata_patch=metadata_patch,
+            linked_action_result_ref_patch=None,
+            linked_action_metadata_patch=linked_action_metadata_patch,
+            event_row=event_row,
+            require_linked_action=True,
+            require_replay_patch_match=True,
+        )
+
+    def finalize_projection_read_with_event(
+        self,
+        *,
+        table_name: str = "operation_runs",
+        operation_run_id: str,
+        expected_status: str,
+        terminal_status: str,
+        progress_patch: dict[str, Any] | None = None,
+        result_ref_patch: dict[str, Any] | None = None,
+        metadata_patch: dict[str, Any] | None = None,
+        linked_action_result_ref_patch: dict[str, Any] | None = None,
+        linked_action_metadata_patch: dict[str, Any] | None = None,
+        event_row: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
+        normalized_terminal_status = str(terminal_status or "").strip()
+        if normalized_terminal_status == "completed":
+            target_action_status = "completed"
+            target_event_type = "OperationReadCompleted"
+        elif normalized_terminal_status == "failed":
+            target_action_status = "queued"
+            target_event_type = "OperationReadFailed"
+        else:
+            raise ValueError("projection read terminal_status must be completed or failed")
+        return self._transition_operation_run_with_linked_action_and_event(
+            table_name=table_name,
+            operation_run_id=operation_run_id,
+            expected_status=expected_status,
+            target_operation_status=normalized_terminal_status,
+            target_action_status=target_action_status,
+            target_event_type=target_event_type,
+            progress_patch=progress_patch,
+            workflow_ref_patch=None,
+            result_ref_patch=result_ref_patch,
+            metadata_patch=metadata_patch,
+            linked_action_result_ref_patch=linked_action_result_ref_patch,
             linked_action_metadata_patch=linked_action_metadata_patch,
             event_row=event_row,
             require_linked_action=True,
@@ -6988,6 +7190,7 @@ class LiveControlPlanePostgresAdapter:
         workflow_ref_patch: dict[str, Any] | None,
         result_ref_patch: dict[str, Any] | None,
         metadata_patch: dict[str, Any] | None,
+        linked_action_result_ref_patch: dict[str, Any] | None,
         linked_action_metadata_patch: dict[str, Any] | None,
         event_row: dict[str, Any] | None,
         require_linked_action: bool,
@@ -7010,6 +7213,8 @@ class LiveControlPlanePostgresAdapter:
         if supported_transition not in {
             ("cancelled", "cancelled", "OperationCancelled"),
             ("failed", "failed", "OperationInputRevisionStale"),
+            ("completed", "completed", "OperationReadCompleted"),
+            ("failed", "queued", "OperationReadFailed"),
         }:
             raise ValueError("unsupported operation/action/event transition")
         event_payload = _normalize_postgres_row_payload(dict(event_row or {}))
@@ -7162,15 +7367,28 @@ class LiveControlPlanePostgresAdapter:
                                                 "operation transition linked action workspace does not match the operation"
                                             )
                                         current_action_metadata = _json_load_dict(linked_action.get("metadata_json"))
+                                        current_action_result_ref = _json_load_dict(
+                                            linked_action.get("result_ref_json")
+                                        )
+                                        action_result_ref = {
+                                            **current_action_result_ref,
+                                            **dict(linked_action_result_ref_patch or {}),
+                                        }
                                         action_metadata = {
                                             **current_action_metadata,
                                             **dict(linked_action_metadata_patch or {}),
                                         }
                                         action_already_applied = action_status == requested_action_status and (
                                             not require_replay_patch_match
-                                            or patch_matches(
-                                                linked_action.get("metadata_json"),
-                                                linked_action_metadata_patch,
+                                            or (
+                                                patch_matches(
+                                                    linked_action.get("result_ref_json"),
+                                                    linked_action_result_ref_patch,
+                                                )
+                                                and patch_matches(
+                                                    linked_action.get("metadata_json"),
+                                                    linked_action_metadata_patch,
+                                                )
                                             )
                                         )
                                         action_terminal_conflict = (
@@ -7194,6 +7412,7 @@ class LiveControlPlanePostgresAdapter:
                                             }
                                         action_needs_update = not action_terminal_conflict and (
                                             action_status != requested_action_status
+                                            or action_result_ref != current_action_result_ref
                                             or action_metadata != current_action_metadata
                                         )
                                         if action_needs_update:
@@ -7201,6 +7420,7 @@ class LiveControlPlanePostgresAdapter:
                                                 """
                                                 UPDATE agent_actions
                                                 SET status = %s,
+                                                    result_ref_json = %s,
                                                     metadata_json = %s,
                                                     updated_at = %s
                                                 WHERE action_id = %s AND status = %s
@@ -7208,6 +7428,7 @@ class LiveControlPlanePostgresAdapter:
                                                 """,
                                                 (
                                                     requested_action_status,
+                                                    _json_dump(action_result_ref),
                                                     _json_dump(action_metadata),
                                                     now,
                                                     action_id,

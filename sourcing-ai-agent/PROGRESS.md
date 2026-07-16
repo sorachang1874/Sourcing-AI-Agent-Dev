@@ -10,6 +10,45 @@
 
 ## 2026-07-16 (Asia/Singapore)
 
+### Track D D1l projection read action schema activation
+
+- `search_projection` and `filter_projection` are now the eighth and ninth schema-defined production actions. Submit
+  exact-validates projection/revision aliases through the shared-canonical serving projection reader and stores an
+  owner-bound projection id + membership revision. Search and filter aliases normalize to one canonical carrier;
+  multi-select filter values are strict, deduplicated, sorted, and idempotency-stable instead of silently becoming an
+  unfiltered read. Operation workspace scopes CRM overlays without pretending the shared projection is tenant-owned.
+- Dispatch acquires the Operation dispatch plus projection publication locks against one shared monotonic **5s total
+  acquisition deadline**, not 5s per lock, and holds both through result persistence. An already-expired deadline fails
+  before opening a connection. `operation_dispatch_lock_busy` and
+  `projection_publication_lock_busy` fail closed as HTTP 409 instead of waiting indefinitely. The persisted revision is
+  checked before the reader call and the reader-pinned revision is checked afterward. Missing/non-shared projections
+  fail at submit without creating an action/operation; stale membership fails before successful read-result
+  publication or domain writes while persisting explicit dispatch-time failure/reselection evidence. The terminal
+  Operation/action/event transition is one commandless PG UoW. Operation dispatch uses its exact persisted workspace
+  for CRM overlays. Authenticated direct/job reads default to the server-derived workspace, while an explicit
+  `default` remains the pre-auth legacy selector; open mode preserves its explicit workspace. Completed reads map to
+  HTTP 200, dispatch-time readiness or lock-busy failures to HTTP 409 with their exact reason, missing submit targets to
+  HTTP 404, and these actions still create no workflow command.
+- Persisted schema-defined input/target revalidation accepts only strict JSON containers and rejects Python-only values
+  such as nested tuples before dispatch writes. Generic reader reasons ending in membership revision
+  `changed_during_read`, `changed_during_page_read`, or `changed_during_search_read` all become stale/reselection;
+  idempotent replay preserves `reselection_required=true` without a duplicate event. Direct projection candidates/search
+  now cover authenticated server-derived, authenticated explicit legacy `default`, and open-mode explicit workspaces.
+- All four production generic projection-patch callers now use `patch_publication_fields_under_lock`. The helper owns the
+  projection publication session key, then performs a native `SELECT ... FOR UPDATE` merge of current counts/readiness/
+  metadata. It rejects the three search-index build/input revision binding keys, while a static guard rejects production
+  raw projection `upsert`; public counts/readiness patches therefore cannot bypass D1l read/result exclusion.
+- Final stable-tree author evidence is: adversarial projection-read nodes **5 passed + 9 subtests**; API + projection
+  writer **50 passed + 87 subtests**; the D1 contract suite **133 passed + 176 subtests**; full Operation runtime
+  **139 passed**; `make lint` green across **58 files**; global mypy unchanged at the accepted ceiling
+  **81 errors / 4 files**; changed-file compile and diff checks green. A fresh dirty-tree non-author read-only re-audit
+  returned scope-local advisory `GO` with P0/P1/P2/P3=`0/0/0/0`; it is neither pinned nor formal review evidence.
+  Fresh hash-bound review remains required before live/W6/manual/product signoff.
+- Current production partition is **9 schema-defined / 6 schema-less / served=0**. R-029 remains open at 6/15. D1l is
+  only a bounded R-019 specialization: its commandless terminal writes share one PG UoW, command generation/lease
+  fencing is inapplicable because no workflow command exists, and the direct state-sync caller ratchet remains **26**.
+  Global R-019 and R-028 remain open; no provider/model/live path is authorized.
+
 ### Track D D1k export-candidates projection membership action activation
 
 - `export_candidates` is now the seventh schema-defined production action. Submit accepts the legacy projection
@@ -22,9 +61,10 @@
   an empty selected-candidate list.
 - Current D1k/fixed-forward author evidence is targeted D1j/D1k + D1 action surface **10 passed**, writer-control
   regression **6 passed**, full Operation runtime **137 passed**, lint green, and typecheck still at the accepted
-  ceiling **81 errors / 4 files**. Fresh pinned non-author review remains required before live/W6/manual or product
-  signoff. This is not formal `GO`.
-- Current production partition is **7 schema-defined / 8 schema-less / served=0**. R-029 remains open at 8/15.
+  ceiling **81 errors / 4 files**. The completed pinned `354e979` runner-backed advisory is `NO-GO`
+  (P0/P1/P2/P3=`0/9/7/1`); fixed-forward and re-review are required before live/W6/manual or product signoff. This is
+  not formal `GO`.
+- D1k checkpoint production partition was **7 schema-defined / 8 schema-less / served=0**. R-029 remained open at 8/15.
   R-028 is unchanged because this batch does not alter CRM mutation UoWs or command terminal/effect synchronization.
   No provider/model/live path is authorized.
 
@@ -39,9 +79,10 @@
   `projection_selection_target`; forged command payload targets, stale revisions, missing/foreign projection members,
   or operation/action mismatches fail before CRM record/engagement/event/Activity/EntityDelta writes.
 - Current D1j author evidence is full Operation runtime **137 passed**, targeted D1j nodes **3 passed**, and D1 action
-  request surface characterization **6 passed**. Fresh pinned non-author review remains required before live/W6/manual
-  or product signoff. This is not formal `GO`.
-- Current production partition is **6 schema-defined / 9 schema-less / served=0**. R-029 remains open at 9/15. R-028
+  request surface characterization **6 passed**. The combined D1j/D1k pinned `354e979` runner-backed advisory is
+  `NO-GO` (P0/P1/P2/P3=`0/9/7/1`); findings remain fixed-forward input, not formal `GO`.
+- D1j checkpoint production partition was **6 schema-defined / 9 schema-less / served=0**. R-029 remained open at
+  9/15. R-028
   remains open because the projection-to-CRM UoW still sits behind the temporary Store facade, legacy CRM mutation
   writers do not all share one identity-lock repository, and command terminal/effect/linked Operation synchronization
   are not one global exactly-once transaction. No provider/model/live path is authorized.
@@ -139,8 +180,8 @@
   linkage from current authoritative rows. A running command persists its complete continuation through an exact-owner,
   unexpired-lease CAS before any phase link, and native PG errors surface rather than becoming false CAS conflicts.
   Expired-lease recovery consumes that checkpoint after legitimate batch progress without duplicating rows.
-- At the D1h checkpoint the production partition was **4 schema-defined / 11 schema-less / served=0**; D1i now
-  supersedes the current count at **5/10/0**. Confirmed D1h author evidence is
+- At the D1h checkpoint the production partition was **4 schema-defined / 11 schema-less / served=0**; the later D1i
+  checkpoint was **5/10/0**, and D1l now owns the current count at **9/6/0**. Confirmed D1h author evidence is
   D1h action/boundary/checkpoint **20 passed + 7 subtests**, exact Operation/transport/generic retry
   **5 passed + 11 subtests**, CRM Public Web boundary **34 passed**, combined D1 **121 passed + 202 subtests**, and
   final stable-tree Operation **136 passed + 503 subtests**. Lint is green across **58 files**; global mypy remains

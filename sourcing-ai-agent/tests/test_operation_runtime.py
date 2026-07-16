@@ -16,6 +16,7 @@ from sourcing_agent.api import create_server
 from sourcing_agent.asset_catalog import AssetCatalog
 from sourcing_agent.command_kernel import CommandKernel
 from sourcing_agent.company_asset_writer import CompanyAssetWriter
+from sourcing_agent.control_plane_live_postgres import ControlPlaneAdvisoryLockBusy
 from sourcing_agent.crm_public_web_runtime import start_crm_public_web_batch
 from sourcing_agent.domain import JobRequest
 from sourcing_agent.durable_runtime import (
@@ -99,10 +100,10 @@ from sourcing_agent.operation_runtime import (
     ACTION_FETCH_PROFILE_SAMPLE,
     ACTION_FILTER_PROJECTION,
     ACTION_REFRESH_COMPANY_PUBLIC_WEB,
+    ACTION_SEARCH_PROJECTION,
     ACTION_SET_CRM_STAGE,
     ACTION_START_ACQUISITION_RUN,
     DEFAULT_ACTION_REGISTRY,
-    REQUEST_SCHEMA_COMPATIBILITY_EVENT_TYPE,
     ActionRegistry,
     ActionSpec,
     OperationRuntimeStateConflict,
@@ -151,6 +152,20 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 "membership_revision": membership_revision,
                 "source_candidate_count": source_candidate_count,
                 "candidate_identity_keys": sorted(candidate_identity_keys or []),
+            },
+        )
+
+    def _projection_read_owner_target(
+        self,
+        projection_id: str,
+        *,
+        membership_revision: str = "revision-a",
+    ) -> OwnerBoundTargetRef:
+        return OwnerBoundTargetRef(
+            owner_module="projection_search_service",
+            target_ref={
+                "projection_id": projection_id,
+                "membership_revision": membership_revision,
             },
         )
 
@@ -3414,8 +3429,8 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             action_type=ACTION_FILTER_PROJECTION,
             workspace_id="default",
             conversation_id="conv-a",
-            target_ref={"projection_id": "proj-a"},
-            input_payload={"filters": {"location": ["SF"]}},
+            owner_bound_target_ref=self._projection_read_owner_target("proj-a"),
+            input_payload={"filters": {"locations": ["us"]}},
             idempotency_key="filter:proj-a:sf",
             actor="unit-test",
         )
@@ -3423,8 +3438,8 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             action_type=ACTION_FILTER_PROJECTION,
             workspace_id="default",
             conversation_id="conv-a",
-            target_ref={"projection_id": "proj-a"},
-            input_payload={"filters": {"location": ["SF"]}},
+            owner_bound_target_ref=self._projection_read_owner_target("proj-a"),
+            input_payload={"filters": {"locations": ["us"]}},
             idempotency_key="filter:proj-a:sf",
             actor="unit-test",
         )
@@ -3432,7 +3447,11 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         self.assertTrue(first.executable)
         self.assertEqual(first.action["action_id"], duplicate.action["action_id"])
         self.assertEqual(first.operation_run["operation_run_id"], duplicate.operation_run["operation_run_id"])
-        self.assertEqual(first.action["input"]["filters"], {"location": ["SF"]})
+        self.assertEqual(first.action["input"]["filters"]["locations"], ["us"])
+        self.assertEqual(
+            first.action["target_ref"],
+            {"projection_id": "proj-a", "membership_revision": "revision-a"},
+        )
         self.assertEqual(first.operation_run["owner_module"], "projection_search_service")
         self.assertEqual(first.operation_run["status"], "queued")
         with self.assertRaisesRegex(
@@ -3443,8 +3462,8 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 action_type=ACTION_FILTER_PROJECTION,
                 workspace_id="default",
                 conversation_id="conv-a",
-                target_ref={"projection_id": "proj-a"},
-                input_payload={"filters": {"location": ["NYC"]}},
+                owner_bound_target_ref=self._projection_read_owner_target("proj-a"),
+                input_payload={"filters": {"locations": ["other"]}},
                 idempotency_key="filter:proj-a:sf",
                 actor="unit-test",
             )
@@ -3453,7 +3472,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 event["event_type"]
                 for event in self.store.repos.workflow_runtime.list_operation_events(first.action["action_id"])
             ],
-            ["AgentActionQueued", REQUEST_SCHEMA_COMPATIBILITY_EVENT_TYPE],
+            ["AgentActionQueued"],
         )
         self.assertEqual(
             [
@@ -3556,8 +3575,8 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         result = self.writer.submit_action(
             action_type=ACTION_FILTER_PROJECTION,
             workspace_id="default",
-            target_ref={"projection_id": "proj-cancel"},
-            input_payload={"filters": {"role": ["engineering"]}},
+            owner_bound_target_ref=self._projection_read_owner_target("proj-cancel"),
+            input_payload={"filters": {"function_buckets": ["engineering"]}},
             idempotency_key="filter:proj-cancel",
         )
 
@@ -3651,7 +3670,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         submitted = self.writer.submit_action(
             action_type=ACTION_FILTER_PROJECTION,
             workspace_id="default",
-            target_ref={"projection_id": "proj-cancel-repair"},
+            owner_bound_target_ref=self._projection_read_owner_target("proj-cancel-repair"),
             idempotency_key="filter:proj-cancel-repair",
         )
         operation_run_id = submitted.operation_run["operation_run_id"]
@@ -3690,7 +3709,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         cancel_submission = self.writer.submit_action(
             action_type=ACTION_FILTER_PROJECTION,
             workspace_id="default",
-            target_ref={"projection_id": "proj-cancel-rollback"},
+            owner_bound_target_ref=self._projection_read_owner_target("proj-cancel-rollback"),
             idempotency_key="filter:proj-cancel-rollback",
         )
         adapter = self.store._control_plane_postgres
@@ -3777,7 +3796,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         submitted = self.writer.submit_action(
             action_type=ACTION_FILTER_PROJECTION,
             workspace_id="default",
-            target_ref={"projection_id": "proj-event-collision"},
+            owner_bound_target_ref=self._projection_read_owner_target("proj-event-collision"),
             idempotency_key="filter:proj-event-collision",
         )
         operation_run_id = submitted.operation_run["operation_run_id"]
@@ -3819,7 +3838,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         empty_status_submission = self.writer.submit_action(
             action_type=ACTION_FILTER_PROJECTION,
             workspace_id="default",
-            target_ref={"projection_id": "proj-empty-cancel-status"},
+            owner_bound_target_ref=self._projection_read_owner_target("proj-empty-cancel-status"),
             idempotency_key="filter:proj-empty-cancel-status",
         )
         empty_status_event = repository._operation_event_row_payload(
@@ -3875,7 +3894,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         cancel_submission = self.writer.submit_action(
             action_type=ACTION_FILTER_PROJECTION,
             workspace_id="default",
-            target_ref={"projection_id": "proj-cancel-race"},
+            owner_bound_target_ref=self._projection_read_owner_target("proj-cancel-race"),
             idempotency_key="filter:proj-cancel-race",
         )
         original_cancel = repository.cancel_operation_with_event
@@ -3907,7 +3926,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         submitted = self.writer.submit_action(
             action_type=ACTION_FILTER_PROJECTION,
             workspace_id="default",
-            target_ref={"projection_id": "proj-stale-uow"},
+            owner_bound_target_ref=self._projection_read_owner_target("proj-stale-uow"),
             idempotency_key="filter:proj-stale-uow",
         )
         operation = submitted.operation_run
@@ -3961,7 +3980,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         rollback_submission = self.writer.submit_action(
             action_type=ACTION_FILTER_PROJECTION,
             workspace_id="default",
-            target_ref={"projection_id": "proj-stale-uow-rollback"},
+            owner_bound_target_ref=self._projection_read_owner_target("proj-stale-uow-rollback"),
             idempotency_key="filter:proj-stale-uow-rollback",
         )
         rollback_operation = rollback_submission.operation_run
@@ -4000,7 +4019,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         action_conflict_submission = self.writer.submit_action(
             action_type=ACTION_FILTER_PROJECTION,
             workspace_id="default",
-            target_ref={"projection_id": "proj-stale-action-conflict"},
+            owner_bound_target_ref=self._projection_read_owner_target("proj-stale-action-conflict"),
             idempotency_key="filter:proj-stale-action-conflict",
         )
         action_conflict_operation = action_conflict_submission.operation_run
@@ -4037,7 +4056,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         event_conflict_submission = self.writer.submit_action(
             action_type=ACTION_FILTER_PROJECTION,
             workspace_id="default",
-            target_ref={"projection_id": "proj-stale-event-conflict"},
+            owner_bound_target_ref=self._projection_read_owner_target("proj-stale-event-conflict"),
             idempotency_key="filter:proj-stale-event-conflict",
         )
         event_conflict_operation = event_conflict_submission.operation_run
@@ -4070,6 +4089,109 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         self.assertEqual(
             repository.get_action(event_conflict_action["action_id"])["status"],
             event_conflict_action["status"],
+        )
+
+    def test_projection_read_terminal_uow_replays_and_rolls_back_as_one_transition(self) -> None:
+        repository = self.store.repos.workflow_runtime
+        with self.assertRaises(ControlPlaneAdvisoryLockBusy):
+            with repository.hold_operation_dispatch_lock(
+                "operation-past-lock-deadline",
+                deadline_monotonic=0.0,
+            ):
+                self.fail("a past shared lock deadline must fail before entering")
+        submitted = self.writer.submit_action(
+            action_type=ACTION_FILTER_PROJECTION,
+            workspace_id="default",
+            owner_bound_target_ref=self._projection_read_owner_target("proj-read-terminal-uow"),
+            idempotency_key="filter:proj-read-terminal-uow",
+        )
+        operation = submitted.operation_run
+        action = submitted.action
+        result_ref = {
+            "operation_adapter": "projection_read_v1",
+            "projection_id": "proj-read-terminal-uow",
+            "read_status": "ready",
+        }
+        transition_kwargs = {
+            "expected_status": operation["status"],
+            "action_id": action["action_id"],
+            "terminal_status": "completed",
+            "workspace_id": "default",
+            "progress_patch": {"phase": "projection_read_completed", "read_status": "ready"},
+            "result_ref_patch": result_ref,
+            "metadata_patch": {"read_only_adapter": True},
+            "linked_action_result_ref_patch": {
+                "operation_run_id": operation["operation_run_id"],
+                "read_status": "ready",
+            },
+            "linked_action_metadata_patch": {"last_operation_run_id": operation["operation_run_id"]},
+            "event_idempotency_key": f"{operation['idempotency_key']}:OperationReadCompleted",
+            "actor": "unit-test",
+            "source": "test.operation_runtime",
+            "event_payload": {
+                "projection_id": "proj-read-terminal-uow",
+                "read_status": "ready",
+                "module_state_mutated": False,
+            },
+        }
+
+        first = repository.finalize_projection_read_with_event(
+            operation["operation_run_id"],
+            **transition_kwargs,
+        )
+        replay = repository.finalize_projection_read_with_event(
+            operation["operation_run_id"],
+            **transition_kwargs,
+        )
+
+        self.assertEqual(first["outcome"], "applied")
+        self.assertEqual(first["operation"]["status"], "completed")
+        self.assertEqual(first["linked_action"]["status"], "completed")
+        self.assertEqual(first["linked_action"]["result_ref"]["read_status"], "ready")
+        self.assertEqual(first["event"]["event_type"], "OperationReadCompleted")
+        self.assertEqual(replay["outcome"], "already_applied")
+        self.assertEqual(replay["event"]["event_id"], first["event"]["event_id"])
+
+        rollback_submission = self.writer.submit_action(
+            action_type=ACTION_FILTER_PROJECTION,
+            workspace_id="default",
+            owner_bound_target_ref=self._projection_read_owner_target("proj-read-terminal-uow-rollback"),
+            idempotency_key="filter:proj-read-terminal-uow-rollback",
+        )
+        rollback_operation = rollback_submission.operation_run
+        rollback_action = rollback_submission.action
+        rollback_kwargs = {
+            **transition_kwargs,
+            "expected_status": rollback_operation["status"],
+            "action_id": rollback_action["action_id"],
+            "linked_action_result_ref_patch": {
+                "operation_run_id": rollback_operation["operation_run_id"],
+                "read_status": "ready",
+            },
+            "linked_action_metadata_patch": {"last_operation_run_id": rollback_operation["operation_run_id"]},
+            "event_idempotency_key": f"{rollback_operation['idempotency_key']}:OperationReadCompleted",
+        }
+        with mock.patch.object(
+            self.store._control_plane_postgres,
+            "_append_operation_event_with_cursor",
+            side_effect=RuntimeError("forced-projection-read-event-failure"),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "forced-projection-read-event-failure"):
+                repository.finalize_projection_read_with_event(
+                    rollback_operation["operation_run_id"],
+                    **rollback_kwargs,
+                )
+        self.assertEqual(
+            repository.get_operation(rollback_operation["operation_run_id"])["status"],
+            rollback_operation["status"],
+        )
+        self.assertEqual(
+            repository.get_action(rollback_action["action_id"])["status"],
+            rollback_action["status"],
+        )
+        self.assertNotIn(
+            "OperationReadCompleted",
+            [event["event_type"] for event in repository.list_operation_events(rollback_operation["operation_run_id"])],
         )
 
     def test_approve_and_resume_cas_conflicts_stop_downstream_writes(self) -> None:
@@ -4111,7 +4233,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         resumable = self.writer.submit_action(
             action_type=ACTION_FILTER_PROJECTION,
             workspace_id="default",
-            target_ref={"projection_id": "proj-resume-race"},
+            owner_bound_target_ref=self._projection_read_owner_target("proj-resume-race"),
             idempotency_key="filter:proj-resume-race",
         )
         original_operation_update = repository.update_operation_state
@@ -4143,8 +4265,8 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             action_type=ACTION_FILTER_PROJECTION,
             workspace_id="default",
             conversation_id="conv-ops",
-            target_ref={"projection_id": "proj-retry"},
-            input_payload={"filters": {"role": ["ml"]}},
+            owner_bound_target_ref=self._projection_read_owner_target("proj-retry"),
+            input_payload={"filters": {"function_buckets": ["research"]}},
             idempotency_key="filter:proj-retry",
         )
         operation_run_id = result.operation_run["operation_run_id"]
@@ -4216,7 +4338,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         result = self.writer.submit_action(
             action_type=ACTION_FILTER_PROJECTION,
             workspace_id="default",
-            target_ref={"projection_id": "proj-cancel-retry"},
+            owner_bound_target_ref=self._projection_read_owner_target("proj-cancel-retry"),
             idempotency_key="filter:proj-cancel-retry",
         )
         operation_run_id = result.operation_run["operation_run_id"]
@@ -4245,7 +4367,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         result = self.writer.submit_action(
             action_type=ACTION_FILTER_PROJECTION,
             workspace_id="default",
-            target_ref={"projection_id": "proj-retry-single-child"},
+            owner_bound_target_ref=self._projection_read_owner_target("proj-retry-single-child"),
             idempotency_key="filter:proj-retry-single-child",
         )
         operation_run_id = result.operation_run["operation_run_id"]
@@ -4276,7 +4398,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         result = self.writer.submit_action(
             action_type=ACTION_FILTER_PROJECTION,
             workspace_id="default",
-            target_ref={"projection_id": "proj-retry-terminal-replay"},
+            owner_bound_target_ref=self._projection_read_owner_target("proj-retry-terminal-replay"),
             idempotency_key="filter:proj-retry-terminal-replay",
         )
         repository = self.store.repos.workflow_runtime
@@ -4332,7 +4454,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         result = self.writer.submit_action(
             action_type=ACTION_FILTER_PROJECTION,
             workspace_id="default",
-            target_ref={"projection_id": "proj-retry-child-collision"},
+            owner_bound_target_ref=self._projection_read_owner_target("proj-retry-child-collision"),
             idempotency_key="filter:proj-retry-child-collision",
         )
         repository = self.store.repos.workflow_runtime
@@ -4353,6 +4475,8 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             status="queued",
             idempotency_key="conflicting-persisted-retry-key",
             metadata={"parent_operation_run_id": parent_run_id},
+            request_schema_version=result.operation_run["request_schema_version"],
+            request_schema_digest=result.operation_run["request_schema_digest"],
         )
         action_before = repository.get_action(result.action["action_id"])
         event_ids_before = [
@@ -4375,7 +4499,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         result = self.writer.submit_action(
             action_type=ACTION_FILTER_PROJECTION,
             workspace_id="default",
-            target_ref={"projection_id": "proj-retry-race"},
+            owner_bound_target_ref=self._projection_read_owner_target("proj-retry-race"),
             idempotency_key="filter:proj-retry-race",
         )
         operation_run_id = result.operation_run["operation_run_id"]
@@ -4428,7 +4552,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         result = self.writer.submit_action(
             action_type=ACTION_FILTER_PROJECTION,
             workspace_id="workspace-a",
-            target_ref={"projection_id": "proj-retry-workspace"},
+            owner_bound_target_ref=self._projection_read_owner_target("proj-retry-workspace"),
             idempotency_key="filter:proj-retry-workspace",
         )
         repository = self.store.repos.workflow_runtime
@@ -4482,7 +4606,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         result = self.writer.submit_action(
             action_type=ACTION_FILTER_PROJECTION,
             workspace_id="default",
-            target_ref={"projection_id": "proj-retry-chain"},
+            owner_bound_target_ref=self._projection_read_owner_target("proj-retry-chain"),
             idempotency_key="filter:proj-retry-chain",
         )
         repository = self.store.repos.workflow_runtime
@@ -4522,13 +4646,13 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         first = self.writer.submit_action(
             action_type=ACTION_FILTER_PROJECTION,
             workspace_id="default",
-            target_ref={"projection_id": "proj-retry-key-first"},
+            owner_bound_target_ref=self._projection_read_owner_target("proj-retry-key-first"),
             idempotency_key="filter:proj-retry-key-first",
         )
         second = self.writer.submit_action(
             action_type=ACTION_FILTER_PROJECTION,
             workspace_id="default",
-            target_ref={"projection_id": "proj-retry-key-second"},
+            owner_bound_target_ref=self._projection_read_owner_target("proj-retry-key-second"),
             idempotency_key="filter:proj-retry-key-second",
         )
         repository = self.store.repos.workflow_runtime
@@ -4560,7 +4684,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         third = self.writer.submit_action(
             action_type=ACTION_FILTER_PROJECTION,
             workspace_id="default",
-            target_ref={"projection_id": "proj-retry-parent-key"},
+            owner_bound_target_ref=self._projection_read_owner_target("proj-retry-parent-key"),
             idempotency_key="filter:proj-retry-parent-key",
         )
         repository.update_operation_state(third.operation_run["operation_run_id"], status="failed")
@@ -4792,12 +4916,57 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 ).get("membership_revision")
                 or ""
             )
+            invalid_non_object_target = orchestrator.submit_operation_action(
+                {
+                    "action_type": ACTION_EXPORT_CANDIDATES,
+                    "target_ref": ["proj-dispatch"],
+                    "input": {"expected_membership_revision": membership_revision},
+                    "idempotency_key": "export:proj-dispatch:invalid-target",
+                }
+            )
+            self.assertEqual(invalid_non_object_target["status"], "invalid")
+            self.assertEqual(
+                invalid_non_object_target["reason"],
+                "projection_export_target_selector_invalid",
+            )
+            invalid_blank_candidate = orchestrator.submit_operation_action(
+                {
+                    "action_type": ACTION_EXPORT_CANDIDATES,
+                    "target_ref": {"projection_id": "proj-dispatch"},
+                    "input": {
+                        "candidate_id": " ",
+                        "expected_membership_revision": membership_revision,
+                    },
+                    "idempotency_key": "export:proj-dispatch:blank-candidate",
+                }
+            )
+            self.assertEqual(invalid_blank_candidate["status"], "invalid")
+            self.assertEqual(
+                invalid_blank_candidate["reason"],
+                "projection_export_target_selector_invalid",
+            )
+            ambiguous_projection = orchestrator.submit_operation_action(
+                {
+                    "action_type": ACTION_EXPORT_CANDIDATES,
+                    "target_ref": {"projection_id": "proj-dispatch"},
+                    "input": {
+                        "projection_id": "proj-other",
+                        "expected_membership_revision": membership_revision,
+                    },
+                    "idempotency_key": "export:proj-dispatch:ambiguous-projection",
+                }
+            )
+            self.assertEqual(ambiguous_projection["status"], "invalid")
+            self.assertEqual(
+                ambiguous_projection["reason"],
+                "projection_export_target_selector_invalid",
+            )
             submitted = orchestrator.submit_operation_action(
                 {
                     "action_type": ACTION_EXPORT_CANDIDATES,
                     "target_ref": {"projection_id": "proj-dispatch"},
                     "input": {
-                        "candidate_identity_keys": ["person-a"],
+                        "candidateIdentityKeys": ["person-a"],
                         "expected_membership_revision": membership_revision,
                         "limit": 10,
                     },
@@ -5792,18 +5961,198 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                     }
                 ],
             )
-            submitted = orchestrator.submit_operation_action(
+            api_store.upsert_crm_record(
+                {
+                    "crm_record_id": "crm-default-ada",
+                    "workspace_id": "default",
+                    "person_identity_key": "linkedin:ada",
+                    "candidate_identity_key": "linkedin:ada",
+                    "owner_user_id": "default-owner",
+                    "metadata": {"current_stage": "default-stage"},
+                }
+            )
+            api_store.upsert_crm_record(
+                {
+                    "crm_record_id": "crm-auth-ada",
+                    "workspace_id": "workspace-auth",
+                    "person_identity_key": "linkedin:ada",
+                    "candidate_identity_key": "linkedin:ada",
+                    "owner_user_id": "auth-owner",
+                    "metadata": {"current_stage": "auth-stage"},
+                }
+            )
+            invalid_target = orchestrator.submit_operation_action(
+                {
+                    "action_type": ACTION_FILTER_PROJECTION,
+                    "target_ref": ["proj-read"],
+                    "input": {"limit": 1},
+                    "idempotency_key": "filter:proj-read:invalid-target",
+                }
+            )
+            self.assertEqual(invalid_target["status"], "invalid")
+            self.assertEqual(invalid_target["reason"], "projection_read_target_selector_invalid")
+            self.assertEqual(api_store.repos.workflow_runtime.list_actions(workspace_id="default"), [])
+
+            ambiguous_target = orchestrator.submit_operation_action(
                 {
                     "action_type": ACTION_FILTER_PROJECTION,
                     "target_ref": {"projection_id": "proj-read"},
-                    "input": {"limit": 1},
-                    "idempotency_key": "filter:proj-read",
+                    "input": {"projection_id": "proj-other", "limit": 1},
+                    "idempotency_key": "filter:proj-read:ambiguous-target",
                 }
             )
-            operation_run_id = submitted["operation_run"]["operation_run_id"]
+            self.assertEqual(ambiguous_target["status"], "invalid")
+            self.assertEqual(ambiguous_target["reason"], "projection_read_target_selector_invalid")
 
-            dispatched = orchestrator.dispatch_operation_run_api(operation_run_id, {"actor": "unit-test"})
-            duplicate = orchestrator.dispatch_operation_run_api(operation_run_id, {"actor": "unit-test"})
+            invalid_filter = orchestrator.submit_operation_action(
+                {
+                    "action_type": ACTION_FILTER_PROJECTION,
+                    "target_ref": {"projection_id": "proj-read"},
+                    "input": {"filters": {"employment_status": "current"}},
+                    "idempotency_key": "filter:proj-read:invalid-filter",
+                }
+            )
+            self.assertEqual(invalid_filter["status"], "invalid")
+            self.assertEqual(
+                invalid_filter["reason"],
+                "filter_projection_filter_fields_invalid:employment_status",
+            )
+            invalid_filter_value = orchestrator.submit_operation_action(
+                {
+                    "action_type": ACTION_FILTER_PROJECTION,
+                    "target_ref": {"projection_id": "proj-read"},
+                    "input": {"filters": {"employment_statuses": ["current", "contractor"]}},
+                    "idempotency_key": "filter:proj-read:invalid-filter-value",
+                }
+            )
+            self.assertEqual(invalid_filter_value["status"], "invalid")
+            self.assertEqual(
+                invalid_filter_value["reason"],
+                "filter_projection_filter_value_invalid:employment_statuses",
+            )
+            for invalid_filters, expected_reason in (
+                (
+                    {"search_keyword": "   "},
+                    "filter_projection_filter_value_invalid:search_keyword",
+                ),
+                (
+                    {"employment_statuses": ("current", "former")},
+                    "filter_projection_filter_value_invalid:employment_statuses",
+                ),
+                (
+                    {"recall_buckets": ("all",)},
+                    "filter_projection_filter_value_invalid:recall_buckets",
+                ),
+            ):
+                with self.subTest(invalid_filters=invalid_filters):
+                    invalid_lossy_filter = orchestrator.submit_operation_action(
+                        {
+                            "action_type": ACTION_FILTER_PROJECTION,
+                            "target_ref": {"projection_id": "proj-read"},
+                            "input": {"filters": invalid_filters},
+                            "idempotency_key": f"filter:proj-read:invalid-lossy:{expected_reason}",
+                        }
+                    )
+                    self.assertEqual(invalid_lossy_filter["status"], "invalid")
+                    self.assertEqual(invalid_lossy_filter["reason"], expected_reason)
+
+            api_store.repos.serving_projection.upsert(
+                {
+                    "projection_id": "proj-archived",
+                    "projection_type": "run_scope_projection",
+                    "collection_id": "company:test",
+                    "source_run_id": "job-archived",
+                    "state": "archived",
+                }
+            )
+            not_servable = orchestrator.submit_operation_action(
+                {
+                    "action_type": ACTION_FILTER_PROJECTION,
+                    "target_ref": {"projection_id": "proj-archived"},
+                    "input": {"limit": 1},
+                    "idempotency_key": "filter:proj-archived",
+                }
+            )
+            self.assertEqual(not_servable["status"], "not_ready")
+            self.assertEqual(not_servable["reason"], "projection_not_servable")
+
+            private_action_count = len(api_store.repos.workflow_runtime.list_actions(limit=0))
+            private_operation_count = len(api_store.repos.workflow_runtime.list_operations(limit=0))
+            with mock.patch.object(
+                api_store.repos.serving_projection,
+                "get",
+                return_value={
+                    "projection_id": "proj-private-scope",
+                    "projection_type": "tenant_private_projection",
+                    "state": "serving",
+                },
+            ):
+                private_projection = orchestrator.submit_operation_action(
+                    {
+                        "action_type": ACTION_FILTER_PROJECTION,
+                        "target_ref": {"projection_id": "proj-private-scope"},
+                        "input": {"limit": 1},
+                        "idempotency_key": "filter:proj-private-scope",
+                    }
+                )
+            self.assertEqual(private_projection["status"], "not_found")
+            self.assertEqual(private_projection["reason"], "projection_not_found")
+            self.assertEqual(len(api_store.repos.workflow_runtime.list_actions(limit=0)), private_action_count)
+            self.assertEqual(len(api_store.repos.workflow_runtime.list_operations(limit=0)), private_operation_count)
+
+            current_revision = str(
+                orchestrator.serving_projection_reader.get_projection("proj-read")["projection"]["membership_revision"]
+            )
+            stale_submit_action_count = len(api_store.repos.workflow_runtime.list_actions(limit=0))
+            stale_submit_operation_count = len(api_store.repos.workflow_runtime.list_operations(limit=0))
+            stale_submit = orchestrator.submit_operation_action(
+                {
+                    "action_type": ACTION_FILTER_PROJECTION,
+                    "target_ref": {
+                        "projection_id": "proj-read",
+                        "membership_revision": f"stale-{current_revision}",
+                    },
+                    "input": {"limit": 1},
+                    "idempotency_key": "filter:proj-read:stale-submit",
+                }
+            )
+            self.assertEqual(stale_submit["status"], "not_ready")
+            self.assertEqual(stale_submit["reason"], "projection_membership_revision_stale")
+            self.assertEqual(
+                len(api_store.repos.workflow_runtime.list_actions(limit=0)),
+                stale_submit_action_count,
+            )
+            self.assertEqual(
+                len(api_store.repos.workflow_runtime.list_operations(limit=0)),
+                stale_submit_operation_count,
+            )
+
+            submitted = orchestrator.submit_operation_action(
+                {
+                    "action_type": ACTION_FILTER_PROJECTION,
+                    "workspace_id": "workspace-auth",
+                    "target_ref": {"projection_id": "proj-read"},
+                    "input": {"limit": 1},
+                    "idempotency_key": "filter:proj-read",
+                },
+                expected_workspace_id="workspace-auth",
+                expected_owner_user_id="auth-owner",
+            )
+            self.assertEqual(submitted["status"], "queued", submitted)
+            operation_run_id = submitted["operation_run"]["operation_run_id"]
+            self.assertEqual(set(submitted["action"]["target_ref"]), {"projection_id", "membership_revision"})
+            self.assertEqual(submitted["action"]["request_schema_version"], "projection_filter_request_v1")
+
+            dispatched = orchestrator.dispatch_operation_run_api(
+                operation_run_id,
+                {"actor": "unit-test"},
+                expected_workspace_id="workspace-auth",
+            )
+            duplicate = orchestrator.dispatch_operation_run_api(
+                operation_run_id,
+                {"actor": "unit-test"},
+                expected_workspace_id="workspace-auth",
+            )
 
             self.assertEqual(dispatched["status"], "completed")
             self.assertEqual(dispatched["operation_run"]["status"], "completed")
@@ -5812,11 +6161,19 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 dispatched["operation_run"]["result_ref"]["read_result"]["candidates"][0]["public_summary"]["name"],
                 "Ada",
             )
+            self.assertEqual(
+                dispatched["operation_run"]["result_ref"]["read_result"]["candidates"][0]["crm_overlay_summary"][
+                    "crm_record_id"
+                ],
+                "crm-auth-ada",
+            )
             self.assertEqual(duplicate["status"], "completed")
             self.assertEqual(duplicate["events"], [])
             self.assertEqual(api_store.list_workflow_commands(limit=0), [])
             self.assertFalse(dispatched["module_state_mutated"])
 
+            action_count_before_missing = len(api_store.repos.workflow_runtime.list_actions(limit=0))
+            operation_count_before_missing = len(api_store.repos.workflow_runtime.list_operations(limit=0))
             missing = orchestrator.submit_operation_action(
                 {
                     "action_type": ACTION_FILTER_PROJECTION,
@@ -5825,15 +6182,452 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                     "idempotency_key": "filter:proj-missing",
                 }
             )
-            missing_operation_id = missing["operation_run"]["operation_run_id"]
-            failed = orchestrator.dispatch_operation_run_api(missing_operation_id, {"actor": "unit-test"})
-            self.assertEqual(failed["status"], "failed")
+            self.assertEqual(missing["status"], "not_found")
+            self.assertEqual(missing["reason"], "projection_not_found")
             self.assertEqual(
-                api_store.repos.workflow_runtime.get_action(missing["action"]["action_id"])["status"], "queued"
+                len(api_store.repos.workflow_runtime.list_actions(limit=0)),
+                action_count_before_missing,
             )
-            retried = orchestrator.retry_operation_run_api(missing_operation_id, {"actor": "unit-test"})
-            self.assertEqual(retried["status"], "queued")
-            self.assertNotEqual(retried["operation_run"]["operation_run_id"], missing_operation_id)
+            self.assertEqual(
+                len(api_store.repos.workflow_runtime.list_operations(limit=0)),
+                operation_count_before_missing,
+            )
+            self.assertEqual(api_store.list_workflow_commands(limit=0), [])
+
+            def _hold_session_lock_until_released(
+                lock_key: str,
+                entered: threading.Event,
+                release: threading.Event,
+                errors: list[BaseException],
+            ) -> None:
+                try:
+                    with api_store._control_plane_postgres._hold_session_advisory_lock(lock_key):
+                        entered.set()
+                        release.wait(timeout=2)
+                except BaseException as exc:  # pragma: no cover - surfaced below
+                    errors.append(exc)
+                    entered.set()
+
+            operation_lock_submission = orchestrator.submit_operation_action(
+                {
+                    "action_type": ACTION_FILTER_PROJECTION,
+                    "target_ref": {"projection_id": "proj-read"},
+                    "input": {"limit": 1},
+                    "idempotency_key": "filter:proj-read:operation-lock-busy",
+                }
+            )
+            operation_lock_id = operation_lock_submission["operation_run"]["operation_run_id"]
+            operation_lock_entered = threading.Event()
+            operation_lock_release = threading.Event()
+            operation_lock_errors: list[BaseException] = []
+            operation_lock_thread = threading.Thread(
+                target=_hold_session_lock_until_released,
+                args=(
+                    f"operation_dispatch:{operation_lock_id}",
+                    operation_lock_entered,
+                    operation_lock_release,
+                    operation_lock_errors,
+                ),
+                daemon=True,
+            )
+            operation_lock_thread.start()
+            self.assertTrue(operation_lock_entered.wait(timeout=1))
+            operation_lock_events = api_store.repos.workflow_runtime.list_operation_events(operation_lock_id)
+            with mock.patch(
+                "sourcing_agent.orchestrator.SESSION_ADVISORY_LOCK_ACQUISITION_TIMEOUT_SECONDS",
+                0.05,
+            ):
+                operation_lock_busy = orchestrator.dispatch_operation_run_api(
+                    operation_lock_id,
+                    {"actor": "unit-test"},
+                )
+            self.assertEqual(operation_lock_busy["status"], "conflict")
+            self.assertEqual(operation_lock_busy["reason"], "operation_dispatch_lock_busy")
+            self.assertTrue(operation_lock_busy["retryable"])
+            self.assertEqual(
+                api_store.repos.workflow_runtime.get_operation(operation_lock_id)["status"],
+                operation_lock_submission["operation_run"]["status"],
+            )
+            self.assertEqual(
+                api_store.repos.workflow_runtime.list_operation_events(operation_lock_id),
+                operation_lock_events,
+            )
+            operation_lock_release.set()
+            operation_lock_thread.join(timeout=2)
+            self.assertFalse(operation_lock_thread.is_alive())
+            self.assertEqual(operation_lock_errors, [])
+            self.assertEqual(
+                orchestrator.dispatch_operation_run_api(operation_lock_id, {"actor": "unit-test"})["status"],
+                "completed",
+            )
+
+            publication_lock_submission = orchestrator.submit_operation_action(
+                {
+                    "action_type": ACTION_FILTER_PROJECTION,
+                    "target_ref": {"projection_id": "proj-read"},
+                    "input": {"limit": 1},
+                    "idempotency_key": "filter:proj-read:publication-lock-busy",
+                }
+            )
+            publication_lock_id = publication_lock_submission["operation_run"]["operation_run_id"]
+            publication_lock_entered = threading.Event()
+            publication_lock_release = threading.Event()
+            publication_lock_errors: list[BaseException] = []
+            publication_lock_thread = threading.Thread(
+                target=_hold_session_lock_until_released,
+                args=(
+                    "serving_projection_publication:proj-read",
+                    publication_lock_entered,
+                    publication_lock_release,
+                    publication_lock_errors,
+                ),
+                daemon=True,
+            )
+            publication_lock_thread.start()
+            self.assertTrue(publication_lock_entered.wait(timeout=1))
+            publication_lock_events = api_store.repos.workflow_runtime.list_operation_events(publication_lock_id)
+            with mock.patch(
+                "sourcing_agent.orchestrator.SESSION_ADVISORY_LOCK_ACQUISITION_TIMEOUT_SECONDS",
+                0.05,
+            ):
+                publication_lock_busy = orchestrator.dispatch_operation_run_api(
+                    publication_lock_id,
+                    {"actor": "unit-test"},
+                )
+            self.assertEqual(publication_lock_busy["status"], "conflict")
+            self.assertEqual(publication_lock_busy["reason"], "projection_publication_lock_busy")
+            self.assertTrue(publication_lock_busy["retryable"])
+            self.assertEqual(
+                api_store.repos.workflow_runtime.get_operation(publication_lock_id)["status"],
+                publication_lock_submission["operation_run"]["status"],
+            )
+            self.assertEqual(
+                api_store.repos.workflow_runtime.list_operation_events(publication_lock_id),
+                publication_lock_events,
+            )
+            publication_lock_release.set()
+            publication_lock_thread.join(timeout=2)
+            self.assertFalse(publication_lock_thread.is_alive())
+            self.assertEqual(publication_lock_errors, [])
+            self.assertEqual(
+                orchestrator.dispatch_operation_run_api(publication_lock_id, {"actor": "unit-test"})["status"],
+                "completed",
+            )
+
+            search = orchestrator.submit_operation_action(
+                {
+                    "action_type": ACTION_SEARCH_PROJECTION,
+                    "target_ref": {"serving_projection_id": "proj-read"},
+                    "input": {"query": "Ada", "limit": 1},
+                    "idempotency_key": "search:proj-read:ada",
+                }
+            )
+            self.assertEqual(search["status"], "queued")
+            self.assertEqual(search["action"]["input"], {"limit": 1, "search_keyword": "Ada"})
+            self.assertEqual(search["action"]["request_schema_version"], "projection_search_request_v1")
+
+            canonical_filter = orchestrator.submit_operation_action(
+                {
+                    "action_type": ACTION_FILTER_PROJECTION,
+                    "target_ref": {"projection_id": "proj-read"},
+                    "input": {
+                        "filters": {
+                            "employment_statuses": ["Former", "current", "former"],
+                            "function_buckets": "Engineering,Research",
+                        }
+                    },
+                    "idempotency_key": "filter:proj-read:canonical",
+                }
+            )
+            canonical_filter_replay = orchestrator.submit_operation_action(
+                {
+                    "action_type": ACTION_FILTER_PROJECTION,
+                    "target_ref": {"serving_projection_id": "proj-read"},
+                    "input": {
+                        "candidate_filter": {
+                            "employment_statuses": "current,former",
+                            "function_buckets": ["research", "engineering"],
+                        }
+                    },
+                    "idempotency_key": "filter:proj-read:canonical",
+                }
+            )
+            self.assertEqual(canonical_filter["status"], "queued")
+            self.assertTrue(canonical_filter_replay["idempotent_replay"])
+            self.assertEqual(
+                canonical_filter_replay["action"]["action_id"],
+                canonical_filter["action"]["action_id"],
+            )
+            self.assertEqual(
+                canonical_filter["action"]["input"]["filters"]["function_buckets"],
+                ["engineering", "research"],
+            )
+            canonical_action_id = canonical_filter["action"]["action_id"]
+            canonical_operation_id = canonical_filter["operation_run"]["operation_run_id"]
+            persisted_canonical_action = api_store.repos.workflow_runtime.get_action(canonical_action_id)
+            tampered_tuple_action = json.loads(json.dumps(persisted_canonical_action))
+            tampered_tuple_action["input"]["filters"]["employment_statuses"] = ("current", "former")
+            original_get_action = api_store.repos.workflow_runtime.get_action
+
+            def _get_action_with_python_only_tuple(action_id: str):
+                if action_id == canonical_action_id:
+                    return tampered_tuple_action
+                return original_get_action(action_id)
+
+            tuple_events_before = api_store.repos.workflow_runtime.list_operation_events(canonical_operation_id)
+            with mock.patch.object(
+                api_store.repos.workflow_runtime,
+                "get_action",
+                side_effect=_get_action_with_python_only_tuple,
+            ):
+                tuple_tamper_dispatch = orchestrator.dispatch_operation_run_api(
+                    canonical_operation_id,
+                    {"actor": "unit-test"},
+                )
+            self.assertEqual(tuple_tamper_dispatch["status"], "conflict")
+            self.assertEqual(
+                tuple_tamper_dispatch["reason"],
+                "operation_action_request_schema_validation_conflict",
+            )
+            self.assertEqual(
+                api_store.repos.workflow_runtime.get_operation(canonical_operation_id)["status"],
+                canonical_filter["operation_run"]["status"],
+            )
+            self.assertEqual(
+                api_store.repos.workflow_runtime.get_action(canonical_action_id)["status"],
+                canonical_filter["action"]["status"],
+            )
+            self.assertEqual(
+                api_store.repos.workflow_runtime.list_operation_events(canonical_operation_id),
+                tuple_events_before,
+            )
+
+            ambiguous_filter = orchestrator.submit_operation_action(
+                {
+                    "action_type": ACTION_FILTER_PROJECTION,
+                    "target_ref": {"projection_id": "proj-read"},
+                    "input": {"filters": {}, "candidate_filter": {}},
+                    "idempotency_key": "filter:proj-read:ambiguous-filter",
+                }
+            )
+            self.assertEqual(ambiguous_filter["status"], "invalid")
+            self.assertEqual(ambiguous_filter["reason"], "filter_projection_filter_alias_ambiguous")
+
+            api_store.repos.serving_projection.upsert(
+                {
+                    "projection_id": "proj-dispatch-not-ready",
+                    "projection_type": "run_scope_projection",
+                    "collection_id": "company:test",
+                    "source_run_id": "job-dispatch-not-ready",
+                    "state": "serving",
+                }
+            )
+            api_store.repos.serving_projection.upsert_members(
+                "proj-dispatch-not-ready",
+                [
+                    {
+                        "candidate_identity_key": "linkedin:dispatch-not-ready",
+                        "person_identity_key": "linkedin:dispatch-not-ready",
+                    }
+                ],
+            )
+            dispatch_not_ready = orchestrator.submit_operation_action(
+                {
+                    "action_type": ACTION_FILTER_PROJECTION,
+                    "target_ref": {"projection_id": "proj-dispatch-not-ready"},
+                    "input": {"limit": 1},
+                    "idempotency_key": "filter:proj-dispatch-not-ready",
+                }
+            )
+            archived_projection = dict(api_store.repos.serving_projection.get("proj-dispatch-not-ready") or {})
+            archived_projection["state"] = "archived"
+            api_store.repos.serving_projection.upsert(archived_projection)
+            dispatch_not_ready_result = orchestrator.dispatch_operation_run_api(
+                dispatch_not_ready["operation_run"]["operation_run_id"],
+                {"actor": "unit-test"},
+            )
+            dispatch_not_ready_replay = orchestrator.dispatch_operation_run_api(
+                dispatch_not_ready["operation_run"]["operation_run_id"],
+                {"actor": "unit-test"},
+            )
+            self.assertEqual(dispatch_not_ready_result["status"], "not_ready")
+            self.assertEqual(dispatch_not_ready_result["reason"], "projection_not_servable")
+            self.assertEqual(dispatch_not_ready_result["operation_run"]["status"], "failed")
+            self.assertEqual(dispatch_not_ready_result["events"][0]["event_type"], "OperationReadFailed")
+            self.assertEqual(dispatch_not_ready_replay["status"], "not_ready")
+            self.assertEqual(dispatch_not_ready_replay["reason"], "projection_not_servable")
+            self.assertEqual(dispatch_not_ready_replay["events"], [])
+
+            stale = orchestrator.submit_operation_action(
+                {
+                    "action_type": ACTION_FILTER_PROJECTION,
+                    "target_ref": {"projection_id": "proj-read"},
+                    "input": {"limit": 1},
+                    "idempotency_key": "filter:proj-read:stale",
+                }
+            )
+            stale_operation_id = stale["operation_run"]["operation_run_id"]
+            api_store.repos.serving_projection.upsert_members(
+                "proj-read",
+                [
+                    {
+                        "candidate_identity_key": "linkedin:grace",
+                        "person_identity_key": "linkedin:grace",
+                        "profile_url_key": "grace",
+                        "rank_index": 2,
+                        "public_summary": {"name": "Grace"},
+                    }
+                ],
+            )
+            stale_dispatch = orchestrator.dispatch_operation_run_api(stale_operation_id, {"actor": "unit-test"})
+            self.assertEqual(stale_dispatch["status"], "not_ready")
+            self.assertEqual(stale_dispatch["reason"], "projection_membership_revision_stale")
+            self.assertTrue(stale_dispatch["reselection_required"])
+            self.assertEqual(stale_dispatch["operation_run"]["status"], "failed")
+            self.assertEqual(stale_dispatch["action"]["status"], "failed")
+            self.assertEqual(stale_dispatch["events"][0]["event_type"], "OperationInputRevisionStale")
+            stale_dispatch_replay = orchestrator.dispatch_operation_run_api(
+                stale_operation_id,
+                {"actor": "unit-test"},
+            )
+            self.assertEqual(stale_dispatch_replay["status"], "not_ready")
+            self.assertEqual(stale_dispatch_replay["reason"], "projection_membership_revision_stale")
+            self.assertTrue(stale_dispatch_replay["reselection_required"])
+            self.assertEqual(stale_dispatch_replay["events"], [])
+            self.assertEqual(
+                stale_dispatch_replay["operation_run"]["result_ref"]["operation_adapter"],
+                "projection_read_v1",
+            )
+            self.assertEqual(
+                [
+                    event["event_type"]
+                    for event in api_store.repos.workflow_runtime.list_operation_events(stale_operation_id)
+                ].count("OperationInputRevisionStale"),
+                1,
+            )
+
+            toctou = orchestrator.submit_operation_action(
+                {
+                    "action_type": ACTION_FILTER_PROJECTION,
+                    "target_ref": {"projection_id": "proj-read"},
+                    "input": {"limit": 1},
+                    "idempotency_key": "filter:proj-read:toctou",
+                }
+            )
+            original_page_reader = orchestrator.serving_projection_reader.get_projection_candidates
+
+            def _report_membership_change_during_reader(*args, **kwargs):
+                payload = original_page_reader(*args, **kwargs)
+                return {
+                    **payload,
+                    "status": "not_ready",
+                    "reason": "projection_membership_revision_changed_during_read",
+                    "membership_revision": "revision-reported-by-reader",
+                }
+
+            with mock.patch.object(
+                orchestrator.serving_projection_reader,
+                "get_projection_candidates",
+                side_effect=_report_membership_change_during_reader,
+            ):
+                toctou_dispatch = orchestrator.dispatch_operation_run_api(
+                    toctou["operation_run"]["operation_run_id"],
+                    {"actor": "unit-test"},
+                )
+            self.assertEqual(toctou_dispatch["status"], "not_ready")
+            self.assertEqual(toctou_dispatch["reason"], "projection_membership_revision_stale")
+            self.assertTrue(toctou_dispatch["reselection_required"])
+            self.assertEqual(api_store.list_workflow_commands(limit=0), [])
+
+            serialized = orchestrator.submit_operation_action(
+                {
+                    "action_type": ACTION_FILTER_PROJECTION,
+                    "target_ref": {"projection_id": "proj-read"},
+                    "input": {"limit": 1},
+                    "idempotency_key": "filter:proj-read:serialized-publication",
+                }
+            )
+            serialized_revision = str(serialized["action"]["target_ref"]["membership_revision"])
+            reader_returned = threading.Event()
+            allow_dispatch_persist = threading.Event()
+            publisher_started = threading.Event()
+            publisher_finished = threading.Event()
+            dispatch_result: dict[str, Any] = {}
+            thread_errors: list[BaseException] = []
+            original_serialized_reader = orchestrator.serving_projection_reader.get_projection_candidates
+
+            def _pause_after_reader_returns(*args, **kwargs):
+                payload = original_serialized_reader(*args, **kwargs)
+                reader_returned.set()
+                if not allow_dispatch_persist.wait(10):
+                    raise AssertionError("dispatch persistence release timed out")
+                return payload
+
+            def _dispatch_with_lock() -> None:
+                try:
+                    dispatch_result.update(
+                        orchestrator.dispatch_operation_run_api(
+                            serialized["operation_run"]["operation_run_id"],
+                            {"actor": "unit-test"},
+                        )
+                    )
+                except BaseException as exc:  # pragma: no cover - surfaced in the parent assertion
+                    thread_errors.append(exc)
+
+            def _publish_after_reader_return() -> None:
+                publisher_started.set()
+                try:
+                    orchestrator.serving_projection_writer.publish_run_scope_projection(
+                        run_id="job-read",
+                        collection_id="company:test",
+                        projection_id="proj-read",
+                        members=[
+                            {
+                                "candidate_identity_key": "linkedin:hopper",
+                                "person_identity_key": "linkedin:hopper",
+                                "profile_url_key": "hopper",
+                                "public_summary": {"name": "Hopper"},
+                            }
+                        ],
+                        replace_members=True,
+                    )
+                except BaseException as exc:  # pragma: no cover - surfaced in the parent assertion
+                    thread_errors.append(exc)
+                finally:
+                    publisher_finished.set()
+
+            with mock.patch.object(
+                orchestrator.serving_projection_reader,
+                "get_projection_candidates",
+                side_effect=_pause_after_reader_returns,
+            ):
+                dispatch_thread = threading.Thread(target=_dispatch_with_lock, daemon=True)
+                dispatch_thread.start()
+                self.assertTrue(reader_returned.wait(10))
+                publisher_thread = threading.Thread(target=_publish_after_reader_return, daemon=True)
+                publisher_thread.start()
+                self.assertTrue(publisher_started.wait(10))
+                self.assertFalse(publisher_finished.wait(0.25))
+                allow_dispatch_persist.set()
+                dispatch_thread.join(10)
+                publisher_thread.join(10)
+            self.assertFalse(dispatch_thread.is_alive())
+            self.assertFalse(publisher_thread.is_alive())
+            self.assertEqual(thread_errors, [])
+            self.assertEqual(dispatch_result["status"], "completed")
+            read_result = dict(dispatch_result["operation_run"]["result_ref"]["read_result"])
+            self.assertEqual(
+                str(
+                    read_result.get("membership_revision")
+                    or dict(read_result.get("projection") or {}).get("membership_revision")
+                    or ""
+                ),
+                serialized_revision,
+            )
+            published_revision = str(
+                orchestrator.serving_projection_reader.get_projection("proj-read")["projection"]["membership_revision"]
+            )
+            self.assertNotEqual(published_revision, serialized_revision)
         finally:
             api_store.close()
 
@@ -13138,6 +13932,78 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
 
 
 class OperationControlHttpConflictTest(unittest.TestCase):
+    def test_projection_read_submit_and_dispatch_use_not_found_and_completed_http_statuses(self) -> None:
+        orchestrator = SimpleNamespace(
+            submit_operation_action=lambda *_args, **_kwargs: {
+                "status": "not_found",
+                "reason": "projection_not_found",
+                "projection_id": "proj-missing",
+            },
+            dispatch_operation_run_api=lambda run_id, *_args, **_kwargs: (
+                {
+                    "status": "not_ready",
+                    "reason": "projection_not_servable",
+                    "operation_run": {"operation_run_id": run_id, "status": "failed"},
+                    "module_state_mutated": False,
+                }
+                if run_id == "operation-not-ready"
+                else {
+                    "status": "completed",
+                    "operation_run": {"operation_run_id": run_id, "status": "completed"},
+                    "module_state_mutated": False,
+                }
+            ),
+        )
+        server = create_server(orchestrator, host="127.0.0.1", port=0)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        host, port = server.server_address
+        try:
+            submit_request = urllib_request.Request(
+                f"http://{host}:{port}/api/operations/actions",
+                data=json.dumps(
+                    {
+                        "action_type": ACTION_FILTER_PROJECTION,
+                        "target_ref": {"projection_id": "proj-missing"},
+                    }
+                ).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with self.assertRaises(urllib_error.HTTPError) as raised:
+                urllib_request.urlopen(submit_request)
+            self.assertEqual(raised.exception.code, 404)
+            missing_payload = json.loads(raised.exception.read().decode("utf-8"))
+            self.assertEqual(missing_payload["reason"], "projection_not_found")
+
+            dispatch_request = urllib_request.Request(
+                f"http://{host}:{port}/api/operations/runs/operation-read/dispatch",
+                data=b"{}",
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib_request.urlopen(dispatch_request) as response:
+                self.assertEqual(response.status, 200)
+                completed_payload = json.loads(response.read().decode("utf-8"))
+            self.assertEqual(completed_payload["status"], "completed")
+
+            not_ready_request = urllib_request.Request(
+                f"http://{host}:{port}/api/operations/runs/operation-not-ready/dispatch",
+                data=b"{}",
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with self.assertRaises(urllib_error.HTTPError) as raised:
+                urllib_request.urlopen(not_ready_request)
+            self.assertEqual(raised.exception.code, 409)
+            not_ready_payload = json.loads(raised.exception.read().decode("utf-8"))
+            self.assertEqual(not_ready_payload["status"], "not_ready")
+            self.assertEqual(not_ready_payload["reason"], "projection_not_servable")
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
+
     def test_operation_control_conflicts_map_to_http_409(self) -> None:
         orchestrator = SimpleNamespace(
             approve_operation_action_api=lambda *_args, **_kwargs: {

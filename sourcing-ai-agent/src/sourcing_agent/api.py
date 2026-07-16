@@ -1582,11 +1582,13 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["GET"], "/api/projections/{projection_id:sourcing_ident}/export-policy", get_projection_export_policy)
 
     def get_projection_search(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        _apply_server_read_scope(query, request, workspace=True)
         search_payload = orchestrator.search_projection_person_index_api(
             request.path_params["projection_id"],
             search_keyword=str(query.get("search") or query.get("q") or ""),
             offset=_env_int_from_payload(query, "offset", 0),
             limit=_env_int_from_payload(query, "limit", 120),
+            workspace_id=str(query.get("workspace_id") or "default"),
         )
         if search_payload is None:
             return _json_response(HTTPStatus.NOT_FOUND, {"error": "projection not found"})
@@ -1614,11 +1616,13 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["GET"], "/api/projections/{projection_id:sourcing_ident}/persons/{person_key}", get_projection_person_detail)
 
     def get_projection_candidates(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        _apply_server_read_scope(query, request, workspace=True)
         candidate_page_payload = orchestrator.get_serving_projection_candidate_page(
             request.path_params["projection_id"],
             offset=_env_int_from_payload(query, "offset", 0),
             limit=_env_int_from_payload(query, "limit", 120),
             candidate_filter=_candidate_page_filter_from_payload(query),
+            workspace_id=str(query.get("workspace_id") or "default"),
         )
         if candidate_page_payload is None:
             return _json_response(HTTPStatus.NOT_FOUND, {"error": "projection not found"})
@@ -1697,9 +1701,11 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
         denied = _gate_job_owner(request, job_id)
         if denied is not None:
             return denied
+        _apply_server_read_scope(query, request, workspace=True)
         dashboard_payload = orchestrator.get_job_dashboard(
             job_id,
             include_asset_population_preview=_env_bool_from_payload(query, "include_candidates", True),
+            workspace_id=str(query.get("workspace_id") or "default"),
         )
         if dashboard_payload is None:
             return _json_response(HTTPStatus.NOT_FOUND, {"error": "job not found"})
@@ -1721,12 +1727,14 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
         denied = _gate_job_owner(request, job_id)
         if denied is not None:
             return denied
+        _apply_server_read_scope(query, request, workspace=True)
         candidate_page_payload = orchestrator.get_job_candidate_page(
             job_id,
             offset=_env_int_from_payload(query, "offset", 0),
             limit=_env_int_from_payload(query, "limit", 120),
             lightweight=_env_bool_from_payload(query, "lightweight", True),
             candidate_filter=_candidate_page_filter_from_payload(query),
+            workspace_id=str(query.get("workspace_id") or "default"),
         )
         if candidate_page_payload is None:
             return _json_response(HTTPStatus.NOT_FOUND, {"error": "job not found"})
@@ -2118,9 +2126,10 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
             and raw_status in OPERATION_ACTION_FRESH_SUBMISSION_STATUSES
         ):
             status = HTTPStatus.ACCEPTED
-        elif raw_status == "not_found" and result.get("reason") == "crm_record_not_found":
+        elif raw_status == "not_found":
             status = HTTPStatus.NOT_FOUND
-            result = dict(_CRM_RECORD_NOT_FOUND_BODY)
+            if result.get("reason") == "crm_record_not_found":
+                result = dict(_CRM_RECORD_NOT_FOUND_BODY)
         elif raw_status == "conflict":
             status = HTTPStatus.CONFLICT
         else:
@@ -2222,9 +2231,14 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
             **_expected_operation_owner_kwargs(request),
         )
         result = _mask_authenticated_operation_not_found(request, result, resource="run")
-        status = HTTPStatus.ACCEPTED if result.get("status") == "planned" else HTTPStatus.BAD_REQUEST
-        if result.get("status") == "not_found":
+        result_status = result.get("status")
+        status = HTTPStatus.ACCEPTED if result_status == "planned" else HTTPStatus.BAD_REQUEST
+        if result_status == "completed":
+            status = HTTPStatus.OK
+        elif result_status == "not_found":
             status = HTTPStatus.NOT_FOUND
+        elif result_status in {"conflict", "not_ready"}:
+            status = HTTPStatus.CONFLICT
         return _json_response(status, result)
 
     add(["POST"], "/api/operations/runs/{run_id}/dispatch", post_operation_run_dispatch, read_body=True)

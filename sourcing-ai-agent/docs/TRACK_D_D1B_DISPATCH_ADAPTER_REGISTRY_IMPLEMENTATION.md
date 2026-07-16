@@ -130,9 +130,9 @@ type, strict request-schema shape/validator, physical action/run pin columns, su
 foundation, epoch-scoped compatibility observations, and R-029 residual for the schema-less bridge. Remaining work
 still includes:
 
-- reviewed per-action production schemas and owner-target binders; D1f activated three existing-record CRM actions,
-  D1h activated CRM Public Web enrichment, and D1i activated the acquisition root, leaving 10 production actions
-  schema-less;
+- reviewed per-action production schemas and owner-target binders for the remaining six actions. Historical checkpoints
+  were D1f=12 schema-less, D1h=11, D1i=10, D1j=9, and D1k=8; D1l then activated both projection-read actions, so the
+  current production partition is **9 schema-defined / 6 schema-less / served=0**;
 - revisioned model-safe result schemas and their validator owner;
 - the full served predicate and simulate-dispatch serializer preflight;
 - bridge retirement only after every API-submittable action records zero compatibility hits for one release window,

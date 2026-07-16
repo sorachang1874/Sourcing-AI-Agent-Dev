@@ -41,6 +41,12 @@
   direct state-sync caller 棘轮降至 26，但 cancel race 仍可留下已计划 command，transaction try-lock helper 也只有
   capped backoff、没有总 acquisition deadline。下一次触碰 operation retry/dispatch/command completion、
   `workflow_commands` 或新增该 helper caller 时，必须先落 generation/lease fence、统一 UoW 和 typed lock-busy budget。
+  D1l 仅登记一个 commandless bounded specialization：projection-read terminal action+Operation+event 在一个 PG UoW
+  提交，session Operation-dispatch/publication locks 共用单一 monotonic 5s total acquisition deadline（不是 each
+  5s），past deadline 在 connect 前 fail，耗尽时分别返回
+  `operation_dispatch_lock_busy` / `projection_publication_lock_busy` 并映射 HTTP 409。该路径不创建 workflow command，
+  因而 command generation/lease fence 不适用；不新增 direct state-sync caller，26 棘轮不升。R-019 对所有其它
+  retry/dispatch/command-producing/completion 路径继续 open。
 - [ ] R-022：②.4c activity spine / R-020 fixed-forward 已固定 `af50f45..30a703e` 异步 Codex review；有效 GO 前只冻结本 scope 的 live/W6/manual/里程碑签收，commands 与其他非 live 开发继续。
 - [ ] R-023：`runtime_outbox` 在 production claim/consumer、Track C 5d 或 outbox live/W6/manual 签收前补 claim generation/token fence；当前无 production consumer，不阻断非 live 开发。
 - [ ] R-025：②.4d `889848e..7048d83` re-review 已重发，但 Codex 0.144 多 thread / non-inline-items transcript 被旧 runner fail-closed 为 `invalid_transport`；提取的 reviewer 内容只作参考，不是 GO/NO-GO。协议适配已由独立 carrier `dc5af51` 修复；operator 顶层 reasoning effort 仍为 `medium`，改为最高支持档后再正式重发。有效 GO 前只冻结本 scope 的 live/W6/manual/里程碑签收。
@@ -163,14 +169,16 @@
   `causal_binding.final_response_item_exact=false` 为 invalid；其中 substantive text 只作 fixed-forward 输入，不是
   formal `NO-GO`。fresh pinned formal review 必须绑定 enclosing commit，hash-bound valid artifact 存在前 formal
   status=pending，且不阻断无关 non-live Track D 开发。
-- [x] D1d projection action binder decision oracle（2026-07-15）：`search_projection` / `filter_projection` 当前
-  aggregate 无物理 workspace/access-scope owner，故 fail-closed 留在 R-029 bridge；D1f 仅对 exact 三项 CRM
-  action 条件化绑定 authenticated workspace/user，不改变 projection owner 决策。served=0。
+- [x] D1d projection action binder decision oracle（2026-07-15 checkpoint）：当时
+  `search_projection` / `filter_projection` aggregate 无物理 workspace owner，故 fail-closed 留在 R-029 bridge。
+  D1l 后续选择其 option 2：由 public `ServingProjectionReader` 的 closed production-type classification 显式拥有
+  `shared_canonical_read`，`projection_search_service` mint projection+revision target；Operation workspace 仅隔离 CRM
+  overlay，不伪装 projection tenant owner。served=0，D1l review 仍独立 pending。
 - [x] D1e CRM existing-record schema/binder foundation（2026-07-15）：声明 shared closed schema builder、typed
   bind context、binder registry，以及 `set_crm_stage|add_crm_note|create_crm_task` exact 三项 contracts；初始
   checkpoint=`declared_not_activated`，直到 HTTP/orchestrator + execution revalidation 可同批激活。
-- [x] D1f CRM existing-record action activation current author candidate（2026-07-15）：exact 三项 schema 已复制到
-  production registry，当前 **3 schema-defined / 12 schema-less / served=0**。authenticated submit 由 request state
+- [x] D1f CRM existing-record action activation author candidate（2026-07-15）：exact 三项 schema 已复制到
+  production registry，D1f checkpoint 为 **3 schema-defined / 12 schema-less / served=0**。authenticated submit 由 request state
   exact 绑定 workspace/user；missing/foreign 同一 404 且 pre-submit 全域零写；open-mode exact workspace 正向保留。
   owner snapshot 持久化 `crm_record_id/workspace_id/owner_user_id/crm_version`，stable request identity 仅
   `crm_record_id+workspace_id`；dispatch 在新 plan 写前、CRM command owner 在首个 domain effect 前分别 revalidate，
@@ -210,10 +218,10 @@
   approval 分支在返回 captured plan 前写 action/run/event，触发 R-019 next-mutation tripwire；current fixed-forward
   对 existing-plan approval requirement 只读返回，并把回归扩为全 D1g 表零写。Commit `ebe7ed0` fresh pinned
   non-author scope-local advisory=`GO 0/0/0/0`，但不是 formal GO；R-031 仍 formal-review pending。D1g checkpoint 不迁移当时其余
-  12 个 schema-less action；D1h checkpoint 将其降至 11，当前 D1i partition 见下一项。不改 served=0、
+  12 个 schema-less action；D1h checkpoint 将其降至 11，当前 D1l partition 见后续 D1l 项。不改 served=0、
   不授权 live/provider。
 - [x] D1h CRM Public Web action activation current author candidate（2026-07-16）：将
-  `enrich_person_public_web` 作为第 4 个 schema-defined action 激活，当前 **4 schema-defined / 11 schema-less /
+  `enrich_person_public_web` 作为第 4 个 schema-defined action 激活，D1h checkpoint 为 **4 schema-defined / 11 schema-less /
   served=0**。exact one batch/single/person-identity selector 绑定 authenticated server workspace+user，canonical
   ids 去重排序且上限 1000；任一 missing/foreign member 返回同一 `crm_record_not_found`，submit 前全域零写，
   same-owner/replay/open-mode 保留。owner-minted target 持久化每项 workspace/owner/version snapshot，dispatch
@@ -259,28 +267,58 @@
   acknowledgement ambiguity；typed intent uniqueness 不冒充其它 command family 的 global fence。R-029 降至 10/15、epoch 仍为
   `d1f_r029_20260715_v2`；无 served/provider/model/live。
 - [x] D1j add_to_crm projection selection action activation candidate（2026-07-16）：将 `add_to_crm` 作为第 6 个
-  schema-defined action 激活，当前 **6 schema-defined / 9 schema-less / served=0**。Submit 只接受
+  schema-defined action 激活，D1j checkpoint 为 **6 schema-defined / 9 schema-less / served=0**。Submit 只接受
   `projection_id + membership_revision alias + candidate_identity_keys` selector，并由 canonical serving projection
   reader mint workspace/projection/revision/source-count/selected-candidates owner-bound target；input 仅保留 CRM
   destination fields。Dispatch 与 CRM writer command owner 均重验 persisted action/run request 和 current projection
   snapshot；forged command target、stale revision、missing/foreign projection member 在 CRM write/Activity/EntityDelta
   前失败。Author evidence=full Operation runtime `137 passed`、targeted D1j `3 passed`、D1 action request surface
-  `6 passed`；fresh pinned review pending，不是 `GO`。R-028 不关闭：temporary Store facade、legacy CRM writers、
+  `6 passed`；combined D1j/D1k pinned `354e979` runner-backed advisory=`NO-GO 0/9/7/1`，需 fixed-forward +
+  re-review，不是 formal `GO`。R-028 不关闭：temporary Store facade、legacy CRM writers、
   command terminal/effect/linked Operation sync 仍未统一为 global exactly-once UoW；无 served/provider/model/live。
 - [x] D1k export_candidates projection membership action activation candidate（2026-07-16）：将
-  `export_candidates` 作为第 7 个 schema-defined action 激活，当前 **7 schema-defined / 8 schema-less /
+  `export_candidates` 作为第 7 个 schema-defined action 激活，D1k checkpoint 为 **7 schema-defined / 8 schema-less /
   served=0**。Submit 只接受 projection selector/revision alias/optional selected candidate keys，由 export owner
   mint canonical projection/revision/source-count/selected-candidates target；input 仅保留 export options。
   Dispatch 只从 persisted owner-bound target 规划 `export.projection.generate`，stale membership 仍在 command planning
   前 reselection fail-closed。Whole-projection export 通过空 selected-candidate list 保持兼容。Author evidence=
   targeted D1j/D1k + D1 action surface `10 passed`、writer-control regression `6 passed`、full Operation runtime
-  `137 passed`、lint green、typecheck `81/4`；fresh pinned review required，不是 `GO`。R-028 不变；
+  `137 passed`、lint green、typecheck `81/4`；combined D1j/D1k pinned `354e979` runner-backed advisory=
+  `NO-GO 0/9/7/1`，需 fixed-forward + re-review，不是 formal `GO`。R-028 不变；
   无 served/provider/model/live。
-- [ ] R-029：宽松 action-schema bridge 仅可在 production action 尚无 reviewed schema/owner binder 期间存在；
+- [x] D1l projection-read action schema activation candidate（2026-07-16）：将 `search_projection` 与
+  `filter_projection` 作为第 8/9 个 schema-defined action 激活，当前 **9 schema-defined / 6 schema-less /
+  served=0**。Submit 通过 canonical serving projection reader mint `projection_search_service` owner-bound
+  `projection_id + membership_revision` target；search/filter aliases exact-one 后规范为 canonical input，multi-select
+  filter 严格校验、去重、排序，unknown/lossy intent fail closed。Operation dispatch 使用 persisted exact workspace
+  隔离 CRM overlay；authenticated direct projection 与 job dashboard/candidate 默认使用 server-derived workspace，
+  但显式 `default` 保留为 pre-auth legacy selector，open mode 保留 explicit workspace；direct candidates/search
+  已覆盖三种模式。Dispatch 以同一个 monotonic 5s total deadline 获取 Operation dispatch + projection publication
+  locks（不是 each 5s；past deadline connect 前 fail）并持有至 result persistence；
+  `operation_dispatch_lock_busy` / `projection_publication_lock_busy` 均 fail closed 为 HTTP 409。它执行 pre-read +
+  reader-pinned post-read revision fence；generic changed-during-read/page-read/search-read 统一 stale/reselection，
+  replay 保留 `reselection_required=true` 且不重复 event；persisted input/target strict JSON 拒绝 tuple 等 Python-only
+  container；terminal action+Operation+event 在一个 commandless PG UoW 提交；missing/non-shared/unprovable
+  projection submit-time 零 action/operation + HTTP 404，dispatch readiness exact reason + HTTP 409，stale 在成功
+  read-result/domain write 前 reselection，completed HTTP 200，仍不创建 workflow command。Initial
+  final stable author evidence=adversarial `5+9 subtests`、API+writer `50+87 subtests`、D1 contract
+  `133+176 subtests`、full Operation runtime `139`、lint `58 files`、mypy `81/4`、compile/diff clean。fresh dirty-tree
+  non-author read-only re-audit=`GO 0/0/0/0`，但未 pin、不是 formal `GO`；fresh hash-bound review required。
+  D1l 不新增 direct state-sync caller，R-019 的 26 棘轮不升；该路径无 workflow command，故 command
+  generation/lease fence 不适用。此 bounded specialization 不关闭 global R-019；R-028 不变；无
+  served/provider/model/live。
+  四个 production generic projection field patch caller（board-visible extension、Operation native admission、facet
+  layering、collection layering backfill）均迁至 `patch_publication_fields_under_lock`；production raw projection
+  `upsert` 由静态 guard 拒绝。Helper 持 publication session key，再由 native `SELECT ... FOR UPDATE` merge 当前
+  counts/readiness/metadata，并拒绝三个 search-index binding keys：
+  `projection_person_search_index_build_generation`、`projection_person_search_index_build_input_revision`、
+  `projection_person_search_index_input_revision`。因此 raw public counts/readiness patch 不再绕过 D1l
+  read/result exclusion。
+- [ ] R-029：宽松 action-schema bridge 仅可在 production action 尚无 implemented explicit schema/owner binder 期间存在；
   删除条件 = 全部 API-submittable actions（不是只看 served subset）连续一个 release window durable hit=0。
   observation epoch 必须每个 release window bump，且 `NOT VALID` checks 的既有行 validation 在独立部署完成；
   任一 action 进入 served 集前必须满足完整 schema+adapter+Activity+revisioned model-safe result+simulate serializer
-  谓词；D1k 后当前 8/15 schema-less、served=0。
+  谓词；D1l 后当前 6/15 schema-less、served=0。
 - [ ] R-031 review closeout：D1g current author candidate 已将 actions/runs list、detail、provenance 及
   approve/reject/dispatch/resume/retry/cancel 统一到 server-derived exact-workspace preflight，run 同时校验 linked
   action owner；nested commands/events 分别按 linked operation+action owner 与 physical event workspace 在 SQL

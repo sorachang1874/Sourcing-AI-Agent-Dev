@@ -149,7 +149,7 @@ def test_crm_action_schemas_are_exact_closed_digest_pinned_with_the_current_part
         action_type for action_type in records if DEFAULT_ACTION_REGISTRY.spec_for(action_type).has_request_schema
     } == set(OPERATION_OWNER_BOUND_ACTION_TYPES)
     assert set(CRM_RESOURCE_BOUND_ACTION_TYPES).issubset(OPERATION_OWNER_BOUND_ACTION_TYPES)
-    assert sum(not DEFAULT_ACTION_REGISTRY.spec_for(action_type).has_request_schema for action_type in records) == 10
+    assert sum(not DEFAULT_ACTION_REGISTRY.spec_for(action_type).has_request_schema for action_type in records) == 6
 
     for action_type in CRM_ACTIONS:
         spec = DEFAULT_ACTION_REGISTRY.spec_for(action_type)

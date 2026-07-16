@@ -64,7 +64,7 @@ FULL_ZERO_WRITE_TABLES = (
 )
 
 
-def test_acquisition_root_is_the_fifth_schema_defined_unserved_action() -> None:
+def test_acquisition_root_remains_in_the_current_schema_defined_unserved_set() -> None:
     records = DEFAULT_ACTION_REGISTRY.to_record(include_command_contracts=False)
     schema_defined = {
         action_type for action_type in records if DEFAULT_ACTION_REGISTRY.spec_for(action_type).has_request_schema
@@ -73,8 +73,8 @@ def test_acquisition_root_is_the_fifth_schema_defined_unserved_action() -> None:
 
     assert set(ACQUISITION_ROOT_ACTION_REQUEST_CONTRACTS) == {ACTION_START_ACQUISITION_RUN}
     assert schema_defined == set(OPERATION_OWNER_BOUND_ACTION_TYPES)
-    assert len(schema_defined) == 5
-    assert sum(not DEFAULT_ACTION_REGISTRY.spec_for(action_type).has_request_schema for action_type in records) == 10
+    assert len(schema_defined) == 9
+    assert sum(not DEFAULT_ACTION_REGISTRY.spec_for(action_type).has_request_schema for action_type in records) == 6
     assert spec.request_schema_version == "acquisition_root_request_v1"
     assert len(spec.request_schema_digest) == 64
     assert spec.request_identity_target_fields == ("workspace_id",)

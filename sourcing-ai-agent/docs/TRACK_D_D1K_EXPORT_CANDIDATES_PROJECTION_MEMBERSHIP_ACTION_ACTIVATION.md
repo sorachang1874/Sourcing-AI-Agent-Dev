@@ -1,13 +1,13 @@
 # Track D D1k — Export Candidates Projection Membership Action Activation
 
 Date: 2026-07-16  
-Candidate commit: pending  
+Candidate commit: `354e979`
 Scope: `export_candidates` only
 
 ## Impact
 
-`export_candidates` is moved from the R-029 schema-less compatibility bridge to a reviewed, schema-defined Operation
-action. The action remains API-submittable but is not served to a model. No provider, live model, CRM mutation, or
+`export_candidates` is moved from the R-029 schema-less compatibility bridge to a schema-defined Operation action. The
+combined pinned review is recorded below and remains `NO-GO`; the action remains API-submittable but is not served to a model. No provider, live model, CRM mutation, or
 served Agent tool path is authorized by this batch.
 
 ## Contract
@@ -24,7 +24,8 @@ served Agent tool path is authorized by this batch.
 
 ## Residuals
 
-- R-029 remains open: 8/15 production actions are still schema-less and served population remains zero.
+- At the D1k checkpoint R-029 remained open at 8/15 schema-less actions; D1l now owns the current
+  **9 schema-defined / 6 schema-less / served=0** partition.
 - R-028 is unchanged: this batch does not alter CRM mutation, effect/terminal synchronization, legacy CRM writers, or
   command completion exactly-once boundaries.
 - R-019 is unchanged: this batch does not add a global operation/command UoW or claim-generation fence.
@@ -42,4 +43,6 @@ served Agent tool path is authorized by this batch.
 - `make typecheck`
   - Result: expected ceiling `81 errors in 4 files`
 
-Fresh pinned non-author review is required before live/W6/manual/product signoff. Author evidence is not a formal GO.
+The combined D1j/D1k pinned `354e979` runner-backed advisory completed as `NO-GO 0/9/7/1`; it is not formal `GO`.
+Its findings require fixed-forward plus a fresh pinned re-review before live/W6/manual/product signoff. Author evidence
+does not override that scope-local blocker.

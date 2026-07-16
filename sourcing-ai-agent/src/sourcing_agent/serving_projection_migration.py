@@ -603,9 +603,10 @@ class ServingProjectionMigrationBackfill:
                     }
                     member_metadata.update(layer_payload)
                     projection_metrics.update(layer_payload)
-                    if (
-                        dict(member.get("public_summary") or {}).get("outreach_layer") == public_summary.get("outreach_layer")
-                        and dict(member.get("metadata") or {}).get("outreach_layer") == member_metadata.get("outreach_layer")
+                    if dict(member.get("public_summary") or {}).get("outreach_layer") == public_summary.get(
+                        "outreach_layer"
+                    ) and dict(member.get("metadata") or {}).get("outreach_layer") == member_metadata.get(
+                        "outreach_layer"
                     ):
                         continue
                     updates.append(
@@ -625,20 +626,14 @@ class ServingProjectionMigrationBackfill:
                     break
                 offset += len(members)
             if processed_count and not dry_run:
-                self.store.repos.serving_projection.upsert(
-                    {
-                        **projection,
-                        "readiness": {
-                            **dict(projection.get("readiness") or {}),
-                            "layering": "complete",
-                        },
-                        "metadata": {
-                            **dict(projection.get("metadata") or {}),
-                            "layer_assignment_source": "collection_projection_layer_backfill",
-                            "layer_assignment_updated_member_count": updated_count,
-                            "layer_assignment_distribution": distribution,
-                        },
-                    }
+                self.store.repos.serving_projection.patch_publication_fields_under_lock(
+                    projection_id,
+                    readiness_patch={"layering": "complete"},
+                    metadata_patch={
+                        "layer_assignment_source": "collection_projection_layer_backfill",
+                        "layer_assignment_updated_member_count": updated_count,
+                        "layer_assignment_distribution": distribution,
+                    },
                 )
             processed_projection_count += 1
             if updated_count:
@@ -673,11 +668,7 @@ class ServingProjectionMigrationBackfill:
         projection_ids: list[str] | tuple[str, ...] | None,
         projection_limit: int,
     ) -> list[dict[str, Any]]:
-        explicit_ids = [
-            str(item or "").strip()
-            for item in list(projection_ids or [])
-            if str(item or "").strip()
-        ]
+        explicit_ids = [str(item or "").strip() for item in list(projection_ids or []) if str(item or "").strip()]
         if explicit_ids:
             return [
                 projection
@@ -749,9 +740,13 @@ def _projection_member_with_person_summary_view(
         **source_public_summary,
         **public_summary,
     }
-    candidate_id = str(member.get("candidate_id") or public_summary.get("candidate_id") or public_summary.get("id") or "").strip()
+    candidate_id = str(
+        member.get("candidate_id") or public_summary.get("candidate_id") or public_summary.get("id") or ""
+    ).strip()
     linkedin_url = str(public_summary.get("linkedin_url") or public_summary.get("profile_url") or "").strip()
-    profile_url_key = resolve_profile_url_key(member.get("profile_url_key"), public_summary.get("profile_url_key"), linkedin_url)
+    profile_url_key = resolve_profile_url_key(
+        member.get("profile_url_key"), public_summary.get("profile_url_key"), linkedin_url
+    )
     person_identity_key = resolve_person_identity_key(
         person_identity_key=str(member.get("person_identity_key") or public_summary.get("person_identity_key") or ""),
         profile_url_key=profile_url_key,
@@ -795,7 +790,10 @@ def _projection_member_summary_changed(before: dict[str, Any], after: dict[str, 
     for key in ("candidate_identity_key", "person_identity_key", "profile_url_key", "candidate_id", "source_run_id"):
         if str(dict(before).get(key) or "").strip() != str(dict(after).get(key) or "").strip():
             return True
-    if str(dict(before).get("profile_readiness") or "").strip() != str(dict(after).get("profile_readiness") or "").strip():
+    if (
+        str(dict(before).get("profile_readiness") or "").strip()
+        != str(dict(after).get("profile_readiness") or "").strip()
+    ):
         return True
     before_summary = dict(dict(before).get("public_summary") or {})
     after_summary = dict(dict(after).get("public_summary") or {})
@@ -830,20 +828,13 @@ def _candidate_record_from_projection_member(member: dict[str, Any]) -> dict[str
     member_metadata = dict(payload.get("metadata") or {})
     record = dict(public_summary)
     candidate_id = str(
-        record.get("candidate_id")
-        or payload.get("candidate_id")
-        or payload.get("candidate_identity_key")
-        or ""
+        record.get("candidate_id") or payload.get("candidate_id") or payload.get("candidate_identity_key") or ""
     ).strip()
     if candidate_id:
         record["candidate_id"] = candidate_id
     if not str(record.get("name_en") or "").strip():
         record["name_en"] = str(
-            record.get("display_name")
-            or record.get("full_name")
-            or record.get("name")
-            or candidate_id
-            or ""
+            record.get("display_name") or record.get("full_name") or record.get("name") or candidate_id or ""
         ).strip()
     if not str(record.get("display_name") or "").strip() and str(record.get("name_en") or "").strip():
         record["display_name"] = str(record.get("name_en") or "").strip()
@@ -948,16 +939,24 @@ def _source_candidate_index_for_projection(projection: dict[str, Any]) -> dict[s
             candidate.get("profile_url"),
             public_summary.get("profile_url"),
         )
-        candidate_id = str(candidate.get("candidate_id") or candidate.get("id") or public_summary.get("candidate_id") or "").strip()
+        candidate_id = str(
+            candidate.get("candidate_id") or candidate.get("id") or public_summary.get("candidate_id") or ""
+        ).strip()
         person_key = resolve_person_identity_key(
-            person_identity_key=str(candidate.get("person_identity_key") or public_summary.get("person_identity_key") or ""),
+            person_identity_key=str(
+                candidate.get("person_identity_key") or public_summary.get("person_identity_key") or ""
+            ),
             profile_url_key=profile_key,
             linkedin_url=str(candidate.get("linkedin_url") or public_summary.get("linkedin_url") or ""),
-            candidate_identity_key=str(candidate.get("candidate_identity_key") or public_summary.get("candidate_identity_key") or ""),
+            candidate_identity_key=str(
+                candidate.get("candidate_identity_key") or public_summary.get("candidate_identity_key") or ""
+            ),
             candidate_id=candidate_id,
         )
         candidate_key = resolve_candidate_identity_key(
-            candidate_identity_key=str(candidate.get("candidate_identity_key") or public_summary.get("candidate_identity_key") or ""),
+            candidate_identity_key=str(
+                candidate.get("candidate_identity_key") or public_summary.get("candidate_identity_key") or ""
+            ),
             person_identity_key=person_key,
             profile_url_key=profile_key,
             linkedin_url=str(candidate.get("linkedin_url") or public_summary.get("linkedin_url") or ""),
@@ -1252,7 +1251,9 @@ def _members_from_local_asset_payload(
 ) -> list[dict[str, Any]]:
     members: list[dict[str, Any]] = []
     seen: set[str] = set()
-    for index, raw_candidate in enumerate(list(payload.get("candidates") or [])[: max(1, int(max_members or 100_000))], start=1):
+    for index, raw_candidate in enumerate(
+        list(payload.get("candidates") or [])[: max(1, int(max_members or 100_000))], start=1
+    ):
         candidate = dict(raw_candidate or {})
         public_summary = dict(candidate.get("public_summary") or {})
         metadata = dict(candidate.get("metadata") or {})
@@ -1266,16 +1267,24 @@ def _members_from_local_asset_payload(
             public_summary.get("profile_url"),
             metadata.get("profile_url"),
         )
-        candidate_id = str(candidate.get("candidate_id") or candidate.get("id") or public_summary.get("candidate_id") or "").strip()
+        candidate_id = str(
+            candidate.get("candidate_id") or candidate.get("id") or public_summary.get("candidate_id") or ""
+        ).strip()
         person_key = resolve_person_identity_key(
-            person_identity_key=str(candidate.get("person_identity_key") or public_summary.get("person_identity_key") or ""),
+            person_identity_key=str(
+                candidate.get("person_identity_key") or public_summary.get("person_identity_key") or ""
+            ),
             profile_url_key=profile_key,
             linkedin_url=str(candidate.get("linkedin_url") or public_summary.get("linkedin_url") or ""),
-            candidate_identity_key=str(candidate.get("candidate_identity_key") or public_summary.get("candidate_identity_key") or ""),
+            candidate_identity_key=str(
+                candidate.get("candidate_identity_key") or public_summary.get("candidate_identity_key") or ""
+            ),
             candidate_id=candidate_id,
         )
         candidate_key = resolve_candidate_identity_key(
-            candidate_identity_key=str(candidate.get("candidate_identity_key") or public_summary.get("candidate_identity_key") or ""),
+            candidate_identity_key=str(
+                candidate.get("candidate_identity_key") or public_summary.get("candidate_identity_key") or ""
+            ),
             person_identity_key=person_key,
             profile_url_key=profile_key,
             linkedin_url=str(candidate.get("linkedin_url") or public_summary.get("linkedin_url") or ""),

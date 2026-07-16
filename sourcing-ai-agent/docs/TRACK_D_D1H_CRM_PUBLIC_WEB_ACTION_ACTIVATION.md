@@ -14,7 +14,7 @@
 ## 1. Outcome and bounded scope
 
 D1h removes `enrich_person_public_web` from the R-029 compatibility numerator without changing whether any action is
-served to a model. The production registry now has this exact current partition:
+served to a model. At the D1h checkpoint, the production registry had this exact partition:
 
 - schema-defined: D1f's `set_crm_stage`, `add_crm_note`, and `create_crm_task`, plus
   `enrich_person_public_web` (**4**);

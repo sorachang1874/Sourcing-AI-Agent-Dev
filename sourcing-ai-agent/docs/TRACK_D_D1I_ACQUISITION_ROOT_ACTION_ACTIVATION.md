@@ -2,8 +2,8 @@
 
 > Status: bounded non-live fixed-forward remediation candidate after pinned `dce094e` advisory
 > `NO-GO P0/P1/P2/P3=0/2/2/0`; fresh review of the remediation commit is pending (2026-07-16). This batch activates only
-> `start_acquisition_run` as the fifth schema-defined production action. The production partition is
-> **5 schema-defined / 10 schema-less / served=0**. It does not authorize a provider/model call, live validation,
+> `start_acquisition_run` as the fifth schema-defined production action. The D1i checkpoint partition was
+> **5 schema-defined / 10 schema-less / served=0**; D1l now owns the current **9/6/0** partition. It does not authorize a provider/model call, live validation,
 > product signoff, or closure of R-019/R-029. Author tests are evidence, not an independent-review verdict.
 
 ## Outcome
@@ -104,7 +104,8 @@ loss after a committed failure can still leave the caller with an ambiguous stal
 This batch does not claim aggregate-cancel atomicity or four-table exactly-once completion and adds no operation
 state-mutator; the existing 26-call ratchet must not rise.
 
-R-029 falls from 11 to **10** schema-less actions but remains open. The compatibility observation epoch stays
+At the D1i checkpoint, R-029 fell from 11 to **10** schema-less actions but remained open; D1l now owns the current
+**6/15** numerator. The compatibility observation epoch stays
 `d1f_r029_20260715_v2` because D1i does not start a new release window. The deletion condition is unchanged: all
 API-submittable actions need reviewed owner/schema contracts and the complete population must record zero bridge hits
 for one release window. Served-only evidence is insufficient.

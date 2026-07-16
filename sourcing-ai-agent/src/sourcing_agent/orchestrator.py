@@ -119,6 +119,10 @@ from .company_public_web_assets import sync_company_public_web_assets_to_company
 from .company_registry import builtin_company_identity, normalize_company_key
 from .confidence_policy import apply_policy_control, build_confidence_policy
 from .connectors import CompanyIdentity, CompanyRosterSnapshot, resolve_company_identity
+from .control_plane_live_postgres import (
+    SESSION_ADVISORY_LOCK_ACQUISITION_TIMEOUT_SECONDS,
+    ControlPlaneAdvisoryLockBusy,
+)
 from .control_plane_postgres import (
     load_control_plane_postgres_sync_state,
 )
@@ -264,6 +268,7 @@ from .operation_runtime import (
     OPERATION_ACTION_TERMINAL_STATUSES,
     OPERATION_OWNER_BOUND_ACTION_TYPES,
     OPERATION_RUN_TERMINAL_STATUSES,
+    PROJECTION_READ_ACTION_TYPES,
     OperationRuntimeStateConflict,
     OperationRuntimeWriter,
     OwnerBoundTargetRef,
@@ -561,7 +566,7 @@ from .service_daemon import (
     request_service_wakeup,
 )
 from .serving_projection_migration import ServingProjectionMigrationBackfill
-from .serving_projection_reader import ServingProjectionReader
+from .serving_projection_reader import SHARED_CANONICAL_PROJECTION_ACCESS_SCOPE, ServingProjectionReader
 from .serving_projection_writer import ServingProjectionWriter
 from .snapshot_materializer import SnapshotMaterializer, resolve_snapshot_company_identity
 from .snapshot_state import (
@@ -7545,66 +7550,52 @@ class SourcingOrchestrator:
         row_readiness = (
             "complete" if complete_expected_count <= 0 or after_visible_count >= complete_expected_count else "partial"
         )
-        existing_counts = dict(projection.get("counts") or {})
-        counts = {
-            key: value
-            for key, value in existing_counts.items()
-            if key
-            not in {
-                "public_facet_counts",
-                "facet_count_scope",
-                "facet_build_status",
-                "facet_record_count",
-            }
+        counts_patch = {
+            "result_count": after_visible_count,
+            "candidate_count": after_visible_count,
+            "visible_member_count": after_visible_count,
+            "count_scope": "exact_projection",
+            "facet_build_status": "pending",
+            "facet_count_scope": "unavailable",
+            "expected_visible_member_count": complete_expected_count,
         }
-        counts.update(
-            {
-                "result_count": after_visible_count,
-                "candidate_count": after_visible_count,
-                "visible_member_count": after_visible_count,
-                "count_scope": "exact_projection",
-                "facet_build_status": "pending",
-                "facet_count_scope": "unavailable",
-                "expected_visible_member_count": complete_expected_count,
-            }
-        )
-        readiness = {
-            **dict(projection.get("readiness") or {}),
+        profile_required_count = int(readiness_counts.get("profile_required_count") or 0)
+        profile_ready_count = int(readiness_counts.get("profile_ready_count") or 0)
+        card_ready_count = int(readiness_counts.get("card_ready_count") or 0)
+        readiness_patch: dict[str, Any] = {
             "row": row_readiness,
             "row_count": int(readiness_counts.get("row_count") or after_visible_count or 0),
-            "profile_required_count": int(readiness_counts.get("profile_required_count") or 0),
-            "profile_ready_count": int(readiness_counts.get("profile_ready_count") or 0),
-            "card_ready_count": int(readiness_counts.get("card_ready_count") or 0),
+            "profile_required_count": profile_required_count,
+            "profile_ready_count": profile_ready_count,
+            "card_ready_count": card_ready_count,
             "count_scope": "exact_projection",
         }
         if after_visible_count > 0:
-            required = int(readiness.get("profile_required_count") or 0)
-            ready = int(readiness.get("profile_ready_count") or 0)
-            card_ready = int(readiness.get("card_ready_count") or 0)
-            readiness["profile"] = "complete" if required <= 0 or ready >= required else "partial"
-            readiness["card"] = "complete" if card_ready >= after_visible_count else "partial"
-        metadata = dict(projection.get("metadata") or {})
-        metadata["board_visible_projection_extension"] = {
-            "source": "board_visible_patch_writer",
-            "reason": str(reason or "board_visible_patch").strip(),
-            "snapshot_id": normalized_snapshot_id,
-            "updated_member_count": updated_member_count,
-            "before_visible_member_count": before_visible_count,
-            "after_visible_member_count": after_visible_count,
-            "expected_visible_member_count": max(0, _coerce_int(expected_visible_member_count, 0)),
-            "updated_at": _utc_now_iso(),
-        }
-        self.store.repos.serving_projection.upsert(
-            {
-                **dict(projection),
-                "collection_id": str(
-                    projection.get("collection_id") or self._projection_collection_id_for_request(request) or ""
-                ).strip(),
-                "counts": counts,
-                "readiness": readiness,
-                "metadata": metadata,
-                "state": str(projection.get("state") or "serving").strip() or "serving",
+            readiness_patch["profile"] = (
+                "complete"
+                if profile_required_count <= 0 or profile_ready_count >= profile_required_count
+                else "partial"
+            )
+            readiness_patch["card"] = "complete" if card_ready_count >= after_visible_count else "partial"
+        metadata_patch = {
+            "board_visible_projection_extension": {
+                "source": "board_visible_patch_writer",
+                "reason": str(reason or "board_visible_patch").strip(),
+                "snapshot_id": normalized_snapshot_id,
+                "updated_member_count": updated_member_count,
+                "before_visible_member_count": before_visible_count,
+                "after_visible_member_count": after_visible_count,
+                "expected_visible_member_count": max(0, _coerce_int(expected_visible_member_count, 0)),
+                "updated_at": _utc_now_iso(),
             }
+        }
+        self.store.repos.serving_projection.patch_publication_fields_under_lock(
+            projection_id,
+            collection_id_if_empty=self._projection_collection_id_for_request(request),
+            counts_patch=counts_patch,
+            counts_remove=("public_facet_counts", "facet_record_count"),
+            readiness_patch=readiness_patch,
+            metadata_patch=metadata_patch,
         )
         index_item = self._enqueue_projection_person_search_index_build_item(
             projection_id=projection_id,
@@ -18489,25 +18480,20 @@ class SourcingOrchestrator:
             self.store.repos.serving_projection.count_members_by_readiness(projection_id) if projection_id else {}
         )
         if projection_id:
-            self.store.repos.serving_projection.upsert(
-                {
-                    **projection,
-                    "counts": {
-                        **dict(projection.get("counts") or {}),
-                        "visible_member_count": visible_count,
-                        "admitted_member_count": len(members),
-                    },
-                    "readiness": {
-                        **dict(projection.get("readiness") or {}),
-                        **readiness_counts,
-                        "projection_admission": "ready",
-                    },
-                    "metadata": {
-                        **dict(projection.get("metadata") or {}),
-                        "latest_projection_admission_command_id": command_id,
-                        "latest_projection_admission_activity_run_id": activity_run_id,
-                    },
-                }
+            self.store.repos.serving_projection.patch_publication_fields_under_lock(
+                projection_id,
+                counts_patch={
+                    "visible_member_count": visible_count,
+                    "admitted_member_count": len(members),
+                },
+                readiness_patch={
+                    **readiness_counts,
+                    "projection_admission": "ready",
+                },
+                metadata_patch={
+                    "latest_projection_admission_command_id": command_id,
+                    "latest_projection_admission_activity_run_id": activity_run_id,
+                },
             )
         downstream_projection_commands: list[dict[str, Any]] = []
         projection_index_item: dict[str, Any] = {}
@@ -21390,24 +21376,17 @@ class SourcingOrchestrator:
             analysis_stage_label=analysis_stage_label,
             output_dir=output_dir,
         )
-        latest_projection = self.store.repos.serving_projection.get(projection_id) or projection
-        self.store.repos.serving_projection.upsert(
-            {
-                **latest_projection,
-                "readiness": {
-                    **dict(latest_projection.get("readiness") or {}),
-                    "layering": "complete",
-                },
-                "metadata": {
-                    **dict(latest_projection.get("metadata") or {}),
-                    "layer_assignment_source": "projection_facet_layering_build",
-                    "layer_assignment_item_id": item_id,
-                    "layer_assignment_state_path": str(state_path),
-                    "layer_assignment_updated_member_count": _coerce_int(state.get("updated_member_count"), 0),
-                    "layer_assignment_updated_at": _utc_now_iso(),
-                    "layer_assignment_source_kind": "serving_projection_members",
-                },
-            }
+        self.store.repos.serving_projection.patch_publication_fields_under_lock(
+            projection_id,
+            readiness_patch={"layering": "complete"},
+            metadata_patch={
+                "layer_assignment_source": "projection_facet_layering_build",
+                "layer_assignment_item_id": item_id,
+                "layer_assignment_state_path": str(state_path),
+                "layer_assignment_updated_member_count": _coerce_int(state.get("updated_member_count"), 0),
+                "layer_assignment_updated_at": _utc_now_iso(),
+                "layer_assignment_source_kind": "serving_projection_members",
+            },
         )
         index_item = self._enqueue_projection_person_search_index_build_item(
             projection_id=projection_id,
@@ -26252,6 +26231,85 @@ class SourcingOrchestrator:
     def _normalize_candidate_page_filter(cls, candidate_filter: dict[str, Any] | None) -> dict[str, Any]:
         return _public_normalize_candidate_page_filter(candidate_filter)
 
+    @classmethod
+    def _normalize_operation_projection_filter(cls, candidate_filter: Any) -> dict[str, Any]:
+        if not isinstance(candidate_filter, Mapping):
+            raise ValueError("filter_projection_filter_must_be_object")
+        source = dict(candidate_filter)
+        allowed_fields = {
+            "search_keyword",
+            "search",
+            "recall_buckets",
+            "employment_statuses",
+            "locations",
+            "function_buckets",
+            "layer_includes",
+            "layers",
+            "layer_excludes",
+            "audit_statuses",
+        }
+        unknown_fields = sorted(set(source) - allowed_fields)
+        if unknown_fields:
+            raise ValueError("filter_projection_filter_fields_invalid:" + ",".join(unknown_fields))
+        for aliases in (("search_keyword", "search"), ("layer_includes", "layers")):
+            if sum(alias in source for alias in aliases) > 1:
+                raise ValueError("filter_projection_filter_alias_ambiguous:" + ",".join(aliases))
+
+        search_field = "search_keyword" if "search_keyword" in source else "search" if "search" in source else ""
+        if search_field:
+            search_value = source[search_field]
+            if not isinstance(search_value, str) or not search_value.strip() or len(search_value.strip()) > 200:
+                raise ValueError("filter_projection_filter_value_invalid:" + search_field)
+
+        fixed_values = {
+            "employment_statuses": {"current", "former"},
+            "locations": {"us", "other", "unknown"},
+            "function_buckets": {"research", "engineering", "product_management", "other", "unknown"},
+            "layer_includes": {f"layer_{index}" for index in range(8)},
+            "layer_excludes": {f"layer_{index}" for index in range(8)},
+            "audit_statuses": {
+                "no_review_needed",
+                "needs_review",
+                "needs_profile_completion",
+                "low_profile_richness",
+                "verified_keep",
+                "verified_exclude",
+            },
+        }
+        for canonical_field, allowed_values in fixed_values.items():
+            source_field = "layers" if canonical_field == "layer_includes" and "layers" in source else canonical_field
+            if source_field not in source:
+                continue
+            raw_values = source[source_field]
+            if not isinstance(raw_values, (str, list)) or (
+                isinstance(raw_values, list) and not all(isinstance(value, str) for value in raw_values)
+            ):
+                raise ValueError("filter_projection_filter_value_invalid:" + source_field)
+            raw_items = [raw_values] if isinstance(raw_values, str) else list(raw_values)
+            split_values = [part.strip().lower() for item in raw_items for part in item.split(",")]
+            if any(not value or value not in allowed_values for value in split_values):
+                raise ValueError("filter_projection_filter_value_invalid:" + source_field)
+
+        if "recall_buckets" in source:
+            recall_values = source["recall_buckets"]
+            if not isinstance(recall_values, (str, list)) or (
+                isinstance(recall_values, list) and not all(isinstance(value, str) for value in recall_values)
+            ):
+                raise ValueError("filter_projection_filter_value_invalid:recall_buckets")
+            recall_items = [recall_values] if isinstance(recall_values, str) else list(recall_values)
+            if any(not part.strip() for item in recall_items for part in item.split(",")):
+                raise ValueError("filter_projection_filter_value_invalid:recall_buckets")
+
+        normalized = cls._normalize_candidate_page_filter(source)
+        compacted: dict[str, Any] = {}
+        for field, value in normalized.items():
+            if isinstance(value, list):
+                value = sorted(value, key=lambda item: str(item).lower())
+            if value in ("", []):
+                continue
+            compacted[field] = value
+        return compacted
+
     @staticmethod
     def _candidate_page_filter_signature(candidate_filter: dict[str, Any]) -> str:
         return _public_candidate_page_filter_signature(candidate_filter)
@@ -28224,6 +28282,7 @@ class SourcingOrchestrator:
         job_id: str,
         *,
         include_asset_population_preview: bool = True,
+        workspace_id: str = "default",
     ) -> dict[str, Any] | None:
         context = self._build_job_results_context(job_id)
         if context is None:
@@ -28263,6 +28322,7 @@ class SourcingOrchestrator:
                 candidate_filter={},
                 offset=0,
                 limit=preview_limit,
+                workspace_id=workspace_id,
             )
             asset_population = projection_preview or self._build_job_asset_population_payload(
                 request=request,
@@ -28967,12 +29027,14 @@ class SourcingOrchestrator:
         offset: int = 0,
         limit: int = 120,
         candidate_filter: dict[str, Any] | None = None,
+        workspace_id: str = "default",
     ) -> dict[str, Any] | None:
         payload = self.serving_projection_reader.get_projection_candidates(
             projection_id,
             offset=offset,
             limit=limit,
             candidate_filter=candidate_filter,
+            workspace_id=workspace_id,
         )
         if (
             str(payload.get("status") or "") == "not_ready"
@@ -28988,12 +29050,14 @@ class SourcingOrchestrator:
         search_keyword: str,
         offset: int = 0,
         limit: int = 120,
+        workspace_id: str = "default",
     ) -> dict[str, Any] | None:
         payload = self.serving_projection_reader.search_projection_person_index(
             projection_id,
             search_keyword=search_keyword,
             offset=offset,
             limit=limit,
+            workspace_id=workspace_id,
         )
         if (
             str(payload.get("status") or "") == "not_ready"
@@ -32075,6 +32139,7 @@ class SourcingOrchestrator:
         limit: int = 120,
         lightweight: bool = False,
         candidate_filter: dict[str, Any] | None = None,
+        workspace_id: str = "default",
     ) -> dict[str, Any] | None:
         context = self._build_job_results_context(job_id)
         if context is None:
@@ -32118,6 +32183,7 @@ class SourcingOrchestrator:
                 candidate_filter=normalized_candidate_filter,
                 offset=normalized_offset,
                 limit=normalized_limit,
+                workspace_id=workspace_id,
             )
             if str(asset_population_page.get("status") or "").strip() == "not_ready":
                 canonical_total_candidates = _coerce_int(
@@ -32448,6 +32514,7 @@ class SourcingOrchestrator:
         candidate_filter: dict[str, Any],
         offset: int,
         limit: int,
+        workspace_id: str = "default",
     ) -> dict[str, Any]:
         serving_projection_payload = dict(public_projection.get("serving_projection_payload") or {})
         resolution = dict(
@@ -32532,6 +32599,7 @@ class SourcingOrchestrator:
             offset=offset,
             limit=limit,
             candidate_filter=candidate_filter,
+            workspace_id=str(workspace_id or "default").strip() or "default",
         )
         status = str(projection_page.get("status") or "").strip()
         if status == "not_ready":
@@ -48943,6 +49011,10 @@ class SourcingOrchestrator:
                         if action_type in CRM_RESOURCE_BOUND_ACTION_TYPES
                         else CRM_PROJECTION_SELECTION_TARGET_INVALID
                         if action_type in CRM_PROJECTION_SELECTION_ACTION_TYPES
+                        else "projection_read_target_selector_invalid"
+                        if action_type in PROJECTION_READ_ACTION_TYPES
+                        else "projection_export_target_selector_invalid"
+                        if action_type == ACTION_EXPORT_CANDIDATES
                         else ACQUISITION_ROOT_TARGET_INVALID
                     ),
                 }
@@ -49348,46 +49420,83 @@ class SourcingOrchestrator:
         target_ref: dict[str, Any],
         input_payload: dict[str, Any],
     ) -> dict[str, Any]:
-        if action_type != ACTION_EXPORT_CANDIDATES:
+        if action_type != ACTION_EXPORT_CANDIDATES and action_type not in PROJECTION_READ_ACTION_TYPES:
             return {"status": "ready", "target_ref": target_ref, "input_payload": input_payload}
-        selector_aliases = {
-            "projection_id",
-            "serving_projection_id",
-            "expected_membership_revision",
-            "membership_revision",
+        projection_aliases = ("projection_id", "serving_projection_id")
+        revision_aliases = ("expected_membership_revision", "membership_revision")
+        candidate_aliases = (
             "candidate_identity_keys",
             "candidateIdentityKeys",
             "candidate_ids",
             "candidate_identity_key",
             "candidate_id",
-        }
+        )
+        selector_aliases = set(projection_aliases + revision_aliases)
+        if action_type == ACTION_EXPORT_CANDIDATES:
+            selector_aliases.update(candidate_aliases)
+        invalid_selector_reason = (
+            "projection_read_target_selector_invalid"
+            if action_type in PROJECTION_READ_ACTION_TYPES
+            else "projection_export_target_selector_invalid"
+        )
         if set(target_ref) - selector_aliases:
-            return {"status": "invalid", "reason": "projection_export_target_selector_invalid"}
-        projection_id = str(
-            input_payload.get("projection_id")
-            or target_ref.get("projection_id")
-            or target_ref.get("serving_projection_id")
-            or ""
-        ).strip()
-        if not projection_id:
+            return {"status": "invalid", "reason": invalid_selector_reason}
+
+        def _selector_occurrences(aliases: tuple[str, ...]) -> list[tuple[str, str, Any]]:
+            return [
+                (carrier, alias, values[alias])
+                for carrier, values in (("target_ref", target_ref), ("input_payload", input_payload))
+                for alias in aliases
+                if alias in values
+            ]
+
+        projection_occurrences = _selector_occurrences(projection_aliases)
+        if not projection_occurrences:
             return {
                 "status": "invalid",
                 "reason": "projection_id_required_for_revision_bound_action",
             }
-        requested_revision = str(
-            input_payload.get("expected_membership_revision")
-            or target_ref.get("expected_membership_revision")
-            or input_payload.get("membership_revision")
-            or target_ref.get("membership_revision")
-            or ""
-        ).strip()
-        if not requested_revision:
+        if len(projection_occurrences) != 1:
+            return {"status": "invalid", "reason": invalid_selector_reason}
+        projection_value = projection_occurrences[0][2]
+        if not isinstance(projection_value, str) or not projection_value.strip():
+            return {"status": "invalid", "reason": invalid_selector_reason}
+        projection_id = projection_value.strip()
+
+        revision_occurrences = _selector_occurrences(revision_aliases)
+        if len(revision_occurrences) > 1:
+            return {"status": "invalid", "reason": invalid_selector_reason}
+        requested_revision = ""
+        if revision_occurrences:
+            revision_value = revision_occurrences[0][2]
+            if not isinstance(revision_value, str) or not revision_value.strip():
+                return {"status": "invalid", "reason": invalid_selector_reason}
+            requested_revision = revision_value.strip()
+        elif action_type == ACTION_EXPORT_CANDIDATES:
             return {
                 "status": "invalid",
                 "reason": "expected_membership_revision_required_for_revision_bound_action",
                 "projection_id": projection_id,
             }
-        candidate_keys = self._operation_candidate_identity_keys(input_payload, target_ref)
+
+        candidate_occurrences = _selector_occurrences(candidate_aliases)
+        if action_type in PROJECTION_READ_ACTION_TYPES and candidate_occurrences:
+            return {"status": "invalid", "reason": invalid_selector_reason}
+        if len(candidate_occurrences) > 1:
+            return {"status": "invalid", "reason": invalid_selector_reason}
+        candidate_keys: list[str] = []
+        if candidate_occurrences:
+            candidate_value = candidate_occurrences[0][2]
+            if isinstance(candidate_value, str):
+                if not candidate_value.strip():
+                    return {"status": "invalid", "reason": invalid_selector_reason}
+                candidate_keys = [candidate_value.strip()]
+            elif isinstance(candidate_value, (list, tuple)):
+                if any(not isinstance(item, str) or not item.strip() for item in candidate_value):
+                    return {"status": "invalid", "reason": invalid_selector_reason}
+                candidate_keys = _dedupe_texts(item.strip() for item in candidate_value)
+            else:
+                return {"status": "invalid", "reason": invalid_selector_reason}
         if len(candidate_keys) > 100_000:
             return {"status": "invalid", "reason": "projection_selection_limit_exceeded", "limit": 100_000}
         if candidate_keys:
@@ -49406,6 +49515,11 @@ class SourcingOrchestrator:
             membership_revision = str(projection.get("membership_revision") or "").strip()
             source_candidate_count = int(projection.get("visible_member_count") or 0)
         if str(snapshot.get("status") or "") != "ready":
+            if (
+                action_type in PROJECTION_READ_ACTION_TYPES
+                and str(snapshot.get("reason") or "") == "projection_not_found"
+            ):
+                return {"status": "not_found", "reason": "projection_not_found", "projection_id": projection_id}
             return snapshot
         if requested_revision and requested_revision != membership_revision:
             return {
@@ -49416,6 +49530,57 @@ class SourcingOrchestrator:
                 "membership_revision": membership_revision,
             }
         normalized_candidate_keys = sorted(candidate_keys)
+        if action_type in PROJECTION_READ_ACTION_TYPES:
+            owner_bound_target_ref: dict[str, Any] = {
+                "projection_id": projection_id,
+                "membership_revision": membership_revision,
+            }
+            normalized_input = {field: value for field, value in input_payload.items() if field not in selector_aliases}
+            if action_type == ACTION_SEARCH_PROJECTION:
+                search_alias_occurrences = [
+                    field for field in ("search_keyword", "search", "query") if field in normalized_input
+                ]
+                if len(search_alias_occurrences) != 1:
+                    return {"status": "invalid", "reason": "search_projection_requires_single_search_keyword"}
+                source_field = search_alias_occurrences[0]
+                search_value = normalized_input.pop(source_field)
+                if not isinstance(search_value, str) or not search_value.strip():
+                    return {"status": "invalid", "reason": "search_projection_requires_single_search_keyword"}
+                normalized_input["search_keyword"] = search_value.strip()
+            else:
+                if {"filters", "candidate_filter"} <= set(normalized_input):
+                    return {"status": "invalid", "reason": "filter_projection_filter_alias_ambiguous"}
+                raw_filter = (
+                    normalized_input.pop("filters")
+                    if "filters" in normalized_input
+                    else normalized_input.pop("candidate_filter")
+                    if "candidate_filter" in normalized_input
+                    else {}
+                )
+                try:
+                    normalized_input["filters"] = self._normalize_operation_projection_filter(raw_filter)
+                except ValueError as exc:
+                    return {"status": "invalid", "reason": str(exc)}
+            return {
+                "status": "ready",
+                "target_ref": {},
+                "input_payload": normalized_input,
+                "owner_bound_target_ref": OwnerBoundTargetRef(
+                    owner_module="projection_search_service",
+                    target_ref=owner_bound_target_ref,
+                ),
+                "metadata": {
+                    "projection_read_binding": {
+                        **owner_bound_target_ref,
+                        "source_candidate_count": source_candidate_count,
+                        "destination_owner": "projection_search_service",
+                        "source": "serving_projection_members",
+                        "access_scope": SHARED_CANONICAL_PROJECTION_ACCESS_SCOPE,
+                        "fallback_used": False,
+                        "fail_closed": True,
+                    }
+                },
+            }
         owner_bound_target_ref = {
             "projection_id": projection_id,
             "membership_revision": membership_revision,
@@ -49460,14 +49625,20 @@ class SourcingOrchestrator:
             or dict(action.get("target_ref") or {}).get("projection_id")
             or ""
         ).strip()
+        operation_adapter = (
+            "projection_read_v1" if str(action.get("action_type") or "").strip() in PROJECTION_READ_ACTION_TYPES else ""
+        )
         conflict_payload = {
             "phase": "reselection_required",
             "reason": reason,
             "projection_id": projection_id,
             "expected_membership_revision": expected_revision,
             "membership_revision": membership_revision,
+            "reselection_required": True,
             "module_state_mutated": False,
         }
+        if operation_adapter:
+            conflict_payload["operation_adapter"] = operation_adapter
         operation_run_id = str(operation_run.get("operation_run_id") or "").strip()
         action_id = str(action.get("action_id") or "").strip()
         transition = self.store.repos.workflow_runtime.fail_operation_for_stale_input_with_event(
@@ -50353,43 +50524,66 @@ class SourcingOrchestrator:
                 "operation_run_id": str(operation_run_id or "").strip(),
             }
         action_type = str(action.get("action_type") or "").strip()
-        if action_type in {ACTION_EXPORT_CANDIDATES, ACTION_ADD_TO_CRM}:
-            with self.store.repos.workflow_runtime.hold_operation_dispatch_lock(operation_run_id):
-                operation_run = self._operation_run_for_expected_workspace(
+        if action_type in {ACTION_EXPORT_CANDIDATES, ACTION_ADD_TO_CRM, *PROJECTION_READ_ACTION_TYPES}:
+            lock_deadline_monotonic = time.monotonic() + SESSION_ADVISORY_LOCK_ACQUISITION_TIMEOUT_SECONDS
+            try:
+                with self.store.repos.workflow_runtime.hold_operation_dispatch_lock(
                     operation_run_id,
-                    expected_workspace_id=expected_workspace_id,
+                    deadline_monotonic=lock_deadline_monotonic,
+                ):
+                    operation_run = self._operation_run_for_expected_workspace(
+                        operation_run_id,
+                        expected_workspace_id=expected_workspace_id,
+                    )
+                    if not operation_run:
+                        return {"status": "not_found", "operation_run_id": str(operation_run_id or "").strip()}
+                    action = self.store.repos.workflow_runtime.get_action(str(operation_run.get("action_id") or ""))
+                    if not action:
+                        return {
+                            "status": "invalid",
+                            "reason": "operation action not found",
+                            "operation_run_id": str(operation_run_id or "").strip(),
+                        }
+                    action_input = dict(action.get("input") or {})
+                    action_target = dict(action.get("target_ref") or {})
+                    projection_id = str(
+                        action_input.get("projection_id")
+                        or action_target.get("projection_id")
+                        or action_target.get("serving_projection_id")
+                        or ""
+                    ).strip()
+                    if projection_id:
+                        with self.store.repos.serving_projection.hold_publication_lock(
+                            projection_id,
+                            deadline_monotonic=lock_deadline_monotonic,
+                        ):
+                            return self._dispatch_operation_run_from_records(
+                                operation_run=operation_run,
+                                action=action,
+                                actor=actor,
+                                expected_workspace_id=expected_workspace_id,
+                            )
+                    return self._dispatch_operation_run_from_records(
+                        operation_run=operation_run,
+                        action=action,
+                        actor=actor,
+                        expected_workspace_id=expected_workspace_id,
+                    )
+            except ControlPlaneAdvisoryLockBusy as exc:
+                reason = (
+                    "projection_publication_lock_busy"
+                    if exc.lock_key.startswith("serving_projection_publication:")
+                    else "operation_dispatch_lock_busy"
                 )
-                if not operation_run:
-                    return {"status": "not_found", "operation_run_id": str(operation_run_id or "").strip()}
-                action = self.store.repos.workflow_runtime.get_action(str(operation_run.get("action_id") or ""))
-                if not action:
-                    return {
-                        "status": "invalid",
-                        "reason": "operation action not found",
-                        "operation_run_id": str(operation_run_id or "").strip(),
-                    }
-                action_input = dict(action.get("input") or {})
-                action_target = dict(action.get("target_ref") or {})
-                projection_id = str(
-                    action_input.get("projection_id")
-                    or action_target.get("projection_id")
-                    or action_target.get("serving_projection_id")
-                    or ""
-                ).strip()
-                if projection_id:
-                    with self.store.repos.serving_projection.hold_publication_lock(projection_id):
-                        return self._dispatch_operation_run_from_records(
-                            operation_run=operation_run,
-                            action=action,
-                            actor=actor,
-                            expected_workspace_id=expected_workspace_id,
-                        )
-                return self._dispatch_operation_run_from_records(
-                    operation_run=operation_run,
-                    action=action,
-                    actor=actor,
-                    expected_workspace_id=expected_workspace_id,
-                )
+                return {
+                    "status": "conflict",
+                    "reason": reason,
+                    "operation_run_id": str(operation_run_id or "").strip(),
+                    "retryable": True,
+                    "retry_after_seconds": exc.timeout_seconds,
+                    "module_state_mutated": False,
+                    "contract": "w9_operation_run_dispatch_v1",
+                }
         return self._dispatch_operation_run_from_records(
             operation_run=operation_run,
             action=action,
@@ -52831,6 +53025,21 @@ class SourcingOrchestrator:
     ) -> dict[str, Any]:
         current_status = str(operation_run.get("status") or "").strip()
         if current_status in {"completed", "failed", "cancelled"}:
+            result_ref = dict(operation_run.get("result_ref") or {})
+            if (
+                current_status == "failed"
+                and str(result_ref.get("operation_adapter") or "").strip() == "projection_read_v1"
+            ):
+                return {
+                    "status": "not_ready",
+                    "reason": str(result_ref.get("reason") or "projection_read_failed").strip(),
+                    **({"reselection_required": True} if bool(result_ref.get("reselection_required")) else {}),
+                    "action": action,
+                    "operation_run": operation_run,
+                    "events": [],
+                    "module_state_mutated": False,
+                    "contract": "w9_operation_run_dispatch_v1",
+                }
             return {
                 "status": current_status,
                 "action": action,
@@ -52841,6 +53050,7 @@ class SourcingOrchestrator:
             }
         target_ref = dict(action.get("target_ref") or {})
         input_payload = dict(action.get("input") or {})
+        operation_workspace_id = str(operation_run.get("workspace_id") or "default").strip() or "default"
         projection_id = str(
             input_payload.get("projection_id")
             or target_ref.get("projection_id")
@@ -52856,6 +53066,36 @@ class SourcingOrchestrator:
                 "module_state_mutated": False,
                 "contract": "w9_operation_run_dispatch_v1",
             }
+        expected_membership_revision = str(target_ref.get("membership_revision") or "").strip()
+        if not expected_membership_revision:
+            return {
+                "status": "invalid",
+                "reason": "projection_read_bound_target_invalid",
+                "action": action,
+                "operation_run": operation_run,
+                "module_state_mutated": False,
+                "contract": "w9_operation_run_dispatch_v1",
+            }
+        current_projection_payload = self.serving_projection_reader.get_projection(projection_id)
+        current_projection = dict(current_projection_payload.get("projection") or {})
+        current_membership_revision = str(current_projection.get("membership_revision") or "").strip()
+        if (
+            str(current_projection_payload.get("status") or "") == "ready"
+            and current_membership_revision
+            and current_membership_revision != expected_membership_revision
+        ):
+            return self._fail_projection_bound_operation_reselection(
+                operation_run=operation_run,
+                action=action,
+                failure={
+                    "status": "not_ready",
+                    "reason": "projection_membership_revision_stale",
+                    "projection_id": projection_id,
+                    "expected_membership_revision": expected_membership_revision,
+                    "membership_revision": current_membership_revision,
+                },
+                actor=actor,
+            )
         offset = max(0, _coerce_int(input_payload.get("offset"), 0))
         limit = min(max(1, _coerce_int(input_payload.get("limit"), 120)), 250)
         action_type = str(action.get("action_type") or "").strip()
@@ -52877,6 +53117,7 @@ class SourcingOrchestrator:
                 search_keyword=search_keyword,
                 offset=offset,
                 limit=limit,
+                workspace_id=operation_workspace_id,
             ) or {"status": "not_found", "reason": "projection_not_found"}
         else:
             read_payload = self.get_serving_projection_candidate_page(
@@ -52884,8 +53125,55 @@ class SourcingOrchestrator:
                 offset=offset,
                 limit=limit,
                 candidate_filter=dict(input_payload.get("filters") or input_payload.get("candidate_filter") or {}),
+                workspace_id=operation_workspace_id,
             ) or {"status": "not_found", "reason": "projection_not_found"}
         read_status = str(read_payload.get("status") or "").strip()
+        read_projection = dict(read_payload.get("projection") or {})
+        read_membership_revision = str(
+            read_payload.get("membership_revision") or read_projection.get("membership_revision") or ""
+        ).strip()
+        if str(read_payload.get("reason") or "").strip() in {
+            "projection_membership_revision_changed_during_read",
+            "projection_membership_revision_changed_during_page_read",
+            "projection_membership_revision_changed_during_search_read",
+        }:
+            return self._fail_projection_bound_operation_reselection(
+                operation_run=operation_run,
+                action=action,
+                failure={
+                    "status": "not_ready",
+                    "reason": "projection_membership_revision_stale",
+                    "projection_id": projection_id,
+                    "expected_membership_revision": expected_membership_revision,
+                    "membership_revision": read_membership_revision,
+                },
+                actor=actor,
+            )
+        if read_membership_revision and read_membership_revision != expected_membership_revision:
+            return self._fail_projection_bound_operation_reselection(
+                operation_run=operation_run,
+                action=action,
+                failure={
+                    "status": "not_ready",
+                    "reason": "projection_membership_revision_stale",
+                    "projection_id": projection_id,
+                    "expected_membership_revision": expected_membership_revision,
+                    "membership_revision": read_membership_revision,
+                },
+                actor=actor,
+            )
+        if read_status == "ready" and not read_membership_revision:
+            return self._fail_projection_bound_operation_reselection(
+                operation_run=operation_run,
+                action=action,
+                failure={
+                    "status": "not_ready",
+                    "reason": "projection_read_membership_revision_missing",
+                    "projection_id": projection_id,
+                    "expected_membership_revision": expected_membership_revision,
+                },
+                actor=actor,
+            )
         terminal_status = "completed" if read_status == "ready" else "failed"
         event_type = "OperationReadCompleted" if terminal_status == "completed" else "OperationReadFailed"
         result_ref = {
@@ -52896,49 +53184,58 @@ class SourcingOrchestrator:
             "reason": str(read_payload.get("reason") or "").strip(),
             "read_result": read_payload,
         }
-        next_operation = self.store.repos.workflow_runtime.update_operation_state(
+        progress_patch = {
+            "phase": "projection_read_completed" if terminal_status == "completed" else "projection_read_failed",
+            "projection_id": projection_id,
+            "read_status": read_status,
+        }
+        action_result_ref_patch = {
+            "operation_run_id": operation_run.get("operation_run_id"),
+            "projection_id": projection_id,
+            "read_status": read_status,
+        }
+        event_payload = {
+            "projection_id": projection_id,
+            "action_type": action_type,
+            "read_status": read_status,
+            "module_state_mutated": False,
+        }
+        transition = self.store.repos.workflow_runtime.finalize_projection_read_with_event(
             str(operation_run.get("operation_run_id") or ""),
-            status=terminal_status,
-            progress_patch={
-                "phase": "projection_read_completed" if terminal_status == "completed" else "projection_read_failed",
-                "projection_id": projection_id,
-                "read_status": read_status,
-            },
+            expected_status=str(operation_run.get("status") or "").strip(),
+            action_id=str(action.get("action_id") or "").strip(),
+            terminal_status=terminal_status,
+            workspace_id=str(operation_run.get("workspace_id") or "default").strip() or "default",
+            progress_patch=progress_patch,
             result_ref_patch=result_ref,
             metadata_patch={"dispatch_actor": actor, "read_only_adapter": True},
-        )
-        self.store.repos.workflow_runtime.update_action_state(
-            str(action.get("action_id") or ""),
-            status="completed" if terminal_status == "completed" else "queued",
-            result_ref_patch={
-                "operation_run_id": operation_run.get("operation_run_id"),
-                "projection_id": projection_id,
-                "read_status": read_status,
-            },
-            metadata_patch={"last_operation_run_id": operation_run.get("operation_run_id")},
-        )
-        event = self.store.repos.workflow_runtime.append_operation_event(
-            workspace_id=str(operation_run.get("workspace_id") or "default").strip() or "default",
-            event_stream_id=str(operation_run.get("operation_run_id") or ""),
-            operation_run_id=str(operation_run.get("operation_run_id") or ""),
-            action_id=str(action.get("action_id") or ""),
-            event_family="operation_event",
-            event_type=event_type,
-            idempotency_key=f"{operation_run.get('idempotency_key')}:{event_type}",
+            linked_action_result_ref_patch=action_result_ref_patch,
+            linked_action_metadata_patch={"last_operation_run_id": operation_run.get("operation_run_id")},
+            event_idempotency_key=f"{operation_run.get('idempotency_key')}:{event_type}",
             actor=actor,
             source="api.operation_run_dispatch",
-            payload={
-                "projection_id": projection_id,
-                "action_type": action_type,
-                "read_status": read_status,
-                "module_state_mutated": False,
-            },
+            event_payload=event_payload,
         )
+        transition_outcome = str(transition.get("outcome") or "").strip()
+        next_operation = dict(transition.get("operation") or {})
+        next_action = dict(transition.get("linked_action") or {})
+        event = dict(transition.get("event") or {})
+        if transition_outcome not in {"applied", "already_applied", "repaired"}:
+            return {
+                "status": "conflict",
+                "reason": "operation_state_conflict",
+                "action": next_action or action,
+                "operation_run": next_operation or operation_run,
+                "events": [],
+                "module_state_mutated": False,
+                "contract": "w9_operation_run_dispatch_v1",
+            }
         return {
-            "status": terminal_status,
-            "action": self.store.repos.workflow_runtime.get_action(str(action.get("action_id") or "")) or action,
+            "status": "completed" if terminal_status == "completed" else "not_ready",
+            "reason": str(read_payload.get("reason") or "").strip(),
+            "action": next_action or action,
             "operation_run": next_operation,
-            "events": [event],
+            "events": [event] if event else [],
             "module_state_mutated": False,
             "contract": "w9_operation_run_dispatch_v1",
         }

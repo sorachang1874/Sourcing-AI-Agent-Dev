@@ -1,6 +1,6 @@
 > Status: bounded non-live implementation candidate after D1i. This activates
-> `add_to_crm` as the sixth schema-defined production action. The production
-> partition is **6 schema-defined / 9 schema-less / served=0**. It does not
+> `add_to_crm` as the sixth schema-defined production action. The D1j checkpoint
+> partition was **6 schema-defined / 9 schema-less / served=0**; D1l now owns the current **9/6/0** partition. It does not
 > authorize live provider/model calls, product signoff, or closure of R-028/R-029.
 
 # Track D D1j Add-to-CRM Projection Selection Action Activation
@@ -33,7 +33,7 @@ facade, legacy CRM mutation callers remain outside one shared identity-lock
 repository, and command terminal/effect/linked Operation synchronization are not
 one global exactly-once transaction.
 
-R-029 drops from 10 to **9** schema-less actions, but remains open until every
+At the D1j checkpoint, R-029 dropped from 10 to **9** schema-less actions, but it remains open until every
 API-submittable action has a reviewed schema/binder decision and the release
 window records zero compatibility hits. Served Agent tool population remains
 zero.
@@ -46,5 +46,6 @@ Author evidence for the local candidate:
 - D1j targeted nodes = **3 passed**;
 - D1 action request surface characterization = **6 passed**.
 
-This is author evidence only. A fresh pinned non-author review is required
-before any live/W6/manual/product signoff for this scope.
+This is author evidence only. The combined D1j/D1k pinned `354e979` runner-backed advisory completed as
+`NO-GO 0/9/7/1`; it is not formal `GO`. Its findings require fixed-forward plus a fresh pinned re-review before any
+live/W6/manual/product signoff for this scope.

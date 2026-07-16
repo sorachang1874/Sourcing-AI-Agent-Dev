@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 from dataclasses import dataclass, field
 from hashlib import sha1
@@ -61,12 +62,14 @@ CRM_EXISTING_RECORD_ACTION_TYPES = (
 CRM_RECORD_BATCH_ACTION_TYPES = (ACTION_ENRICH_PERSON_PUBLIC_WEB,)
 CRM_PROJECTION_SELECTION_ACTION_TYPES = (ACTION_ADD_TO_CRM,)
 ACQUISITION_ROOT_ACTION_TYPES = (ACTION_START_ACQUISITION_RUN,)
+PROJECTION_READ_ACTION_TYPES = (ACTION_SEARCH_PROJECTION, ACTION_FILTER_PROJECTION)
 PROJECTION_EXPORT_ACTION_TYPES = (ACTION_EXPORT_CANDIDATES,)
 CRM_RESOURCE_BOUND_ACTION_TYPES = CRM_EXISTING_RECORD_ACTION_TYPES + CRM_RECORD_BATCH_ACTION_TYPES
 OPERATION_OWNER_BOUND_ACTION_TYPES = (
     CRM_RESOURCE_BOUND_ACTION_TYPES
     + CRM_PROJECTION_SELECTION_ACTION_TYPES
     + ACQUISITION_ROOT_ACTION_TYPES
+    + PROJECTION_READ_ACTION_TYPES
     + PROJECTION_EXPORT_ACTION_TYPES
 )
 
@@ -140,6 +143,20 @@ def _freeze_action_request_json(value: Any) -> Any:
     if isinstance(value, list):
         return tuple(_freeze_action_request_json(child) for child in value)
     return value
+
+
+def _is_strict_action_request_json(value: Any) -> bool:
+    """Reject Python-only containers before schema validation can JSON-normalize them."""
+
+    if value is None or type(value) in {str, bool, int}:
+        return True
+    if type(value) is float:
+        return math.isfinite(value)
+    if type(value) is list:
+        return all(_is_strict_action_request_json(child) for child in value)
+    if type(value) is dict:
+        return all(type(key) is str and _is_strict_action_request_json(child) for key, child in value.items())
+    return False
 
 
 _CRM_RECORD_TARGET_PROPERTIES: dict[str, dict[str, Any]] = {
@@ -426,10 +443,127 @@ PROJECTION_EXPORT_ACTION_REQUEST_CONTRACTS: Mapping[str, Mapping[str, Any]] = Ma
                 "target_ref_field_aliases": (
                     ("projection_id", ("serving_projection_id",)),
                     ("membership_revision", ("expected_membership_revision",)),
-                    ("candidate_identity_keys", ("candidate_ids", "candidate_identity_key", "candidate_id")),
+                    (
+                        "candidate_identity_keys",
+                        ("candidateIdentityKeys", "candidate_ids", "candidate_identity_key", "candidate_id"),
+                    ),
                 ),
             }
         )
+    }
+)
+
+_PROJECTION_READ_TARGET_PROPERTIES: dict[str, dict[str, Any]] = {
+    "projection_id": {"type": "string", "minLength": 1, "maxLength": 200, "pattern": r"\S"},
+    "membership_revision": {"type": "string", "minLength": 1, "maxLength": 200, "pattern": r"\S"},
+}
+_PROJECTION_READ_TARGET_ALIASES = (
+    ("projection_id", ("serving_projection_id",)),
+    ("membership_revision", ("expected_membership_revision",)),
+)
+_PROJECTION_READ_BASE_INPUT_PROPERTIES: dict[str, dict[str, Any]] = {
+    "offset": {"type": "integer", "minimum": 0, "maximum": 100_000},
+    "limit": {"type": "integer", "minimum": 1, "maximum": 250},
+}
+_PROJECTION_READ_FILTER_PROPERTIES: dict[str, dict[str, Any]] = {
+    "search_keyword": {"type": "string", "minLength": 1, "maxLength": 200, "pattern": r"\S"},
+    "recall_buckets": {
+        "type": "array",
+        "items": {"type": "string", "minLength": 1, "maxLength": 500, "pattern": r"\S"},
+        "maxItems": 500,
+    },
+    "employment_statuses": {
+        "type": "array",
+        "items": {"type": "string", "enum": ["current", "former"]},
+        "maxItems": 2,
+    },
+    "locations": {
+        "type": "array",
+        "items": {"type": "string", "enum": ["us", "other", "unknown"]},
+        "maxItems": 3,
+    },
+    "function_buckets": {
+        "type": "array",
+        "items": {
+            "type": "string",
+            "enum": ["research", "engineering", "product_management", "other", "unknown"],
+        },
+        "maxItems": 5,
+    },
+    "layer_includes": {
+        "type": "array",
+        "items": {"type": "string", "enum": [f"layer_{index}" for index in range(8)]},
+        "maxItems": 8,
+    },
+    "layer_excludes": {
+        "type": "array",
+        "items": {"type": "string", "enum": [f"layer_{index}" for index in range(8)]},
+        "maxItems": 8,
+    },
+    "audit_statuses": {
+        "type": "array",
+        "items": {
+            "type": "string",
+            "enum": [
+                "no_review_needed",
+                "needs_review",
+                "needs_profile_completion",
+                "low_profile_richness",
+                "verified_keep",
+                "verified_exclude",
+            ],
+        },
+        "maxItems": 6,
+    },
+}
+_PROJECTION_READ_FILTER_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": _PROJECTION_READ_FILTER_PROPERTIES,
+    "additionalProperties": False,
+}
+
+PROJECTION_READ_ACTION_REQUEST_CONTRACTS: Mapping[str, Mapping[str, Any]] = MappingProxyType(
+    {
+        ACTION_SEARCH_PROJECTION: MappingProxyType(
+            {
+                "request_schema": _freeze_action_request_json(
+                    DEFAULT_ACTION_REQUEST_SCHEMA_BUILDER.build(
+                        input_properties={
+                            **_PROJECTION_READ_BASE_INPUT_PROPERTIES,
+                            "search_keyword": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 500,
+                                "pattern": r"\S",
+                            },
+                        },
+                        input_required=("search_keyword",),
+                        target_properties=_PROJECTION_READ_TARGET_PROPERTIES,
+                        target_required=tuple(_PROJECTION_READ_TARGET_PROPERTIES),
+                    )
+                ),
+                "request_schema_version": "projection_search_request_v1",
+                "request_identity_target_fields": ("projection_id", "membership_revision"),
+                "target_ref_field_aliases": _PROJECTION_READ_TARGET_ALIASES,
+            }
+        ),
+        ACTION_FILTER_PROJECTION: MappingProxyType(
+            {
+                "request_schema": _freeze_action_request_json(
+                    DEFAULT_ACTION_REQUEST_SCHEMA_BUILDER.build(
+                        input_properties={
+                            **_PROJECTION_READ_BASE_INPUT_PROPERTIES,
+                            "filters": _PROJECTION_READ_FILTER_SCHEMA,
+                        },
+                        target_properties=_PROJECTION_READ_TARGET_PROPERTIES,
+                        target_required=tuple(_PROJECTION_READ_TARGET_PROPERTIES),
+                    )
+                ),
+                "request_schema_version": "projection_filter_request_v1",
+                "request_identity_target_fields": ("projection_id", "membership_revision"),
+                "target_ref_field_aliases": _PROJECTION_READ_TARGET_ALIASES,
+            }
+        ),
     }
 )
 
@@ -935,6 +1069,7 @@ DEFAULT_ACTION_REGISTRY = ActionRegistry(
             description="Run a read-only search over a canonical serving projection.",
             display_label="Search projection",
             display_category="projection",
+            **dict(PROJECTION_READ_ACTION_REQUEST_CONTRACTS[ACTION_SEARCH_PROJECTION]),
         ),
         ACTION_FILTER_PROJECTION: ActionSpec(
             action_type=ACTION_FILTER_PROJECTION,
@@ -944,6 +1079,7 @@ DEFAULT_ACTION_REGISTRY = ActionRegistry(
             description="Apply read-only filters against a canonical serving projection.",
             display_label="Filter projection",
             display_category="projection",
+            **dict(PROJECTION_READ_ACTION_REQUEST_CONTRACTS[ACTION_FILTER_PROJECTION]),
         ),
         ACTION_ADD_TO_CRM: ActionSpec(
             action_type=ACTION_ADD_TO_CRM,
@@ -1403,7 +1539,12 @@ class OperationRuntimeWriter:
         if spec.has_request_schema:
             persisted_input = action_record.get("input")
             persisted_target = action_record.get("target_ref")
-            if not isinstance(persisted_input, Mapping) or not isinstance(persisted_target, Mapping):
+            if (
+                not isinstance(persisted_input, Mapping)
+                or not isinstance(persisted_target, Mapping)
+                or not _is_strict_action_request_json(persisted_input)
+                or not _is_strict_action_request_json(persisted_target)
+            ):
                 raise OperationRuntimeStateConflict(
                     "operation_action_request_schema_validation_conflict",
                     action_record,

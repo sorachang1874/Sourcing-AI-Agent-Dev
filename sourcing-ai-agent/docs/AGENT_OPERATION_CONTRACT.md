@@ -167,9 +167,9 @@ W8 foundation is active.
 ### D1 Request Schema, Owner Binding, And Physical Pins
 
 The D1c foundation and D1e binder declarations are active. D1f activated three existing-record CRM request schemas,
-D1h activated CRM Public Web enrichment, D1i activated the acquisition root, D1j activated `add_to_crm`, and D1k
-activated `export_candidates`. Seven actions are schema-defined, 8 remain on the R-029 bridge, and no production
-action is served to a model.
+D1h activated CRM Public Web enrichment, D1i activated the acquisition root, D1j activated `add_to_crm`, D1k
+activated `export_candidates`, and D1l activated `search_projection` / `filter_projection`. Nine actions are
+schema-defined, 6 remain on the R-029 bridge, and no production action is served to a model.
 
 - `operation_runtime.ActionRequestSpec` is the checked-in action request-contract owner. `ActionSpec` is an
   object-identical compatibility alias, not a second schema model. A non-empty request schema is a closed root object
@@ -178,9 +178,9 @@ action is served to a model.
 - D0 `ToolSpec.validate_input(...)` and `ToolSpec.input_schema_digest` are the shared schema validator and canonical
   digest owner. D1 must not add a second JSON-schema evaluator or digest algorithm.
 - For a schema-defined action, normalized caller/model values enter only the request schema's `input_payload` segment.
-  The seven current schema-defined HTTP actions accept one object envelope named `input` or compatibility alias `input_payload`;
+  The nine current schema-defined HTTP actions accept one object envelope named `input` or compatibility alias `input_payload`;
   selection is by key presence, every supplied envelope is validated, and supplying both is ambiguous even when equal
-  or empty. This rule does not silently migrate the 8 R-029 actions, which retain their existing truthy precedence.
+  or empty. This rule does not silently migrate the 6 R-029 actions, which retain their existing truthy precedence.
   The action owner must mint an `OwnerBoundTargetRef` whose owner equals `ActionRequestSpec.owner_module`; raw
   caller/model `target_ref`, a duplicate owner field, or a declared alias override fails before persistence. The API
   and writer also reject caller-supplied `request_schema_version` / `request_schema_digest` fields.
@@ -200,10 +200,11 @@ action is served to a model.
   immediately guarding new writes; validation of existing rows is a separately deployed transaction and remains
   pending. The CHECK constrains physical shape; repository/upsert and runtime preflight enforce immutable identity.
   This is not a claim that unrestricted direct SQL is protected by an immutability trigger.
-- Exactly seven production actions are schema-defined: `add_to_crm`, `set_crm_stage`, `add_crm_note`,
-  `create_crm_task`, `enrich_person_public_web`, `start_acquisition_run`, and `export_candidates`. The
-  CRM-resource/projection-selection/projection-export contracts use their CRM/projection owner binders; the acquisition
-  root accepts only nonblank company/query intent and mints exactly one workspace target. The existing-record CRM
+- Exactly nine production actions are schema-defined: `search_projection`, `filter_projection`, `add_to_crm`,
+  `set_crm_stage`, `add_crm_note`, `create_crm_task`, `enrich_person_public_web`, `start_acquisition_run`, and
+  `export_candidates`. The CRM-resource/projection-selection/projection-read/projection-export contracts use their
+  CRM/projection owner binders; the acquisition root accepts only nonblank company/query intent and mints exactly one
+  workspace target. The existing-record CRM
   request contracts and versions come from `CRM_EXISTING_RECORD_ACTION_REQUEST_CONTRACTS`; the authenticated submit
   route derives workspace/user, the binder mints the complete CRM target snapshot, and dispatch plus the CRM command
   owner revalidate current ownership/version before new plan/domain writes. Authenticated missing and foreign CRM rows
@@ -212,7 +213,7 @@ action is served to a model.
   allowlist. The CRM command fence reconciles physical `workflow_command.operation_id` with payload
   `operation_run_id`; any non-empty dangling id fails before mutable action-label inspection, and the legacy
   owner-internal path is available only when both carriers are absent.
-- The other 8 production actions remain schema-less. Their physical pins are empty/empty and each submission records
+- The other 6 production actions remain schema-less. Their physical pins are empty/empty and each submission records
   `request_schema_status=schema_less_compatibility` plus `request_schema_compatibility_hit=true` in action metadata and
   the submission event payload. Any replay, approve, retry, or dispatch continuation also records an idempotent
   `ActionRequestSchemaCompatibilityObserved` event before its first domain mutation/handler; its checked-in epoch must
@@ -236,7 +237,7 @@ authorization ownership is `agent_actions.workspace_id` and `operation_runs.work
 its linked action to exist in the same exact workspace. Server request state supplies the expected workspace, while
 `actor` is provenance only. Missing and foreign resources share one generic not-found transport shape per resource
 kind. Open mode keeps the existing explicit operator-workspace behavior. At its checkpoint D1g did not add schemas for
-the remaining 12 actions; D1h/D1i/D1j/D1k later reduce the current bridge to 8. D1g does not change served=0 or close
+the remaining 12 actions; D1h/D1i/D1j/D1k/D1l later reduce the current bridge to 6. D1g does not change served=0 or close
 R-019/R-028; fresh pinned non-author review remains required before hosted/live
 multi-user Operation exposure.
 
@@ -267,10 +268,49 @@ Input is limited to export options. Dispatch plans `export.projection.generate` 
 stale membership still fails before command planning. R-028 is unchanged because this is not a CRM mutation or command
 terminal/effect UoW change.
 
+D1l activates only `search_projection` and `filter_projection`. Submit resolves the caller projection selector through
+the canonical public serving projection reader and stores an owner-bound `target_ref` containing projection id and
+membership revision. The reader's closed production type set owns `shared_canonical_read`; projection identity is not
+tenant-owned, while the persisted Operation workspace exclusively scopes CRM overlays. Exactly one of
+`search_keyword|search|query` is normalized to `search_keyword`. Exactly one of `filters|candidate_filter` is normalized
+to a closed canonical filter whose multi-select values are validated, deduplicated, and sorted; unknown/lossy filter
+intent fails before persistence. Missing/non-shared/unprovable projections share masked `projection_not_found` before
+writer entry. Dispatch acquires the Operation dispatch and projection publication locks against one shared monotonic 5s
+total acquisition deadline, not one timeout per lock, and holds them through bounded-result persistence. An expired
+deadline fails before connection acquisition. Exhausting the shared deadline returns
+`operation_dispatch_lock_busy` or `projection_publication_lock_busy`, mapped to HTTP 409. Dispatch checks the persisted
+membership revision before the read and the reader-pinned revision afterward. Its terminal action, Operation, and event
+writes commit in one commandless PG UoW. A stale revision supplied at submit is zero-write; only a revision change
+observed after successful submit persists explicit Operation failure/reselection evidence. Generic reader reasons
+`projection_membership_revision_changed_during_read`, `...changed_during_page_read`, and
+`...changed_during_search_read` all normalize to stale/reselection, and replay preserves
+`reselection_required=true` without duplicating its event. Persisted schema-defined action input and target are
+revalidated as strict JSON; tuples and other Python-only containers fail closed before dispatch writes. Operation
+dispatch uses the exact persisted Operation workspace for CRM overlays. Authenticated direct projection and job
+dashboard/candidate reads default to the server-derived workspace, while an explicit `default` remains the pre-auth
+legacy namespace selector; open mode preserves its explicit workspace. Direct candidates/search transport coverage
+pins all three modes. No projection-read path creates a workflow command or mutates projection/CRM/person/provider
+domain state.
+
+The four production generic projection-field patch callers—board-visible extension, Operation native projection
+admission, facet layering publication, and collection layering backfill—use
+`ServingProjectionRepository.patch_publication_fields_under_lock`. Production raw projection `upsert` is statically
+rejected. The helper holds the projection publication session key and invokes one native `SELECT ... FOR UPDATE` merge
+against the current row, so stale count/readiness snapshots cannot overwrite a concurrent D1l read/result boundary. It
+also rejects these search-index binding metadata keys:
+
+- `projection_person_search_index_build_generation`
+- `projection_person_search_index_build_input_revision`
+- `projection_person_search_index_input_revision`
+
 D1c adds zero-write pin-drift preflights but does not combine approval or retry state/event/run writes into one UoW.
 The generic operation/command atomicity, generation/lease fence, and transaction-lock budget limits in R-019 remain
 open and must not be inferred closed from this foundation. A concurrent identity insert after the read preflight can
 still reach that pre-existing multi-write window; only preflight-observed drift has the stated zero-write guarantee.
+D1l is a narrower commandless specialization: projection-read terminal action/Operation/event writes use one PG UoW,
+its session dispatch/publication locks share one monotonic 5s total acquisition deadline, and it creates no workflow
+command, so command generation/lease fencing is inapplicable. It adds no direct state-sync caller and leaves the R-019
+ratchet at 26; none of these facts closes R-019 for command-producing or other Operation paths.
 
 ## W9 Implementation Status
 
@@ -281,10 +321,13 @@ W9 backend control foundation is active; product Agent UI remains deferred.
   Authenticated transport overwrites caller workspace with the server-derived exact workspace; open mode preserves the
   explicit operator workspace.
 - `POST /api/operations/actions` persists an `AgentAction` and, when no approval is required, a queued `OperationRun`.
-  For the four CRM-resource actions and acquisition root action, authenticated request state overrides workspace/user
-  and supplies exact owner scope. CRM missing/foreign rows share one HTTP 404 body; raw owner/version aliases fail
-  before persistence. Acquisition root accepts no caller target and only canonical company/query intent. The other 10
-  action types retain their existing schema-less/open-mode behavior until reviewed.
+  Nine current schema-defined actions require owner-minted targets. The four CRM-resource actions and acquisition root
+  use authenticated request state for exact owner scope; CRM missing/foreign rows share one HTTP 404 body, raw
+  owner/version aliases fail before persistence, and acquisition root accepts no caller target. `add_to_crm`,
+  `export_candidates`, and the two projection-read actions resolve only shared-canonical projection membership through
+  their domain readers; authenticated Operation workspace remains separate and scopes CRM destination/overlay data.
+  The other 6 action types retain their explicit schema-less compatibility behavior. Open-mode operator workspace
+  remains supported; independent review is a served/signoff gate rather than a denominator heuristic.
   A fresh accepted submission returns HTTP 202 with `queued` or `approval_required`. A preflight-observed exact replay,
   or a committed result whose current lifecycle is already outside the fresh set, returns HTTP 200 with
   `idempotent_replay=true` and the current persisted run status, or action status when no run exists. The
@@ -361,7 +404,7 @@ W9 backend control foundation is active; product Agent UI remains deferred.
   `workflow_commands(command_type='export.projection.generate', owner='projection_exporter')` with
   `operation_id=<operation_run_id>` and appends `OperationCommandPlanned`. It does not run the export owner
   synchronously.
-- `POST /api/operations/runs/{operation_run_id}/dispatch` also supports read-only projection actions `filter_projection` and `search_projection`. These actions call the canonical projection reader, persist the bounded result in `OperationRun.result_ref`, and append `OperationReadCompleted` / `OperationReadFailed`; they do not create workflow commands or mutate projection/CRM/person-asset state.
+- `POST /api/operations/runs/{operation_run_id}/dispatch` also supports read-only projection actions `filter_projection` and `search_projection`. These actions acquire the Operation/projection locks against one shared monotonic 5s deadline, not 5s each; an expired deadline fails before connection acquisition. They hold both locks through bounded-result persistence, call the canonical projection reader, and commit `OperationRun.result_ref`, action state, and `OperationReadCompleted` / `OperationReadFailed` in one PG UoW; they do not create workflow commands or mutate projection/CRM/person-asset state. Completed reads return HTTP 200, command-planning dispatches return HTTP 202, missing resources return HTTP 404, and readiness/stale/reselection plus typed `operation_dispatch_lock_busy` / `projection_publication_lock_busy` responses return HTTP 409 with the exact reason.
 - `POST /api/operations/runs/{operation_run_id}/dispatch` supports `enrich_person_public_web` after approval/budget. Dispatch only plans `workflow_commands(command_type='crm.public_web.queue_batch', owner='crm_public_web_owner')` with `operation_id=<operation_run_id>`; the command owner creates CRM Public Web batch/run rows and queues workers. Operation dispatch must not call the synchronous CRM Public Web start route.
 - `POST /api/operations/runs/{operation_run_id}/dispatch` supports company Public Web refresh action `refresh_company_public_web_assets` after approval/budget. Dispatch only plans `workflow_commands(command_type='company.public_web.refresh', owner='company_public_web_owner')`; that root command only orchestrates phase commands. `company.public_web.source.collect` is the only Agent normal path that calls the company Public Web refresh service and writes source-specific rows/artifacts with canonical asset sync deferred. `company.public_web.assets.materialize` is the only Agent normal path that syncs canonical `CompanyAsset` / `CompanyEvidence` and records ActivityRun/Attempt/EntityDelta evidence for company asset effects.
 - `POST /api/operations/runs/{operation_run_id}/dispatch` supports CRM writer actions `add_to_crm`, `set_crm_stage`, `add_crm_note`, and `create_crm_task`. Dispatch only plans `crm.record.add_from_projection`, `crm.record.update`, `crm.note.add`, or `crm.task.create`; the `crm_writer` command owner is the only normal path that writes `crm_records`, `crm_engagements`, PG-only `crm_tasks`, and `crm_events`. For `set_crm_stage`, `add_crm_note`, and `create_crm_task`, first plan creation revalidates the persisted four-field CRM owner/version snapshot before approval or command-plan writes; the command carries that exact snapshot and one record id, follows the canonical OperationRun→AgentAction discriminator, and revalidates before the first CRM domain effect. For `add_to_crm`, submit mints a projection-selection target from the canonical serving projection reader, dispatch revalidates it, and the command owner revalidates the exact target before the first CRM domain effect. Owner loss is not-found and same-owner version drift is conflict; neither read-only preflight claims R-028 command/effect atomicity. Sensitive stage changes such as `do_not_contact` / `archived` and bulk stage changes require approval before command planning. Stale running CRM writer commands may be resumed only through `crm_writer.resume_crm_writer_command`; resume records control evidence and requeues the command, but does not write CRM state from the Operation/API request path.

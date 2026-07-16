@@ -11,11 +11,17 @@ from sourcing_agent.operation_runtime import (
     ACTION_SEARCH_PROJECTION,
     DEFAULT_ACTION_REGISTRY,
     DISPATCH_ADAPTER_PROJECTION_READ,
+    PROJECTION_READ_ACTION_REQUEST_CONTRACTS,
+    PROJECTION_READ_ACTION_TYPES,
 )
 from sourcing_agent.repositories.serving_projection import (
     COLLECTION_AUTHORITATIVE_POINTERS,
     RUN_PROJECTION_LINKS,
     SERVING_PROJECTIONS,
+)
+from sourcing_agent.serving_projection_reader import (
+    SHARED_CANONICAL_PROJECTION_ACCESS_SCOPE,
+    SHARED_CANONICAL_PROJECTION_TYPES,
 )
 from sourcing_agent.serving_projection_writer import ServingProjectionWriter
 
@@ -138,10 +144,26 @@ def test_generic_operation_submit_only_derives_authenticated_scope_for_owner_bou
 
 
 @pytest.mark.parametrize("action_type", PROJECTION_ACTIONS)
-def test_projection_actions_remain_schema_less_until_projection_scope_owner_is_decided(action_type: str) -> None:
+def test_projection_actions_use_the_decided_projection_read_owner_contract(action_type: str) -> None:
     spec = DEFAULT_ACTION_REGISTRY.spec_for(action_type)
     assert spec.dispatch_adapter == DISPATCH_ADAPTER_PROJECTION_READ
-    assert spec.request_schema is None
-    assert spec.request_schema_version == ""
-    assert spec.request_schema_digest == ""
-    assert spec.has_request_schema is False
+    assert set(PROJECTION_READ_ACTION_REQUEST_CONTRACTS) == set(PROJECTION_READ_ACTION_TYPES)
+    assert spec.owner_module == "projection_search_service"
+    assert SHARED_CANONICAL_PROJECTION_ACCESS_SCOPE == "shared_canonical_read"
+    assert SHARED_CANONICAL_PROJECTION_TYPES == {
+        "run_scope_projection",
+        "collection_authoritative_projection",
+    }
+    assert spec.request_schema is not None
+    assert spec.request_schema_version == (
+        "projection_search_request_v1" if action_type == ACTION_SEARCH_PROJECTION else "projection_filter_request_v1"
+    )
+    assert len(spec.request_schema_digest) == 64
+    assert spec.request_identity_target_fields == ("projection_id", "membership_revision")
+    assert spec.has_request_schema is True
+    if action_type == ACTION_FILTER_PROJECTION:
+        search_schema = spec.request_schema["properties"]["input_payload"]["properties"]["filters"]["properties"][
+            "search_keyword"
+        ]
+        assert search_schema["minLength"] == 1
+        assert search_schema["pattern"] == r"\S"

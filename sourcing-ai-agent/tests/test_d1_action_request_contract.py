@@ -17,12 +17,13 @@ from sourcing_agent.operation_runtime import (
     ACTION_ADD_CRM_NOTE,
     ACTION_CREATE_CRM_TASK,
     ACTION_EXTERNAL_INTAKE,
-    ACTION_SEARCH_PROJECTION,
+    ACTION_FETCH_PROFILE_SAMPLE,
     ACTION_SET_CRM_STAGE,
     APPROVAL_REQUIRED,
     CRM_EXISTING_RECORD_ACTION_TYPES,
     CRM_RESOURCE_BOUND_ACTION_TYPES,
     DEFAULT_ACTION_REGISTRY,
+    DISPATCH_ADAPTER_AGENT_CALLABLE_WORKFLOW_COMMAND,
     DISPATCH_ADAPTER_PROJECTION_READ,
     OPERATION_OWNER_BOUND_ACTION_TYPES,
     REQUEST_SCHEMA_COMPATIBILITY_EVENT_TYPE,
@@ -306,7 +307,7 @@ def test_production_action_registry_activates_owner_bound_schemas_and_remains_un
     }
     assert set(CRM_RESOURCE_BOUND_ACTION_TYPES).issubset(schema_defined)
     assert schema_defined == set(OPERATION_OWNER_BOUND_ACTION_TYPES)
-    assert sum(not DEFAULT_ACTION_REGISTRY.spec_for(action_type).has_request_schema for action_type in records) == 10
+    assert sum(not DEFAULT_ACTION_REGISTRY.spec_for(action_type).has_request_schema for action_type in records) == 6
     assert all(
         bool(DEFAULT_ACTION_REGISTRY.spec_for(action_type).request_schema_digest) == (action_type in schema_defined)
         for action_type in records
@@ -358,7 +359,10 @@ class _DispatchPreflightProbe:
         return {"status": "completed", "module_state_mutated": False}
 
     def _operation_dispatch_adapter_bindings(self) -> dict[str, Callable[..., dict[str, Any]]]:
-        return {DISPATCH_ADAPTER_PROJECTION_READ: self._projection_handler}
+        return {
+            DISPATCH_ADAPTER_AGENT_CALLABLE_WORKFLOW_COMMAND: self._projection_handler,
+            DISPATCH_ADAPTER_PROJECTION_READ: self._projection_handler,
+        }
 
 
 @pytest.mark.parametrize(
@@ -387,10 +391,10 @@ def test_submit_api_rejects_pin_overrides_before_binding_or_writer(payload: dict
 
 def test_dispatch_pin_preflight_is_zero_write_and_matching_schema_less_path_stays_compatible() -> None:
     probe = _DispatchPreflightProbe()
-    spec = DEFAULT_ACTION_REGISTRY.spec_for(ACTION_SEARCH_PROJECTION)
+    spec = DEFAULT_ACTION_REGISTRY.spec_for(ACTION_FETCH_PROFILE_SAMPLE)
     action = {
         "action_id": "action-a",
-        "action_type": ACTION_SEARCH_PROJECTION,
+        "action_type": ACTION_FETCH_PROFILE_SAMPLE,
         "workspace_id": "default",
         "owner_module": spec.owner_module,
         "operation_type": spec.operation_type,
@@ -795,7 +799,7 @@ class D1ActionRequestContractPGTest(PGDurableRuntimeTestMixin, unittest.TestCase
             for action_type in DEFAULT_ACTION_REGISTRY.to_record()
             if not DEFAULT_ACTION_REGISTRY.spec_for(action_type).has_request_schema
         )
-        self.assertEqual(len(schema_less_actions), 10)
+        self.assertEqual(len(schema_less_actions), 6)
         for ordinal, action_type in enumerate(schema_less_actions, start=1):
             with self.subTest(action_type=action_type):
                 spec = DEFAULT_ACTION_REGISTRY.spec_for(action_type)
@@ -864,7 +868,7 @@ class D1ActionRequestContractPGTest(PGDurableRuntimeTestMixin, unittest.TestCase
             for action_type in DEFAULT_ACTION_REGISTRY.to_record()
             if not DEFAULT_ACTION_REGISTRY.spec_for(action_type).has_request_schema
         )
-        self.assertEqual(len(schema_less_actions), 10)
+        self.assertEqual(len(schema_less_actions), 6)
         for ordinal, action_type in enumerate(schema_less_actions, start=1):
             with self.subTest(action_type=action_type):
                 spec = DEFAULT_ACTION_REGISTRY.spec_for(action_type)

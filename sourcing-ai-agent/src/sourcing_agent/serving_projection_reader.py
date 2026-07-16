@@ -21,6 +21,13 @@ from .public_candidate_facets import (
 from .storage import ControlPlaneStore
 
 _SERVABLE_PROJECTION_STATES = {"serving", "building", "degraded"}
+SHARED_CANONICAL_PROJECTION_ACCESS_SCOPE = "shared_canonical_read"
+SHARED_CANONICAL_PROJECTION_TYPES = frozenset(
+    {
+        "run_scope_projection",
+        "collection_authoritative_projection",
+    }
+)
 _VISIBLE_MEMBER_STATE = "visible"
 _RESTRICTED_PUBLIC_ROW_KEYS = {
     "contact",
@@ -58,6 +65,11 @@ class ServingProjectionReader:
         projection = self.store.repos.serving_projection.get(normalized_projection_id)
         if not projection:
             return self._projection_error("projection_not_found", projection_id=normalized_projection_id)
+        if str(projection.get("projection_type") or "").strip() not in SHARED_CANONICAL_PROJECTION_TYPES:
+            return self._projection_error(
+                "projection_not_found",
+                projection_id=normalized_projection_id,
+            )
         if str(projection.get("state") or "").strip().lower() not in _SERVABLE_PROJECTION_STATES:
             return self._projection_error(
                 "projection_not_servable",
@@ -91,6 +103,11 @@ class ServingProjectionReader:
         latest_projection = self.store.repos.serving_projection.get(normalized_projection_id)
         if not latest_projection:
             return self._projection_error("projection_not_found", projection_id=normalized_projection_id)
+        if str(latest_projection.get("projection_type") or "").strip() not in SHARED_CANONICAL_PROJECTION_TYPES:
+            return self._projection_error(
+                "projection_not_found",
+                projection_id=normalized_projection_id,
+            )
         if str(latest_projection.get("state") or "").strip().lower() not in _SERVABLE_PROJECTION_STATES:
             return self._projection_error(
                 "projection_not_servable",
@@ -114,6 +131,12 @@ class ServingProjectionReader:
                 visible_count=visible_count,
                 readiness_counts=readiness_counts,
             ),
+            "read_contract": {
+                "source": "serving_projection_members",
+                "access_scope": SHARED_CANONICAL_PROJECTION_ACCESS_SCOPE,
+                "fallback_used": False,
+                "fail_closed": True,
+            },
         }
 
     def get_projection_member_snapshot(
@@ -246,6 +269,7 @@ class ServingProjectionReader:
         offset: int = 0,
         limit: int = 120,
         candidate_filter: dict[str, Any] | None = None,
+        workspace_id: str = "default",
     ) -> dict[str, Any]:
         projection_payload = self.get_projection(projection_id)
         if str(projection_payload.get("status") or "") != "ready":
@@ -340,7 +364,7 @@ class ServingProjectionReader:
         if not filter_active:
             filtered_count = total_count
             index_filter_readiness = self._index_filter_readiness_payload(projection)
-        crm_overlays_by_person = self._crm_overlays_for_members(members)
+        crm_overlays_by_person = self._crm_overlays_for_members(members, workspace_id=workspace_id)
         if crm_overlays_by_person:
             members = [
                 {
@@ -468,6 +492,7 @@ class ServingProjectionReader:
         search_keyword: str,
         offset: int = 0,
         limit: int = 120,
+        workspace_id: str = "default",
     ) -> dict[str, Any]:
         projection_payload = self.get_projection(projection_id)
         if str(projection_payload.get("status") or "") != "ready":
@@ -555,7 +580,7 @@ class ServingProjectionReader:
                 projection=final_projection,
             )
         projection = final_projection
-        crm_overlays_by_person = self._crm_overlays_for_members(members)
+        crm_overlays_by_person = self._crm_overlays_for_members(members, workspace_id=workspace_id)
         if crm_overlays_by_person:
             members = [
                 {
@@ -653,7 +678,12 @@ class ServingProjectionReader:
             },
         }
 
-    def _crm_overlays_for_members(self, members: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    def _crm_overlays_for_members(
+        self,
+        members: list[dict[str, Any]],
+        *,
+        workspace_id: str = "default",
+    ) -> dict[str, dict[str, Any]]:
         person_keys = [
             str(member.get("person_identity_key") or "").strip()
             for member in list(members or [])
@@ -661,7 +691,10 @@ class ServingProjectionReader:
         ]
         if not person_keys or not hasattr(self.store, "list_crm_records_by_person_identity_keys"):
             return {}
-        records_by_person = self.store.list_crm_records_by_person_identity_keys(person_keys)
+        records_by_person = self.store.list_crm_records_by_person_identity_keys(
+            person_keys,
+            workspace_id=str(workspace_id or "default").strip() or "default",
+        )
         overlays: dict[str, dict[str, Any]] = {}
         for person_key, record in records_by_person.items():
             if not record:
@@ -1427,7 +1460,15 @@ class ServingProjectionReader:
             },
         }
         if projection:
-            payload["projection_state"] = str(dict(projection).get("state") or "").strip()
+            projection_payload = dict(projection)
+            payload["projection_state"] = str(projection_payload.get("state") or "").strip()
+            membership_revision = str(
+                projection_payload.get("membership_revision")
+                or dict(projection_payload.get("metadata") or {}).get(PROJECTION_SEARCH_INDEX_INPUT_REVISION_KEY)
+                or ""
+            ).strip()
+            if membership_revision:
+                payload["membership_revision"] = membership_revision
         return payload
 
 

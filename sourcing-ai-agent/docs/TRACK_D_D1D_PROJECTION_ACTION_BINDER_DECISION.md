@@ -1,16 +1,23 @@
 # Track D D1d — Projection action owner-binder decision oracle
 
-> Status: Decision/oracle complete; production implementation blocked by an unowned projection-scope contract
-> (2026-07-15). `search_projection` and `filter_projection` deliberately remain on the R-029 schema-less bridge, and
-> the served Agent tool population remains zero. This document and its executable oracle authorize no schema, binder,
-> model/provider call, live path, manual/product signoff, or milestone closure.
+> Status: D1d checkpoint decision/oracle complete; superseded for production schema activation by D1l on 2026-07-16.
+> At the D1d checkpoint, `search_projection` and `filter_projection` deliberately remained on the R-029 schema-less
+> bridge. D1l later selected the shared-canonical-read option described below, while served Agent tool population
+> remains zero and no model/provider/live path is authorized.
 >
 > D1f follow-up: the generic submit route now derives authenticated workspace/user only for the exact three activated
 > CRM existing-record actions. That conditional path does not supply a projection owner or change this decision.
+>
+> D1l follow-up: the existing fail-closed public `ServingProjectionReader` is now the explicit access-scope owner.
+> `SHARED_CANONICAL_PROJECTION_TYPES` is the closed classification for run-scope and collection-authoritative rows;
+> `projection_search_service` mints projection id plus membership revision. Projection identity is intentionally not
+> tenant-owned. The persisted Operation workspace scopes only CRM overlay reads. Exact selector-carrier validation and
+> pre/post read revision fencing replace this oracle's schema-less tripwire; independent D1l review remains pending.
 
 ## 1. Outcome and boundary
 
-D1d attempted the first production `ActionRequestSpec` population for the two read-only projection actions. The
+D1d attempted the first production `ActionRequestSpec` population for the two read-only projection actions. At this
+checkpoint, the
 required owner proof does not exist in the current physical or request-boundary contracts, so this batch stops before
 adding `ActionRequestSchemaBuilder`, `ActionTargetBinderRegistry`, an `ActionBindContext`, or either production schema.
 
@@ -59,9 +66,9 @@ There is also no active `AgentConversation.scope_ref`/session owner at this boun
 could select a target. Treating `payload.target_ref.projection_id`, an input alias, or caller-supplied membership
 revision as server context would violate the existing D1 owner boundary.
 
-### 2.3 Current D1 status
+### 2.3 D1d checkpoint status
 
-Both actions still have the reviewed D1b `projection_read` adapter, but their request schema/version/digest remain
+Both actions had the reviewed D1b `projection_read` adapter, but their request schema/version/digest remained
 empty. This keeps them API-submittable only through the explicit R-029 compatibility path and ineligible for any
 future full served predicate. The D1 OB-ID set remains empty; Plan section 6 item 3 and R-029 continue to own the loose
 schema bridge. R-019 and its 26-call ratchet are untouched.
@@ -78,8 +85,10 @@ action:
    canonical `projection_id` plus the repository-read membership revision.
 2. **Intentionally shared canonical read.** Add an explicit physical access-scope classification and document that
    shared projection identity is not tenant-owned. Separately define the authenticated operation workspace and the
-   server-owned conversation/session scope that selects the projection. Missing, non-shared, and unprovable rows must
-   share one fail-closed result; the API must not pretend a shared projection has a foreign tenant owner.
+   server-owned conversation/session scope that selects the projection. D1l selected this option: missing, non-shared,
+   and otherwise unprovable rows share the masked `projection_not_found` / HTTP 404 result before writer entry. Only
+   readiness failures after the row proves a supported shared-canonical type may retain their exact `not_ready` reason;
+   the API must not pretend a shared projection has a foreign tenant owner.
 
 Neither choice may be inferred from current metadata/provenance JSON. The owner decision must cover both run-scope and
 collection-authoritative projections, or explicitly exclude one with a reviewed product contract and migration plan.
@@ -101,9 +110,9 @@ After the owner choice is physical and reviewed, the bounded implementation must
    preflight complete the full served predicate.
 
 Only then may these two actions leave the R-029 numerator. D1f reduced that numerator to 12 by activating three CRM
-actions; D1h then reduced it to 11 and D1i to the current 10 through their own reviewed owner/schema contracts.
-Projection activation would reduce it further but would not close R-029 for the remaining API-submittable actions or
-authorize removal of the compatibility epoch/evidence.
+actions; D1h then reduced it to 11, D1i to 10, D1j to 9, and D1k to 8 through their own owner/schema contracts. D1l
+implements the shared-canonical-read decision and reduces the current numerator to 6. This activation does not close
+R-029 for the remaining API-submittable actions or authorize removal of the compatibility epoch/evidence.
 
 ## 5. Executable oracle and validation
 
@@ -122,9 +131,9 @@ git diff --check -- \
   docs/TRACK_D_D1D_PROJECTION_ACTION_BINDER_DECISION.md
 ```
 
-The oracle is intentionally a tripwire. Adding a physical projection scope, extending either projection publisher,
-wiring authenticated action workspace/target binding, or populating either action schema must fail this test until the
-owner decision, binder behavior, migration/backfill, zero-write matrix, and this document are updated together.
+The oracle was intentionally a tripwire. D1l updates it to keep the absence of physical tenant ownership explicit while
+asserting the new shared-canonical access-scope owner, owner-bound target, closed schemas, and revision identity. Adding
+a non-shared projection type or tenant-owned projection still requires a new physical owner decision and migration.
 
 Author validation on the decision-only worktree passed the D1d oracle (**8 passed**) and the combined D1d + D1a + D1b
 + D1c request-contract/characterization/adapter set (**82 passed**). Ruff check/format, focused mypy, and the exact
