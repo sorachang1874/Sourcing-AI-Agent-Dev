@@ -13,7 +13,7 @@ from sourcing_agent.acquisition_plan_preview import (
     AcquisitionPlanPreview,
     acquisition_plan_preview_success_result,
 )
-from sourcing_agent.agent_canary_registry import PLAN_ACQUISITION_TOOL_SPEC
+from sourcing_agent.agent_canary_registry import PLAN_ACQUISITION_TOOL_SPEC, START_ACQUISITION_RUN_TOOL_SPEC
 from sourcing_agent.agent_tool_result_postgres import ACQUISITION_PLAN_PREVIEW_OWNER_TARGET_KIND
 from sourcing_agent.agent_tool_result_slot import (
     AGENT_TOOL_RESULT_ATTEMPT_SCHEMA_VERSION,
@@ -22,6 +22,7 @@ from sourcing_agent.agent_tool_result_slot import (
     AGENT_TOOL_RESULT_JOURNAL_SCHEMA_VERSION_V2,
     AGENT_TOOL_RESULT_SLOT_SCHEMA_VERSION,
     AgentToolOccurrence,
+    AgentToolResultSlotError,
     AgentToolTerminalResult,
 )
 from tests.pg_store_fixture import PGControlPlaneStoreTestMixin
@@ -44,7 +45,13 @@ class D1nAgentToolResultSlotUowPGTest(PGControlPlaneStoreTestMixin, unittest.Tes
         self.repository = self.store.repos.workflow_runtime
         self.adapter = self.store._control_plane_postgres  # noqa: SLF001
 
-    def _occurrence(self, *, suffix: str = "1", slot_generation: int = 1) -> AgentToolOccurrence:
+    def _occurrence(
+        self,
+        *,
+        suffix: str = "1",
+        slot_generation: int = 1,
+        tool_spec=PLAN_ACQUISITION_TOOL_SPEC,
+    ) -> AgentToolOccurrence:
         kwargs = _uow_kwargs(suffix=suffix)
         return AgentToolOccurrence.from_tool_spec(
             result_slot_id=f"toolslot_{suffix}",
@@ -55,7 +62,7 @@ class D1nAgentToolResultSlotUowPGTest(PGControlPlaneStoreTestMixin, unittest.Tes
             provider_mode="simulate",
             turn_id=f"turn_{suffix}",
             step_id="step_1",
-            tool_spec=PLAN_ACQUISITION_TOOL_SPEC,
+            tool_spec=tool_spec,
             canonical_args={
                 "input_payload": kwargs["input_payload"],
                 "target_ref": kwargs["target_ref"],
@@ -196,6 +203,7 @@ class D1nAgentToolResultSlotUowPGTest(PGControlPlaneStoreTestMixin, unittest.Tes
         self.assertTrue(replay["replayed"])
         self.assertEqual(first["slot"]["logical_occurrence_digest"], occurrence.logical_occurrence_digest)
         self.assertEqual(first["slot"]["canonical_args"], occurrence.canonical_args)
+        self.assertEqual(first["slot"]["result_link_policy"], occurrence.result_link_policy)
         collision = AgentToolOccurrence.from_tool_spec(
             result_slot_id="toolslot_forged",
             slot_generation=1,
@@ -212,6 +220,42 @@ class D1nAgentToolResultSlotUowPGTest(PGControlPlaneStoreTestMixin, unittest.Tes
         with self.assertRaisesRegex(ValueError, "immutable identity collision"):
             self.adapter.reserve_agent_tool_result_slot(occurrence=collision)
         self.assertEqual(self._counts()["agent_tool_result_slots"], 1)
+
+    def test_result_link_policy_is_exact_slot_identity_without_changing_logical_identity_record(self) -> None:
+        occurrence = self._occurrence(suffix="policy", tool_spec=START_ACQUISITION_RUN_TOOL_SPEC)
+        reserved = self.repository.reserve_agent_tool_result_slot(occurrence=occurrence)
+        replay = self.repository.reserve_agent_tool_result_slot(occurrence=occurrence)
+        self.assertEqual(replay["outcome"], "replayed")
+        self.assertNotIn("result_link_policy", occurrence.logical_identity_record())
+
+        collision_row = dict(reserved["slot"])
+        collision_row["result_link_policy"] = "activity_attempt_terminal_v1"
+        with self.assertRaisesRegex(ValueError, "immutable identity collision: result_link_policy"):
+            result_postgres._assert_exact_slot(collision_row, occurrence)  # noqa: SLF001
+
+        self.assertEqual(
+            self._counts(),
+            {
+                "agent_tool_result_slots": 1,
+                "agent_tool_result_attempts": 0,
+                "agent_tool_result_journal": 0,
+            },
+        )
+
+    def test_incoherent_occurrence_policy_is_rejected_before_reserve_with_zero_writes(self) -> None:
+        occurrence = self._occurrence(suffix="policyincoherent")
+
+        with self.assertRaisesRegex(AgentToolResultSlotError, "link_policy_effect_mismatch"):
+            replace(occurrence, result_link_policy="workflow_command_acceptance_v1")
+
+        self.assertEqual(
+            self._counts(),
+            {
+                "agent_tool_result_slots": 0,
+                "agent_tool_result_attempts": 0,
+                "agent_tool_result_journal": 0,
+            },
+        )
 
     def test_accept_reloads_exact_owner_serializes_and_recovers_lost_ack(self) -> None:
         occurrence = self._occurrence()
@@ -248,6 +292,9 @@ class D1nAgentToolResultSlotUowPGTest(PGControlPlaneStoreTestMixin, unittest.Tes
         self.assertEqual(replay["attempt"]["disposition"], "accepted")
         self.assertEqual(replay["journal"]["tool_spec_digest"], occurrence.tool_spec_digest)
         self.assertEqual(replay["slot"]["schema_version"], AGENT_TOOL_RESULT_SLOT_SCHEMA_VERSION)
+        self.assertEqual(replay["slot"]["result_link_policy"], occurrence.result_link_policy)
+        self.assertEqual(replay["attempt"]["result_link_policy"], occurrence.result_link_policy)
+        self.assertEqual(replay["journal"]["result_link_policy"], occurrence.result_link_policy)
         self.assertEqual(replay["attempt"]["schema_version"], AGENT_TOOL_RESULT_ATTEMPT_SCHEMA_VERSION)
         self.assertEqual(replay["journal"]["schema_version"], AGENT_TOOL_RESULT_JOURNAL_SCHEMA_VERSION)
         self.assertEqual(
@@ -273,6 +320,7 @@ class D1nAgentToolResultSlotUowPGTest(PGControlPlaneStoreTestMixin, unittest.Tes
 
         self.assertEqual(stale["outcome"], "quarantined")
         self.assertEqual(stale["attempt"]["quarantine_reason"], "slot_generation_mismatch")
+        self.assertEqual(stale["attempt"]["result_link_policy"], occurrence.result_link_policy)
         self.assertEqual(stale["slot"]["status"], "pending")
         terminal_2 = self._terminal(
             bundle,
@@ -314,6 +362,9 @@ class D1nAgentToolResultSlotUowPGTest(PGControlPlaneStoreTestMixin, unittest.Tes
 
         self.assertEqual(quarantined["outcome"], "quarantined")
         self.assertEqual(quarantined["attempt"]["quarantine_reason"], "terminal_winner_already_accepted")
+        self.assertEqual(quarantined["attempt"]["result_link_policy"], occurrence.result_link_policy)
+        self.assertEqual(quarantined["slot"]["result_link_policy"], occurrence.result_link_policy)
+        self.assertEqual(quarantined["journal"]["result_link_policy"], occurrence.result_link_policy)
         self.assertEqual(quarantined["slot"]["result_attempt_id"], winner.result_attempt_id)
         self.assertEqual(quarantined["journal"]["journal_id"], accepted["journal"]["journal_id"])
         self.assertEqual(self._counts()["agent_tool_result_attempts"], 2)
@@ -336,6 +387,7 @@ class D1nAgentToolResultSlotUowPGTest(PGControlPlaneStoreTestMixin, unittest.Tes
             )
             self.assertEqual(aggregate_row["owner_target_revision"], 0)
             self.assertEqual(aggregate_row["owner_target_generation"], 0)
+            self.assertEqual(aggregate_row["result_link_policy"], occurrence.result_link_policy)
         self.assertEqual(accepted["slot"]["schema_version"], AGENT_TOOL_RESULT_SLOT_SCHEMA_VERSION)
         self.assertEqual(accepted["attempt"]["schema_version"], AGENT_TOOL_RESULT_ATTEMPT_SCHEMA_VERSION_V2)
         self.assertEqual(accepted["journal"]["schema_version"], AGENT_TOOL_RESULT_JOURNAL_SCHEMA_VERSION_V2)
@@ -442,6 +494,16 @@ class D1nAgentToolResultSlotUowPGTest(PGControlPlaneStoreTestMixin, unittest.Tes
             self.adapter.accept_acquisition_plan_tool_result_uow(
                 occurrence=occurrence,
                 terminal=foreign_owner,
+                attempted_slot_generation=1,
+            )
+        forged_owner_token = replace(
+            self._terminal(bundle),
+            owner_target_revision_token="membership_revision:forged-plan-owner-token",
+        )
+        with self.assertRaisesRegex(ValueError, "exact-owner mismatch: owner_target_revision_token"):
+            self.adapter.accept_acquisition_plan_tool_result_uow(
+                occurrence=occurrence,
+                terminal=forged_owner_token,
                 attempted_slot_generation=1,
             )
         changed_output = self._terminal(

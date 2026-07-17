@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from typing import cast
 
 import pytest
 
@@ -8,6 +9,7 @@ from sourcing_agent.agent_canary_registry import (
     INSPECT_OPERATION_TOOL_SPEC,
     PLAN_ACQUISITION_TOOL_SPEC,
     START_ACQUISITION_RUN_TOOL_SPEC,
+    START_ACQUISITION_RUN_TOOL_SPEC_V2,
 )
 from sourcing_agent.agent_tool_result_slot import (
     AGENT_TOOL_RESULT_ATTEMPT_SCHEMA_VERSION,
@@ -71,6 +73,9 @@ def test_occurrence_exact_copies_historical_tool_request_result_and_serializer_p
         PLAN_ACQUISITION_TOOL_SPEC.result.serializer_owner.owner_contract_digest
     )
     assert occurrence.effect_class == "commandless_action"
+    assert occurrence.result_link_policy == PLAN_ACQUISITION_TOOL_SPEC.behavior.result_link_policy
+    assert occurrence.to_record()["result_link_policy"] == occurrence.result_link_policy
+    assert occurrence.revalidated().result_link_policy == occurrence.result_link_policy
 
 
 def test_logical_occurrence_uses_stable_ordinal_and_not_provider_call_id() -> None:
@@ -82,6 +87,7 @@ def test_logical_occurrence_uses_stable_ordinal_and_not_provider_call_id() -> No
     assert first.logical_occurrence_digest != duplicate.logical_occurrence_digest
     assert "provider_call_id" not in first.logical_identity_record()
     assert "result_slot_id" not in first.logical_identity_record()
+    assert "result_link_policy" not in first.logical_identity_record()
 
 
 def test_occurrence_rejects_noncanonical_arguments_and_digest_drift() -> None:
@@ -91,6 +97,15 @@ def test_occurrence_rejects_noncanonical_arguments_and_digest_drift() -> None:
         replace(occurrence, canonical_args_json='{"z":1, "a":2}')
     with pytest.raises(AgentToolResultSlotError, match="canonical_args_digest_mismatch"):
         replace(occurrence, canonical_args_digest="f" * 64)
+    with pytest.raises(AgentToolResultSlotError, match="link_policy_effect_mismatch"):
+        replace(occurrence, result_link_policy="workflow_command_acceptance_v1")
+    with pytest.raises(AgentToolResultSlotError, match="link_policy_effect_mismatch"):
+        replace(
+            _occurrence(tool_spec=START_ACQUISITION_RUN_TOOL_SPEC),
+            result_link_policy="no_command_v1",
+        )
+    with pytest.raises(AgentToolResultSlotError, match="link_policy_invalid"):
+        replace(occurrence, result_link_policy="model_selected_policy_v1")
 
 
 def test_terminal_result_builds_exact_tool_result_message_and_content_digest() -> None:
@@ -108,15 +123,21 @@ def test_terminal_result_builds_exact_tool_result_message_and_content_digest() -
     assert terminal.attempt_schema_version == AGENT_TOOL_RESULT_ATTEMPT_SCHEMA_VERSION
     assert terminal.journal_schema_version == AGENT_TOOL_RESULT_JOURNAL_SCHEMA_VERSION
     assert terminal.to_record()["schema_version"] == AGENT_TOOL_RESULT_ATTEMPT_SCHEMA_VERSION
+    assert not hasattr(terminal, "result_link_policy")
 
 
-def test_commandless_action_requires_action_run_and_forbids_command_chain() -> None:
+def test_no_command_policy_closes_commandless_and_read_only_link_shapes() -> None:
     terminal = _terminal()
-    terminal.validate_for_occurrence(_occurrence())
+    commandless = _occurrence()
+    terminal.validate_for_occurrence(commandless)
+
+    read_only = _occurrence(tool_spec=INSPECT_OPERATION_TOOL_SPEC)
+    _terminal(action_id="", operation_run_id="").validate_for_occurrence(read_only)
+    terminal.validate_for_occurrence(read_only)
 
     without_owner = _terminal(action_id="", operation_run_id="")
-    with pytest.raises(AgentToolResultSlotError, match="commandless_link_invalid"):
-        without_owner.validate_for_occurrence(_occurrence())
+    with pytest.raises(AgentToolResultSlotError, match="link_policy_shape_invalid"):
+        without_owner.validate_for_occurrence(commandless)
     with_command = _terminal(
         workflow_command_id="command_1",
         activity_run_id="activity_1",
@@ -125,12 +146,34 @@ def test_commandless_action_requires_action_run_and_forbids_command_chain() -> N
         command_generation=1,
         control_epoch=1,
     )
-    with pytest.raises(AgentToolResultSlotError, match="commandless_link_invalid"):
-        with_command.validate_for_occurrence(_occurrence())
+    with pytest.raises(AgentToolResultSlotError, match="link_policy_shape_invalid"):
+        with_command.validate_for_occurrence(commandless)
+    with pytest.raises(AgentToolResultSlotError, match="link_policy_shape_invalid"):
+        with_command.validate_for_occurrence(read_only)
 
 
-def test_command_backed_action_requires_complete_positive_command_chain() -> None:
+def test_workflow_command_acceptance_policy_requires_command_without_activity_or_fences() -> None:
     occurrence = _occurrence(tool_spec=START_ACQUISITION_RUN_TOOL_SPEC)
+    assert occurrence.result_link_policy == "workflow_command_acceptance_v1"
+    terminal = _terminal(workflow_command_id="command_1")
+    terminal.validate_for_occurrence(occurrence)
+
+    with pytest.raises(AgentToolResultSlotError, match="link_policy_shape_invalid"):
+        _terminal().validate_for_occurrence(occurrence)
+    with pytest.raises(AgentToolResultSlotError, match="link_policy_shape_invalid"):
+        _terminal(
+            workflow_command_id="command_1",
+            activity_run_id="activity_1",
+            activity_attempt_id="activity_attempt_1",
+            command_attempt=1,
+            command_generation=2,
+            control_epoch=3,
+        ).validate_for_occurrence(occurrence)
+
+
+def test_activity_attempt_terminal_policy_requires_full_positive_chain() -> None:
+    occurrence = _occurrence(tool_spec=START_ACQUISITION_RUN_TOOL_SPEC_V2)
+    assert occurrence.result_link_policy == "activity_attempt_terminal_v1"
     terminal = _terminal(
         workflow_command_id="command_1",
         activity_run_id="activity_1",
@@ -141,26 +184,38 @@ def test_command_backed_action_requires_complete_positive_command_chain() -> Non
     )
     terminal.validate_for_occurrence(occurrence)
 
-    with pytest.raises(AgentToolResultSlotError, match="command_backed_link_required"):
+    with pytest.raises(AgentToolResultSlotError, match="link_policy_shape_invalid"):
+        _terminal(workflow_command_id="command_1").validate_for_occurrence(occurrence)
+    with pytest.raises(AgentToolResultSlotError, match="link_policy_shape_invalid"):
         _terminal().validate_for_occurrence(occurrence)
-    with pytest.raises(AgentToolResultSlotError, match="command_link_group_incomplete"):
-        _terminal(workflow_command_id="command_1")
 
 
-def test_read_only_query_allows_no_action_but_never_a_command_chain() -> None:
-    occurrence = _occurrence(tool_spec=INSPECT_OPERATION_TOOL_SPEC)
-    terminal = _terminal(action_id="", operation_run_id="")
-    terminal.validate_for_occurrence(occurrence)
-
-    with pytest.raises(AgentToolResultSlotError, match="read_only_command_link_forbidden"):
-        _terminal(
-            workflow_command_id="command_1",
-            activity_run_id="activity_1",
-            activity_attempt_id="activity_attempt_1",
-            command_attempt=1,
-            command_generation=1,
-            control_epoch=1,
-        ).validate_for_occurrence(occurrence)
+@pytest.mark.parametrize(
+    "overrides",
+    (
+        {"operation_run_id": ""},
+        {"activity_run_id": "activity_1"},
+        {"activity_run_id": "activity_1", "activity_attempt_id": "attempt_1"},
+        {"workflow_command_id": "command_1", "action_id": "", "operation_run_id": ""},
+        {"workflow_command_id": "command_1", "command_attempt": 1},
+        {
+            "workflow_command_id": "command_1",
+            "activity_run_id": "activity_1",
+            "activity_attempt_id": "attempt_1",
+            "command_attempt": 1,
+            "command_generation": 1,
+            "control_epoch": 0,
+        },
+    ),
+)
+def test_terminal_rejects_shapes_outside_the_three_closed_policy_unions(
+    overrides: dict[str, object],
+) -> None:
+    with pytest.raises(
+        AgentToolResultSlotError,
+        match="(action_link_group_incomplete|command_link_group_incomplete)",
+    ):
+        _terminal(**overrides)
 
 
 def test_terminal_result_rejects_partial_owner_link_zero_target_version_and_payload_drift() -> None:
@@ -201,3 +256,16 @@ def test_terminal_result_accepts_opaque_equality_only_owner_revision_token() -> 
 def test_terminal_result_rejects_noncanonical_owner_revision_token(token: str) -> None:
     with pytest.raises(AgentToolResultSlotError, match="owner_target_revision_token_invalid"):
         _terminal(owner_target_revision=0, owner_target_revision_token=token)
+
+
+def test_optional_owner_revision_token_requires_an_exact_string_before_empty_sentinel() -> None:
+    class EmptyStringSubclass(str):
+        pass
+
+    class EmptyEqualityAlias:
+        def __eq__(self, other: object) -> bool:
+            return other == ""
+
+    for token in (cast(str, EmptyStringSubclass("")), cast(str, EmptyEqualityAlias())):
+        with pytest.raises(AgentToolResultSlotError, match="owner_target_revision_token_invalid"):
+            _terminal(owner_target_revision_token=token)

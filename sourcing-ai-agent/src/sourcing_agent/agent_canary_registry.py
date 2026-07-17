@@ -39,6 +39,7 @@ from .agent_projection_query import (
     INSPECT_OPERATION_RESULT_SPEC,
 )
 from .agent_tool_registry import (
+    AGENT_TOOL_SPEC_SCHEMA_VERSION_V2,
     AgentActionToolRoute,
     AgentExecutionSubjectRequirement,
     AgentQueryToolRoute,
@@ -66,6 +67,7 @@ LOCAL_CANARY_REGISTRY_SCHEMA_VERSION = "local_agent_canary_registry_v1"
 LOCAL_CANARY_OWNER_CONTRACT_SCHEMA_VERSION = "local_agent_canary_owner_contract_v1"
 LOCAL_CANARY_EXECUTION_SUBJECT_SCHEMA_VERSION = "local_agent_execution_subject_v1"
 LOCAL_CANARY_SIMULATE_FIXTURE_SCHEMA_VERSION = "local_agent_simulate_fixture_v1"
+LOCAL_CANARY_SIMULATE_FIXTURE_SCHEMA_VERSION_V2 = "local_agent_simulate_fixture_v2"
 LOCAL_CANARY_TOOL_NAMES = (
     ACTION_PLAN_ACQUISITION,
     ACTION_START_ACQUISITION_RUN,
@@ -335,9 +337,11 @@ def _fixture_record(
     fixture_revision: str,
     approval_required: bool,
     effect_class: str,
+    result_link_policy: str = "",
+    schema_version: str = LOCAL_CANARY_SIMULATE_FIXTURE_SCHEMA_VERSION,
 ) -> dict[str, Any]:
-    return {
-        "schema_version": LOCAL_CANARY_SIMULATE_FIXTURE_SCHEMA_VERSION,
+    record = {
+        "schema_version": schema_version,
         "fixture_id": f"agent.local_canary.simulate.{tool_name}",
         "fixture_revision": fixture_revision,
         "tool_name": tool_name,
@@ -348,6 +352,17 @@ def _fixture_record(
         "expected_live_provider_invocations": 0,
         "expected_live_model_invocations": 0,
     }
+    if result_link_policy:
+        record["result_link_policy"] = result_link_policy
+    return record
+
+
+_START_ACQUISITION_RUN_V2_FIXTURE_RECORD = _fixture_record(
+    ACTION_START_ACQUISITION_RUN,
+    fixture_revision="start_acquisition_run_fixture_v2",
+    approval_required=True,
+    effect_class="command_backed_action",
+)
 
 
 _FIXTURE_RECORDS = {
@@ -359,9 +374,11 @@ _FIXTURE_RECORDS = {
     ),
     ACTION_START_ACQUISITION_RUN: _fixture_record(
         ACTION_START_ACQUISITION_RUN,
-        fixture_revision="start_acquisition_run_fixture_v2",
+        fixture_revision="start_acquisition_run_fixture_v3",
         approval_required=True,
         effect_class="command_backed_action",
+        result_link_policy="workflow_command_acceptance_v1",
+        schema_version=LOCAL_CANARY_SIMULATE_FIXTURE_SCHEMA_VERSION_V2,
     ),
     ACTION_FILTER_PROJECTION: _fixture_record(
         ACTION_FILTER_PROJECTION,
@@ -381,13 +398,17 @@ LOCAL_CANARY_SIMULATE_FIXTURES: Mapping[str, Mapping[str, Any]] = MappingProxyTy
 )
 
 
-def _fixture_pin(tool_name: str) -> AgentToolSimulateFixturePin:
-    record = dict(LOCAL_CANARY_SIMULATE_FIXTURES[tool_name])
+def _fixture_pin_from_record(record: Mapping[str, Any]) -> AgentToolSimulateFixturePin:
+    canonical_record = dict(record)
     return AgentToolSimulateFixturePin(
-        fixture_id=str(record["fixture_id"]),
-        fixture_revision=str(record["fixture_revision"]),
-        fixture_digest=_sha256_json(record),
+        fixture_id=str(canonical_record["fixture_id"]),
+        fixture_revision=str(canonical_record["fixture_revision"]),
+        fixture_digest=_sha256_json(canonical_record),
     )
+
+
+def _fixture_pin(tool_name: str) -> AgentToolSimulateFixturePin:
+    return _fixture_pin_from_record(LOCAL_CANARY_SIMULATE_FIXTURES[tool_name])
 
 
 def _release_ref(action_type: str | None, tool_name: str) -> AgentToolReleaseStateRef:
@@ -456,7 +477,7 @@ PLAN_ACQUISITION_TOOL_SPEC = AgentToolSpec(
     ),
 )
 
-START_ACQUISITION_RUN_TOOL_SPEC = AgentToolSpec(
+START_ACQUISITION_RUN_TOOL_SPEC_V2 = AgentToolSpec(
     tool_spec_version="start_acquisition_run_tool_v2",
     tool_name=ACTION_START_ACQUISITION_RUN,
     model_description="Start one acquisition only after exact immutable preview confirmation.",
@@ -484,7 +505,7 @@ START_ACQUISITION_RUN_TOOL_SPEC = AgentToolSpec(
             },
         ),
     ),
-    simulate_fixture=_fixture_pin(ACTION_START_ACQUISITION_RUN),
+    simulate_fixture=_fixture_pin_from_record(_START_ACQUISITION_RUN_V2_FIXTURE_RECORD),
     release_state_ref=_release_ref(ACTION_START_ACQUISITION_RUN, ACTION_START_ACQUISITION_RUN),
     execution_subject=_execution_subject(approval=True, dispatch=True),
     budget=AgentToolBudgetRequirement(mode="parent_reservation_required", budget_owner=_START_BUDGET_OWNER),
@@ -500,6 +521,17 @@ START_ACQUISITION_RUN_TOOL_SPEC = AgentToolSpec(
         approval=_approval(True),
         control_policy=_action_contract_control_pin(START_ACQUISITION_V2_CANARY_ACTION_SPEC),
     ),
+)
+
+START_ACQUISITION_RUN_TOOL_SPEC = replace(
+    START_ACQUISITION_RUN_TOOL_SPEC_V2,
+    tool_spec_version="start_acquisition_run_tool_v3",
+    simulate_fixture=_fixture_pin(ACTION_START_ACQUISITION_RUN),
+    behavior=replace(
+        START_ACQUISITION_RUN_TOOL_SPEC_V2.behavior,
+        explicit_result_link_policy="workflow_command_acceptance_v1",
+    ),
+    fingerprint_schema_version=AGENT_TOOL_SPEC_SCHEMA_VERSION_V2,
 )
 
 FILTER_PROJECTION_TOOL_SPEC = AgentToolSpec(
@@ -574,6 +606,7 @@ INSPECT_OPERATION_TOOL_SPEC = AgentToolSpec(
 LOCAL_CANARY_AGENT_TOOL_REGISTRY = AgentToolRegistry.from_specs(
     (
         PLAN_ACQUISITION_TOOL_SPEC,
+        START_ACQUISITION_RUN_TOOL_SPEC_V2,
         START_ACQUISITION_RUN_TOOL_SPEC,
         INSPECT_OPERATION_TOOL_SPEC,
         FILTER_PROJECTION_TOOL_SPEC,
@@ -605,10 +638,12 @@ __all__ = [
     "LOCAL_CANARY_REGISTRY_SCHEMA_VERSION",
     "LOCAL_CANARY_SIMULATE_FIXTURES",
     "LOCAL_CANARY_SIMULATE_FIXTURE_SCHEMA_VERSION",
+    "LOCAL_CANARY_SIMULATE_FIXTURE_SCHEMA_VERSION_V2",
     "LOCAL_CANARY_TOOL_NAMES",
     "PLAN_ACQUISITION_CANARY_ACTION_SPEC",
     "PLAN_ACQUISITION_TOOL_SPEC",
     "START_ACQUISITION_RUN_TOOL_SPEC",
+    "START_ACQUISITION_RUN_TOOL_SPEC_V2",
     "START_ACQUISITION_V2_CANARY_ACTION_SPEC",
     "local_canary_registry_record",
 ]

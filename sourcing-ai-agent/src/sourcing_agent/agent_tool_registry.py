@@ -22,9 +22,15 @@ from .model_tool_runtime import MAX_MESSAGE_CONTENT_BYTES
 
 AGENT_TOOL_REGISTRY_SCHEMA_VERSION = "agent_tool_registry_v1"
 AGENT_TOOL_SPEC_SCHEMA_VERSION = "agent_tool_spec_v1"
+AGENT_TOOL_SPEC_SCHEMA_VERSION_V2 = "agent_tool_spec_v2"
 
 AgentToolKind: TypeAlias = Literal["action", "query"]
 AgentToolEffectClass: TypeAlias = Literal["read_only", "commandless_action", "command_backed_action"]
+AgentToolResultLinkPolicy: TypeAlias = Literal[
+    "no_command_v1",
+    "workflow_command_acceptance_v1",
+    "activity_attempt_terminal_v1",
+]
 AgentToolCommandExposure: TypeAlias = Literal["none", "owner_command_only"]
 AgentToolApprovalMode: TypeAlias = Literal["not_required", "human_confirmation_required"]
 AgentToolBudgetMode: TypeAlias = Literal["not_required", "parent_reservation_required"]
@@ -33,6 +39,17 @@ AgentToolProviderMode: TypeAlias = Literal["simulate", "scripted", "live"]
 
 _TOOL_KINDS = frozenset({"action", "query"})
 _EFFECT_CLASSES = frozenset({"read_only", "commandless_action", "command_backed_action"})
+_RESULT_LINK_POLICIES = frozenset({"no_command_v1", "workflow_command_acceptance_v1", "activity_attempt_terminal_v1"})
+_SPEC_SCHEMA_VERSIONS = frozenset({AGENT_TOOL_SPEC_SCHEMA_VERSION, AGENT_TOOL_SPEC_SCHEMA_VERSION_V2})
+AGENT_TOOL_V1_RESULT_LINK_POLICY_BY_EFFECT_CLASS: Mapping[AgentToolEffectClass, AgentToolResultLinkPolicy] = (
+    MappingProxyType(
+        {
+            "read_only": "no_command_v1",
+            "commandless_action": "no_command_v1",
+            "command_backed_action": "activity_attempt_terminal_v1",
+        }
+    )
+)
 _COMMAND_EXPOSURES = frozenset({"none", "owner_command_only"})
 _APPROVAL_MODES = frozenset({"not_required", "human_confirmation_required"})
 _BUDGET_MODES = frozenset({"not_required", "parent_reservation_required"})
@@ -487,6 +504,7 @@ class AgentToolBehavior:
     command_exposure: AgentToolCommandExposure
     approval: AgentToolApprovalRequirement
     control_policy: AgentToolOwnerPin
+    explicit_result_link_policy: AgentToolResultLinkPolicy | None = None
 
     def __post_init__(self) -> None:
         if self.effect_class not in _EFFECT_CLASSES:
@@ -497,20 +515,48 @@ class AgentToolBehavior:
             raise AgentToolRegistryError("agent_tool_approval_requirement_invalid")
         if not isinstance(self.control_policy, AgentToolOwnerPin):
             raise AgentToolRegistryError("agent_tool_control_policy_invalid")
+        if (
+            self.explicit_result_link_policy is not None
+            and self.explicit_result_link_policy not in _RESULT_LINK_POLICIES
+        ):
+            raise AgentToolRegistryError("agent_tool_result_link_policy_invalid")
         if self.effect_class in {"read_only", "commandless_action"} and self.command_exposure != "none":
             raise AgentToolRegistryError("agent_tool_command_exposure_effect_mismatch")
         if self.effect_class == "command_backed_action" and self.command_exposure != "owner_command_only":
             raise AgentToolRegistryError("agent_tool_command_exposure_effect_mismatch")
         if self.effect_class == "read_only" and self.approval.required:
             raise AgentToolRegistryError("agent_tool_read_only_approval_forbidden")
+        if self.result_link_policy == "no_command_v1" and self.effect_class not in {
+            "read_only",
+            "commandless_action",
+        }:
+            raise AgentToolRegistryError("agent_tool_result_link_policy_effect_mismatch")
+        if (
+            self.result_link_policy
+            in {
+                "workflow_command_acceptance_v1",
+                "activity_attempt_terminal_v1",
+            }
+            and self.effect_class != "command_backed_action"
+        ):
+            raise AgentToolRegistryError("agent_tool_result_link_policy_effect_mismatch")
 
-    def to_fingerprint_record(self) -> dict[str, object]:
-        return {
+    @property
+    def result_link_policy(self) -> AgentToolResultLinkPolicy:
+        if self.explicit_result_link_policy is not None:
+            return self.explicit_result_link_policy
+        return AGENT_TOOL_V1_RESULT_LINK_POLICY_BY_EFFECT_CLASS[self.effect_class]
+
+    def to_fingerprint_record(self, *, include_result_link_policy: bool = False) -> dict[str, object]:
+        record: dict[str, object] = {
             "effect_class": self.effect_class,
             "command_exposure": self.command_exposure,
             "approval": self.approval.to_fingerprint_record(),
             "control_policy": self.control_policy.to_fingerprint_record(),
         }
+        if include_result_link_policy:
+            record["result_link_policy"] = self.result_link_policy
+        return record
 
 
 @dataclass(frozen=True, slots=True)
@@ -581,6 +627,7 @@ class AgentToolSpec:
     budget: AgentToolBudgetRequirement
     capability: AgentToolCapabilityRequirement
     behavior: AgentToolBehavior
+    fingerprint_schema_version: str = AGENT_TOOL_SPEC_SCHEMA_VERSION
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -597,6 +644,8 @@ class AgentToolSpec:
         )
         if self.tool_kind not in _TOOL_KINDS:
             raise AgentToolRegistryError("agent_tool_kind_invalid")
+        if self.fingerprint_schema_version not in _SPEC_SCHEMA_VERSIONS:
+            raise AgentToolRegistryError("agent_tool_spec_schema_version_invalid")
         for field_name, value, expected_type in (
             ("request", self.request, AgentToolRequestPin),
             ("result", self.result, AgentToolResultPin),
@@ -609,6 +658,11 @@ class AgentToolSpec:
         ):
             if not isinstance(value, expected_type):
                 raise AgentToolRegistryError(f"agent_tool_{field_name}_invalid")
+        if self.fingerprint_schema_version == AGENT_TOOL_SPEC_SCHEMA_VERSION:
+            if self.behavior.explicit_result_link_policy is not None:
+                raise AgentToolRegistryError("agent_tool_v1_explicit_result_link_policy_forbidden")
+        elif self.behavior.explicit_result_link_policy is None:
+            raise AgentToolRegistryError("agent_tool_v2_explicit_result_link_policy_required")
         if self.tool_kind == "action":
             if not isinstance(self.route, AgentActionToolRoute):
                 raise AgentToolRegistryError("agent_tool_action_route_required")
@@ -674,7 +728,7 @@ class AgentToolSpec:
         action_route = self.route if isinstance(self.route, AgentActionToolRoute) else None
         query_route = self.route if isinstance(self.route, AgentQueryToolRoute) else None
         return {
-            "schema_version": AGENT_TOOL_SPEC_SCHEMA_VERSION,
+            "schema_version": self.fingerprint_schema_version,
             "tool_spec_version": self.tool_spec_version,
             "tool_name": self.tool_name,
             "model_description": self.model_description,
@@ -694,7 +748,9 @@ class AgentToolSpec:
             "execution_subject": self.execution_subject.to_fingerprint_record(),
             "budget": self.budget.to_fingerprint_record(),
             "capability": self.capability.to_fingerprint_record(),
-            "behavior": self.behavior.to_fingerprint_record(),
+            "behavior": self.behavior.to_fingerprint_record(
+                include_result_link_policy=(self.fingerprint_schema_version == AGENT_TOOL_SPEC_SCHEMA_VERSION_V2)
+            ),
         }
 
     @property
@@ -862,6 +918,8 @@ DEFAULT_AGENT_TOOL_REGISTRY = AgentToolRegistry.from_specs((), current_release_o
 __all__ = [
     "AGENT_TOOL_REGISTRY_SCHEMA_VERSION",
     "AGENT_TOOL_SPEC_SCHEMA_VERSION",
+    "AGENT_TOOL_SPEC_SCHEMA_VERSION_V2",
+    "AGENT_TOOL_V1_RESULT_LINK_POLICY_BY_EFFECT_CLASS",
     "AgentActionToolRoute",
     "AgentExecutionSubjectRequirement",
     "AgentQueryToolRoute",
@@ -877,6 +935,7 @@ __all__ = [
     "AgentToolKind",
     "AgentToolOwnerPin",
     "AgentToolProviderMode",
+    "AgentToolResultLinkPolicy",
     "AgentToolRegistry",
     "AgentToolRegistryError",
     "AgentToolReleaseStateRef",

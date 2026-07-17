@@ -237,6 +237,7 @@ AGENT_TOOL_RESULT_SLOTS = TableDescriptor(
         Column("tool_name"),
         Column("tool_kind"),
         Column("effect_class"),
+        Column("result_link_policy"),
         Column("tool_spec_version"),
         Column("tool_spec_digest"),
         Column("canonical_args_json", Kind.JSON, field="canonical_args"),
@@ -288,6 +289,7 @@ AGENT_TOOL_RESULT_ATTEMPTS = TableDescriptor(
     columns=(
         Column("result_attempt_id"),
         Column("result_slot_id"),
+        Column("result_link_policy"),
         Column("attempted_slot_generation", Kind.INT),
         Column("disposition"),
         Column("quarantine_reason"),
@@ -345,6 +347,7 @@ AGENT_TOOL_RESULT_JOURNAL = TableDescriptor(
         Column("serializer_owner"),
         Column("serializer_revision"),
         Column("serializer_contract_digest"),
+        Column("result_link_policy"),
         Column("action_id"),
         Column("operation_run_id"),
         Column("workflow_command_id"),

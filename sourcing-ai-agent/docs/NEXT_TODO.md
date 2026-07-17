@@ -382,11 +382,19 @@
   已增加 equality-only `owner_target_revision_token`，保持 logical occurrence digest v1；numeric-only
   attempt/journal 仍为 v1，token-bearing aggregate 使用 v2/v2，旧 writer 默认与历史 numeric replay 保持可用，
   token-only activation 要求旧 replicas drain/quiesce。该 synthetic carrier 只证明 storage transport，不是
-  `filter_projection` physical-owner evidence。下一批先以显式 link policy 区分 command acceptance 与 Activity
-  terminal，补 `start_acquisition_run` exact command-acceptance owner；随后实现 `filter_projection` 的
-  membership/publication adapter，之后才组装四工具 PG simulate/model-turn loop。剩余 5/15 schema-less action、
+  `filter_projection` physical-owner evidence。S1d candidate 已以 registry-owned 显式 link policy 区分
+  `no_command_v1`、`workflow_command_acceptance_v1` 与 `activity_attempt_terminal_v1`；historical start tool v2
+  保持 Activity-terminal，current tool v3 使用 command-acceptance，`0013` 以 deterministic backfill +
+  `NOT NULL`/no-default 执行 quiesced cutover。下一批 S1e 先锁定 start 的 exact approval receipt、command winner
+  与 parent-budget reservation owner，再实现 `start_acquisition_run` physical adapter；随后实现
+  `filter_projection` membership/publication adapter，之后才组装四工具 PG simulate/model-turn loop。剩余 5/15 schema-less action、
   R-029、scripted two-lab、live checkpoint 与 paid TML
-  全部继续 open；无 provider/model/live 调用。fresh pinned non-author review pending，不得把作者证据写成 formal GO。
+  全部继续 open；无 provider/model/live 调用。S1b bundled Ultra 输出为 reference-only `NO-GO 0/4/6/0`
+  （scope-list 绑定缺陷导致 digest 未绑定实际文件；另有 9 个 actionable new findings + R-019 residual），因此既
+  不能写成 formal artifact，也不能忽略其 inspect 风险。S1c bundled Ultra 也因同一 scope invocation 缺陷为
+  reference-only `NO-GO 0/2/3/2`；其中 numeric-only-v2/application replay 不一致、warm-pool rollout overclaim、
+  value-owner/adapter 混淆、exact-string sentinel 与空 mismatch diagnostic 已在 S1d fixed-forward 并补回归。
+  S1d fresh correctly scoped pinned non-author review pending；不得把作者证据写成 formal GO。
 - [ ] D1m mixed-version rollout gate（R-019）：pre-D1m binary 可继续写 revisionless source row 并绕开
   revision-aware exact-claim canonical materializer。任何 hosted activation 前必须选择并验证其一：quiesced
   single-version cutover，或 separately reviewed dual-write/compatibility bridge；完成前不得声称 rolling overlap

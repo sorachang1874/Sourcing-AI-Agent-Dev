@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import inspect
 import json
+from typing import cast
 
 from sourcing_agent.acquisition_plan_preview import (
     ACQUISITION_PLAN_PREVIEW_REQUEST_SCHEMA_DIGEST,
@@ -19,11 +20,14 @@ from sourcing_agent.agent_canary_registry import (
     INSPECT_OPERATION_TOOL_SPEC,
     LOCAL_CANARY_ACTION_SPECS,
     LOCAL_CANARY_AGENT_TOOL_REGISTRY,
+    LOCAL_CANARY_SIMULATE_FIXTURE_SCHEMA_VERSION,
+    LOCAL_CANARY_SIMULATE_FIXTURE_SCHEMA_VERSION_V2,
     LOCAL_CANARY_SIMULATE_FIXTURES,
     LOCAL_CANARY_TOOL_NAMES,
     PLAN_ACQUISITION_CANARY_ACTION_SPEC,
     PLAN_ACQUISITION_TOOL_SPEC,
     START_ACQUISITION_RUN_TOOL_SPEC,
+    START_ACQUISITION_RUN_TOOL_SPEC_V2,
     START_ACQUISITION_V2_CANARY_ACTION_SPEC,
     local_canary_registry_record,
 )
@@ -36,7 +40,11 @@ from sourcing_agent.agent_projection_query import (
     INSPECT_OPERATION_REQUEST_SCHEMA_DIGEST,
     INSPECT_OPERATION_RESULT_SPEC,
 )
-from sourcing_agent.agent_tool_registry import DEFAULT_AGENT_TOOL_REGISTRY
+from sourcing_agent.agent_tool_registry import (
+    AGENT_TOOL_SPEC_SCHEMA_VERSION,
+    AGENT_TOOL_SPEC_SCHEMA_VERSION_V2,
+    DEFAULT_AGENT_TOOL_REGISTRY,
+)
 from sourcing_agent.operation_runtime import DEFAULT_ACTION_REGISTRY
 
 
@@ -54,7 +62,7 @@ def _fixture_digest(tool_name: str) -> str:
 def test_local_canary_registry_has_exact_four_tool_population_without_global_serving() -> None:
     assert LOCAL_CANARY_AGENT_TOOL_REGISTRY.declared_tool_count == 4
     assert set(LOCAL_CANARY_AGENT_TOOL_REGISTRY.tool_names) == set(LOCAL_CANARY_TOOL_NAMES)
-    assert LOCAL_CANARY_AGENT_TOOL_REGISTRY.historical_spec_count == 4
+    assert LOCAL_CANARY_AGENT_TOOL_REGISTRY.historical_spec_count == 5
     assert DEFAULT_AGENT_TOOL_REGISTRY.declared_tool_count == 0
     assert DEFAULT_AGENT_TOOL_REGISTRY.tool_names == ()
 
@@ -114,20 +122,24 @@ def test_effects_cover_commandless_command_backed_action_read_and_query_without_
     assert PLAN_ACQUISITION_TOOL_SPEC.tool_kind == "action"
     assert PLAN_ACQUISITION_TOOL_SPEC.behavior.effect_class == "commandless_action"
     assert PLAN_ACQUISITION_TOOL_SPEC.behavior.command_exposure == "none"
+    assert PLAN_ACQUISITION_TOOL_SPEC.behavior.result_link_policy == "no_command_v1"
 
     assert START_ACQUISITION_RUN_TOOL_SPEC.tool_kind == "action"
     assert START_ACQUISITION_RUN_TOOL_SPEC.behavior.effect_class == "command_backed_action"
+    assert START_ACQUISITION_RUN_TOOL_SPEC.behavior.result_link_policy == "workflow_command_acceptance_v1"
     assert START_ACQUISITION_RUN_TOOL_SPEC.behavior.approval.required is True
     assert START_ACQUISITION_RUN_TOOL_SPEC.budget.required is True
     assert START_ACQUISITION_RUN_TOOL_SPEC.capability.required_provider_modes == ("live",)
 
     assert FILTER_PROJECTION_TOOL_SPEC.tool_kind == "action"
     assert FILTER_PROJECTION_TOOL_SPEC.behavior.effect_class == "read_only"
+    assert FILTER_PROJECTION_TOOL_SPEC.behavior.result_link_policy == "no_command_v1"
     assert FILTER_PROJECTION_TOOL_SPEC.behavior.command_exposure == "none"
     assert FILTER_PROJECTION_TOOL_SPEC.behavior.approval.required is False
 
     assert INSPECT_OPERATION_TOOL_SPEC.tool_kind == "query"
     assert INSPECT_OPERATION_TOOL_SPEC.behavior.effect_class == "read_only"
+    assert INSPECT_OPERATION_TOOL_SPEC.behavior.result_link_policy == "no_command_v1"
     assert INSPECT_OPERATION_TOOL_SPEC.action_type is None
     assert INSPECT_OPERATION_TOOL_SPEC.query_owner_id == INSPECT_OPERATION_QUERY_OWNER_ID
 
@@ -152,14 +164,102 @@ def test_simulate_fixture_pins_are_real_content_digests_and_require_terminal_suc
     for tool_name in LOCAL_CANARY_TOOL_NAMES:
         fixture = dict(LOCAL_CANARY_SIMULATE_FIXTURES[tool_name])
         specs = LOCAL_CANARY_AGENT_TOOL_REGISTRY.specs_for_name(tool_name)
-        assert len(specs) == 1
+        expected_spec = START_ACQUISITION_RUN_TOOL_SPEC if tool_name == "start_acquisition_run" else specs[0]
+        assert len(specs) == (2 if tool_name == "start_acquisition_run" else 1)
         assert fixture["provider_mode"] == "simulate"
         assert fixture["expected_terminal_variant"] == "success"
         assert fixture["expected_live_provider_invocations"] == 0
         assert fixture["expected_live_model_invocations"] == 0
-        assert specs[0].simulate_fixture.fixture_id == fixture["fixture_id"]
-        assert specs[0].simulate_fixture.fixture_revision == fixture["fixture_revision"]
-        assert specs[0].simulate_fixture.fixture_digest == _fixture_digest(tool_name)
+        assert expected_spec.simulate_fixture.fixture_id == fixture["fixture_id"]
+        assert expected_spec.simulate_fixture.fixture_revision == fixture["fixture_revision"]
+        assert expected_spec.simulate_fixture.fixture_digest == _fixture_digest(tool_name)
+
+
+def test_start_v2_history_is_byte_stable_and_v3_explicitly_fingerprints_command_acceptance() -> None:
+    historical_behavior = cast(
+        dict[str, object],
+        START_ACQUISITION_RUN_TOOL_SPEC_V2.to_fingerprint_record()["behavior"],
+    )
+    assert START_ACQUISITION_RUN_TOOL_SPEC_V2.fingerprint_schema_version == AGENT_TOOL_SPEC_SCHEMA_VERSION
+    assert START_ACQUISITION_RUN_TOOL_SPEC_V2.tool_spec_version == "start_acquisition_run_tool_v2"
+    assert (
+        START_ACQUISITION_RUN_TOOL_SPEC_V2.tool_spec_digest
+        == "f834d7f3c04035dd012f7ee4a321b41fb120c7efeb51dfbe1ee68f7d665be7d2"
+    )
+    assert START_ACQUISITION_RUN_TOOL_SPEC_V2.behavior.result_link_policy == "activity_attempt_terminal_v1"
+    assert "result_link_policy" not in historical_behavior
+    assert START_ACQUISITION_RUN_TOOL_SPEC_V2.simulate_fixture.fixture_revision == "start_acquisition_run_fixture_v2"
+    assert (
+        START_ACQUISITION_RUN_TOOL_SPEC_V2.simulate_fixture.fixture_digest
+        == "5e664547d3624c738b468948d9337dc3469634ceddccee30c19d625a52df85a0"
+    )
+    assert START_ACQUISITION_RUN_TOOL_SPEC_V2.simulate_fixture.fixture_digest != (
+        START_ACQUISITION_RUN_TOOL_SPEC.simulate_fixture.fixture_digest
+    )
+
+    assert START_ACQUISITION_RUN_TOOL_SPEC.fingerprint_schema_version == AGENT_TOOL_SPEC_SCHEMA_VERSION_V2
+    assert START_ACQUISITION_RUN_TOOL_SPEC.tool_spec_version == "start_acquisition_run_tool_v3"
+    assert (
+        START_ACQUISITION_RUN_TOOL_SPEC.tool_spec_digest
+        == "0ed14aa4a5b536606f7123a2b864900e5ab0ce37ebd79a79b49326c75669bcf1"
+    )
+    assert START_ACQUISITION_RUN_TOOL_SPEC.behavior.result_link_policy == "workflow_command_acceptance_v1"
+    current_behavior = cast(dict[str, object], START_ACQUISITION_RUN_TOOL_SPEC.to_fingerprint_record()["behavior"])
+    assert current_behavior["result_link_policy"] == "workflow_command_acceptance_v1"
+    assert START_ACQUISITION_RUN_TOOL_SPEC.simulate_fixture.fixture_revision == "start_acquisition_run_fixture_v3"
+    assert (
+        START_ACQUISITION_RUN_TOOL_SPEC.simulate_fixture.fixture_digest
+        == "44d18168e15ffeb84c2cdcdae317917974b6fdeab70046eaadc998d0f3292748"
+    )
+    assert LOCAL_CANARY_SIMULATE_FIXTURES["start_acquisition_run"]["schema_version"] == (
+        LOCAL_CANARY_SIMULATE_FIXTURE_SCHEMA_VERSION_V2
+    )
+    assert LOCAL_CANARY_SIMULATE_FIXTURES["start_acquisition_run"]["result_link_policy"] == (
+        "workflow_command_acceptance_v1"
+    )
+    assert (
+        LOCAL_CANARY_AGENT_TOOL_REGISTRY.require_historical(*START_ACQUISITION_RUN_TOOL_SPEC_V2.historical_identity)
+        is START_ACQUISITION_RUN_TOOL_SPEC_V2
+    )
+
+    legacy_fixture_record = {
+        "schema_version": LOCAL_CANARY_SIMULATE_FIXTURE_SCHEMA_VERSION,
+        "fixture_id": "agent.local_canary.simulate.start_acquisition_run",
+        "fixture_revision": "start_acquisition_run_fixture_v2",
+        "tool_name": "start_acquisition_run",
+        "provider_mode": "simulate",
+        "expected_terminal_variant": "success",
+        "approval_required": True,
+        "effect_class": "command_backed_action",
+        "expected_live_provider_invocations": 0,
+        "expected_live_model_invocations": 0,
+    }
+    assert (
+        hashlib.sha256(
+            json.dumps(
+                legacy_fixture_record,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+        == START_ACQUISITION_RUN_TOOL_SPEC_V2.simulate_fixture.fixture_digest
+    )
+
+
+def test_non_start_v1_tool_fingerprints_remain_byte_identical() -> None:
+    assert {
+        spec.tool_name: spec.tool_spec_digest
+        for spec in (
+            PLAN_ACQUISITION_TOOL_SPEC,
+            FILTER_PROJECTION_TOOL_SPEC,
+            INSPECT_OPERATION_TOOL_SPEC,
+        )
+    } == {
+        "plan_acquisition": "82562f99fa6c28a10b625756dfe8905c5d9dd9a016f8269e93b932321e5aeba0",
+        "filter_projection": "0fd97ff1dcb546fc6fa6ed6ab730daac01c36987f21cae23a7832e1de82bc08c",
+        "inspect_operation": "26b7e6a56f3461a605e68c7d16fa9d74bfec086ea4d9747382fc96ebe5a620d0",
+    }
 
 
 def test_global_historical_v1_contracts_are_not_rewritten_by_local_successors() -> None:

@@ -37,6 +37,13 @@ _SHA256_PATTERN = re.compile(r"[0-9a-f]{64}")
 _PROVIDER_MODES = frozenset({"simulate", "scripted", "live", "replay"})
 _TOOL_KINDS = frozenset({"action", "query"})
 _EFFECT_CLASSES = frozenset({"read_only", "commandless_action", "command_backed_action"})
+_RESULT_LINK_POLICIES = frozenset(
+    {
+        "no_command_v1",
+        "workflow_command_acceptance_v1",
+        "activity_attempt_terminal_v1",
+    }
+)
 
 
 class AgentToolResultSlotError(ValueError):
@@ -78,6 +85,8 @@ def _required_identifier(field_name: str, value: object) -> str:
 
 
 def _optional_identifier(field_name: str, value: object) -> str:
+    if type(value) is not str:
+        raise AgentToolResultSlotError(f"agent_tool_result_{field_name}_invalid")
     if value == "":
         return ""
     return _required_identifier(field_name, value)
@@ -130,6 +139,7 @@ class AgentToolOccurrence:
     tool_name: str
     tool_kind: str
     effect_class: str
+    result_link_policy: str
     tool_spec_version: str
     tool_spec_digest: str
     canonical_args_json: str
@@ -166,6 +176,18 @@ class AgentToolOccurrence:
             raise AgentToolResultSlotError("agent_tool_result_tool_kind_invalid")
         if self.effect_class not in _EFFECT_CLASSES:
             raise AgentToolResultSlotError("agent_tool_result_effect_class_invalid")
+        if self.result_link_policy not in _RESULT_LINK_POLICIES:
+            raise AgentToolResultSlotError("agent_tool_result_link_policy_invalid")
+        if self.result_link_policy == "no_command_v1" and self.effect_class not in {
+            "read_only",
+            "commandless_action",
+        }:
+            raise AgentToolResultSlotError("agent_tool_result_link_policy_effect_mismatch")
+        if (
+            self.result_link_policy in {"workflow_command_acceptance_v1", "activity_attempt_terminal_v1"}
+            and self.effect_class != "command_backed_action"
+        ):
+            raise AgentToolResultSlotError("agent_tool_result_link_policy_effect_mismatch")
         if self.tool_kind == "query" and self.effect_class != "read_only":
             raise AgentToolResultSlotError("agent_tool_result_query_effect_invalid")
         for field_name in (
@@ -226,6 +248,7 @@ class AgentToolOccurrence:
             tool_name=tool_spec.tool_name,
             tool_kind=tool_spec.tool_kind,
             effect_class=tool_spec.behavior.effect_class,
+            result_link_policy=tool_spec.behavior.result_link_policy,
             tool_spec_version=tool_spec.tool_spec_version,
             tool_spec_digest=tool_spec.tool_spec_digest,
             canonical_args_json=canonical_args_json,
@@ -273,6 +296,7 @@ class AgentToolOccurrence:
             "slot_generation": self.slot_generation,
             "tool_kind": self.tool_kind,
             "effect_class": self.effect_class,
+            "result_link_policy": self.result_link_policy,
             "canonical_args": self.canonical_args,
             "logical_occurrence_digest": self.logical_occurrence_digest,
             "request_schema_version": self.request_schema_version,
@@ -299,6 +323,7 @@ class AgentToolOccurrence:
             tool_name=self.tool_name,
             tool_kind=self.tool_kind,
             effect_class=self.effect_class,
+            result_link_policy=self.result_link_policy,
             tool_spec_version=self.tool_spec_version,
             tool_spec_digest=self.tool_spec_digest,
             canonical_args_json=self.canonical_args_json,
@@ -468,20 +493,21 @@ class AgentToolTerminalResult:
         action_group = (self.action_id, self.operation_run_id)
         if bool(action_group[0]) != bool(action_group[1]):
             raise AgentToolResultSlotError("agent_tool_result_action_link_group_incomplete")
-        command_group = (
-            self.workflow_command_id,
-            self.activity_run_id,
-            self.activity_attempt_id,
-        )
-        has_any_command_link = any(command_group)
-        has_all_command_links = all(command_group)
-        if has_any_command_link != has_all_command_links:
+        activity_group = (self.activity_run_id, self.activity_attempt_id)
+        has_activity = all(activity_group)
+        if any(activity_group) and not has_activity:
             raise AgentToolResultSlotError("agent_tool_result_command_link_group_incomplete")
         numeric_command_group = (self.command_attempt, self.command_generation, self.control_epoch)
-        if has_all_command_links:
-            if not all(action_group) or any(value <= 0 for value in numeric_command_group):
+        if has_activity:
+            if (
+                not all(action_group)
+                or not self.workflow_command_id
+                or any(value <= 0 for value in numeric_command_group)
+            ):
                 raise AgentToolResultSlotError("agent_tool_result_command_link_group_incomplete")
         elif any(numeric_command_group):
+            raise AgentToolResultSlotError("agent_tool_result_command_link_group_incomplete")
+        elif self.workflow_command_id and not all(action_group):
             raise AgentToolResultSlotError("agent_tool_result_command_link_group_incomplete")
 
     @property
@@ -501,14 +527,27 @@ class AgentToolTerminalResult:
             raise AgentToolResultSlotError("agent_tool_result_occurrence_invalid")
         has_action = bool(self.action_id)
         has_command = bool(self.workflow_command_id)
-        if occurrence.effect_class == "command_backed_action":
-            if not has_action or not has_command:
-                raise AgentToolResultSlotError("agent_tool_result_command_backed_link_required")
-        elif occurrence.effect_class == "commandless_action":
-            if not has_action or has_command:
-                raise AgentToolResultSlotError("agent_tool_result_commandless_link_invalid")
-        elif has_command:
-            raise AgentToolResultSlotError("agent_tool_result_read_only_command_link_forbidden")
+        has_activity = bool(self.activity_run_id)
+        has_fence = any((self.command_attempt, self.command_generation, self.control_epoch))
+        policy = occurrence.result_link_policy
+        if policy == "no_command_v1":
+            effect_shape_valid = (
+                occurrence.effect_class == "commandless_action" and has_action
+            ) or occurrence.effect_class == "read_only"
+            link_shape_valid = not has_command and not has_activity and not has_fence
+        elif policy == "workflow_command_acceptance_v1":
+            effect_shape_valid = True
+            link_shape_valid = has_action and has_command and not has_activity and not has_fence
+        elif policy == "activity_attempt_terminal_v1":
+            effect_shape_valid = True
+            link_shape_valid = has_action and has_command and has_activity and all(
+                value > 0 for value in (self.command_attempt, self.command_generation, self.control_epoch)
+            )
+        else:  # pragma: no cover - occurrence construction rejects this first
+            effect_shape_valid = False
+            link_shape_valid = False
+        if not effect_shape_valid or not link_shape_valid:
+            raise AgentToolResultSlotError("agent_tool_result_link_policy_shape_invalid")
 
     def revalidated(self) -> AgentToolTerminalResult:
         """Re-run every boundary invariant when crossing from an external adapter."""

@@ -14,6 +14,8 @@ from sourcing_agent.acquisition_plan_preview import (
 from sourcing_agent.agent_tool_registry import (
     AGENT_TOOL_REGISTRY_SCHEMA_VERSION,
     AGENT_TOOL_SPEC_SCHEMA_VERSION,
+    AGENT_TOOL_SPEC_SCHEMA_VERSION_V2,
+    AGENT_TOOL_V1_RESULT_LINK_POLICY_BY_EFFECT_CLASS,
     DEFAULT_AGENT_TOOL_REGISTRY,
     AgentActionToolRoute,
     AgentExecutionSubjectRequirement,
@@ -140,12 +142,18 @@ def _approval(*, required: bool = False) -> AgentToolApprovalRequirement:
     )
 
 
-def _action_behavior(*, command_backed: bool = False, approval_required: bool = False) -> AgentToolBehavior:
+def _action_behavior(
+    *,
+    command_backed: bool = False,
+    approval_required: bool = False,
+    result_link_policy: str | None = None,
+) -> AgentToolBehavior:
     return AgentToolBehavior(
         effect_class="command_backed_action" if command_backed else "commandless_action",
         command_exposure="owner_command_only" if command_backed else "none",
         approval=_approval(required=approval_required),
         control_policy=_owner("agent.control.policy"),
+        explicit_result_link_policy=result_link_policy,  # type: ignore[arg-type]
     )
 
 
@@ -171,6 +179,7 @@ def _action_spec(
     execution_subject: AgentExecutionSubjectRequirement | None = None,
     model_description: str = "Perform one synthetic owner-bound action.",
     tool_spec_version: str = "synthetic_action_tool_v1",
+    fingerprint_schema_version: str = AGENT_TOOL_SPEC_SCHEMA_VERSION,
 ) -> AgentToolSpec:
     resolved_action_type = action_type or tool_name
     resolved_route = route or AgentActionToolRoute(
@@ -195,6 +204,7 @@ def _action_spec(
         budget=budget or AgentToolBudgetRequirement(mode="not_required"),
         capability=capability or AgentToolCapabilityRequirement(mode="not_required"),
         behavior=behavior or _action_behavior(),
+        fingerprint_schema_version=fingerprint_schema_version,
     )
 
 
@@ -390,6 +400,115 @@ def test_query_shape_has_exact_xor_owner_and_read_only_behavior() -> None:
     assert record["query_owner_id"] == "operation.query.inspect"
     assert record["behavior"]["effect_class"] == "read_only"  # type: ignore[index]
     assert record["behavior"]["command_exposure"] == "none"  # type: ignore[index]
+
+
+@pytest.mark.parametrize(
+    ("behavior", "expected_policy"),
+    (
+        (_action_behavior(), "no_command_v1"),
+        (_query_behavior(), "no_command_v1"),
+        (_action_behavior(command_backed=True), "activity_attempt_terminal_v1"),
+    ),
+)
+def test_v1_result_link_policy_is_deterministic_without_rewriting_fingerprint(
+    behavior: AgentToolBehavior,
+    expected_policy: str,
+) -> None:
+    spec = (
+        _action_spec(
+            behavior=behavior,
+            execution_subject=_subject(
+                checkpoints=("catalog_projection", "invocation_acceptance", "dispatch_acceptance")
+            ),
+        )
+        if behavior.effect_class != "read_only"
+        else _query_spec(behavior=behavior)
+    )
+    assert spec.fingerprint_schema_version == AGENT_TOOL_SPEC_SCHEMA_VERSION
+    assert spec.behavior.result_link_policy == expected_policy
+    assert "result_link_policy" not in spec.to_fingerprint_record()["behavior"]  # type: ignore[operator]
+
+
+def test_v1_effect_to_result_link_policy_decoder_is_closed_and_immutable() -> None:
+    assert dict(AGENT_TOOL_V1_RESULT_LINK_POLICY_BY_EFFECT_CLASS) == {
+        "read_only": "no_command_v1",
+        "commandless_action": "no_command_v1",
+        "command_backed_action": "activity_attempt_terminal_v1",
+    }
+    with pytest.raises(TypeError):
+        AGENT_TOOL_V1_RESULT_LINK_POLICY_BY_EFFECT_CLASS["read_only"] = "activity_attempt_terminal_v1"  # type: ignore[index]
+
+
+def test_v2_fingerprint_explicitly_owns_result_link_policy() -> None:
+    spec = _action_spec(
+        tool_spec_version="synthetic_action_tool_v2",
+        behavior=_action_behavior(
+            command_backed=True,
+            result_link_policy="workflow_command_acceptance_v1",
+        ),
+        execution_subject=_subject(checkpoints=("catalog_projection", "invocation_acceptance", "dispatch_acceptance")),
+        fingerprint_schema_version=AGENT_TOOL_SPEC_SCHEMA_VERSION_V2,
+    )
+    record = spec.to_fingerprint_record()
+    assert record["schema_version"] == AGENT_TOOL_SPEC_SCHEMA_VERSION_V2
+    assert spec.behavior.result_link_policy == "workflow_command_acceptance_v1"
+    assert record["behavior"]["result_link_policy"] == "workflow_command_acceptance_v1"  # type: ignore[index]
+    assert (
+        replace(
+            spec,
+            behavior=_action_behavior(
+                command_backed=True,
+                result_link_policy="activity_attempt_terminal_v1",
+            ),
+        ).tool_spec_digest
+        != spec.tool_spec_digest
+    )
+
+
+def test_spec_schema_and_result_link_policy_explicitness_fail_closed() -> None:
+    with pytest.raises(AgentToolRegistryError, match="v1_explicit_result_link_policy_forbidden"):
+        _action_spec(behavior=_action_behavior(result_link_policy="no_command_v1"))
+    with pytest.raises(AgentToolRegistryError, match="v2_explicit_result_link_policy_required"):
+        _action_spec(
+            tool_spec_version="synthetic_action_tool_v2",
+            fingerprint_schema_version=AGENT_TOOL_SPEC_SCHEMA_VERSION_V2,
+        )
+    with pytest.raises(AgentToolRegistryError, match="spec_schema_version_invalid"):
+        _action_spec(fingerprint_schema_version="agent_tool_spec_v99")
+
+
+@pytest.mark.parametrize(
+    ("effect_class", "command_exposure", "result_link_policy"),
+    (
+        ("read_only", "none", "workflow_command_acceptance_v1"),
+        ("commandless_action", "none", "activity_attempt_terminal_v1"),
+        ("command_backed_action", "owner_command_only", "no_command_v1"),
+    ),
+)
+def test_result_link_policy_and_effect_class_must_be_coherent(
+    effect_class: str,
+    command_exposure: str,
+    result_link_policy: str,
+) -> None:
+    with pytest.raises(AgentToolRegistryError, match="result_link_policy_effect_mismatch"):
+        AgentToolBehavior(
+            effect_class=effect_class,  # type: ignore[arg-type]
+            command_exposure=command_exposure,  # type: ignore[arg-type]
+            approval=_approval(),
+            control_policy=_owner("agent.control.policy"),
+            explicit_result_link_policy=result_link_policy,  # type: ignore[arg-type]
+        )
+
+
+def test_unknown_result_link_policy_is_rejected() -> None:
+    with pytest.raises(AgentToolRegistryError, match="result_link_policy_invalid"):
+        AgentToolBehavior(
+            effect_class="command_backed_action",
+            command_exposure="owner_command_only",
+            approval=_approval(),
+            control_policy=_owner("agent.control.policy"),
+            explicit_result_link_policy="command_created_v1",  # type: ignore[arg-type]
+        )
 
 
 def test_query_route_binder_and_adapter_are_typed_exact_and_digest_bound() -> None:

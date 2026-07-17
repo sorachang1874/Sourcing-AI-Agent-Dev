@@ -2,7 +2,8 @@
 
 Date: 2026-07-17
 
-Status: fixed-forward implementation candidate. This batch is a storage/result-aggregate foundation only. It does
+Status: committed author candidate at `bacae9e80c8c0593b6c8c436b06e68777ade6d54`; fresh pinned review is pending.
+This batch is a storage/result-aggregate foundation only. It does
 not implement the `filter_projection` physical-owner adapter, populate the public/default Agent registry, mark a tool
 served, or authorize a provider/model/live call.
 
@@ -26,19 +27,27 @@ each value; the result layer derives none of them and compares every populated v
 
 ## Field ownership contract
 
-- owner/source of truth: the future tool-specific physical-owner adapter;
+- physical value owner/source of truth: the registered membership/publication owner UoW; the future
+  `filter_projection` adapter is not a second authority;
+- adapter responsibility: lock/reload that exact owner and copy/revalidate the opaque value without transformation;
+- carrier writer: the result-acceptance UoW exact-copies the adapter-authorized value into slot, attempt, and journal;
 - allowed token form: empty, or one bounded canonical identifier copied byte-for-byte from the owner;
 - derivation: forbidden; no integer conversion, ordering, hashing, truncation, case folding, or fallback ladder;
 - persisted consumers: accepted/quarantined attempt, accepted slot, immutable journal, repository projection, and
   deferred aggregate validator;
+- forbidden consumers: planner/model/UI, caller-supplied payloads, latest-row lookup, ordering/range comparison, and
+  any adapter that has not locked and revalidated the registered physical owner;
 - failure behavior: all three carriers absent, invalid token shape, replay collision, or slot/attempt/journal mismatch
   fails closed;
+- fast-preflight status: current storage tests cover exact copy, collision, and deferred parity; the physical
+  membership/publication cross-path preflight does not exist yet and therefore blocks the future adapter, fixture,
+  and any served transition;
 - migration state: additive `0012`; historical numeric-only rows remain valid and exact;
 - activation boundary: token-only writers remain inactive until their physical-owner adapter and scope review land.
 - deletion condition: the carrier may be removed only by a future versioned migration after no retained historical or
   active terminal result refers to an opaque owner revision; S1c defines no deletion or fallback date.
 
-## Rolling schema contract
+## Schema-version and quiesced-rollout contract
 
 `agent_tool_result_slots.schema_version=agent_tool_result_slot_v1` remains the immutable logical-occurrence identity
 version. It is included in `logical_occurrence_digest` and therefore is not repurposed or bumped by this additive
@@ -48,10 +57,16 @@ terminal carrier. Attempt and journal rows version the terminal payload itself:
 - a populated token is written as attempt/journal `v2`;
 - database checks reject a token on `v1`, require at least one carrier on `v2`, and require accepted attempt/journal
   schema parity;
-- the database default remains `v1`, so an old writer after `0012` can still write a numeric-only aggregate while a
-  new writer drains and exactly replays that same `v1` form;
-- token-only activation requires old replicas to be drained or quiesced. This is currently enforceable because the
-  public/default served population is zero.
+- the database default remains `v1`, preserving numeric-only row semantics after a pool/session recycle;
+- applying `0012` itself requires a quiesced cutover and complete pool/session recycling: retained prepared
+  `SELECT *`/`RETURNING *` statements may reject the changed row descriptor after DDL, so S1c does not claim rolling
+  old/new binary overlap;
+- token-only activation additionally requires all old replicas to remain drained. This is currently enforceable
+  because the public/default served population is zero.
+
+S1d migration `0013` fixed-forwards another S1c review finding: attempt/journal v2 now requires a nonempty token,
+matching the canonical application encoder. Numeric-only terminal payloads are v1; a preexisting noncanonical
+numeric-only v2 row makes the quiesced migration fail atomically instead of being silently reinterpreted.
 
 This avoids changing the logical occurrence digest in place and avoids durable rows whose terminal payload version
 cannot distinguish historical numeric-only data from the new opaque carrier.
@@ -68,6 +83,10 @@ cannot distinguish historical numeric-only data from the new opaque carrier.
 
 No lock order, occurrence identity, generation quarantine, late-winner quarantine, result-slot CAS, or append-only
 journal behavior changes.
+
+S1d is a separate fixed-forward successor: it adds an explicit result-link policy and migration `0013` without
+rewriting S1c evidence or changing the meaning of the opaque owner-revision carrier. Neither batch is evidence for a
+`filter_projection` physical-owner adapter.
 
 ## Required evidence before commit
 
@@ -88,8 +107,8 @@ not the future `filter_projection` physical owner. S1c does not claim that adapt
 
 ## Fresh pinned review scope
 
-Review base: `38013035f0000fbe978e56b2ae55d8cbbc33fab3`. The head is the eventual standalone S1c commit. Exact intended
-scope:
+Review base: `38013035f0000fbe978e56b2ae55d8cbbc33fab3`. Review head:
+`bacae9e80c8c0593b6c8c436b06e68777ade6d54`. Exact intended scope:
 
 - `docs/NEXT_TODO.md`
 - `docs/TRACK_D_D1N_REMAINING_ACTION_AND_AGENT_TOOL_SERVING_PLAN.md`

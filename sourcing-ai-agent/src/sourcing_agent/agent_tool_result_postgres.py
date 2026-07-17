@@ -65,6 +65,7 @@ def _slot_insert_row(occurrence: AgentToolOccurrence) -> dict[str, Any]:
         "tool_name": occurrence.tool_name,
         "tool_kind": occurrence.tool_kind,
         "effect_class": occurrence.effect_class,
+        "result_link_policy": occurrence.result_link_policy,
         "tool_spec_version": occurrence.tool_spec_version,
         "tool_spec_digest": occurrence.tool_spec_digest,
         "canonical_args_json": occurrence.canonical_args_json,
@@ -95,6 +96,7 @@ _SLOT_IDENTITY_FIELDS = (
     "tool_name",
     "tool_kind",
     "effect_class",
+    "result_link_policy",
     "tool_spec_version",
     "tool_spec_digest",
     "canonical_args_digest",
@@ -133,6 +135,7 @@ def _attempt_insert_row(
     return {
         "result_attempt_id": terminal.result_attempt_id,
         "result_slot_id": occurrence.result_slot_id,
+        "result_link_policy": occurrence.result_link_policy,
         "attempted_slot_generation": attempted_slot_generation,
         "disposition": disposition,
         "quarantine_reason": quarantine_reason,
@@ -166,6 +169,7 @@ def _attempt_insert_row(
 _ATTEMPT_FIELDS = (
     "result_attempt_id",
     "result_slot_id",
+    "result_link_policy",
     "attempted_slot_generation",
     "disposition",
     "quarantine_reason",
@@ -402,7 +406,11 @@ def _assert_plan_owner(
         "preview_digest": terminal.owner_result_digest,
     }
     mismatches = [field for field, value in preview_expected.items() if str(preview.get(field)) != str(value)]
-    if mismatches or terminal.owner_target_generation != 0 or terminal.owner_target_revision_token:
+    if terminal.owner_target_generation != 0:
+        mismatches.append("owner_target_generation")
+    if terminal.owner_target_revision_token:
+        mismatches.append("owner_target_revision_token")
+    if mismatches:
         raise ValueError("agent tool plan result preview exact-owner mismatch: " + ", ".join(mismatches))
     event_expected = {
         "event_id": terminal.terminal_winner_id,
@@ -498,6 +506,7 @@ def _journal_insert_row(
         "tool_name": occurrence.tool_name,
         "tool_spec_version": occurrence.tool_spec_version,
         "tool_spec_digest": occurrence.tool_spec_digest,
+        "result_link_policy": occurrence.result_link_policy,
         "canonical_args_digest": occurrence.canonical_args_digest,
         "occurrence_ordinal": occurrence.occurrence_ordinal,
         "request_schema_version": occurrence.request_schema_version,

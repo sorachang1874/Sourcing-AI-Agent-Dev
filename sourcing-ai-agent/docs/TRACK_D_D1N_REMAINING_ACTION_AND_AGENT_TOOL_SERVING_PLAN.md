@@ -183,7 +183,7 @@ different table name) persists this immutable identity:
 ```text
 workspace_id, actor_id, runtime_namespace, provider_mode
 turn_id, step_id, result_slot_id, slot_generation
-tool_name, tool_spec_version, tool_spec_digest
+tool_name, tool_kind, effect_class, result_link_policy, tool_spec_version, tool_spec_digest
 canonical_args_digest, occurrence_ordinal
 request_schema_version/digest, result_schema_version/digest, serializer_owner/revision
 action_id, operation_run_id, workflow_command_id (nullable for query tools)
@@ -204,6 +204,13 @@ additive terminal carrier without changing the v1 logical-occurrence digest: num
 remain v1, token-bearing records are v2, and the deferred aggregate requires exact token plus terminal-schema parity.
 This is not `filter_projection` owner evidence; the adapter must exact-copy the canonical membership token from the
 locked publication/membership owner before any terminal write.
+
+S1d makes `result_link_policy` a separate immutable occurrence/aggregate pin with three closed values:
+`no_command_v1`, `workflow_command_acceptance_v1`, and `activity_attempt_terminal_v1`. It is deliberately absent
+from the v1 logical-occurrence record; a new `agent_tool_spec_v2` fingerprint binds the explicit policy through the
+already-pinned tool-spec digest. Historical start tool spec v2 retains its Activity-terminal interpretation, while
+current start tool spec v3 uses command-acceptance. Migration `0013` is a quiesced cutover with deterministic
+backfill, `NOT NULL`, and no default; it is not a rolling-overlap bridge.
 
 ### 4.3 One `AgentToolSpec` for actions and queries
 
@@ -348,6 +355,11 @@ V2 accepts only the immutable preview reference and confirmation flow in §3.2. 
 Cohort, effective request, provider planning manifest, budget, and all schema pins into the action/run/root command.
 No free-text re-inference occurs after preview. V1 remains historical-only under §8; it is never reinterpreted as v2
 or exposed as a new Agent tool.
+
+The Action request/result contract version and Agent tool-spec version are separate identities. Historical
+`start_acquisition_run_tool_v2` remains lookup-capable with `activity_attempt_terminal_v1`; the current
+`start_acquisition_run_tool_v3` exact-pins `workflow_command_acceptance_v1`. Neither identity may be reinterpreted in
+place.
 
 ### V3. Projection reads
 
@@ -542,12 +554,16 @@ adds `inspect_operation` prepare/accept against exact Action/Operation/event/wor
 command must match its planned event and registries; unrelated same-operation rows are excluded from the owner.
 The pre-served inspect result/query-owner/serializer/tool/adapter/fixture contract is fixed-forward v2, with one
 central readiness derivation: completed without durable result ref remains `pending/fail_closed`. Evidence includes
-event-revision drift zero-write and both commandless/command-backed success fixtures. S1 remains
-incomplete until physical-owner
-adapters and terminal-success fixtures exist for `start_acquisition_run` and `filter_projection`; the latter first
-needs an explicit opaque target-revision carrier because `membership_revision` is equality-only, not an integer.
-Default/public serving remains zero. See `TRACK_D_D1N_S1A_AGENT_TOOL_RESULT_SLOT_IMPLEMENTATION.md` and
-`TRACK_D_D1N_S1B_INSPECT_OPERATION_RESULT_IMPLEMENTATION.md`.
+event-revision drift zero-write and both commandless/command-backed success fixtures. S1c now provides the opaque
+equality-only target-revision carrier; S1d adds the registry-owned result-link policy, historical start v2/current v3
+boundary, and quiesced `0013` migration. S1 remains incomplete until physical-owner adapters and terminal-success
+fixtures exist for `start_acquisition_run` and `filter_projection`. The next bounded start batch must first ratify the
+exact approval-receipt, command-acceptance winner, and parent-budget reservation owners; it must not reuse or guess
+the older multi-transaction dispatch path. Default/public serving remains zero. See
+`TRACK_D_D1N_S1A_AGENT_TOOL_RESULT_SLOT_IMPLEMENTATION.md`,
+`TRACK_D_D1N_S1B_INSPECT_OPERATION_RESULT_IMPLEMENTATION.md`,
+`TRACK_D_D1N_S1C_OPAQUE_OWNER_REVISION_CARRIER_IMPLEMENTATION.md`, and
+`TRACK_D_D1N_S1D_RESULT_LINK_POLICY_IMPLEMENTATION.md`.
 
 Shared hotspots—`operation_runtime.py`, `orchestrator.py`, public API routing, registry aggregation, migrations, and
 release-state derivation—have one serial integration owner. Leaf modules/tests may be developed in parallel. No leaf
