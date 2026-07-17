@@ -78,8 +78,7 @@ class SourceNeutralCampaignStoreTests(unittest.TestCase):
             validated_wave=_validated_wave(label, *proof_labels),
         )
 
-    def _fork_append_and_exit_after_link(self, target_parent_name: str) -> None:
-        expected_point = f"after_append_only_link_before_temp_unlink:{target_parent_name}"
+    def _fork_append_and_exit_at(self, expected_point: str) -> None:
         child_pid = os.fork()
         if child_pid == 0:
 
@@ -97,6 +96,31 @@ class SourceNeutralCampaignStoreTests(unittest.TestCase):
         self.assertEqual(waited_pid, child_pid)
         self.assertTrue(os.WIFEXITED(status), status)
         self.assertEqual(os.WEXITSTATUS(status), 73)
+
+    def _fork_append_and_exit_after_link(self, target_parent_name: str) -> None:
+        self._fork_append_and_exit_at(f"after_append_only_link_before_temp_unlink:{target_parent_name}")
+
+    def _fork_create_and_exit_at(self, root: Path, expected_point: str) -> None:
+        child_pid = os.fork()
+        if child_pid == 0:
+
+            def exit_at_boundary(point: str) -> None:
+                if point == expected_point:
+                    os._exit(76)
+
+            try:
+                CampaignStore.create(
+                    root,
+                    store_id="fixture_manifest_boundary",
+                    _fault_injector=exit_at_boundary,
+                )
+            except BaseException:
+                os._exit(77)
+            os._exit(78)
+        waited_pid, status = os.waitpid(child_pid, 0)
+        self.assertEqual(waited_pid, child_pid)
+        self.assertTrue(os.WIFEXITED(status), status)
+        self.assertEqual(os.WEXITSTATUS(status), 76)
 
     def test_private_canonical_store_and_read_replay_apis(self) -> None:
         committed = self._append()
@@ -520,6 +544,249 @@ class SourceNeutralCampaignStoreTests(unittest.TestCase):
         self.assertEqual(len(snapshot.waves), 1)
         self.assertEqual(self._append(store=recovered), snapshot.waves[0])
         self.assertEqual(len(recovered.replay().waves), 1)
+
+    def test_object_link_completed_interruption_preserves_recoverable_marker(self) -> None:
+        real_link = os.link
+
+        def link_then_interrupt(source: Path, target: Path) -> None:
+            real_link(source, target)
+            if Path(target).parent == self.store.objects_dir:
+                raise KeyboardInterrupt("injected_after_link_completion")
+
+        with mock.patch("x_first.source_neutral_campaign_store.os.link", side_effect=link_then_interrupt):
+            with self.assertRaisesRegex(KeyboardInterrupt, "injected_after_link_completion"):
+                self._append()
+
+        temps = list(self.store.temp_dir.iterdir())
+        objects = list(self.store.objects_dir.iterdir())
+        self.assertEqual(len(temps), 1)
+        self.assertEqual(len(objects), 1)
+        self.assertTrue(os.path.samefile(temps[0], objects[0]))
+        self.assertEqual(temps[0].stat().st_nlink, 2)
+        self.assertEqual(list(self.store.journal_dir.iterdir()), [])
+
+        recovered = CampaignStore.open(self.root)
+        self.assertEqual(recovered.replay().waves, ())
+        committed = self._append(store=recovered)
+        self.assertEqual(committed.sequence, 1)
+        self.assertEqual(self._append(store=recovered), committed)
+
+    def test_journal_link_completed_interruption_preserves_committed_replay(self) -> None:
+        real_link = os.link
+
+        def link_then_interrupt(source: Path, target: Path) -> None:
+            real_link(source, target)
+            if Path(target).parent == self.store.journal_dir:
+                raise KeyboardInterrupt("injected_after_link_completion")
+
+        with mock.patch("x_first.source_neutral_campaign_store.os.link", side_effect=link_then_interrupt):
+            with self.assertRaisesRegex(KeyboardInterrupt, "injected_after_link_completion"):
+                self._append()
+
+        temps = list(self.store.temp_dir.iterdir())
+        journals = list(self.store.journal_dir.iterdir())
+        self.assertEqual(len(temps), 1)
+        self.assertEqual(len(journals), 1)
+        self.assertTrue(os.path.samefile(temps[0], journals[0]))
+        self.assertEqual(temps[0].stat().st_nlink, 2)
+
+        recovered = CampaignStore.open(self.root)
+        snapshot = recovered.replay()
+        self.assertEqual(len(snapshot.waves), 1)
+        self.assertEqual(self._append(store=recovered), snapshot.waves[0])
+
+    def test_manifest_link_completed_interruption_preserves_recoverable_marker(self) -> None:
+        root = Path(self.temporary.name) / "manifest-link-completed-interruption"
+        manifest = root / "store_manifest.json"
+        real_link = os.link
+
+        def link_then_interrupt(source: Path, target: Path) -> None:
+            real_link(source, target)
+            if Path(target) == manifest:
+                raise KeyboardInterrupt("injected_after_link_completion")
+
+        with mock.patch("x_first.source_neutral_campaign_store.os.link", side_effect=link_then_interrupt):
+            with self.assertRaisesRegex(KeyboardInterrupt, "injected_after_link_completion"):
+                CampaignStore.create(root, store_id="fixture_manifest_link_interruption")
+
+        temps = list((root / "tmp").iterdir())
+        self.assertEqual(len(temps), 1)
+        self.assertTrue(os.path.samefile(temps[0], manifest))
+        self.assertEqual(manifest.stat().st_nlink, 2)
+
+        recovered = CampaignStore.open(root)
+        self.assertEqual(recovered.replay().store_id, "fixture_manifest_link_interruption")
+        self.assertEqual(list(recovered.temp_dir.iterdir()), [])
+
+    def test_object_exit_after_target_fsync_before_temp_unlink_recovers_and_commits(self) -> None:
+        self._fork_append_and_exit_at("after_append_only_target_fsync_before_temp_unlink:objects")
+
+        temps = list(self.store.temp_dir.iterdir())
+        objects = list(self.store.objects_dir.iterdir())
+        self.assertEqual(len(temps), 1)
+        self.assertEqual(len(objects), 1)
+        self.assertTrue(os.path.samefile(temps[0], objects[0]))
+        self.assertEqual(temps[0].stat().st_nlink, 2)
+
+        recovered = CampaignStore.open(self.root)
+        self.assertEqual(recovered.replay().waves, ())
+        committed = self._append(store=recovered)
+        self.assertEqual(committed.sequence, 1)
+        self.assertEqual(self._append(store=recovered), committed)
+
+    def test_journal_exit_after_target_fsync_before_temp_unlink_replays_committed(self) -> None:
+        self._fork_append_and_exit_at("after_append_only_target_fsync_before_temp_unlink:journal")
+
+        temps = list(self.store.temp_dir.iterdir())
+        journals = list(self.store.journal_dir.iterdir())
+        self.assertEqual(len(temps), 1)
+        self.assertEqual(len(journals), 1)
+        self.assertTrue(os.path.samefile(temps[0], journals[0]))
+        self.assertEqual(temps[0].stat().st_nlink, 2)
+
+        recovered = CampaignStore.open(self.root)
+        snapshot = recovered.replay()
+        self.assertEqual(len(snapshot.waves), 1)
+        self.assertEqual(self._append(store=recovered), snapshot.waves[0])
+
+    def test_object_exit_after_temp_unlink_before_temp_fsync_retries_once(self) -> None:
+        self._fork_append_and_exit_at("after_append_only_temp_unlink_before_temp_fsync:objects")
+
+        self.assertEqual(list(self.store.temp_dir.iterdir()), [])
+        objects = list(self.store.objects_dir.iterdir())
+        self.assertEqual(len(objects), 1)
+        self.assertEqual(objects[0].stat().st_nlink, 1)
+        self.assertEqual(list(self.store.journal_dir.iterdir()), [])
+
+        recovered = CampaignStore.open(self.root)
+        self.assertEqual(recovered.replay().waves, ())
+        committed = self._append(store=recovered)
+        self.assertEqual(committed.sequence, 1)
+        self.assertEqual(self._append(store=recovered), committed)
+
+    def test_journal_exit_after_temp_unlink_before_temp_fsync_replays_committed(self) -> None:
+        self._fork_append_and_exit_at("after_append_only_temp_unlink_before_temp_fsync:journal")
+
+        self.assertEqual(list(self.store.temp_dir.iterdir()), [])
+        journals = list(self.store.journal_dir.iterdir())
+        self.assertEqual(len(journals), 1)
+        self.assertEqual(journals[0].stat().st_nlink, 1)
+        self.assertEqual(list(self.store.heads_dir.iterdir()), [])
+
+        recovered = CampaignStore.open(self.root)
+        snapshot = recovered.replay()
+        self.assertEqual(len(snapshot.waves), 1)
+        self.assertEqual(self._append(store=recovered), snapshot.waves[0])
+
+    def test_manifest_publication_uses_durable_order_at_both_exit_boundaries(self) -> None:
+        boundaries = (
+            "after_append_only_target_fsync_before_temp_unlink",
+            "after_append_only_temp_unlink_before_temp_fsync",
+        )
+        for index, boundary in enumerate(boundaries):
+            with self.subTest(boundary=boundary):
+                root = Path(self.temporary.name) / f"manifest-boundary-{index}"
+                self._fork_create_and_exit_at(root, f"{boundary}:{root.name}")
+
+                manifest = root / "store_manifest.json"
+                temps = list((root / "tmp").iterdir())
+                self.assertTrue(manifest.exists())
+                if boundary == "after_append_only_target_fsync_before_temp_unlink":
+                    self.assertEqual(len(temps), 1)
+                    self.assertTrue(os.path.samefile(temps[0], manifest))
+                    self.assertEqual(manifest.stat().st_nlink, 2)
+                else:
+                    self.assertEqual(temps, [])
+                    self.assertEqual(manifest.stat().st_nlink, 1)
+
+                recovered = CampaignStore.open(root)
+                self.assertEqual(recovered.replay().store_id, "fixture_manifest_boundary")
+                recreated = CampaignStore.create(root, store_id="fixture_manifest_boundary")
+                self.assertEqual(recreated.replay().store_id, "fixture_manifest_boundary")
+
+    def test_object_target_directory_fsync_failure_retains_recoverable_marker(self) -> None:
+        original_fsync = CampaignStore._fsync_directory
+        failed = False
+
+        def fail_object_directory_once(path: Path) -> None:
+            nonlocal failed
+            if path == self.store.objects_dir and not failed:
+                failed = True
+                raise CampaignStoreError("injected_target_directory_fsync_failed")
+            original_fsync(path)
+
+        with mock.patch.object(CampaignStore, "_fsync_directory", side_effect=fail_object_directory_once):
+            with self.assertRaisesRegex(CampaignStoreError, "injected_target_directory_fsync_failed"):
+                self._append()
+
+        self.assertTrue(failed)
+        temps = list(self.store.temp_dir.iterdir())
+        objects = list(self.store.objects_dir.iterdir())
+        self.assertEqual(len(temps), 1)
+        self.assertEqual(len(objects), 1)
+        self.assertTrue(os.path.samefile(temps[0], objects[0]))
+        self.assertEqual(temps[0].stat().st_nlink, 2)
+        self.assertEqual(list(self.store.journal_dir.iterdir()), [])
+
+        recovered = CampaignStore.open(self.root)
+        self.assertEqual(recovered.replay().waves, ())
+        committed = self._append(store=recovered)
+        self.assertEqual(committed.sequence, 1)
+
+    def test_journal_target_directory_fsync_failure_retains_recoverable_marker(self) -> None:
+        original_fsync = CampaignStore._fsync_directory
+        failed = False
+
+        def fail_journal_directory_once(path: Path) -> None:
+            nonlocal failed
+            if path == self.store.journal_dir and not failed:
+                failed = True
+                raise CampaignStoreError("injected_target_directory_fsync_failed")
+            original_fsync(path)
+
+        with mock.patch.object(CampaignStore, "_fsync_directory", side_effect=fail_journal_directory_once):
+            with self.assertRaisesRegex(CampaignStoreError, "injected_target_directory_fsync_failed"):
+                self._append()
+
+        self.assertTrue(failed)
+        temps = list(self.store.temp_dir.iterdir())
+        journals = list(self.store.journal_dir.iterdir())
+        self.assertEqual(len(temps), 1)
+        self.assertEqual(len(journals), 1)
+        self.assertTrue(os.path.samefile(temps[0], journals[0]))
+        self.assertEqual(temps[0].stat().st_nlink, 2)
+
+        recovered = CampaignStore.open(self.root)
+        snapshot = recovered.replay()
+        self.assertEqual(len(snapshot.waves), 1)
+        self.assertEqual(self._append(store=recovered), snapshot.waves[0])
+
+    def test_manifest_target_directory_fsync_failure_retains_recoverable_marker(self) -> None:
+        root = Path(self.temporary.name) / "manifest-fsync-failure"
+        manifest = root / "store_manifest.json"
+        original_fsync = CampaignStore._fsync_directory
+        failed = False
+
+        def fail_manifest_directory_once(path: Path) -> None:
+            nonlocal failed
+            if path == root and manifest.exists() and manifest.stat().st_nlink == 2 and not failed:
+                failed = True
+                raise CampaignStoreError("injected_target_directory_fsync_failed")
+            original_fsync(path)
+
+        with mock.patch.object(CampaignStore, "_fsync_directory", side_effect=fail_manifest_directory_once):
+            with self.assertRaisesRegex(CampaignStoreError, "injected_target_directory_fsync_failed"):
+                CampaignStore.create(root, store_id="fixture_manifest_fsync_failure")
+
+        self.assertTrue(failed)
+        temps = list((root / "tmp").iterdir())
+        self.assertEqual(len(temps), 1)
+        self.assertTrue(os.path.samefile(temps[0], manifest))
+        self.assertEqual(manifest.stat().st_nlink, 2)
+
+        recovered = CampaignStore.open(root)
+        self.assertEqual(recovered.replay().store_id, "fixture_manifest_fsync_failure")
+        self.assertEqual(list(recovered.temp_dir.iterdir()), [])
 
     def test_two_link_temp_with_only_non_target_alias_fails_closed(self) -> None:
         payload = {"fixture": "valid-content-addressed-bytes"}

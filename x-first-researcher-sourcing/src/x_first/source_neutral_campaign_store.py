@@ -1124,22 +1124,40 @@ class CampaignStore:
 
     def _publish_new_file(self, target: Path, content: bytes, *, lock: _GlobalLock) -> None:
         temp = self._write_temp(target, content)
+        target_link_attempted = False
         try:
             self._ensure_private_directory(target.parent, create=False)
             lock.assert_canonical_binding()
+            # Set this before entering the syscall.  A Python signal handler
+            # can raise after link(2) has created the target but before control
+            # returns to the next bytecode instruction.  That result is
+            # ambiguous, so cleanup must conservatively retain the temp alias.
+            target_link_attempted = True
             os.link(temp, target)
             self._inject_fault(f"after_append_only_link_before_temp_unlink:{target.parent.name}")
+            # The authoritative target link must be durable before the only
+            # recovery marker (the temporary alias) is removed.  Otherwise a
+            # process exit after unlink and before this fsync can acknowledge a
+            # target whose directory entry is still lost by a later power loss.
+            self._fsync_directory(target.parent)
+            self._inject_fault(f"after_append_only_target_fsync_before_temp_unlink:{target.parent.name}")
+            self._remove_publish_temp_alias(temp, target)
+            self._inject_fault(f"after_append_only_temp_unlink_before_temp_fsync:{target.parent.name}")
+            self._fsync_directory(self.temp_dir)
         except FileExistsError as exc:
             raise CampaignStoreCorruption("append_only_target_exists") from exc
         except OSError as exc:
             raise CampaignStoreError("append_only_publish_failed") from exc
         finally:
-            try:
-                temp.unlink()
-            except OSError:
-                pass
-        self._fsync_directory(target.parent)
-        self._fsync_directory(self.temp_dir)
+            # Only a failure proven to precede the link attempt may discard the
+            # temp.  Once link(2) starts, an exception cannot prove whether the
+            # target was created, so retain either the two-link recovery marker
+            # or the harmless one-link orphan for the next replay.
+            if not target_link_attempted:
+                try:
+                    temp.unlink()
+                except OSError:
+                    pass
 
     def _publish_content_addressed(self, target: Path, content: bytes, *, lock: _GlobalLock) -> None:
         lock.assert_canonical_binding()
@@ -1262,6 +1280,41 @@ class CampaignStore:
                 raise
             raise CampaignStoreCorruption("temporary_publish_intermediate_invalid") from exc
 
+    def _remove_publish_temp_alias(self, temp: Path, target: Path) -> None:
+        """Remove only a proven two-link publication alias.
+
+        The caller must have already fsynced ``target.parent``.  The open file
+        descriptor keeps the inode stable while path identities are checked on
+        both sides of the unlink.
+        """
+
+        flags = os.O_RDONLY
+        if hasattr(os, "O_NOFOLLOW"):
+            flags |= os.O_NOFOLLOW
+        if hasattr(os, "O_CLOEXEC"):
+            flags |= os.O_CLOEXEC
+        try:
+            fd = os.open(temp, flags)
+        except OSError as exc:
+            raise CampaignStoreCorruption("temporary_publish_intermediate_invalid") from exc
+        try:
+            self._validate_publish_intermediate_binding(fd, temp, target)
+            try:
+                temp.unlink()
+            except OSError as exc:
+                raise CampaignStoreCorruption("temporary_file_cleanup_failed") from exc
+            self._validate_private_file_binding(fd, target)
+            try:
+                temp.lstat()
+            except FileNotFoundError:
+                pass
+            except OSError as exc:
+                raise CampaignStoreCorruption("temporary_file_cleanup_failed") from exc
+            else:
+                raise CampaignStoreCorruption("temporary_file_cleanup_failed")
+        finally:
+            os.close(fd)
+
     def _recover_publish_intermediate(self, temp: Path, kind: str, target: Path) -> None:
         self._ensure_private_directory(target.parent, create=False)
         flags = os.O_RDONLY
@@ -1288,19 +1341,11 @@ class CampaignStore:
             # only the mechanically bound temporary alias.
             self._fsync_directory(target.parent)
             self._validate_publish_intermediate_binding(fd, temp, target)
-            try:
-                temp.unlink()
-            except OSError as exc:
-                raise CampaignStoreCorruption("temporary_file_cleanup_failed") from exc
-            self._validate_private_file_binding(fd, target)
-            try:
-                temp.lstat()
-            except FileNotFoundError:
-                pass
-            except OSError as exc:
-                raise CampaignStoreCorruption("temporary_file_cleanup_failed") from exc
-            else:
-                raise CampaignStoreCorruption("temporary_file_cleanup_failed")
+            # Keep this descriptor open until the shared alias-removal helper
+            # completes its own before/after checks.  Revalidation above also
+            # ensures no path changed between byte validation and the durable
+            # target-directory boundary.
+            self._remove_publish_temp_alias(temp, target)
             self._fsync_directory(self.temp_dir)
         finally:
             os.close(fd)

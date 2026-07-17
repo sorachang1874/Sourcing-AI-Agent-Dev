@@ -140,10 +140,17 @@ before create/open inspects or creates the store layout.
 Append-only publication has one narrowly recoverable process-exit intermediate: the exact generated temp name and its
 allowed manifest, content-addressed-object, or journal target may temporarily be the only two names for the same
 effective-UID-owned `0600` inode. Replay accepts only link count exactly two, exact temp-to-target namespace binding,
-and target-authoritative canonical bytes/hash. It fsyncs the target directory before unlinking only that proven temp
-alias, verifies the surviving target is again single-link, then fsyncs the temp directory. A second link at any other
+and target-authoritative canonical bytes/hash. Both normal publication and recovery use the same durable order:
+link the target, fsync the target directory, validate and unlink only that proven temp alias, then fsync the temp
+directory. Once the link syscall is attempted, even an exception delivered after kernel link creation but before the
+next Python instruction conservatively preserves the temp name: it is either the same-inode, two-link recovery marker
+or a harmless single-link orphan that replay removes. If the target link exists, failure before its directory fsync
+completes preserves that two-link marker; after the fsync completes, losing or repeating the temp-alias unlink cannot
+erase the already durable target. The
+surviving target must verify as single-link before publication can acknowledge success. A second link at any other
 pathname, an unexpected target namespace, wrong bytes, extra links, or mismatched inode remains corruption. Forked
-`os._exit` regressions cover the real object-link and journal-link boundaries, not only higher-level fault points.
+`os._exit` regressions cover both sides of temp-alias removal for manifest, object, and journal publication, plus
+target-directory-fsync failure and fresh-open recovery; they do not rely only on higher-level fault points.
 
 This backend's declared support boundary is a local POSIX filesystem with working `fcntl.flock`, hardlinks, effective
 UID and permission bits, and file/directory `fsync`; the current evidence was executed on Darwin. Network and
