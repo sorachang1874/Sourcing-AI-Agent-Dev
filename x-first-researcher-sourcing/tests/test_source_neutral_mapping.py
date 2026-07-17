@@ -5,6 +5,7 @@ import hashlib
 import json
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 
 from tests.grok_raw_session_fixture import (
@@ -20,10 +21,16 @@ from x_first.source_neutral_mapping import (
     PLAN_SCHEMA_FILE,
     POLICY_SCHEMA_FILE,
     RECEIPT_SCHEMA_FILE,
+    ExactPostHydrationProjection,
+    ExecutedWaveFacts,
     SourceNeutralMappingError,
     build_candidate_free_aggregate,
+    build_exact_post_hydration_projection,
+    build_executed_wave_facts,
     build_frontier_queues,
     build_luna_input_queue,
+    build_luna_state_review_projection,
+    build_mapping_session_projection,
     build_session_precommit,
     canonical_sha256,
     expand_saturation_item,
@@ -45,9 +52,7 @@ from x_first.source_neutral_mapping import (
 
 ROOT = project_root()
 MANIFEST_PATH = ROOT / "fixtures" / "source_neutral_mapping_manifest_fixture_v1.json"
-CALIBRATION_PATH = (
-    ROOT / "docs" / "live-evidence" / "2026-07-17-gdm-query-family-calibration.aggregate.v1.json"
-)
+CALIBRATION_PATH = ROOT / "docs" / "live-evidence" / "2026-07-17-gdm-query-family-calibration.aggregate.v1.json"
 
 
 def _manifest() -> dict:
@@ -80,34 +85,6 @@ def _large_manifest(count: int = 137) -> dict:
     )
 
 
-def _accepted_receipt(references: list[dict], *, receipt_salt: str = "a") -> dict:
-    payload = {
-        "schema_version": "x.source_neutral.mapping.session_receipt.v1",
-        "status": "accepted",
-        "commit_allowed": True,
-        "proof_authority": "existing_raw_grok_six_file_replay",
-        "errors": [],
-        "precommit_sha256": receipt_salt * 64,
-        "source_artifact_manifest_sha256": "b" * 64,
-        "source_artifact_count": 6,
-        "source_artifact_hashes_sha256": "c" * 64,
-        "terminal_sha256": "d" * 64,
-        "planned_native_x_call_count": max(1, len(references)),
-        "attested_completed_native_x_call_count": max(1, len(references)),
-        "x_user_search_call_count": 0,
-        "pretool_terminal_count": 0,
-        "unique_stable_post_id_count": len(references),
-        "saturation_lower_bound_count": 0,
-        "references": references,
-        "saturation_queue_seeds": [],
-        "receipt_sha256": "",
-    }
-    payload["receipt_sha256"] = canonical_sha256(
-        {key: value for key, value in payload.items() if key != "receipt_sha256"}
-    )
-    return payload
-
-
 def _fixture_batch(
     *,
     terminal_blocks: list[list[str]] | None = None,
@@ -123,20 +100,18 @@ def _fixture_batch(
     grok_precommit = fixture_grok_session_precommit(user_prompt_text=prompt)
     mapping_precommit = build_session_precommit(
         plan=plan,
+        manifest=manifest,
+        policy=policy,
         batch_index=0,
         grok_precommit=grok_precommit,
     )
     if terminal_blocks is None:
         terminal_blocks = [
-            [
-                f"https://x.invalid/{call['expected_author_handle']}/status/{10000 + ordinal}"
-            ]
+            [f"https://x.invalid/{call['expected_author_handle']}/status/{10000 + ordinal}"]
             for ordinal, call in enumerate(batch["calls"], 1)
         ]
     terminal = render_flat_terminal(terminal_blocks)
-    calls = raw_call_override or [
-        (call["tool_name"], call["arguments"]) for call in mapping_precommit["calls"]
-    ]
+    calls = raw_call_override or [(call["tool_name"], call["arguments"]) for call in mapping_precommit["calls"]]
     raw = raw_grok_session(
         {"ignored_by_literal_flat_replay": True},
         calls=calls,
@@ -145,6 +120,157 @@ def _fixture_batch(
         terminal_before_tools=terminal_before_tools,
     )
     return manifest, plan, terminal, raw, grok_precommit
+
+
+def _projection_for_batch(
+    manifest: dict,
+    plan: dict,
+    batch_index: int,
+    *,
+    terminal_blocks: list[list[str]] | None = None,
+    terminal_before_tools: bool = False,
+    include_references: bool = True,
+    references_per_candidate: int = 1,
+    session_namespace: str = "fixture-map",
+    policy: dict | None = None,
+) -> object:
+    policy = policy or load_policy()
+    batch = plan["batches"][batch_index]
+    marker = f"MAPPING_BATCH_SHA256={batch['batch_sha256']}"
+    prompt = f"Synthetic flat mapping session.\n{marker}"
+    session_id = f"{session_namespace}-session-{batch_index + 1:04d}"
+    request_id = f"{session_namespace}-request-{batch_index + 1:04d}"
+    grok_precommit = fixture_grok_session_precommit(
+        session_id=session_id,
+        request_id=request_id,
+        user_prompt_text=prompt,
+    )
+    mapping_precommit = build_session_precommit(
+        plan=plan,
+        manifest=manifest,
+        policy=policy,
+        batch_index=batch_index,
+        grok_precommit=grok_precommit,
+    )
+    if terminal_blocks is None:
+        terminal_blocks = []
+        seen_candidates: set[str] = set()
+        for call in batch["calls"]:
+            if not include_references or call["candidate_ref"] in seen_candidates:
+                terminal_blocks.append([])
+                continue
+            seen_candidates.add(call["candidate_ref"])
+            stable_base = 8_000_000 + call["global_call_ordinal"] * 10
+            terminal_blocks.append(
+                [
+                    f"https://x.invalid/{call['expected_author_handle']}/status/{stable_base + offset}"
+                    for offset in range(references_per_candidate)
+                ]
+            )
+    terminal = render_flat_terminal(terminal_blocks)
+    raw = raw_grok_session(
+        {"ignored_by_literal_flat_replay": True},
+        calls=[(call["tool_name"], call["arguments"]) for call in batch["calls"]],
+        session_id=session_id,
+        request_id=request_id,
+        user_prompt_text=prompt,
+        terminal_text_override=terminal,
+        terminal_before_tools=terminal_before_tools,
+    )
+    return build_mapping_session_projection(
+        mapping_precommit=mapping_precommit,
+        terminal_text=terminal,
+        lab_descriptor=manifest["lab_descriptor"],
+        raw_session_files=raw,
+        grok_precommit=grok_precommit,
+    )
+
+
+def _all_session_projections(
+    manifest: dict,
+    plan: dict,
+    *,
+    include_references: bool = True,
+    references_per_candidate: int = 1,
+    session_namespace: str = "fixture-map",
+    policy: dict | None = None,
+) -> list[object]:
+    return [
+        _projection_for_batch(
+            manifest,
+            plan,
+            index,
+            include_references=include_references,
+            references_per_candidate=references_per_candidate,
+            session_namespace=session_namespace,
+            policy=policy,
+        )
+        for index in range(len(plan["batches"]))
+    ]
+
+
+def _hydration_projection(
+    task: dict,
+    index: int = 1,
+    *,
+    session_namespace: str = "fixture-hydration",
+) -> ExactPostHydrationProjection:
+    text = f"Synthetic source-bound technical Post {index}."
+    terminal = {
+        "schema_version": "x.source_neutral.mapping.exact_post_hydration.v1",
+        "candidate_ref": task["candidate_ref"],
+        "requested_stable_post_id": task["stable_post_id"],
+        "returned_stable_post_id": task["stable_post_id"],
+        "source_url": task["url"],
+        "author_handle": task["expected_author_handle"],
+        "full_text": text,
+        "full_text_sha256": hashlib.sha256(text.encode()).hexdigest(),
+        "lookup_status": "matched",
+    }
+    session_id = f"{session_namespace}-session-{index:04d}"
+    request_id = f"{session_namespace}-request-{index:04d}"
+    precommit = fixture_grok_session_precommit(
+        session_id=session_id,
+        request_id=request_id,
+        user_prompt_text=f"Hydrate {task['stable_post_id']}",
+    )
+    raw = raw_grok_session(
+        terminal,
+        calls=[("x_thread_fetch", {"post_id": task["stable_post_id"]})],
+        session_id=session_id,
+        request_id=request_id,
+        user_prompt_text=f"Hydrate {task['stable_post_id']}",
+    )
+    return build_exact_post_hydration_projection(
+        task=task,
+        terminal=terminal,
+        raw_session_files=raw,
+        grok_precommit=precommit,
+    )
+
+
+def _luna_projection(
+    hydration: ExactPostHydrationProjection,
+    *,
+    index: int,
+    upgrade: bool = False,
+    review_namespace: str = "fixture_luna_review",
+):
+    terminal = json.loads(hydration.terminal_json)
+    result = {
+        "schema_version": "x.source_neutral.mapping.luna_state_review.v1",
+        "review_id": f"{review_namespace}_{index:04d}",
+        "candidate_ref": terminal["candidate_ref"],
+        "stable_post_id": terminal["returned_stable_post_id"],
+        "hydration_projection_sha256": hydration.projection_sha256,
+        "source_text_sha256": hashlib.sha256(hydration.source_text).hexdigest(),
+        "terminal_status": "reviewed",
+        "lab_affiliation_state": "current",
+        "pretraining_experience_state": "current",
+        "qualified_state_upgrade": upgrade,
+        "upgrade_id": f"fixture_upgrade_{index:04d}" if upgrade else None,
+    }
+    return build_luna_state_review_projection(hydration_projection=hydration, result=result)
 
 
 class SourceNeutralMappingTests(unittest.TestCase):
@@ -162,10 +288,7 @@ class SourceNeutralMappingTests(unittest.TestCase):
         self.assertIsNone(policy["authority"]["business_reference_cap"])
         axes = manifest["candidates"][:4]
         self.assertEqual(
-            {
-                (row["lab_affiliation_prior"]["state"], row["pretraining_experience_prior"]["state"])
-                for row in axes
-            },
+            {(row["lab_affiliation_prior"]["state"], row["pretraining_experience_prior"]["state"]) for row in axes},
             {
                 ("current", "current"),
                 ("current", "historical"),
@@ -191,6 +314,71 @@ class SourceNeutralMappingTests(unittest.TestCase):
         refs = [ref for batch in plan["batches"] for ref in batch["candidate_refs"]]
         self.assertEqual(refs, [row["candidate_ref"] for row in manifest["candidates"]])
         self.assertTrue(all(len(batch["calls"]) == 2 * len(batch["candidate_refs"]) for batch in plan["batches"]))
+
+    def test_plan_validation_reconstructs_every_policy_owned_call_and_batch_field(self) -> None:
+        manifest = _manifest()
+        policy = load_policy()
+        plan = plan_wave_p(manifest, policy, plan_id="fixture_exact_reconstruction_v1")
+        mutations = {
+            "candidate_ref": lambda call: call.__setitem__("candidate_ref", manifest["candidates"][3]["candidate_ref"]),
+            "expected_author_handle": lambda call: call.__setitem__("expected_author_handle", "unrelated"),
+            "batch_candidate_ordinal": lambda call: call.__setitem__("batch_candidate_ordinal", 2),
+            "champion_cell_id": lambda call: call.__setitem__("champion_cell_id", "architecture_latest"),
+            "concept_alias_group_id": lambda call: call.__setitem__("concept_alias_group_id", "architecture_latest"),
+            "topic_aliases": lambda call: call.__setitem__("topic_aliases", ["attention"]),
+            "tool_name": lambda call: call.__setitem__("tool_name", "x_user_search"),
+            "query": lambda call: call["arguments"].__setitem__("query", "from:unrelated (attention)"),
+            "limit": lambda call: call["arguments"].__setitem__("limit", "9"),
+            "mode": lambda call: call["arguments"].__setitem__("mode", "Latest"),
+        }
+        for label, mutate in mutations.items():
+            with self.subTest(label=label):
+                changed = copy.deepcopy(plan)
+                mutate(changed["batches"][0]["calls"][0])
+                batch = changed["batches"][0]
+                batch["batch_sha256"] = canonical_sha256(
+                    {key: value for key, value in batch.items() if key != "batch_sha256"}
+                )
+                changed["plan_sha256"] = canonical_sha256(
+                    {key: value for key, value in changed.items() if key != "plan_sha256"}
+                )
+                with self.assertRaises(SourceNeutralMappingError):
+                    validate_wave_plan(changed, manifest=manifest, policy=policy)
+
+        changed = copy.deepcopy(plan)
+        changed["batches"][0]["calls"][0]["arguments"]["query"] = "from:unrelated (attention)"
+        changed["batches"][0]["batch_sha256"] = canonical_sha256(
+            {key: value for key, value in changed["batches"][0].items() if key != "batch_sha256"}
+        )
+        changed["plan_sha256"] = canonical_sha256(
+            {key: value for key, value in changed.items() if key != "plan_sha256"}
+        )
+        marker = f"MAPPING_BATCH_SHA256={changed['batches'][0]['batch_sha256']}"
+        grok_precommit = fixture_grok_session_precommit(user_prompt_text=marker)
+        with self.assertRaisesRegex(SourceNeutralMappingError, "exact_policy_reconstruction"):
+            build_session_precommit(
+                plan=changed,
+                manifest=manifest,
+                policy=policy,
+                batch_index=0,
+                grok_precommit=grok_precommit,
+            )
+
+        regrouped = copy.deepcopy(plan)
+        regrouped["batches"][0]["candidate_refs"], regrouped["batches"][1]["candidate_refs"] = (
+            regrouped["batches"][1]["candidate_refs"],
+            regrouped["batches"][0]["candidate_refs"],
+        )
+        for batch in regrouped["batches"][:2]:
+            batch["candidate_refs_sha256"] = canonical_sha256(batch["candidate_refs"])
+            batch["batch_sha256"] = canonical_sha256(
+                {key: value for key, value in batch.items() if key != "batch_sha256"}
+            )
+        regrouped["plan_sha256"] = canonical_sha256(
+            {key: value for key, value in regrouped.items() if key != "plan_sha256"}
+        )
+        with self.assertRaises(SourceNeutralMappingError):
+            validate_wave_plan(regrouped, manifest=manifest, policy=policy)
 
     def test_grain_and_call_count_come_from_policy_not_code(self) -> None:
         manifest = _manifest()
@@ -248,6 +436,8 @@ class SourceNeutralMappingTests(unittest.TestCase):
         manifest, plan, terminal, raw, grok_precommit = _fixture_batch()
         mapping_precommit = build_session_precommit(
             plan=plan,
+            manifest=manifest,
+            policy=load_policy(),
             batch_index=0,
             grok_precommit=grok_precommit,
         )
@@ -271,7 +461,13 @@ class SourceNeutralMappingTests(unittest.TestCase):
 
     def test_caller_projection_never_self_proves_execution_or_commits_references(self) -> None:
         manifest, plan, terminal, _, grok_precommit = _fixture_batch()
-        mapping_precommit = build_session_precommit(plan=plan, batch_index=0, grok_precommit=grok_precommit)
+        mapping_precommit = build_session_precommit(
+            plan=plan,
+            manifest=manifest,
+            policy=load_policy(),
+            batch_index=0,
+            grok_precommit=grok_precommit,
+        )
         receipt = replay_flat_session(
             mapping_precommit=mapping_precommit,
             terminal_text=terminal,
@@ -284,10 +480,28 @@ class SourceNeutralMappingTests(unittest.TestCase):
         self.assertFalse(receipt["commit_allowed"])
         self.assertEqual(receipt["references"], [])
         self.assertEqual(receipt["attested_completed_native_x_call_count"], 0)
+        self.assertEqual(receipt["planned_native_x_call_count"], 6)
+
+        invalid_precommit = copy.deepcopy(mapping_precommit)
+        invalid_precommit["precommit_sha256"] = "invalid"
+        rejected = replay_flat_session(
+            mapping_precommit=invalid_precommit,
+            terminal_text=terminal,
+            lab_descriptor=manifest["lab_descriptor"],
+            raw_session_files=None,
+            grok_precommit=None,
+        )
+        self.assertIsNone(rejected["planned_native_x_call_count"])
 
     def test_raw_replay_rejects_pretool_terminal_wrong_tool_and_argument_drift(self) -> None:
         manifest, plan, terminal, raw, grok_precommit = _fixture_batch(terminal_before_tools=True)
-        mapping_precommit = build_session_precommit(plan=plan, batch_index=0, grok_precommit=grok_precommit)
+        mapping_precommit = build_session_precommit(
+            plan=plan,
+            manifest=manifest,
+            policy=load_policy(),
+            batch_index=0,
+            grok_precommit=grok_precommit,
+        )
         before = replay_flat_session(
             mapping_precommit=mapping_precommit,
             terminal_text=terminal,
@@ -298,12 +512,16 @@ class SourceNeutralMappingTests(unittest.TestCase):
         self.assertEqual(before["errors"], ["raw_six_file_replay_invalid"])
 
         wrong_calls = [("x_user_search", {"query": "fixture", "count": "1"})]
-        wrong_calls.extend(
-            (call["tool_name"], call["arguments"]) for call in mapping_precommit["calls"][1:]
-        )
+        wrong_calls.extend((call["tool_name"], call["arguments"]) for call in mapping_precommit["calls"][1:])
         _, _, terminal, raw, grok_precommit = _fixture_batch(raw_call_override=wrong_calls)
         wrong_tool = replay_flat_session(
-            mapping_precommit=build_session_precommit(plan=plan, batch_index=0, grok_precommit=grok_precommit),
+            mapping_precommit=build_session_precommit(
+                plan=plan,
+                manifest=manifest,
+                policy=load_policy(),
+                batch_index=0,
+                grok_precommit=grok_precommit,
+            ),
             terminal_text=terminal,
             lab_descriptor=manifest["lab_descriptor"],
             raw_session_files=raw,
@@ -316,7 +534,13 @@ class SourceNeutralMappingTests(unittest.TestCase):
         drift_calls[0][1]["query"] += " drift"
         _, _, terminal, raw, grok_precommit = _fixture_batch(raw_call_override=drift_calls)
         drift = replay_flat_session(
-            mapping_precommit=build_session_precommit(plan=plan, batch_index=0, grok_precommit=grok_precommit),
+            mapping_precommit=build_session_precommit(
+                plan=plan,
+                manifest=manifest,
+                policy=load_policy(),
+                batch_index=0,
+                grok_precommit=grok_precommit,
+            ),
             terminal_text=terminal,
             lab_descriptor=manifest["lab_descriptor"],
             raw_session_files=raw,
@@ -343,11 +567,16 @@ class SourceNeutralMappingTests(unittest.TestCase):
         manifest, plan, _, _, grok_precommit = _fixture_batch()
         calls = plan["batches"][0]["calls"]
         wrong_author_blocks = [
-            [f"https://x.invalid/{calls[1]['expected_author_handle']}/status/{30000 + index}"]
-            for index in range(1, 7)
+            [f"https://x.invalid/{calls[1]['expected_author_handle']}/status/{30000 + index}"] for index in range(1, 7)
         ]
         terminal = render_flat_terminal(wrong_author_blocks)
-        mapping_precommit = build_session_precommit(plan=plan, batch_index=0, grok_precommit=grok_precommit)
+        mapping_precommit = build_session_precommit(
+            plan=plan,
+            manifest=manifest,
+            policy=load_policy(),
+            batch_index=0,
+            grok_precommit=grok_precommit,
+        )
         rejected = replay_flat_session(
             mapping_precommit=mapping_precommit,
             terminal_text=terminal,
@@ -380,7 +609,13 @@ class SourceNeutralMappingTests(unittest.TestCase):
         ]
         _, _, terminal, raw, grok_precommit = _fixture_batch(terminal_blocks=blocks)
         receipt = replay_flat_session(
-            mapping_precommit=build_session_precommit(plan=plan, batch_index=0, grok_precommit=grok_precommit),
+            mapping_precommit=build_session_precommit(
+                plan=plan,
+                manifest=manifest,
+                policy=load_policy(),
+                batch_index=0,
+                grok_precommit=grok_precommit,
+            ),
             terminal_text=terminal,
             lab_descriptor=manifest["lab_descriptor"],
             raw_session_files=raw,
@@ -401,170 +636,265 @@ class SourceNeutralMappingTests(unittest.TestCase):
 
     def test_frontier_queues_scale_past_one_hundred_refs_and_challengers_are_never_self_evidence(self) -> None:
         manifest = _large_manifest(121)
-        references = [
-            {
-                "candidate_ref": row["candidate_ref"],
-                "stable_post_id": str(8_000_000 + index),
-                "url": f"https://x.invalid/{row['current_handle']}/status/{8_000_000 + index}",
-                "author_handle": row["current_handle"],
-                "source_status": "model_mediated_url_from_verified_native_x_session",
-                "observed_call_ordinals": [index],
-            }
-            for index, row in enumerate(manifest["candidates"], 1)
-        ]
-        receipt = _accepted_receipt(references)
-        queues = build_frontier_queues(manifest=manifest, accepted_receipts=[receipt], policy=load_policy())
+        policy = load_policy()
+        plan = plan_wave_p(manifest, policy, plan_id="fixture_large_frontier_v1")
+        projections = _all_session_projections(manifest, plan)
+        queues = build_frontier_queues(
+            manifest=manifest,
+            plan=plan,
+            session_projections=projections,
+            policy=policy,
+        )
         self.assertEqual(len(queues["thread_hydration_queue"]), 121)
+        self.assertEqual(queues["pending_wave_p_queue"], [])
+        self.assertEqual(queues["retry_split_queue"], [])
         self.assertEqual(queues["luna_input_queue"], [])
         self.assertGreater(len(queues["challenger_queue"]), 0)
-        self.assertTrue(
-            all(row["self_evidence_allowed"] is False for row in queues["challenger_queue"])
-        )
+        self.assertTrue(all(row["self_evidence_allowed"] is False for row in queues["challenger_queue"]))
         self.assertTrue(
             all(row["relationship"] == "official_or_third_party_non_self" for row in queues["challenger_queue"])
         )
 
-    def test_frontier_rejects_receipt_hash_unknown_candidates_and_cross_batch_post_collisions(self) -> None:
+    def test_frontier_replays_typed_sources_and_separates_unexecuted_rejected_from_sparse(self) -> None:
         manifest = _manifest()
-        row = manifest["candidates"][0]
-        reference = {
-            "candidate_ref": row["candidate_ref"],
-            "stable_post_id": "880001",
-            "url": f"https://x.invalid/{row['current_handle']}/status/880001",
-            "author_handle": row["current_handle"],
-            "source_status": "model_mediated_url_from_verified_native_x_session",
-            "observed_call_ordinals": [1],
-        }
-        tampered = _accepted_receipt([reference])
-        tampered["terminal_sha256"] = "e" * 64
-        with self.assertRaisesRegex(SourceNeutralMappingError, "frontier_receipt_not_accepted"):
-            build_frontier_queues(manifest=manifest, accepted_receipts=[tampered], policy=load_policy())
-
-        unknown = copy.deepcopy(reference)
-        unknown["candidate_ref"] = "fixture_candidate_unknown"
-        with self.assertRaisesRegex(SourceNeutralMappingError, "candidate_unknown"):
-            build_frontier_queues(
-                manifest=manifest,
-                accepted_receipts=[_accepted_receipt([unknown])],
-                policy=load_policy(),
-            )
-
-        other = manifest["candidates"][1]
-        collision = copy.deepcopy(reference)
-        collision.update(
-            {
-                "candidate_ref": other["candidate_ref"],
-                "url": f"https://x.invalid/{other['current_handle']}/status/880001",
-                "author_handle": other["current_handle"],
-            }
+        policy = load_policy()
+        plan = plan_wave_p(manifest, policy, plan_id="fixture_coverage_states_v1")
+        accepted = _projection_for_batch(manifest, plan, 0)
+        rejected = _projection_for_batch(manifest, plan, 1, terminal_before_tools=True)
+        queues = build_frontier_queues(
+            manifest=manifest,
+            plan=plan,
+            session_projections=[accepted, rejected],
+            policy=policy,
         )
-        with self.assertRaisesRegex(SourceNeutralMappingError, "cross_candidate"):
+        self.assertEqual(len(queues["retry_split_queue"]), 1)
+        self.assertEqual(len(queues["pending_wave_p_queue"]), len(plan["batches"]) - 2)
+        covered = set(plan["batches"][0]["candidate_refs"])
+        self.assertTrue(all(row["candidate_ref"] in covered for row in queues["challenger_queue"]))
+        self.assertTrue(
+            all(row["challenger_type"] != "thread" or row["seed_stable_post_ids"] for row in queues["challenger_queue"])
+        )
+        zero_reference = _projection_for_batch(
+            manifest,
+            plan,
+            0,
+            include_references=False,
+        )
+        zero_queues = build_frontier_queues(
+            manifest=manifest,
+            plan=plan,
+            session_projections=[zero_reference],
+            policy=policy,
+        )
+        self.assertGreater(len(zero_queues["challenger_queue"]), 0)
+        self.assertNotIn(
+            "thread",
+            {row["challenger_type"] for row in zero_queues["challenger_queue"]},
+        )
+        forged = replace(accepted, receipt_sha256="e" * 64)
+        with self.assertRaisesRegex(SourceNeutralMappingError, "receipt_mismatch"):
             build_frontier_queues(
                 manifest=manifest,
-                accepted_receipts=[
-                    _accepted_receipt([reference], receipt_salt="1"),
-                    _accepted_receipt([collision], receipt_salt="2"),
-                ],
-                policy=load_policy(),
+                plan=plan,
+                session_projections=[forged],
+                policy=policy,
             )
 
     def test_exact_hydration_is_required_before_luna_queue(self) -> None:
-        hydration_queue = [
-            {
-                "candidate_ref": "fixture_candidate_001",
-                "stable_post_id": "12345",
-                "url": "https://x.invalid/fixturemap001/status/12345",
-                "queue_reason": "exact_thread_hydration_required",
-            }
-        ]
-        text = "Synthetic source-bound technical Post."
-        exact = [
-            {
-                "candidate_ref": "fixture_candidate_001",
-                "stable_post_id": "12345",
-                "source_url": "https://x.invalid/fixturemap001/status/12345",
-                "author_handle": "fixturemap001",
-                "full_text": text,
-                "full_text_sha256": canonical_sha256(text),
-                "hydration_status": "exact_source_bound",
-            }
-        ]
-        queue = build_luna_input_queue(thread_hydration_queue=hydration_queue, exact_hydrations=exact)
+        manifest = _manifest()
+        policy = load_policy()
+        plan = plan_wave_p(manifest, policy, plan_id="fixture_hydration_lane_v1")
+        sessions = _all_session_projections(manifest, plan)
+        frontier = build_frontier_queues(
+            manifest=manifest,
+            plan=plan,
+            session_projections=sessions,
+            policy=policy,
+        )
+        hydration = _hydration_projection(frontier["thread_hydration_queue"][0])
+        queue = build_luna_input_queue(
+            manifest=manifest,
+            plan=plan,
+            session_projections=sessions,
+            hydration_projections=[hydration],
+            policy=policy,
+        )
         self.assertEqual(queue[0]["source_binding_status"], "exact_source_bound")
-        tampered = copy.deepcopy(exact)
-        tampered[0]["full_text"] += " tampered"
-        with self.assertRaisesRegex(SourceNeutralMappingError, "text_hash_mismatch"):
-            build_luna_input_queue(thread_hydration_queue=hydration_queue, exact_hydrations=tampered)
-
-        wrong_source = copy.deepcopy(exact)
-        wrong_source[0]["source_url"] = "https://x.invalid/someone_else/status/12345"
-        with self.assertRaisesRegex(SourceNeutralMappingError, "source_url_binding_invalid"):
+        self.assertEqual(queue[0]["source_text"].encode(), hydration.source_text)
+        with self.assertRaisesRegex(SourceNeutralMappingError, "projection_required"):
             build_luna_input_queue(
-                thread_hydration_queue=hydration_queue,
-                exact_hydrations=wrong_source,
+                manifest=manifest,
+                plan=plan,
+                session_projections=sessions,
+                hydration_projections=[{"hydration_status": "exact_source_bound"}],
+                policy=policy,
             )
-
-        wrong_author = copy.deepcopy(exact)
-        wrong_author[0]["author_handle"] = "someone_else"
-        with self.assertRaisesRegex(SourceNeutralMappingError, "source_url_binding_invalid"):
+        tampered = replace(hydration, source_text=hydration.source_text + b" tampered")
+        with self.assertRaisesRegex(SourceNeutralMappingError, "content_mismatch"):
             build_luna_input_queue(
-                thread_hydration_queue=hydration_queue,
-                exact_hydrations=wrong_author,
+                manifest=manifest,
+                plan=plan,
+                session_projections=sessions,
+                hydration_projections=[tampered],
+                policy=policy,
             )
 
     def test_structural_stop_requires_empty_queues_and_two_distinct_double_zero_waves(self) -> None:
-        empty = {
-            key: []
-            for key in (
-                "saturation_queue",
-                "thread_hydration_queue",
-                "luna_input_queue",
-                "challenger_queue",
+        source_manifest = _manifest()
+        candidates = copy.deepcopy(source_manifest["candidates"])
+        for candidate in candidates:
+            candidate["lab_affiliation_prior"] = {
+                "state": "current",
+                "evidence_status": "fixture_asserted",
+            }
+            candidate["pretraining_experience_prior"] = {
+                "state": "current",
+                "evidence_status": "fixture_asserted",
+            }
+        manifest = freeze_candidate_manifest(
+            manifest_id="fixture_structural_stop_manifest_v1",
+            lab_descriptor=source_manifest["lab_descriptor"],
+            candidates=candidates,
+        )
+        top_policy = load_policy()
+        latest_policy = copy.deepcopy(top_policy)
+        for cell in latest_policy["wave_p"]["champion_cells"]:
+            cell["mode"] = "Latest"
+        validate_policy(latest_policy)
+
+        def facts(
+            *,
+            wave_id: str,
+            plan_id: str,
+            policy: dict,
+            namespace: str,
+        ) -> ExecutedWaveFacts:
+            plan = plan_wave_p(manifest, policy, plan_id=plan_id)
+            sessions = _all_session_projections(
+                manifest,
+                plan,
+                references_per_candidate=2,
+                session_namespace=namespace,
+                policy=policy,
             )
-        }
+            frontier = build_frontier_queues(
+                manifest=manifest,
+                policy=policy,
+                plan=plan,
+                session_projections=sessions,
+            )
+            hydrations = [
+                _hydration_projection(
+                    task,
+                    index,
+                    session_namespace=f"{namespace}-hydration",
+                )
+                for index, task in enumerate(frontier["thread_hydration_queue"], 1)
+            ]
+            luna = [
+                _luna_projection(
+                    hydration,
+                    index=index,
+                    review_namespace=f"{namespace}_luna",
+                )
+                for index, hydration in enumerate(hydrations, 1)
+            ]
+            return build_executed_wave_facts(
+                wave_id=wave_id,
+                manifest=manifest,
+                policy=policy,
+                plan=plan,
+                strategy_payload={
+                    "strategy_id": plan["plan_id"],
+                    "strategy_family": "wave_p",
+                    "plan_sha256": plan["plan_sha256"],
+                    "query_surface": "candidate_authored",
+                    "mode": policy["wave_p"]["champion_cells"][0]["mode"],
+                    "time_window": None,
+                },
+                session_projections=sessions,
+                hydration_projections=hydrations,
+                luna_review_projections=luna,
+                prior_stable_post_ids=[task["stable_post_id"] for task in frontier["thread_hydration_queue"]],
+            )
+
         waves = [
-            {
-                "wave_id": "wave_a",
-                "strategy_signature_sha256": "a" * 64,
-                "new_stable_post_id_count": 0,
-                "luna_qualified_state_upgrade_count": 0,
-            },
-            {
-                "wave_id": "wave_b",
-                "strategy_signature_sha256": "b" * 64,
-                "new_stable_post_id_count": 0,
-                "luna_qualified_state_upgrade_count": 0,
-            },
+            facts(
+                wave_id="wave_a",
+                plan_id="fixture_zero_top_plan_v1",
+                policy=top_policy,
+                namespace="fixture-zero-top",
+            ),
+            facts(
+                wave_id="wave_b",
+                plan_id="fixture_zero_latest_plan_v1",
+                policy=latest_policy,
+                namespace="fixture-zero-latest",
+            ),
         ]
-        self.assertTrue(structural_stop(queues=empty, recent_waves=waves, policy=load_policy())["stop"])
+        empty = json.loads(waves[-1].remaining_queues_json)
+        self.assertTrue(all(not empty[key] for key in latest_policy["queues"]["queue_order"]))
+        self.assertTrue(structural_stop(queues=empty, recent_waves=waves, policy=latest_policy)["stop"])
         nonempty = copy.deepcopy(empty)
         nonempty["luna_input_queue"] = [{}]
-        self.assertFalse(structural_stop(queues=nonempty, recent_waves=waves, policy=load_policy())["stop"])
-        waves[1]["luna_qualified_state_upgrade_count"] = 1
-        self.assertFalse(structural_stop(queues=empty, recent_waves=waves, policy=load_policy())["stop"])
-
-        forged_boolean = copy.deepcopy(waves)
-        forged_boolean[1]["luna_qualified_state_upgrade_count"] = False
-        self.assertFalse(
-            structural_stop(queues=empty, recent_waves=forged_boolean, policy=load_policy())["stop"]
-        )
+        self.assertFalse(structural_stop(queues=nonempty, recent_waves=waves, policy=latest_policy)["stop"])
+        forged = replace(waves[1], strategy_signature_sha256="c" * 64)
+        self.assertFalse(structural_stop(queues=empty, recent_waves=[waves[0], forged], policy=latest_policy)["stop"])
 
         malformed_empty = copy.deepcopy(empty)
         malformed_empty["challenger_queue"] = ""
+        self.assertFalse(structural_stop(queues=malformed_empty, recent_waves=waves, policy=latest_policy)["stop"])
+
+        sparse_waves: list[ExecutedWaveFacts] = []
+        for wave_id, plan_id, policy, namespace in (
+            ("sparse_wave_a", "fixture_sparse_top_plan_v1", top_policy, "fixture-sparse-top"),
+            (
+                "sparse_wave_b",
+                "fixture_sparse_latest_plan_v1",
+                latest_policy,
+                "fixture-sparse-latest",
+            ),
+        ):
+            plan = plan_wave_p(manifest, policy, plan_id=plan_id)
+            sessions = _all_session_projections(
+                manifest,
+                plan,
+                include_references=False,
+                session_namespace=namespace,
+                policy=policy,
+            )
+            sparse_waves.append(
+                build_executed_wave_facts(
+                    wave_id=wave_id,
+                    manifest=manifest,
+                    policy=policy,
+                    plan=plan,
+                    strategy_payload={
+                        "strategy_id": plan["plan_id"],
+                        "strategy_family": "wave_p",
+                        "plan_sha256": plan["plan_sha256"],
+                        "query_surface": "candidate_authored",
+                        "mode": policy["wave_p"]["champion_cells"][0]["mode"],
+                        "time_window": None,
+                    },
+                    session_projections=sessions,
+                    hydration_projections=[],
+                    luna_review_projections=[],
+                    prior_stable_post_ids=[],
+                )
+            )
+        sparse_remaining = json.loads(sparse_waves[-1].remaining_queues_json)
+        self.assertGreater(len(sparse_remaining["challenger_queue"]), 0)
         self.assertFalse(
-            structural_stop(queues=malformed_empty, recent_waves=waves, policy=load_policy())["stop"]
+            structural_stop(
+                queues=empty,
+                recent_waves=sparse_waves,
+                policy=latest_policy,
+            )["stop"]
         )
 
     def test_structural_stop_derives_distinctness_and_rejects_flags_or_malformed_hashes(self) -> None:
-        empty = {
-            key: []
-            for key in (
-                "saturation_queue",
-                "thread_hydration_queue",
-                "luna_input_queue",
-                "challenger_queue",
-            )
-        }
+        empty = {key: [] for key in load_policy()["queues"]["queue_order"]}
         waves = [
             {
                 "wave_id": "wave_a",
@@ -589,22 +919,27 @@ class SourceNeutralMappingTests(unittest.TestCase):
         self.assertFalse(structural_stop(queues=empty, recent_waves=waves, policy=load_policy())["stop"])
 
     def test_candidate_free_aggregate_has_exact_four_denominators_and_hash_bindings(self) -> None:
-        bindings = {
-            "policy_sha256": "1" * 64,
-            "candidate_manifest_sha256": "2" * 64,
-            "wave_plan_sha256": "3" * 64,
-            "session_receipt_manifest_sha256": "4" * 64,
-            "hydration_receipt_manifest_sha256": "5" * 64,
-            "luna_result_manifest_sha256": "6" * 64,
-        }
+        manifest = _manifest()
+        policy = load_policy()
+        plan = plan_wave_p(manifest, policy, plan_id="fixture_aggregate_v1")
+        sessions = _all_session_projections(manifest, plan)
+        frontier = build_frontier_queues(
+            manifest=manifest,
+            plan=plan,
+            session_projections=sessions,
+            policy=policy,
+        )
+        hydrations = [
+            _hydration_projection(task, index) for index, task in enumerate(frontier["thread_hydration_queue"][:2], 1)
+        ]
+        luna = [_luna_projection(hydrations[0], index=1, upgrade=True)]
         aggregate = build_candidate_free_aggregate(
-            bindings=bindings,
-            planned_native_x_calls=10,
-            attested_completed_native_x_calls=8,
-            unique_stable_post_ids=6,
-            exact_source_bound_hydrations=5,
-            luna_terminal_reviews=5,
-            luna_qualified_state_upgrades=2,
+            manifest=manifest,
+            policy=policy,
+            plan=plan,
+            session_projections=sessions,
+            hydration_projections=hydrations,
+            luna_review_projections=luna,
         )
         assert_schema_valid(aggregate, AGGREGATE_SCHEMA_FILE)
         self.assertEqual(
@@ -617,9 +952,46 @@ class SourceNeutralMappingTests(unittest.TestCase):
             ],
         )
         self.assertFalse(aggregate["model_call_counts_included"])
+        self.assertEqual(aggregate["metric_numerators"]["exact_hydration"], 2)
+        self.assertEqual(aggregate["metric_denominators"]["luna_qualified_state_upgrades"], 1)
         serialized = json.dumps(aggregate).casefold()
         for token in ("candidate_ref", "handle", "profile_url", "source_text", "excerpt"):
             self.assertNotIn(token, serialized)
+
+    def test_aggregate_zero_propagation_is_derived_from_replayed_stage_coverage(self) -> None:
+        manifest = _manifest()
+        policy = load_policy()
+        plan = plan_wave_p(manifest, policy, plan_id="fixture_zero_aggregate_v1")
+        empty = build_candidate_free_aggregate(
+            manifest=manifest,
+            policy=policy,
+            plan=plan,
+            session_projections=[],
+        )
+        self.assertEqual(empty["metric_numerators"]["execution_compliance"], 0)
+        self.assertEqual(empty["metric_numerators"]["stable_post_id_retrieval"], 0)
+        self.assertEqual(empty["metric_numerators"]["exact_hydration"], 0)
+        self.assertEqual(empty["metric_numerators"]["luna_qualified_state_upgrades"], 0)
+        self.assertIsNone(empty["metric_rates"]["stable_post_id_retrieval"])
+
+        sessions = _all_session_projections(manifest, plan)
+        frontier = build_frontier_queues(
+            manifest=manifest,
+            plan=plan,
+            session_projections=sessions,
+            policy=policy,
+        )
+        hydration = _hydration_projection(frontier["thread_hydration_queue"][0])
+        luna = _luna_projection(hydration, index=1, upgrade=True)
+        with self.assertRaisesRegex(SourceNeutralMappingError, "hydration_binding"):
+            build_candidate_free_aggregate(
+                manifest=manifest,
+                policy=policy,
+                plan=plan,
+                session_projections=sessions,
+                hydration_projections=[],
+                luna_review_projections=[luna],
+            )
 
     def test_calibration_binding_is_candidate_free_hash_bound_and_not_plateau_claim(self) -> None:
         aggregate = strict_load_json(CALIBRATION_PATH)

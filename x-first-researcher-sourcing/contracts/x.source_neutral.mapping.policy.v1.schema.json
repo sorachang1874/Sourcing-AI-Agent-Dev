@@ -131,7 +131,7 @@
         "challenger_self_evidence_allowed"
       ],
       "properties": {
-        "queue_order": {"const": ["saturation_queue", "thread_hydration_queue", "luna_input_queue", "challenger_queue"]},
+        "queue_order": {"const": ["pending_wave_p_queue", "retry_split_queue", "saturation_queue", "thread_hydration_queue", "luna_input_queue", "challenger_queue"]},
         "thread_hydration_requires_exact_stable_post_id": {"const": true},
         "luna_requires_exact_source_bound_hydration": {"const": true},
         "authored_sparse_max_references": {"type": "integer", "minimum": 0},

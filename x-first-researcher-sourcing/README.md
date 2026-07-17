@@ -131,8 +131,10 @@ The first vertical slice covers OpenAI with:
 
 A provider-free source-neutral mapping controller now freezes the calibrated large-lab query method without a lab,
 candidate, model, or business-volume cap. Its default Wave P is empirical grain `3`, two exact champion keyword calls
-per candidate, complete manifest coverage, literal per-call URL blocks, six-file raw-session replay, exact hydration
-and Luna queues, and a structural two-wave stop. Historical calibration sessions remain exploratory because they did
+per candidate, exact manifest+policy plan reconstruction, literal per-call URL blocks, and six-file raw-session
+replay. Frontier/Luna/metric consumers replay typed retained-source projections; unexecuted and rejected batches stay
+separate from sparse evidence; exact `x_thread_fetch` hydration binds descriptor host, author, Post ID, and text bytes;
+and structural stopping requires six empty queues plus two replayed, fully covered zero waves. Historical calibration sessions remain exploratory because they did
 not retain the typed precommit required for `commit_allowed`; see
 `docs/SOURCE_NEUTRAL_MAPPING_CONTROLLER.md`.
 

@@ -35,7 +35,7 @@
     "source_artifact_count": {"type": "integer", "minimum": 0},
     "source_artifact_hashes_sha256": {"$ref": "#/$defs/nullable_sha"},
     "terminal_sha256": {"$ref": "#/$defs/nullable_sha"},
-    "planned_native_x_call_count": {"type": "integer", "minimum": 0},
+    "planned_native_x_call_count": {"oneOf": [{"type": "integer", "minimum": 0}, {"type": "null"}]},
     "attested_completed_native_x_call_count": {"type": "integer", "minimum": 0},
     "x_user_search_call_count": {"const": 0},
     "pretool_terminal_count": {"const": 0},

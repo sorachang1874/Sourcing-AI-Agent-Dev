@@ -13,16 +13,20 @@ import hashlib
 import json
 import re
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
 from x_first.grok_operator_session_replay import (
+    FrozenRawSessionArtifact,
     GrokOperatorSessionPrecommit,
     GrokOperatorSessionReplayError,
     replay_grok_operator_session,
     session_precommit_sha256,
+    thaw_raw_session_artifacts,
 )
+from x_first.recall_pool_campaign import RAW_SESSION_FILES
 from x_first.recall_pool_schema import assert_schema_valid
 
 POLICY_SCHEMA_VERSION = "x.source_neutral.mapping.policy.v1"
@@ -33,6 +37,8 @@ TERMINAL_SCHEMA_VERSION = "x.source_neutral.mapping.flat_terminal.v1"
 RECEIPT_SCHEMA_VERSION = "x.source_neutral.mapping.session_receipt.v1"
 AGGREGATE_SCHEMA_VERSION = "x.source_neutral.mapping.candidate_free_aggregate.v1"
 CALIBRATION_SCHEMA_VERSION = "x.source_neutral.mapping.calibration_aggregate.v1"
+EXACT_HYDRATION_SCHEMA_VERSION = "x.source_neutral.mapping.exact_post_hydration.v1"
+LUNA_REVIEW_SCHEMA_VERSION = "x.source_neutral.mapping.luna_state_review.v1"
 
 POLICY_SCHEMA_FILE = "x.source_neutral.mapping.policy.v1.schema.json"
 MANIFEST_SCHEMA_FILE = "x.source_neutral.mapping.candidate_manifest.v1.schema.json"
@@ -40,12 +46,16 @@ PLAN_SCHEMA_FILE = "x.source_neutral.mapping.wave_plan.v1.schema.json"
 RECEIPT_SCHEMA_FILE = "x.source_neutral.mapping.session_receipt.v1.schema.json"
 AGGREGATE_SCHEMA_FILE = "x.source_neutral.mapping.candidate_free_aggregate.v1.schema.json"
 CALIBRATION_SCHEMA_FILE = "x.source_neutral.mapping.calibration_aggregate.v1.schema.json"
+EXACT_HYDRATION_SCHEMA_FILE = "x.source_neutral.mapping.exact_post_hydration.v1.schema.json"
+LUNA_REVIEW_SCHEMA_FILE = "x.source_neutral.mapping.luna_state_review.v1.schema.json"
 
 CONTRACT_SCHEMA_FILES = (
     POLICY_SCHEMA_FILE,
     MANIFEST_SCHEMA_FILE,
     PLAN_SCHEMA_FILE,
     RECEIPT_SCHEMA_FILE,
+    EXACT_HYDRATION_SCHEMA_FILE,
+    LUNA_REVIEW_SCHEMA_FILE,
     AGGREGATE_SCHEMA_FILE,
     CALIBRATION_SCHEMA_FILE,
 )
@@ -56,10 +66,10 @@ _HANDLE_RE = re.compile(r"[A-Za-z0-9_]{1,15}")
 _STATUS_ID_RE = re.compile(r"[0-9]{1,32}")
 _QUERY_TERM_RE = re.compile(r'(?:[A-Za-z0-9_-]+|"[A-Za-z0-9 -]+")')
 _AXIS_STATES = frozenset({"current", "historical", "ambiguous", "unsupported"})
-_PRIOR_EVIDENCE = frozenset(
-    {"fixture_asserted", "source_bound", "model_mediated_unverified", "unsupported"}
-)
+_PRIOR_EVIDENCE = frozenset({"fixture_asserted", "source_bound", "model_mediated_unverified", "unsupported"})
 QUEUE_KEYS = (
+    "pending_wave_p_queue",
+    "retry_split_queue",
     "saturation_queue",
     "thread_hydration_queue",
     "luna_input_queue",
@@ -69,6 +79,71 @@ QUEUE_KEYS = (
 
 class SourceNeutralMappingError(ValueError):
     """Stable fail-closed error for the provider-free mapping controller."""
+
+
+@dataclass(frozen=True)
+class MappingSessionProjection:
+    """Immutable inputs required to replay one planned mapping batch."""
+
+    mapping_precommit_json: bytes
+    terminal_text: str
+    lab_descriptor_json: bytes
+    grok_precommit: GrokOperatorSessionPrecommit
+    raw_session_artifacts: tuple[FrozenRawSessionArtifact, ...]
+    receipt_sha256: str
+
+
+@dataclass(frozen=True)
+class ExactPostHydrationProjection:
+    """One exact x_thread_fetch result with retained replayable source bytes."""
+
+    task_sha256: str
+    terminal_json: bytes
+    grok_precommit: GrokOperatorSessionPrecommit
+    raw_session_artifacts: tuple[FrozenRawSessionArtifact, ...]
+    terminal_sha256: str
+    source_text: bytes
+    projection_sha256: str
+
+
+@dataclass(frozen=True)
+class LunaStateReviewProjection:
+    """Canonical Luna result bound to one exact hydration projection."""
+
+    result_json: bytes
+    result_sha256: str
+
+
+@dataclass(frozen=True)
+class ExecutedWaveFacts:
+    """Mechanically derived zero-wave eligibility facts.
+
+    The constructor is public Python syntax, so consumers revalidate every
+    relation and digest instead of treating dataclass identity as authority.
+    """
+
+    wave_id: str
+    manifest_json: bytes
+    policy_json: bytes
+    plan_json: bytes
+    strategy_payload_json: bytes
+    session_projections: tuple[MappingSessionProjection, ...]
+    hydration_projections: tuple[ExactPostHydrationProjection, ...]
+    luna_review_projections: tuple[LunaStateReviewProjection, ...]
+    prior_stable_post_ids: tuple[str, ...]
+    strategy_signature_sha256: str
+    planned_work_item_ids: tuple[str, ...]
+    completed_work_item_ids: tuple[str, ...]
+    rejected_work_item_ids: tuple[str, ...]
+    covered_candidate_refs: tuple[str, ...]
+    expected_candidate_refs: tuple[str, ...]
+    session_projection_sha256s: tuple[str, ...]
+    exact_hydration_projection_sha256s: tuple[str, ...]
+    luna_result_sha256s: tuple[str, ...]
+    new_stable_post_ids: tuple[str, ...]
+    luna_qualified_upgrade_ids: tuple[str, ...]
+    remaining_queues_json: bytes
+    remaining_queue_state_sha256: str
 
 
 def project_root() -> Path:
@@ -112,6 +187,36 @@ def strict_load_json(path: Path) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise SourceNeutralMappingError("json_root_not_object")
     return value
+
+
+def strict_load_json_bytes(raw: bytes, *, error: str) -> dict[str, Any]:
+    if type(raw) is not bytes or not raw:
+        raise SourceNeutralMappingError(error)
+    try:
+        value = json.loads(
+            raw.decode("utf-8"),
+            object_pairs_hook=_strict_object,
+            parse_constant=_reject_constant,
+        )
+    except (UnicodeError, json.JSONDecodeError) as exc:
+        raise SourceNeutralMappingError(error) from exc
+    if type(value) is not dict:
+        raise SourceNeutralMappingError(error)
+    return value
+
+
+def _canonical_json_bytes(value: Any) -> bytes:
+    return canonical_json(value).encode("utf-8")
+
+
+def _freeze_raw_session_files(raw_session_files: Mapping[str, bytes]) -> tuple[FrozenRawSessionArtifact, ...]:
+    if type(raw_session_files) is not dict or set(raw_session_files) != RAW_SESSION_FILES:
+        raise SourceNeutralMappingError("mapping_projection_raw_artifact_set_invalid")
+    if any(type(value) is not bytes for value in raw_session_files.values()):
+        raise SourceNeutralMappingError("mapping_projection_raw_artifact_bytes_invalid")
+    return tuple(
+        FrozenRawSessionArtifact(name=name, content=raw_session_files[name]) for name in sorted(RAW_SESSION_FILES)
+    )
 
 
 def _exact_keys(value: Any, keys: set[str], error: str) -> Mapping[str, Any]:
@@ -164,8 +269,10 @@ def validate_lab_descriptor(value: Any) -> None:
         raise SourceNeutralMappingError("lab_official_handle_duplicate")
     for field in ("affiliation_aliases", "project_aliases"):
         values = descriptor[field]
-        if not isinstance(values, list) or not values or any(
-            not isinstance(item, str) or not item.strip() or len(item) > 160 for item in values
+        if (
+            not isinstance(values, list)
+            or not values
+            or any(not isinstance(item, str) or not item.strip() or len(item) > 160 for item in values)
         ):
             raise SourceNeutralMappingError(f"lab_{field}_invalid")
         if len({item.casefold() for item in values}) != len(values):
@@ -191,9 +298,7 @@ def validate_policy(policy: Any) -> None:
     if any(cell["concept_alias_group_id"] not in group_ids for cell in cells):
         raise SourceNeutralMappingError("mapping_policy_champion_group_unknown")
     if any(
-        _QUERY_TERM_RE.fullmatch(term) is None
-        for group in policy["concept_alias_groups"]
-        for term in group["aliases"]
+        _QUERY_TERM_RE.fullmatch(term) is None for group in policy["concept_alias_groups"] for term in group["aliases"]
     ):
         raise SourceNeutralMappingError("mapping_policy_query_term_invalid")
     if policy["saturation"]["child_lineage"] != ["topic", "mode", "time"]:
@@ -327,6 +432,19 @@ def plan_wave_p(
     validate_candidate_manifest(manifest)
     validate_policy(policy)
     _identifier(plan_id, "wave_plan_id_invalid")
+    payload = _construct_wave_plan(manifest=manifest, policy=policy, plan_id=plan_id)
+    validate_wave_plan(payload, manifest=manifest, policy=policy)
+    return payload
+
+
+def _construct_wave_plan(
+    *,
+    manifest: Mapping[str, Any],
+    policy: Mapping[str, Any],
+    plan_id: str,
+) -> dict[str, Any]:
+    """Construct the sole policy-owned Wave P value without recursive validation."""
+
     aliases = _alias_groups(policy)
     grain = policy["wave_p"]["candidate_grain"]
     candidates = manifest["candidates"]
@@ -380,7 +498,6 @@ def plan_wave_p(
         "plan_sha256": "",
     }
     payload["plan_sha256"] = _content_sha256(payload, "plan_sha256")
-    validate_wave_plan(payload, manifest=manifest, policy=policy)
     return payload
 
 
@@ -390,11 +507,17 @@ def validate_wave_plan(
     manifest: Mapping[str, Any],
     policy: Mapping[str, Any],
 ) -> None:
+    validate_candidate_manifest(manifest)
+    validate_policy(policy)
     if not isinstance(plan, Mapping):
         raise SourceNeutralMappingError("wave_plan_not_object")
-    assert_schema_valid(plan, PLAN_SCHEMA_FILE)
+    try:
+        assert_schema_valid(plan, PLAN_SCHEMA_FILE)
+    except Exception as exc:
+        raise SourceNeutralMappingError("wave_plan_schema_invalid") from exc
     if plan.get("schema_version") != PLAN_SCHEMA_VERSION:
         raise SourceNeutralMappingError("wave_plan_version_invalid")
+    plan_id = _identifier(plan.get("plan_id"), "wave_plan_id_invalid")
     if (
         plan["policy_sha256"] != canonical_sha256(policy)
         or plan["manifest_sha256"] != manifest["manifest_sha256"]
@@ -427,14 +550,20 @@ def validate_wave_plan(
         raise SourceNeutralMappingError("wave_plan_denominator_mismatch")
     if plan["plan_sha256"] != _content_sha256(plan, "plan_sha256"):
         raise SourceNeutralMappingError("wave_plan_hash_mismatch")
+    expected = _construct_wave_plan(manifest=manifest, policy=policy, plan_id=plan_id)
+    if canonical_json(plan) != canonical_json(expected):
+        raise SourceNeutralMappingError("wave_plan_exact_policy_reconstruction_mismatch")
 
 
 def build_session_precommit(
     *,
     plan: Mapping[str, Any],
+    manifest: Mapping[str, Any],
+    policy: Mapping[str, Any],
     batch_index: int,
     grok_precommit: GrokOperatorSessionPrecommit,
 ) -> dict[str, Any]:
+    validate_wave_plan(plan, manifest=manifest, policy=policy)
     if type(batch_index) is not int or batch_index < 0 or batch_index >= len(plan["batches"]):
         raise SourceNeutralMappingError("session_precommit_batch_index_invalid")
     batch = plan["batches"][batch_index]
@@ -614,8 +743,17 @@ def replay_flat_session(
 ) -> dict[str, Any]:
     """Replay one flat batch; only six-file raw replay can authorize commit."""
 
+    precommit_trusted = False
     try:
         _validate_session_precommit(mapping_precommit)
+        precommit_trusted = True
+    except (SourceNeutralMappingError, KeyError, TypeError):
+        return _rejected_session_receipt(
+            mapping_precommit,
+            "mapping_precommit_invalid",
+            planned_native_x_call_count=None,
+        )
+    try:
         validate_lab_descriptor(lab_descriptor)
         references, saturation = _parse_flat_terminal(
             terminal_text,
@@ -623,15 +761,21 @@ def replay_flat_session(
             x_url_host=lab_descriptor["x_url_host"],
         )
     except (SourceNeutralMappingError, KeyError, TypeError):
-        return _rejected_session_receipt(mapping_precommit, "flat_projection_invalid")
+        return _rejected_session_receipt(
+            mapping_precommit,
+            "flat_projection_invalid",
+            planned_native_x_call_count=len(mapping_precommit["calls"]) if precommit_trusted else None,
+        )
     if raw_session_files is None or grok_precommit is None:
-        return _rejected_session_receipt(mapping_precommit, "operator_projected_unverified")
+        return _rejected_session_receipt(
+            mapping_precommit,
+            "operator_projected_unverified",
+            planned_native_x_call_count=len(mapping_precommit["calls"]),
+        )
     try:
         if (
-            session_precommit_sha256(grok_precommit)
-            != mapping_precommit["grok_session_precommit_sha256"]
-            or grok_precommit.expected_user_prompt_sha256
-            != mapping_precommit["expected_user_prompt_sha256"]
+            session_precommit_sha256(grok_precommit) != mapping_precommit["grok_session_precommit_sha256"]
+            or grok_precommit.expected_user_prompt_sha256 != mapping_precommit["expected_user_prompt_sha256"]
             or mapping_precommit["prompt_batch_marker"]
             not in grok_precommit.expected_user_prompt.decode("utf-8").splitlines()
         ):
@@ -658,7 +802,11 @@ def replay_flat_session(
         UnicodeError,
         json.JSONDecodeError,
     ):
-        return _rejected_session_receipt(mapping_precommit, "raw_six_file_replay_invalid")
+        return _rejected_session_receipt(
+            mapping_precommit,
+            "raw_six_file_replay_invalid",
+            planned_native_x_call_count=len(mapping_precommit["calls"]),
+        )
     receipt: dict[str, Any] = {
         "schema_version": RECEIPT_SCHEMA_VERSION,
         "status": "accepted",
@@ -685,7 +833,12 @@ def replay_flat_session(
     return receipt
 
 
-def _rejected_session_receipt(precommit: Mapping[str, Any], error: str) -> dict[str, Any]:
+def _rejected_session_receipt(
+    precommit: Mapping[str, Any],
+    error: str,
+    *,
+    planned_native_x_call_count: int | None,
+) -> dict[str, Any]:
     digest = precommit.get("precommit_sha256") if isinstance(precommit, Mapping) else None
     if not isinstance(digest, str) or _SHA_RE.fullmatch(digest) is None:
         digest = "0" * 64
@@ -700,7 +853,7 @@ def _rejected_session_receipt(precommit: Mapping[str, Any], error: str) -> dict[
         "source_artifact_count": 0,
         "source_artifact_hashes_sha256": None,
         "terminal_sha256": None,
-        "planned_native_x_call_count": 0,
+        "planned_native_x_call_count": planned_native_x_call_count,
         "attested_completed_native_x_call_count": 0,
         "x_user_search_call_count": 0,
         "pretool_terminal_count": 0,
@@ -713,6 +866,64 @@ def _rejected_session_receipt(precommit: Mapping[str, Any], error: str) -> dict[
     receipt["receipt_sha256"] = _content_sha256(receipt, "receipt_sha256")
     assert_schema_valid(receipt, RECEIPT_SCHEMA_FILE)
     return receipt
+
+
+def build_mapping_session_projection(
+    *,
+    mapping_precommit: Mapping[str, Any],
+    terminal_text: str,
+    lab_descriptor: Mapping[str, Any],
+    raw_session_files: Mapping[str, bytes],
+    grok_precommit: GrokOperatorSessionPrecommit,
+) -> MappingSessionProjection:
+    """Freeze all source material needed to rederive one session receipt."""
+
+    receipt = replay_flat_session(
+        mapping_precommit=mapping_precommit,
+        terminal_text=terminal_text,
+        lab_descriptor=lab_descriptor,
+        raw_session_files=raw_session_files,
+        grok_precommit=grok_precommit,
+    )
+    projection = MappingSessionProjection(
+        mapping_precommit_json=_canonical_json_bytes(mapping_precommit),
+        terminal_text=terminal_text,
+        lab_descriptor_json=_canonical_json_bytes(lab_descriptor),
+        grok_precommit=grok_precommit,
+        raw_session_artifacts=_freeze_raw_session_files(raw_session_files),
+        receipt_sha256=receipt["receipt_sha256"],
+    )
+    _replay_mapping_session_projection(projection)
+    return projection
+
+
+def _replay_mapping_session_projection(
+    projection: Any,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    if type(projection) is not MappingSessionProjection:
+        raise SourceNeutralMappingError("mapping_session_projection_required")
+    mapping_precommit = strict_load_json_bytes(
+        projection.mapping_precommit_json,
+        error="mapping_session_projection_precommit_invalid",
+    )
+    lab_descriptor = strict_load_json_bytes(
+        projection.lab_descriptor_json,
+        error="mapping_session_projection_descriptor_invalid",
+    )
+    try:
+        raw_session_files = thaw_raw_session_artifacts(projection.raw_session_artifacts)
+    except GrokOperatorSessionReplayError as exc:
+        raise SourceNeutralMappingError("mapping_session_projection_raw_invalid") from exc
+    receipt = replay_flat_session(
+        mapping_precommit=mapping_precommit,
+        terminal_text=projection.terminal_text,
+        lab_descriptor=lab_descriptor,
+        raw_session_files=raw_session_files,
+        grok_precommit=projection.grok_precommit,
+    )
+    if receipt["receipt_sha256"] != projection.receipt_sha256:
+        raise SourceNeutralMappingError("mapping_session_projection_receipt_mismatch")
+    return mapping_precommit, receipt
 
 
 def split_invalid_batch(candidate_refs: Sequence[str]) -> list[list[str]]:
@@ -769,34 +980,101 @@ def expand_saturation_item(item: Mapping[str, Any], policy: Mapping[str, Any]) -
 def build_frontier_queues(
     *,
     manifest: Mapping[str, Any],
-    accepted_receipts: Sequence[Mapping[str, Any]],
+    plan: Mapping[str, Any],
+    session_projections: Sequence[MappingSessionProjection],
     policy: Mapping[str, Any],
 ) -> dict[str, list[dict[str, Any]]]:
     validate_candidate_manifest(manifest)
     validate_policy(policy)
+    validate_wave_plan(plan, manifest=manifest, policy=policy)
+    if type(session_projections) not in {list, tuple}:
+        raise SourceNeutralMappingError("frontier_session_projections_invalid")
     references: dict[tuple[str, str], Mapping[str, Any]] = {}
     manifest_refs = {row["candidate_ref"] for row in manifest["candidates"]}
     stable_post_owners: dict[str, str] = {}
     saturation: list[dict[str, Any]] = []
-    for receipt in accepted_receipts:
-        try:
-            assert_schema_valid(receipt, RECEIPT_SCHEMA_FILE)
-        except Exception as exc:
-            raise SourceNeutralMappingError("frontier_receipt_schema_invalid") from exc
+    batches_by_id = {batch["batch_id"]: (index, batch) for index, batch in enumerate(plan["batches"])}
+    projected_by_batch: dict[str, tuple[dict[str, Any], dict[str, Any]]] = {}
+    session_ids: set[str] = set()
+    request_ids: set[str] = set()
+    receipt_sha256s: set[str] = set()
+    for projection in session_projections:
+        mapping_precommit, receipt = _replay_mapping_session_projection(projection)
         if (
-            receipt.get("status") != "accepted"
-            or receipt.get("commit_allowed") is not True
-            or receipt.get("proof_authority") != "existing_raw_grok_six_file_replay"
-            or receipt.get("errors") != []
-            or receipt.get("source_artifact_count") != 6
-            or receipt.get("planned_native_x_call_count")
-            != receipt.get("attested_completed_native_x_call_count")
-            or receipt.get("receipt_sha256") != _content_sha256(receipt, "receipt_sha256")
-            or receipt.get("unique_stable_post_id_count") != len(receipt.get("references", []))
-            or receipt.get("saturation_lower_bound_count")
-            != len(receipt.get("saturation_queue_seeds", []))
+            strict_load_json_bytes(
+                projection.lab_descriptor_json,
+                error="frontier_projection_descriptor_invalid",
+            )
+            != manifest["lab_descriptor"]
         ):
-            raise SourceNeutralMappingError("frontier_receipt_not_accepted")
+            raise SourceNeutralMappingError("frontier_projection_descriptor_mismatch")
+        batch_id = mapping_precommit.get("batch_id")
+        if (
+            batch_id not in batches_by_id
+            or batch_id in projected_by_batch
+            or mapping_precommit["session_id"] in session_ids
+            or mapping_precommit["request_id"] in request_ids
+            or receipt["receipt_sha256"] in receipt_sha256s
+        ):
+            raise SourceNeutralMappingError("frontier_projection_batch_coverage_invalid")
+        session_ids.add(mapping_precommit["session_id"])
+        request_ids.add(mapping_precommit["request_id"])
+        receipt_sha256s.add(receipt["receipt_sha256"])
+        batch_index, _ = batches_by_id[batch_id]
+        expected_precommit = build_session_precommit(
+            plan=plan,
+            manifest=manifest,
+            policy=policy,
+            batch_index=batch_index,
+            grok_precommit=projection.grok_precommit,
+        )
+        if canonical_json(mapping_precommit) != canonical_json(expected_precommit):
+            raise SourceNeutralMappingError("frontier_projection_plan_binding_invalid")
+        projected_by_batch[batch_id] = (mapping_precommit, receipt)
+
+    pending: list[dict[str, Any]] = []
+    retry_split: list[dict[str, Any]] = []
+    fully_attested_candidate_refs: set[str] = set()
+    accepted_receipts: list[dict[str, Any]] = []
+    for batch in plan["batches"]:
+        projected = projected_by_batch.get(batch["batch_id"])
+        if projected is None:
+            pending.append(
+                {
+                    "batch_id": batch["batch_id"],
+                    "candidate_refs": list(batch["candidate_refs"]),
+                    "planned_native_x_call_count": len(batch["calls"]),
+                    "reason": "unexecuted_wave_p_batch",
+                }
+            )
+            continue
+        _, receipt = projected
+        if receipt["status"] != "accepted":
+            children = split_invalid_batch(batch["candidate_refs"])
+            retry_split.append(
+                {
+                    "batch_id": batch["batch_id"],
+                    "candidate_refs": list(batch["candidate_refs"]),
+                    "planned_native_x_call_count": receipt["planned_native_x_call_count"],
+                    "split_candidate_refs": children,
+                    "retry_action": "split" if children else "retry_singleton",
+                    "error_codes": list(receipt["errors"]),
+                }
+            )
+            continue
+        if (
+            receipt["commit_allowed"] is not True
+            or receipt["proof_authority"] != "existing_raw_grok_six_file_replay"
+            or receipt["errors"] != []
+            or receipt["source_artifact_count"] != 6
+            or receipt["planned_native_x_call_count"] != len(batch["calls"])
+            or receipt["attested_completed_native_x_call_count"] != len(batch["calls"])
+        ):
+            raise SourceNeutralMappingError("frontier_projection_accepted_receipt_invalid")
+        fully_attested_candidate_refs.update(batch["candidate_refs"])
+        accepted_receipts.append(receipt)
+
+    for receipt in accepted_receipts:
         for row in receipt["references"]:
             if row["candidate_ref"] not in manifest_refs:
                 raise SourceNeutralMappingError("frontier_reference_candidate_unknown")
@@ -812,6 +1090,8 @@ def build_frontier_queues(
             "candidate_ref": row["candidate_ref"],
             "stable_post_id": row["stable_post_id"],
             "url": row["url"],
+            "expected_author_handle": row["author_handle"],
+            "x_url_host": manifest["lab_descriptor"]["x_url_host"],
             "queue_reason": "exact_thread_hydration_required",
         }
         for row in references.values()
@@ -823,6 +1103,8 @@ def build_frontier_queues(
     challenger: list[dict[str, Any]] = []
     for candidate in manifest["candidates"]:
         candidate_ref = candidate["candidate_ref"]
+        if candidate_ref not in fully_attested_candidate_refs:
+            continue
         states = {
             candidate["lab_affiliation_prior"]["state"],
             candidate["pretraining_experience_prior"]["state"],
@@ -830,21 +1112,24 @@ def build_frontier_queues(
         sparse = counts.get(candidate_ref, 0) <= policy["queues"]["authored_sparse_max_references"]
         if not sparse and not states & {"ambiguous", "unsupported"}:
             continue
+        seeds = [stable_id for ref, stable_id in references if ref == candidate_ref]
         for challenger_type in policy["queues"]["challenger_types"]:
+            if challenger_type == "thread" and not seeds:
+                continue
             challenger.append(
                 {
                     "candidate_ref": candidate_ref,
                     "challenger_type": challenger_type,
                     "official_handles": list(descriptor["official_handles"]),
                     "project_aliases": list(descriptor["project_aliases"]),
-                    "seed_stable_post_ids": [
-                        stable_id for ref, stable_id in references if ref == candidate_ref
-                    ],
+                    "seed_stable_post_ids": seeds,
                     "relationship": "official_or_third_party_non_self",
                     "self_evidence_allowed": False,
                 }
             )
     return {
+        "pending_wave_p_queue": pending,
+        "retry_split_queue": retry_split,
         "saturation_queue": saturation,
         "thread_hydration_queue": hydration,
         "luna_input_queue": [],
@@ -852,84 +1137,455 @@ def build_frontier_queues(
     }
 
 
-def build_luna_input_queue(
+def _validate_hydration_task(task: Any) -> Mapping[str, Any]:
+    queued = _exact_keys(
+        task,
+        {
+            "candidate_ref",
+            "stable_post_id",
+            "url",
+            "expected_author_handle",
+            "x_url_host",
+            "queue_reason",
+        },
+        "thread_hydration_queue_shape_invalid",
+    )
+    _identifier(queued["candidate_ref"], "thread_hydration_candidate_ref_invalid")
+    if not isinstance(queued["stable_post_id"], str) or _STATUS_ID_RE.fullmatch(queued["stable_post_id"]) is None:
+        raise SourceNeutralMappingError("thread_hydration_stable_post_id_invalid")
+    _handle(queued["expected_author_handle"], "thread_hydration_author_invalid")
+    if queued["queue_reason"] != "exact_thread_hydration_required":
+        raise SourceNeutralMappingError("thread_hydration_reason_invalid")
+    return queued
+
+
+def build_exact_post_hydration_projection(
     *,
-    thread_hydration_queue: Sequence[Mapping[str, Any]],
-    exact_hydrations: Sequence[Mapping[str, Any]],
-) -> list[dict[str, Any]]:
-    expected: dict[tuple[str, str], Mapping[str, Any]] = {}
-    for row in thread_hydration_queue:
-        queued = _exact_keys(
-            row,
-            {"candidate_ref", "stable_post_id", "url", "queue_reason"},
-            "thread_hydration_queue_shape_invalid",
+    task: Mapping[str, Any],
+    terminal: Mapping[str, Any],
+    raw_session_files: Mapping[str, bytes],
+    grok_precommit: GrokOperatorSessionPrecommit,
+) -> ExactPostHydrationProjection:
+    """Replay one exact x_thread_fetch and retain bytes for Luna handoff."""
+
+    queued = _validate_hydration_task(task)
+    try:
+        assert_schema_valid(terminal, EXACT_HYDRATION_SCHEMA_FILE)
+    except Exception as exc:
+        raise SourceNeutralMappingError("exact_hydration_terminal_schema_invalid") from exc
+    if terminal.get("schema_version") != EXACT_HYDRATION_SCHEMA_VERSION:
+        raise SourceNeutralMappingError("exact_hydration_terminal_version_invalid")
+    parsed = urlsplit(terminal["source_url"])
+    parts = parsed.path.split("/")
+    if (
+        terminal["candidate_ref"] != queued["candidate_ref"]
+        or terminal["requested_stable_post_id"] != queued["stable_post_id"]
+        or terminal["returned_stable_post_id"] != queued["stable_post_id"]
+        or terminal["source_url"] != queued["url"]
+        or terminal["author_handle"].casefold() != queued["expected_author_handle"].casefold()
+        or parsed.scheme != "https"
+        or parsed.netloc != queued["x_url_host"]
+        or parsed.query
+        or parsed.fragment
+        or parts != ["", terminal["author_handle"], "status", terminal["returned_stable_post_id"]]
+        or terminal["lookup_status"] != "matched"
+    ):
+        raise SourceNeutralMappingError("exact_hydration_source_binding_invalid")
+    try:
+        source_text = terminal["full_text"].encode("utf-8")
+    except (AttributeError, UnicodeError) as exc:
+        raise SourceNeutralMappingError("exact_hydration_full_text_invalid") from exc
+    if not source_text or hashlib.sha256(source_text).hexdigest() != terminal["full_text_sha256"]:
+        raise SourceNeutralMappingError("exact_hydration_text_bytes_mismatch")
+    try:
+        replay = replay_grok_operator_session(
+            raw_session_files,
+            session_precommit=grok_precommit,
+            allowed_tool_names=frozenset({"x_thread_fetch"}),
+            expected_terminal=terminal,
         )
-        identity = (queued["candidate_ref"], queued["stable_post_id"])
-        if identity in expected:
-            raise SourceNeutralMappingError("thread_hydration_queue_identity_duplicate")
-        expected[identity] = queued
+    except GrokOperatorSessionReplayError as exc:
+        raise SourceNeutralMappingError("exact_hydration_raw_replay_invalid") from exc
+    if len(replay.tool_completions) != 1:
+        raise SourceNeutralMappingError("exact_hydration_call_count_invalid")
+    completion = replay.tool_completions[0]
+    try:
+        arguments = json.loads(completion.arguments_json, object_pairs_hook=_strict_object)
+    except json.JSONDecodeError as exc:
+        raise SourceNeutralMappingError("exact_hydration_tool_arguments_invalid") from exc
+    if completion.tool_name != "x_thread_fetch" or arguments != {"post_id": queued["stable_post_id"]}:
+        raise SourceNeutralMappingError("exact_hydration_tool_binding_invalid")
+    terminal_json = _canonical_json_bytes(terminal)
+    task_sha256 = canonical_sha256(queued)
+    projection_body = {
+        "task_sha256": task_sha256,
+        "terminal_sha256": replay.terminal_sha256,
+        "session_precommit_sha256": session_precommit_sha256(grok_precommit),
+        "source_artifact_sha256s": list(replay.source_artifact_sha256s),
+        "source_text_sha256": hashlib.sha256(source_text).hexdigest(),
+    }
+    projection = ExactPostHydrationProjection(
+        task_sha256=task_sha256,
+        terminal_json=terminal_json,
+        grok_precommit=grok_precommit,
+        raw_session_artifacts=replay.source_artifacts,
+        terminal_sha256=replay.terminal_sha256,
+        source_text=source_text,
+        projection_sha256=canonical_sha256(projection_body),
+    )
+    return projection
+
+
+def _replay_exact_hydration_projection(
+    projection: Any,
+    *,
+    task: Mapping[str, Any],
+) -> tuple[ExactPostHydrationProjection, dict[str, Any]]:
+    if type(projection) is not ExactPostHydrationProjection:
+        raise SourceNeutralMappingError("exact_hydration_projection_required")
+    terminal = strict_load_json_bytes(
+        projection.terminal_json,
+        error="exact_hydration_projection_terminal_invalid",
+    )
+    try:
+        raw_session_files = thaw_raw_session_artifacts(projection.raw_session_artifacts)
+    except GrokOperatorSessionReplayError as exc:
+        raise SourceNeutralMappingError("exact_hydration_projection_raw_invalid") from exc
+    recomputed = build_exact_post_hydration_projection(
+        task=task,
+        terminal=terminal,
+        raw_session_files=raw_session_files,
+        grok_precommit=projection.grok_precommit,
+    )
+    if recomputed != projection:
+        raise SourceNeutralMappingError("exact_hydration_projection_content_mismatch")
+    return recomputed, terminal
+
+
+def build_luna_state_review_projection(
+    *,
+    hydration_projection: ExactPostHydrationProjection,
+    result: Mapping[str, Any],
+) -> LunaStateReviewProjection:
+    try:
+        assert_schema_valid(result, LUNA_REVIEW_SCHEMA_FILE)
+    except Exception as exc:
+        raise SourceNeutralMappingError("luna_review_schema_invalid") from exc
+    terminal = strict_load_json_bytes(
+        hydration_projection.terminal_json,
+        error="luna_review_hydration_terminal_invalid",
+    )
+    if (
+        result.get("schema_version") != LUNA_REVIEW_SCHEMA_VERSION
+        or result["hydration_projection_sha256"] != hydration_projection.projection_sha256
+        or result["candidate_ref"] != terminal["candidate_ref"]
+        or result["stable_post_id"] != terminal["returned_stable_post_id"]
+        or result["source_text_sha256"] != hashlib.sha256(hydration_projection.source_text).hexdigest()
+    ):
+        raise SourceNeutralMappingError("luna_review_source_binding_invalid")
+    result_json = _canonical_json_bytes(result)
+    return LunaStateReviewProjection(
+        result_json=result_json,
+        result_sha256=hashlib.sha256(result_json).hexdigest(),
+    )
+
+
+def _replay_luna_review_projection(
+    projection: Any,
+    *,
+    hydration_projection: ExactPostHydrationProjection,
+) -> dict[str, Any]:
+    if type(projection) is not LunaStateReviewProjection:
+        raise SourceNeutralMappingError("luna_review_projection_required")
+    result = strict_load_json_bytes(projection.result_json, error="luna_review_projection_result_invalid")
+    recomputed = build_luna_state_review_projection(
+        hydration_projection=hydration_projection,
+        result=result,
+    )
+    if recomputed != projection:
+        raise SourceNeutralMappingError("luna_review_projection_content_mismatch")
+    return result
+
+
+def _validated_hydration_outputs(
+    *,
+    manifest: Mapping[str, Any],
+    plan: Mapping[str, Any],
+    session_projections: Sequence[MappingSessionProjection],
+    hydration_projections: Sequence[ExactPostHydrationProjection],
+    policy: Mapping[str, Any],
+) -> tuple[list[dict[str, Any]], dict[str, ExactPostHydrationProjection]]:
+    queues = build_frontier_queues(
+        manifest=manifest,
+        plan=plan,
+        session_projections=session_projections,
+        policy=policy,
+    )
+    tasks = {canonical_sha256(row): row for row in queues["thread_hydration_queue"]}
+    if type(hydration_projections) not in {list, tuple}:
+        raise SourceNeutralMappingError("exact_hydration_projections_invalid")
     output: list[dict[str, Any]] = []
-    seen: set[tuple[str, str]] = set()
-    for row in exact_hydrations:
-        hydration = _exact_keys(
-            row,
-            {
-                "candidate_ref",
-                "stable_post_id",
-                "source_url",
-                "author_handle",
-                "full_text",
-                "full_text_sha256",
-                "hydration_status",
-            },
-            "exact_hydration_shape_invalid",
-        )
-        identity = (hydration["candidate_ref"], hydration["stable_post_id"])
-        if identity not in expected or identity in seen or hydration["hydration_status"] != "exact_source_bound":
-            raise SourceNeutralMappingError("exact_hydration_binding_invalid")
-        queued = expected[identity]
-        source_url = hydration["source_url"]
-        author_handle = _handle(hydration["author_handle"], "exact_hydration_author_handle_invalid")
-        parsed = urlsplit(source_url) if isinstance(source_url, str) else None
-        parts = parsed.path.split("/") if parsed is not None else []
+    checked_by_sha: dict[str, ExactPostHydrationProjection] = {}
+    session_ids: set[str] = set()
+    request_ids: set[str] = set()
+    for projection in hydration_projections:
+        if type(projection) is not ExactPostHydrationProjection:
+            raise SourceNeutralMappingError("exact_hydration_projection_required")
+        if projection.task_sha256 not in tasks:
+            raise SourceNeutralMappingError("exact_hydration_projection_task_unknown")
         if (
-            source_url != queued["url"]
-            or parsed is None
-            or parsed.scheme != "https"
-            or not parsed.netloc
-            or parsed.query
-            or parsed.fragment
-            or len(parts) != 4
-            or parts[0] != ""
-            or parts[2] != "status"
-            or parts[1].casefold() != author_handle.casefold()
-            or parts[3] != hydration["stable_post_id"]
+            projection.projection_sha256 in checked_by_sha
+            or projection.grok_precommit.expected_session_id in session_ids
+            or projection.grok_precommit.expected_request_id in request_ids
         ):
-            raise SourceNeutralMappingError("exact_hydration_source_url_binding_invalid")
-        if not isinstance(hydration["full_text"], str) or not hydration["full_text"]:
-            raise SourceNeutralMappingError("exact_hydration_full_text_invalid")
-        if canonical_sha256(hydration["full_text"]) != hydration["full_text_sha256"]:
-            raise SourceNeutralMappingError("exact_hydration_text_hash_mismatch")
-        seen.add(identity)
+            raise SourceNeutralMappingError("exact_hydration_projection_duplicate")
+        checked, terminal = _replay_exact_hydration_projection(
+            projection,
+            task=tasks[projection.task_sha256],
+        )
+        checked_by_sha[projection.projection_sha256] = checked
+        session_ids.add(projection.grok_precommit.expected_session_id)
+        request_ids.add(projection.grok_precommit.expected_request_id)
         output.append(
             {
-                "candidate_ref": hydration["candidate_ref"],
-                "stable_post_id": hydration["stable_post_id"],
-                "source_url": hydration["source_url"],
-                "author_handle": hydration["author_handle"],
-                "source_text": hydration["full_text"],
-                "source_text_sha256": hydration["full_text_sha256"],
+                "candidate_ref": terminal["candidate_ref"],
+                "stable_post_id": terminal["returned_stable_post_id"],
+                "source_url": terminal["source_url"],
+                "author_handle": terminal["author_handle"],
+                "source_text": checked.source_text.decode("utf-8"),
+                "source_text_sha256": hashlib.sha256(checked.source_text).hexdigest(),
+                "hydration_projection_sha256": checked.projection_sha256,
                 "source_binding_status": "exact_source_bound",
                 "review_purpose": "lab_and_pretraining_temporal_state_transition",
             }
         )
+    return output, checked_by_sha
+
+
+def build_luna_input_queue(
+    *,
+    manifest: Mapping[str, Any],
+    plan: Mapping[str, Any],
+    session_projections: Sequence[MappingSessionProjection],
+    hydration_projections: Sequence[ExactPostHydrationProjection],
+    policy: Mapping[str, Any],
+) -> list[dict[str, Any]]:
+    output, _ = _validated_hydration_outputs(
+        manifest=manifest,
+        plan=plan,
+        session_projections=session_projections,
+        hydration_projections=hydration_projections,
+        policy=policy,
+    )
     return output
+
+
+def _validate_strategy_payload(value: Any, *, plan: Mapping[str, Any]) -> Mapping[str, Any]:
+    payload = _exact_keys(
+        value,
+        {
+            "strategy_id",
+            "strategy_family",
+            "plan_sha256",
+            "query_surface",
+            "mode",
+            "time_window",
+        },
+        "executed_wave_strategy_shape_invalid",
+    )
+    if payload["strategy_id"] != plan["plan_id"] or payload["strategy_family"] != "wave_p":
+        raise SourceNeutralMappingError("executed_wave_strategy_identity_mismatch")
+    if payload["plan_sha256"] != plan["plan_sha256"]:
+        raise SourceNeutralMappingError("executed_wave_strategy_plan_mismatch")
+    if payload["query_surface"] != "candidate_authored":
+        raise SourceNeutralMappingError("executed_wave_query_surface_invalid")
+    modes = {call["arguments"]["mode"] for batch in plan["batches"] for call in batch["calls"]}
+    expected_mode = next(iter(modes)) if len(modes) == 1 else "mixed"
+    if payload["mode"] != expected_mode:
+        raise SourceNeutralMappingError("executed_wave_mode_invalid")
+    if payload["time_window"] is not None:
+        raise SourceNeutralMappingError("executed_wave_time_window_invalid")
+    return payload
+
+
+def _derive_executed_wave_facts(
+    *,
+    wave_id: str,
+    manifest: Mapping[str, Any],
+    policy: Mapping[str, Any],
+    plan: Mapping[str, Any],
+    strategy_payload: Mapping[str, Any],
+    session_projections: Sequence[MappingSessionProjection],
+    hydration_projections: Sequence[ExactPostHydrationProjection],
+    luna_review_projections: Sequence[LunaStateReviewProjection],
+    prior_stable_post_ids: Sequence[str],
+) -> ExecutedWaveFacts:
+    _identifier(wave_id, "executed_wave_id_invalid")
+    validate_wave_plan(plan, manifest=manifest, policy=policy)
+    strategy = _validate_strategy_payload(strategy_payload, plan=plan)
+    if type(session_projections) not in {list, tuple}:
+        raise SourceNeutralMappingError("executed_wave_session_projections_invalid")
+    if type(hydration_projections) not in {list, tuple} or type(luna_review_projections) not in {list, tuple}:
+        raise SourceNeutralMappingError("executed_wave_downstream_projections_invalid")
+    if (
+        type(prior_stable_post_ids) not in {list, tuple}
+        or any(not isinstance(item, str) or _STATUS_ID_RE.fullmatch(item) is None for item in prior_stable_post_ids)
+        or len(set(prior_stable_post_ids)) != len(prior_stable_post_ids)
+    ):
+        raise SourceNeutralMappingError("executed_wave_prior_stable_ids_invalid")
+
+    queues = build_frontier_queues(
+        manifest=manifest,
+        plan=plan,
+        session_projections=session_projections,
+        policy=policy,
+    )
+    if queues["pending_wave_p_queue"] or queues["retry_split_queue"]:
+        raise SourceNeutralMappingError("executed_wave_plan_execution_incomplete")
+    hydration_outputs, checked_hydrations = _validated_hydration_outputs(
+        manifest=manifest,
+        plan=plan,
+        session_projections=session_projections,
+        hydration_projections=hydration_projections,
+        policy=policy,
+    )
+    if len(hydration_outputs) != len(queues["thread_hydration_queue"]):
+        raise SourceNeutralMappingError("executed_wave_hydration_incomplete")
+    hydration_by_sha = checked_hydrations
+    checked_luna: dict[str, dict[str, Any]] = {}
+    review_ids: set[str] = set()
+    for projection in luna_review_projections:
+        if type(projection) is not LunaStateReviewProjection:
+            raise SourceNeutralMappingError("executed_wave_luna_projection_invalid")
+        raw = strict_load_json_bytes(projection.result_json, error="executed_wave_luna_result_invalid")
+        hydration_sha = raw.get("hydration_projection_sha256")
+        if hydration_sha not in hydration_by_sha or hydration_sha in checked_luna or raw.get("review_id") in review_ids:
+            raise SourceNeutralMappingError("executed_wave_luna_coverage_invalid")
+        review_ids.add(raw["review_id"])
+        checked_luna[hydration_sha] = _replay_luna_review_projection(
+            projection,
+            hydration_projection=hydration_by_sha[hydration_sha],
+        )
+    if set(checked_luna) != set(hydration_by_sha):
+        raise SourceNeutralMappingError("executed_wave_luna_coverage_incomplete")
+
+    receipt_by_batch: dict[str, tuple[MappingSessionProjection, dict[str, Any]]] = {}
+    for projection in session_projections:
+        precommit, receipt = _replay_mapping_session_projection(projection)
+        receipt_by_batch[precommit["batch_id"]] = (projection, receipt)
+    completed = tuple(
+        batch["batch_id"]
+        for batch in plan["batches"]
+        if batch["batch_id"] in receipt_by_batch and receipt_by_batch[batch["batch_id"]][1]["status"] == "accepted"
+    )
+    rejected = tuple(
+        batch["batch_id"]
+        for batch in plan["batches"]
+        if batch["batch_id"] in receipt_by_batch and receipt_by_batch[batch["batch_id"]][1]["status"] == "rejected"
+    )
+    planned = tuple(batch["batch_id"] for batch in plan["batches"])
+    expected_refs = tuple(row["candidate_ref"] for row in manifest["candidates"])
+    covered_refs = tuple(
+        ref for batch in plan["batches"] if batch["batch_id"] in completed for ref in batch["candidate_refs"]
+    )
+    all_stable_ids = sorted(
+        {
+            row["stable_post_id"]
+            for _, receipt in receipt_by_batch.values()
+            if receipt["status"] == "accepted"
+            for row in receipt["references"]
+        },
+        key=int,
+    )
+    prior = set(prior_stable_post_ids)
+    new_ids = tuple(item for item in all_stable_ids if item not in prior)
+    upgrades = tuple(
+        sorted(result["upgrade_id"] for result in checked_luna.values() if result["qualified_state_upgrade"] is True)
+    )
+    if len(upgrades) != len(set(upgrades)):
+        raise SourceNeutralMappingError("executed_wave_luna_upgrade_duplicate")
+    remaining_queues = json.loads(canonical_json(queues))
+    remaining_queues["thread_hydration_queue"] = []
+    remaining_queues["luna_input_queue"] = []
+    remaining_queues_json = _canonical_json_bytes(remaining_queues)
+    return ExecutedWaveFacts(
+        wave_id=wave_id,
+        manifest_json=_canonical_json_bytes(manifest),
+        policy_json=_canonical_json_bytes(policy),
+        plan_json=_canonical_json_bytes(plan),
+        strategy_payload_json=_canonical_json_bytes(strategy),
+        session_projections=tuple(session_projections),
+        hydration_projections=tuple(hydration_projections),
+        luna_review_projections=tuple(luna_review_projections),
+        prior_stable_post_ids=tuple(prior_stable_post_ids),
+        strategy_signature_sha256=canonical_sha256(strategy),
+        planned_work_item_ids=planned,
+        completed_work_item_ids=completed,
+        rejected_work_item_ids=rejected,
+        covered_candidate_refs=covered_refs,
+        expected_candidate_refs=expected_refs,
+        session_projection_sha256s=tuple(receipt_by_batch[batch_id][0].receipt_sha256 for batch_id in completed),
+        exact_hydration_projection_sha256s=tuple(sorted(hydration_by_sha)),
+        luna_result_sha256s=tuple(sorted(item.result_sha256 for item in luna_review_projections)),
+        new_stable_post_ids=new_ids,
+        luna_qualified_upgrade_ids=upgrades,
+        remaining_queues_json=remaining_queues_json,
+        remaining_queue_state_sha256=hashlib.sha256(remaining_queues_json).hexdigest(),
+    )
+
+
+def build_executed_wave_facts(
+    *,
+    wave_id: str,
+    manifest: Mapping[str, Any],
+    policy: Mapping[str, Any],
+    plan: Mapping[str, Any],
+    strategy_payload: Mapping[str, Any],
+    session_projections: Sequence[MappingSessionProjection],
+    hydration_projections: Sequence[ExactPostHydrationProjection],
+    luna_review_projections: Sequence[LunaStateReviewProjection],
+    prior_stable_post_ids: Sequence[str],
+) -> ExecutedWaveFacts:
+    return _derive_executed_wave_facts(
+        wave_id=wave_id,
+        manifest=manifest,
+        policy=policy,
+        plan=plan,
+        strategy_payload=strategy_payload,
+        session_projections=session_projections,
+        hydration_projections=hydration_projections,
+        luna_review_projections=luna_review_projections,
+        prior_stable_post_ids=prior_stable_post_ids,
+    )
+
+
+def _replay_executed_wave_facts(value: Any) -> ExecutedWaveFacts:
+    if type(value) is not ExecutedWaveFacts:
+        raise SourceNeutralMappingError("executed_wave_facts_required")
+    manifest = strict_load_json_bytes(value.manifest_json, error="executed_wave_manifest_invalid")
+    policy = strict_load_json_bytes(value.policy_json, error="executed_wave_policy_invalid")
+    plan = strict_load_json_bytes(value.plan_json, error="executed_wave_plan_invalid")
+    strategy = strict_load_json_bytes(value.strategy_payload_json, error="executed_wave_strategy_invalid")
+    recomputed = _derive_executed_wave_facts(
+        wave_id=value.wave_id,
+        manifest=manifest,
+        policy=policy,
+        plan=plan,
+        strategy_payload=strategy,
+        session_projections=value.session_projections,
+        hydration_projections=value.hydration_projections,
+        luna_review_projections=value.luna_review_projections,
+        prior_stable_post_ids=value.prior_stable_post_ids,
+    )
+    if recomputed != value:
+        raise SourceNeutralMappingError("executed_wave_facts_content_mismatch")
+    return recomputed
 
 
 def structural_stop(
     *,
     queues: Mapping[str, Sequence[Any]],
-    recent_waves: Sequence[Mapping[str, Any]],
+    recent_waves: Sequence[ExecutedWaveFacts],
     policy: Mapping[str, Any],
 ) -> dict[str, Any]:
     validate_policy(policy)
@@ -938,29 +1594,67 @@ def structural_stop(
         and set(queues) == set(QUEUE_KEYS)
         and all(isinstance(queues[key], list) for key in QUEUE_KEYS)
     )
-    queues_empty = queue_shape_valid and all(not queues[key] for key in QUEUE_KEYS)
     required = policy["stop"]["consecutive_materially_distinct_zero_waves"]
-    trailing = list(recent_waves[-required:])
-    wave_keys = {
-        "wave_id",
-        "strategy_signature_sha256",
-        "new_stable_post_id_count",
-        "luna_qualified_state_upgrade_count",
-    }
-    valid_waves = len(trailing) == required and all(
-        isinstance(row, Mapping)
-        and set(row) == wave_keys
-        and isinstance(row["wave_id"], str)
-        and _ID_RE.fullmatch(row["wave_id"]) is not None
-        and isinstance(row["strategy_signature_sha256"], str)
-        and _SHA_RE.fullmatch(row["strategy_signature_sha256"]) is not None
-        and type(row["new_stable_post_id_count"]) is int
-        and row["new_stable_post_id_count"] == 0
-        and type(row["luna_qualified_state_upgrade_count"]) is int
-        and row["luna_qualified_state_upgrade_count"] == 0
-        for row in trailing
+    trailing = list(recent_waves[-required:]) if type(recent_waves) in {list, tuple} else []
+    checked: list[ExecutedWaveFacts] = []
+    if len(trailing) == required:
+        try:
+            checked = [_replay_executed_wave_facts(row) for row in trailing]
+        except Exception:  # fail closed to continue_mapping at the public stop boundary
+            checked = []
+    derived_queues: dict[str, Any] | None = None
+    if checked:
+        try:
+            derived_queues = strict_load_json_bytes(
+                checked[-1].remaining_queues_json,
+                error="executed_wave_remaining_queues_invalid",
+            )
+        except SourceNeutralMappingError:
+            derived_queues = None
+    remaining_states = [
+        strict_load_json_bytes(
+            row.remaining_queues_json,
+            error="executed_wave_remaining_queues_invalid",
+        )
+        for row in checked
+    ]
+    queue_state_matches = False
+    if queue_shape_valid and derived_queues is not None:
+        try:
+            queue_state_matches = canonical_json(queues) == canonical_json(derived_queues)
+        except (TypeError, ValueError):
+            queue_state_matches = False
+    queues_empty = queue_state_matches and all(not derived_queues[key] for key in QUEUE_KEYS)
+    valid_waves = len(checked) == required and all(
+        row.planned_work_item_ids
+        and row.completed_work_item_ids == row.planned_work_item_ids
+        and not row.rejected_work_item_ids
+        and row.covered_candidate_refs == row.expected_candidate_refs
+        and not row.new_stable_post_ids
+        and not row.luna_qualified_upgrade_ids
+        and all(not remaining_states[index][key] for key in QUEUE_KEYS)
+        for index, row in enumerate(checked)
     )
-    distinct = valid_waves and len({row["strategy_signature_sha256"] for row in trailing}) == required
+    campaign_continuity = valid_waves and len({row.manifest_json for row in checked}) == 1
+    session_ids = [
+        projection.grok_precommit.expected_session_id for row in checked for projection in row.session_projections
+    ]
+    request_ids = [
+        projection.grok_precommit.expected_request_id for row in checked for projection in row.session_projections
+    ]
+    cross_wave_execution_distinct = (
+        len(session_ids) == len(set(session_ids))
+        and len(request_ids) == len(set(request_ids))
+        and len([digest for row in checked for digest in row.session_projection_sha256s])
+        == len({digest for row in checked for digest in row.session_projection_sha256s})
+    )
+    distinct = (
+        valid_waves
+        and campaign_continuity
+        and cross_wave_execution_distinct
+        and len({row.wave_id for row in checked}) == required
+        and len({row.strategy_signature_sha256 for row in checked}) == required
+    )
     stopped = queues_empty and bool(distinct)
     return {
         "stop": stopped,
@@ -977,47 +1671,102 @@ def _rate(numerator: int, denominator: int) -> float | None:
 
 def build_candidate_free_aggregate(
     *,
-    bindings: Mapping[str, str],
-    planned_native_x_calls: int,
-    attested_completed_native_x_calls: int,
-    unique_stable_post_ids: int,
-    exact_source_bound_hydrations: int,
-    luna_terminal_reviews: int,
-    luna_qualified_state_upgrades: int,
+    manifest: Mapping[str, Any],
+    policy: Mapping[str, Any],
+    plan: Mapping[str, Any],
+    session_projections: Sequence[MappingSessionProjection],
+    hydration_projections: Sequence[ExactPostHydrationProjection] = (),
+    luna_review_projections: Sequence[LunaStateReviewProjection] = (),
 ) -> dict[str, Any]:
-    expected_bindings = {
-        "policy_sha256",
-        "candidate_manifest_sha256",
-        "wave_plan_sha256",
-        "session_receipt_manifest_sha256",
-        "hydration_receipt_manifest_sha256",
-        "luna_result_manifest_sha256",
-    }
-    if set(bindings) != expected_bindings:
-        raise SourceNeutralMappingError("aggregate_binding_registry_invalid")
-    for value in bindings.values():
-        _sha(value, "aggregate_binding_hash_invalid")
-    counts = (
-        planned_native_x_calls,
-        attested_completed_native_x_calls,
-        unique_stable_post_ids,
-        exact_source_bound_hydrations,
-        luna_terminal_reviews,
-        luna_qualified_state_upgrades,
+    validate_wave_plan(plan, manifest=manifest, policy=policy)
+    build_frontier_queues(
+        manifest=manifest,
+        plan=plan,
+        session_projections=session_projections,
+        policy=policy,
     )
-    if any(type(value) is not int or value < 0 for value in counts):
-        raise SourceNeutralMappingError("aggregate_count_invalid")
+    receipt_rows: list[dict[str, Any]] = []
+    receipts: list[dict[str, Any]] = []
+    for projection in session_projections:
+        precommit, receipt = _replay_mapping_session_projection(projection)
+        receipt_rows.append(
+            {
+                "batch_id": precommit["batch_id"],
+                "receipt_sha256": receipt["receipt_sha256"],
+                "status": receipt["status"],
+            }
+        )
+        receipts.append(receipt)
+    receipt_rows.sort(key=lambda row: row["batch_id"])
+    planned_native_x_calls = plan["planned_native_x_call_count"]
+    attested_completed_native_x_calls = sum(receipt["attested_completed_native_x_call_count"] for receipt in receipts)
+    stable_ids = {
+        row["stable_post_id"]
+        for receipt in receipts
+        if receipt["status"] == "accepted"
+        for row in receipt["references"]
+    }
+    unique_stable_post_ids = len(stable_ids)
+    hydration_outputs, checked_hydrations = _validated_hydration_outputs(
+        manifest=manifest,
+        plan=plan,
+        session_projections=session_projections,
+        hydration_projections=hydration_projections,
+        policy=policy,
+    )
+    exact_source_bound_hydrations = len(hydration_outputs)
+    checked_luna: list[dict[str, Any]] = []
+    seen_hydrations: set[str] = set()
+    review_ids: set[str] = set()
+    for projection in luna_review_projections:
+        if type(projection) is not LunaStateReviewProjection:
+            raise SourceNeutralMappingError("aggregate_luna_projection_invalid")
+        result = strict_load_json_bytes(projection.result_json, error="aggregate_luna_result_invalid")
+        hydration_sha = result.get("hydration_projection_sha256")
+        if (
+            hydration_sha not in checked_hydrations
+            or hydration_sha in seen_hydrations
+            or result.get("review_id") in review_ids
+        ):
+            raise SourceNeutralMappingError("aggregate_luna_hydration_binding_invalid")
+        seen_hydrations.add(hydration_sha)
+        review_ids.add(result["review_id"])
+        checked_luna.append(
+            _replay_luna_review_projection(
+                projection,
+                hydration_projection=checked_hydrations[hydration_sha],
+            )
+        )
+    luna_terminal_reviews = len(checked_luna)
+    luna_qualified_state_upgrades = sum(result["qualified_state_upgrade"] is True for result in checked_luna)
     if (
         attested_completed_native_x_calls > planned_native_x_calls
+        or unique_stable_post_ids > attested_completed_native_x_calls * policy["search"]["request_limit"]
         or exact_source_bound_hydrations > unique_stable_post_ids
+        or luna_terminal_reviews > exact_source_bound_hydrations
         or luna_qualified_state_upgrades > luna_terminal_reviews
+        or (attested_completed_native_x_calls == 0 and unique_stable_post_ids != 0)
+        or (unique_stable_post_ids == 0 and (exact_source_bound_hydrations or luna_terminal_reviews))
+        or (exact_source_bound_hydrations == 0 and luna_terminal_reviews != 0)
     ):
         raise SourceNeutralMappingError("aggregate_denominator_violation")
+    bindings = {
+        "policy_sha256": canonical_sha256(policy),
+        "candidate_manifest_sha256": manifest["manifest_sha256"],
+        "wave_plan_sha256": plan["plan_sha256"],
+        "session_receipt_manifest_sha256": canonical_sha256(receipt_rows),
+        "hydration_receipt_manifest_sha256": canonical_sha256(
+            sorted(projection.projection_sha256 for projection in hydration_projections)
+        ),
+        "luna_result_manifest_sha256": canonical_sha256(
+            sorted(projection.result_sha256 for projection in luna_review_projections)
+        ),
+    }
     payload: dict[str, Any] = {
         "schema_version": AGGREGATE_SCHEMA_VERSION,
         "privacy_class": "candidate_free_counts_and_hashes_only",
         "claim_status": "diagnostic_only",
-        "bindings": dict(bindings),
+        "bindings": bindings,
         "metric_denominators": {
             "execution_compliance": planned_native_x_calls,
             "stable_post_id_retrieval": attested_completed_native_x_calls,
@@ -1079,8 +1828,7 @@ def validate_private_calibration_binding(
         or type(receipt["source_binding_count"]) is not int
         or receipt["source_binding_count"] != len(receipt["source_bindings"])
         or receipt["source_binding_count"] != bindings["private_source_binding_count"]
-        or canonical_sha256(receipt["source_bindings"])
-        != bindings["private_source_binding_manifest_sha256"]
+        or canonical_sha256(receipt["source_bindings"]) != bindings["private_source_binding_manifest_sha256"]
     ):
         raise SourceNeutralMappingError("calibration_private_source_binding_invalid")
 

@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sourcing-ai-agent.invalid/contracts/x.source_neutral.mapping.exact_post_hydration.v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "candidate_ref",
+    "requested_stable_post_id",
+    "returned_stable_post_id",
+    "source_url",
+    "author_handle",
+    "full_text",
+    "full_text_sha256",
+    "lookup_status"
+  ],
+  "properties": {
+    "schema_version": {"const": "x.source_neutral.mapping.exact_post_hydration.v1"},
+    "candidate_ref": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]{0,127}$"},
+    "requested_stable_post_id": {"type": "string", "pattern": "^[0-9]{1,32}$"},
+    "returned_stable_post_id": {"type": "string", "pattern": "^[0-9]{1,32}$"},
+    "source_url": {"type": "string", "minLength": 1, "maxLength": 512},
+    "author_handle": {"type": "string", "pattern": "^[A-Za-z0-9_]{1,15}$"},
+    "full_text": {"type": "string", "minLength": 1, "maxLength": 1000000},
+    "full_text_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "lookup_status": {"const": "matched"}
+  }
+}

@@ -34,6 +34,12 @@ END_CALL_0001_URLS
 There is one ordered block for every call. Only exact author-bound status URLs are accepted. Stable Post IDs dedupe
 within a candidate; one ID appearing under two candidates rejects the whole batch.
 
+The plan hash is diagnostic rather than authority. Validation reconstructs the complete plan from the validated
+manifest plus policy and compares the exact typed value: batch grain and placement, candidate and call ordinals,
+expected author, champion cell, alias group and aliases, tool, query, limit, and mode. Session precommit construction
+reruns that reconstruction before selecting a batch, so a self-consistent rehashed caller plan cannot change the
+calibrated calls.
+
 ## Raw replay authority
 
 A normalized ledger or flat terminal supplied by a caller is never execution proof. An accepted receipt is produced
@@ -50,7 +56,11 @@ That replay binds the typed Grok precommit, exact prompt, session/request identi
 argument, chat/update/event order, and the exact post-tool literal terminal bytes. Operator input/schema/prompt,
 stdout/stderr, copied updates, and process receipts may be retained separately, but they are not substitutes for this
 six-file authority. Missing or invalid raw replay returns `operator_projected_unverified`, zero committed references,
-and zero proven execution.
+and zero proven execution. When the mapping precommit itself is valid, a rejected receipt preserves the trusted
+planned-call denominator; only an invalid precommit records that denominator as unknown (`null`). Frontier derivation
+does not accept serialized receipt dictionaries. It consumes immutable typed projections retaining the mapping and
+Grok precommits, literal terminal, lab descriptor, and all six source files, then replays them and checks exact plan
+coverage again.
 
 The retained private Wave P calibration controller is still exploratory and its URLs remain
 `model_mediated_unverified`. It did not emit the typed `GrokOperatorSessionPrecommit` required by this controller, so
@@ -65,14 +75,27 @@ compatibility for the already-retained calibration sessions.
 `returned URL count == request limit` means only a saturation lower bound. It is not evidence of completeness. A
 saturated lineage expands in the configured order `topic -> mode -> time`; only saturated children continue.
 
-Accepted stable IDs enter an exact thread-hydration queue. Only exact source-bound hydration enters the explicit Luna
-input queue. Candidates with sparse authored evidence or an `ambiguous|unsupported` axis receive
-`official_exact_mention`, `project_alias`, and `thread` challengers. Challenger evidence is always marked
+Unexecuted Wave P batches enter `pending_wave_p_queue`; raw-replay rejection enters `retry_split_queue`. Neither state
+is classified as sparse evidence. Only candidates whose complete champion batch is replay-attested are eligible for
+sparse/ambiguity challengers. `official_exact_mention` and `project_alias` remain seed-free strategies, while `thread`
+is omitted unless at least one stable Post ID exists. Challenger evidence is always marked
 `official_or_third_party_non_self` and can never be relabelled as self-authored evidence.
 
-The campaign stops only when all four queues are empty and two consecutive, materially distinct strategy waves each
-produce both zero new stable Post IDs and zero Luna-qualified state upgrades. Answer length, one zero-yield call, or a
-model claim that the search is complete cannot stop the campaign.
+Accepted stable IDs enter an exact thread-hydration queue. Luna input accepts only a typed `x_thread_fetch`
+projection that retains the six raw files and operator precommit, replays exactly one call for the queued Post ID, and
+binds descriptor host, queued URL, expected author, requested/returned ID, and exact UTF-8 full-text bytes. Luna state
+reviews are separately typed and bind the hydration projection and source-text digest.
+
+The campaign stops only when all six queues are empty and two consecutive, materially distinct strategy waves each
+produce both zero new stable Post IDs and zero Luna-qualified state upgrades. A zero-wave fact retains the manifest,
+policy, plan, strategy payload, typed session/hydration/Luna projections, and prior stable-ID set; stopping replays all
+of them, recomputes the strategy digest, requires exact planned/completed work and manifest coverage, and derives the
+remaining queue state after completed hydration/Luna work. The caller queue must equal that derived state, so an empty
+queue mapping cannot hide pending, retry, saturation, hydration, Luna, or challenger work. Distinct zero waves also
+require the same frozen manifest, an empty derived queue state in each trailing fact, distinct strategy-bound plans,
+and disjoint session/request/receipt identities. Answer length, one zero-yield
+call, an unexecuted/rejected wave, or a model claim that the search is
+complete cannot stop the campaign.
 
 ## Metrics and calibration binding
 
@@ -83,8 +106,10 @@ The candidate-free aggregate carries four explicit denominators:
 3. exact hydration / unique stable Post IDs enqueued;
 4. Luna-qualified upgrades / terminal Luna reviews.
 
-It binds policy, manifest, plan, session-receipt, hydration-receipt, and Luna-result manifests by SHA-256 and contains
-no model-call count. The tracked 46-call calibration aggregate is diagnostic method evidence only: it binds the
+The aggregate builder derives every count and binding from the exact plan plus replayed typed session, hydration, and
+Luna projections; independent caller integers are not accepted. It enforces zero propagation and legal cross-stage
+cardinalities, binds policy, manifest, plan, session-receipt, hydration-receipt, and Luna-result manifests by SHA-256,
+and contains no model-call count. The tracked 46-call calibration aggregate is diagnostic method evidence only: it binds the
 owner-private candidate-free summary and receipt by hash, retains only counts/hashes, and explicitly does not claim a
 global recall plateau. Its calibrated frontier moved `17 -> 37` over 31 authored expansion calls; the three-candidate,
 six-call flat canary passed ledger/format checks and added four marginal stable references.

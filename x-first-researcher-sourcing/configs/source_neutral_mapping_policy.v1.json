@@ -105,6 +105,8 @@
   },
   "queues": {
     "queue_order": [
+      "pending_wave_p_queue",
+      "retry_split_queue",
       "saturation_queue",
       "thread_hydration_queue",
       "luna_input_queue",
