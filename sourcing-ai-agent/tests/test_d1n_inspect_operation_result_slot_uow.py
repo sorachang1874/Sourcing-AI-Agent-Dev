@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import tempfile
 import unittest
 from dataclasses import replace
@@ -216,7 +218,7 @@ class D1nInspectOperationResultSlotUowPGTest(PGControlPlaneStoreTestMixin, unitt
         self.assertEqual(terminal.serialized_result["status"], "ready")
         ensure_write_schema.assert_not_called()
 
-    def test_prepare_wraps_infrastructure_failure_but_preserves_domain_errors(self) -> None:
+    def test_prepare_wraps_infrastructure_failure_and_returns_masked_domain_error(self) -> None:
         bundle = self._preview_bundle(suffix="read-failure")
         occurrence = self._occurrence(bundle, suffix="read-failure")
 
@@ -228,13 +230,22 @@ class D1nInspectOperationResultSlotUowPGTest(PGControlPlaneStoreTestMixin, unitt
             with self.assertRaisesRegex(ControlPlaneAuthoritativeReadError, "ConnectionError"):
                 self._prepare(bundle, occurrence, attempt_id="inspectattempt_read_failure")
 
-        with self.assertRaisesRegex(ValueError, "exact owner not found"):
-            self._prepare(
-                bundle,
-                occurrence,
-                attempt_id="inspectattempt_domain_failure",
-                action_id="action_missing_domain_failure",
-            )
+        terminal = self._prepare(
+            bundle,
+            occurrence,
+            attempt_id="inspectattempt_domain_failure",
+            action_id="action_missing_domain_failure",
+        )
+        self.assertTrue(terminal.is_error)
+        self.assertEqual(
+            terminal.serialized_result,
+            {
+                "variant": "error",
+                "status": "failed",
+                "reason": "operation_not_found",
+                "retryable": False,
+            },
+        )
 
     def test_event_revision_drift_before_acceptance_leaves_slot_pending(self) -> None:
         bundle = self._preview_bundle()
@@ -286,7 +297,7 @@ class D1nInspectOperationResultSlotUowPGTest(PGControlPlaneStoreTestMixin, unitt
             result_attempt_id="inspectattempt_stale_missing_owner",
             action_id="action_missing_stale",
         )
-        with self.assertRaisesRegex(ValueError, "exact owner not found"):
+        with self.assertRaisesRegex(ValueError, "physical owner or serializer mismatch"):
             self.adapter.accept_inspect_operation_tool_result_uow(
                 occurrence=occurrence,
                 terminal=stale_missing_owner,
@@ -306,7 +317,7 @@ class D1nInspectOperationResultSlotUowPGTest(PGControlPlaneStoreTestMixin, unitt
             result_attempt_id="inspectattempt_late_missing_owner",
             action_id="action_missing_late",
         )
-        with self.assertRaisesRegex(ValueError, "exact owner not found"):
+        with self.assertRaisesRegex(ValueError, "physical owner or serializer mismatch"):
             self.adapter.accept_inspect_operation_tool_result_uow(
                 occurrence=occurrence,
                 terminal=late_missing_owner,
@@ -326,6 +337,23 @@ class D1nInspectOperationResultSlotUowPGTest(PGControlPlaneStoreTestMixin, unitt
         self.assertEqual(result["provenance"]["workflow_command_count"], 1)
         self.assertEqual(result["provenance"]["latest_workflow_command_id"], "command_start_inspect")
         self.assertEqual(result["result_readiness"]["status"], "pending")
+        owner_ref = terminal.owner_result_ref
+        self.assertEqual(
+            owner_ref["physical_owner_fingerprint_schema_version"],
+            "inspect_operation_physical_owner_fingerprint_v2",
+        )
+        self.assertEqual(owner_ref["selected_plan_event"]["event_id"], dict(bundle["event"])["event_id"])
+        self.assertEqual(
+            owner_ref["workflow_command_causal_identity"]["workflow_run_id"],
+            "workflow_start_inspect",
+        )
+        for private_field in (
+            "physical_owner_fingerprint_schema_version",
+            "workflow_command_causal_identity",
+            "selected_plan_event",
+        ):
+            self.assertNotIn(private_field, terminal.serialized_result_json)
+            self.assertNotIn(private_field, terminal.tool_result_message_record()["content"])
 
         self.repository.reserve_agent_tool_result_slot(occurrence=occurrence)
         accepted = self.repository.accept_inspect_operation_tool_result_uow(
@@ -473,8 +501,10 @@ class D1nInspectOperationResultSlotUowPGTest(PGControlPlaneStoreTestMixin, unitt
             "command_start_inspect",
         )
 
-    def test_missing_and_foreign_owner_fail_the_same_before_terminal_writes(self) -> None:
+    def test_missing_and_foreign_owner_accept_the_same_masked_result_with_lost_ack(self) -> None:
         bundle = self._preview_bundle()
+        action = dict(bundle["action"])
+        operation = dict(bundle["operation_run"])
         occurrence = self._occurrence(bundle)
         foreign = self._occurrence(
             bundle,
@@ -484,19 +514,470 @@ class D1nInspectOperationResultSlotUowPGTest(PGControlPlaneStoreTestMixin, unitt
         )
         self.repository.reserve_agent_tool_result_slot(occurrence=occurrence)
         self.repository.reserve_agent_tool_result_slot(occurrence=foreign)
+        before_action = self.repository.get_action(str(action["action_id"]))
+        before_operation = self.repository.get_operation(str(operation["operation_run_id"]))
+        before_events = self.repository.list_operation_events(str(operation["operation_run_id"]))
 
-        errors: list[str] = []
-        for candidate, action_id in (
-            (occurrence, "action_missing"),
-            (foreign, str(dict(bundle["action"])["action_id"])),
-        ):
-            with self.assertRaises(ValueError) as raised:
-                self._prepare(bundle, candidate, action_id=action_id)
-            errors.append(str(raised.exception))
+        missing_terminal = self._prepare(
+            bundle,
+            occurrence,
+            attempt_id="inspectattempt_missing",
+            action_id="action_missing",
+        )
+        foreign_terminal = self._prepare(
+            bundle,
+            foreign,
+            attempt_id="inspectattempt_foreign",
+            action_id=str(action["action_id"]),
+        )
+        expected_json = '{"reason":"operation_not_found","retryable":false,"status":"failed","variant":"error"}'
+        self.assertEqual(missing_terminal.serialized_result_json, expected_json)
+        self.assertEqual(foreign_terminal.serialized_result_json, expected_json)
+        self.assertTrue(missing_terminal.is_error)
+        self.assertTrue(foreign_terminal.is_error)
+        self.assertNotIn("foreign", expected_json)
+        self.assertNotIn("workspace", expected_json)
 
-        self.assertEqual(errors, ["agent tool inspect result exact owner not found"] * 2)
+        with self.assertRaisesRegex(RuntimeError, "after commit"):
+            self.adapter.accept_inspect_operation_tool_result_uow(
+                occurrence=occurrence,
+                terminal=missing_terminal,
+                attempted_slot_generation=1,
+                fault_injection_point="after_commit",
+            )
+        replay = self.repository.accept_inspect_operation_tool_result_uow(
+            occurrence=occurrence,
+            terminal=missing_terminal,
+            attempted_slot_generation=1,
+        )
+        accepted = self.repository.accept_inspect_operation_tool_result_uow(
+            occurrence=foreign,
+            terminal=foreign_terminal,
+            attempted_slot_generation=1,
+        )
+
+        self.assertEqual(replay["outcome"], "replayed")
+        self.assertTrue(replay["replayed"])
+        self.assertEqual(accepted["outcome"], "accepted")
+        for result in (replay, accepted):
+            self.assertTrue(result["slot"]["is_error"])
+            self.assertTrue(result["attempt"]["is_error"])
+            self.assertTrue(result["journal"]["is_error"])
+            self.assertEqual(result["slot"]["tool_result_message"]["content"], expected_json)
+        self.assertEqual(
+            self._result_counts(),
+            {
+                "agent_tool_result_slots": 2,
+                "agent_tool_result_attempts": 2,
+                "agent_tool_result_journal": 2,
+            },
+        )
+        self.assertEqual(self.repository.get_action(str(action["action_id"])), before_action)
+        self.assertEqual(self.repository.get_operation(str(operation["operation_run_id"])), before_operation)
+        self.assertEqual(self.repository.list_operation_events(str(operation["operation_run_id"])), before_events)
+
+    def test_foreign_workspace_event_cannot_be_hidden_during_acceptance(self) -> None:
+        bundle = self._preview_bundle(suffix="foreign-stream")
+        action = dict(bundle["action"])
+        operation = dict(bundle["operation_run"])
+        occurrence = self._occurrence(bundle, suffix="foreign-stream")
+        terminal = self._prepare(bundle, occurrence, attempt_id="inspectattempt_foreign_stream")
+        self.repository.reserve_agent_tool_result_slot(occurrence=occurrence)
+        appended = self.repository.append_operation_event(
+            event_stream_id=str(operation["operation_run_id"]),
+            event_family="operation_event",
+            event_type="OperationInspectionRevisionAdvanced",
+            idempotency_key="inspect-foreign-workspace-stream",
+            workspace_id="workspace_foreign",
+            operation_run_id=str(operation["operation_run_id"]),
+            action_id=str(action["action_id"]),
+            actor="foreign-test-user",
+            source="test.d1n.inspect.foreign",
+            payload={"reason": "foreign_workspace_fixture"},
+        )
+        self.assertEqual(appended["workspace_id"], "workspace_foreign")
+
+        with self.assertRaisesRegex(ValueError, "operation event owner mismatch"):
+            self.adapter.accept_inspect_operation_tool_result_uow(
+                occurrence=occurrence,
+                terminal=terminal,
+                attempted_slot_generation=1,
+            )
+
+        slot = self.repository.get_agent_tool_result_slot(
+            occurrence.result_slot_id,
+            workspace_id=occurrence.workspace_id,
+            actor_id=occurrence.actor_id,
+            runtime_namespace=occurrence.runtime_namespace,
+            provider_mode=occurrence.provider_mode,
+        )
+        self.assertEqual(slot["status"], "pending")
         self.assertEqual(self._result_counts()["agent_tool_result_attempts"], 0)
         self.assertEqual(self._result_counts()["agent_tool_result_journal"], 0)
+
+    def test_every_event_owner_identity_and_sequence_is_fenced(self) -> None:
+        mutations: tuple[tuple[str, str, Any], ...] = (
+            ("operation_run", "operation_run_id", "oprun_event_foreign"),
+            ("action", "action_id", "action_event_foreign"),
+            ("schema", "schema_version", "operation_event_v2"),
+            ("sequence", "sequence_number", 2),
+        )
+        for label, column, value in mutations:
+            with self.subTest(label=label):
+                bundle = self._preview_bundle(suffix=f"event-owner-{label}")
+                occurrence = self._occurrence(bundle, suffix=f"event-owner-{label}")
+                terminal = self._prepare(
+                    bundle,
+                    occurrence,
+                    attempt_id=f"inspectattempt_event_owner_{label}",
+                )
+                self.repository.reserve_agent_tool_result_slot(occurrence=occurrence)
+                event = dict(bundle["event"])
+                with self.adapter._connect() as connection:  # noqa: SLF001
+                    with connection.cursor() as cursor:
+                        cursor.execute(
+                            f"UPDATE operation_events SET {column} = %s WHERE event_id = %s",
+                            (value, event["event_id"]),
+                        )
+
+                with self.assertRaisesRegex(ValueError, "operation event owner mismatch"):
+                    self.adapter.accept_inspect_operation_tool_result_uow(
+                        occurrence=occurrence,
+                        terminal=terminal,
+                        attempted_slot_generation=1,
+                    )
+                slot = self.repository.get_agent_tool_result_slot(
+                    occurrence.result_slot_id,
+                    workspace_id=occurrence.workspace_id,
+                    actor_id=occurrence.actor_id,
+                    runtime_namespace=occurrence.runtime_namespace,
+                    provider_mode=occurrence.provider_mode,
+                )
+                self.assertEqual(slot["status"], "pending")
+        self.assertEqual(self._result_counts()["agent_tool_result_attempts"], 0)
+        self.assertEqual(self._result_counts()["agent_tool_result_journal"], 0)
+
+    def test_foreign_malformed_owner_is_masked_like_missing(self) -> None:
+        bundle = self._command_backed_bundle()
+        action = dict(bundle["action"])
+        operation = dict(bundle["operation_run"])
+        foreign = self._occurrence(
+            bundle,
+            suffix="foreign-malformed",
+            workspace_id="workspace_foreign",
+            actor_id="requester_foreign",
+        )
+        with self.adapter._connect() as connection:  # noqa: SLF001
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "UPDATE operation_runs SET workflow_ref_json = %s WHERE operation_run_id = %s",
+                    ("{", operation["operation_run_id"]),
+                )
+        foreign_terminal = self._prepare(
+            bundle,
+            foreign,
+            attempt_id="inspectattempt_foreign_malformed",
+            action_id=str(action["action_id"]),
+        )
+        missing_terminal = self._prepare(
+            bundle,
+            foreign,
+            attempt_id="inspectattempt_missing_malformed",
+            action_id="action_missing_malformed",
+        )
+        self.assertEqual(foreign_terminal.serialized_result_json, missing_terminal.serialized_result_json)
+        self.assertEqual(foreign_terminal.serialized_result["reason"], "operation_not_found")
+        self.assertTrue(foreign_terminal.is_error)
+        self.assertTrue(missing_terminal.is_error)
+
+    def test_duplicate_command_plan_proof_is_rejected_before_result_writes(self) -> None:
+        bundle = self._command_backed_bundle()
+        action = dict(bundle["action"])
+        operation = dict(bundle["operation_run"])
+        workflow_ref = dict(operation["workflow_ref"])
+        duplicate = self.repository.append_operation_event(
+            event_stream_id=str(operation["operation_run_id"]),
+            event_family="operation_event",
+            event_type="OperationCommandPlanned",
+            idempotency_key="start-inspect-event-duplicate",
+            workspace_id="workspace_1",
+            operation_run_id=str(operation["operation_run_id"]),
+            action_id=str(action["action_id"]),
+            actor="test-user",
+            source="test.d1n.inspect",
+            payload={
+                **workflow_ref,
+                "workflow_run_id": "workflow_conflicting_duplicate",
+                "module_state_mutated": False,
+            },
+        )
+        self.assertTrue(duplicate)
+
+        with self.assertRaisesRegex(ValueError, "workflow command link mismatch"):
+            self._prepare(
+                bundle,
+                self._occurrence(bundle, suffix="duplicate-plan"),
+                attempt_id="inspectattempt_duplicate_plan",
+            )
+        self.assertEqual(self._result_counts()["agent_tool_result_attempts"], 0)
+        self.assertEqual(self._result_counts()["agent_tool_result_journal"], 0)
+
+    def test_plan_payload_drift_without_revision_advance_is_fenced(self) -> None:
+        bundle = self._command_backed_bundle()
+        occurrence = self._occurrence(bundle, suffix="plan-payload-drift")
+        terminal = self._prepare(bundle, occurrence, attempt_id="inspectattempt_plan_payload_drift")
+        self.repository.reserve_agent_tool_result_slot(occurrence=occurrence)
+        event = dict(bundle["event"])
+        payload = dict(event["payload"])
+        payload["module_state_mutated"] = True
+        with self.adapter._connect() as connection:  # noqa: SLF001
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "UPDATE operation_events SET payload_json = %s WHERE event_id = %s",
+                    (json.dumps(payload, sort_keys=True, separators=(",", ":")), event["event_id"]),
+                )
+
+        with self.assertRaisesRegex(ValueError, "physical owner or serializer mismatch"):
+            self.adapter.accept_inspect_operation_tool_result_uow(
+                occurrence=occurrence,
+                terminal=terminal,
+                attempted_slot_generation=1,
+            )
+        self.assertEqual(self._result_counts()["agent_tool_result_attempts"], 0)
+        self.assertEqual(self._result_counts()["agent_tool_result_journal"], 0)
+
+    def test_coordinated_workflow_lineage_drift_is_fenced(self) -> None:
+        bundle = self._command_backed_bundle()
+        occurrence = self._occurrence(bundle, suffix="lineage-drift")
+        terminal = self._prepare(bundle, occurrence, attempt_id="inspectattempt_lineage_drift")
+        self.repository.reserve_agent_tool_result_slot(occurrence=occurrence)
+        operation = dict(bundle["operation_run"])
+        event = dict(bundle["event"])
+        workflow_ref = {**dict(operation["workflow_ref"]), "workflow_run_id": "workflow_coordinated_drift"}
+        event_payload = {**dict(event["payload"]), "workflow_run_id": "workflow_coordinated_drift"}
+        with self.adapter._connect() as connection:  # noqa: SLF001
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "UPDATE operation_runs SET workflow_ref_json = %s WHERE operation_run_id = %s",
+                    (
+                        json.dumps(workflow_ref, sort_keys=True, separators=(",", ":")),
+                        operation["operation_run_id"],
+                    ),
+                )
+                cursor.execute(
+                    "UPDATE workflow_commands SET workflow_run_id = %s WHERE command_id = %s",
+                    ("workflow_coordinated_drift", workflow_ref["command_id"]),
+                )
+                cursor.execute(
+                    "UPDATE operation_events SET payload_json = %s WHERE event_id = %s",
+                    (
+                        json.dumps(event_payload, sort_keys=True, separators=(",", ":")),
+                        event["event_id"],
+                    ),
+                )
+
+        with self.assertRaisesRegex(ValueError, "physical owner or serializer mismatch"):
+            self.adapter.accept_inspect_operation_tool_result_uow(
+                occurrence=occurrence,
+                terminal=terminal,
+                attempted_slot_generation=1,
+            )
+        self.assertEqual(self._result_counts()["agent_tool_result_attempts"], 0)
+        self.assertEqual(self._result_counts()["agent_tool_result_journal"], 0)
+
+    def test_command_causal_identity_drift_is_fenced(self) -> None:
+        bundle = self._command_backed_bundle()
+        occurrence = self._occurrence(bundle, suffix="command-causal-drift")
+        terminal = self._prepare(bundle, occurrence, attempt_id="inspectattempt_command_causal_drift")
+        self.repository.reserve_agent_tool_result_slot(occurrence=occurrence)
+        with self.adapter._connect() as connection:  # noqa: SLF001
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "UPDATE workflow_commands SET stage_id = %s WHERE command_id = %s",
+                    ("stage_drift", "command_start_inspect"),
+                )
+
+        with self.assertRaisesRegex(ValueError, "physical owner or serializer mismatch"):
+            self.adapter.accept_inspect_operation_tool_result_uow(
+                occurrence=occurrence,
+                terminal=terminal,
+                attempted_slot_generation=1,
+            )
+        self.assertEqual(self._result_counts()["agent_tool_result_attempts"], 0)
+        self.assertEqual(self._result_counts()["agent_tool_result_journal"], 0)
+
+    def test_workflow_ref_and_plan_identity_are_strict_typed_contracts(self) -> None:
+        bundle = self._command_backed_bundle()
+        operation = dict(bundle["operation_run"])
+        event = dict(bundle["event"])
+        exact_ref = dict(operation["workflow_ref"])
+        malformed_refs: tuple[tuple[str, Any], ...] = (
+            ("empty_text", ""),
+            ("null", "null"),
+            ("list", "[]"),
+            ("invalid_json", "{"),
+            ("unknown_only", {"unknown": "value"}),
+            ("partial", {"command_id": exact_ref["command_id"]}),
+            ("conflicting_extra", {**exact_ref, "workflow_run": exact_ref["workflow_run_id"]}),
+            ("numeric", {**exact_ref, "command_id": 123}),
+            ("padded", {**exact_ref, "command_id": f" {exact_ref['command_id']} "}),
+        )
+        for label, malformed in malformed_refs:
+            with self.subTest(label=label):
+                encoded = malformed if type(malformed) is str else json.dumps(malformed)
+                with self.adapter._connect() as connection:  # noqa: SLF001
+                    with connection.cursor() as cursor:
+                        cursor.execute(
+                            "UPDATE operation_runs SET workflow_ref_json = %s WHERE operation_run_id = %s",
+                            (encoded, operation["operation_run_id"]),
+                        )
+                with self.assertRaisesRegex(ValueError, "operation workflow ref"):
+                    self._prepare(
+                        bundle,
+                        self._occurrence(bundle, suffix=f"strict-ref-{label}"),
+                        attempt_id=f"inspectattempt_strict_ref_{label}",
+                    )
+
+        malformed_plan_payloads = (
+            ("padded", {**dict(event["payload"]), "command_id": f" {exact_ref['command_id']} "}),
+            ("numeric", {**dict(event["payload"]), "command_id": 123}),
+            ("missing", {key: value for key, value in dict(event["payload"]).items() if key != "owner"}),
+        )
+        for label, malformed_payload in malformed_plan_payloads:
+            with self.subTest(plan_payload=label):
+                with self.adapter._connect() as connection:  # noqa: SLF001
+                    with connection.cursor() as cursor:
+                        cursor.execute(
+                            "UPDATE operation_runs SET workflow_ref_json = %s WHERE operation_run_id = %s",
+                            (json.dumps(exact_ref), operation["operation_run_id"]),
+                        )
+                        cursor.execute(
+                            "UPDATE operation_events SET payload_json = %s WHERE event_id = %s",
+                            (json.dumps(malformed_payload), event["event_id"]),
+                        )
+                with self.assertRaisesRegex(ValueError, "workflow command link mismatch"):
+                    self._prepare(
+                        bundle,
+                        self._occurrence(bundle, suffix=f"strict-plan-{label}"),
+                        attempt_id=f"inspectattempt_strict_plan_{label}",
+                    )
+        self.assertEqual(self._result_counts()["agent_tool_result_attempts"], 0)
+        self.assertEqual(self._result_counts()["agent_tool_result_journal"], 0)
+
+    def test_masked_error_owner_reappears_before_acceptance_and_forged_unions_fail_closed(self) -> None:
+        bundle = self._preview_bundle(suffix="masked-recheck")
+        action = dict(bundle["action"])
+        operation = dict(bundle["operation_run"])
+        foreign = self._occurrence(
+            bundle,
+            suffix="masked-recheck",
+            workspace_id="workspace_foreign",
+            actor_id="requester_foreign",
+        )
+        error_terminal = self._prepare(
+            bundle,
+            foreign,
+            attempt_id="inspectattempt_masked_recheck",
+            action_id=str(action["action_id"]),
+        )
+        self.repository.reserve_agent_tool_result_slot(occurrence=foreign)
+        with self.adapter._connect() as connection:  # noqa: SLF001
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "UPDATE agent_actions SET workspace_id = %s WHERE action_id = %s",
+                    ("workspace_foreign", action["action_id"]),
+                )
+                cursor.execute(
+                    "UPDATE operation_runs SET workspace_id = %s WHERE operation_run_id = %s",
+                    ("workspace_foreign", operation["operation_run_id"]),
+                )
+                cursor.execute(
+                    "UPDATE operation_events SET workspace_id = %s WHERE event_stream_id = %s",
+                    ("workspace_foreign", operation["operation_run_id"]),
+                )
+
+        with self.assertRaisesRegex(ValueError, "physical owner or serializer mismatch"):
+            self.adapter.accept_inspect_operation_tool_result_uow(
+                occurrence=foreign,
+                terminal=error_terminal,
+                attempted_slot_generation=1,
+            )
+        self.assertEqual(self._result_counts()["agent_tool_result_attempts"], 0)
+        self.assertEqual(self._result_counts()["agent_tool_result_journal"], 0)
+
+        # Restore the foreign owner state so the forged-union matrix exercises
+        # the pre-acceptance closed union rather than the owner recheck.
+        with self.adapter._connect() as connection:  # noqa: SLF001
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "UPDATE agent_actions SET workspace_id = %s WHERE action_id = %s",
+                    ("workspace_1", action["action_id"]),
+                )
+                cursor.execute(
+                    "UPDATE operation_runs SET workspace_id = %s WHERE operation_run_id = %s",
+                    ("workspace_1", operation["operation_run_id"]),
+                )
+                cursor.execute(
+                    "UPDATE operation_events SET workspace_id = %s WHERE event_stream_id = %s",
+                    ("workspace_1", operation["operation_run_id"]),
+                )
+        success = self._prepare(
+            bundle,
+            self._occurrence(bundle, suffix="masked-success-shape"),
+            attempt_id="inspectattempt_success_shape",
+        )
+        forged_json = '{"reason":"forged","retryable":false,"status":"failed","variant":"error"}'
+        forged_terminals = (
+            replace(success, is_error=True),
+            replace(error_terminal, is_error=False),
+            replace(
+                error_terminal,
+                serialized_result_json=forged_json,
+                serialized_result_digest=hashlib.sha256(forged_json.encode("utf-8")).hexdigest(),
+            ),
+            replace(error_terminal, owner_target_kind="operation_state_event_v1"),
+            replace(error_terminal, owner_target_generation=2),
+        )
+        for forged in forged_terminals:
+            with self.subTest(forged=forged.to_record()):
+                with self.assertRaisesRegex(ValueError, "matching Operation owner result kind"):
+                    self.adapter.accept_inspect_operation_tool_result_uow(
+                        occurrence=foreign,
+                        terminal=forged,
+                        attempted_slot_generation=1,
+                    )
+        self.assertEqual(self._result_counts()["agent_tool_result_attempts"], 0)
+        self.assertEqual(self._result_counts()["agent_tool_result_journal"], 0)
+
+    def test_masked_error_faults_rollback_before_commit(self) -> None:
+        bundle = self._preview_bundle(suffix="masked-faults")
+        occurrence = self._occurrence(bundle, suffix="masked-faults")
+        terminal = self._prepare(
+            bundle,
+            occurrence,
+            attempt_id="inspectattempt_masked_faults",
+            action_id="action_missing_masked_faults",
+        )
+        self.repository.reserve_agent_tool_result_slot(occurrence=occurrence)
+        for fault in ("after_attempt_write", "after_slot_write", "after_journal_write"):
+            with self.subTest(fault=fault):
+                with self.assertRaisesRegex(RuntimeError, fault.replace("_", " ")):
+                    self.adapter.accept_inspect_operation_tool_result_uow(
+                        occurrence=occurrence,
+                        terminal=terminal,
+                        attempted_slot_generation=1,
+                        fault_injection_point=fault,
+                    )
+                slot = self.repository.get_agent_tool_result_slot(
+                    occurrence.result_slot_id,
+                    workspace_id=occurrence.workspace_id,
+                    actor_id=occurrence.actor_id,
+                    runtime_namespace=occurrence.runtime_namespace,
+                    provider_mode=occurrence.provider_mode,
+                )
+                self.assertEqual(slot["status"], "pending")
+                self.assertEqual(self._result_counts()["agent_tool_result_attempts"], 0)
+                self.assertEqual(self._result_counts()["agent_tool_result_journal"], 0)
 
     def test_forged_query_contract_is_rejected_before_owner_read(self) -> None:
         from sourcing_agent.agent_canary_registry import PLAN_ACQUISITION_TOOL_SPEC

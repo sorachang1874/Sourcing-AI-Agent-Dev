@@ -985,6 +985,7 @@ def prepare_inspect_operation_tool_result(
                             raise _ResultSlotLockBusy
                 base_owner = load_inspect_operation_base_owner(
                     cursor,
+                    workspace_id=occurrence.workspace_id,
                     action_id=action_id,
                     operation_run_id=operation_run_id,
                 )
@@ -1029,12 +1030,14 @@ def accept_inspect_operation_tool_result_uow(
     """Accept one revision-bound, read-only Operation query result."""
 
     from .agent_operation_query_postgres import (
+        INSPECT_OPERATION_MASKED_ABSENCE_OWNER_TARGET_KIND,
         INSPECT_OPERATION_OWNER_TARGET_KIND,
         assert_exact_inspect_operation_terminal,
         inspect_operation_result_lock_groups,
         load_inspect_operation_base_owner,
         validate_inspect_operation_occurrence,
     )
+    from .agent_projection_query import inspect_operation_error_result
 
     if not isinstance(occurrence, AgentToolOccurrence) or not isinstance(terminal, AgentToolTerminalResult):
         raise ValueError("accept inspect result requires exact occurrence and terminal result")
@@ -1043,22 +1046,32 @@ def accept_inspect_operation_tool_result_uow(
         action_id=terminal.action_id,
         operation_run_id=terminal.operation_run_id,
     )
-    if (
-        terminal.owner_target_kind != INSPECT_OPERATION_OWNER_TARGET_KIND
-        or terminal.owner_target_id != terminal.operation_run_id
-        or terminal.is_error
-    ):
-        raise ValueError("accept inspect result requires exact Operation event owner")
+    success_terminal = (
+        not terminal.is_error
+        and terminal.owner_target_kind == INSPECT_OPERATION_OWNER_TARGET_KIND
+        and terminal.owner_target_id == terminal.operation_run_id
+    )
+    masked_error_terminal = (
+        terminal.is_error
+        and terminal.owner_target_kind == INSPECT_OPERATION_MASKED_ABSENCE_OWNER_TARGET_KIND
+        and terminal.owner_target_id == occurrence.result_slot_id
+        and terminal.owner_target_revision == 0
+        and terminal.owner_target_generation == occurrence.slot_generation
+        and not terminal.owner_target_revision_token
+        and terminal.serialized_result == inspect_operation_error_result(reason="operation_not_found")
+    )
+    if not (success_terminal or masked_error_terminal):
+        raise ValueError("accept inspect result requires matching Operation owner result kind")
 
     def load_owner(
         cursor: Any,
         *,
         occurrence: AgentToolOccurrence,
         terminal: AgentToolTerminalResult,
-    ) -> dict[str, dict[str, Any]]:
-        del occurrence
+    ) -> dict[str, Any]:
         return load_inspect_operation_base_owner(
             cursor,
+            workspace_id=occurrence.workspace_id,
             action_id=terminal.action_id,
             operation_run_id=terminal.operation_run_id,
         )

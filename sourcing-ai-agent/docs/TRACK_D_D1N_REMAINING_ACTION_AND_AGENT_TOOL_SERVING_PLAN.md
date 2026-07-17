@@ -212,6 +212,14 @@ already-pinned tool-spec digest. Historical start tool spec v2 retains its Activ
 current start tool spec v3 uses command-acceptance. Migration `0013` is a quiesced cutover with deterministic
 backfill, `NOT NULL`, and no default; it is not a rolling-overlap bridge.
 
+The S1b reference-review response fixed-forwards the inspect physical owner without changing model-visible v2
+semantics. A scoped missing or foreign tuple now produces an exact, slot-generation-anchored masked error terminal and
+can atomically persist/replay the byte-identical `operation_not_found` result. Success loads the complete event stream,
+requires contiguous exact ownership, accepts only a closed typed four-field workflow ref, requires one unambiguous
+same-command plan proof, and binds command causal identity plus full event/plan payload digests into a non-model
+physical fingerprint. Reference findings for historical inspect v1 lookup, operator reason text, full serializer
+semantics, and the canonical result owner/preflight matrix remain open; this response does not authorize serving.
+
 ### 4.3 One `AgentToolSpec` for actions and queries
 
 Introduce one immutable registry projection rather than a second query-tool path:
@@ -552,6 +560,11 @@ deletes historical serializers. Hosted serving is fail-closed during registry/ac
 owner-specific `plan_acquisition` pending-to-accepted PG UoW. S1b factors the acceptance state machine for reuse and
 adds `inspect_operation` prepare/accept against exact Action/Operation/event/workflow-ref-command state. The referenced
 command must match its planned event and registries; unrelated same-operation rows are excluded from the owner.
+The active fixed-forward response additionally locks the complete stream before the result slot, rejects hidden
+foreign rows and sequence gaps, binds an unambiguous plan-event/command-causality fingerprint, and persists masked
+missing/foreign `operation_not_found` through the same atomic result UoW. It closes reference findings 2/3/4/7 only;
+historical spec lookup, reason normalization, serializer semantic closure, and canonical owner-matrix/preflight remain
+open.
 The pre-served inspect result/query-owner/serializer/tool/adapter/fixture contract is fixed-forward v2, with one
 central readiness derivation: completed without durable result ref remains `pending/fail_closed`. Evidence includes
 event-revision drift zero-write and both commandless/command-backed success fixtures. S1c now provides the opaque

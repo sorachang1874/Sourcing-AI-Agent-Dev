@@ -378,7 +378,15 @@
   `OperationCommandPlanned` event 同时一致，同 `operation_id` 的非引用 row 不进入 owner。prepare 后 event revision
   漂移保持 slot pending 且 attempt/journal 零写，commandless + command-backed terminal success 均有 PG 证据，prepare
   不触发 write-schema bootstrap。`inspect_operation` 已 fixed-forward 到 v2；readiness 由一个 owner matrix 贯穿
-  snapshot/execution/serializer/PG，completed 且无 durable result ref 只能 `pending/fail_closed`。S1c candidate
+  snapshot/execution/serializer/PG，completed 且无 durable result ref 只能 `pending/fail_closed`。S1b
+  reference-review response 当前已 fixed-forward findings 2/3/4/7：完整 event stream 在 result slot 前锁定并
+  检查 exact workspace/action/run/family/schema 与连续 1..N sequence；workflow ref 仅接受 `{}` 或 exact typed
+  four-field envelope；同 command plan proof 必须唯一，command causal identity、完整 event identity 与 plan payload
+  digest 进入 non-model fingerprint。missing/foreign 统一生成 slot-generation-anchored masked error owner，并可在
+  同一 UoW 原子 accepted/replay byte-identical `operation_not_found`；owner reappearance、foreign stream、duplicate/
+  conflicting plan、coordinated lineage/causal drift、malformed durable identity 与 fault rollback 均有零写 PG 回归。
+  Reference findings 5/6/8/9（historical inspect spec lookup、operator reason、serializer semantics、canonical owner
+  matrix/preflight）仍 open；不得把本响应写成 S1b formal GO。S1c candidate
   已增加 equality-only `owner_target_revision_token`，保持 logical occurrence digest v1；numeric-only
   attempt/journal 仍为 v1，token-bearing aggregate 使用 v2/v2，旧 writer 默认与历史 numeric replay 保持可用，
   token-only activation 要求旧 replicas drain/quiesce。该 synthetic carrier 只证明 storage transport，不是
@@ -394,7 +402,10 @@
   不能写成 formal artifact，也不能忽略其 inspect 风险。S1c bundled Ultra 也因同一 scope invocation 缺陷为
   reference-only `NO-GO 0/2/3/2`；其中 numeric-only-v2/application replay 不一致、warm-pool rollout overclaim、
   value-owner/adapter 混淆、exact-string sentinel 与空 mismatch diagnostic 已在 S1d fixed-forward 并补回归。
-  S1d fresh correctly scoped pinned non-author review pending；不得把作者证据写成 formal GO。
+  S1d fresh correctly scoped pinned Ultra review 已完成并有效绑定
+  `bacae9e..3b235fd`，结论 `NO-GO 0/1/4/0`：historical spec→occurrence policy persistence trust root、quarantined
+  commandless-action PG link invariant、S1a stale policy/rollout wording、canonical result owner/preflight matrix 仍需
+  fixed-forward；R-019/R-029 仍是 residual。该有效 NO-GO 不阻塞无关批，但阻塞 S1d signoff/live。
 - [ ] D1m mixed-version rollout gate（R-019）：pre-D1m binary 可继续写 revisionless source row 并绕开
   revision-aware exact-claim canonical materializer。任何 hosted activation 前必须选择并验证其一：quiesced
   single-version cutover，或 separately reviewed dual-write/compatibility bridge；完成前不得声称 rolling overlap
