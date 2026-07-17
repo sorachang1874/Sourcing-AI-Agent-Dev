@@ -15,6 +15,7 @@ from sourcing_agent.operation_runtime import (
     ACTION_EXPORT_CANDIDATES,
     ACTION_FILTER_PROJECTION,
     ACTION_SET_CRM_STAGE,
+    OperationSubmissionResult,
 )
 from sourcing_agent.orchestrator import SourcingOrchestrator
 from sourcing_agent.semantic_provider import LocalSemanticProvider
@@ -143,24 +144,64 @@ class D1gOperationAPIExactOwnerPGTest(PGDurableRuntimeTestMixin, unittest.TestCa
         )
         return command
 
-    def _submit_filter(self, suffix: str, *, workspace_id: str) -> Any:
-        return self.writer.submit_action(
-            action_type=ACTION_FILTER_PROJECTION,
-            workspace_id=workspace_id,
-            target_ref={"projection_id": f"projection-{suffix}"},
-            input_payload={"filters": {"role": ["researcher"]}},
-            idempotency_key=f"filter:{suffix}",
-            actor="fixture",
+    def _submit_projection_action(
+        self,
+        suffix: str,
+        *,
+        action_type: str,
+        workspace_id: str,
+        input_payload: dict[str, Any],
+        idempotency_key: str,
+    ) -> OperationSubmissionResult:
+        projection_id = f"projection-{suffix}"
+        projection = self.orchestrator.serving_projection_reader.get_projection(projection_id)
+        if projection.get("status") != "ready":
+            self.orchestrator.serving_projection_writer.publish_run_scope_projection(
+                run_id=f"run-{suffix}",
+                projection_id=projection_id,
+                members=(),
+                replace_members=True,
+            )
+            projection = self.orchestrator.serving_projection_reader.get_projection(projection_id)
+        self.assertEqual(projection.get("status"), "ready", projection)
+        membership_revision = str(dict(projection["projection"])["membership_revision"])
+        target_ref = {"projection_id": projection_id}
+        if action_type == ACTION_EXPORT_CANDIDATES:
+            target_ref["membership_revision"] = membership_revision
+        result = self.orchestrator.submit_operation_action(
+            {
+                "action_type": action_type,
+                "workspace_id": workspace_id,
+                "target_ref": target_ref,
+                "input": input_payload,
+                "idempotency_key": idempotency_key,
+                "actor": "fixture",
+            }
+        )
+        self.assertIn(result.get("status"), {"approval_required", "queued"}, result)
+        return OperationSubmissionResult(
+            action=dict(result["action"]),
+            operation_run=dict(result.get("operation_run") or {}),
+            events=tuple(result.get("events") or ()),
+            replayed=bool(result.get("idempotent_replay")),
         )
 
-    def _submit_export(self, suffix: str, *, workspace_id: str) -> Any:
-        return self.writer.submit_action(
+    def _submit_filter(self, suffix: str, *, workspace_id: str) -> OperationSubmissionResult:
+        return self._submit_projection_action(
+            suffix,
+            action_type=ACTION_FILTER_PROJECTION,
+            workspace_id=workspace_id,
+            input_payload={"filters": {"function_buckets": ["research"]}},
+            idempotency_key=f"filter:{suffix}",
+        )
+
+    def _submit_export(self, suffix: str, *, workspace_id: str) -> OperationSubmissionResult:
+        return self._submit_projection_action(
+            suffix,
             action_type=ACTION_EXPORT_CANDIDATES,
             workspace_id=workspace_id,
-            target_ref={"projection_id": f"projection-{suffix}"},
             input_payload={"include_crm_notes": True},
             idempotency_key=f"export:{suffix}",
-            actor="fixture",
         )
 
     def _approved_export(self, suffix: str, *, workspace_id: str) -> tuple[dict[str, Any], dict[str, Any]]:
