@@ -211,7 +211,11 @@ operator execution facts are retained separately and cannot be copied from a for
 Caller-authored receipt dataclasses are not accepted without those bindings and replay. The compact union routes
 same-handle provisional evidence into a generalized one-or-more-candidate unresolved sidecar without rewriting a
 stable lead or adding hydration work, requires explicit lookup-alias resolution for renamed stable ids, and emits
-closed hydration identity tuples. Hydration fails closed on a stable platform-id
+closed hydration identity tuples. The normal hydration handoff does not accept the serialized union mapping: it
+retains every typed compact projection and its immutable raw sources in a typed merge envelope, replays every source,
+reruns the deterministic merge, and compares the complete union and merge summary before deriving hydration work.
+The envelope's union/summary hashes are diagnostics rather than caller authority; recomputing those hashes cannot
+make a deleted or rebound identity sidecar acceptable. Hydration fails closed on a stable platform-id
 mismatch and returns candidate-free stable errors for malformed nested envelopes. See
 `docs/GROK_COMPACT_DISCOVERY_AND_PROFILE_HYDRATION.md`.
 

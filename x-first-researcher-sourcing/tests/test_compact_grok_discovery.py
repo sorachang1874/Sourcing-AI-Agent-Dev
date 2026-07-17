@@ -4,7 +4,7 @@ import copy
 import hashlib
 import json
 import unittest
-from dataclasses import replace
+from dataclasses import asdict, replace
 from itertools import product
 from pathlib import Path
 
@@ -22,6 +22,7 @@ from x_first.compact_grok_discovery import (
     compare_compact_discovery_results,
     compare_lead_sets,
     merge_compact_discovery_results,
+    replay_merged_compact_discovery,
     summarize_compact_discovery,
     validate_compact_discovery_result,
 )
@@ -36,6 +37,8 @@ from x_first.grok_operator_session_replay import (
     GrokOperatorExecutionFacts,
 )
 from x_first.grok_profile_hydration import (
+    ProfileHydrationContractError,
+    build_profile_hydration_expectation_from_merge,
     build_profile_hydration_expectation_from_union,
 )
 from x_first.recall_pool_schema import schema_errors
@@ -206,6 +209,10 @@ class CompactGrokDiscoveryContractTests(unittest.TestCase):
         )
         self.assertIn("origin_shard_ids", schema["$defs"]["source_ref"]["required"])
         self.assertIn("handle_history_proposals", schema["$defs"]["lead"]["required"])
+        self.assertNotIn(
+            "same_handle_provisional_evidence_absorbed",
+            schema["$defs"]["lead"]["properties"]["identity_conflicts"]["items"]["enum"],
+        )
 
     def test_live_diagnostic_aggregate_receipt_is_hash_bound_and_arithmetically_closed(self) -> None:
         receipt = json.loads(AGGREGATE_RECEIPT_PATH.read_text(encoding="utf-8"))
@@ -896,6 +903,26 @@ class CompactGrokDiscoveryContractTests(unittest.TestCase):
         with self.assertRaisesRegex(CompactDiscoveryContractError, "result_digest_mismatch"):
             merge_compact_discovery_results([forged])
 
+        merged = merge_compact_discovery_results([projection])
+        with self.assertRaisesRegex(
+            ProfileHydrationContractError,
+            "discovery_merge_envelope_required",
+        ):
+            build_profile_hydration_expectation_from_merge(  # type: ignore[arg-type]
+                merged.result,
+                run_id="fixture.profile-run-v1",
+                batch_id="fixture.profile-batch-v1",
+            )
+        with self.assertRaisesRegex(
+            ProfileHydrationContractError,
+            "raw_discovery_union_handoff_retired",
+        ):
+            build_profile_hydration_expectation_from_union(
+                merged.result,
+                run_id="fixture.profile-run-v1",
+                batch_id="fixture.profile-batch-v1",
+            )
+
     def test_merge_rejects_cross_campaign_descriptor_and_duplicate_shard(self) -> None:
         first = _projection(_result([_lead("FxCampaign01")], shard_id="fixture.shard-a"))
         cross_campaign = _projection(
@@ -948,8 +975,9 @@ class CompactGrokDiscoveryContractTests(unittest.TestCase):
             {"FxOldHandle01", "FxNewHandle01"},
         )
         self.assertEqual(lead["origin_shard_ids"], ["fixture.shard-a", "fixture.shard-b"])
-        expectation = build_profile_hydration_expectation_from_union(
-            merged.result,
+        self.assertEqual(replay_merged_compact_discovery(merged), merged)
+        expectation = build_profile_hydration_expectation_from_merge(
+            merged,
             run_id="fixture.profile-run-v1",
             batch_id="fixture.profile-batch-v1",
         )
@@ -1006,8 +1034,7 @@ class CompactGrokDiscoveryContractTests(unittest.TestCase):
         stable_only = merge_compact_discovery_results([stable])
         merged = merge_compact_discovery_results([stable, provisional])
         reversed_merge = merge_compact_discovery_results([provisional, stable])
-        self.assertEqual(merged.result, reversed_merge.result)
-        self.assertEqual(merged.summary, reversed_merge.summary)
+        self.assertEqual(merged, reversed_merge)
         self.assertEqual(merged.summary.unique_lead_count, 1)
         self.assertEqual(merged.summary.provisional_identity_count, 0)
         self.assertEqual(merged.summary.absorbed_provisional_observation_count, 1)
@@ -1038,10 +1065,19 @@ class CompactGrokDiscoveryContractTests(unittest.TestCase):
                 for ref in projected_provisional_lead["source_refs"]
             ),
         )
-        expectation = build_profile_hydration_expectation_from_union(
-            merged.result,
+        stable_only_expectation = build_profile_hydration_expectation_from_merge(
+            stable_only,
+            run_id="fixture.profile-stable-only-run-v1",
+            batch_id="fixture.profile-stable-only-batch-v1",
+        )
+        expectation = build_profile_hydration_expectation_from_merge(
+            merged,
             run_id="fixture.profile-run-v1",
             batch_id="fixture.profile-batch-v1",
+        )
+        self.assertEqual(
+            expectation.input_identities,
+            stable_only_expectation.input_identities,
         )
         self.assertEqual(len(expectation.input_identities), 1)
         hydration_identity = expectation.input_identities[0]
@@ -1052,6 +1088,122 @@ class CompactGrokDiscoveryContractTests(unittest.TestCase):
         self.assertEqual(validate_compact_discovery_result(merged.result), [])
         schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
         self.assertEqual(schema_errors(merged.result, schema), [])
+
+    def test_hydration_handoff_replays_sidecar_and_full_summary(self) -> None:
+        stable = _projection(
+            _result(
+                [_lead("FxReplaySide01", platform_user_id="93021")],
+                shard_id="fixture.shard-a",
+            )
+        )
+        provisional = _projection(
+            _result([_lead("fxreplayside01")], shard_id="fixture.shard-b")
+        )
+        merged = merge_compact_discovery_results([provisional, stable])
+        self.assertEqual(replay_merged_compact_discovery(merged), merged)
+
+        mutations = {
+            "sidecar_deleted": lambda result: result[
+                "identity_resolution_sidecars"
+            ].clear(),
+            "lead_digest_replaced": lambda result: result[
+                "identity_resolution_sidecars"
+            ][0]["provisional_lead_sha256s"].__setitem__(0, "f" * 64),
+            "reference_digest_replaced": lambda result: result[
+                "identity_resolution_sidecars"
+            ][0]["provisional_source_ref_sha256s"].__setitem__(0, "e" * 64),
+            "candidate_id_replaced": lambda result: result[
+                "identity_resolution_sidecars"
+            ][0]["candidate_platform_user_ids"].__setitem__(0, "99999"),
+            "origin_rebound_to_allowed_shard": lambda result: result[
+                "identity_resolution_sidecars"
+            ][0].__setitem__("origin_shard_ids", ["fixture.shard-a"]),
+        }
+        for name, mutate in mutations.items():
+            with self.subTest(name=name):
+                result = copy.deepcopy(merged.result)
+                mutate(result)
+                forged = replace(
+                    merged,
+                    result=result,
+                    result_sha256=canonical_json_sha256(result),
+                )
+                with self.assertRaisesRegex(
+                    ProfileHydrationContractError,
+                    "discovery_merge_replay_invalid",
+                ):
+                    build_profile_hydration_expectation_from_merge(
+                        forged,
+                        run_id="fixture.profile-run-v1",
+                        batch_id="fixture.profile-batch-v1",
+                    )
+
+        stale_marker_result = copy.deepcopy(merged.result)
+        stale_marker_result["identity_resolution_sidecars"] = []
+        stale_marker_result["leads"][0]["identity_conflicts"] = [
+            "same_handle_provisional_evidence_absorbed"
+        ]
+        self.assertTrue(validate_compact_discovery_result(stale_marker_result))
+        schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+        self.assertTrue(schema_errors(stale_marker_result, schema))
+        forged_stale_marker = replace(
+            merged,
+            result=stale_marker_result,
+            result_sha256=canonical_json_sha256(stale_marker_result),
+        )
+        with self.assertRaisesRegex(
+            ProfileHydrationContractError,
+            "discovery_merge_replay_invalid",
+        ):
+            build_profile_hydration_expectation_from_merge(
+                forged_stale_marker,
+                run_id="fixture.profile-run-v1",
+                batch_id="fixture.profile-batch-v1",
+            )
+
+        forged_summary = replace(
+            merged.summary,
+            absorbed_provisional_observation_count=0,
+            unresolved_identity_sidecar_count=0,
+        )
+        self_consistent_summary_forgery = replace(
+            merged,
+            summary=forged_summary,
+            summary_sha256=canonical_json_sha256(asdict(forged_summary)),
+        )
+        with self.assertRaisesRegex(
+            ProfileHydrationContractError,
+            "discovery_merge_replay_invalid",
+        ):
+            build_profile_hydration_expectation_from_merge(
+                self_consistent_summary_forgery,
+                run_id="fixture.profile-run-v1",
+                batch_id="fixture.profile-batch-v1",
+            )
+
+    def test_merge_envelope_snapshots_projection_values_before_handoff(self) -> None:
+        projection = _projection(
+            _result(
+                [_lead("FxSnapshot001", platform_user_id="93031")],
+                shard_id="fixture.shard-a",
+            )
+        )
+        merged = merge_compact_discovery_results([projection])
+        expected = copy.deepcopy(merged)
+
+        projection.result["leads"][0]["target_lab_affiliation_state"] = "historical"
+        projection.raw_terminal["leads"][0][
+            "pretraining_experience_state"
+        ] = "historical"
+
+        self.assertEqual(merged, expected)
+        self.assertEqual(replay_merged_compact_discovery(merged), expected)
+        expectation = build_profile_hydration_expectation_from_merge(
+            merged,
+            run_id="fixture.profile-snapshot-run-v1",
+            batch_id="fixture.profile-snapshot-batch-v1",
+        )
+        self.assertEqual(expectation.input_identities[0].lead_identity, "platform:93031")
 
     def test_same_handle_multiple_stable_ids_preserves_provisional_evidence_in_sidecar(self) -> None:
         stable_a = _projection(
@@ -1069,13 +1221,31 @@ class CompactGrokDiscoveryContractTests(unittest.TestCase):
         provisional = _projection(
             _result([_lead("FXAMBIGUOUS01")], shard_id="fixture.shard-c")
         )
+        eligible = _projection(
+            _result(
+                [_lead("FxEligible001", platform_user_id="93013")],
+                shard_id="fixture.shard-d",
+            )
+        )
         provisional_lead = provisional.result["leads"][0]
-        merged = merge_compact_discovery_results([stable_a, stable_b, provisional])
-        self.assertEqual(merged.summary.input_lead_count, 3)
-        self.assertEqual(merged.summary.unique_lead_count, 2)
+        merged = merge_compact_discovery_results(
+            [eligible, stable_a, stable_b, provisional]
+        )
+        reversed_merge = merge_compact_discovery_results(
+            [provisional, stable_b, stable_a, eligible]
+        )
+        self.assertEqual(merged, reversed_merge)
+        self.assertEqual(replay_merged_compact_discovery(merged), merged)
+        self.assertEqual(merged.summary.input_lead_count, 4)
+        self.assertEqual(merged.summary.unique_lead_count, 3)
         self.assertEqual(merged.summary.provisional_identity_count, 0)
         self.assertEqual(merged.summary.unresolved_identity_sidecar_count, 1)
-        self.assertTrue(all(lead["lookup_handle"] is None for lead in merged.result["leads"]))
+        ambiguous_leads = [
+            lead
+            for lead in merged.result["leads"]
+            if lead["platform_user_id"] in {"93011", "93012"}
+        ]
+        self.assertTrue(all(lead["lookup_handle"] is None for lead in ambiguous_leads))
         sidecar = merged.result["identity_resolution_sidecars"][0]
         self.assertEqual(sidecar["candidate_platform_user_ids"], ["93011", "93012"])
         self.assertEqual(sidecar["origin_shard_ids"], ["fixture.shard-c"])
@@ -1090,6 +1260,18 @@ class CompactGrokDiscoveryContractTests(unittest.TestCase):
         self.assertEqual(validate_compact_discovery_result(merged.result), [])
         schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
         self.assertEqual(schema_errors(merged.result, schema), [])
+        expectation = build_profile_hydration_expectation_from_merge(
+            merged,
+            run_id="fixture.profile-run-v1",
+            batch_id="fixture.profile-batch-v1",
+        )
+        self.assertEqual(
+            expectation.input_identities,
+            (
+                expectation.input_identities[0],
+            ),
+        )
+        self.assertEqual(expectation.input_identities[0].lead_identity, "platform:93013")
 
     def test_merge_persists_input_digests_and_lead_ref_membership(self) -> None:
         first = _projection(

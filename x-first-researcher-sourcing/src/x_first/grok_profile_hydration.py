@@ -17,7 +17,11 @@ from dataclasses import asdict, dataclass
 from typing import Any
 from urllib.parse import urlsplit
 
-from x_first.compact_grok_discovery import validate_compact_discovery_result
+from x_first.compact_grok_discovery import (
+    CompactDiscoveryContractError,
+    MergedCompactDiscovery,
+    replay_merged_compact_discovery,
+)
 from x_first.grok_operator_session_replay import (
     RAW_SESSION_SHAPE_REGISTRY_VERSION,
     FrozenRawSessionArtifact,
@@ -352,19 +356,20 @@ def profile_input_set_sha256(handles: Sequence[str]) -> str:
     raise ProfileHydrationContractError("handle_only_input_set_retired")
 
 
-def build_profile_hydration_expectation_from_union(
-    discovery_union: Mapping[str, Any],
+def build_profile_hydration_expectation_from_merge(
+    discovery_merge: MergedCompactDiscovery,
     *,
     run_id: str,
     batch_id: str,
 ) -> ProfileHydrationBatchExpectation:
-    """Build the only normal hydration input from an exact compact union."""
+    """Build normal hydration input from a raw-session-replayed merge."""
 
-    errors = validate_compact_discovery_result(discovery_union)
-    if errors:
-        raise ProfileHydrationContractError("discovery_union_invalid")
-    if discovery_union.get("result_kind") != "union":
-        raise ProfileHydrationContractError("discovery_union_required")
+    if not isinstance(discovery_merge, MergedCompactDiscovery):
+        raise ProfileHydrationContractError("discovery_merge_envelope_required")
+    try:
+        discovery_union = replay_merged_compact_discovery(discovery_merge).result
+    except CompactDiscoveryContractError as exc:
+        raise ProfileHydrationContractError("discovery_merge_replay_invalid") from exc
     if not _valid_identifier(run_id) or not _valid_identifier(batch_id):
         raise ProfileHydrationContractError("hydration_run_identity_invalid")
     identities: list[ProfileHydrationIdentityExpectation] = []
@@ -402,6 +407,23 @@ def build_profile_hydration_expectation_from_union(
         batch_id=batch_id,
         input_identities=tuple(identities),
     )
+
+
+def build_profile_hydration_expectation_from_union(
+    discovery_union: Mapping[str, Any],
+    *,
+    run_id: str,
+    batch_id: str,
+) -> ProfileHydrationBatchExpectation:
+    """Reject the retired raw-union handoff.
+
+    ``validate_compact_discovery_result`` remains available as a shape helper,
+    but a self-consistent mapping cannot prove its sidecar or merge history.
+    Callers must pass ``MergedCompactDiscovery`` to
+    ``build_profile_hydration_expectation_from_merge`` instead.
+    """
+
+    raise ProfileHydrationContractError("raw_discovery_union_handoff_retired")
 
 
 def _valid_external_url(value: Any) -> bool:

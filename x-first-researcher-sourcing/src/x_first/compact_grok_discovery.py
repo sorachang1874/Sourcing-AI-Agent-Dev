@@ -32,6 +32,7 @@ from x_first.grok_operator_session_replay import (
 )
 
 CONTRACT_VERSION = "x.grok.compact_discovery.result.v1"
+MERGE_ENVELOPE_VERSION = "x.grok.compact_discovery.merge_envelope.v1"
 RESULT_KEYS = frozenset(
     {
         "contract_version",
@@ -98,7 +99,6 @@ IDENTITY_STATUSES = (
     "quarantined_handle_reuse",
 )
 IDENTITY_CONFLICT_CODES = (
-    "same_handle_provisional_evidence_absorbed",
     "same_handle_multiple_stable_ids_unresolved",
 )
 TEMPORAL_STATES = ("current", "historical", "ambiguous")
@@ -272,10 +272,23 @@ class CompactDiscoveryMergeSummary:
 
 @dataclass(frozen=True)
 class MergedCompactDiscovery:
-    """A validated compact union plus non-serialized diagnostics."""
+    """Replay-bound compact union, merge controls, and diagnostics.
 
+    ``input_projections`` retain the exact operator projections needed to
+    replay every raw Grok session before this envelope can cross into profile
+    hydration.  The cached digests are diagnostics, never authority: replay
+    reconstructs the complete result and summary and compares both values.
+    """
+
+    merge_envelope_version: str
+    input_projections: tuple[CompactDiscoveryOperatorProjection, ...]
+    union_id: str
+    strategy_id: str
+    resolved_lookup_handles: tuple[tuple[str, str], ...]
     result: dict[str, Any]
     summary: CompactDiscoveryMergeSummary
+    result_sha256: str
+    summary_sha256: str
 
 
 def canonical_json_sha256(value: Any) -> str:
@@ -605,12 +618,6 @@ def _validate_compact_discovery_result(
                     errors.append(f"{prefix}:lookup_handle_casefold_duplicate")
                 else:
                     lookup_handle_owners[lookup_key] = lead_index
-        if (
-            "same_handle_provisional_evidence_absorbed" in identity_conflicts
-            and not isinstance(platform_user_id, str)
-        ):
-            errors.append(f"{prefix}:absorbed_provisional_without_stable_identity")
-
         lead_origins = lead.get("origin_shard_ids")
         if not _valid_origin_ids(lead_origins, allowed_origin_ids):
             errors.append(f"{prefix}:origin_binding_invalid")
@@ -1299,7 +1306,15 @@ def merge_compact_discovery_results(
         raise CompactDiscoveryContractError("merge_resolved_lookup_handles_invalid")
     resolved_lookup_handles = dict(resolved_lookup_handles)
 
-    checked = tuple(_assert_projection(projection) for projection in inputs)
+    checked = tuple(
+        sorted(
+            (
+                copy.deepcopy(_assert_projection(projection))
+                for projection in inputs
+            ),
+            key=lambda projection: projection.result["shard_id"],
+        )
+    )
     results = tuple(projection.result for projection in checked)
     if any(result["result_kind"] != "shard" for result in results):
         raise CompactDiscoveryContractError("merge_input_must_be_shard")
@@ -1545,4 +1560,68 @@ def merge_compact_discovery_results(
         input_source_ref_count=input_source_ref_count,
         merged_source_ref_count=sum(len(lead["source_refs"]) for lead in merged_leads),
     )
-    return MergedCompactDiscovery(result=merged_result, summary=summary)
+    return MergedCompactDiscovery(
+        merge_envelope_version=MERGE_ENVELOPE_VERSION,
+        input_projections=checked,
+        union_id=union_id,
+        strategy_id=strategy_id,
+        resolved_lookup_handles=tuple(sorted(resolved_lookup_handles.items())),
+        result=merged_result,
+        summary=summary,
+        result_sha256=canonical_json_sha256(merged_result),
+        summary_sha256=canonical_json_sha256(asdict(summary)),
+    )
+
+
+def replay_merged_compact_discovery(value: Any) -> MergedCompactDiscovery:
+    """Replay every retained shard and reconstruct an exact merge envelope.
+
+    This is the normal handoff gate for downstream hydration.  A JSON union,
+    even one that is schema-valid and internally digest-consistent, carries no
+    replay authority and is deliberately rejected here.
+    """
+
+    if not isinstance(value, MergedCompactDiscovery):
+        raise CompactDiscoveryContractError("merge_envelope_required")
+    if value.merge_envelope_version != MERGE_ENVELOPE_VERSION:
+        raise CompactDiscoveryContractError("merge_envelope_version_invalid")
+    if not isinstance(value.input_projections, tuple) or not value.input_projections:
+        raise CompactDiscoveryContractError("merge_envelope_projections_invalid")
+    if not isinstance(value.resolved_lookup_handles, tuple) or any(
+        not isinstance(item, tuple) or len(item) != 2
+        for item in value.resolved_lookup_handles
+    ):
+        raise CompactDiscoveryContractError("merge_envelope_lookup_controls_invalid")
+    if any(
+        not isinstance(key, str) or not _valid_handle(handle)
+        for key, handle in value.resolved_lookup_handles
+    ):
+        raise CompactDiscoveryContractError("merge_envelope_lookup_controls_invalid")
+    if value.resolved_lookup_handles != tuple(sorted(value.resolved_lookup_handles)):
+        raise CompactDiscoveryContractError("merge_envelope_lookup_controls_noncanonical")
+    if len({key for key, _value in value.resolved_lookup_handles}) != len(
+        value.resolved_lookup_handles
+    ):
+        raise CompactDiscoveryContractError("merge_envelope_lookup_controls_duplicate")
+    try:
+        recomputed = merge_compact_discovery_results(
+            value.input_projections,
+            union_id=value.union_id,
+            strategy_id=value.strategy_id,
+            resolved_lookup_handles=dict(value.resolved_lookup_handles),
+        )
+    except (CompactDiscoveryContractError, TypeError, ValueError) as exc:
+        raise CompactDiscoveryContractError("merge_envelope_replay_failed") from exc
+    if value.input_projections != recomputed.input_projections:
+        raise CompactDiscoveryContractError("merge_envelope_projection_set_mismatch")
+    if value.result != recomputed.result:
+        raise CompactDiscoveryContractError("merge_envelope_result_mismatch")
+    if value.summary != recomputed.summary:
+        raise CompactDiscoveryContractError("merge_envelope_summary_mismatch")
+    if value.result_sha256 != canonical_json_sha256(value.result):
+        raise CompactDiscoveryContractError("merge_envelope_result_digest_invalid")
+    if value.summary_sha256 != canonical_json_sha256(asdict(value.summary)):
+        raise CompactDiscoveryContractError("merge_envelope_summary_digest_invalid")
+    if value != recomputed:
+        raise CompactDiscoveryContractError("merge_envelope_content_mismatch")
+    return recomputed

@@ -275,7 +275,6 @@
           "uniqueItems": true,
           "items": {
             "enum": [
-              "same_handle_provisional_evidence_absorbed",
               "same_handle_multiple_stable_ids_unresolved"
             ]
           }

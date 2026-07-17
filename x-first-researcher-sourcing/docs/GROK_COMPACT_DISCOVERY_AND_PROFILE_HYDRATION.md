@@ -165,13 +165,34 @@ source reference retains sorted origin-shard ids. Per-shard membership therefore
 exact projected inputs, so marginal unique leads, overlap, cross-shard evidence, and strategy-specific failure can be
 recomputed after the merge.
 
+The normal cross-phase value is the typed `MergedCompactDiscovery` envelope, not the JSON union mapping. The envelope
+snapshots the exact accepted `CompactDiscoveryOperatorProjection` values, including their session precommits,
+operator facts, receipts, unmodified terminals, and frozen raw-session sources. Before profile hydration derives even
+one lookup, it:
+
+1. replays and revalidates every retained projection from the frozen sources;
+2. sorts the projections by unique shard id and reruns the merge with the retained union id, strategy id, and explicit
+   lookup-handle resolutions;
+3. compares the complete reconstructed union and `CompactDiscoveryMergeSummary`, including the entire sidecar set and
+   its provisional lead/reference digests, candidate platform ids, and origin shards; and
+4. checks the cached result and summary digests only as diagnostics, then requires the whole typed envelope to equal
+   the reconstruction.
+
+Consequently, deleting a sidecar, replacing a provisional lead/reference digest, changing a candidate id, rebinding
+an origin to a different but otherwise allowed shard, or substituting the retired absorbed-evidence marker fails
+before a hydration expectation is emitted. Updating a caller-authored hash over the forged value does not help. A raw
+mapping remains usable only with the standalone compact result validator as a shape inspection; the retired
+`build_profile_hydration_expectation_from_union` entrypoint rejects it and is not a normal hydration path. Input order
+is non-authoritative: stable-only merges and one- or multiple-candidate sidecars reconstruct identically after shard-id
+ordering.
+
 ### Phase 3: profile hydration
 
-Profile hydration runs only after the discovery union. Its owner-built expectation carries one closed identity tuple
-per resolved, non-quarantined union lead and uses exactly one canonical `x_user_search` lookup per resolved lookup
-handle in a normal attempt. A renamed stable account cannot use lexical alias order as evidence: an operator must
-select an observed alias. Repeating equivalent handle, URL, and display-name variants is not a default strategy;
-additional calls require a typed lookup failure or a separate challenger experiment.
+Profile hydration runs only after the replay-verified discovery merge envelope. Its owner-built expectation carries
+one closed identity tuple per resolved, non-quarantined union lead and uses exactly one canonical `x_user_search`
+lookup per resolved lookup handle in a normal attempt. A renamed stable account cannot use lexical alias order as
+evidence: an operator must select an observed alias. Repeating equivalent handle, URL, and display-name variants is
+not a default strategy; additional calls require a typed lookup failure or a separate challenger experiment.
 
 The generic output contract is `x.grok.profile_hydration.result.v1`. Its operator evaluator accepts only a typed
 projection envelope, not a model object plus caller-supplied call dictionaries. The envelope binds the operator
