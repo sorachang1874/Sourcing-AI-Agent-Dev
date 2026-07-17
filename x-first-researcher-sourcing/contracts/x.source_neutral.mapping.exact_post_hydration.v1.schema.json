@@ -17,8 +17,8 @@
   "properties": {
     "schema_version": {"const": "x.source_neutral.mapping.exact_post_hydration.v1"},
     "candidate_ref": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]{0,127}$"},
-    "requested_stable_post_id": {"type": "string", "pattern": "^[0-9]{1,32}$"},
-    "returned_stable_post_id": {"type": "string", "pattern": "^[0-9]{1,32}$"},
+    "requested_stable_post_id": {"type": "string", "pattern": "^[1-9][0-9]{0,31}$"},
+    "returned_stable_post_id": {"type": "string", "pattern": "^[1-9][0-9]{0,31}$"},
     "source_url": {"type": "string", "minLength": 1, "maxLength": 512},
     "author_handle": {"type": "string", "pattern": "^[A-Za-z0-9_]{1,15}$"},
     "full_text": {"type": "string", "minLength": 1, "maxLength": 1000000},

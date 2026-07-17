@@ -12,6 +12,7 @@ import argparse
 import hashlib
 import json
 import re
+import unicodedata
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -66,7 +67,7 @@ CONTRACT_SCHEMA_FILES = (
 _SHA_RE = re.compile(r"[0-9a-f]{64}")
 _ID_RE = re.compile(r"[a-z0-9][a-z0-9_.-]{0,127}")
 _HANDLE_RE = re.compile(r"[A-Za-z0-9_]{1,15}")
-_STATUS_ID_RE = re.compile(r"[0-9]{1,32}")
+_STATUS_ID_RE = re.compile(r"[1-9][0-9]{0,31}")
 _QUERY_TERM_RE = re.compile(r'(?:[A-Za-z0-9_-]+|"[A-Za-z0-9 -]+")')
 _AXIS_STATES = frozenset({"current", "historical", "ambiguous", "unsupported"})
 _PRIOR_EVIDENCE = frozenset({"fixture_asserted", "source_bound", "model_mediated_unverified", "unsupported"})
@@ -138,6 +139,7 @@ class ExecutedWaveFacts:
     predecessor_wave_facts_sha256: str | None
     prior_frontier_sha256: str
     cumulative_stable_post_ids: tuple[str, ...]
+    cumulative_frontier_bindings: tuple[tuple[str, str, str], ...]
     cumulative_frontier_sha256: str
     manifest_json: bytes
     policy_json: bytes
@@ -1500,6 +1502,7 @@ def _validated_hydration_outputs(
         raise SourceNeutralMappingError("exact_hydration_projections_invalid")
     output: list[dict[str, Any]] = []
     checked_by_sha: dict[str, ExactPostHydrationProjection] = {}
+    checked_task_sha256s: set[str] = set()
     session_ids: set[str] = set()
     request_ids: set[str] = set()
     for projection in hydration_projections:
@@ -1509,6 +1512,7 @@ def _validated_hydration_outputs(
             raise SourceNeutralMappingError("exact_hydration_projection_task_unknown")
         if (
             projection.projection_sha256 in checked_by_sha
+            or projection.task_sha256 in checked_task_sha256s
             or projection.grok_precommit.expected_session_id in session_ids
             or projection.grok_precommit.expected_request_id in request_ids
         ):
@@ -1518,6 +1522,7 @@ def _validated_hydration_outputs(
             task=tasks[projection.task_sha256],
         )
         checked_by_sha[projection.projection_sha256] = checked
+        checked_task_sha256s.add(projection.task_sha256)
         session_ids.add(projection.grok_precommit.expected_session_id)
         request_ids.add(projection.grok_precommit.expected_request_id)
         output.append(
@@ -1594,14 +1599,24 @@ def build_luna_axis_reduction(
 def _derive_semantic_strategy_payload(plan: Mapping[str, Any]) -> dict[str, Any]:
     """Describe retrieval semantics without scheduling or execution identity."""
 
+    def normalized_alias(value: str) -> str:
+        return " ".join(unicodedata.normalize("NFKC", value).split()).casefold()
+
     cells: dict[str, dict[str, Any]] = {}
     for batch in plan["batches"]:
         for call in batch["calls"]:
-            aliases = list(call["topic_aliases"])
+            # Boolean OR is commutative.  Execution preserves the frozen query
+            # ordering, while the semantic strategy signature deliberately
+            # ignores an aliases-only permutation.
+            normalized_aliases = [normalized_alias(item) for item in call["topic_aliases"]]
+            if len(normalized_aliases) != len(set(normalized_aliases)):
+                raise SourceNeutralMappingError("strategy_alias_normalized_duplicate")
+            aliases = sorted(normalized_aliases)
             cell = {
                 "tool_name": call["tool_name"],
                 "query_template": f"from:{{candidate_handle}} ({' OR '.join(aliases)})",
                 "topic_aliases": aliases,
+                "alias_normalization": "unicode_nfkc_casefold_whitespace_collapse_sorted_unique_v1",
                 "mode": call["arguments"]["mode"],
                 "request_limit": call["arguments"]["limit"],
                 "time_window": None,
@@ -1652,6 +1667,7 @@ def _derive_executed_wave_facts(
     campaign_ordinal = 0 if checked_predecessor is None else checked_predecessor.campaign_ordinal + 1
     predecessor_digest = None if checked_predecessor is None else checked_predecessor.wave_facts_sha256
     prior_stable_ids = () if checked_predecessor is None else checked_predecessor.cumulative_stable_post_ids
+    prior_frontier_bindings = () if checked_predecessor is None else checked_predecessor.cumulative_frontier_bindings
     prior_frontier_sha256 = (
         canonical_sha256(
             {
@@ -1681,7 +1697,9 @@ def _derive_executed_wave_facts(
         hydration_projections=hydration_projections,
         policy=policy,
     )
-    if len(hydration_outputs) != len(queues["thread_hydration_queue"]):
+    expected_hydration_task_sha256s = {canonical_sha256(task) for task in queues["thread_hydration_queue"]}
+    completed_hydration_task_sha256s = {projection.task_sha256 for projection in hydration_projections}
+    if completed_hydration_task_sha256s != expected_hydration_task_sha256s:
         raise SourceNeutralMappingError("executed_wave_hydration_incomplete")
     hydration_by_sha = checked_hydrations
     checked_luna = _collect_luna_reviews(
@@ -1713,18 +1731,33 @@ def _derive_executed_wave_facts(
     covered_refs = tuple(
         ref for batch in plan["batches"] if batch["batch_id"] in completed for ref in batch["candidate_refs"]
     )
-    all_stable_ids = sorted(
-        {
-            row["stable_post_id"]
-            for _, receipt in receipt_by_batch.values()
-            if receipt["status"] == "accepted"
-            for row in receipt["references"]
-        },
-        key=int,
-    )
+    current_frontier_bindings: dict[str, tuple[str, str]] = {}
+    for _, receipt in receipt_by_batch.values():
+        if receipt["status"] != "accepted":
+            continue
+        for row in receipt["references"]:
+            binding = (row["candidate_ref"], row["author_handle"].casefold())
+            previous = current_frontier_bindings.setdefault(row["stable_post_id"], binding)
+            if previous != binding:
+                raise SourceNeutralMappingError("executed_wave_frontier_owner_collision")
+    all_stable_ids = sorted(current_frontier_bindings, key=int)
+    prior_binding_map = {
+        stable_post_id: (candidate_ref, author_handle)
+        for stable_post_id, candidate_ref, author_handle in prior_frontier_bindings
+    }
+    for stable_post_id, binding in current_frontier_bindings.items():
+        previous = prior_binding_map.get(stable_post_id)
+        if previous is not None and previous != binding:
+            raise SourceNeutralMappingError("executed_wave_frontier_owner_reassignment")
     prior = set(prior_stable_ids)
     new_ids = tuple(item for item in all_stable_ids if item not in prior)
     cumulative_stable_post_ids = tuple(sorted(prior | set(all_stable_ids), key=int))
+    cumulative_binding_map = dict(prior_binding_map)
+    cumulative_binding_map.update(current_frontier_bindings)
+    cumulative_frontier_bindings = tuple(
+        (stable_post_id, *cumulative_binding_map[stable_post_id])
+        for stable_post_id in sorted(cumulative_binding_map, key=int)
+    )
     cumulative_frontier_sha256 = canonical_sha256(
         {
             "campaign_id": campaign_id,
@@ -1732,6 +1765,7 @@ def _derive_executed_wave_facts(
             "predecessor_frontier_sha256": prior_frontier_sha256,
             "added_stable_post_ids": list(new_ids),
             "cumulative_stable_post_ids": list(cumulative_stable_post_ids),
+            "cumulative_frontier_bindings": [list(row) for row in cumulative_frontier_bindings],
         }
     )
 
@@ -1802,6 +1836,7 @@ def _derive_executed_wave_facts(
         "prior_frontier_sha256": prior_frontier_sha256,
         "cumulative_frontier_sha256": cumulative_frontier_sha256,
         "cumulative_stable_post_ids": list(cumulative_stable_post_ids),
+        "cumulative_frontier_bindings": [list(row) for row in cumulative_frontier_bindings],
         "manifest_sha256": manifest["manifest_sha256"],
         "policy_sha256": canonical_sha256(policy),
         "plan_sha256": plan["plan_sha256"],
@@ -1830,6 +1865,7 @@ def _derive_executed_wave_facts(
         predecessor_wave_facts_sha256=predecessor_digest,
         prior_frontier_sha256=prior_frontier_sha256,
         cumulative_stable_post_ids=cumulative_stable_post_ids,
+        cumulative_frontier_bindings=cumulative_frontier_bindings,
         cumulative_frontier_sha256=cumulative_frontier_sha256,
         manifest_json=_canonical_json_bytes(manifest),
         policy_json=_canonical_json_bytes(policy),

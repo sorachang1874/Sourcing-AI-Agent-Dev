@@ -75,7 +75,7 @@
       ],
       "properties": {
         "candidate_ref": {"$ref": "#/$defs/id"},
-        "platform_user_id": {"type": ["string", "null"], "pattern": "^[0-9]{1,32}$"},
+        "platform_user_id": {"type": ["string", "null"], "pattern": "^[1-9][0-9]{0,31}$"},
         "current_handle": {"$ref": "#/$defs/handle"},
         "profile_url": {"type": "string", "minLength": 1, "maxLength": 512},
         "lab_affiliation_prior": {"$ref": "#/$defs/prior"},

@@ -81,12 +81,17 @@ sparse/ambiguity challengers. `official_exact_mention` and `project_alias` remai
 is omitted unless at least one stable Post ID exists. Challenger evidence is always marked
 `official_or_third_party_non_self` and can never be relabelled as self-authored evidence.
 
-Accepted stable IDs enter an exact thread-hydration queue. Luna input accepts only a typed `x_thread_fetch`
+Accepted stable IDs use canonical positive decimal text (no zero or leading-zero aliases) and enter an exact
+thread-hydration queue. Luna input accepts only a typed `x_thread_fetch`
 projection that retains the six raw files and operator precommit, replays exactly one call for the queued Post ID, and
 binds descriptor host, queued URL, expected author, requested/returned ID, and exact UTF-8 full-text bytes. Luna state
 reviews are separately typed and bind the hydration projection and source-text digest. Their current contract is
 explicitly `diagnostic_only_unattested`: the model may propose the two axis states, but it does not emit an upgrade
 Boolean or transition ID and cannot change product or campaign state.
+
+Hydration coverage is keyed by the exact queued task digest. A second projection for the same task is rejected even
+when it has fresh session, request, and projection identities; a complete wave compares the exact task set rather than
+projection-row counts. This prevents duplicate hydration of Post A from substituting for missing Post B.
 
 Deterministic code reduces the full available review set to exactly one row per candidate, axis, and manifest-bound
 state version. Every row binds the frozen prior, expected/reviewed evidence manifests, proposal-set digest, and
@@ -95,18 +100,38 @@ Because the current Luna boundary is unattested, `resolved_state` always remains
 `transition_status=not_authorized`, and there are zero authorized transitions. This prevents multiple Posts from being
 counted as multiple candidate-state upgrades or a single model run from downgrading a prior.
 
-Wave facts form one append-only campaign chain. The public builder accepts a campaign ID and an optional replayable
-predecessor fact; it does not accept prior stable IDs, an ordinal, or a strategy payload. It recursively replays the
-predecessor, derives the monotonic ordinal, exact predecessor-fact digest, prior frontier, new IDs, cumulative frontier,
-and current fact digest. The strategy signature is independently derived from the validated plan's actual native tool,
-handle-neutral query template, ordered aliases, mode, limit, time window, and relationship topology. Plan, batch, wave,
-session, request, candidate, and other execution IDs/hashes are excluded, so rescheduling an identical strategy cannot
-pretend to be a new challenger.
+`ExecutedWaveFacts` is a replayable **diagnostic predecessor projection**, not an admitted append-only campaign truth.
+The public builder accepts a campaign ID and optional replayable predecessor; it does not accept prior stable IDs, an
+ordinal, or a strategy payload. It recursively replays that selected predecessor and derives its ordinal, fact digest,
+prior frontier, new IDs, cumulative frontier, and current fact digest. The cumulative authored frontier binds each
+stable Post ID to its candidate and source author, so cross-wave reassignment fails closed. The strategy signature is
+derived from the validated plan's native tool, handle-neutral query template, NFKC/casefold/whitespace-normalized,
+sorted unique OR aliases, mode, limit, time window, and relationship topology. Normalized alias collisions reject
+rather than silently collapsing. Plan, batch, wave, session, request, candidate, and execution identities are excluded,
+so rescheduling an identical strategy cannot pretend to be a new challenger.
 
-Stopping replays the two trailing facts and requires exact predecessor adjacency; passing `[F1,F3]` while omitting
-`F2` fails closed. One proof-identity registry covers mapping and hydration session IDs, request IDs, and projection
-digests within the wave and across the complete predecessor chain. Silent cache reuse is unsupported: a future cache
-must introduce an explicit source/consumer-bound cache projection before any identity can be reused.
+The diagnostic stopping helper replays the two supplied trailing facts and requires exact predecessor adjacency;
+passing `[F1,F3]` while omitting `F2` fails closed. It is not campaign-global authority: two callers can still build
+sibling projections from the same predecessor, and independent roots cannot see one another's proof identities. The
+2026-07-17 pinned review therefore remains `NO-GO` for campaign closeout. A durable store-global append journal,
+canonical head, successor compare-and-swap, global proof registry, and explicit source/consumer-bound cache projection
+must land before any campaign frontier, zero-wave, or stop result is promotable.
+
+### Durable campaign store Phase 1
+
+`x_first.source_neutral_campaign_store.CampaignStore` now provides the durable admission substrate: one private
+store-global lock, a content-addressed global journal, replay-derived per-campaign heads, successor compare-and-swap,
+mutation idempotency, and a campaign-global direct-proof registry. Journal publication is the commit point; materialized
+head files are repairable caches. Replay fails closed on sequence gaps, hash-chain corruption, unknown/forked
+materialized frontiers, and tail rollback witnessed by a previously materialized global head. Crash tests cover both
+orphan bundles before journal publication and committed journal entries before head materialization.
+
+Phase 1 deliberately accepts an explicit `ValidatedWaveBundle` plus caller-supplied `DirectProof` inventory. It does
+not yet derive either value from raw mapping/hydration/Luna projections, and current `structural_stop` does not read the
+store. Therefore the store foundation has its own scoped test/review result, but it does **not** clear the mapping
+controller's promotion blocker. Phase 2 must replay `ExecutedWaveFacts` inputs inside the store lock, derive proof keys
+from raw transcripts/session/request/projection/review identities, add explicit cache-consumer projections, and make
+authoritative stop read only the canonical journal tail.
 
 All six queues must still be empty and two adjacent, materially distinct strategies must produce zero new stable Post
 IDs and zero **authorized** semantic transitions. Diagnostic Luna output cannot prove the latter. Therefore a campaign
@@ -128,7 +153,8 @@ The aggregate builder derives every count and binding from the exact plan plus r
 Luna projections; independent caller integers are not accepted. It exposes
 `not_applicable|not_started|incomplete|complete` review coverage,
 `semantic_transition_authority=diagnostic_only_unattested`, and an authorized transition count fixed at zero. It
-enforces zero propagation and legal cross-stage cardinalities, binds policy, manifest, plan, session-receipt,
+enforces one projection per queued hydration task, zero propagation, and legal cross-stage cardinalities; binds policy,
+manifest, plan, session-receipt,
 hydration-receipt, Luna-result, and candidate-axis-reduction manifests by SHA-256, and contains no model-call count. The
 tracked 46-call calibration aggregate is diagnostic method evidence only: it binds the
 owner-private candidate-free summary and receipt by hash, retains only counts/hashes, and explicitly does not claim a
@@ -149,13 +175,16 @@ PYTHONPATH=src ../sourcing-ai-agent/.venv/bin/python -m x_first.source_neutral_m
 
 ## Contract correction status
 
-The first v1 source-neutral mapping contract was pinned for review but never promoted: its rereview returned `NO-GO`.
-This round corrects that unpromoted v1 contract in place by removing caller transition authority and caller-owned
-frontier/strategy inputs. It does not reinterpret a previously promoted live artifact.
+The first v1 source-neutral mapping contract was pinned for review but never promoted. The `da396e6` rereview returned
+`NO-GO` with three P1 and four P2 findings. The current fixed-forward closes duplicate hydration substitution,
+candidate/author frontier loss, canonical decimal identity, and commutative alias normalization; durable campaign
+admission, temporal candidate-snapshot semantics, and general saturation/challenger strategy v2 remain explicit
+promotion blockers. No historical exploratory artifact is reinterpreted as promoted evidence.
 
 ## Offline validation
 
 ```bash
 PYTHONPATH=src ../sourcing-ai-agent/.venv/bin/python -m x_first.source_neutral_mapping
 PYTHONPATH=src ../sourcing-ai-agent/.venv/bin/python -m unittest tests.test_source_neutral_mapping -v
+PYTHONPATH=src ../sourcing-ai-agent/.venv/bin/python -m unittest tests.test_source_neutral_campaign_store -v
 ```

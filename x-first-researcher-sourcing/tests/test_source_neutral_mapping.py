@@ -26,6 +26,7 @@ from x_first.source_neutral_mapping import (
     ExactPostHydrationProjection,
     ExecutedWaveFacts,
     SourceNeutralMappingError,
+    _derive_semantic_strategy_payload,
     build_candidate_free_aggregate,
     build_exact_post_hydration_projection,
     build_executed_wave_facts,
@@ -601,6 +602,25 @@ class SourceNeutralMappingTests(unittest.TestCase):
         )
         self.assertEqual(rejected["references"], [])
 
+        noncanonical_blocks = [[] for _ in calls]
+        noncanonical_blocks[0] = [f"https://x.invalid/{calls[0]['expected_author_handle']}/status/01"]
+        _, _, terminal, raw, grok_precommit = _fixture_batch(terminal_blocks=noncanonical_blocks)
+        rejected = replay_flat_session(
+            mapping_precommit=build_session_precommit(
+                plan=plan,
+                manifest=manifest,
+                policy=load_policy(),
+                batch_index=0,
+                grok_precommit=grok_precommit,
+            ),
+            terminal_text=terminal,
+            lab_descriptor=manifest["lab_descriptor"],
+            raw_session_files=raw,
+            grok_precommit=grok_precommit,
+        )
+        self.assertFalse(rejected["commit_allowed"])
+        self.assertEqual(rejected["references"], [])
+
     def test_request_limit_equality_is_only_saturation_lower_bound(self) -> None:
         manifest, plan, _, _, grok_precommit = _fixture_batch()
         calls = plan["batches"][0]["calls"]
@@ -744,6 +764,42 @@ class SourceNeutralMappingTests(unittest.TestCase):
                 hydration_projections=[tampered],
                 policy=policy,
             )
+        duplicate_task = _hydration_projection(
+            frontier["thread_hydration_queue"][0],
+            index=2,
+            session_namespace="fixture-hydration-duplicate-task",
+        )
+        with self.assertRaisesRegex(SourceNeutralMappingError, "projection_duplicate"):
+            build_luna_input_queue(
+                manifest=manifest,
+                plan=plan,
+                session_projections=sessions,
+                hydration_projections=[hydration, duplicate_task],
+                policy=policy,
+            )
+
+    def test_semantic_strategy_normalizes_commutative_or_aliases(self) -> None:
+        manifest = _manifest()
+        policy = load_policy()
+        plan = plan_wave_p(manifest, policy, plan_id="fixture_strategy_normalization_v1")
+        reordered = copy.deepcopy(plan)
+        reordered["batches"][0]["calls"][0]["topic_aliases"].reverse()
+        decorated = copy.deepcopy(plan)
+        decorated["batches"][0]["calls"][0]["topic_aliases"] = [
+            f"  {alias.upper()}  " for alias in reversed(plan["batches"][0]["calls"][0]["topic_aliases"])
+        ]
+        self.assertEqual(
+            _derive_semantic_strategy_payload(plan),
+            _derive_semantic_strategy_payload(reordered),
+        )
+        self.assertEqual(
+            _derive_semantic_strategy_payload(plan),
+            _derive_semantic_strategy_payload(decorated),
+        )
+        collision = copy.deepcopy(plan)
+        collision["batches"][0]["calls"][0]["topic_aliases"] = ["BPE", "bpe"]
+        with self.assertRaisesRegex(SourceNeutralMappingError, "alias_normalized_duplicate"):
+            _derive_semantic_strategy_payload(collision)
 
     def test_execution_identity_registry_rejects_cross_lane_and_campaign_reuse(self) -> None:
         source = _manifest()
@@ -824,6 +880,95 @@ class SourceNeutralMappingTests(unittest.TestCase):
                 hydration_projections=[hydration],
                 luna_review_projections=[luna],
                 predecessor_wave_facts=base,
+            )
+
+    def test_campaign_frontier_rejects_cross_wave_candidate_owner_reassignment(self) -> None:
+        source = _manifest()
+        manifest = freeze_candidate_manifest(
+            manifest_id="fixture_frontier_owner_manifest_v1",
+            lab_descriptor=source["lab_descriptor"],
+            candidates=source["candidates"][:2],
+        )
+        policy = load_policy()
+
+        def one_reference_sessions(plan: dict, candidate_ref: str, namespace: str) -> list[object]:
+            sessions: list[object] = []
+            emitted = False
+            for batch_index, batch in enumerate(plan["batches"]):
+                blocks: list[list[str]] = []
+                for call in batch["calls"]:
+                    if call["candidate_ref"] == candidate_ref and not emitted:
+                        blocks.append([f"https://x.invalid/{call['expected_author_handle']}/status/9000001"])
+                        emitted = True
+                    else:
+                        blocks.append([])
+                sessions.append(
+                    _projection_for_batch(
+                        manifest,
+                        plan,
+                        batch_index,
+                        terminal_blocks=blocks,
+                        session_namespace=namespace,
+                        policy=policy,
+                    )
+                )
+            return sessions
+
+        first_plan = plan_wave_p(manifest, policy, plan_id="fixture_frontier_owner_plan_v1")
+        first_sessions = one_reference_sessions(
+            first_plan,
+            manifest["candidates"][0]["candidate_ref"],
+            "fixture-frontier-owner-first",
+        )
+        first_queues = build_frontier_queues(
+            manifest=manifest,
+            plan=first_plan,
+            session_projections=first_sessions,
+            policy=policy,
+        )
+        first_hydration = _hydration_projection(
+            first_queues["thread_hydration_queue"][0],
+            session_namespace="fixture-frontier-owner-first-hydration",
+        )
+        first = build_executed_wave_facts(
+            campaign_id="fixture_frontier_owner_campaign_v1",
+            wave_id="frontier_owner_first",
+            manifest=manifest,
+            policy=policy,
+            plan=first_plan,
+            session_projections=first_sessions,
+            hydration_projections=[first_hydration],
+            luna_review_projections=[],
+        )
+        self.assertEqual(len(first.cumulative_frontier_bindings), 1)
+
+        second_plan = plan_wave_p(manifest, policy, plan_id="fixture_frontier_owner_plan_v2")
+        second_sessions = one_reference_sessions(
+            second_plan,
+            manifest["candidates"][1]["candidate_ref"],
+            "fixture-frontier-owner-second",
+        )
+        second_queues = build_frontier_queues(
+            manifest=manifest,
+            plan=second_plan,
+            session_projections=second_sessions,
+            policy=policy,
+        )
+        second_hydration = _hydration_projection(
+            second_queues["thread_hydration_queue"][0],
+            session_namespace="fixture-frontier-owner-second-hydration",
+        )
+        with self.assertRaisesRegex(SourceNeutralMappingError, "frontier_owner_reassignment"):
+            build_executed_wave_facts(
+                campaign_id="fixture_frontier_owner_campaign_v1",
+                wave_id="frontier_owner_second",
+                manifest=manifest,
+                policy=policy,
+                plan=second_plan,
+                session_projections=second_sessions,
+                hydration_projections=[second_hydration],
+                luna_review_projections=[],
+                predecessor_wave_facts=first,
             )
 
     def test_diagnostic_luna_reducer_is_complete_set_bound_and_never_authorizes_transitions(self) -> None:
