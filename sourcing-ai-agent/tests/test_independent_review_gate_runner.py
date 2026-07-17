@@ -412,6 +412,26 @@ def _init_nested_review_repo(git_root: Path) -> tuple[Path, str]:
     return project_root, base
 
 
+def test_scope_parser_prefers_repeatable_exact_file_and_keeps_legacy_space_list() -> None:
+    runner = _load_runner()
+    parser = runner._build_argument_parser()
+
+    exact_args = parser.parse_args(
+        ["--file", "src/with space.py", "--file", "src/a,b.py"]
+    )
+    assert runner._parse_review_files(exact_args) == ["src/a,b.py", "src/with space.py"]
+
+    legacy_args = parser.parse_args(["--files", '"src/with space.py" docs/example.md'])
+    assert runner._parse_review_files(legacy_args) == ["docs/example.md", "src/with space.py"]
+
+    comma_args = parser.parse_args(["--files", "src/a.py,src/b.py"])
+    with pytest.raises(ValueError, match="comma-separated lists are not supported"):
+        runner._parse_review_files(comma_args)
+
+    with pytest.raises(SystemExit):
+        parser.parse_args(["--file", "src/a.py", "--files", "src/b.py"])
+
+
 def test_effective_rollout_accepts_fast_priority_alias_across_real_event_shapes(tmp_path: Path) -> None:
     runner = _load_runner()
     codex_home = tmp_path / "codex-home"
@@ -1546,7 +1566,7 @@ def test_dry_run_records_resolved_codex_executable(
             "dry run executable",
             "--base",
             base,
-            "--files",
+            "--file",
             "src/example.py",
             "--output",
             str(output_path),
@@ -2144,6 +2164,64 @@ def test_nested_project_scope_maps_explicitly_to_git_toplevel_and_fails_closed(
     assert "review_artifact_scope_current_tree_mismatch" in scope_blockers(scope, required_files=["src/example.py"])
 
 
+def test_added_blob_is_a_signoff_capable_scope_transition(tmp_path: Path) -> None:
+    from sourcing_agent import runtime_asset_retention_prune as review_evidence
+
+    root = tmp_path / "repo"
+    base = _init_review_repo(root)
+    (root / "src" / "added.py").write_text("added = True\n", encoding="utf-8")
+    REAL_SUBPROCESS_RUN(["git", "add", "src/added.py"], cwd=root, check=True)
+    REAL_SUBPROCESS_RUN(["git", "commit", "-qm", "add reviewed file"], cwd=root, check=True)
+
+    scope = review_evidence.build_independent_review_scope_evidence(
+        workspace_root=root,
+        title="intentional addition",
+        base_ref=base,
+        files=["src/added.py"],
+        extra_context="contract context",
+    )
+
+    assert scope["scope_mode"] == "pinned_commit_diff"
+    assert review_evidence._independent_review_scope_blockers(
+        scope=scope,
+        metadata={"review_scope_digest_sha256": scope["scope_digest_sha256"]},
+        root=root,
+        expected_title="intentional addition",
+        required_files=["src/added.py"],
+        expected_scope_digest=scope["scope_digest_sha256"],
+    ) == []
+
+
+def test_rename_scope_accepts_exact_delete_and_add_pair(tmp_path: Path) -> None:
+    from sourcing_agent import runtime_asset_retention_prune as review_evidence
+
+    root = tmp_path / "repo"
+    _init_review_repo(root)
+    base = REAL_SUBPROCESS_RUN(
+        ["git", "rev-parse", "HEAD"], cwd=root, check=True, capture_output=True, text=True
+    ).stdout.strip()
+    REAL_SUBPROCESS_RUN(["git", "mv", "src/example.py", "src/renamed.py"], cwd=root, check=True)
+    REAL_SUBPROCESS_RUN(["git", "commit", "-qm", "rename reviewed file"], cwd=root, check=True)
+
+    scope = review_evidence.build_independent_review_scope_evidence(
+        workspace_root=root,
+        title="intentional rename",
+        base_ref=base,
+        files=["src/example.py", "src/renamed.py"],
+        extra_context="contract context",
+    )
+
+    assert scope["scope_mode"] == "pinned_commit_diff"
+    assert review_evidence._independent_review_scope_blockers(
+        scope=scope,
+        metadata={"review_scope_digest_sha256": scope["scope_digest_sha256"]},
+        root=root,
+        expected_title="intentional rename",
+        required_files=[],
+        expected_scope_digest=scope["scope_digest_sha256"],
+    ) == []
+
+
 def test_missing_scoped_file_is_reference_only_and_cannot_sign_off(tmp_path: Path) -> None:
     from sourcing_agent import runtime_asset_retention_prune as review_evidence
 
@@ -2169,6 +2247,78 @@ def test_missing_scoped_file_is_reference_only_and_cannot_sign_off(tmp_path: Pat
         expected_scope_digest=scope["scope_digest_sha256"],
     )
     assert "review_artifact_scope_missing_file:src/does-not-exist.py" in blockers
+
+
+def test_nonblob_scope_transitions_are_reference_only_and_fail_verification(tmp_path: Path) -> None:
+    from sourcing_agent import runtime_asset_retention_prune as review_evidence
+
+    root = tmp_path / "repo"
+    (root / "docs").mkdir(parents=True)
+    (root / "tree-scope").mkdir()
+    (root / "tree-to-blob").mkdir()
+    (root / "docs" / "INDEPENDENT_REVIEW_BRIEF.md").write_text("# Review brief\n", encoding="utf-8")
+    (root / "tree-scope" / "leaf.txt").write_text("leaf\n", encoding="utf-8")
+    (root / "tree-to-blob" / "child.txt").write_text("child\n", encoding="utf-8")
+    (root / "blob-to-tree").write_text("blob\n", encoding="utf-8")
+    REAL_SUBPROCESS_RUN(["git", "init", "-q"], cwd=root, check=True)
+    REAL_SUBPROCESS_RUN(["git", "config", "user.name", "Test"], cwd=root, check=True)
+    REAL_SUBPROCESS_RUN(["git", "config", "user.email", "test@example.com"], cwd=root, check=True)
+    REAL_SUBPROCESS_RUN(
+        [
+            "git",
+            "add",
+            "docs/INDEPENDENT_REVIEW_BRIEF.md",
+            "tree-scope/leaf.txt",
+            "tree-to-blob/child.txt",
+            "blob-to-tree",
+        ],
+        cwd=root,
+        check=True,
+    )
+    REAL_SUBPROCESS_RUN(["git", "commit", "-qm", "base"], cwd=root, check=True)
+    base = REAL_SUBPROCESS_RUN(
+        ["git", "rev-parse", "HEAD"], cwd=root, check=True, capture_output=True, text=True
+    ).stdout.strip()
+
+    (root / "blob-to-tree").unlink()
+    (root / "blob-to-tree").mkdir()
+    (root / "blob-to-tree" / "child.txt").write_text("child\n", encoding="utf-8")
+    shutil.rmtree(root / "tree-to-blob")
+    (root / "tree-to-blob").write_text("blob\n", encoding="utf-8")
+    REAL_SUBPROCESS_RUN(["git", "add", "-A"], cwd=root, check=True)
+    REAL_SUBPROCESS_RUN(
+        ["git", "update-index", "--add", "--cacheinfo", f"160000,{base},vendor/submodule"],
+        cwd=root,
+        check=True,
+    )
+    REAL_SUBPROCESS_RUN(["git", "commit", "-qm", "nonblob transitions"], cwd=root, check=True)
+
+    expected = {
+        "tree-scope": "tree->tree",
+        "blob-to-tree": "blob->tree",
+        "tree-to-blob": "tree->blob",
+        "vendor/submodule": "absent->commit",
+    }
+    for path, transition in expected.items():
+        scope = review_evidence.build_independent_review_scope_evidence(
+            workspace_root=root,
+            title=f"nonblob {path}",
+            base_ref=base,
+            files=[path],
+            extra_context="contract context",
+        )
+        assert scope["scope_mode"] == "reference_only_worktree"
+        scope["scope_mode"] = "pinned_commit_diff"
+        scope["scope_digest_sha256"] = review_evidence.independent_review_scope_digest(scope)
+        blockers = review_evidence._independent_review_scope_blockers(
+            scope=scope,
+            metadata={"review_scope_digest_sha256": scope["scope_digest_sha256"]},
+            root=root,
+            expected_title=f"nonblob {path}",
+            required_files=[],
+            expected_scope_digest=scope["scope_digest_sha256"],
+        )
+        assert f"review_artifact_scope_invalid_file_transition:{path}:{transition}" in blockers
 
 
 def test_deleted_file_is_reviewable_but_cannot_satisfy_a_required_file_gate(tmp_path: Path) -> None:

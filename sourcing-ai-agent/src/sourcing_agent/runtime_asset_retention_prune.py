@@ -339,6 +339,13 @@ _INDEPENDENT_REVIEW_SCOPE_DIGEST_FIELDS = (
     "git_tree_sha256",
     "extra_context_sha256",
 )
+_INDEPENDENT_REVIEW_ALLOWED_FILE_TRANSITIONS = frozenset(
+    {
+        ("blob", "blob"),
+        ("absent", "blob"),
+        ("blob", "absent"),
+    }
+)
 _REVIEW_GIT_RUN = subprocess.run
 ALLOWED_PRUNE_ROOTS = ("runtime/test_env", "output")
 PROTECTED_NAMES = {"company_assets", "secrets", "object_store"}
@@ -389,9 +396,6 @@ class _ReviewGitProject:
 
     def tree_path(self, project_path: str) -> str:
         return posixpath.join(self.project_prefix, project_path) if self.project_prefix else project_path
-
-    def object_spec(self, revision: str, project_path: str) -> str:
-        return f"{revision}:{self.tree_path(project_path)}"
 
     def pathspec(self, project_path: str) -> str:
         return f":(top,literal){self.tree_path(project_path)}"
@@ -1364,6 +1368,53 @@ def _review_git_project(root: Path) -> _ReviewGitProject | None:
     return _ReviewGitProject(git_toplevel=git_toplevel, project_prefix=project_prefix)
 
 
+def _independent_review_file_transition(
+    *,
+    root: Path,
+    git_project: _ReviewGitProject,
+    base_commit: str,
+    head_commit: str,
+    path: str,
+) -> tuple[str, str]:
+    """Return the exact base/head Git object-type transition for one path."""
+
+    def object_type(commit: str) -> str:
+        raw = _review_git_bytes(
+            root,
+            "ls-tree",
+            "-z",
+            commit,
+            "--",
+            git_project.pathspec(path),
+            allow_failure=True,
+        )
+        if raw is None:
+            return "unverifiable"
+        entries = [entry for entry in raw.split(b"\0") if entry]
+        if not entries:
+            return "absent"
+        if len(entries) != 1:
+            return "unverifiable"
+        metadata, separator, observed_path = entries[0].partition(b"\t")
+        metadata_fields = metadata.split()
+        if (
+            separator != b"\t"
+            or os.fsdecode(observed_path) != path
+            or len(metadata_fields) != 3
+        ):
+            return "unverifiable"
+        try:
+            return metadata_fields[1].decode("ascii")
+        except UnicodeDecodeError:
+            return "unverifiable"
+
+    return object_type(base_commit), object_type(head_commit)
+
+
+def _independent_review_file_transition_is_allowed(transition: tuple[str, str]) -> bool:
+    return transition in _INDEPENDENT_REVIEW_ALLOWED_FILE_TRANSITIONS
+
+
 def build_independent_review_scope_evidence(
     *,
     workspace_root: str | Path,
@@ -1392,24 +1443,15 @@ def build_independent_review_scope_evidence(
         if normalized_base
         else ""
     )
-    scoped_file_types = (
+    scoped_file_transitions = (
         {
-            path: {
-                "base": _review_git_text(
-                    root,
-                    "cat-file",
-                    "-t",
-                    git_project.object_spec(resolved_base, path),
-                    allow_failure=True,
-                ),
-                "head": _review_git_text(
-                    root,
-                    "cat-file",
-                    "-t",
-                    git_project.object_spec(resolved_head, path),
-                    allow_failure=True,
-                ),
-            }
+            path: _independent_review_file_transition(
+                root=root,
+                git_project=git_project,
+                base_commit=resolved_base,
+                head_commit=resolved_head,
+                path=path,
+            )
             for path in normalized_files
         }
         if git_project and resolved_base and resolved_head
@@ -1421,7 +1463,10 @@ def build_independent_review_scope_evidence(
         and resolved_base
         and resolved_head
         and normalized_files
-        and all("blob" in scoped_file_types.get(path, {}).values() for path in normalized_files)
+        and all(
+            _independent_review_file_transition_is_allowed(scoped_file_transitions[path])
+            for path in normalized_files
+        )
     )
     scope_mode = INDEPENDENT_REVIEW_PINNED_SCOPE_MODE if pinned else INDEPENDENT_REVIEW_REFERENCE_SCOPE_MODE
     diff_raw = b""
@@ -3183,22 +3228,22 @@ def _independent_review_scope_blockers(
         return blockers
     pathspecs = [git_project.pathspec(path) for path in files]
     for path in files:
-        base_entry_type = _review_git_text(
-            root,
-            "cat-file",
-            "-t",
-            git_project.object_spec(base_commit, path),
-            allow_failure=True,
+        transition = _independent_review_file_transition(
+            root=root,
+            git_project=git_project,
+            base_commit=base_commit,
+            head_commit=head_commit,
+            path=path,
         )
-        head_entry_type = _review_git_text(
-            root,
-            "cat-file",
-            "-t",
-            git_project.object_spec(head_commit, path),
-            allow_failure=True,
-        )
-        if "blob" not in {base_entry_type, head_entry_type}:
-            blockers.append(f"review_artifact_scope_missing_file:{path}")
+        base_entry_type, head_entry_type = transition
+        if not _independent_review_file_transition_is_allowed(transition):
+            if transition == ("absent", "absent"):
+                blockers.append(f"review_artifact_scope_missing_file:{path}")
+            else:
+                blockers.append(
+                    "review_artifact_scope_invalid_file_transition:"
+                    f"{path}:{base_entry_type}->{head_entry_type}"
+                )
         elif path in required_files and head_entry_type != "blob":
             blockers.append(f"review_artifact_scope_required_file_missing_at_head:{path}")
 

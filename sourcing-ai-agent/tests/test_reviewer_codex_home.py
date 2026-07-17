@@ -126,7 +126,7 @@ def test_make_review_cuts_over_to_v2_isolated_home_and_1800_second_default() -> 
             "independent-review-gate",
             "REVIEW_EXECUTE=0",
             "REVIEW_BASE=HEAD",
-            "REVIEW_FILES=scripts/bootstrap_reviewer_codex_home.sh",
+            "REVIEW_FILES=scripts/bootstrap_reviewer_codex_home.sh docs/INDEPENDENT_REVIEW_GATE.md",
         ],
         cwd=REPO_ROOT,
         check=True,
@@ -139,6 +139,9 @@ def test_make_review_cuts_over_to_v2_isolated_home_and_1800_second_default() -> 
     assert f'REVIEWER_CODEX_HOME="{LEGACY_REVIEWER_HOME}"' not in result.stdout
     assert f'CODEX_HOME="{LEGACY_REVIEWER_HOME}"' not in result.stdout
     assert '--timeout-seconds "1800"' in result.stdout
+    assert '--file "scripts/bootstrap_reviewer_codex_home.sh"' in result.stdout
+    assert '--file "docs/INDEPENDENT_REVIEW_GATE.md"' in result.stdout
+    assert "--files" not in result.stdout
     assert 'TARGET_HOME="${REVIEWER_CODEX_HOME:-$REPO_ROOT/runtime/reviewer_codex_home_v2}"' in BOOTSTRAP.read_text(
         encoding="utf-8"
     )

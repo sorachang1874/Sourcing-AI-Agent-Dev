@@ -325,7 +325,48 @@ def _repo_root() -> Path:
 
 
 def _split_files(raw: str) -> list[str]:
-    return [part for part in shlex.split(raw or "") if part]
+    parts = [part for part in shlex.split(raw or "") if part]
+    if any("," in part for part in parts):
+        raise ValueError(
+            "legacy --files accepts only a shell-style space-separated file list; "
+            "comma-separated lists are not supported (use repeated --file PATH)"
+        )
+    return parts
+
+
+def _build_argument_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Generate or execute the independent review gate prompt.")
+    parser.add_argument("--title", default="", help="Review title.")
+    scope = parser.add_mutually_exclusive_group()
+    scope.add_argument(
+        "--file",
+        action="append",
+        default=None,
+        dest="exact_files",
+        metavar="PATH",
+        help="Exact project-relative scope path; repeat once per path.",
+    )
+    scope.add_argument(
+        "--files",
+        default=None,
+        dest="legacy_files",
+        metavar="PATHS",
+        help="Legacy shell-style space-separated file list (commas are rejected).",
+    )
+    parser.add_argument("--base", default="", help="Optional base branch/ref for reviewer context.")
+    parser.add_argument("--extra-context", default="", help="Additional review context.")
+    parser.add_argument("--timeout-seconds", type=int, default=420, help="Hard timeout for --execute.")
+    parser.add_argument("--output", default="", help="Review output file.")
+    parser.add_argument("--prompt-output", default="", help="Prompt output file for dry-run/use elsewhere.")
+    parser.add_argument("--execute", action="store_true", help="Run Codex app-server in read-only mode.")
+    return parser
+
+
+def _parse_review_files(args: argparse.Namespace) -> list[str]:
+    raw_files = list(args.exact_files or [])
+    if args.legacy_files is not None:
+        raw_files = _split_files(args.legacy_files)
+    return normalize_independent_review_files(raw_files)
 
 
 def _codex_home() -> Path:
@@ -1686,24 +1727,19 @@ def _artifact_header(
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Generate or execute the independent review gate prompt.")
-    parser.add_argument("--title", default="", help="Review title.")
-    parser.add_argument("--files", default="", help="Shell-style space-separated file list.")
-    parser.add_argument("--base", default="", help="Optional base branch/ref for reviewer context.")
-    parser.add_argument("--extra-context", default="", help="Additional review context.")
-    parser.add_argument("--timeout-seconds", type=int, default=420, help="Hard timeout for --execute.")
-    parser.add_argument("--output", default="", help="Review output file.")
-    parser.add_argument("--prompt-output", default="", help="Prompt output file for dry-run/use elsewhere.")
-    parser.add_argument("--execute", action="store_true", help="Run Codex app-server in read-only mode.")
+    parser = _build_argument_parser()
     args = parser.parse_args()
 
     root = _repo_root()
+    try:
+        files = _parse_review_files(args)
+    except ValueError as exc:
+        parser.error(str(exc))
     try:
         configured = _load_reviewer_configuration()
     except (OSError, RuntimeError, tomllib.TOMLDecodeError) as exc:
         parser.error(str(exc))
     try:
-        files = normalize_independent_review_files(_split_files(args.files))
         scope_evidence = build_independent_review_scope_evidence(
             workspace_root=root,
             title=args.title,
