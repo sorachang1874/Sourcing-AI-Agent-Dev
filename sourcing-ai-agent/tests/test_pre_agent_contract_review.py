@@ -58,6 +58,10 @@ from sourcing_agent.durable_runtime import (
 from sourcing_agent.operation_runtime import (
     ACTION_CONTINUE_ACQUISITION_RUN,
     DEFAULT_ACTION_REGISTRY,
+    OPERATION_CANCELLED_PROGRESS_REASON,
+    OPERATION_EVENT_REASON_MAX_LENGTH,
+    OPERATION_RESUME_REQUESTED_PROGRESS_REASON,
+    OPERATION_RETRY_REQUESTED_PROGRESS_REASON,
     operation_run_control_state,
 )
 from tests.source_inspection import all_source_files, find_class_method
@@ -74,6 +78,7 @@ WORKER_DAEMON_PATH = REPO_ROOT / "src" / "sourcing_agent" / "worker_daemon.py"
 AGENT_OPERATION_PATH = REPO_ROOT / "docs" / "AGENT_OPERATION_CONTRACT.md"
 DURABLE_RUNTIME_PATH = REPO_ROOT / "src" / "sourcing_agent" / "durable_runtime.py"
 OPERATION_RUNTIME_PATH = REPO_ROOT / "src" / "sourcing_agent" / "operation_runtime.py"
+AGENT_PROJECTION_QUERY_PATH = REPO_ROOT / "src" / "sourcing_agent" / "agent_projection_query.py"
 PUBLIC_WEB_SEARCH_PATH = REPO_ROOT / "src" / "sourcing_agent" / "public_web_search.py"
 SEED_DISCOVERY_PATH = REPO_ROOT / "src" / "sourcing_agent" / "seed_discovery.py"
 EXPLORATORY_ENRICHMENT_PATH = REPO_ROOT / "src" / "sourcing_agent" / "exploratory_enrichment.py"
@@ -320,6 +325,7 @@ def test_agent_tool_result_aggregate_owner_contract_is_canonical() -> None:
     assert set(field_rows) == {
         "`agent_tool_terminal_aggregate.result_link_policy`",
         "`inspect_operation.result_readiness`",
+        "`operation_runs.progress.reason`",
     }
     assert all(len(row) == len(expected_header) and all(row) for row in field_rows.values())
 
@@ -392,6 +398,45 @@ def test_agent_tool_result_aggregate_owner_contract_is_canonical() -> None:
     }
     assert OPERATION_RESULT_READINESS_OWNER in readiness_row[header.index("Owner")]
     assert "fail_closed" in readiness_row[header.index("Fallback")]
+
+    progress_reason_codes = {
+        OPERATION_CANCELLED_PROGRESS_REASON,
+        OPERATION_RETRY_REQUESTED_PROGRESS_REASON,
+        OPERATION_RESUME_REQUESTED_PROGRESS_REASON,
+    }
+    assert progress_reason_codes == {
+        "operation_cancelled",
+        "operation_retry_requested",
+        "operation_resume_requested",
+    }
+    assert all(re.fullmatch(r"[a-z0-9][a-z0-9_]{0,95}", code) for code in progress_reason_codes)
+    progress_reason_row = field_rows["`operation_runs.progress.reason`"]
+    documented_reason_values = set(re.findall(r"`([^`]+)`", progress_reason_row[allowed_values_index]))
+    assert progress_reason_codes <= documented_reason_values
+    assert "OperationRuntimeWriter" in progress_reason_row[header.index("Owner")]
+    assert "operation_runs.progress_json" in progress_reason_row[header.index("Source of truth")]
+    assert "operation_events.payload_json.reason" in progress_reason_row[header.index("Source of truth")]
+    assert "Model-visible `inspect_operation` v3" in progress_reason_row[header.index("Forbidden consumers")]
+    assert "no reader repairs the row" in progress_reason_row[header.index("Fallback")]
+    assert "without rewrite" in progress_reason_row[header.index("Migration status")]
+    assert f"{OPERATION_EVENT_REASON_MAX_LENGTH} characters" in progress_reason_row[header.index("Migration status")]
+    assert "retained v1/v2" in progress_reason_row[header.index("Deletion condition")]
+    assert OPERATION_EVENT_REASON_MAX_LENGTH == 500
+
+    operation_runtime_source = OPERATION_RUNTIME_PATH.read_text(encoding="utf-8")
+    for constant_name in (
+        "OPERATION_CANCELLED_PROGRESS_REASON",
+        "OPERATION_RETRY_REQUESTED_PROGRESS_REASON",
+        "OPERATION_RESUME_REQUESTED_PROGRESS_REASON",
+    ):
+        assert f'"reason": {constant_name}' in operation_runtime_source
+    assert operation_runtime_source.count("event_reason = _operation_event_reason(reason)") == 3
+    assert operation_runtime_source.count('"reason": event_reason') == 3
+
+    inspect_source = AGENT_PROJECTION_QUERY_PATH.read_text(encoding="utf-8")
+    assert '"omitted_model_fields": ("progress.reason",)' in inspect_source
+    operations_ui_source = FRONTEND_OPERATIONS_PAGE_PATH.read_text(encoding="utf-8")
+    assert re.search(r"\bprogress\s*(?:\.\s*reason|\[\s*['\"]reason)", operations_ui_source) is None
 
     storage_source = STORAGE_PATH.read_text(encoding="utf-8")
     storage_pg_only_inventory = _literal_string_collection(STORAGE_PATH, "_DURABLE_RUNTIME_TABLES")

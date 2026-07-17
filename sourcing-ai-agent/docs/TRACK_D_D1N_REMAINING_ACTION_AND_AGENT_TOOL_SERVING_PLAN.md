@@ -229,6 +229,15 @@ the physical fingerprint, and reuses the canonical Operation control owner to re
 drift. Operation progress stores machine reason codes while append-only events retain operator text. This closes
 reference findings 5/6/8 author-side; S1d separately closes finding 9. Neither response authorizes serving.
 
+The later correctly scoped `4dddd0e..28c2b2e` Ultra review is valid `NO-GO 0/6/1/0`, plus the accepted R-019
+residual. Its current author-side response pins an explicit V3 tool/result physical identity independent of the
+current facade, rederives the complete command policy from the durable registry, validates full-stream command/event
+topology, binds actor/source in a V3-only audit digest, and binds one immutable request before dependency/schema/
+connection access. Cancel/retry/resume operator event text is bounded to 500 characters before any runtime-writer
+repository read or write; frozen historical Git-object fixtures prove V1 bytes and accepted V2 replay without
+invoking head prepare.
+R-019 remains open and a fresh response review is still required; these changes keep public/default `served=0`.
+
 ### 4.3 One `AgentToolSpec` for actions and queries
 
 Introduce one immutable registry projection rather than a second query-tool path:

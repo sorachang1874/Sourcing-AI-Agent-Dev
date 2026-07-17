@@ -1,7 +1,8 @@
 # Track D D1n V3 — projection filter and Operation query contracts
 
-> Status: Non-live contract leaf (2026-07-17), fixed-forward integrated by D1n S1b. Author evidence only; fresh pinned
-> non-author review is pending. S1b adds isolated registry pins and a PostgreSQL result-slot adapter but does not
+> Status: Non-live contract leaf (2026-07-17), fixed-forward integrated by D1n S1b. The valid
+> `4dddd0e..28c2b2e` pinned Ultra review returned `NO-GO 0/6/1/0`; the current author response is implemented but its
+> fresh pinned re-review is pending. S1b adds isolated registry pins and a PostgreSQL result-slot adapter but does not
 > populate the public/default registry, authorize a served tool, repair state, or call a provider/model/network
 > transport; public `served` remains zero.
 
@@ -20,7 +21,10 @@ The request schema remains `inspect_operation_request_v1`; S1b advanced the curr
 tool, adapter, and fixture revisions together without rewriting v1/v2 manifests. The fixed-forward readiness owner
 treats completed-without-result-ref as `pending/fail_closed`. V3 also omits operator-authored `progress.reason` from
 the model result, binds raw progress in the non-model physical fingerprint, and revalidates the complete canonical
-control/readiness/policy/provenance semantics at execution and named serialization.
+control/readiness/policy/provenance semantics at execution and named serialization. The fixed-forward response pins
+the V3 physical identity explicitly, rederives the complete registered command policy, requires exact full-stream
+command/event topology, and adds a V3-only actor/source audit digest. Its request binder runs before dependency,
+schema, connection, owner, or result effects; retained V1/V2 bytes and accepted V2 replay are frozen separately.
 
 Neither surface infers a next command or performs a repair/write. Missing or unproved projection access is one
 `projection_not_found` result. Missing or foreign Operation action/run ownership is one `operation_not_found` result.

@@ -33,9 +33,9 @@ from .agent_projection_query import (
     FILTER_PROJECTION_V2_RESULT_SPEC,
     INSPECT_OPERATION_REQUEST_SCHEMA_DIGEST,
     INSPECT_OPERATION_REQUEST_SCHEMA_VERSION,
-    INSPECT_OPERATION_RESULT_SPEC,
     INSPECT_OPERATION_RESULT_SPEC_V1,
     INSPECT_OPERATION_RESULT_SPEC_V2,
+    INSPECT_OPERATION_RESULT_SPEC_V3,
 )
 from .agent_tool_registry import (
     AGENT_TOOL_SPEC_SCHEMA_VERSION,
@@ -651,13 +651,17 @@ INSPECT_OPERATION_TOOL_SPEC_V2 = _inspect_operation_tool_spec(
     simulate_fixture=_fixture_pin_from_record(_INSPECT_OPERATION_V2_FIXTURE_RECORD),
 )
 
-INSPECT_OPERATION_TOOL_SPEC = _inspect_operation_tool_spec(
-    result_spec=INSPECT_OPERATION_RESULT_SPEC,
+INSPECT_OPERATION_TOOL_SPEC_V3 = _inspect_operation_tool_spec(
+    result_spec=INSPECT_OPERATION_RESULT_SPEC_V3,
     tool_spec_version="inspect_operation_tool_v3",
     adapter_revision="inspect_operation_adapter_v3",
     simulate_fixture=_fixture_pin("inspect_operation"),
     fingerprint_schema_version=AGENT_TOOL_SPEC_SCHEMA_VERSION_V2,
 )
+
+# Public/current facade only.  Physical historical resolution must use the
+# explicit V1/V2/V3 symbols so a future successor cannot reinterpret V3.
+INSPECT_OPERATION_TOOL_SPEC = INSPECT_OPERATION_TOOL_SPEC_V3
 
 LOCAL_CANARY_AGENT_TOOL_REGISTRY = AgentToolRegistry.from_specs(
     (
@@ -666,7 +670,7 @@ LOCAL_CANARY_AGENT_TOOL_REGISTRY = AgentToolRegistry.from_specs(
         START_ACQUISITION_RUN_TOOL_SPEC,
         INSPECT_OPERATION_TOOL_SPEC_V1,
         INSPECT_OPERATION_TOOL_SPEC_V2,
-        INSPECT_OPERATION_TOOL_SPEC,
+        INSPECT_OPERATION_TOOL_SPEC_V3,
         FILTER_PROJECTION_TOOL_SPEC,
     ),
     current_release_owner=_LOCAL_RELEASE_OWNER,
@@ -691,6 +695,7 @@ __all__ = [
     "INSPECT_OPERATION_TOOL_SPEC",
     "INSPECT_OPERATION_TOOL_SPEC_V1",
     "INSPECT_OPERATION_TOOL_SPEC_V2",
+    "INSPECT_OPERATION_TOOL_SPEC_V3",
     "LOCAL_CANARY_ACTION_SPECS",
     "LOCAL_CANARY_AGENT_TOOL_REGISTRY",
     "LOCAL_CANARY_EXECUTION_SUBJECT_SCHEMA_VERSION",

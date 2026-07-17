@@ -366,9 +366,23 @@ W9 backend control foundation is active; product Agent UI remains deferred.
   from another workspace rather than treating it as eligible control state.
 - `OperationRun.progress.reason` is machine-owned control state, not operator-authored display text. Cancel, retry, and
   resume persist `operation_cancelled`, `operation_retry_requested`, and `operation_resume_requested` respectively.
-  The trimmed operator reason is retained only in the matching append-only Operation event payload for authenticated
-  audit/provenance reads. `inspect_operation` v3 omits that event text from its model-visible result and binds the raw
-  progress record only in its non-model physical-owner fingerprint.
+  The trimmed operator reason is accepted only up to 500 characters and retained only in the matching append-only
+  Operation event payload for authenticated audit/provenance reads. The bound is enforced before any runtime-writer
+  repository read or write; retained historical event payloads are not rewritten. `inspect_operation` v3 omits that
+  event text from its model-visible result and binds the raw progress record only in its non-model physical-owner
+  fingerprint. New reason values are absent or bounded lower-snake machine tokens; they are not an authorization,
+  control-policy, readiness, result-link, provider-routing,
+  or user-facing-copy source. Brownfield free-form progress values are not rewritten: authenticated diagnostics and
+  retained v1/v2 lookup/replay may preserve them until the deletion condition in `PRE_AGENT_CONTRACT_REVIEW.md`, while
+  current UI status uses typed control state, status summary, phase, and append-only provenance instead.
+- `inspect_operation` binds its closed request plus server workspace/action/actor identities before dependency routing,
+  schema bootstrap, or connection acquisition. This applies to success and masked-absence results alike: a valid
+  missing/foreign tuple remains the same `operation_not_found`, while malformed or padded identifiers fail before an
+  owner read or result write. The bound request is reused under the owner locks rather than reconstructed from raw
+  arguments. V3 also requires one complete Operation event stream, at least one event, command cardinality `0|1`, no
+  plan phase/event without a workflow ref, and exactly one four-field `OperationCommandPlanned` proof for a referenced
+  command. Its non-model V3 audit-event digest includes validated `actor` and `source`; retained V1/V2 event-evidence
+  and fingerprint construction remain byte-identical and do not acquire the new field.
 - `POST /api/operations/actions/{action_id}/approve` records approval and creates the idempotent queued `OperationRun`
   for approval-required actions, after the authenticated exact-action-workspace preflight.
 - `POST /api/operations/actions/{action_id}/reject` atomically records `status=cancelled`,

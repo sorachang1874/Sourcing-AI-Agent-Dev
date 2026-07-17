@@ -20,6 +20,7 @@ from sourcing_agent.agent_canary_registry import (
     INSPECT_OPERATION_TOOL_SPEC,
     INSPECT_OPERATION_TOOL_SPEC_V1,
     INSPECT_OPERATION_TOOL_SPEC_V2,
+    INSPECT_OPERATION_TOOL_SPEC_V3,
     LOCAL_CANARY_ACTION_SPECS,
     LOCAL_CANARY_AGENT_TOOL_REGISTRY,
     LOCAL_CANARY_SIMULATE_FIXTURE_SCHEMA_VERSION,
@@ -43,6 +44,7 @@ from sourcing_agent.agent_projection_query import (
     INSPECT_OPERATION_RESULT_SPEC,
     INSPECT_OPERATION_RESULT_SPEC_V1,
     INSPECT_OPERATION_RESULT_SPEC_V2,
+    INSPECT_OPERATION_RESULT_SPEC_V3,
 )
 from sourcing_agent.agent_tool_registry import (
     AGENT_TOOL_SPEC_SCHEMA_VERSION,
@@ -293,12 +295,14 @@ def test_non_start_historical_tool_fingerprints_remain_byte_identical() -> None:
         "cc5d501d2dc503941f9112a4666d4536ae2817d54ea85f7ea4b34ddb2f77d120"
     )
 
-    assert INSPECT_OPERATION_TOOL_SPEC.tool_spec_version == "inspect_operation_tool_v3"
-    assert INSPECT_OPERATION_TOOL_SPEC.tool_spec_digest == (
+    assert INSPECT_OPERATION_TOOL_SPEC is INSPECT_OPERATION_TOOL_SPEC_V3
+    assert INSPECT_OPERATION_TOOL_SPEC_V3.tool_spec_version == "inspect_operation_tool_v3"
+    assert INSPECT_OPERATION_TOOL_SPEC_V3.tool_spec_digest == (
         "37b649a45d9595d4703175c0304aaffcb3bf14d343bc5100fb312487e6fcb314"
     )
-    assert INSPECT_OPERATION_TOOL_SPEC.result.schema_digest == INSPECT_OPERATION_RESULT_SPEC.result_schema_digest
-    assert INSPECT_OPERATION_TOOL_SPEC.simulate_fixture.fixture_digest == (
+    assert INSPECT_OPERATION_RESULT_SPEC is INSPECT_OPERATION_RESULT_SPEC_V3
+    assert INSPECT_OPERATION_TOOL_SPEC_V3.result.schema_digest == INSPECT_OPERATION_RESULT_SPEC_V3.result_schema_digest
+    assert INSPECT_OPERATION_TOOL_SPEC_V3.simulate_fixture.fixture_digest == (
         "a6382e35a5183aeebfd6d15a7bf02afd6aee7bfd692fbb31484b2b3ed8ee6428"
     )
 
@@ -306,7 +310,7 @@ def test_non_start_historical_tool_fingerprints_remain_byte_identical() -> None:
     assert set(inspect_history) == {
         INSPECT_OPERATION_TOOL_SPEC_V1,
         INSPECT_OPERATION_TOOL_SPEC_V2,
-        INSPECT_OPERATION_TOOL_SPEC,
+        INSPECT_OPERATION_TOOL_SPEC_V3,
     }
     assert INSPECT_OPERATION_TOOL_SPEC is not inspect_history[0]
 

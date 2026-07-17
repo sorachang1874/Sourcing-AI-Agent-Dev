@@ -89,6 +89,7 @@ OPERATION_ACTION_TERMINAL_STATUSES = {"completed", "failed", "cancelled", "rejec
 OPERATION_CANCELLED_PROGRESS_REASON = "operation_cancelled"
 OPERATION_RETRY_REQUESTED_PROGRESS_REASON = "operation_retry_requested"
 OPERATION_RESUME_REQUESTED_PROGRESS_REASON = "operation_resume_requested"
+OPERATION_EVENT_REASON_MAX_LENGTH = 500
 OPERATION_ACTION_FRESH_SUBMISSION_STATUSES = frozenset({"queued", "approval_required"})
 OPERATION_ACTION_SUBMISSION_STATUSES = frozenset(
     {
@@ -147,6 +148,15 @@ REQUEST_SCHEMA_COMPATIBILITY_OBSERVATIONS = frozenset(
     }
 )
 _REQUEST_SCHEMA_VERSION_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}")
+
+
+def _operation_event_reason(reason: str) -> str:
+    """Normalize bounded operator text before any control-path read or write."""
+
+    normalized = str(reason or "").strip()
+    if len(normalized) > OPERATION_EVENT_REASON_MAX_LENGTH:
+        raise ValueError(f"operation event reason supports at most {OPERATION_EVENT_REASON_MAX_LENGTH} characters")
+    return normalized
 
 
 def _freeze_action_request_json(value: Any) -> Any:
@@ -2375,6 +2385,7 @@ class OperationRuntimeWriter:
         source: str = "operation_runtime",
         reason: str = "",
     ) -> dict[str, Any]:
+        event_reason = _operation_event_reason(reason)
         operation = self.store.repos.workflow_runtime.get_operation(operation_run_id)
         if not operation:
             raise KeyError(f"operation run not found: {operation_run_id}")
@@ -2401,7 +2412,7 @@ class OperationRuntimeWriter:
                 event_idempotency_key=f"{operation.get('idempotency_key')}:OperationCancelled",
                 actor=actor,
                 source=source,
-                event_payload={"reason": str(reason or "").strip(), "module_state_mutated": False},
+                event_payload={"reason": event_reason, "module_state_mutated": False},
             )
             next_operation = dict(control_result.get("operation") or {})
             next_status = str(next_operation.get("status") or "").strip()
@@ -2426,6 +2437,7 @@ class OperationRuntimeWriter:
         reason: str = "",
         idempotency_key: str = "",
     ) -> dict[str, Any]:
+        event_reason = _operation_event_reason(reason)
         operation = self.store.repos.workflow_runtime.get_operation(operation_run_id)
         if not operation:
             raise KeyError(f"operation run not found: {operation_run_id}")
@@ -2609,7 +2621,7 @@ class OperationRuntimeWriter:
             source=source,
             payload={
                 "retry_operation_run_id": retry_run.get("operation_run_id"),
-                "reason": str(reason or "").strip(),
+                "reason": event_reason,
                 "module_state_mutated": False,
             },
         )
@@ -2644,6 +2656,7 @@ class OperationRuntimeWriter:
         source: str = "operation_runtime",
         reason: str = "",
     ) -> dict[str, Any]:
+        event_reason = _operation_event_reason(reason)
         operation = self.store.repos.workflow_runtime.get_operation(operation_run_id)
         if not operation:
             raise KeyError(f"operation run not found: {operation_run_id}")
@@ -2674,6 +2687,6 @@ class OperationRuntimeWriter:
             idempotency_key=f"{next_operation.get('idempotency_key')}:OperationResumeRequested",
             actor=actor,
             source=source,
-            payload={"reason": str(reason or "").strip(), "module_state_mutated": False},
+            payload={"reason": event_reason, "module_state_mutated": False},
         )
         return {"operation_run": next_operation, "events": [event]}

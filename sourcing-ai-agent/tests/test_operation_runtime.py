@@ -112,6 +112,7 @@ from sourcing_agent.operation_runtime import (
     ACTION_SET_CRM_STAGE,
     ACTION_START_ACQUISITION_RUN,
     DEFAULT_ACTION_REGISTRY,
+    OPERATION_EVENT_REASON_MAX_LENGTH,
     ActionRegistry,
     ActionSpec,
     OperationRuntimeStateConflict,
@@ -4763,6 +4764,86 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         self.assertEqual(cancelled["progress"]["reason"], "operation_cancelled")
         self.assertEqual(cancel_events[-1]["event_type"], "OperationCancelled")
         self.assertEqual(cancel_events[-1]["payload"]["reason"], "")
+
+    def test_operation_controls_bound_operator_reason_before_any_runtime_effect(self) -> None:
+        repository = self.store.repos.workflow_runtime
+        submissions = {
+            control: self.writer.submit_action(
+                action_type=ACTION_FILTER_PROJECTION,
+                workspace_id="default",
+                owner_bound_target_ref=self._projection_read_owner_target(f"proj-{control}-reason-bound"),
+                idempotency_key=f"filter:proj-{control}-reason-bound",
+            )
+            for control in ("cancel", "retry", "resume")
+        }
+        retry_submission = submissions["retry"]
+        retry_operation_run_id = retry_submission.operation_run["operation_run_id"]
+        repository.update_operation_state(
+            retry_operation_run_id,
+            status="failed",
+            progress_patch={"phase": "failed", "reason": "owner_timeout"},
+        )
+        repository.update_action_state(
+            retry_submission.action["action_id"],
+            status="failed",
+            metadata_patch={"last_operation_command_status": "failed_terminal"},
+        )
+
+        overlong_reason = "x" * (OPERATION_EVENT_REASON_MAX_LENGTH + 1)
+        for control, submission in submissions.items():
+            operation_run_id = submission.operation_run["operation_run_id"]
+            action_id = submission.action["action_id"]
+            operation_before = repository.get_operation(operation_run_id)
+            action_before = repository.get_action(action_id)
+            runs_before = repository.list_operations(action_id=action_id)
+            events_before = repository.list_operation_events_for_action(action_id)
+
+            with self.subTest(control=control):
+                with self.assertRaisesRegex(
+                    ValueError,
+                    rf"operation event reason supports at most {OPERATION_EVENT_REASON_MAX_LENGTH} characters",
+                ):
+                    getattr(self.writer, f"{control}_operation")(
+                        operation_run_id=operation_run_id,
+                        reason=overlong_reason,
+                    )
+                self.assertEqual(repository.get_operation(operation_run_id), operation_before)
+                self.assertEqual(repository.get_action(action_id), action_before)
+                self.assertEqual(repository.list_operations(action_id=action_id), runs_before)
+                self.assertEqual(repository.list_operation_events_for_action(action_id), events_before)
+
+        cancel_submission = submissions["cancel"]
+        cancel_operation_run_id = cancel_submission.operation_run["operation_run_id"]
+        cancel_events_before = repository.list_operation_events_for_action(cancel_submission.action["action_id"])
+        orchestrator = object.__new__(SourcingOrchestrator)
+        orchestrator.store = self.store
+        orchestrator.operation_runtime_writer = self.writer
+        cancel_response = orchestrator.cancel_operation_run_api(
+            cancel_operation_run_id,
+            {"reason": overlong_reason},
+        )
+        self.assertEqual(cancel_response["status"], "invalid")
+        self.assertEqual(
+            cancel_response["reason"],
+            f"operation event reason supports at most {OPERATION_EVENT_REASON_MAX_LENGTH} characters",
+        )
+        self.assertEqual(
+            repository.list_operation_events_for_action(cancel_submission.action["action_id"]),
+            cancel_events_before,
+        )
+
+        boundary_submission = self.writer.submit_action(
+            action_type=ACTION_FILTER_PROJECTION,
+            workspace_id="default",
+            owner_bound_target_ref=self._projection_read_owner_target("proj-resume-reason-boundary"),
+            idempotency_key="filter:proj-resume-reason-boundary",
+        )
+        boundary_reason = "界" * OPERATION_EVENT_REASON_MAX_LENGTH
+        resumed = self.writer.resume_operation(
+            operation_run_id=boundary_submission.operation_run["operation_run_id"],
+            reason=f"  {boundary_reason}  ",
+        )
+        self.assertEqual(resumed["events"][0]["payload"]["reason"], boundary_reason)
 
     def test_retry_operation_requeues_normally_cancelled_action(self) -> None:
         result = self.writer.submit_action(

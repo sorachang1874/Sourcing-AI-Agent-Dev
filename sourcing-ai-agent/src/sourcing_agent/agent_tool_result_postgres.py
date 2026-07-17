@@ -977,7 +977,7 @@ def prepare_inspect_operation_tool_result(
     if not isinstance(occurrence, AgentToolOccurrence):
         raise ValueError("prepare inspect result requires exact occurrence")
     occurrence = _revalidate_server_owned_occurrence(occurrence)
-    validate_inspect_operation_occurrence(
+    preflight = validate_inspect_operation_occurrence(
         occurrence,
         action_id=action_id,
         operation_run_id=operation_run_id,
@@ -992,11 +992,11 @@ def prepare_inspect_operation_tool_result(
         return None
     timeout_seconds, deadline = _deadline_seconds(lock_timeout_seconds)
     retry_attempt = 0
-    last_busy_key = f"operation_events:{operation_run_id}"
+    last_busy_key = f"operation_events:{preflight.request.operation_run_id}"
     lock_groups = inspect_operation_result_lock_groups(
         occurrence=occurrence,
-        action_id=action_id,
-        operation_run_id=operation_run_id,
+        action_id=preflight.request.action_id,
+        operation_run_id=preflight.request.operation_run_id,
         include_result_slot=False,
     )
     (
@@ -1023,9 +1023,9 @@ def prepare_inspect_operation_tool_result(
                             raise _ResultSlotLockBusy
                 base_owner = load_inspect_operation_base_owner(
                     cursor,
-                    workspace_id=occurrence.workspace_id,
-                    action_id=action_id,
-                    operation_run_id=operation_run_id,
+                    workspace_id=preflight.request.workspace_id,
+                    action_id=preflight.request.action_id,
+                    operation_run_id=preflight.request.operation_run_id,
                 )
                 terminal = terminal_from_locked_inspect_operation_owner(
                     cursor,
@@ -1033,9 +1033,10 @@ def prepare_inspect_operation_tool_result(
                     result_attempt_id=result_attempt_id,
                     provider_call_id=provider_call_id,
                     tool_call_id=tool_call_id,
-                    action_id=action_id,
-                    operation_run_id=operation_run_id,
+                    action_id=preflight.request.action_id,
+                    operation_run_id=preflight.request.operation_run_id,
                     base_owner=base_owner,
+                    preflight=preflight,
                 )
             connection.commit()
             return terminal
@@ -1079,7 +1080,9 @@ def accept_inspect_operation_tool_result_uow(
 
     if not isinstance(occurrence, AgentToolOccurrence) or not isinstance(terminal, AgentToolTerminalResult):
         raise ValueError("accept inspect result requires exact occurrence and terminal result")
-    validate_inspect_operation_occurrence(
+    occurrence = _revalidate_server_owned_occurrence(occurrence)
+    terminal = terminal.revalidated()
+    preflight = validate_inspect_operation_occurrence(
         occurrence,
         action_id=terminal.action_id,
         operation_run_id=terminal.operation_run_id,
@@ -1109,9 +1112,24 @@ def accept_inspect_operation_tool_result_uow(
     ) -> dict[str, Any]:
         return load_inspect_operation_base_owner(
             cursor,
-            workspace_id=occurrence.workspace_id,
-            action_id=terminal.action_id,
-            operation_run_id=terminal.operation_run_id,
+            workspace_id=preflight.request.workspace_id,
+            action_id=preflight.request.action_id,
+            operation_run_id=preflight.request.operation_run_id,
+        )
+
+    def assert_owner(
+        cursor: Any,
+        *,
+        occurrence: AgentToolOccurrence,
+        terminal: AgentToolTerminalResult,
+        base_owner: dict[str, Any],
+    ) -> None:
+        assert_exact_inspect_operation_terminal(
+            cursor,
+            occurrence=occurrence,
+            terminal=terminal,
+            base_owner=base_owner,
+            preflight=preflight,
         )
 
     return _accept_exact_agent_tool_result_uow(
@@ -1130,12 +1148,12 @@ def accept_inspect_operation_tool_result_uow(
         ),
         lock_groups=inspect_operation_result_lock_groups(
             occurrence=occurrence,
-            action_id=terminal.action_id,
-            operation_run_id=terminal.operation_run_id,
+            action_id=preflight.request.action_id,
+            operation_run_id=preflight.request.operation_run_id,
             include_result_slot=True,
         ),
         load_base_owner=load_owner,
-        assert_locked_owner=assert_exact_inspect_operation_terminal,
+        assert_locked_owner=assert_owner,
         lock_timeout_seconds=lock_timeout_seconds,
         fault_injection_point=fault_injection_point,
     )

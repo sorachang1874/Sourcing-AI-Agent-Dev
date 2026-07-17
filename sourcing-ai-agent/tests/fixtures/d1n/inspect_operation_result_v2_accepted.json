@@ -1,0 +1,140 @@
+{
+  "fixture_schema_version": "inspect_operation_historical_accepted_result_fixture_v1",
+  "producer_commit": "38013035f0000fbe978e56b2ae55d8cbbc33fab3",
+  "producer_serializer_blob": "1ef5d0bd1ce1a3e75d6144944e61b9be08b708e6",
+  "producer_registry_blob": "e3c2bc913800e8b1bb122512d063a43cc78dc3c2",
+  "producer_postgres_adapter_blob": "3044c5be817b49c8a4bf719c77f425b0b88b35e1",
+  "producer_pg_test_blob": "0fda43b1a51d17c8d96fb44b40d46db8314235be",
+  "producer_migrations_through": "0011_agent_tool_result_slots",
+  "tool_spec_version": "inspect_operation_tool_v2",
+  "tool_spec_digest": "26b7e6a56f3461a605e68c7d16fa9d74bfec086ea4d9747382fc96ebe5a620d0",
+  "result_schema_version": "inspect_operation_result_v2",
+  "result_schema_digest": "8878c155577af1fbe9c665f28c1d5d8c16b66eec986c084686a356e361287b3e",
+  "serialized_result_sha256": "93df3cd378e250d48e4ba47727df88efcee15d4194661e8568b65ae41db11a4b",
+  "serialized_result": {
+    "action_id": "act_preview_historical_v2",
+    "control_policy": {
+      "fallback_status": "fail_closed",
+      "source_of_truth": "operation_runtime.ActionRegistry.allowed_workflow_command_contracts",
+      "status": "not_applicable"
+    },
+    "control_state": {
+      "action_status": "completed",
+      "allowed_actions": [],
+      "can_cancel": false,
+      "can_dispatch": false,
+      "can_resume": false,
+      "can_retry": false,
+      "control_source_of_truth": "operation_runtime.operation_run_control_state",
+      "disabled_reasons": {
+        "cancel": "linked_action_terminal",
+        "dispatch": "linked_action_terminal",
+        "resume": "linked_action_terminal",
+        "retry": "completed_operation_cannot_retry"
+      },
+      "fallback_status": "fail_closed",
+      "module_state_mutated_on_control": false,
+      "operation_phase": "completed",
+      "operation_status": "completed",
+      "schema_version": "operation_run_control_state_v1"
+    },
+    "display_contract": {
+      "action_type": "plan_acquisition",
+      "description": "Draft an acquisition plan without executing provider or workflow side effects.",
+      "display_category": "acquisition",
+      "display_label": "Plan acquisition",
+      "fallback_status": "fail_closed",
+      "operation_type": "acquisition_plan",
+      "owner_module": "planner",
+      "schema_version": "operation_action_display_contract_v1",
+      "source_of_truth": "operation_runtime.ActionRegistry.display_contract_for"
+    },
+    "operation_run_id": "oprun_preview_historical_v2",
+    "progress": {
+      "phase": "completed",
+      "source_of_truth": "operation_runs.progress"
+    },
+    "provenance": {
+      "latest_event_type": "AcquisitionPlanPreviewCreated",
+      "operation_event_count": 1,
+      "source_of_truth": "operation_runs.agent_actions.workflow_commands.operation_events",
+      "truncated": false,
+      "workflow_command_count": 0
+    },
+    "result_readiness": {
+      "fallback_status": "fail_closed",
+      "result_ref_present": true,
+      "source_of_truth": "operation_query_service.result_readiness_projection",
+      "status": "ready"
+    },
+    "status": "ready",
+    "variant": "success"
+  },
+  "historical_occurrence": {
+    "actor_id": "requester_1",
+    "canonical_args": {
+      "operation_run_id": "oprun_preview_historical_v2"
+    },
+    "canonical_args_digest": "0338015529446a7ede931c666c78d1d7381109e17575a0fcaf2a1e4ec09bbc6f",
+    "effect_class": "read_only",
+    "logical_occurrence_digest": "b8ff8ded9810a213202e6dd7f88bded595b35cd30186452ec139f2e40737fea6",
+    "occurrence_ordinal": 1,
+    "provider_mode": "simulate",
+    "request_schema_digest": "7da47964ed34636765348a734634c8de955837816807f911a24fe36521a8758f",
+    "request_schema_version": "inspect_operation_request_v1",
+    "result_schema_digest": "8878c155577af1fbe9c665f28c1d5d8c16b66eec986c084686a356e361287b3e",
+    "result_schema_version": "inspect_operation_result_v2",
+    "result_slot_id": "inspectslot_historical_v2",
+    "runtime_namespace": "isolated_local_canary",
+    "schema_version": "agent_tool_result_slot_v1",
+    "serializer_contract_digest": "d3bdf4a9e6b409e6ad1070fc47c84293e3205c37f1b4a3b5c1d8c22aad4c9a84",
+    "serializer_owner": "operation_query_service.inspect_operation_result_serializer_v2",
+    "serializer_revision": "inspect_operation_result_serializer_v2",
+    "slot_generation": 1,
+    "step_id": "step_inspect",
+    "tool_kind": "query",
+    "tool_name": "inspect_operation",
+    "tool_spec_digest": "26b7e6a56f3461a605e68c7d16fa9d74bfec086ea4d9747382fc96ebe5a620d0",
+    "tool_spec_version": "inspect_operation_tool_v2",
+    "turn_id": "turn_inspect_historical_v2",
+    "workspace_id": "workspace_1"
+  },
+  "post_0013_result_link_policy": "no_command_v1",
+  "accepted_terminal": {
+    "action_id": "act_preview_historical_v2",
+    "activity_attempt_id": "",
+    "activity_run_id": "",
+    "command_attempt": 0,
+    "command_generation": 0,
+    "control_epoch": 0,
+    "is_error": false,
+    "operation_run_id": "oprun_preview_historical_v2",
+    "owner_result_digest": "ff3a5658d0aad95c4ef446954800fb82cc75aef120f9508486c0aafe2b534fe7",
+    "owner_result_ref": {
+      "action_id": "act_preview_historical_v2",
+      "latest_event_id": "opevt_f107df4da72819e383f58326",
+      "latest_event_sequence": 1,
+      "operation_run_id": "oprun_preview_historical_v2",
+      "owner_snapshot_digest": "ff3a5658d0aad95c4ef446954800fb82cc75aef120f9508486c0aafe2b534fe7",
+      "schema_version": "inspect_operation_owner_result_ref_v1",
+      "workspace_id": "workspace_1"
+    },
+    "owner_target_generation": 0,
+    "owner_target_id": "oprun_preview_historical_v2",
+    "owner_target_kind": "operation_state_event_v1",
+    "owner_target_revision": 1,
+    "provider_call_id": "provider-inspectattempt_historical_v2",
+    "result_attempt_id": "inspectattempt_historical_v2",
+    "terminal_winner_id": "opevt_f107df4da72819e383f58326",
+    "tool_call_id": "tool-inspectattempt_historical_v2",
+    "tool_result_message_digest": "9ad460dd2f9735df2d97b9a22be324b39e20d020e94611d9af1d2f2bfea2b5f3",
+    "workflow_command_id": ""
+  },
+  "historical_acceptance": {
+    "attempt_schema_version": "agent_tool_result_attempt_v1",
+    "journal_id": "tooljournal_d909559074b66131e019784e",
+    "journal_schema_version": "agent_tool_result_journal_v1",
+    "outcome": "accepted",
+    "slot_schema_version": "agent_tool_result_slot_v1"
+  }
+}

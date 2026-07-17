@@ -392,10 +392,16 @@
   response 关闭。Versioned response author evidence=`780 passed + 111 subtests`（含 945 control-owner 组合）、
   inspect PG=`28 + 31 subtests`、control adjacency=`4 passed`、scoped mypy=`0/7`、lint/compile/diff green、global
   mypy=`81/4`。Fresh `4dddd0e..28c2b2e` pinned Ultra review 已 exact-bound 并返回有效
-  `NO-GO 0/6/1/0`，另保留 R-019 residual：explicit V3 identity、canonical control-policy rederive、event/command
-  topology、event actor/source fingerprint、pre-connection request binder、`progress.reason` owner/migration contract 与
-  frozen V1/V2 replay fixture 均进入异步 fixed-forward；R-029/R-031 继续可见。这些证据不得写成 S1b formal GO，
-  但不阻塞 S1d 与无关批。S1c candidate
+  `NO-GO 0/6/1/0`，另保留 R-019 residual。当前 author-side response 已显式 pin V3 tool/result physical contract，
+  unversioned symbol 仅作 current facade；control policy 从 durable owner registry 完整重建，V3 强制 complete event
+  stream、command cardinality `0|1` 与唯一 exact plan proof，并将 event actor/source 纳入独立 audit digest；request
+  在 dependency/schema/connection/owner/result effect 前一次 bind 并在锁内复用；`progress.reason` owner matrix 保持
+  machine code，operator event text 在任何 runtime-writer repository read/write 前 trim 且限 500 字符；冻结 V1/V2 historical Git-object
+  JSON/SHA，V2 accepted terminal 通过 current public acceptance replay 且不调用 head prepare。当前证据=
+  `839 passed + 127 subtests`、inspect PG=`38 + 43 subtests`、version/projection/fixture=`94 passed`、contract
+  preflight=`61 passed`、control bound=`5 + 3 subtests`；R-019/R-029/R-031 继续可见。这些 author 证据不得写成
+  S1b formal GO；fresh `f4f3e58..<response>` pinned Ultra review 待独立提交后发出，但不阻塞 S1e0 与无关批。
+  S1c candidate
   已增加 equality-only `owner_target_revision_token`，保持 logical occurrence digest v1；numeric-only
   attempt/journal 仍为 v1，token-bearing aggregate 使用 v2/v2，旧 writer 默认与历史 numeric replay 保持可用，
   token-only activation 要求旧 replicas drain/quiesce。该 synthetic carrier 只证明 storage transport，不是
@@ -428,8 +434,10 @@
   schema bootstrap/owner read/write 前失败关闭。Migration 改为 exact quiesce/drain/`0012->0013->0014`/recycle/
   compatible-release/registry-verify 顺序，两处 durable inventory 与 fast preflight 已同步，旧 review scope 已封存。
   Current evidence=`807 passed + 119 subtests`、plan+inspect PG=`54 + 44 subtests`、scoped mypy=`0/7`、lint/compile/
-  diff green、global mypy=`81/4`；fresh pinned Ultra re-review 待独立 commit 后发出。R-019/R-029 仍是 residual；
-  当前 NO-GO 继续阻塞 S1d signoff/live，但不阻塞无关批。
+  diff green、global mypy=`81/4`。Fresh exact `28c2b2e..f4f3e58` pinned Ultra review 已返回有效
+  `NO-GO 0/1/1/0`，另保留 R-019/R-029 residual：plan occurrence 须拒绝多余 root field，而 migration runbook
+  须如实记录 `0012/0013/0014` 在 quiesced window 内同步 validate/backfill/scan。两项进入下一独立 bounded
+  fixed-forward；当前 NO-GO 继续阻塞 S1d signoff/live，但不阻塞 S1b response、S1e0 或无关批。
 - [ ] D1m mixed-version rollout gate（R-019）：pre-D1m binary 可继续写 revisionless source row 并绕开
   revision-aware exact-claim canonical materializer。任何 hosted activation 前必须选择并验证其一：quiesced
   single-version cutover，或 separately reviewed dual-write/compatibility bridge；完成前不得声称 rolling overlap

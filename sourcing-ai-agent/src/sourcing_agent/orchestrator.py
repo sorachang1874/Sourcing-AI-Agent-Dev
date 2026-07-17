@@ -50420,6 +50420,8 @@ class SourcingOrchestrator:
             )
         except KeyError:
             return {"status": "not_found", "operation_run_id": str(operation_run_id or "").strip()}
+        except ValueError as exc:
+            return {"status": "invalid", "reason": str(exc), "operation_run_id": str(operation_run_id or "").strip()}
         cancelled = str(operation_run.get("status") or "").strip() == "cancelled"
         return {
             "status": "cancelled" if cancelled else "conflict",

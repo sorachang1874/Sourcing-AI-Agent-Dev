@@ -39,6 +39,8 @@ from .cohort_selection import (
     cohort_selection_registry_digest,
     normalize_cohort_selection,
 )
+from .durable_runtime import DEFAULT_COMMAND_OWNER_REGISTRY, workflow_command_control_policy
+from .json_contract import json_contract_equal
 from .model_tool_runtime import ModelToolSchemaError, ToolSpec
 from .query_signal_knowledge import ROLE_BUCKET_KNOWLEDGE
 
@@ -76,6 +78,14 @@ OPERATION_PROGRESS_OWNER = "operation_runs.progress"
 OPERATION_RESULT_READINESS_OWNER = "operation_query_service.result_readiness_projection"
 OPERATION_RESULT_READINESS_DERIVATION_REVISION = "operation_result_readiness_v1"
 OPERATION_PROVENANCE_OWNER = "operation_runs.agent_actions.workflow_commands.operation_events"
+
+_INSPECT_OPERATION_NOT_APPLICABLE_CONTROL_POLICY = MappingProxyType(
+    {
+        "status": "not_applicable",
+        "source_of_truth": "operation_runtime.ActionRegistry.allowed_workflow_command_contracts",
+        "fallback_status": "fail_closed",
+    }
+)
 
 FILTER_PROJECTION_DEFAULT_LIMIT = 50
 FILTER_PROJECTION_MAX_LIMIT = 250
@@ -1539,6 +1549,46 @@ def operation_result_readiness_projection(
     }
 
 
+def inspect_operation_control_policy_projection(
+    *,
+    command_type: object = "",
+    owner: object = "",
+) -> dict[str, Any]:
+    """Project one exact registered command policy, or the canonical commandless record."""
+
+    if type(command_type) is not str or type(owner) is not str:
+        raise AgentProjectionQueryError("inspect_operation_control_policy_projection_invalid")
+    if not command_type and not owner:
+        return dict(_INSPECT_OPERATION_NOT_APPLICABLE_CONTROL_POLICY)
+    try:
+        exact_command_type = _require_identifier(command_type, field="control_policy.command_type")
+        exact_owner = _require_identifier(owner, field="control_policy.owner")
+        registered_owner = DEFAULT_COMMAND_OWNER_REGISTRY.owner_for(exact_command_type)
+    except (AgentProjectionQueryError, KeyError) as exc:
+        raise AgentProjectionQueryError("inspect_operation_control_policy_projection_invalid") from exc
+    if exact_owner != registered_owner:
+        raise AgentProjectionQueryError("inspect_operation_control_policy_projection_invalid")
+
+    owner_policy = workflow_command_control_policy(
+        command_type=exact_command_type,
+        owner=exact_owner,
+    ).to_record()
+    if owner_policy.get("command_type") != exact_command_type or owner_policy.get("owner") != exact_owner:
+        raise AgentProjectionQueryError("inspect_operation_control_policy_projection_invalid")
+    return {
+        "status": "available",
+        "source_of_truth": owner_policy["control_source_of_truth"],
+        "fallback_status": owner_policy["fallback_status"],
+        "command_type": owner_policy["command_type"],
+        "owner": owner_policy["owner"],
+        "running_control_maturity": owner_policy["running_control_maturity"],
+        "running_control_gap_status": owner_policy["running_control_gap_status"],
+        "running_control_surface": owner_policy["running_control_surface"],
+        "running_cancel_supported": owner_policy["running_cancel_supported"],
+        "running_resume_supported": owner_policy["running_resume_supported"],
+    }
+
+
 def resolve_inspect_operation_result_spec(
     result_schema_version: str,
     result_schema_digest: str,
@@ -1833,23 +1883,59 @@ def _validate_inspect_operation_success_semantics_v3(owner_output: Mapping[str, 
 
     event_count = provenance.get("operation_event_count")
     command_count = provenance.get("workflow_command_count")
-    if type(event_count) is not int or event_count < 0 or type(command_count) is not int or command_count < 0:
+    if (
+        type(event_count) is not int
+        or event_count < 1
+        or type(command_count) is not int
+        or command_count not in {0, 1}
+        or provenance.get("truncated") is not False
+    ):
         raise AgentProjectionQueryError("inspect_operation_result_provenance_mismatch")
     has_latest_event = "latest_event_type" in provenance
     has_latest_command_id = "latest_workflow_command_id" in provenance
     has_latest_command_type = "latest_workflow_command_type" in provenance
-    if (event_count == 0) != (not has_latest_event):
+    if not has_latest_event:
         raise AgentProjectionQueryError("inspect_operation_result_provenance_mismatch")
-    if (command_count == 0) != (not has_latest_command_id and not has_latest_command_type):
+    try:
+        latest_event_type = _require_identifier(
+            provenance.get("latest_event_type"),
+            field="provenance.latest_event_type",
+        )
+    except AgentProjectionQueryError as exc:
+        raise AgentProjectionQueryError("inspect_operation_result_provenance_mismatch") from exc
+    if command_count == 0 and (has_latest_command_id or has_latest_command_type):
         raise AgentProjectionQueryError("inspect_operation_result_provenance_mismatch")
-    if command_count > 0 and not (has_latest_command_id and has_latest_command_type):
+    if command_count == 1 and not (has_latest_command_id and has_latest_command_type):
+        raise AgentProjectionQueryError("inspect_operation_result_provenance_mismatch")
+    latest_command_type = ""
+    if command_count == 1:
+        try:
+            _require_identifier(
+                provenance.get("latest_workflow_command_id"),
+                field="provenance.latest_workflow_command_id",
+            )
+            latest_command_type = _require_identifier(
+                provenance.get("latest_workflow_command_type"),
+                field="provenance.latest_workflow_command_type",
+            )
+        except AgentProjectionQueryError as exc:
+            raise AgentProjectionQueryError("inspect_operation_result_provenance_mismatch") from exc
+    elif progress.get("phase") == "workflow_command_planned" or latest_event_type == "OperationCommandPlanned":
         raise AgentProjectionQueryError("inspect_operation_result_provenance_mismatch")
 
     if policy["status"] == "available":
-        if command_count <= 0 or provenance.get("latest_workflow_command_type") != policy["command_type"]:
+        if command_count != 1 or latest_command_type != policy["command_type"]:
             raise AgentProjectionQueryError("inspect_operation_control_policy_command_mismatch")
+        expected_policy = inspect_operation_control_policy_projection(
+            command_type=policy.get("command_type"),
+            owner=policy.get("owner"),
+        )
     elif command_count != 0 or has_latest_command_id or has_latest_command_type:
         raise AgentProjectionQueryError("inspect_operation_control_policy_not_applicable_mismatch")
+    else:
+        expected_policy = inspect_operation_control_policy_projection()
+    if not json_contract_equal(policy, expected_policy):
+        raise AgentProjectionQueryError("inspect_operation_control_policy_projection_invalid")
 
 
 def _validate_operation_result_readiness_projection(
@@ -2001,6 +2087,7 @@ __all__ = [
     "filter_projection_v2_error_result",
     "filter_projection_v2_request_schema",
     "inspect_operation_deferred_result",
+    "inspect_operation_control_policy_projection",
     "inspect_operation_error_result",
     "inspect_operation_request_schema",
     "operation_result_readiness_projection",

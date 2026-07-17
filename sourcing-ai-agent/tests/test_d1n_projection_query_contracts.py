@@ -37,6 +37,7 @@ from sourcing_agent.agent_projection_query import (
     execute_inspect_operation,
     execute_inspect_operation_for_result_spec,
     filter_projection_v2_request_schema,
+    inspect_operation_control_policy_projection,
     inspect_operation_request_schema,
     operation_result_readiness_projection,
     projection_candidate_ref,
@@ -245,6 +246,9 @@ def _inspect_snapshot(*, policy_status: str = "available") -> dict[str, Any]:
             "latest_workflow_command_id": "cmd-123",
             "latest_workflow_command_type": "acquisition.run.create",
         }
+        operation_phase = "workflow_command_planned"
+        event_count = 2
+        latest_event_type = "OperationCommandPlanned"
     else:
         policy = {
             "status": "not_applicable",
@@ -253,6 +257,9 @@ def _inspect_snapshot(*, policy_status: str = "available") -> dict[str, Any]:
         }
         command_count = 0
         latest_command = {}
+        operation_phase = "commandless_completed"
+        event_count = 1
+        latest_event_type = "AcquisitionPlanPreviewCreated"
     return {
         "action": {
             "workspace_id": "workspace-a",
@@ -274,7 +281,7 @@ def _inspect_snapshot(*, policy_status: str = "available") -> dict[str, Any]:
             "schema_version": "operation_run_control_state_v1",
             "operation_status": "running",
             "action_status": "planned",
-            "operation_phase": "workflow_command_planned",
+            "operation_phase": operation_phase,
             "can_dispatch": False,
             "can_cancel": True,
             "can_retry": False,
@@ -301,7 +308,7 @@ def _inspect_snapshot(*, policy_status: str = "available") -> dict[str, Any]:
             "fallback_status": "fail_closed",
         },
         "progress": {
-            "phase": "workflow_command_planned",
+            "phase": operation_phase,
             "source_of_truth": "operation_runs.progress",
         },
         "result_readiness": {
@@ -312,9 +319,9 @@ def _inspect_snapshot(*, policy_status: str = "available") -> dict[str, Any]:
         },
         "provenance": {
             "source_of_truth": "operation_runs.agent_actions.workflow_commands.operation_events",
-            "operation_event_count": 2,
+            "operation_event_count": event_count,
             "workflow_command_count": command_count,
-            "latest_event_type": "OperationCommandPlanned",
+            "latest_event_type": latest_event_type,
             "truncated": False,
             **latest_command,
         },
@@ -365,6 +372,30 @@ def _mutate_inspect_available_zero_provenance(result) -> None:
 
 def _mutate_inspect_event_provenance(result) -> None:
     result["provenance"]["operation_event_count"] = 0
+
+
+def _apply_inspect_topology_contradiction(result: dict[str, Any], case: str) -> None:
+    provenance = result["provenance"]
+    if case == "zero_events":
+        provenance["operation_event_count"] = 0
+        provenance.pop("latest_event_type")
+    elif case == "two_commands":
+        provenance["workflow_command_count"] = 2
+    elif case == "truncated":
+        provenance["truncated"] = True
+    elif case == "commandless_plan_phase":
+        result["progress"]["phase"] = "workflow_command_planned"
+        result["control_state"]["operation_phase"] = "workflow_command_planned"
+    elif case == "commandless_plan_event":
+        provenance["latest_event_type"] = "OperationCommandPlanned"
+    elif case == "blank_latest_event":
+        provenance["latest_event_type"] = ""
+    elif case == "blank_latest_command_id":
+        provenance["latest_workflow_command_id"] = ""
+    elif case == "missing_latest_command_id":
+        provenance.pop("latest_workflow_command_id")
+    else:  # pragma: no cover - the parametrized matrix is closed below.
+        raise AssertionError(case)
 
 
 def test_v3_request_contracts_are_closed_and_leave_search_projection_v1_unchanged() -> None:
@@ -712,6 +743,135 @@ def test_inspect_operation_exact_owner_preflight_and_closed_projection() -> None
     assert not ({"next_controls", "repair", "command", "events", "metadata", "workflow_ref"} & set(result))
 
 
+def test_inspect_control_policy_projector_rederives_registered_available_and_commandless_records() -> None:
+    assert inspect_operation_control_policy_projection() == {
+        "status": "not_applicable",
+        "source_of_truth": "operation_runtime.ActionRegistry.allowed_workflow_command_contracts",
+        "fallback_status": "fail_closed",
+    }
+    assert inspect_operation_control_policy_projection(
+        command_type="acquisition.run.create",
+        owner="acquisition_run_writer",
+    ) == {
+        "status": "available",
+        "source_of_truth": "durable_runtime.workflow_command_control_policy",
+        "fallback_status": "fail_closed",
+        "command_type": "acquisition.run.create",
+        "owner": "acquisition_run_writer",
+        "running_control_maturity": "owner_specific_cancel_resume",
+        "running_control_gap_status": "closed",
+        "running_control_surface": "workflow_command_control_api_only",
+        "running_cancel_supported": True,
+        "running_resume_supported": True,
+    }
+
+    class StringSubclass(str):
+        pass
+
+    invalid_inputs = (
+        {"command_type": "acquisition.run.create", "owner": "acquisition_planner"},
+        {"command_type": "invented.command", "owner": "invented_owner"},
+        {"command_type": "acquisition.run.create", "owner": ""},
+        {
+            "command_type": StringSubclass("acquisition.run.create"),
+            "owner": "acquisition_run_writer",
+        },
+    )
+    for values in invalid_inputs:
+        with pytest.raises(
+            AgentProjectionQueryError,
+            match="inspect_operation_control_policy_projection_invalid",
+        ):
+            inspect_operation_control_policy_projection(**values)
+
+
+@pytest.mark.parametrize(
+    ("field", "forged_value"),
+    (
+        ("status", "not_applicable"),
+        ("source_of_truth", "operation_runtime.ActionRegistry.allowed_workflow_command_contracts"),
+        ("fallback_status", "fallback_open"),
+        ("command_type", "acquisition.plan.build"),
+        ("owner", "acquisition_planner"),
+        ("running_control_maturity", "fail_closed_with_upgrade_requirements"),
+        ("running_control_gap_status", "accepted_fail_closed_pending_owner_specific_control"),
+        ("running_control_surface", "invented_control_surface"),
+        ("running_cancel_supported", False),
+        ("running_resume_supported", False),
+    ),
+)
+def test_inspect_v3_rejects_every_available_control_policy_field_mutation(
+    field: str,
+    forged_value: object,
+) -> None:
+    result = execute_inspect_operation(
+        request=_inspect_bound_request(),
+        owner_snapshot=_inspect_snapshot(),
+    )
+    result["control_policy"][field] = forged_value
+    if field == "command_type":
+        result["provenance"]["latest_workflow_command_type"] = forged_value
+
+    with pytest.raises(
+        AgentProjectionQueryError,
+        match="inspect_operation_control_policy_projection_invalid",
+    ):
+        serialize_inspect_operation_result_v3(result)
+
+
+@pytest.mark.parametrize(
+    ("field", "forged_value"),
+    (
+        ("status", "available"),
+        ("source_of_truth", "durable_runtime.workflow_command_control_policy"),
+        ("fallback_status", "fallback_open"),
+    ),
+)
+def test_inspect_v3_rejects_every_commandless_control_policy_field_mutation(
+    field: str,
+    forged_value: object,
+) -> None:
+    result = execute_inspect_operation(
+        request=_inspect_bound_request(),
+        owner_snapshot=_inspect_snapshot(policy_status="not_applicable"),
+    )
+    result["control_policy"][field] = forged_value
+
+    with pytest.raises(
+        AgentProjectionQueryError,
+        match="inspect_operation_control_policy_projection_invalid",
+    ):
+        serialize_inspect_operation_result_v3(result)
+
+
+@pytest.mark.parametrize(
+    "case",
+    (
+        "zero_events",
+        "two_commands",
+        "truncated",
+        "commandless_plan_phase",
+        "commandless_plan_event",
+        "blank_latest_event",
+        "blank_latest_command_id",
+        "missing_latest_command_id",
+    ),
+)
+def test_inspect_v3_rejects_every_contradictory_event_command_topology(case: str) -> None:
+    commandless = case in {"commandless_plan_phase", "commandless_plan_event"}
+    result = execute_inspect_operation(
+        request=_inspect_bound_request(),
+        owner_snapshot=_inspect_snapshot(policy_status="not_applicable" if commandless else "available"),
+    )
+    _apply_inspect_topology_contradiction(result, case)
+
+    with pytest.raises(
+        AgentProjectionQueryError,
+        match="inspect_operation_result_provenance_mismatch",
+    ):
+        serialize_inspect_operation_result_v3(result)
+
+
 def test_inspect_execution_and_serialization_are_exactly_result_spec_versioned() -> None:
     request = _inspect_bound_request()
     snapshot = _inspect_snapshot()
@@ -937,7 +1097,7 @@ def test_inspect_operation_serializer_rechecks_readiness_semantics() -> None:
         (_mutate_inspect_disabled_reason_value, "inspect_operation_control_state_owner_mismatch"),
         (_mutate_inspect_readiness, "inspect_operation_result_readiness_mismatch"),
         (_mutate_inspect_policy_command, "inspect_operation_control_policy_command_mismatch"),
-        (_mutate_inspect_available_zero_provenance, "inspect_operation_control_policy_command_mismatch"),
+        (_mutate_inspect_available_zero_provenance, "inspect_operation_result_provenance_mismatch"),
         (_mutate_inspect_event_provenance, "inspect_operation_result_provenance_mismatch"),
     ),
 )

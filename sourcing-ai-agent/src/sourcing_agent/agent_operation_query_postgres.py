@@ -16,8 +16,10 @@ from typing import Any
 
 from .action_result_schema import ActionResultSpec
 from .agent_projection_query import (
+    InspectOperationBoundRequest,
     bind_inspect_operation_request,
     execute_inspect_operation_for_result_spec,
+    inspect_operation_control_policy_projection,
     inspect_operation_error_result,
     operation_result_readiness_projection,
     resolve_inspect_operation_result_spec,
@@ -27,7 +29,6 @@ from .agent_tool_registry import AgentToolSpec
 from .agent_tool_result_slot import AgentToolOccurrence, AgentToolTerminalResult
 from .durable_runtime import (
     DEFAULT_COMMAND_OWNER_REGISTRY,
-    workflow_command_control_policy,
 )
 from .json_contract import json_contract_equal
 from .operation_runtime import DEFAULT_ACTION_REGISTRY, operation_run_control_state
@@ -46,13 +47,21 @@ class _InspectOperationContractBinding:
     include_progress_reason: bool
 
 
+@dataclass(frozen=True, slots=True)
+class _InspectOperationPreflight:
+    """Exact historical contract plus the one server-bound request."""
+
+    contract: _InspectOperationContractBinding
+    request: InspectOperationBoundRequest
+
+
 def _resolve_inspect_operation_contract(occurrence: AgentToolOccurrence) -> _InspectOperationContractBinding:
     """Resolve one exact retained tool/result contract without current-version inference."""
 
     from .agent_canary_registry import (
-        INSPECT_OPERATION_TOOL_SPEC,
         INSPECT_OPERATION_TOOL_SPEC_V1,
         INSPECT_OPERATION_TOOL_SPEC_V2,
+        INSPECT_OPERATION_TOOL_SPEC_V3,
         LOCAL_CANARY_AGENT_TOOL_REGISTRY,
     )
 
@@ -65,7 +74,7 @@ def _resolve_inspect_operation_contract(occurrence: AgentToolOccurrence) -> _Ins
     retained = {
         INSPECT_OPERATION_TOOL_SPEC_V1.historical_identity: ("v2", True),
         INSPECT_OPERATION_TOOL_SPEC_V2.historical_identity: ("v2", True),
-        INSPECT_OPERATION_TOOL_SPEC.historical_identity: ("v3", False),
+        INSPECT_OPERATION_TOOL_SPEC_V3.historical_identity: ("v3", False),
     }
     physical_contract = retained.get(tool_spec.historical_identity)
     if tool_spec.tool_name != "inspect_operation" or tool_spec.tool_kind != "query" or physical_contract is None:
@@ -307,16 +316,19 @@ def validate_inspect_operation_occurrence(
     *,
     action_id: str,
     operation_run_id: str,
-) -> _InspectOperationContractBinding:
+) -> _InspectOperationPreflight:
     """Require the exact isolated-canary query contract and target link."""
 
     binding = _resolve_inspect_operation_contract(occurrence)
-    canonical_args = occurrence.canonical_args
-    if canonical_args != {"operation_run_id": operation_run_id}:
+    request = bind_inspect_operation_request(
+        occurrence.canonical_args,
+        workspace_id=occurrence.workspace_id,
+        action_id=action_id,
+        actor_id=occurrence.actor_id,
+    )
+    if request.operation_run_id != operation_run_id:
         raise ValueError("agent tool inspect result canonical args mismatch")
-    if not action_id or not operation_run_id:
-        raise ValueError("agent tool inspect result action and operation links required")
-    return binding
+    return _InspectOperationPreflight(contract=binding, request=request)
 
 
 def inspect_operation_result_lock_groups(
@@ -411,16 +423,24 @@ def terminal_from_locked_inspect_operation_owner(
     action_id: str,
     operation_run_id: str,
     base_owner: dict[str, Any],
+    preflight: _InspectOperationPreflight,
 ) -> AgentToolTerminalResult:
     """Rebuild one exact query result while all physical owner rows are fenced."""
 
     del cursor
 
-    binding = validate_inspect_operation_occurrence(
-        occurrence,
-        action_id=action_id,
-        operation_run_id=operation_run_id,
-    )
+    if not isinstance(preflight, _InspectOperationPreflight):
+        raise ValueError("agent tool inspect result preflight required")
+    binding = preflight.contract
+    request = preflight.request
+    if (
+        request.workspace_id != occurrence.workspace_id
+        or request.actor_id != occurrence.actor_id
+        or request.action_id != action_id
+        or request.operation_run_id != operation_run_id
+        or occurrence.canonical_args != {"operation_run_id": request.operation_run_id}
+    ):
+        raise ValueError("agent tool inspect result preflight mismatch")
     action = dict(base_owner.get("action") or {})
     operation = dict(base_owner.get("operation_run") or {})
     exact_owner = (
@@ -463,6 +483,7 @@ def terminal_from_locked_inspect_operation_owner(
     events = list(reversed(events_desc))
     previous_sequence = 0
     event_evidence: list[dict[str, Any]] = []
+    audit_event_evidence: list[dict[str, Any]] = []
     for event in events:
         sequence_number = event.get("sequence_number")
         event_payload = _required_json_dict(event.get("payload_json"), field="operation event payload")
@@ -478,52 +499,87 @@ def terminal_from_locked_inspect_operation_owner(
         ):
             raise ValueError("agent tool inspect result operation event owner mismatch")
         previous_sequence = sequence_number
-        event_evidence.append(
-            {
-                "event_id": _required_identity_text(
-                    event.get("event_id"),
-                    field="operation event id",
-                ),
-                "event_type": _required_identity_text(
-                    event.get("event_type"),
-                    field="operation event type",
-                ),
-                "workspace_id": _required_identity_text(
-                    event.get("workspace_id"),
-                    field="operation event workspace_id",
-                ),
-                "event_stream_id": _required_identity_text(
-                    event.get("event_stream_id"),
-                    field="operation event event_stream_id",
-                ),
-                "operation_run_id": _required_identity_text(
-                    event.get("operation_run_id"),
-                    field="operation event operation_run_id",
-                ),
-                "action_id": _required_identity_text(
-                    event.get("action_id"),
-                    field="operation event action_id",
-                ),
-                "event_family": _required_identity_text(
-                    event.get("event_family"),
-                    field="operation event family",
-                ),
-                "sequence_number": sequence_number,
-                "idempotency_key": _required_identity_text(
-                    event.get("idempotency_key"),
-                    field="operation event idempotency_key",
-                ),
-                "schema_version": _required_identity_text(
-                    event.get("schema_version"),
-                    field="operation event schema_version",
-                ),
-                "payload_digest": _sha256_json(event_payload),
-            }
-        )
+        evidence = {
+            "event_id": _required_identity_text(
+                event.get("event_id"),
+                field="operation event id",
+            ),
+            "event_type": _required_identity_text(
+                event.get("event_type"),
+                field="operation event type",
+            ),
+            "workspace_id": _required_identity_text(
+                event.get("workspace_id"),
+                field="operation event workspace_id",
+            ),
+            "event_stream_id": _required_identity_text(
+                event.get("event_stream_id"),
+                field="operation event event_stream_id",
+            ),
+            "operation_run_id": _required_identity_text(
+                event.get("operation_run_id"),
+                field="operation event operation_run_id",
+            ),
+            "action_id": _required_identity_text(
+                event.get("action_id"),
+                field="operation event action_id",
+            ),
+            "event_family": _required_identity_text(
+                event.get("event_family"),
+                field="operation event family",
+            ),
+            "sequence_number": sequence_number,
+            "idempotency_key": _required_identity_text(
+                event.get("idempotency_key"),
+                field="operation event idempotency_key",
+            ),
+            "schema_version": _required_identity_text(
+                event.get("schema_version"),
+                field="operation event schema_version",
+            ),
+            "payload_digest": _sha256_json(event_payload),
+        }
+        event_evidence.append(evidence)
+        if binding.physical_owner_revision == "v3":
+            audit_event_evidence.append(
+                {
+                    **evidence,
+                    "actor": _required_identity_text(
+                        event.get("actor"),
+                        field="operation event actor",
+                    ),
+                    "source": _required_identity_text(
+                        event.get("source"),
+                        field="operation event source",
+                    ),
+                }
+            )
     latest_event = events[-1]
     latest_event_sequence = latest_event.get("sequence_number")
     if type(latest_event_sequence) is not int or latest_event_sequence <= 0:
         raise ValueError("agent tool inspect result operation event revision unavailable")
+    action_metadata = _json_dict(action.get("metadata_json"), field="action metadata")
+    progress = _json_dict(operation.get("progress_json"), field="operation progress")
+    result_ref = _json_dict(operation.get("result_ref_json"), field="operation result ref")
+    phase = str(progress.get("phase") or "").strip()
+    if not phase:
+        raise ValueError("agent tool inspect result operation progress unavailable")
+
+    command_plan_events: list[tuple[dict[str, Any], dict[str, Any], dict[str, str]]] = []
+    for event in events:
+        if str(event.get("event_type") or "") != "OperationCommandPlanned":
+            continue
+        event_payload = _required_json_dict(event.get("payload_json"), field="operation event payload")
+        try:
+            event_identity = _workflow_ref_identity(
+                event_payload,
+                field="operation command planned event",
+                allow_variant_fields=True,
+            )
+        except ValueError as exc:
+            raise ValueError("agent tool inspect result workflow command link mismatch") from exc
+        command_plan_events.append((event, event_payload, event_identity))
+
     workflow_ref = _required_json_dict(operation.get("workflow_ref_json"), field="operation workflow ref")
     try:
         normalized_workflow_ref = _workflow_ref_identity(
@@ -556,44 +612,16 @@ def terminal_from_locked_inspect_operation_owner(
             and command_identity["owner"] == normalized_workflow_ref["owner"]
             and command_identity["owner"] == registered_owner
         )
-        matching_command_plan_events: list[tuple[dict[str, Any], dict[str, Any]]] = []
-        if command_link_matches:
-            for event in events:
-                if str(event.get("event_type") or "") != "OperationCommandPlanned":
-                    continue
-                event_payload = _required_json_dict(event.get("payload_json"), field="operation event payload")
-                try:
-                    event_identity = _workflow_ref_identity(
-                        event_payload,
-                        field="operation command planned event",
-                        allow_variant_fields=True,
-                    )
-                except ValueError as exc:
-                    raise ValueError("agent tool inspect result workflow command link mismatch") from exc
-                if event_identity["command_id"] == normalized_workflow_ref["command_id"]:
-                    matching_command_plan_events.append((event, event_payload))
-        if not command_link_matches or len(matching_command_plan_events) != 1:
+        if not command_link_matches or len(command_plan_events) != 1:
             raise ValueError("agent tool inspect result workflow command link mismatch")
-        plan_event, plan_payload = matching_command_plan_events[0]
-        if (
-            _workflow_ref_identity(
-                plan_payload,
-                field="operation command planned event",
-                allow_variant_fields=True,
-            )
-            != normalized_workflow_ref
-        ):
+        plan_event, _plan_payload, plan_event_identity = command_plan_events[0]
+        if plan_event_identity != normalized_workflow_ref:
             raise ValueError("agent tool inspect result workflow command link mismatch")
         selected_plan_event = next(
             evidence for evidence in event_evidence if evidence["event_id"] == str(plan_event.get("event_id") or "")
         )
-
-    action_metadata = _json_dict(action.get("metadata_json"), field="action metadata")
-    progress = _json_dict(operation.get("progress_json"), field="operation progress")
-    result_ref = _json_dict(operation.get("result_ref_json"), field="operation result ref")
-    phase = str(progress.get("phase") or "").strip()
-    if not phase:
-        raise ValueError("agent tool inspect result operation progress unavailable")
+    elif command_plan_events or phase == "workflow_command_planned":
+        raise ValueError("agent tool inspect result workflow command link mismatch")
     control_state = operation_run_control_state(
         operation_status=str(operation.get("status") or "").strip(),
         operation_run_id=operation_run_id,
@@ -604,28 +632,12 @@ def terminal_from_locked_inspect_operation_owner(
     ).to_record()
 
     if latest_command:
-        policy = workflow_command_control_policy(
-            command_type=str(latest_command.get("command_type") or "").strip(),
-            owner=str(latest_command.get("owner") or "").strip(),
-        ).to_record()
-        control_policy = {
-            "status": "available",
-            "source_of_truth": str(policy["control_source_of_truth"]),
-            "fallback_status": str(policy["fallback_status"]),
-            "command_type": str(policy["command_type"]),
-            "owner": str(policy["owner"]),
-            "running_control_maturity": str(policy["running_control_maturity"]),
-            "running_control_gap_status": str(policy["running_control_gap_status"]),
-            "running_control_surface": str(policy["running_control_surface"]),
-            "running_cancel_supported": bool(policy["running_cancel_supported"]),
-            "running_resume_supported": bool(policy["running_resume_supported"]),
-        }
+        control_policy = inspect_operation_control_policy_projection(
+            command_type=command_identity["command_type"],
+            owner=command_identity["owner"],
+        )
     else:
-        control_policy = {
-            "status": "not_applicable",
-            "source_of_truth": "operation_runtime.ActionRegistry.allowed_workflow_command_contracts",
-            "fallback_status": "fail_closed",
-        }
+        control_policy = inspect_operation_control_policy_projection()
 
     operation_status = str(operation.get("status") or "").strip()
     result_readiness = operation_result_readiness_projection(
@@ -678,12 +690,6 @@ def terminal_from_locked_inspect_operation_owner(
             ),
         },
     }
-    request = bind_inspect_operation_request(
-        occurrence.canonical_args,
-        workspace_id=occurrence.workspace_id,
-        action_id=action_id,
-        actor_id=occurrence.actor_id,
-    )
     owner_output = execute_inspect_operation_for_result_spec(
         request=request,
         owner_snapshot=snapshot,
@@ -700,6 +706,12 @@ def terminal_from_locked_inspect_operation_owner(
     }
     if binding.physical_owner_revision == "v3":
         physical_owner_evidence["raw_progress_digest"] = _sha256_json(progress)
+        physical_owner_evidence["audit_event_stream_digest"] = _sha256_json(
+            {
+                "schema_version": "inspect_operation_audit_event_stream_v1",
+                "events": audit_event_evidence,
+            }
+        )
     owner_result_digest = _sha256_json(physical_owner_evidence)
     owner_result_ref = {
         "schema_version": f"inspect_operation_owner_result_ref_{binding.physical_owner_revision}",
@@ -720,6 +732,7 @@ def terminal_from_locked_inspect_operation_owner(
     }
     if binding.physical_owner_revision == "v3":
         owner_result_ref["raw_progress_digest"] = _sha256_json(progress)
+        owner_result_ref["audit_event_stream_digest"] = physical_owner_evidence["audit_event_stream_digest"]
     return AgentToolTerminalResult.from_serialized_result(
         result_attempt_id=result_attempt_id,
         provider_call_id=provider_call_id,
@@ -743,6 +756,7 @@ def assert_exact_inspect_operation_terminal(
     occurrence: AgentToolOccurrence,
     terminal: AgentToolTerminalResult,
     base_owner: dict[str, Any],
+    preflight: _InspectOperationPreflight,
 ) -> None:
     expected = terminal_from_locked_inspect_operation_owner(
         cursor,
@@ -753,6 +767,7 @@ def assert_exact_inspect_operation_terminal(
         action_id=terminal.action_id,
         operation_run_id=terminal.operation_run_id,
         base_owner=base_owner,
+        preflight=preflight,
     )
     if not json_contract_equal(expected.to_record(), terminal.to_record()):
         raise ValueError("agent tool inspect result physical owner or serializer mismatch")

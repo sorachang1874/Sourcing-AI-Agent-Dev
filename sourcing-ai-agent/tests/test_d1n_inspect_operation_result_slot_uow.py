@@ -263,6 +263,7 @@ class D1nInspectOperationResultSlotUowPGTest(PGControlPlaneStoreTestMixin, unitt
                     terminal.owner_result_ref["physical_owner_fingerprint_schema_version"],
                     "inspect_operation_physical_owner_fingerprint_v2",
                 )
+                self.assertNotIn("audit_event_stream_digest", terminal.owner_result_ref)
                 self.repository.reserve_agent_tool_result_slot(occurrence=occurrence)
                 with self.assertRaisesRegex(RuntimeError, "after commit"):
                     self.adapter.accept_inspect_operation_tool_result_uow(
@@ -347,6 +348,64 @@ class D1nInspectOperationResultSlotUowPGTest(PGControlPlaneStoreTestMixin, unitt
                 "agent_tool_result_journal": 0,
             },
         )
+
+    def test_v3_event_actor_and_source_drift_leave_slot_pending_without_terminal_effects(self) -> None:
+        for index, field_name in enumerate(("actor", "source"), start=1):
+            with self.subTest(field_name=field_name):
+                suffix = f"audit_{field_name}_{index}"
+                bundle = self._preview_bundle(suffix=suffix)
+                occurrence = self._occurrence(bundle, suffix=suffix)
+                terminal = self._prepare(
+                    bundle,
+                    occurrence,
+                    attempt_id=f"inspectattempt_{suffix}",
+                )
+                self.assertEqual(len(terminal.owner_result_ref["audit_event_stream_digest"]), 64)
+                self.repository.reserve_agent_tool_result_slot(occurrence=occurrence)
+                event = dict(bundle["event"])
+                with self.adapter._connect() as connection:  # noqa: SLF001
+                    with connection.cursor() as cursor:
+                        cursor.execute(
+                            f"UPDATE operation_events SET {field_name} = %s WHERE event_id = %s",
+                            (f"drifted.{field_name}", event["event_id"]),
+                        )
+
+                with self.assertRaisesRegex(ValueError, "physical owner or serializer mismatch"):
+                    self.adapter.accept_inspect_operation_tool_result_uow(
+                        occurrence=occurrence,
+                        terminal=terminal,
+                        attempted_slot_generation=1,
+                    )
+                self._assert_pending_without_terminal_effects(occurrence)
+
+    def test_v3_invalid_event_actor_or_source_fails_before_result_writes(self) -> None:
+        for index, field_name in enumerate(("actor", "source"), start=1):
+            with self.subTest(field_name=field_name):
+                suffix = f"invalid_audit_{field_name}_{index}"
+                bundle = self._preview_bundle(suffix=suffix)
+                occurrence = self._occurrence(bundle, suffix=suffix)
+                event = dict(bundle["event"])
+                with self.adapter._connect() as connection:  # noqa: SLF001
+                    with connection.cursor() as cursor:
+                        cursor.execute(
+                            f"UPDATE operation_events SET {field_name} = %s WHERE event_id = %s",
+                            (" ", event["event_id"]),
+                        )
+
+                with self.assertRaisesRegex(ValueError, f"operation event {field_name} invalid"):
+                    self._prepare(
+                        bundle,
+                        occurrence,
+                        attempt_id=f"inspectattempt_{suffix}",
+                    )
+                self.assertEqual(
+                    self._result_counts(),
+                    {
+                        "agent_tool_result_slots": 0,
+                        "agent_tool_result_attempts": 0,
+                        "agent_tool_result_journal": 0,
+                    },
+                )
 
     def test_mixed_or_unknown_historical_inspect_pins_fail_before_owner_read_with_zero_writes(self) -> None:
         bundle = self._preview_bundle(suffix="historical_pin_drift")
@@ -503,6 +562,122 @@ class D1nInspectOperationResultSlotUowPGTest(PGControlPlaneStoreTestMixin, unitt
                 ensure_schema.assert_not_called()
                 connect.assert_not_called()
                 self._assert_pending_without_terminal_effects(occurrence)
+
+    def test_malformed_request_identifiers_fail_before_prepare_dependencies_or_masked_absence(self) -> None:
+        bundle = self._preview_bundle(suffix="malformed_request")
+        operation = dict(bundle["operation_run"])
+        action = dict(bundle["action"])
+        cases: tuple[tuple[str, AgentToolOccurrence, str, str, str], ...] = (
+            (
+                "workspace",
+                self._occurrence(
+                    bundle,
+                    suffix="malformed_workspace",
+                    workspace_id="workspace invalid",
+                ),
+                str(action["action_id"]),
+                str(operation["operation_run_id"]),
+                "workspace_id",
+            ),
+            (
+                "actor",
+                self._occurrence(
+                    bundle,
+                    suffix="malformed_actor",
+                    actor_id="requester invalid",
+                ),
+                str(action["action_id"]),
+                str(operation["operation_run_id"]),
+                "actor_id",
+            ),
+            (
+                "masked_action",
+                self._occurrence(bundle, suffix="malformed_action"),
+                " action_missing",
+                str(operation["operation_run_id"]),
+                "action_id",
+            ),
+            (
+                "operation",
+                AgentToolOccurrence.from_tool_spec(
+                    result_slot_id="inspectslot_malformed_operation",
+                    slot_generation=1,
+                    workspace_id="workspace_1",
+                    actor_id="requester_1",
+                    runtime_namespace="isolated_local_canary",
+                    provider_mode="simulate",
+                    turn_id="turn_inspect_malformed_operation",
+                    step_id="step_inspect",
+                    tool_spec=INSPECT_OPERATION_TOOL_SPEC,
+                    canonical_args={"operation_run_id": "operation invalid"},
+                    occurrence_ordinal=1,
+                ),
+                str(action["action_id"]),
+                "operation invalid",
+                "operation_run_id",
+            ),
+        )
+
+        for label, occurrence, action_id, operation_run_id, invalid_field in cases:
+            with self.subTest(label=label):
+                expected_error = (
+                    "inspect_operation_request_invalid"
+                    if label == "operation"
+                    else f"identifier_invalid: {invalid_field}"
+                )
+                with (
+                    mock.patch.object(self.adapter, "_ensure_table_write_schema") as ensure_schema,
+                    mock.patch.object(self.adapter, "_connect_with_timeout") as connect,
+                    self.assertRaisesRegex(ValueError, expected_error),
+                ):
+                    self.repository.prepare_inspect_operation_tool_result(
+                        occurrence=occurrence,
+                        result_attempt_id=f"inspectattempt_malformed_{label}",
+                        provider_call_id=f"provider-malformed-{label}",
+                        tool_call_id=f"tool-malformed-{label}",
+                        action_id=action_id,
+                        operation_run_id=operation_run_id,
+                    )
+                ensure_schema.assert_not_called()
+                connect.assert_not_called()
+
+        self.assertEqual(
+            self._result_counts(),
+            {
+                "agent_tool_result_slots": 0,
+                "agent_tool_result_attempts": 0,
+                "agent_tool_result_journal": 0,
+            },
+        )
+
+    def test_malformed_bound_request_fails_before_accept_dependencies_and_keeps_slot_pending(self) -> None:
+        bundle = self._preview_bundle(suffix="malformed_accept")
+        occurrence = self._occurrence(bundle, suffix="malformed_accept")
+        terminal = self._prepare(
+            bundle,
+            occurrence,
+            attempt_id="inspectattempt_malformed_accept",
+            action_id="action_missing_malformed_accept",
+        )
+        self.assertTrue(terminal.is_error)
+        self.repository.reserve_agent_tool_result_slot(occurrence=occurrence)
+        canonical_actor = occurrence.actor_id
+        object.__setattr__(occurrence, "actor_id", "requester invalid")
+
+        with (
+            mock.patch.object(self.adapter, "_ensure_table_write_schema") as ensure_schema,
+            mock.patch.object(self.adapter, "_connect_with_timeout") as connect,
+            self.assertRaisesRegex(ValueError, "identifier_invalid: actor_id"),
+        ):
+            self.adapter.accept_inspect_operation_tool_result_uow(
+                occurrence=occurrence,
+                terminal=terminal,
+                attempted_slot_generation=1,
+            )
+        ensure_schema.assert_not_called()
+        connect.assert_not_called()
+        object.__setattr__(occurrence, "actor_id", canonical_actor)
+        self._assert_pending_without_terminal_effects(occurrence)
 
     def test_prepare_is_read_only_and_never_bootstraps_write_schema(self) -> None:
         bundle = self._preview_bundle(suffix="readonly")
@@ -1021,6 +1196,127 @@ class D1nInspectOperationResultSlotUowPGTest(PGControlPlaneStoreTestMixin, unitt
             )
         self.assertEqual(self._result_counts()["agent_tool_result_attempts"], 0)
         self.assertEqual(self._result_counts()["agent_tool_result_journal"], 0)
+
+    def test_unreferenced_command_plan_event_is_rejected_from_the_complete_stream(self) -> None:
+        bundle = self._command_backed_bundle()
+        action = dict(bundle["action"])
+        operation = dict(bundle["operation_run"])
+        workflow_ref = dict(operation["workflow_ref"])
+        unrelated = self.repository.append_operation_event(
+            event_stream_id=str(operation["operation_run_id"]),
+            event_family="operation_event",
+            event_type="OperationCommandPlanned",
+            idempotency_key="start-inspect-event-unreferenced",
+            workspace_id="workspace_1",
+            operation_run_id=str(operation["operation_run_id"]),
+            action_id=str(action["action_id"]),
+            actor="test-user",
+            source="test.d1n.inspect",
+            payload={
+                **workflow_ref,
+                "command_id": "command_unreferenced_plan",
+                "module_state_mutated": False,
+            },
+        )
+        self.assertTrue(unrelated)
+
+        with self.assertRaisesRegex(ValueError, "workflow command link mismatch"):
+            self._prepare(
+                bundle,
+                self._occurrence(bundle, suffix="unreferenced-plan"),
+                attempt_id="inspectattempt_unreferenced_plan",
+            )
+        self.assertEqual(
+            self._result_counts(),
+            {
+                "agent_tool_result_slots": 0,
+                "agent_tool_result_attempts": 0,
+                "agent_tool_result_journal": 0,
+            },
+        )
+
+    def test_commandless_plan_event_or_plan_phase_is_rejected_before_result_writes(self) -> None:
+        plan_event_bundle = self._preview_bundle(suffix="commandless_plan_event")
+        action = dict(plan_event_bundle["action"])
+        operation = dict(plan_event_bundle["operation_run"])
+        self.repository.append_operation_event(
+            event_stream_id=str(operation["operation_run_id"]),
+            event_family="operation_event",
+            event_type="OperationCommandPlanned",
+            idempotency_key="commandless-illegal-plan-event",
+            workspace_id="workspace_1",
+            operation_run_id=str(operation["operation_run_id"]),
+            action_id=str(action["action_id"]),
+            actor="test-user",
+            source="test.d1n.inspect",
+            payload={
+                "workflow_run_id": "workflow_illegal_commandless",
+                "command_id": "command_illegal_commandless",
+                "command_type": "acquisition.run.create",
+                "owner": "acquisition_run_writer",
+                "module_state_mutated": False,
+            },
+        )
+        with self.assertRaisesRegex(ValueError, "workflow command link mismatch"):
+            self._prepare(
+                plan_event_bundle,
+                self._occurrence(plan_event_bundle, suffix="commandless_plan_event"),
+                attempt_id="inspectattempt_commandless_plan_event",
+            )
+
+        plan_phase_bundle = self._preview_bundle(suffix="commandless_plan_phase")
+        plan_phase_operation = dict(plan_phase_bundle["operation_run"])
+        self.repository.update_operation_state(
+            str(plan_phase_operation["operation_run_id"]),
+            progress_patch={"phase": "workflow_command_planned"},
+        )
+        with self.assertRaisesRegex(ValueError, "workflow command link mismatch"):
+            self._prepare(
+                plan_phase_bundle,
+                self._occurrence(plan_phase_bundle, suffix="commandless_plan_phase"),
+                attempt_id="inspectattempt_commandless_plan_phase",
+            )
+
+        self.assertEqual(
+            self._result_counts(),
+            {
+                "agent_tool_result_slots": 0,
+                "agent_tool_result_attempts": 0,
+                "agent_tool_result_journal": 0,
+            },
+        )
+
+    def test_plan_topology_drift_before_acceptance_keeps_slot_pending(self) -> None:
+        bundle = self._command_backed_bundle()
+        action = dict(bundle["action"])
+        operation = dict(bundle["operation_run"])
+        occurrence = self._occurrence(bundle, suffix="plan_topology_drift")
+        terminal = self._prepare(bundle, occurrence, attempt_id="inspectattempt_plan_topology_drift")
+        self.repository.reserve_agent_tool_result_slot(occurrence=occurrence)
+        self.repository.append_operation_event(
+            event_stream_id=str(operation["operation_run_id"]),
+            event_family="operation_event",
+            event_type="OperationCommandPlanned",
+            idempotency_key="start-inspect-event-topology-drift",
+            workspace_id="workspace_1",
+            operation_run_id=str(operation["operation_run_id"]),
+            action_id=str(action["action_id"]),
+            actor="test-user",
+            source="test.d1n.inspect",
+            payload={
+                **dict(operation["workflow_ref"]),
+                "command_id": "command_topology_drift",
+                "module_state_mutated": False,
+            },
+        )
+
+        with self.assertRaisesRegex(ValueError, "workflow command link mismatch"):
+            self.adapter.accept_inspect_operation_tool_result_uow(
+                occurrence=occurrence,
+                terminal=terminal,
+                attempted_slot_generation=1,
+            )
+        self._assert_pending_without_terminal_effects(occurrence)
 
     def test_plan_payload_drift_without_revision_advance_is_fenced(self) -> None:
         bundle = self._command_backed_bundle()
