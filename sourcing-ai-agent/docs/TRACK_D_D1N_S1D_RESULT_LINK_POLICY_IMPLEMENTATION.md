@@ -4,8 +4,9 @@ Date: 2026-07-17
 
 Status: the correctly scoped pinned Ultra review of `bacae9e..3b235fd` was a valid `NO-GO 0/1/4/0`. The bounded
 fixed-forward commit `4dddd0e` received a second valid pinned Ultra `NO-GO 0/3/3/0`; its three P1 and three P2 new
-findings remain open for the next bounded response. Neither artifact is a formal `GO`. This batch separates physical
-result-link semantics in the immutable tool contract and durable result aggregate. It does not implement the
+findings are addressed author-side by the next bounded response, whose fresh pinned review remains pending. Neither
+artifact is a formal `GO`. This batch separates physical result-link semantics in the immutable tool contract and
+durable result aggregate. It does not implement the
 `start_acquisition_run` approval/start UoW, create an Activity, serve a tool, or authorize provider/model/live
 execution.
 
@@ -88,6 +89,12 @@ No universal default is semantically correct. Old binaries that omit the require
 rolling overlap would require a separate reviewed trigger/sentinel bridge. This repository can use the quiesced path
 because no Agent tool is served.
 
+The operator procedure is exact and non-rolling: quiesce all result-aggregate writes, drain old replicas, apply
+`0012 -> 0013 -> 0014`, recycle every pool/session/prepared statement, start only the compatible release, verify the
+same registry/retained-set digest on every replica, and only then CAS-activate action-contract v2 with current tool-spec
+v3. Historical `start_acquisition_run_tool_v2` is retained for exact lookup/replay only; it is never reactivated for new
+submission. Activation does not imply serving, and the public/default served population remains zero.
+
 The existing slot and attempt/journal schema carriers keep their scoped meanings: slot v1 binds logical occurrence,
 while attempt/journal v1/v2 distinguish numeric-only versus opaque-token terminal owner payloads. Link-policy schema
 identity is carried by the versioned policy value and, for new tools, by `agent_tool_spec_v2`; `0013` does not
@@ -111,31 +118,64 @@ it is not the V2 start authority.
 - new start v3 fingerprint and the S1d-checkpoint registry 4-name/5-history shape;
 - positive and negative Python matrices for all three policies;
 - policy exact-copy through pending slot, accepted/quarantined attempt, accepted slot, journal, and replay;
-- `0012 -> 0013` deterministic backfill for all historical effect classes;
+- quiesced `0012 -> 0013 -> 0014` deterministic backfill and all-attempt enforcement for every historical effect class;
 - old-writer omission, unknown policy, link mismatch, immutable collision, and deferred aggregate mismatch fail closed;
 - S1a/S1b/S1c regression, scoped mypy/lint, global `81 errors / 4 files` ceiling, Python compilation, and clean diff.
 
-## Fresh pinned review scope
+## Pinned review records and next request
 
-Review base: `bacae9e80c8c0593b6c8c436b06e68777ade6d54`. The head is the eventual standalone S1d commit. Intended scope:
+### Historical first request (do not reuse)
+
+The former reusable "Fresh pinned review scope" based at
+`bacae9e80c8c0593b6c8c436b06e68777ade6d54` is historical. It described the predecessor 15-file S1d request before
+the S1a wording correction, canonical pre-Agent owner matrix, migration `0014`, and governing preflight existed. It
+must not be copied into a later review request. Its completed independent artifact is
+`runtime/reviews/20260717T130538Z_Track-D-D1n-S1d-result-link-policy.md`, with valid verdict
+`NO-GO 0/1/4/0`; it is not a formal `GO`.
+
+### Completed fixed-forward re-review
+
+The completed independent Ultra re-review is exact-bound as follows:
+
+- artifact: `runtime/reviews/20260717T135248Z_Track-D-D1n-S1d-fixed-forward-re-review.md`;
+- base: `5aa393699075df41182101e20ea0c9cad81b2762`;
+- head: `4dddd0e93634fcb4920f3f15a8c1984ca239a6f3`;
+- model / effort / tier: `gpt-5.6-sol` / `ultra` / `priority`;
+- reviewer exit: `0`;
+- diff SHA-256: `3886c965622cffe7d7d3b1f2627342fba30437ced6714f0fcb0bdc457a12ad6a`;
+- tree SHA-256: `27a792df738ec655fd61664f7d5d7d49a59807943b33dfbb85eac4bf1b4cbf12`;
+- extra-context SHA-256: `f2a40036d68139e1b84ab0a982d442e7601b779d1d023dbe18299ee0846696c4`;
+- scope digest SHA-256: `013c8d1e2d062fb778f692c129bc3d320e248c9d07a17ca0f202fbb9a5f32c08`;
+- valid verdict: `NO-GO 0/3/3/0`, with five re-raises and residuals R-019/R-029; this is not a formal `GO`.
+
+Its exact 12-file reviewed scope was:
 
 - `docs/NEXT_TODO.md`
+- `docs/PRE_AGENT_CONTRACT_REVIEW.md`
 - `docs/TRACK_D_D1N_REMAINING_ACTION_AND_AGENT_TOOL_SERVING_PLAN.md`
-- `docs/TRACK_D_D1N_S1C_OPAQUE_OWNER_REVISION_CARRIER_IMPLEMENTATION.md`
+- `docs/TRACK_D_D1N_S1A_AGENT_TOOL_RESULT_SLOT_IMPLEMENTATION.md`
 - `docs/TRACK_D_D1N_S1D_RESULT_LINK_POLICY_IMPLEMENTATION.md`
-- `src/sourcing_agent/agent_canary_registry.py`
-- `src/sourcing_agent/agent_tool_registry.py`
 - `src/sourcing_agent/agent_tool_result_postgres.py`
 - `src/sourcing_agent/agent_tool_result_slot.py`
-- `src/sourcing_agent/migrations/0013_agent_tool_result_link_policy.sql`
-- `src/sourcing_agent/repositories/workflow_runtime.py`
-- `tests/test_d1n_agent_tool_registry.py`
+- `src/sourcing_agent/migrations/0014_agent_tool_result_attempt_effect_contract.sql`
 - `tests/test_d1n_agent_tool_result_slot.py`
 - `tests/test_d1n_agent_tool_result_slot_uow.py`
-- `tests/test_d1n_canary_agent_tool_population.py`
 - `tests/test_migration_runner.py`
+- `tests/test_pre_agent_contract_review.py`
 
-All results in this document are author evidence until a fresh pinned non-author artifact says otherwise.
+This scope explicitly reviewed the `0014` brownfield/all-attempt enforcement, S1a historical/current start semantics,
+the canonical owner matrix, and its executable preflight. Those artifacts are evidence for that exact range only.
+
+### Next fixed-forward response request
+
+- review base: `28c2b2eb6282462fa5e1a7003590473119e4a30e` (the intervening standalone S1b commit; the
+  `4dddd0e` S1d review artifact remains required finding context, not part of the response diff);
+- review head: `<commit-containing-the-complete-S1d-P1-P2-response>`.
+
+Replace the head placeholder with the exact committed SHA, derive the file list and scope digest from that pinned range,
+and include every response file. Do not reuse either historical file list. Until a fresh pinned non-author artifact for
+that exact range returns `GO`, all new validation remains author evidence, the current verdict remains `NO-GO`, and
+served population remains zero.
 
 ## Review-driven fixed-forward work
 
@@ -175,21 +215,38 @@ returned valid `NO-GO 0/3/3/0`: equality-alias carriers, plan occurrence/Action 
 procedure, governing durable inventory, and stale review-scope instructions require fixed-forward work. R-019 and
 R-029 remain residual; no tool is served and no provider/model/live call is authorized.
 
+The current author-side response closes those six findings without claiming review success:
+
+- closed literals and all three JSON carriers require exact plain strings; registry revalidation returns a
+  server-reconstructed canonical occurrence, while terminal revalidation regenerates canonical JSON/digest bytes;
+- reserve, plan acceptance, inspect prepare, and inspect acceptance reject equality-alias carriers before schema
+  bootstrap, owner reads, or result effects, with pending-slot/zero-attempt/zero-journal PostgreSQL evidence;
+- one pure acquisition-plan request canonicalizer is shared by preview construction and result acceptance, so legal
+  order-insensitive input remains accepted while the canonical occurrence is exact-bound to strict-decoded locked
+  Action input/target plus requester and workspace before any terminal or quarantine write;
+- the rollout procedure is exact quiesce, old-replica drain, `0012 -> 0013 -> 0014`, pool/session recycle,
+  compatible-release start, registry-digest verification, then per-action CAS activation; historical tool v2 remains
+  lookup/replay-only;
+- both governing PG-only inventories name slot/attempt/journal, executable preflight enforces them, and obsolete review
+  instructions are historical rather than reusable.
+
 ## Fixed-forward author validation evidence
 
 Run from the repository root with local PostgreSQL and no live provider/model variables:
 
 ```text
 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src .venv/bin/python -m pytest -q \
-  tests/test_d1n_agent_tool_result_slot.py
-=> 27 passed
+  tests/test_d1n_agent_tool_result_slot.py \
+  tests/test_d1n_agent_tool_registry.py \
+  tests/test_d1n_canary_agent_tool_population.py \
+  tests/test_pre_agent_contract_review.py
+=> 179 passed
 
-PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src .venv/bin/python -m pytest -q \
-  tests/test_d1n_agent_tool_result_slot_uow.py::D1nAgentToolResultSlotUowPGTest::test_compatible_policy_swap_is_rejected_before_reserve_with_zero_writes \
-  tests/test_d1n_agent_tool_result_slot_uow.py::D1nAgentToolResultSlotUowPGTest::test_shared_accept_rebinds_historical_spec_before_owner_reads_or_terminal_writes \
-  tests/test_d1n_agent_tool_result_slot_uow.py::D1nAgentToolResultSlotUowPGTest::test_reserve_is_exactly_replayable_and_rejects_split_logical_identity \
-  tests/test_d1n_agent_tool_result_slot_uow.py::D1nAgentToolResultSlotUowPGTest::test_accept_reloads_exact_owner_serializes_and_recovers_lost_ack
-=> 4 passed + 2 subtests
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src SOURCING_REQUIRE_PG_STORE_TESTS=1 \
+  .venv/bin/python -m pytest -q \
+  tests/test_d1n_agent_tool_result_slot_uow.py \
+  tests/test_d1n_inspect_operation_result_slot_uow.py
+=> 54 passed + 44 subtests
 
 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src SOURCING_REQUIRE_PG_STORE_TESTS=1 \
   .venv/bin/python -m pytest -q --tb=short \
@@ -207,18 +264,17 @@ PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src SOURCING_REQUIRE_PG_STORE_TESTS=1 \
   tests/test_d1n_inspect_operation_result_slot_uow.py \
   tests/test_migration_runner.py \
   tests/test_pre_agent_contract_review.py
-=> 759 passed + 104 subtests
+=> 807 passed + 119 subtests
 
 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src .venv/bin/python -m mypy \
-  src/sourcing_agent/agent_tool_registry.py \
-  src/sourcing_agent/agent_canary_registry.py \
+  src/sourcing_agent/acquisition_plan_preview.py \
   src/sourcing_agent/agent_tool_result_slot.py \
   src/sourcing_agent/agent_tool_result_postgres.py \
-  tests/test_d1n_agent_tool_registry.py \
-  tests/test_d1n_canary_agent_tool_population.py \
+  tests/test_d1n_acquisition_plan_preview.py \
   tests/test_d1n_agent_tool_result_slot.py \
-  tests/test_d1n_agent_tool_result_slot_uow.py
-=> success, 0 issues in 8 files
+  tests/test_d1n_agent_tool_result_slot_uow.py \
+  tests/test_d1n_inspect_operation_result_slot_uow.py
+=> success, 0 issues in 7 files
 
 make lint
 => 58 files already formatted; all checks passed
@@ -226,12 +282,12 @@ make lint
 make typecheck
 => existing ceiling unchanged: 81 errors in 4 files
 
-py_compile on the changed Python files
+py_compile on all 8 changed Python files
 git diff --check
 => clean
 ```
 
-## Author validation evidence
+## Earlier predecessor author validation evidence
 
 Run from the repository root with local PostgreSQL and no live provider/model variables:
 

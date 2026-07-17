@@ -36,7 +36,7 @@ Operation state captures intent, approval, budget, user/Agent provenance, and hi
 
 W8 operation persistence contract:
 
-- `agent_actions`, `operation_runs`, `acquisition_runs`, `workflow_activity_runs`, `workflow_activity_attempts`, `workflow_entity_deltas`, `acquisition_discovery_lanes`, `operation_events`, CRM task current-state (`crm_tasks`), and canonical company fact/media current-state (`company_assets`, `company_evidence`, `company_assertions`) are PG-only durable/current-state tables.
+- `agent_actions`, `operation_runs`, `acquisition_runs`, `workflow_activity_runs`, `workflow_activity_attempts`, `workflow_entity_deltas`, `acquisition_discovery_lanes`, `operation_events`, Agent tool result aggregate (`agent_tool_result_slots`, `agent_tool_result_attempts`, `agent_tool_result_journal`), CRM task current-state (`crm_tasks`), and canonical company fact/media current-state (`company_assets`, `company_evidence`, `company_assertions`) are PG-only durable/current-state tables.
 - New Operation/W11/CRM current-state tables must be introduced through Postgres live DDL first; adding a SQLite normal-path schema or fallback for these tables is forbidden.
 - `OperationRuntimeWriter` may persist user/Agent intent and operation events only.
 - Unknown action types fail closed through the action registry.
@@ -349,7 +349,7 @@ Recommended physical storage is one append-only `workflow_events` table with typ
 
 Storage authority:
 
-- Durable/current-state tables are PG-only for normal execution: `workflow_events`, `workflow_current_state`, `workflow_commands`, `runtime_outbox`, `agent_actions`, `operation_runs`, `acquisition_runs`, `workflow_activity_runs`, `workflow_activity_attempts`, `workflow_entity_deltas`, `acquisition_discovery_lanes`, `operation_events`, `crm_tasks`, `company_assets`, `company_evidence`, and `company_assertions`.
+- Durable/current-state tables are PG-only for normal execution: `workflow_events`, `workflow_current_state`, `workflow_commands`, `runtime_outbox`, `agent_actions`, `operation_runs`, `acquisition_runs`, `workflow_activity_runs`, `workflow_activity_attempts`, `workflow_entity_deltas`, `acquisition_discovery_lanes`, `operation_events`, `agent_tool_result_slots`, `agent_tool_result_attempts`, `agent_tool_result_journal`, `crm_tasks`, `company_assets`, `company_evidence`, and `company_assertions`.
 - SQLite is not an accepted durable/current-state backend for these tables, including unit tests. Typed durable-runtime and CRM task tests must use a PG-backed fixture with `SOURCING_CONTROL_PLANE_POSTGRES_LIVE_MODE=postgres_only`; missing PG is a test-environment failure or skip in optional local mode, not permission to exercise SQLite. New durable runtime, Operation, W11, or CRM task current-state storage must not add SQLite DDL/fallback as a normal path.
 - Hosted/local workflow confidence must use `SOURCING_CONTROL_PLANE_POSTGRES_LIVE_MODE=postgres_only` with a resolved Postgres DSN.
 

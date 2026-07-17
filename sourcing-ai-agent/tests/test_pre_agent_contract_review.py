@@ -64,6 +64,7 @@ from tests.source_inspection import all_source_files, find_class_method
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DOC_PATH = REPO_ROOT / "docs" / "PRE_AGENT_CONTRACT_REVIEW.md"
+DURABLE_EXECUTION_RUNTIME_CONTRACT_PATH = REPO_ROOT / "docs" / "DURABLE_EXECUTION_RUNTIME_CONTRACT.md"
 STORAGE_PATH = REPO_ROOT / "src" / "sourcing_agent" / "storage.py"
 LIVE_PG_PATH = REPO_ROOT / "src" / "sourcing_agent" / "control_plane_live_postgres.py"
 METRICS_PATH = REPO_ROOT / "src" / "sourcing_agent" / "workflow_service_metrics.py"
@@ -396,10 +397,18 @@ def test_agent_tool_result_aggregate_owner_contract_is_canonical() -> None:
     storage_pg_only_inventory = _literal_string_collection(STORAGE_PATH, "_DURABLE_RUNTIME_TABLES")
     live_runtime_inventory = _literal_string_collection(LIVE_PG_PATH, "_RUNTIME_COORDINATION_TABLES")
     live_operation_inventory = _literal_string_collection(LIVE_PG_PATH, "_OPERATION_RUNTIME_TABLES")
+    durable_contract = DURABLE_EXECUTION_RUNTIME_CONTRACT_PATH.read_text(encoding="utf-8")
+    operation_inventory = (
+        durable_contract.split("W8 operation persistence contract:", 1)[1].lstrip().split("\n\n", 1)[0]
+    )
+    storage_authority_inventory = durable_contract.split("Storage authority:", 1)[1].lstrip().split("\n\n", 1)[0]
     base_migration = AGENT_TOOL_RESULT_BASE_MIGRATION_PATH.read_text(encoding="utf-8")
     assert AGENT_TOOL_RESULT_TABLES <= storage_pg_only_inventory
     assert AGENT_TOOL_RESULT_TABLES <= live_runtime_inventory
     assert AGENT_TOOL_RESULT_TABLES <= live_operation_inventory
+    for documented_inventory in (operation_inventory, storage_authority_inventory):
+        assert "PG-only" in documented_inventory
+        assert AGENT_TOOL_RESULT_TABLES <= set(re.findall(r"`([^`]+)`", documented_inventory))
     for table_name in AGENT_TOOL_RESULT_TABLES:
         assert re.search(rf"CREATE\s+TABLE\s+{re.escape(table_name)}\s*\(", base_migration, re.IGNORECASE)
         assert (

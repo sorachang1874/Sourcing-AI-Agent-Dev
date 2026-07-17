@@ -509,7 +509,7 @@ their commandless specialization. Promotion additionally includes promotion/asse
 includes staged-artifact claim plus typed model-attempt/result before accepted intake effects. Fault injection at each
 write is necessary but insufficient; the PG concurrency matrix must exercise the races above.
 
-## 8. Rolling, brownfield, activation, and backout
+## 8. Historical lookup, quiesced migration, activation, and backout
 
 ### 8.1 Historical version lookup
 
@@ -518,18 +518,24 @@ nonterminal action/run/command, retry child, accepted result slot, terminal resu
 retry, replay, and serialization resolve by persisted `(version,digest)`, never by “current”. Unsupported historical
 identity fails visibly; it is not revalidated under a newer schema.
 
-### 8.2 Mixed-replica rollout
+### 8.2 Quiesced migration and activation
 
 A small PG activation owner records, per action/tool, `disabled|shadow|current`, the current submission pin, retained
-pin-set digest, activation epoch, minimum code release, and update revision. Rollout order is:
+pin-set digest, activation epoch, minimum code release, and update revision. The current result-aggregate cutover is not
+a mixed-replica migration. Before cutover, inventory blank-pin and v1 pending rows; drain normally or explicitly
+cancel/reissue them, but never mutate their pins. The exact rollout order is then:
 
-1. deploy historical lookup, result pins, readers, and migrations everywhere with all new entries `disabled`;
-2. prove every replica reports the same local registry/retained-set digest;
-3. inventory blank-pin and v1 pending rows; drain normally or explicitly cancel/reissue them—never mutate their pins;
-4. activate one action atomically by CAS on its PG activation row; a replica lacking the exact local pin fails closed;
-5. activate start/filter v2 only after all replicas read both v1 and v2, then stop new v1 submission while retaining
-   v1 execution/replay;
-6. begin the R-029 zero-hit observation epoch only after P0 plus all five D1n action rows are current and the complete
+1. keep every affected activation row `disabled` and quiesce all result-slot, attempt, and journal writes;
+2. drain every old API, worker, daemon, and Agent-runtime replica, then prove no old writer remains;
+3. apply `0012_agent_tool_result_owner_revision_token.sql`, then `0013_agent_tool_result_link_policy.sql`, then
+   `0014_agent_tool_result_attempt_effect_contract.sql` in that exact order while writes remain quiesced;
+4. recycle every database pool, connection, session, and prepared statement that could retain the pre-migration shape;
+5. start only the exact compatible release that reads all retained historical pins and writes the post-`0014` shape;
+6. prove every compatible replica reports the same local registry/retained-set digest as the PG activation owner;
+7. activate one action atomically by CAS on its PG activation row; for `start_acquisition_run`, activate action-contract
+   v2 only with current `start_acquisition_run_tool_v3`. Historical tool v2 remains lookup/replay-only and is never a
+   current submission identity. A replica lacking the exact current and retained historical pins fails closed;
+8. begin the R-029 zero-hit observation epoch only after P0 plus all five D1n action rows are current and the complete
    generated roster is 15/15.
 
 Migration checks install `NOT VALID` first, are validated separately after data inventory, and become required only
@@ -546,7 +552,7 @@ deletes historical serializers. Hosted serving is fail-closed during registry/ac
 | --- | --- | --- | --- |
 | `P0-d1m` | none | D1m owner | exact D1m commit + valid review + 10/5 generated roster; required for 15/15/R-029/hosted, not for independent leaf coding |
 | `F1-result-core` | plan | result-contract leaf | immutable `ActionResultSpec` registry core and focused tests; no action marked ready |
-| `F0-version-activation` | plan | migration/registry owner | pure immutable pin/transition contract first, then historical request/result lookup + PG activation row + mixed-replica/backout tests; no local-canary production state |
+| `F0-version-activation` | plan | migration/registry owner | pure immutable pin/transition contract first, then historical request/result lookup + PG activation row + quiesced-cutover/drained-old-writer/backout tests; no local-canary production state |
 | `F4-uow` | plan | repository/UoW owner | touched-path command creation/terminal/commandless UoWs and concurrency/fault matrix |
 | `M1-profile-sample` | F0, F4 | profile leaf | closed request/binder/adapter/result owner; ingress mints no Activity/Delta |
 | `M2-continue` | F0, F4 | acquisition leaf | seven closed variants, exact owners, results, success fixtures |
@@ -585,9 +591,10 @@ boundary, and quiesced `0013` migration. Its valid pinned Ultra review returned 
 response now rebinds all persisted occurrence pins through the server-owned exact historical registry before effects,
 adds `0014` brownfield plus deferred all-attempt effect/policy/link-shape enforcement, corrects the S1a historical/current
 start and quiesced-rollout wording, and adds the canonical result aggregate/field-owner fast preflight. Its fresh
-`5aa3936..4dddd0e` pinned Ultra re-review returned valid `NO-GO 0/3/3/0`; equality-alias carriers, plan Action binding,
-and three contract/doc gaps form the next bounded response. S1 remains incomplete until physical-owner adapters and terminal-success
-fixtures exist for `start_acquisition_run` and `filter_projection`. The next bounded start batch must first ratify the
+`5aa3936..4dddd0e` pinned Ultra re-review returned valid `NO-GO 0/3/3/0`; the equality-alias carriers, plan Action
+binding, and three contract/doc gaps are addressed author-side in the next bounded response, whose fresh pinned
+non-author re-review remains pending. S1 remains incomplete until physical-owner adapters and terminal-success fixtures
+exist for `start_acquisition_run` and `filter_projection`. The next bounded start batch must first ratify the
 exact approval-receipt, command-acceptance winner, and parent-budget reservation owners; it must not reuse or guess
 the older multi-transaction dispatch path. Default/public serving remains zero. See
 `TRACK_D_D1N_S1A_AGENT_TOOL_RESULT_SLOT_IMPLEMENTATION.md`,
@@ -709,8 +716,9 @@ as formal `GO`. Paid canary consumption adds the exact artifact paths and scope 
 Before fake/scripted E2E:
 
 - exact generated 15-row enumeration, no duplicate action/tool, no active empty request pin;
-- current plus historical request/result/tool pin lookup, mixed-replica mismatch, per-action CAS activation, disable
-  backout, blank-pin drain/cancel/reissue, v1 pending approve/retry/replay, and new v2 submission;
+- current plus historical request/result/tool pin lookup, exact quiesce/drain/migrate/recycle order, post-cutover registry
+  digest disagreement, per-action CAS activation, disable backout, blank-pin drain/cancel/reissue, historical pending-row
+  approve/retry/replay, and new action-contract-v2/current-tool-v3 submission;
 - exact canonical Cohort round-trip including empty roles=all and server-derived registry/selection digests;
 - missing/stale/foreign/conflicting preview and approval receipt with zero writes;
 - per-action binder/adapter/command/result matrix and presence-sensitive alias conflict tests;
@@ -767,7 +775,7 @@ and operability evidence, not automatic scale or production signoff.
 | 1 | missing sixth action / false denominator | §2.1-2.2 | P0 exact D1m review + generated 15-row roster; no 15/15 claim while placeholder remains |
 | 2 | second population-selector contract | §3.1, §5 V3 | exact `cohort_selection.v1`, server digests, empty roles=all through full chain |
 | 3 | optional confirmation | §3.2 | required preview ref plus exact persisted-action user approval receipt; absent/stale/foreign/conflict zero-write |
-| 4 | no v1/v2 rolling/brownfield | §8 | historical lookup, mixed-replica order, per-action activation CAS, drain/cancel/reissue, disable-only backout |
+| 4 | no v1/v2 rolling/brownfield | §8 | historical lookup, exact quiesce/drain/migrate/recycle order, compatible-release registry agreement, per-action activation CAS, drain/cancel/reissue, disable-only backout |
 | 5 | search v1 cannot carry roles/status | §5 V3 | text search stays v1; filter v2 owns Cohort any/all/all-role mapping and result provenance |
 | 6 | query tool outside readiness path | §4.3 | one `AgentToolSpec` for action/query; query owner/binder/result/simulate/release pins; canonical controls only |
 | 7 | result not bound to occurrence | §4.1-4.2 | result-slot/ordinal/action/run/command/attempt/target/terminal-winner pins and provenance map |

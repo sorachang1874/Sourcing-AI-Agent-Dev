@@ -20,7 +20,7 @@ from .agent_tool_result_slot import (
     AgentToolOccurrence,
     AgentToolTerminalResult,
 )
-from .json_contract import json_contract_equal
+from .json_contract import decode_json_contract, json_contract_equal
 
 ACQUISITION_PLAN_PREVIEW_OWNER_TARGET_KIND = "acquisition_plan_preview_v1"
 
@@ -355,6 +355,20 @@ def reserve_agent_tool_result_slot(
             connection.close()
 
 
+def _canonical_plan_occurrence_args(occurrence: AgentToolOccurrence) -> dict[str, Any]:
+    from .acquisition_plan_preview import canonicalize_acquisition_plan_preview_request
+
+    occurrence_args = occurrence.canonical_args
+    occurrence_input, occurrence_target = canonicalize_acquisition_plan_preview_request(
+        input_payload=occurrence_args.get("input_payload", {}),
+        target_ref=occurrence_args.get("target_ref", {}),
+    )
+    return {
+        "input_payload": occurrence_input,
+        "target_ref": occurrence_target,
+    }
+
+
 def _assert_plan_owner(
     *,
     occurrence: AgentToolOccurrence,
@@ -404,6 +418,20 @@ def _assert_plan_owner(
         mismatches = [field for field, value in expected.items() if str(row.get(field)) != str(value)]
         if mismatches:
             raise ValueError(f"agent tool plan result {label} exact-owner mismatch: " + ", ".join(mismatches))
+
+    action_input = dict(decode_json_contract(action.get("input_json"), expected_type=dict))
+    action_target = dict(decode_json_contract(action.get("target_ref_json"), expected_type=dict))
+    action_canonical_args = {
+        "input_payload": action_input,
+        "target_ref": action_target,
+    }
+    canonical_occurrence_args = _canonical_plan_occurrence_args(occurrence)
+    if action_target.get("requester_id") != occurrence.actor_id:
+        raise ValueError("agent tool plan result action requester mismatch")
+    if action_target.get("workspace_id") != occurrence.workspace_id:
+        raise ValueError("agent tool plan result action target workspace mismatch")
+    if not json_contract_equal(action_canonical_args, canonical_occurrence_args):
+        raise ValueError("agent tool plan result action canonical args mismatch")
 
     preview_expected = {
         "preview_id": terminal.owner_target_id,
@@ -890,6 +918,8 @@ def accept_acquisition_plan_tool_result_uow(
 
     if not isinstance(occurrence, AgentToolOccurrence) or not isinstance(terminal, AgentToolTerminalResult):
         raise ValueError("accept plan result requires exact occurrence and terminal result")
+    occurrence = _revalidate_server_owned_occurrence(occurrence)
+    _canonical_plan_occurrence_args(occurrence)
     if (
         occurrence.tool_name != "plan_acquisition"
         or occurrence.effect_class != "commandless_action"

@@ -77,6 +77,12 @@ def _sha256_text(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
+def _required_closed_literal(field_name: str, value: object, *, allowed: frozenset[str]) -> str:
+    if type(value) is not str or value not in allowed:
+        raise AgentToolResultSlotError(f"agent_tool_result_{field_name}_invalid")
+    return value
+
+
 def _required_text(field_name: str, value: object, *, maximum_bytes: int = 1024) -> str:
     if type(value) is not str or not value or value != value.strip():
         raise AgentToolResultSlotError(f"agent_tool_result_{field_name}_invalid")
@@ -140,6 +146,31 @@ def _required_nonnegative_integer(field_name: str, value: object) -> int:
     return value
 
 
+def _required_canonical_json_object(
+    field_name: str,
+    encoded: object,
+    *,
+    require_nonempty: bool,
+) -> tuple[dict[str, Any], str]:
+    if type(encoded) is not str:
+        raise AgentToolResultSlotError(f"agent_tool_result_{field_name}_invalid")
+    try:
+        decoded = json.loads(encoded)
+    except (TypeError, ValueError, json.JSONDecodeError) as exc:
+        raise AgentToolResultSlotError(f"agent_tool_result_{field_name}_invalid") from exc
+    if not isinstance(decoded, dict) or (require_nonempty and not decoded):
+        raise AgentToolResultSlotError(f"agent_tool_result_{field_name}_invalid")
+    canonical = _canonical_json(decoded)
+    try:
+        encoded_bytes = encoded.encode("utf-8")
+        canonical_bytes = canonical.encode("utf-8")
+    except UnicodeError as exc:
+        raise AgentToolResultSlotError(f"agent_tool_result_{field_name}_invalid") from exc
+    if canonical_bytes != encoded_bytes:
+        raise AgentToolResultSlotError(f"agent_tool_result_{field_name}_invalid")
+    return decoded, canonical
+
+
 @dataclass(frozen=True, slots=True)
 class AgentToolOccurrence:
     """One stable logical tool call before owner execution produces a result."""
@@ -186,14 +217,30 @@ class AgentToolOccurrence:
             "occurrence_ordinal",
             _required_positive_integer("occurrence_ordinal", self.occurrence_ordinal),
         )
-        if self.provider_mode not in _PROVIDER_MODES:
-            raise AgentToolResultSlotError("agent_tool_result_provider_mode_invalid")
-        if self.tool_kind not in _TOOL_KINDS:
-            raise AgentToolResultSlotError("agent_tool_result_tool_kind_invalid")
-        if self.effect_class not in _EFFECT_CLASSES:
-            raise AgentToolResultSlotError("agent_tool_result_effect_class_invalid")
-        if self.result_link_policy not in _RESULT_LINK_POLICIES:
-            raise AgentToolResultSlotError("agent_tool_result_link_policy_invalid")
+        object.__setattr__(
+            self,
+            "provider_mode",
+            _required_closed_literal("provider_mode", self.provider_mode, allowed=_PROVIDER_MODES),
+        )
+        object.__setattr__(
+            self,
+            "tool_kind",
+            _required_closed_literal("tool_kind", self.tool_kind, allowed=_TOOL_KINDS),
+        )
+        object.__setattr__(
+            self,
+            "effect_class",
+            _required_closed_literal("effect_class", self.effect_class, allowed=_EFFECT_CLASSES),
+        )
+        object.__setattr__(
+            self,
+            "result_link_policy",
+            _required_closed_literal(
+                "link_policy",
+                self.result_link_policy,
+                allowed=_RESULT_LINK_POLICIES,
+            ),
+        )
         if self.result_link_policy == "no_command_v1" and self.effect_class not in {
             "read_only",
             "commandless_action",
@@ -222,13 +269,13 @@ class AgentToolOccurrence:
             "serializer_contract_digest",
         ):
             object.__setattr__(self, field_name, _required_sha256(field_name, getattr(self, field_name)))
-        try:
-            decoded_args = json.loads(self.canonical_args_json)
-        except (TypeError, ValueError, json.JSONDecodeError) as exc:
-            raise AgentToolResultSlotError("agent_tool_result_canonical_args_invalid") from exc
-        if not isinstance(decoded_args, dict) or _canonical_json(decoded_args) != self.canonical_args_json:
-            raise AgentToolResultSlotError("agent_tool_result_canonical_args_invalid")
-        if _sha256_text(self.canonical_args_json) != self.canonical_args_digest:
+        _, canonical_args_json = _required_canonical_json_object(
+            "canonical_args",
+            self.canonical_args_json,
+            require_nonempty=False,
+        )
+        object.__setattr__(self, "canonical_args_json", canonical_args_json)
+        if _sha256_text(canonical_args_json) != self.canonical_args_digest:
             raise AgentToolResultSlotError("agent_tool_result_canonical_args_digest_mismatch")
 
     @classmethod
@@ -388,7 +435,7 @@ class AgentToolOccurrence:
         )
         if mismatches:
             raise AgentToolResultSlotError("agent_tool_result_historical_spec_pin_mismatch:" + ",".join(mismatches))
-        return occurrence
+        return expected
 
 
 @dataclass(frozen=True, slots=True)
@@ -470,20 +517,16 @@ class AgentToolTerminalResult:
         )
         if type(self.is_error) is not bool:
             raise AgentToolResultSlotError("agent_tool_result_is_error_invalid")
-        for field_name, encoded, require_nonempty in (
-            ("owner_result_ref", self.owner_result_ref_json, True),
-            ("serialized_result", self.serialized_result_json, True),
+        for field_name, carrier_field in (
+            ("owner_result_ref", "owner_result_ref_json"),
+            ("serialized_result", "serialized_result_json"),
         ):
-            try:
-                decoded = json.loads(encoded)
-            except (TypeError, ValueError, json.JSONDecodeError) as exc:
-                raise AgentToolResultSlotError(f"agent_tool_result_{field_name}_invalid") from exc
-            if (
-                not isinstance(decoded, dict)
-                or (require_nonempty and not decoded)
-                or _canonical_json(decoded) != encoded
-            ):
-                raise AgentToolResultSlotError(f"agent_tool_result_{field_name}_invalid")
+            _, canonical_json = _required_canonical_json_object(
+                field_name,
+                getattr(self, carrier_field),
+                require_nonempty=True,
+            )
+            object.__setattr__(self, carrier_field, canonical_json)
         if _sha256_text(self.serialized_result_json) != self.serialized_result_digest:
             raise AgentToolResultSlotError("agent_tool_result_serialized_result_digest_mismatch")
         self._validate_link_group()
@@ -607,7 +650,21 @@ class AgentToolTerminalResult:
     def revalidated(self) -> AgentToolTerminalResult:
         """Re-run every boundary invariant when crossing from an external adapter."""
 
-        return AgentToolTerminalResult(
+        owner_result_ref, owner_result_ref_json = _required_canonical_json_object(
+            "owner_result_ref",
+            self.owner_result_ref_json,
+            require_nonempty=True,
+        )
+        serialized_result, serialized_result_json = _required_canonical_json_object(
+            "serialized_result",
+            self.serialized_result_json,
+            require_nonempty=True,
+        )
+        claimed_serialized_result_digest = _required_sha256(
+            "serialized_result_digest",
+            self.serialized_result_digest,
+        )
+        canonical = AgentToolTerminalResult.from_serialized_result(
             result_attempt_id=self.result_attempt_id,
             provider_call_id=self.provider_call_id,
             tool_call_id=self.tool_call_id,
@@ -624,13 +681,19 @@ class AgentToolTerminalResult:
             owner_target_revision=self.owner_target_revision,
             owner_target_generation=self.owner_target_generation,
             terminal_winner_id=self.terminal_winner_id,
-            owner_result_ref_json=self.owner_result_ref_json,
+            owner_result_ref=owner_result_ref,
             owner_result_digest=self.owner_result_digest,
-            serialized_result_json=self.serialized_result_json,
-            serialized_result_digest=self.serialized_result_digest,
+            serialized_result=serialized_result,
             is_error=self.is_error,
             owner_target_revision_token=self.owner_target_revision_token,
         )
+        if canonical.owner_result_ref_json.encode("utf-8") != owner_result_ref_json.encode("utf-8"):
+            raise AgentToolResultSlotError("agent_tool_result_owner_result_ref_invalid")
+        if canonical.serialized_result_json.encode("utf-8") != serialized_result_json.encode("utf-8"):
+            raise AgentToolResultSlotError("agent_tool_result_serialized_result_invalid")
+        if canonical.serialized_result_digest != claimed_serialized_result_digest:
+            raise AgentToolResultSlotError("agent_tool_result_serialized_result_digest_mismatch")
+        return canonical
 
     def tool_result_message_record(self) -> dict[str, object]:
         return {

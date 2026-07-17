@@ -29,6 +29,7 @@ from sourcing_agent.acquisition_plan_preview import (
     acquisition_plan_preview_request_schema,
     acquisition_plan_preview_success_result,
     build_acquisition_plan_preview,
+    canonicalize_acquisition_plan_preview_request,
     serialize_acquisition_plan_preview_result,
 )
 from sourcing_agent.action_result_schema import (
@@ -182,6 +183,32 @@ def test_request_contract_is_closed_revisioned_and_digest_pinned() -> None:
         ACQUISITION_PLAN_PREVIEW_REQUEST_SCHEMA_DIGEST
         == preview_module.ACQUISITION_PLAN_PREVIEW_REQUEST_TOOL_SPEC.input_schema_digest
     )
+
+
+def test_request_canonicalizer_normalizes_every_order_insensitive_owner_field() -> None:
+    input_payload = _input(
+        cohort=_cohort(roles=["engineering", "research"], statuses=["former", "current"]),
+        thematic_constraints=["Pre-training", "AI Safety"],
+    )
+    target_ref = _target()
+    target_ref["company_target"]["provider_company_labels"] = [
+        "thinkingmachinesai",
+        "Thinking Machines Lab",
+    ]
+
+    canonical_input, canonical_target = canonicalize_acquisition_plan_preview_request(
+        input_payload=input_payload,
+        target_ref=target_ref,
+    )
+
+    assert canonical_input["cohort_selection"]["role_bucket_ids"] == ["research", "engineering"]
+    assert canonical_input["cohort_selection"]["employment_statuses"] == ["current", "former"]
+    assert canonical_input["thematic_constraints"] == ["AI Safety", "Pre-training"]
+    assert canonical_target["company_target"]["provider_company_labels"] == [
+        "Thinking Machines Lab",
+        "thinkingmachinesai",
+    ]
+    assert "schema_version" not in canonical_target["company_target"]
 
 
 def test_preview_is_deterministic_deeply_immutable_and_defensively_exported() -> None:

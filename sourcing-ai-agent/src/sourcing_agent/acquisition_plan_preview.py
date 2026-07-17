@@ -655,41 +655,12 @@ class AcquisitionPlanPreview:
         return _thaw_json(self._record)
 
 
-def build_acquisition_plan_preview(
+def canonicalize_acquisition_plan_preview_request(
     *,
     input_payload: Mapping[str, Any],
     target_ref: Mapping[str, Any],
-    preview_id: str,
-    preview_revision: int,
-    created_at: str,
-    expires_at: str,
-    intended_start_request_schema_version: str,
-    intended_start_request_schema_digest: str,
-) -> AcquisitionPlanPreview:
-    """Build one deterministic preview without issuing any capability or I/O.
-
-    ``target_ref`` must already be minted by the future authenticated owner.
-    ``preview_revision`` must already be allocated monotonically by the future
-    PG owner.  Requiring those values here keeps this pure leaf from inventing
-    a second identity or persistence authority.
-    """
-
-    _require_identifier(preview_id, field="preview_id")
-    if type(preview_revision) is not int or not 1 <= preview_revision <= MAX_PREVIEW_REVISION:
-        raise AcquisitionPlanPreviewError("acquisition_plan_preview_revision_invalid", "preview_revision")
-    created = _parse_utc_timestamp(created_at, field="created_at")
-    expires = _parse_utc_timestamp(expires_at, field="expires_at")
-    ttl_seconds = int((expires - created).total_seconds())
-    if ttl_seconds <= 0 or ttl_seconds > MAX_PREVIEW_TTL_SECONDS:
-        raise AcquisitionPlanPreviewError("acquisition_plan_preview_expiry_invalid", "expires_at")
-    _require_version(
-        intended_start_request_schema_version,
-        field="intended_start_request_schema_version",
-    )
-    _require_sha256(
-        intended_start_request_schema_digest,
-        field="intended_start_request_schema_digest",
-    )
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Return the one persisted/occurrence request shape for plan acquisition."""
 
     try:
         validated_request = ACQUISITION_PLAN_PREVIEW_REQUEST_TOOL_SPEC.validate_input(
@@ -732,6 +703,74 @@ def build_acquisition_plan_preview(
         field="target_ref.requester_id",
     )
     company_target = _canonical_company_target(validated_target.get("company_target"))
+    company_request = {key: value for key, value in company_target.items() if key != "schema_version"}
+    return (
+        {
+            "cohort_selection": cohort,
+            "source_preferences": list(source_preferences),
+            "coverage_intent": ACQUISITION_PLAN_PREVIEW_COVERAGE_INTENT,
+            "thematic_constraints": thematic_constraints,
+            "provider_mode_intent": str(validated_input["provider_mode_intent"]),
+            "budget": budget,
+        },
+        {
+            "workspace_id": workspace_id,
+            "requester_id": requester_id,
+            "company_target": company_request,
+        },
+    )
+
+
+def build_acquisition_plan_preview(
+    *,
+    input_payload: Mapping[str, Any],
+    target_ref: Mapping[str, Any],
+    preview_id: str,
+    preview_revision: int,
+    created_at: str,
+    expires_at: str,
+    intended_start_request_schema_version: str,
+    intended_start_request_schema_digest: str,
+) -> AcquisitionPlanPreview:
+    """Build one deterministic preview without issuing any capability or I/O.
+
+    ``target_ref`` must already be minted by the future authenticated owner.
+    ``preview_revision`` must already be allocated monotonically by the future
+    PG owner.  Requiring those values here keeps this pure leaf from inventing
+    a second identity or persistence authority.
+    """
+
+    _require_identifier(preview_id, field="preview_id")
+    if type(preview_revision) is not int or not 1 <= preview_revision <= MAX_PREVIEW_REVISION:
+        raise AcquisitionPlanPreviewError("acquisition_plan_preview_revision_invalid", "preview_revision")
+    created = _parse_utc_timestamp(created_at, field="created_at")
+    expires = _parse_utc_timestamp(expires_at, field="expires_at")
+    ttl_seconds = int((expires - created).total_seconds())
+    if ttl_seconds <= 0 or ttl_seconds > MAX_PREVIEW_TTL_SECONDS:
+        raise AcquisitionPlanPreviewError("acquisition_plan_preview_expiry_invalid", "expires_at")
+    _require_version(
+        intended_start_request_schema_version,
+        field="intended_start_request_schema_version",
+    )
+    _require_sha256(
+        intended_start_request_schema_digest,
+        field="intended_start_request_schema_digest",
+    )
+
+    canonical_input, canonical_target = canonicalize_acquisition_plan_preview_request(
+        input_payload=input_payload,
+        target_ref=target_ref,
+    )
+    cohort = dict(canonical_input["cohort_selection"])
+    source_preferences = tuple(str(item) for item in canonical_input["source_preferences"])
+    thematic_constraints = list(canonical_input["thematic_constraints"])
+    budget = dict(canonical_input["budget"])
+    workspace_id = str(canonical_target["workspace_id"])
+    requester_id = str(canonical_target["requester_id"])
+    company_target = {
+        "schema_version": CANONICAL_COMPANY_TARGET_SCHEMA_VERSION,
+        **dict(canonical_target["company_target"]),
+    }
 
     company_target_digest = _sha256_json(company_target)
     company_target = {**company_target, "company_target_digest": company_target_digest}
@@ -747,7 +786,7 @@ def build_acquisition_plan_preview(
         "source_preferences": list(source_preferences),
         "coverage_intent": ACQUISITION_PLAN_PREVIEW_COVERAGE_INTENT,
         "thematic_constraints": thematic_constraints,
-        "provider_mode_intent": str(validated_input["provider_mode_intent"]),
+        "provider_mode_intent": str(canonical_input["provider_mode_intent"]),
         "budget": budget,
     }
     effective_request_digest = _sha256_json(effective_request)
@@ -1293,5 +1332,6 @@ __all__ = [
     "acquisition_plan_preview_request_schema",
     "acquisition_plan_preview_success_result",
     "build_acquisition_plan_preview",
+    "canonicalize_acquisition_plan_preview_request",
     "serialize_acquisition_plan_preview_result",
 ]

@@ -14,10 +14,26 @@ from sourcing_agent.agent_canary_registry import (
     INSPECT_OPERATION_TOOL_SPEC_V1,
     INSPECT_OPERATION_TOOL_SPEC_V2,
 )
-from sourcing_agent.agent_tool_result_slot import AgentToolOccurrence
+from sourcing_agent.agent_tool_result_slot import AgentToolOccurrence, AgentToolResultSlotError
 from sourcing_agent.control_plane_repository import ControlPlaneAuthoritativeReadError
 from tests.pg_store_fixture import PGControlPlaneStoreTestMixin
 from tests.test_d1n_acquisition_plan_preview_uow import _uow_kwargs
+
+
+class _EqualityAliasString(str):
+    """Carry forged bytes while also comparing equal to one expected value."""
+
+    _equal_to: str
+
+    def __new__(cls, value: str, *, equal_to: str) -> _EqualityAliasString:
+        instance = super().__new__(cls, value)
+        instance._equal_to = equal_to
+        return instance
+
+    def __eq__(self, other: object) -> bool:
+        return bool(str.__eq__(self, other)) or other == self._equal_to
+
+    __hash__ = str.__hash__
 
 
 class D1nInspectOperationResultSlotUowPGTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
@@ -156,6 +172,19 @@ class D1nInspectOperationResultSlotUowPGTest(PGControlPlaneStoreTestMixin, unitt
                     cursor.execute(f"SELECT COUNT(*) FROM {table_name}")
                     counts[table_name] = int(cursor.fetchone()[0])
         return counts
+
+    def _assert_pending_without_terminal_effects(self, occurrence: AgentToolOccurrence) -> None:
+        slot = self.repository.get_agent_tool_result_slot(
+            occurrence.result_slot_id,
+            workspace_id=occurrence.workspace_id,
+            actor_id=occurrence.actor_id,
+            runtime_namespace=occurrence.runtime_namespace,
+            provider_mode="simulate",
+        )
+        self.assertEqual(slot["status"], "pending")
+        counts = self._result_counts()
+        self.assertEqual(counts["agent_tool_result_attempts"], 0)
+        self.assertEqual(counts["agent_tool_result_journal"], 0)
 
     def test_prepare_accept_lost_ack_replays_and_keeps_operation_domain_unchanged(self) -> None:
         bundle = self._preview_bundle()
@@ -353,6 +382,127 @@ class D1nInspectOperationResultSlotUowPGTest(PGControlPlaneStoreTestMixin, unitt
                 "agent_tool_result_journal": 0,
             },
         )
+
+    def test_equality_alias_occurrence_is_rejected_before_inspect_prepare_owner_access(self) -> None:
+        cases = (
+            ("provider_mode", "live", "provider_mode_invalid"),
+            ("canonical_args_json", "{}", "canonical_args_invalid"),
+        )
+
+        for index, (field_name, forged_value, expected_error) in enumerate(cases, start=1):
+            with self.subTest(field_name=field_name):
+                bundle = self._preview_bundle(suffix=f"prepare_alias_{index}")
+                occurrence = self._occurrence(bundle, suffix=f"prepare_alias_{index}")
+                object.__setattr__(
+                    occurrence,
+                    field_name,
+                    _EqualityAliasString(forged_value, equal_to=str(getattr(occurrence, field_name))),
+                )
+                if field_name == "canonical_args_json":
+                    object.__setattr__(
+                        occurrence,
+                        "canonical_args_digest",
+                        hashlib.sha256(forged_value.encode("utf-8")).hexdigest(),
+                    )
+
+                with (
+                    mock.patch.object(self.adapter, "_ensure_table_write_schema") as ensure_schema,
+                    mock.patch.object(self.adapter, "_connect_with_timeout") as connect,
+                    self.assertRaisesRegex(AgentToolResultSlotError, expected_error),
+                ):
+                    self._prepare(
+                        bundle,
+                        occurrence,
+                        attempt_id=f"inspectattempt_prepare_alias_{index}",
+                    )
+                ensure_schema.assert_not_called()
+                connect.assert_not_called()
+
+        self.assertEqual(
+            self._result_counts(),
+            {
+                "agent_tool_result_slots": 0,
+                "agent_tool_result_attempts": 0,
+                "agent_tool_result_journal": 0,
+            },
+        )
+
+    def test_equality_alias_occurrence_is_rejected_before_inspect_accept_owner_access(self) -> None:
+        bundle = self._preview_bundle(suffix="accept_occurrence_alias")
+        occurrence = self._occurrence(bundle, suffix="accept_occurrence_alias")
+        terminal = self._prepare(
+            bundle,
+            occurrence,
+            attempt_id="inspectattempt_accept_occurrence_alias",
+        )
+        self.repository.reserve_agent_tool_result_slot(occurrence=occurrence)
+        object.__setattr__(
+            occurrence,
+            "canonical_args_json",
+            _EqualityAliasString("{}", equal_to=occurrence.canonical_args_json),
+        )
+        object.__setattr__(
+            occurrence,
+            "canonical_args_digest",
+            hashlib.sha256(b"{}").hexdigest(),
+        )
+
+        with (
+            mock.patch.object(self.adapter, "_ensure_table_write_schema") as ensure_schema,
+            mock.patch.object(self.adapter, "_connect_with_timeout") as connect,
+            self.assertRaisesRegex(AgentToolResultSlotError, "canonical_args_invalid"),
+        ):
+            self.adapter.accept_inspect_operation_tool_result_uow(
+                occurrence=occurrence,
+                terminal=terminal,
+                attempted_slot_generation=1,
+            )
+        ensure_schema.assert_not_called()
+        connect.assert_not_called()
+        self._assert_pending_without_terminal_effects(occurrence)
+
+    def test_equality_alias_terminal_json_is_rejected_before_inspect_accept_owner_access(self) -> None:
+        cases = (
+            ("owner_result_ref_json", "{}", "owner_result_ref_invalid"),
+            ("serialized_result_json", "{}", "serialized_result_invalid"),
+        )
+
+        for index, (field_name, forged_value, expected_error) in enumerate(cases, start=1):
+            with self.subTest(field_name=field_name):
+                suffix = f"accept_terminal_alias_{index}"
+                bundle = self._preview_bundle(suffix=suffix)
+                occurrence = self._occurrence(bundle, suffix=suffix)
+                terminal = self._prepare(
+                    bundle,
+                    occurrence,
+                    attempt_id=f"inspectattempt_{suffix}",
+                )
+                self.repository.reserve_agent_tool_result_slot(occurrence=occurrence)
+                object.__setattr__(
+                    terminal,
+                    field_name,
+                    _EqualityAliasString(forged_value, equal_to=str(getattr(terminal, field_name))),
+                )
+                if field_name == "serialized_result_json":
+                    object.__setattr__(
+                        terminal,
+                        "serialized_result_digest",
+                        hashlib.sha256(forged_value.encode("utf-8")).hexdigest(),
+                    )
+
+                with (
+                    mock.patch.object(self.adapter, "_ensure_table_write_schema") as ensure_schema,
+                    mock.patch.object(self.adapter, "_connect_with_timeout") as connect,
+                    self.assertRaisesRegex(AgentToolResultSlotError, expected_error),
+                ):
+                    self.adapter.accept_inspect_operation_tool_result_uow(
+                        occurrence=occurrence,
+                        terminal=terminal,
+                        attempted_slot_generation=1,
+                    )
+                ensure_schema.assert_not_called()
+                connect.assert_not_called()
+                self._assert_pending_without_terminal_effects(occurrence)
 
     def test_prepare_is_read_only_and_never_bootstraps_write_schema(self) -> None:
         bundle = self._preview_bundle(suffix="readonly")

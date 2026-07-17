@@ -24,6 +24,25 @@ from sourcing_agent.agent_tool_result_slot import (
 )
 
 
+class _EqualityAliasString(str):
+    """Carry one byte value while claiming equality with a different string."""
+
+    equality_alias: str
+
+    def __new__(cls, value: str, *, equality_alias: str) -> _EqualityAliasString:
+        instance = super().__new__(cls, value)
+        instance.equality_alias = equality_alias
+        return instance
+
+    def __eq__(self, other: object) -> bool:
+        return other == self.equality_alias
+
+    def __ne__(self, other: object) -> bool:
+        return not self.__eq__(other)
+
+    __hash__ = str.__hash__
+
+
 def _occurrence(*, tool_spec=PLAN_ACQUISITION_TOOL_SPEC, ordinal: int = 1) -> AgentToolOccurrence:
     return AgentToolOccurrence.from_tool_spec(
         result_slot_id=f"slot_{tool_spec.tool_name}_{ordinal}",
@@ -83,8 +102,105 @@ def test_occurrence_exact_copies_historical_tool_request_result_and_serializer_p
 def test_all_registered_historical_occurrences_rebind_exact_spec_pins() -> None:
     for ordinal, tool_spec in enumerate(LOCAL_CANARY_AGENT_TOOL_REGISTRY.specs, start=1):
         occurrence = _occurrence(tool_spec=tool_spec, ordinal=ordinal)
+        rebound = occurrence.revalidated_for_registry(LOCAL_CANARY_AGENT_TOOL_REGISTRY)
 
-        assert occurrence.revalidated_for_registry(LOCAL_CANARY_AGENT_TOOL_REGISTRY) == occurrence
+        assert rebound == occurrence
+        assert rebound is not occurrence
+        assert type(rebound.canonical_args_json) is str
+        assert rebound.canonical_args_json.encode("utf-8") == occurrence.canonical_args_json.encode("utf-8")
+        assert rebound.canonical_args_digest == occurrence.canonical_args_digest
+        assert rebound.logical_occurrence_digest == occurrence.logical_occurrence_digest
+        assert rebound.to_record() == occurrence.to_record()
+
+
+@pytest.mark.parametrize(
+    ("mutate", "message"),
+    (
+        (
+            lambda occurrence: replace(
+                occurrence,
+                provider_mode=_EqualityAliasString("simulate", equality_alias="live"),
+            ),
+            "provider_mode_invalid",
+        ),
+        (
+            lambda occurrence: replace(
+                occurrence,
+                tool_kind=_EqualityAliasString("action", equality_alias="query"),
+            ),
+            "tool_kind_invalid",
+        ),
+        (
+            lambda occurrence: replace(
+                occurrence,
+                effect_class=_EqualityAliasString("command_backed_action", equality_alias="read_only"),
+            ),
+            "effect_class_invalid",
+        ),
+        (
+            lambda occurrence: replace(
+                occurrence,
+                result_link_policy=_EqualityAliasString(
+                    "activity_attempt_terminal_v1",
+                    equality_alias="workflow_command_acceptance_v1",
+                ),
+            ),
+            "link_policy_invalid",
+        ),
+    ),
+)
+def test_occurrence_closed_literals_require_exact_plain_strings_before_equality(
+    mutate: Callable[[AgentToolOccurrence], AgentToolOccurrence],
+    message: str,
+) -> None:
+    occurrence = _occurrence(tool_spec=START_ACQUISITION_RUN_TOOL_SPEC)
+
+    with pytest.raises(AgentToolResultSlotError, match=message):
+        mutate(occurrence)
+
+
+def test_occurrence_canonical_arguments_require_exact_plain_json_carrier() -> None:
+    occurrence = _occurrence()
+    forged_json = _EqualityAliasString(
+        '{"company":"Not Thinking Machines Lab"}',
+        equality_alias=occurrence.canonical_args_json,
+    )
+
+    with pytest.raises(AgentToolResultSlotError, match="canonical_args_invalid"):
+        replace(occurrence, canonical_args_json=forged_json)
+
+
+@pytest.mark.parametrize(
+    ("field_name", "forged_value", "message"),
+    (
+        (
+            "result_link_policy",
+            _EqualityAliasString(
+                "activity_attempt_terminal_v1",
+                equality_alias="workflow_command_acceptance_v1",
+            ),
+            "link_policy_invalid",
+        ),
+        (
+            "canonical_args_json",
+            _EqualityAliasString(
+                '{"company":"Not Thinking Machines Lab"}',
+                equality_alias='{"company":"Thinking Machines Lab"}',
+            ),
+            "canonical_args_invalid",
+        ),
+    ),
+)
+def test_registry_revalidation_rejects_postconstruction_equality_alias_carriers(
+    field_name: str,
+    forged_value: str,
+    message: str,
+) -> None:
+    occurrence = _occurrence(tool_spec=START_ACQUISITION_RUN_TOOL_SPEC)
+    object.__setattr__(occurrence, field_name, forged_value)
+
+    with pytest.raises(AgentToolResultSlotError, match=message):
+        occurrence.revalidated_for_registry(LOCAL_CANARY_AGENT_TOOL_REGISTRY)
 
 
 @pytest.mark.parametrize(
@@ -163,6 +279,113 @@ def test_terminal_result_builds_exact_tool_result_message_and_content_digest() -
     assert terminal.journal_schema_version == AGENT_TOOL_RESULT_JOURNAL_SCHEMA_VERSION
     assert terminal.to_record()["schema_version"] == AGENT_TOOL_RESULT_ATTEMPT_SCHEMA_VERSION
     assert not hasattr(terminal, "result_link_policy")
+
+
+@pytest.mark.parametrize(
+    ("mutate", "message"),
+    (
+        (
+            lambda terminal: replace(
+                terminal,
+                owner_result_ref_json=_EqualityAliasString(
+                    '{"preview_id":"forged","preview_revision":7}',
+                    equality_alias='{"preview_id":"preview_1","preview_revision":7}',
+                ),
+            ),
+            "owner_result_ref_invalid",
+        ),
+        (
+            lambda terminal: replace(
+                terminal,
+                serialized_result_json=_EqualityAliasString(
+                    '{"preview_id":"forged","status":"success"}',
+                    equality_alias='{"preview_id":"preview_1","status":"success"}',
+                ),
+            ),
+            "serialized_result_invalid",
+        ),
+    ),
+)
+def test_terminal_json_carriers_require_exact_plain_strings_before_equality(
+    mutate: Callable[[AgentToolTerminalResult], AgentToolTerminalResult],
+    message: str,
+) -> None:
+    with pytest.raises(AgentToolResultSlotError, match=message):
+        mutate(_terminal())
+
+
+@pytest.mark.parametrize(
+    ("mutate", "message"),
+    (
+        (
+            lambda terminal: replace(
+                terminal,
+                owner_result_ref_json='{"preview_revision": 7, "preview_id": "preview_1"}',
+            ),
+            "owner_result_ref_invalid",
+        ),
+        (
+            lambda terminal: replace(
+                terminal,
+                serialized_result_json='{"status": "success", "preview_id": "preview_1"}',
+            ),
+            "serialized_result_invalid",
+        ),
+    ),
+)
+def test_terminal_rejects_plain_noncanonical_json_carriers(
+    mutate: Callable[[AgentToolTerminalResult], AgentToolTerminalResult],
+    message: str,
+) -> None:
+    with pytest.raises(AgentToolResultSlotError, match=message):
+        mutate(_terminal())
+
+
+def test_terminal_revalidation_regenerates_plain_canonical_json_and_digest() -> None:
+    terminal = _terminal()
+
+    rebound = terminal.revalidated()
+
+    assert rebound == terminal
+    assert rebound is not terminal
+    assert type(rebound.owner_result_ref_json) is str
+    assert type(rebound.serialized_result_json) is str
+    assert rebound.owner_result_ref_json.encode("utf-8") == terminal.owner_result_ref_json.encode("utf-8")
+    assert rebound.serialized_result_json.encode("utf-8") == terminal.serialized_result_json.encode("utf-8")
+    assert rebound.serialized_result_digest == terminal.serialized_result_digest
+
+
+@pytest.mark.parametrize(
+    ("field_name", "forged_value", "message"),
+    (
+        (
+            "owner_result_ref_json",
+            _EqualityAliasString(
+                '{"preview_id":"forged","preview_revision":7}',
+                equality_alias='{"preview_id":"preview_1","preview_revision":7}',
+            ),
+            "owner_result_ref_invalid",
+        ),
+        (
+            "serialized_result_json",
+            _EqualityAliasString(
+                '{"preview_id":"forged","status":"success"}',
+                equality_alias='{"preview_id":"preview_1","status":"success"}',
+            ),
+            "serialized_result_invalid",
+        ),
+    ),
+)
+def test_terminal_revalidation_rejects_postconstruction_equality_alias_carriers(
+    field_name: str,
+    forged_value: str,
+    message: str,
+) -> None:
+    terminal = _terminal()
+    object.__setattr__(terminal, field_name, forged_value)
+
+    with pytest.raises(AgentToolResultSlotError, match=message):
+        terminal.revalidated()
 
 
 def test_no_command_policy_closes_commandless_and_read_only_link_shapes() -> None:

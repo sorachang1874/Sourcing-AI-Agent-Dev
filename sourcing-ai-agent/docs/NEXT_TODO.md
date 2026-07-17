@@ -391,7 +391,11 @@
   使用 machine code，operator 原文只保留在 append-only event。Finding 9 canonical owner matrix/preflight 由 S1d
   response 关闭。Versioned response author evidence=`780 passed + 111 subtests`（含 945 control-owner 组合）、
   inspect PG=`28 + 31 subtests`、control adjacency=`4 passed`、scoped mypy=`0/7`、lint/compile/diff green、global
-  mypy=`81/4`；fresh pinned non-author review pending，这些均不得写成 S1b formal GO。S1c candidate
+  mypy=`81/4`。Fresh `4dddd0e..28c2b2e` pinned Ultra review 已 exact-bound 并返回有效
+  `NO-GO 0/6/1/0`，另保留 R-019 residual：explicit V3 identity、canonical control-policy rederive、event/command
+  topology、event actor/source fingerprint、pre-connection request binder、`progress.reason` owner/migration contract 与
+  frozen V1/V2 replay fixture 均进入异步 fixed-forward；R-029/R-031 继续可见。这些证据不得写成 S1b formal GO，
+  但不阻塞 S1d 与无关批。S1c candidate
   已增加 equality-only `owner_target_revision_token`，保持 logical occurrence digest v1；numeric-only
   attempt/journal 仍为 v1，token-bearing aggregate 使用 v2/v2，旧 writer 默认与历史 numeric replay 保持可用，
   token-only activation 要求旧 replicas drain/quiesce。该 synthetic carrier 只证明 storage transport，不是
@@ -418,7 +422,14 @@
   mypy=`0/8`、lint/compile/diff green、global mypy=`81/4`。Fresh `5aa3936..4dddd0e` pinned Ultra re-review 已
   exact-bound 并返回有效 `NO-GO 0/3/3/0`：equality-alias string/JSON carriers、plan occurrence/Action binding、
   migration procedure、durable inventory/preflight 与 stale review-scope instructions 进入下一 bounded response；
-  R-019/R-029 仍是 residual。该 NO-GO 继续阻塞 S1d signoff/live，但不阻塞无关批。
+  当前 author-side response 已要求 closed literals/JSON carriers 为 exact plain string，并从 registry 重建 canonical
+  occurrence/terminal；plan acceptance 复用唯一 request canonicalizer 后精确绑定 locked Action input/target、actor 与
+  workspace，strict decode malformed owner JSON，且 reserve/plan/inspect prepare+accept 的 equality-alias 在任何
+  schema bootstrap/owner read/write 前失败关闭。Migration 改为 exact quiesce/drain/`0012->0013->0014`/recycle/
+  compatible-release/registry-verify 顺序，两处 durable inventory 与 fast preflight 已同步，旧 review scope 已封存。
+  Current evidence=`807 passed + 119 subtests`、plan+inspect PG=`54 + 44 subtests`、scoped mypy=`0/7`、lint/compile/
+  diff green、global mypy=`81/4`；fresh pinned Ultra re-review 待独立 commit 后发出。R-019/R-029 仍是 residual；
+  当前 NO-GO 继续阻塞 S1d signoff/live，但不阻塞无关批。
 - [ ] D1m mixed-version rollout gate（R-019）：pre-D1m binary 可继续写 revisionless source row 并绕开
   revision-aware exact-claim canonical materializer。任何 hosted activation 前必须选择并验证其一：quiesced
   single-version cutover，或 separately reviewed dual-write/compatibility bridge；完成前不得声称 rolling overlap
