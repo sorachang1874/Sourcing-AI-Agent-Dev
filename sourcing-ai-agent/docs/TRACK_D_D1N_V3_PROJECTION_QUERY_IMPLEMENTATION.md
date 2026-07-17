@@ -1,0 +1,74 @@
+# Track D D1n V3 — projection filter and Operation query contracts
+
+> Status: Current non-live implementation candidate (2026-07-17). Author evidence only; fresh pinned non-author
+> review is pending. This pure leaf does not populate a registry, authorize a served tool, persist or repair state, or
+> call a provider/model/network transport; public `served` remains zero.
+
+## Outcome
+
+V3 defines two closed read surfaces while preserving the existing `search_projection` v1 text-search contract
+unchanged:
+
+- `filter_projection` v2 binds a canonical `cohort_selection.v1` plus server-owned projection, membership-revision,
+  Cohort-registry, and selection-digest pins;
+- `inspect_operation` v1 binds a model-visible OperationRun id to authenticated workspace/action/actor context and
+  projects only canonical control, display, progress, result-readiness, and bounded provenance state.
+
+Neither surface infers a next command or performs a repair/write. Missing or unproved projection access is one
+`projection_not_found` result. Missing or foreign Operation action/run ownership is one `operation_not_found` result.
+
+## Cohort predicate semantics
+
+The projection owner compiles the predicate; the Agent/UI never authors lane membership:
+
+- empty `role_bucket_ids` means all roles and still requires one selected employment-status membership;
+- `role_match=any` requires at least one requested role within a qualifying status;
+- `role_match=all` requires every requested role for the same candidate within one qualifying status, so roles split
+  across `current` and `former` do not satisfy the predicate;
+- `employment_statuses` match server-owned lane membership exactly;
+- revision, registry, selection, or freshness drift is explicit `stale` with reselection required, never empty success.
+
+Successful results exact-copy selection/planning/execution/result/publication digests, freshness/readiness,
+provider-mode/runtime-namespace/cache provenance, requested-lane coverage, lane summaries, counts, pagination, and
+explicit truncation.
+
+## Model-safe candidate identity
+
+Canonical projection keys commonly contain scheme-like values such as `linkedin:` and may embed a public URL. F1
+correctly rejects those values as model-visible identifiers. V3 therefore keeps the raw `candidate_identity_key`
+inside the projection owner and publishes only `candidate_ref`, a SHA-256 reference bound to:
+
+```text
+projection_candidate_ref.v1 + projection_id + membership_revision + candidate_identity_key
+```
+
+The raw key is not serialized. A later selection-action binder must resolve `candidate_ref` only under the same exact
+projection and membership revision; it must not treat the digest as a global person identity.
+
+## Operation query parity
+
+`inspect_operation` validates the exact action/run/workspace tuple before exposing data. Its success result exact-copies
+the canonical `operation_run_control_state`, workflow-command control-policy projection, ActionRegistry display
+contract, OperationRun progress, result readiness, and bounded event/command provenance. Cross-owner drift,
+control-state flag/list mismatch, invented policy fields, command-policy mismatch, private fields, and raw local paths
+fail closed.
+
+The query owner is separately identified by owner id, revision, and contract digest for later F3 population. It does
+not change the 15-row ActionRegistry denominator.
+
+## Explicit boundaries
+
+- The leaf does not change historical `projection_search_request_v1` or `projection_filter_request_v1` rows.
+- `filter_projection` v2 is not yet installed as the current request contract or Agent tool.
+- `inspect_operation` has no storage adapter or served population yet.
+- Candidate-ref lookup/indexing, result occurrence persistence, PG simulate fixtures, release evidence, and the local
+  Agent harness remain integration-owner work.
+- Scope-matched independent review remains mandatory before hosted/live activation.
+
+## Author validation
+
+- focused V3 Cohort/filter/query/model-safe matrix: `28 passed`;
+- Cohort/F1/F3/canonical runtime adjacency: `313 passed + 60 subtests`;
+- scoped Ruff, format, Python compilation, and mypy (`0 issues`): green.
+
+These are author results, not an independent-review verdict or live-provider authorization.
