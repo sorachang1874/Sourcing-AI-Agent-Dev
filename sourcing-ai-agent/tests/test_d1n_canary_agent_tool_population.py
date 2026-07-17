@@ -18,6 +18,8 @@ from sourcing_agent.agent_canary_registry import (
     FILTER_PROJECTION_TOOL_SPEC,
     FILTER_PROJECTION_V2_CANARY_ACTION_SPEC,
     INSPECT_OPERATION_TOOL_SPEC,
+    INSPECT_OPERATION_TOOL_SPEC_V1,
+    INSPECT_OPERATION_TOOL_SPEC_V2,
     LOCAL_CANARY_ACTION_SPECS,
     LOCAL_CANARY_AGENT_TOOL_REGISTRY,
     LOCAL_CANARY_SIMULATE_FIXTURE_SCHEMA_VERSION,
@@ -39,6 +41,8 @@ from sourcing_agent.agent_projection_query import (
     INSPECT_OPERATION_QUERY_OWNER_REVISION,
     INSPECT_OPERATION_REQUEST_SCHEMA_DIGEST,
     INSPECT_OPERATION_RESULT_SPEC,
+    INSPECT_OPERATION_RESULT_SPEC_V1,
+    INSPECT_OPERATION_RESULT_SPEC_V2,
 )
 from sourcing_agent.agent_tool_registry import (
     AGENT_TOOL_SPEC_SCHEMA_VERSION,
@@ -62,7 +66,7 @@ def _fixture_digest(tool_name: str) -> str:
 def test_local_canary_registry_has_exact_four_tool_population_without_global_serving() -> None:
     assert LOCAL_CANARY_AGENT_TOOL_REGISTRY.declared_tool_count == 4
     assert set(LOCAL_CANARY_AGENT_TOOL_REGISTRY.tool_names) == set(LOCAL_CANARY_TOOL_NAMES)
-    assert LOCAL_CANARY_AGENT_TOOL_REGISTRY.historical_spec_count == 5
+    assert LOCAL_CANARY_AGENT_TOOL_REGISTRY.historical_spec_count == 7
     assert DEFAULT_AGENT_TOOL_REGISTRY.declared_tool_count == 0
     assert DEFAULT_AGENT_TOOL_REGISTRY.tool_names == ()
 
@@ -146,26 +150,32 @@ def test_effects_cover_commandless_command_backed_action_read_and_query_without_
 
 def test_inspect_query_pins_do_not_create_a_sixteenth_action() -> None:
     assert len(DEFAULT_ACTION_REGISTRY.to_record(include_command_contracts=False)) == 15
-    assert INSPECT_OPERATION_TOOL_SPEC.tool_spec_version == "inspect_operation_tool_v2"
+    assert INSPECT_OPERATION_TOOL_SPEC.tool_spec_version == "inspect_operation_tool_v3"
     assert INSPECT_OPERATION_TOOL_SPEC.request.schema_digest == INSPECT_OPERATION_REQUEST_SCHEMA_DIGEST
     query_owner = INSPECT_OPERATION_TOOL_SPEC.request.query_owner
     assert query_owner is not None
     assert query_owner.owner_id == INSPECT_OPERATION_QUERY_OWNER_ID
-    assert query_owner.owner_revision == INSPECT_OPERATION_QUERY_OWNER_REVISION == "inspect_operation_v2"
+    assert query_owner.owner_revision == INSPECT_OPERATION_QUERY_OWNER_REVISION == "inspect_operation_v3"
     assert query_owner.owner_contract_digest == INSPECT_OPERATION_QUERY_OWNER_CONTRACT_DIGEST
     assert INSPECT_OPERATION_TOOL_SPEC.result.query_owner == query_owner
-    assert INSPECT_OPERATION_RESULT_SPEC.result_schema_version == "inspect_operation_result_v2"
-    assert INSPECT_OPERATION_RESULT_SPEC.serializer_revision == "inspect_operation_result_serializer_v2"
-    assert INSPECT_OPERATION_TOOL_SPEC.route.adapter.owner_revision == "inspect_operation_adapter_v2"
-    assert INSPECT_OPERATION_TOOL_SPEC.simulate_fixture.fixture_revision == "inspect_operation_fixture_v2"
+    assert INSPECT_OPERATION_RESULT_SPEC.result_schema_version == "inspect_operation_result_v3"
+    assert INSPECT_OPERATION_RESULT_SPEC.serializer_revision == "inspect_operation_result_serializer_v3"
+    assert INSPECT_OPERATION_TOOL_SPEC.route.adapter.owner_revision == "inspect_operation_adapter_v3"
+    assert INSPECT_OPERATION_TOOL_SPEC.simulate_fixture.fixture_revision == "inspect_operation_fixture_v3"
 
 
 def test_simulate_fixture_pins_are_real_content_digests_and_require_terminal_success() -> None:
+    current_specs = {
+        "plan_acquisition": PLAN_ACQUISITION_TOOL_SPEC,
+        "start_acquisition_run": START_ACQUISITION_RUN_TOOL_SPEC,
+        "filter_projection": FILTER_PROJECTION_TOOL_SPEC,
+        "inspect_operation": INSPECT_OPERATION_TOOL_SPEC,
+    }
     for tool_name in LOCAL_CANARY_TOOL_NAMES:
         fixture = dict(LOCAL_CANARY_SIMULATE_FIXTURES[tool_name])
         specs = LOCAL_CANARY_AGENT_TOOL_REGISTRY.specs_for_name(tool_name)
-        expected_spec = START_ACQUISITION_RUN_TOOL_SPEC if tool_name == "start_acquisition_run" else specs[0]
-        assert len(specs) == (2 if tool_name == "start_acquisition_run" else 1)
+        expected_spec = current_specs[tool_name]
+        assert len(specs) == ({"start_acquisition_run": 2, "inspect_operation": 3}.get(tool_name, 1))
         assert fixture["provider_mode"] == "simulate"
         assert fixture["expected_terminal_variant"] == "success"
         assert fixture["expected_live_provider_invocations"] == 0
@@ -247,19 +257,58 @@ def test_start_v2_history_is_byte_stable_and_v3_explicitly_fingerprints_command_
     )
 
 
-def test_non_start_v1_tool_fingerprints_remain_byte_identical() -> None:
+def test_non_start_historical_tool_fingerprints_remain_byte_identical() -> None:
     assert {
         spec.tool_name: spec.tool_spec_digest
         for spec in (
             PLAN_ACQUISITION_TOOL_SPEC,
             FILTER_PROJECTION_TOOL_SPEC,
-            INSPECT_OPERATION_TOOL_SPEC,
         )
     } == {
         "plan_acquisition": "82562f99fa6c28a10b625756dfe8905c5d9dd9a016f8269e93b932321e5aeba0",
         "filter_projection": "0fd97ff1dcb546fc6fa6ed6ab730daac01c36987f21cae23a7832e1de82bc08c",
-        "inspect_operation": "26b7e6a56f3461a605e68c7d16fa9d74bfec086ea4d9747382fc96ebe5a620d0",
     }
+
+    assert INSPECT_OPERATION_TOOL_SPEC_V1.tool_spec_version == "inspect_operation_tool_v1"
+    assert INSPECT_OPERATION_TOOL_SPEC_V1.tool_spec_digest == (
+        "03fb54ee910ecd8a3319c7326dd09a1dcf37e6258d103e60968f756676c0d2d8"
+    )
+    assert INSPECT_OPERATION_TOOL_SPEC_V1.result.schema_digest == INSPECT_OPERATION_RESULT_SPEC_V1.result_schema_digest
+    assert INSPECT_OPERATION_RESULT_SPEC_V1.result_schema_digest == (
+        "acd2538887715a9be0167c7d573345d74baea1e614a38ad62256b96b925100c8"
+    )
+    assert INSPECT_OPERATION_TOOL_SPEC_V1.simulate_fixture.fixture_digest == (
+        "c7a0882459a671471a26ac9f1b45befd17883c8380adfd22b98b1e4c7b58303d"
+    )
+
+    assert INSPECT_OPERATION_TOOL_SPEC_V2.tool_spec_version == "inspect_operation_tool_v2"
+    assert INSPECT_OPERATION_TOOL_SPEC_V2.tool_spec_digest == (
+        "26b7e6a56f3461a605e68c7d16fa9d74bfec086ea4d9747382fc96ebe5a620d0"
+    )
+    assert INSPECT_OPERATION_TOOL_SPEC_V2.result.schema_digest == INSPECT_OPERATION_RESULT_SPEC_V2.result_schema_digest
+    assert INSPECT_OPERATION_RESULT_SPEC_V2.result_schema_digest == (
+        "8878c155577af1fbe9c665f28c1d5d8c16b66eec986c084686a356e361287b3e"
+    )
+    assert INSPECT_OPERATION_TOOL_SPEC_V2.simulate_fixture.fixture_digest == (
+        "cc5d501d2dc503941f9112a4666d4536ae2817d54ea85f7ea4b34ddb2f77d120"
+    )
+
+    assert INSPECT_OPERATION_TOOL_SPEC.tool_spec_version == "inspect_operation_tool_v3"
+    assert INSPECT_OPERATION_TOOL_SPEC.tool_spec_digest == (
+        "37b649a45d9595d4703175c0304aaffcb3bf14d343bc5100fb312487e6fcb314"
+    )
+    assert INSPECT_OPERATION_TOOL_SPEC.result.schema_digest == INSPECT_OPERATION_RESULT_SPEC.result_schema_digest
+    assert INSPECT_OPERATION_TOOL_SPEC.simulate_fixture.fixture_digest == (
+        "a6382e35a5183aeebfd6d15a7bf02afd6aee7bfd692fbb31484b2b3ed8ee6428"
+    )
+
+    inspect_history = LOCAL_CANARY_AGENT_TOOL_REGISTRY.specs_for_name("inspect_operation")
+    assert set(inspect_history) == {
+        INSPECT_OPERATION_TOOL_SPEC_V1,
+        INSPECT_OPERATION_TOOL_SPEC_V2,
+        INSPECT_OPERATION_TOOL_SPEC,
+    }
+    assert INSPECT_OPERATION_TOOL_SPEC is not inspect_history[0]
 
 
 def test_global_historical_v1_contracts_are_not_rewritten_by_local_successors() -> None:

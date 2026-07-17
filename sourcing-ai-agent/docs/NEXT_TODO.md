@@ -377,7 +377,7 @@
   adapter；command 必须与 ActionRegistry、durable owner registry、`OperationRun.workflow_ref` 和匹配的
   `OperationCommandPlanned` event 同时一致，同 `operation_id` 的非引用 row 不进入 owner。prepare 后 event revision
   漂移保持 slot pending 且 attempt/journal 零写，commandless + command-backed terminal success 均有 PG 证据，prepare
-  不触发 write-schema bootstrap。`inspect_operation` 已 fixed-forward 到 v2；readiness 由一个 owner matrix 贯穿
+  不触发 write-schema bootstrap。`inspect_operation` 保留 exact v1/v2 并以 v3 作为 explicit current；readiness 由一个 owner matrix 贯穿
   snapshot/execution/serializer/PG，completed 且无 durable result ref 只能 `pending/fail_closed`。S1b
   reference-review response 当前已 fixed-forward findings 2/3/4/7：完整 event stream 在 result slot 前锁定并
   检查 exact workspace/action/run/family/schema 与连续 1..N sequence；workflow ref 仅接受 `{}` 或 exact typed
@@ -385,8 +385,13 @@
   digest 进入 non-model fingerprint。missing/foreign 统一生成 slot-generation-anchored masked error owner，并可在
   同一 UoW 原子 accepted/replay byte-identical `operation_not_found`；owner reappearance、foreign stream、duplicate/
   conflicting plan、coordinated lineage/causal drift、malformed durable identity 与 fault rollback 均有零写 PG 回归。
-  Reference findings 5/6/8（historical inspect spec lookup、operator reason、serializer semantics）仍 open；finding 9
-  canonical owner matrix/preflight 由 S1d fixed-forward response 关闭；不得把本响应写成 S1b formal GO。S1c candidate
+  Reference findings 5/6/8 已在 versioned fixed-forward author response 关闭：persisted occurrence 以 exact
+  historical identity preflight，v3 model result 省略 operator reason、non-model fingerprint 绑定 raw progress，
+  serializer 复用 canonical Operation control owner 并检查 readiness/policy/provenance；cancel/retry/resume progress
+  使用 machine code，operator 原文只保留在 append-only event。Finding 9 canonical owner matrix/preflight 由 S1d
+  response 关闭。Versioned response author evidence=`780 passed + 111 subtests`（含 945 control-owner 组合）、
+  inspect PG=`28 + 31 subtests`、control adjacency=`4 passed`、scoped mypy=`0/7`、lint/compile/diff green、global
+  mypy=`81/4`；fresh pinned non-author review pending，这些均不得写成 S1b formal GO。S1c candidate
   已增加 equality-only `owner_target_revision_token`，保持 logical occurrence digest v1；numeric-only
   attempt/journal 仍为 v1，token-bearing aggregate 使用 v2/v2，旧 writer 默认与历史 numeric replay 保持可用，
   token-only activation 要求旧 replicas drain/quiesce。该 synthetic carrier 只证明 storage transport，不是
@@ -410,9 +415,10 @@
   S1a 已区分 historical start v2 Activity-terminal 与 current v3 command-acceptance，并将 `0012` 明确为
   quiesced/pool-recycled；canonical PG-only result aggregate、link-policy/readiness field owner matrix 与 fast preflight
   已补。Fixed-forward author evidence=`759 passed + 104 subtests`、migration runner=`45 + 71 subtests`、scoped
-  mypy=`0/8`、lint/compile/diff green、global mypy=`81/4`。以上仍是 author response，fresh pinned non-author
-  re-review pending；R-019/R-029 仍是 residual。原有效
-  NO-GO 在 re-review 前继续阻塞 S1d signoff/live，但不阻塞无关批。
+  mypy=`0/8`、lint/compile/diff green、global mypy=`81/4`。Fresh `5aa3936..4dddd0e` pinned Ultra re-review 已
+  exact-bound 并返回有效 `NO-GO 0/3/3/0`：equality-alias string/JSON carriers、plan occurrence/Action binding、
+  migration procedure、durable inventory/preflight 与 stale review-scope instructions 进入下一 bounded response；
+  R-019/R-029 仍是 residual。该 NO-GO 继续阻塞 S1d signoff/live，但不阻塞无关批。
 - [ ] D1m mixed-version rollout gate（R-019）：pre-D1m binary 可继续写 revisionless source row 并绕开
   revision-aware exact-claim canonical materializer。任何 hosted activation 前必须选择并验证其一：quiesced
   single-version cutover，或 separately reviewed dual-write/compatibility bridge；完成前不得声称 rolling overlap

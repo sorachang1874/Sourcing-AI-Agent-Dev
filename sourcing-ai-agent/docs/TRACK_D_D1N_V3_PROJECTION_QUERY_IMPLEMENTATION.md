@@ -12,13 +12,15 @@ unchanged:
 
 - `filter_projection` v2 binds a canonical `cohort_selection.v1` plus server-owned projection, membership-revision,
   Cohort-registry, and selection-digest pins;
-- `inspect_operation` v2 result/query-owner semantics bind a model-visible OperationRun id to authenticated
-  workspace/action/actor context and project only canonical control, display, progress, result-readiness, and bounded
-  provenance state.
+- `inspect_operation` retains exact v1/v2 history and exposes v3 result/query-owner semantics that bind a
+  model-visible OperationRun id to authenticated workspace/action/actor context and project only canonical control,
+  display, progress, result-readiness, and bounded provenance state.
 
-The request schema remains `inspect_operation_request_v1`; S1b advanced the result, query owner, serializer, tool,
-adapter, and fixture revisions together. The fixed-forward readiness owner treats completed-without-result-ref as
-`pending/fail_closed`, and validates that rule at owner snapshot, execution, serialization, and PostgreSQL rebuild.
+The request schema remains `inspect_operation_request_v1`; S1b advanced the current result, query owner, serializer,
+tool, adapter, and fixture revisions together without rewriting v1/v2 manifests. The fixed-forward readiness owner
+treats completed-without-result-ref as `pending/fail_closed`. V3 also omits operator-authored `progress.reason` from
+the model result, binds raw progress in the non-model physical fingerprint, and revalidates the complete canonical
+control/readiness/policy/provenance semantics at execution and named serialization.
 
 Neither surface infers a next command or performs a repair/write. Missing or unproved projection access is one
 `projection_not_found` result. Missing or foreign Operation action/run ownership is one `operation_not_found` result.
@@ -56,9 +58,10 @@ projection and membership revision; it must not treat the digest as a global per
 `inspect_operation` validates the exact action/run/workspace tuple before exposing data. Its success result exact-copies
 the canonical `operation_run_control_state`, workflow-command control-policy projection, ActionRegistry display
 contract, OperationRun progress, result readiness, and bounded event/command provenance. Cross-owner drift,
-control-state flag/list mismatch, invented policy fields, command-policy mismatch, private fields, and raw local paths
-fail closed. Result readiness is derived once from Operation status plus durable result-reference presence; a
-schema-valid but semantically forged readiness projection also fails closed.
+control-state status/flag/list/reason mismatch, invented policy fields, command-policy mismatch, private fields, and
+raw local paths fail closed. Result readiness is derived once from Operation status plus durable result-reference
+presence; a schema-valid but semantically forged readiness projection also fails closed. Exact historical occurrences
+resolve by version plus digest, never registry order or the current alias.
 
 The query owner is separately identified by owner id, revision, and contract digest for later F3 population. It does
 not change the 15-row ActionRegistry denominator.

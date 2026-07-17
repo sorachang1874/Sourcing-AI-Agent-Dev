@@ -364,6 +364,11 @@ W9 backend control foundation is active; product Agent UI remains deferred.
 - OperationRun records and control responses expose `control_state` from `operation_runtime.operation_run_control_state`; Agent/UI code must use its `allowed_actions` and `disabled_reasons` for dispatch/resume/retry/cancel buttons instead of local terminal-status sets. If retry returns a child OperationRun, the caller should continue with that child run id rather than mutating or re-dispatching the terminal parent.
   All controls fail closed when the linked action is missing, and the API/repository boundary rejects a linked action
   from another workspace rather than treating it as eligible control state.
+- `OperationRun.progress.reason` is machine-owned control state, not operator-authored display text. Cancel, retry, and
+  resume persist `operation_cancelled`, `operation_retry_requested`, and `operation_resume_requested` respectively.
+  The trimmed operator reason is retained only in the matching append-only Operation event payload for authenticated
+  audit/provenance reads. `inspect_operation` v3 omits that event text from its model-visible result and binds the raw
+  progress record only in its non-model physical-owner fingerprint.
 - `POST /api/operations/actions/{action_id}/approve` records approval and creates the idempotent queued `OperationRun`
   for approval-required actions, after the authenticated exact-action-workspace preflight.
 - `POST /api/operations/actions/{action_id}/reject` atomically records `status=cancelled`,

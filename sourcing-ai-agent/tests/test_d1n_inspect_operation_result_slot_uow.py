@@ -9,7 +9,11 @@ from pathlib import Path
 from typing import Any
 from unittest import mock
 
-from sourcing_agent.agent_canary_registry import INSPECT_OPERATION_TOOL_SPEC
+from sourcing_agent.agent_canary_registry import (
+    INSPECT_OPERATION_TOOL_SPEC,
+    INSPECT_OPERATION_TOOL_SPEC_V1,
+    INSPECT_OPERATION_TOOL_SPEC_V2,
+)
 from sourcing_agent.agent_tool_result_slot import AgentToolOccurrence
 from sourcing_agent.control_plane_repository import ControlPlaneAuthoritativeReadError
 from tests.pg_store_fixture import PGControlPlaneStoreTestMixin
@@ -104,6 +108,7 @@ class D1nInspectOperationResultSlotUowPGTest(PGControlPlaneStoreTestMixin, unitt
         suffix: str = "1",
         workspace_id: str = "workspace_1",
         actor_id: str = "requester_1",
+        tool_spec=INSPECT_OPERATION_TOOL_SPEC,
     ) -> AgentToolOccurrence:
         operation = dict(bundle["operation_run"])
         return AgentToolOccurrence.from_tool_spec(
@@ -115,7 +120,7 @@ class D1nInspectOperationResultSlotUowPGTest(PGControlPlaneStoreTestMixin, unitt
             provider_mode="simulate",
             turn_id=f"turn_inspect_{suffix}",
             step_id="step_inspect",
-            tool_spec=INSPECT_OPERATION_TOOL_SPEC,
+            tool_spec=tool_spec,
             canonical_args={"operation_run_id": str(operation["operation_run_id"])},
             occurrence_ordinal=1,
         )
@@ -201,6 +206,151 @@ class D1nInspectOperationResultSlotUowPGTest(PGControlPlaneStoreTestMixin, unitt
                 "agent_tool_result_slots": 1,
                 "agent_tool_result_attempts": 1,
                 "agent_tool_result_journal": 1,
+            },
+        )
+
+    def test_retained_v1_v2_occurrences_prepare_accept_and_replay_with_their_exact_serializer(self) -> None:
+        historical_specs = (INSPECT_OPERATION_TOOL_SPEC_V1, INSPECT_OPERATION_TOOL_SPEC_V2)
+        for index, tool_spec in enumerate(historical_specs, start=1):
+            with self.subTest(tool_spec_version=tool_spec.tool_spec_version):
+                suffix = f"history_{index}"
+                bundle = self._preview_bundle(suffix=suffix)
+                operation = dict(bundle["operation_run"])
+                updated = self.repository.update_operation_state(
+                    str(operation["operation_run_id"]),
+                    progress_patch={"reason": "operation_retry_requested"},
+                )
+                bundle["operation_run"] = updated
+                occurrence = self._occurrence(bundle, suffix=suffix, tool_spec=tool_spec)
+                terminal = self._prepare(
+                    bundle,
+                    occurrence,
+                    attempt_id=f"inspectattempt_{suffix}",
+                )
+
+                self.assertEqual(terminal.serialized_result["progress"]["reason"], "operation_retry_requested")
+                self.assertEqual(occurrence.result_schema_version, tool_spec.result.schema_version)
+                self.assertEqual(
+                    terminal.owner_result_ref["physical_owner_fingerprint_schema_version"],
+                    "inspect_operation_physical_owner_fingerprint_v2",
+                )
+                self.repository.reserve_agent_tool_result_slot(occurrence=occurrence)
+                with self.assertRaisesRegex(RuntimeError, "after commit"):
+                    self.adapter.accept_inspect_operation_tool_result_uow(
+                        occurrence=occurrence,
+                        terminal=terminal,
+                        attempted_slot_generation=1,
+                        fault_injection_point="after_commit",
+                    )
+                replay = self.repository.accept_inspect_operation_tool_result_uow(
+                    occurrence=occurrence,
+                    terminal=terminal,
+                    attempted_slot_generation=1,
+                )
+                self.assertEqual(replay["outcome"], "replayed")
+                self.assertTrue(replay["replayed"])
+
+    def test_v3_omits_operator_reason_text_but_fences_its_raw_progress_digest(self) -> None:
+        reasons = (
+            "Retry after operator review",
+            "人工复核后重试",
+            "operator note " + ("x" * 500),
+        )
+        for index, reason in enumerate(reasons, start=1):
+            with self.subTest(reason=reason[:32]):
+                suffix = f"operator_reason_{index}"
+                bundle = self._preview_bundle(suffix=suffix)
+                operation = dict(bundle["operation_run"])
+                updated = self.repository.update_operation_state(
+                    str(operation["operation_run_id"]),
+                    progress_patch={"reason": reason},
+                )
+                bundle["operation_run"] = updated
+                occurrence = self._occurrence(bundle, suffix=suffix)
+                terminal = self._prepare(
+                    bundle,
+                    occurrence,
+                    attempt_id=f"inspectattempt_{suffix}",
+                )
+
+                self.assertNotIn("reason", terminal.serialized_result["progress"])
+                self.assertNotIn(reason, terminal.serialized_result_json)
+                self.assertEqual(
+                    terminal.owner_result_ref["physical_owner_fingerprint_schema_version"],
+                    "inspect_operation_physical_owner_fingerprint_v3",
+                )
+                self.assertEqual(len(terminal.owner_result_ref["raw_progress_digest"]), 64)
+                self.repository.reserve_agent_tool_result_slot(occurrence=occurrence)
+                accepted = self.repository.accept_inspect_operation_tool_result_uow(
+                    occurrence=occurrence,
+                    terminal=terminal,
+                    attempted_slot_generation=1,
+                )
+                self.assertEqual(accepted["outcome"], "accepted")
+
+    def test_v3_raw_operator_reason_drift_after_prepare_leaves_slot_pending(self) -> None:
+        bundle = self._preview_bundle(suffix="operator_reason_drift")
+        operation = dict(bundle["operation_run"])
+        first = self.repository.update_operation_state(
+            str(operation["operation_run_id"]),
+            progress_patch={"reason": "first operator note"},
+        )
+        bundle["operation_run"] = first
+        occurrence = self._occurrence(bundle, suffix="operator_reason_drift")
+        terminal = self._prepare(bundle, occurrence, attempt_id="inspectattempt_operator_reason_drift")
+        self.repository.reserve_agent_tool_result_slot(occurrence=occurrence)
+        self.repository.update_operation_state(
+            str(operation["operation_run_id"]),
+            progress_patch={"reason": "second operator note"},
+        )
+
+        with self.assertRaisesRegex(ValueError, "physical owner or serializer mismatch"):
+            self.adapter.accept_inspect_operation_tool_result_uow(
+                occurrence=occurrence,
+                terminal=terminal,
+                attempted_slot_generation=1,
+            )
+        self.assertEqual(
+            self._result_counts(),
+            {
+                "agent_tool_result_slots": 1,
+                "agent_tool_result_attempts": 0,
+                "agent_tool_result_journal": 0,
+            },
+        )
+
+    def test_mixed_or_unknown_historical_inspect_pins_fail_before_owner_read_with_zero_writes(self) -> None:
+        bundle = self._preview_bundle(suffix="historical_pin_drift")
+        occurrence = self._occurrence(
+            bundle,
+            suffix="historical_pin_drift",
+            tool_spec=INSPECT_OPERATION_TOOL_SPEC_V1,
+        )
+        forged_result = replace(
+            occurrence,
+            result_schema_version=INSPECT_OPERATION_TOOL_SPEC_V2.result.schema_version,
+            result_schema_digest=INSPECT_OPERATION_TOOL_SPEC_V2.result.schema_digest,
+            serializer_owner=INSPECT_OPERATION_TOOL_SPEC_V2.result.serializer_owner.owner_id,
+            serializer_revision=INSPECT_OPERATION_TOOL_SPEC_V2.result.serializer_owner.owner_revision,
+            serializer_contract_digest=(INSPECT_OPERATION_TOOL_SPEC_V2.result.serializer_owner.owner_contract_digest),
+        )
+        unknown_tool = replace(occurrence, tool_spec_digest="f" * 64)
+
+        with mock.patch.object(self.adapter, "_connect_with_timeout") as connect:
+            for forged, message in (
+                (forged_result, "historical_spec_pin_mismatch"),
+                (unknown_tool, "historical_spec_missing"),
+            ):
+                with self.subTest(message=message):
+                    with self.assertRaisesRegex(ValueError, message):
+                        self._prepare(bundle, forged, attempt_id=f"inspectattempt_{message}")
+            connect.assert_not_called()
+        self.assertEqual(
+            self._result_counts(),
+            {
+                "agent_tool_result_slots": 0,
+                "agent_tool_result_attempts": 0,
+                "agent_tool_result_journal": 0,
             },
         )
 
@@ -340,7 +490,7 @@ class D1nInspectOperationResultSlotUowPGTest(PGControlPlaneStoreTestMixin, unitt
         owner_ref = terminal.owner_result_ref
         self.assertEqual(
             owner_ref["physical_owner_fingerprint_schema_version"],
-            "inspect_operation_physical_owner_fingerprint_v2",
+            "inspect_operation_physical_owner_fingerprint_v3",
         )
         self.assertEqual(owner_ref["selected_plan_event"]["event_id"], dict(bundle["event"])["event_id"])
         self.assertEqual(
@@ -998,7 +1148,7 @@ class D1nInspectOperationResultSlotUowPGTest(PGControlPlaneStoreTestMixin, unitt
             occurrence_ordinal=1,
         )
 
-        with self.assertRaisesRegex(ValueError, "occurrence contract mismatch"):
+        with self.assertRaisesRegex(ValueError, "historical contract unavailable"):
             self._prepare(bundle, forged)
         self.assertEqual(
             self._result_counts(),

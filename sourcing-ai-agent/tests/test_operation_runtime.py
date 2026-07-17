@@ -119,6 +119,7 @@ from sourcing_agent.operation_runtime import (
     OwnerBoundTargetRef,
     operation_retry_run_id_for,
     operation_run_control_state,
+    validate_operation_run_control_state_projection,
 )
 from sourcing_agent.orchestrator import SourcingOrchestrator
 from sourcing_agent.semantic_provider import LocalSemanticProvider
@@ -2034,6 +2035,24 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         self.assertFalse(missing_action["can_resume"])
         self.assertEqual(missing_action["disabled_reasons"]["retry"], "linked_action_missing")
 
+        for control_state in (
+            queued,
+            failed,
+            cancelled_action,
+            cancelled_run,
+            planned_action,
+            retry_already_planned,
+            missing_action,
+        ):
+            self.assertEqual(
+                validate_operation_run_control_state_projection(control_state).to_record(),
+                control_state,
+            )
+        forged = dict(queued)
+        forged["action_status"] = "completed"
+        with self.assertRaisesRegex(ValueError, "operation_run_control_state_projection_invalid"):
+            validate_operation_run_control_state_projection(forged)
+
     def test_action_registry_unknown_action_fails_closed(self) -> None:
         with self.assertRaisesRegex(KeyError, "unknown operation action type"):
             DEFAULT_ACTION_REGISTRY.spec_for("write_projection_directly")
@@ -3941,32 +3960,32 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             input_payload={"filters": {"function_buckets": ["engineering"]}},
             idempotency_key="filter:proj-cancel",
         )
+        operator_reason = "Operator requested cancellation — 操作员已确认"
 
         cancelled = self.writer.cancel_operation(
             operation_run_id=result.operation_run["operation_run_id"],
             actor="unit-test",
-            reason="operator_cancelled",
+            reason=operator_reason,
         )
         duplicate = self.writer.cancel_operation(
             operation_run_id=result.operation_run["operation_run_id"],
             actor="unit-test",
-            reason="operator_cancelled",
+            reason="ignored duplicate cancellation reason",
         )
 
         action = self.store.repos.workflow_runtime.get_action(result.action["action_id"])
+        events = self.store.repos.workflow_runtime.list_operation_events(result.operation_run["operation_run_id"])
         self.assertEqual(cancelled["status"], "cancelled")
         self.assertEqual(duplicate["operation_run_id"], cancelled["operation_run_id"])
         self.assertEqual(cancelled["progress"]["phase"], "cancelled")
+        self.assertEqual(cancelled["progress"]["reason"], "operation_cancelled")
+        self.assertEqual(duplicate["progress"]["reason"], "operation_cancelled")
         self.assertEqual(action["status"], "cancelled")
         self.assertEqual(
-            [
-                event["event_type"]
-                for event in self.store.repos.workflow_runtime.list_operation_events(
-                    result.operation_run["operation_run_id"]
-                )
-            ],
+            [event["event_type"] for event in events],
             ["OperationRunQueued", "OperationCancelled"],
         )
+        self.assertEqual(events[-1]["payload"]["reason"], operator_reason)
         self.assertEqual(self.store.list_workflow_commands(limit=0), [])
 
     def test_reject_action_is_atomic_idempotent_and_repairs_missing_event(self) -> None:
@@ -4633,19 +4652,24 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         )
         operation_run_id = result.operation_run["operation_run_id"]
 
+        resume_reason = "Worker recovered after operator review — 已恢复"
         resumed = self.writer.resume_operation(
             operation_run_id=operation_run_id,
             actor="unit-test",
-            reason="worker_recovered",
+            reason=resume_reason,
         )
         duplicate_resume = self.writer.resume_operation(
             operation_run_id=operation_run_id,
             actor="unit-test",
-            reason="worker_recovered",
+            reason="ignored duplicate resume reason",
         )
         self.assertEqual(resumed["operation_run"]["operation_run_id"], operation_run_id)
         self.assertEqual(duplicate_resume["events"][0]["event_id"], resumed["events"][0]["event_id"])
         self.assertEqual(resumed["operation_run"]["progress"]["phase"], "resume_requested")
+        self.assertEqual(resumed["operation_run"]["progress"]["reason"], "operation_resume_requested")
+        self.assertEqual(duplicate_resume["operation_run"]["progress"]["reason"], "operation_resume_requested")
+        self.assertEqual(resumed["events"][0]["payload"]["reason"], resume_reason)
+        self.assertEqual(duplicate_resume["events"][0]["payload"]["reason"], resume_reason)
 
         self.store.repos.workflow_runtime.update_operation_state(
             operation_run_id,
@@ -4657,22 +4681,31 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             status="failed",
             metadata_patch={"last_operation_command_status": "failed_terminal"},
         )
+        retry_reason = "Operator requested retry after timeout — 请重试"
         retry = self.writer.retry_operation(
             operation_run_id=operation_run_id,
             actor="unit-test",
-            reason="owner_timeout",
+            reason=retry_reason,
         )
         duplicate_retry = self.writer.retry_operation(
             operation_run_id=operation_run_id,
             actor="unit-test",
-            reason="owner_timeout",
+            reason="ignored duplicate retry reason",
         )
 
         retry_run = retry["operation_run"]
         self.assertNotEqual(retry_run["operation_run_id"], operation_run_id)
         self.assertEqual(retry_run["status"], "queued")
+        self.assertEqual(retry_run["progress"]["reason"], "operation_retry_requested")
+        self.assertEqual(duplicate_retry["operation_run"]["progress"]["reason"], "operation_retry_requested")
         self.assertEqual(retry_run["metadata"]["parent_operation_run_id"], operation_run_id)
         self.assertEqual(duplicate_retry["operation_run"]["operation_run_id"], retry_run["operation_run_id"])
+        self.assertEqual(retry["events"][0]["payload"]["reason"], retry_reason)
+        self.assertEqual(duplicate_retry["events"][0]["payload"]["reason"], retry_reason)
+        self.assertEqual(
+            [event["event_id"] for event in duplicate_retry["events"]],
+            [event["event_id"] for event in retry["events"]],
+        )
         self.assertEqual(
             {
                 run["operation_run_id"]
@@ -4695,6 +4728,41 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         self.assertIn("OperationResumeRequested", event_types)
         self.assertIn("OperationRetryRequested", event_types)
         self.assertEqual(self.store.list_workflow_commands(limit=0), [])
+
+    def test_operation_control_blank_reasons_keep_canonical_progress_and_blank_audit_payload(self) -> None:
+        result = self.writer.submit_action(
+            action_type=ACTION_FILTER_PROJECTION,
+            workspace_id="default",
+            owner_bound_target_ref=self._projection_read_owner_target("proj-blank-control-reasons"),
+            idempotency_key="filter:proj-blank-control-reasons",
+        )
+        repository = self.store.repos.workflow_runtime
+        operation_run_id = result.operation_run["operation_run_id"]
+
+        resumed = self.writer.resume_operation(operation_run_id=operation_run_id, reason="   ")
+        self.assertEqual(resumed["operation_run"]["progress"]["reason"], "operation_resume_requested")
+        self.assertEqual(resumed["events"][0]["payload"]["reason"], "")
+
+        repository.update_operation_state(
+            operation_run_id,
+            status="failed",
+            progress_patch={"phase": "failed", "reason": "owner_timeout"},
+        )
+        repository.update_action_state(
+            result.action["action_id"],
+            status="failed",
+            metadata_patch={"last_operation_command_status": "failed_terminal"},
+        )
+        retry = self.writer.retry_operation(operation_run_id=operation_run_id, reason="")
+        retry_run_id = retry["operation_run"]["operation_run_id"]
+        self.assertEqual(retry["operation_run"]["progress"]["reason"], "operation_retry_requested")
+        self.assertEqual(retry["events"][0]["payload"]["reason"], "")
+
+        cancelled = self.writer.cancel_operation(operation_run_id=retry_run_id, reason="\t")
+        cancel_events = repository.list_operation_events(retry_run_id)
+        self.assertEqual(cancelled["progress"]["reason"], "operation_cancelled")
+        self.assertEqual(cancel_events[-1]["event_type"], "OperationCancelled")
+        self.assertEqual(cancel_events[-1]["payload"]["reason"], "")
 
     def test_retry_operation_requeues_normally_cancelled_action(self) -> None:
         result = self.writer.submit_action(

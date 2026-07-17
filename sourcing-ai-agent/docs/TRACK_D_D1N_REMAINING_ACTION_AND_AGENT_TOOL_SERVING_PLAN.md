@@ -218,13 +218,16 @@ tool-name/version/digest, rebuild every spec-derived pin, and reject any mismatc
 adds brownfield validation plus the deferred all-attempt effect/policy/link-shape matrix, including quarantined rows.
 Neither change alters the v1 logical-occurrence digest or grants serving authority.
 
-The S1b reference-review response fixed-forwards the inspect physical owner without changing model-visible v2
-semantics. A scoped missing or foreign tuple now produces an exact, slot-generation-anchored masked error terminal and
+The S1b reference-review response fixed-forwards the inspect physical owner. A scoped missing or foreign tuple now
+produces an exact, slot-generation-anchored masked error terminal and
 can atomically persist/replay the byte-identical `operation_not_found` result. Success loads the complete event stream,
 requires contiguous exact ownership, accepts only a closed typed four-field workflow ref, requires one unambiguous
 same-command plan proof, and binds command causal identity plus full event/plan payload digests into a non-model
-physical fingerprint. Reference findings for historical inspect v1 lookup, operator reason text, full serializer
-semantics, and the canonical result owner/preflight matrix remain open; this response does not authorize serving.
+physical fingerprint. The bounded versioned-contract response retains exact inspect v1/v2 manifests, exact-resolves
+persisted occurrences, and adds current v3. V3 omits operator reason text from the model result, binds raw progress in
+the physical fingerprint, and reuses the canonical Operation control owner to reject schema-valid status/flag/reason
+drift. Operation progress stores machine reason codes while append-only events retain operator text. This closes
+reference findings 5/6/8 author-side; S1d separately closes finding 9. Neither response authorizes serving.
 
 ### 4.3 One `AgentToolSpec` for actions and queries
 
@@ -566,20 +569,24 @@ deletes historical serializers. Hosted serving is fail-closed during registry/ac
 owner-specific `plan_acquisition` pending-to-accepted PG UoW. S1b factors the acceptance state machine for reuse and
 adds `inspect_operation` prepare/accept against exact Action/Operation/event/workflow-ref-command state. The referenced
 command must match its planned event and registries; unrelated same-operation rows are excluded from the owner.
-The active fixed-forward response additionally locks the complete stream before the result slot, rejects hidden
+The physical-owner response additionally locks the complete stream before the result slot, rejects hidden
 foreign rows and sequence gaps, binds an unambiguous plan-event/command-causality fingerprint, and persists masked
 missing/foreign `operation_not_found` through the same atomic result UoW. It closes reference findings 2/3/4/7 only;
-the S1d response separately closes canonical owner-matrix/preflight finding 9. Historical inspect spec lookup, reason
-normalization, and serializer semantic closure findings 5/6/8 remain open and form the next versioned inspect batch.
-The pre-served inspect result/query-owner/serializer/tool/adapter/fixture contract is fixed-forward v2, with one
-central readiness derivation: completed without durable result ref remains `pending/fail_closed`. Evidence includes
-event-revision drift zero-write and both commandless/command-backed success fixtures. S1c now provides the opaque
+the S1d response separately closes canonical owner-matrix/preflight finding 9. The versioned inspect response closes
+findings 5/6/8 author-side: v1/v2 remain exact, v3 is current, historical occurrences exact-resolve before owner reads,
+operator text is excluded from the v3 model result but raw progress remains physical causality, and the named
+serializer checks the canonical control/readiness/policy/provenance semantics. Completed without durable result ref
+remains `pending/fail_closed`. Evidence includes historical lost-ack replay, reason-only drift zero-write,
+event-revision drift zero-write, and commandless/command-backed success fixtures. Author validation is
+`780 passed + 111 subtests` plus `28 + 31 subtests` inspect PG and four Operation-control adjacency nodes; fresh pinned
+non-author review remains pending. S1c now provides the opaque
 equality-only target-revision carrier; S1d adds the registry-owned result-link policy, historical start v2/current v3
 boundary, and quiesced `0013` migration. Its valid pinned Ultra review returned `NO-GO 0/1/4/0`; the bounded author
 response now rebinds all persisted occurrence pins through the server-owned exact historical registry before effects,
 adds `0014` brownfield plus deferred all-attempt effect/policy/link-shape enforcement, corrects the S1a historical/current
-start and quiesced-rollout wording, and adds the canonical result aggregate/field-owner fast preflight. A fresh pinned
-non-author review is still required. S1 remains incomplete until physical-owner adapters and terminal-success
+start and quiesced-rollout wording, and adds the canonical result aggregate/field-owner fast preflight. Its fresh
+`5aa3936..4dddd0e` pinned Ultra re-review returned valid `NO-GO 0/3/3/0`; equality-alias carriers, plan Action binding,
+and three contract/doc gaps form the next bounded response. S1 remains incomplete until physical-owner adapters and terminal-success
 fixtures exist for `start_acquisition_run` and `filter_projection`. The next bounded start batch must first ratify the
 exact approval-receipt, command-acceptance winner, and parent-budget reservation owners; it must not reuse or guess
 the older multi-transaction dispatch path. Default/public serving remains zero. See

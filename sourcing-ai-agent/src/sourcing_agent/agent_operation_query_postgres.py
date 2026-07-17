@@ -11,15 +11,19 @@ from __future__ import annotations
 
 import hashlib
 import json
+from dataclasses import dataclass
 from typing import Any
 
+from .action_result_schema import ActionResultSpec
 from .agent_projection_query import (
     bind_inspect_operation_request,
-    execute_inspect_operation,
+    execute_inspect_operation_for_result_spec,
     inspect_operation_error_result,
     operation_result_readiness_projection,
-    serialize_inspect_operation_result,
+    resolve_inspect_operation_result_spec,
+    serialize_inspect_operation_result_for_spec,
 )
+from .agent_tool_registry import AgentToolSpec
 from .agent_tool_result_slot import AgentToolOccurrence, AgentToolTerminalResult
 from .durable_runtime import (
     DEFAULT_COMMAND_OWNER_REGISTRY,
@@ -32,6 +36,56 @@ INSPECT_OPERATION_OWNER_TARGET_KIND = "operation_state_event_v1"
 INSPECT_OPERATION_MASKED_ABSENCE_OWNER_TARGET_KIND = "inspect_operation_masked_error_v1"
 
 _WORKFLOW_REF_FIELDS = ("workflow_run_id", "command_id", "command_type", "owner")
+
+
+@dataclass(frozen=True, slots=True)
+class _InspectOperationContractBinding:
+    tool_spec: AgentToolSpec
+    result_spec: ActionResultSpec
+    physical_owner_revision: str
+    include_progress_reason: bool
+
+
+def _resolve_inspect_operation_contract(occurrence: AgentToolOccurrence) -> _InspectOperationContractBinding:
+    """Resolve one exact retained tool/result contract without current-version inference."""
+
+    from .agent_canary_registry import (
+        INSPECT_OPERATION_TOOL_SPEC,
+        INSPECT_OPERATION_TOOL_SPEC_V1,
+        INSPECT_OPERATION_TOOL_SPEC_V2,
+        LOCAL_CANARY_AGENT_TOOL_REGISTRY,
+    )
+
+    occurrence = occurrence.revalidated_for_registry(LOCAL_CANARY_AGENT_TOOL_REGISTRY)
+    tool_spec = LOCAL_CANARY_AGENT_TOOL_REGISTRY.require_historical(
+        occurrence.tool_name,
+        occurrence.tool_spec_version,
+        occurrence.tool_spec_digest,
+    )
+    retained = {
+        INSPECT_OPERATION_TOOL_SPEC_V1.historical_identity: ("v2", True),
+        INSPECT_OPERATION_TOOL_SPEC_V2.historical_identity: ("v2", True),
+        INSPECT_OPERATION_TOOL_SPEC.historical_identity: ("v3", False),
+    }
+    physical_contract = retained.get(tool_spec.historical_identity)
+    if tool_spec.tool_name != "inspect_operation" or tool_spec.tool_kind != "query" or physical_contract is None:
+        raise ValueError("agent tool inspect result historical contract unavailable")
+    result_spec = resolve_inspect_operation_result_spec(
+        occurrence.result_schema_version,
+        occurrence.result_schema_digest,
+    )
+    if (
+        tool_spec.result.schema_version != result_spec.result_schema_version
+        or tool_spec.result.schema_digest != result_spec.result_schema_digest
+    ):
+        raise ValueError("agent tool inspect result historical result contract mismatch")
+    physical_owner_revision, include_progress_reason = physical_contract
+    return _InspectOperationContractBinding(
+        tool_spec=tool_spec,
+        result_spec=result_spec,
+        physical_owner_revision=physical_owner_revision,
+        include_progress_reason=include_progress_reason,
+    )
 
 
 def _canonical_json(value: object) -> str:
@@ -193,6 +247,7 @@ def _workflow_ref_identity(
 
 def _masked_absence_terminal(
     *,
+    binding: _InspectOperationContractBinding,
     occurrence: AgentToolOccurrence,
     result_attempt_id: str,
     provider_call_id: str,
@@ -205,7 +260,10 @@ def _masked_absence_terminal(
     owner_output = inspect_operation_error_result(reason="operation_not_found")
     # Keep this physical adapter pinned to the same model-safe serializer as the
     # pure query owner even though the output is a fixed masked value.
-    serialized_result = serialize_inspect_operation_result(owner_output)
+    serialized_result = serialize_inspect_operation_result_for_spec(
+        owner_output,
+        result_spec=binding.result_spec,
+    )
     owner_result_ref = {
         "schema_version": "inspect_operation_masked_error_owner_ref_v1",
         "lookup": {
@@ -249,34 +307,16 @@ def validate_inspect_operation_occurrence(
     *,
     action_id: str,
     operation_run_id: str,
-) -> None:
+) -> _InspectOperationContractBinding:
     """Require the exact isolated-canary query contract and target link."""
 
-    from .agent_canary_registry import INSPECT_OPERATION_TOOL_SPEC
-
-    expected = INSPECT_OPERATION_TOOL_SPEC
-    expected_pins = {
-        "tool_name": expected.tool_name,
-        "tool_kind": expected.tool_kind,
-        "effect_class": expected.behavior.effect_class,
-        "tool_spec_version": expected.tool_spec_version,
-        "tool_spec_digest": expected.tool_spec_digest,
-        "request_schema_version": expected.request.schema_version,
-        "request_schema_digest": expected.request.schema_digest,
-        "result_schema_version": expected.result.schema_version,
-        "result_schema_digest": expected.result.schema_digest,
-        "serializer_owner": expected.result.serializer_owner.owner_id,
-        "serializer_revision": expected.result.serializer_owner.owner_revision,
-        "serializer_contract_digest": expected.result.serializer_owner.owner_contract_digest,
-    }
-    mismatches = [field for field, value in expected_pins.items() if str(getattr(occurrence, field)) != str(value)]
-    if mismatches:
-        raise ValueError("agent tool inspect result occurrence contract mismatch: " + ", ".join(mismatches))
+    binding = _resolve_inspect_operation_contract(occurrence)
     canonical_args = occurrence.canonical_args
     if canonical_args != {"operation_run_id": operation_run_id}:
         raise ValueError("agent tool inspect result canonical args mismatch")
     if not action_id or not operation_run_id:
         raise ValueError("agent tool inspect result action and operation links required")
+    return binding
 
 
 def inspect_operation_result_lock_groups(
@@ -376,7 +416,7 @@ def terminal_from_locked_inspect_operation_owner(
 
     del cursor
 
-    validate_inspect_operation_occurrence(
+    binding = validate_inspect_operation_occurrence(
         occurrence,
         action_id=action_id,
         operation_run_id=operation_run_id,
@@ -394,6 +434,7 @@ def terminal_from_locked_inspect_operation_owner(
     )
     if not exact_owner:
         return _masked_absence_terminal(
+            binding=binding,
             occurrence=occurrence,
             result_attempt_id=result_attempt_id,
             provider_call_id=provider_call_id,
@@ -592,6 +633,13 @@ def terminal_from_locked_inspect_operation_owner(
         result_ref_present=bool(result_ref),
     )
 
+    progress_projection: dict[str, Any] = {
+        "phase": phase,
+        "source_of_truth": "operation_runs.progress",
+    }
+    if binding.include_progress_reason and str(progress.get("reason") or "").strip():
+        progress_projection["reason"] = str(progress["reason"])
+
     snapshot: dict[str, Any] = {
         "action": {
             "workspace_id": occurrence.workspace_id,
@@ -612,11 +660,7 @@ def terminal_from_locked_inspect_operation_owner(
         "control_state": control_state,
         "control_policy": control_policy,
         "display_contract": display_contract,
-        "progress": {
-            "phase": phase,
-            **({"reason": str(progress["reason"])} if str(progress.get("reason") or "").strip() else {}),
-            "source_of_truth": "operation_runs.progress",
-        },
+        "progress": progress_projection,
         "result_readiness": result_readiness,
         "provenance": {
             "source_of_truth": "operation_runs.agent_actions.workflow_commands.operation_events",
@@ -640,19 +684,25 @@ def terminal_from_locked_inspect_operation_owner(
         action_id=action_id,
         actor_id=occurrence.actor_id,
     )
-    owner_output = execute_inspect_operation(request=request, owner_snapshot=snapshot)
+    owner_output = execute_inspect_operation_for_result_spec(
+        request=request,
+        owner_snapshot=snapshot,
+        result_spec=binding.result_spec,
+    )
     event_stream_digest = _sha256_json(event_evidence)
     physical_owner_evidence = {
-        "schema_version": "inspect_operation_physical_owner_fingerprint_v2",
+        "schema_version": f"inspect_operation_physical_owner_fingerprint_{binding.physical_owner_revision}",
         "snapshot": snapshot,
         "event_stream_digest": event_stream_digest,
         "workflow_ref": normalized_workflow_ref,
         "workflow_command_causal_identity": command_identity,
         "selected_plan_event": selected_plan_event,
     }
+    if binding.physical_owner_revision == "v3":
+        physical_owner_evidence["raw_progress_digest"] = _sha256_json(progress)
     owner_result_digest = _sha256_json(physical_owner_evidence)
     owner_result_ref = {
-        "schema_version": "inspect_operation_owner_result_ref_v2",
+        "schema_version": f"inspect_operation_owner_result_ref_{binding.physical_owner_revision}",
         "workspace_id": occurrence.workspace_id,
         "action_id": action_id,
         "operation_run_id": operation_run_id,
@@ -663,9 +713,13 @@ def terminal_from_locked_inspect_operation_owner(
         "workflow_command_causal_identity": command_identity,
         "selected_plan_event": selected_plan_event,
         "owner_snapshot_digest": _sha256_json(snapshot),
-        "physical_owner_fingerprint_schema_version": "inspect_operation_physical_owner_fingerprint_v2",
+        "physical_owner_fingerprint_schema_version": (
+            f"inspect_operation_physical_owner_fingerprint_{binding.physical_owner_revision}"
+        ),
         "physical_owner_fingerprint_digest": owner_result_digest,
     }
+    if binding.physical_owner_revision == "v3":
+        owner_result_ref["raw_progress_digest"] = _sha256_json(progress)
     return AgentToolTerminalResult.from_serialized_result(
         result_attempt_id=result_attempt_id,
         provider_call_id=provider_call_id,

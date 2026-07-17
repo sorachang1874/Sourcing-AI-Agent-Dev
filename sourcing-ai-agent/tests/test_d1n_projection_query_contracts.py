@@ -4,6 +4,7 @@ import copy
 import hashlib
 import inspect
 import json
+from typing import Any
 
 import pytest
 
@@ -22,7 +23,11 @@ from sourcing_agent.agent_projection_query import (
     INSPECT_OPERATION_QUERY_OWNER_REVISION,
     INSPECT_OPERATION_REQUEST_SCHEMA_DIGEST,
     INSPECT_OPERATION_REQUEST_TOOL_SPEC,
+    INSPECT_OPERATION_RESULT_REGISTRY,
     INSPECT_OPERATION_RESULT_SPEC,
+    INSPECT_OPERATION_RESULT_SPEC_V1,
+    INSPECT_OPERATION_RESULT_SPEC_V2,
+    INSPECT_OPERATION_RESULT_SPEC_V3,
     AgentProjectionQueryError,
     FilterProjectionV2BoundRequest,
     ProjectionCohortPredicate,
@@ -30,12 +35,18 @@ from sourcing_agent.agent_projection_query import (
     bind_inspect_operation_request,
     execute_filter_projection_v2,
     execute_inspect_operation,
+    execute_inspect_operation_for_result_spec,
     filter_projection_v2_request_schema,
     inspect_operation_request_schema,
     operation_result_readiness_projection,
     projection_candidate_ref,
+    resolve_inspect_operation_result_spec,
     serialize_filter_projection_v2_result,
     serialize_inspect_operation_result,
+    serialize_inspect_operation_result_for_spec,
+    serialize_inspect_operation_result_v1,
+    serialize_inspect_operation_result_v2,
+    serialize_inspect_operation_result_v3,
 )
 from sourcing_agent.cohort_selection import (
     COHORT_SELECTION_REGISTRY_VERSION,
@@ -47,6 +58,8 @@ from sourcing_agent.model_tool_runtime import ModelToolSchemaError
 from sourcing_agent.operation_runtime import (
     ACTION_SEARCH_PROJECTION,
     PROJECTION_READ_ACTION_REQUEST_CONTRACTS,
+    operation_run_control_state,
+    validate_operation_run_control_state_projection,
 )
 
 
@@ -109,7 +122,7 @@ def _candidate(
     }
 
 
-def _filter_snapshot(request=None) -> dict[str, object]:
+def _filter_snapshot(request=None) -> dict[str, Any]:
     request = request or _bound_filter_request()
     target = dict(request.target_ref)
     return {
@@ -213,7 +226,7 @@ def _candidate_refs(request, candidate_ids: list[str]) -> list[str]:
     ]
 
 
-def _inspect_snapshot(*, policy_status: str = "available") -> dict[str, object]:
+def _inspect_snapshot(*, policy_status: str = "available") -> dict[str, Any]:
     if policy_status == "available":
         policy: dict[str, object] = {
             "status": "available",
@@ -308,6 +321,52 @@ def _inspect_snapshot(*, policy_status: str = "available") -> dict[str, object]:
     }
 
 
+def _mutate_inspect_phase(result) -> None:
+    result["progress"]["phase"] = "different_phase"
+
+
+def _mutate_inspect_allowed_actions(result) -> None:
+    result["control_state"]["allowed_actions"] = ["cancel"]
+
+
+def _mutate_inspect_allowed_action_order(result) -> None:
+    result["control_state"]["allowed_actions"] = ["cancel", "resume"]
+
+
+def _mutate_inspect_enabled_disabled_reason(result) -> None:
+    result["control_state"]["disabled_reasons"]["cancel"] = "cancel_disabled"
+
+
+def _mutate_inspect_missing_disabled_reason(result) -> None:
+    result["control_state"]["disabled_reasons"].pop("dispatch")
+
+
+def _mutate_inspect_impossible_terminal_controls(result) -> None:
+    result["control_state"]["action_status"] = "completed"
+
+
+def _mutate_inspect_disabled_reason_value(result) -> None:
+    result["control_state"]["disabled_reasons"]["dispatch"] = "linked_action_missing"
+
+
+def _mutate_inspect_readiness(result) -> None:
+    result["result_readiness"]["status"] = "ready"
+
+
+def _mutate_inspect_policy_command(result) -> None:
+    result["provenance"]["latest_workflow_command_type"] = "other.command"
+
+
+def _mutate_inspect_available_zero_provenance(result) -> None:
+    result["provenance"]["workflow_command_count"] = 0
+    result["provenance"].pop("latest_workflow_command_id")
+    result["provenance"].pop("latest_workflow_command_type")
+
+
+def _mutate_inspect_event_provenance(result) -> None:
+    result["provenance"]["operation_event_count"] = 0
+
+
 def test_v3_request_contracts_are_closed_and_leave_search_projection_v1_unchanged() -> None:
     search_v1 = dict(PROJECTION_READ_ACTION_REQUEST_CONTRACTS[ACTION_SEARCH_PROJECTION])
     assert search_v1["request_schema_version"] == "projection_search_request_v1"
@@ -334,6 +393,48 @@ def test_v3_request_contracts_are_closed_and_leave_search_projection_v1_unchange
         INSPECT_OPERATION_REQUEST_TOOL_SPEC.validate_input(
             {"operation_run_id": "oprun-123", "workspace_id": "caller-must-not-author"}
         )
+
+
+def test_inspect_result_registry_retains_exact_v1_v2_v3_and_current_alias() -> None:
+    import sourcing_agent.agent_projection_query as module
+
+    expected_digests = {
+        "inspect_operation_result_v1": "acd2538887715a9be0167c7d573345d74baea1e614a38ad62256b96b925100c8",
+        "inspect_operation_result_v2": "8878c155577af1fbe9c665f28c1d5d8c16b66eec986c084686a356e361287b3e",
+        "inspect_operation_result_v3": "a03c5cad763e31a196497b5141776b7e25cc207d0f60743150eca73773dd20af",
+    }
+    specs = (
+        INSPECT_OPERATION_RESULT_SPEC_V1,
+        INSPECT_OPERATION_RESULT_SPEC_V2,
+        INSPECT_OPERATION_RESULT_SPEC_V3,
+    )
+
+    assert INSPECT_OPERATION_REQUEST_TOOL_SPEC.schema_version == "inspect_operation_request_v1"
+    assert INSPECT_OPERATION_RESULT_SPEC is INSPECT_OPERATION_RESULT_SPEC_V3
+    assert INSPECT_OPERATION_QUERY_OWNER_REVISION == "inspect_operation_v3"
+    assert INSPECT_OPERATION_QUERY_OWNER_CONTRACT_DIGEST == (
+        "c7308a382105cecba770b5fdb61a1f31ba36161c308230e81e2ae675aa7f6243"
+    )
+    assert INSPECT_OPERATION_RESULT_REGISTRY.specs_for_tool("inspect_operation") == specs
+    for spec in specs:
+        assert spec.result_schema_digest == expected_digests[spec.result_schema_version]
+        assert (
+            resolve_inspect_operation_result_spec(
+                spec.result_schema_version,
+                spec.result_schema_digest,
+            )
+            is spec
+        )
+    with pytest.raises(ActionResultSchemaError, match="action_result_historical_spec_missing"):
+        resolve_inspect_operation_result_spec("inspect_operation_result_v2", "0" * 64)
+
+    assert module._INSPECT_OWNER_SNAPSHOT_TOOL_SPEC_V1.input_schema_digest == (
+        "02d933eae94d2d48ef3435bb15d015866c3817021341c9268f46b185f4f788bb"
+    )
+    assert module._INSPECT_OWNER_SNAPSHOT_TOOL_SPEC_V2.input_schema_digest == (
+        "b07bd8b4a15f7b0dd1b39b87897c1e4eed6df3e152700c6189c36bef47a8fc6c"
+    )
+    assert module._INSPECT_OWNER_SNAPSHOT_TOOL_SPEC_V3.schema_version == "inspect_operation_owner_snapshot_v3"
 
 
 def test_filter_projection_any_matches_at_least_one_role_in_a_qualifying_status() -> None:
@@ -611,6 +712,134 @@ def test_inspect_operation_exact_owner_preflight_and_closed_projection() -> None
     assert not ({"next_controls", "repair", "command", "events", "metadata", "workflow_ref"} & set(result))
 
 
+def test_inspect_execution_and_serialization_are_exactly_result_spec_versioned() -> None:
+    request = _inspect_bound_request()
+    snapshot = _inspect_snapshot()
+    snapshot["progress"]["reason"] = "retry_requested"
+
+    v1 = execute_inspect_operation_for_result_spec(
+        request=request,
+        owner_snapshot=snapshot,
+        result_spec=INSPECT_OPERATION_RESULT_SPEC_V1,
+    )
+    v2 = execute_inspect_operation_for_result_spec(
+        request=request,
+        owner_snapshot=snapshot,
+        result_spec=INSPECT_OPERATION_RESULT_SPEC_V2,
+    )
+    v3 = execute_inspect_operation_for_result_spec(
+        request=request,
+        owner_snapshot=snapshot,
+        result_spec=INSPECT_OPERATION_RESULT_SPEC_V3,
+    )
+
+    assert v1["progress"]["reason"] == "retry_requested"
+    assert v2["progress"]["reason"] == "retry_requested"
+    assert v3["progress"] == {
+        "phase": "workflow_command_planned",
+        "source_of_truth": "operation_runs.progress",
+    }
+    assert execute_inspect_operation(request=request, owner_snapshot=snapshot) == v3
+    for spec, result in (
+        (INSPECT_OPERATION_RESULT_SPEC_V1, v1),
+        (INSPECT_OPERATION_RESULT_SPEC_V2, v2),
+        (INSPECT_OPERATION_RESULT_SPEC_V3, v3),
+    ):
+        assert json.loads(serialize_inspect_operation_result_for_spec(result, result_spec=spec)) == result
+
+
+def test_inspect_v3_omits_arbitrary_operator_reason_without_reinterpreting_history() -> None:
+    request = _inspect_bound_request()
+    snapshot = _inspect_snapshot()
+    snapshot["progress"]["reason"] = "Retry after operator review — keep this outside the model result"
+
+    current = execute_inspect_operation(request=request, owner_snapshot=snapshot)
+
+    assert "reason" not in current["progress"]
+    assert "operator review" not in serialize_inspect_operation_result_v3(current)
+    injected = copy.deepcopy(current)
+    injected["progress"]["reason"] = "Retry after operator review"
+    with pytest.raises(ActionResultSchemaError):
+        serialize_inspect_operation_result_v3(injected)
+    for historical in (INSPECT_OPERATION_RESULT_SPEC_V1, INSPECT_OPERATION_RESULT_SPEC_V2):
+        with pytest.raises(AgentProjectionQueryError, match="inspect_operation_owner_snapshot_invalid"):
+            execute_inspect_operation_for_result_spec(
+                request=request,
+                owner_snapshot=snapshot,
+                result_spec=historical,
+            )
+
+
+def test_inspect_v1_v2_serializer_semantics_remain_frozen_and_are_not_upgraded_to_v3() -> None:
+    request = _inspect_bound_request()
+    v1_snapshot = _inspect_snapshot()
+    v1_snapshot["result_readiness"]["status"] = "not_applicable"
+    v1 = execute_inspect_operation_for_result_spec(
+        request=request,
+        owner_snapshot=v1_snapshot,
+        result_spec=INSPECT_OPERATION_RESULT_SPEC_V1,
+    )
+    assert json.loads(serialize_inspect_operation_result_v1(v1)) == v1
+    for newer in (INSPECT_OPERATION_RESULT_SPEC_V2, INSPECT_OPERATION_RESULT_SPEC_V3):
+        with pytest.raises(AgentProjectionQueryError, match="inspect_operation_owner_snapshot_invalid"):
+            execute_inspect_operation_for_result_spec(
+                request=request,
+                owner_snapshot=v1_snapshot,
+                result_spec=newer,
+            )
+
+    v2 = execute_inspect_operation_for_result_spec(
+        request=request,
+        owner_snapshot=_inspect_snapshot(),
+        result_spec=INSPECT_OPERATION_RESULT_SPEC_V2,
+    )
+    _mutate_inspect_phase(v2)
+    assert json.loads(serialize_inspect_operation_result_v2(v2)) == v2
+    with pytest.raises(AgentProjectionQueryError, match="inspect_operation_result_phase_mismatch"):
+        serialize_inspect_operation_result_v3(v2)
+
+
+def test_canonical_control_projection_validator_accepts_every_owner_emitted_hidden_input_witness() -> None:
+    operation_statuses = ("", "queued", "planned", "running", "completed", "failed", "cancelled")
+    action_statuses = (
+        "",
+        "planned",
+        "approval_required",
+        "queued",
+        "running",
+        "completed",
+        "failed",
+        "cancelled",
+        "rejected",
+    )
+    approval_statuses = ("", "not_required", "approved", "rejected", "pending")
+    retry_ids = ("", "operation-run", "other-retry-run")
+    accepted = 0
+
+    for operation_status in operation_statuses:
+        for action_status in action_statuses:
+            for approval_status in approval_statuses:
+                for retry_id in retry_ids:
+                    owner_state = operation_run_control_state(
+                        operation_status=operation_status,
+                        operation_run_id="operation-run",
+                        action_status=action_status,
+                        action_approval_status=approval_status,
+                        action_retry_operation_run_id=retry_id,
+                        operation_phase="phase",
+                    )
+                    assert (
+                        validate_operation_run_control_state_projection(
+                            owner_state.to_record(),
+                            operation_run_id="operation-run",
+                        ).to_record()
+                        == owner_state.to_record()
+                    )
+                    accepted += 1
+
+    assert accepted == 945
+
+
 @pytest.mark.parametrize(
     ("operation_status", "result_ref_present", "expected_status"),
     (
@@ -694,6 +923,60 @@ def test_inspect_operation_serializer_rechecks_readiness_semantics() -> None:
     result["result_readiness"]["status"] = "not_applicable"
     with pytest.raises(ActionResultSchemaError):
         INSPECT_OPERATION_RESULT_SPEC.serialize(result)
+
+
+@pytest.mark.parametrize(
+    ("mutation", "error"),
+    (
+        (_mutate_inspect_phase, "inspect_operation_result_phase_mismatch"),
+        (_mutate_inspect_allowed_actions, "inspect_operation_control_state_action_mismatch"),
+        (_mutate_inspect_allowed_action_order, "inspect_operation_control_state_action_mismatch"),
+        (_mutate_inspect_enabled_disabled_reason, "inspect_operation_control_state_disabled_reason_mismatch"),
+        (_mutate_inspect_missing_disabled_reason, "inspect_operation_control_state_disabled_reason_mismatch"),
+        (_mutate_inspect_impossible_terminal_controls, "inspect_operation_control_state_owner_mismatch"),
+        (_mutate_inspect_disabled_reason_value, "inspect_operation_control_state_owner_mismatch"),
+        (_mutate_inspect_readiness, "inspect_operation_result_readiness_mismatch"),
+        (_mutate_inspect_policy_command, "inspect_operation_control_policy_command_mismatch"),
+        (_mutate_inspect_available_zero_provenance, "inspect_operation_control_policy_command_mismatch"),
+        (_mutate_inspect_event_provenance, "inspect_operation_result_provenance_mismatch"),
+    ),
+)
+def test_inspect_v3_named_serializer_rechecks_every_success_cross_field_semantic(mutation, error: str) -> None:
+    result = execute_inspect_operation(
+        request=_inspect_bound_request(),
+        owner_snapshot=_inspect_snapshot(),
+    )
+    mutation(result)
+
+    with pytest.raises(AgentProjectionQueryError, match=error):
+        serialize_inspect_operation_result_v3(result)
+
+
+def test_inspect_v3_execution_uses_shared_success_semantics_and_not_applicable_has_zero_command_provenance() -> None:
+    snapshot = _inspect_snapshot()
+    snapshot["control_state"]["disabled_reasons"].pop("dispatch")
+    with pytest.raises(
+        AgentProjectionQueryError,
+        match="inspect_operation_control_state_disabled_reason_mismatch",
+    ):
+        execute_inspect_operation(request=_inspect_bound_request(), owner_snapshot=snapshot)
+
+    commandless = execute_inspect_operation(
+        request=_inspect_bound_request(),
+        owner_snapshot=_inspect_snapshot(policy_status="not_applicable"),
+    )
+    commandless["provenance"].update(
+        {
+            "workflow_command_count": 1,
+            "latest_workflow_command_id": "invented-command",
+            "latest_workflow_command_type": "invented.command",
+        }
+    )
+    with pytest.raises(
+        AgentProjectionQueryError,
+        match="inspect_operation_control_policy_not_applicable_mismatch",
+    ):
+        serialize_inspect_operation_result_v3(commandless)
 
 
 def test_inspect_operation_supports_explicit_commandless_policy_without_inference() -> None:

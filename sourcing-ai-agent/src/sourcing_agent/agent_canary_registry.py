@@ -26,19 +26,19 @@ from .acquisition_start_v2 import (
     ACQUISITION_START_V2_RESULT_SPEC,
 )
 from .action_contract_identity import action_contract_digest
-from .action_result_schema import ACTION_RESULT_VALIDATOR_OWNER, ActionResultSpec
+from .action_result_schema import ACTION_RESULT_VALIDATOR_OWNER, ActionResultQueryOwner, ActionResultSpec
 from .agent_projection_query import (
     FILTER_PROJECTION_V2_REQUEST_SCHEMA_VERSION,
     FILTER_PROJECTION_V2_REQUEST_TOOL_SPEC,
     FILTER_PROJECTION_V2_RESULT_SPEC,
-    INSPECT_OPERATION_QUERY_OWNER_CONTRACT_DIGEST,
-    INSPECT_OPERATION_QUERY_OWNER_ID,
-    INSPECT_OPERATION_QUERY_OWNER_REVISION,
     INSPECT_OPERATION_REQUEST_SCHEMA_DIGEST,
     INSPECT_OPERATION_REQUEST_SCHEMA_VERSION,
     INSPECT_OPERATION_RESULT_SPEC,
+    INSPECT_OPERATION_RESULT_SPEC_V1,
+    INSPECT_OPERATION_RESULT_SPEC_V2,
 )
 from .agent_tool_registry import (
+    AGENT_TOOL_SPEC_SCHEMA_VERSION,
     AGENT_TOOL_SPEC_SCHEMA_VERSION_V2,
     AgentActionToolRoute,
     AgentExecutionSubjectRequirement,
@@ -287,26 +287,30 @@ def _request_pin(spec: ActionRequestSpec) -> AgentToolRequestPin:
     )
 
 
-_INSPECT_QUERY_OWNER = AgentToolOwnerPin(
-    owner_id=INSPECT_OPERATION_QUERY_OWNER_ID,
-    owner_revision=INSPECT_OPERATION_QUERY_OWNER_REVISION,
-    owner_contract_digest=INSPECT_OPERATION_QUERY_OWNER_CONTRACT_DIGEST,
-)
+def _inspect_query_owner_for_result_spec(spec: ActionResultSpec) -> AgentToolOwnerPin:
+    owner = spec.owner_binding
+    if not isinstance(owner, ActionResultQueryOwner):
+        raise ValueError("inspect operation result spec requires query owner")
+    return AgentToolOwnerPin(
+        owner_id=owner.owner_id,
+        owner_revision=owner.owner_revision,
+        owner_contract_digest=owner.owner_contract_digest,
+    )
 
 
-def _query_request_pin() -> AgentToolRequestPin:
+def _query_request_pin(query_owner: AgentToolOwnerPin) -> AgentToolRequestPin:
     return AgentToolRequestPin(
         schema_version=INSPECT_OPERATION_REQUEST_SCHEMA_VERSION,
         schema_digest=INSPECT_OPERATION_REQUEST_SCHEMA_DIGEST,
         validator_owner=_REQUEST_VALIDATOR_OWNER,
         action_type=None,
         action_contract_digest=None,
-        query_owner=_INSPECT_QUERY_OWNER,
+        query_owner=query_owner,
     )
 
 
 def _result_pin(spec: ActionResultSpec) -> AgentToolResultPin:
-    query_owner = _INSPECT_QUERY_OWNER if spec.tool_kind == "query" else None
+    query_owner = _inspect_query_owner_for_result_spec(spec) if spec.tool_kind == "query" else None
     return AgentToolResultPin(
         tool_name=spec.tool_name,
         tool_kind=spec.tool_kind,
@@ -364,6 +368,20 @@ _START_ACQUISITION_RUN_V2_FIXTURE_RECORD = _fixture_record(
     effect_class="command_backed_action",
 )
 
+_INSPECT_OPERATION_V1_FIXTURE_RECORD = _fixture_record(
+    "inspect_operation",
+    fixture_revision="inspect_operation_fixture_v1",
+    approval_required=False,
+    effect_class="read_only",
+)
+
+_INSPECT_OPERATION_V2_FIXTURE_RECORD = _fixture_record(
+    "inspect_operation",
+    fixture_revision="inspect_operation_fixture_v2",
+    approval_required=False,
+    effect_class="read_only",
+)
+
 
 _FIXTURE_RECORDS = {
     ACTION_PLAN_ACQUISITION: _fixture_record(
@@ -388,9 +406,11 @@ _FIXTURE_RECORDS = {
     ),
     "inspect_operation": _fixture_record(
         "inspect_operation",
-        fixture_revision="inspect_operation_fixture_v2",
+        fixture_revision="inspect_operation_fixture_v3",
         approval_required=False,
         effect_class="read_only",
+        result_link_policy="no_command_v1",
+        schema_version=LOCAL_CANARY_SIMULATE_FIXTURE_SCHEMA_VERSION_V2,
     ),
 }
 LOCAL_CANARY_SIMULATE_FIXTURES: Mapping[str, Mapping[str, Any]] = MappingProxyType(
@@ -570,37 +590,73 @@ FILTER_PROJECTION_TOOL_SPEC = AgentToolSpec(
     ),
 )
 
-INSPECT_OPERATION_TOOL_SPEC = AgentToolSpec(
+
+def _inspect_operation_tool_spec(
+    *,
+    result_spec: ActionResultSpec,
+    tool_spec_version: str,
+    adapter_revision: str,
+    simulate_fixture: AgentToolSimulateFixturePin,
+    fingerprint_schema_version: str = AGENT_TOOL_SPEC_SCHEMA_VERSION,
+) -> AgentToolSpec:
+    query_owner = _inspect_query_owner_for_result_spec(result_spec)
+    explicit_policy = "no_command_v1" if fingerprint_schema_version == AGENT_TOOL_SPEC_SCHEMA_VERSION_V2 else None
+    return AgentToolSpec(
+        tool_spec_version=tool_spec_version,
+        tool_name="inspect_operation",
+        model_description="Read bounded canonical operation state without repairing or controlling it.",
+        tool_kind="query",
+        request=_query_request_pin(query_owner),
+        result=_result_pin(result_spec),
+        route=AgentQueryToolRoute(
+            query_owner=query_owner,
+            workspace_actor_binder=_route_pin(
+                "sourcing_agent.agent_projection_query.bind_inspect_operation_request",
+                "inspect_operation_binder_v1",
+                {"owner_preflight": "workspace+action+operation_run", "actor_from_transport": True},
+            ),
+            adapter=_route_pin(
+                "sourcing_agent.agent_projection_query.execute_inspect_operation",
+                adapter_revision,
+                {"effects": "read_only", "repair": False, "control_inference": False},
+            ),
+        ),
+        simulate_fixture=simulate_fixture,
+        release_state_ref=_release_ref(None, "inspect_operation"),
+        execution_subject=_execution_subject(),
+        budget=AgentToolBudgetRequirement(mode="not_required"),
+        capability=AgentToolCapabilityRequirement(mode="not_required"),
+        behavior=AgentToolBehavior(
+            effect_class="read_only",
+            command_exposure="none",
+            approval=_approval(False),
+            control_policy=_QUERY_CONTROL_PIN,
+            explicit_result_link_policy=explicit_policy,
+        ),
+        fingerprint_schema_version=fingerprint_schema_version,
+    )
+
+
+INSPECT_OPERATION_TOOL_SPEC_V1 = _inspect_operation_tool_spec(
+    result_spec=INSPECT_OPERATION_RESULT_SPEC_V1,
+    tool_spec_version="inspect_operation_tool_v1",
+    adapter_revision="inspect_operation_adapter_v1",
+    simulate_fixture=_fixture_pin_from_record(_INSPECT_OPERATION_V1_FIXTURE_RECORD),
+)
+
+INSPECT_OPERATION_TOOL_SPEC_V2 = _inspect_operation_tool_spec(
+    result_spec=INSPECT_OPERATION_RESULT_SPEC_V2,
     tool_spec_version="inspect_operation_tool_v2",
-    tool_name="inspect_operation",
-    model_description="Read bounded canonical operation state without repairing or controlling it.",
-    tool_kind="query",
-    request=_query_request_pin(),
-    result=_result_pin(INSPECT_OPERATION_RESULT_SPEC),
-    route=AgentQueryToolRoute(
-        query_owner=_INSPECT_QUERY_OWNER,
-        workspace_actor_binder=_route_pin(
-            "sourcing_agent.agent_projection_query.bind_inspect_operation_request",
-            "inspect_operation_binder_v1",
-            {"owner_preflight": "workspace+action+operation_run", "actor_from_transport": True},
-        ),
-        adapter=_route_pin(
-            "sourcing_agent.agent_projection_query.execute_inspect_operation",
-            "inspect_operation_adapter_v2",
-            {"effects": "read_only", "repair": False, "control_inference": False},
-        ),
-    ),
+    adapter_revision="inspect_operation_adapter_v2",
+    simulate_fixture=_fixture_pin_from_record(_INSPECT_OPERATION_V2_FIXTURE_RECORD),
+)
+
+INSPECT_OPERATION_TOOL_SPEC = _inspect_operation_tool_spec(
+    result_spec=INSPECT_OPERATION_RESULT_SPEC,
+    tool_spec_version="inspect_operation_tool_v3",
+    adapter_revision="inspect_operation_adapter_v3",
     simulate_fixture=_fixture_pin("inspect_operation"),
-    release_state_ref=_release_ref(None, "inspect_operation"),
-    execution_subject=_execution_subject(),
-    budget=AgentToolBudgetRequirement(mode="not_required"),
-    capability=AgentToolCapabilityRequirement(mode="not_required"),
-    behavior=AgentToolBehavior(
-        effect_class="read_only",
-        command_exposure="none",
-        approval=_approval(False),
-        control_policy=_QUERY_CONTROL_PIN,
-    ),
+    fingerprint_schema_version=AGENT_TOOL_SPEC_SCHEMA_VERSION_V2,
 )
 
 LOCAL_CANARY_AGENT_TOOL_REGISTRY = AgentToolRegistry.from_specs(
@@ -608,6 +664,8 @@ LOCAL_CANARY_AGENT_TOOL_REGISTRY = AgentToolRegistry.from_specs(
         PLAN_ACQUISITION_TOOL_SPEC,
         START_ACQUISITION_RUN_TOOL_SPEC_V2,
         START_ACQUISITION_RUN_TOOL_SPEC,
+        INSPECT_OPERATION_TOOL_SPEC_V1,
+        INSPECT_OPERATION_TOOL_SPEC_V2,
         INSPECT_OPERATION_TOOL_SPEC,
         FILTER_PROJECTION_TOOL_SPEC,
     ),
@@ -631,6 +689,8 @@ __all__ = [
     "FILTER_PROJECTION_TOOL_SPEC",
     "FILTER_PROJECTION_V2_CANARY_ACTION_SPEC",
     "INSPECT_OPERATION_TOOL_SPEC",
+    "INSPECT_OPERATION_TOOL_SPEC_V1",
+    "INSPECT_OPERATION_TOOL_SPEC_V2",
     "LOCAL_CANARY_ACTION_SPECS",
     "LOCAL_CANARY_AGENT_TOOL_REGISTRY",
     "LOCAL_CANARY_EXECUTION_SUBJECT_SCHEMA_VERSION",

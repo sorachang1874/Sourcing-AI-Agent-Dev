@@ -2,9 +2,10 @@
 
 Date: 2026-07-17
 
-Status: the correctly scoped pinned Ultra review of `bacae9e..3b235fd` is a valid `NO-GO 0/1/4/0`. A bounded author
-fixed-forward response is validated and awaits a fresh pinned non-author review; it is not a formal `GO`. This batch separates physical result-link
-semantics in the immutable tool contract and durable result aggregate. It does not implement the
+Status: the correctly scoped pinned Ultra review of `bacae9e..3b235fd` was a valid `NO-GO 0/1/4/0`. The bounded
+fixed-forward commit `4dddd0e` received a second valid pinned Ultra `NO-GO 0/3/3/0`; its three P1 and three P2 new
+findings remain open for the next bounded response. Neither artifact is a formal `GO`. This batch separates physical
+result-link semantics in the immutable tool contract and durable result aggregate. It does not implement the
 `start_acquisition_run` approval/start UoW, create an Activity, serve a tool, or authorize provider/model/live
 execution.
 
@@ -53,8 +54,9 @@ binds it for new spec-schema v2 records, while existing v1 digests must remain b
   policy.
 - A new `start_acquisition_run_tool_v3` carries `workflow_command_acceptance_v1`; its policy-bearing simulate fixture
   uses `local_agent_simulate_fixture_v2`, while the v2 fixture remains byte-identical under fixture schema v1.
-- The isolated registry therefore has four names and five historical specs; the public/default served population
-  remains zero.
+- At the S1d checkpoint the isolated registry had four names and five historical specs; the later S1b versioned
+  inspect response retains those identities and adds inspect v1/v3 history, producing four names/seven specs. The
+  public/default served population remains zero.
 
 This avoids publishing the same `(tool_name, tool_spec_version)` with a different digest and avoids rotating the
 unchanged plan/filter/inspect historical identities.
@@ -106,7 +108,7 @@ it is not the V2 start authority.
 ## Required evidence before commit
 
 - all existing v1 tool digests remain exact;
-- new start v3 fingerprint and registry 4-name/5-history shape;
+- new start v3 fingerprint and the S1d-checkpoint registry 4-name/5-history shape;
 - positive and negative Python matrices for all three policies;
 - policy exact-copy through pending slot, accepted/quarantined attempt, accepted slot, journal, and replay;
 - `0012 -> 0013` deterministic backfill for all historical effect classes;
@@ -167,8 +169,11 @@ The fresh correctly scoped pinned review at
 - P2 owner/preflight omission: the canonical pre-Agent matrix now assigns the PG-only result aggregate, link policy,
   and inspect readiness owners and names a fast executable preflight.
 
-These are author changes until a fresh pinned non-author review of the fixed-forward commit returns a valid verdict.
-R-019 and R-029 remain residual; no tool is served and no provider/model/live call is authorized.
+The fresh re-review at
+`runtime/reviews/20260717T135248Z_Track-D-D1n-S1d-fixed-forward-re-review.md` exact-bound `5aa3936..4dddd0e` and
+returned valid `NO-GO 0/3/3/0`: equality-alias carriers, plan occurrence/Action binding, the contradictory migration
+procedure, governing durable inventory, and stale review-scope instructions require fixed-forward work. R-019 and
+R-029 remain residual; no tool is served and no provider/model/live call is authorized.
 
 ## Fixed-forward author validation evidence
 

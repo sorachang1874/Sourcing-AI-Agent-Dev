@@ -86,6 +86,9 @@ APPROVAL_NOT_REQUIRED = "not_required"
 APPROVAL_REQUIRED = "required"
 OPERATION_RUN_TERMINAL_STATUSES = {"completed", "failed", "cancelled"}
 OPERATION_ACTION_TERMINAL_STATUSES = {"completed", "failed", "cancelled", "rejected"}
+OPERATION_CANCELLED_PROGRESS_REASON = "operation_cancelled"
+OPERATION_RETRY_REQUESTED_PROGRESS_REASON = "operation_retry_requested"
+OPERATION_RESUME_REQUESTED_PROGRESS_REASON = "operation_resume_requested"
 OPERATION_ACTION_FRESH_SUBMISSION_STATUSES = frozenset({"queued", "approval_required"})
 OPERATION_ACTION_SUBMISSION_STATUSES = frozenset(
     {
@@ -1528,6 +1531,45 @@ def operation_run_control_state(
     )
 
 
+def validate_operation_run_control_state_projection(
+    value: Mapping[str, Any],
+    *,
+    operation_run_id: str = "",
+) -> OperationRunControlState:
+    """Require a projection that the canonical control-state owner can emit.
+
+    Approval status and an already-planned retry id are deliberately absent
+    from the public control projection.  Their two canonical retry-disabled
+    reasons select representative hidden inputs; all other fields are then
+    re-derived by :func:`operation_run_control_state` and compared exactly.
+    """
+
+    if not isinstance(value, Mapping):
+        raise ValueError("operation_run_control_state_projection_invalid")
+    record = dict(value)
+    disabled_reasons = record.get("disabled_reasons")
+    if not isinstance(disabled_reasons, Mapping):
+        raise ValueError("operation_run_control_state_projection_invalid")
+    retry_disabled_reason = str(disabled_reasons.get("retry") or "").strip()
+    normalized_operation_run_id = str(operation_run_id or "").strip()
+    action_approval_status = "rejected" if retry_disabled_reason == "linked_action_rejected" else "not_required"
+    action_retry_operation_run_id = ""
+    if retry_disabled_reason == "linked_action_retry_already_planned":
+        action_retry_operation_run_id = f"{normalized_operation_run_id or 'operation'}:existing_retry"
+
+    expected = operation_run_control_state(
+        operation_status=str(record.get("operation_status") or ""),
+        operation_run_id=normalized_operation_run_id,
+        action_status=str(record.get("action_status") or ""),
+        action_approval_status=action_approval_status,
+        action_retry_operation_run_id=action_retry_operation_run_id,
+        operation_phase=str(record.get("operation_phase") or ""),
+    )
+    if record != expected.to_record():
+        raise ValueError("operation_run_control_state_projection_invalid")
+    return expected
+
+
 def operation_action_id(*, workspace_id: str, action_type: str, idempotency_key: str) -> str:
     seed = (
         f"{str(workspace_id or 'default').strip() or 'default'}:"
@@ -2347,7 +2389,10 @@ class OperationRuntimeWriter:
                 expected_status=expected_status,
                 action_id=action_id,
                 workspace_id=str(operation.get("workspace_id") or "default").strip() or "default",
-                progress_patch={"phase": "cancelled", "reason": str(reason or "").strip()},
+                progress_patch={
+                    "phase": "cancelled",
+                    "reason": OPERATION_CANCELLED_PROGRESS_REASON,
+                },
                 result_ref_patch={},
                 metadata_patch={"cancelled_by": actor},
                 linked_action_metadata_patch={
@@ -2523,7 +2568,7 @@ class OperationRuntimeWriter:
             progress={
                 "phase": "queued_retry",
                 "retry_of_operation_run_id": operation.get("operation_run_id"),
-                "reason": str(reason or "").strip(),
+                "reason": OPERATION_RETRY_REQUESTED_PROGRESS_REASON,
             },
             workflow_ref={},
             cost_budget=dict(operation.get("cost_budget") or {}),
@@ -2608,7 +2653,10 @@ class OperationRuntimeWriter:
         next_operation = self.store.repos.workflow_runtime.update_operation_state(
             str(operation.get("operation_run_id") or ""),
             status="queued",
-            progress_patch={"phase": "resume_requested", "reason": str(reason or "").strip()},
+            progress_patch={
+                "phase": "resume_requested",
+                "reason": OPERATION_RESUME_REQUESTED_PROGRESS_REASON,
+            },
             metadata_patch={"resume_requested_by": actor},
         )
         if (
