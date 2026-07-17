@@ -42,6 +42,55 @@ _FILE_MODE = 0o600
 _DIR_MODE = 0o700
 
 
+def _open_flags(*, directory: bool = False) -> int:
+    flags = os.O_RDONLY if directory else os.O_RDWR
+    if directory and hasattr(os, "O_DIRECTORY"):
+        flags |= os.O_DIRECTORY
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    if hasattr(os, "O_CLOEXEC"):
+        flags |= os.O_CLOEXEC
+    return flags
+
+
+def _validate_private_directory_fd(fd: int, path: Path) -> os.stat_result:
+    """Bind a private directory descriptor to its canonical pathname.
+
+    POSIX directory link counts are topology-dependent (normally at least two),
+    so the single-link invariant used for regular store files cannot apply to
+    directories.  Directory substitution is instead rejected by exact
+    descriptor/path device and inode binding plus owner and mode checks.
+    """
+
+    try:
+        descriptor_info = os.fstat(fd)
+        pathname_info = path.lstat()
+    except OSError as exc:
+        raise CampaignStoreCorruption("campaign_store_directory_path_binding_invalid") from exc
+    if (descriptor_info.st_dev, descriptor_info.st_ino) != (pathname_info.st_dev, pathname_info.st_ino):
+        raise CampaignStoreCorruption("campaign_store_directory_path_binding_invalid")
+    if not stat.S_ISDIR(descriptor_info.st_mode) or not stat.S_ISDIR(pathname_info.st_mode):
+        raise CampaignStoreCorruption("campaign_store_directory_invalid")
+    if descriptor_info.st_uid != os.geteuid() or pathname_info.st_uid != os.geteuid():
+        raise CampaignStoreCorruption("campaign_store_directory_owner_invalid")
+    if stat.S_IMODE(descriptor_info.st_mode) != _DIR_MODE or stat.S_IMODE(pathname_info.st_mode) != _DIR_MODE:
+        raise CampaignStoreCorruption("campaign_store_directory_permission_invalid")
+    return descriptor_info
+
+
+def _open_private_directory_fd(path: Path) -> int:
+    try:
+        fd = os.open(path, _open_flags(directory=True))
+    except OSError as exc:
+        raise CampaignStoreCorruption("campaign_store_directory_missing") from exc
+    try:
+        _validate_private_directory_fd(fd, path)
+        return fd
+    except BaseException:
+        os.close(fd)
+        raise
+
+
 class CampaignStoreError(RuntimeError):
     """Base class carrying a stable machine-readable failure code."""
 
@@ -276,51 +325,131 @@ def _parse_proofs(value: Any, error: str) -> tuple[DirectProof, ...]:
 
 
 class _GlobalLock:
-    def __init__(self, path: Path, timeout_seconds: float) -> None:
+    """Two-level store-global lock with canonical-path binding.
+
+    The private store-root inode is the serialization anchor.  The traditional
+    ``.store.lock`` inode remains an independently validated lock/marker, but
+    replacing that pathname cannot create a second writer lane because every
+    conforming writer must first acquire the unchanged root-directory inode.
+    """
+
+    def __init__(self, root: Path, path: Path, timeout_seconds: float, *, allow_create: bool) -> None:
         if isinstance(timeout_seconds, bool) or not isinstance(timeout_seconds, (int, float)) or timeout_seconds < 0:
             raise CampaignStoreError("lock_timeout_invalid")
+        self._root = root
         self._path = path
         self._timeout_seconds = float(timeout_seconds)
+        self._allow_create = allow_create
+        self._root_fd: int | None = None
         self._fd: int | None = None
 
-    def __enter__(self) -> _GlobalLock:
-        flags = os.O_RDWR | os.O_CREAT
-        if hasattr(os, "O_NOFOLLOW"):
-            flags |= os.O_NOFOLLOW
-        try:
-            fd = os.open(self._path, flags, _FILE_MODE)
-        except OSError as exc:
-            raise CampaignStoreError("store_lock_open_failed") from exc
-        try:
-            os.fchmod(fd, _FILE_MODE)
-            info = os.fstat(fd)
-            if not stat.S_ISREG(info.st_mode):
-                raise CampaignStoreError("store_lock_not_regular")
-            deadline = time.monotonic() + self._timeout_seconds
-            while True:
+    @staticmethod
+    def _acquire(fd: int, deadline: float) -> None:
+        while True:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                return
+            except OSError as exc:
+                if exc.errno not in (errno.EACCES, errno.EAGAIN):
+                    raise CampaignStoreError("store_lock_acquire_failed") from exc
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise CampaignStoreLockBusy("campaign_store_lock_busy") from exc
+                time.sleep(min(0.01, remaining))
+
+    def _open_lock_file(self) -> tuple[int, bool]:
+        flags = _open_flags()
+        created = False
+        if self._allow_create:
+            try:
+                fd = os.open(self._path, flags | os.O_CREAT | os.O_EXCL, _FILE_MODE)
+                created = True
+            except FileExistsError:
                 try:
-                    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                    self._fd = fd
-                    return self
+                    fd = os.open(self._path, flags)
                 except OSError as exc:
-                    if exc.errno not in (errno.EACCES, errno.EAGAIN):
-                        raise CampaignStoreError("store_lock_acquire_failed") from exc
-                    remaining = deadline - time.monotonic()
-                    if remaining <= 0:
-                        raise CampaignStoreLockBusy("campaign_store_lock_busy") from exc
-                    time.sleep(min(0.01, remaining))
+                    raise CampaignStoreError("store_lock_open_failed") from exc
+            except OSError as exc:
+                raise CampaignStoreError("store_lock_open_failed") from exc
+        else:
+            try:
+                fd = os.open(self._path, flags)
+            except OSError as exc:
+                raise CampaignStoreError("store_lock_open_failed") from exc
+        if created:
+            try:
+                # Only a file proven to have been created by this O_EXCL call
+                # receives umask normalization. Existing locks are immutable
+                # inputs and wrong permissions fail closed below.
+                os.fchmod(fd, _FILE_MODE)
+            except BaseException:
+                os.close(fd)
+                raise
+        return fd, created
+
+    def _validate_lock_binding(self, fd: int) -> None:
+        try:
+            descriptor_info = os.fstat(fd)
+            pathname_info = self._path.lstat()
+        except OSError as exc:
+            raise CampaignStoreCorruption("store_lock_path_binding_invalid") from exc
+        if (descriptor_info.st_dev, descriptor_info.st_ino) != (pathname_info.st_dev, pathname_info.st_ino):
+            raise CampaignStoreCorruption("store_lock_path_binding_invalid")
+        if not stat.S_ISREG(descriptor_info.st_mode) or not stat.S_ISREG(pathname_info.st_mode):
+            raise CampaignStoreCorruption("store_lock_not_regular")
+        if descriptor_info.st_uid != os.geteuid() or pathname_info.st_uid != os.geteuid():
+            raise CampaignStoreCorruption("store_lock_owner_invalid")
+        if descriptor_info.st_nlink != 1 or pathname_info.st_nlink != 1:
+            raise CampaignStoreCorruption("store_lock_link_count_invalid")
+        if stat.S_IMODE(descriptor_info.st_mode) != _FILE_MODE or stat.S_IMODE(pathname_info.st_mode) != _FILE_MODE:
+            raise CampaignStoreCorruption("store_lock_permission_invalid")
+
+    def assert_canonical_binding(self) -> None:
+        if self._root_fd is None or self._fd is None:
+            raise CampaignStoreError("store_lock_not_held")
+        _validate_private_directory_fd(self._root_fd, self._root)
+        self._validate_lock_binding(self._fd)
+
+    def __enter__(self) -> _GlobalLock:
+        deadline = time.monotonic() + self._timeout_seconds
+        root_fd = _open_private_directory_fd(self._root)
+        root_locked = False
+        fd: int | None = None
+        fd_locked = False
+        try:
+            self._acquire(root_fd, deadline)
+            root_locked = True
+            fd, _ = self._open_lock_file()
+            self._validate_lock_binding(fd)
+            self._acquire(fd, deadline)
+            fd_locked = True
+            self._root_fd = root_fd
+            self._fd = fd
+            self.assert_canonical_binding()
+            return self
         except BaseException:
-            os.close(fd)
+            if fd is not None:
+                if fd_locked:
+                    fcntl.flock(fd, fcntl.LOCK_UN)
+                os.close(fd)
+            if root_locked:
+                fcntl.flock(root_fd, fcntl.LOCK_UN)
+            os.close(root_fd)
             raise
 
     def __exit__(self, exc_type: object, exc: object, traceback: object) -> None:
-        if self._fd is None:
+        if self._fd is None or self._root_fd is None:
             return
         try:
             fcntl.flock(self._fd, fcntl.LOCK_UN)
         finally:
             os.close(self._fd)
             self._fd = None
+            try:
+                fcntl.flock(self._root_fd, fcntl.LOCK_UN)
+            finally:
+                os.close(self._root_fd)
+                self._root_fd = None
 
 
 class CampaignStore:
@@ -377,7 +506,8 @@ class CampaignStore:
             _fault_injector=_fault_injector,
         )
         instance._prepare_layout()
-        with instance._global_lock():
+        with instance._global_lock(allow_create=True) as lock:
+            lock.assert_canonical_binding()
             manifest = _hashed_object(
                 {
                     "schema_version": STORE_MANIFEST_SCHEMA_VERSION,
@@ -399,9 +529,9 @@ class CampaignStore:
                 if current != raw:
                     raise CampaignStoreCorruption("store_manifest_conflict")
             else:
-                instance._publish_new_file(instance.manifest_path, raw)
-            snapshot = instance._replay_unlocked()
-            instance._repair_heads_unlocked(snapshot)
+                instance._publish_new_file(instance.manifest_path, raw, lock=lock)
+            snapshot = instance._replay_unlocked(lock)
+            instance._repair_heads_unlocked(snapshot, lock)
         return instance
 
     @classmethod
@@ -424,9 +554,9 @@ class CampaignStore:
     def replay(self) -> CampaignStoreReplay:
         """Replay journal authority and repair all materialized heads."""
 
-        with self._global_lock():
-            snapshot = self._replay_unlocked()
-            self._repair_heads_unlocked(snapshot)
+        with self._global_lock() as lock:
+            snapshot = self._replay_unlocked(lock)
+            self._repair_heads_unlocked(snapshot, lock)
             return snapshot
 
     def append_validated_wave(
@@ -464,9 +594,9 @@ class CampaignStore:
         }
         intent_sha256 = _canonical_sha256(intent)
 
-        with self._global_lock():
-            snapshot = self._replay_unlocked()
-            self._repair_heads_unlocked(snapshot)
+        with self._global_lock() as lock:
+            snapshot = self._replay_unlocked(lock)
+            self._repair_heads_unlocked(snapshot, lock)
             existing = next(
                 (
                     item
@@ -478,7 +608,7 @@ class CampaignStore:
             if existing is not None:
                 if existing.intent_sha256 != intent_sha256:
                     raise CampaignMutationConflict("campaign_mutation_conflict")
-                self._repair_heads_unlocked(snapshot)
+                self._repair_heads_unlocked(snapshot, lock)
                 return existing
 
             if snapshot.wave(campaign_id, wave_id) is not None:
@@ -494,7 +624,7 @@ class CampaignStore:
                     raise DirectProofCollision("direct_proof_collision")
 
             object_path = self.objects_dir / f"{bundle_sha256}.json"
-            self._publish_content_addressed(object_path, bundle_raw)
+            self._publish_content_addressed(object_path, bundle_raw, lock=lock)
             self._inject_fault("after_bundle_publish_before_journal")
 
             sequence = len(snapshot.waves) + 1
@@ -509,11 +639,11 @@ class CampaignStore:
             entry_sha256 = entry["entry_sha256"]
             entry_raw = _canonical_json(entry).encode("utf-8") + b"\n"
             journal_path = self.journal_dir / f"{sequence:020d}.{entry_sha256}.json"
-            self._publish_new_file(journal_path, entry_raw)
+            self._publish_new_file(journal_path, entry_raw, lock=lock)
             self._inject_fault("after_journal_publish_before_head")
 
-            committed = self._replay_unlocked()
-            self._repair_heads_unlocked(committed)
+            committed = self._replay_unlocked(lock)
+            self._repair_heads_unlocked(committed, lock)
             result = next(
                 item for item in committed.waves if item.campaign_id == campaign_id and item.mutation_id == mutation_id
             )
@@ -531,13 +661,19 @@ class CampaignStore:
     def read_wave_bundle(self, campaign_id: str, wave_id: str) -> dict[str, Any]:
         """Return a fresh JSON value after replay verifies the owning entry."""
 
-        item = self.get_wave(campaign_id, wave_id)
-        if item is None:
-            raise CampaignStoreError("campaign_wave_not_found")
-        raw = self._read_private_file(
-            self.objects_dir / f"{item.bundle_sha256}.json",
-            "wave_bundle_read_failed",
-        )
+        campaign_id = _identifier(campaign_id, "campaign_id_invalid")
+        wave_id = _identifier(wave_id, "wave_id_invalid")
+        with self._global_lock() as lock:
+            snapshot = self._replay_unlocked(lock)
+            self._repair_heads_unlocked(snapshot, lock)
+            item = snapshot.wave(campaign_id, wave_id)
+            if item is None:
+                raise CampaignStoreError("campaign_wave_not_found")
+            lock.assert_canonical_binding()
+            raw = self._read_private_file(
+                self.objects_dir / f"{item.bundle_sha256}.json",
+                "wave_bundle_read_failed",
+            )
         value = _strict_json_bytes(raw, "wave_bundle_json_invalid")
         canonical = _canonical_json(value).encode("utf-8") + b"\n"
         if raw != canonical or _canonical_sha256(value) != item.bundle_sha256:
@@ -558,29 +694,49 @@ class CampaignStore:
             raise CampaignStoreCorruption("campaign_store_layout_incomplete")
 
     def _ensure_private_directory(self, path: Path, *, create: bool) -> None:
+        created = False
         if create:
             try:
-                path.mkdir(mode=_DIR_MODE, parents=False, exist_ok=True)
+                path.mkdir(mode=_DIR_MODE, parents=False, exist_ok=False)
+                created = True
+            except FileExistsError:
+                pass
             except FileNotFoundError:
                 if path == self.root:
-                    path.mkdir(mode=_DIR_MODE, parents=True, exist_ok=True)
+                    try:
+                        path.mkdir(mode=_DIR_MODE, parents=True, exist_ok=False)
+                        created = True
+                    except FileExistsError:
+                        pass
                 else:
                     raise CampaignStoreError("campaign_store_parent_missing") from None
             except OSError as exc:
                 raise CampaignStoreError("campaign_store_directory_failed") from exc
-        try:
-            info = path.lstat()
-        except OSError as exc:
-            raise CampaignStoreCorruption("campaign_store_directory_missing") from exc
-        if not stat.S_ISDIR(info.st_mode) or stat.S_ISLNK(info.st_mode):
-            raise CampaignStoreCorruption("campaign_store_directory_invalid")
-        if create:
-            path.chmod(_DIR_MODE)
-        elif stat.S_IMODE(info.st_mode) != _DIR_MODE:
-            raise CampaignStoreCorruption("campaign_store_directory_permission_invalid")
+        created_identity: tuple[int, int] | None = None
+        if created:
+            try:
+                created_info = path.lstat()
+                if not stat.S_ISDIR(created_info.st_mode) or created_info.st_uid != os.geteuid():
+                    raise CampaignStoreCorruption("campaign_store_directory_invalid")
+                created_identity = (created_info.st_dev, created_info.st_ino)
+                os.chmod(path, _DIR_MODE, follow_symlinks=False)
+            except OSError as exc:
+                raise CampaignStoreError("campaign_store_directory_normalize_failed") from exc
+        fd = _open_private_directory_fd(path)
+        if created_identity is not None:
+            opened_info = os.fstat(fd)
+            if (opened_info.st_dev, opened_info.st_ino) != created_identity:
+                os.close(fd)
+                raise CampaignStoreCorruption("campaign_store_directory_path_binding_invalid")
+        os.close(fd)
 
-    def _global_lock(self) -> _GlobalLock:
-        return _GlobalLock(self.lock_path, self.lock_timeout_seconds)
+    def _global_lock(self, *, allow_create: bool = False) -> _GlobalLock:
+        return _GlobalLock(
+            self.root,
+            self.lock_path,
+            self.lock_timeout_seconds,
+            allow_create=allow_create,
+        )
 
     def _load_manifest_unlocked(self) -> dict[str, Any]:
         raw = self._read_private_file(self.manifest_path, "store_manifest_read_failed")
@@ -622,8 +778,10 @@ class CampaignStore:
             raise CampaignStoreCorruption("store_manifest_not_canonical")
         return dict(manifest)
 
-    def _replay_unlocked(self) -> CampaignStoreReplay:
+    def _replay_unlocked(self, lock: _GlobalLock) -> CampaignStoreReplay:
+        self._validate_layout()
         self._cleanup_temps_unlocked()
+        lock.assert_canonical_binding()
         manifest = self._load_manifest_unlocked()
         journal_files: list[tuple[int, str, Path]] = []
         try:
@@ -761,7 +919,8 @@ class CampaignStore:
             direct_proof_registry=tuple(proof_registry[key] for key in sorted(proof_registry)),
         )
 
-    def _repair_heads_unlocked(self, snapshot: CampaignStoreReplay) -> None:
+    def _repair_heads_unlocked(self, snapshot: CampaignStoreReplay, lock: _GlobalLock) -> None:
+        lock.assert_canonical_binding()
         wave_by_token = {item.head_token: item for item in snapshot.waves}
         current_heads = {item.campaign_id: item for item in snapshot.campaign_heads}
         try:
@@ -824,7 +983,7 @@ class CampaignStore:
                     raise
                 current = None
             if current != raw:
-                self._replace_file(path, raw)
+                self._replace_file(path, raw, lock=lock)
 
         for path in self.heads_dir.iterdir():
             if path.name not in expected_names:
@@ -876,6 +1035,8 @@ class CampaignStore:
         flags = os.O_RDONLY
         if hasattr(os, "O_NOFOLLOW"):
             flags |= os.O_NOFOLLOW
+        if hasattr(os, "O_CLOEXEC"):
+            flags |= os.O_CLOEXEC
         try:
             fd = os.open(path, flags)
         except FileNotFoundError as exc:
@@ -883,31 +1044,49 @@ class CampaignStore:
         except OSError as exc:
             raise CampaignStoreCorruption(error) from exc
         try:
-            info = os.fstat(fd)
-            if not stat.S_ISREG(info.st_mode):
-                raise CampaignStoreCorruption("private_file_not_regular")
-            if stat.S_IMODE(info.st_mode) != _FILE_MODE:
-                raise CampaignStoreCorruption("private_file_permission_invalid")
+            self._validate_private_file_binding(fd, path)
             chunks: list[bytes] = []
             while True:
                 chunk = os.read(fd, 1024 * 1024)
                 if not chunk:
+                    self._validate_private_file_binding(fd, path)
                     return b"".join(chunks)
                 chunks.append(chunk)
         finally:
             os.close(fd)
+
+    @staticmethod
+    def _validate_private_file_binding(fd: int, path: Path) -> None:
+        try:
+            descriptor_info = os.fstat(fd)
+            pathname_info = path.lstat()
+        except OSError as exc:
+            raise CampaignStoreCorruption("private_file_path_binding_invalid") from exc
+        if (descriptor_info.st_dev, descriptor_info.st_ino) != (pathname_info.st_dev, pathname_info.st_ino):
+            raise CampaignStoreCorruption("private_file_path_binding_invalid")
+        if not stat.S_ISREG(descriptor_info.st_mode) or not stat.S_ISREG(pathname_info.st_mode):
+            raise CampaignStoreCorruption("private_file_not_regular")
+        if descriptor_info.st_uid != os.geteuid() or pathname_info.st_uid != os.geteuid():
+            raise CampaignStoreCorruption("private_file_owner_invalid")
+        if descriptor_info.st_nlink != 1 or pathname_info.st_nlink != 1:
+            raise CampaignStoreCorruption("private_file_link_count_invalid")
+        if stat.S_IMODE(descriptor_info.st_mode) != _FILE_MODE or stat.S_IMODE(pathname_info.st_mode) != _FILE_MODE:
+            raise CampaignStoreCorruption("private_file_permission_invalid")
 
     def _write_temp(self, target: Path, content: bytes) -> Path:
         temp = self.temp_dir / f".{target.parent.name}-{target.name}.{secrets.token_hex(12)}.tmp"
         flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
         if hasattr(os, "O_NOFOLLOW"):
             flags |= os.O_NOFOLLOW
+        if hasattr(os, "O_CLOEXEC"):
+            flags |= os.O_CLOEXEC
         try:
             fd = os.open(temp, flags, _FILE_MODE)
         except OSError as exc:
             raise CampaignStoreError("temporary_file_create_failed") from exc
         try:
             os.fchmod(fd, _FILE_MODE)
+            self._validate_private_file_binding(fd, temp)
             view = memoryview(content)
             while view:
                 written = os.write(fd, view)
@@ -915,6 +1094,7 @@ class CampaignStore:
                     raise CampaignStoreError("temporary_file_write_failed")
                 view = view[written:]
             os.fsync(fd)
+            self._validate_private_file_binding(fd, temp)
         except BaseException:
             try:
                 temp.unlink()
@@ -925,9 +1105,11 @@ class CampaignStore:
             os.close(fd)
         return temp
 
-    def _publish_new_file(self, target: Path, content: bytes) -> None:
+    def _publish_new_file(self, target: Path, content: bytes, *, lock: _GlobalLock) -> None:
         temp = self._write_temp(target, content)
         try:
+            self._ensure_private_directory(target.parent, create=False)
+            lock.assert_canonical_binding()
             os.link(temp, target)
         except FileExistsError as exc:
             raise CampaignStoreCorruption("append_only_target_exists") from exc
@@ -941,14 +1123,15 @@ class CampaignStore:
         self._fsync_directory(target.parent)
         self._fsync_directory(self.temp_dir)
 
-    def _publish_content_addressed(self, target: Path, content: bytes) -> None:
+    def _publish_content_addressed(self, target: Path, content: bytes, *, lock: _GlobalLock) -> None:
+        lock.assert_canonical_binding()
         if target.exists():
             current = self._read_private_file(target, "content_addressed_read_failed")
             if current != content:
                 raise CampaignStoreCorruption("content_addressed_collision")
             return
         try:
-            self._publish_new_file(target, content)
+            self._publish_new_file(target, content, lock=lock)
         except CampaignStoreCorruption as exc:
             if exc.code != "append_only_target_exists":
                 raise
@@ -956,9 +1139,11 @@ class CampaignStore:
             if current != content:
                 raise CampaignStoreCorruption("content_addressed_collision") from exc
 
-    def _replace_file(self, target: Path, content: bytes) -> None:
+    def _replace_file(self, target: Path, content: bytes, *, lock: _GlobalLock) -> None:
         temp = self._write_temp(target, content)
         try:
+            self._ensure_private_directory(target.parent, create=False)
+            lock.assert_canonical_binding()
             os.replace(temp, target)
         except OSError as exc:
             raise CampaignStoreError("materialized_head_replace_failed") from exc
@@ -985,6 +1170,8 @@ class CampaignStore:
                 _TEMP_FILE_RE.fullmatch(path.name) is None
                 or not stat.S_ISREG(info.st_mode)
                 or stat.S_ISLNK(info.st_mode)
+                or info.st_uid != os.geteuid()
+                or info.st_nlink != 1
                 or stat.S_IMODE(info.st_mode) != _FILE_MODE
             ):
                 raise CampaignStoreCorruption("temporary_file_invalid")
@@ -998,10 +1185,7 @@ class CampaignStore:
 
     @staticmethod
     def _fsync_directory(path: Path) -> None:
-        try:
-            fd = os.open(path, os.O_RDONLY)
-        except OSError as exc:
-            raise CampaignStoreError("directory_fsync_open_failed") from exc
+        fd = _open_private_directory_fd(path)
         try:
             os.fsync(fd)
         except OSError as exc:

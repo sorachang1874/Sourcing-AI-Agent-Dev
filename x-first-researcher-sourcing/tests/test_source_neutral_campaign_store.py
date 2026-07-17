@@ -8,6 +8,7 @@ import stat
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from x_first.source_neutral_campaign_store import (
     PHASE1_VALIDATION_BOUNDARY,
@@ -281,6 +282,122 @@ class SourceNeutralCampaignStoreTests(unittest.TestCase):
         finally:
             fcntl.flock(fd, fcntl.LOCK_UN)
             os.close(fd)
+
+    def test_existing_lock_with_public_mode_is_rejected_without_repair(self) -> None:
+        self.store.lock_path.chmod(0o666)
+
+        with self.assertRaisesRegex(CampaignStoreCorruption, "store_lock_permission_invalid"):
+            CampaignStore.create(self.root, store_id="fixture_store_v1")
+
+        self.assertEqual(stat.S_IMODE(self.store.lock_path.stat().st_mode), 0o666)
+
+    def test_new_store_normalizes_only_new_paths_under_restrictive_umask(self) -> None:
+        root = Path(self.temporary.name) / "restrictive-umask-store"
+        previous = os.umask(0o777)
+        try:
+            store = CampaignStore.create(root, store_id="fixture_restrictive_umask")
+        finally:
+            os.umask(previous)
+
+        self.assertEqual(stat.S_IMODE(root.stat().st_mode), 0o700)
+        self.assertEqual(stat.S_IMODE(store.lock_path.stat().st_mode), 0o600)
+        self.assertEqual(stat.S_IMODE(store.manifest_path.stat().st_mode), 0o600)
+
+    def test_hardlinked_lock_is_rejected(self) -> None:
+        alias = self.root / ".store.lock.alias"
+        os.link(self.store.lock_path, alias)
+
+        with self.assertRaisesRegex(CampaignStoreCorruption, "store_lock_link_count_invalid"):
+            CampaignStore.open(self.root)
+
+    def test_lock_path_replacement_cannot_open_a_second_writer_lane(self) -> None:
+        displaced = self.root / ".store.lock.displaced"
+        contender_outcome: list[str] = []
+        writer_b = CampaignStore.open(self.root, lock_timeout_seconds=0)
+
+        def replace_lock_and_probe_contender(point: str) -> None:
+            if point != "after_bundle_publish_before_journal":
+                return
+            os.replace(self.store.lock_path, displaced)
+            fd = os.open(self.store.lock_path, os.O_RDWR | os.O_CREAT | os.O_EXCL, 0o600)
+            try:
+                os.fchmod(fd, 0o600)
+            finally:
+                os.close(fd)
+            try:
+                self._append(
+                    label="writer-b",
+                    proof_labels=("proof-writer-b",),
+                    store=writer_b,
+                )
+            except CampaignStoreLockBusy as exc:
+                contender_outcome.append(exc.code)
+            else:
+                contender_outcome.append("unexpectedly_opened")
+
+        writer_a = CampaignStore.open(self.root, _fault_injector=replace_lock_and_probe_contender)
+        with self.assertRaisesRegex(CampaignStoreCorruption, "store_lock_path_binding_invalid"):
+            self._append(
+                label="writer-a",
+                proof_labels=("proof-writer-a",),
+                store=writer_a,
+            )
+
+        self.assertEqual(contender_outcome, ["campaign_store_lock_busy"])
+        self.assertEqual(list(self.store.journal_dir.iterdir()), [])
+        displaced.unlink()
+
+        committed = self._append(
+            label="writer-b",
+            proof_labels=("proof-writer-b",),
+            store=writer_b,
+        )
+        snapshot = writer_b.replay()
+        self.assertEqual(committed.sequence, 1)
+        self.assertEqual(snapshot.waves, (committed,))
+        self.assertEqual(len(list(self.store.journal_dir.iterdir())), 1)
+
+    def test_hardlinked_authoritative_files_fail_closed(self) -> None:
+        for kind in ("manifest", "journal", "object", "head"):
+            with self.subTest(kind=kind):
+                root = Path(self.temporary.name) / f"campaign-store-{kind}"
+                store = CampaignStore.create(root, store_id=f"fixture_store_{kind}")
+                committed = store.append_validated_wave(
+                    campaign_id="fixture_campaign",
+                    wave_id="wave_001",
+                    mutation_id="mutation_001",
+                    expected_head_token=None,
+                    validated_wave=_validated_wave(kind, f"proof-{kind}"),
+                )
+                authoritative_path = {
+                    "manifest": store.manifest_path,
+                    "journal": store.journal_dir / f"{committed.sequence:020d}.{committed.head_token}.json",
+                    "object": store.objects_dir / f"{committed.bundle_sha256}.json",
+                    "head": store.heads_dir / "fixture_campaign.json",
+                }[kind]
+                os.link(authoritative_path, Path(self.temporary.name) / f"{kind}.hardlink")
+
+                with self.assertRaisesRegex(CampaignStoreCorruption, "private_file_link_count_invalid"):
+                    store.replay()
+
+    def test_authoritative_file_and_directory_owner_are_required(self) -> None:
+        actual_euid = os.geteuid()
+        with mock.patch(
+            "x_first.source_neutral_campaign_store.os.geteuid",
+            return_value=actual_euid + 1,
+        ):
+            with self.assertRaisesRegex(CampaignStoreCorruption, "private_file_owner_invalid"):
+                self.store._read_private_file(self.store.manifest_path, "store_manifest_read_failed")
+            with self.assertRaisesRegex(CampaignStoreCorruption, "campaign_store_directory_owner_invalid"):
+                self.store._ensure_private_directory(self.root, create=False)
+
+    def test_existing_directory_with_public_mode_is_rejected_without_repair(self) -> None:
+        self.root.chmod(0o755)
+
+        with self.assertRaisesRegex(CampaignStoreCorruption, "campaign_store_directory_permission_invalid"):
+            CampaignStore.create(self.root, store_id="fixture_store_v1")
+
+        self.assertEqual(stat.S_IMODE(self.root.stat().st_mode), 0o755)
 
     def test_pre_journal_crash_leaves_no_commit_and_exact_retry_succeeds(self) -> None:
         def crash(point: str) -> None:

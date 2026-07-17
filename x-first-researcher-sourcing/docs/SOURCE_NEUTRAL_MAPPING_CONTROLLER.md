@@ -126,6 +126,15 @@ head files are repairable caches. Replay fails closed on sequence gaps, hash-cha
 materialized frontiers, and tail rollback witnessed by a previously materialized global head. Crash tests cover both
 orphan bundles before journal publication and committed journal entries before head materialization.
 
+The store-global lock uses the private store-root directory inode as the serialization anchor and independently locks
+the canonical `.store.lock` inode. After acquisition and immediately before replay or publication, both descriptors
+must still bind their canonical pathnames. Replacing `.store.lock` therefore cannot open a second writer lane, and the
+active writer fails closed before journal publication. Existing lock files are never permission-repaired: only an
+`O_EXCL`-created lock receives `0600` umask normalization. Every store directory must be owned by the effective UID and
+remain exactly `0700`; every manifest, journal, object, materialized head, temporary file, and lock must be a regular
+effective-UID-owned, single-link `0600` inode. Directory link counts are not fixed because POSIX derives them from
+subdirectory topology; canonical device/inode binding closes directory-path substitution instead.
+
 Phase 1 deliberately accepts an explicit `ValidatedWaveBundle` plus caller-supplied `DirectProof` inventory. It does
 not yet derive either value from raw mapping/hydration/Luna projections, and current `structural_stop` does not read the
 store. Therefore the store foundation has its own scoped test/review result, but it does **not** clear the mapping
