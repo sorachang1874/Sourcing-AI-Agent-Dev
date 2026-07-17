@@ -58,10 +58,19 @@ from sourcing_agent.durable_runtime import (
 from sourcing_agent.operation_runtime import (
     ACTION_CONTINUE_ACQUISITION_RUN,
     DEFAULT_ACTION_REGISTRY,
+    OPERATION_BULK_ADD_TO_CRM_REQUIRES_APPROVAL_PROGRESS_REASON,
+    OPERATION_BULK_CRM_STAGE_UPDATE_REQUIRES_APPROVAL_PROGRESS_REASON,
     OPERATION_CANCELLED_PROGRESS_REASON,
     OPERATION_EVENT_REASON_MAX_LENGTH,
+    OPERATION_PROGRESS_REASON_OWNER_CRM_APPROVAL,
+    OPERATION_PROGRESS_REASON_OWNER_PROJECTION_RESELECTION,
+    OPERATION_PROGRESS_REASON_OWNER_RUNTIME_CONTROL,
+    OPERATION_PROGRESS_REASON_REGISTRY,
+    OPERATION_PROJECTION_MEMBERSHIP_REVISION_STALE_PROGRESS_REASON,
+    OPERATION_PROJECTION_READ_MEMBERSHIP_REVISION_MISSING_PROGRESS_REASON,
     OPERATION_RESUME_REQUESTED_PROGRESS_REASON,
     OPERATION_RETRY_REQUESTED_PROGRESS_REASON,
+    OPERATION_SENSITIVE_CRM_STAGE_REQUIRES_APPROVAL_PROGRESS_REASON,
     operation_run_control_state,
 )
 from tests.source_inspection import all_source_files, find_class_method
@@ -114,6 +123,13 @@ AGENT_TOOL_RESULT_BASE_MIGRATION_PATH = (
 )
 AGENT_TOOL_RESULT_POLICY_MIGRATION_PATH = (
     REPO_ROOT / "src" / "sourcing_agent" / "migrations" / "0013_agent_tool_result_link_policy.sql"
+)
+D1N_SERVING_PLAN_PATH = REPO_ROOT / "docs" / "TRACK_D_D1N_REMAINING_ACTION_AND_AGENT_TOOL_SERVING_PLAN.md"
+AGENT_TOOL_RESULT_TOKEN_MIGRATION_PATH = (
+    REPO_ROOT / "src" / "sourcing_agent" / "migrations" / "0012_agent_tool_result_owner_revision_token.sql"
+)
+AGENT_TOOL_RESULT_EFFECT_MIGRATION_PATH = (
+    REPO_ROOT / "src" / "sourcing_agent" / "migrations" / "0014_agent_tool_result_attempt_effect_contract.sql"
 )
 
 
@@ -399,39 +415,105 @@ def test_agent_tool_result_aggregate_owner_contract_is_canonical() -> None:
     assert OPERATION_RESULT_READINESS_OWNER in readiness_row[header.index("Owner")]
     assert "fail_closed" in readiness_row[header.index("Fallback")]
 
-    progress_reason_codes = {
-        OPERATION_CANCELLED_PROGRESS_REASON,
-        OPERATION_RETRY_REQUESTED_PROGRESS_REASON,
-        OPERATION_RESUME_REQUESTED_PROGRESS_REASON,
+    progress_reason_identities = {
+        (OPERATION_PROGRESS_REASON_OWNER_RUNTIME_CONTROL, "cancelled", OPERATION_CANCELLED_PROGRESS_REASON),
+        (OPERATION_PROGRESS_REASON_OWNER_RUNTIME_CONTROL, "queued_retry", OPERATION_RETRY_REQUESTED_PROGRESS_REASON),
+        (
+            OPERATION_PROGRESS_REASON_OWNER_RUNTIME_CONTROL,
+            "resume_requested",
+            OPERATION_RESUME_REQUESTED_PROGRESS_REASON,
+        ),
+        (
+            OPERATION_PROGRESS_REASON_OWNER_PROJECTION_RESELECTION,
+            "reselection_required",
+            OPERATION_PROJECTION_MEMBERSHIP_REVISION_STALE_PROGRESS_REASON,
+        ),
+        (
+            OPERATION_PROGRESS_REASON_OWNER_PROJECTION_RESELECTION,
+            "reselection_required",
+            OPERATION_PROJECTION_READ_MEMBERSHIP_REVISION_MISSING_PROGRESS_REASON,
+        ),
+        (
+            OPERATION_PROGRESS_REASON_OWNER_CRM_APPROVAL,
+            "approval_required",
+            OPERATION_BULK_CRM_STAGE_UPDATE_REQUIRES_APPROVAL_PROGRESS_REASON,
+        ),
+        (
+            OPERATION_PROGRESS_REASON_OWNER_CRM_APPROVAL,
+            "approval_required",
+            OPERATION_SENSITIVE_CRM_STAGE_REQUIRES_APPROVAL_PROGRESS_REASON,
+        ),
+        (
+            OPERATION_PROGRESS_REASON_OWNER_CRM_APPROVAL,
+            "approval_required",
+            OPERATION_BULK_ADD_TO_CRM_REQUIRES_APPROVAL_PROGRESS_REASON,
+        ),
     }
-    assert progress_reason_codes == {
-        "operation_cancelled",
-        "operation_retry_requested",
-        "operation_resume_requested",
-    }
+    assert set(OPERATION_PROGRESS_REASON_REGISTRY) == progress_reason_identities
+    progress_reason_codes = {code for _owner, _phase, code in progress_reason_identities}
+    assert len(progress_reason_codes) == len(progress_reason_identities)
     assert all(re.fullmatch(r"[a-z0-9][a-z0-9_]{0,95}", code) for code in progress_reason_codes)
     progress_reason_row = field_rows["`operation_runs.progress.reason`"]
-    documented_reason_values = set(re.findall(r"`([^`]+)`", progress_reason_row[allowed_values_index]))
-    assert progress_reason_codes <= documented_reason_values
-    assert "OperationRuntimeWriter" in progress_reason_row[header.index("Owner")]
+    for owner, phase, code in progress_reason_identities:
+        assert owner in progress_reason_row[header.index("Owner")]
+        assert f"`{phase}/{code}`" in progress_reason_row[allowed_values_index]
+    assert "OPERATION_PROGRESS_REASON_REGISTRY" in progress_reason_row[header.index("Source of truth")]
     assert "operation_runs.progress_json" in progress_reason_row[header.index("Source of truth")]
     assert "operation_events.payload_json.reason" in progress_reason_row[header.index("Source of truth")]
     assert "Model-visible `inspect_operation` v3" in progress_reason_row[header.index("Forbidden consumers")]
     assert "no reader repairs the row" in progress_reason_row[header.index("Fallback")]
-    assert "without rewrite" in progress_reason_row[header.index("Migration status")]
+    assert "mint-time" in progress_reason_row[allowed_values_index]
+    assert "must not derive the current phase" in progress_reason_row[header.index("Forbidden consumers")]
+    assert "byte-untouched" in progress_reason_row[header.index("Migration status")]
     assert f"{OPERATION_EVENT_REASON_MAX_LENGTH} characters" in progress_reason_row[header.index("Migration status")]
     assert "retained v1/v2" in progress_reason_row[header.index("Deletion condition")]
     assert OPERATION_EVENT_REASON_MAX_LENGTH == 500
 
     operation_runtime_source = OPERATION_RUNTIME_PATH.read_text(encoding="utf-8")
-    for constant_name in (
-        "OPERATION_CANCELLED_PROGRESS_REASON",
-        "OPERATION_RETRY_REQUESTED_PROGRESS_REASON",
-        "OPERATION_RESUME_REQUESTED_PROGRESS_REASON",
-    ):
-        assert f'"reason": {constant_name}' in operation_runtime_source
     assert operation_runtime_source.count("event_reason = _operation_event_reason(reason)") == 3
     assert operation_runtime_source.count('"reason": event_reason') == 3
+    assert operation_runtime_source.count('"reason": progress_reason') == 3
+
+    runtime_control_methods = {
+        "cancel_operation": ("cancelled", "OPERATION_CANCELLED_PROGRESS_REASON"),
+        "retry_operation": ("queued_retry", "OPERATION_RETRY_REQUESTED_PROGRESS_REASON"),
+        "resume_operation": ("resume_requested", "OPERATION_RESUME_REQUESTED_PROGRESS_REASON"),
+    }
+    for method_name, (phase, constant_name) in runtime_control_methods.items():
+        _method_path, method_source = find_class_method(method_name, class_name="OperationRuntimeWriter")
+        assert f'"phase": "{phase}"' in method_source
+        assert "validate_operation_progress_reason(" in method_source
+        assert f"code={constant_name}" in method_source
+        assert '"reason": progress_reason' in method_source
+        assert "progress_reason_owner=OPERATION_PROGRESS_REASON_OWNER_RUNTIME_CONTROL" in method_source
+
+    _method_path, projection_reselection_source = find_class_method(
+        "_fail_projection_bound_operation_reselection",
+        class_name="SourcingOrchestrator",
+    )
+    assert "validate_operation_progress_reason(" in projection_reselection_source
+    assert "progress_reason_owner=OPERATION_PROGRESS_REASON_OWNER_PROJECTION_RESELECTION" in (
+        projection_reselection_source
+    )
+    _method_path, crm_dispatch_source = find_class_method(
+        "_dispatch_crm_writer_operation",
+        class_name="SourcingOrchestrator",
+    )
+    assert "validate_operation_progress_reason(" in crm_dispatch_source
+    assert "progress_reason_owner=OPERATION_PROGRESS_REASON_OWNER_CRM_APPROVAL" in crm_dispatch_source
+
+    for repository_method in (
+        "upsert_operation",
+        "update_operation_state",
+        "cancel_operation_with_event",
+        "fail_operation_for_stale_input_with_event",
+        "finalize_projection_read_with_event",
+    ):
+        _method_path, repository_source = find_class_method(
+            repository_method,
+            class_name="WorkflowRuntimeRepository",
+        )
+        assert "_validate_operation_progress_reason_input(" in repository_source
 
     inspect_source = AGENT_PROJECTION_QUERY_PATH.read_text(encoding="utf-8")
     assert '"omitted_model_fields": ("progress.reason",)' in inspect_source
@@ -472,6 +554,24 @@ def test_agent_tool_result_aggregate_owner_contract_is_canonical() -> None:
             )
             is None
         )
+
+
+def test_d1n_result_migration_runbook_matches_synchronous_quiesced_cutover() -> None:
+    serving_plan = D1N_SERVING_PLAN_PATH.read_text(encoding="utf-8")
+    assert "does **not** defer its checks with `NOT VALID`" in serving_plan
+    assert "`0012` replaces ordinary CHECK constraints and validates existing rows synchronously" in serving_plan
+    assert "`0013` performs the" in serving_plan
+    assert "deterministic backfill, applies `NOT NULL`" in serving_plan
+    assert "`0014` takes `SHARE ROW EXCLUSIVE`" in serving_plan
+    assert "all validation,\nbackfill, and scan work inside that window" in serving_plan
+
+    for migration_path in (
+        AGENT_TOOL_RESULT_TOKEN_MIGRATION_PATH,
+        AGENT_TOOL_RESULT_POLICY_MIGRATION_PATH,
+        AGENT_TOOL_RESULT_EFFECT_MIGRATION_PATH,
+    ):
+        migration_sql = migration_path.read_text(encoding="utf-8")
+        assert "NOT VALID" not in migration_sql.upper()
 
 
 def test_pre_agent_completion_evidence_matrix_records_current_gates() -> None:

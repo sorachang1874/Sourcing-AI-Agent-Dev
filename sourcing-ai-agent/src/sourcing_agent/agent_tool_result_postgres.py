@@ -359,9 +359,16 @@ def _canonical_plan_occurrence_args(occurrence: AgentToolOccurrence) -> dict[str
     from .acquisition_plan_preview import canonicalize_acquisition_plan_preview_request
 
     occurrence_args = occurrence.canonical_args
+    expected_root_keys = {"input_payload", "target_ref"}
+    if (
+        len(occurrence_args) != len(expected_root_keys)
+        or any(type(key) is not str for key in occurrence_args)
+        or set(occurrence_args) != expected_root_keys
+    ):
+        raise ValueError("agent tool plan result occurrence args root mismatch")
     occurrence_input, occurrence_target = canonicalize_acquisition_plan_preview_request(
-        input_payload=occurrence_args.get("input_payload", {}),
-        target_ref=occurrence_args.get("target_ref", {}),
+        input_payload=occurrence_args["input_payload"],
+        target_ref=occurrence_args["target_ref"],
     )
     return {
         "input_payload": occurrence_input,

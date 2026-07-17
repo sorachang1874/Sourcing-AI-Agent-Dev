@@ -436,8 +436,18 @@
   Current evidence=`807 passed + 119 subtests`、plan+inspect PG=`54 + 44 subtests`、scoped mypy=`0/7`、lint/compile/
   diff green、global mypy=`81/4`。Fresh exact `28c2b2e..f4f3e58` pinned Ultra review 已返回有效
   `NO-GO 0/1/1/0`，另保留 R-019/R-029 residual：plan occurrence 须拒绝多余 root field，而 migration runbook
-  须如实记录 `0012/0013/0014` 在 quiesced window 内同步 validate/backfill/scan。两项进入下一独立 bounded
-  fixed-forward；当前 NO-GO 继续阻塞 S1d signoff/live，但不阻塞 S1b response、S1e0 或无关批。
+  须如实记录 `0012/0013/0014` 在 quiesced window 内同步 validate/backfill/scan。当前 bounded fixed-forward 已
+  在 schema/connection/owner/quarantine 前要求 occurrence root 精确等于 plain-string `input_payload/target_ref`，
+  normal/stale extra-key 均保持 pending 且 attempt/journal 零写；runbook 与 executable preflight 已改为同步
+  validation/backfill/scan 与 `SHARE ROW EXCLUSIVE` 事实。并行的 S1b reason follow-up 将全部生产写入收敛到
+  8-entry exact owner/phase/code registry，五个 repository reason 写入口在 read/native-write 前二次校验，
+  reason-omitting patch 原样保留 brownfield，历史 `18c7583` v1 serializer 的合法 reason byte/hash probe 已冻结。
+  Current integrated evidence：Operation runtime=`193 passed + 592 subtests`；result-slot/inspect PG+history=
+  `70 passed + 52 subtests`；pre-Agent=`62 passed`；focused registry/producer=`10 passed + 22 subtests`；S1d exact=
+  `3 passed`；historical probe=`2 passed`；lint/compile/diff green；global mypy ceiling unchanged=`81 errors/4 files`。
+  Fresh S1b review 的两次 canonical execution 均未形成 verdict；filtered-cache diagnostic 已证明独立
+  `gpt-5.6-sol/ultra/priority` transport 可启动，但随后由服务端 `usageLimitExceeded` fail closed。因此 S1b/S1d
+  formal review 均继续 pending，当前 NO-GO 继续阻塞 signoff/live，但不阻塞 S1e0/S1e1 非 live 开发。
 - [ ] D1m mixed-version rollout gate（R-019）：pre-D1m binary 可继续写 revisionless source row 并绕开
   revision-aware exact-claim canonical materializer。任何 hosted activation 前必须选择并验证其一：quiesced
   single-version cutover，或 separately reviewed dual-write/compatibility bridge；完成前不得声称 rolling overlap

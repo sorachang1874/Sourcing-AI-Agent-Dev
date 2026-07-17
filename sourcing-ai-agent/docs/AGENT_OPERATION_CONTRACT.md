@@ -364,17 +364,28 @@ W9 backend control foundation is active; product Agent UI remains deferred.
 - OperationRun records and control responses expose `control_state` from `operation_runtime.operation_run_control_state`; Agent/UI code must use its `allowed_actions` and `disabled_reasons` for dispatch/resume/retry/cancel buttons instead of local terminal-status sets. If retry returns a child OperationRun, the caller should continue with that child run id rather than mutating or re-dispatching the terminal parent.
   All controls fail closed when the linked action is missing, and the API/repository boundary rejects a linked action
   from another workspace rather than treating it as eligible control state.
-- `OperationRun.progress.reason` is machine-owned control state, not operator-authored display text. Cancel, retry, and
+- `OperationRun.progress.reason` is machine-owned transition provenance, not current control state or
+  operator-authored display text. Cancel, retry, and
   resume persist `operation_cancelled`, `operation_retry_requested`, and `operation_resume_requested` respectively.
+  Projection reselection and CRM approval-required transitions use their own checked-in namespaces. Every producer
+  resolves one exact plain-string owner/phase/code triple from `OPERATION_PROGRESS_REASON_REGISTRY` before its first
+  state write, and every explicit repository reason replacement revalidates the same owner and phase.
+  Registry codes are globally unique. The registered phase is the mint-time transition context, not a permanent
+  constraint on the later current phase: a phase-only patch preserves the last registered reason as transition
+  provenance, and consumers must never derive current phase or control state from it. A progress patch that omits
+  `reason` likewise leaves any existing brownfield value uninterpreted and byte-untouched.
   The trimmed operator reason is accepted only up to 500 characters and retained only in the matching append-only
   Operation event payload for authenticated audit/provenance reads. The bound is enforced before any runtime-writer
   repository read or write; retained historical event payloads are not rewritten. `inspect_operation` v3 omits that
   event text from its model-visible result and binds the raw progress record only in its non-model physical-owner
-  fingerprint. New reason values are absent or bounded lower-snake machine tokens; they are not an authorization,
-  control-policy, readiness, result-link, provider-routing,
-  or user-facing-copy source. Brownfield free-form progress values are not rewritten: authenticated diagnostics and
-  retained v1/v2 lookup/replay may preserve them until the deletion condition in `PRE_AGENT_CONTRACT_REVIEW.md`, while
-  current UI status uses typed control state, status summary, phase, and append-only provenance instead.
+  fingerprint. New reason values are absent or one of the exact registered machine codes; they are not an
+  authorization, control-policy, readiness, result-link, provider-routing, or user-facing-copy source. Brownfield
+  free-form progress values are not rewritten. Authenticated diagnostics may
+  read the raw PG row, v3 omits the value while binding its non-model fingerprint, and an already accepted historical
+  v1/v2 terminal result may replay its immutable bytes. A fresh v1/v2 preparation still projects a nonempty raw reason
+  through the retained serializer and therefore fails closed when free-form text violates that historical schema; it
+  does not normalize or silently preserve that text as a newly accepted result. Current UI status uses typed control
+  state, status summary, phase, and append-only provenance instead.
 - `inspect_operation` binds its closed request plus server workspace/action/actor identities before dependency routing,
   schema bootstrap, or connection acquisition. This applies to success and masked-absence results alike: a valid
   missing/foreign tuple remains the same `operation_not_found`, while malformed or padded identifiers fail before an

@@ -10,6 +10,14 @@
   "result_schema_version": "inspect_operation_result_v1",
   "result_schema_digest": "acd2538887715a9be0167c7d573345d74baea1e614a38ad62256b96b925100c8",
   "serialized_result_sha256": "c824a77c4311bd4d7979e65c85662bc4c8de801a701444ce537bca20fe039f45",
+  "historical_reason_probe": {
+    "probe_schema_version": "inspect_operation_historical_reason_probe_v1",
+    "producer_commit": "18c758314643ceb7959163f1767f31d02d598276",
+    "producer_serializer_blob": "c08bfc1655d2b88bfaf31faf29d58183c16c4e01",
+    "base_serialized_result_sha256": "c824a77c4311bd4d7979e65c85662bc4c8de801a701444ce537bca20fe039f45",
+    "progress_reason": "operation_retry_requested",
+    "serialized_result_sha256": "a482982fd143122b81e49c4c47b41b99433ce8a974a37fcec4f74243b86af334"
+  },
   "serialized_result": {
     "action_id": "action-123",
     "control_policy": {

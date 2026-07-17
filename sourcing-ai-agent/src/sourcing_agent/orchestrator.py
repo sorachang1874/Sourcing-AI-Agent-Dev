@@ -277,14 +277,21 @@ from .operation_runtime import (
     DISPATCH_ADAPTER_PROJECTION_READ,
     OPERATION_ACTION_FRESH_SUBMISSION_STATUSES,
     OPERATION_ACTION_TERMINAL_STATUSES,
+    OPERATION_BULK_ADD_TO_CRM_REQUIRES_APPROVAL_PROGRESS_REASON,
+    OPERATION_BULK_CRM_STAGE_UPDATE_REQUIRES_APPROVAL_PROGRESS_REASON,
     OPERATION_OWNER_BOUND_ACTION_TYPES,
+    OPERATION_PROGRESS_REASON_OWNER_CRM_APPROVAL,
+    OPERATION_PROGRESS_REASON_OWNER_PROJECTION_RESELECTION,
+    OPERATION_PROJECTION_MEMBERSHIP_REVISION_STALE_PROGRESS_REASON,
     OPERATION_RUN_TERMINAL_STATUSES,
+    OPERATION_SENSITIVE_CRM_STAGE_REQUIRES_APPROVAL_PROGRESS_REASON,
     PROJECTION_READ_ACTION_TYPES,
     OperationRuntimeStateConflict,
     OperationRuntimeWriter,
     OwnerBoundTargetRef,
     operation_run_control_state,
     operation_submission_current_status,
+    validate_operation_progress_reason,
 )
 from .organization_assets import warmup_existing_organization_assets
 from .organization_execution_profile import (
@@ -49706,7 +49713,14 @@ class SourcingOrchestrator:
         failure: dict[str, Any],
         actor: str,
     ) -> dict[str, Any]:
-        reason = str(failure.get("reason") or "projection_membership_revision_stale").strip()
+        raw_reason = failure.get("reason")
+        if raw_reason is None or (type(raw_reason) is str and not raw_reason):
+            raw_reason = OPERATION_PROJECTION_MEMBERSHIP_REVISION_STALE_PROGRESS_REASON
+        reason = validate_operation_progress_reason(
+            owner=OPERATION_PROGRESS_REASON_OWNER_PROJECTION_RESELECTION,
+            phase="reselection_required",
+            code=raw_reason,
+        ).code
         expected_revision = str(failure.get("expected_membership_revision") or "").strip()
         membership_revision = str(failure.get("membership_revision") or "").strip()
         projection_id = str(
@@ -49737,6 +49751,7 @@ class SourcingOrchestrator:
             action_id=action_id,
             workspace_id=str(operation_run.get("workspace_id") or "default").strip() or "default",
             progress_patch=conflict_payload,
+            progress_reason_owner=OPERATION_PROGRESS_REASON_OWNER_PROJECTION_RESELECTION,
             result_ref_patch=conflict_payload,
             metadata_patch={"reselection_required": True, **conflict_payload},
             linked_action_metadata_patch={"reselection_required": True, **conflict_payload},
@@ -52752,6 +52767,12 @@ class SourcingOrchestrator:
                 "contract": "w9_operation_run_dispatch_v1",
             }
         approval_reason = self._crm_writer_operation_approval_reason(action)
+        if approval_reason:
+            approval_reason = validate_operation_progress_reason(
+                owner=OPERATION_PROGRESS_REASON_OWNER_CRM_APPROVAL,
+                phase="approval_required",
+                code=approval_reason,
+            ).code
         if approval_reason and str(action.get("approval_status") or "").strip() != "approved":
             if preflighted_existing_plan:
                 return {
@@ -52773,6 +52794,7 @@ class SourcingOrchestrator:
                 str(operation_run.get("operation_run_id") or ""),
                 status="queued",
                 progress_patch={"phase": "approval_required", "reason": approval_reason},
+                progress_reason_owner=OPERATION_PROGRESS_REASON_OWNER_CRM_APPROVAL,
                 metadata_patch={"approval_required_reason": approval_reason},
             )
             event = self.store.repos.workflow_runtime.append_operation_event(
@@ -52950,14 +52972,14 @@ class SourcingOrchestrator:
         stage = str(input_payload.get("stage") or target_ref.get("stage") or "").strip().lower()
         if action_type == ACTION_SET_CRM_STAGE:
             if len(record_ids) > 1:
-                return "bulk_crm_stage_update_requires_approval"
+                return OPERATION_BULK_CRM_STAGE_UPDATE_REQUIRES_APPROVAL_PROGRESS_REASON
             if stage in {"do_not_contact", "archived"}:
-                return "sensitive_crm_stage_requires_approval"
+                return OPERATION_SENSITIVE_CRM_STAGE_REQUIRES_APPROVAL_PROGRESS_REASON
         if (
             action_type == ACTION_ADD_TO_CRM
             and len(self._operation_candidate_identity_keys(input_payload, target_ref)) > 25
         ):
-            return "bulk_add_to_crm_requires_approval"
+            return OPERATION_BULK_ADD_TO_CRM_REQUIRES_APPROVAL_PROGRESS_REASON
         return ""
 
     def _build_crm_writer_operation_command_plan(

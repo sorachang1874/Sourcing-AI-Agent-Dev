@@ -72,6 +72,18 @@ def _normalize_json_object_payload(value: Any) -> dict[str, Any]:
     return _loads_json_dict(value)
 
 
+def _validate_operation_progress_reason_input(
+    progress_patch: dict[str, Any] | None,
+    *,
+    owner: str,
+) -> None:
+    """Keep the repository write boundary closed without importing the service layer at module load."""
+
+    from ..operation_runtime import validate_operation_progress_reason_patch
+
+    validate_operation_progress_reason_patch(progress_patch, owner=owner)
+
+
 WORKFLOW_RECOVERY_INTENTS = TableDescriptor(
     table="workflow_recovery_intents",
     pk=("job_id",),
@@ -2815,6 +2827,7 @@ class WorkflowRuntimeRepository(Repository):
         request_schema_digest: str = "",
         status: str = "queued",
         progress: dict[str, Any] | None = None,
+        progress_reason_owner: str = "",
         workflow_ref: dict[str, Any] | None = None,
         cost_budget: dict[str, Any] | None = None,
         idempotency_key: str,
@@ -2823,6 +2836,7 @@ class WorkflowRuntimeRepository(Repository):
         started_at: str = "",
         completed_at: str = "",
     ) -> dict[str, Any]:
+        _validate_operation_progress_reason_input(progress, owner=progress_reason_owner)
         self._require_postgres_for_durable_runtime("operation_runs")
         normalized_operation_id = str(operation_run_id or "").strip()
         normalized_workspace_id = str(workspace_id or "default").strip() or "default"
@@ -2995,10 +3009,12 @@ class WorkflowRuntimeRepository(Repository):
         *,
         status: str = "",
         progress_patch: dict[str, Any] | None = None,
+        progress_reason_owner: str = "",
         workflow_ref_patch: dict[str, Any] | None = None,
         result_ref_patch: dict[str, Any] | None = None,
         metadata_patch: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
+        _validate_operation_progress_reason_input(progress_patch, owner=progress_reason_owner)
         self._require_postgres_for_durable_runtime("operation_runs")
         normalized_operation_id = str(operation_run_id or "").strip()
         if not normalized_operation_id:
@@ -3199,6 +3215,7 @@ class WorkflowRuntimeRepository(Repository):
         action_id: str = "",
         workspace_id: str = "default",
         progress_patch: dict[str, Any] | None = None,
+        progress_reason_owner: str = "",
         workflow_ref_patch: dict[str, Any] | None = None,
         result_ref_patch: dict[str, Any] | None = None,
         metadata_patch: dict[str, Any] | None = None,
@@ -3208,6 +3225,7 @@ class WorkflowRuntimeRepository(Repository):
         source: str = "",
         event_payload: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
+        _validate_operation_progress_reason_input(progress_patch, owner=progress_reason_owner)
         self._require_postgres_for_durable_runtime("operation_runs")
         self._require_postgres_for_durable_runtime("agent_actions")
         self._require_postgres_for_durable_runtime("operation_events")
@@ -3267,6 +3285,7 @@ class WorkflowRuntimeRepository(Repository):
         action_id: str,
         workspace_id: str = "default",
         progress_patch: dict[str, Any] | None = None,
+        progress_reason_owner: str = "",
         workflow_ref_patch: dict[str, Any] | None = None,
         result_ref_patch: dict[str, Any] | None = None,
         metadata_patch: dict[str, Any] | None = None,
@@ -3276,6 +3295,7 @@ class WorkflowRuntimeRepository(Repository):
         source: str = "",
         event_payload: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
+        _validate_operation_progress_reason_input(progress_patch, owner=progress_reason_owner)
         self._require_postgres_for_durable_runtime("operation_runs")
         self._require_postgres_for_durable_runtime("agent_actions")
         self._require_postgres_for_durable_runtime("operation_events")
@@ -3336,6 +3356,7 @@ class WorkflowRuntimeRepository(Repository):
         terminal_status: str,
         workspace_id: str = "default",
         progress_patch: dict[str, Any] | None = None,
+        progress_reason_owner: str = "",
         result_ref_patch: dict[str, Any] | None = None,
         metadata_patch: dict[str, Any] | None = None,
         linked_action_result_ref_patch: dict[str, Any] | None = None,
@@ -3347,6 +3368,7 @@ class WorkflowRuntimeRepository(Repository):
     ) -> dict[str, Any]:
         """Persist a commandless projection read's terminal state as one PG UoW."""
 
+        _validate_operation_progress_reason_input(progress_patch, owner=progress_reason_owner)
         self._require_postgres_for_durable_runtime("operation_runs")
         self._require_postgres_for_durable_runtime("agent_actions")
         self._require_postgres_for_durable_runtime("operation_events")

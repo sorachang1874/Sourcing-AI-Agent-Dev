@@ -83,6 +83,31 @@ def test_retained_v1_v2_serializers_match_frozen_historical_commit_bytes() -> No
         )
 
 
+def test_retained_v1_serializer_matches_historical_reason_bearing_probe_bytes() -> None:
+    fixture = _load_fixture(_V1_FIXTURE_PATH)
+    probe = dict(fixture["historical_reason_probe"])
+    assert probe == {
+        "probe_schema_version": "inspect_operation_historical_reason_probe_v1",
+        "producer_commit": "18c758314643ceb7959163f1767f31d02d598276",
+        "producer_serializer_blob": "c08bfc1655d2b88bfaf31faf29d58183c16c4e01",
+        "base_serialized_result_sha256": fixture["serialized_result_sha256"],
+        "progress_reason": "operation_retry_requested",
+        "serialized_result_sha256": "a482982fd143122b81e49c4c47b41b99433ce8a974a37fcec4f74243b86af334",
+    }
+
+    reason_bearing_result = json.loads(json.dumps(fixture["serialized_result"]))
+    reason_bearing_result["progress"]["reason"] = probe["progress_reason"]
+    reason_bearing_json = _canonical_json(reason_bearing_result)
+    assert hashlib.sha256(reason_bearing_json.encode("utf-8")).hexdigest() == probe["serialized_result_sha256"]
+    assert (
+        serialize_inspect_operation_result_for_spec(
+            reason_bearing_result,
+            result_spec=INSPECT_OPERATION_RESULT_SPEC_V1,
+        )
+        == reason_bearing_json
+    )
+
+
 def test_retained_v3_physical_binding_ignores_future_current_alias_and_registry_input_order(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

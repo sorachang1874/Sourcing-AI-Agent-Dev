@@ -166,10 +166,27 @@ Its exact 12-file reviewed scope was:
 This scope explicitly reviewed the `0014` brownfield/all-attempt enforcement, S1a historical/current start semantics,
 the canonical owner matrix, and its executable preflight. Those artifacts are evidence for that exact range only.
 
+### Completed canonical-owner response review
+
+The next independent Ultra review exact-bound the complete author response:
+
+- artifact: `runtime/reviews/20260717T150637Z_Track-D-D1n-S1d-canonical-owner-response.md`;
+- base: `28c2b2eb6282462fa5e1a7003590473119e4a30e`;
+- head: `f4f3e58ddce3342f8f7e2e0b88c30898f510fcb1`;
+- model / effort / tier: `gpt-5.6-sol` / `ultra` / `priority`;
+- reviewer exit: `0`;
+- scope digest SHA-256: `7fd287ab4d9cfdd4ec5ffa88e523b3cfebd4482b98c6deed42b5651b5dad71ba`;
+- valid verdict: `NO-GO 0/1/1/0`, plus residuals R-019/R-029; this is not a formal `GO`.
+
+Its P1 found that plan occurrence canonicalization discarded surplus request-root fields before exact Action binding,
+including the stale-generation quarantine path. Its P2 found that the serving runbook falsely described the existing
+`0012 -> 0013 -> 0014` sequence as deferred `NOT VALID` validation even though those migrations synchronously
+validate, backfill, and scan during quiescence.
+
 ### Next fixed-forward response request
 
-- review base: `28c2b2eb6282462fa5e1a7003590473119e4a30e` (the intervening standalone S1b commit; the
-  `4dddd0e` S1d review artifact remains required finding context, not part of the response diff);
+- review base: `f8a72c75b299825d3c14584751a1586adb51dff7` (the intervening S1b response commit is the direct
+  parent; the valid `f4f3e58` S1d artifact remains required finding context, not part of this response diff);
 - review head: `<commit-containing-the-complete-S1d-P1-P2-response>`.
 
 Replace the head placeholder with the exact committed SHA, derive the file list and scope digest from that pinned range,
@@ -230,6 +247,11 @@ The current author-side response closes those six findings without claiming revi
 - both governing PG-only inventories name slot/attempt/journal, executable preflight enforces them, and obsolete review
   instructions are historical rather than reusable.
 
+The subsequent `f4f3e58` review response additionally rejects any plan occurrence whose root is not exactly the two
+plain-string keys `input_payload` and `target_ref` before schema bootstrap, connection acquisition, owner access, or
+normal/stale terminal effects. The runbook now states the real synchronous validation/backfill/scan and lock-budget
+work performed by `0012`, `0013`, and `0014`; a future `NOT VALID` strategy would require a separately named review.
+
 ## Fixed-forward author validation evidence
 
 Run from the repository root with local PostgreSQL and no live provider/model variables:
@@ -286,6 +308,38 @@ py_compile on all 8 changed Python files
 git diff --check
 => clean
 ```
+
+The latest direct-child response additionally ran:
+
+```text
+full tests/test_operation_runtime.py
+=> 193 passed + 592 subtests
+
+full result-slot + inspect-result PG files plus historical fixtures
+=> 70 passed + 52 subtests
+
+full tests/test_pre_agent_contract_review.py
+=> 62 passed
+
+exact normal/stale extra-root rejection plus legal order-insensitive request
+=> 3 passed
+
+historical v1 reason-bearing probe and frozen v1/v2 bytes
+=> 2 passed
+
+make lint
+=> 58 files already formatted; all checks passed
+
+make typecheck
+=> existing ceiling unchanged: 81 errors in 4 files
+
+py_compile on all 9 changed Python files; git diff --check
+=> clean
+```
+
+These remain author results. Reviewer transport/cache diagnostics produced no valid verdict, and the later
+filtered-cache execution stopped on server-side `usageLimitExceeded`; S1d therefore remains `NO-GO` pending a fresh
+pinned non-author review of the committed response.
 
 ## Earlier predecessor author validation evidence
 

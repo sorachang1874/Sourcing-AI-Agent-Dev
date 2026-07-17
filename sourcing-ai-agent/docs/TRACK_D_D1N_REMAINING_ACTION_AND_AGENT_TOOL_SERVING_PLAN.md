@@ -235,8 +235,11 @@ current facade, rederives the complete command policy from the durable registry,
 topology, binds actor/source in a V3-only audit digest, and binds one immutable request before dependency/schema/
 connection access. Cancel/retry/resume operator event text is bounded to 500 characters before any runtime-writer
 repository read or write; frozen historical Git-object fixtures prove V1 bytes and accepted V2 replay without
-invoking head prepare.
-R-019 remains open and a fresh response review is still required; these changes keep public/default `served=0`.
+invoking head prepare. The bounded follow-up closes the complete progress-reason write surface with an exact
+eight-entry runtime-control/projection-reselection/CRM-approval owner/phase/code registry, repository validation for
+explicit reason replacements, and a historical v1 reason-bearing byte/hash probe. Reason-omitting patches preserve
+brownfield values unchanged. R-019 remains open and fresh response review is still required; initialization/cache and
+account-usage failures produced no valid GO/NO-GO artifact. These changes keep public/default `served=0`.
 
 ### 4.3 One `AgentToolSpec` for actions and queries
 
@@ -547,9 +550,15 @@ cancel/reissue them, but never mutate their pins. The exact rollout order is the
 8. begin the R-029 zero-hit observation epoch only after P0 plus all five D1n action rows are current and the complete
    generated roster is 15/15.
 
-Migration checks install `NOT VALID` first, are validated separately after data inventory, and become required only
-after every eligible row is pinned. If a bridge is needed, it is report-visible, never served, and deleted only after
-one full release window with zero complete-population hits and no durable references.
+The existing `0012 -> 0013 -> 0014` sequence does **not** defer its checks with `NOT VALID`. Under the quiesced
+window, `0012` replaces ordinary CHECK constraints and validates existing rows synchronously; `0013` performs the
+deterministic backfill, applies `NOT NULL`, and installs its ordinary CHECK/aggregate constraints synchronously; and
+`0014` takes `SHARE ROW EXCLUSIVE` on attempts and completes its explicit brownfield scan before replacing the
+trigger function. The operator must budget the migrations' checked-in lock/statement timeouts and all validation,
+backfill, and scan work inside that window. Any future `NOT VALID` rollout would require a separately named and
+reviewed migration; it is not an available property of these three files. If a bridge is needed, it is report-visible,
+never served, and deleted only after one full release window with zero complete-population hits and no durable
+references.
 
 Backout moves the activation row to `disabled`, stops new submission/tool visibility, and lets exact pinned historical
 work drain or be cancelled. It never reopens schema-less submission, rewrites pins, downgrades v2 rows to v1, or
@@ -602,7 +611,10 @@ adds `0014` brownfield plus deferred all-attempt effect/policy/link-shape enforc
 start and quiesced-rollout wording, and adds the canonical result aggregate/field-owner fast preflight. Its fresh
 `5aa3936..4dddd0e` pinned Ultra re-review returned valid `NO-GO 0/3/3/0`; the equality-alias carriers, plan Action
 binding, and three contract/doc gaps are addressed author-side in the next bounded response, whose fresh pinned
-non-author re-review remains pending. S1 remains incomplete until physical-owner adapters and terminal-success fixtures
+non-author re-review remains pending. The next exact `28c2b2e..f4f3e58` review returned valid
+`NO-GO 0/1/1/0`: surplus plan-occurrence root fields and the false deferred-validation migration wording are now
+fixed-forward with normal/stale zero-effect coverage and a synchronous `0012 -> 0013 -> 0014` quiesced runbook.
+S1 remains incomplete until physical-owner adapters and terminal-success fixtures
 exist for `start_acquisition_run` and `filter_projection`. The next bounded start batch must first ratify the
 exact approval-receipt, command-acceptance winner, and parent-budget reservation owners; it must not reuse or guess
 the older multi-transaction dispatch path. Default/public serving remains zero. See

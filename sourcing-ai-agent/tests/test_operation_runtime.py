@@ -112,7 +112,19 @@ from sourcing_agent.operation_runtime import (
     ACTION_SET_CRM_STAGE,
     ACTION_START_ACQUISITION_RUN,
     DEFAULT_ACTION_REGISTRY,
+    OPERATION_BULK_ADD_TO_CRM_REQUIRES_APPROVAL_PROGRESS_REASON,
+    OPERATION_BULK_CRM_STAGE_UPDATE_REQUIRES_APPROVAL_PROGRESS_REASON,
+    OPERATION_CANCELLED_PROGRESS_REASON,
     OPERATION_EVENT_REASON_MAX_LENGTH,
+    OPERATION_PROGRESS_REASON_OWNER_CRM_APPROVAL,
+    OPERATION_PROGRESS_REASON_OWNER_PROJECTION_RESELECTION,
+    OPERATION_PROGRESS_REASON_OWNER_RUNTIME_CONTROL,
+    OPERATION_PROGRESS_REASON_REGISTRY,
+    OPERATION_PROJECTION_MEMBERSHIP_REVISION_STALE_PROGRESS_REASON,
+    OPERATION_PROJECTION_READ_MEMBERSHIP_REVISION_MISSING_PROGRESS_REASON,
+    OPERATION_RESUME_REQUESTED_PROGRESS_REASON,
+    OPERATION_RETRY_REQUESTED_PROGRESS_REASON,
+    OPERATION_SENSITIVE_CRM_STAGE_REQUIRES_APPROVAL_PROGRESS_REASON,
     ActionRegistry,
     ActionSpec,
     OperationRuntimeStateConflict,
@@ -120,6 +132,7 @@ from sourcing_agent.operation_runtime import (
     OwnerBoundTargetRef,
     operation_retry_run_id_for,
     operation_run_control_state,
+    validate_operation_progress_reason,
     validate_operation_run_control_state_projection,
 )
 from sourcing_agent.orchestrator import SourcingOrchestrator
@@ -133,6 +146,117 @@ from sourcing_agent.settings import (
 )
 from sourcing_agent.storage import ControlPlaneStore
 from tests.pg_durable_runtime import PGDurableRuntimeTestMixin
+
+
+class _EqualityAliasString(str):
+    """Carry forged bytes while comparing equal to one expected plain string."""
+
+    _equal_to: str
+
+    def __new__(cls, value: str, *, equal_to: str) -> "_EqualityAliasString":
+        instance = super().__new__(cls, value)
+        instance._equal_to = equal_to
+        return instance
+
+    def __eq__(self, other: object) -> bool:
+        return bool(str.__eq__(self, other)) or bool(str.__eq__(self._equal_to, other))
+
+    __hash__ = str.__hash__
+
+
+class OperationProgressReasonRegistryTest(unittest.TestCase):
+    def test_registry_covers_exact_producers_and_rejects_forged_plain_or_subclass_strings(self) -> None:
+        expected = {
+            (
+                OPERATION_PROGRESS_REASON_OWNER_RUNTIME_CONTROL,
+                "cancelled",
+                OPERATION_CANCELLED_PROGRESS_REASON,
+            ),
+            (
+                OPERATION_PROGRESS_REASON_OWNER_RUNTIME_CONTROL,
+                "queued_retry",
+                OPERATION_RETRY_REQUESTED_PROGRESS_REASON,
+            ),
+            (
+                OPERATION_PROGRESS_REASON_OWNER_RUNTIME_CONTROL,
+                "resume_requested",
+                OPERATION_RESUME_REQUESTED_PROGRESS_REASON,
+            ),
+            (
+                OPERATION_PROGRESS_REASON_OWNER_PROJECTION_RESELECTION,
+                "reselection_required",
+                OPERATION_PROJECTION_MEMBERSHIP_REVISION_STALE_PROGRESS_REASON,
+            ),
+            (
+                OPERATION_PROGRESS_REASON_OWNER_PROJECTION_RESELECTION,
+                "reselection_required",
+                OPERATION_PROJECTION_READ_MEMBERSHIP_REVISION_MISSING_PROGRESS_REASON,
+            ),
+            (
+                OPERATION_PROGRESS_REASON_OWNER_CRM_APPROVAL,
+                "approval_required",
+                OPERATION_BULK_CRM_STAGE_UPDATE_REQUIRES_APPROVAL_PROGRESS_REASON,
+            ),
+            (
+                OPERATION_PROGRESS_REASON_OWNER_CRM_APPROVAL,
+                "approval_required",
+                OPERATION_SENSITIVE_CRM_STAGE_REQUIRES_APPROVAL_PROGRESS_REASON,
+            ),
+            (
+                OPERATION_PROGRESS_REASON_OWNER_CRM_APPROVAL,
+                "approval_required",
+                OPERATION_BULK_ADD_TO_CRM_REQUIRES_APPROVAL_PROGRESS_REASON,
+            ),
+        }
+        self.assertEqual(set(OPERATION_PROGRESS_REASON_REGISTRY), expected)
+        self.assertEqual(len({code for _owner, _phase, code in expected}), len(expected))
+        for identity, spec in OPERATION_PROGRESS_REASON_REGISTRY.items():
+            self.assertEqual(identity, (spec.owner, spec.phase, spec.code))
+            self.assertIs(type(spec.owner), str)
+            self.assertIs(type(spec.phase), str)
+            self.assertIs(type(spec.code), str)
+            self.assertIs(
+                validate_operation_progress_reason(owner=spec.owner, phase=spec.phase, code=spec.code),
+                spec,
+            )
+
+        owner = OPERATION_PROGRESS_REASON_OWNER_RUNTIME_CONTROL
+        phase = "cancelled"
+        code = OPERATION_CANCELLED_PROGRESS_REASON
+        forged_cases = (
+            ("plain owner", "forged.owner", phase, code, "not registered"),
+            ("plain phase", owner, "forged_phase", code, "not registered"),
+            ("plain code", owner, phase, "forged_code", "not registered"),
+            (
+                "owner subclass",
+                _EqualityAliasString("forged.owner", equal_to=owner),
+                phase,
+                code,
+                "owner must be an exact string",
+            ),
+            (
+                "phase subclass",
+                owner,
+                _EqualityAliasString("forged_phase", equal_to=phase),
+                code,
+                "phase must be an exact string",
+            ),
+            (
+                "code subclass",
+                owner,
+                phase,
+                _EqualityAliasString("forged_code", equal_to=code),
+                "code must be an exact string",
+            ),
+        )
+        for label, candidate_owner, candidate_phase, candidate_code, error_pattern in forged_cases:
+            with self.subTest(label=label):
+                with self.assertRaisesRegex(ValueError, error_pattern):
+                    validate_operation_progress_reason(
+                        owner=candidate_owner,
+                        phase=candidate_phase,
+                        code=candidate_code,
+                    )
 
 
 class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
@@ -521,6 +645,29 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 "membership_revision": membership_revision,
             },
         )
+
+    @staticmethod
+    def _seed_brownfield_operation_progress(
+        store: ControlPlaneStore,
+        operation_run_id: str,
+        *,
+        status: str = "",
+        progress_patch: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Seed retained pre-registry progress through the migration-level native adapter."""
+
+        repository = store.repos.workflow_runtime
+        current = repository.get_operation(operation_run_id)
+        updated = store._control_plane_postgres.update_operation_run_state(  # noqa: SLF001
+            operation_run_id,
+            table_name="operation_runs",
+            expected_status=str(current["status"]),
+            status=status or str(current["status"]),
+            progress={**dict(current.get("progress") or {}), **progress_patch},
+        )
+        if updated is None:
+            raise AssertionError("brownfield operation progress seed produced no row")
+        return repository.get_operation(operation_run_id)
 
     def _build_r020_orchestrator(self) -> SourcingOrchestrator:
         settings = AppSettings(
@@ -2053,6 +2200,267 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         forged["action_status"] = "completed"
         with self.assertRaisesRegex(ValueError, "operation_run_control_state_projection_invalid"):
             validate_operation_run_control_state_projection(forged)
+
+    def test_progress_reason_repository_boundary_rejects_forged_identity_before_reads_or_writes(self) -> None:
+        repository = self.store.repos.workflow_runtime
+        submitted = self.writer.submit_action(
+            action_type=ACTION_FILTER_PROJECTION,
+            workspace_id="default",
+            owner_bound_target_ref=self._projection_read_owner_target("proj-reason-registry-fence"),
+            idempotency_key="filter:proj-reason-registry-fence",
+        )
+        operation_run_id = submitted.operation_run["operation_run_id"]
+        operation_before = repository.get_operation(operation_run_id)
+        action_before = repository.get_action(submitted.action["action_id"])
+        runs_before = repository.list_operations(action_id=submitted.action["action_id"])
+        events_before = repository.list_operation_events_for_action(submitted.action["action_id"])
+        owner = OPERATION_PROGRESS_REASON_OWNER_RUNTIME_CONTROL
+        phase = "cancelled"
+        code = OPERATION_CANCELLED_PROGRESS_REASON
+        invalid_updates = (
+            ("plain owner", "forged.owner", {"phase": phase, "reason": code}, "not registered"),
+            ("plain phase", owner, {"phase": "forged_phase", "reason": code}, "not registered"),
+            ("plain code", owner, {"phase": phase, "reason": "forged_code"}, "not registered"),
+            (
+                "owner subclass",
+                _EqualityAliasString("forged.owner", equal_to=owner),
+                {"phase": phase, "reason": code},
+                "owner must be an exact string",
+            ),
+            (
+                "phase subclass",
+                owner,
+                {"phase": _EqualityAliasString("forged_phase", equal_to=phase), "reason": code},
+                "phase must be an exact string",
+            ),
+            (
+                "code subclass",
+                owner,
+                {"phase": phase, "reason": _EqualityAliasString("forged_code", equal_to=code)},
+                "code must be an exact string",
+            ),
+            ("reason without phase", owner, {"reason": code}, "requires an explicit phase"),
+            ("owner without reason", owner, {"phase": phase}, "owner supplied without reason"),
+        )
+
+        for label, candidate_owner, progress_patch, error_pattern in invalid_updates:
+            with self.subTest(label=label):
+                with (
+                    mock.patch.object(
+                        repository,
+                        "get_operation",
+                        side_effect=AssertionError("progress reason validation reached a repository read"),
+                    ) as operation_read,
+                    mock.patch.object(
+                        repository,
+                        "_call_native_write",
+                        side_effect=AssertionError("progress reason validation reached a native write"),
+                    ) as native_write,
+                ):
+                    with self.assertRaisesRegex(ValueError, error_pattern):
+                        repository.update_operation_state(
+                            operation_run_id,
+                            progress_patch=progress_patch,
+                            progress_reason_owner=candidate_owner,
+                        )
+                    operation_read.assert_not_called()
+                    native_write.assert_not_called()
+
+        self.assertEqual(repository.get_operation(operation_run_id), operation_before)
+        self.assertEqual(repository.get_action(submitted.action["action_id"]), action_before)
+        self.assertEqual(repository.list_operations(action_id=submitted.action["action_id"]), runs_before)
+        self.assertEqual(repository.list_operation_events_for_action(submitted.action["action_id"]), events_before)
+
+    def test_runtime_control_progress_reasons_resolve_before_operation_read(self) -> None:
+        repository = self.store.repos.workflow_runtime
+        cases = (
+            (
+                "cancel",
+                "OPERATION_CANCELLED_PROGRESS_REASON",
+                OPERATION_CANCELLED_PROGRESS_REASON,
+            ),
+            (
+                "retry",
+                "OPERATION_RETRY_REQUESTED_PROGRESS_REASON",
+                OPERATION_RETRY_REQUESTED_PROGRESS_REASON,
+            ),
+            (
+                "resume",
+                "OPERATION_RESUME_REQUESTED_PROGRESS_REASON",
+                OPERATION_RESUME_REQUESTED_PROGRESS_REASON,
+            ),
+        )
+        for control, constant_name, expected_code in cases:
+            forged_code = _EqualityAliasString(f"forged-{control}-reason", equal_to=expected_code)
+            with self.subTest(control=control):
+                with (
+                    mock.patch(f"sourcing_agent.operation_runtime.{constant_name}", forged_code),
+                    mock.patch.object(
+                        repository,
+                        "get_operation",
+                        side_effect=AssertionError("runtime control reason validation reached an operation read"),
+                    ) as operation_read,
+                ):
+                    with self.assertRaisesRegex(ValueError, "code must be an exact string"):
+                        getattr(self.writer, f"{control}_operation")(
+                            operation_run_id=f"oprun-never-read-{control}",
+                            reason="bounded operator reason",
+                        )
+                    operation_read.assert_not_called()
+
+    def test_all_progress_repository_write_paths_fail_closed_before_native_write(self) -> None:
+        repository = self.store.repos.workflow_runtime
+        submitted = self.writer.submit_action(
+            action_type=ACTION_FILTER_PROJECTION,
+            workspace_id="default",
+            owner_bound_target_ref=self._projection_read_owner_target("proj-reason-write-path-fence"),
+            idempotency_key="filter:proj-reason-write-path-fence",
+        )
+        operation_run_id = submitted.operation_run["operation_run_id"]
+        action_id = submitted.action["action_id"]
+        progress_patch = {
+            "phase": "cancelled",
+            "reason": OPERATION_CANCELLED_PROGRESS_REASON,
+        }
+        boundary_calls = (
+            (
+                "upsert_operation",
+                lambda: repository.upsert_operation(
+                    operation_run_id="oprun_forged_reason_upsert",
+                    workspace_id="default",
+                    action_id=action_id,
+                    owner_module="projection_search_service",
+                    operation_type="projection_filter",
+                    status="queued",
+                    progress=progress_patch,
+                    progress_reason_owner="forged.owner",
+                    idempotency_key="forged-reason-upsert",
+                ),
+            ),
+            (
+                "update_operation_state",
+                lambda: repository.update_operation_state(
+                    operation_run_id,
+                    progress_patch=progress_patch,
+                    progress_reason_owner="forged.owner",
+                ),
+            ),
+            (
+                "cancel_operation_with_event",
+                lambda: repository.cancel_operation_with_event(
+                    operation_run_id,
+                    expected_status=submitted.operation_run["status"],
+                    action_id=action_id,
+                    progress_patch=progress_patch,
+                    progress_reason_owner="forged.owner",
+                    event_idempotency_key="forged-reason-cancel",
+                ),
+            ),
+            (
+                "fail_operation_for_stale_input_with_event",
+                lambda: repository.fail_operation_for_stale_input_with_event(
+                    operation_run_id,
+                    expected_status=submitted.operation_run["status"],
+                    action_id=action_id,
+                    progress_patch=progress_patch,
+                    progress_reason_owner="forged.owner",
+                    event_idempotency_key="forged-reason-stale",
+                ),
+            ),
+            (
+                "finalize_projection_read_with_event",
+                lambda: repository.finalize_projection_read_with_event(
+                    operation_run_id,
+                    expected_status=submitted.operation_run["status"],
+                    action_id=action_id,
+                    terminal_status="failed",
+                    progress_patch=progress_patch,
+                    progress_reason_owner="forged.owner",
+                    event_idempotency_key="forged-reason-finalize",
+                ),
+            ),
+        )
+        operation_before = repository.get_operation(operation_run_id)
+        action_before = repository.get_action(action_id)
+        all_runs_before = repository.list_operations(limit=0)
+        events_before = repository.list_operation_events_for_action(action_id)
+
+        with (
+            mock.patch.object(
+                repository,
+                "get_operation",
+                side_effect=AssertionError("progress reason validation reached a repository read"),
+            ) as operation_read,
+            mock.patch.object(
+                repository,
+                "_call_native_write",
+                side_effect=AssertionError("progress reason validation reached a native write"),
+            ) as native_write,
+        ):
+            for boundary, call in boundary_calls:
+                with self.subTest(boundary=boundary):
+                    with self.assertRaisesRegex(ValueError, "not registered"):
+                        call()
+            operation_read.assert_not_called()
+            native_write.assert_not_called()
+
+        self.assertEqual(repository.get_operation(operation_run_id), operation_before)
+        self.assertEqual(repository.get_action(action_id), action_before)
+        self.assertEqual(repository.list_operations(limit=0), all_runs_before)
+        self.assertEqual(repository.list_operation_events_for_action(action_id), events_before)
+
+    def test_progress_patch_without_reason_preserves_brownfield_reason_verbatim(self) -> None:
+        repository = self.store.repos.workflow_runtime
+        submitted = self.writer.submit_action(
+            action_type=ACTION_FILTER_PROJECTION,
+            workspace_id="default",
+            owner_bound_target_ref=self._projection_read_owner_target("proj-brownfield-reason"),
+            idempotency_key="filter:proj-brownfield-reason",
+        )
+        operation_run_id = submitted.operation_run["operation_run_id"]
+        retained_reason = "legacy operator free text — 原样保留"
+        seeded = self._seed_brownfield_operation_progress(
+            self.store,
+            operation_run_id,
+            progress_patch={"phase": "legacy_phase", "reason": retained_reason},
+        )
+        self.assertEqual(seeded["progress"]["reason"], retained_reason)
+
+        updated = repository.update_operation_state(
+            operation_run_id,
+            progress_patch={"phase": "legacy_phase_recovered", "percent": 50},
+        )
+
+        self.assertEqual(updated["progress"]["reason"], retained_reason)
+        self.assertEqual(updated["progress"]["phase"], "legacy_phase_recovered")
+        self.assertEqual(updated["progress"]["percent"], 50)
+
+    def test_phase_only_patch_retains_registered_reason_as_transition_provenance(self) -> None:
+        repository = self.store.repos.workflow_runtime
+        submitted = self.writer.submit_action(
+            action_type=ACTION_FILTER_PROJECTION,
+            workspace_id="default",
+            owner_bound_target_ref=self._projection_read_owner_target("proj-reason-provenance"),
+            idempotency_key="filter:proj-reason-provenance",
+        )
+        operation_run_id = submitted.operation_run["operation_run_id"]
+        reasoned = repository.update_operation_state(
+            operation_run_id,
+            progress_patch={
+                "phase": "resume_requested",
+                "reason": OPERATION_RESUME_REQUESTED_PROGRESS_REASON,
+            },
+            progress_reason_owner=OPERATION_PROGRESS_REASON_OWNER_RUNTIME_CONTROL,
+        )
+        self.assertEqual(reasoned["progress"]["phase"], "resume_requested")
+
+        advanced = repository.update_operation_state(
+            operation_run_id,
+            progress_patch={"phase": "workflow_command_planned"},
+        )
+
+        self.assertEqual(advanced["progress"]["phase"], "workflow_command_planned")
+        self.assertEqual(advanced["progress"]["reason"], OPERATION_RESUME_REQUESTED_PROGRESS_REASON)
 
     def test_action_registry_unknown_action_fails_closed(self) -> None:
         with self.assertRaisesRegex(KeyError, "unknown operation action type"):
@@ -4056,7 +4464,8 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             idempotency_key="filter:proj-cancel-repair",
         )
         operation_run_id = submitted.operation_run["operation_run_id"]
-        self.store.repos.workflow_runtime.update_operation_state(
+        self._seed_brownfield_operation_progress(
+            self.store,
             operation_run_id,
             status="cancelled",
             progress_patch={"phase": "cancelled", "reason": "legacy_partial"},
@@ -4326,6 +4735,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             "action_id": action["action_id"],
             "workspace_id": "default",
             "progress_patch": conflict_payload,
+            "progress_reason_owner": OPERATION_PROGRESS_REASON_OWNER_PROJECTION_RESELECTION,
             "result_ref_patch": conflict_payload,
             "metadata_patch": {"reselection_required": True, **conflict_payload},
             "linked_action_metadata_patch": {"reselection_required": True, **conflict_payload},
@@ -4410,6 +4820,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             action_conflict_operation["operation_run_id"],
             status="failed",
             progress_patch=conflict_payload,
+            progress_reason_owner=OPERATION_PROGRESS_REASON_OWNER_PROJECTION_RESELECTION,
             result_ref_patch=conflict_payload,
             metadata_patch={"reselection_required": True, **conflict_payload},
         )
@@ -4672,7 +5083,8 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         self.assertEqual(resumed["events"][0]["payload"]["reason"], resume_reason)
         self.assertEqual(duplicate_resume["events"][0]["payload"]["reason"], resume_reason)
 
-        self.store.repos.workflow_runtime.update_operation_state(
+        self._seed_brownfield_operation_progress(
+            self.store,
             operation_run_id,
             status="failed",
             progress_patch={"phase": "failed", "reason": "owner_timeout"},
@@ -4744,7 +5156,8 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         self.assertEqual(resumed["operation_run"]["progress"]["reason"], "operation_resume_requested")
         self.assertEqual(resumed["events"][0]["payload"]["reason"], "")
 
-        repository.update_operation_state(
+        self._seed_brownfield_operation_progress(
+            self.store,
             operation_run_id,
             status="failed",
             progress_patch={"phase": "failed", "reason": "owner_timeout"},
@@ -4778,7 +5191,8 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         }
         retry_submission = submissions["retry"]
         retry_operation_run_id = retry_submission.operation_run["operation_run_id"]
-        repository.update_operation_state(
+        self._seed_brownfield_operation_progress(
+            self.store,
             retry_operation_run_id,
             status="failed",
             progress_patch={"phase": "failed", "reason": "owner_timeout"},
@@ -12053,6 +12467,90 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(
                 api_store.repos.workflow_runtime.list_entity_deltas(command_id=actor_command["command_id"]),
                 [],
+            )
+        finally:
+            api_store.close()
+
+    def test_forged_crm_approval_reason_fails_before_action_operation_event_or_command_writes(self) -> None:
+        settings = AppSettings(
+            project_root=self.runtime_dir,
+            runtime_dir=self.runtime_dir,
+            secrets_file=self.runtime_dir / "secrets.toml",
+            db_path=self.runtime_dir / "crm-forged-approval-reason.db",
+            jobs_dir=self.runtime_dir / "jobs",
+            company_assets_dir=self.runtime_dir / "company_assets",
+            qwen=QwenSettings(enabled=False),
+            semantic=SemanticProviderSettings(enabled=False),
+            harvest=HarvestSettings(profile_scraper=HarvestActorSettings(enabled=False)),
+        )
+        api_store = ControlPlaneStore(settings.db_path)
+        catalog = AssetCatalog.discover()
+        model_client = DeterministicModelClient()
+        orchestrator = SourcingOrchestrator(
+            catalog=catalog,
+            store=api_store,
+            jobs_dir=settings.jobs_dir,
+            model_client=model_client,
+            semantic_provider=LocalSemanticProvider(),
+            acquisition_engine=AcquisitionEngine(catalog, settings, api_store, model_client),
+        )
+        try:
+            record = api_store.upsert_crm_record(
+                {
+                    "crm_record_id": "crmrec-forged-approval-reason",
+                    "workspace_id": "default",
+                    "person_identity_key": "linkedin:forged-approval-reason",
+                    "display_name_cache": "Forged Approval Person",
+                }
+            )
+            submitted = orchestrator.submit_operation_action(
+                {
+                    "action_type": ACTION_SET_CRM_STAGE,
+                    "target_ref": {"crm_record_id": record["crm_record_id"]},
+                    "input": {"stage": "do_not_contact"},
+                    "idempotency_key": "stage:forged-approval-reason",
+                }
+            )
+            repository = api_store.repos.workflow_runtime
+            action_id = submitted["action"]["action_id"]
+            operation_run_id = submitted["operation_run"]["operation_run_id"]
+            action_before = repository.get_action(action_id)
+            operation_before = repository.get_operation(operation_run_id)
+            events_before = repository.list_operation_events(operation_run_id)
+            commands_before = api_store.list_workflow_commands(operation_id=operation_run_id, limit=0)
+            forged_reason = _EqualityAliasString(
+                "forged-sensitive-approval-reason",
+                equal_to=OPERATION_SENSITIVE_CRM_STAGE_REQUIRES_APPROVAL_PROGRESS_REASON,
+            )
+
+            with (
+                mock.patch.object(
+                    orchestrator,
+                    "_crm_writer_operation_approval_reason",
+                    return_value=forged_reason,
+                ),
+                mock.patch.object(repository, "update_action_state") as action_write,
+                mock.patch.object(repository, "update_operation_state") as operation_write,
+                mock.patch.object(repository, "append_operation_event") as event_write,
+                mock.patch.object(orchestrator, "_build_crm_writer_operation_command_plan") as command_plan,
+            ):
+                with self.assertRaisesRegex(ValueError, "code must be an exact string"):
+                    orchestrator._dispatch_crm_writer_operation(  # noqa: SLF001
+                        operation_run=dict(submitted["operation_run"]),
+                        action=dict(submitted["action"]),
+                        actor="unit-test",
+                    )
+                action_write.assert_not_called()
+                operation_write.assert_not_called()
+                event_write.assert_not_called()
+                command_plan.assert_not_called()
+
+            self.assertEqual(repository.get_action(action_id), action_before)
+            self.assertEqual(repository.get_operation(operation_run_id), operation_before)
+            self.assertEqual(repository.list_operation_events(operation_run_id), events_before)
+            self.assertEqual(
+                api_store.list_workflow_commands(operation_id=operation_run_id, limit=0),
+                commands_before,
             )
         finally:
             api_store.close()
@@ -20253,7 +20751,8 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(resumed["status"], "queued")
             self.assertEqual(resumed["operation_run"]["progress"]["phase"], "resume_requested")
 
-            api_store.repos.workflow_runtime.update_operation_state(
+            self._seed_brownfield_operation_progress(
+                api_store,
                 operation_run_id,
                 status="failed",
                 progress_patch={"phase": "failed", "reason": "api-test"},

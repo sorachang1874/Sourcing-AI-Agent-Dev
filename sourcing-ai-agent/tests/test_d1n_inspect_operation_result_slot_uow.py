@@ -173,6 +173,21 @@ class D1nInspectOperationResultSlotUowPGTest(PGControlPlaneStoreTestMixin, unitt
                     counts[table_name] = int(cursor.fetchone()[0])
         return counts
 
+    def _seed_brownfield_progress_reason(self, operation_run_id: str, reason: str) -> dict[str, Any]:
+        """Seed retained pre-registry reason text through the migration-level native adapter."""
+
+        current = self.repository.get_operation(operation_run_id)
+        updated = self.adapter.update_operation_run_state(
+            operation_run_id,
+            table_name="operation_runs",
+            expected_status=str(current["status"]),
+            status=str(current["status"]),
+            progress={**dict(current.get("progress") or {}), "reason": reason},
+        )
+        if updated is None:
+            raise AssertionError("brownfield operation progress seed produced no row")
+        return self.repository.get_operation(operation_run_id)
+
     def _assert_pending_without_terminal_effects(self, occurrence: AgentToolOccurrence) -> None:
         slot = self.repository.get_agent_tool_result_slot(
             occurrence.result_slot_id,
@@ -245,9 +260,9 @@ class D1nInspectOperationResultSlotUowPGTest(PGControlPlaneStoreTestMixin, unitt
                 suffix = f"history_{index}"
                 bundle = self._preview_bundle(suffix=suffix)
                 operation = dict(bundle["operation_run"])
-                updated = self.repository.update_operation_state(
+                updated = self._seed_brownfield_progress_reason(
                     str(operation["operation_run_id"]),
-                    progress_patch={"reason": "operation_retry_requested"},
+                    "operation_retry_requested",
                 )
                 bundle["operation_run"] = updated
                 occurrence = self._occurrence(bundle, suffix=suffix, tool_spec=tool_spec)
@@ -291,9 +306,9 @@ class D1nInspectOperationResultSlotUowPGTest(PGControlPlaneStoreTestMixin, unitt
                 suffix = f"operator_reason_{index}"
                 bundle = self._preview_bundle(suffix=suffix)
                 operation = dict(bundle["operation_run"])
-                updated = self.repository.update_operation_state(
+                updated = self._seed_brownfield_progress_reason(
                     str(operation["operation_run_id"]),
-                    progress_patch={"reason": reason},
+                    reason,
                 )
                 bundle["operation_run"] = updated
                 occurrence = self._occurrence(bundle, suffix=suffix)
@@ -321,17 +336,17 @@ class D1nInspectOperationResultSlotUowPGTest(PGControlPlaneStoreTestMixin, unitt
     def test_v3_raw_operator_reason_drift_after_prepare_leaves_slot_pending(self) -> None:
         bundle = self._preview_bundle(suffix="operator_reason_drift")
         operation = dict(bundle["operation_run"])
-        first = self.repository.update_operation_state(
+        first = self._seed_brownfield_progress_reason(
             str(operation["operation_run_id"]),
-            progress_patch={"reason": "first operator note"},
+            "first operator note",
         )
         bundle["operation_run"] = first
         occurrence = self._occurrence(bundle, suffix="operator_reason_drift")
         terminal = self._prepare(bundle, occurrence, attempt_id="inspectattempt_operator_reason_drift")
         self.repository.reserve_agent_tool_result_slot(occurrence=occurrence)
-        self.repository.update_operation_state(
+        self._seed_brownfield_progress_reason(
             str(operation["operation_run_id"]),
-            progress_patch={"reason": "second operator note"},
+            "second operator note",
         )
 
         with self.assertRaisesRegex(ValueError, "physical owner or serializer mismatch"):

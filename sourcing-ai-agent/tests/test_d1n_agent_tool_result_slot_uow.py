@@ -593,6 +593,35 @@ class D1nAgentToolResultSlotUowPGTest(PGControlPlaneStoreTestMixin, unittest.Tes
         self.assertEqual(accepted["outcome"], "accepted")
         self.assertEqual(accepted["slot"]["status"], "accepted")
 
+    def test_extra_occurrence_root_key_fails_before_normal_acceptance_owner_access(self) -> None:
+        suffix = "extra_occurrence_root_normal"
+        kwargs = _uow_kwargs(suffix=suffix)
+        occurrence = self._occurrence(
+            suffix=suffix,
+            canonical_args={
+                "input_payload": kwargs["input_payload"],
+                "target_ref": kwargs["target_ref"],
+                "injected": {"owner": "caller"},
+            },
+        )
+        bundle = self._preview_bundle(suffix=suffix)
+        terminal = self._terminal(bundle, attempt_id="resultattempt_extra_occurrence_root_normal")
+        self.repository.reserve_agent_tool_result_slot(occurrence=occurrence)
+
+        with (
+            mock.patch.object(self.adapter, "_ensure_table_write_schema") as ensure_schema,
+            mock.patch.object(self.adapter, "_connect_with_timeout") as connect,
+            self.assertRaisesRegex(ValueError, "occurrence args root mismatch"),
+        ):
+            self.adapter.accept_acquisition_plan_tool_result_uow(
+                occurrence=occurrence,
+                terminal=terminal,
+                attempted_slot_generation=1,
+            )
+        ensure_schema.assert_not_called()
+        connect.assert_not_called()
+        self._assert_pending_without_terminal_effects(occurrence)
+
     def test_malformed_action_input_fails_closed_before_terminal_effects(self) -> None:
         suffix = "malformed_action_input"
         occurrence = self._occurrence(suffix=suffix)
@@ -695,6 +724,36 @@ class D1nAgentToolResultSlotUowPGTest(PGControlPlaneStoreTestMixin, unittest.Tes
                 attempted_slot_generation=2,
             )
 
+        self._assert_pending_without_terminal_effects(occurrence)
+
+    def test_extra_occurrence_root_key_fails_before_stale_generation_quarantine(self) -> None:
+        suffix = "extra_occurrence_root_stale"
+        kwargs = _uow_kwargs(suffix=suffix)
+        occurrence = self._occurrence(
+            suffix=suffix,
+            slot_generation=2,
+            canonical_args={
+                "input_payload": kwargs["input_payload"],
+                "target_ref": kwargs["target_ref"],
+                "injected": {"owner": "caller"},
+            },
+        )
+        bundle = self._preview_bundle(suffix=suffix)
+        terminal = self._terminal(bundle, attempt_id="resultattempt_extra_occurrence_root_stale")
+        self.repository.reserve_agent_tool_result_slot(occurrence=occurrence)
+
+        with (
+            mock.patch.object(self.adapter, "_ensure_table_write_schema") as ensure_schema,
+            mock.patch.object(self.adapter, "_connect_with_timeout") as connect,
+            self.assertRaisesRegex(ValueError, "occurrence args root mismatch"),
+        ):
+            self.adapter.accept_acquisition_plan_tool_result_uow(
+                occurrence=occurrence,
+                terminal=terminal,
+                attempted_slot_generation=1,
+            )
+        ensure_schema.assert_not_called()
+        connect.assert_not_called()
         self._assert_pending_without_terminal_effects(occurrence)
 
     def test_stale_slot_generation_is_quarantined_without_consuming_pending_slot(self) -> None:

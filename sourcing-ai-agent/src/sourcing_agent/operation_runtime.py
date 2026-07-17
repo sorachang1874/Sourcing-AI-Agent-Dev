@@ -89,6 +89,14 @@ OPERATION_ACTION_TERMINAL_STATUSES = {"completed", "failed", "cancelled", "rejec
 OPERATION_CANCELLED_PROGRESS_REASON = "operation_cancelled"
 OPERATION_RETRY_REQUESTED_PROGRESS_REASON = "operation_retry_requested"
 OPERATION_RESUME_REQUESTED_PROGRESS_REASON = "operation_resume_requested"
+OPERATION_PROJECTION_MEMBERSHIP_REVISION_STALE_PROGRESS_REASON = "projection_membership_revision_stale"
+OPERATION_PROJECTION_READ_MEMBERSHIP_REVISION_MISSING_PROGRESS_REASON = "projection_read_membership_revision_missing"
+OPERATION_BULK_CRM_STAGE_UPDATE_REQUIRES_APPROVAL_PROGRESS_REASON = "bulk_crm_stage_update_requires_approval"
+OPERATION_SENSITIVE_CRM_STAGE_REQUIRES_APPROVAL_PROGRESS_REASON = "sensitive_crm_stage_requires_approval"
+OPERATION_BULK_ADD_TO_CRM_REQUIRES_APPROVAL_PROGRESS_REASON = "bulk_add_to_crm_requires_approval"
+OPERATION_PROGRESS_REASON_OWNER_RUNTIME_CONTROL = "operation_runtime.OperationRuntimeWriter.control"
+OPERATION_PROGRESS_REASON_OWNER_PROJECTION_RESELECTION = "orchestrator.projection_reselection"
+OPERATION_PROGRESS_REASON_OWNER_CRM_APPROVAL = "orchestrator.crm_writer_approval"
 OPERATION_EVENT_REASON_MAX_LENGTH = 500
 OPERATION_ACTION_FRESH_SUBMISSION_STATUSES = frozenset({"queued", "approval_required"})
 OPERATION_ACTION_SUBMISSION_STATUSES = frozenset(
@@ -148,6 +156,118 @@ REQUEST_SCHEMA_COMPATIBILITY_OBSERVATIONS = frozenset(
     }
 )
 _REQUEST_SCHEMA_VERSION_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}")
+
+
+@dataclass(frozen=True, slots=True)
+class OperationProgressReasonSpec:
+    """One exact machine-owned Operation progress transition reason."""
+
+    owner: str
+    phase: str
+    code: str
+
+    def __post_init__(self) -> None:
+        for field_name in ("owner", "phase", "code"):
+            value = getattr(self, field_name)
+            if type(value) is not str or not value or value != value.strip():
+                raise ValueError(f"operation progress reason {field_name} must be an exact non-empty string")
+
+
+_OPERATION_PROGRESS_REASON_SPECS = (
+    OperationProgressReasonSpec(
+        owner=OPERATION_PROGRESS_REASON_OWNER_RUNTIME_CONTROL,
+        phase="cancelled",
+        code=OPERATION_CANCELLED_PROGRESS_REASON,
+    ),
+    OperationProgressReasonSpec(
+        owner=OPERATION_PROGRESS_REASON_OWNER_RUNTIME_CONTROL,
+        phase="queued_retry",
+        code=OPERATION_RETRY_REQUESTED_PROGRESS_REASON,
+    ),
+    OperationProgressReasonSpec(
+        owner=OPERATION_PROGRESS_REASON_OWNER_RUNTIME_CONTROL,
+        phase="resume_requested",
+        code=OPERATION_RESUME_REQUESTED_PROGRESS_REASON,
+    ),
+    OperationProgressReasonSpec(
+        owner=OPERATION_PROGRESS_REASON_OWNER_PROJECTION_RESELECTION,
+        phase="reselection_required",
+        code=OPERATION_PROJECTION_MEMBERSHIP_REVISION_STALE_PROGRESS_REASON,
+    ),
+    OperationProgressReasonSpec(
+        owner=OPERATION_PROGRESS_REASON_OWNER_PROJECTION_RESELECTION,
+        phase="reselection_required",
+        code=OPERATION_PROJECTION_READ_MEMBERSHIP_REVISION_MISSING_PROGRESS_REASON,
+    ),
+    OperationProgressReasonSpec(
+        owner=OPERATION_PROGRESS_REASON_OWNER_CRM_APPROVAL,
+        phase="approval_required",
+        code=OPERATION_BULK_CRM_STAGE_UPDATE_REQUIRES_APPROVAL_PROGRESS_REASON,
+    ),
+    OperationProgressReasonSpec(
+        owner=OPERATION_PROGRESS_REASON_OWNER_CRM_APPROVAL,
+        phase="approval_required",
+        code=OPERATION_SENSITIVE_CRM_STAGE_REQUIRES_APPROVAL_PROGRESS_REASON,
+    ),
+    OperationProgressReasonSpec(
+        owner=OPERATION_PROGRESS_REASON_OWNER_CRM_APPROVAL,
+        phase="approval_required",
+        code=OPERATION_BULK_ADD_TO_CRM_REQUIRES_APPROVAL_PROGRESS_REASON,
+    ),
+)
+if len({(spec.owner, spec.phase, spec.code) for spec in _OPERATION_PROGRESS_REASON_SPECS}) != len(
+    _OPERATION_PROGRESS_REASON_SPECS
+):  # pragma: no cover - checked-in registry construction invariant.
+    raise RuntimeError("duplicate operation progress reason registry identity")
+if len({spec.code for spec in _OPERATION_PROGRESS_REASON_SPECS}) != len(
+    _OPERATION_PROGRESS_REASON_SPECS
+):  # pragma: no cover - checked-in registry construction invariant.
+    raise RuntimeError("duplicate operation progress reason code")
+OPERATION_PROGRESS_REASON_REGISTRY: Mapping[tuple[str, str, str], OperationProgressReasonSpec] = MappingProxyType(
+    {(spec.owner, spec.phase, spec.code): spec for spec in _OPERATION_PROGRESS_REASON_SPECS}
+)
+
+
+def validate_operation_progress_reason(*, owner: str, phase: str, code: str) -> OperationProgressReasonSpec:
+    """Resolve one exact plain-string mint-time owner/phase/code transition identity."""
+
+    for field_name, value in (("owner", owner), ("phase", phase), ("code", code)):
+        if type(value) is not str:
+            raise ValueError(f"operation progress reason {field_name} must be an exact string")
+    spec = OPERATION_PROGRESS_REASON_REGISTRY.get((owner, phase, code))
+    if spec is None:
+        raise ValueError("operation progress reason owner/phase/code is not registered")
+    return spec
+
+
+def validate_operation_progress_reason_patch(
+    progress_patch: dict[str, Any] | None,
+    *,
+    owner: str = "",
+) -> None:
+    """Validate an explicit reason replacement without reinterpreting retained brownfield state."""
+
+    if type(owner) is not str:
+        raise ValueError("operation progress reason owner must be an exact string")
+    if progress_patch is None:
+        if owner:
+            raise ValueError("operation progress reason owner supplied without reason")
+        return
+    if type(progress_patch) is not dict:
+        raise ValueError("operation progress patch must be an exact dictionary")
+    if any(type(key) is not str for key in progress_patch):
+        raise ValueError("operation progress patch keys must be exact strings")
+    if "reason" not in progress_patch:
+        if owner:
+            raise ValueError("operation progress reason owner supplied without reason")
+        return
+    if "phase" not in progress_patch:
+        raise ValueError("operation progress reason requires an explicit phase")
+    validate_operation_progress_reason(
+        owner=owner,
+        phase=progress_patch["phase"],
+        code=progress_patch["reason"],
+    )
 
 
 def _operation_event_reason(reason: str) -> str:
@@ -2386,6 +2506,11 @@ class OperationRuntimeWriter:
         reason: str = "",
     ) -> dict[str, Any]:
         event_reason = _operation_event_reason(reason)
+        progress_reason = validate_operation_progress_reason(
+            owner=OPERATION_PROGRESS_REASON_OWNER_RUNTIME_CONTROL,
+            phase="cancelled",
+            code=OPERATION_CANCELLED_PROGRESS_REASON,
+        ).code
         operation = self.store.repos.workflow_runtime.get_operation(operation_run_id)
         if not operation:
             raise KeyError(f"operation run not found: {operation_run_id}")
@@ -2402,8 +2527,9 @@ class OperationRuntimeWriter:
                 workspace_id=str(operation.get("workspace_id") or "default").strip() or "default",
                 progress_patch={
                     "phase": "cancelled",
-                    "reason": OPERATION_CANCELLED_PROGRESS_REASON,
+                    "reason": progress_reason,
                 },
+                progress_reason_owner=OPERATION_PROGRESS_REASON_OWNER_RUNTIME_CONTROL,
                 result_ref_patch={},
                 metadata_patch={"cancelled_by": actor},
                 linked_action_metadata_patch={
@@ -2438,6 +2564,11 @@ class OperationRuntimeWriter:
         idempotency_key: str = "",
     ) -> dict[str, Any]:
         event_reason = _operation_event_reason(reason)
+        progress_reason = validate_operation_progress_reason(
+            owner=OPERATION_PROGRESS_REASON_OWNER_RUNTIME_CONTROL,
+            phase="queued_retry",
+            code=OPERATION_RETRY_REQUESTED_PROGRESS_REASON,
+        ).code
         operation = self.store.repos.workflow_runtime.get_operation(operation_run_id)
         if not operation:
             raise KeyError(f"operation run not found: {operation_run_id}")
@@ -2580,8 +2711,9 @@ class OperationRuntimeWriter:
             progress={
                 "phase": "queued_retry",
                 "retry_of_operation_run_id": operation.get("operation_run_id"),
-                "reason": OPERATION_RETRY_REQUESTED_PROGRESS_REASON,
+                "reason": progress_reason,
             },
+            progress_reason_owner=OPERATION_PROGRESS_REASON_OWNER_RUNTIME_CONTROL,
             workflow_ref={},
             cost_budget=dict(operation.get("cost_budget") or {}),
             idempotency_key=persisted_retry_key,
@@ -2657,6 +2789,11 @@ class OperationRuntimeWriter:
         reason: str = "",
     ) -> dict[str, Any]:
         event_reason = _operation_event_reason(reason)
+        progress_reason = validate_operation_progress_reason(
+            owner=OPERATION_PROGRESS_REASON_OWNER_RUNTIME_CONTROL,
+            phase="resume_requested",
+            code=OPERATION_RESUME_REQUESTED_PROGRESS_REASON,
+        ).code
         operation = self.store.repos.workflow_runtime.get_operation(operation_run_id)
         if not operation:
             raise KeyError(f"operation run not found: {operation_run_id}")
@@ -2668,8 +2805,9 @@ class OperationRuntimeWriter:
             status="queued",
             progress_patch={
                 "phase": "resume_requested",
-                "reason": OPERATION_RESUME_REQUESTED_PROGRESS_REASON,
+                "reason": progress_reason,
             },
+            progress_reason_owner=OPERATION_PROGRESS_REASON_OWNER_RUNTIME_CONTROL,
             metadata_patch={"resume_requested_by": actor},
         )
         if (
