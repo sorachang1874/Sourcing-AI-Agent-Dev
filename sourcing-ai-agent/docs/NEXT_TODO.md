@@ -47,6 +47,9 @@
   `operation_dispatch_lock_busy` / `projection_publication_lock_busy` 并映射 HTTP 409。该路径不创建 workflow command，
   因而 command generation/lease fence 不适用；不新增 direct state-sync caller，26 棘轮不升。R-019 对所有其它
   retry/dispatch/command-producing/completion 路径继续 open。
+  D1m candidate 仅在既有 Company Public Web command-producing topology 上增加 persisted/dispatch/root/source/
+  materialize exact request-target revalidation；不把 submit/plan/effect/terminal/Operation sync 收入一个 global
+  UoW，也不提供全局 generation/lease fence，因此 R-019 继续 open。
 - [ ] R-022：②.4c activity spine / R-020 fixed-forward 已固定 `af50f45..30a703e` 异步 Codex review；有效 GO 前只冻结本 scope 的 live/W6/manual/里程碑签收，commands 与其他非 live 开发继续。
 - [ ] R-023：`runtime_outbox` 在 production claim/consumer、Track C 5d 或 outbox live/W6/manual 签收前补 claim generation/token fence；当前无 production consumer，不阻断非 live 开发。
 - [ ] R-025：②.4d `889848e..7048d83` re-review 已重发，但 Codex 0.144 多 thread / non-inline-items transcript 被旧 runner fail-closed 为 `invalid_transport`；提取的 reviewer 内容只作参考，不是 GO/NO-GO。协议适配已由独立 carrier `dc5af51` 修复；operator 顶层 reasoning effort 仍为 `medium`，改为最高支持档后再正式重发。有效 GO 前只冻结本 scope 的 live/W6/manual/里程碑签收。
@@ -218,7 +221,7 @@
   approval 分支在返回 captured plan 前写 action/run/event，触发 R-019 next-mutation tripwire；current fixed-forward
   对 existing-plan approval requirement 只读返回，并把回归扩为全 D1g 表零写。Commit `ebe7ed0` fresh pinned
   non-author scope-local advisory=`GO 0/0/0/0`，但不是 formal GO；R-031 仍 formal-review pending。D1g checkpoint 不迁移当时其余
-  12 个 schema-less action；D1h checkpoint 将其降至 11，当前 D1l partition 见后续 D1l 项。不改 served=0、
+  12 个 schema-less action；D1h checkpoint 将其降至 11，当前 D1m candidate partition 见后续 D1m 项。不改 served=0、
   不授权 live/provider。
 - [x] D1h CRM Public Web action activation current author candidate（2026-07-16）：将
   `enrich_person_public_web` 作为第 4 个 schema-defined action 激活，D1h checkpoint 为 **4 schema-defined / 11 schema-less /
@@ -287,7 +290,7 @@
   `NO-GO 0/9/7/1`，需 fixed-forward + re-review，不是 formal `GO`。R-028 不变；
   无 served/provider/model/live。
 - [x] D1l projection-read action schema activation candidate（2026-07-16）：将 `search_projection` 与
-  `filter_projection` 作为第 8/9 个 schema-defined action 激活，当前 **9 schema-defined / 6 schema-less /
+  `filter_projection` 作为第 8/9 个 schema-defined action 激活，D1l checkpoint 为 **9 schema-defined / 6 schema-less /
   served=0**。Submit 通过 canonical serving projection reader mint `projection_search_service` owner-bound
   `projection_id + membership_revision` target；search/filter aliases exact-one 后规范为 canonical input，multi-select
   filter 严格校验、去重、排序，unknown/lossy intent fail closed。Operation dispatch 使用 persisted exact workspace
@@ -303,7 +306,11 @@
   read-result/domain write 前 reselection，completed HTTP 200，仍不创建 workflow command。Initial
   final stable author evidence=adversarial `5+9 subtests`、API+writer `50+87 subtests`、D1 contract
   `133+176 subtests`、full Operation runtime `139`、lint `58 files`、mypy `81/4`、compile/diff clean。fresh dirty-tree
-  non-author read-only re-audit=`GO 0/0/0/0`，但未 pin、不是 formal `GO`；fresh hash-bound review required。
+  non-author read-only re-audit=`GO 0/0/0/0`，但未 pin、不是 formal `GO`。后续 hash-bound independent artifact
+  `runtime/reviews/20260716T144526Z_Track_D_D1l_projection_read_action_schema_activation.md` 对 35-path scope 返回
+  **NO-GO 0/4/7/0**（另保留 R-019/R-028/R-029）；artifact 证明 scope 自 intended commit `fc5d603` 至 runner
+  resolved head `8744285` 未变化。四个 fixed-forward batch 依次为 workspace/fallback/filter-carrier、
+  replay/failure/retry/lock-order、index-owner/ready-empty、bounded SQL/lock/bytes；fresh re-review required。
   D1l 不新增 direct state-sync caller，R-019 的 26 棘轮不升；该路径无 workflow command，故 command
   generation/lease fence 不适用。此 bounded specialization 不关闭 global R-019；R-028 不变；无
   served/provider/model/live。
@@ -314,11 +321,63 @@
   `projection_person_search_index_build_generation`、`projection_person_search_index_build_input_revision`、
   `projection_person_search_index_input_revision`。因此 raw public counts/readiness patch 不再绕过 D1l
   read/result exclusion。
+- [x] D1m company Public Web action schema activation author candidate（2026-07-16）：仅将
+  `refresh_company_public_web_assets` 作为第 10 个 schema-defined action 激活，candidate partition=
+  **10 schema-defined / 5 schema-less / served=0**。Closed input required=`target_company + source_families +
+  seed_urls`，canonical defaults=`max_assets=50 / force_refresh=false / collection_mode=seed_url_only`，
+  `refresh_nonce` iff force；families/normalized HTTP(S) seed URLs 均 nonempty + dedupe + sort。拒绝 provider-search、
+  collector-bundle、legacy nested command/job/options 与 owner aliases。`CompanyPublicWebTargetBinder` 通过 canonical
+  alias resolver mint exact `workspace_id + company_key`；authenticated transport 只用 server workspace/actor，open
+  mode 保留 explicit operator workspace。Persisted action/run、dispatch、`company.public_web.refresh` root、
+  `company.public_web.source.collect` 与 `company.public_web.assets.materialize` owner 在各自新 effect 前 reload 并
+  exact-compare canonical request/target、schema pin、OperationRun/AgentAction，并从 persisted parent 重算 expected
+  idempotency/command/event causality；materialize 前另验 source-run identity。Migration `0009` 对 protocol-ASCII
+  trim 后 nonblank idempotency key 加 partial UNIQUE；PG owner 对 run/key 排序加锁并拒绝 split identity，source-run
+  metadata 绑定 physical command id/attempt/lease。Same-command higher current attempt 可 reclaim `running|failed`；
+  stale/lower/wrong-lease attempt 以 `owner_lost` 零 source-row 写，completed/failed terminalization 再做 current-claim
+  CAS。Materialize 只消费 full snapshot v3，绑定 assets/summary/artifact paths+publication digest/source
+  revision+completion time/run timestamps，不从 later-run 可变 source rows 或 later clock 重建历史；positive logical revision 统一拥有
+  PG/memory latest ordering，brownfield fallback 显式；asset/evidence 以 exact claim 在单一 PG transaction 写入，
+  `updated_at` monotonic；typed completed repair 从 authenticated source-owner request 强制 deferred。Source snapshot
+  freeze 后，exact plan event、deterministic materialize child、one source-run EntityDelta、physical downstream edge 与
+  source terminal CAS 在一个 PG UoW 提交；takeover、final-CAS failure、event identity collision 均 whole-bundle
+  rollback，ack-loss 仅在 exact replay validation 后接受成功。Operation workspace
+  只做 control-plane authorization，canonical `CompanyAsset` / `CompanyEvidence` 保持 shared-canonical
+  `workspace_id=default`。Source effect commit 后若 pure materialize planning 失败，artifact refs 保留用于 retry，
+  但 plan event/child/source-run EntityDelta/source terminal CAS 全部零写；成功 retry 由其 current attempt 提交唯一
+  bundle 并收敛为 `succeeded`；未 reclaim 的 joined nonterminal 不提升 completed。Source artifact effect 仍先于
+  completion bundle，Activity/Operation sync 仍在其后；此 fixed-forward 不宣称 global submit/effect/Operation-sync
+  UoW 或 exactly-once。Root/source/materialize drains 只为 D1m opt into expired-`claimed` recovery；shared default
+  不变。Guarded start 以 PG clock + deterministic ActivityRun/截至 current attempt 的全部 deterministic
+  ActivityAttempt identities 锁定并 full-validate primary ids/keys、workspace、command/activity/workflow/operation/
+  type/owner/provider、attempt/lease 与 owner metadata；split identity、alternate nonterminal、current/future terminal
+  execution Activity/Attempt rows 与 future/malformed resume evidence 均 pre-write fail closed，fully exact prior terminal 可保留。
+  Succeeded owner-specific resume Attempt 仅在 deterministic resume id/key、generation `<=` current、完整
+  workspace/activity/workflow/command/provider/request-ref/lease + target/company/boolean-force/nonblank-output-reason
+  语义成立时共存。Successful takeover 先把 exact superseded prior running execution attempts 收敛为 `owner_lost`，
+  returned Activity/current Attempt 只有形成 exact `running` spine 才被接受。Exhausted final source closure 以 DB
+  clock 为唯一 lease-expiry authority，并在一个 transaction 中 fail exact Command/Activity/Attempts；valid resume
+  control Attempt 保留，exact current failed owner-loss partial 仅在 error/metadata/output 为同一 nonblank reason、
+  `output.status=skipped`、`error.owner_lost=true`、`error.deterministic_terminal_failure=false` 时收敛；active lease、
+  future/malformed/identity/semantic conflict 全部 zero-write。当前 R-019 direct state-sync ratchet=**24**；历史 26-call checkpoint
+  保留。Latest author evidence=D1m **68 passed + 15 subtests**、Operation Company Public Web selection
+  **52 + 61 subtests**、migration runner **24 + 65 subtests**、
+  lint/compile/diff green、mypy **81/4**；earlier combined D1 **219 + 209 subtests** 仅为 predecessor evidence。
+  首轮 broad combined-D1 的 6 个 D1g stale helper failure 在 clean `abe7725` 完全复现；test-only commit
+  `702de97` 已统一经 production binder 生成 target，exact **7 passed + 35 subtests**，不把该 fixture 漂移记作
+  D1m regression。Enclosing D1m commit 与 fresh pinned non-author review 仍 pending；R-019/R-029 open，无
+  provider/model/live/served authorization。
+- [ ] D1m mixed-version rollout gate（R-019）：pre-D1m binary 可继续写 revisionless source row 并绕开
+  revision-aware exact-claim canonical materializer。任何 hosted activation 前必须选择并验证其一：quiesced
+  single-version cutover，或 separately reviewed dual-write/compatibility bridge；完成前不得声称 rolling overlap
+  safe。删除条件是对应 rollout rehearsal + exact legacy/new-writer convergence evidence 固定到 pinned commit。
 - [ ] R-029：宽松 action-schema bridge 仅可在 production action 尚无 implemented explicit schema/owner binder 期间存在；
   删除条件 = 全部 API-submittable actions（不是只看 served subset）连续一个 release window durable hit=0。
   observation epoch 必须每个 release window bump，且 `NOT VALID` checks 的既有行 validation 在独立部署完成；
-  任一 action 进入 served 集前必须满足完整 schema+adapter+Activity+revisioned model-safe result+simulate serializer
-  谓词；D1l 后当前 6/15 schema-less、served=0。
+  任一 action 进入 served 集前必须满足完整 schema+adapter+Activity+action-specific populated revisioned model-safe
+  result spec + result/simulate serializer mapping + complete served predicate；D1m candidate 后当前 5/15
+  schema-less、served=0。D1m 的 action-specific populated result spec/serializer/served predicate 仍未完成；review
+  pending 不改变完整人口 zero-hit deletion condition。
 - [ ] R-031 review closeout：D1g current author candidate 已将 actions/runs list、detail、provenance 及
   approve/reject/dispatch/resume/retry/cancel 统一到 server-derived exact-workspace preflight，run 同时校验 linked
   action owner；nested commands/events 分别按 linked operation+action owner 与 physical event workspace 在 SQL

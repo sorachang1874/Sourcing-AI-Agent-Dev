@@ -8,6 +8,73 @@
 > month-before-last out before appending. Keep this file under ~300 lines.
 > Archives: [2026-05](docs/archive/progress/PROGRESS_2026-05.md) · [2026-04 and earlier](docs/archive/progress/PROGRESS_2026-04_and_earlier.md)
 
+## 2026-07-17 (Asia/Singapore)
+
+### Track D D1m company Public Web action schema activation
+
+- D1m implementation candidate activates only `refresh_company_public_web_assets` as the tenth schema-defined
+  production action. Its closed input requires canonical `target_company + source_families + seed_urls`, defaults
+  `max_assets=50`, `force_refresh=false`, and `collection_mode=seed_url_only`, and accepts `refresh_nonce` iff force is
+  true. Source families and normalized HTTP/S seed URLs are nonempty, deduplicated, and sorted before persistence;
+  provider-search and collector-bundle modes plus legacy nested command/job/options/owner aliases fail closed.
+- `CompanyPublicWebTargetBinder` accepts only the company selector, uses the canonical alias resolver, and mints exact
+  `workspace_id + company_key`. Authenticated transport derives workspace/actor from request state; open mode preserves
+  explicit operator workspace. Caller target/workspace/tenant/company-key aliases cannot override the owner target.
+- Persisted canonical request/target and schema pins are revalidated at dispatch and before each existing
+  `company.public_web.refresh -> company.public_web.source.collect -> company.public_web.assets.materialize` owner
+  effect. Root/source/materialize commands carry the exact owner target and their stage-required fields while each
+  preflight reloads the complete canonical action input plus exact OperationRun/AgentAction links; source-run identity
+  and parent/downstream causality are checked before materialization. After the source snapshot is frozen, the source
+  owner commits the exact plan event, deterministic materialize child, one source-run EntityDelta, physical downstream
+  edge, and source-command terminal result in one PostgreSQL UoW. Source artifacts still precede that bundle and linked
+  Activity/Operation synchronization follows it, so this is not a global submit/effect/Operation-sync UoW or an
+  exactly-once claim.
+- Materialization no longer reconstructs an older run from mutable source-asset rows. Snapshot v3 binds that run's
+  assets/summary/artifact paths+publication digest/source revision+completion time/run timestamps under one SHA-256, so a later same-URL run,
+  later clock read, or post-plan summary/artifact drift cannot replace payload, provenance, or lineage. Positive source
+  revision owns PG/memory latest ordering; brownfield fallback is explicit. Canonical asset/evidence writes share one
+  exact-claim PG transaction and monotonic `updated_at`; typed repair derives deferred sync from the authenticated
+  source owner. The Operation workspace authorizes the control-plane action only; canonical
+  `CompanyAsset` / `CompanyEvidence` facts retain the ratified shared-canonical `workspace_id=default` identity and do
+  not fork into per-workspace copies.
+- Root/source/materialize causality now recomputes the expected idempotency key, deterministic command id, and plan
+  event id from the persisted parent rather than accepting a self-consistent forged envelope. Migration `0009` adds
+  the normalized nonblank idempotency unique index; the source owner takes sorted run/key locks, rejects split identity,
+  and binds create/reclaim/finalize to the current physical command id/attempt/lease. A higher current attempt of the
+  same command may reclaim `running|failed`; stale/lower/wrong-lease attempts return `owner_lost` without a source-row
+  write. If source effects commit but pure materialize planning fails, artifacts remain available for retry while the
+  plan event, child, source-run EntityDelta, and source terminal CAS are all zero-write; a successful later attempt
+  commits its own single bundle and converges the Activity to `succeeded`. Final-CAS failure and event-identity collision
+  also roll the entire bundle back; post-commit acknowledgement loss succeeds only after exact bundle validation. A
+  non-reclaimed joined nonterminal run is never promoted to completed.
+- Root/source/materialize drains opt into bounded expired-`claimed` recovery without changing the shared default.
+  Guarded start uses the PostgreSQL clock and locks the exact deterministic ActivityRun plus all deterministic
+  ActivityAttempts through the current attempt. It validates the full immutable command/activity/owner/provider spine,
+  rejects split primary/key identities, alternate nonterminal rows, current/future terminal execution Activity/Attempt rows, and
+  future/malformed resume evidence before writes. Fully exact prior terminal execution evidence may remain. A succeeded
+  owner-specific resume Attempt may coexist only with deterministic resume id/key, generation no greater than current,
+  and exact workspace/activity/workflow/command/provider/request-ref/lease plus target/company/boolean-force/nonblank-
+  reason semantics. The returned new Activity/current Attempt must still be exact `running`; successful takeover first
+  closes every exact superseded prior running execution attempt. Exhausted final-source closure uses the database clock
+  as sole expiry authority and atomically fails the exact Command/Activity/Attempts. It preserves a valid resume-control
+  Attempt and converges an exact current failed owner-loss partial only when error/metadata/output share one nonblank
+  reason with `output.status=skipped`, `error.owner_lost=true`, and
+  `error.deterministic_terminal_failure=false`; active leases and future/malformed/semantic/identity conflicts are
+  zero-write.
+- Current candidate partition is **10 schema-defined / 5 schema-less / served=0**. The action still has no populated
+  action-specific revisioned result spec, result/simulate serializer mapping, or complete served predicate. R-019 and
+  R-029 remain open; the current direct state-sync ratchet is **24**, while earlier 26-call checkpoints remain historical
+  evidence. No provider/model/live path is authorized. Latest author evidence: D1m **68 + 15 subtests**; Operation
+  Company Public Web selection **52 + 61 subtests**; migration runner **24 + 65 subtests**; Ruff/diff green; mypy
+  unchanged at **81 errors / 4 files**. Earlier combined D1 **219 + 209 subtests** is predecessor evidence. The six stale D1g raw-target helpers first seen in that broad run reproduced on clean
+  `abe7725` and were separately corrected through the production binder by test-only commit `702de97` (**7 + 35
+  subtests**). The enclosing D1m commit and fresh pinned non-author review remain pending, so no independent verdict or
+  formal `GO` is claimed.
+- D1m is not rolling-deploy compatible with a pre-D1m writer: the old binary can emit revisionless rows and bypass the
+  revision-aware exact-claim materializer. Hosted rollout therefore requires a quiesced single-version cutover, or a
+  separately reviewed dual-write/compatibility bridge, before any D1m activation. This local non-live candidate does
+  not satisfy or bypass that gate.
+
 ## 2026-07-16 (Asia/Singapore)
 
 ### Track D D1l projection read action schema activation
@@ -43,8 +110,17 @@
   **139 passed**; `make lint` green across **58 files**; global mypy unchanged at the accepted ceiling
   **81 errors / 4 files**; changed-file compile and diff checks green. A fresh dirty-tree non-author read-only re-audit
   returned scope-local advisory `GO` with P0/P1/P2/P3=`0/0/0/0`; it is neither pinned nor formal review evidence.
-  Fresh hash-bound review remains required before live/W6/manual/product signoff.
-- Current production partition is **9 schema-defined / 6 schema-less / served=0**. R-029 remains open at 6/15. D1l is
+  The subsequent hash-bound independent review artifact
+  `runtime/reviews/20260716T144526Z_Track_D_D1l_projection_read_action_schema_activation.md` returned **NO-GO** with
+  new P0/P1/P2/P3=`0/4/7/0` (plus residual R-019/R-028/R-029). Its scoped 35 paths were proven unchanged from intended
+  implementation `fc5d603` even though the runner resolved later ambient head `8744285`. D1l signoff remains blocked.
+- The eleven new D1l findings are scheduled as four bounded fixed-forward batches: (1) workspace CRM overlay isolation,
+  migration-only filter fallback isolation, and exactly-one filter carrier; (2) stable replay identity, failed-action
+  closure, reselection retry denial, and terminal replay before publication lock; (3) narrow index-owner patch APIs and
+  published-empty readiness; (4) bounded SQL/lock-hold work and serialized-result byte ceilings. This review does not
+  block the independent non-live D1m implementation batch.
+- The D1l checkpoint partition was **9 schema-defined / 6 schema-less / served=0**. D1m now owns the current candidate
+  count at **10/5/0**; R-029 remains open. D1l is
   only a bounded R-019 specialization: its commandless terminal writes share one PG UoW, command generation/lease
   fencing is inapplicable because no workflow command exists, and the direct state-sync caller ratchet remains **26**.
   Global R-019 and R-028 remain open; no provider/model/live path is authorized.
@@ -181,7 +257,8 @@
   unexpired-lease CAS before any phase link, and native PG errors surface rather than becoming false CAS conflicts.
   Expired-lease recovery consumes that checkpoint after legitimate batch progress without duplicating rows.
 - At the D1h checkpoint the production partition was **4 schema-defined / 11 schema-less / served=0**; the later D1i
-  checkpoint was **5/10/0**, and D1l now owns the current count at **9/6/0**. Confirmed D1h author evidence is
+  checkpoint was **5/10/0**, D1l was **9/6/0**, and D1m now owns the current candidate count at **10/5/0**. Confirmed
+  D1h author evidence is
   D1h action/boundary/checkpoint **20 passed + 7 subtests**, exact Operation/transport/generic retry
   **5 passed + 11 subtests**, CRM Public Web boundary **34 passed**, combined D1 **121 passed + 202 subtests**, and
   final stable-tree Operation **136 passed + 503 subtests**. Lint is green across **58 files**; global mypy remains

@@ -2,7 +2,7 @@
 
 Date: 2026-07-16
 
-Status: implementation candidate; fresh pinned non-author review required before live/W6/manual/product signoff.
+Status: pinned independent review `NO-GO`; fixed-forward and re-review required before live/W6/manual/product signoff.
 
 ## Scope
 
@@ -86,7 +86,11 @@ command-planning adapters retain HTTP 202.
 
 ## Residuals
 
-- R-029 remains open at **6/15** schema-less production actions.
+- At the D1l checkpoint R-029 remained open at **6/15** schema-less production actions. The later D1m candidate moves
+  only `refresh_company_public_web_assets` to an explicit schema/owner binder, so the current candidate numerator is
+  **5/15**; D1m has a stable-tree fixed-forward with author evidence while its enclosing commit and pinned review
+  remain pending, and the R-029
+  deletion gate is unchanged.
 - R-019 remains open globally. D1l is a bounded commandless specialization: terminal action+Operation+event writes use
   one PG UoW and both session locks share one monotonic total deadline; there is no workflow command, so command
   generation/lease fencing is inapplicable. No direct state-sync caller is added and the ratchet remains **26**. Other
@@ -126,6 +130,29 @@ changed Python py_compile:         clean
 git diff --check:                  clean
 ```
 
-A fresh dirty-tree non-author read-only re-audit returned P0/P1/P2/P3=`0/0/0/0`, scope-local advisory `GO`. It is not
-a pinned or formal `GO`. The implementation commit and its fresh hash-bound independent-review artifact are recorded
-only after those steps complete; live/W6/manual/product signoff remains fail-closed meanwhile.
+A fresh dirty-tree non-author read-only re-audit returned P0/P1/P2/P3=`0/0/0/0`, scope-local advisory `GO`; it was not
+pinned or formal evidence. The later hash-bound independent artifact
+`runtime/reviews/20260716T144526Z_Track_D_D1l_projection_read_action_schema_activation.md` reviewed the exact 35-path
+scope and proved those paths unchanged from intended implementation commit `fc5d603` even though its runner resolved
+ambient head `8744285`. It returned **NO-GO**, with new P0/P1/P2/P3=`0/4/7/0` and accepted residuals R-019/R-028/R-029.
+
+The eleven new findings are retained, not collapsed into the residuals:
+
+1. exact-workspace CRM overlay reads must never inherit another workspace's stored overlay;
+2. durable replay recognition must precede rebinding a mutable membership revision;
+3. the migration/debug filter-scan fallback must be unreachable from normal Operation actions;
+4. projection work performed while both session locks are held must have a bounded SQL/lock-hold budget;
+5. durable results must have a canonical serialized-byte ceiling;
+6. ordinary failed reads must terminalize the linked action in the same UoW;
+7. reselection-required operations must not advertise or accept generic retry;
+8. exact terminal replay must return before acquiring the publication lock;
+9. `filter_projection` must require exactly one filter carrier;
+10. a completed empty canonical index must be a ready zero-row result; and
+11. generic publication patching must not mutate index-owned readiness/status/count products.
+
+Remediation is split into four bounded batches: workspace/fallback/filter carrier; replay/failure/retry/lock
+order; owner API/ready-empty; then bounded SQL/lock/bytes. Live/W6/manual/product signoff remains fail-closed until the
+fixed-forward scope has a fresh valid review.
+
+D1m is a separate successor scope. Its candidate registry partition is **10 schema-defined / 5 schema-less /
+served=0**; it does not alter or waive D1l's pinned `NO-GO` and may proceed only as an unrelated non-live batch.

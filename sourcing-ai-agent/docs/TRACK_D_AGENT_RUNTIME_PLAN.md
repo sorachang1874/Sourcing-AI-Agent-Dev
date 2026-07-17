@@ -191,8 +191,10 @@ serve、会话/事件层、planner loop），用一个垂直切片证明闭环�
   action/operation，caller-supplied stale revision submit-time 零写，成功 submit 后 observation 到的 stale 才持久化
   Operation failure/reselection evidence。Final stable author evidence=adversarial `5+9 subtests`、API+writer
   `50+87 subtests`、D1 contract `133+176 subtests`、full Operation runtime `139`、lint `58 files`、mypy `81/4`、
-  compile/diff clean；fresh dirty-tree non-author read-only re-audit=`GO 0/0/0/0`，但未 pin、不是 formal `GO`，
-  fresh hash-bound review pending。当前 registry=**9 schema-defined / 6 schema-less / served=0**。D1l 不新增
+  compile/diff clean；fresh dirty-tree non-author read-only re-audit=`GO 0/0/0/0`，但未 pin、不是 formal `GO`。
+  后续 hash-bound independent review artifact `20260716T144526Z_Track_D_D1l_projection_read_action_schema_activation.md`
+  返回 **NO-GO 0/4/7/0** + residual R-019/R-028/R-029；十一项 new finding 分四个 bounded fixed-forward batch，
+  fresh re-review required。D1l checkpoint registry=**9 schema-defined / 6 schema-less / served=0**。D1l 不新增
   direct state-sync caller，26 棘轮不升；因无 workflow
   command，command generation/lease fence 不适用。该 bounded specialization 不关闭 R-019：其它路径仍保留
   Operation/action preflight→root-UoW race、
@@ -203,6 +205,48 @@ serve、会话/事件层、planner loop），用一个垂直切片证明闭环�
   publication session key，native `SELECT ... FOR UPDATE` merge 当前 row，拒绝三个 search-index
   build/input-revision binding keys，production raw projection `upsert` 静态 guard 为零；public counts/readiness
   patch 不能再绕过 D1l read/result exclusion。
+  D1m implementation candidate 再仅将 `refresh_company_public_web_assets` 作为第 10 个 schema-defined action：
+  required canonical input=`target_company + source_families + seed_urls`，optional `max_assets`、default-false
+  `force_refresh`、`refresh_nonce` iff force、且 `collection_mode` 仅 `seed_url_only`；families/normalized HTTP(S) URLs
+  nonempty + dedupe + sort。Company Public Web owner 通过 canonical alias resolver mint exact
+  `workspace_id + company_key` target；authenticated transport 使用 server scope，open mode 保留 explicit operator
+  workspace。Persisted action/run、dispatch、`company.public_web.refresh` root、`company.public_web.source.collect`
+  与 `company.public_web.assets.materialize` owner 在各自新 effect 前重读并 exact-compare canonical request/target、
+  OperationRun/AgentAction，并从 persisted parent 重算 expected idempotency/command/event causality，materialize 前
+  另验 source-run identity。`0009` 增加 normalized-nonblank source-run idempotency UNIQUE；PG owner 对 run/key
+  排序加锁，绑定 current physical command id/attempt/lease，允许 same-command higher current attempt reclaim
+  `running|failed`，并以 owner-CAS finalize，stale owner 零写。Materialize 仅消费 snapshot v3 绑定的
+  assets/summary/artifact paths+publication digest/source revision+completion time/run timestamps，不由 later-run mutable source rows 或 later clock 重建；
+  positive revision 统一拥有 PG/memory latest ordering，brownfield fallback 显式；canonical asset/evidence exact-
+  claim 单一 PG transaction，`updated_at` monotonic；typed repair 强制 deferred。Source snapshot freeze 后，exact
+  plan event、deterministic materialize child、one source-run EntityDelta、physical downstream edge 与 source terminal
+  CAS 在一个 PG UoW 提交；takeover、final-CAS failure、event identity collision 均 whole-bundle rollback，ack-loss
+  仅以 exact bundle validation 恢复。Operation workspace 只授权 control plane，canonical
+  CompanyAsset/CompanyEvidence 保持 shared `workspace_id=default`。Source effect 后 pure child planning 失败保留
+  artifact refs 用于 retry，但对 event/child/delta/terminal bundle 零写；成功 retry 由其 current attempt 提交唯一
+  bundle 并收敛。Root/source/materialize drains 只为 D1m opt into expired-`claimed` recovery，shared default
+  不变。Guarded start 以 PostgreSQL clock 锁定 deterministic ActivityRun + 截至 current attempt 的全部
+  deterministic ActivityAttempt identities，并 full-validate primary ids/keys、workspace、command/activity/workflow/
+  operation/type/owner/provider、attempt/lease 与 owner metadata；split identities、alternate nonterminal、
+  current/future terminal execution Activity/Attempt rows 与 future/malformed resume evidence pre-write fail closed，fully exact
+  prior terminal 可保留。Succeeded owner-specific resume Attempt 仅在 deterministic resume id/key、generation
+  `<=` current、完整 workspace/activity/workflow/command/provider/request-ref/lease + target/company/boolean-force/
+  nonblank-output-reason 语义成立时共存。Successful takeover 先 fail exact superseded prior running execution
+  Attempts，再仅在 returned Activity/current Attempt 形成 exact `running` spine 时继续。Exhausted final source
+  closure 以 DB clock 为唯一 expiry authority，并 atomic fail exact Command/Activity/Attempts；valid resume-control
+  Attempt 保留，exact current failed owner-loss partial 仅在 error/metadata/output 为同一 nonblank reason、
+  `output.status=skipped`、`error.owner_lost=true`、`error.deterministic_terminal_failure=false` 时收敛；active lease、
+  future/malformed/identity/semantic conflict zero-write。当前 candidate registry=**10 schema-defined / 5 schema-less / served=0**。D1m 仍未提供该 action 的
+  populated revisioned result spec、result/simulate serializer mapping 或 complete served predicate。Source artifacts 仍在
+  completion bundle 前，Activity/Operation sync 仍在其后；这不宣称 global submit/effect/Operation-sync UoW、
+  generation fence 或 exactly-once；R-019/R-029 remain open，current R-019 direct state-sync ratchet=`24`（历史
+  26-call checkpoints 保留）。Latest author evidence=`D1m 68+15 / Operation 52+61 / runner 24+65 / mypy 81/4`；
+  earlier combined D1 `219+209` 仅 predecessor evidence。首轮 combined D1 的 6 个 D1g stale-helper
+  failure 在 clean `abe7725` 完全复现；test-only commit `702de97` 已改经 production binder，exact=`7+35`。
+  Enclosing D1m commit 与 fresh pinned review pending，不授权 provider/model/live。
+  Pre-D1m binary 仍可写 revisionless row 并绕开 revision-aware exact-claim materializer，因此 hosted rollout
+  必须 quiesced single-version cutover，或先实现并 review dual-write compatibility bridge；当前 non-live candidate
+  不宣称 rolling-overlap safe。
 
 ### D2 — Agent 会话与事件层（与 C4/C5 合流）
 
@@ -597,10 +641,12 @@ TD-4 初始路由表已按 owner 2026-07-13 裁决落档（D0 §4）。
    CRM existing-record actions 并把 numerator 从 15 降到 12；D1h 再激活 `enrich_person_public_web` 的 CRM
    batch schema/binder，把 numerator 降到 11；D1i 激活 `start_acquisition_run` 的 acquisition-root workspace
    binder，把 numerator 降到 10；D1j 激活 `add_to_crm`，降到 9；D1k 激活 `export_candidates`，降到 8；D1l
-   激活 `search_projection` / `filter_projection`，将当前 numerator 降到 6。bridge、release-window durable-hit audit、独立
-   `NOT VALID` validation 与 complete API-submittable-population 删除条件仍 open；served population 仍为零。
+   激活 `search_projection` / `filter_projection`，降到 6；D1m candidate 激活
+   `refresh_company_public_web_assets`，将当前 candidate numerator 降到 5。bridge、release-window durable-hit audit、独立
+   `NOT VALID` validation 与 complete API-submittable-population 删除条件仍 open；D1m action-specific populated
+   result spec/serializer/complete served predicate 尚未完成，因此 served population 仍为零。
    D1g 仅闭合 downstream Operation API authorization，不改变其所在 checkpoint 的 schema
-   numerator/deletion condition；D1h/D1i/D1j/D1k/D1l 也不改变该 deletion condition。
+   numerator/deletion condition；D1h/D1i/D1j/D1k/D1l/D1m 也不改变该 deletion condition。
 4. tool-schema 版本/digest 在 turn 创建点钉住并贯穿 terminal result/journal → AgentAction →
    approve/retry run（D0/D2 批）。
 5. `judge_call_key` 追加 workspace/intent generation/有效路由/schema/policy revision 维度；
