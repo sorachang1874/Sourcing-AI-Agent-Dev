@@ -27,12 +27,11 @@ from .action_result_schema import (
     ActionResultValueRole,
 )
 from .cohort_provider_compiler import (
-    COHORT_EXECUTION_NOT_READY,
-    COHORT_PROVIDER,
-    COHORT_PROVIDER_MANIFEST_VERSION,
+    COHORT_PROVIDER_COMPANY_TARGET_VERSION,
     MAX_COHORT_PROVIDER_LANES,
     CohortProviderCompilationError,
     CohortProviderCompiler,
+    cohort_provider_planning_manifest_schema,
 )
 from .cohort_selection import (
     COHORT_SELECTION_REGISTRY_VERSION,
@@ -48,8 +47,7 @@ from .query_signal_knowledge import ROLE_BUCKET_KNOWLEDGE
 ACQUISITION_PLAN_PREVIEW_REQUEST_SCHEMA_VERSION = "acquisition_plan_preview_request_v2"
 ACQUISITION_PLAN_PREVIEW_SCHEMA_VERSION = "acquisition_plan_preview.v2"
 ACQUISITION_PLAN_EFFECTIVE_REQUEST_SCHEMA_VERSION = "acquisition_plan_effective_request.v2"
-ACQUISITION_PROVIDER_PLAN_SCHEMA_VERSION = "acquisition_provider_plan.v2"
-CANONICAL_COMPANY_TARGET_SCHEMA_VERSION = "canonical_company_target.v1"
+CANONICAL_COMPANY_TARGET_SCHEMA_VERSION = COHORT_PROVIDER_COMPANY_TARGET_VERSION
 ACQUISITION_PLAN_PREVIEW_RESULT_SCHEMA_VERSION = "acquisition_plan_preview_result_v2"
 ACQUISITION_PLAN_PREVIEW_SERIALIZER_OWNER = "planner.acquisition_plan_preview_result_serializer_v2"
 ACQUISITION_PLAN_PREVIEW_SERIALIZER_REVISION = "acquisition_plan_preview_result_serializer_v2"
@@ -73,17 +71,20 @@ MAX_PREVIEW_REVISION = 9_223_372_036_854_775_807
 
 _SHA256_PATTERN = re.compile(r"[0-9a-f]{64}")
 _ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,199}")
-_OWNER_IDENTITY_PATTERN = re.compile(r"\S{1,200}")
 _VERSION_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}")
 _UTC_TIMESTAMP_PATTERN = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z")
 _TERMINAL_REASON_PATTERN = re.compile(r"[a-z0-9][a-z0-9_]{0,79}")
+_ERROR_FIELD_PATTERN = re.compile(r"(?:__none__|[a-z][a-z0-9_]{0,63}(?:\.[a-z][a-z0-9_]{0,63}){0,7})")
+_MAX_ERROR_FIELD_LENGTH = 200
 
 _SHA256_SCHEMA_PATTERN = r"^[0-9a-f]{64}$"
 _ID_SCHEMA_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$"
 _VERSION_SCHEMA_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
 _UTC_TIMESTAMP_SCHEMA_PATTERN = r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
 _TERMINAL_REASON_SCHEMA_PATTERN = r"^[a-z0-9][a-z0-9_]{0,79}$"
+_ERROR_FIELD_SCHEMA_PATTERN = r"^(?:__none__|[a-z][a-z0-9_]{0,63}(?:\.[a-z][a-z0-9_]{0,63}){0,7})$"
 _NONEMPTY_TEXT_SCHEMA_PATTERN = r"^(?s:.*\S.*)$"
+ACQUISITION_PLAN_PREVIEW_NO_FIELD = "__none__"
 _BUDGET_FIELDS = (
     "max_provider_calls",
     "max_provider_items",
@@ -107,7 +108,11 @@ class AcquisitionPlanPreviewError(ValueError):
     def to_result(self) -> dict[str, Any]:
         """Return the canonical model-visible error variant without diagnostics."""
 
-        return acquisition_plan_preview_error_result(reason=self.code, field=self.field)
+        canonical_field = self.field if _is_canonical_error_field(self.field) else ACQUISITION_PLAN_PREVIEW_NO_FIELD
+        return acquisition_plan_preview_error_result(
+            reason=self.code,
+            field=canonical_field or ACQUISITION_PLAN_PREVIEW_NO_FIELD,
+        )
 
 
 def _closed_object(
@@ -305,68 +310,8 @@ def _effective_request_schema() -> dict[str, Any]:
     )
 
 
-def _lane_preview_schema() -> dict[str, Any]:
-    return _closed_object(
-        {
-            "lane_id": _string_schema(maximum=200, pattern=_ID_SCHEMA_PATTERN),
-            "employment_status": {"type": "string", "enum": ["current", "former"]},
-            "role_bucket_id": _string_schema(maximum=80, minimum=0),
-            "provider_item_limit": {
-                "type": "integer",
-                "minimum": 1,
-                "maximum": MAX_PREVIEW_PROVIDER_ITEMS,
-            },
-            "lane_digest": _sha256_schema(),
-        }
-    )
-
-
 def _provider_planning_manifest_schema() -> dict[str, Any]:
-    return _closed_object(
-        {
-            "manifest_id": _string_schema(
-                maximum=96,
-                pattern=r"^acquisition-provider-plan:[0-9a-f]{64}$",
-            ),
-            "schema_version": {"type": "string", "const": ACQUISITION_PROVIDER_PLAN_SCHEMA_VERSION},
-            "manifest_digest": _sha256_schema(),
-            "canonical_company_id": _string_schema(maximum=200, pattern=_ID_SCHEMA_PATTERN),
-            "company_target_digest": _sha256_schema(),
-            "company_registry_revision": _string_schema(maximum=128, pattern=_VERSION_SCHEMA_PATTERN),
-            "company_registry_digest": _sha256_schema(),
-            "compiler_manifest_schema_version": {
-                "type": "string",
-                "const": COHORT_PROVIDER_MANIFEST_VERSION,
-            },
-            "physical_query_digest": _sha256_schema(),
-            "budget_ceiling": _budget_schema(),
-            "provider": {"type": "string", "const": COHORT_PROVIDER},
-            "capability_included": {"type": "boolean", "const": False},
-            "execution_authorized": {"type": "boolean", "const": False},
-            "execution_blocker": {"type": "string", "const": COHORT_EXECUTION_NOT_READY},
-            "planned_provider_calls": {
-                "type": "integer",
-                "minimum": 1,
-                "maximum": MAX_COHORT_PROVIDER_LANES,
-            },
-            "planned_provider_items": {
-                "type": "integer",
-                "minimum": 1,
-                "maximum": MAX_PREVIEW_PROVIDER_ITEMS,
-            },
-            "planned_output_candidates": {
-                "type": "integer",
-                "minimum": 1,
-                "maximum": MAX_PREVIEW_OUTPUT_CANDIDATES,
-            },
-            "lanes": {
-                "type": "array",
-                "items": _lane_preview_schema(),
-                "minItems": 1,
-                "maxItems": MAX_COHORT_PROVIDER_LANES,
-            },
-        }
-    )
+    return cohort_provider_planning_manifest_schema()
 
 
 def _schema_pins_schema() -> dict[str, Any]:
@@ -472,7 +417,7 @@ def _variant_schema(variant: str) -> dict[str, Any]:
             "variant": {"type": "string", "const": "error"},
             "status": {"type": "string", "const": "failed"},
             "reason": _string_schema(maximum=80, pattern=_TERMINAL_REASON_SCHEMA_PATTERN),
-            "field": _string_schema(maximum=200, minimum=0),
+            "field": _string_schema(maximum=200, pattern=_ERROR_FIELD_SCHEMA_PATTERN),
             "retryable": {"type": "boolean", "const": False},
         }
     )
@@ -542,10 +487,37 @@ _DISPLAY_TEXT_RESULT_PATHS = frozenset(
     {
         "/status",
         "/reason",
-        "/field",
         "/preview/company_target/canonical_name",
+        "/preview/company_target/provider_company_labels/*",
+        "/preview/provider_planning_manifest/company_target/canonical_name",
+        "/preview/provider_planning_manifest/company_target/provider_company_labels/*",
+        "/preview/provider_planning_manifest/compiler_inputs/base_filter_hints/current_companies/*",
+        "/preview/provider_planning_manifest/compiler_inputs/base_filter_hints/past_companies/*",
+        "/preview/provider_planning_manifest/compiler_inputs/base_filter_hints/keywords/*",
+        "/preview/provider_planning_manifest/lanes/*/provider_payload/filter_hints/current_companies/*",
+        "/preview/provider_planning_manifest/lanes/*/provider_payload/filter_hints/past_companies/*",
+        "/preview/provider_planning_manifest/lanes/*/provider_payload/filter_hints/keywords/*",
+        "/preview/provider_planning_manifest/lanes/*/provider_payload/filter_hints/job_titles/*",
         "/preview/effective_request/thematic_constraints/*",
         "/preview/confirmation/instruction",
+    }
+)
+
+_USER_SUPPLIED_IDENTIFIER_RESULT_PATHS = (
+    "/preview/effective_request/cohort_selection/employment_statuses/*",
+    "/preview/effective_request/cohort_selection/role_bucket_ids/*",
+    "/preview/effective_request/cohort_selection/role_match",
+    "/preview/effective_request/cohort_selection/schema_version",
+    "/preview/effective_request/cohort_selection/source",
+    "/preview/effective_request/coverage_intent",
+    "/preview/effective_request/provider_mode_intent",
+    "/preview/effective_request/source_preferences/*",
+)
+
+_CONTROL_RESULT_PATHS = frozenset(
+    {
+        "/preview/provider_planning_manifest/lanes/*/role_bucket_id",
+        "/preview/provider_planning_manifest/lanes/*/provider_payload/query_text",
     }
 )
 
@@ -558,7 +530,7 @@ def _field_value_roles(
         roles: dict[str, ActionResultValueRole] = {}
         for path in sorted(_schema_string_paths(schema)):
             role: ActionResultValueRole
-            if path == "/variant":
+            if path == "/variant" or path in _CONTROL_RESULT_PATHS:
                 role = "control"
             elif path in _DISPLAY_TEXT_RESULT_PATHS:
                 role = "display_text"
@@ -626,9 +598,10 @@ ACQUISITION_PLAN_PREVIEW_RESULT_SPEC = ActionResultSpec(
     field_provenance=_field_provenance(_RESULT_VARIANT_SCHEMAS),
     field_value_roles=_field_value_roles(_RESULT_VARIANT_SCHEMAS),
     max_serialized_bytes=48 * 1024,
-    max_items=512,
+    max_items=4_096,
     max_depth=10,
     artifact_ref_schemes=(),
+    externally_controlled_identifier_paths=_USER_SUPPLIED_IDENTIFIER_RESULT_PATHS,
 )
 
 
@@ -779,36 +752,47 @@ def build_acquisition_plan_preview(
     }
     effective_request_digest = _sha256_json(effective_request)
 
+    schema_pins = {
+        "plan_request_schema_version": ACQUISITION_PLAN_PREVIEW_REQUEST_SCHEMA_VERSION,
+        "plan_request_schema_digest": ACQUISITION_PLAN_PREVIEW_REQUEST_SCHEMA_DIGEST,
+        "plan_result_schema_version": ACQUISITION_PLAN_PREVIEW_RESULT_SCHEMA_VERSION,
+        "plan_result_schema_digest": ACQUISITION_PLAN_PREVIEW_RESULT_SPEC.result_schema_digest,
+        "intended_start_request_schema_version": intended_start_request_schema_version,
+        "intended_start_request_schema_digest": intended_start_request_schema_digest,
+    }
+
     compiler_owner = CohortProviderCompiler()
     try:
-        manifest = compiler_owner.compile(
+        provider_manifest = compiler_owner.compile_planning_manifest(
             {"cohort_selection": cohort},
             base_filter_hints={
                 "current_companies": list(company_target["provider_company_labels"]),
                 "past_companies": list(company_target["provider_company_labels"]),
                 "keywords": list(thematic_constraints),
             },
-            execution_capability=None,
+            company_target=company_target,
+            budget_ceiling=budget,
+            schema_pins=schema_pins,
             requested_result_limit=int(budget["max_provider_items"]),
         )
     except CohortProviderCompilationError as exc:
+        if exc.code == "cohort_provider_planning_filter_rejected":
+            raise AcquisitionPlanPreviewError(
+                "acquisition_plan_preview_thematic_constraint_rejected",
+                "input_payload.thematic_constraints",
+                "put role intent in cohort_selection.role_bucket_ids",
+            ) from exc
+        if exc.code == "cohort_provider_call_budget_exceeded":
+            raise AcquisitionPlanPreviewError(
+                "acquisition_plan_preview_provider_call_budget_exceeded",
+                "input_payload.budget.max_provider_calls",
+            ) from exc
         raise AcquisitionPlanPreviewError(exc.code, exc.field, exc.detail) from exc
     _require_compiler_preserved_thematic_constraints(
-        manifest,
+        provider_manifest,
         thematic_constraints,
         field="input_payload.thematic_constraints",
     )
-    provider_manifest = _provider_manifest_preview(
-        manifest,
-        company_target=company_target,
-        budget_ceiling=budget,
-        planned_output_candidates=int(budget["max_output_candidates"]),
-    )
-    if int(provider_manifest["planned_provider_calls"]) > int(budget["max_provider_calls"]):
-        raise AcquisitionPlanPreviewError(
-            "acquisition_plan_preview_provider_call_budget_exceeded",
-            "input_payload.budget.max_provider_calls",
-        )
 
     record_without_digest: dict[str, Any] = {
         "schema_version": ACQUISITION_PLAN_PREVIEW_SCHEMA_VERSION,
@@ -820,14 +804,7 @@ def build_acquisition_plan_preview(
         "effective_request": effective_request,
         "effective_request_digest": effective_request_digest,
         "provider_planning_manifest": provider_manifest,
-        "schema_pins": {
-            "plan_request_schema_version": ACQUISITION_PLAN_PREVIEW_REQUEST_SCHEMA_VERSION,
-            "plan_request_schema_digest": ACQUISITION_PLAN_PREVIEW_REQUEST_SCHEMA_DIGEST,
-            "plan_result_schema_version": ACQUISITION_PLAN_PREVIEW_RESULT_SCHEMA_VERSION,
-            "plan_result_schema_digest": ACQUISITION_PLAN_PREVIEW_RESULT_SPEC.result_schema_digest,
-            "intended_start_request_schema_version": intended_start_request_schema_version,
-            "intended_start_request_schema_digest": intended_start_request_schema_digest,
-        },
+        "schema_pins": schema_pins,
         "confirmation": {
             "required": True,
             "confirmation_type": ACQUISITION_PLAN_PREVIEW_CONFIRMATION_TYPE,
@@ -874,8 +851,13 @@ def acquisition_plan_preview_deferred_result(*, reason: str, retryable: bool) ->
     }
 
 
-def acquisition_plan_preview_error_result(*, reason: str, field: str = "") -> dict[str, Any]:
+def acquisition_plan_preview_error_result(
+    *,
+    reason: str,
+    field: str = ACQUISITION_PLAN_PREVIEW_NO_FIELD,
+) -> dict[str, Any]:
     _require_terminal_reason(reason, field="reason")
+    _require_error_field(field)
     return {
         "variant": "error",
         "status": "failed",
@@ -894,6 +876,8 @@ def serialize_acquisition_plan_preview_result(owner_output: dict[str, Any]) -> s
         candidate["preview"] = AcquisitionPlanPreview(raw_preview).to_record()
     elif candidate.get("variant") in {"deferred", "error"}:
         _require_terminal_reason(candidate.get("reason"), field="reason")
+        if candidate.get("variant") == "error":
+            _require_error_field(candidate.get("field"))
     return ACQUISITION_PLAN_PREVIEW_RESULT_SPEC.serialize(candidate)
 
 
@@ -905,18 +889,32 @@ def _canonical_company_target(value: Any) -> dict[str, Any]:
         )
     canonical_company_id = str(value.get("canonical_company_id") or "")
     _require_identifier(canonical_company_id, field="target_ref.company_target.canonical_company_id")
+    raw_canonical_name = value.get("canonical_name")
     canonical_name = _canonical_nonempty_text(
-        value.get("canonical_name"),
+        raw_canonical_name,
         field="target_ref.company_target.canonical_name",
     )
+    if raw_canonical_name != canonical_name:
+        raise AcquisitionPlanPreviewError(
+            "acquisition_plan_preview_company_target_invalid",
+            "target_ref.company_target.canonical_name",
+        )
     revision = str(value.get("company_registry_revision") or "")
     _require_version(revision, field="target_ref.company_target.company_registry_revision")
     registry_digest = str(value.get("company_registry_digest") or "")
     _require_sha256(registry_digest, field="target_ref.company_target.company_registry_digest")
+    raw_labels = value.get("provider_company_labels")
     labels = _canonical_string_set(
-        value.get("provider_company_labels"),
+        raw_labels,
         field="target_ref.company_target.provider_company_labels",
     )
+    if not isinstance(raw_labels, list) or any(
+        type(label) is not str or " ".join(label.split()).strip() != label for label in raw_labels
+    ):
+        raise AcquisitionPlanPreviewError(
+            "acquisition_plan_preview_provider_company_labels_invalid",
+            "target_ref.company_target.provider_company_labels",
+        )
     if not labels or len(labels) > MAX_PREVIEW_PROVIDER_COMPANY_LABELS:
         raise AcquisitionPlanPreviewError(
             "acquisition_plan_preview_provider_company_labels_invalid",
@@ -934,84 +932,6 @@ def _canonical_company_target(value: Any) -> dict[str, Any]:
         "company_registry_revision": revision,
         "company_registry_digest": registry_digest,
         "provider_company_labels": labels,
-    }
-
-
-def _provider_manifest_preview(
-    manifest: Mapping[str, Any],
-    *,
-    company_target: Mapping[str, Any],
-    budget_ceiling: Mapping[str, Any],
-    planned_output_candidates: int,
-) -> dict[str, Any]:
-    if (
-        bool(manifest.get("execution_ready"))
-        or str(manifest.get("execution_blocker") or "") != COHORT_EXECUTION_NOT_READY
-        or dict(dict(manifest.get("compiler_inputs") or {}).get("execution_capability") or {})
-    ):
-        raise AcquisitionPlanPreviewError(
-            "acquisition_plan_preview_manifest_not_capability_free",
-            "provider_planning_manifest",
-        )
-    physical_query_digest = str(manifest.get("manifest_digest") or "")
-    _require_sha256(
-        physical_query_digest,
-        field="provider_planning_manifest.physical_query_digest",
-    )
-    budget = dict(manifest.get("budget") or {})
-    canonical_company_id = _require_identifier(
-        company_target.get("canonical_company_id"),
-        field="provider_planning_manifest.canonical_company_id",
-    )
-    company_target_digest = _require_sha256(
-        company_target.get("company_target_digest"),
-        field="provider_planning_manifest.company_target_digest",
-    )
-    company_registry_revision = _require_version(
-        company_target.get("company_registry_revision"),
-        field="provider_planning_manifest.company_registry_revision",
-    )
-    company_registry_digest = _require_sha256(
-        company_target.get("company_registry_digest"),
-        field="provider_planning_manifest.company_registry_digest",
-    )
-    canonical_budget_ceiling = {field: budget_ceiling.get(field) for field in _BUDGET_FIELDS}
-    _validate_budget(canonical_budget_ceiling)
-    lanes: list[dict[str, Any]] = []
-    for raw_lane in list(manifest.get("lanes") or []):
-        lane = dict(raw_lane or {})
-        lanes.append(
-            {
-                "lane_id": str(lane.get("lane_id") or ""),
-                "employment_status": str(lane.get("employment_status") or ""),
-                "role_bucket_id": str(lane.get("role_bucket_id") or ""),
-                "provider_item_limit": int(lane.get("provider_item_limit") or 0),
-                "lane_digest": str(lane.get("lane_digest") or ""),
-            }
-        )
-    plan_without_identity = {
-        "schema_version": ACQUISITION_PROVIDER_PLAN_SCHEMA_VERSION,
-        "canonical_company_id": canonical_company_id,
-        "company_target_digest": company_target_digest,
-        "company_registry_revision": company_registry_revision,
-        "company_registry_digest": company_registry_digest,
-        "compiler_manifest_schema_version": str(manifest.get("schema_version") or ""),
-        "physical_query_digest": physical_query_digest,
-        "budget_ceiling": canonical_budget_ceiling,
-        "provider": str(manifest.get("provider") or ""),
-        "capability_included": False,
-        "execution_authorized": False,
-        "execution_blocker": COHORT_EXECUTION_NOT_READY,
-        "planned_provider_calls": int(budget.get("planned_provider_calls") or 0),
-        "planned_provider_items": int(budget.get("planned_provider_items") or 0),
-        "planned_output_candidates": planned_output_candidates,
-        "lanes": lanes,
-    }
-    plan_digest = _sha256_json(plan_without_identity)
-    return {
-        "manifest_id": f"acquisition-provider-plan:{plan_digest}",
-        "manifest_digest": plan_digest,
-        **plan_without_identity,
     }
 
 
@@ -1084,84 +1004,19 @@ def _validate_preview_semantics(record: Mapping[str, Any]) -> None:
             "effective_request_digest",
         )
 
-    try:
-        expected_manifest = CohortProviderCompiler().compile(
-            {"cohort_selection": cohort},
-            base_filter_hints={
-                "current_companies": list(expected_company["provider_company_labels"]),
-                "past_companies": list(expected_company["provider_company_labels"]),
-                "keywords": list(expected_effective["thematic_constraints"]),
-            },
-            execution_capability=None,
-            requested_result_limit=int(budget["max_provider_items"]),
-        )
-    except CohortProviderCompilationError as exc:
-        raise AcquisitionPlanPreviewError(exc.code, exc.field, exc.detail) from exc
-    _require_compiler_preserved_thematic_constraints(
-        expected_manifest,
-        list(expected_effective["thematic_constraints"]),
-        field="effective_request.thematic_constraints",
-    )
-    expected_manifest_preview = _provider_manifest_preview(
-        expected_manifest,
-        company_target=expected_company,
-        budget_ceiling=budget,
-        planned_output_candidates=int(budget["max_output_candidates"]),
-    )
-    stored_manifest_preview = dict(record.get("provider_planning_manifest") or {})
-    stored_manifest_digest = _require_sha256(
-        stored_manifest_preview.get("manifest_digest"),
-        field="provider_planning_manifest.manifest_digest",
-    )
-    _require_sha256(
-        stored_manifest_preview.get("physical_query_digest"),
-        field="provider_planning_manifest.physical_query_digest",
-    )
-    _require_sha256(
-        stored_manifest_preview.get("company_target_digest"),
-        field="provider_planning_manifest.company_target_digest",
-    )
-    _require_sha256(
-        stored_manifest_preview.get("company_registry_digest"),
-        field="provider_planning_manifest.company_registry_digest",
-    )
-    _require_version(
-        stored_manifest_preview.get("company_registry_revision"),
-        field="provider_planning_manifest.company_registry_revision",
-    )
-    if stored_manifest_preview.get("manifest_id") != f"acquisition-provider-plan:{stored_manifest_digest}":
-        raise AcquisitionPlanPreviewError(
-            "acquisition_plan_preview_provider_manifest_identity_mismatch",
-            "provider_planning_manifest.manifest_id",
-        )
-    if stored_manifest_preview != expected_manifest_preview:
-        raise AcquisitionPlanPreviewError(
-            "acquisition_plan_preview_provider_manifest_mismatch",
-            "provider_planning_manifest",
-        )
-    if int(expected_manifest_preview["planned_provider_calls"]) > int(budget["max_provider_calls"]):
-        raise AcquisitionPlanPreviewError(
-            "acquisition_plan_preview_provider_call_budget_exceeded",
-            "effective_request.budget.max_provider_calls",
-        )
-
     schema_pins = dict(record.get("schema_pins") or {})
-    _require_sha256(
-        schema_pins.get("plan_request_schema_digest"),
-        field="schema_pins.plan_request_schema_digest",
-    )
-    _require_sha256(
-        schema_pins.get("plan_result_schema_digest"),
-        field="schema_pins.plan_result_schema_digest",
-    )
-    _require_version(
-        schema_pins.get("intended_start_request_schema_version"),
-        field="schema_pins.intended_start_request_schema_version",
-    )
-    _require_sha256(
-        schema_pins.get("intended_start_request_schema_digest"),
-        field="schema_pins.intended_start_request_schema_digest",
-    )
+    for field in (
+        "plan_request_schema_version",
+        "plan_result_schema_version",
+        "intended_start_request_schema_version",
+    ):
+        _require_version(schema_pins.get(field), field=f"schema_pins.{field}")
+    for field in (
+        "plan_request_schema_digest",
+        "plan_result_schema_digest",
+        "intended_start_request_schema_digest",
+    ):
+        _require_sha256(schema_pins.get(field), field=f"schema_pins.{field}")
     if (
         schema_pins.get("plan_request_schema_version") != ACQUISITION_PLAN_PREVIEW_REQUEST_SCHEMA_VERSION
         or schema_pins.get("plan_request_schema_digest") != ACQUISITION_PLAN_PREVIEW_REQUEST_SCHEMA_DIGEST
@@ -1171,6 +1026,61 @@ def _validate_preview_semantics(record: Mapping[str, Any]) -> None:
         raise AcquisitionPlanPreviewError(
             "acquisition_plan_preview_schema_pin_mismatch",
             "schema_pins",
+        )
+
+    compiler = CohortProviderCompiler()
+    try:
+        expected_manifest = compiler.compile_planning_manifest(
+            {"cohort_selection": cohort},
+            base_filter_hints={
+                "current_companies": list(expected_company["provider_company_labels"]),
+                "past_companies": list(expected_company["provider_company_labels"]),
+                "keywords": list(expected_effective["thematic_constraints"]),
+            },
+            company_target=expected_company,
+            budget_ceiling=budget,
+            schema_pins=schema_pins,
+            requested_result_limit=int(budget["max_provider_items"]),
+        )
+    except CohortProviderCompilationError as exc:
+        if exc.code == "cohort_provider_planning_filter_rejected":
+            raise AcquisitionPlanPreviewError(
+                "acquisition_plan_preview_thematic_constraint_rejected",
+                "effective_request.thematic_constraints",
+                "put role intent in cohort_selection.role_bucket_ids",
+            ) from exc
+        raise AcquisitionPlanPreviewError(exc.code, exc.field, exc.detail) from exc
+    _require_compiler_preserved_thematic_constraints(
+        expected_manifest,
+        list(expected_effective["thematic_constraints"]),
+        field="effective_request.thematic_constraints",
+    )
+    stored_manifest = dict(record.get("provider_planning_manifest") or {})
+    _require_sha256(
+        stored_manifest.get("manifest_digest"),
+        field="provider_planning_manifest.manifest_digest",
+    )
+    _require_sha256(
+        stored_manifest.get("physical_query_digest"),
+        field="provider_planning_manifest.physical_query_digest",
+    )
+    try:
+        compiler.validate_planning_manifest(stored_manifest)
+    except CohortProviderCompilationError as exc:
+        raise AcquisitionPlanPreviewError(
+            "acquisition_plan_preview_provider_manifest_mismatch",
+            "provider_planning_manifest",
+            exc.code,
+        ) from exc
+    if stored_manifest != expected_manifest:
+        raise AcquisitionPlanPreviewError(
+            "acquisition_plan_preview_provider_manifest_mismatch",
+            "provider_planning_manifest",
+        )
+    if int(dict(expected_manifest["budget"])["planned_provider_calls"]) > int(budget["max_provider_calls"]):
+        raise AcquisitionPlanPreviewError(
+            "acquisition_plan_preview_provider_call_budget_exceeded",
+            "effective_request.budget.max_provider_calls",
         )
     confirmation = dict(record.get("confirmation") or {})
     _require_identifier(confirmation.get("preview_id"), field="confirmation.preview_id")
@@ -1244,7 +1154,17 @@ def _canonical_nonempty_text(value: Any, *, field: str) -> str:
 
 
 def _require_owner_identity(value: Any, *, field: str) -> str:
-    if type(value) is not str or _OWNER_IDENTITY_PATTERN.fullmatch(value) is None:
+    if (
+        type(value) is not str
+        or not 1 <= len(value) <= 200
+        or any(
+            character.isspace()
+            or ord(character) <= 0x1F
+            or 0x7F <= ord(character) <= 0x9F
+            or 0xD800 <= ord(character) <= 0xDFFF
+            for character in value
+        )
+    ):
         raise AcquisitionPlanPreviewError(
             "acquisition_plan_preview_owner_identity_noncanonical",
             field,
@@ -1277,6 +1197,24 @@ def _require_terminal_reason(value: Any, *, field: str) -> str:
             field,
         )
     return value
+
+
+def _require_error_field(value: Any) -> str:
+    if not _is_canonical_error_field(value):
+        raise AcquisitionPlanPreviewError(
+            "acquisition_plan_preview_error_field_invalid",
+            "field",
+        )
+    assert isinstance(value, str)
+    return value
+
+
+def _is_canonical_error_field(value: Any) -> bool:
+    return (
+        type(value) is str
+        and len(value) <= _MAX_ERROR_FIELD_LENGTH
+        and _ERROR_FIELD_PATTERN.fullmatch(value) is not None
+    )
 
 
 def _parse_utc_timestamp(value: Any, *, field: str) -> datetime:
@@ -1334,12 +1272,12 @@ def _thaw_json(value: Any) -> Any:
 
 
 __all__ = [
-    "ACQUISITION_PROVIDER_PLAN_SCHEMA_VERSION",
     "ACQUISITION_PLAN_EFFECTIVE_REQUEST_SCHEMA_VERSION",
     "ACQUISITION_PLAN_PREVIEW_CONFIRMATION_INSTRUCTION",
     "ACQUISITION_PLAN_PREVIEW_CONFIRMATION_TYPE",
     "ACQUISITION_PLAN_PREVIEW_COVERAGE_INTENT",
     "ACQUISITION_PLAN_PREVIEW_PROVIDER_MODES",
+    "ACQUISITION_PLAN_PREVIEW_NO_FIELD",
     "ACQUISITION_PLAN_PREVIEW_REQUEST_SCHEMA_DIGEST",
     "ACQUISITION_PLAN_PREVIEW_REQUEST_SCHEMA_VERSION",
     "ACQUISITION_PLAN_PREVIEW_REQUEST_TOOL_SPEC",

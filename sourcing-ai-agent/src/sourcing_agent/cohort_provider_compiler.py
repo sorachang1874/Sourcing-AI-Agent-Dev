@@ -12,6 +12,7 @@ from urllib import parse
 
 from .cohort_selection import (
     COHORT_SELECTION_REGISTRY_VERSION,
+    COHORT_SELECTION_SCHEMA_VERSION,
     cohort_selection_digest,
     cohort_selection_registry_digest,
     explicit_cohort_selection,
@@ -31,6 +32,8 @@ from .runtime_environment import (
 )
 
 COHORT_PROVIDER_MANIFEST_VERSION = "cohort_provider_manifest.v1"
+COHORT_PROVIDER_PLANNING_MANIFEST_VERSION = "cohort_provider_manifest.v2"
+COHORT_PROVIDER_COMPANY_TARGET_VERSION = "canonical_company_target.v1"
 COHORT_PROVIDER = "harvest_profile_search"
 COHORT_EXECUTION_NOT_READY = "cohort_selection_execution_not_ready"
 COHORT_EXECUTION_CAPABILITY_VERSION = "cohort_execution_capability.v1"
@@ -42,6 +45,272 @@ COHORT_PUBLIC_HEADLINE_SOURCE = "harvest_profile_search.headline"
 COHORT_CANONICAL_PROFILE_URL_FIELD = "cohort_canonical_profile_url"
 DEFAULT_COHORT_RESULT_LIMIT = 25
 MAX_COHORT_PROVIDER_LANES = 10
+
+_SHA256_PATTERN = re.compile(r"[0-9a-f]{64}")
+_VERSION_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}")
+_IDENTIFIER_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,199}")
+_PLANNING_BUDGET_FIELDS = (
+    "max_provider_calls",
+    "max_provider_items",
+    "max_output_candidates",
+    "max_cost_micro_usd",
+    "max_elapsed_seconds",
+)
+_PLANNING_SCHEMA_PIN_FIELDS = (
+    "plan_request_schema_version",
+    "plan_request_schema_digest",
+    "plan_result_schema_version",
+    "plan_result_schema_digest",
+    "intended_start_request_schema_version",
+    "intended_start_request_schema_digest",
+)
+_PLANNING_BASE_FILTER_FIELDS = (
+    "current_companies",
+    "past_companies",
+    "keywords",
+)
+_PLANNING_LANE_FILTER_FIELDS = (
+    "current_companies",
+    "past_companies",
+    "keywords",
+    "job_titles",
+    "function_ids",
+)
+
+
+def _closed_json_schema(
+    properties: dict[str, Any],
+    *,
+    required: tuple[str, ...] | list[str] | None = None,
+) -> dict[str, Any]:
+    return {
+        "type": "object",
+        "properties": properties,
+        "required": list(properties) if required is None else list(required),
+        "additionalProperties": False,
+    }
+
+
+def _bounded_string_schema(*, maximum: int, minimum: int = 1, pattern: str = "") -> dict[str, Any]:
+    schema: dict[str, Any] = {
+        "type": "string",
+        "minLength": minimum,
+        "maxLength": maximum,
+    }
+    if pattern:
+        schema["pattern"] = pattern
+    return schema
+
+
+def _bounded_string_list_schema(*, maximum: int = 16, item_maximum: int = 240) -> dict[str, Any]:
+    return {
+        "type": "array",
+        "items": _bounded_string_schema(maximum=item_maximum),
+        "maxItems": maximum,
+    }
+
+
+def _cohort_selection_manifest_schema() -> dict[str, Any]:
+    return _closed_json_schema(
+        {
+            "schema_version": {"type": "string", "const": COHORT_SELECTION_SCHEMA_VERSION},
+            "role_bucket_ids": _bounded_string_list_schema(maximum=10, item_maximum=80),
+            "employment_statuses": {
+                "type": "array",
+                "items": {"type": "string", "enum": ["current", "former"]},
+                "minItems": 1,
+                "maxItems": 2,
+            },
+            "role_match": {"type": "string", "enum": ["any", "all"]},
+            "source": {"type": "string", "const": "user_explicit"},
+        }
+    )
+
+
+def _planning_filter_hints_schema(*, lane: bool) -> dict[str, Any]:
+    allowed_fields = _PLANNING_LANE_FILTER_FIELDS if lane else _PLANNING_BASE_FILTER_FIELDS
+    return _closed_json_schema(
+        {field: _bounded_string_list_schema() for field in allowed_fields},
+        required=(),
+    )
+
+
+def _planning_budget_schema() -> dict[str, Any]:
+    return _closed_json_schema(
+        {
+            "max_provider_calls": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": MAX_COHORT_PROVIDER_LANES,
+            },
+            "max_provider_items": {"type": "integer", "minimum": 1, "maximum": 1_000},
+            "max_output_candidates": {"type": "integer", "minimum": 1, "maximum": 1_000},
+            "max_cost_micro_usd": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 100_000_000,
+            },
+            "max_elapsed_seconds": {"type": "integer", "minimum": 1, "maximum": 86_400},
+        }
+    )
+
+
+def _planning_schema_pins_schema() -> dict[str, Any]:
+    version = _bounded_string_schema(
+        maximum=128,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+    )
+    digest = _bounded_string_schema(
+        maximum=64,
+        minimum=64,
+        pattern=r"^[0-9a-f]{64}$",
+    )
+    return _closed_json_schema(
+        {
+            "plan_request_schema_version": version,
+            "plan_request_schema_digest": digest,
+            "plan_result_schema_version": version,
+            "plan_result_schema_digest": digest,
+            "intended_start_request_schema_version": version,
+            "intended_start_request_schema_digest": digest,
+        }
+    )
+
+
+def _planning_company_target_schema() -> dict[str, Any]:
+    digest = _bounded_string_schema(
+        maximum=64,
+        minimum=64,
+        pattern=r"^[0-9a-f]{64}$",
+    )
+    return _closed_json_schema(
+        {
+            "schema_version": {"type": "string", "const": COHORT_PROVIDER_COMPANY_TARGET_VERSION},
+            "canonical_company_id": _bounded_string_schema(
+                maximum=200,
+                pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$",
+            ),
+            "canonical_name": _bounded_string_schema(maximum=200),
+            "company_registry_revision": _bounded_string_schema(
+                maximum=128,
+                pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            ),
+            "company_registry_digest": digest,
+            "provider_company_labels": {
+                "type": "array",
+                "items": _bounded_string_schema(maximum=200),
+                "minItems": 1,
+                "maxItems": 16,
+            },
+            "company_target_digest": digest,
+        }
+    )
+
+
+def cohort_provider_planning_manifest_schema() -> dict[str, Any]:
+    """Return the compiler-owned closed schema for capability-free v2 plans."""
+
+    digest = _bounded_string_schema(
+        maximum=64,
+        minimum=64,
+        pattern=r"^[0-9a-f]{64}$",
+    )
+    lane_schema = _closed_json_schema(
+        {
+            "lane_id": _bounded_string_schema(
+                maximum=200,
+                pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$",
+            ),
+            "provider": {"type": "string", "const": COHORT_PROVIDER},
+            "operation": {"type": "string", "const": "profile_search"},
+            "employment_status": {"type": "string", "enum": ["current", "former"]},
+            "role_bucket_id": {
+                "type": "string",
+                "enum": ["", *sorted(ROLE_BUCKET_KNOWLEDGE)],
+            },
+            "provider_item_limit": {"type": "integer", "minimum": 1, "maximum": 1_000},
+            "provider_payload": _closed_json_schema(
+                {
+                    "query_text": {"type": "string", "const": ""},
+                    "employment_status": {"type": "string", "enum": ["current", "former"]},
+                    "filter_hints": _planning_filter_hints_schema(lane=True),
+                }
+            ),
+            "post_filter": _closed_json_schema(
+                {
+                    "employment_status": {"type": "string", "enum": ["current", "former"]},
+                    "required_role_bucket_ids": _bounded_string_list_schema(maximum=10, item_maximum=80),
+                }
+            ),
+            "lane_digest": digest,
+        }
+    )
+    return _closed_json_schema(
+        {
+            "schema_version": {"type": "string", "const": COHORT_PROVIDER_PLANNING_MANIFEST_VERSION},
+            "source": {"type": "string", "const": "cohort_provider_compiler"},
+            "provider": {"type": "string", "const": COHORT_PROVIDER},
+            "registry_version": {"type": "string", "const": COHORT_SELECTION_REGISTRY_VERSION},
+            "registry_digest": digest,
+            "cohort_selection_digest": digest,
+            "role_match": {"type": "string", "enum": ["any", "all"]},
+            "execution_ready": {"type": "boolean", "const": False},
+            "execution_blocker": {"type": "string", "const": COHORT_EXECUTION_NOT_READY},
+            "compiler_inputs": _closed_json_schema(
+                {
+                    "cohort_selection": _cohort_selection_manifest_schema(),
+                    "base_filter_hints": _planning_filter_hints_schema(lane=False),
+                    "execution_capability": _closed_json_schema({}, required=()),
+                    "requested_result_limit": {"type": "integer", "minimum": 1, "maximum": 1_000},
+                }
+            ),
+            "budget": _closed_json_schema(
+                {
+                    "planned_provider_calls": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": MAX_COHORT_PROVIDER_LANES,
+                    },
+                    "planned_provider_items": {"type": "integer", "minimum": 1, "maximum": 1_000},
+                    "max_output_candidates": {"type": "integer", "minimum": 1, "maximum": 1_000},
+                    "lane_item_limits": {
+                        "type": "array",
+                        "items": {"type": "integer", "minimum": 1, "maximum": 1_000},
+                        "minItems": 1,
+                        "maxItems": MAX_COHORT_PROVIDER_LANES,
+                    },
+                }
+            ),
+            "aggregation": _closed_json_schema(
+                {
+                    "operation": {
+                        "type": "string",
+                        "enum": ["union_dedupe", "intersection_by_status_then_union"],
+                    },
+                    "dedupe_identity_order": {
+                        "type": "array",
+                        "items": _bounded_string_schema(maximum=80),
+                        "minItems": 3,
+                        "maxItems": 3,
+                    },
+                    "required_role_bucket_ids": _bounded_string_list_schema(maximum=10, item_maximum=80),
+                    "verified_post_filter_required": {"type": "boolean"},
+                    "proof_owner": _closed_json_schema({}, required=()),
+                }
+            ),
+            "lanes": {
+                "type": "array",
+                "items": lane_schema,
+                "minItems": 1,
+                "maxItems": MAX_COHORT_PROVIDER_LANES,
+            },
+            "physical_query_digest": digest,
+            "company_target": _planning_company_target_schema(),
+            "budget_ceiling": _planning_budget_schema(),
+            "schema_pins": _planning_schema_pins_schema(),
+            "manifest_digest": digest,
+        }
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -396,6 +665,143 @@ class CohortProviderCompiler:
         }
         manifest["manifest_digest"] = _sha256_json(manifest)
         return manifest
+
+    def compile_planning_manifest(
+        self,
+        request_payload: dict[str, Any] | None,
+        *,
+        base_filter_hints: dict[str, Any] | None,
+        company_target: dict[str, Any],
+        budget_ceiling: dict[str, Any],
+        schema_pins: dict[str, Any],
+        requested_result_limit: int,
+    ) -> dict[str, Any]:
+        """Compile the sole capability-free, persistence-safe provider plan.
+
+        The legacy v1 compiler remains available to existing non-live runtime
+        surfaces.  This explicit entry point never accepts an execution
+        capability and never upgrades a v1 record.  Its digest is the planning
+        identity and binds the complete company, budget, and schema pins; the
+        retained ``physical_query_digest`` identifies the narrower v1 query.
+        """
+
+        canonical_company_target = _canonical_planning_company_target(company_target)
+        canonical_budget_ceiling = _canonical_planning_budget(budget_ceiling)
+        canonical_schema_pins = _canonical_planning_schema_pins(schema_pins)
+        raw_base_filter_hints = _copy_json_object(base_filter_hints or {})
+        nonempty_raw_base_filter_hints = {key: value for key, value in raw_base_filter_hints.items() if value != []}
+        canonical_base_filter_hints = _canonical_base_filter_hints(base_filter_hints)
+        if (
+            set(raw_base_filter_hints) - set(_PLANNING_BASE_FILTER_FIELDS)
+            or nonempty_raw_base_filter_hints != canonical_base_filter_hints
+        ):
+            raise CohortProviderCompilationError(
+                "cohort_provider_planning_filter_rejected",
+                "base_filter_hints",
+            )
+        company_labels = list(canonical_company_target["provider_company_labels"])
+        if (
+            canonical_base_filter_hints.get("current_companies") != company_labels
+            or canonical_base_filter_hints.get("past_companies") != company_labels
+        ):
+            raise CohortProviderCompilationError(
+                "cohort_provider_planning_company_target_mismatch",
+                "base_filter_hints",
+            )
+        if requested_result_limit != canonical_budget_ceiling["max_provider_items"]:
+            raise CohortProviderCompilationError(
+                "cohort_provider_planning_manifest_invalid",
+                "requested_result_limit",
+            )
+        legacy_manifest = self.compile(
+            request_payload,
+            base_filter_hints=canonical_base_filter_hints,
+            execution_capability=None,
+            requested_result_limit=requested_result_limit,
+        )
+        if (
+            bool(legacy_manifest.get("execution_ready"))
+            or str(legacy_manifest.get("execution_blocker") or "") != COHORT_EXECUTION_NOT_READY
+            or dict(dict(legacy_manifest.get("compiler_inputs") or {}).get("execution_capability") or {})
+        ):
+            raise CohortProviderCompilationError(
+                "cohort_provider_planning_manifest_capability_forbidden",
+                "execution_capability",
+            )
+        legacy_budget = dict(legacy_manifest.get("budget") or {})
+        if int(legacy_budget.get("planned_provider_calls") or 0) > canonical_budget_ceiling["max_provider_calls"]:
+            raise CohortProviderCompilationError(
+                "cohort_provider_call_budget_exceeded",
+                "budget_ceiling.max_provider_calls",
+            )
+        if canonical_budget_ceiling["max_output_candidates"] > canonical_budget_ceiling["max_provider_items"]:
+            raise CohortProviderCompilationError(
+                "cohort_provider_output_budget_exceeded",
+                "budget_ceiling.max_output_candidates",
+            )
+
+        physical_query_digest = str(legacy_manifest.pop("manifest_digest"))
+        legacy_manifest["schema_version"] = COHORT_PROVIDER_PLANNING_MANIFEST_VERSION
+        legacy_manifest["budget"] = {
+            **legacy_budget,
+            "max_output_candidates": canonical_budget_ceiling["max_output_candidates"],
+        }
+        planning_manifest = {
+            **legacy_manifest,
+            "physical_query_digest": physical_query_digest,
+            "company_target": canonical_company_target,
+            "budget_ceiling": canonical_budget_ceiling,
+            "schema_pins": canonical_schema_pins,
+        }
+        planning_manifest["manifest_digest"] = _sha256_json(planning_manifest)
+        return planning_manifest
+
+    def validate_planning_manifest(self, manifest: dict[str, Any]) -> dict[str, Any]:
+        """Exact-recompile one v2 plan; reject v1 and all silent rewrites."""
+
+        candidate = _copy_json_object(manifest)
+        if candidate.get("schema_version") != COHORT_PROVIDER_PLANNING_MANIFEST_VERSION:
+            raise CohortProviderCompilationError(
+                "cohort_provider_planning_manifest_invalid",
+                "schema_version",
+            )
+        compiler_inputs = _copy_json_object(candidate.get("compiler_inputs"))
+        if set(compiler_inputs) != {
+            "cohort_selection",
+            "base_filter_hints",
+            "execution_capability",
+            "requested_result_limit",
+        } or _copy_json_object(compiler_inputs.get("execution_capability")):
+            raise CohortProviderCompilationError(
+                "cohort_provider_planning_manifest_invalid",
+                "compiler_inputs",
+            )
+        try:
+            expected = self.compile_planning_manifest(
+                {"cohort_selection": _copy_json_object(compiler_inputs.get("cohort_selection"))},
+                base_filter_hints=_copy_json_object(compiler_inputs.get("base_filter_hints")),
+                company_target=_copy_json_object(candidate.get("company_target")),
+                budget_ceiling=_copy_json_object(candidate.get("budget_ceiling")),
+                schema_pins=_copy_json_object(candidate.get("schema_pins")),
+                requested_result_limit=_require_positive_int(
+                    compiler_inputs.get("requested_result_limit"),
+                    "requested_result_limit",
+                    code="cohort_provider_planning_manifest_invalid",
+                ),
+            )
+        except (CohortProviderCompilationError, TypeError, ValueError) as exc:
+            if isinstance(exc, CohortProviderCompilationError):
+                raise
+            raise CohortProviderCompilationError(
+                "cohort_provider_planning_manifest_invalid",
+                "compiler_inputs",
+            ) from exc
+        if candidate != expected:
+            raise CohortProviderCompilationError(
+                "cohort_provider_planning_manifest_semantic_mismatch",
+                "manifest",
+            )
+        return candidate
 
     def assert_execution_ready(
         self,
@@ -794,6 +1200,141 @@ def _require_positive_int(value: Any, field: str, *, code: str) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
         raise CohortProviderCompilationError(code, field)
     return value
+
+
+def _copy_json_object(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict) or any(type(key) is not str for key in value):
+        raise CohortProviderCompilationError(
+            "cohort_provider_planning_manifest_invalid",
+            "object",
+        )
+    return {key: _copy_json_value(child) for key, child in value.items()}
+
+
+def _copy_json_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        return _copy_json_object(value)
+    if isinstance(value, list):
+        return [_copy_json_value(child) for child in value]
+    return value
+
+
+def _canonical_planning_company_target(value: Any) -> dict[str, Any]:
+    record = _copy_json_object(value)
+    expected_fields = {
+        "schema_version",
+        "canonical_company_id",
+        "canonical_name",
+        "company_registry_revision",
+        "company_registry_digest",
+        "provider_company_labels",
+        "company_target_digest",
+    }
+    if set(record) != expected_fields:
+        raise CohortProviderCompilationError(
+            "cohort_provider_planning_manifest_invalid",
+            "company_target.fields",
+        )
+    if record.get("schema_version") != COHORT_PROVIDER_COMPANY_TARGET_VERSION:
+        raise CohortProviderCompilationError(
+            "cohort_provider_planning_manifest_invalid",
+            "company_target.schema_version",
+        )
+    registry_revision = record.get("company_registry_revision")
+    if type(registry_revision) is not str or _VERSION_PATTERN.fullmatch(registry_revision) is None:
+        raise CohortProviderCompilationError(
+            "cohort_provider_planning_manifest_invalid",
+            "company_target.company_registry_revision",
+        )
+    canonical_company_id = record.get("canonical_company_id")
+    if type(canonical_company_id) is not str or _IDENTIFIER_PATTERN.fullmatch(canonical_company_id) is None:
+        raise CohortProviderCompilationError(
+            "cohort_provider_planning_manifest_invalid",
+            "company_target.canonical_company_id",
+        )
+    canonical_name = record.get("canonical_name")
+    if (
+        type(canonical_name) is not str
+        or not canonical_name
+        or len(canonical_name) > 200
+        or " ".join(canonical_name.split()).strip() != canonical_name
+    ):
+        raise CohortProviderCompilationError(
+            "cohort_provider_planning_manifest_invalid",
+            "company_target.canonical_name",
+        )
+    labels = record.get("provider_company_labels")
+    if (
+        not isinstance(labels, list)
+        or not 1 <= len(labels) <= 16
+        or any(
+            type(label) is not str or not label or len(label) > 200 or " ".join(label.split()).strip() != label
+            for label in labels
+        )
+        or len({label.casefold() for label in labels}) != len(labels)
+        or labels != sorted(labels, key=lambda label: (label.casefold(), label))
+    ):
+        raise CohortProviderCompilationError(
+            "cohort_provider_planning_manifest_invalid",
+            "company_target.provider_company_labels",
+        )
+    for field in ("company_registry_digest", "company_target_digest"):
+        raw_value = record.get(field)
+        if type(raw_value) is not str or _SHA256_PATTERN.fullmatch(raw_value) is None:
+            raise CohortProviderCompilationError(
+                "cohort_provider_planning_manifest_invalid",
+                f"company_target.{field}",
+            )
+    digest_input = {key: child for key, child in record.items() if key != "company_target_digest"}
+    if record["company_target_digest"] != _sha256_json(digest_input):
+        raise CohortProviderCompilationError(
+            "cohort_provider_planning_manifest_invalid",
+            "company_target.company_target_digest",
+        )
+    return record
+
+
+def _canonical_planning_budget(value: Any) -> dict[str, int]:
+    record = _copy_json_object(value)
+    if set(record) != set(_PLANNING_BUDGET_FIELDS) or any(
+        type(record.get(field)) is not int for field in _PLANNING_BUDGET_FIELDS
+    ):
+        raise CohortProviderCompilationError(
+            "cohort_provider_planning_manifest_invalid",
+            "budget_ceiling",
+        )
+    budget = {field: int(record[field]) for field in _PLANNING_BUDGET_FIELDS}
+    if (
+        not 1 <= budget["max_provider_calls"] <= MAX_COHORT_PROVIDER_LANES
+        or not 1 <= budget["max_provider_items"] <= 1_000
+        or not 1 <= budget["max_output_candidates"] <= 1_000
+        or not 0 <= budget["max_cost_micro_usd"] <= 100_000_000
+        or not 1 <= budget["max_elapsed_seconds"] <= 86_400
+        or budget["max_output_candidates"] > budget["max_provider_items"]
+    ):
+        raise CohortProviderCompilationError(
+            "cohort_provider_planning_manifest_invalid",
+            "budget_ceiling",
+        )
+    return budget
+
+
+def _canonical_planning_schema_pins(value: Any) -> dict[str, str]:
+    record = _copy_json_object(value)
+    if set(record) != set(_PLANNING_SCHEMA_PIN_FIELDS):
+        raise CohortProviderCompilationError(
+            "cohort_provider_planning_manifest_invalid",
+            "schema_pins.fields",
+        )
+    for field in _PLANNING_SCHEMA_PIN_FIELDS:
+        raw_value = record.get(field)
+        pattern = _SHA256_PATTERN if field.endswith("_digest") else _VERSION_PATTERN
+        if type(raw_value) is not str or pattern.fullmatch(raw_value) is None:
+            raise CohortProviderCompilationError(
+                "cohort_provider_planning_manifest_invalid",
+                f"schema_pins.{field}",
+            )
+    return {field: str(record[field]) for field in _PLANNING_SCHEMA_PIN_FIELDS}
 
 
 def _normalized_strings(value: Any) -> list[str]:
