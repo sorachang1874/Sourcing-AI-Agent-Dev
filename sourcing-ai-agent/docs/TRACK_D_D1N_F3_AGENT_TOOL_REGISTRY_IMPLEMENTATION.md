@@ -40,6 +40,10 @@ This fixed-forward closes the four P1 findings in the advisory `NO-GO` (`0/4/0/0
 No registry is populated, no production contract owner is activated, and no adjacent F0/F1/V1/V2/V3/F4 file is
 changed by this fixed-forward.
 
+The later F3-A batch now populates a separate four-tool isolated-local declaration registry without changing this
+module's empty `DEFAULT_AGENT_TOOL_REGISTRY`; see
+`TRACK_D_D1N_F3A_LOCAL_CANARY_TOOL_POPULATION_IMPLEMENTATION.md`. Presence there remains non-serving.
+
 ## Contract invariants
 
 - Historical lookup remains exact and closed on `(tool_name, tool_spec_version, tool_spec_digest)`.
