@@ -79,6 +79,7 @@ DEFAULT_CONTROL_PLANE_TABLES = [
     "runtime_outbox",
     "agent_actions",
     "operation_runs",
+    "acquisition_plan_previews",
     "acquisition_runs",
     "workflow_activity_runs",
     "workflow_activity_attempts",

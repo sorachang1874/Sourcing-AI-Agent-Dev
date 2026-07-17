@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import ast
 import json
+import math
 import os
+import re
 import threading
 import time
 from contextlib import contextmanager
@@ -248,6 +250,7 @@ CONTROL_PLANE_LIVE_TABLES = (
     "runtime_outbox",
     "agent_actions",
     "operation_runs",
+    "acquisition_plan_previews",
     "acquisition_runs",
     "workflow_activity_runs",
     "workflow_activity_attempts",
@@ -337,6 +340,7 @@ _PRIMARY_KEY_COLUMNS = {
     "runtime_outbox": ("outbox_id",),
     "agent_actions": ("action_id",),
     "operation_runs": ("operation_run_id",),
+    "acquisition_plan_previews": ("preview_id",),
     "acquisition_runs": ("acquisition_run_id",),
     "workflow_activity_runs": ("activity_run_id",),
     "workflow_activity_attempts": ("attempt_id",),
@@ -553,6 +557,7 @@ _RUNTIME_COORDINATION_TABLES = {
     "runtime_outbox",
     "agent_actions",
     "operation_runs",
+    "acquisition_plan_previews",
     "acquisition_runs",
     "workflow_activity_runs",
     "workflow_activity_attempts",
@@ -570,6 +575,7 @@ _RUNTIME_COORDINATION_TABLES = {
 _OPERATION_RUNTIME_TABLES = {
     "agent_actions",
     "operation_runs",
+    "acquisition_plan_previews",
     "acquisition_runs",
     "workflow_activity_runs",
     "workflow_activity_attempts",
@@ -8088,6 +8094,796 @@ class LiveControlPlanePostgresAdapter:
             connection.commit()
         return existing
 
+    def create_acquisition_plan_preview_uow(
+        self,
+        *,
+        table_name: str = "acquisition_plan_previews",
+        action_id: str,
+        operation_run_id: str,
+        preview_id: str,
+        workspace_id: str,
+        requester_id: str,
+        conversation_id: str,
+        input_payload: dict[str, Any],
+        target_ref: dict[str, Any],
+        budget: dict[str, Any],
+        idempotency_key: str,
+        request_schema_version: str,
+        request_schema_digest: str,
+        result_schema_version: str,
+        result_schema_digest: str,
+        result_serializer_owner: str,
+        result_serializer_revision: str,
+        result_serializer_contract_digest: str,
+        start_request_schema_version: str,
+        start_request_schema_digest: str,
+        actor: str,
+        source: str,
+        ttl_seconds: int,
+        lock_timeout_seconds: float = 5.0,
+        fault_injection_point: str = "",
+    ) -> dict[str, Any] | None:
+        """Create one immutable commandless preview aggregate in one PG transaction.
+
+        The method is deliberately specialized.  Generic action submission writes
+        its aggregate in several transactions and therefore cannot provide the
+        F4a atomicity, replay, or lock-order contract.  This path performs no
+        provider/model/network work and emits no outbox row because no result-ready
+        outbox consumer exists.
+        """
+
+        from .acquisition_plan_preview import (
+            ACQUISITION_PLAN_PREVIEW_REQUEST_SCHEMA_DIGEST,
+            ACQUISITION_PLAN_PREVIEW_REQUEST_SCHEMA_VERSION,
+            ACQUISITION_PLAN_PREVIEW_RESULT_SPEC,
+            ACQUISITION_PLAN_PREVIEW_SCHEMA_VERSION,
+            build_acquisition_plan_preview,
+        )
+
+        if _normalize_postgres_identifier(table_name) != "acquisition_plan_previews":
+            raise ValueError("create_acquisition_plan_preview_uow requires table_name=acquisition_plan_previews")
+        if not all(
+            self._require_operation_runtime_table(required_table)
+            for required_table in (
+                "operation_events",
+                "operation_runs",
+                "agent_actions",
+                "acquisition_plan_previews",
+            )
+        ):
+            return None
+
+        text_values = {
+            "action_id": action_id,
+            "operation_run_id": operation_run_id,
+            "preview_id": preview_id,
+            "workspace_id": workspace_id,
+            "requester_id": requester_id,
+            "idempotency_key": idempotency_key,
+            "request_schema_version": request_schema_version,
+            "request_schema_digest": request_schema_digest,
+            "result_schema_version": result_schema_version,
+            "result_schema_digest": result_schema_digest,
+            "result_serializer_owner": result_serializer_owner,
+            "result_serializer_revision": result_serializer_revision,
+            "result_serializer_contract_digest": result_serializer_contract_digest,
+            "start_request_schema_version": start_request_schema_version,
+            "start_request_schema_digest": start_request_schema_digest,
+            "actor": actor,
+            "source": source,
+        }
+        noncanonical = [
+            name for name, value in text_values.items() if type(value) is not str or not value or value != value.strip()
+        ]
+        if noncanonical:
+            raise ValueError(
+                "acquisition plan preview UoW requires non-empty canonical text: " + ", ".join(noncanonical)
+            )
+        if type(conversation_id) is not str or conversation_id != conversation_id.strip():
+            raise ValueError("acquisition plan preview conversation_id must be canonical")
+        if type(ttl_seconds) is not int or not 1 <= ttl_seconds <= 24 * 60 * 60:
+            raise ValueError("acquisition plan preview ttl_seconds must be between 1 and 86400")
+        if isinstance(lock_timeout_seconds, bool):
+            raise ValueError("acquisition plan preview lock_timeout_seconds must be finite and positive")
+        timeout_seconds = float(lock_timeout_seconds)
+        if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
+            raise ValueError("acquisition plan preview lock_timeout_seconds must be finite and positive")
+        if not isinstance(input_payload, dict) or not isinstance(target_ref, dict) or not isinstance(budget, dict):
+            raise ValueError("acquisition plan preview payload, target, and budget must be objects")
+
+        identifier_pattern = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,199}")
+        version_pattern = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,199}")
+        digest_pattern = re.compile(r"[0-9a-f]{64}")
+        for name in ("action_id", "operation_run_id", "preview_id"):
+            if identifier_pattern.fullmatch(text_values[name]) is None:
+                raise ValueError(f"acquisition plan preview {name} is invalid")
+        for name in (
+            "request_schema_version",
+            "result_schema_version",
+            "result_serializer_owner",
+            "result_serializer_revision",
+            "start_request_schema_version",
+        ):
+            if version_pattern.fullmatch(text_values[name]) is None:
+                raise ValueError(f"acquisition plan preview {name} is invalid")
+        for name in (
+            "request_schema_digest",
+            "result_schema_digest",
+            "result_serializer_contract_digest",
+            "start_request_schema_digest",
+        ):
+            if digest_pattern.fullmatch(text_values[name]) is None:
+                raise ValueError(f"acquisition plan preview {name} is invalid")
+
+        expected_result_pins = {
+            "request_schema_version": ACQUISITION_PLAN_PREVIEW_REQUEST_SCHEMA_VERSION,
+            "request_schema_digest": ACQUISITION_PLAN_PREVIEW_REQUEST_SCHEMA_DIGEST,
+            "result_schema_version": ACQUISITION_PLAN_PREVIEW_RESULT_SPEC.result_schema_version,
+            "result_schema_digest": ACQUISITION_PLAN_PREVIEW_RESULT_SPEC.result_schema_digest,
+            "result_serializer_owner": ACQUISITION_PLAN_PREVIEW_RESULT_SPEC.serializer_owner,
+            "result_serializer_revision": ACQUISITION_PLAN_PREVIEW_RESULT_SPEC.serializer_revision,
+            "result_serializer_contract_digest": ACQUISITION_PLAN_PREVIEW_RESULT_SPEC.serializer_contract_digest,
+        }
+        mismatched_pins = [name for name, expected in expected_result_pins.items() if text_values[name] != expected]
+        if mismatched_pins:
+            raise ValueError("acquisition plan preview canonical result pin mismatch: " + ", ".join(mismatched_pins))
+        if target_ref.get("workspace_id") != workspace_id or target_ref.get("requester_id") != requester_id:
+            raise ValueError("acquisition plan preview owner target mismatch")
+        if not json_contract_equal(input_payload.get("budget"), budget):
+            raise ValueError("acquisition plan preview budget mismatch")
+
+        allowed_faults = {
+            "",
+            "after_operation_write",
+            "after_action_write",
+            "after_preview_write",
+            "after_event_write",
+            "after_commit",
+        }
+        if fault_injection_point not in allowed_faults:
+            raise ValueError("unsupported acquisition plan preview fault injection point")
+
+        terminal_event_type = "AcquisitionPlanPreviewCreated"
+        event_idempotency_key = f"{idempotency_key}:{terminal_event_type}"
+        deadline_monotonic = time.monotonic() + timeout_seconds
+        retry_attempt = 0
+        last_busy_key = f"operation_events:{operation_run_id}"
+
+        def _canonical_rows(
+            *,
+            preview_revision: int,
+            created_at_iso: str,
+            expires_at_iso: str,
+        ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any]]:
+            preview_value = build_acquisition_plan_preview(
+                input_payload=input_payload,
+                target_ref=target_ref,
+                preview_id=preview_id,
+                preview_revision=preview_revision,
+                created_at=created_at_iso,
+                expires_at=expires_at_iso,
+                intended_start_request_schema_version=start_request_schema_version,
+                intended_start_request_schema_digest=start_request_schema_digest,
+            )
+            preview_record = preview_value.to_record()
+            schema_pins = dict(preview_record.get("schema_pins") or {})
+            if (
+                schema_pins.get("plan_request_schema_version") != request_schema_version
+                or schema_pins.get("plan_request_schema_digest") != request_schema_digest
+                or schema_pins.get("plan_result_schema_version") != result_schema_version
+                or schema_pins.get("plan_result_schema_digest") != result_schema_digest
+                or schema_pins.get("intended_start_request_schema_version") != start_request_schema_version
+                or schema_pins.get("intended_start_request_schema_digest") != start_request_schema_digest
+            ):
+                raise ValueError("acquisition plan preview embedded schema pin mismatch")
+
+            company_target = dict(preview_record.get("company_target") or {})
+            effective_request = dict(preview_record.get("effective_request") or {})
+            planning_manifest = dict(preview_record.get("provider_planning_manifest") or {})
+            canonical_input = {
+                "cohort_selection": effective_request.get("cohort_selection"),
+                "source_preferences": effective_request.get("source_preferences"),
+                "coverage_intent": effective_request.get("coverage_intent"),
+                "thematic_constraints": effective_request.get("thematic_constraints"),
+                "provider_mode_intent": effective_request.get("provider_mode_intent"),
+                "budget": effective_request.get("budget"),
+            }
+            canonical_company_request = {
+                key: value
+                for key, value in company_target.items()
+                if key not in {"schema_version", "company_target_digest"}
+            }
+            canonical_target = {
+                "workspace_id": workspace_id,
+                "requester_id": requester_id,
+                "company_target": canonical_company_request,
+            }
+            result_ref = {
+                "schema_version": "acquisition_plan_preview_result_ref.v1",
+                "preview_id": preview_id,
+                "preview_revision": preview_revision,
+                "preview_digest": str(preview_record.get("preview_digest") or ""),
+                "result_schema_version": result_schema_version,
+                "result_schema_digest": result_schema_digest,
+                "result_serializer_owner": result_serializer_owner,
+                "result_serializer_revision": result_serializer_revision,
+                "result_serializer_contract_digest": result_serializer_contract_digest,
+            }
+            aggregate_metadata = {
+                "operation_runtime_contract": "track_d_d1n_f4a_commandless_preview_v1",
+                "request_schema_status": "validated",
+                "result_contract_pinned": True,
+                "commandless": True,
+                "outbox_required": False,
+            }
+            created_at_sql = created_at_iso.replace("T", " ").removesuffix("Z")
+            action_row = {
+                "action_id": action_id,
+                "workspace_id": workspace_id,
+                "conversation_id": conversation_id,
+                "action_type": "plan_acquisition",
+                "owner_module": "planner",
+                "operation_type": "acquisition_plan",
+                "target_ref_json": _json_dump(canonical_target),
+                "input_json": _json_dump(canonical_input),
+                "request_schema_version": request_schema_version,
+                "request_schema_digest": request_schema_digest,
+                "result_schema_version": result_schema_version,
+                "result_schema_digest": result_schema_digest,
+                "result_serializer_owner": result_serializer_owner,
+                "result_serializer_revision": result_serializer_revision,
+                "result_serializer_contract_digest": result_serializer_contract_digest,
+                "approval_status": "not_required",
+                "approval_policy": "not_required",
+                "budget_json": _json_dump(budget),
+                "idempotency_key": idempotency_key,
+                "status": "completed",
+                "result_ref_json": _json_dump(result_ref),
+                "metadata_json": _json_dump(aggregate_metadata),
+                "created_at": created_at_sql,
+                "updated_at": created_at_sql,
+            }
+            operation_row = {
+                "operation_run_id": operation_run_id,
+                "workspace_id": workspace_id,
+                "action_id": action_id,
+                "owner_module": "planner",
+                "operation_type": "acquisition_plan",
+                "request_schema_version": request_schema_version,
+                "request_schema_digest": request_schema_digest,
+                "result_schema_version": result_schema_version,
+                "result_schema_digest": result_schema_digest,
+                "result_serializer_owner": result_serializer_owner,
+                "result_serializer_revision": result_serializer_revision,
+                "result_serializer_contract_digest": result_serializer_contract_digest,
+                "status": "completed",
+                "progress_json": _json_dump({"phase": "completed", "commandless": True}),
+                "workflow_ref_json": _json_dump({}),
+                "cost_budget_json": _json_dump(budget),
+                "idempotency_key": idempotency_key,
+                "result_ref_json": _json_dump(result_ref),
+                "metadata_json": _json_dump(aggregate_metadata),
+                "started_at": created_at_sql,
+                "completed_at": created_at_sql,
+                "created_at": created_at_sql,
+                "updated_at": created_at_sql,
+            }
+            preview_row = {
+                "preview_id": preview_id,
+                "workspace_id": workspace_id,
+                "requester_id": requester_id,
+                "action_id": action_id,
+                "operation_run_id": operation_run_id,
+                "canonical_company_id": str(company_target.get("canonical_company_id") or ""),
+                "company_registry_revision": str(company_target.get("company_registry_revision") or ""),
+                "company_registry_digest": str(company_target.get("company_registry_digest") or ""),
+                "company_target_digest": str(company_target.get("company_target_digest") or ""),
+                "idempotency_key": idempotency_key,
+                "preview_revision": preview_revision,
+                "preview_digest": str(preview_record.get("preview_digest") or ""),
+                "effective_request_digest": str(preview_record.get("effective_request_digest") or ""),
+                "provider_manifest_digest": str(planning_manifest.get("manifest_digest") or ""),
+                "physical_query_digest": str(planning_manifest.get("physical_query_digest") or ""),
+                "request_schema_version": request_schema_version,
+                "request_schema_digest": request_schema_digest,
+                "result_schema_version": result_schema_version,
+                "result_schema_digest": result_schema_digest,
+                "result_serializer_owner": result_serializer_owner,
+                "result_serializer_revision": result_serializer_revision,
+                "result_serializer_contract_digest": result_serializer_contract_digest,
+                "start_request_schema_version": start_request_schema_version,
+                "start_request_schema_digest": start_request_schema_digest,
+                "preview_json": preview_record,
+                "schema_version": ACQUISITION_PLAN_PREVIEW_SCHEMA_VERSION,
+                "created_at": created_at_iso,
+                "expires_at": expires_at_iso,
+            }
+            event_payload = {
+                "contract": "track_d_d1n_f4a_commandless_preview_v1",
+                "action_type": "plan_acquisition",
+                "owner_module": "planner",
+                "operation_type": "acquisition_plan",
+                "result_ref": result_ref,
+                "module_state_mutated": False,
+                "outbox_required": False,
+            }
+            event_row = {
+                "workspace_id": workspace_id,
+                "event_stream_id": operation_run_id,
+                "operation_run_id": operation_run_id,
+                "action_id": action_id,
+                "event_family": "operation_event",
+                "event_type": terminal_event_type,
+                "idempotency_key": event_idempotency_key,
+                "occurred_at": created_at_sql,
+                "recorded_at": created_at_sql,
+                "actor": actor,
+                "source": source,
+                "payload_json": _json_dump(event_payload),
+                "schema_version": "operation_event_v1",
+                "created_at": created_at_sql,
+            }
+            return action_row, operation_row, preview_row, event_row, preview_record
+
+        def _validate_exact_bundle(
+            *,
+            action_row: dict[str, Any],
+            operation_row: dict[str, Any],
+            preview_row: dict[str, Any],
+            event_row: dict[str, Any],
+            expected_action: dict[str, Any],
+            expected_operation: dict[str, Any],
+            expected_preview: dict[str, Any],
+            expected_event: dict[str, Any],
+        ) -> None:
+            scalar_groups = (
+                (
+                    "action",
+                    action_row,
+                    expected_action,
+                    (
+                        "action_id",
+                        "workspace_id",
+                        "conversation_id",
+                        "action_type",
+                        "owner_module",
+                        "operation_type",
+                        "request_schema_version",
+                        "request_schema_digest",
+                        "result_schema_version",
+                        "result_schema_digest",
+                        "result_serializer_owner",
+                        "result_serializer_revision",
+                        "result_serializer_contract_digest",
+                        "approval_status",
+                        "approval_policy",
+                        "idempotency_key",
+                        "status",
+                        "created_at",
+                        "updated_at",
+                    ),
+                ),
+                (
+                    "operation",
+                    operation_row,
+                    expected_operation,
+                    (
+                        "operation_run_id",
+                        "workspace_id",
+                        "action_id",
+                        "owner_module",
+                        "operation_type",
+                        "request_schema_version",
+                        "request_schema_digest",
+                        "result_schema_version",
+                        "result_schema_digest",
+                        "result_serializer_owner",
+                        "result_serializer_revision",
+                        "result_serializer_contract_digest",
+                        "status",
+                        "idempotency_key",
+                        "started_at",
+                        "completed_at",
+                        "created_at",
+                        "updated_at",
+                    ),
+                ),
+                (
+                    "preview",
+                    preview_row,
+                    expected_preview,
+                    (
+                        "preview_id",
+                        "workspace_id",
+                        "requester_id",
+                        "action_id",
+                        "operation_run_id",
+                        "canonical_company_id",
+                        "company_registry_revision",
+                        "company_registry_digest",
+                        "company_target_digest",
+                        "idempotency_key",
+                        "preview_revision",
+                        "preview_digest",
+                        "effective_request_digest",
+                        "provider_manifest_digest",
+                        "physical_query_digest",
+                        "request_schema_version",
+                        "request_schema_digest",
+                        "result_schema_version",
+                        "result_schema_digest",
+                        "result_serializer_owner",
+                        "result_serializer_revision",
+                        "result_serializer_contract_digest",
+                        "start_request_schema_version",
+                        "start_request_schema_digest",
+                        "schema_version",
+                    ),
+                ),
+                (
+                    "event",
+                    event_row,
+                    expected_event,
+                    (
+                        "workspace_id",
+                        "event_stream_id",
+                        "operation_run_id",
+                        "action_id",
+                        "event_family",
+                        "event_type",
+                        "idempotency_key",
+                        "occurred_at",
+                        "recorded_at",
+                        "actor",
+                        "source",
+                        "schema_version",
+                        "created_at",
+                    ),
+                ),
+            )
+            for kind, actual, expected, fields in scalar_groups:
+                mismatches = [
+                    field
+                    for field in fields
+                    if str(actual.get(field) or "").strip() != str(expected.get(field) or "").strip()
+                ]
+                if mismatches:
+                    raise ValueError(
+                        f"acquisition plan preview {kind} immutable identity collision: " + ", ".join(mismatches)
+                    )
+            json_groups = (
+                ("action.target_ref", action_row.get("target_ref_json"), expected_action["target_ref_json"]),
+                ("action.input", action_row.get("input_json"), expected_action["input_json"]),
+                ("action.budget", action_row.get("budget_json"), expected_action["budget_json"]),
+                ("action.result_ref", action_row.get("result_ref_json"), expected_action["result_ref_json"]),
+                ("action.metadata", action_row.get("metadata_json"), expected_action["metadata_json"]),
+                (
+                    "operation.progress",
+                    operation_row.get("progress_json"),
+                    expected_operation["progress_json"],
+                ),
+                (
+                    "operation.workflow_ref",
+                    operation_row.get("workflow_ref_json"),
+                    expected_operation["workflow_ref_json"],
+                ),
+                (
+                    "operation.cost_budget",
+                    operation_row.get("cost_budget_json"),
+                    expected_operation["cost_budget_json"],
+                ),
+                (
+                    "operation.result_ref",
+                    operation_row.get("result_ref_json"),
+                    expected_operation["result_ref_json"],
+                ),
+                (
+                    "operation.metadata",
+                    operation_row.get("metadata_json"),
+                    expected_operation["metadata_json"],
+                ),
+                ("preview.preview", preview_row.get("preview_json"), expected_preview["preview_json"]),
+                ("event.payload", event_row.get("payload_json"), expected_event["payload_json"]),
+            )
+            for label, actual, expected in json_groups:
+                if not json_contract_equal(_json_load_dict(actual), _json_load_dict(expected)):
+                    raise ValueError(f"acquisition plan preview {label} immutable identity collision")
+            sequence_number = int(event_row.get("sequence_number") or 0)
+            expected_event_id = (
+                "opevt_"
+                + sha1(f"{operation_run_id}:{sequence_number}:{event_idempotency_key}".encode("utf-8")).hexdigest()[:24]
+            )
+            if sequence_number <= 0 or str(event_row.get("event_id") or "").strip() != expected_event_id:
+                raise ValueError("acquisition plan preview event sequence identity collision")
+
+        while True:
+            remaining_seconds = deadline_monotonic - time.monotonic()
+            if remaining_seconds <= 0:
+                raise ControlPlaneAdvisoryLockBusy(lock_key=last_busy_key, timeout_seconds=timeout_seconds)
+            connection = self._connect_with_timeout(remaining_seconds)
+            committed_bundle: dict[str, Any] | None = None
+            try:
+                with connection.cursor() as cursor:
+                    remaining_milliseconds = max(1, int((deadline_monotonic - time.monotonic()) * 1000))
+                    cursor.execute("SELECT set_config('lock_timeout', %s, true)", (f"{remaining_milliseconds}ms",))
+                    lock_groups = (
+                        (f"operation_events:{operation_run_id}",),
+                        tuple(
+                            sorted(
+                                {
+                                    f"operation_runs:id:{operation_run_id}",
+                                    f"operation_runs:idempotency:{workspace_id}:{idempotency_key}",
+                                }
+                            )
+                        ),
+                        tuple(
+                            sorted(
+                                {
+                                    f"agent_actions:id:{action_id}",
+                                    f"agent_actions:idempotency:{workspace_id}:{idempotency_key}",
+                                }
+                            )
+                        ),
+                        tuple(
+                            sorted(
+                                {
+                                    f"acquisition_plan_previews:id:{preview_id}",
+                                    f"acquisition_plan_previews:idempotency:{workspace_id}:{idempotency_key}",
+                                }
+                            )
+                        ),
+                    )
+                    for lock_group in lock_groups:
+                        for lock_key in lock_group:
+                            last_busy_key = lock_key
+                            if not self._try_acquire_transaction_lock(cursor, lock_key):
+                                raise _TransactionAdvisoryLockBusy
+
+                    cursor.execute(
+                        """
+                        SELECT * FROM operation_runs
+                        WHERE operation_run_id = %s OR (workspace_id = %s AND idempotency_key = %s)
+                        ORDER BY operation_run_id
+                        FOR UPDATE
+                        """,
+                        (operation_run_id, workspace_id, idempotency_key),
+                    )
+                    operation_candidates = _fetch_all_dict_rows(cursor)
+                    if len(operation_candidates) > 1:
+                        raise ValueError("acquisition plan preview operation split identity collision")
+                    existing_operation = operation_candidates[0] if operation_candidates else None
+
+                    cursor.execute(
+                        """
+                        SELECT * FROM agent_actions
+                        WHERE action_id = %s OR (workspace_id = %s AND idempotency_key = %s)
+                        ORDER BY action_id
+                        FOR UPDATE
+                        """,
+                        (action_id, workspace_id, idempotency_key),
+                    )
+                    action_candidates = _fetch_all_dict_rows(cursor)
+                    if len(action_candidates) > 1:
+                        raise ValueError("acquisition plan preview action split identity collision")
+                    existing_action = action_candidates[0] if action_candidates else None
+
+                    cursor.execute(
+                        """
+                        SELECT * FROM acquisition_plan_previews
+                        WHERE preview_id = %s OR (workspace_id = %s AND idempotency_key = %s)
+                        ORDER BY preview_id
+                        FOR UPDATE
+                        """,
+                        (preview_id, workspace_id, idempotency_key),
+                    )
+                    preview_candidates = _fetch_all_dict_rows(cursor)
+                    if len(preview_candidates) > 1:
+                        raise ValueError("acquisition plan preview split identity collision")
+                    existing_preview = preview_candidates[0] if preview_candidates else None
+
+                    cursor.execute(
+                        """
+                        SELECT * FROM operation_events
+                        WHERE (event_stream_id = %s AND idempotency_key = %s)
+                           OR (operation_run_id = %s AND event_type = %s)
+                        ORDER BY event_id
+                        FOR UPDATE
+                        """,
+                        (operation_run_id, event_idempotency_key, operation_run_id, terminal_event_type),
+                    )
+                    event_candidates = _fetch_all_dict_rows(cursor)
+                    if len(event_candidates) > 1:
+                        raise ValueError("acquisition plan preview event split identity collision")
+                    existing_event = event_candidates[0] if event_candidates else None
+
+                    existing_rows = (
+                        existing_operation,
+                        existing_action,
+                        existing_preview,
+                        existing_event,
+                    )
+                    existing_count = sum(row is not None for row in existing_rows)
+                    if existing_count not in {0, 4}:
+                        raise ValueError("acquisition plan preview partial aggregate collision")
+
+                    if existing_count == 4:
+                        assert existing_preview is not None
+                        stored_preview = _json_load_dict(existing_preview.get("preview_json"))
+                        preview_revision = int(existing_preview.get("preview_revision") or 0)
+                        created_at_iso = str(stored_preview.get("created_at") or "")
+                        expires_at_iso = str(stored_preview.get("expires_at") or "")
+                        expected_action, expected_operation, expected_preview, expected_event, _ = _canonical_rows(
+                            preview_revision=preview_revision,
+                            created_at_iso=created_at_iso,
+                            expires_at_iso=expires_at_iso,
+                        )
+                        assert existing_action is not None
+                        assert existing_operation is not None
+                        assert existing_event is not None
+                        _validate_exact_bundle(
+                            action_row=existing_action,
+                            operation_row=existing_operation,
+                            preview_row=existing_preview,
+                            event_row=existing_event,
+                            expected_action=expected_action,
+                            expected_operation=expected_operation,
+                            expected_preview=expected_preview,
+                            expected_event=expected_event,
+                        )
+                        committed_bundle = {
+                            "outcome": "replayed",
+                            "replayed": True,
+                            "action": existing_action,
+                            "operation_run": existing_operation,
+                            "preview": existing_preview,
+                            "event": existing_event,
+                        }
+                    else:
+                        cursor.execute(
+                            """
+                            SELECT
+                                nextval('acquisition_plan_preview_revision_seq') AS preview_revision,
+                                date_trunc('second', transaction_timestamp()) AS created_at,
+                                to_char(
+                                    date_trunc('second', transaction_timestamp()) AT TIME ZONE 'UTC',
+                                    'YYYY-MM-DD"T"HH24:MI:SS"Z"'
+                                ) AS created_at_iso,
+                                to_char(
+                                    (date_trunc('second', transaction_timestamp()) + (%s * INTERVAL '1 second'))
+                                        AT TIME ZONE 'UTC',
+                                    'YYYY-MM-DD"T"HH24:MI:SS"Z"'
+                                ) AS expires_at_iso
+                            """,
+                            (ttl_seconds,),
+                        )
+                        allocation = _fetch_one_dict_row(cursor, cursor.fetchone()) or {}
+                        preview_revision = int(allocation.get("preview_revision") or 0)
+                        created_at_iso = str(allocation.get("created_at_iso") or "")
+                        expires_at_iso = str(allocation.get("expires_at_iso") or "")
+                        (
+                            expected_action,
+                            expected_operation,
+                            expected_preview,
+                            expected_event,
+                            preview_record,
+                        ) = _canonical_rows(
+                            preview_revision=preview_revision,
+                            created_at_iso=created_at_iso,
+                            expires_at_iso=expires_at_iso,
+                        )
+
+                        operation_columns = list(expected_operation)
+                        cursor.execute(
+                            (
+                                f"INSERT INTO operation_runs "
+                                f"({', '.join(_quote_identifier(column) for column in operation_columns)}) "
+                                f"VALUES ({', '.join(['%s'] * len(operation_columns))}) RETURNING *"
+                            ),
+                            tuple(expected_operation[column] for column in operation_columns),
+                        )
+                        inserted_operation = _fetch_one_dict_row(cursor, cursor.fetchone())
+                        if fault_injection_point == "after_operation_write":
+                            raise RuntimeError("injected acquisition plan preview fault after operation write")
+
+                        action_columns = list(expected_action)
+                        cursor.execute(
+                            (
+                                f"INSERT INTO agent_actions "
+                                f"({', '.join(_quote_identifier(column) for column in action_columns)}) "
+                                f"VALUES ({', '.join(['%s'] * len(action_columns))}) RETURNING *"
+                            ),
+                            tuple(expected_action[column] for column in action_columns),
+                        )
+                        inserted_action = _fetch_one_dict_row(cursor, cursor.fetchone())
+                        if fault_injection_point == "after_action_write":
+                            raise RuntimeError("injected acquisition plan preview fault after action write")
+
+                        preview_insert = dict(expected_preview)
+                        preview_insert["preview_json"] = _json_dump(preview_record)
+                        preview_insert["created_at"] = created_at_iso
+                        preview_insert["expires_at"] = expires_at_iso
+                        preview_columns = list(preview_insert)
+                        cursor.execute(
+                            (
+                                f"INSERT INTO acquisition_plan_previews "
+                                f"({', '.join(_quote_identifier(column) for column in preview_columns)}) "
+                                f"VALUES ({', '.join(['%s'] * len(preview_columns))}) RETURNING *"
+                            ),
+                            tuple(preview_insert[column] for column in preview_columns),
+                        )
+                        inserted_preview = _fetch_one_dict_row(cursor, cursor.fetchone())
+                        if fault_injection_point == "after_preview_write":
+                            raise RuntimeError("injected acquisition plan preview fault after preview write")
+
+                        inserted_event = self._append_operation_event_with_cursor(
+                            cursor,
+                            payload=expected_event,
+                            now=expected_event["created_at"],
+                            acquire_stream_lock=False,
+                        )
+                        if fault_injection_point == "after_event_write":
+                            raise RuntimeError("injected acquisition plan preview fault after event write")
+                        if not all((inserted_operation, inserted_action, inserted_preview, inserted_event)):
+                            raise RuntimeError("acquisition plan preview UoW failed to persist a complete bundle")
+                        _validate_exact_bundle(
+                            action_row=inserted_action,
+                            operation_row=inserted_operation,
+                            preview_row=inserted_preview,
+                            event_row=inserted_event,
+                            expected_action=expected_action,
+                            expected_operation=expected_operation,
+                            expected_preview=expected_preview,
+                            expected_event=expected_event,
+                        )
+                        committed_bundle = {
+                            "outcome": "created",
+                            "replayed": False,
+                            "action": inserted_action,
+                            "operation_run": inserted_operation,
+                            "preview": inserted_preview,
+                            "event": inserted_event,
+                        }
+                connection.commit()
+                if fault_injection_point == "after_commit":
+                    raise RuntimeError("injected acquisition plan preview fault after commit")
+                assert committed_bundle is not None
+                return committed_bundle
+            except _TransactionAdvisoryLockBusy:
+                connection.rollback()
+                remaining_seconds = deadline_monotonic - time.monotonic()
+                if remaining_seconds <= 0:
+                    raise ControlPlaneAdvisoryLockBusy(
+                        lock_key=last_busy_key,
+                        timeout_seconds=timeout_seconds,
+                    )
+                time.sleep(min(_SESSION_ADVISORY_LOCK_POLL_SECONDS, remaining_seconds))
+            except Exception as exc:
+                connection.rollback()
+                sqlstate = str(getattr(exc, "sqlstate", "") or "").strip().upper()
+                retry_attempt += 1
+                if sqlstate == "55P03":
+                    remaining_seconds = deadline_monotonic - time.monotonic()
+                    if remaining_seconds <= 0:
+                        raise ControlPlaneAdvisoryLockBusy(
+                            lock_key=last_busy_key,
+                            timeout_seconds=timeout_seconds,
+                        ) from exc
+                    time.sleep(min(_SESSION_ADVISORY_LOCK_POLL_SECONDS, remaining_seconds))
+                elif _is_retryable_postgres_exception(exc) and retry_attempt < _CONTROL_PLANE_POSTGRES_MAX_RETRIES:
+                    remaining_seconds = deadline_monotonic - time.monotonic()
+                    if remaining_seconds <= 0:
+                        raise
+                    time.sleep(
+                        min(
+                            _control_plane_postgres_retry_delay_seconds(retry_attempt),
+                            remaining_seconds,
+                        )
+                    )
+                else:
+                    raise
+            finally:
+                connection.close()
+
     def upsert_workflow_runtime_identity_row(
         self,
         row: dict[str, Any] | None = None,
@@ -14464,6 +15260,15 @@ class LiveControlPlanePostgresAdapter:
             return self._direct_connect(psycopg_module)
         pool = self._ensure_pool()
         return _PooledConnectionHandle(pool, pool.getconn())
+
+    def _connect_with_timeout(self, timeout_seconds: float) -> Any:
+        """Checkout one connection within the caller's existing deadline budget."""
+
+        psycopg_module = self._psycopg
+        if psycopg_module is not None and getattr(psycopg_module, "Connection", None) is None:
+            return self._direct_connect(psycopg_module)
+        pool = self._ensure_pool()
+        return _PooledConnectionHandle(pool, pool.getconn(timeout=max(0.001, float(timeout_seconds))))
 
     def _direct_connect(self, psycopg_module: Any) -> Any:
         """Legacy non-pooled connect path (used with injected psycopg stubs)."""

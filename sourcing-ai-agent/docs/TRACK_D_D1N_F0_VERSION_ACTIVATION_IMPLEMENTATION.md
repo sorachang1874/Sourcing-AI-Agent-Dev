@@ -137,7 +137,8 @@ already-copied runtime pins, not the mutable current-pointer snapshot alone, pre
 
 F0-A does not implement:
 
-- migration `0010`, PostgreSQL tables, row locks, atomic CAS, or replica/brownfield behavior;
+- the F0-B PostgreSQL activation migration (now `0011` or the next available number after F4a `0010`), activation
+  tables, row locks, atomic CAS, or replica/brownfield behavior;
 - historical lookup against `ActionRequestSchemaRegistry`, `ActionResultRegistry`, or `AgentToolRegistry`;
 - independent-review scope-coverage verification, hosted-gate execution, receipt provenance/authenticity,
   server-time checks, or append-only rows;

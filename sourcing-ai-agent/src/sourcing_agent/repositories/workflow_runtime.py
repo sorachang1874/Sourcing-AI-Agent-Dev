@@ -131,6 +131,11 @@ AGENT_ACTIONS = TableDescriptor(
         Column("input_json", Kind.JSON, field="input"),
         Column("request_schema_version"),
         Column("request_schema_digest"),
+        Column("result_schema_version", read_default=""),
+        Column("result_schema_digest", read_default=""),
+        Column("result_serializer_owner", read_default=""),
+        Column("result_serializer_revision", read_default=""),
+        Column("result_serializer_contract_digest", read_default=""),
         Column("approval_status", default="not_required"),
         Column("approval_policy", default="not_required"),
         Column("budget_json", Kind.JSON, field="budget"),
@@ -155,6 +160,11 @@ OPERATION_RUNS = TableDescriptor(
         Column("operation_type"),
         Column("request_schema_version"),
         Column("request_schema_digest"),
+        Column("result_schema_version", read_default=""),
+        Column("result_schema_digest", read_default=""),
+        Column("result_serializer_owner", read_default=""),
+        Column("result_serializer_revision", read_default=""),
+        Column("result_serializer_contract_digest", read_default=""),
         Column("status", default="queued"),
         Column("progress_json", Kind.JSON, field="progress"),
         Column("workflow_ref_json", Kind.JSON, field="workflow_ref"),
@@ -166,6 +176,42 @@ OPERATION_RUNS = TableDescriptor(
         Column("completed_at"),
         Column("created_at"),
         Column("updated_at"),
+    ),
+)
+
+
+ACQUISITION_PLAN_PREVIEWS = TableDescriptor(
+    table="acquisition_plan_previews",
+    pk=("preview_id",),
+    columns=(
+        Column("preview_id"),
+        Column("workspace_id"),
+        Column("requester_id"),
+        Column("action_id"),
+        Column("operation_run_id"),
+        Column("canonical_company_id"),
+        Column("company_registry_revision"),
+        Column("company_registry_digest"),
+        Column("company_target_digest"),
+        Column("idempotency_key"),
+        Column("preview_revision", Kind.INT),
+        Column("preview_digest"),
+        Column("effective_request_digest"),
+        Column("provider_manifest_digest"),
+        Column("physical_query_digest"),
+        Column("request_schema_version"),
+        Column("request_schema_digest"),
+        Column("result_schema_version"),
+        Column("result_schema_digest"),
+        Column("result_serializer_owner"),
+        Column("result_serializer_revision"),
+        Column("result_serializer_contract_digest"),
+        Column("start_request_schema_version"),
+        Column("start_request_schema_digest"),
+        Column("preview_json", Kind.JSON, field="preview"),
+        Column("schema_version"),
+        Column("created_at", Kind.TIMESTAMPTZ),
+        Column("expires_at", Kind.TIMESTAMPTZ),
     ),
 )
 
@@ -2026,6 +2072,162 @@ class WorkflowRuntimeRepository(Repository):
             "returned False; legacy SQLite tail retired (B4)"
         )
 
+    def create_acquisition_plan_preview_uow(
+        self,
+        *,
+        action_id: str,
+        operation_run_id: str,
+        preview_id: str,
+        workspace_id: str,
+        requester_id: str,
+        conversation_id: str,
+        input_payload: dict[str, Any],
+        target_ref: dict[str, Any],
+        budget: dict[str, Any],
+        idempotency_key: str,
+        request_schema_version: str,
+        request_schema_digest: str,
+        result_schema_version: str,
+        result_schema_digest: str,
+        result_serializer_owner: str,
+        result_serializer_revision: str,
+        result_serializer_contract_digest: str,
+        start_request_schema_version: str,
+        start_request_schema_digest: str,
+        actor: str,
+        source: str,
+        ttl_seconds: int,
+        lock_timeout_seconds: float = 5.0,
+    ) -> dict[str, Any]:
+        """Create or exact-reload one terminal plan preview as one PG transaction.
+
+        The native owner allocates revision and timestamps from PostgreSQL,
+        invokes only the pure preview compiler, and writes the linked terminal
+        action/run/preview/event bundle.  It intentionally emits no runtime
+        outbox row: a commandless preview has no dispatch or wakeup consumer.
+        """
+
+        for table_name in (
+            "operation_events",
+            "operation_runs",
+            "agent_actions",
+            "acquisition_plan_previews",
+        ):
+            self._require_postgres_for_durable_runtime(table_name)
+        required_text = {
+            "action_id": action_id,
+            "operation_run_id": operation_run_id,
+            "preview_id": preview_id,
+            "workspace_id": workspace_id,
+            "requester_id": requester_id,
+            "idempotency_key": idempotency_key,
+            "request_schema_version": request_schema_version,
+            "request_schema_digest": request_schema_digest,
+            "result_schema_version": result_schema_version,
+            "result_schema_digest": result_schema_digest,
+            "result_serializer_owner": result_serializer_owner,
+            "result_serializer_revision": result_serializer_revision,
+            "result_serializer_contract_digest": result_serializer_contract_digest,
+            "start_request_schema_version": start_request_schema_version,
+            "start_request_schema_digest": start_request_schema_digest,
+        }
+        if any(not str(value or "").strip() for value in required_text.values()):
+            raise ValueError("acquisition plan preview UoW requires complete identity and schema pins")
+        if not 1 <= int(ttl_seconds) <= 24 * 60 * 60:
+            raise ValueError("acquisition plan preview ttl_seconds must be between 1 and 86400")
+        if float(lock_timeout_seconds) <= 0:
+            raise ValueError("acquisition plan preview lock_timeout_seconds must be positive")
+        if self._should_prefer_read("acquisition_plan_previews"):
+            result = self._call_native_write(
+                "create_acquisition_plan_preview_uow",
+                table_name="acquisition_plan_previews",
+                action_id=str(action_id),
+                operation_run_id=str(operation_run_id),
+                preview_id=str(preview_id),
+                workspace_id=str(workspace_id),
+                requester_id=str(requester_id),
+                conversation_id=str(conversation_id or ""),
+                input_payload=dict(input_payload),
+                target_ref=dict(target_ref),
+                budget=dict(budget),
+                idempotency_key=str(idempotency_key),
+                request_schema_version=str(request_schema_version),
+                request_schema_digest=str(request_schema_digest),
+                result_schema_version=str(result_schema_version),
+                result_schema_digest=str(result_schema_digest),
+                result_serializer_owner=str(result_serializer_owner),
+                result_serializer_revision=str(result_serializer_revision),
+                result_serializer_contract_digest=str(result_serializer_contract_digest),
+                start_request_schema_version=str(start_request_schema_version),
+                start_request_schema_digest=str(start_request_schema_digest),
+                actor=str(actor or ""),
+                source=str(source or ""),
+                ttl_seconds=int(ttl_seconds),
+                lock_timeout_seconds=float(lock_timeout_seconds),
+            )
+            if result is not None:
+                payload = dict(result)
+                return {
+                    "outcome": str(payload.get("outcome") or "").strip(),
+                    "replayed": bool(payload.get("replayed")),
+                    "action": self._action_from_row(payload.get("action")),
+                    "operation_run": self._operation_from_row(payload.get("operation_run")),
+                    "preview": self._acquisition_plan_preview_from_row(payload.get("preview")),
+                    "event": self._operation_event_from_row(payload.get("event")),
+                }
+            if self._strict_authoritative("acquisition_plan_previews"):
+                self._raise_write_failure(
+                    table_name="acquisition_plan_previews",
+                    method_name="create_acquisition_plan_preview_uow",
+                    reason="native writer returned no bundle",
+                )
+        self._raise_postgres_only_invariant(
+            table_name="acquisition_plan_previews",
+            method_name="create_acquisition_plan_preview_uow",
+        )
+
+    def get_acquisition_plan_preview(
+        self,
+        preview_id: str,
+        *,
+        workspace_id: str,
+        requester_id: str,
+        preview_revision: int,
+        preview_digest: str,
+    ) -> dict[str, Any]:
+        """Read one preview only through its exact owner and immutable triple."""
+
+        self._require_postgres_for_durable_runtime("acquisition_plan_previews")
+        normalized_preview_id = str(preview_id or "").strip()
+        normalized_workspace_id = str(workspace_id or "").strip()
+        normalized_requester_id = str(requester_id or "").strip()
+        normalized_preview_digest = str(preview_digest or "").strip()
+        if (
+            not normalized_preview_id
+            or not normalized_workspace_id
+            or not normalized_requester_id
+            or type(preview_revision) is not int
+            or preview_revision <= 0
+            or len(normalized_preview_digest) != 64
+        ):
+            return {}
+        row = self._select_row(
+            "acquisition_plan_previews",
+            row_builder=self._acquisition_plan_preview_from_row,
+            where_sql=(
+                "preview_id = %s AND workspace_id = %s AND requester_id = %s "
+                "AND preview_revision = %s AND preview_digest = %s"
+            ),
+            params=[
+                normalized_preview_id,
+                normalized_workspace_id,
+                normalized_requester_id,
+                preview_revision,
+                normalized_preview_digest,
+            ],
+        )
+        return row or {}
+
     def get_action(self, action_id: str) -> dict[str, Any]:
         self._require_postgres_for_durable_runtime("agent_actions")
         normalized_action_id = str(action_id or "").strip()
@@ -2872,6 +3074,9 @@ class WorkflowRuntimeRepository(Repository):
 
     def _operation_from_row(self, row: Any) -> dict[str, Any]:
         return OPERATION_RUNS.from_row(row)
+
+    def _acquisition_plan_preview_from_row(self, row: Any) -> dict[str, Any]:
+        return ACQUISITION_PLAN_PREVIEWS.from_row(row)
 
     def _operation_event_from_row(self, row: Any) -> dict[str, Any]:
         return OPERATION_EVENTS.from_row(row)
