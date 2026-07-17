@@ -18,7 +18,7 @@ import re
 from dataclasses import dataclass
 from typing import Any, Literal, Mapping, TypeAlias
 
-from .agent_tool_registry import AgentToolSpec
+from .agent_tool_registry import AgentToolRegistry, AgentToolRegistryError, AgentToolSpec
 
 # This value is also pinned into ``logical_occurrence_digest``. Additive
 # terminal-payload migrations must not bump or reinterpret it in place.
@@ -43,6 +43,22 @@ _RESULT_LINK_POLICIES = frozenset(
         "workflow_command_acceptance_v1",
         "activity_attempt_terminal_v1",
     }
+)
+
+_OCCURRENCE_SPEC_PIN_FIELDS = (
+    "tool_name",
+    "tool_kind",
+    "effect_class",
+    "result_link_policy",
+    "tool_spec_version",
+    "tool_spec_digest",
+    "request_schema_version",
+    "request_schema_digest",
+    "result_schema_version",
+    "result_schema_digest",
+    "serializer_owner",
+    "serializer_revision",
+    "serializer_contract_digest",
 )
 
 
@@ -338,6 +354,42 @@ class AgentToolOccurrence:
             serializer_contract_digest=self.serializer_contract_digest,
         )
 
+    def revalidated_for_registry(self, registry: AgentToolRegistry) -> AgentToolOccurrence:
+        """Bind all spec-derived pins to one exact server-owned historical spec."""
+
+        occurrence = self.revalidated()
+        if not isinstance(registry, AgentToolRegistry):
+            raise AgentToolResultSlotError("agent_tool_result_registry_invalid")
+        try:
+            historical_spec = registry.require_historical(
+                occurrence.tool_name,
+                occurrence.tool_spec_version,
+                occurrence.tool_spec_digest,
+            )
+        except AgentToolRegistryError as exc:
+            raise AgentToolResultSlotError("agent_tool_result_historical_spec_missing") from exc
+        expected = AgentToolOccurrence.from_tool_spec(
+            result_slot_id=occurrence.result_slot_id,
+            slot_generation=occurrence.slot_generation,
+            workspace_id=occurrence.workspace_id,
+            actor_id=occurrence.actor_id,
+            runtime_namespace=occurrence.runtime_namespace,
+            provider_mode=occurrence.provider_mode,
+            turn_id=occurrence.turn_id,
+            step_id=occurrence.step_id,
+            tool_spec=historical_spec,
+            canonical_args=occurrence.canonical_args,
+            occurrence_ordinal=occurrence.occurrence_ordinal,
+        )
+        mismatches = tuple(
+            field_name
+            for field_name in _OCCURRENCE_SPEC_PIN_FIELDS
+            if getattr(occurrence, field_name) != getattr(expected, field_name)
+        )
+        if mismatches:
+            raise AgentToolResultSlotError("agent_tool_result_historical_spec_pin_mismatch:" + ",".join(mismatches))
+        return occurrence
+
 
 @dataclass(frozen=True, slots=True)
 class AgentToolTerminalResult:
@@ -540,8 +592,11 @@ class AgentToolTerminalResult:
             link_shape_valid = has_action and has_command and not has_activity and not has_fence
         elif policy == "activity_attempt_terminal_v1":
             effect_shape_valid = True
-            link_shape_valid = has_action and has_command and has_activity and all(
-                value > 0 for value in (self.command_attempt, self.command_generation, self.control_epoch)
+            link_shape_valid = (
+                has_action
+                and has_command
+                and has_activity
+                and all(value > 0 for value in (self.command_attempt, self.command_generation, self.control_epoch))
             )
         else:  # pragma: no cover - occurrence construction rejects this first
             effect_shape_valid = False

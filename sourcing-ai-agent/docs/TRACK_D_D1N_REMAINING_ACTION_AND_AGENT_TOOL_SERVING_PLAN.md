@@ -212,6 +212,12 @@ already-pinned tool-spec digest. Historical start tool spec v2 retains its Activ
 current start tool spec v3 uses command-acceptance. Migration `0013` is a quiesced cutover with deterministic
 backfill, `NOT NULL`, and no default; it is not a rolling-overlap bridge.
 
+The S1d fixed-forward response makes the historical registry the persistence trust root rather than trusting a
+caller-constructed occurrence: reserve, read-only prepare, and shared acceptance exact-resolve the historical
+tool-name/version/digest, rebuild every spec-derived pin, and reject any mismatch before effects. Migration `0014`
+adds brownfield validation plus the deferred all-attempt effect/policy/link-shape matrix, including quarantined rows.
+Neither change alters the v1 logical-occurrence digest or grants serving authority.
+
 The S1b reference-review response fixed-forwards the inspect physical owner without changing model-visible v2
 semantics. A scoped missing or foreign tuple now produces an exact, slot-generation-anchored masked error terminal and
 can atomically persist/replay the byte-identical `operation_not_found` result. Success loads the complete event stream,
@@ -563,13 +569,17 @@ command must match its planned event and registries; unrelated same-operation ro
 The active fixed-forward response additionally locks the complete stream before the result slot, rejects hidden
 foreign rows and sequence gaps, binds an unambiguous plan-event/command-causality fingerprint, and persists masked
 missing/foreign `operation_not_found` through the same atomic result UoW. It closes reference findings 2/3/4/7 only;
-historical spec lookup, reason normalization, serializer semantic closure, and canonical owner-matrix/preflight remain
-open.
+the S1d response separately closes canonical owner-matrix/preflight finding 9. Historical inspect spec lookup, reason
+normalization, and serializer semantic closure findings 5/6/8 remain open and form the next versioned inspect batch.
 The pre-served inspect result/query-owner/serializer/tool/adapter/fixture contract is fixed-forward v2, with one
 central readiness derivation: completed without durable result ref remains `pending/fail_closed`. Evidence includes
 event-revision drift zero-write and both commandless/command-backed success fixtures. S1c now provides the opaque
 equality-only target-revision carrier; S1d adds the registry-owned result-link policy, historical start v2/current v3
-boundary, and quiesced `0013` migration. S1 remains incomplete until physical-owner adapters and terminal-success
+boundary, and quiesced `0013` migration. Its valid pinned Ultra review returned `NO-GO 0/1/4/0`; the bounded author
+response now rebinds all persisted occurrence pins through the server-owned exact historical registry before effects,
+adds `0014` brownfield plus deferred all-attempt effect/policy/link-shape enforcement, corrects the S1a historical/current
+start and quiesced-rollout wording, and adds the canonical result aggregate/field-owner fast preflight. A fresh pinned
+non-author review is still required. S1 remains incomplete until physical-owner adapters and terminal-success
 fixtures exist for `start_acquisition_run` and `filter_projection`. The next bounded start batch must first ratify the
 exact approval-receipt, command-acceptance winner, and parent-budget reservation owners; it must not reuse or guess
 the older multi-transaction dispatch path. Default/public serving remains zero. See

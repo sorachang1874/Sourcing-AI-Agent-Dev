@@ -13,7 +13,11 @@ from sourcing_agent.acquisition_plan_preview import (
     AcquisitionPlanPreview,
     acquisition_plan_preview_success_result,
 )
-from sourcing_agent.agent_canary_registry import PLAN_ACQUISITION_TOOL_SPEC, START_ACQUISITION_RUN_TOOL_SPEC
+from sourcing_agent.agent_canary_registry import (
+    PLAN_ACQUISITION_TOOL_SPEC,
+    START_ACQUISITION_RUN_TOOL_SPEC,
+    START_ACQUISITION_RUN_TOOL_SPEC_V2,
+)
 from sourcing_agent.agent_tool_result_postgres import ACQUISITION_PLAN_PREVIEW_OWNER_TARGET_KIND
 from sourcing_agent.agent_tool_result_slot import (
     AGENT_TOOL_RESULT_ATTEMPT_SCHEMA_VERSION,
@@ -256,6 +260,82 @@ class D1nAgentToolResultSlotUowPGTest(PGControlPlaneStoreTestMixin, unittest.Tes
                 "agent_tool_result_journal": 0,
             },
         )
+
+    def test_compatible_policy_swap_is_rejected_before_reserve_with_zero_writes(self) -> None:
+        cases = (
+            (
+                self._occurrence(suffix="policy_v2", tool_spec=START_ACQUISITION_RUN_TOOL_SPEC_V2),
+                "workflow_command_acceptance_v1",
+            ),
+            (
+                self._occurrence(suffix="policy_v3", tool_spec=START_ACQUISITION_RUN_TOOL_SPEC),
+                "activity_attempt_terminal_v1",
+            ),
+        )
+
+        for occurrence, forged_policy in cases:
+            with self.subTest(tool_spec_version=occurrence.tool_spec_version):
+                forged = replace(occurrence, result_link_policy=forged_policy)
+                self.assertEqual(forged.logical_occurrence_digest, occurrence.logical_occurrence_digest)
+                with self.assertRaisesRegex(
+                    AgentToolResultSlotError,
+                    "historical_spec_pin_mismatch:result_link_policy",
+                ):
+                    self.adapter.reserve_agent_tool_result_slot(occurrence=forged)
+
+        self.assertEqual(
+            self._counts(),
+            {
+                "agent_tool_result_slots": 0,
+                "agent_tool_result_attempts": 0,
+                "agent_tool_result_journal": 0,
+            },
+        )
+
+    def test_shared_accept_rebinds_historical_spec_before_owner_reads_or_terminal_writes(self) -> None:
+        occurrence = self._occurrence(suffix="acceptpolicy", tool_spec=START_ACQUISITION_RUN_TOOL_SPEC)
+        forged = replace(occurrence, result_link_policy="activity_attempt_terminal_v1")
+        with self.adapter._connect() as connection:  # noqa: SLF001
+            with connection.cursor() as cursor:
+                result_postgres._insert_dict(  # noqa: SLF001
+                    cursor,
+                    table_name="agent_tool_result_slots",
+                    row=result_postgres._slot_insert_row(forged),  # noqa: SLF001
+                )
+            connection.commit()
+
+        bundle = self._preview_bundle(suffix="acceptpolicy")
+        terminal = replace(
+            self._terminal(bundle, attempt_id="resultattempt_acceptpolicy"),
+            workflow_command_id="command_acceptpolicy",
+            activity_run_id="activity_acceptpolicy",
+            activity_attempt_id="activityattempt_acceptpolicy",
+            command_attempt=1,
+            command_generation=1,
+            control_epoch=1,
+        )
+
+        with self.assertRaisesRegex(
+            AgentToolResultSlotError,
+            "historical_spec_pin_mismatch:result_link_policy",
+        ):
+            self._accept_synthetic_token_owner(occurrence=forged, terminal=terminal)
+
+        self.assertEqual(
+            self._counts(),
+            {
+                "agent_tool_result_slots": 1,
+                "agent_tool_result_attempts": 0,
+                "agent_tool_result_journal": 0,
+            },
+        )
+        with self.adapter._connect() as connection:  # noqa: SLF001
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT status FROM agent_tool_result_slots WHERE result_slot_id = %s",
+                    (forged.result_slot_id,),
+                )
+                self.assertEqual(cursor.fetchone()[0], "pending")
 
     def test_accept_reloads_exact_owner_serializes_and_recovers_lost_ack(self) -> None:
         occurrence = self._occurrence()

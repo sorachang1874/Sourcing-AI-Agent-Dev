@@ -385,8 +385,8 @@
   digest 进入 non-model fingerprint。missing/foreign 统一生成 slot-generation-anchored masked error owner，并可在
   同一 UoW 原子 accepted/replay byte-identical `operation_not_found`；owner reappearance、foreign stream、duplicate/
   conflicting plan、coordinated lineage/causal drift、malformed durable identity 与 fault rollback 均有零写 PG 回归。
-  Reference findings 5/6/8/9（historical inspect spec lookup、operator reason、serializer semantics、canonical owner
-  matrix/preflight）仍 open；不得把本响应写成 S1b formal GO。S1c candidate
+  Reference findings 5/6/8（historical inspect spec lookup、operator reason、serializer semantics）仍 open；finding 9
+  canonical owner matrix/preflight 由 S1d fixed-forward response 关闭；不得把本响应写成 S1b formal GO。S1c candidate
   已增加 equality-only `owner_target_revision_token`，保持 logical occurrence digest v1；numeric-only
   attempt/journal 仍为 v1，token-bearing aggregate 使用 v2/v2，旧 writer 默认与历史 numeric replay 保持可用，
   token-only activation 要求旧 replicas drain/quiesce。该 synthetic carrier 只证明 storage transport，不是
@@ -403,9 +403,16 @@
   reference-only `NO-GO 0/2/3/2`；其中 numeric-only-v2/application replay 不一致、warm-pool rollout overclaim、
   value-owner/adapter 混淆、exact-string sentinel 与空 mismatch diagnostic 已在 S1d fixed-forward 并补回归。
   S1d fresh correctly scoped pinned Ultra review 已完成并有效绑定
-  `bacae9e..3b235fd`，结论 `NO-GO 0/1/4/0`：historical spec→occurrence policy persistence trust root、quarantined
-  commandless-action PG link invariant、S1a stale policy/rollout wording、canonical result owner/preflight matrix 仍需
-  fixed-forward；R-019/R-029 仍是 residual。该有效 NO-GO 不阻塞无关批，但阻塞 S1d signoff/live。
+  `bacae9e..3b235fd`，结论 `NO-GO 0/1/4/0`。当前 bounded fixed-forward response：在 reserve、prepare 与 shared
+  accept 的任意 schema bootstrap/owner read/result write 前，以 server-owned historical registry exact lookup 并
+  重建/比对全部 spec-derived occurrence pins；compatible v2/v3 policy swap 与 forged pins 零写；新增 `0014`
+  brownfield preflight + deferred all-attempt effect/policy/link-shape matrix，覆盖 quarantined commandless owner link；
+  S1a 已区分 historical start v2 Activity-terminal 与 current v3 command-acceptance，并将 `0012` 明确为
+  quiesced/pool-recycled；canonical PG-only result aggregate、link-policy/readiness field owner matrix 与 fast preflight
+  已补。Fixed-forward author evidence=`759 passed + 104 subtests`、migration runner=`45 + 71 subtests`、scoped
+  mypy=`0/8`、lint/compile/diff green、global mypy=`81/4`。以上仍是 author response，fresh pinned non-author
+  re-review pending；R-019/R-029 仍是 residual。原有效
+  NO-GO 在 re-review 前继续阻塞 S1d signoff/live，但不阻塞无关批。
 - [ ] D1m mixed-version rollout gate（R-019）：pre-D1m binary 可继续写 revisionless source row 并绕开
   revision-aware exact-claim canonical materializer。任何 hosted activation 前必须选择并验证其一：quiesced
   single-version cutover，或 separately reviewed dual-write/compatibility bridge；完成前不得声称 rolling overlap

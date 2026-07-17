@@ -29,6 +29,14 @@ class _ResultSlotLockBusy(RuntimeError):
     pass
 
 
+def _revalidate_server_owned_occurrence(occurrence: AgentToolOccurrence) -> AgentToolOccurrence:
+    """Resolve persistence pins from the server-owned exact historical registry."""
+
+    from .agent_canary_registry import LOCAL_CANARY_AGENT_TOOL_REGISTRY
+
+    return occurrence.revalidated_for_registry(LOCAL_CANARY_AGENT_TOOL_REGISTRY)
+
+
 def _runtime_dependencies(adapter: Any, table_names: tuple[str, ...]) -> bool:
     for table_name in table_names:
         if not adapter.should_prefer_read(table_name):
@@ -260,7 +268,7 @@ def reserve_agent_tool_result_slot(
 
     if not isinstance(occurrence, AgentToolOccurrence):
         raise ValueError("reserve_agent_tool_result_slot requires AgentToolOccurrence")
-    occurrence = occurrence.revalidated()
+    occurrence = _revalidate_server_owned_occurrence(occurrence)
     if not _runtime_dependencies(adapter, ("agent_tool_result_slots",)):
         return None
     if fault_injection_point not in {"", "after_slot_write", "after_commit"}:
@@ -626,7 +634,7 @@ def _accept_exact_agent_tool_result_uow(
 
     if not isinstance(occurrence, AgentToolOccurrence) or not isinstance(terminal, AgentToolTerminalResult):
         raise ValueError("accept tool result requires exact occurrence and terminal result")
-    occurrence = occurrence.revalidated()
+    occurrence = _revalidate_server_owned_occurrence(occurrence)
     terminal = terminal.revalidated()
     terminal.validate_for_occurrence(occurrence)
     if type(attempted_slot_generation) is not int or attempted_slot_generation <= 0:
@@ -938,7 +946,7 @@ def prepare_inspect_operation_tool_result(
 
     if not isinstance(occurrence, AgentToolOccurrence):
         raise ValueError("prepare inspect result requires exact occurrence")
-    occurrence = occurrence.revalidated()
+    occurrence = _revalidate_server_owned_occurrence(occurrence)
     validate_inspect_operation_occurrence(
         occurrence,
         action_id=action_id,

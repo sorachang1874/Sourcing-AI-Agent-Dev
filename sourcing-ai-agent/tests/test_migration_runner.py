@@ -51,6 +51,9 @@ _D1N_ACQUISITION_PLAN_PREVIEW_MIGRATION = "0010_acquisition_plan_preview_uow"
 _D1N_AGENT_TOOL_RESULT_SLOT_MIGRATION = "0011_agent_tool_result_slots"
 _D1N_AGENT_TOOL_OWNER_REVISION_TOKEN_MIGRATION = "0012_agent_tool_result_owner_revision_token"
 _D1N_AGENT_TOOL_RESULT_LINK_POLICY_MIGRATION = "0013_agent_tool_result_link_policy"
+_D1N_AGENT_TOOL_RESULT_ATTEMPT_EFFECT_CONTRACT_MIGRATION = (
+    "0014_agent_tool_result_attempt_effect_contract"
+)
 _ALL_MIGRATIONS = [
     "0001_baseline",
     "0002_action_request_schema_pins",
@@ -65,6 +68,7 @@ _ALL_MIGRATIONS = [
     _D1N_AGENT_TOOL_RESULT_SLOT_MIGRATION,
     _D1N_AGENT_TOOL_OWNER_REVISION_TOKEN_MIGRATION,
     _D1N_AGENT_TOOL_RESULT_LINK_POLICY_MIGRATION,
+    _D1N_AGENT_TOOL_RESULT_ATTEMPT_EFFECT_CONTRACT_MIGRATION,
 ]
 _D3_COMMAND_COLUMNS = (
     ("runtime_namespace", "text", "NO", "''::text"),
@@ -815,6 +819,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 _D1N_AGENT_TOOL_RESULT_SLOT_MIGRATION,
                 _D1N_AGENT_TOOL_OWNER_REVISION_TOKEN_MIGRATION,
                 _D1N_AGENT_TOOL_RESULT_LINK_POLICY_MIGRATION,
+                _D1N_AGENT_TOOL_RESULT_ATTEMPT_EFFECT_CONTRACT_MIGRATION,
             ],
         )
         self.assertEqual(ledger, _ALL_MIGRATIONS)
@@ -869,6 +874,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 _D1N_AGENT_TOOL_RESULT_SLOT_MIGRATION,
                 _D1N_AGENT_TOOL_OWNER_REVISION_TOKEN_MIGRATION,
                 _D1N_AGENT_TOOL_RESULT_LINK_POLICY_MIGRATION,
+                _D1N_AGENT_TOOL_RESULT_ATTEMPT_EFFECT_CONTRACT_MIGRATION,
             ],
         )
         self.assertEqual(
@@ -1096,6 +1102,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 _D1N_AGENT_TOOL_RESULT_SLOT_MIGRATION,
                 _D1N_AGENT_TOOL_OWNER_REVISION_TOKEN_MIGRATION,
                 _D1N_AGENT_TOOL_RESULT_LINK_POLICY_MIGRATION,
+                _D1N_AGENT_TOOL_RESULT_ATTEMPT_EFFECT_CONTRACT_MIGRATION,
             ],
         )
         self.assertEqual(columns, list(_D3_COMMAND_COLUMNS))
@@ -1272,6 +1279,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 _D1N_AGENT_TOOL_RESULT_SLOT_MIGRATION,
                 _D1N_AGENT_TOOL_OWNER_REVISION_TOKEN_MIGRATION,
                 _D1N_AGENT_TOOL_RESULT_LINK_POLICY_MIGRATION,
+                _D1N_AGENT_TOOL_RESULT_ATTEMPT_EFFECT_CONTRACT_MIGRATION,
             ],
         )
         self.assertEqual(again.applied, [])
@@ -1365,6 +1373,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 _D1N_AGENT_TOOL_RESULT_SLOT_MIGRATION,
                 _D1N_AGENT_TOOL_OWNER_REVISION_TOKEN_MIGRATION,
                 _D1N_AGENT_TOOL_RESULT_LINK_POLICY_MIGRATION,
+                _D1N_AGENT_TOOL_RESULT_ATTEMPT_EFFECT_CONTRACT_MIGRATION,
             ],
         )
         self.assertEqual(session_columns, list(_D3_SCOPED_SESSION_COLUMNS))
@@ -1567,6 +1576,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 _D1N_AGENT_TOOL_RESULT_SLOT_MIGRATION,
                 _D1N_AGENT_TOOL_OWNER_REVISION_TOKEN_MIGRATION,
                 _D1N_AGENT_TOOL_RESULT_LINK_POLICY_MIGRATION,
+                _D1N_AGENT_TOOL_RESULT_ATTEMPT_EFFECT_CONTRACT_MIGRATION,
             ],
         )
         self.assertEqual(again.applied, [])
@@ -1659,6 +1669,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 _D1N_AGENT_TOOL_RESULT_SLOT_MIGRATION,
                 _D1N_AGENT_TOOL_OWNER_REVISION_TOKEN_MIGRATION,
                 _D1N_AGENT_TOOL_RESULT_LINK_POLICY_MIGRATION,
+                _D1N_AGENT_TOOL_RESULT_ATTEMPT_EFFECT_CONTRACT_MIGRATION,
             ],
         )
         self.assertEqual(run_columns, list(_D3_ACTIVITY_RUN_COLUMNS))
@@ -1874,6 +1885,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 _D1N_AGENT_TOOL_RESULT_SLOT_MIGRATION,
                 _D1N_AGENT_TOOL_OWNER_REVISION_TOKEN_MIGRATION,
                 _D1N_AGENT_TOOL_RESULT_LINK_POLICY_MIGRATION,
+                _D1N_AGENT_TOOL_RESULT_ATTEMPT_EFFECT_CONTRACT_MIGRATION,
             ],
         )
         self.assertEqual(again.applied, [])
@@ -1957,6 +1969,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 _D1N_AGENT_TOOL_RESULT_SLOT_MIGRATION,
                 _D1N_AGENT_TOOL_OWNER_REVISION_TOKEN_MIGRATION,
                 _D1N_AGENT_TOOL_RESULT_LINK_POLICY_MIGRATION,
+                _D1N_AGENT_TOOL_RESULT_ATTEMPT_EFFECT_CONTRACT_MIGRATION,
             ],
         )
         self.assertEqual(columns, list(_D3_EVENT_COLUMNS))
@@ -2100,6 +2113,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 _D1N_AGENT_TOOL_RESULT_SLOT_MIGRATION,
                 _D1N_AGENT_TOOL_OWNER_REVISION_TOKEN_MIGRATION,
                 _D1N_AGENT_TOOL_RESULT_LINK_POLICY_MIGRATION,
+                _D1N_AGENT_TOOL_RESULT_ATTEMPT_EFFECT_CONTRACT_MIGRATION,
             ],
         )
         self.assertEqual(again.applied, [])
@@ -3839,6 +3853,225 @@ class MigrationRunnerTest(unittest.TestCase):
                 )
                 deferred_effects = cur.fetchone()
         self.assertEqual(deferred_effects, (0, 0, 0))
+
+    def test_agent_tool_result_attempt_effect_contract_upgrade_rejects_ownerless_commandless_attempt(
+        self,
+    ) -> None:
+        schema = self._fresh_schema("d1n_attempt_effect_upgrade")
+        quoted = quote_control_plane_postgres_identifier(schema)
+        result_slot_id = "slot-s1d-commandless-historical-ownerless"
+        result_attempt_id = "attempt-s1d-commandless-historical-ownerless"
+        with tempfile.TemporaryDirectory() as temp_dir:
+            migrations_dir = Path(temp_dir)
+            _copy_migrations_through(migrations_dir, 13)
+            with psycopg.connect(self.dsn, client_encoding="utf8") as conn:
+                prefix = mr.apply_pending_migrations(conn, schema=schema, migrations_dir=migrations_dir)
+                with conn.cursor() as cur:
+                    cur.execute(f"SET search_path TO {quoted}")
+                    self._insert_agent_tool_pending_slot(
+                        cur,
+                        result_slot_id=result_slot_id,
+                        tool_name="plan_acquisition_historical_ownerless",
+                        tool_kind="action",
+                        effect_class="commandless_action",
+                        result_link_policy="no_command_v1",
+                    )
+                    self._insert_agent_tool_result_attempt(
+                        cur,
+                        result_slot_id=result_slot_id,
+                        result_attempt_id=result_attempt_id,
+                        disposition="quarantined",
+                        quarantine_reason="historical-ownerless-commandless",
+                        owner_target_revision=1,
+                        owner_target_generation=0,
+                        owner_target_revision_token=None,
+                        result_link_policy="no_command_v1",
+                    )
+                conn.commit()
+
+                _copy_migrations_through(migrations_dir, 14)
+                with self.assertRaises(psycopg.errors.RaiseException) as raised:
+                    mr.apply_pending_migrations(conn, schema=schema, migrations_dir=migrations_dir)
+                self.assertEqual(
+                    raised.exception.diag.constraint_name,
+                    "agent_tool_result_attempt_slot_effect_shape_mismatch",
+                )
+
+        with psycopg.connect(self.dsn, autocommit=True, client_encoding="utf8") as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"SET search_path TO {quoted}")
+                cur.execute(
+                    """
+                    SELECT
+                        (SELECT count(*) FROM schema_migrations WHERE version = %s),
+                        (SELECT count(*) FROM agent_tool_result_attempts
+                         WHERE result_attempt_id = %s),
+                        (SELECT count(*) FROM agent_tool_result_journal
+                         WHERE result_slot_id = %s)
+                    """,
+                    (
+                        _D1N_AGENT_TOOL_RESULT_ATTEMPT_EFFECT_CONTRACT_MIGRATION,
+                        result_attempt_id,
+                        result_slot_id,
+                    ),
+                )
+                rollback_state = cur.fetchone()
+
+        migrations_through_0013 = _ALL_MIGRATIONS[
+            : _ALL_MIGRATIONS.index(_D1N_AGENT_TOOL_RESULT_ATTEMPT_EFFECT_CONTRACT_MIGRATION)
+        ]
+        self.assertEqual(prefix.applied, migrations_through_0013)
+        self.assertEqual(rollback_state, (0, 1, 0))
+
+    def test_agent_tool_result_attempt_effect_contract_rejects_fresh_ownerless_commandless_attempt(
+        self,
+    ) -> None:
+        schema = self._fresh_schema("d1n_attempt_effect_fresh_invalid")
+        quoted = quote_control_plane_postgres_identifier(schema)
+        result_slot_id = "slot-s1d-commandless-fresh-ownerless"
+        result_attempt_id = "attempt-s1d-commandless-fresh-ownerless"
+        with psycopg.connect(self.dsn, client_encoding="utf8") as conn:
+            mr.apply_pending_migrations(conn, schema=schema)
+            with conn.cursor() as cur:
+                cur.execute(f"SET search_path TO {quoted}")
+                self._insert_agent_tool_pending_slot(
+                    cur,
+                    result_slot_id=result_slot_id,
+                    tool_name="plan_acquisition_fresh_ownerless",
+                    tool_kind="action",
+                    effect_class="commandless_action",
+                    result_link_policy="no_command_v1",
+                )
+            conn.commit()
+
+        with psycopg.connect(self.dsn, client_encoding="utf8") as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"SET search_path TO {quoted}")
+                self._insert_agent_tool_result_attempt(
+                    cur,
+                    result_slot_id=result_slot_id,
+                    result_attempt_id=result_attempt_id,
+                    disposition="quarantined",
+                    quarantine_reason="fresh-ownerless-commandless",
+                    owner_target_revision=1,
+                    owner_target_generation=0,
+                    owner_target_revision_token=None,
+                    result_link_policy="no_command_v1",
+                )
+            with self.assertRaises(psycopg.errors.RaiseException) as raised:
+                conn.commit()
+            conn.rollback()
+
+        self.assertEqual(
+            raised.exception.diag.constraint_name,
+            "agent_tool_result_attempt_slot_effect_shape_mismatch",
+        )
+        with psycopg.connect(self.dsn, autocommit=True, client_encoding="utf8") as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"SET search_path TO {quoted}")
+                cur.execute(
+                    """
+                    SELECT slot.status,
+                           (SELECT count(*) FROM agent_tool_result_attempts AS attempt
+                            WHERE attempt.result_slot_id = slot.result_slot_id),
+                           (SELECT count(*) FROM agent_tool_result_journal AS journal
+                            WHERE journal.result_slot_id = slot.result_slot_id)
+                    FROM agent_tool_result_slots AS slot
+                    WHERE slot.result_slot_id = %s
+                    """,
+                    (result_slot_id,),
+                )
+                persisted = cur.fetchone()
+        self.assertEqual(persisted, ("pending", 0, 0))
+
+    def test_agent_tool_result_attempt_effect_contract_accepts_commandless_and_read_only_shapes(
+        self,
+    ) -> None:
+        schema = self._fresh_schema("d1n_attempt_effect_positive")
+        quoted = quote_control_plane_postgres_identifier(schema)
+        cases = (
+            (
+                "commandless",
+                "plan_acquisition_effect_contract",
+                "action",
+                "commandless_action",
+                "action-s1d-effect-contract",
+                "operation-s1d-effect-contract",
+            ),
+            (
+                "read-ownerless",
+                "inspect_operation_effect_contract_ownerless",
+                "query",
+                "read_only",
+                "",
+                "",
+            ),
+            (
+                "read-owned",
+                "inspect_operation_effect_contract_owned",
+                "query",
+                "read_only",
+                "action-s1d-read-effect-contract",
+                "operation-s1d-read-effect-contract",
+            ),
+        )
+        with psycopg.connect(self.dsn, client_encoding="utf8") as conn:
+            mr.apply_pending_migrations(conn, schema=schema)
+            with conn.cursor() as cur:
+                cur.execute(f"SET search_path TO {quoted}")
+                for label, tool_name, tool_kind, effect_class, action_id, operation_run_id in cases:
+                    result_slot_id = f"slot-s1d-effect-contract-{label}"
+                    self._insert_agent_tool_pending_slot(
+                        cur,
+                        result_slot_id=result_slot_id,
+                        tool_name=tool_name,
+                        tool_kind=tool_kind,
+                        effect_class=effect_class,
+                        result_link_policy="no_command_v1",
+                    )
+                    self._insert_agent_tool_result_attempt(
+                        cur,
+                        result_slot_id=result_slot_id,
+                        result_attempt_id=f"attempt-s1d-effect-contract-{label}",
+                        disposition="quarantined",
+                        quarantine_reason=f"positive-{label}",
+                        owner_target_revision=1,
+                        owner_target_generation=0,
+                        owner_target_revision_token=None,
+                        result_link_policy="no_command_v1",
+                        action_id=action_id,
+                        operation_run_id=operation_run_id,
+                    )
+            conn.commit()
+            with conn.cursor() as cur:
+                cur.execute(f"SET search_path TO {quoted}")
+                cur.execute(
+                    """
+                    SELECT slot.effect_class, attempt.action_id, attempt.operation_run_id
+                    FROM agent_tool_result_slots AS slot
+                    JOIN agent_tool_result_attempts AS attempt
+                      ON attempt.result_slot_id = slot.result_slot_id
+                    ORDER BY attempt.result_attempt_id
+                    """
+                )
+                persisted = cur.fetchall()
+
+        self.assertEqual(
+            persisted,
+            [
+                (
+                    "commandless_action",
+                    "action-s1d-effect-contract",
+                    "operation-s1d-effect-contract",
+                ),
+                (
+                    "read_only",
+                    "action-s1d-read-effect-contract",
+                    "operation-s1d-read-effect-contract",
+                ),
+                ("read_only", "", ""),
+            ],
+        )
 
     def test_applied_migration_checksum_change_fails_closed(self) -> None:
         schema = self._fresh_schema("checksum")

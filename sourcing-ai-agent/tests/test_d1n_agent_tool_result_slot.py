@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import replace
 from typing import cast
 
@@ -7,6 +8,7 @@ import pytest
 
 from sourcing_agent.agent_canary_registry import (
     INSPECT_OPERATION_TOOL_SPEC,
+    LOCAL_CANARY_AGENT_TOOL_REGISTRY,
     PLAN_ACQUISITION_TOOL_SPEC,
     START_ACQUISITION_RUN_TOOL_SPEC,
     START_ACQUISITION_RUN_TOOL_SPEC_V2,
@@ -76,6 +78,43 @@ def test_occurrence_exact_copies_historical_tool_request_result_and_serializer_p
     assert occurrence.result_link_policy == PLAN_ACQUISITION_TOOL_SPEC.behavior.result_link_policy
     assert occurrence.to_record()["result_link_policy"] == occurrence.result_link_policy
     assert occurrence.revalidated().result_link_policy == occurrence.result_link_policy
+
+
+def test_all_registered_historical_occurrences_rebind_exact_spec_pins() -> None:
+    for ordinal, tool_spec in enumerate(LOCAL_CANARY_AGENT_TOOL_REGISTRY.specs, start=1):
+        occurrence = _occurrence(tool_spec=tool_spec, ordinal=ordinal)
+
+        assert occurrence.revalidated_for_registry(LOCAL_CANARY_AGENT_TOOL_REGISTRY) == occurrence
+
+
+@pytest.mark.parametrize(
+    ("mutate", "message"),
+    (
+        (
+            lambda occurrence: replace(occurrence, result_link_policy="activity_attempt_terminal_v1"),
+            "pin_mismatch:result_link_policy",
+        ),
+        (lambda occurrence: replace(occurrence, request_schema_digest="e" * 64), "pin_mismatch:request_schema_digest"),
+        (
+            lambda occurrence: replace(occurrence, result_schema_version="forged_result_v1"),
+            "pin_mismatch:result_schema_version",
+        ),
+        (
+            lambda occurrence: replace(occurrence, serializer_revision="forged_serializer_v1"),
+            "pin_mismatch:serializer_revision",
+        ),
+        (lambda occurrence: replace(occurrence, tool_spec_digest="f" * 64), "historical_spec_missing"),
+    ),
+)
+def test_registry_revalidation_rejects_compatible_or_forged_historical_spec_pins(
+    mutate: Callable[[AgentToolOccurrence], AgentToolOccurrence],
+    message: str,
+) -> None:
+    occurrence = _occurrence(tool_spec=START_ACQUISITION_RUN_TOOL_SPEC)
+    forged = mutate(occurrence)
+
+    with pytest.raises(AgentToolResultSlotError, match=message):
+        forged.revalidated_for_registry(LOCAL_CANARY_AGENT_TOOL_REGISTRY)
 
 
 def test_logical_occurrence_uses_stable_ordinal_and_not_provider_call_id() -> None:

@@ -2,10 +2,11 @@
 
 Date: 2026-07-17
 
-Status: validated fixed-forward author candidate, ready for a standalone commit and fresh pinned review. This batch
-separates physical result-link semantics in the immutable tool contract and durable result aggregate. It does not
-implement the `start_acquisition_run` approval/start UoW, create an Activity, serve a tool, or authorize
-provider/model/live execution.
+Status: the correctly scoped pinned Ultra review of `bacae9e..3b235fd` is a valid `NO-GO 0/1/4/0`. A bounded author
+fixed-forward response is validated and awaits a fresh pinned non-author review; it is not a formal `GO`. This batch separates physical result-link
+semantics in the immutable tool contract and durable result aggregate. It does not implement the
+`start_acquisition_run` approval/start UoW, create an Activity, serve a tool, or authorize provider/model/live
+execution.
 
 ## Engineering goal
 
@@ -30,6 +31,9 @@ both absent or both present. No other combination is valid.
 - allowed values: the three closed policies above;
 - caller authority: none; `AgentToolTerminalResult` cannot supply or override policy;
 - derivation: an `AgentToolOccurrence` exact-copies the policy from the pinned historical tool spec;
+- persistence trust root: reserve, read-only prepare, and shared terminal acceptance resolve the exact
+  `(tool_name, tool_spec_version, tool_spec_digest)` from the server-owned historical registry, rebuild the occurrence,
+  and exact-compare every spec-derived pin before schema bootstrap, owner reads, or result writes;
 - persisted consumers: result slot, every accepted/quarantined attempt, and immutable journal;
 - enforcement: occurrence validation, exact replay/collision checks, PostgreSQL row checks, slot mutation guard, and
   deferred accepted-aggregate validation;
@@ -70,6 +74,13 @@ revision token, while numeric-only payloads remain v1. A preexisting noncanonica
 quiesced migration atomically. A separate deferred constraint trigger requires every accepted or quarantined attempt
 to exact-match its owning slot policy; quarantined evidence cannot select a different policy merely because it is
 outside the accepted aggregate.
+
+Migration `0014_agent_tool_result_attempt_effect_contract.sql` fixed-forwards the remaining all-attempt database
+shape gap. Under a bounded table lock it first rejects any retained attempt whose link shape is inconsistent with its
+owning slot's immutable effect class and policy, then replaces the existing deferred validator. This applies to both
+accepted and quarantined attempts: commandless actions require their Action/Operation pair, read-only rows permit
+only the documented both-empty or both-present pair, and both command-backed policies retain their exact closed
+shapes. It adds no default, serving state, or live authority.
 
 No universal default is semantically correct. Old binaries that omit the required column fail closed after `0013`;
 rolling overlap would require a separate reviewed trigger/sentinel bridge. This repository can use the quiesced path
@@ -140,6 +151,80 @@ reproduced and fixed in this successor scope:
 The earlier local S1d adversarial P1 for mismatched quarantined-attempt policy was also reproduced against PostgreSQL
 and closed by the all-attempt constraint trigger plus fresh-connection zero-write assertions. The resolved dirty-tree
 prereview reported `P0/P1/P2/P3=0/0/0/0`, but it includes subdiff authors and is not independent or formal.
+
+The fresh correctly scoped pinned review at
+`runtime/reviews/20260717T130538Z_Track-D-D1n-S1d-result-link-policy.md` then returned valid
+`NO-GO 0/1/4/0`. Its bounded fixed-forward response is:
+
+- P1 historical-spec trust root: persistence uses the server-owned exact historical registry at reserve, prepare,
+  and acceptance; compatible v2/v3 policy swaps and forged request/result/serializer pins fail closed before effects;
+- P2 quarantined commandless shape: `0014` validates brownfield rows and extends the deferred all-attempt trigger to
+  the slot effect-class/policy matrix;
+- P2 stale S1a start wording: historical start v2 remains Activity-terminal, while current v3 terminates at exact
+  WorkflowCommand acceptance;
+- P2 stale S1a rollout wording: `0012` is explicitly quiesced/pool-recycled, with old replicas drained before
+  token-only activation;
+- P2 owner/preflight omission: the canonical pre-Agent matrix now assigns the PG-only result aggregate, link policy,
+  and inspect readiness owners and names a fast executable preflight.
+
+These are author changes until a fresh pinned non-author review of the fixed-forward commit returns a valid verdict.
+R-019 and R-029 remain residual; no tool is served and no provider/model/live call is authorized.
+
+## Fixed-forward author validation evidence
+
+Run from the repository root with local PostgreSQL and no live provider/model variables:
+
+```text
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src .venv/bin/python -m pytest -q \
+  tests/test_d1n_agent_tool_result_slot.py
+=> 27 passed
+
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src .venv/bin/python -m pytest -q \
+  tests/test_d1n_agent_tool_result_slot_uow.py::D1nAgentToolResultSlotUowPGTest::test_compatible_policy_swap_is_rejected_before_reserve_with_zero_writes \
+  tests/test_d1n_agent_tool_result_slot_uow.py::D1nAgentToolResultSlotUowPGTest::test_shared_accept_rebinds_historical_spec_before_owner_reads_or_terminal_writes \
+  tests/test_d1n_agent_tool_result_slot_uow.py::D1nAgentToolResultSlotUowPGTest::test_reserve_is_exactly_replayable_and_rejects_split_logical_identity \
+  tests/test_d1n_agent_tool_result_slot_uow.py::D1nAgentToolResultSlotUowPGTest::test_accept_reloads_exact_owner_serializes_and_recovers_lost_ack
+=> 4 passed + 2 subtests
+
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src SOURCING_REQUIRE_PG_STORE_TESTS=1 \
+  .venv/bin/python -m pytest -q --tb=short \
+  tests/test_d1n_action_contract_activation.py \
+  tests/test_d1n_action_contract_identity.py \
+  tests/test_d1n_action_result_schema.py \
+  tests/test_d1n_acquisition_plan_preview.py \
+  tests/test_d1n_acquisition_plan_preview_uow.py \
+  tests/test_d1n_start_acquisition_v2.py \
+  tests/test_d1n_projection_query_contracts.py \
+  tests/test_d1n_agent_tool_registry.py \
+  tests/test_d1n_canary_agent_tool_population.py \
+  tests/test_d1n_agent_tool_result_slot.py \
+  tests/test_d1n_agent_tool_result_slot_uow.py \
+  tests/test_d1n_inspect_operation_result_slot_uow.py \
+  tests/test_migration_runner.py \
+  tests/test_pre_agent_contract_review.py
+=> 759 passed + 104 subtests
+
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src .venv/bin/python -m mypy \
+  src/sourcing_agent/agent_tool_registry.py \
+  src/sourcing_agent/agent_canary_registry.py \
+  src/sourcing_agent/agent_tool_result_slot.py \
+  src/sourcing_agent/agent_tool_result_postgres.py \
+  tests/test_d1n_agent_tool_registry.py \
+  tests/test_d1n_canary_agent_tool_population.py \
+  tests/test_d1n_agent_tool_result_slot.py \
+  tests/test_d1n_agent_tool_result_slot_uow.py
+=> success, 0 issues in 8 files
+
+make lint
+=> 58 files already formatted; all checks passed
+
+make typecheck
+=> existing ceiling unchanged: 81 errors in 4 files
+
+py_compile on the changed Python files
+git diff --check
+=> clean
+```
 
 ## Author validation evidence
 

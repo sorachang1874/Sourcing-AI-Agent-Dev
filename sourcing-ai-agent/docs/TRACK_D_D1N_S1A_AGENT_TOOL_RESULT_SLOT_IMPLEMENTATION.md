@@ -72,7 +72,8 @@ No network, provider, model, release transition, budget issuance, or capability 
 This batch implements terminal acceptance only for `plan_acquisition`. The same occurrence storage is ready for the
 other three isolated canary declarations, but each needs its own physical-owner reload adapter:
 
-- `start_acquisition_run`: confirmation/start UoW, WorkflowCommand, ActivityRun/Attempt, terminal winner;
+- `start_acquisition_run`: confirmation/start UoW and exact WorkflowCommand acceptance winner for current tool v3;
+  retained historical tool v2 continues to require its ActivityRun/Attempt terminal winner;
 - `filter_projection`: exact projection membership revision and publication/result digest;
 - `inspect_operation`: exact Action/Operation owner and operation-state/event revision.
 
@@ -80,8 +81,10 @@ Until those adapters and the assembled scripted model loop land, S1 is partial a
 
 Fixed-forward checkpoint: S1b subsequently completed the `inspect_operation` physical event-revision adapter while
 reusing the S1a acceptance state machine. S1c then added an equality-only opaque owner-revision carrier with
-rolling-safe attempt/journal schema discrimination for the future `filter_projection` adapter. Neither fixed-forward
-batch serves a tool. `start_acquisition_run` and the physical `filter_projection` adapter remain open; see
+versioned attempt/journal schema discrimination for the future `filter_projection` adapter. The `0012` activation is
+a quiesced cutover that requires a complete connection-pool/session recycle; token-only activation additionally
+requires old replicas to be drained. Neither fixed-forward batch serves a tool. `start_acquisition_run` and the
+physical `filter_projection` adapter remain open; see
 `TRACK_D_D1N_S1B_INSPECT_OPERATION_RESULT_IMPLEMENTATION.md` and
 `TRACK_D_D1N_S1C_OPAQUE_OWNER_REVISION_CARRIER_IMPLEMENTATION.md`.
 

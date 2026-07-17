@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import hashlib
 import importlib.util
 import json
@@ -9,7 +10,15 @@ import subprocess
 import sys
 from functools import lru_cache
 from pathlib import Path
+from typing import get_args
 
+from sourcing_agent.agent_canary_registry import LOCAL_CANARY_AGENT_TOOL_REGISTRY
+from sourcing_agent.agent_projection_query import (
+    OPERATION_RESULT_READINESS_OWNER,
+    operation_result_readiness_projection,
+)
+from sourcing_agent.agent_tool_registry import AgentToolResultLinkPolicy
+from sourcing_agent.agent_tool_result_slot import AgentToolOccurrence
 from sourcing_agent.durable_runtime import (
     ACQUISITION_INTENT_RESOLVE_COMMAND_TYPE,
     ACQUISITION_PLAN_BUILD_COMMAND_TYPE,
@@ -94,6 +103,12 @@ TESTING_PLAYBOOK_PATH = REPO_ROOT / "docs" / "TESTING_PLAYBOOK.md"
 INDEPENDENT_REVIEW_GATE_PATH = REPO_ROOT / "docs" / "INDEPENDENT_REVIEW_GATE.md"
 INDEPENDENT_REVIEW_BRIEF_PATH = REPO_ROOT / "docs" / "INDEPENDENT_REVIEW_BRIEF.md"
 INDEPENDENT_REVIEW_RUNNER_PATH = REPO_ROOT / "scripts" / "run_independent_review_gate.py"
+AGENT_TOOL_RESULT_BASE_MIGRATION_PATH = (
+    REPO_ROOT / "src" / "sourcing_agent" / "migrations" / "0011_agent_tool_result_slots.sql"
+)
+AGENT_TOOL_RESULT_POLICY_MIGRATION_PATH = (
+    REPO_ROOT / "src" / "sourcing_agent" / "migrations" / "0013_agent_tool_result_link_policy.sql"
+)
 
 
 def _load_crm_public_web_live_validation_module():
@@ -140,10 +155,16 @@ DURABLE_OPERATION_TABLES = {
     "company_evidence",
     "company_assertions",
 }
+AGENT_TOOL_RESULT_TABLES = {
+    "agent_tool_result_slots",
+    "agent_tool_result_attempts",
+    "agent_tool_result_journal",
+}
 
 REQUIRED_MODULE_ROWS = {
     "Durable runtime",
     "Operation runtime",
+    "Agent tool result aggregate",
     "Acquisition root/plan",
     "Acquisition probe/scale",
     "Provider-backed discovery",
@@ -182,6 +203,35 @@ def _module_rows(markdown: str) -> dict[str, list[str]]:
             continue
         rows[cells[0]] = cells
     return rows
+
+
+def _agent_tool_result_field_owner_rows(markdown: str) -> tuple[list[str], dict[str, list[str]]]:
+    section = markdown.split("## Agent Tool Result Field-Owner Matrix", 1)[1].split("\n## ", 1)[0]
+    header: list[str] = []
+    rows: dict[str, list[str]] = {}
+    for line in section.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("|") or stripped.startswith("| ---"):
+            continue
+        cells = [cell.strip() for cell in stripped.strip("|").split("|")]
+        if cells[0] == "Field":
+            header = cells
+            continue
+        rows[cells[0]] = cells
+    return header, rows
+
+
+def _literal_string_collection(path: Path, variable_name: str) -> set[str]:
+    module = ast.parse(path.read_text(encoding="utf-8"))
+    for node in module.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        if any(isinstance(target, ast.Name) and target.id == variable_name for target in node.targets):
+            value = ast.literal_eval(node.value)
+            assert isinstance(value, (set, frozenset, tuple, list))
+            assert all(isinstance(item, str) for item in value)
+            return set(value)
+    raise AssertionError(f"missing literal collection: {variable_name}")
 
 
 def _completion_evidence_rows(markdown: str) -> dict[str, list[str]]:
@@ -248,6 +298,126 @@ def test_pre_agent_contract_review_has_complete_owner_matrix() -> None:
         "Command control responses must expose `display_contract`, `control_policy`, and `activity_spine_policy`"
         in markdown
     )
+
+
+def test_agent_tool_result_aggregate_owner_contract_is_canonical() -> None:
+    markdown = DOC_PATH.read_text(encoding="utf-8")
+    header, field_rows = _agent_tool_result_field_owner_rows(markdown)
+    expected_header = [
+        "Field",
+        "Owner",
+        "Source of truth",
+        "Allowed values",
+        "Derivation",
+        "Normal consumers",
+        "Forbidden consumers",
+        "Fallback",
+        "Migration status",
+        "Deletion condition",
+    ]
+    assert header == expected_header
+    assert set(field_rows) == {
+        "`agent_tool_terminal_aggregate.result_link_policy`",
+        "`inspect_operation.result_readiness`",
+    }
+    assert all(len(row) == len(expected_header) and all(row) for row in field_rows.values())
+
+    expected_policies = {
+        "no_command_v1",
+        "workflow_command_acceptance_v1",
+        "activity_attempt_terminal_v1",
+    }
+    literal_policies = set(get_args(AgentToolResultLinkPolicy))
+    registry_policies = {spec.behavior.result_link_policy for spec in LOCAL_CANARY_AGENT_TOOL_REGISTRY.specs}
+    policy_migration = AGENT_TOOL_RESULT_POLICY_MIGRATION_PATH.read_text(encoding="utf-8")
+    migration_policies = set(re.findall(r"result_link_policy\s*=\s*'([^']+)'", policy_migration))
+    for clause in re.findall(r"result_link_policy\s+IN\s*\((.*?)\)", policy_migration, flags=re.DOTALL):
+        migration_policies.update(re.findall(r"'([^']+)'", clause))
+    assert literal_policies == registry_policies == migration_policies == expected_policies
+    for ordinal, tool_spec in enumerate(LOCAL_CANARY_AGENT_TOOL_REGISTRY.specs, start=1):
+        occurrence = AgentToolOccurrence.from_tool_spec(
+            result_slot_id=f"preflight_slot_{ordinal}",
+            slot_generation=1,
+            workspace_id="preflight_workspace",
+            actor_id="preflight_actor",
+            runtime_namespace="isolated_local_canary",
+            provider_mode="simulate",
+            turn_id="preflight_turn",
+            step_id=f"preflight_step_{ordinal}",
+            tool_spec=tool_spec,
+            canonical_args={},
+            occurrence_ordinal=ordinal,
+        )
+        assert occurrence.result_link_policy == tool_spec.behavior.result_link_policy
+        assert occurrence.revalidated_for_registry(LOCAL_CANARY_AGENT_TOOL_REGISTRY) == occurrence
+
+    policy_row = field_rows["`agent_tool_terminal_aggregate.result_link_policy`"]
+    allowed_values_index = header.index("Allowed values")
+    assert set(re.findall(r"`([^`]+)`", policy_row[allowed_values_index])) == expected_policies
+    assert "server-owned `AgentToolRegistry`" in policy_row[header.index("Owner")]
+    assert "fail_closed" in policy_row[header.index("Fallback")]
+
+    readiness_cases = {
+        ("running", False): "pending",
+        ("completed", True): "ready",
+        ("failed", False): "failed",
+        ("cancelled", False): "cancelled",
+    }
+    for (operation_status, result_ref_present), expected_status in readiness_cases.items():
+        assert operation_result_readiness_projection(
+            operation_status=operation_status,
+            result_ref_present=result_ref_present,
+        ) == {
+            "status": expected_status,
+            "result_ref_present": result_ref_present,
+            "source_of_truth": OPERATION_RESULT_READINESS_OWNER,
+            "fallback_status": "fail_closed",
+        }
+    assert (
+        operation_result_readiness_projection(
+            operation_status="completed",
+            result_ref_present=False,
+        )["status"]
+        == "pending"
+    )
+    assert set(readiness_cases.values()) == {"pending", "ready", "failed", "cancelled"}
+
+    readiness_row = field_rows["`inspect_operation.result_readiness`"]
+    assert set(re.findall(r"`([^`]+)`", readiness_row[allowed_values_index])) == {
+        "pending",
+        "ready",
+        "failed",
+        "cancelled",
+    }
+    assert OPERATION_RESULT_READINESS_OWNER in readiness_row[header.index("Owner")]
+    assert "fail_closed" in readiness_row[header.index("Fallback")]
+
+    storage_source = STORAGE_PATH.read_text(encoding="utf-8")
+    storage_pg_only_inventory = _literal_string_collection(STORAGE_PATH, "_DURABLE_RUNTIME_TABLES")
+    live_runtime_inventory = _literal_string_collection(LIVE_PG_PATH, "_RUNTIME_COORDINATION_TABLES")
+    live_operation_inventory = _literal_string_collection(LIVE_PG_PATH, "_OPERATION_RUNTIME_TABLES")
+    base_migration = AGENT_TOOL_RESULT_BASE_MIGRATION_PATH.read_text(encoding="utf-8")
+    assert AGENT_TOOL_RESULT_TABLES <= storage_pg_only_inventory
+    assert AGENT_TOOL_RESULT_TABLES <= live_runtime_inventory
+    assert AGENT_TOOL_RESULT_TABLES <= live_operation_inventory
+    for table_name in AGENT_TOOL_RESULT_TABLES:
+        assert re.search(rf"CREATE\s+TABLE\s+{re.escape(table_name)}\s*\(", base_migration, re.IGNORECASE)
+        assert (
+            re.search(
+                rf"CREATE\s+TABLE(?:\s+IF\s+NOT\s+EXISTS)?\s+{re.escape(table_name)}\b",
+                storage_source,
+                re.IGNORECASE,
+            )
+            is None
+        )
+        assert (
+            re.search(
+                rf"CREATE\s+(?:UNIQUE\s+)?INDEX(?:\s+IF\s+NOT\s+EXISTS)?\s+\S*{re.escape(table_name)}\S*",
+                storage_source,
+                re.IGNORECASE,
+            )
+            is None
+        )
 
 
 def test_pre_agent_completion_evidence_matrix_records_current_gates() -> None:
