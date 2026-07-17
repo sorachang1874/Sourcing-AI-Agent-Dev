@@ -6,6 +6,7 @@ import json
 import os
 import stat
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -16,6 +17,7 @@ from x_first.source_neutral_campaign_store import (
     CampaignMutationConflict,
     CampaignStore,
     CampaignStoreCorruption,
+    CampaignStoreError,
     CampaignStoreLockBusy,
     DirectProof,
     DirectProofCollision,
@@ -75,6 +77,26 @@ class SourceNeutralCampaignStoreTests(unittest.TestCase):
             expected_head_token=expected_head_token,
             validated_wave=_validated_wave(label, *proof_labels),
         )
+
+    def _fork_append_and_exit_after_link(self, target_parent_name: str) -> None:
+        expected_point = f"after_append_only_link_before_temp_unlink:{target_parent_name}"
+        child_pid = os.fork()
+        if child_pid == 0:
+
+            def exit_after_link(point: str) -> None:
+                if point == expected_point:
+                    os._exit(73)
+
+            try:
+                child_store = CampaignStore.open(self.root, _fault_injector=exit_after_link)
+                self._append(store=child_store)
+            except BaseException:
+                os._exit(74)
+            os._exit(75)
+        waited_pid, status = os.waitpid(child_pid, 0)
+        self.assertEqual(waited_pid, child_pid)
+        self.assertTrue(os.WIFEXITED(status), status)
+        self.assertEqual(os.WEXITSTATUS(status), 73)
 
     def test_private_canonical_store_and_read_replay_apis(self) -> None:
         committed = self._append()
@@ -275,6 +297,7 @@ class SourceNeutralCampaignStoreTests(unittest.TestCase):
 
     def test_store_global_nonblocking_lock_honors_monotonic_deadline(self) -> None:
         fd = os.open(self.store.lock_path, os.O_RDWR)
+        started = time.monotonic()
         try:
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
             with self.assertRaisesRegex(CampaignStoreLockBusy, "campaign_store_lock_busy"):
@@ -282,6 +305,24 @@ class SourceNeutralCampaignStoreTests(unittest.TestCase):
         finally:
             fcntl.flock(fd, fcntl.LOCK_UN)
             os.close(fd)
+        elapsed = time.monotonic() - started
+        self.assertGreaterEqual(elapsed, 0.005)
+        self.assertLess(elapsed, 0.5)
+
+    def test_invalid_and_nonfinite_lock_timeouts_fail_before_layout_creation(self) -> None:
+        invalid_values = (True, False, -0.01, float("nan"), float("inf"), float("-inf"), 10**10000)
+        for index, timeout in enumerate(invalid_values):
+            with self.subTest(index=index):
+                root = Path(self.temporary.name) / f"invalid-timeout-{index}"
+                with self.assertRaisesRegex(CampaignStoreError, "lock_timeout_invalid"):
+                    CampaignStore.create(
+                        root,
+                        store_id=f"fixture_invalid_timeout_{index}",
+                        lock_timeout_seconds=timeout,
+                    )
+                self.assertFalse(root.exists())
+                with self.assertRaisesRegex(CampaignStoreError, "lock_timeout_invalid"):
+                    CampaignStore.open(self.root, lock_timeout_seconds=timeout)
 
     def test_existing_lock_with_public_mode_is_rejected_without_repair(self) -> None:
         self.store.lock_path.chmod(0o666)
@@ -442,6 +483,74 @@ class SourceNeutralCampaignStoreTests(unittest.TestCase):
         self.store.replay()
 
         self.assertFalse(orphan.exists())
+
+    def test_object_publish_link_intermediate_recovers_then_exact_retry_commits(self) -> None:
+        self._fork_append_and_exit_after_link("objects")
+
+        temps = list(self.store.temp_dir.iterdir())
+        objects = list(self.store.objects_dir.iterdir())
+        self.assertEqual(len(temps), 1)
+        self.assertEqual(len(objects), 1)
+        self.assertTrue(os.path.samefile(temps[0], objects[0]))
+        self.assertEqual(temps[0].stat().st_nlink, 2)
+
+        recovered = CampaignStore.open(self.root)
+        self.assertEqual(list(recovered.temp_dir.iterdir()), [])
+        self.assertEqual(recovered.replay().waves, ())
+        committed = self._append(store=recovered)
+        retried = self._append(store=recovered)
+        self.assertEqual(committed.sequence, 1)
+        self.assertEqual(retried, committed)
+        self.assertEqual(recovered.replay().waves, (committed,))
+
+    def test_journal_publish_link_intermediate_recovers_as_committed_exact_retry(self) -> None:
+        self._fork_append_and_exit_after_link("journal")
+
+        temps = list(self.store.temp_dir.iterdir())
+        journals = list(self.store.journal_dir.iterdir())
+        self.assertEqual(len(temps), 1)
+        self.assertEqual(len(journals), 1)
+        self.assertTrue(os.path.samefile(temps[0], journals[0]))
+        self.assertEqual(temps[0].stat().st_nlink, 2)
+        self.assertEqual(list(self.store.heads_dir.iterdir()), [])
+
+        recovered = CampaignStore.open(self.root)
+        snapshot = recovered.replay()
+        self.assertEqual(list(recovered.temp_dir.iterdir()), [])
+        self.assertEqual(len(snapshot.waves), 1)
+        self.assertEqual(self._append(store=recovered), snapshot.waves[0])
+        self.assertEqual(len(recovered.replay().waves), 1)
+
+    def test_two_link_temp_with_only_non_target_alias_fails_closed(self) -> None:
+        payload = {"fixture": "valid-content-addressed-bytes"}
+        raw = _canonical_json(payload).encode("utf-8") + b"\n"
+        digest = hashlib.sha256(_canonical_json(payload).encode("utf-8")).hexdigest()
+        temp = self.store.temp_dir / f".objects-{digest}.json.{('a' * 24)}.tmp"
+        alias = self.root / "non-target-alias.json"
+        temp.write_bytes(raw)
+        temp.chmod(0o600)
+        os.link(temp, alias)
+
+        with self.assertRaisesRegex(CampaignStoreCorruption, "temporary_publish_intermediate_invalid"):
+            self.store.replay()
+
+        self.assertTrue(os.path.samefile(temp, alias))
+        self.assertEqual(temp.stat().st_nlink, 2)
+        self.assertFalse((self.store.objects_dir / f"{digest}.json").exists())
+
+    def test_two_link_expected_target_with_wrong_bytes_fails_closed(self) -> None:
+        claimed_digest = "f" * 64
+        temp = self.store.temp_dir / f".objects-{claimed_digest}.json.{('b' * 24)}.tmp"
+        target = self.store.objects_dir / f"{claimed_digest}.json"
+        temp.write_bytes(b'{"fixture":"wrong-digest"}\n')
+        temp.chmod(0o600)
+        os.link(temp, target)
+
+        with self.assertRaisesRegex(CampaignStoreCorruption, "temporary_publish_intermediate_invalid"):
+            self.store.replay()
+
+        self.assertTrue(os.path.samefile(temp, target))
+        self.assertEqual(temp.stat().st_nlink, 2)
 
 
 if __name__ == "__main__":

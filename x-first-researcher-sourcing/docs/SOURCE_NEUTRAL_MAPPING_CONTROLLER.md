@@ -134,6 +134,21 @@ active writer fails closed before journal publication. Existing lock files are n
 remain exactly `0700`; every manifest, journal, object, materialized head, temporary file, and lock must be a regular
 effective-UID-owned, single-link `0600` inode. Directory link counts are not fixed because POSIX derives them from
 subdirectory topology; canonical device/inode binding closes directory-path substitution instead.
+The lock timeout is a finite, non-negative numeric duration; Booleans, negative values, NaN, and either infinity fail
+before create/open inspects or creates the store layout.
+
+Append-only publication has one narrowly recoverable process-exit intermediate: the exact generated temp name and its
+allowed manifest, content-addressed-object, or journal target may temporarily be the only two names for the same
+effective-UID-owned `0600` inode. Replay accepts only link count exactly two, exact temp-to-target namespace binding,
+and target-authoritative canonical bytes/hash. It fsyncs the target directory before unlinking only that proven temp
+alias, verifies the surviving target is again single-link, then fsyncs the temp directory. A second link at any other
+pathname, an unexpected target namespace, wrong bytes, extra links, or mismatched inode remains corruption. Forked
+`os._exit` regressions cover the real object-link and journal-link boundaries, not only higher-level fault points.
+
+This backend's declared support boundary is a local POSIX filesystem with working `fcntl.flock`, hardlinks, effective
+UID and permission bits, and file/directory `fsync`; the current evidence was executed on Darwin. Network and
+distributed filesystems are not declared supported because their locking and durability semantics may differ. Windows
+is not declared supported by this backend and no cross-platform result is implied.
 
 Phase 1 deliberately accepts an explicit `ValidatedWaveBundle` plus caller-supplied `DirectProof` inventory. It does
 not yet derive either value from raw mapping/hydration/Luna projections, and current `structural_stop` does not read the

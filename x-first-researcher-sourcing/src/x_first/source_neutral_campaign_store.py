@@ -18,6 +18,7 @@ import errno
 import fcntl
 import hashlib
 import json
+import math
 import os
 import re
 import secrets
@@ -38,8 +39,22 @@ _ID_RE = re.compile(r"[a-z0-9][a-z0-9_.-]{0,127}")
 _SHA_RE = re.compile(r"[0-9a-f]{64}")
 _JOURNAL_FILE_RE = re.compile(r"([0-9]{20})\.([0-9a-f]{64})\.json")
 _TEMP_FILE_RE = re.compile(r"\..+\.[0-9a-f]{24}\.tmp")
+_OBJECT_PUBLISH_TEMP_RE = re.compile(r"\.objects-([0-9a-f]{64})\.json\.[0-9a-f]{24}\.tmp")
+_JOURNAL_PUBLISH_TEMP_RE = re.compile(r"\.journal-([0-9]{20})\.([0-9a-f]{64})\.json\.[0-9a-f]{24}\.tmp")
 _FILE_MODE = 0o600
 _DIR_MODE = 0o700
+
+
+def _normalize_lock_timeout(value: float) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise CampaignStoreError("lock_timeout_invalid")
+    try:
+        normalized = float(value)
+    except (OverflowError, ValueError) as exc:
+        raise CampaignStoreError("lock_timeout_invalid") from exc
+    if normalized < 0 or not math.isfinite(normalized):
+        raise CampaignStoreError("lock_timeout_invalid")
+    return normalized
 
 
 def _open_flags(*, directory: bool = False) -> int:
@@ -334,11 +349,9 @@ class _GlobalLock:
     """
 
     def __init__(self, root: Path, path: Path, timeout_seconds: float, *, allow_create: bool) -> None:
-        if isinstance(timeout_seconds, bool) or not isinstance(timeout_seconds, (int, float)) or timeout_seconds < 0:
-            raise CampaignStoreError("lock_timeout_invalid")
         self._root = root
         self._path = path
-        self._timeout_seconds = float(timeout_seconds)
+        self._timeout_seconds = _normalize_lock_timeout(timeout_seconds)
         self._allow_create = allow_create
         self._root_fd: int | None = None
         self._fd: int | None = None
@@ -463,7 +476,7 @@ class CampaignStore:
         _fault_injector: FaultInjector | None = None,
     ) -> None:
         self.root = Path(root)
-        self.lock_timeout_seconds = lock_timeout_seconds
+        self.lock_timeout_seconds = _normalize_lock_timeout(lock_timeout_seconds)
         self._fault_injector = _fault_injector
 
     @property
@@ -740,6 +753,10 @@ class CampaignStore:
 
     def _load_manifest_unlocked(self) -> dict[str, Any]:
         raw = self._read_private_file(self.manifest_path, "store_manifest_read_failed")
+        return self._parse_manifest_raw(raw)
+
+    @staticmethod
+    def _parse_manifest_raw(raw: bytes) -> dict[str, Any]:
         value = _strict_json_bytes(raw, "store_manifest_json_invalid")
         expected_keys = {
             "schema_version",
@@ -1111,6 +1128,7 @@ class CampaignStore:
             self._ensure_private_directory(target.parent, create=False)
             lock.assert_canonical_binding()
             os.link(temp, target)
+            self._inject_fault(f"after_append_only_link_before_temp_unlink:{target.parent.name}")
         except FileExistsError as exc:
             raise CampaignStoreCorruption("append_only_target_exists") from exc
         except OSError as exc:
@@ -1155,6 +1173,138 @@ class CampaignStore:
         self._fsync_directory(target.parent)
         self._fsync_directory(self.temp_dir)
 
+    def _publish_intermediate_target(self, temp: Path) -> tuple[str, Path] | None:
+        manifest_prefix = f".{self.root.name}-{self.manifest_path.name}."
+        if temp.name.startswith(manifest_prefix) and temp.name.endswith(".tmp"):
+            token = temp.name[len(manifest_prefix) : -len(".tmp")]
+            if re.fullmatch(r"[0-9a-f]{24}", token) is not None:
+                return "manifest", self.manifest_path
+        object_match = _OBJECT_PUBLISH_TEMP_RE.fullmatch(temp.name)
+        if object_match is not None:
+            return "object", self.objects_dir / f"{object_match.group(1)}.json"
+        journal_match = _JOURNAL_PUBLISH_TEMP_RE.fullmatch(temp.name)
+        if journal_match is not None:
+            return (
+                "journal",
+                self.journal_dir / f"{journal_match.group(1)}.{journal_match.group(2)}.json",
+            )
+        return None
+
+    @staticmethod
+    def _validate_publish_intermediate_binding(fd: int, temp: Path, target: Path) -> None:
+        try:
+            descriptor_info = os.fstat(fd)
+            temp_info = temp.lstat()
+            target_info = target.lstat()
+        except OSError as exc:
+            raise CampaignStoreCorruption("temporary_publish_intermediate_invalid") from exc
+        identities = {
+            (descriptor_info.st_dev, descriptor_info.st_ino),
+            (temp_info.st_dev, temp_info.st_ino),
+            (target_info.st_dev, target_info.st_ino),
+        }
+        if len(identities) != 1:
+            raise CampaignStoreCorruption("temporary_publish_intermediate_invalid")
+        for info in (descriptor_info, temp_info, target_info):
+            if (
+                not stat.S_ISREG(info.st_mode)
+                or info.st_uid != os.geteuid()
+                or info.st_nlink != 2
+                or stat.S_IMODE(info.st_mode) != _FILE_MODE
+            ):
+                raise CampaignStoreCorruption("temporary_publish_intermediate_invalid")
+
+    def _validate_publish_intermediate_bytes(self, kind: str, target: Path, raw: bytes) -> None:
+        try:
+            if kind == "manifest":
+                self._parse_manifest_raw(raw)
+                return
+            value = _strict_json_bytes(raw, "temporary_publish_intermediate_json_invalid")
+            if raw != _canonical_json(value).encode("utf-8") + b"\n":
+                raise CampaignStoreCorruption("temporary_publish_intermediate_not_canonical")
+            if kind == "object":
+                expected_digest = target.name.removesuffix(".json")
+                if _SHA_RE.fullmatch(expected_digest) is None or _canonical_sha256(value) != expected_digest:
+                    raise CampaignStoreCorruption("temporary_publish_intermediate_object_hash_invalid")
+                return
+            if kind != "journal":
+                raise CampaignStoreCorruption("temporary_publish_intermediate_kind_invalid")
+            filename_match = _JOURNAL_FILE_RE.fullmatch(target.name)
+            entry = _exact_keys(
+                value,
+                {
+                    "schema_version",
+                    "sequence",
+                    "previous_entry_sha256",
+                    "campaign_id",
+                    "wave_id",
+                    "mutation_id",
+                    "expected_parent_head_token",
+                    "bundle_sha256",
+                    "direct_proofs",
+                    "intent_sha256",
+                    "entry_sha256",
+                },
+                "temporary_publish_intermediate_journal_shape_invalid",
+            )
+            if (
+                filename_match is None
+                or entry["schema_version"] != JOURNAL_ENTRY_SCHEMA_VERSION
+                or type(entry["sequence"]) is not int
+                or entry["sequence"] != int(filename_match.group(1))
+                or entry["entry_sha256"] != filename_match.group(2)
+                or _canonical_sha256({key: item for key, item in entry.items() if key != "entry_sha256"})
+                != filename_match.group(2)
+            ):
+                raise CampaignStoreCorruption("temporary_publish_intermediate_journal_hash_invalid")
+        except CampaignStoreError as exc:
+            if exc.code == "temporary_publish_intermediate_invalid":
+                raise
+            raise CampaignStoreCorruption("temporary_publish_intermediate_invalid") from exc
+
+    def _recover_publish_intermediate(self, temp: Path, kind: str, target: Path) -> None:
+        self._ensure_private_directory(target.parent, create=False)
+        flags = os.O_RDONLY
+        if hasattr(os, "O_NOFOLLOW"):
+            flags |= os.O_NOFOLLOW
+        if hasattr(os, "O_CLOEXEC"):
+            flags |= os.O_CLOEXEC
+        try:
+            fd = os.open(temp, flags)
+        except OSError as exc:
+            raise CampaignStoreCorruption("temporary_publish_intermediate_invalid") from exc
+        try:
+            self._validate_publish_intermediate_binding(fd, temp, target)
+            chunks: list[bytes] = []
+            while True:
+                chunk = os.read(fd, 1024 * 1024)
+                if not chunk:
+                    break
+                chunks.append(chunk)
+            self._validate_publish_intermediate_binding(fd, temp, target)
+            self._validate_publish_intermediate_bytes(kind, target, b"".join(chunks))
+
+            # Durably establish the authoritative target link before removing
+            # only the mechanically bound temporary alias.
+            self._fsync_directory(target.parent)
+            self._validate_publish_intermediate_binding(fd, temp, target)
+            try:
+                temp.unlink()
+            except OSError as exc:
+                raise CampaignStoreCorruption("temporary_file_cleanup_failed") from exc
+            self._validate_private_file_binding(fd, target)
+            try:
+                temp.lstat()
+            except FileNotFoundError:
+                pass
+            except OSError as exc:
+                raise CampaignStoreCorruption("temporary_file_cleanup_failed") from exc
+            else:
+                raise CampaignStoreCorruption("temporary_file_cleanup_failed")
+            self._fsync_directory(self.temp_dir)
+        finally:
+            os.close(fd)
+
     def _cleanup_temps_unlocked(self) -> None:
         removed = False
         try:
@@ -1171,9 +1321,18 @@ class CampaignStore:
                 or not stat.S_ISREG(info.st_mode)
                 or stat.S_ISLNK(info.st_mode)
                 or info.st_uid != os.geteuid()
-                or info.st_nlink != 1
                 or stat.S_IMODE(info.st_mode) != _FILE_MODE
             ):
+                raise CampaignStoreCorruption("temporary_file_invalid")
+            if info.st_nlink == 2:
+                recovery_target = self._publish_intermediate_target(path)
+                if recovery_target is None:
+                    raise CampaignStoreCorruption("temporary_file_invalid")
+                kind, target = recovery_target
+                self._recover_publish_intermediate(path, kind, target)
+                removed = True
+                continue
+            if info.st_nlink != 1:
                 raise CampaignStoreCorruption("temporary_file_invalid")
             try:
                 path.unlink()
