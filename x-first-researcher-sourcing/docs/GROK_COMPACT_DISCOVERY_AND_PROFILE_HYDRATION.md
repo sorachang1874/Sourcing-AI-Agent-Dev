@@ -178,6 +178,18 @@ one lookup, it:
 4. checks the cached result and summary digests only as diagnostics, then requires the whole typed envelope to equal
    the reconstruction.
 
+The replay boundary first rebuilds an operator-owned snapshot without using caller equality, hashing, or deep-copy
+hooks. Every JSON object, array, string, integer, Boolean, and finite number must have its exact built-in type; nested
+subclasses, Boolean-as-integer fields, non-finite numbers, cycles, and structures deeper than the closed JSON depth
+ceiling fail closed. Every merge/projection/receipt/precommit/execution-facts/raw-artifact dataclass must have its exact
+declared class, every tuple-valued field and nested tuple container must be an exact tuple whose elements satisfy the
+declared exact types, and raw artifact/prompt values must be exact bytes. Projection snapshots are made before
+semantic replay validation. Only after this fence succeeds are retained
+sources replayed and remerged. The cached result and summary are compared to the fresh reconstruction as canonical
+UTF-8 JSON bytes derived from the plain snapshots; no fresh mutable reconstruction is passed to a caller-overloadable
+`__eq__` or `__ne__`. The returned reconstruction's result and summary digests are checked again before hydration can
+derive lookup identities.
+
 Consequently, deleting a sidecar, replacing a provisional lead/reference digest, changing a candidate id, rebinding
 an origin to a different but otherwise allowed shard, or substituting the retired absorbed-evidence marker fails
 before a hydration expectation is emitted. Updating a caller-authored hash over the forged value does not help. A raw

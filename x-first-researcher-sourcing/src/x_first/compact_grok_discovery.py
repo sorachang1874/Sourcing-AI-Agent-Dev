@@ -11,6 +11,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import math
 import re
 from collections import Counter
 from collections.abc import Mapping, Sequence
@@ -291,17 +292,442 @@ class MergedCompactDiscovery:
     summary_sha256: str
 
 
-def canonical_json_sha256(value: Any) -> str:
-    """Hash one JSON-compatible value with the repository canonical encoding."""
+_PLAIN_JSON_MAX_DEPTH = 64
 
-    encoded = json.dumps(
+
+def _snapshot_exact_plain_json(
+    value: Any,
+    *,
+    error: str,
+    depth: int = 0,
+    active_containers: set[int] | None = None,
+) -> Any:
+    """Copy JSON data without invoking caller-defined equality or copy hooks."""
+
+    if depth > _PLAIN_JSON_MAX_DEPTH:
+        raise CompactDiscoveryContractError(error)
+    value_type = type(value)
+    if value is None or value_type is bool:
+        return value
+    if value_type is str:
+        try:
+            value.encode("utf-8")
+        except UnicodeError as exc:
+            raise CompactDiscoveryContractError(error) from exc
+        return value
+    if value_type is int:
+        return value
+    if value_type is float:
+        if not math.isfinite(value):
+            raise CompactDiscoveryContractError(error)
+        return value
+    if value_type not in {dict, list}:
+        raise CompactDiscoveryContractError(error)
+
+    active = active_containers if active_containers is not None else set()
+    container_id = id(value)
+    if container_id in active:
+        raise CompactDiscoveryContractError(error)
+    active.add(container_id)
+    try:
+        if value_type is list:
+            return [
+                _snapshot_exact_plain_json(
+                    item,
+                    error=error,
+                    depth=depth + 1,
+                    active_containers=active,
+                )
+                for item in value
+            ]
+        copied: dict[str, Any] = {}
+        for key, item in value.items():
+            if type(key) is not str:
+                raise CompactDiscoveryContractError(error)
+            try:
+                key.encode("utf-8")
+            except UnicodeError as exc:
+                raise CompactDiscoveryContractError(error) from exc
+            copied[key] = _snapshot_exact_plain_json(
+                item,
+                error=error,
+                depth=depth + 1,
+                active_containers=active,
+            )
+        return copied
+    except (RuntimeError, RecursionError) as exc:
+        raise CompactDiscoveryContractError(error) from exc
+    finally:
+        active.remove(container_id)
+
+
+def _exact_string(value: Any, *, error: str) -> str:
+    if type(value) is not str:
+        raise CompactDiscoveryContractError(error)
+    try:
+        value.encode("utf-8")
+    except UnicodeError as exc:
+        raise CompactDiscoveryContractError(error) from exc
+    return value
+
+
+def _exact_integer(value: Any, *, error: str) -> int:
+    if type(value) is not int:
+        raise CompactDiscoveryContractError(error)
+    return value
+
+
+def _snapshot_session_precommit(
+    value: Any,
+) -> GrokOperatorSessionPrecommit:
+    error = "merge_projection_session_precommit_type_invalid"
+    if type(value) is not GrokOperatorSessionPrecommit:
+        raise CompactDiscoveryContractError(error)
+    if type(value.expected_user_prompt) is not bytes or type(
+        value.expected_chat_history_prefix
+    ) is not bytes:
+        raise CompactDiscoveryContractError(error)
+    return GrokOperatorSessionPrecommit(
+        expected_session_id=_exact_string(value.expected_session_id, error=error),
+        expected_request_id=_exact_string(value.expected_request_id, error=error),
+        expected_model_id=_exact_string(value.expected_model_id, error=error),
+        expected_reasoning_effort=_exact_string(
+            value.expected_reasoning_effort, error=error
+        ),
+        prompt_binding_mode=_exact_string(value.prompt_binding_mode, error=error),
+        expected_user_prompt=value.expected_user_prompt,
+        expected_user_prompt_sha256=_exact_string(
+            value.expected_user_prompt_sha256, error=error
+        ),
+        expected_chat_history_prefix=value.expected_chat_history_prefix,
+        expected_chat_history_prefix_sha256=_exact_string(
+            value.expected_chat_history_prefix_sha256, error=error
+        ),
+        expected_system_prompt_sha256=_exact_string(
+            value.expected_system_prompt_sha256, error=error
+        ),
+        expected_prompt_context_sha256=_exact_string(
+            value.expected_prompt_context_sha256, error=error
+        ),
+    )
+
+
+def _snapshot_operator_execution_facts(
+    value: Any,
+) -> GrokOperatorExecutionFacts:
+    error = "merge_projection_execution_facts_type_invalid"
+    if type(value) is not GrokOperatorExecutionFacts:
+        raise CompactDiscoveryContractError(error)
+    fields = (
+        value.result_truncated,
+        value.execution_deadline_reached,
+        value.transport_failure,
+        value.model_output_repaired,
+    )
+    if any(type(item) is not bool for item in fields):
+        raise CompactDiscoveryContractError(error)
+    return GrokOperatorExecutionFacts(*fields)
+
+
+def _snapshot_tool_completion(value: Any) -> ReplayedNativeToolCompletion:
+    error = "merge_projection_tool_completion_type_invalid"
+    if type(value) is not ReplayedNativeToolCompletion:
+        raise CompactDiscoveryContractError(error)
+    if value.query is not None and type(value.query) is not str:
+        raise CompactDiscoveryContractError(error)
+    query = (
+        None
+        if value.query is None
+        else _exact_string(value.query, error=error)
+    )
+    return ReplayedNativeToolCompletion(
+        call_id=_exact_string(value.call_id, error=error),
+        provider_call_id=_exact_string(value.provider_call_id, error=error),
+        tool_name=_exact_string(value.tool_name, error=error),
+        arguments_json=_exact_string(value.arguments_json, error=error),
+        query=query,
+        started_update_index=_exact_integer(
+            value.started_update_index, error=error
+        ),
+        completed_update_index=_exact_integer(
+            value.completed_update_index, error=error
+        ),
+        start_event_sha256=_exact_string(value.start_event_sha256, error=error),
+        completion_event_sha256=_exact_string(
+            value.completion_event_sha256, error=error
+        ),
+    )
+
+
+def _snapshot_execution_receipt(value: Any) -> CompactDiscoveryExecutionReceipt:
+    error = "merge_projection_receipt_type_invalid"
+    if type(value) is not CompactDiscoveryExecutionReceipt:
+        raise CompactDiscoveryContractError(error)
+    string_fields = (
+        "receipt_version",
+        "campaign_id",
+        "target_descriptor_id",
+        "target_descriptor_sha256",
+        "prompt_policy_sha256",
+        "shard_id",
+        "session_id",
+        "request_id",
+        "model_id",
+        "transcript_sha256",
+        "session_precommit_sha256",
+        "raw_session_shape_registry_version",
+        "operator_execution_facts_sha256",
+        "system_prompt_sha256",
+        "prompt_context_sha256",
+        "user_prompt_sha256",
+        "terminal_sha256",
+    )
+    strings = {
+        field: _exact_string(getattr(value, field), error=error)
+        for field in string_fields
+    }
+    bindings = value.raw_session_artifact_sha256s
+    if type(bindings) is not tuple:
+        raise CompactDiscoveryContractError(error)
+    copied_bindings: list[tuple[str, str]] = []
+    for binding in bindings:
+        if type(binding) is not tuple or len(binding) != 2:
+            raise CompactDiscoveryContractError(error)
+        copied_bindings.append(
+            (
+                _exact_string(binding[0], error=error),
+                _exact_string(binding[1], error=error),
+            )
+        )
+    integer_fields = (
+        "terminal_start_byte_offset",
+        "terminal_end_byte_offset_exclusive",
+        "terminal_start_update_index",
+        "terminal_end_update_index",
+        "final_assistant_update_index",
+        "session_event_count",
+        "started_tool_call_count",
+        "completed_tool_call_count",
+    )
+    integers = {
+        field: _exact_integer(getattr(value, field), error=error)
+        for field in integer_fields
+    }
+    last_native_tool_update_index = value.last_native_tool_update_index
+    if last_native_tool_update_index is not None:
+        last_native_tool_update_index = _exact_integer(
+            last_native_tool_update_index, error=error
+        )
+    if type(value.tool_completions) is not tuple:
+        raise CompactDiscoveryContractError(error)
+    tool_completions = tuple(
+        _snapshot_tool_completion(item) for item in value.tool_completions
+    )
+    boolean_fields = (
+        "result_truncated",
+        "execution_deadline_reached",
+        "transport_failure",
+        "model_output_repaired",
+    )
+    booleans = {field: getattr(value, field) for field in boolean_fields}
+    if any(type(item) is not bool for item in booleans.values()):
+        raise CompactDiscoveryContractError(error)
+    return CompactDiscoveryExecutionReceipt(
+        **strings,
+        raw_session_artifact_sha256s=tuple(copied_bindings),
+        **integers,
+        last_native_tool_update_index=last_native_tool_update_index,
+        tool_completions=tool_completions,
+        **booleans,
+    )
+
+
+def _snapshot_raw_session_artifacts(
+    value: Any,
+) -> tuple[FrozenRawSessionArtifact, ...]:
+    error = "merge_projection_raw_session_artifacts_type_invalid"
+    if type(value) is not tuple:
+        raise CompactDiscoveryContractError(error)
+    copied: list[FrozenRawSessionArtifact] = []
+    for item in value:
+        if type(item) is not FrozenRawSessionArtifact:
+            raise CompactDiscoveryContractError(error)
+        if type(item.content) is not bytes:
+            raise CompactDiscoveryContractError(error)
+        copied.append(
+            FrozenRawSessionArtifact(
+                name=_exact_string(item.name, error=error),
+                content=item.content,
+            )
+        )
+    return tuple(copied)
+
+
+def _snapshot_string_tuple(value: Any, *, error: str) -> tuple[str, ...]:
+    if type(value) is not tuple:
+        raise CompactDiscoveryContractError(error)
+    return tuple(_exact_string(item, error=error) for item in value)
+
+
+def _snapshot_compact_projection(value: Any) -> CompactDiscoveryOperatorProjection:
+    """Snapshot one exact typed projection before semantic validation/replay."""
+
+    error = "merge_projection_required"
+    if type(value) is not CompactDiscoveryOperatorProjection:
+        raise CompactDiscoveryContractError(error)
+    raw_terminal = _snapshot_exact_plain_json(
+        value.raw_terminal,
+        error="merge_projection_raw_terminal_plain_json_invalid",
+    )
+    result = _snapshot_exact_plain_json(
+        value.result,
+        error="merge_projection_result_plain_json_invalid",
+    )
+    if type(raw_terminal) is not dict or type(result) is not dict:
+        raise CompactDiscoveryContractError(error)
+    return CompactDiscoveryOperatorProjection(
+        raw_terminal=raw_terminal,
+        result=result,
+        receipt=_snapshot_execution_receipt(value.receipt),
+        session_precommit=_snapshot_session_precommit(value.session_precommit),
+        operator_execution_facts=_snapshot_operator_execution_facts(
+            value.operator_execution_facts
+        ),
+        raw_session_artifacts=_snapshot_raw_session_artifacts(
+            value.raw_session_artifacts
+        ),
+        receipt_sha256=_exact_string(value.receipt_sha256, error=error),
+        terminal_sha256=_exact_string(value.terminal_sha256, error=error),
+        projected_result_sha256=_exact_string(
+            value.projected_result_sha256, error=error
+        ),
+        removed_model_operator_limitations=_snapshot_string_tuple(
+            value.removed_model_operator_limitations, error=error
+        ),
+        added_operator_limitations=_snapshot_string_tuple(
+            value.added_operator_limitations, error=error
+        ),
+    )
+
+
+def _snapshot_merge_summary(value: Any) -> CompactDiscoveryMergeSummary:
+    error = "merge_envelope_summary_type_invalid"
+    if type(value) is not CompactDiscoveryMergeSummary:
+        raise CompactDiscoveryContractError(error)
+    names = (
+        "input_result_count",
+        "input_lead_count",
+        "unique_lead_count",
+        "overlapping_handle_count",
+        "platform_user_id_conflict_count",
+        "renamed_stable_identity_count",
+        "quarantined_handle_reuse_identity_count",
+        "provisional_identity_count",
+        "absorbed_provisional_observation_count",
+        "unresolved_identity_sidecar_count",
+        "lab_affiliation_state_conflict_count",
+        "pretraining_experience_state_conflict_count",
+        "input_source_ref_count",
+        "merged_source_ref_count",
+    )
+    values = {name: _exact_integer(getattr(value, name), error=error) for name in names}
+    return CompactDiscoveryMergeSummary(**values)
+
+
+def _summary_plain_json(value: CompactDiscoveryMergeSummary) -> dict[str, int]:
+    return {
+        "input_result_count": value.input_result_count,
+        "input_lead_count": value.input_lead_count,
+        "unique_lead_count": value.unique_lead_count,
+        "overlapping_handle_count": value.overlapping_handle_count,
+        "platform_user_id_conflict_count": value.platform_user_id_conflict_count,
+        "renamed_stable_identity_count": value.renamed_stable_identity_count,
+        "quarantined_handle_reuse_identity_count": (
+            value.quarantined_handle_reuse_identity_count
+        ),
+        "provisional_identity_count": value.provisional_identity_count,
+        "absorbed_provisional_observation_count": (
+            value.absorbed_provisional_observation_count
+        ),
+        "unresolved_identity_sidecar_count": value.unresolved_identity_sidecar_count,
+        "lab_affiliation_state_conflict_count": (
+            value.lab_affiliation_state_conflict_count
+        ),
+        "pretraining_experience_state_conflict_count": (
+            value.pretraining_experience_state_conflict_count
+        ),
+        "input_source_ref_count": value.input_source_ref_count,
+        "merged_source_ref_count": value.merged_source_ref_count,
+    }
+
+
+def _snapshot_merged_compact_discovery(value: Any) -> MergedCompactDiscovery:
+    error = "merge_envelope_required"
+    if type(value) is not MergedCompactDiscovery:
+        raise CompactDiscoveryContractError(error)
+    if type(value.input_projections) is not tuple or not value.input_projections:
+        raise CompactDiscoveryContractError("merge_envelope_projections_invalid")
+    projections = tuple(
+        _snapshot_compact_projection(item) for item in value.input_projections
+    )
+    controls = value.resolved_lookup_handles
+    if type(controls) is not tuple:
+        raise CompactDiscoveryContractError(
+            "merge_envelope_lookup_controls_invalid"
+        )
+    copied_controls: list[tuple[str, str]] = []
+    for item in controls:
+        if type(item) is not tuple or len(item) != 2:
+            raise CompactDiscoveryContractError(
+                "merge_envelope_lookup_controls_invalid"
+            )
+        copied_controls.append(
+            (
+                _exact_string(
+                    item[0], error="merge_envelope_lookup_controls_invalid"
+                ),
+                _exact_string(
+                    item[1], error="merge_envelope_lookup_controls_invalid"
+                ),
+            )
+        )
+    result = _snapshot_exact_plain_json(
+        value.result,
+        error="merge_envelope_result_plain_json_invalid",
+    )
+    if type(result) is not dict:
+        raise CompactDiscoveryContractError(
+            "merge_envelope_result_plain_json_invalid"
+        )
+    return MergedCompactDiscovery(
+        merge_envelope_version=_exact_string(
+            value.merge_envelope_version, error=error
+        ),
+        input_projections=projections,
+        union_id=_exact_string(value.union_id, error=error),
+        strategy_id=_exact_string(value.strategy_id, error=error),
+        resolved_lookup_handles=tuple(copied_controls),
+        result=result,
+        summary=_snapshot_merge_summary(value.summary),
+        result_sha256=_exact_string(value.result_sha256, error=error),
+        summary_sha256=_exact_string(value.summary_sha256, error=error),
+    )
+
+
+def _canonical_json_bytes(value: Any) -> bytes:
+    return json.dumps(
         value,
         ensure_ascii=False,
         allow_nan=False,
         separators=(",", ":"),
         sort_keys=True,
     ).encode("utf-8")
-    return hashlib.sha256(encoded).hexdigest()
+
+
+def canonical_json_sha256(value: Any) -> str:
+    """Hash one JSON-compatible value with the repository canonical encoding."""
+
+    return hashlib.sha256(_canonical_json_bytes(value)).hexdigest()
 
 
 def _valid_identifier(value: Any) -> bool:
@@ -1084,37 +1510,28 @@ def build_compact_operator_projection(
 
 
 def _assert_projection(projection: Any) -> CompactDiscoveryOperatorProjection:
-    if not isinstance(projection, CompactDiscoveryOperatorProjection):
-        raise CompactDiscoveryContractError("merge_projection_required")
-    if not isinstance(projection.result, dict) or not isinstance(projection.raw_terminal, dict):
-        raise CompactDiscoveryContractError("merge_projection_result_type_invalid")
-    if not isinstance(projection.receipt, CompactDiscoveryExecutionReceipt):
-        raise CompactDiscoveryContractError("merge_projection_receipt_type_invalid")
-    if not isinstance(projection.session_precommit, GrokOperatorSessionPrecommit):
-        raise CompactDiscoveryContractError("merge_projection_session_precommit_type_invalid")
-    if not isinstance(projection.operator_execution_facts, GrokOperatorExecutionFacts):
-        raise CompactDiscoveryContractError("merge_projection_execution_facts_type_invalid")
-    assert_compact_discovery_result(projection.result)
+    snapshot = _snapshot_compact_projection(projection)
+    assert_compact_discovery_result(snapshot.result)
     try:
-        raw_session_files = thaw_raw_session_artifacts(projection.raw_session_artifacts)
+        raw_session_files = thaw_raw_session_artifacts(snapshot.raw_session_artifacts)
         recomputed = project_compact_execution_limitations(
-            projection.raw_terminal,
-            receipt=projection.receipt,
-            session_precommit=projection.session_precommit,
-            operator_execution_facts=projection.operator_execution_facts,
+            snapshot.raw_terminal,
+            receipt=snapshot.receipt,
+            session_precommit=snapshot.session_precommit,
+            operator_execution_facts=snapshot.operator_execution_facts,
             raw_session_files=raw_session_files,
         )
     except (CompactDiscoveryContractError, GrokOperatorSessionReplayError) as exc:
         raise CompactDiscoveryContractError(f"merge_projection_revalidation_failed:{exc}") from exc
-    if recomputed != projection:
-        if projection.receipt_sha256 != recomputed.receipt_sha256:
+    if recomputed != snapshot:
+        if snapshot.receipt_sha256 != recomputed.receipt_sha256:
             raise CompactDiscoveryContractError("merge_projection_receipt_digest_mismatch")
-        if projection.terminal_sha256 != recomputed.terminal_sha256:
+        if snapshot.terminal_sha256 != recomputed.terminal_sha256:
             raise CompactDiscoveryContractError("merge_projection_terminal_digest_mismatch")
-        if projection.projected_result_sha256 != recomputed.projected_result_sha256:
+        if snapshot.projected_result_sha256 != recomputed.projected_result_sha256:
             raise CompactDiscoveryContractError("merge_projection_result_digest_mismatch")
         raise CompactDiscoveryContractError("merge_projection_content_mismatch")
-    return projection
+    return snapshot
 
 
 def summarize_compact_discovery(result: Mapping[str, Any]) -> dict[str, Any]:
@@ -1290,17 +1707,24 @@ def merge_compact_discovery_results(
     explicit operator-resolved lookup handle keyed by platform user id.
     """
 
-    if isinstance(projections, (str, bytes)):
+    if type(projections) not in {list, tuple}:
         raise CompactDiscoveryContractError("merge_results_invalid")
     inputs = tuple(projections)
     if not inputs:
         raise CompactDiscoveryContractError("merge_results_empty")
-    if not _valid_identifier(union_id) or not _valid_identifier(strategy_id):
+    if (
+        type(union_id) is not str
+        or type(strategy_id) is not str
+        or not _valid_identifier(union_id)
+        or not _valid_identifier(strategy_id)
+    ):
         raise CompactDiscoveryContractError("merge_output_identity_invalid")
     if resolved_lookup_handles is None:
         resolved_lookup_handles = {}
-    if not isinstance(resolved_lookup_handles, Mapping) or any(
-        not isinstance(key, str) or not _valid_handle(value)
+    if type(resolved_lookup_handles) is not dict or any(
+        type(key) is not str
+        or type(value) is not str
+        or not _valid_handle(value)
         for key, value in resolved_lookup_handles.items()
     ):
         raise CompactDiscoveryContractError("merge_resolved_lookup_handles_invalid")
@@ -1308,10 +1732,7 @@ def merge_compact_discovery_results(
 
     checked = tuple(
         sorted(
-            (
-                copy.deepcopy(_assert_projection(projection))
-                for projection in inputs
-            ),
+            (_assert_projection(projection) for projection in inputs),
             key=lambda projection: projection.result["shard_id"],
         )
     )
@@ -1581,47 +2002,56 @@ def replay_merged_compact_discovery(value: Any) -> MergedCompactDiscovery:
     replay authority and is deliberately rejected here.
     """
 
-    if not isinstance(value, MergedCompactDiscovery):
-        raise CompactDiscoveryContractError("merge_envelope_required")
-    if value.merge_envelope_version != MERGE_ENVELOPE_VERSION:
+    snapshot = _snapshot_merged_compact_discovery(value)
+    if snapshot.merge_envelope_version != MERGE_ENVELOPE_VERSION:
         raise CompactDiscoveryContractError("merge_envelope_version_invalid")
-    if not isinstance(value.input_projections, tuple) or not value.input_projections:
-        raise CompactDiscoveryContractError("merge_envelope_projections_invalid")
-    if not isinstance(value.resolved_lookup_handles, tuple) or any(
-        not isinstance(item, tuple) or len(item) != 2
-        for item in value.resolved_lookup_handles
-    ):
-        raise CompactDiscoveryContractError("merge_envelope_lookup_controls_invalid")
     if any(
-        not isinstance(key, str) or not _valid_handle(handle)
-        for key, handle in value.resolved_lookup_handles
+        not _valid_handle(handle)
+        for _key, handle in snapshot.resolved_lookup_handles
     ):
         raise CompactDiscoveryContractError("merge_envelope_lookup_controls_invalid")
-    if value.resolved_lookup_handles != tuple(sorted(value.resolved_lookup_handles)):
+    if snapshot.resolved_lookup_handles != tuple(
+        sorted(snapshot.resolved_lookup_handles)
+    ):
         raise CompactDiscoveryContractError("merge_envelope_lookup_controls_noncanonical")
-    if len({key for key, _value in value.resolved_lookup_handles}) != len(
-        value.resolved_lookup_handles
+    if len({key for key, _value in snapshot.resolved_lookup_handles}) != len(
+        snapshot.resolved_lookup_handles
     ):
         raise CompactDiscoveryContractError("merge_envelope_lookup_controls_duplicate")
     try:
         recomputed = merge_compact_discovery_results(
-            value.input_projections,
-            union_id=value.union_id,
-            strategy_id=value.strategy_id,
-            resolved_lookup_handles=dict(value.resolved_lookup_handles),
+            snapshot.input_projections,
+            union_id=snapshot.union_id,
+            strategy_id=snapshot.strategy_id,
+            resolved_lookup_handles=dict(snapshot.resolved_lookup_handles),
         )
     except (CompactDiscoveryContractError, TypeError, ValueError) as exc:
         raise CompactDiscoveryContractError("merge_envelope_replay_failed") from exc
-    if value.input_projections != recomputed.input_projections:
+    if snapshot.input_projections != recomputed.input_projections:
         raise CompactDiscoveryContractError("merge_envelope_projection_set_mismatch")
-    if value.result != recomputed.result:
+    snapshot_result_bytes = _canonical_json_bytes(snapshot.result)
+    recomputed_result_bytes = _canonical_json_bytes(recomputed.result)
+    if snapshot_result_bytes != recomputed_result_bytes:
         raise CompactDiscoveryContractError("merge_envelope_result_mismatch")
-    if value.summary != recomputed.summary:
+    snapshot_summary_bytes = _canonical_json_bytes(
+        _summary_plain_json(snapshot.summary)
+    )
+    recomputed_summary_bytes = _canonical_json_bytes(
+        _summary_plain_json(recomputed.summary)
+    )
+    if snapshot_summary_bytes != recomputed_summary_bytes:
         raise CompactDiscoveryContractError("merge_envelope_summary_mismatch")
-    if value.result_sha256 != canonical_json_sha256(value.result):
+    if snapshot.result_sha256 != hashlib.sha256(snapshot_result_bytes).hexdigest():
         raise CompactDiscoveryContractError("merge_envelope_result_digest_invalid")
-    if value.summary_sha256 != canonical_json_sha256(asdict(value.summary)):
+    if snapshot.summary_sha256 != hashlib.sha256(snapshot_summary_bytes).hexdigest():
         raise CompactDiscoveryContractError("merge_envelope_summary_digest_invalid")
-    if value != recomputed:
+    if snapshot != recomputed:
         raise CompactDiscoveryContractError("merge_envelope_content_mismatch")
+    if (
+        recomputed.result_sha256
+        != hashlib.sha256(recomputed_result_bytes).hexdigest()
+        or recomputed.summary_sha256
+        != hashlib.sha256(recomputed_summary_bytes).hexdigest()
+    ):
+        raise CompactDiscoveryContractError("merge_envelope_recomputed_digest_invalid")
     return recomputed

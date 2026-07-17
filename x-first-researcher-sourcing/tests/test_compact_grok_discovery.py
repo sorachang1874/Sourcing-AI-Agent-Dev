@@ -1205,6 +1205,356 @@ class CompactGrokDiscoveryContractTests(unittest.TestCase):
         )
         self.assertEqual(expectation.input_identities[0].lead_identity, "platform:93031")
 
+    def test_hydration_rejects_equality_overload_identity_injection_before_callback(self) -> None:
+        equality_calls: list[str] = []
+
+        class MutatingEqualityDict(dict):
+            def __init__(self, value, replacement):
+                super().__init__(value)
+                self.replacement = replacement
+
+            def _mutate(self, other) -> None:
+                equality_calls.append("mapping")
+                if type(other) is dict:
+                    other.clear()
+                    other.update(copy.deepcopy(self.replacement))
+
+            def __eq__(self, other):
+                self._mutate(other)
+                return True
+
+            def __ne__(self, other):
+                self._mutate(other)
+                return False
+
+        class EqualityString(str):
+            def __new__(cls, value):
+                return super().__new__(cls, value)
+
+            def __eq__(self, other):
+                equality_calls.append("string")
+                return True
+
+            def __ne__(self, other):
+                equality_calls.append("string")
+                return False
+
+        stable = _projection(
+            _result(
+                [_lead("FxAttack001", platform_user_id="99301")],
+                shard_id="fixture.shard-a",
+            )
+        )
+        provisional = _projection(
+            _result([_lead("fxattack001")], shard_id="fixture.shard-b")
+        )
+        omitted = _projection(
+            _result(
+                [_lead("FxInjected002", platform_user_id="99302")],
+                shard_id="fixture.shard-c",
+            )
+        )
+        retained = merge_compact_discovery_results([stable, provisional])
+        injected = merge_compact_discovery_results([stable, provisional, omitted])
+        honest = build_profile_hydration_expectation_from_merge(
+            retained,
+            run_id="fixture.profile-overload-honest-run-v1",
+            batch_id="fixture.profile-overload-honest-batch-v1",
+        )
+        self.assertEqual(
+            tuple(item.lead_identity for item in honest.input_identities),
+            ("platform:99301",),
+        )
+
+        sidecar_deleted = copy.deepcopy(retained.result)
+        sidecar_deleted["identity_resolution_sidecars"] = []
+        attempts = (
+            ("omitted_identity", injected.result),
+            ("sidecar_deleted", sidecar_deleted),
+        )
+        for name, replacement_result in attempts:
+            with self.subTest(name=name):
+                forged = replace(
+                    retained,
+                    result=MutatingEqualityDict(
+                        copy.deepcopy(retained.result),
+                        copy.deepcopy(replacement_result),
+                    ),
+                    result_sha256=EqualityString(retained.result_sha256),
+                )
+                with self.assertRaisesRegex(
+                    ProfileHydrationContractError,
+                    "discovery_merge_replay_invalid",
+                ):
+                    build_profile_hydration_expectation_from_merge(
+                        forged,
+                        run_id="fixture.profile-overload-run-v1",
+                        batch_id="fixture.profile-overload-batch-v1",
+                    )
+        self.assertEqual(equality_calls, [])
+
+    def test_hydration_plain_data_and_exact_dataclass_type_fence(self) -> None:
+        class DictSubclass(dict):
+            pass
+
+        class ListSubclass(list):
+            pass
+
+        class StringSubclass(str):
+            pass
+
+        class IntegerSubclass(int):
+            pass
+
+        class BytesSubclass(bytes):
+            pass
+
+        class TupleSubclass(tuple):
+            pass
+
+        projection = _projection(
+            _result(
+                [_lead("FxTypeFence01", platform_user_id="99401")],
+                shard_id="fixture.shard-a",
+            )
+        )
+        merged = merge_compact_discovery_results([projection])
+
+        outer_dict = replace(merged, result=DictSubclass(merged.result))
+        nested_list_result = copy.deepcopy(merged.result)
+        nested_list_result["leads"] = ListSubclass(nested_list_result["leads"])
+        nested_dict_result = copy.deepcopy(merged.result)
+        nested_dict_result["leads"][0] = DictSubclass(
+            nested_dict_result["leads"][0]
+        )
+        nested_string_result = copy.deepcopy(merged.result)
+        nested_string_result["leads"][0]["handle"] = StringSubclass(
+            nested_string_result["leads"][0]["handle"]
+        )
+        nonfinite_result = copy.deepcopy(merged.result)
+        nonfinite_result["limitations"] = [float("nan")]
+        cyclic_result = copy.deepcopy(merged.result)
+        cyclic_value: list[object] = []
+        cyclic_value.append(cyclic_value)
+        cyclic_result["limitations"] = cyclic_value
+        over_depth_result = copy.deepcopy(merged.result)
+        over_depth_value: object = None
+        for _ in range(66):
+            over_depth_value = [over_depth_value]
+        over_depth_result["limitations"] = over_depth_value
+        projection_nested_result = copy.deepcopy(projection.result)
+        projection_nested_result["leads"] = ListSubclass(
+            projection_nested_result["leads"]
+        )
+        projection_with_nested_subclass = replace(
+            projection,
+            result=projection_nested_result,
+        )
+
+        class ProjectionSubclass(type(projection)):
+            pass
+
+        class ReceiptSubclass(type(projection.receipt)):
+            pass
+
+        class PrecommitSubclass(type(projection.session_precommit)):
+            pass
+
+        class FactsSubclass(type(projection.operator_execution_facts)):
+            pass
+
+        class ArtifactSubclass(type(projection.raw_session_artifacts[0])):
+            pass
+
+        class ToolCompletionSubclass(type(projection.receipt.tool_completions[0])):
+            pass
+
+        class EnvelopeSubclass(type(merged)):
+            pass
+
+        projection_subclass = ProjectionSubclass(**vars(projection))
+        receipt_subclass = ReceiptSubclass(**vars(projection.receipt))
+        precommit_subclass = PrecommitSubclass(**vars(projection.session_precommit))
+        facts_subclass = FactsSubclass(**vars(projection.operator_execution_facts))
+        first_artifact = projection.raw_session_artifacts[0]
+        artifact_subclass = ArtifactSubclass(**vars(first_artifact))
+        artifact_name_subclass = replace(
+            first_artifact,
+            name=StringSubclass(first_artifact.name),
+        )
+        artifact_bytes_subclass = replace(
+            first_artifact,
+            content=BytesSubclass(first_artifact.content),
+        )
+        artifact_projection = replace(
+            projection,
+            raw_session_artifacts=(
+                artifact_subclass,
+                *projection.raw_session_artifacts[1:],
+            ),
+        )
+        first_completion = projection.receipt.tool_completions[0]
+        tool_completion_subclass = ToolCompletionSubclass(**vars(first_completion))
+        envelope_subclass = EnvelopeSubclass(**vars(merged))
+
+        cases = {
+            "outer_dict_subclass": outer_dict,
+            "nested_list_subclass": replace(merged, result=nested_list_result),
+            "nested_dict_subclass": replace(merged, result=nested_dict_result),
+            "nested_string_subclass": replace(merged, result=nested_string_result),
+            "nonfinite_float": replace(merged, result=nonfinite_result),
+            "cyclic_json": replace(merged, result=cyclic_result),
+            "over_depth_json": replace(merged, result=over_depth_result),
+            "digest_string_subclass": replace(
+                merged,
+                result_sha256=StringSubclass(merged.result_sha256),
+            ),
+            "summary_integer_subclass": replace(
+                merged,
+                summary=replace(
+                    merged.summary,
+                    input_result_count=IntegerSubclass(1),
+                ),
+            ),
+            "summary_bool_for_integer": replace(
+                merged,
+                summary=replace(merged.summary, input_result_count=True),
+            ),
+            "projection_tuple_subclass": replace(
+                merged,
+                input_projections=TupleSubclass(merged.input_projections),
+            ),
+            "lookup_control_item_tuple_subclass": replace(
+                merged,
+                resolved_lookup_handles=(TupleSubclass(("99401", "FxTypeFence01")),),
+            ),
+            "projection_nested_json_subclass": replace(
+                merged,
+                input_projections=(projection_with_nested_subclass,),
+            ),
+            "projection_dataclass_subclass": replace(
+                merged,
+                input_projections=(projection_subclass,),
+            ),
+            "receipt_dataclass_subclass": replace(
+                merged,
+                input_projections=(replace(projection, receipt=receipt_subclass),),
+            ),
+            "precommit_dataclass_subclass": replace(
+                merged,
+                input_projections=(
+                    replace(projection, session_precommit=precommit_subclass),
+                ),
+            ),
+            "facts_dataclass_subclass": replace(
+                merged,
+                input_projections=(
+                    replace(projection, operator_execution_facts=facts_subclass),
+                ),
+            ),
+            "facts_bool_integer_confusion": replace(
+                merged,
+                input_projections=(
+                    replace(
+                        projection,
+                        operator_execution_facts=replace(
+                            projection.operator_execution_facts,
+                            result_truncated=1,
+                        ),
+                    ),
+                ),
+            ),
+            "artifact_dataclass_subclass": replace(
+                merged,
+                input_projections=(artifact_projection,),
+            ),
+            "artifact_name_string_subclass": replace(
+                merged,
+                input_projections=(
+                    replace(
+                        projection,
+                        raw_session_artifacts=(
+                            artifact_name_subclass,
+                            *projection.raw_session_artifacts[1:],
+                        ),
+                    ),
+                ),
+            ),
+            "artifact_bytes_subclass": replace(
+                merged,
+                input_projections=(
+                    replace(
+                        projection,
+                        raw_session_artifacts=(
+                            artifact_bytes_subclass,
+                            *projection.raw_session_artifacts[1:],
+                        ),
+                    ),
+                ),
+            ),
+            "tool_completion_dataclass_subclass": replace(
+                merged,
+                input_projections=(
+                    replace(
+                        projection,
+                        receipt=replace(
+                            projection.receipt,
+                            tool_completions=(tool_completion_subclass,),
+                        ),
+                    ),
+                ),
+            ),
+            "tool_completion_tuple_subclass": replace(
+                merged,
+                input_projections=(
+                    replace(
+                        projection,
+                        receipt=replace(
+                            projection.receipt,
+                            tool_completions=TupleSubclass(
+                                projection.receipt.tool_completions
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+            "receipt_integer_bool_confusion": replace(
+                merged,
+                input_projections=(
+                    replace(
+                        projection,
+                        receipt=replace(
+                            projection.receipt,
+                            session_event_count=True,
+                        ),
+                    ),
+                ),
+            ),
+            "raw_artifact_tuple_subclass": replace(
+                merged,
+                input_projections=(
+                    replace(
+                        projection,
+                        raw_session_artifacts=TupleSubclass(
+                            projection.raw_session_artifacts
+                        ),
+                    ),
+                ),
+            ),
+            "envelope_dataclass_subclass": envelope_subclass,
+        }
+        for name, forged in cases.items():
+            with self.subTest(name=name):
+                with self.assertRaisesRegex(
+                    ProfileHydrationContractError,
+                    "discovery_merge_replay_invalid",
+                ):
+                    build_profile_hydration_expectation_from_merge(
+                        forged,
+                        run_id="fixture.profile-type-fence-run-v1",
+                        batch_id="fixture.profile-type-fence-batch-v1",
+                    )
+
     def test_same_handle_multiple_stable_ids_preserves_provisional_evidence_in_sidecar(self) -> None:
         stable_a = _projection(
             _result(

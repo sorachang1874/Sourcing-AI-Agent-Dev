@@ -215,7 +215,11 @@ closed hydration identity tuples. The normal hydration handoff does not accept t
 retains every typed compact projection and its immutable raw sources in a typed merge envelope, replays every source,
 reruns the deterministic merge, and compares the complete union and merge summary before deriving hydration work.
 The envelope's union/summary hashes are diagnostics rather than caller authority; recomputing those hashes cannot
-make a deleted or rebound identity sidecar acceptable. Hydration fails closed on a stable platform-id
+make a deleted or rebound identity sidecar acceptable. Before replay, the boundary snapshots only exact built-in
+plain-JSON values and exact dataclass/tuple fields; subclasses, Boolean/integer aliases, non-finite numbers, and cyclic
+or over-depth structures fail before caller equality or copy hooks can run. Result and summary comparisons use
+canonical bytes built from those operator-owned snapshots, so a caller mapping cannot mutate the fresh reconstruction.
+Hydration fails closed on a stable platform-id
 mismatch and returns candidate-free stable errors for malformed nested envelopes. See
 `docs/GROK_COMPACT_DISCOVERY_AND_PROFILE_HYDRATION.md`.
 
