@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import time
 import uuid
 from datetime import datetime, timezone
-from hashlib import sha1
+from hashlib import sha1, sha256
 from pathlib import Path
 from typing import Any, Protocol
 from urllib.parse import urlparse
@@ -48,10 +49,50 @@ COMPANY_PUBLIC_WEB_TERMINAL_STATUSES = {
     "cancelled",
 }
 
+COMPANY_PUBLIC_WEB_MATERIALIZATION_SNAPSHOT_SCHEMA_VERSION = "company_public_web_run_snapshot_v3"
+COMPANY_PUBLIC_WEB_MATERIALIZATION_SNAPSHOT_SCHEMA_KEY = "materialization_snapshot_schema_version"
+COMPANY_PUBLIC_WEB_MATERIALIZATION_SNAPSHOT_DIGEST_KEY = "materialization_snapshot_sha256"
+COMPANY_PUBLIC_WEB_MATERIALIZATION_SNAPSHOT_COUNT_KEY = "materialization_snapshot_asset_count"
+COMPANY_PUBLIC_WEB_SOURCE_PROJECTION_COMPLETED_AT_KEY = "source_projection_completed_at"
+COMPANY_PUBLIC_WEB_SOURCE_PROJECTION_REVISION_KEY = "source_projection_revision"
+COMPANY_PUBLIC_WEB_SOURCE_PROJECTION_ORDER_SCHEMA_VERSION = "company_public_web_source_projection_v2"
+COMPANY_PUBLIC_WEB_ARTIFACT_PUBLICATION_SCHEMA_VERSION = "company_public_web_artifact_publication_v1"
+COMPANY_PUBLIC_WEB_ARTIFACT_PUBLICATION_ENVELOPE_KEY = "artifact_publication_envelope"
+COMPANY_PUBLIC_WEB_ARTIFACT_PUBLICATION_DIGEST_KEY = "artifact_publication_sha256"
+_COMPANY_PUBLIC_WEB_ARTIFACT_OBJECT_LIMIT = 20
+_COMPANY_PUBLIC_WEB_ARTIFACT_OBJECT_BYTES_LIMIT = 8 * 1024 * 1024
+_COMPANY_PUBLIC_WEB_ARTIFACT_TOTAL_BYTES_LIMIT = 32 * 1024 * 1024
+_COMPANY_PUBLIC_WEB_SOURCE_PROJECTION_TIMESTAMP_PATTERN = re.compile(
+    r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{6}Z"
+)
+_COMPANY_PUBLIC_WEB_SOURCE_PROJECTION_REVISION_MAX = 9_223_372_036_854_775_807
+_COMPANY_PUBLIC_WEB_RUN_ASSET_SNAPSHOT_KEYS = frozenset(
+    {
+        "asset_id",
+        "target_company",
+        "company_key",
+        "latest_run_id",
+        "source_run_ids",
+        "source_family",
+        "asset_kind",
+        "title",
+        "url",
+        "normalized_url_key",
+        "summary",
+        "model_safe_payload",
+        "artifact_refs",
+        "status",
+        "metadata",
+        "raw_assets_included",
+    }
+)
+_SOURCE_WORKFLOW_COMMAND_ID_REQUEST_KEY = "_source_workflow_command_id"
+_SOURCE_WORKFLOW_COMMAND_ATTEMPT_REQUEST_KEY = "_source_workflow_command_attempt"
+_SOURCE_WORKFLOW_COMMAND_LEASE_OWNER_REQUEST_KEY = "_source_workflow_command_lease_owner"
+
 
 class CompanyPublicWebCollectorFetcher(Protocol):
-    def fetch(self, url: str, *, timeout_seconds: float = 20.0) -> dict[str, Any]:
-        ...
+    def fetch(self, url: str, *, timeout_seconds: float = 20.0) -> dict[str, Any]: ...
 
 
 class UrllibCompanyPublicWebCollectorFetcher:
@@ -76,8 +117,36 @@ def refresh_company_public_web_assets(
     collector_fetcher: CompanyPublicWebCollectorFetcher | None = None,
 ) -> dict[str, Any]:
     request_payload = dict(payload or {})
+    source_command_id = str(request_payload.get(_SOURCE_WORKFLOW_COMMAND_ID_REQUEST_KEY) or "").strip()
+    source_command_lease_owner = str(
+        request_payload.get(_SOURCE_WORKFLOW_COMMAND_LEASE_OWNER_REQUEST_KEY) or ""
+    ).strip()
+    raw_source_command_attempt = request_payload.get(_SOURCE_WORKFLOW_COMMAND_ATTEMPT_REQUEST_KEY)
+    try:
+        source_command_attempt = (
+            0 if isinstance(raw_source_command_attempt, bool) else int(raw_source_command_attempt or 0)
+        )
+    except (TypeError, ValueError):
+        source_command_attempt = 0
+    source_owner_present = bool(
+        source_command_id or source_command_lease_owner or raw_source_command_attempt not in (None, "", 0)
+    )
+    if source_owner_present and not (source_command_id and source_command_lease_owner and source_command_attempt > 0):
+        return {"status": "invalid", "reason": "company_public_web_source_run_owner_invalid"}
+    source_owner_metadata = (
+        {
+            "source_workflow_command_id": source_command_id,
+            "source_workflow_command_attempt": source_command_attempt,
+            "source_workflow_command_lease_owner": source_command_lease_owner,
+        }
+        if source_owner_present
+        else {}
+    )
     target_company = str(
-        request_payload.get("target_company") or request_payload.get("company") or request_payload.get("company_name") or ""
+        request_payload.get("target_company")
+        or request_payload.get("company")
+        or request_payload.get("company_name")
+        or ""
     ).strip()
     if not target_company:
         return {"status": "invalid", "reason": "target_company is required"}
@@ -131,8 +200,7 @@ def refresh_company_public_web_assets(
             json.dumps(_json_safe_payload(collector_inputs), sort_keys=True, ensure_ascii=False)
         )
         options["collector_input_counts"] = {
-            collector_type: len(records)
-            for collector_type, records in collector_inputs.items()
+            collector_type: len(records) for collector_type, records in collector_inputs.items()
         }
     if collector_sources:
         options["collector_source_count"] = len(collector_sources)
@@ -160,57 +228,130 @@ def refresh_company_public_web_assets(
         force_refresh=force_refresh,
         nonce=refresh_nonce,
     )
-    if not force_refresh:
-        existing = store.get_company_public_web_asset_run(idempotency_key=idempotency_key)
-        if existing is not None:
-            assets = store.list_company_public_web_assets(company_key=company_key, limit=int(options["max_assets"]))
-            return {
-                "status": "joined",
-                "run": existing,
-                "assets": assets,
-                "summary": dict(existing.get("summary") or {})
-                or summarize_company_public_web_assets(assets, run=existing),
-                "idempotency_key": idempotency_key,
-            }
+    # The typed source-collect adapter supplies this policy explicitly. Exact
+    # completed repair below derives it from the authenticated physical owner
+    # pin instead of mutable stored metadata.
     defer_company_asset_sync = bool(request_payload.get("defer_company_asset_sync"))
+    company_asset_sync_policy = (
+        "deferred_to_typed_command" if defer_company_asset_sync else "inline_after_owner_finalize"
+    )
 
     run_id = str(request_payload.get("run_id") or "").strip()
     if not run_id:
-        run_id = f"company-public-web-run-{utc_compact_timestamp()}-{short_hash(idempotency_key)}"
+        run_id = f"company-public-web-run-{short_hash(idempotency_key)}"
     artifact_root = (
         Path(str(request_payload.get("artifact_root"))).expanduser()
         if str(request_payload.get("artifact_root") or "").strip()
         else Path(runtime_dir).expanduser() / "public_web" / "company_assets" / company_key / run_id
     )
-    artifact_root.mkdir(parents=True, exist_ok=True)
     started_at = utc_sql_timestamp()
-    initial_run = store.upsert_company_public_web_asset_run(
-        {
-            "run_id": run_id,
+    initial_payload = {
+        "run_id": run_id,
+        "target_company": target_company,
+        "company_key": company_key,
+        "idempotency_key": idempotency_key,
+        "status": "running",
+        "phase": company_public_web_collection_phase(collection_mode),
+        "source_families": source_families,
+        "seed_urls": seed_urls,
+        "options": options,
+        "artifact_root": str(artifact_root),
+        "requested_by": str(request_payload.get("requested_by") or request_payload.get("user_id") or "").strip(),
+        "force_refresh": force_refresh,
+        "started_at": started_at,
+        "metadata": {
+            "workflow_boundary": "api_cli_only_company_public_web_assets",
+            "collection_mode": collection_mode,
+            "default_workflow_stage": "not_enabled",
+            "target_candidate_lane": "not_enabled",
+            "company_asset_sync_policy": company_asset_sync_policy,
+            "raw_asset_policy": (
+                "Raw HTML/PDF/search payloads are internal collection inputs and are excluded "
+                "from default model/export surfaces."
+            ),
+            **source_owner_metadata,
+        },
+    }
+    try:
+        owner_row = store.create_company_public_web_asset_run_if_absent(initial_payload)
+    except RuntimeError as exc:
+        if "company_public_web_asset_run_identity_collision" not in str(exc):
+            raise
+        return {
+            "status": "invalid",
+            "reason": "company_public_web_asset_run_identity_collision",
             "target_company": target_company,
             "company_key": company_key,
-            "idempotency_key": idempotency_key,
-            "status": "running",
-            "phase": company_public_web_collection_phase(collection_mode),
-            "source_families": source_families,
-            "seed_urls": seed_urls,
-            "options": options,
-            "artifact_root": str(artifact_root),
-            "requested_by": str(request_payload.get("requested_by") or request_payload.get("user_id") or "").strip(),
-            "force_refresh": force_refresh,
-            "started_at": started_at,
-            "metadata": {
-                "workflow_boundary": "api_cli_only_company_public_web_assets",
-                "collection_mode": collection_mode,
-                "default_workflow_stage": "not_enabled",
-                "target_candidate_lane": "not_enabled",
-                "raw_asset_policy": (
-                    "Raw HTML/PDF/search payloads are internal collection inputs and are excluded "
-                    "from default model/export surfaces."
-                ),
-            },
         }
-    )
+    initial_run = dict(owner_row.get("run") or {})
+    owner_outcome = str(owner_row.get("outcome") or "").strip()
+    if owner_outcome == "owner_lost":
+        return {
+            "status": "owner_lost",
+            "reason": str(owner_row.get("reason") or "company_public_web_source_run_owner_lost"),
+            "run": initial_run,
+            "assets": [],
+            "summary": dict(initial_run.get("summary") or {}),
+            "idempotency_key": idempotency_key,
+            "artifact_paths": {},
+            "company_asset_sync": {"status": "not_attempted", "reason": "source_run_owner_lost"},
+        }
+    if not bool(owner_row.get("created")) and not bool(owner_row.get("reclaimed")):
+        run_status = str(initial_run.get("status") or "").strip().lower()
+        read_only_join = owner_outcome == "read_only_join"
+        assets: list[dict[str, Any]] = []
+        company_asset_sync = dict(dict(initial_run.get("metadata") or {}).get("company_asset_sync") or {})
+        source_effect_publication: dict[str, Any] = {}
+        if run_status == "completed":
+            if not read_only_join:
+                publish_company_public_web_artifact_publication(initial_run)
+            assets = company_public_web_materialization_assets_for_run(
+                initial_run,
+                max_assets=int(options["max_assets"]),
+            )
+        if run_status == "completed" and assets and not read_only_join:
+            replay_deferred = (
+                True
+                if source_owner_present
+                else _company_public_web_completed_run_sync_is_deferred(
+                    initial_run,
+                    request_default=defer_company_asset_sync,
+                )
+            )
+            assets, company_asset_sync = publish_company_public_web_completed_run_effects(
+                store=store,
+                run=initial_run,
+                assets=assets,
+                defer_company_asset_sync=replay_deferred,
+            )
+            source_effect_publication = {
+                "status": "published",
+                "reason": "completed_run_effects_replayed",
+                "source_asset_count": len(assets),
+            }
+        elif run_status == "completed" and read_only_join:
+            source_effect_publication = {
+                "status": "not_attempted",
+                "reason": "completed_run_replay_read_only",
+                "source_asset_count": 0,
+            }
+        elif run_status != "completed":
+            assets = store.list_company_public_web_assets(
+                company_key=company_key,
+                source_run_id=str(initial_run.get("run_id") or "").strip(),
+                limit=int(options["max_assets"]),
+            )
+        return {
+            "status": "joined",
+            "run": initial_run,
+            "assets": assets,
+            "summary": dict(initial_run.get("summary") or {})
+            or summarize_company_public_web_assets(assets, run=initial_run),
+            "idempotency_key": idempotency_key,
+            "artifact_paths": dict(dict(initial_run.get("metadata") or {}).get("artifact_paths") or {}),
+            "company_asset_sync": company_asset_sync,
+            "source_effect_publication": source_effect_publication,
+        }
     seed_assets = build_company_public_web_seed_assets(
         target_company=target_company,
         company_key=company_key,
@@ -263,28 +404,11 @@ def refresh_company_public_web_assets(
             ],
             max_assets=int(options["max_assets"]),
         )
-        persisted_assets = [
-            store.upsert_company_public_web_asset(asset_payload)
-            for asset_payload in discovered_assets
-        ]
-        company_asset_sync = (
-            {
-                "status": "deferred",
-                "reason": "company_asset_sync_deferred_to_typed_command",
-                "synced_asset_count": 0,
-                "source_asset_count": len(persisted_assets),
-            }
-            if defer_company_asset_sync
-            else sync_company_public_web_assets_to_company_asset_layer(
-                store=store,
-                run=initial_run,
-                assets=persisted_assets,
-            )
-        )
-        artifact_paths = write_company_public_web_asset_artifacts(
+        prepared_assets = [store.prepare_company_public_web_asset(asset_payload) for asset_payload in discovered_assets]
+        artifact_paths, artifact_publication_envelope = prepare_company_public_web_asset_artifacts(
             artifact_root=artifact_root,
             run=initial_run,
-            assets=persisted_assets,
+            assets=prepared_assets,
             request_payload=request_payload,
             query_manifest=search_collection["query_manifest"],
             search_results=search_collection["search_results"],
@@ -292,19 +416,33 @@ def refresh_company_public_web_assets(
             collector_source_metrics=collector_source_metrics,
         )
     except Exception as exc:
-        failed_run = store.upsert_company_public_web_asset_run(
-            {
-                **initial_run,
-                "status": "failed",
-                "phase": "failed",
-                "last_error": str(exc),
-                "completed_at": utc_sql_timestamp(),
-                "metadata": {
-                    **dict(initial_run.get("metadata") or {}),
-                    "failure_class": exc.__class__.__name__,
-                },
-            }
-        )
+        failed_payload = {
+            **initial_run,
+            "status": "failed",
+            "phase": "failed",
+            "last_error": str(exc),
+            "completed_at": utc_sql_timestamp(),
+            "metadata": {
+                **dict(initial_run.get("metadata") or {}),
+                "failure_class": exc.__class__.__name__,
+            },
+        }
+        if source_owner_metadata:
+            finalized = store.finalize_company_public_web_asset_run_if_owned(failed_payload)
+            if str(finalized.get("outcome") or "").strip() != "finalized":
+                return {
+                    "status": "owner_lost",
+                    "reason": str(finalized.get("reason") or "company_public_web_source_run_owner_lost").strip(),
+                    "run": dict(finalized.get("run") or initial_run),
+                    "assets": [],
+                    "summary": {},
+                    "idempotency_key": idempotency_key,
+                    "artifact_paths": {},
+                    "company_asset_sync": {"status": "not_attempted", "reason": "source_run_owner_lost"},
+                }
+            failed_run = dict(finalized.get("run") or {})
+        else:
+            failed_run = store.upsert_company_public_web_asset_run(failed_payload)
         return {
             "status": "failed",
             "reason": str(exc),
@@ -316,31 +454,117 @@ def refresh_company_public_web_assets(
             "company_asset_sync": {"status": "not_attempted", "reason": "refresh_failed"},
         }
     summary = summarize_company_public_web_assets(
-        persisted_assets,
+        prepared_assets,
         run=initial_run,
         query_manifest=search_collection["query_manifest"],
         search_results=search_collection["search_results"],
         collector_manifest=build_company_public_web_collector_manifest(effective_collector_inputs),
         collector_source_metrics=collector_source_metrics,
     )
-    completed_run = store.upsert_company_public_web_asset_run(
+    frozen_assets = [_company_public_web_asset_run_projection(asset) for asset in prepared_assets]
+    company_asset_sync = (
         {
-            **initial_run,
-            "status": "completed",
-            "phase": "completed",
-            "discovered_assets": [_company_public_web_asset_run_projection(asset) for asset in persisted_assets],
-            "summary": summary,
-            "completed_at": utc_sql_timestamp(),
-            "artifact_root": str(artifact_root),
-            "metadata": {
-                **dict(initial_run.get("metadata") or {}),
-                "artifact_paths": artifact_paths,
-                "model_safe_asset_count": len(persisted_assets),
-                "provider_names": summary["provider_names"],
-                "provider_result_count": summary["provider_result_count"],
-                "company_asset_sync": company_asset_sync,
-            },
+            "status": "deferred",
+            "reason": "company_asset_sync_deferred_to_typed_command",
+            "synced_asset_count": 0,
+            "source_asset_count": len(prepared_assets),
         }
+        if defer_company_asset_sync
+        else {
+            "status": "pending",
+            "reason": "company_asset_sync_waiting_for_source_run_owner_finalize",
+            "synced_asset_count": 0,
+            "source_asset_count": len(prepared_assets),
+        }
+    )
+    revision_reservation = store.reserve_company_public_web_source_projection_revision_if_owned(
+        run_id=run_id,
+        idempotency_key=idempotency_key,
+        command_id=source_command_id,
+        expected_attempt=source_command_attempt,
+        expected_lease_owner=source_command_lease_owner,
+    )
+    if str(revision_reservation.get("outcome") or "").strip() != "reserved":
+        return {
+            "status": "owner_lost",
+            "reason": str(
+                revision_reservation.get("reason") or "company_public_web_source_projection_revision_owner_lost"
+            ).strip(),
+            "run": dict(revision_reservation.get("run") or initial_run),
+            "assets": [],
+            "summary": {},
+            "idempotency_key": idempotency_key,
+            "artifact_paths": {},
+            "company_asset_sync": {"status": "not_attempted", "reason": "source_run_owner_lost"},
+        }
+    initial_run = dict(revision_reservation.get("run") or initial_run)
+    source_projection_revision = int(revision_reservation.get("source_projection_revision") or 0)
+    source_projection_completed_at = utc_source_projection_timestamp()
+    # Freeze the terminal timestamp before computing the snapshot identity.
+    # Materialization consumes both run timestamps, so producing completed_at
+    # after the digest would leave a mutable, unbound projection input.
+    completed_at = utc_sql_timestamp()
+    snapshot_identity = build_company_public_web_materialization_snapshot_identity(
+        frozen_assets,
+        summary=summary,
+        artifact_paths=artifact_paths,
+        artifact_publication_sha256=str(
+            artifact_publication_envelope.get(COMPANY_PUBLIC_WEB_ARTIFACT_PUBLICATION_DIGEST_KEY) or ""
+        ),
+        source_projection_revision=source_projection_revision,
+        source_projection_completed_at=source_projection_completed_at,
+        started_at=str(initial_run.get("started_at") or started_at).strip(),
+        completed_at=completed_at,
+    )
+    completed_payload = {
+        **initial_run,
+        "status": "completed",
+        "phase": "completed",
+        "discovered_assets": frozen_assets,
+        "summary": summary,
+        "completed_at": completed_at,
+        "artifact_root": str(artifact_root),
+        "metadata": {
+            **dict(initial_run.get("metadata") or {}),
+            "artifact_paths": artifact_paths,
+            COMPANY_PUBLIC_WEB_ARTIFACT_PUBLICATION_ENVELOPE_KEY: artifact_publication_envelope,
+            COMPANY_PUBLIC_WEB_ARTIFACT_PUBLICATION_DIGEST_KEY: str(
+                artifact_publication_envelope.get(COMPANY_PUBLIC_WEB_ARTIFACT_PUBLICATION_DIGEST_KEY) or ""
+            ),
+            COMPANY_PUBLIC_WEB_SOURCE_PROJECTION_REVISION_KEY: source_projection_revision,
+            COMPANY_PUBLIC_WEB_SOURCE_PROJECTION_COMPLETED_AT_KEY: source_projection_completed_at,
+            "model_safe_asset_count": len(prepared_assets),
+            "provider_names": summary["provider_names"],
+            "provider_result_count": summary["provider_result_count"],
+            "company_asset_sync": company_asset_sync,
+            **snapshot_identity,
+        },
+    }
+    if source_owner_metadata:
+        finalized = store.finalize_company_public_web_asset_run_if_owned(completed_payload)
+        if str(finalized.get("outcome") or "").strip() != "finalized":
+            return {
+                "status": "owner_lost",
+                "reason": str(finalized.get("reason") or "company_public_web_source_run_owner_lost").strip(),
+                "run": dict(finalized.get("run") or initial_run),
+                "assets": [],
+                "summary": {},
+                "idempotency_key": idempotency_key,
+                "artifact_paths": {},
+                "company_asset_sync": {"status": "not_attempted", "reason": "source_run_owner_lost"},
+            }
+        completed_run = dict(finalized.get("run") or {})
+    else:
+        completed_run = store.upsert_company_public_web_asset_run(completed_payload)
+    publish_company_public_web_artifact_publication(completed_run)
+    persisted_assets, company_asset_sync = publish_company_public_web_completed_run_effects(
+        store=store,
+        run=completed_run,
+        assets=company_public_web_materialization_assets_for_run(
+            completed_run,
+            max_assets=int(options["max_assets"]),
+        ),
+        defer_company_asset_sync=defer_company_asset_sync,
     )
     return {
         "status": "completed",
@@ -350,6 +574,11 @@ def refresh_company_public_web_assets(
         "idempotency_key": idempotency_key,
         "artifact_paths": artifact_paths,
         "company_asset_sync": company_asset_sync,
+        "source_effect_publication": {
+            "status": "published",
+            "reason": "source_run_owner_finalized",
+            "source_asset_count": len(persisted_assets),
+        },
     }
 
 
@@ -410,6 +639,8 @@ def sync_company_public_web_assets_to_company_asset_layer(
     synced_evidence_ids: list[str] = []
     try:
         for asset in normalized_assets:
+            asset_metadata = dict(asset.get("metadata") or {})
+            materialized_source_run_id = str(asset.get("latest_run_id") or "").strip()
             source_asset_id = str(asset.get("asset_id") or "").strip()
             source_family = str(asset.get("source_family") or "").strip() or "company_public_web_asset"
             canonical_asset_id = f"company-asset-{short_hash(source_asset_id)}"
@@ -423,6 +654,13 @@ def sync_company_public_web_assets_to_company_asset_layer(
                 "source_family": source_family,
                 "source_asset_kind": str(asset.get("asset_kind") or "").strip(),
                 "source_run_ids": list(asset.get("source_run_ids") or []),
+                "materialized_source_run_id": materialized_source_run_id,
+                "source_run_completed_at": str(asset_metadata.get("source_run_completed_at") or "").strip(),
+                "source_run_started_at": str(asset_metadata.get("source_run_started_at") or "").strip(),
+                COMPANY_PUBLIC_WEB_SOURCE_PROJECTION_REVISION_KEY: int(
+                    asset_metadata.get(COMPANY_PUBLIC_WEB_SOURCE_PROJECTION_REVISION_KEY) or 0
+                ),
+                "source_projection_order_key": str(asset_metadata.get("source_projection_order_key") or "").strip(),
                 "model_safe_payload": dict(asset.get("model_safe_payload") or {}),
             }
             canonical_asset = writer.record_asset(
@@ -433,7 +671,7 @@ def sync_company_public_web_assets_to_company_asset_layer(
                     "target_company": str(asset.get("target_company") or run.get("target_company") or "").strip(),
                     "asset_type": source_family,
                     "source_kind": "company_public_web_model_safe",
-                    "source_run_id": str(asset.get("latest_run_id") or run.get("run_id") or "").strip(),
+                    "source_run_id": materialized_source_run_id,
                     "content_ref": url,
                     "source_url": url,
                     "visibility_scope": "public_summary",
@@ -480,6 +718,319 @@ def sync_company_public_web_assets_to_company_asset_layer(
         "company_asset_ids": synced_asset_ids,
         "company_evidence_ids": synced_evidence_ids,
     }
+
+
+def _company_public_web_completed_run_sync_is_deferred(
+    run: dict[str, Any],
+    *,
+    request_default: bool,
+) -> bool:
+    metadata = dict(dict(run or {}).get("metadata") or {})
+    policy = str(metadata.get("company_asset_sync_policy") or "").strip()
+    if policy:
+        return policy == "deferred_to_typed_command"
+    previous = dict(metadata.get("company_asset_sync") or {})
+    if str(previous.get("reason") or "").strip() == "company_asset_sync_deferred_to_typed_command":
+        return True
+    return bool(request_default)
+
+
+def company_public_web_source_projection_order_key(run: dict[str, Any]) -> str:
+    run_payload = dict(run or {})
+    revision = company_public_web_source_projection_revision(run_payload)
+    return (
+        f"{COMPANY_PUBLIC_WEB_SOURCE_PROJECTION_ORDER_SCHEMA_VERSION}:"
+        f"{revision:020d}:{str(run_payload.get('run_id') or '').strip()}"
+    )
+
+
+def company_public_web_source_projection_revision(run: dict[str, Any]) -> int:
+    metadata = dict(dict(run or {}).get("metadata") or {})
+    raw_revision = metadata.get(COMPANY_PUBLIC_WEB_SOURCE_PROJECTION_REVISION_KEY)
+    if isinstance(raw_revision, bool) or not isinstance(raw_revision, int):
+        return 0
+    if not 1 <= raw_revision <= _COMPANY_PUBLIC_WEB_SOURCE_PROJECTION_REVISION_MAX:
+        return 0
+    return raw_revision
+
+
+def publish_company_public_web_completed_run_effects(
+    *,
+    store: Any,
+    run: dict[str, Any],
+    assets: list[dict[str, Any]],
+    defer_company_asset_sync: bool,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Publish mutable source/canonical rows only from an immutable completed run.
+
+    The run owner CAS is the authority transition. Collection attempts prepare
+    only an in-memory artifact envelope before that transition; only its winner
+    reaches this publisher. Exact completed replays call it again, closing the
+    crash window after CAS through idempotent writes.
+    """
+
+    run_payload = dict(run or {})
+    if str(run_payload.get("status") or "").strip().lower() != "completed":
+        raise RuntimeError("company_public_web_source_effect_run_not_completed")
+    snapshot_assets = company_public_web_materialization_assets_for_run(
+        run_payload,
+        max_assets=500,
+    )
+    if not snapshot_assets:
+        raise RuntimeError("company_public_web_source_effect_snapshot_invalid")
+    expected_asset_ids = [str(asset.get("asset_id") or "").strip() for asset in snapshot_assets]
+    supplied_asset_ids = [str(asset.get("asset_id") or "").strip() for asset in list(assets or [])]
+    if supplied_asset_ids != expected_asset_ids:
+        raise RuntimeError("company_public_web_source_effect_snapshot_mismatch")
+
+    persisted_assets = [store.upsert_company_public_web_asset(asset) for asset in snapshot_assets]
+    if defer_company_asset_sync:
+        company_asset_sync = {
+            "status": "deferred",
+            "reason": "company_asset_sync_deferred_to_typed_command",
+            "synced_asset_count": 0,
+            "source_asset_count": len(persisted_assets),
+        }
+    else:
+        company_asset_sync = sync_company_public_web_assets_to_company_asset_layer(
+            store=store,
+            run=run_payload,
+            assets=persisted_assets,
+        )
+    return persisted_assets, company_asset_sync
+
+
+def build_company_public_web_materialization_snapshot_identity(
+    assets: list[dict[str, Any]],
+    *,
+    summary: dict[str, Any] | None = None,
+    artifact_paths: dict[str, Any] | None = None,
+    artifact_publication_sha256: str = "",
+    source_projection_revision: int = 0,
+    source_projection_completed_at: str = "",
+    started_at: str = "",
+    completed_at: str = "",
+) -> dict[str, Any]:
+    """Bind every run field consumed by materialization into one digest."""
+
+    canonical_json = json.dumps(
+        _json_safe_payload(
+            {
+                "discovered_assets": list(assets or []),
+                "summary": dict(summary or {}),
+                "artifact_paths": dict(artifact_paths or {}),
+                "artifact_publication_sha256": str(artifact_publication_sha256 or "").strip(),
+                "source_projection_revision": source_projection_revision,
+                "source_projection_completed_at": str(source_projection_completed_at or "").strip(),
+                "started_at": str(started_at or "").strip(),
+                "completed_at": str(completed_at or "").strip(),
+            }
+        ),
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+    return {
+        COMPANY_PUBLIC_WEB_MATERIALIZATION_SNAPSHOT_SCHEMA_KEY: (
+            COMPANY_PUBLIC_WEB_MATERIALIZATION_SNAPSHOT_SCHEMA_VERSION
+        ),
+        COMPANY_PUBLIC_WEB_MATERIALIZATION_SNAPSHOT_DIGEST_KEY: sha256(canonical_json.encode("utf-8")).hexdigest(),
+        COMPANY_PUBLIC_WEB_MATERIALIZATION_SNAPSHOT_COUNT_KEY: len(list(assets or [])),
+    }
+
+
+def company_public_web_materialization_snapshot_identity(run: dict[str, Any]) -> dict[str, Any]:
+    """Return a verified versioned identity for one immutable materialization snapshot."""
+
+    run_payload = dict(run or {})
+    run_id = str(run_payload.get("run_id") or "").strip()
+    target_company = str(run_payload.get("target_company") or "").strip()
+    company_key = str(run_payload.get("company_key") or "").strip()
+    artifact_root = str(run_payload.get("artifact_root") or "").strip()
+    raw_snapshot = run_payload.get("discovered_assets")
+    summary = run_payload.get("summary")
+    metadata = dict(run_payload.get("metadata") or {})
+    artifact_paths = metadata.get("artifact_paths")
+    artifact_publication_sha256 = str(metadata.get(COMPANY_PUBLIC_WEB_ARTIFACT_PUBLICATION_DIGEST_KEY) or "").strip()
+    source_projection_revision = company_public_web_source_projection_revision(run_payload)
+    source_projection_completed_at = str(
+        metadata.get(COMPANY_PUBLIC_WEB_SOURCE_PROJECTION_COMPLETED_AT_KEY) or ""
+    ).strip()
+    started_at = str(run_payload.get("started_at") or "").strip()
+    completed_at = str(run_payload.get("completed_at") or "").strip()
+    try:
+        artifact_publication_envelope = (
+            _validated_company_public_web_artifact_publication_envelope(run_payload)
+            if isinstance(artifact_paths, dict) and artifact_paths
+            else {}
+        )
+    except (RuntimeError, TypeError, ValueError):
+        return {}
+    schema_version = str(metadata.get(COMPANY_PUBLIC_WEB_MATERIALIZATION_SNAPSHOT_SCHEMA_KEY) or "").strip()
+    expected_digest = str(metadata.get(COMPANY_PUBLIC_WEB_MATERIALIZATION_SNAPSHOT_DIGEST_KEY) or "").strip()
+    expected_count = metadata.get(COMPANY_PUBLIC_WEB_MATERIALIZATION_SNAPSHOT_COUNT_KEY)
+    if (
+        not run_id
+        or not target_company
+        or not company_key
+        or schema_version != COMPANY_PUBLIC_WEB_MATERIALIZATION_SNAPSHOT_SCHEMA_VERSION
+        or re.fullmatch(r"[0-9a-f]{64}", expected_digest) is None
+        or isinstance(expected_count, bool)
+        or not isinstance(expected_count, int)
+        or not isinstance(raw_snapshot, list)
+        or not isinstance(summary, dict)
+        or not isinstance(artifact_paths, dict)
+        or source_projection_revision <= 0
+        or not started_at
+        or not completed_at
+        or (
+            bool(artifact_paths)
+            and _COMPANY_PUBLIC_WEB_SOURCE_PROJECTION_TIMESTAMP_PATTERN.fullmatch(source_projection_completed_at)
+            is None
+        )
+        or (
+            bool(artifact_paths)
+            and (
+                not artifact_publication_envelope
+                or str(
+                    artifact_publication_envelope.get(COMPANY_PUBLIC_WEB_ARTIFACT_PUBLICATION_DIGEST_KEY) or ""
+                ).strip()
+                != artifact_publication_sha256
+            )
+        )
+        or not _company_public_web_artifact_paths_are_content_addressed(
+            artifact_root=artifact_root,
+            artifact_paths=artifact_paths if isinstance(artifact_paths, dict) else {},
+        )
+        or not 1 <= len(raw_snapshot) <= 500
+        or expected_count != len(raw_snapshot)
+    ):
+        return {}
+    seen_asset_ids: set[str] = set()
+    for raw_asset in raw_snapshot:
+        if not isinstance(raw_asset, dict) or set(raw_asset) != _COMPANY_PUBLIC_WEB_RUN_ASSET_SNAPSHOT_KEYS:
+            return {}
+        asset = dict(raw_asset)
+        text_fields = (
+            "asset_id",
+            "target_company",
+            "company_key",
+            "latest_run_id",
+            "source_family",
+            "asset_kind",
+            "title",
+            "url",
+            "normalized_url_key",
+            "summary",
+            "status",
+        )
+        if any(not isinstance(asset.get(field), str) for field in text_fields):
+            return {}
+        asset_id = str(asset.get("asset_id") or "").strip()
+        source_run_ids = asset.get("source_run_ids")
+        if (
+            not asset_id
+            or asset_id in seen_asset_ids
+            or str(asset.get("target_company") or "").strip() != target_company
+            or str(asset.get("company_key") or "").strip() != company_key
+            or str(asset.get("latest_run_id") or "").strip() != run_id
+            or not isinstance(source_run_ids, list)
+            or any(not isinstance(value, str) or not value.strip() for value in source_run_ids)
+            or run_id not in {str(value or "").strip() for value in source_run_ids}
+            or not str(asset.get("source_family") or "").strip()
+            or not str(asset.get("asset_kind") or "").strip()
+            or not str(asset.get("url") or "").strip()
+            or not isinstance(asset.get("model_safe_payload"), dict)
+            or not isinstance(asset.get("artifact_refs"), dict)
+            or not isinstance(asset.get("metadata"), dict)
+            or asset.get("raw_assets_included") is not False
+            or str(asset.get("status") or "").strip().lower() not in {"active", "observed"}
+        ):
+            return {}
+        seen_asset_ids.add(asset_id)
+    actual_identity = build_company_public_web_materialization_snapshot_identity(
+        raw_snapshot,
+        summary=summary,
+        artifact_paths=artifact_paths,
+        artifact_publication_sha256=artifact_publication_sha256,
+        source_projection_revision=source_projection_revision,
+        source_projection_completed_at=source_projection_completed_at,
+        started_at=started_at,
+        completed_at=completed_at,
+    )
+    if (
+        actual_identity[COMPANY_PUBLIC_WEB_MATERIALIZATION_SNAPSHOT_SCHEMA_KEY] != schema_version
+        or actual_identity[COMPANY_PUBLIC_WEB_MATERIALIZATION_SNAPSHOT_DIGEST_KEY] != expected_digest
+        or actual_identity[COMPANY_PUBLIC_WEB_MATERIALIZATION_SNAPSHOT_COUNT_KEY] != expected_count
+    ):
+        return {}
+    return actual_identity
+
+
+def company_public_web_materialization_assets_for_run(
+    run: dict[str, Any],
+    *,
+    max_assets: int = 500,
+) -> list[dict[str, Any]]:
+    """Rebuild the exact model-safe asset snapshot frozen on one completed run."""
+
+    run_payload = dict(run or {})
+    snapshot_identity = company_public_web_materialization_snapshot_identity(run_payload)
+    run_id = str(run_payload.get("run_id") or "").strip()
+    target_company = str(run_payload.get("target_company") or "").strip()
+    company_key = str(run_payload.get("company_key") or "").strip()
+    raw_snapshot = run_payload.get("discovered_assets")
+    if (
+        not snapshot_identity
+        or not run_id
+        or not target_company
+        or not company_key
+        or not isinstance(raw_snapshot, list)
+    ):
+        return []
+    bounded_limit = max(1, min(int(max_assets or 500), 500))
+    materialization_assets: list[dict[str, Any]] = []
+    seen_asset_ids: set[str] = set()
+    source_projection_revision = company_public_web_source_projection_revision(run_payload)
+    source_projection_order_key = company_public_web_source_projection_order_key(run_payload)
+    for raw_asset in raw_snapshot[:bounded_limit]:
+        if not isinstance(raw_asset, dict):
+            return []
+        asset = dict(raw_asset)
+        asset_id = str(asset.get("asset_id") or "").strip()
+        source_family = str(asset.get("source_family") or "").strip()
+        url = str(asset.get("url") or "").strip()
+        if not asset_id or asset_id in seen_asset_ids or not source_family or not url:
+            return []
+        seen_asset_ids.add(asset_id)
+        materialization_assets.append(
+            {
+                "asset_id": asset_id,
+                "target_company": target_company,
+                "company_key": company_key,
+                "latest_run_id": run_id,
+                "source_run_ids": [run_id],
+                "source_family": source_family,
+                "asset_kind": str(asset.get("asset_kind") or "").strip(),
+                "title": str(asset.get("title") or "").strip(),
+                "url": url,
+                "normalized_url_key": str(asset.get("normalized_url_key") or "").strip(),
+                "summary": str(asset.get("summary") or "").strip(),
+                "model_safe_payload": dict(asset.get("model_safe_payload") or {}),
+                "artifact_refs": dict(asset.get("artifact_refs") or {}),
+                "status": str(asset.get("status") or "").strip().lower(),
+                "metadata": {
+                    **dict(asset.get("metadata") or {}),
+                    "materialization_snapshot": "company_public_web_run.discovered_assets",
+                    "materialized_source_run_id": run_id,
+                    "source_run_completed_at": str(run_payload.get("completed_at") or "").strip(),
+                    "source_run_started_at": str(run_payload.get("started_at") or "").strip(),
+                    COMPANY_PUBLIC_WEB_SOURCE_PROJECTION_REVISION_KEY: source_projection_revision,
+                    "source_projection_order_key": source_projection_order_key,
+                },
+            }
+        )
+    return materialization_assets
 
 
 def _public_web_domain(url: str) -> str:
@@ -540,7 +1091,9 @@ def normalize_company_public_web_options(payload: dict[str, Any]) -> dict[str, A
     raw_options = dict(payload.get("options") or {})
     max_assets = _bounded_int(raw_options.get("max_assets") or payload.get("max_assets"), default=50, low=1, high=500)
     collection_mode = str(raw_options.get("collection_mode") or payload.get("collection_mode") or "").strip().lower()
-    legacy_search_provider_mode = str(raw_options.get("search_provider") or payload.get("search_provider") or "").strip().lower()
+    legacy_search_provider_mode = (
+        str(raw_options.get("search_provider") or payload.get("search_provider") or "").strip().lower()
+    )
     if not collection_mode and legacy_search_provider_mode in COMPANY_PUBLIC_WEB_COLLECTION_MODES:
         collection_mode = legacy_search_provider_mode
     if not collection_mode:
@@ -550,7 +1103,9 @@ def normalize_company_public_web_options(payload: dict[str, Any]) -> dict[str, A
     return {
         "max_assets": max_assets,
         "collection_mode": collection_mode,
-        "max_queries": _bounded_int(raw_options.get("max_queries") or payload.get("max_queries"), default=6, low=1, high=50),
+        "max_queries": _bounded_int(
+            raw_options.get("max_queries") or payload.get("max_queries"), default=6, low=1, high=50
+        ),
         "max_results_per_query": _bounded_int(
             raw_options.get("max_results_per_query") or payload.get("max_results_per_query"),
             default=10,
@@ -597,13 +1152,16 @@ def build_company_public_web_seed_assets(
 ) -> list[dict[str, Any]]:
     assets: list[dict[str, Any]] = []
     seen_keys: set[str] = set()
-    family_by_url = _source_family_by_seed_url(seed_urls=seed_urls, source_families=source_families)
     for url in seed_urls:
         normalized_url_key = normalize_public_web_url_key(url)
         if not normalized_url_key or normalized_url_key in seen_keys:
             continue
         seen_keys.add(normalized_url_key)
-        source_family = family_by_url.get(url) or infer_company_public_web_source_family(url)
+        # ``source_families`` is the independently validated allow-set.  It is
+        # not positionally paired with ``seed_urls`` (both collections are
+        # canonicalized independently at the Action boundary), so URL shape is
+        # the sole owner of each seed's family.
+        source_family = infer_company_public_web_source_family(url)
         title = company_public_web_asset_title(target_company=target_company, source_family=source_family, url=url)
         assets.append(
             {
@@ -754,7 +1312,9 @@ def normalize_company_public_web_collector_documents(value: Any) -> list[dict[st
             {
                 "url": url,
                 "content": content,
-                "content_type": str(raw_document.get("content_type") or raw_document.get("mime_type") or "").strip().lower(),
+                "content_type": str(raw_document.get("content_type") or raw_document.get("mime_type") or "")
+                .strip()
+                .lower(),
                 "collector_type": str(raw_document.get("collector_type") or "").strip().lower(),
             }
         )
@@ -864,8 +1424,12 @@ def fetch_company_public_web_collector_documents(
                 "content": content,
                 "content_type": str(
                     fetched.get("content_type") or fetched.get("mime_type") or source.get("content_type") or ""
-                ).strip().lower(),
-                "collector_type": str(fetched.get("collector_type") or source.get("collector_type") or "").strip().lower(),
+                )
+                .strip()
+                .lower(),
+                "collector_type": str(fetched.get("collector_type") or source.get("collector_type") or "")
+                .strip()
+                .lower(),
                 "fetch_duration_ms": fetch_duration_ms,
             }
         )
@@ -1017,7 +1581,9 @@ def parse_company_public_web_atom_publication_document(content: str, *, source_u
             {
                 "title": " ".join(title.split()),
                 "url": url,
-                "summary": " ".join(strip_markup(_xml_child_text(entry, "{http://www.w3.org/2005/Atom}summary")).split()),
+                "summary": " ".join(
+                    strip_markup(_xml_child_text(entry, "{http://www.w3.org/2005/Atom}summary")).split()
+                ),
                 "published_at": _xml_child_text(entry, "{http://www.w3.org/2005/Atom}published"),
                 "authors": authors,
                 "source_url": source_url,
@@ -1090,7 +1656,9 @@ def sanitize_company_public_web_collector_record(record: dict[str, Any]) -> dict
         "title": title or url,
         "url": url,
         "summary": summary,
-        "published_at": str(record.get("published_at") or record.get("published") or record.get("updated_at") or "").strip(),
+        "published_at": str(
+            record.get("published_at") or record.get("published") or record.get("updated_at") or ""
+        ).strip(),
         "authors": [str(item or "").strip() for item in list(record.get("authors") or []) if str(item or "").strip()]
         if isinstance(record.get("authors"), (list, tuple))
         else [],
@@ -1127,8 +1695,10 @@ def build_company_public_web_collector_assets(
     for collector_type, records in sorted(collector_inputs.items()):
         for index, record in enumerate(records, start=1):
             url = normalize_public_web_url(str(record.get("url") or record.get("source_url") or ""))
-            normalized_url_key = normalize_public_web_url_key(url) if url else short_hash(
-                f"{company_key}|{collector_type}|{record.get('title')}|{index}"
+            normalized_url_key = (
+                normalize_public_web_url_key(url)
+                if url
+                else short_hash(f"{company_key}|{collector_type}|{record.get('title')}|{index}")
             )
             if not normalized_url_key:
                 continue
@@ -1164,8 +1734,11 @@ def build_company_public_web_collector_assets(
                     "title": title,
                     "url": url,
                     "normalized_url_key": normalized_url_key,
-                    "summary": summary or f"Model-safe {collector_type.replace('_', ' ')} record for {target_company}: {title}.",
-                    "model_safe_payload": {key: value for key, value in model_safe_payload.items() if value not in ("", [], {})},
+                    "summary": summary
+                    or f"Model-safe {collector_type.replace('_', ' ')} record for {target_company}: {title}.",
+                    "model_safe_payload": {
+                        key: value for key, value in model_safe_payload.items() if value not in ("", [], {})
+                    },
                     "source_run_ids": [run_id],
                     "artifact_refs": {},
                     "status": "active",
@@ -1209,12 +1782,12 @@ def build_company_public_web_query_manifest(
 ) -> list[dict[str, Any]]:
     domain = company_key_to_domain(company_key or normalize_company_key(target_company))
     query_by_family = {
-        "company_homepage": f'{target_company} official website',
-        "company_blog": f'{target_company} blog site:{domain}',
-        "company_research": f'{target_company} research publications',
-        "company_engineering": f'{target_company} engineering blog',
-        "company_news": f'{target_company} company news',
-        "company_docs": f'{target_company} documentation developers',
+        "company_homepage": f"{target_company} official website",
+        "company_blog": f"{target_company} blog site:{domain}",
+        "company_research": f"{target_company} research publications",
+        "company_engineering": f"{target_company} engineering blog",
+        "company_news": f"{target_company} company news",
+        "company_docs": f"{target_company} documentation developers",
     }
     manifest: list[dict[str, Any]] = []
     seen: set[str] = set()
@@ -1368,7 +1941,7 @@ def company_public_web_search_response_record(
     }
 
 
-def write_company_public_web_asset_artifacts(
+def prepare_company_public_web_asset_artifacts(
     *,
     artifact_root: Path,
     run: dict[str, Any],
@@ -1378,14 +1951,9 @@ def write_company_public_web_asset_artifacts(
     search_results: list[dict[str, Any]] | None = None,
     collector_manifest: list[dict[str, Any]] | None = None,
     collector_source_metrics: dict[str, Any] | None = None,
-) -> dict[str, str]:
-    artifact_root.mkdir(parents=True, exist_ok=True)
-    summary_path = artifact_root / "company_public_web_assets_summary.json"
-    assets_path = artifact_root / "company_public_web_assets.json"
-    query_manifest_path = artifact_root / "query_manifest.json"
-    search_results_path = artifact_root / "model_safe_search_results.json"
-    collector_manifest_path = artifact_root / "collector_manifest.json"
-    manifest_path = artifact_root / "manifest.json"
+) -> tuple[dict[str, str], dict[str, Any]]:
+    """Prepare a bounded, reconstructable artifact envelope without filesystem effects."""
+
     query_manifest = list(query_manifest or [])
     search_results = list(search_results or [])
     collector_manifest = list(collector_manifest or [])
@@ -1397,20 +1965,24 @@ def write_company_public_web_asset_artifacts(
         collector_manifest=collector_manifest,
         collector_source_metrics=collector_source_metrics,
     )
-    summary_path.write_text(json.dumps(_json_safe_payload(summary), ensure_ascii=False, indent=2), encoding="utf-8")
-    assets_path.write_text(json.dumps(_json_safe_payload(assets), ensure_ascii=False, indent=2), encoding="utf-8")
-    query_manifest_path.write_text(
-        json.dumps(_json_safe_payload(query_manifest), ensure_ascii=False, indent=2),
-        encoding="utf-8",
+    object_specs = (
+        ("summary", "company_public_web_assets_summary.json", summary),
+        ("assets", "company_public_web_assets.json", assets),
+        ("query_manifest", "query_manifest.json", query_manifest),
+        ("model_safe_search_results", "model_safe_search_results.json", search_results),
+        ("collector_manifest", "collector_manifest.json", collector_manifest),
     )
-    search_results_path.write_text(
-        json.dumps(_json_safe_payload(search_results), ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
-    collector_manifest_path.write_text(
-        json.dumps(_json_safe_payload(collector_manifest), ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    objects: list[dict[str, Any]] = []
+    artifact_paths: dict[str, str] = {}
+    for label, filename, object_payload in object_specs:
+        artifact_object, artifact_path = _prepare_company_public_web_content_addressed_json(
+            artifact_root,
+            label=label,
+            filename=filename,
+            payload=object_payload,
+        )
+        objects.append(artifact_object)
+        artifact_paths[label] = artifact_path
     manifest = {
         "artifact_kind": "company_public_web_assets",
         "run_id": str(run.get("run_id") or ""),
@@ -1423,24 +1995,233 @@ def write_company_public_web_asset_artifacts(
         "collector_record_count": sum(int(item.get("record_count") or 0) for item in collector_manifest),
         "collector_source_metrics": dict(collector_source_metrics or {}),
         "request": request_payload,
-        "written_at": datetime.now(timezone.utc).isoformat(),
-        "files": {
-            "summary": str(summary_path),
-            "assets": str(assets_path),
-            "query_manifest": str(query_manifest_path),
-            "model_safe_search_results": str(search_results_path),
-            "collector_manifest": str(collector_manifest_path),
+        "written_at": str(run.get("started_at") or run.get("created_at") or "").strip()
+        or datetime.now(timezone.utc).isoformat(),
+        "files": dict(artifact_paths),
+    }
+    manifest_object, manifest_path = _prepare_company_public_web_content_addressed_json(
+        artifact_root,
+        label="manifest",
+        filename="manifest.json",
+        payload=manifest,
+    )
+    objects.append(manifest_object)
+    artifact_paths["manifest"] = manifest_path
+    total_bytes = sum(int(item.get("byte_count") or 0) for item in objects)
+    if (
+        not 1 <= len(objects) <= _COMPANY_PUBLIC_WEB_ARTIFACT_OBJECT_LIMIT
+        or total_bytes > _COMPANY_PUBLIC_WEB_ARTIFACT_TOTAL_BYTES_LIMIT
+    ):
+        raise RuntimeError("company_public_web_artifact_publication_envelope_limit_exceeded")
+    envelope_payload = {
+        "schema_version": COMPANY_PUBLIC_WEB_ARTIFACT_PUBLICATION_SCHEMA_VERSION,
+        "artifact_paths": artifact_paths,
+        "object_count": len(objects),
+        "total_bytes": total_bytes,
+        "objects": objects,
+    }
+    envelope_sha256 = sha256(
+        json.dumps(
+            _json_safe_payload(envelope_payload),
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+    ).hexdigest()
+    return artifact_paths, {
+        **envelope_payload,
+        COMPANY_PUBLIC_WEB_ARTIFACT_PUBLICATION_DIGEST_KEY: envelope_sha256,
+    }
+
+
+def _prepare_company_public_web_content_addressed_json(
+    artifact_root: Path,
+    *,
+    label: str,
+    filename: str,
+    payload: Any,
+) -> tuple[dict[str, Any], str]:
+    content = json.dumps(_json_safe_payload(payload), ensure_ascii=False, indent=2).encode("utf-8")
+    if len(content) > _COMPANY_PUBLIC_WEB_ARTIFACT_OBJECT_BYTES_LIMIT:
+        raise RuntimeError("company_public_web_artifact_object_limit_exceeded")
+    content_sha256 = sha256(content).hexdigest()
+    artifact_path = artifact_root / "objects" / content_sha256 / filename
+    return (
+        {
+            "label": str(label or "").strip(),
+            "filename": filename,
+            "content_sha256": content_sha256,
+            "byte_count": len(content),
+            "content_utf8": content.decode("utf-8"),
         },
-    }
-    manifest_path.write_text(json.dumps(_json_safe_payload(manifest), ensure_ascii=False, indent=2), encoding="utf-8")
-    return {
-        "summary": str(summary_path),
-        "assets": str(assets_path),
-        "query_manifest": str(query_manifest_path),
-        "model_safe_search_results": str(search_results_path),
-        "collector_manifest": str(collector_manifest_path),
-        "manifest": str(manifest_path),
-    }
+        str(artifact_path),
+    )
+
+
+def _publish_company_public_web_content_addressed_object(
+    artifact_path: Path,
+    *,
+    content: bytes,
+    expected_sha256: str,
+) -> None:
+    if sha256(content).hexdigest() != expected_sha256:
+        raise RuntimeError("company_public_web_artifact_publication_content_invalid")
+    artifact_path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path = artifact_path.parent / f".{artifact_path.name}.{uuid.uuid4().hex}.tmp"
+    try:
+        with temporary_path.open("xb") as artifact_file:
+            artifact_file.write(content)
+        try:
+            # A hard-link publishes the fully written inode atomically and does
+            # not replace an object another attempt already published.
+            os.link(temporary_path, artifact_path)
+        except FileExistsError:
+            if artifact_path.read_bytes() != content:
+                raise RuntimeError("company_public_web_artifact_immutability_violation") from None
+    finally:
+        temporary_path.unlink(missing_ok=True)
+
+
+def _validated_company_public_web_artifact_publication_envelope(run: dict[str, Any]) -> dict[str, Any]:
+    run_payload = dict(run or {})
+    artifact_root = str(run_payload.get("artifact_root") or "").strip()
+    metadata = dict(run_payload.get("metadata") or {})
+    artifact_paths = metadata.get("artifact_paths")
+    raw_envelope = metadata.get(COMPANY_PUBLIC_WEB_ARTIFACT_PUBLICATION_ENVELOPE_KEY)
+    expected_digest = str(metadata.get(COMPANY_PUBLIC_WEB_ARTIFACT_PUBLICATION_DIGEST_KEY) or "").strip()
+    if artifact_paths == {} and raw_envelope in (None, {}) and not expected_digest:
+        return {}
+    if (
+        not artifact_root
+        or not isinstance(artifact_paths, dict)
+        or not isinstance(raw_envelope, dict)
+        or re.fullmatch(r"[0-9a-f]{64}", expected_digest) is None
+    ):
+        raise RuntimeError("company_public_web_artifact_publication_envelope_invalid")
+    envelope = dict(raw_envelope)
+    envelope_digest = str(envelope.pop(COMPANY_PUBLIC_WEB_ARTIFACT_PUBLICATION_DIGEST_KEY, "") or "").strip()
+    objects = envelope.get("objects")
+    if (
+        envelope_digest != expected_digest
+        or envelope.get("schema_version") != COMPANY_PUBLIC_WEB_ARTIFACT_PUBLICATION_SCHEMA_VERSION
+        or envelope.get("artifact_paths") != artifact_paths
+        or not isinstance(objects, list)
+        or isinstance(envelope.get("object_count"), bool)
+        or int(envelope.get("object_count") or 0) != len(objects)
+        or not 1 <= len(objects) <= _COMPANY_PUBLIC_WEB_ARTIFACT_OBJECT_LIMIT
+    ):
+        raise RuntimeError("company_public_web_artifact_publication_envelope_invalid")
+    labels: set[str] = set()
+    total_bytes = 0
+    for raw_object in objects:
+        if not isinstance(raw_object, dict):
+            raise RuntimeError("company_public_web_artifact_publication_envelope_invalid")
+        artifact_object = dict(raw_object)
+        label = str(artifact_object.get("label") or "").strip()
+        filename = str(artifact_object.get("filename") or "").strip()
+        content_sha256 = str(artifact_object.get("content_sha256") or "").strip()
+        content_utf8 = artifact_object.get("content_utf8")
+        byte_count = artifact_object.get("byte_count")
+        if (
+            not label
+            or label in labels
+            or not filename
+            or Path(filename).name != filename
+            or re.fullmatch(r"[0-9a-f]{64}", content_sha256) is None
+            or not isinstance(content_utf8, str)
+            or isinstance(byte_count, bool)
+            or not isinstance(byte_count, int)
+        ):
+            raise RuntimeError("company_public_web_artifact_publication_envelope_invalid")
+        content = content_utf8.encode("utf-8")
+        expected_path = str(Path(artifact_root) / "objects" / content_sha256 / filename)
+        if (
+            byte_count != len(content)
+            or byte_count > _COMPANY_PUBLIC_WEB_ARTIFACT_OBJECT_BYTES_LIMIT
+            or sha256(content).hexdigest() != content_sha256
+            or str(artifact_paths.get(label) or "") != expected_path
+        ):
+            raise RuntimeError("company_public_web_artifact_publication_envelope_invalid")
+        labels.add(label)
+        total_bytes += byte_count
+    if (
+        set(artifact_paths) != labels
+        or total_bytes != int(envelope.get("total_bytes") or -1)
+        or total_bytes > _COMPANY_PUBLIC_WEB_ARTIFACT_TOTAL_BYTES_LIMIT
+    ):
+        raise RuntimeError("company_public_web_artifact_publication_envelope_invalid")
+    actual_digest = sha256(
+        json.dumps(
+            _json_safe_payload(envelope),
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+    ).hexdigest()
+    if actual_digest != expected_digest:
+        raise RuntimeError("company_public_web_artifact_publication_envelope_invalid")
+    return {**envelope, COMPANY_PUBLIC_WEB_ARTIFACT_PUBLICATION_DIGEST_KEY: expected_digest}
+
+
+def publish_company_public_web_artifact_publication(run: dict[str, Any]) -> dict[str, str]:
+    """Idempotently publish a completed run's reconstructable artifact objects."""
+
+    run_payload = dict(run or {})
+    if str(run_payload.get("status") or "").strip().lower() != "completed":
+        raise RuntimeError("company_public_web_artifact_publication_run_not_completed")
+    metadata = dict(run_payload.get("metadata") or {})
+    artifact_paths = dict(metadata.get("artifact_paths") or {})
+    if not artifact_paths:
+        return {}
+    envelope = _validated_company_public_web_artifact_publication_envelope(run_payload)
+    for artifact_object in list(envelope.get("objects") or []):
+        label = str(artifact_object.get("label") or "").strip()
+        _publish_company_public_web_content_addressed_object(
+            Path(artifact_paths[label]),
+            content=str(artifact_object.get("content_utf8") or "").encode("utf-8"),
+            expected_sha256=str(artifact_object.get("content_sha256") or ""),
+        )
+    if not _company_public_web_artifact_paths_are_content_addressed(
+        artifact_root=str(run_payload.get("artifact_root") or ""),
+        artifact_paths=artifact_paths,
+    ):
+        raise RuntimeError("company_public_web_artifact_publication_incomplete")
+    return {str(label): str(path) for label, path in artifact_paths.items()}
+
+
+def _company_public_web_artifact_paths_are_content_addressed(
+    *,
+    artifact_root: str,
+    artifact_paths: dict[str, Any],
+) -> bool:
+    if not artifact_paths:
+        return True
+    if not artifact_root or len(artifact_paths) > 20:
+        return False
+    try:
+        resolved_root = Path(artifact_root).expanduser().resolve(strict=True)
+    except (OSError, RuntimeError):
+        return False
+    for label, raw_path in artifact_paths.items():
+        if not isinstance(label, str) or not label.strip() or not isinstance(raw_path, str) or not raw_path.strip():
+            return False
+        try:
+            artifact_path = Path(raw_path).expanduser().resolve(strict=True)
+            artifact_path.relative_to(resolved_root)
+            if not artifact_path.is_file() or artifact_path.parent.parent.name != "objects":
+                return False
+            expected_sha256 = artifact_path.parent.name
+            if re.fullmatch(r"[0-9a-f]{64}", expected_sha256) is None:
+                return False
+            digest = sha256()
+            with artifact_path.open("rb") as artifact_file:
+                for chunk in iter(lambda: artifact_file.read(1024 * 1024), b""):
+                    digest.update(chunk)
+            if digest.hexdigest() != expected_sha256:
+                return False
+        except (OSError, RuntimeError, ValueError):
+            return False
+    return True
 
 
 def summarize_company_public_web_assets(
@@ -1488,9 +2269,7 @@ def summarize_company_public_web_assets(
         "collector_record_count": sum(int(item.get("record_count") or 0) for item in list(collector_manifest or [])),
         "collector_type_counts": collector_type_counts,
         "collector_source_count": _safe_int(collector_source_metrics.get("collector_source_count")),
-        "collector_document_fetch_count": _safe_int(
-            collector_source_metrics.get("collector_document_fetch_count")
-        ),
+        "collector_document_fetch_count": _safe_int(collector_source_metrics.get("collector_document_fetch_count")),
         "collector_document_fetch_failure_count": _safe_int(
             collector_source_metrics.get("collector_document_fetch_failure_count")
         ),
@@ -1522,9 +2301,7 @@ def default_company_public_web_seed_urls(
         "company_news": f"https://{base_domain}/news",
         "company_docs": f"https://{base_domain}/docs",
         "company_rss": f"https://{base_domain}/rss.xml",
-        "company_arxiv": "https://arxiv.org/search/?query="
-        + target_company.replace(" ", "+")
-        + "&searchtype=all",
+        "company_arxiv": "https://arxiv.org/search/?query=" + target_company.replace(" ", "+") + "&searchtype=all",
         "company_openreview": "https://openreview.net/search?term=" + target_company.replace(" ", "+"),
         "company_crawl": f"https://{base_domain}/",
     }
@@ -1644,25 +2421,28 @@ def build_company_public_web_run_idempotency_key(
         "force_refresh": bool(force_refresh),
         "nonce": str(nonce or "") if force_refresh else "",
     }
-    return "company-public-web-run:" + short_hash(json.dumps(_json_safe_payload(payload), sort_keys=True, ensure_ascii=False))
-
-
-def _source_family_by_seed_url(*, seed_urls: list[str], source_families: list[str]) -> dict[str, str]:
-    result: dict[str, str] = {}
-    if len(seed_urls) == len(source_families):
-        for url, family in zip(seed_urls, source_families, strict=False):
-            result[url] = family
-    return result
+    return "company-public-web-run:" + short_hash(
+        json.dumps(_json_safe_payload(payload), sort_keys=True, ensure_ascii=False)
+    )
 
 
 def _company_public_web_asset_run_projection(asset: dict[str, Any]) -> dict[str, Any]:
     return {
         "asset_id": str(asset.get("asset_id") or ""),
+        "target_company": str(asset.get("target_company") or ""),
+        "company_key": str(asset.get("company_key") or ""),
+        "latest_run_id": str(asset.get("latest_run_id") or ""),
+        "source_run_ids": list(asset.get("source_run_ids") or []),
         "source_family": str(asset.get("source_family") or ""),
         "asset_kind": str(asset.get("asset_kind") or ""),
         "title": str(asset.get("title") or ""),
         "url": str(asset.get("url") or ""),
         "normalized_url_key": str(asset.get("normalized_url_key") or ""),
+        "summary": str(asset.get("summary") or ""),
+        "model_safe_payload": dict(asset.get("model_safe_payload") or {}),
+        "artifact_refs": dict(asset.get("artifact_refs") or {}),
+        "status": str(asset.get("status") or "active"),
+        "metadata": dict(asset.get("metadata") or {}),
         "raw_assets_included": False,
     }
 
@@ -1686,6 +2466,12 @@ def strip_markup(value: str) -> str:
 
 def short_hash(value: str) -> str:
     return sha1(str(value or "").encode("utf-8")).hexdigest()[:16]
+
+
+def utc_source_projection_timestamp() -> str:
+    """Return the service-owned microsecond revision used for projection ordering."""
+
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
 
 def utc_sql_timestamp() -> str:

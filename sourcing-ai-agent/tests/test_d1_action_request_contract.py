@@ -307,7 +307,7 @@ def test_production_action_registry_activates_owner_bound_schemas_and_remains_un
     }
     assert set(CRM_RESOURCE_BOUND_ACTION_TYPES).issubset(schema_defined)
     assert schema_defined == set(OPERATION_OWNER_BOUND_ACTION_TYPES)
-    assert sum(not DEFAULT_ACTION_REGISTRY.spec_for(action_type).has_request_schema for action_type in records) == 6
+    assert sum(not DEFAULT_ACTION_REGISTRY.spec_for(action_type).has_request_schema for action_type in records) == 5
     assert all(
         bool(DEFAULT_ACTION_REGISTRY.spec_for(action_type).request_schema_digest) == (action_type in schema_defined)
         for action_type in records
@@ -799,7 +799,7 @@ class D1ActionRequestContractPGTest(PGDurableRuntimeTestMixin, unittest.TestCase
             for action_type in DEFAULT_ACTION_REGISTRY.to_record()
             if not DEFAULT_ACTION_REGISTRY.spec_for(action_type).has_request_schema
         )
-        self.assertEqual(len(schema_less_actions), 6)
+        self.assertEqual(len(schema_less_actions), 5)
         for ordinal, action_type in enumerate(schema_less_actions, start=1):
             with self.subTest(action_type=action_type):
                 spec = DEFAULT_ACTION_REGISTRY.spec_for(action_type)
@@ -868,7 +868,7 @@ class D1ActionRequestContractPGTest(PGDurableRuntimeTestMixin, unittest.TestCase
             for action_type in DEFAULT_ACTION_REGISTRY.to_record()
             if not DEFAULT_ACTION_REGISTRY.spec_for(action_type).has_request_schema
         )
-        self.assertEqual(len(schema_less_actions), 6)
+        self.assertEqual(len(schema_less_actions), 5)
         for ordinal, action_type in enumerate(schema_less_actions, start=1):
             with self.subTest(action_type=action_type):
                 spec = DEFAULT_ACTION_REGISTRY.spec_for(action_type)

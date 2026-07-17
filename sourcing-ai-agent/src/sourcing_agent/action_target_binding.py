@@ -8,8 +8,10 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, Literal, Protocol
 
+from sourcing_agent.company_registry import resolve_company_alias_key
 from sourcing_agent.operation_runtime import (
     ACQUISITION_ROOT_ACTION_TYPES,
+    COMPANY_PUBLIC_WEB_ACTION_TYPES,
     CRM_EXISTING_RECORD_ACTION_TYPES,
     CRM_PROJECTION_SELECTION_ACTION_TYPES,
     CRM_RECORD_BATCH_ACTION_TYPES,
@@ -49,6 +51,8 @@ CRM_PROJECTION_SELECTION_SELECTOR_ALIASES = (
 )
 ACQUISITION_ROOT_TARGET_OWNER = "acquisition_run_writer"
 ACQUISITION_ROOT_TARGET_INVALID = "acquisition_root_target_invalid"
+COMPANY_PUBLIC_WEB_TARGET_OWNER = "company_public_web_owner"
+COMPANY_PUBLIC_WEB_TARGET_INVALID = "company_public_web_target_invalid"
 
 
 class ActionTargetBindingError(ValueError):
@@ -212,6 +216,66 @@ class AcquisitionRootTargetBinder:
         ):
             raise ActionTargetBindingError(ACQUISITION_ROOT_TARGET_INVALID)
         return {"workspace_id": workspace_id}
+
+
+class CompanyPublicWebTargetBinder:
+    """Mint the canonical workspace/company target for deterministic refresh."""
+
+    _SELECTOR_FIELDS = {"target_company"}
+    _TARGET_FIELDS = {"workspace_id", "company_key"}
+
+    def __call__(self, context: ActionBindContext) -> OwnerBoundTargetRef:
+        selector = dict(context.target_selector)
+        raw_target_company = selector.get("target_company")
+        if set(selector) != self._SELECTOR_FIELDS or not isinstance(raw_target_company, str):
+            raise ActionTargetBindingError(COMPANY_PUBLIC_WEB_TARGET_INVALID)
+        target_company = raw_target_company.strip()
+        company_key = resolve_company_alias_key(target_company)
+        if (
+            not target_company
+            or len(target_company) > 500
+            or not company_key
+            or len(company_key) > 200
+            or company_key != company_key.strip()
+        ):
+            raise ActionTargetBindingError(COMPANY_PUBLIC_WEB_TARGET_INVALID)
+        return OwnerBoundTargetRef(
+            owner_module=COMPANY_PUBLIC_WEB_TARGET_OWNER,
+            target_ref={
+                "workspace_id": context.workspace_id,
+                "company_key": company_key,
+            },
+        )
+
+    @classmethod
+    def revalidate_snapshot(
+        cls,
+        *,
+        target_ref: Mapping[str, Any],
+        operation_workspace_id: str,
+    ) -> dict[str, str]:
+        target = dict(target_ref)
+        raw_workspace_id = target.get("workspace_id")
+        raw_company_key = target.get("company_key")
+        if (
+            set(target) != cls._TARGET_FIELDS
+            or not isinstance(raw_workspace_id, str)
+            or not isinstance(raw_company_key, str)
+        ):
+            raise ActionTargetBindingError(COMPANY_PUBLIC_WEB_TARGET_INVALID)
+        workspace_id = raw_workspace_id.strip()
+        company_key = raw_company_key.strip()
+        if (
+            not workspace_id
+            or workspace_id != raw_workspace_id
+            or workspace_id != str(operation_workspace_id or "").strip()
+            or not company_key
+            or company_key != raw_company_key
+            or len(company_key) > 200
+            or resolve_company_alias_key(company_key) != company_key
+        ):
+            raise ActionTargetBindingError(COMPANY_PUBLIC_WEB_TARGET_INVALID)
+        return {"workspace_id": workspace_id, "company_key": company_key}
 
 
 class CRMRecordTargetBinder:
@@ -617,6 +681,23 @@ def build_acquisition_root_target_binder_registry(
                 binder=binder,
             )
             for action_type in ACQUISITION_ROOT_ACTION_TYPES
+        )
+    )
+
+
+def build_company_public_web_target_binder_registry(
+    *,
+    binder: CompanyPublicWebTargetBinder | None = None,
+) -> ActionTargetBinderRegistry:
+    binder = binder or CompanyPublicWebTargetBinder()
+    return ActionTargetBinderRegistry(
+        tuple(
+            ActionTargetBinderSpec(
+                action_type=action_type,
+                owner_module=COMPANY_PUBLIC_WEB_TARGET_OWNER,
+                binder=binder,
+            )
+            for action_type in COMPANY_PUBLIC_WEB_ACTION_TYPES
         )
     )
 

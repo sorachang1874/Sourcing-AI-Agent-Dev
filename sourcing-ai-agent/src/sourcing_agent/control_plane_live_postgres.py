@@ -47,6 +47,158 @@ from .projection_search_index_contract import (
 )
 from .runtime_lease_utils import worker_lease_owner_is_dead_local_process
 
+_COMPANY_PUBLIC_WEB_IDEMPOTENCY_ASCII_WHITESPACE = " \t\n\r\f\v"
+_COMPANY_PUBLIC_WEB_SOURCE_COMMAND_ID_KEY = "source_workflow_command_id"
+_COMPANY_PUBLIC_WEB_SOURCE_COMMAND_ATTEMPT_KEY = "source_workflow_command_attempt"
+_COMPANY_PUBLIC_WEB_SOURCE_COMMAND_LEASE_OWNER_KEY = "source_workflow_command_lease_owner"
+_COMPANY_PUBLIC_WEB_SOURCE_PROJECTION_REVISION_KEY = "source_projection_revision"
+_COMPANY_PUBLIC_WEB_SOURCE_PROJECTION_REVISION_SEQUENCE = "company_public_web_source_projection_revision_seq"
+_COMPANY_PUBLIC_WEB_SOURCE_PROJECTION_REVISION_MAX = 9_223_372_036_854_775_807
+
+
+def normalize_company_public_web_asset_run_idempotency_key(value: Any) -> str:
+    """Match PostgreSQL's protocol-ASCII whitespace identity expression."""
+
+    return str(value or "").strip(_COMPANY_PUBLIC_WEB_IDEMPOTENCY_ASCII_WHITESPACE)
+
+
+def _company_public_web_source_activity_identity(command_id: str) -> tuple[str, str]:
+    normalized_command_id = str(command_id or "").strip()
+    activity_key = f"workflow_activity:company.public_web.source.collect:{normalized_command_id}"
+    return "actrun_" + sha1(activity_key.encode("utf-8")).hexdigest()[:24], activity_key
+
+
+def _company_public_web_source_attempt_identity(command_id: str, attempt_number: int) -> tuple[str, str]:
+    normalized_command_id = str(command_id or "").strip()
+    normalized_attempt = max(1, int(attempt_number or 1))
+    attempt_key_hash = sha1(
+        (f"company.public_web.source.collect:company_public_web_refresh:{normalized_attempt}").encode("utf-8")
+    ).hexdigest()[:24]
+    attempt_key = f"workflow_activity_attempt:{normalized_command_id}:{attempt_key_hash}"
+    return "actattempt_" + sha1(attempt_key.encode("utf-8")).hexdigest()[:24], attempt_key
+
+
+def _company_public_web_source_resume_attempt_identity(command_id: str, attempt_number: int) -> tuple[str, str]:
+    """Return the exact owner-specific resume Attempt identity for one source command."""
+
+    normalized_command_id = str(command_id or "").strip()
+    normalized_attempt = max(1, int(attempt_number or 1))
+    attempt_key_hash = sha1(
+        (f"company.public_web.source.collect:owner_specific_resume:{normalized_attempt}").encode("utf-8")
+    ).hexdigest()[:24]
+    attempt_key = f"workflow_activity_attempt:{normalized_command_id}:{attempt_key_hash}"
+    return "actattempt_" + sha1(attempt_key.encode("utf-8")).hexdigest()[:24], attempt_key
+
+
+def _company_public_web_source_run_owner(metadata_payload: Any) -> tuple[dict[str, Any], bool]:
+    metadata = _json_load_dict(metadata_payload)
+    command_id = str(metadata.get(_COMPANY_PUBLIC_WEB_SOURCE_COMMAND_ID_KEY) or "").strip()
+    lease_owner = str(metadata.get(_COMPANY_PUBLIC_WEB_SOURCE_COMMAND_LEASE_OWNER_KEY) or "").strip()
+    raw_attempt = metadata.get(_COMPANY_PUBLIC_WEB_SOURCE_COMMAND_ATTEMPT_KEY)
+    try:
+        command_attempt = 0 if isinstance(raw_attempt, bool) else int(raw_attempt or 0)
+    except (TypeError, ValueError):
+        command_attempt = 0
+    present = bool(command_id or lease_owner or raw_attempt not in (None, "", 0))
+    valid = bool(command_id and lease_owner and command_attempt > 0)
+    return (
+        {
+            "command_id": command_id,
+            "command_attempt": command_attempt,
+            "lease_owner": lease_owner,
+        }
+        if valid
+        else {},
+        bool(present and not valid),
+    )
+
+
+def _company_public_web_source_projection_revision(metadata_payload: Any) -> tuple[int, bool]:
+    metadata = _json_load_dict(metadata_payload)
+    if _COMPANY_PUBLIC_WEB_SOURCE_PROJECTION_REVISION_KEY not in metadata:
+        return 0, False
+    raw_revision = metadata.get(_COMPANY_PUBLIC_WEB_SOURCE_PROJECTION_REVISION_KEY)
+    if isinstance(raw_revision, bool) or not isinstance(raw_revision, int):
+        return 0, True
+    if not 1 <= raw_revision <= _COMPANY_PUBLIC_WEB_SOURCE_PROJECTION_REVISION_MAX:
+        return 0, True
+    return raw_revision, False
+
+
+def _company_public_web_projection_revision_sql(metadata_expression: str) -> str:
+    revision_text = f"COALESCE(({metadata_expression} ->> '{_COMPANY_PUBLIC_WEB_SOURCE_PROJECTION_REVISION_KEY}'), '')"
+    return (
+        f"(CASE WHEN {revision_text} ~ '^[1-9][0-9]{{0,18}}$' "
+        f"AND ({revision_text})::numeric <= {_COMPANY_PUBLIC_WEB_SOURCE_PROJECTION_REVISION_MAX}::numeric "
+        f"THEN ({revision_text})::numeric ELSE 0::numeric END)"
+    )
+
+
+def company_public_web_projection_order_sql(
+    *,
+    metadata_expression: str,
+    updated_at_expression: str,
+    created_at_expression: str,
+    run_id_expression: str,
+) -> str:
+    """Order revisioned projections first, with an explicit legacy fallback.
+
+    Positive DB-owned revisions are the sole normal-path chronology. Brownfield
+    rows without a valid revision retain their historical timestamp ordering;
+    equal positive revisions use the immutable run id as their deterministic
+    corruption/tie fallback and never consult wall clock time.
+    """
+
+    revision = _company_public_web_projection_revision_sql(metadata_expression)
+    return (
+        f"{revision} DESC, "
+        f"CASE WHEN {revision} = 0 THEN {updated_at_expression} ELSE '' END DESC, "
+        f"CASE WHEN {revision} = 0 THEN {created_at_expression} ELSE '' END DESC, "
+        f"{run_id_expression} DESC"
+    )
+
+
+def _company_public_web_projection_incoming_wins_sql(
+    *,
+    incoming_metadata_expression: str,
+    existing_metadata_expression: str,
+    incoming_run_id_expression: str,
+    existing_run_id_expression: str,
+) -> str:
+    incoming_revision = _company_public_web_projection_revision_sql(incoming_metadata_expression)
+    existing_revision = _company_public_web_projection_revision_sql(existing_metadata_expression)
+    return (
+        f"ROW({incoming_revision}, {incoming_run_id_expression}) >= "
+        f"ROW({existing_revision}, {existing_run_id_expression})"
+    )
+
+
+def _lock_current_company_public_web_source_command(
+    cursor: Any,
+    owner: dict[str, Any],
+) -> dict[str, Any] | None:
+    cursor.execute(
+        """
+        SELECT *
+        FROM workflow_commands
+        WHERE command_id = %s
+          AND command_type = 'company.public_web.source.collect'
+          AND owner = 'company_public_web_owner'
+          AND status IN ('claimed', 'running')
+          AND attempt = %s
+          AND lease_owner = %s
+          AND (NULLIF(lease_expires_at, '')::timestamp AT TIME ZONE 'UTC') > clock_timestamp()
+        FOR UPDATE
+        """,
+        (
+            str(owner.get("command_id") or "").strip(),
+            int(owner.get("command_attempt") or 0),
+            str(owner.get("lease_owner") or "").strip(),
+        ),
+    )
+    return _fetch_one_dict_row(cursor, cursor.fetchone())
+
+
 CONTROL_PLANE_LIVE_TABLES = (
     "candidates",
     "evidence",
@@ -1881,11 +2033,66 @@ class LiveControlPlanePostgresAdapter:
         placeholders = ", ".join(["%s"] * len(columns))
         update_columns = [column for column in columns if column not in primary_keys]
         conflict_target = ", ".join(_quote_identifier(column) for column in primary_keys)
+        company_public_web_projection_metadata = _json_load_dict(payload.get("metadata_json"))
+        company_public_web_projection_upsert = bool(
+            normalized_table in {"company_assets", "company_evidence"}
+            and str(company_public_web_projection_metadata.get("source") or "").strip() == "company_public_web_assets"
+            and str(company_public_web_projection_metadata.get("source_projection_order_key") or "").strip()
+        )
+        company_public_web_projection_incoming_wins = ""
+        if company_public_web_projection_upsert:
+            incoming_run_id = (
+                "COALESCE(NULLIF(EXCLUDED.source_run_id, ''), "
+                "EXCLUDED.metadata_json::jsonb ->> 'materialized_source_run_id', '')"
+                if normalized_table == "company_assets"
+                else "COALESCE(EXCLUDED.metadata_json::jsonb ->> 'materialized_source_run_id', '')"
+            )
+            existing_run_id = (
+                f"COALESCE(NULLIF({quoted_table_name}.source_run_id, ''), "
+                f"{quoted_table_name}.metadata_json::jsonb ->> 'materialized_source_run_id', '')"
+                if normalized_table == "company_assets"
+                else (f"COALESCE({quoted_table_name}.metadata_json::jsonb ->> 'materialized_source_run_id', '')")
+            )
+            company_public_web_projection_incoming_wins = _company_public_web_projection_incoming_wins_sql(
+                incoming_metadata_expression="EXCLUDED.metadata_json::jsonb",
+                existing_metadata_expression=f"{quoted_table_name}.metadata_json::jsonb",
+                incoming_run_id_expression=incoming_run_id,
+                existing_run_id_expression=existing_run_id,
+            )
         sql = f"INSERT INTO {quoted_table_name} ({', '.join(quoted_columns)}) VALUES ({placeholders})"
         if update_columns:
             update_assignments: list[str] = []
             for column in update_columns:
                 quoted_column = _quote_identifier(column)
+                if company_public_web_projection_upsert:
+                    if column == "updated_at":
+                        update_assignments.append(
+                            f"{quoted_column} = GREATEST({quoted_table_name}.{quoted_column}, EXCLUDED.{quoted_column})"
+                        )
+                        continue
+                    if column == "metadata_json":
+                        update_assignments.append(
+                            f"{quoted_column} = jsonb_set("
+                            f"(CASE WHEN {company_public_web_projection_incoming_wins} "
+                            f"THEN EXCLUDED.{quoted_column}::jsonb "
+                            f"ELSE {quoted_table_name}.{quoted_column}::jsonb END), "
+                            "'{source_run_ids}', "
+                            "(SELECT COALESCE(jsonb_agg(source_run_id ORDER BY source_run_id), '[]'::jsonb) "
+                            "FROM ("
+                            "SELECT DISTINCT jsonb_array_elements_text("
+                            f"COALESCE({quoted_table_name}.{quoted_column}::jsonb -> 'source_run_ids', "
+                            "'[]'::jsonb)) AS source_run_id "
+                            "UNION SELECT DISTINCT jsonb_array_elements_text("
+                            f"COALESCE(EXCLUDED.{quoted_column}::jsonb -> 'source_run_ids', '[]'::jsonb)) "
+                            ") company_public_web_canonical_source_runs "
+                            "WHERE source_run_id <> ''), true)::text"
+                        )
+                    else:
+                        update_assignments.append(
+                            f"{quoted_column} = CASE WHEN {company_public_web_projection_incoming_wins} "
+                            f"THEN EXCLUDED.{quoted_column} ELSE {quoted_table_name}.{quoted_column} END"
+                        )
+                    continue
                 if (
                     normalized_table == "job_result_lifecycle"
                     and column in _JOB_RESULT_LIFECYCLE_DELTA_MONOTONIC_INT_FIELDS
@@ -4088,20 +4295,26 @@ class LiveControlPlanePostgresAdapter:
         status_filter = str(status or "").strip().lower()
         company_placeholders = ", ".join(["%s"] * len(normalized_company_keys))
         status_clause = "AND status = %s" if status_filter else ""
+        latest_order_sql = company_public_web_projection_order_sql(
+            metadata_expression="metadata_json::jsonb",
+            updated_at_expression="updated_at",
+            created_at_expression="created_at",
+            run_id_expression="run_id",
+        )
         query = f"""
             SELECT *
             FROM (
                 SELECT *,
                        ROW_NUMBER() OVER (
                            PARTITION BY company_key
-                           ORDER BY updated_at DESC, created_at DESC, run_id DESC
+                           ORDER BY {latest_order_sql}
                        ) AS company_public_web_run_rank
                 FROM company_public_web_asset_runs
                 WHERE company_key IN ({company_placeholders})
                 {status_clause}
             ) ranked_company_public_web_runs
             WHERE company_public_web_run_rank = 1
-            ORDER BY updated_at DESC, created_at DESC, run_id DESC
+            ORDER BY {latest_order_sql}
             LIMIT %s
         """
         params: list[Any] = [*normalized_company_keys]
@@ -4114,6 +4327,1731 @@ class LiveControlPlanePostgresAdapter:
                     return []
                 cursor.execute(query, tuple(_normalize_postgres_payload(item) for item in params))
                 return _fetch_all_dict_rows(cursor)
+
+    def materialize_company_public_web_assets_for_exact_workflow_claim(
+        self,
+        *,
+        command_id: str,
+        expected_attempt: int,
+        expected_lease_owner: str,
+        company_asset_rows: list[dict[str, Any]],
+        company_evidence_rows: list[dict[str, Any]],
+    ) -> dict[str, Any] | None:
+        """Linearize the first canonical write behind one exact D1m claim.
+
+        Locking the workflow command first makes the command claim an effect
+        reservation: if takeover wins, this transaction writes no canonical
+        rows; if this transaction wins, takeover waits until the whole asset and
+        evidence projection commits. A retry of the same or a later valid claim
+        can safely replay the deterministic row identities.
+        """
+
+        if not self.should_prefer_read("workflow_commands"):
+            return None
+        if not self.should_prefer_read("company_assets") or not self.should_prefer_read("company_evidence"):
+            return None
+        normalized_command_id = str(command_id or "").strip()
+        normalized_lease_owner = str(expected_lease_owner or "").strip()
+        normalized_attempt = 0 if isinstance(expected_attempt, bool) else max(0, int(expected_attempt or 0))
+        asset_rows = [
+            _normalize_postgres_row_payload(dict(row or {}))
+            for row in list(company_asset_rows or [])
+            if isinstance(row, dict)
+        ]
+        evidence_rows = [
+            _normalize_postgres_row_payload(dict(row or {}))
+            for row in list(company_evidence_rows or [])
+            if isinstance(row, dict)
+        ]
+        if not normalized_command_id or not normalized_lease_owner or normalized_attempt <= 0:
+            raise ValueError("company_public_web_materialize_claim_identity_required")
+        if not asset_rows or len(asset_rows) != len(evidence_rows):
+            raise ValueError("company_public_web_materialize_rows_required")
+        asset_ids = [str(row.get("asset_id") or "").strip() for row in asset_rows]
+        evidence_ids = [str(row.get("evidence_id") or "").strip() for row in evidence_rows]
+        if (
+            any(not value for value in asset_ids)
+            or any(not value for value in evidence_ids)
+            or len(set(asset_ids)) != len(asset_ids)
+            or len(set(evidence_ids)) != len(evidence_ids)
+            or any(str(row.get("asset_id") or "").strip() not in set(asset_ids) for row in evidence_rows)
+        ):
+            raise ValueError("company_public_web_materialize_row_identity_invalid")
+        asset_rows.sort(key=lambda row: str(row.get("asset_id") or ""))
+        evidence_rows.sort(key=lambda row: str(row.get("evidence_id") or ""))
+        self.ensure_bootstrapped()
+
+        def _upsert_rows(
+            cursor: Any,
+            *,
+            table_name: str,
+            id_column: str,
+            rows: list[dict[str, Any]],
+        ) -> list[dict[str, Any]]:
+            written: list[dict[str, Any]] = []
+            for row in rows:
+                columns = [column for column in row if str(column or "").strip()]
+                quoted_table_name = _quote_identifier(table_name)
+                quoted_columns = ", ".join(_quote_identifier(column) for column in columns)
+                placeholders = ", ".join(["%s"] * len(columns))
+                incoming_run_id = (
+                    "COALESCE(NULLIF(EXCLUDED.source_run_id, ''), "
+                    "EXCLUDED.metadata_json::jsonb ->> 'materialized_source_run_id', '')"
+                    if table_name == "company_assets"
+                    else "COALESCE(EXCLUDED.metadata_json::jsonb ->> 'materialized_source_run_id', '')"
+                )
+                existing_run_id = (
+                    f"COALESCE(NULLIF({quoted_table_name}.source_run_id, ''), "
+                    f"{quoted_table_name}.metadata_json::jsonb ->> 'materialized_source_run_id', '')"
+                    if table_name == "company_assets"
+                    else f"COALESCE({quoted_table_name}.metadata_json::jsonb ->> 'materialized_source_run_id', '')"
+                )
+                incoming_wins = _company_public_web_projection_incoming_wins_sql(
+                    incoming_metadata_expression="EXCLUDED.metadata_json::jsonb",
+                    existing_metadata_expression=f"{quoted_table_name}.metadata_json::jsonb",
+                    incoming_run_id_expression=incoming_run_id,
+                    existing_run_id_expression=existing_run_id,
+                )
+                assignments: list[str] = []
+                for column in columns:
+                    if column in {id_column, "created_at"}:
+                        continue
+                    quoted_column = _quote_identifier(column)
+                    if column == "updated_at":
+                        assignments.append(
+                            f"{quoted_column} = GREATEST({quoted_table_name}.{quoted_column}, EXCLUDED.{quoted_column})"
+                        )
+                    elif column == "metadata_json":
+                        assignments.append(
+                            f"{quoted_column} = jsonb_set("
+                            f"(CASE WHEN {incoming_wins} "
+                            f"THEN EXCLUDED.{quoted_column}::jsonb "
+                            f"ELSE {quoted_table_name}.{quoted_column}::jsonb END), "
+                            "'{source_run_ids}', "
+                            "(SELECT COALESCE(jsonb_agg(source_run_id ORDER BY source_run_id), '[]'::jsonb) "
+                            "FROM ("
+                            "SELECT DISTINCT jsonb_array_elements_text("
+                            f"COALESCE({quoted_table_name}.{quoted_column}::jsonb -> 'source_run_ids', "
+                            "'[]'::jsonb)) AS source_run_id "
+                            "UNION SELECT DISTINCT jsonb_array_elements_text("
+                            f"COALESCE(EXCLUDED.{quoted_column}::jsonb -> 'source_run_ids', '[]'::jsonb)) "
+                            ") company_public_web_canonical_source_runs "
+                            "WHERE source_run_id <> ''), true)::text"
+                        )
+                    else:
+                        assignments.append(
+                            f"{quoted_column} = CASE WHEN {incoming_wins} "
+                            f"THEN EXCLUDED.{quoted_column} ELSE {quoted_table_name}.{quoted_column} END"
+                        )
+                cursor.execute(
+                    f"INSERT INTO {quoted_table_name} ({quoted_columns}) "
+                    f"VALUES ({placeholders}) ON CONFLICT ({_quote_identifier(id_column)}) "
+                    f"DO UPDATE SET {', '.join(assignments)} RETURNING *",
+                    tuple(_normalize_postgres_payload(row.get(column)) for column in columns),
+                )
+                current = _fetch_one_dict_row(cursor, cursor.fetchone())
+                if current is None:
+                    raise RuntimeError("company_public_web_materialize_upsert_returned_no_row")
+                written.append(current)
+            return written
+
+        attempt = 0
+        while True:
+            try:
+                with self._connect() as connection:
+                    with connection.cursor() as cursor:
+                        cursor.execute(
+                            """
+                            SELECT *
+                            FROM workflow_commands
+                            WHERE command_id = %s
+                              AND command_type = 'company.public_web.assets.materialize'
+                              AND owner = 'company_public_web_owner'
+                              AND status = 'running'
+                              AND attempt = %s
+                              AND lease_owner = %s
+                              AND (NULLIF(lease_expires_at, '')::timestamp AT TIME ZONE 'UTC')
+                                  > clock_timestamp()
+                            FOR UPDATE
+                            """,
+                            (normalized_command_id, normalized_attempt, normalized_lease_owner),
+                        )
+                        claim = _fetch_one_dict_row(cursor, cursor.fetchone())
+                        if claim is None:
+                            cursor.execute(
+                                "SELECT * FROM workflow_commands WHERE command_id = %s",
+                                (normalized_command_id,),
+                            )
+                            current_command = _fetch_one_dict_row(cursor, cursor.fetchone())
+                            connection.commit()
+                            return {
+                                "outcome": "owner_lost",
+                                "reason": "company_public_web_materialize_command_claim_not_current",
+                                "command": current_command,
+                                "company_assets": [],
+                                "company_evidence": [],
+                            }
+                        written_assets = _upsert_rows(
+                            cursor,
+                            table_name="company_assets",
+                            id_column="asset_id",
+                            rows=asset_rows,
+                        )
+                        written_evidence = _upsert_rows(
+                            cursor,
+                            table_name="company_evidence",
+                            id_column="evidence_id",
+                            rows=evidence_rows,
+                        )
+                    connection.commit()
+                return {
+                    "outcome": "materialized",
+                    "reason": "company_public_web_assets_materialized_for_exact_claim",
+                    "command": claim,
+                    "company_assets": written_assets,
+                    "company_evidence": written_evidence,
+                }
+            except Exception as exc:
+                attempt += 1
+                if not _is_retryable_postgres_exception(exc) or attempt >= _CONTROL_PLANE_POSTGRES_MAX_RETRIES:
+                    raise
+                time.sleep(_control_plane_postgres_retry_delay_seconds(attempt))
+
+    def create_company_public_web_asset_run_if_absent(
+        self,
+        payload: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        """Atomically create one source-run identity or return its replay.
+
+        Both the effective idempotency identity and the explicit run id are
+        locked before probing absent rows.  The migration-backed effective-key
+        unique index remains the final fence for writers that do not yet share
+        these advisory locks.
+        """
+
+        table_name = "company_public_web_asset_runs"
+        if not self.should_prefer_read(table_name):
+            return None
+        raw_payload = dict(payload or {})
+        raw_idempotency_key = normalize_company_public_web_asset_run_idempotency_key(raw_payload.get("idempotency_key"))
+        row_payload = _normalize_postgres_row_payload(raw_payload)
+        run_id = str(row_payload.get("run_id") or "").strip()
+        idempotency_key = raw_idempotency_key
+        if not run_id or not idempotency_key:
+            raise ValueError("company_public_web_asset_run_identity_required")
+        row_payload["run_id"] = run_id
+        row_payload["idempotency_key"] = idempotency_key
+        incoming_owner, incoming_owner_invalid = _company_public_web_source_run_owner(row_payload.get("metadata_json"))
+        if incoming_owner_invalid:
+            raise ValueError("company_public_web_source_run_owner_invalid")
+        self.ensure_bootstrapped()
+        columns = [column for column in row_payload if str(column or "").strip()]
+        quoted_columns = ", ".join(_quote_identifier(column) for column in columns)
+        placeholders = ", ".join(["%s"] * len(columns))
+
+        def _resolve_identity(rows: list[dict[str, Any]]) -> dict[str, Any] | None:
+            by_idempotency = [
+                row
+                for row in rows
+                if normalize_company_public_web_asset_run_idempotency_key(row.get("idempotency_key")) == idempotency_key
+            ]
+            by_run_id = [row for row in rows if str(row.get("run_id") or "").strip() == run_id]
+            if len(by_idempotency) > 1:
+                raise ValueError("company_public_web_asset_run_identity_collision:idempotency_key_duplicate")
+            if len(by_run_id) > 1:
+                raise ValueError("company_public_web_asset_run_identity_collision:run_id_duplicate")
+            idempotent_row = by_idempotency[0] if by_idempotency else None
+            run_id_row = by_run_id[0] if by_run_id else None
+            if idempotent_row is not None and str(idempotent_row.get("run_id") or "").strip() != run_id:
+                raise ValueError("company_public_web_asset_run_identity_collision:idempotency_key")
+            if (
+                run_id_row is not None
+                and normalize_company_public_web_asset_run_idempotency_key(run_id_row.get("idempotency_key"))
+                != idempotency_key
+            ):
+                raise ValueError("company_public_web_asset_run_identity_collision:run_id")
+            if idempotent_row is not None and run_id_row is not None and idempotent_row != run_id_row:
+                raise ValueError("company_public_web_asset_run_identity_collision:identity_split")
+            return run_id_row or idempotent_row
+
+        def _select_identity_rows(cursor: Any) -> list[dict[str, Any]]:
+            cursor.execute(
+                "SELECT *, '~' || idempotency_key || '~' AS _idempotency_key_fenced "
+                "FROM company_public_web_asset_runs "
+                "WHERE btrim(idempotency_key, E' \\t\\n\\r\\f\\013') = %s OR run_id = %s "
+                "ORDER BY run_id FOR UPDATE",
+                (idempotency_key, run_id),
+            )
+            rows = _fetch_all_dict_rows(cursor)
+            for row in rows:
+                fenced_key = str(row.pop("_idempotency_key_fenced", "") or "")
+                if len(fenced_key) >= 2:
+                    row["idempotency_key"] = fenced_key[1:-1]
+            return rows
+
+        def _owner_lost(existing: dict[str, Any], reason: str) -> dict[str, Any]:
+            return {
+                "created": False,
+                "reclaimed": False,
+                "outcome": "owner_lost",
+                "reason": reason,
+                "run": existing,
+            }
+
+        def _resolve_existing_owner(cursor: Any, existing: dict[str, Any]) -> dict[str, Any]:
+            existing_owner, existing_owner_invalid = _company_public_web_source_run_owner(existing.get("metadata_json"))
+            existing_status = str(existing.get("status") or "").strip().lower()
+            same_source_command = bool(
+                incoming_owner and existing_owner and incoming_owner["command_id"] == existing_owner["command_id"]
+            )
+
+            # A completed replay can repair publication only while an exact,
+            # unexpired physical claim for the same logical source command is
+            # current. This includes a higher retry attempt after the original
+            # attempt crashed between terminalization and publication. A
+            # distinct command remains read-only with respect to this run.
+            if existing_status == "completed":
+                if not incoming_owner:
+                    if not existing_owner and not existing_owner_invalid:
+                        return {
+                            "created": False,
+                            "reclaimed": False,
+                            "outcome": "read_only_join",
+                            "reason": "company_public_web_completed_run_read_only_join",
+                            "run": existing,
+                        }
+                    return _owner_lost(
+                        existing,
+                        "company_public_web_completed_run_replay_requires_exact_current_owner",
+                    )
+                current_command = _lock_current_company_public_web_source_command(cursor, incoming_owner)
+                if current_command is None:
+                    return _owner_lost(existing, "company_public_web_source_command_claim_not_current")
+                if existing_owner_invalid or not existing_owner or not same_source_command:
+                    return _owner_lost(
+                        existing,
+                        "company_public_web_completed_run_replay_read_only",
+                    )
+                if incoming_owner["command_attempt"] < existing_owner["command_attempt"] or (
+                    incoming_owner["command_attempt"] == existing_owner["command_attempt"]
+                    and incoming_owner["lease_owner"] != existing_owner["lease_owner"]
+                ):
+                    return _owner_lost(
+                        existing,
+                        "company_public_web_completed_run_replay_read_only",
+                    )
+                return {
+                    "created": False,
+                    "reclaimed": False,
+                    "outcome": "joined",
+                    "reason": "company_public_web_source_run_completed_repair_authorized",
+                    "run": existing,
+                }
+
+            # A nonterminal source row is owned by a physical command claim, so
+            # every join/reclaim must prove that the incoming claim is the exact
+            # current, unexpired owner. In particular, an old execution with the
+            # same attempt/lease values may not keep joining after the workflow
+            # command has moved on.
+            if existing_status in {"running", "failed"} and (
+                incoming_owner or existing_owner or existing_owner_invalid
+            ):
+                if existing_owner_invalid or not incoming_owner or not existing_owner or not same_source_command:
+                    return _owner_lost(existing, "company_public_web_source_run_owner_not_current")
+                if incoming_owner["command_attempt"] < existing_owner["command_attempt"] or (
+                    incoming_owner["command_attempt"] == existing_owner["command_attempt"]
+                    and incoming_owner["lease_owner"] != existing_owner["lease_owner"]
+                ):
+                    return _owner_lost(existing, "company_public_web_source_run_owner_not_current")
+
+                current_command = _lock_current_company_public_web_source_command(cursor, incoming_owner)
+                if current_command is None:
+                    return _owner_lost(existing, "company_public_web_source_command_claim_not_current")
+
+                can_reclaim = incoming_owner["command_attempt"] > existing_owner["command_attempt"]
+                if not can_reclaim:
+                    return {
+                        "created": False,
+                        "reclaimed": False,
+                        "outcome": "owner_busy",
+                        "reason": "company_public_web_source_run_owned_by_current_command_attempt",
+                        "run": existing,
+                    }
+                if can_reclaim:
+                    reclaimed_metadata = _json_load_dict(row_payload.get("metadata_json"))
+                    existing_revision, existing_revision_invalid = _company_public_web_source_projection_revision(
+                        existing.get("metadata_json")
+                    )
+                    if existing_revision_invalid:
+                        raise RuntimeError("company_public_web_source_projection_revision_invalid")
+                    if existing_revision > 0:
+                        reclaimed_metadata[_COMPANY_PUBLIC_WEB_SOURCE_PROJECTION_REVISION_KEY] = existing_revision
+                    cursor.execute(
+                        """
+                        UPDATE company_public_web_asset_runs
+                        SET status = 'running',
+                            phase = %s,
+                            discovered_assets_json = %s,
+                            summary_json = %s,
+                            artifact_root = %s,
+                            started_at = %s,
+                            completed_at = '',
+                            last_error = '',
+                            metadata_json = %s,
+                            updated_at = GREATEST(updated_at, %s)
+                        WHERE run_id = %s
+                        RETURNING *
+                        """,
+                        tuple(
+                            _normalize_postgres_payload(value)
+                            for value in (
+                                row_payload.get("phase") or "running",
+                                row_payload.get("discovered_assets_json") or "[]",
+                                row_payload.get("summary_json") or "{}",
+                                row_payload.get("artifact_root") or "",
+                                row_payload.get("started_at") or "",
+                                _json_dump(reclaimed_metadata),
+                                row_payload.get("updated_at") or "",
+                                run_id,
+                            )
+                        ),
+                    )
+                    reclaimed = _fetch_one_dict_row(cursor, cursor.fetchone())
+                    if reclaimed is None:
+                        raise RuntimeError("company_public_web_source_run_reclaim_lost")
+                    reclaimed["idempotency_key"] = idempotency_key
+                    return {
+                        "created": False,
+                        "reclaimed": True,
+                        "outcome": "reclaimed",
+                        "reason": "company_public_web_source_run_reclaimed",
+                        "run": reclaimed,
+                    }
+
+            return {
+                "created": False,
+                "reclaimed": False,
+                "outcome": "joined",
+                "reason": (
+                    "company_public_web_source_run_completed"
+                    if existing_status == "completed"
+                    else "company_public_web_source_run_already_owned"
+                ),
+                "run": existing,
+            }
+
+        attempt = 0
+        while True:
+            try:
+                with self._connect() as connection:
+                    with connection.cursor() as cursor:
+                        lock_keys = sorted(
+                            {
+                                f"company_public_web_asset_run:idempotency:{idempotency_key}",
+                                f"company_public_web_asset_run:run_id:{run_id}",
+                            }
+                        )
+                        for lock_key in lock_keys:
+                            self._acquire_transaction_lock(cursor, lock_key)
+                        existing = _resolve_identity(_select_identity_rows(cursor))
+                        if existing is not None:
+                            resolved = _resolve_existing_owner(cursor, existing)
+                            connection.commit()
+                            return resolved
+
+                        if (
+                            incoming_owner
+                            and _lock_current_company_public_web_source_command(
+                                cursor,
+                                incoming_owner,
+                            )
+                            is None
+                        ):
+                            connection.commit()
+                            return {
+                                "created": False,
+                                "reclaimed": False,
+                                "outcome": "owner_lost",
+                                "reason": "company_public_web_source_command_claim_not_current",
+                                "run": None,
+                            }
+
+                        cursor.execute(
+                            f"INSERT INTO company_public_web_asset_runs ({quoted_columns}) "
+                            f"VALUES ({placeholders}) ON CONFLICT DO NOTHING RETURNING *",
+                            tuple(
+                                row_payload.get(column)
+                                if column == "idempotency_key"
+                                else _normalize_postgres_payload(row_payload.get(column))
+                                for column in columns
+                            ),
+                        )
+                        inserted = _fetch_one_dict_row(cursor, cursor.fetchone())
+                        if inserted is not None:
+                            inserted["idempotency_key"] = idempotency_key
+                            connection.commit()
+                            return {
+                                "created": True,
+                                "reclaimed": False,
+                                "outcome": "created",
+                                "reason": "company_public_web_source_run_created",
+                                "run": inserted,
+                            }
+
+                        # A writer outside this lock protocol may have won a
+                        # primary-key or effective-idempotency conflict.  Re-read
+                        # both identities and accept only one exact binding.
+                        existing = _resolve_identity(_select_identity_rows(cursor))
+                        if existing is None:
+                            raise RuntimeError("company_public_web_asset_run_insert_lost_without_owner")
+                        resolved = _resolve_existing_owner(cursor, existing)
+                    connection.commit()
+                return resolved
+            except Exception as exc:
+                attempt += 1
+                if not _is_retryable_postgres_exception(exc) or attempt >= _CONTROL_PLANE_POSTGRES_MAX_RETRIES:
+                    raise
+                time.sleep(_control_plane_postgres_retry_delay_seconds(attempt))
+
+    def get_company_public_web_asset_run_exact(
+        self,
+        *,
+        run_id: str = "",
+        idempotency_key: str = "",
+    ) -> dict[str, Any] | None:
+        """Read one effective source-run identity without Unicode trimming."""
+
+        table_name = "company_public_web_asset_runs"
+        if not self.should_prefer_read(table_name):
+            return None
+        normalized_run_id = str(run_id or "").strip()
+        normalized_idempotency_key = normalize_company_public_web_asset_run_idempotency_key(idempotency_key)
+        if not normalized_run_id and not normalized_idempotency_key:
+            return None
+        self.ensure_bootstrapped()
+        with self._connect() as connection:
+            with connection.cursor() as cursor:
+                if normalized_run_id:
+                    where_sql = "run_id = %s"
+                    params = (normalized_run_id,)
+                else:
+                    where_sql = "btrim(idempotency_key, E' \\t\\n\\r\\f\\013') = %s"
+                    params = (normalized_idempotency_key,)
+                cursor.execute(
+                    "SELECT *, '~' || idempotency_key || '~' AS _idempotency_key_fenced "
+                    f"FROM company_public_web_asset_runs WHERE {where_sql} LIMIT 1",
+                    params,
+                )
+                row = _fetch_one_dict_row(cursor, cursor.fetchone())
+        if row is None:
+            return None
+        fenced_key = str(row.pop("_idempotency_key_fenced", "") or "")
+        if len(fenced_key) >= 2:
+            row["idempotency_key"] = normalize_company_public_web_asset_run_idempotency_key(fenced_key[1:-1])
+        return row
+
+    def reserve_company_public_web_source_projection_revision_if_owned(
+        self,
+        *,
+        run_id: str,
+        idempotency_key: str,
+        command_id: str = "",
+        expected_attempt: int = 0,
+        expected_lease_owner: str = "",
+    ) -> dict[str, Any] | None:
+        """Reserve one DB-owned logical projection revision on a running source run.
+
+        Workflow-owned runs require the exact current physical source-command
+        claim. Open-mode runs are permitted only when the durable run itself has
+        no workflow owner. Once reserved, the revision remains attached to the
+        logical run across a higher-attempt reclaim; sequence gaps are harmless.
+        """
+
+        table_name = "company_public_web_asset_runs"
+        if not self.should_prefer_read(table_name):
+            return None
+        normalized_run_id = str(run_id or "").strip()
+        normalized_idempotency_key = normalize_company_public_web_asset_run_idempotency_key(idempotency_key)
+        normalized_command_id = str(command_id or "").strip()
+        normalized_lease_owner = str(expected_lease_owner or "").strip()
+        normalized_attempt = 0 if isinstance(expected_attempt, bool) else int(expected_attempt or 0)
+        owner_present = bool(normalized_command_id or normalized_lease_owner or normalized_attempt)
+        if not normalized_run_id or not normalized_idempotency_key:
+            raise ValueError("company_public_web_asset_run_identity_required")
+        if owner_present and not (normalized_command_id and normalized_lease_owner and normalized_attempt > 0):
+            raise ValueError("company_public_web_source_run_owner_invalid")
+        incoming_owner = (
+            {
+                "command_id": normalized_command_id,
+                "command_attempt": normalized_attempt,
+                "lease_owner": normalized_lease_owner,
+            }
+            if owner_present
+            else {}
+        )
+        self.ensure_bootstrapped()
+
+        attempt = 0
+        while True:
+            try:
+                with self._connect() as connection:
+                    with connection.cursor() as cursor:
+                        for lock_key in sorted(
+                            {
+                                f"company_public_web_asset_run:idempotency:{normalized_idempotency_key}",
+                                f"company_public_web_asset_run:run_id:{normalized_run_id}",
+                            }
+                        ):
+                            self._acquire_transaction_lock(cursor, lock_key)
+                        cursor.execute(
+                            "SELECT *, '~' || idempotency_key || '~' AS _idempotency_key_fenced "
+                            "FROM company_public_web_asset_runs "
+                            "WHERE btrim(idempotency_key, E' \\t\\n\\r\\f\\013') = %s OR run_id = %s "
+                            "ORDER BY run_id FOR UPDATE",
+                            (normalized_idempotency_key, normalized_run_id),
+                        )
+                        rows = _fetch_all_dict_rows(cursor)
+                        for row in rows:
+                            fenced_key = str(row.pop("_idempotency_key_fenced", "") or "")
+                            if len(fenced_key) >= 2:
+                                row["idempotency_key"] = fenced_key[1:-1]
+                        matching_rows = [
+                            row
+                            for row in rows
+                            if str(row.get("run_id") or "").strip() == normalized_run_id
+                            and normalize_company_public_web_asset_run_idempotency_key(row.get("idempotency_key"))
+                            == normalized_idempotency_key
+                        ]
+                        if len(rows) != 1 or len(matching_rows) != 1:
+                            connection.commit()
+                            return {
+                                "outcome": "owner_lost",
+                                "reason": "company_public_web_source_run_identity_not_current",
+                                "source_projection_revision": 0,
+                                "run": matching_rows[0] if len(matching_rows) == 1 else None,
+                            }
+                        existing = matching_rows[0]
+                        existing_owner, existing_owner_invalid = _company_public_web_source_run_owner(
+                            existing.get("metadata_json")
+                        )
+                        if str(existing.get("status") or "").strip().lower() != "running":
+                            connection.commit()
+                            return {
+                                "outcome": "owner_lost",
+                                "reason": "company_public_web_source_run_not_running",
+                                "source_projection_revision": 0,
+                                "run": existing,
+                            }
+                        if incoming_owner:
+                            if existing_owner_invalid or existing_owner != incoming_owner:
+                                connection.commit()
+                                return {
+                                    "outcome": "owner_lost",
+                                    "reason": "company_public_web_source_run_owner_not_current",
+                                    "source_projection_revision": 0,
+                                    "run": existing,
+                                }
+                            if _lock_current_company_public_web_source_command(cursor, incoming_owner) is None:
+                                connection.commit()
+                                return {
+                                    "outcome": "owner_lost",
+                                    "reason": "company_public_web_source_command_claim_not_current",
+                                    "source_projection_revision": 0,
+                                    "run": existing,
+                                }
+                        elif existing_owner or existing_owner_invalid:
+                            connection.commit()
+                            return {
+                                "outcome": "owner_lost",
+                                "reason": "company_public_web_source_run_owner_not_current",
+                                "source_projection_revision": 0,
+                                "run": existing,
+                            }
+
+                        revision, revision_invalid = _company_public_web_source_projection_revision(
+                            existing.get("metadata_json")
+                        )
+                        if revision_invalid:
+                            raise RuntimeError("company_public_web_source_projection_revision_invalid")
+                        revision_was_reused = revision > 0
+                        reserved = existing
+                        if not revision_was_reused:
+                            cursor.execute(
+                                f"SELECT nextval('{_COMPANY_PUBLIC_WEB_SOURCE_PROJECTION_REVISION_SEQUENCE}')"
+                            )
+                            revision = int(cursor.fetchone()[0])
+                            if not 1 <= revision <= _COMPANY_PUBLIC_WEB_SOURCE_PROJECTION_REVISION_MAX:
+                                raise RuntimeError("company_public_web_source_projection_revision_invalid")
+                            metadata = _json_load_dict(existing.get("metadata_json"))
+                            metadata[_COMPANY_PUBLIC_WEB_SOURCE_PROJECTION_REVISION_KEY] = revision
+                            cursor.execute(
+                                "UPDATE company_public_web_asset_runs "
+                                "SET metadata_json = %s, updated_at = GREATEST(updated_at, %s) "
+                                "WHERE run_id = %s AND status = 'running' RETURNING *",
+                                (
+                                    _json_dump(metadata),
+                                    _utc_now_sql_timestamp(),
+                                    normalized_run_id,
+                                ),
+                            )
+                            reserved_row = _fetch_one_dict_row(cursor, cursor.fetchone())
+                            if reserved_row is None:
+                                raise RuntimeError("company_public_web_source_projection_revision_reservation_lost")
+                            reserved_row["idempotency_key"] = normalized_idempotency_key
+                            reserved = reserved_row
+                    connection.commit()
+                return {
+                    "outcome": "reserved",
+                    "reason": (
+                        "company_public_web_source_projection_revision_reused"
+                        if revision_was_reused
+                        else "company_public_web_source_projection_revision_reserved"
+                    ),
+                    "source_projection_revision": revision,
+                    "run": reserved,
+                }
+            except Exception as exc:
+                attempt += 1
+                if not _is_retryable_postgres_exception(exc) or attempt >= _CONTROL_PLANE_POSTGRES_MAX_RETRIES:
+                    raise
+                time.sleep(_control_plane_postgres_retry_delay_seconds(attempt))
+
+    def finalize_company_public_web_asset_run_if_owned(
+        self,
+        payload: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        """Finalize a source run only for its current physical command claim."""
+
+        table_name = "company_public_web_asset_runs"
+        if not self.should_prefer_read(table_name):
+            return None
+        raw_payload = dict(payload or {})
+        raw_idempotency_key = normalize_company_public_web_asset_run_idempotency_key(raw_payload.get("idempotency_key"))
+        row_payload = _normalize_postgres_row_payload(raw_payload)
+        run_id = str(row_payload.get("run_id") or "").strip()
+        idempotency_key = raw_idempotency_key
+        terminal_status = str(row_payload.get("status") or "").strip().lower()
+        incoming_owner, incoming_owner_invalid = _company_public_web_source_run_owner(row_payload.get("metadata_json"))
+        if not run_id or not idempotency_key:
+            raise ValueError("company_public_web_asset_run_identity_required")
+        if incoming_owner_invalid or not incoming_owner:
+            raise ValueError("company_public_web_source_run_owner_required")
+        if terminal_status not in {"completed", "failed"}:
+            raise ValueError("company_public_web_source_run_terminal_status_required")
+        row_payload["run_id"] = run_id
+        row_payload["idempotency_key"] = idempotency_key
+        self.ensure_bootstrapped()
+
+        attempt = 0
+        while True:
+            try:
+                with self._connect() as connection:
+                    with connection.cursor() as cursor:
+                        for lock_key in sorted(
+                            {
+                                f"company_public_web_asset_run:idempotency:{idempotency_key}",
+                                f"company_public_web_asset_run:run_id:{run_id}",
+                            }
+                        ):
+                            self._acquire_transaction_lock(cursor, lock_key)
+                        cursor.execute(
+                            "SELECT *, '~' || idempotency_key || '~' AS _idempotency_key_fenced "
+                            "FROM company_public_web_asset_runs "
+                            "WHERE btrim(idempotency_key, E' \\t\\n\\r\\f\\013') = %s OR run_id = %s "
+                            "ORDER BY run_id FOR UPDATE",
+                            (idempotency_key, run_id),
+                        )
+                        rows = _fetch_all_dict_rows(cursor)
+                        for row in rows:
+                            fenced_key = str(row.pop("_idempotency_key_fenced", "") or "")
+                            if len(fenced_key) >= 2:
+                                row["idempotency_key"] = fenced_key[1:-1]
+                        matching_rows = [
+                            row
+                            for row in rows
+                            if str(row.get("run_id") or "").strip() == run_id
+                            and normalize_company_public_web_asset_run_idempotency_key(row.get("idempotency_key"))
+                            == idempotency_key
+                        ]
+                        if len(rows) != 1 or len(matching_rows) != 1:
+                            connection.commit()
+                            return {
+                                "outcome": "owner_lost",
+                                "reason": "company_public_web_source_run_identity_not_current",
+                                "run": matching_rows[0] if len(matching_rows) == 1 else None,
+                            }
+                        existing = matching_rows[0]
+                        existing_owner, _ = _company_public_web_source_run_owner(existing.get("metadata_json"))
+                        if (
+                            existing_owner != incoming_owner
+                            or str(existing.get("status") or "").strip().lower() != "running"
+                        ):
+                            connection.commit()
+                            return {
+                                "outcome": "owner_lost",
+                                "reason": "company_public_web_source_run_owner_not_current",
+                                "run": existing,
+                            }
+                        if _lock_current_company_public_web_source_command(cursor, incoming_owner) is None:
+                            connection.commit()
+                            return {
+                                "outcome": "owner_lost",
+                                "reason": "company_public_web_source_command_claim_not_current",
+                                "run": existing,
+                            }
+                        cursor.execute(
+                            """
+                            UPDATE company_public_web_asset_runs
+                            SET status = %s,
+                                phase = %s,
+                                discovered_assets_json = %s,
+                                summary_json = %s,
+                                artifact_root = %s,
+                                completed_at = %s,
+                                last_error = %s,
+                                metadata_json = %s,
+                                updated_at = GREATEST(updated_at, %s)
+                            WHERE run_id = %s
+                              AND status = 'running'
+                            RETURNING *
+                            """,
+                            tuple(
+                                _normalize_postgres_payload(value)
+                                for value in (
+                                    terminal_status,
+                                    row_payload.get("phase") or terminal_status,
+                                    row_payload.get("discovered_assets_json") or "[]",
+                                    row_payload.get("summary_json") or "{}",
+                                    row_payload.get("artifact_root") or "",
+                                    row_payload.get("completed_at") or "",
+                                    row_payload.get("last_error") or "",
+                                    row_payload.get("metadata_json") or "{}",
+                                    row_payload.get("updated_at") or "",
+                                    run_id,
+                                )
+                            ),
+                        )
+                        finalized = _fetch_one_dict_row(cursor, cursor.fetchone())
+                        if finalized is None:
+                            connection.commit()
+                            return {
+                                "outcome": "owner_lost",
+                                "reason": "company_public_web_source_run_owner_not_current",
+                                "run": existing,
+                            }
+                        finalized["idempotency_key"] = idempotency_key
+                    connection.commit()
+                return {
+                    "outcome": "finalized",
+                    "reason": f"company_public_web_source_run_{terminal_status}",
+                    "run": finalized,
+                }
+            except Exception as exc:
+                attempt += 1
+                if not _is_retryable_postgres_exception(exc) or attempt >= _CONTROL_PLANE_POSTGRES_MAX_RETRIES:
+                    raise
+                time.sleep(_control_plane_postgres_retry_delay_seconds(attempt))
+
+    def upsert_company_public_web_asset_atomic_source_runs(
+        self,
+        payload: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        """Upsert one mutable source asset without losing concurrent run lineage."""
+
+        table_name = "company_public_web_assets"
+        if not self.should_prefer_read(table_name):
+            return None
+        row_payload = _normalize_postgres_row_payload(dict(payload or {}))
+        asset_id = str(row_payload.get("asset_id") or "").strip()
+        if not asset_id:
+            raise ValueError("company_public_web_asset_id_required")
+        source_run_ids = sorted(
+            {
+                str(source_run_id or "").strip()
+                for source_run_id in _json_load_list(row_payload.get("source_run_ids_json"))
+                if str(source_run_id or "").strip()
+            }
+        )
+        if not source_run_ids:
+            raise ValueError("company_public_web_asset_source_run_id_required")
+        row_payload["source_run_ids_json"] = _json_dump(source_run_ids)
+        self.ensure_bootstrapped()
+
+        columns = [column for column in row_payload if str(column or "").strip()]
+        quoted_columns = ", ".join(_quote_identifier(column) for column in columns)
+        placeholders = ", ".join(["%s"] * len(columns))
+        incoming_projection_wins = _company_public_web_projection_incoming_wins_sql(
+            incoming_metadata_expression="EXCLUDED.metadata_json::jsonb",
+            existing_metadata_expression="company_public_web_assets.metadata_json::jsonb",
+            incoming_run_id_expression="EXCLUDED.latest_run_id",
+            existing_run_id_expression="company_public_web_assets.latest_run_id",
+        )
+        update_assignments: list[str] = []
+        for column in columns:
+            if column == "asset_id":
+                continue
+            quoted_column = _quote_identifier(column)
+            if column == "source_run_ids_json":
+                update_assignments.append(
+                    f"""
+                    {quoted_column} = (
+                        SELECT COALESCE(
+                            jsonb_agg(merged_source_run_id ORDER BY merged_source_run_id),
+                            '[]'::jsonb
+                        )::text
+                        FROM (
+                            SELECT DISTINCT jsonb_array_elements_text(
+                                COALESCE(
+                                    NULLIF(company_public_web_assets.source_run_ids_json, ''),
+                                    '[]'
+                                )::jsonb
+                            ) AS merged_source_run_id
+                            UNION
+                            SELECT DISTINCT jsonb_array_elements_text(
+                                COALESCE(NULLIF(EXCLUDED.source_run_ids_json, ''), '[]')::jsonb
+                            ) AS merged_source_run_id
+                        ) company_public_web_source_run_union
+                        WHERE merged_source_run_id <> ''
+                    )
+                    """.strip()
+                )
+            elif column == "created_at":
+                update_assignments.append(
+                    f"{quoted_column} = COALESCE(NULLIF(company_public_web_assets.{quoted_column}, ''), "
+                    f"EXCLUDED.{quoted_column})"
+                )
+            elif column == "updated_at":
+                update_assignments.append(
+                    f"{quoted_column} = GREATEST(company_public_web_assets.{quoted_column}, EXCLUDED.{quoted_column})"
+                )
+            else:
+                update_assignments.append(
+                    f"{quoted_column} = CASE WHEN {incoming_projection_wins} "
+                    f"THEN EXCLUDED.{quoted_column} ELSE company_public_web_assets.{quoted_column} END"
+                )
+
+        sql = (
+            f"INSERT INTO company_public_web_assets ({quoted_columns}) VALUES ({placeholders}) "
+            "ON CONFLICT (asset_id) DO UPDATE SET " + ", ".join(update_assignments) + " RETURNING *"
+        )
+        attempt = 0
+        while True:
+            try:
+                with self._connect() as connection:
+                    with connection.cursor() as cursor:
+                        cursor.execute(
+                            sql,
+                            tuple(_normalize_postgres_payload(row_payload.get(column)) for column in columns),
+                        )
+                        written = _fetch_one_dict_row(cursor, cursor.fetchone())
+                    connection.commit()
+                return written
+            except Exception as exc:
+                attempt += 1
+                if not _is_retryable_postgres_exception(exc) or attempt >= _CONTROL_PLANE_POSTGRES_MAX_RETRIES:
+                    raise
+                time.sleep(_control_plane_postgres_retry_delay_seconds(attempt))
+
+    def close_company_public_web_owner_lost_activity_attempt(
+        self,
+        *,
+        table_name: str = "workflow_activity_attempts",
+        command_id: str,
+        expected_command_attempt: int,
+        expected_lease_owner: str,
+        expected_lease_expires_at: str,
+        activity_run_id: str,
+        activity_idempotency_key: str,
+        attempt_id: str,
+        attempt_idempotency_key: str,
+        workspace_id: str = "default",
+        reason: str = "company_public_web_source_run_owner_lost",
+        terminalize_exact_command: bool = False,
+        terminalize_exhausted_command: bool = False,
+    ) -> dict[str, Any] | None:
+        """Close a D1m owner-loss attempt without changing a newer physical owner.
+
+        The ActivityAttempt is generation-specific and can be failed by exact
+        attempt/lease CAS. The ActivityRun is shared across command attempts;
+        it moves to ``retry_wait`` only while its current metadata still names
+        the same lease owner. A newer attempt's ActivityRun therefore remains
+        untouched even when the old execution reports owner loss later.
+
+        ``terminalize_exact_command`` is reserved for deterministic, non-retryable
+        owner-loss outcomes such as a typed source command colliding with a
+        revisionless completed brownfield run. In that mode the current command,
+        ActivityRun, and ActivityAttempt are failed in this one transaction only
+        when the command still names the exact attempt/lease owner. If a newer
+        command attempt already won, this method falls back to the stale-attempt
+        closure above and never terminalizes the newer command or ActivityRun.
+
+        ``terminalize_exhausted_command`` is the D1m-only final-attempt crash
+        closure. It requires the same exact physical claim with an expired lease
+        and ``attempt >= max_attempts``; command, ActivityRun, and ActivityAttempt
+        then fail together. Missing Activity rows are allowed so a crash between
+        command-running and Activity creation can still terminalize the command.
+        """
+
+        if _normalize_postgres_identifier(table_name) != "workflow_activity_attempts":
+            raise ValueError(
+                "close_company_public_web_owner_lost_activity_attempt requires table_name=workflow_activity_attempts"
+            )
+        if not self.should_prefer_read("workflow_activity_attempts") or not self.should_prefer_read(
+            "workflow_activity_runs"
+        ):
+            return None
+        if terminalize_exact_command and terminalize_exhausted_command:
+            raise ValueError("company Public Web terminal closure modes are mutually exclusive")
+        terminalize_command = bool(terminalize_exact_command or terminalize_exhausted_command)
+        if terminalize_command and not self.should_prefer_read("workflow_commands"):
+            return None
+        normalized_command_id = str(command_id or "").strip()
+        normalized_attempt = max(0, int(expected_command_attempt or 0))
+        normalized_lease_owner = str(expected_lease_owner or "").strip()
+        normalized_lease_expires_at = str(expected_lease_expires_at or "").strip()
+        normalized_activity_run_id = str(activity_run_id or "").strip()
+        normalized_activity_key = str(activity_idempotency_key or "").strip()
+        normalized_attempt_id = str(attempt_id or "").strip()
+        normalized_attempt_key = str(attempt_idempotency_key or "").strip()
+        normalized_workspace_id = str(workspace_id or "default").strip() or "default"
+        normalized_reason = str(reason or "company_public_web_source_run_owner_lost").strip()
+        activity_identity_values = (
+            normalized_activity_run_id,
+            normalized_activity_key,
+            normalized_attempt_id,
+            normalized_attempt_key,
+        )
+        activity_identity_complete = all(activity_identity_values)
+        activity_identity_absent = not any(activity_identity_values)
+        exhausted_attempt_identities: dict[int, tuple[str, str]] = {}
+        if (
+            not normalized_command_id
+            or normalized_attempt <= 0
+            or not normalized_lease_owner
+            or (terminalize_command and not normalized_lease_expires_at)
+            or (not terminalize_exhausted_command and not activity_identity_complete)
+            or (terminalize_exhausted_command and not (activity_identity_complete or activity_identity_absent))
+        ):
+            return {
+                "outcome": "invalid",
+                "reason": "company_public_web_owner_lost_activity_identity_required",
+                "attempt_closed": False,
+                "activity_closed": False,
+                "attempt": None,
+                "activity": None,
+            }
+        if terminalize_exhausted_command:
+            expected_activity_run_id, expected_activity_key = _company_public_web_source_activity_identity(
+                normalized_command_id
+            )
+            exhausted_attempt_identities = {
+                attempt_number: _company_public_web_source_attempt_identity(normalized_command_id, attempt_number)
+                for attempt_number in range(1, normalized_attempt + 1)
+            }
+            expected_attempt_id, expected_attempt_key = exhausted_attempt_identities[normalized_attempt]
+            expected_identity = (
+                expected_activity_run_id,
+                expected_activity_key,
+                expected_attempt_id,
+                expected_attempt_key,
+            )
+            if activity_identity_complete and activity_identity_values != expected_identity:
+                return {
+                    "outcome": "conflict",
+                    "reason": "company_public_web_exhausted_activity_identity_conflict",
+                    "attempt_closed": False,
+                    "activity_closed": False,
+                    "attempt": None,
+                    "activity": None,
+                }
+            normalized_activity_run_id = expected_activity_run_id
+            normalized_activity_key = expected_activity_key
+            normalized_attempt_id = expected_attempt_id
+            normalized_attempt_key = expected_attempt_key
+            activity_identity_complete = True
+        self._ensure_runtime_coordination_schema()
+
+        retry_attempt = 0
+        while True:
+            try:
+                with self._connect() as connection:
+                    with connection.cursor() as cursor:
+                        # Match the generic workflow-runtime upsert lock
+                        # identities so a newer ActivityRun start cannot race
+                        # the shared-row ownership check below.
+                        lock_key_values: set[str] = set()
+                        if activity_identity_complete:
+                            lock_key_values.update(
+                                {
+                                    f"workflow_runtime:workflow_activity_runs:id:{normalized_activity_run_id}",
+                                    (
+                                        "workflow_runtime:workflow_activity_runs:idempotency:"
+                                        f"{normalized_workspace_id}:{normalized_activity_key}"
+                                    ),
+                                }
+                            )
+                            attempt_lock_identities = (
+                                exhausted_attempt_identities.values()
+                                if terminalize_exhausted_command
+                                else [(normalized_attempt_id, normalized_attempt_key)]
+                            )
+                            for attempt_identity_id, attempt_identity_key in attempt_lock_identities:
+                                lock_key_values.update(
+                                    {
+                                        (f"workflow_runtime:workflow_activity_attempts:id:{attempt_identity_id}"),
+                                        (
+                                            "workflow_runtime:workflow_activity_attempts:idempotency:"
+                                            f"{normalized_workspace_id}:{attempt_identity_key}"
+                                        ),
+                                    }
+                                )
+                        lock_keys = sorted(lock_key_values)
+                        for lock_key in lock_keys:
+                            self._acquire_transaction_lock(cursor, lock_key)
+
+                        current_attempt = None
+                        current_activity = None
+                        if terminalize_exhausted_command:
+                            deterministic_attempt_ids = [
+                                identity[0] for identity in exhausted_attempt_identities.values()
+                            ]
+                            deterministic_attempt_keys = [
+                                identity[1] for identity in exhausted_attempt_identities.values()
+                            ]
+                            attempt_id_placeholders = ", ".join(["%s"] * len(deterministic_attempt_ids))
+                            attempt_key_placeholders = ", ".join(["%s"] * len(deterministic_attempt_keys))
+                            cursor.execute(
+                                f"""
+                                SELECT * FROM workflow_activity_attempts
+                                WHERE command_id = %s
+                                   OR attempt_id IN ({attempt_id_placeholders})
+                                   OR (workspace_id = %s AND idempotency_key IN ({attempt_key_placeholders}))
+                                ORDER BY attempt_number, attempt_id
+                                FOR UPDATE
+                                """,
+                                (
+                                    normalized_command_id,
+                                    *deterministic_attempt_ids,
+                                    normalized_workspace_id,
+                                    *deterministic_attempt_keys,
+                                ),
+                            )
+                            all_generation_attempts = _fetch_all_dict_rows(cursor)
+                            attempt_terminal_statuses = set(
+                                _WORKFLOW_RUNTIME_IDENTITY_UPSERT_CONFIG["workflow_activity_attempts"][
+                                    "terminal_statuses"
+                                ]
+                            )
+
+                            def _is_expected_attempt_identity(item: dict[str, Any]) -> bool:
+                                item_attempt_number = int(item.get("attempt_number") or 0)
+                                expected_attempt_identity = exhausted_attempt_identities.get(item_attempt_number)
+                                if expected_attempt_identity is None:
+                                    return False
+                                expected_attempt_identity_id, expected_attempt_identity_key = expected_attempt_identity
+                                item_metadata = _json_load_dict(item.get("metadata_json"))
+                                item_lease_owner = str(item_metadata.get("lease_owner") or "").strip()
+                                return bool(
+                                    str(item.get("attempt_id") or "").strip() == expected_attempt_identity_id
+                                    and (str(item.get("workspace_id") or "default").strip() or "default")
+                                    == normalized_workspace_id
+                                    and str(item.get("activity_run_id") or "").strip() == normalized_activity_run_id
+                                    and str(item.get("command_id") or "").strip() == normalized_command_id
+                                    and str(item.get("idempotency_key") or "").strip() == expected_attempt_identity_key
+                                    and item_lease_owner
+                                    and (
+                                        item_attempt_number < normalized_attempt
+                                        or item_lease_owner == normalized_lease_owner
+                                    )
+                                )
+
+                            def _is_expected_resume_attempt_identity(item: dict[str, Any]) -> bool:
+                                item_attempt_number = int(item.get("attempt_number") or 0)
+                                if item_attempt_number <= 0:
+                                    return False
+                                expected_resume_attempt_id, expected_resume_attempt_key = (
+                                    _company_public_web_source_resume_attempt_identity(
+                                        normalized_command_id,
+                                        item_attempt_number,
+                                    )
+                                )
+                                item_metadata = _json_load_dict(item.get("metadata_json"))
+                                item_input = _json_load_dict(item.get("input_json"))
+                                item_output = _json_load_dict(item.get("output_json"))
+                                item_input_force = item_input.get("force")
+                                item_output_force = item_output.get("force")
+                                return bool(
+                                    item_attempt_number <= normalized_attempt
+                                    and str(item.get("status") or "").strip() == "succeeded"
+                                    and str(item.get("attempt_id") or "").strip() == expected_resume_attempt_id
+                                    and (str(item.get("workspace_id") or "default").strip() or "default")
+                                    == normalized_workspace_id
+                                    and str(item.get("activity_run_id") or "").strip() == normalized_activity_run_id
+                                    and str(item.get("command_id") or "").strip() == normalized_command_id
+                                    and str(item.get("provider_request_ref") or "").strip() == normalized_command_id
+                                    and str(item.get("idempotency_key") or "").strip() == expected_resume_attempt_key
+                                    and str(item_metadata.get("lease_owner") or "").strip()
+                                    and str(item_input.get("control_action") or "").strip() == "resume"
+                                    and str(item_input.get("phase_command_type") or "").strip()
+                                    == "company.public_web.source.collect"
+                                    and str(item_output.get("control_action") or "").strip() == "resume"
+                                    and str(item_output.get("command_id") or "").strip() == normalized_command_id
+                                    and str(item_output.get("command_type") or "").strip()
+                                    == "company.public_web.source.collect"
+                                    and str(item_input.get("target_company") or "").strip()
+                                    == str(item_output.get("target_company") or "").strip()
+                                    and str(item_input.get("company_key") or "").strip()
+                                    == str(item_output.get("company_key") or "").strip()
+                                    and isinstance(item_input_force, bool)
+                                    and isinstance(item_output_force, bool)
+                                    and item_input_force is item_output_force
+                                    and str(item_output.get("reason") or "").strip()
+                                )
+
+                            generation_attempts = [
+                                item for item in all_generation_attempts if _is_expected_attempt_identity(item)
+                            ]
+                            resume_control_attempts = [
+                                item for item in all_generation_attempts if _is_expected_resume_attempt_identity(item)
+                            ]
+
+                            def _is_current_owner_loss_terminal(item: dict[str, Any]) -> bool:
+                                item_error = _json_load_dict(item.get("error_json"))
+                                item_output = _json_load_dict(item.get("output_json"))
+                                item_metadata = _json_load_dict(item.get("metadata_json"))
+                                owner_loss_reason = str(item_error.get("reason") or "").strip()
+                                return bool(
+                                    int(item.get("attempt_number") or 0) == normalized_attempt
+                                    and str(item.get("status") or "").strip() == "failed"
+                                    and owner_loss_reason
+                                    and item_error.get("owner_lost") is True
+                                    and item_error.get("deterministic_terminal_failure") is False
+                                    and str(item_output.get("status") or "").strip() == "skipped"
+                                    and str(item_output.get("reason") or "").strip() == owner_loss_reason
+                                    and item_metadata.get("owner_lost") is True
+                                    and str(item_metadata.get("owner_lost_reason") or "").strip() == owner_loss_reason
+                                )
+
+                            unexpected_generation_attempts = [
+                                item
+                                for item in all_generation_attempts
+                                if not _is_expected_attempt_identity(item)
+                                and not _is_expected_resume_attempt_identity(item)
+                            ]
+                            alternate_nonterminal_attempts = [
+                                item
+                                for item in all_generation_attempts
+                                if str(item.get("status") or "").strip() not in attempt_terminal_statuses
+                                and not _is_expected_attempt_identity(item)
+                            ]
+                            attempt_identity_collisions = [
+                                item
+                                for item in all_generation_attempts
+                                if (
+                                    str(item.get("attempt_id") or "").strip() in deterministic_attempt_ids
+                                    or (
+                                        (str(item.get("workspace_id") or "default").strip() or "default")
+                                        == normalized_workspace_id
+                                        and str(item.get("idempotency_key") or "").strip() in deterministic_attempt_keys
+                                    )
+                                )
+                                and not _is_expected_attempt_identity(item)
+                            ]
+                            cursor.execute(
+                                """
+                                SELECT * FROM workflow_activity_runs
+                                WHERE command_id = %s
+                                   OR activity_run_id = %s
+                                   OR (workspace_id = %s AND idempotency_key = %s)
+                                ORDER BY activity_run_id
+                                FOR UPDATE
+                                """,
+                                (
+                                    normalized_command_id,
+                                    normalized_activity_run_id,
+                                    normalized_workspace_id,
+                                    normalized_activity_key,
+                                ),
+                            )
+                            all_generation_activities = _fetch_all_dict_rows(cursor)
+                            activity_terminal_statuses = set(
+                                _WORKFLOW_RUNTIME_IDENTITY_UPSERT_CONFIG["workflow_activity_runs"]["terminal_statuses"]
+                            )
+
+                            def _is_expected_activity_identity(item: dict[str, Any]) -> bool:
+                                item_metadata = _json_load_dict(item.get("metadata_json"))
+                                item_lease_owner = str(item_metadata.get("lease_owner") or "").strip()
+                                return bool(
+                                    str(item.get("activity_run_id") or "").strip() == normalized_activity_run_id
+                                    and (str(item.get("workspace_id") or "default").strip() or "default")
+                                    == normalized_workspace_id
+                                    and str(item.get("command_id") or "").strip() == normalized_command_id
+                                    and str(item.get("idempotency_key") or "").strip() == normalized_activity_key
+                                    and item_lease_owner
+                                )
+
+                            generation_activities = [
+                                item for item in all_generation_activities if _is_expected_activity_identity(item)
+                            ]
+                            alternate_nonterminal_activities = [
+                                item
+                                for item in all_generation_activities
+                                if str(item.get("status") or "").strip() not in activity_terminal_statuses
+                                and not _is_expected_activity_identity(item)
+                            ]
+                            activity_identity_collisions = [
+                                item
+                                for item in all_generation_activities
+                                if (
+                                    str(item.get("activity_run_id") or "").strip() == normalized_activity_run_id
+                                    or (
+                                        (str(item.get("workspace_id") or "default").strip() or "default")
+                                        == normalized_workspace_id
+                                        and str(item.get("idempotency_key") or "").strip() == normalized_activity_key
+                                    )
+                                )
+                                and not _is_expected_activity_identity(item)
+                            ]
+                            activity_identity_conflict = bool(
+                                len(generation_activities) > 1
+                                or unexpected_generation_attempts
+                                or attempt_identity_collisions
+                                or activity_identity_collisions
+                                or alternate_nonterminal_attempts
+                                or alternate_nonterminal_activities
+                                or any(
+                                    str(item.get("status") or "").strip() != "running"
+                                    and str(item.get("status") or "").strip() not in attempt_terminal_statuses
+                                    for item in generation_attempts
+                                )
+                                or any(
+                                    int(item.get("attempt_number") or 0) == normalized_attempt
+                                    and str(item.get("status") or "").strip() in attempt_terminal_statuses
+                                    and not _is_current_owner_loss_terminal(item)
+                                    for item in generation_attempts
+                                )
+                                or (
+                                    generation_activities
+                                    and str(generation_activities[0].get("status") or "").strip()
+                                    not in {"planned", "queued", "running", "retry_wait", "failed"}
+                                )
+                                or (
+                                    generation_activities
+                                    and any(
+                                        str(item.get("activity_run_id") or "").strip()
+                                        != str(generation_activities[0].get("activity_run_id") or "").strip()
+                                        for item in generation_attempts
+                                    )
+                                )
+                                or (
+                                    generation_activities
+                                    and any(
+                                        (str(item.get("workspace_id") or "default").strip() or "default")
+                                        != (
+                                            str(generation_activities[0].get("workspace_id") or "default").strip()
+                                            or "default"
+                                        )
+                                        for item in generation_attempts
+                                    )
+                                )
+                            )
+                            if activity_identity_conflict:
+                                connection.rollback()
+                                return {
+                                    "outcome": "conflict",
+                                    "reason": "company_public_web_exhausted_activity_identity_conflict",
+                                    "attempt_closed": False,
+                                    "activity_closed": False,
+                                    "command_closed": False,
+                                    "attempt": next(
+                                        (
+                                            item
+                                            for item in generation_attempts
+                                            if int(item.get("attempt_number") or 0) == normalized_attempt
+                                        ),
+                                        None,
+                                    ),
+                                    "activity": generation_activities[0] if len(generation_activities) == 1 else None,
+                                    "command": None,
+                                }
+                            current_attempt = next(
+                                (
+                                    item
+                                    for item in generation_attempts
+                                    if int(item.get("attempt_number") or 0) == normalized_attempt
+                                ),
+                                None,
+                            )
+                            current_activity = generation_activities[0] if generation_activities else None
+                        elif activity_identity_complete:
+                            cursor.execute(
+                                "SELECT * FROM workflow_activity_attempts WHERE attempt_id = %s FOR UPDATE",
+                                (normalized_attempt_id,),
+                            )
+                            current_attempt = _fetch_one_dict_row(cursor, cursor.fetchone())
+                            cursor.execute(
+                                "SELECT * FROM workflow_activity_runs WHERE activity_run_id = %s FOR UPDATE",
+                                (normalized_activity_run_id,),
+                            )
+                            current_activity = _fetch_one_dict_row(cursor, cursor.fetchone())
+                        current_command = None
+                        exact_command_current = False
+                        exact_command_guard: dict[str, Any] = {}
+                        if terminalize_command:
+                            cursor.execute(
+                                "SELECT * FROM workflow_commands WHERE command_id = %s FOR UPDATE",
+                                (normalized_command_id,),
+                            )
+                            current_command = _fetch_one_dict_row(cursor, cursor.fetchone())
+                            exact_command_guard = {
+                                "command_found": current_command is not None,
+                                "command_type_matches": bool(
+                                    current_command
+                                    and str(current_command.get("command_type") or "").strip()
+                                    == "company.public_web.source.collect"
+                                ),
+                                "owner_matches": bool(
+                                    current_command
+                                    and str(current_command.get("owner") or "").strip() == "company_public_web_owner"
+                                ),
+                                "status_matches": bool(
+                                    current_command and str(current_command.get("status") or "").strip() == "running"
+                                ),
+                                "attempt_matches": bool(
+                                    current_command and int(current_command.get("attempt") or 0) == normalized_attempt
+                                ),
+                                "lease_owner_matches": bool(
+                                    current_command
+                                    and str(current_command.get("lease_owner") or "").strip() == normalized_lease_owner
+                                ),
+                                "lease_expires_at_matches": bool(
+                                    current_command
+                                    and str(current_command.get("lease_expires_at") or "").strip()
+                                    == normalized_lease_expires_at
+                                ),
+                            }
+                            if terminalize_exhausted_command:
+                                exact_command_guard.update(
+                                    {
+                                        "attempts_exhausted": bool(
+                                            current_command
+                                            and int(current_command.get("attempt") or 0)
+                                            >= max(1, int(current_command.get("max_attempts") or 1))
+                                        ),
+                                    }
+                                )
+                            else:
+                                exact_command_guard["lease_unexpired"] = bool(
+                                    current_command
+                                    and not _timestamp_is_expired(current_command.get("lease_expires_at"))
+                                )
+                            exact_command_current = all(exact_command_guard.values())
+
+                        if terminalize_exhausted_command and current_command is not None:
+                            command_payload = _json_load_dict(current_command.get("payload_json"))
+                            command_options = _json_load_dict(command_payload.get("options"))
+                            expected_workflow_run_id = str(current_command.get("workflow_run_id") or "").strip()
+                            expected_operation_run_id = str(
+                                current_command.get("operation_id") or command_payload.get("operation_run_id") or ""
+                            ).strip()
+                            expected_provider = str(
+                                command_options.get("collection_mode")
+                                or command_payload.get("collection_mode")
+                                or "seed_url_only"
+                            ).strip()
+                            expected_target_company = str(
+                                command_payload.get("target_company") or command_payload.get("company") or ""
+                            ).strip()
+                            expected_company_key = str(command_payload.get("company_key") or "").strip()
+                            semantic_identity_conflict = bool(
+                                current_activity
+                                and (
+                                    str(current_activity.get("workflow_run_id") or "").strip()
+                                    != expected_workflow_run_id
+                                    or str(current_activity.get("operation_run_id") or "").strip()
+                                    != expected_operation_run_id
+                                    or str(current_activity.get("acquisition_run_id") or "").strip()
+                                    or str(current_activity.get("parent_activity_run_id") or "").strip()
+                                    or str(current_activity.get("activity_type") or "").strip()
+                                    != "company.public_web.source.collect"
+                                    or str(current_activity.get("owner") or "").strip() != "company_public_web_owner"
+                                )
+                                or any(
+                                    str(item.get("workflow_run_id") or "").strip() != expected_workflow_run_id
+                                    or str(item.get("provider") or "").strip() != expected_provider
+                                    or str(item.get("provider_request_ref") or "").strip() != normalized_command_id
+                                    for item in [*generation_attempts, *resume_control_attempts]
+                                )
+                                or any(
+                                    str(_json_load_dict(item.get("input_json")).get("target_company") or "").strip()
+                                    != expected_target_company
+                                    or str(_json_load_dict(item.get("output_json")).get("target_company") or "").strip()
+                                    != expected_target_company
+                                    or str(_json_load_dict(item.get("input_json")).get("company_key") or "").strip()
+                                    != expected_company_key
+                                    or str(_json_load_dict(item.get("output_json")).get("company_key") or "").strip()
+                                    != expected_company_key
+                                    for item in resume_control_attempts
+                                )
+                            )
+                            if semantic_identity_conflict:
+                                connection.rollback()
+                                return {
+                                    "outcome": "conflict",
+                                    "reason": "company_public_web_exhausted_activity_semantic_identity_conflict",
+                                    "attempt_closed": False,
+                                    "activity_closed": False,
+                                    "command_closed": False,
+                                    "attempt": current_attempt,
+                                    "activity": current_activity,
+                                    "command": current_command,
+                                }
+
+                        # Terminalize the exact physical claim before mutating
+                        # either Activity row.  The Python guard above is only
+                        # diagnostic: a lease can expire after it is computed,
+                        # so the SQL CAS is the sole authority for deterministic
+                        # terminal closure.  Holding the command row lock keeps
+                        # a takeover behind this decision until commit.
+                        command_closed = False
+                        if terminalize_command and exact_command_current and current_command is not None:
+                            now = _utc_now_sql_timestamp()
+                            command_result = {
+                                **_json_load_dict(current_command.get("result_json")),
+                                "status": "invalid",
+                                "reason": normalized_reason,
+                                "operation_completion_deferred": False,
+                                "downstream_command_required": False,
+                                "downstream_command_count": 0,
+                                "downstream_command_ids": [],
+                            }
+                            lease_terminal_predicate = (
+                                "(NULLIF(lease_expires_at, '')::timestamp AT TIME ZONE 'UTC') <= clock_timestamp()"
+                                if terminalize_exhausted_command
+                                else "(NULLIF(lease_expires_at, '')::timestamp AT TIME ZONE 'UTC') > clock_timestamp()"
+                            )
+                            attempt_exhaustion_predicate = (
+                                "AND attempt >= max_attempts" if terminalize_exhausted_command else ""
+                            )
+                            cursor.execute(
+                                f"""
+                                UPDATE workflow_commands
+                                SET status = 'failed_terminal',
+                                    lease_owner = '',
+                                    lease_expires_at = '',
+                                    heartbeat_at = %s,
+                                    not_before_at = '',
+                                    last_error = %s,
+                                    result_json = %s,
+                                    updated_at = %s
+                                WHERE command_id = %s
+                                  AND command_type = 'company.public_web.source.collect'
+                                  AND owner = 'company_public_web_owner'
+                                  AND status = 'running'
+                                  AND attempt = %s
+                                  AND lease_owner = %s
+                                  AND lease_expires_at = %s
+                                  {attempt_exhaustion_predicate}
+                                  AND {lease_terminal_predicate}
+                                RETURNING *
+                                """,
+                                (
+                                    now,
+                                    normalized_reason,
+                                    _json_dump(command_result),
+                                    now,
+                                    normalized_command_id,
+                                    normalized_attempt,
+                                    normalized_lease_owner,
+                                    normalized_lease_expires_at,
+                                ),
+                            )
+                            closed_command = _fetch_one_dict_row(cursor, cursor.fetchone())
+                            if closed_command is not None:
+                                current_command = closed_command
+                                command_closed = True
+
+                        attempt_closed = False
+                        attempts_closed_count = 0
+                        reported_attempt = current_attempt
+                        attempt_rows = (
+                            generation_attempts
+                            if terminalize_exhausted_command
+                            else [current_attempt]
+                            if current_attempt is not None
+                            else []
+                        )
+                        for attempt_row in attempt_rows:
+                            attempt_number = int(attempt_row.get("attempt_number") or 0)
+                            expected_attempt_identity = (
+                                exhausted_attempt_identities.get(attempt_number)
+                                if terminalize_exhausted_command
+                                else (normalized_attempt_id, normalized_attempt_key)
+                            )
+                            if expected_attempt_identity is None:
+                                continue
+                            expected_attempt_identity_id, expected_attempt_identity_key = expected_attempt_identity
+                            attempt_metadata = _json_load_dict(attempt_row.get("metadata_json"))
+                            attempt_lease_owner = str(attempt_metadata.get("lease_owner") or "").strip()
+                            attempt_matches = bool(
+                                (str(attempt_row.get("workspace_id") or "default").strip() or "default")
+                                == normalized_workspace_id
+                                and str(attempt_row.get("activity_run_id") or "").strip() == normalized_activity_run_id
+                                and str(attempt_row.get("command_id") or "").strip() == normalized_command_id
+                                and attempt_number > 0
+                                and str(attempt_row.get("attempt_id") or "").strip() == expected_attempt_identity_id
+                                and str(attempt_row.get("idempotency_key") or "").strip()
+                                == expected_attempt_identity_key
+                                and attempt_lease_owner
+                                and (terminalize_exhausted_command or attempt_lease_owner == normalized_lease_owner)
+                            )
+                            if (
+                                attempt_matches
+                                and (not terminalize_exhausted_command or command_closed)
+                                and str(attempt_row.get("status") or "").strip() == "running"
+                            ):
+                                now = _utc_now_sql_timestamp()
+                                terminal_failure = bool(terminalize_command and command_closed)
+                                cursor.execute(
+                                    """
+                                    UPDATE workflow_activity_attempts
+                                    SET status = 'failed',
+                                        completed_at = %s,
+                                        error_json = %s,
+                                        output_json = %s,
+                                        metadata_json = %s,
+                                        updated_at = %s
+                                    WHERE attempt_id = %s
+                                      AND status = 'running'
+                                      AND attempt_number = %s
+                                    RETURNING *
+                                    """,
+                                    (
+                                        now,
+                                        _json_dump(
+                                            {
+                                                **_json_load_dict(attempt_row.get("error_json")),
+                                                "reason": normalized_reason,
+                                                "owner_lost": not terminal_failure,
+                                                "deterministic_terminal_failure": terminal_failure,
+                                            }
+                                        ),
+                                        _json_dump(
+                                            {
+                                                **_json_load_dict(attempt_row.get("output_json")),
+                                                "status": "invalid" if terminal_failure else "skipped",
+                                                "reason": normalized_reason,
+                                            }
+                                        ),
+                                        _json_dump(
+                                            {
+                                                **attempt_metadata,
+                                                "owner_lost": not terminal_failure,
+                                                (
+                                                    "terminal_failure_reason"
+                                                    if terminal_failure
+                                                    else "owner_lost_reason"
+                                                ): normalized_reason,
+                                            }
+                                        ),
+                                        now,
+                                        expected_attempt_identity_id,
+                                        attempt_number,
+                                    ),
+                                )
+                                closed_attempt = _fetch_one_dict_row(cursor, cursor.fetchone())
+                                if closed_attempt is not None:
+                                    attempt_closed = True
+                                    attempts_closed_count += 1
+                                    reported_attempt = closed_attempt
+                                    if attempt_number == normalized_attempt:
+                                        current_attempt = closed_attempt
+
+                        activity_closed = False
+                        if current_activity is not None:
+                            activity_metadata = _json_load_dict(current_activity.get("metadata_json"))
+                            current_activity_status = str(current_activity.get("status") or "").strip()
+                            activity_matches = bool(
+                                str(current_activity.get("workspace_id") or "default").strip()
+                                == normalized_workspace_id
+                                and str(current_activity.get("command_id") or "").strip() == normalized_command_id
+                                and str(current_activity.get("idempotency_key") or "").strip()
+                                == normalized_activity_key
+                                and (
+                                    str(activity_metadata.get("lease_owner") or "").strip() == normalized_lease_owner
+                                    or terminalize_exhausted_command
+                                )
+                            )
+                            if (
+                                activity_matches
+                                and (not terminalize_command or command_closed)
+                                and current_activity_status in {"planned", "queued", "running", "retry_wait"}
+                            ):
+                                now = _utc_now_sql_timestamp()
+                                terminal_failure = bool(terminalize_command and command_closed)
+                                cursor.execute(
+                                    """
+                                    UPDATE workflow_activity_runs
+                                    SET status = %s,
+                                        phase = %s,
+                                        output_json = %s,
+                                        metadata_json = %s,
+                                        updated_at = %s
+                                    WHERE activity_run_id = %s
+                                      AND status IN ('planned', 'queued', 'running', 'retry_wait')
+                                    RETURNING *
+                                    """,
+                                    (
+                                        "failed" if terminal_failure else "retry_wait",
+                                        normalized_reason,
+                                        _json_dump(
+                                            {
+                                                **_json_load_dict(current_activity.get("output_json")),
+                                                "status": "invalid" if terminal_failure else "skipped",
+                                                "reason": normalized_reason,
+                                                "latest_attempt_id": normalized_attempt_id,
+                                            }
+                                        ),
+                                        _json_dump(
+                                            {
+                                                **activity_metadata,
+                                                "latest_attempt_id": normalized_attempt_id,
+                                                "owner_lost": not terminal_failure,
+                                                (
+                                                    "terminal_failure_reason"
+                                                    if terminal_failure
+                                                    else "owner_lost_reason"
+                                                ): normalized_reason,
+                                            }
+                                        ),
+                                        now,
+                                        normalized_activity_run_id,
+                                    ),
+                                )
+                                closed_activity = _fetch_one_dict_row(cursor, cursor.fetchone())
+                                if closed_activity is not None:
+                                    current_activity = closed_activity
+                                    activity_closed = True
+
+                    connection.commit()
+                return {
+                    "outcome": (
+                        "terminalized" if command_closed else "closed" if attempt_closed else "stale_or_already_closed"
+                    ),
+                    "reason": normalized_reason,
+                    "attempt_closed": attempt_closed,
+                    "attempts_closed_count": attempts_closed_count,
+                    "activity_closed": activity_closed,
+                    "command_closed": command_closed,
+                    "attempt": reported_attempt,
+                    "activity": current_activity,
+                    "command": current_command,
+                }
+            except Exception as exc:
+                retry_attempt += 1
+                if not _is_retryable_postgres_exception(exc) or retry_attempt >= _CONTROL_PLANE_POSTGRES_MAX_RETRIES:
+                    raise
+                time.sleep(_control_plane_postgres_retry_delay_seconds(retry_attempt))
 
     def create_agent_trace_span(
         self,
@@ -6159,6 +8097,7 @@ class LiveControlPlanePostgresAdapter:
         immutable_columns: tuple[str, ...],
         terminal_statuses: tuple[str, ...],
         write_once: bool,
+        expected_command_claim: dict[str, Any] | None = None,
     ) -> dict[str, Any] | None:
         normalized_table = _normalize_postgres_identifier(table_name)
         config = _WORKFLOW_RUNTIME_IDENTITY_UPSERT_CONFIG.get(normalized_table)
@@ -6194,6 +8133,39 @@ class LiveControlPlanePostgresAdapter:
         idempotency_key = str(payload.get("idempotency_key") or "").strip()
         if not row_id or not workspace_id or not idempotency_key:
             return None
+        expected_claim = dict(expected_command_claim or {})
+        if expected_claim and normalized_table not in {"workflow_activity_runs", "workflow_activity_attempts"}:
+            raise ValueError("expected_command_claim is supported only for workflow activity rows")
+        expected_command_id = str(expected_claim.get("command_id") or "").strip()
+        expected_command_attempt = max(0, int(expected_claim.get("attempt") or 0))
+        expected_lease_owner = str(expected_claim.get("lease_owner") or "").strip()
+        expected_lease_expires_at = str(expected_claim.get("lease_expires_at") or "").strip()
+        expected_command_type = str(expected_claim.get("command_type") or "").strip()
+        expected_command_owner = str(expected_claim.get("owner") or "").strip()
+        if expected_claim and (
+            not expected_command_id
+            or expected_command_attempt <= 0
+            or not expected_lease_owner
+            or not expected_lease_expires_at
+            or not expected_command_type
+            or not expected_command_owner
+            or str(payload.get("command_id") or "").strip() != expected_command_id
+        ):
+            raise ValueError("expected_command_claim requires one exact workflow command identity")
+        d1m_source_claim_guard = bool(
+            expected_claim
+            and normalized_table in {"workflow_activity_runs", "workflow_activity_attempts"}
+            and expected_command_type == "company.public_web.source.collect"
+            and expected_command_owner == "company_public_web_owner"
+        )
+        d1m_source_attempt_identities = (
+            {
+                attempt_number: _company_public_web_source_attempt_identity(expected_command_id, attempt_number)
+                for attempt_number in range(1, expected_command_attempt + 1)
+            }
+            if d1m_source_claim_guard
+            else {}
+        )
 
         columns = [column for column in configured_columns if column in payload]
         if configured_id_column not in columns:
@@ -6206,14 +8178,385 @@ class LiveControlPlanePostgresAdapter:
             try:
                 with self._connect() as connection:
                     with connection.cursor() as cursor:
-                        lock_keys = sorted(
-                            {
-                                f"workflow_runtime:{normalized_table}:id:{row_id}",
-                                (f"workflow_runtime:{normalized_table}:idempotency:{workspace_id}:{idempotency_key}"),
-                            }
-                        )
+                        lock_key_values = {
+                            f"workflow_runtime:{normalized_table}:id:{row_id}",
+                            (f"workflow_runtime:{normalized_table}:idempotency:{workspace_id}:{idempotency_key}"),
+                        }
+                        for prior_attempt_id, prior_attempt_key in d1m_source_attempt_identities.values():
+                            lock_key_values.update(
+                                {
+                                    f"workflow_runtime:workflow_activity_attempts:id:{prior_attempt_id}",
+                                    (
+                                        "workflow_runtime:workflow_activity_attempts:idempotency:"
+                                        f"{workspace_id}:{prior_attempt_key}"
+                                    ),
+                                }
+                            )
+                        lock_keys = sorted(lock_key_values)
                         for lock_key in lock_keys:
                             self._acquire_transaction_lock(cursor, lock_key)
+
+                        if expected_claim:
+                            cursor.execute(
+                                "SELECT * FROM workflow_commands WHERE command_id = %s FOR UPDATE",
+                                (expected_command_id,),
+                            )
+                            current_command = _fetch_one_dict_row(cursor, cursor.fetchone())
+                            cursor.execute(
+                                "SELECT (NULLIF(%s, '')::timestamp AT TIME ZONE 'UTC') > clock_timestamp()",
+                                (str((current_command or {}).get("lease_expires_at") or "").strip(),),
+                            )
+                            lease_active_row = cursor.fetchone()
+                            lease_active = bool(
+                                lease_active_row[0]
+                                if isinstance(lease_active_row, (list, tuple)) and lease_active_row
+                                else next(iter(lease_active_row.values()), False)
+                                if isinstance(lease_active_row, dict)
+                                else lease_active_row
+                            )
+                            if (
+                                current_command is None
+                                or str(current_command.get("status") or "").strip() != "running"
+                                or str(current_command.get("command_type") or "").strip() != expected_command_type
+                                or str(current_command.get("owner") or "").strip() != expected_command_owner
+                                or int(current_command.get("attempt") or 0) != expected_command_attempt
+                                or str(current_command.get("lease_owner") or "").strip() != expected_lease_owner
+                                or str(current_command.get("lease_expires_at") or "").strip()
+                                != expected_lease_expires_at
+                                or not lease_active
+                            ):
+                                connection.commit()
+                                return None
+
+                            if d1m_source_claim_guard:
+                                command_payload = _json_load_dict(current_command.get("payload_json"))
+                                command_options = _json_load_dict(command_payload.get("options"))
+                                expected_activity_run_id, expected_activity_key = (
+                                    _company_public_web_source_activity_identity(expected_command_id)
+                                )
+                                expected_attempt_id, expected_attempt_key = d1m_source_attempt_identities[
+                                    expected_command_attempt
+                                ]
+                                expected_workflow_run_id = str(current_command.get("workflow_run_id") or "").strip()
+                                expected_operation_run_id = str(
+                                    current_command.get("operation_id") or command_payload.get("operation_run_id") or ""
+                                ).strip()
+                                expected_workspace_id = (
+                                    str(command_payload.get("workspace_id") or "default").strip() or "default"
+                                )
+                                expected_provider = str(
+                                    command_options.get("collection_mode")
+                                    or command_payload.get("collection_mode")
+                                    or "seed_url_only"
+                                ).strip()
+                                expected_target_company = str(
+                                    command_payload.get("target_company") or command_payload.get("company") or ""
+                                ).strip()
+                                expected_company_key = str(command_payload.get("company_key") or "").strip()
+                                requested_metadata = _json_load_dict(payload.get("metadata_json"))
+                                if normalized_table == "workflow_activity_runs":
+                                    requested_identity_valid = bool(
+                                        row_id == expected_activity_run_id
+                                        and idempotency_key == expected_activity_key
+                                        and workspace_id == expected_workspace_id
+                                        and str(payload.get("workflow_run_id") or "").strip()
+                                        == expected_workflow_run_id
+                                        and str(payload.get("operation_run_id") or "").strip()
+                                        == expected_operation_run_id
+                                        and not str(payload.get("acquisition_run_id") or "").strip()
+                                        and not str(payload.get("parent_activity_run_id") or "").strip()
+                                        and str(payload.get("activity_type") or "").strip()
+                                        == "company.public_web.source.collect"
+                                        and str(payload.get("owner") or "").strip() == "company_public_web_owner"
+                                        and str(payload.get("status") or "").strip() == "running"
+                                        and str(requested_metadata.get("lease_owner") or "").strip()
+                                        == expected_lease_owner
+                                    )
+                                else:
+                                    requested_identity_valid = bool(
+                                        row_id == expected_attempt_id
+                                        and idempotency_key == expected_attempt_key
+                                        and workspace_id == expected_workspace_id
+                                        and str(payload.get("activity_run_id") or "").strip()
+                                        == expected_activity_run_id
+                                        and str(payload.get("workflow_run_id") or "").strip()
+                                        == expected_workflow_run_id
+                                        and str(payload.get("command_id") or "").strip() == expected_command_id
+                                        and int(payload.get("attempt_number") or 0) == expected_command_attempt
+                                        and str(payload.get("provider") or "").strip() == expected_provider
+                                        and str(payload.get("status") or "").strip() == "running"
+                                        and str(requested_metadata.get("lease_owner") or "").strip()
+                                        == expected_lease_owner
+                                    )
+                                if not requested_identity_valid:
+                                    connection.rollback()
+                                    return None
+
+                                cursor.execute(
+                                    """
+                                    SELECT * FROM workflow_activity_runs
+                                    WHERE command_id = %s
+                                       OR activity_run_id = %s
+                                       OR (workspace_id = %s AND idempotency_key = %s)
+                                    ORDER BY activity_run_id
+                                    FOR UPDATE
+                                    """,
+                                    (
+                                        expected_command_id,
+                                        expected_activity_run_id,
+                                        expected_workspace_id,
+                                        expected_activity_key,
+                                    ),
+                                )
+                                existing_activity_rows = _fetch_all_dict_rows(cursor)
+                                if len(existing_activity_rows) > 1:
+                                    connection.rollback()
+                                    return None
+                                existing_activity = existing_activity_rows[0] if existing_activity_rows else None
+                                if existing_activity is not None:
+                                    existing_activity_metadata = _json_load_dict(existing_activity.get("metadata_json"))
+                                    existing_activity_status = str(existing_activity.get("status") or "").strip()
+                                    existing_activity_valid = bool(
+                                        str(existing_activity.get("activity_run_id") or "").strip()
+                                        == expected_activity_run_id
+                                        and (
+                                            str(existing_activity.get("workspace_id") or "default").strip() or "default"
+                                        )
+                                        == expected_workspace_id
+                                        and str(existing_activity.get("workflow_run_id") or "").strip()
+                                        == expected_workflow_run_id
+                                        and str(existing_activity.get("operation_run_id") or "").strip()
+                                        == expected_operation_run_id
+                                        and not str(existing_activity.get("acquisition_run_id") or "").strip()
+                                        and str(existing_activity.get("command_id") or "").strip()
+                                        == expected_command_id
+                                        and not str(existing_activity.get("parent_activity_run_id") or "").strip()
+                                        and str(existing_activity.get("activity_type") or "").strip()
+                                        == "company.public_web.source.collect"
+                                        and str(existing_activity.get("owner") or "").strip()
+                                        == "company_public_web_owner"
+                                        and str(existing_activity.get("idempotency_key") or "").strip()
+                                        == expected_activity_key
+                                        and existing_activity_status in {"planned", "queued", "running", "retry_wait"}
+                                        and str(existing_activity_metadata.get("lease_owner") or "").strip()
+                                    )
+                                    if normalized_table == "workflow_activity_attempts":
+                                        existing_activity_valid = bool(
+                                            existing_activity_valid
+                                            and existing_activity_status == "running"
+                                            and str(existing_activity_metadata.get("lease_owner") or "").strip()
+                                            == expected_lease_owner
+                                        )
+                                    if not existing_activity_valid:
+                                        connection.rollback()
+                                        return None
+                                elif normalized_table == "workflow_activity_attempts":
+                                    connection.rollback()
+                                    return None
+
+                                deterministic_attempt_ids = [
+                                    identity[0] for identity in d1m_source_attempt_identities.values()
+                                ]
+                                deterministic_attempt_keys = [
+                                    identity[1] for identity in d1m_source_attempt_identities.values()
+                                ]
+                                attempt_id_placeholders = ", ".join(["%s"] * len(deterministic_attempt_ids))
+                                attempt_key_placeholders = ", ".join(["%s"] * len(deterministic_attempt_keys))
+                                cursor.execute(
+                                    f"""
+                                    SELECT * FROM workflow_activity_attempts
+                                    WHERE command_id = %s
+                                       OR attempt_id IN ({attempt_id_placeholders})
+                                       OR (workspace_id = %s AND idempotency_key IN ({attempt_key_placeholders}))
+                                    ORDER BY attempt_number, attempt_id
+                                    FOR UPDATE
+                                    """,
+                                    (
+                                        expected_command_id,
+                                        *deterministic_attempt_ids,
+                                        expected_workspace_id,
+                                        *deterministic_attempt_keys,
+                                    ),
+                                )
+                                command_attempt_rows = _fetch_all_dict_rows(cursor)
+                                attempt_terminal_statuses = set(
+                                    _WORKFLOW_RUNTIME_IDENTITY_UPSERT_CONFIG["workflow_activity_attempts"][
+                                        "terminal_statuses"
+                                    ]
+                                )
+                                superseded_running_attempts: list[dict[str, Any]] = []
+                                for command_attempt in command_attempt_rows:
+                                    command_attempt_number = int(command_attempt.get("attempt_number") or 0)
+                                    command_attempt_status = str(command_attempt.get("status") or "").strip()
+                                    command_attempt_id = str(command_attempt.get("attempt_id") or "").strip()
+                                    command_attempt_key = str(command_attempt.get("idempotency_key") or "").strip()
+                                    command_attempt_workspace = (
+                                        str(command_attempt.get("workspace_id") or "default").strip() or "default"
+                                    )
+                                    command_attempt_identity = d1m_source_attempt_identities.get(command_attempt_number)
+                                    deterministic_identity_collision = bool(
+                                        command_attempt_id in deterministic_attempt_ids
+                                        or (
+                                            command_attempt_workspace == expected_workspace_id
+                                            and command_attempt_key in deterministic_attempt_keys
+                                        )
+                                    )
+                                    if deterministic_identity_collision and (
+                                        not command_attempt_identity
+                                        or command_attempt_id != command_attempt_identity[0]
+                                        or command_attempt_key != command_attempt_identity[1]
+                                        or str(command_attempt.get("command_id") or "").strip() != expected_command_id
+                                    ):
+                                        connection.rollback()
+                                        return None
+                                    command_attempt_metadata = _json_load_dict(command_attempt.get("metadata_json"))
+                                    command_attempt_input = _json_load_dict(command_attempt.get("input_json"))
+                                    command_attempt_output = _json_load_dict(command_attempt.get("output_json"))
+                                    command_attempt_input_force = command_attempt_input.get("force")
+                                    command_attempt_output_force = command_attempt_output.get("force")
+                                    command_attempt_lease_owner = str(
+                                        command_attempt_metadata.get("lease_owner") or ""
+                                    ).strip()
+                                    command_attempt_immutable_valid = bool(
+                                        command_attempt_identity
+                                        and command_attempt_id == command_attempt_identity[0]
+                                        and command_attempt_key == command_attempt_identity[1]
+                                        and command_attempt_workspace == expected_workspace_id
+                                        and str(command_attempt.get("activity_run_id") or "").strip()
+                                        == expected_activity_run_id
+                                        and str(command_attempt.get("workflow_run_id") or "").strip()
+                                        == expected_workflow_run_id
+                                        and str(command_attempt.get("command_id") or "").strip() == expected_command_id
+                                        and str(command_attempt.get("provider") or "").strip() == expected_provider
+                                        and str(command_attempt.get("provider_request_ref") or "").strip()
+                                        == expected_command_id
+                                        and command_attempt_lease_owner
+                                    )
+                                    expected_resume_attempt_id, expected_resume_attempt_key = (
+                                        _company_public_web_source_resume_attempt_identity(
+                                            expected_command_id,
+                                            command_attempt_number,
+                                        )
+                                    )
+                                    resume_control_attempt_valid = bool(
+                                        command_attempt_number > 0
+                                        and command_attempt_number <= expected_command_attempt
+                                        and command_attempt_status == "succeeded"
+                                        and command_attempt_id == expected_resume_attempt_id
+                                        and command_attempt_key == expected_resume_attempt_key
+                                        and command_attempt_workspace == expected_workspace_id
+                                        and str(command_attempt.get("activity_run_id") or "").strip()
+                                        == expected_activity_run_id
+                                        and str(command_attempt.get("workflow_run_id") or "").strip()
+                                        == expected_workflow_run_id
+                                        and str(command_attempt.get("command_id") or "").strip() == expected_command_id
+                                        and str(command_attempt.get("provider") or "").strip() == expected_provider
+                                        and str(command_attempt.get("provider_request_ref") or "").strip()
+                                        == expected_command_id
+                                        and command_attempt_lease_owner
+                                        and str(command_attempt_input.get("control_action") or "").strip() == "resume"
+                                        and str(command_attempt_input.get("phase_command_type") or "").strip()
+                                        == "company.public_web.source.collect"
+                                        and str(command_attempt_output.get("control_action") or "").strip() == "resume"
+                                        and str(command_attempt_output.get("command_id") or "").strip()
+                                        == expected_command_id
+                                        and str(command_attempt_output.get("command_type") or "").strip()
+                                        == "company.public_web.source.collect"
+                                        and str(command_attempt_input.get("target_company") or "").strip()
+                                        == expected_target_company
+                                        and str(command_attempt_output.get("target_company") or "").strip()
+                                        == expected_target_company
+                                        and str(command_attempt_input.get("company_key") or "").strip()
+                                        == expected_company_key
+                                        and str(command_attempt_output.get("company_key") or "").strip()
+                                        == expected_company_key
+                                        and isinstance(command_attempt_input_force, bool)
+                                        and isinstance(command_attempt_output_force, bool)
+                                        and command_attempt_input_force is command_attempt_output_force
+                                        and str(command_attempt_output.get("reason") or "").strip()
+                                    )
+                                    if command_attempt_status in attempt_terminal_statuses:
+                                        if resume_control_attempt_valid:
+                                            continue
+                                        # Only an exact, fully validated prior
+                                        # generation may already be terminal.
+                                        # A terminal current/future generation
+                                        # contradicts the active command claim;
+                                        # an alternate prior identity is equally
+                                        # impossible and must fail closed.
+                                        if (
+                                            not command_attempt_immutable_valid
+                                            or command_attempt_number >= expected_command_attempt
+                                        ):
+                                            connection.rollback()
+                                            return None
+                                        continue
+                                    command_attempt_identity_valid = bool(
+                                        command_attempt_immutable_valid
+                                        and command_attempt_status == "running"
+                                        and (
+                                            command_attempt_number < expected_command_attempt
+                                            or command_attempt_lease_owner == expected_lease_owner
+                                        )
+                                    )
+                                    if not command_attempt_identity_valid:
+                                        connection.rollback()
+                                        return None
+                                    if command_attempt_number < expected_command_attempt:
+                                        superseded_running_attempts.append(command_attempt)
+
+                                for prior_attempt in superseded_running_attempts:
+                                    now = _utc_now_sql_timestamp()
+                                    prior_metadata = _json_load_dict(prior_attempt.get("metadata_json"))
+                                    cursor.execute(
+                                        """
+                                        UPDATE workflow_activity_attempts
+                                        SET status = 'failed',
+                                            completed_at = %s,
+                                            error_json = %s,
+                                            output_json = %s,
+                                            metadata_json = %s,
+                                            updated_at = %s
+                                        WHERE attempt_id = %s
+                                          AND status = 'running'
+                                          AND attempt_number = %s
+                                        RETURNING attempt_id
+                                        """,
+                                        (
+                                            now,
+                                            _json_dump(
+                                                {
+                                                    **_json_load_dict(prior_attempt.get("error_json")),
+                                                    "reason": "workflow_command_attempt_superseded_by_new_claim",
+                                                    "owner_lost": True,
+                                                    "deterministic_terminal_failure": False,
+                                                }
+                                            ),
+                                            _json_dump(
+                                                {
+                                                    **_json_load_dict(prior_attempt.get("output_json")),
+                                                    "status": "skipped",
+                                                    "reason": "workflow_command_attempt_superseded_by_new_claim",
+                                                }
+                                            ),
+                                            _json_dump(
+                                                {
+                                                    **prior_metadata,
+                                                    "owner_lost": True,
+                                                    "owner_lost_reason": (
+                                                        "workflow_command_attempt_superseded_by_new_claim"
+                                                    ),
+                                                    "superseded_by_attempt": expected_command_attempt,
+                                                }
+                                            ),
+                                            now,
+                                            str(prior_attempt.get("attempt_id") or "").strip(),
+                                            int(prior_attempt.get("attempt_number") or 0),
+                                        ),
+                                    )
+                                    if cursor.fetchone() is None:
+                                        connection.rollback()
+                                        return None
 
                         cursor.execute(
                             (
@@ -7705,11 +10048,12 @@ class LiveControlPlanePostgresAdapter:
         if not normalized_command_id or not normalized_owner:
             return None
         now = _utc_now_sql_timestamp()
-        # reclaim_claimed (opt-in, currently export-only) lets a new owner reclaim an
-        # expired-lease claim left by a worker that crashed before
-        # mark_workflow_command_running; the lease-expiry clause still protects
-        # active claims. Scoped pending general ownership-fencing hardening
-        # (docs/DURABLE_COMMAND_OWNERSHIP_FENCING.md).
+        # reclaim_claimed lets an explicitly opted-in owner reclaim an expired
+        # claim left by a worker that crashed before mark_workflow_command_running;
+        # the lease-expiry clause still protects active claims. Export and the
+        # bounded, exact-claim-guarded D1m owner opt in today. It is not the global
+        # default pending the remaining ownership-fencing hardening documented in
+        # docs/DURABLE_COMMAND_OWNERSHIP_FENCING.md.
         claim_status_in = (
             "('queued', 'retry_wait', 'running', 'claimed')"
             if reclaim_claimed
@@ -7776,12 +10120,35 @@ class LiveControlPlanePostgresAdapter:
         command_id: str,
         *,
         result: dict[str, Any] | None = None,
+        expected_attempt: int = 0,
+        expected_lease_owner: str = "",
+        expected_lease_expires_at: str = "",
     ) -> dict[str, Any] | None:
         if not self.should_prefer_read("workflow_commands"):
             return None
+        normalized_attempt = max(0, int(expected_attempt or 0))
+        normalized_lease_owner = str(expected_lease_owner or "").strip()
+        normalized_lease_expires_at = str(expected_lease_expires_at or "").strip()
+        exact_claim_requested = bool(normalized_attempt or normalized_lease_owner or normalized_lease_expires_at)
+        if exact_claim_requested and not (
+            normalized_attempt > 0 and normalized_lease_owner and normalized_lease_expires_at
+        ):
+            return None
         now = _utc_now_sql_timestamp()
+        clauses = ["command_id = %s", "status IN ('claimed', 'running')"]
+        params: list[Any] = [now, _json_dump(result or {}), now, str(command_id or "").strip()]
+        if exact_claim_requested:
+            clauses.extend(
+                [
+                    "attempt = %s",
+                    "lease_owner = %s",
+                    "lease_expires_at = %s",
+                    "(NULLIF(lease_expires_at, '')::timestamp AT TIME ZONE 'UTC') > clock_timestamp()",
+                ]
+            )
+            params.extend([normalized_attempt, normalized_lease_owner, normalized_lease_expires_at])
         return self._execute_returning_one(
-            """
+            f"""
             UPDATE workflow_commands
             SET status = 'succeeded',
                 lease_owner = '',
@@ -7790,11 +10157,10 @@ class LiveControlPlanePostgresAdapter:
                 last_error = '',
                 result_json = %s,
                 updated_at = %s
-            WHERE command_id = %s
-              AND status IN ('claimed', 'running')
+            WHERE {" AND ".join(clauses)}
             RETURNING *
             """,
-            (now, _json_dump(result or {}), now, str(command_id or "").strip()),
+            tuple(params),
         )
 
     def mark_workflow_command_failed(
@@ -7804,8 +10170,19 @@ class LiveControlPlanePostgresAdapter:
         error_text: str,
         retryable: bool = True,
         retry_delay_seconds: int = 30,
+        expected_attempt: int = 0,
+        expected_lease_owner: str = "",
+        expected_lease_expires_at: str = "",
     ) -> dict[str, Any] | None:
         if not self.should_prefer_read("workflow_commands"):
+            return None
+        normalized_attempt = max(0, int(expected_attempt or 0))
+        normalized_lease_owner = str(expected_lease_owner or "").strip()
+        normalized_lease_expires_at = str(expected_lease_expires_at or "").strip()
+        exact_claim_requested = bool(normalized_attempt or normalized_lease_owner or normalized_lease_expires_at)
+        if exact_claim_requested and not (
+            normalized_attempt > 0 and normalized_lease_owner and normalized_lease_expires_at
+        ):
             return None
         current = self.select_one(
             "workflow_commands", where_sql="command_id = %s", params=[str(command_id or "").strip()]
@@ -7816,8 +10193,27 @@ class LiveControlPlanePostgresAdapter:
         max_attempts = max(1, int(current.get("max_attempts") or 5))
         should_retry = bool(retryable) and attempt < max_attempts
         now = _utc_now_sql_timestamp()
+        clauses = ["command_id = %s", "status IN ('claimed', 'running')"]
+        params: list[Any] = [
+            "retry_wait" if should_retry else "failed_terminal",
+            now,
+            _expiry_timestamp(max(0, int(retry_delay_seconds or 0))) if should_retry else "",
+            str(error_text or "").strip(),
+            now,
+            str(command_id or "").strip(),
+        ]
+        if exact_claim_requested:
+            clauses.extend(
+                [
+                    "attempt = %s",
+                    "lease_owner = %s",
+                    "lease_expires_at = %s",
+                    "(NULLIF(lease_expires_at, '')::timestamp AT TIME ZONE 'UTC') > clock_timestamp()",
+                ]
+            )
+            params.extend([normalized_attempt, normalized_lease_owner, normalized_lease_expires_at])
         return self._execute_returning_one(
-            """
+            f"""
             UPDATE workflow_commands
             SET status = %s,
                 lease_owner = '',
@@ -7826,18 +10222,10 @@ class LiveControlPlanePostgresAdapter:
                 not_before_at = %s,
                 last_error = %s,
                 updated_at = %s
-            WHERE command_id = %s
-              AND status IN ('claimed', 'running')
+            WHERE {" AND ".join(clauses)}
             RETURNING *
             """,
-            (
-                "retry_wait" if should_retry else "failed_terminal",
-                now,
-                _expiry_timestamp(max(0, int(retry_delay_seconds or 0))) if should_retry else "",
-                str(error_text or "").strip(),
-                now,
-                str(command_id or "").strip(),
-            ),
+            tuple(params),
         )
 
     def fail_acquisition_root_command_claim(
@@ -7930,14 +10318,53 @@ class LiveControlPlanePostgresAdapter:
         plan_event: dict[str, Any] | None = None,
         child_command: dict[str, Any] | None = None,
         child_causality: dict[str, Any] | None = None,
+        entity_deltas: list[dict[str, Any]] | None = None,
         root_result: dict[str, Any] | None = None,
+        completion_contract: str = "acquisition_root",
     ) -> dict[str, Any] | None:
-        """Commit one acquisition root's plan event, intent child, and terminal row atomically."""
+        """Commit one exact root/source plan event, child, and terminal row atomically."""
 
         if _normalize_postgres_identifier(table_name) != "workflow_commands":
             raise ValueError("complete_acquisition_root_command requires table_name=workflow_commands")
         if not self.should_prefer_read("workflow_commands"):
             return None
+        contract_name = str(completion_contract or "acquisition_root").strip()
+        completion_contracts = {
+            "acquisition_root": {
+                "parent_command_type": "acquisition.run.create",
+                "parent_owner": "acquisition_run_writer",
+                "child_command_type": "acquisition.intent.resolve",
+                "child_owner": "acquisition_planner",
+                "reason_prefix": "acquisition_root",
+                "child_reason_prefix": "acquisition_root_intent_child",
+                "committed_reason": "acquisition_root_intent_child_committed",
+                "entity_delta_count": 0,
+                "entity_delta_type": "",
+            },
+            "company_public_web_source": {
+                "parent_command_type": "company.public_web.source.collect",
+                "parent_owner": "company_public_web_owner",
+                "child_command_type": "company.public_web.assets.materialize",
+                "child_owner": "company_public_web_owner",
+                "reason_prefix": "company_public_web_source",
+                "child_reason_prefix": "company_public_web_source_materialize_child",
+                "committed_reason": "company_public_web_source_materialize_child_committed",
+                "entity_delta_count": 1,
+                "entity_delta_type": "company_public_web_run",
+            },
+        }
+        contract = completion_contracts.get(contract_name)
+        if contract is None:
+            raise ValueError("complete_acquisition_root_command completion_contract is not registered")
+        parent_command_type = str(contract["parent_command_type"])
+        parent_owner = str(contract["parent_owner"])
+        child_command_type = str(contract["child_command_type"])
+        child_owner = str(contract["child_owner"])
+        reason_prefix = str(contract["reason_prefix"])
+        child_reason_prefix = str(contract["child_reason_prefix"])
+        committed_reason = str(contract["committed_reason"])
+        expected_entity_delta_count = int(contract["entity_delta_count"])
+        expected_entity_delta_type = str(contract["entity_delta_type"])
         self._ensure_runtime_coordination_schema()
         normalized_command_id = str(command_id or "").strip()
         normalized_lease_owner = str(expected_lease_owner or "").strip()
@@ -7946,6 +10373,7 @@ class LiveControlPlanePostgresAdapter:
         event_spec = dict(plan_event or {})
         child_spec = dict(child_command or {})
         causality_template = dict(child_causality or {})
+        delta_specs = [dict(item or {}) for item in list(entity_deltas or []) if isinstance(item, dict)]
         expected_root = dict(expected_root_command or {})
         terminal_result = dict(root_result or {})
         workflow_run_id = str(event_spec.get("workflow_run_id") or "").strip()
@@ -7964,6 +10392,7 @@ class LiveControlPlanePostgresAdapter:
             or not child_command_id
             or not child_idempotency_key
             or not expected_root
+            or len(delta_specs) != expected_entity_delta_count
         ):
             return None
         if (
@@ -7972,20 +10401,38 @@ class LiveControlPlanePostgresAdapter:
             or str(event_spec.get("event_type") or "").strip() != "CommandPlanRequested"
             or str(child_spec.get("workflow_run_id") or "").strip() != workflow_run_id
             or str(child_spec.get("operation_id") or "").strip() != operation_id
-            or str(child_spec.get("command_type") or "").strip() != "acquisition.intent.resolve"
-            or str(child_spec.get("owner") or "").strip() != "acquisition_planner"
+            or str(child_spec.get("command_type") or "").strip() != child_command_type
+            or str(child_spec.get("owner") or "").strip() != child_owner
             or str(causality_template.get("workflow_run_id") or "").strip() != workflow_run_id
             or str(causality_template.get("operation_id") or "").strip() != operation_id
-            or str(causality_template.get("command_type") or "").strip() != "acquisition.intent.resolve"
-            or str(causality_template.get("owner") or "").strip() != "acquisition_planner"
+            or str(causality_template.get("command_type") or "").strip() != child_command_type
+            or str(causality_template.get("owner") or "").strip() != child_owner
             or str(causality_template.get("parent_command_id") or "").strip() != normalized_command_id
             or str(causality_template.get("idempotency_key") or "").strip() != child_idempotency_key
             or str(causality_template.get("source_event_id") or "").strip()
             or str(causality_template.get("source_event_type") or "").strip() != "CommandPlanRequested"
             or list(terminal_result.get("downstream_command_ids") or []) != [child_command_id]
             or int(terminal_result.get("completed_claim_attempt") or 0) != normalized_attempt
+            or list(terminal_result.get("entity_delta_ids") or [])
+            != [str(item.get("delta_id") or "").strip() for item in delta_specs]
         ):
-            raise ValueError("acquisition root UoW contract mismatch")
+            raise ValueError(f"{contract_name} UoW contract mismatch")
+        for delta_spec in delta_specs:
+            if (
+                not str(delta_spec.get("delta_id") or "").strip()
+                or not str(delta_spec.get("workspace_id") or "").strip()
+                or str(delta_spec.get("workflow_run_id") or "").strip() != workflow_run_id
+                or str(delta_spec.get("operation_run_id") or "").strip() != operation_id
+                or str(delta_spec.get("command_id") or "").strip() != normalized_command_id
+                or not str(delta_spec.get("activity_run_id") or "").strip()
+                or not str(delta_spec.get("attempt_id") or "").strip()
+                or str(delta_spec.get("entity_type") or "").strip() != expected_entity_delta_type
+                or not str(delta_spec.get("entity_key") or "").strip()
+                or not str(delta_spec.get("delta_kind") or "").strip()
+                or str(delta_spec.get("status") or "").strip() != "recorded"
+                or not str(delta_spec.get("idempotency_key") or "").strip()
+            ):
+                raise ValueError(f"{contract_name} entity-delta contract mismatch")
 
         def response(
             *,
@@ -7994,6 +10441,7 @@ class LiveControlPlanePostgresAdapter:
             command: dict[str, Any] | None,
             child: dict[str, Any] | None = None,
             event: dict[str, Any] | None = None,
+            deltas: list[dict[str, Any]] | None = None,
         ) -> dict[str, Any]:
             return {
                 "outcome": outcome,
@@ -8001,6 +10449,7 @@ class LiveControlPlanePostgresAdapter:
                 "command": command,
                 "child_command": child,
                 "event": event,
+                "entity_deltas": list(deltas or []),
             }
 
         attempt = 0
@@ -8040,8 +10489,8 @@ class LiveControlPlanePostgresAdapter:
                             else lease_active_row
                         )
                         claim_is_current = bool(
-                            str(root.get("command_type") or "").strip() == "acquisition.run.create"
-                            and str(root.get("owner") or "").strip() == "acquisition_run_writer"
+                            str(root.get("command_type") or "").strip() == parent_command_type
+                            and str(root.get("owner") or "").strip() == parent_owner
                             and str(root.get("workflow_run_id") or "").strip() == workflow_run_id
                             and str(root.get("operation_id") or "").strip() == operation_id
                             and str(root.get("status") or "").strip() == "running"
@@ -8054,7 +10503,7 @@ class LiveControlPlanePostgresAdapter:
                             connection.commit()
                             return response(
                                 outcome="stale_claim",
-                                reason_code="acquisition_root_command_claim_not_current",
+                                reason_code=f"{reason_prefix}_command_claim_not_current",
                                 command=root,
                             )
                         try:
@@ -8094,7 +10543,7 @@ class LiveControlPlanePostgresAdapter:
                             connection.commit()
                             return response(
                                 outcome="conflict",
-                                reason_code="acquisition_root_command_persisted_json_invalid",
+                                reason_code=f"{reason_prefix}_command_persisted_json_invalid",
                                 command=root,
                             )
                         locked_root_identity = {
@@ -8129,7 +10578,7 @@ class LiveControlPlanePostgresAdapter:
                             connection.commit()
                             return response(
                                 outcome="conflict",
-                                reason_code="acquisition_root_command_locked_identity_mismatch",
+                                reason_code=f"{reason_prefix}_command_locked_identity_mismatch",
                                 command=root,
                             )
 
@@ -8155,7 +10604,7 @@ class LiveControlPlanePostgresAdapter:
                             connection.rollback()
                             return response(
                                 outcome="conflict",
-                                reason_code="acquisition_root_source_event_missing",
+                                reason_code=f"{reason_prefix}_source_event_missing",
                                 command=root,
                             )
                         cursor.execute(
@@ -8180,7 +10629,7 @@ class LiveControlPlanePostgresAdapter:
                             connection.rollback()
                             return response(
                                 outcome="conflict",
-                                reason_code="acquisition_root_plan_event_ambiguous",
+                                reason_code=f"{reason_prefix}_plan_event_ambiguous",
                                 command=root,
                             )
                         event = candidate_events[0] if candidate_events else None
@@ -8244,7 +10693,7 @@ class LiveControlPlanePostgresAdapter:
                                 connection.rollback()
                                 return response(
                                     outcome="conflict",
-                                    reason_code="acquisition_root_plan_event_json_invalid",
+                                    reason_code=f"{reason_prefix}_plan_event_json_invalid",
                                     command=root,
                                     event=event,
                                 )
@@ -8281,7 +10730,7 @@ class LiveControlPlanePostgresAdapter:
                                 connection.rollback()
                                 return response(
                                     outcome="conflict",
-                                    reason_code="acquisition_root_plan_event_identity_conflict",
+                                    reason_code=f"{reason_prefix}_plan_event_identity_conflict",
                                     command=root,
                                     event=event,
                                 )
@@ -8301,8 +10750,8 @@ class LiveControlPlanePostgresAdapter:
                             "command_id": child_command_id,
                             "workflow_run_id": workflow_run_id,
                             "operation_id": operation_id,
-                            "command_type": "acquisition.intent.resolve",
-                            "owner": "acquisition_planner",
+                            "command_type": child_command_type,
+                            "owner": child_owner,
                             **causality_columns,
                             "status": "queued",
                             "idempotency_key": child_idempotency_key,
@@ -8342,7 +10791,7 @@ class LiveControlPlanePostgresAdapter:
                             connection.rollback()
                             return response(
                                 outcome="conflict",
-                                reason_code="acquisition_root_intent_child_ambiguous",
+                                reason_code=f"{child_reason_prefix}_ambiguous",
                                 command=root,
                                 event=event,
                             )
@@ -8386,7 +10835,7 @@ class LiveControlPlanePostgresAdapter:
                                     connection.rollback()
                                     return response(
                                         outcome="conflict",
-                                        reason_code="acquisition_root_intent_child_unique_conflict",
+                                        reason_code=f"{child_reason_prefix}_unique_conflict",
                                         command=root,
                                         event=event,
                                     )
@@ -8431,7 +10880,7 @@ class LiveControlPlanePostgresAdapter:
                                 connection.rollback()
                                 return response(
                                     outcome="conflict",
-                                    reason_code="acquisition_root_intent_child_json_invalid",
+                                    reason_code=f"{child_reason_prefix}_json_invalid",
                                     command=root,
                                     child=child,
                                     event=event,
@@ -8492,11 +10941,182 @@ class LiveControlPlanePostgresAdapter:
                                 connection.rollback()
                                 return response(
                                     outcome="conflict",
-                                    reason_code="acquisition_root_intent_child_identity_conflict",
+                                    reason_code=f"{child_reason_prefix}_identity_conflict",
                                     command=root,
                                     child=child,
                                     event=event,
                                 )
+
+                        persisted_deltas: list[dict[str, Any]] = []
+                        for delta_spec in delta_specs:
+                            delta_row = {
+                                "delta_id": str(delta_spec.get("delta_id") or "").strip(),
+                                "workspace_id": str(delta_spec.get("workspace_id") or "").strip(),
+                                "workflow_run_id": workflow_run_id,
+                                "operation_run_id": operation_id,
+                                "command_id": normalized_command_id,
+                                "activity_run_id": str(delta_spec.get("activity_run_id") or "").strip(),
+                                "attempt_id": str(delta_spec.get("attempt_id") or "").strip(),
+                                "acquisition_run_id": str(delta_spec.get("acquisition_run_id") or "").strip(),
+                                "entity_type": str(delta_spec.get("entity_type") or "").strip(),
+                                "entity_key": str(delta_spec.get("entity_key") or "").strip(),
+                                "delta_kind": str(delta_spec.get("delta_kind") or "").strip(),
+                                "status": "recorded",
+                                "reason": str(delta_spec.get("reason") or "").strip(),
+                                "source_ref_json": _json_dump(dict(delta_spec.get("source_ref") or {})),
+                                "entity_payload_json": _json_dump(dict(delta_spec.get("entity_payload") or {})),
+                                "projection_effect_json": _json_dump(
+                                    dict(delta_spec.get("projection_effect") or {"entered_projection": False})
+                                ),
+                                "artifact_refs_json": _json_dump(list(delta_spec.get("artifact_refs") or [])),
+                                "idempotency_key": str(delta_spec.get("idempotency_key") or "").strip(),
+                                "metadata_json": _json_dump(dict(delta_spec.get("metadata") or {})),
+                                "created_at": repository_now,
+                                "updated_at": repository_now,
+                            }
+                            cursor.execute(
+                                """
+                                SELECT * FROM workflow_entity_deltas
+                                WHERE delta_id = %s
+                                   OR (workspace_id = %s AND idempotency_key = %s)
+                                ORDER BY delta_id
+                                FOR UPDATE
+                                """,
+                                (
+                                    delta_row["delta_id"],
+                                    delta_row["workspace_id"],
+                                    delta_row["idempotency_key"],
+                                ),
+                            )
+                            candidate_deltas = _fetch_all_dict_rows(cursor)
+                            if len(candidate_deltas) > 1:
+                                connection.rollback()
+                                return response(
+                                    outcome="conflict",
+                                    reason_code=f"{reason_prefix}_entity_delta_ambiguous",
+                                    command=root,
+                                    child=child,
+                                    event=event,
+                                )
+                            persisted_delta = candidate_deltas[0] if candidate_deltas else None
+                            delta_requires_validation = persisted_delta is not None
+                            if persisted_delta is None:
+                                delta_columns = list(delta_row)
+                                cursor.execute(
+                                    f"INSERT INTO workflow_entity_deltas "
+                                    f"({', '.join(_quote_identifier(column) for column in delta_columns)}) "
+                                    f"VALUES ({', '.join(['%s'] * len(delta_columns))}) "
+                                    f"ON CONFLICT DO NOTHING RETURNING *",
+                                    tuple(delta_row[column] for column in delta_columns),
+                                )
+                                persisted_delta = _fetch_one_dict_row(cursor, cursor.fetchone())
+                                if persisted_delta is None:
+                                    cursor.execute(
+                                        """
+                                        SELECT * FROM workflow_entity_deltas
+                                        WHERE delta_id = %s
+                                           OR (workspace_id = %s AND idempotency_key = %s)
+                                        ORDER BY delta_id
+                                        FOR UPDATE
+                                        """,
+                                        (
+                                            delta_row["delta_id"],
+                                            delta_row["workspace_id"],
+                                            delta_row["idempotency_key"],
+                                        ),
+                                    )
+                                    raced_deltas = _fetch_all_dict_rows(cursor)
+                                    if len(raced_deltas) != 1:
+                                        connection.rollback()
+                                        return response(
+                                            outcome="conflict",
+                                            reason_code=f"{reason_prefix}_entity_delta_unique_conflict",
+                                            command=root,
+                                            child=child,
+                                            event=event,
+                                        )
+                                    persisted_delta = raced_deltas[0]
+                                    delta_requires_validation = True
+                            if delta_requires_validation:
+                                assert persisted_delta is not None
+                                try:
+                                    persisted_source_ref = decode_json_contract(
+                                        persisted_delta.get("source_ref_json"), expected_type=dict
+                                    )
+                                    persisted_entity_payload = decode_json_contract(
+                                        persisted_delta.get("entity_payload_json"), expected_type=dict
+                                    )
+                                    persisted_projection_effect = decode_json_contract(
+                                        persisted_delta.get("projection_effect_json"), expected_type=dict
+                                    )
+                                    persisted_artifact_refs = decode_json_contract(
+                                        persisted_delta.get("artifact_refs_json"), expected_type=list
+                                    )
+                                    persisted_metadata = decode_json_contract(
+                                        persisted_delta.get("metadata_json"), expected_type=dict
+                                    )
+                                except JsonContractShapeError:
+                                    connection.rollback()
+                                    return response(
+                                        outcome="conflict",
+                                        reason_code=f"{reason_prefix}_entity_delta_json_invalid",
+                                        command=root,
+                                        child=child,
+                                        event=event,
+                                    )
+                                scalar_fields = (
+                                    "delta_id",
+                                    "workspace_id",
+                                    "workflow_run_id",
+                                    "operation_run_id",
+                                    "command_id",
+                                    "activity_run_id",
+                                    "attempt_id",
+                                    "acquisition_run_id",
+                                    "entity_type",
+                                    "entity_key",
+                                    "delta_kind",
+                                    "status",
+                                    "reason",
+                                    "idempotency_key",
+                                )
+                                delta_matches = all(
+                                    str(persisted_delta.get(field) or "").strip()
+                                    == str(delta_row.get(field) or "").strip()
+                                    for field in scalar_fields
+                                ) and bool(
+                                    json_contract_equal(
+                                        persisted_source_ref,
+                                        dict(delta_spec.get("source_ref") or {}),
+                                    )
+                                    and json_contract_equal(
+                                        persisted_entity_payload,
+                                        dict(delta_spec.get("entity_payload") or {}),
+                                    )
+                                    and json_contract_equal(
+                                        persisted_projection_effect,
+                                        dict(delta_spec.get("projection_effect") or {"entered_projection": False}),
+                                    )
+                                    and json_contract_equal(
+                                        persisted_artifact_refs,
+                                        list(delta_spec.get("artifact_refs") or []),
+                                    )
+                                    and json_contract_equal(
+                                        persisted_metadata,
+                                        dict(delta_spec.get("metadata") or {}),
+                                    )
+                                )
+                                if not delta_matches:
+                                    connection.rollback()
+                                    return response(
+                                        outcome="conflict",
+                                        reason_code=f"{reason_prefix}_entity_delta_identity_conflict",
+                                        command=root,
+                                        child=child,
+                                        event=event,
+                                    )
+                            assert persisted_delta is not None
+                            persisted_deltas.append(persisted_delta)
 
                         cursor.execute(
                             """
@@ -8511,8 +11131,8 @@ class LiveControlPlanePostgresAdapter:
                                 result_json = %s,
                                 updated_at = %s
                             WHERE command_id = %s
-                              AND command_type = 'acquisition.run.create'
-                              AND owner = 'acquisition_run_writer'
+                              AND command_type = %s
+                              AND owner = %s
                               AND status = 'running'
                               AND lease_owner = %s
                               AND lease_expires_at = %s
@@ -8526,6 +11146,8 @@ class LiveControlPlanePostgresAdapter:
                                 _json_dump(terminal_result),
                                 repository_now,
                                 normalized_command_id,
+                                parent_command_type,
+                                parent_owner,
                                 normalized_lease_owner,
                                 normalized_lease_expires_at,
                                 normalized_attempt,
@@ -8536,23 +11158,56 @@ class LiveControlPlanePostgresAdapter:
                             connection.rollback()
                             return response(
                                 outcome="stale_claim",
-                                reason_code="acquisition_root_command_claim_not_current",
+                                reason_code=f"{reason_prefix}_command_claim_not_current",
                                 command=root,
                             )
 
                     connection.commit()
                     return response(
                         outcome="applied",
-                        reason_code="acquisition_root_intent_child_committed",
+                        reason_code=committed_reason,
                         command=completed_root,
                         child=child,
                         event=event,
+                        deltas=persisted_deltas,
                     )
             except Exception as exc:
                 attempt += 1
                 if not _is_retryable_postgres_exception(exc) or attempt >= _CONTROL_PLANE_POSTGRES_MAX_RETRIES:
                     raise
                 time.sleep(_control_plane_postgres_retry_delay_seconds(attempt))
+
+    def complete_company_public_web_source_command(
+        self,
+        command_id: str,
+        *,
+        table_name: str = "workflow_commands",
+        expected_lease_owner: str,
+        expected_lease_expires_at: str,
+        expected_attempt: int,
+        expected_root_command: dict[str, Any] | None = None,
+        plan_event: dict[str, Any] | None = None,
+        child_command: dict[str, Any] | None = None,
+        child_causality: dict[str, Any] | None = None,
+        entity_deltas: list[dict[str, Any]] | None = None,
+        root_result: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
+        """Atomically publish one D1m materialize child and close its source claim."""
+
+        return self.complete_acquisition_root_command(
+            command_id,
+            table_name=table_name,
+            expected_lease_owner=expected_lease_owner,
+            expected_lease_expires_at=expected_lease_expires_at,
+            expected_attempt=expected_attempt,
+            expected_root_command=expected_root_command,
+            plan_event=plan_event,
+            child_command=child_command,
+            child_causality=child_causality,
+            entity_deltas=entity_deltas,
+            root_result=root_result,
+            completion_contract="company_public_web_source",
+        )
 
     def mark_workflow_command_partial_progress(
         self,

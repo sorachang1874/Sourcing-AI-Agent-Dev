@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from hashlib import sha1
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 from uuid import uuid4
 
 from .asset_governance import (
@@ -27,6 +28,8 @@ from .control_plane_job_progress import (
 )
 from .control_plane_live_postgres import (
     LiveControlPlanePostgresAdapter,
+    company_public_web_projection_order_sql,
+    normalize_company_public_web_asset_run_idempotency_key,
     resolve_control_plane_postgres_live_mode,
 )
 from .control_plane_repository import _validate_bulk_upsert_rows_call_contract
@@ -71,6 +74,31 @@ _RESULT_VIEW_SERVING_ARTIFACT_FILENAMES = (
     "snapshot_manifest.json",
     "materialized_candidate_documents.json",
 )
+_COMPANY_PUBLIC_WEB_SOURCE_PROJECTION_REVISION_MAX = 9_223_372_036_854_775_807
+
+
+def _company_public_web_run_projection_order_key(run: dict[str, Any]) -> tuple[Any, ...]:
+    """Mirror PG revision chronology with an explicit brownfield fallback."""
+
+    run_payload = dict(run or {})
+    raw_revision = dict(run_payload.get("metadata") or {}).get("source_projection_revision")
+    revision = (
+        raw_revision
+        if isinstance(raw_revision, int)
+        and not isinstance(raw_revision, bool)
+        and 1 <= raw_revision <= _COMPANY_PUBLIC_WEB_SOURCE_PROJECTION_REVISION_MAX
+        else 0
+    )
+    run_id = str(run_payload.get("run_id") or "")
+    if revision > 0:
+        return (1, revision, "", "", run_id)
+    return (
+        0,
+        0,
+        str(run_payload.get("updated_at") or ""),
+        str(run_payload.get("created_at") or ""),
+        run_id,
+    )
 
 
 def _normalize_job_result_view_source_path(source_path: str) -> str:
@@ -102,6 +130,7 @@ _CONTROL_PLANE_POSTGRES_NATIVE_READ_METHODS = {
     "list_latest_target_candidate_public_web_runs_by_record_ids",
     "list_latest_crm_public_web_runs_by_record_ids",
     "list_latest_company_public_web_asset_runs_by_company_keys",
+    "get_company_public_web_asset_run_exact",
 }
 _CONTROL_PLANE_POSTGRES_NATIVE_TABLES = {
     "save_job_row": "jobs",
@@ -125,6 +154,12 @@ _CONTROL_PLANE_POSTGRES_NATIVE_TABLES = {
     "clear_interrupt_agent_worker": "agent_worker_runs",
     "list_agent_workers_by_remote_provider_identifiers": "agent_worker_runs",
     "list_latest_company_public_web_asset_runs_by_company_keys": "company_public_web_asset_runs",
+    "create_company_public_web_asset_run_if_absent": "company_public_web_asset_runs",
+    "get_company_public_web_asset_run_exact": "company_public_web_asset_runs",
+    "reserve_company_public_web_source_projection_revision_if_owned": "company_public_web_asset_runs",
+    "finalize_company_public_web_asset_run_if_owned": "company_public_web_asset_runs",
+    "materialize_company_public_web_assets_for_exact_workflow_claim": "company_assets",
+    "upsert_company_public_web_asset_atomic_source_runs": "company_public_web_assets",
     "acquire_workflow_job_lease": "workflow_job_leases",
     "get_workflow_job_lease": "workflow_job_leases",
     "renew_workflow_job_lease": "workflow_job_leases",
@@ -5440,6 +5475,302 @@ class ControlPlaneStore:
             reason="postgres-only: write returned no confirmation; legacy SQLite mirror tail retired (B4)",
         )
 
+    def create_company_public_web_asset_run_if_absent(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Create the immutable source-run owner identity or return its exact replay.
+
+        This bypasses the generic primary-key upsert: source-run creation owns
+        both ``run_id`` and effective ``idempotency_key`` identities, so an
+        insert may never overwrite an existing row or split those identities
+        across two rows.
+        """
+
+        normalized = _normalize_company_public_web_asset_run_payload(payload)
+        now = _utc_now_timestamp()
+        row_payload = _company_public_web_asset_run_row_payload(normalized, existing=None, now=now)
+        result = self._call_control_plane_postgres_native(
+            "create_company_public_web_asset_run_if_absent",
+            row_payload,
+        )
+        if not isinstance(result, dict):
+            self._raise_control_plane_postgres_write_failure(
+                table_name="company_public_web_asset_runs",
+                method_name="create_company_public_web_asset_run_if_absent",
+                reason="native owner-row insert returned no durable run",
+            )
+        raw_run = result.get("run")
+        if str(result.get("outcome") or "").strip() != "owner_lost" and not isinstance(raw_run, dict):
+            self._raise_control_plane_postgres_write_failure(
+                table_name="company_public_web_asset_runs",
+                method_name="create_company_public_web_asset_run_if_absent",
+                reason="native owner-row insert returned no durable run",
+            )
+        return {
+            "created": bool(result.get("created")),
+            "reclaimed": bool(result.get("reclaimed")),
+            "outcome": str(result.get("outcome") or "").strip(),
+            "reason": str(result.get("reason") or "").strip(),
+            "run": self._company_public_web_asset_run_from_row(dict(raw_run)) if isinstance(raw_run, dict) else {},
+        }
+
+    def reserve_company_public_web_source_projection_revision_if_owned(
+        self,
+        *,
+        run_id: str,
+        idempotency_key: str,
+        command_id: str = "",
+        expected_attempt: int = 0,
+        expected_lease_owner: str = "",
+    ) -> dict[str, Any]:
+        result = self._call_control_plane_postgres_native(
+            "reserve_company_public_web_source_projection_revision_if_owned",
+            run_id=str(run_id or "").strip(),
+            idempotency_key=str(idempotency_key or ""),
+            command_id=str(command_id or "").strip(),
+            expected_attempt=expected_attempt,
+            expected_lease_owner=str(expected_lease_owner or "").strip(),
+        )
+        if not isinstance(result, dict):
+            self._raise_control_plane_postgres_write_failure(
+                table_name="company_public_web_asset_runs",
+                method_name="reserve_company_public_web_source_projection_revision_if_owned",
+                reason="native projection revision reservation returned no durable outcome",
+            )
+        raw_run = result.get("run")
+        return {
+            "outcome": str(result.get("outcome") or "").strip(),
+            "reason": str(result.get("reason") or "").strip(),
+            "source_projection_revision": int(result.get("source_projection_revision") or 0),
+            "run": self._company_public_web_asset_run_from_row(dict(raw_run)) if isinstance(raw_run, dict) else {},
+        }
+
+    def finalize_company_public_web_asset_run_if_owned(self, payload: dict[str, Any]) -> dict[str, Any]:
+        normalized = _normalize_company_public_web_asset_run_payload(payload)
+        existing = self.get_company_public_web_asset_run(run_id=normalized["run_id"])
+        now = _utc_now_timestamp()
+        row_payload = _company_public_web_asset_run_row_payload(normalized, existing=existing, now=now)
+        result = self._call_control_plane_postgres_native(
+            "finalize_company_public_web_asset_run_if_owned",
+            row_payload,
+        )
+        if not isinstance(result, dict):
+            self._raise_control_plane_postgres_write_failure(
+                table_name="company_public_web_asset_runs",
+                method_name="finalize_company_public_web_asset_run_if_owned",
+                reason="native owner-fenced finalizer returned no outcome",
+            )
+        raw_run = result.get("run")
+        return {
+            "outcome": str(result.get("outcome") or "").strip(),
+            "reason": str(result.get("reason") or "").strip(),
+            "run": self._company_public_web_asset_run_from_row(dict(raw_run)) if isinstance(raw_run, dict) else {},
+        }
+
+    def materialize_company_public_web_assets_for_exact_workflow_claim(
+        self,
+        *,
+        command: dict[str, Any],
+        run: dict[str, Any],
+        assets: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Project one immutable snapshot only behind its current physical claim."""
+
+        self._require_postgres_for_durable_runtime("company_assets")
+        self._require_postgres_for_durable_runtime("company_evidence")
+        command_id = str(dict(command or {}).get("command_id") or "").strip()
+        lease_owner = str(dict(command or {}).get("lease_owner") or "").strip()
+        raw_attempt = dict(command or {}).get("attempt")
+        attempt = 0 if isinstance(raw_attempt, bool) else max(0, int(raw_attempt or 0))
+        if not command_id or not lease_owner or attempt <= 0:
+            return {
+                "status": "owner_lost",
+                "reason": "company_public_web_materialize_command_claim_not_current",
+                "synced_asset_count": 0,
+                "synced_evidence_count": 0,
+                "company_asset_ids": [],
+                "company_evidence_ids": [],
+            }
+        normalized_assets = [
+            dict(asset or {})
+            for asset in list(assets or [])
+            if isinstance(asset, dict) and str(dict(asset or {}).get("asset_id") or "").strip()
+        ]
+        if not normalized_assets:
+            return {
+                "status": "skipped",
+                "reason": "no_company_public_web_assets",
+                "synced_asset_count": 0,
+                "synced_evidence_count": 0,
+                "company_asset_ids": [],
+                "company_evidence_ids": [],
+            }
+
+        run_payload = dict(run or {})
+        run_metadata = dict(run_payload.get("metadata") or {})
+        materialized_source_run_id = str(run_payload.get("run_id") or "").strip()
+        # Company Public Web canonical assets are shared company-level facts.
+        # The operation command remains workspace-scoped, but the established
+        # canonical projection contract is the shared ``default`` workspace.
+        workspace_id = "default"
+        now = _utc_now_timestamp()
+        company_asset_rows: list[dict[str, Any]] = []
+        company_evidence_rows: list[dict[str, Any]] = []
+        for asset in normalized_assets:
+            asset_metadata = dict(asset.get("metadata") or {})
+            source_asset_id = str(asset.get("asset_id") or "").strip()
+            source_family = str(asset.get("source_family") or "").strip() or "company_public_web_asset"
+            identity_hash = sha1(source_asset_id.encode("utf-8")).hexdigest()[:16]
+            canonical_asset_id = f"company-asset-{identity_hash}"
+            evidence_id = f"company-evidence-{identity_hash}"
+            url = str(asset.get("url") or "").strip()
+            title = str(asset.get("title") or "").strip()
+            summary = str(asset.get("summary") or "").strip()
+            company_key = str(asset.get("company_key") or run_payload.get("company_key") or "").strip()
+            target_company = str(asset.get("target_company") or run_payload.get("target_company") or "").strip()
+            source_run_ids = sorted(
+                {
+                    str(source_run_id or "").strip()
+                    for source_run_id in list(asset.get("source_run_ids") or [])
+                    if str(source_run_id or "").strip()
+                }
+                | ({materialized_source_run_id} if materialized_source_run_id else set())
+            )
+            source_run_completed_at = str(
+                asset_metadata.get("source_run_completed_at")
+                or run_metadata.get("source_projection_completed_at")
+                or run_payload.get("completed_at")
+                or ""
+            ).strip()
+            source_run_started_at = str(
+                asset_metadata.get("source_run_started_at") or run_payload.get("started_at") or ""
+            ).strip()
+            raw_source_projection_revision = asset_metadata.get(
+                "source_projection_revision",
+                run_metadata.get("source_projection_revision"),
+            )
+            source_projection_revision = (
+                raw_source_projection_revision
+                if isinstance(raw_source_projection_revision, int)
+                and not isinstance(raw_source_projection_revision, bool)
+                and raw_source_projection_revision > 0
+                else 0
+            )
+            source_projection_order_key = str(asset_metadata.get("source_projection_order_key") or "").strip()
+            if not source_projection_order_key:
+                source_projection_order_key = (
+                    "company_public_web_source_projection_v2:"
+                    f"{source_projection_revision:020d}:{materialized_source_run_id}"
+                )
+            metadata = {
+                "source": "company_public_web_assets",
+                "source_public_web_asset_id": source_asset_id,
+                "source_family": source_family,
+                "source_asset_kind": str(asset.get("asset_kind") or "").strip(),
+                "source_run_ids": source_run_ids,
+                "materialized_source_run_id": materialized_source_run_id,
+                "source_run_completed_at": source_run_completed_at,
+                "source_run_started_at": source_run_started_at,
+                "source_projection_revision": source_projection_revision,
+                "source_projection_order_key": source_projection_order_key,
+                "model_safe_payload": dict(asset.get("model_safe_payload") or {}),
+                "writer_id": "company_asset_writer_v1",
+                "materialize_command_id": command_id,
+            }
+            company_asset_rows.append(
+                _person_company_assets_repo.COMPANY_ASSETS.to_columns(
+                    {
+                        "asset_id": canonical_asset_id,
+                        "workspace_id": workspace_id,
+                        "company_key": company_key,
+                        "target_company": target_company,
+                        "asset_type": source_family,
+                        "source_kind": "company_public_web_model_safe",
+                        "source_run_id": materialized_source_run_id,
+                        "source_command_id": command_id,
+                        "content_ref": url,
+                        "source_url": url,
+                        "visibility_scope": "public_summary",
+                        "status": "available"
+                        if str(asset.get("status") or "active").strip() == "active"
+                        else "observed",
+                        "metadata": metadata,
+                        "created_at": now,
+                        "updated_at": now,
+                    }
+                )
+            )
+            try:
+                source_domain = str(urlparse(url).netloc or "").lower()
+            except ValueError:
+                source_domain = ""
+            company_evidence_rows.append(
+                _person_company_assets_repo.COMPANY_EVIDENCE.to_columns(
+                    {
+                        "evidence_id": evidence_id,
+                        "workspace_id": workspace_id,
+                        "company_key": company_key,
+                        "target_company": target_company,
+                        "asset_id": canonical_asset_id,
+                        "evidence_type": "company_public_web_asset",
+                        "value": summary or title or url,
+                        "normalized_value": summary or title or url,
+                        "source_url": url,
+                        "source_domain": source_domain,
+                        "evidence_excerpt": summary,
+                        "artifact_refs": dict(asset.get("artifact_refs") or {}),
+                        "status": "observed",
+                        "metadata": metadata,
+                        "created_at": now,
+                        "updated_at": now,
+                    }
+                )
+            )
+
+        result = self._call_control_plane_postgres_native(
+            "materialize_company_public_web_assets_for_exact_workflow_claim",
+            command_id=command_id,
+            expected_attempt=attempt,
+            expected_lease_owner=lease_owner,
+            company_asset_rows=company_asset_rows,
+            company_evidence_rows=company_evidence_rows,
+        )
+        if not isinstance(result, dict):
+            self._raise_control_plane_postgres_write_failure(
+                table_name="company_assets",
+                method_name="materialize_company_public_web_assets_for_exact_workflow_claim",
+                reason="exact-claim canonical materialization returned no durable outcome",
+            )
+        if str(result.get("outcome") or "").strip() == "owner_lost":
+            return {
+                "status": "owner_lost",
+                "reason": str(
+                    result.get("reason") or "company_public_web_materialize_command_claim_not_current"
+                ).strip(),
+                "synced_asset_count": 0,
+                "synced_evidence_count": 0,
+                "company_asset_ids": [],
+                "company_evidence_ids": [],
+            }
+        raw_assets = [dict(row or {}) for row in list(result.get("company_assets") or [])]
+        raw_evidence = [dict(row or {}) for row in list(result.get("company_evidence") or [])]
+        if len(raw_assets) != len(company_asset_rows) or len(raw_evidence) != len(company_evidence_rows):
+            self._raise_control_plane_postgres_write_failure(
+                table_name="company_assets",
+                method_name="materialize_company_public_web_assets_for_exact_workflow_claim",
+                reason="exact-claim canonical materialization returned an incomplete durable set",
+            )
+        persisted_assets = [self._company_asset_from_row(row) for row in raw_assets]
+        persisted_evidence = [self._company_evidence_from_row(row) for row in raw_evidence]
+        return {
+            "status": "synced",
+            "source": "company_public_web_assets",
+            "owner": "CompanyAssetWriter",
+            "effect_authority": "exact_physical_workflow_command_claim",
+            "synced_asset_count": len(persisted_assets),
+            "synced_evidence_count": len(persisted_evidence),
+            "company_asset_ids": [str(row.get("asset_id") or "") for row in persisted_assets],
+            "company_evidence_ids": [str(row.get("evidence_id") or "") for row in persisted_evidence],
+        }
+
     def get_company_public_web_asset_run(
         self,
         *,
@@ -5447,19 +5778,16 @@ class ControlPlaneStore:
         idempotency_key: str = "",
     ) -> dict[str, Any] | None:
         normalized_run_id = str(run_id or "").strip()
-        normalized_idempotency_key = str(idempotency_key or "").strip()
+        normalized_idempotency_key = normalize_company_public_web_asset_run_idempotency_key(idempotency_key)
         if not normalized_run_id and not normalized_idempotency_key:
             return None
-        where_sql = "run_id = %s" if normalized_run_id else "idempotency_key = %s"
-        value = normalized_run_id or normalized_idempotency_key
-        postgres_row = self._select_control_plane_row(
-            "company_public_web_asset_runs",
-            row_builder=self._company_public_web_asset_run_from_row,
-            where_sql=where_sql,
-            params=[value],
+        postgres_row = self._call_control_plane_postgres_native(
+            "get_company_public_web_asset_run_exact",
+            run_id=normalized_run_id,
+            idempotency_key=normalized_idempotency_key,
         )
         if postgres_row is not None:
-            return postgres_row
+            return self._company_public_web_asset_run_from_row(postgres_row)
         return None
 
     def list_company_public_web_asset_runs(
@@ -5497,11 +5825,19 @@ class ControlPlaneStore:
             row_builder=self._company_public_web_asset_run_from_row,
             where_sql=" AND ".join(clauses_pg),
             params=params,
-            order_by_sql="updated_at DESC, created_at DESC, run_id DESC",
+            order_by_sql=company_public_web_projection_order_sql(
+                metadata_expression="metadata_json::jsonb",
+                updated_at_expression="updated_at",
+                created_at_expression="created_at",
+                run_id_expression="run_id",
+            ),
             limit=max(1, int(limit or 100)),
         )
         if postgres_rows:
-            return postgres_rows
+            # Keep the public in-memory projection identical to its SQL owner;
+            # callers that supply an adapter double must not silently fall back
+            # to wall-clock chronology.
+            return sorted(postgres_rows, key=_company_public_web_run_projection_order_key, reverse=True)
         return []
 
     def list_latest_company_public_web_asset_runs_by_company_keys(
@@ -5522,11 +5858,12 @@ class ControlPlaneStore:
             limit=max(1, int(limit or 1000)),
         )
         if native_rows:
-            return [
+            parsed_rows = [
                 self._company_public_web_asset_run_from_row(row)
                 for row in list(native_rows or [])
                 if isinstance(row, dict)
             ]
+            return sorted(parsed_rows, key=_company_public_web_run_projection_order_key, reverse=True)
         return []
 
     def upsert_company_public_web_asset(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -5534,15 +5871,30 @@ class ControlPlaneStore:
         existing = self.get_company_public_web_asset(asset_id=normalized["asset_id"])
         now = _utc_now_timestamp()
         row_payload = _company_public_web_asset_row_payload(normalized, existing=existing, now=now)
-        if self._write_control_plane_row_to_postgres("company_public_web_assets", row_payload):
-            return self.get_company_public_web_asset(
-                asset_id=normalized["asset_id"]
-            ) or self._company_public_web_asset_from_row(row_payload)
+        written = self._call_control_plane_postgres_native(
+            "upsert_company_public_web_asset_atomic_source_runs",
+            row_payload,
+        )
+        if isinstance(written, dict):
+            # The native statement unions source_run_ids_json inside the same
+            # INSERT .. ON CONFLICT transaction.  Its RETURNING row is also the
+            # only race-free observation of the mutation; do not reread here.
+            return self._company_public_web_asset_from_row(written)
         self._raise_control_plane_postgres_write_failure(
             table_name="company_public_web_assets",
-            method_name="upsert_company_public_web_asset",
-            reason="postgres-only: write returned no confirmation; legacy SQLite mirror tail retired (B4)",
+            method_name="upsert_company_public_web_asset_atomic_source_runs",
+            reason="native atomic asset upsert returned no durable row",
         )
+
+    def prepare_company_public_web_asset(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Normalize one source asset without publishing any durable effect.
+
+        Source collection freezes its completed-run snapshot before it publishes
+        mutable source rows.  Keeping normalization on the storage owner avoids
+        a second asset-id/default implementation in the collector.
+        """
+
+        return _normalize_company_public_web_asset_payload(payload)
 
     def get_company_public_web_asset(
         self,
@@ -5583,6 +5935,7 @@ class ControlPlaneStore:
         *,
         target_company: str = "",
         company_key: str = "",
+        source_run_id: str = "",
         source_family: str = "",
         status: str = "",
         limit: int = 500,
@@ -5604,6 +5957,11 @@ class ControlPlaneStore:
             clauses_sqlite.append(clause_sqlite)
             clauses_pg.append(clause_pg)
             params.extend(clause_params)
+        normalized_source_run_id = str(source_run_id or "").strip()
+        if normalized_source_run_id:
+            clauses_sqlite.append("source_run_ids_json LIKE ?")
+            clauses_pg.append("source_run_ids_json::jsonb ? %s")
+            params.append(normalized_source_run_id)
         normalized_source_family = str(source_family or "").strip()
         if normalized_source_family:
             clauses_sqlite.append("source_family = ?")
@@ -7205,6 +7563,9 @@ class ControlPlaneStore:
         command_id: str,
         *,
         result: dict[str, Any] | None = None,
+        expected_attempt: int = 0,
+        expected_lease_owner: str = "",
+        expected_lease_expires_at: str = "",
     ) -> dict[str, Any]:
         self._require_postgres_for_durable_runtime("workflow_commands")
         normalized_command_id = str(command_id or "").strip()
@@ -7215,6 +7576,9 @@ class ControlPlaneStore:
                 "mark_workflow_command_succeeded",
                 normalized_command_id,
                 result=result or {},
+                expected_attempt=max(0, int(expected_attempt or 0)),
+                expected_lease_owner=str(expected_lease_owner or "").strip(),
+                expected_lease_expires_at=str(expected_lease_expires_at or "").strip(),
             )
             return self._workflow_command_from_row(row) if row is not None else {}
         raise RuntimeError(
@@ -7229,6 +7593,9 @@ class ControlPlaneStore:
         error_text: str,
         retryable: bool = True,
         retry_delay_seconds: int = 30,
+        expected_attempt: int = 0,
+        expected_lease_owner: str = "",
+        expected_lease_expires_at: str = "",
     ) -> dict[str, Any]:
         self._require_postgres_for_durable_runtime("workflow_commands")
         normalized_command_id = str(command_id or "").strip()
@@ -7241,6 +7608,9 @@ class ControlPlaneStore:
                 error_text=error_text,
                 retryable=retryable,
                 retry_delay_seconds=retry_delay_seconds,
+                expected_attempt=max(0, int(expected_attempt or 0)),
+                expected_lease_owner=str(expected_lease_owner or "").strip(),
+                expected_lease_expires_at=str(expected_lease_expires_at or "").strip(),
             )
             return self._workflow_command_from_row(row) if row is not None else {}
         raise RuntimeError(
@@ -11866,7 +12236,7 @@ def _normalize_company_public_web_asset_run_payload(payload: dict[str, Any]) -> 
     seed_urls = _normalize_public_web_string_list(normalized.get("seed_urls") or normalized.get("urls"))
     options = dict(normalized.get("options") or {})
     force_refresh = bool(normalized.get("force_refresh"))
-    idempotency_key = str(normalized.get("idempotency_key") or "").strip()
+    idempotency_key = normalize_company_public_web_asset_run_idempotency_key(normalized.get("idempotency_key"))
     if not idempotency_key:
         idempotency_key = "company-public-web-run:" + _public_web_hash_token(
             company_key,
@@ -11881,7 +12251,10 @@ def _normalize_company_public_web_asset_run_payload(payload: dict[str, Any]) -> 
         str(normalized.get("run_id") or "").strip()
         or f"company-public-web-run-{_public_web_hash_token(idempotency_key)}"
     )
-    status = _normalize_target_candidate_public_web_status(normalized.get("status"))
+    requested_status = str(normalized.get("status") or "").strip().lower()
+    status = (
+        "running" if requested_status == "running" else _normalize_target_candidate_public_web_status(requested_status)
+    )
     phase = str(normalized.get("phase") or status or "queued").strip().lower()
     started_at = str(normalized.get("started_at") or "").strip()
     if status != "queued" and not started_at:
@@ -11919,9 +12292,14 @@ def _company_public_web_asset_run_row_payload(
     now: str,
 ) -> dict[str, Any]:
     created_at = str((existing or {}).get("created_at") or normalized.get("created_at") or "").strip() or now
-    return _public_web_repo.COMPANY_PUBLIC_WEB_ASSET_RUNS.to_columns(
+    row_payload = _public_web_repo.COMPANY_PUBLIC_WEB_ASSET_RUNS.to_columns(
         {**normalized, "created_at": created_at, "updated_at": now}
     )
+    # This identity has an explicit protocol-ASCII whitespace scope.  The
+    # generic descriptor strips Unicode whitespace from all text fields, so
+    # restore the already-normalized identity byte-for-byte for SQL parity.
+    row_payload["idempotency_key"] = normalized["idempotency_key"]
+    return row_payload
 
 
 def _crm_public_web_batch_row_payload(
@@ -11961,6 +12339,22 @@ def _normalize_company_public_web_asset_payload(payload: dict[str, Any]) -> dict
     source_run_ids = _normalize_public_web_string_list(normalized.get("source_run_ids"))
     if latest_run_id and latest_run_id not in source_run_ids:
         source_run_ids.append(latest_run_id)
+    metadata = dict(normalized.get("metadata") or {})
+    raw_source_projection_revision = metadata.get("source_projection_revision")
+    source_projection_revision = (
+        raw_source_projection_revision
+        if isinstance(raw_source_projection_revision, int)
+        and not isinstance(raw_source_projection_revision, bool)
+        and raw_source_projection_revision > 0
+        else 0
+    )
+    metadata["source_projection_revision"] = source_projection_revision
+    source_projection_order_key = str(metadata.get("source_projection_order_key") or "").strip()
+    if not source_projection_order_key:
+        source_projection_order_key = (
+            f"company_public_web_source_projection_v2:{source_projection_revision:020d}:{latest_run_id}"
+        )
+    metadata["source_projection_order_key"] = source_projection_order_key
     return {
         "asset_id": asset_id,
         "company_key": company_key,
@@ -11976,7 +12370,7 @@ def _normalize_company_public_web_asset_payload(payload: dict[str, Any]) -> dict
         "source_run_ids": source_run_ids,
         "artifact_refs": dict(normalized.get("artifact_refs") or {}),
         "status": str(normalized.get("status") or "active").strip().lower() or "active",
-        "metadata": dict(normalized.get("metadata") or {}),
+        "metadata": metadata,
         "created_at": str(normalized.get("created_at") or "").strip(),
     }
 

@@ -74,8 +74,8 @@ def test_production_registry_reflects_current_schema_partition_and_still_serves_
     assert len(records) == 15
     assert set(CRM_RESOURCE_BOUND_ACTION_TYPES).issubset(schema_defined)
     assert schema_defined == set(OPERATION_OWNER_BOUND_ACTION_TYPES)
-    assert len(schema_defined) == 9
-    assert sum(not DEFAULT_ACTION_REGISTRY.spec_for(action_type).has_request_schema for action_type in records) == 6
+    assert len(schema_defined) == 10
+    assert sum(not DEFAULT_ACTION_REGISTRY.spec_for(action_type).has_request_schema for action_type in records) == 5
     assert sum(record.get("agent_tool_enabled") is True for record in records.values()) == 0
     assert all("served_tool_status" not in record for record in records.values())
 

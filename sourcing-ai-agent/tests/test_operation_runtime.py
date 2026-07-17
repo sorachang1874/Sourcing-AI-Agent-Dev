@@ -4,6 +4,8 @@ import os
 import tempfile
 import threading
 import unittest
+from concurrent.futures import ThreadPoolExecutor
+from hashlib import sha1
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -16,6 +18,12 @@ from sourcing_agent.api import create_server
 from sourcing_agent.asset_catalog import AssetCatalog
 from sourcing_agent.command_kernel import CommandKernel
 from sourcing_agent.company_asset_writer import CompanyAssetWriter
+from sourcing_agent.company_public_web_assets import (
+    build_company_public_web_materialization_snapshot_identity,
+    build_company_public_web_run_idempotency_key,
+    normalize_company_public_web_options,
+    short_hash,
+)
 from sourcing_agent.control_plane_live_postgres import ControlPlaneAdvisoryLockBusy
 from sourcing_agent.crm_public_web_runtime import start_crm_public_web_batch
 from sourcing_agent.domain import JobRequest
@@ -136,6 +144,349 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
     def tearDown(self) -> None:
         self._stop_pg_durable_runtime()
         self.tempdir.cleanup()
+
+    @staticmethod
+    def _company_public_web_completed_run_snapshot(
+        *,
+        company: str,
+        company_key: str,
+        run_id: str,
+        url: str,
+    ) -> dict[str, Any]:
+        snapshot_asset = {
+            "asset_id": f"company-public-web-asset-{company_key}",
+            "target_company": company,
+            "company_key": company_key,
+            "latest_run_id": run_id,
+            "source_run_ids": [run_id],
+            "source_family": "company_homepage",
+            "asset_kind": "company_public_web_seed",
+            "title": f"{company} homepage",
+            "url": url,
+            "normalized_url_key": url.rstrip("/").lower(),
+            "summary": f"Model-safe company-level public web seed for {company}: {company} homepage.",
+            "model_safe_payload": {
+                "target_company": company,
+                "company_key": company_key,
+                "source_family": "company_homepage",
+                "url": url,
+                "raw_content_included": False,
+            },
+            "artifact_refs": {},
+            "status": "active",
+            "metadata": {"collection_mode": "seed_url_only"},
+            "raw_assets_included": False,
+        }
+        snapshot = [snapshot_asset]
+        started_at = "2026-07-17 00:00:00"
+        completed_at = "2026-07-17 00:01:00"
+        return {
+            "run_id": run_id,
+            "target_company": company,
+            "company_key": company_key,
+            "status": "completed",
+            "phase": "completed",
+            "started_at": started_at,
+            "completed_at": completed_at,
+            "discovered_assets": snapshot,
+            "summary": {"asset_count": 1},
+            "metadata": {
+                "artifact_paths": {},
+                "source_projection_revision": 1,
+                **build_company_public_web_materialization_snapshot_identity(
+                    snapshot,
+                    summary={"asset_count": 1},
+                    artifact_paths={},
+                    source_projection_revision=1,
+                    started_at=started_at,
+                    completed_at=completed_at,
+                ),
+            },
+        }
+
+    def _company_public_web_test_runtime(
+        self,
+        suffix: str,
+    ) -> tuple[ControlPlaneStore, SourcingOrchestrator]:
+        settings = AppSettings(
+            project_root=self.runtime_dir,
+            runtime_dir=self.runtime_dir,
+            secrets_file=self.runtime_dir / "secrets.toml",
+            db_path=self.runtime_dir / f"company-public-web-{suffix}.db",
+            jobs_dir=self.runtime_dir / "jobs",
+            company_assets_dir=self.runtime_dir / "company_assets",
+            qwen=QwenSettings(enabled=False),
+            semantic=SemanticProviderSettings(enabled=False),
+            harvest=HarvestSettings(profile_scraper=HarvestActorSettings(enabled=False)),
+        )
+        api_store = ControlPlaneStore(settings.db_path)
+        catalog = AssetCatalog.discover()
+        model_client = DeterministicModelClient()
+        return api_store, SourcingOrchestrator(
+            catalog=catalog,
+            store=api_store,
+            jobs_dir=settings.jobs_dir,
+            model_client=model_client,
+            semantic_provider=LocalSemanticProvider(),
+            acquisition_engine=AcquisitionEngine(catalog, settings, api_store, model_client),
+        )
+
+    def _plan_company_public_web_source_command(
+        self,
+        orchestrator: SourcingOrchestrator,
+        *,
+        company: str,
+        company_key: str,
+        suffix: str,
+        force_refresh: bool = False,
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        action_input: dict[str, Any] = {
+            "target_company": company,
+            "source_families": ["company_homepage"],
+            "seed_urls": [f"https://{company_key}.example/"],
+            "force_refresh": force_refresh,
+        }
+        if force_refresh:
+            action_input["refresh_nonce"] = f"nonce-{suffix}"
+        submitted = orchestrator.submit_operation_action(
+            {
+                "action_type": ACTION_REFRESH_COMPANY_PUBLIC_WEB,
+                "input": action_input,
+                "budget": {"max_provider_calls": 0, "max_usd": 0.0},
+                "idempotency_key": f"company-public-web:{suffix}",
+            }
+        )
+        approved = orchestrator.approve_operation_action_api(
+            submitted["action"]["action_id"],
+            {"actor": "unit-test"},
+        )
+        planned = orchestrator.dispatch_operation_run_api(
+            approved["operation_run"]["operation_run_id"],
+            {"actor": "unit-test"},
+        )
+        root_drain = orchestrator._drain_company_public_web_refresh_commands(  # noqa: SLF001
+            {"workflow_run_id": planned["workflow_command"]["workflow_run_id"], "command_limit": 1}
+        )
+        self.assertEqual(root_drain["completed_count"], 1, root_drain)
+        root_command = orchestrator.store.get_workflow_command(planned["workflow_command"]["command_id"])
+        source_command = orchestrator.store.get_workflow_command(root_command["result"]["downstream_command_ids"][0])
+        return planned, source_command
+
+    def _prepare_exhausted_company_public_web_source_command(
+        self,
+        api_store: ControlPlaneStore,
+        orchestrator: SourcingOrchestrator,
+        *,
+        suffix: str,
+    ) -> tuple[dict[str, Any], dict[str, Any], str, str]:
+        planned, source_command = self._plan_company_public_web_source_command(
+            orchestrator,
+            company=f"Exhausted Source {suffix} Labs",
+            company_key=f"exhaustedsource{short_hash(suffix)}",
+            suffix=suffix,
+        )
+        api_store._control_plane_postgres._execute_non_query(  # noqa: SLF001
+            "UPDATE workflow_commands SET max_attempts = 1 WHERE command_id = %s",
+            (source_command["command_id"],),
+        )
+        lease_owner = f"company-public-web-exhausted-{suffix}"
+        claimed = api_store.claim_workflow_command(
+            source_command["command_id"],
+            lease_owner=lease_owner,
+            lease_seconds=60,
+        )
+        self.assertEqual(int(claimed["attempt"]), 1)
+        running = api_store.mark_workflow_command_running(
+            source_command["command_id"],
+            lease_owner=lease_owner,
+        )
+        self.assertEqual(running["status"], "running")
+        operation_run_id = str(running["operation_id"])
+        action_id = str(api_store.repos.workflow_runtime.get_operation(operation_run_id)["action_id"])
+        return planned, running, operation_run_id, action_id
+
+    @staticmethod
+    def _company_public_web_source_activity_identity(
+        command: dict[str, Any],
+        *,
+        attempt_suffix: str = "company_public_web_refresh",
+    ) -> dict[str, str]:
+        command_id = str(command["command_id"])
+        activity_key = f"workflow_activity:{COMPANY_PUBLIC_WEB_SOURCE_COLLECT_COMMAND_TYPE}:{command_id}"
+        activity_run_id = f"actrun_{sha1(activity_key.encode('utf-8')).hexdigest()[:24]}"
+        attempt_key_suffix = sha1(
+            (f"{COMPANY_PUBLIC_WEB_SOURCE_COLLECT_COMMAND_TYPE}:{attempt_suffix}:{int(command['attempt'])}").encode(
+                "utf-8"
+            )
+        ).hexdigest()[:24]
+        attempt_key = f"workflow_activity_attempt:{command_id}:{attempt_key_suffix}"
+        return {
+            "activity_run_id": activity_run_id,
+            "activity_idempotency_key": activity_key,
+            "attempt_id": f"actattempt_{sha1(attempt_key.encode('utf-8')).hexdigest()[:24]}",
+            "attempt_idempotency_key": attempt_key,
+        }
+
+    @staticmethod
+    def _start_guarded_company_public_web_source_activity(
+        orchestrator: SourcingOrchestrator,
+        command: dict[str, Any],
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        payload = dict(command.get("payload") or {})
+        return orchestrator._start_workflow_command_activity_attempt(  # noqa: SLF001
+            command,
+            activity_type=COMPANY_PUBLIC_WEB_SOURCE_COLLECT_COMMAND_TYPE,
+            owner=COMPANY_PUBLIC_WEB_REFRESH_OWNER,
+            phase="company_public_web_source_collect_started",
+            lease_owner=str(command["lease_owner"]),
+            provider=str(
+                dict(payload.get("options") or {}).get("collection_mode")
+                or payload.get("collection_mode")
+                or "seed_url_only"
+            ),
+            provider_request_ref=str(command["command_id"]),
+            input_payload={
+                "target_company": str(payload.get("target_company") or ""),
+                "company_key": str(payload.get("company_key") or ""),
+                "collection_mode": str(
+                    dict(payload.get("options") or {}).get("collection_mode")
+                    or payload.get("collection_mode")
+                    or "seed_url_only"
+                ),
+                "seed_url_count": len(list(payload.get("seed_urls") or [])),
+                "source_family_count": len(list(payload.get("source_families") or [])),
+            },
+            entity_counts={"company_public_web_run_count": 1},
+            metadata={
+                "activity_owner": COMPANY_PUBLIC_WEB_REFRESH_OWNER,
+                "company_asset_layer": "company_assets/company_evidence/company_assertions",
+            },
+            attempt_suffix="company_public_web_refresh",
+            require_current_command_claim=True,
+        )
+
+    @staticmethod
+    def _insert_company_public_web_source_activity(
+        api_store: ControlPlaneStore,
+        command: dict[str, Any],
+        identity: dict[str, str],
+        *,
+        status: str = "running",
+        overrides: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        payload = dict(command.get("payload") or {})
+        return api_store.repos.workflow_runtime.upsert_activity_run(
+            {
+                "activity_run_id": identity["activity_run_id"],
+                "workspace_id": str(payload.get("workspace_id") or "default"),
+                "workflow_run_id": command["workflow_run_id"],
+                "operation_run_id": command["operation_id"],
+                "command_id": command["command_id"],
+                "activity_type": COMPANY_PUBLIC_WEB_SOURCE_COLLECT_COMMAND_TYPE,
+                "owner": COMPANY_PUBLIC_WEB_REFRESH_OWNER,
+                "status": status,
+                "phase": "company_public_web_source_collect_started",
+                "idempotency_key": identity["activity_idempotency_key"],
+                "input": {"company_key": payload.get("company_key")},
+                "output": {},
+                "artifact_refs": [],
+                "entity_counts": {"company_public_web_run_count": 1},
+                "metadata": {
+                    "lease_owner": command["lease_owner"],
+                    "workflow_command_id": command["command_id"],
+                    "workflow_command_type": command["command_type"],
+                    "workflow_command_owner": command["owner"],
+                    "activity_spine_contract": "command_activity_attempt_entity_delta_v1",
+                },
+                **dict(overrides or {}),
+            }
+        )
+
+    @staticmethod
+    def _insert_company_public_web_source_attempt(
+        api_store: ControlPlaneStore,
+        command: dict[str, Any],
+        identity: dict[str, str],
+        *,
+        status: str = "running",
+        overrides: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        payload = dict(command.get("payload") or {})
+        return api_store.repos.workflow_runtime.upsert_activity_attempt(
+            {
+                "attempt_id": identity["attempt_id"],
+                "workspace_id": str(payload.get("workspace_id") or "default"),
+                "activity_run_id": identity["activity_run_id"],
+                "workflow_run_id": command["workflow_run_id"],
+                "command_id": command["command_id"],
+                "attempt_number": int(command["attempt"]),
+                "status": status,
+                "provider": "seed_url_only",
+                "provider_request_ref": command["command_id"],
+                "input": {"company_key": payload.get("company_key")},
+                "output": {},
+                "artifact_refs": [],
+                "error": {},
+                "idempotency_key": identity["attempt_idempotency_key"],
+                "metadata": {
+                    "lease_owner": command["lease_owner"],
+                    "activity_spine_contract": "command_activity_attempt_entity_delta_v1",
+                },
+                **dict(overrides or {}),
+            }
+        )
+
+    @classmethod
+    def _insert_company_public_web_source_resume_attempt(
+        cls,
+        api_store: ControlPlaneStore,
+        command: dict[str, Any],
+        *,
+        overrides: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        payload = dict(command.get("payload") or {})
+        identity = cls._company_public_web_source_activity_identity(
+            command,
+            attempt_suffix="owner_specific_resume",
+        )
+        resume_payload: dict[str, Any] = {
+            "completed_at": "2026-07-17 00:00:00",
+            "input": {
+                "target_company": str(payload.get("target_company") or ""),
+                "company_key": str(payload.get("company_key") or ""),
+                "phase_command_type": COMPANY_PUBLIC_WEB_SOURCE_COLLECT_COMMAND_TYPE,
+                "control_action": "resume",
+                "force": True,
+            },
+            "output": {
+                "command_id": str(command["command_id"]),
+                "command_type": COMPANY_PUBLIC_WEB_SOURCE_COLLECT_COMMAND_TYPE,
+                "target_company": str(payload.get("target_company") or ""),
+                "company_key": str(payload.get("company_key") or ""),
+                "control_action": "resume",
+                "force": True,
+                "reason": "synthetic future owner-specific resume evidence",
+            },
+            "metadata": {
+                "lease_owner": str(command["lease_owner"]),
+                "activity_spine_contract": "command_activity_attempt_entity_delta_v1",
+                "owner_specific_control": True,
+                "company_public_web_owner": COMPANY_PUBLIC_WEB_REFRESH_OWNER,
+                "resume_mode": "owner_specific_requeue",
+            },
+        }
+        for key, value in dict(overrides or {}).items():
+            if key in {"input", "output", "metadata"} and isinstance(value, dict):
+                resume_payload[key] = {**dict(resume_payload[key]), **dict(value)}
+            else:
+                resume_payload[key] = value
+        return cls._insert_company_public_web_source_attempt(
+            api_store,
+            command,
+            identity,
+            status="succeeded",
+            overrides=resume_payload,
+        )
 
     def _projection_export_owner_target(
         self,
@@ -3509,16 +3860,27 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         self.assertEqual(self.store.list_workflow_commands(limit=0), [])
 
     def test_budget_required_action_requires_explicit_budget(self) -> None:
+        company_public_web_input = {
+            "target_company": "Company A",
+            "source_families": ["company_homepage"],
+            "seed_urls": ["https://company-a.example/"],
+        }
+        company_public_web_target = OwnerBoundTargetRef(
+            owner_module="company_public_web_owner",
+            target_ref={"workspace_id": "default", "company_key": "company-a"},
+        )
         with self.assertRaisesRegex(ValueError, "requires explicit budget"):
             self.writer.submit_action(
                 action_type=ACTION_REFRESH_COMPANY_PUBLIC_WEB,
-                target_ref={"company_id": "company-a"},
+                owner_bound_target_ref=company_public_web_target,
+                input_payload=company_public_web_input,
                 idempotency_key="enrich:person-a",
             )
 
         result = self.writer.submit_action(
             action_type=ACTION_REFRESH_COMPANY_PUBLIC_WEB,
-            target_ref={"company_id": "company-a"},
+            owner_bound_target_ref=company_public_web_target,
+            input_payload=company_public_web_input,
             budget={"max_provider_calls": 3, "max_usd": 1.5},
             idempotency_key="enrich:person-a",
         )
@@ -11997,17 +12359,25 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             submitted = orchestrator.submit_operation_action(
                 {
                     "action_type": ACTION_REFRESH_COMPANY_PUBLIC_WEB,
-                    "target_ref": {"target_company": "OpenAI", "company_key": "openai"},
                     "input": {
+                        "target_company": " OpenAI ",
                         "collection_mode": "seed_url_only",
-                        "source_families": ["homepage"],
+                        "source_families": ["company_homepage", "company_homepage"],
                         "seed_urls": ["https://openai.com/"],
-                        "force_refresh": "false",
+                        "force_refresh": False,
                     },
                     "budget": {"max_provider_calls": 0, "max_usd": 0.0},
                     "idempotency_key": "company-public-web:openai-homepage",
                 }
             )
+            self.assertEqual(
+                submitted["action"]["target_ref"],
+                {"workspace_id": "default", "company_key": "openai"},
+            )
+            self.assertEqual(submitted["action"]["input"]["target_company"], "OpenAI")
+            self.assertEqual(submitted["action"]["input"]["source_families"], ["company_homepage"])
+            self.assertEqual(submitted["action"]["input"]["max_assets"], 50)
+            self.assertEqual(submitted["action"]["input"]["collection_mode"], "seed_url_only")
             approved = orchestrator.approve_operation_action_api(
                 submitted["action"]["action_id"], {"actor": "unit-test"}
             )
@@ -12020,6 +12390,14 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(planned["workflow_command"]["owner"], COMPANY_PUBLIC_WEB_REFRESH_OWNER)
             self.assertEqual(planned["workflow_command"]["operation_id"], operation_run_id)
             self.assertFalse(planned["workflow_command"]["payload"]["force_refresh"])
+            self.assertEqual(planned["workflow_command"]["payload"]["collection_mode"], "seed_url_only")
+            self.assertEqual(
+                planned["workflow_command"]["payload"]["company_public_web_target"],
+                {"workspace_id": "default", "company_key": "openai"},
+            )
+            for legacy_alias in ("company", "options", "command_payload", "collector_inputs"):
+                self.assertNotIn(legacy_alias, planned["workflow_command"]["payload"])
+            self.assertNotIn("refresh_nonce", planned["workflow_command"]["payload"])
             self.assertEqual(api_store.list_company_public_web_asset_runs(company_key="openai"), [])
             self.assertEqual(api_store.list_company_assets(company_key="openai"), [])
 
@@ -12047,15 +12425,60 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(runs[0]["status"], "completed")
             self.assertEqual(api_store.list_company_assets(company_key="openai"), [])
 
+            historical_run_id = "company-public-web-run-historical-openai"
+            api_store.upsert_company_public_web_asset_run(
+                {
+                    "run_id": historical_run_id,
+                    "target_company": "OpenAI",
+                    "company_key": "openai",
+                    "idempotency_key": "company-public-web:historical-openai",
+                    "status": "completed",
+                    "phase": "completed",
+                    "source_families": ["company_news"],
+                    "seed_urls": ["https://openai.com/historical-news"],
+                    "options": {"collection_mode": "seed_url_only", "max_assets": 50},
+                }
+            )
+            api_store.upsert_company_public_web_asset(
+                {
+                    "asset_id": "company-public-web-asset-historical-openai",
+                    "target_company": "OpenAI",
+                    "company_key": "openai",
+                    "latest_run_id": historical_run_id,
+                    "source_run_ids": [historical_run_id],
+                    "source_family": "company_news",
+                    "title": "Historical OpenAI News",
+                    "url": "https://openai.com/historical-news",
+                    "summary": "Must not be materialized by a different source run.",
+                    "status": "active",
+                }
+            )
+            source_rows = api_store.list_company_public_web_assets(
+                company_key="openai",
+                source_run_id=runs[0]["run_id"],
+                limit=50,
+            )
+            self.assertEqual(len(source_rows), 1)
+            api_store.upsert_company_public_web_asset(
+                {
+                    **source_rows[0],
+                    "latest_run_id": historical_run_id,
+                    "source_run_ids": [historical_run_id],
+                    "title": "Poisoned Later-Run Title",
+                    "summary": "Poisoned later-run content must not enter the earlier run snapshot.",
+                    "model_safe_payload": {"poisoned_by_later_run": True},
+                }
+            )
+
             joined_submitted = orchestrator.submit_operation_action(
                 {
                     "action_type": ACTION_REFRESH_COMPANY_PUBLIC_WEB,
-                    "target_ref": {"target_company": "OpenAI", "company_key": "openai"},
                     "input": {
+                        "target_company": "OpenAI",
                         "collection_mode": "seed_url_only",
-                        "source_families": ["homepage"],
+                        "source_families": ["company_homepage"],
                         "seed_urls": ["https://openai.com/"],
-                        "force_refresh": "false",
+                        "force_refresh": False,
                     },
                     "budget": {"max_provider_calls": 0, "max_usd": 0.0},
                     "idempotency_key": "company-public-web:openai-homepage-joined",
@@ -12082,7 +12505,11 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(joined_source_command["command_type"], COMPANY_PUBLIC_WEB_SOURCE_COLLECT_COMMAND_TYPE)
             self.assertEqual(joined_source_command["status"], "succeeded")
             self.assertEqual(
-                joined_source_command["result"]["reason"], "company_public_web_refresh_joined_existing_run"
+                joined_source_command["result"]["reason"], "company_public_web_completed_run_read_only_join"
+            )
+            self.assertEqual(
+                joined_source_command["result"]["source_effect_publication"]["status"],
+                "not_attempted",
             )
             self.assertEqual(
                 joined_source_command["result"]["company_asset_sync"]["reason"],
@@ -12093,13 +12520,22 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             materialize_drain = orchestrator._drain_company_public_web_refresh_commands(  # noqa: SLF001
                 {"workflow_run_id": planned["workflow_command"]["workflow_run_id"], "command_limit": 1}
             )
-            self.assertEqual(materialize_drain["completed_count"], 1)
+            self.assertEqual(materialize_drain["completed_count"], 1, materialize_drain)
             assets = api_store.list_company_assets(company_key="openai")
             evidence = api_store.list_company_evidence(company_key="openai")
             self.assertEqual(len(assets), 1)
             self.assertEqual(len(evidence), 1)
             self.assertEqual(assets[0]["source_kind"], "company_public_web_model_safe")
             self.assertEqual(assets[0]["content_ref"], "https://openai.com/")
+            self.assertEqual(assets[0]["source_run_id"], runs[0]["run_id"])
+            self.assertEqual(assets[0]["metadata"]["materialized_source_run_id"], runs[0]["run_id"])
+            self.assertNotEqual(assets[0]["content_ref"], "https://openai.com/historical-news")
+            self.assertEqual(
+                evidence[0]["value"],
+                "Model-safe company-level public web seed for OpenAI: OpenAI homepage.",
+            )
+            self.assertNotIn("Poisoned", evidence[0]["value"])
+            self.assertNotIn("poisoned_by_later_run", assets[0]["metadata"]["model_safe_payload"])
             source_command_id = root_after_owner["result"]["downstream_command_ids"][0]
             source_command = api_store.get_workflow_command(source_command_id)
             self.assertEqual(source_command["command_type"], COMPANY_PUBLIC_WEB_SOURCE_COLLECT_COMMAND_TYPE)
@@ -12133,7 +12569,5778 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(len(run_deltas), 1)
             self.assertEqual(len(asset_deltas), 1)
             self.assertEqual(asset_deltas[0]["delta_kind"], "company_asset_synced_from_public_web")
+            source_run_deltas = api_store.repos.workflow_runtime.list_entity_deltas(
+                command_id=source_command_id,
+                entity_type="company_public_web_run",
+            )
+            self.assertEqual(len(source_run_deltas), 1)
+            self.assertFalse(source_run_deltas[0]["projection_effect"]["company_asset_layer_synced"])
+            self.assertEqual(
+                source_run_deltas[0]["source_ref"]["command_type"],
+                COMPANY_PUBLIC_WEB_SOURCE_COLLECT_COMMAND_TYPE,
+            )
+            self.assertTrue(run_deltas[0]["projection_effect"]["company_asset_layer_synced"])
+            self.assertEqual(
+                run_deltas[0]["source_ref"]["command_type"],
+                COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE,
+            )
             self.assertEqual(api_store.repos.workflow_runtime.get_operation(operation_run_id)["status"], "completed")
+
+            shared_asset_ids: list[str] = []
+            shared_evidence_ids: list[str] = []
+            for workspace_id, actor in (("workspace-alpha", "alice"), ("workspace-beta", "bob")):
+                scoped_submitted = orchestrator.submit_operation_action(
+                    {
+                        "action_type": ACTION_REFRESH_COMPANY_PUBLIC_WEB,
+                        "workspace_id": workspace_id,
+                        "actor": actor,
+                        "input": {
+                            "target_company": "OpenAI",
+                            "source_families": ["company_homepage"],
+                            "seed_urls": ["https://openai.com/"],
+                        },
+                        "budget": {"max_provider_calls": 0, "max_usd": 0.0},
+                        "idempotency_key": f"company-public-web:openai:{workspace_id}",
+                    },
+                    expected_workspace_id=workspace_id,
+                    expected_owner_user_id=actor,
+                )
+                scoped_approved = orchestrator.approve_operation_action_api(
+                    scoped_submitted["action"]["action_id"],
+                    {"actor": "unit-test"},
+                    expected_workspace_id=workspace_id,
+                )
+                scoped_planned = orchestrator.dispatch_operation_run_api(
+                    scoped_approved["operation_run"]["operation_run_id"],
+                    {"actor": "unit-test"},
+                    expected_workspace_id=workspace_id,
+                )
+                scoped_workflow_run_id = scoped_planned["workflow_command"]["workflow_run_id"]
+                for _phase in range(3):
+                    scoped_drain = orchestrator._drain_company_public_web_refresh_commands(  # noqa: SLF001
+                        {"workflow_run_id": scoped_workflow_run_id, "command_limit": 1}
+                    )
+                    self.assertEqual(scoped_drain["completed_count"], 1, scoped_drain)
+                self.assertEqual(
+                    api_store.list_company_assets(
+                        workspace_id=workspace_id,
+                        company_key="openai",
+                    ),
+                    [],
+                )
+                self.assertEqual(
+                    api_store.list_company_evidence(
+                        workspace_id=workspace_id,
+                        company_key="openai",
+                    ),
+                    [],
+                )
+                shared_assets = api_store.list_company_assets(
+                    workspace_id="default",
+                    company_key="openai",
+                )
+                shared_evidence = api_store.list_company_evidence(
+                    workspace_id="default",
+                    company_key="openai",
+                )
+                self.assertEqual(len(shared_assets), 1)
+                self.assertEqual(len(shared_evidence), 1)
+                self.assertEqual(shared_assets[0]["workspace_id"], "default")
+                self.assertEqual(shared_evidence[0]["workspace_id"], "default")
+                shared_asset_ids.append(shared_assets[0]["asset_id"])
+                shared_evidence_ids.append(shared_evidence[0]["evidence_id"])
+            self.assertEqual(len(set(shared_asset_ids)), 1)
+            self.assertEqual(len(set(shared_evidence_ids)), 1)
+            self.assertEqual(shared_asset_ids[0], assets[0]["asset_id"])
+            self.assertEqual(shared_evidence_ids[0], evidence[0]["evidence_id"])
+
+            forced_submitted = orchestrator.submit_operation_action(
+                {
+                    "action_type": ACTION_REFRESH_COMPANY_PUBLIC_WEB,
+                    "workspace_id": "user-alice",
+                    "actor": "alice",
+                    "input": {
+                        "target_company": "Anthropic",
+                        "source_families": ["company_homepage"],
+                        "seed_urls": ["https://anthropic.com/"],
+                        "force_refresh": True,
+                        "refresh_nonce": "unit-test-refresh-001",
+                    },
+                    "budget": {"max_provider_calls": 0, "max_usd": 0.0},
+                    "idempotency_key": "company-public-web:anthropic-force-plan",
+                },
+                expected_workspace_id="user-alice",
+                expected_owner_user_id="alice",
+            )
+            forced_approved = orchestrator.approve_operation_action_api(
+                forced_submitted["action"]["action_id"],
+                {"actor": "unit-test"},
+                expected_workspace_id="user-alice",
+            )
+            forced_planned = orchestrator.dispatch_operation_run_api(
+                forced_approved["operation_run"]["operation_run_id"],
+                {"actor": "unit-test"},
+                expected_workspace_id="user-alice",
+            )
+            self.assertEqual(forced_planned["status"], "planned")
+            self.assertTrue(forced_planned["workflow_command"]["payload"]["force_refresh"])
+            self.assertEqual(
+                forced_planned["workflow_command"]["payload"]["refresh_nonce"],
+                "unit-test-refresh-001",
+            )
+            self.assertEqual(
+                forced_submitted["action"]["target_ref"],
+                {"workspace_id": "user-alice", "company_key": "anthropic"},
+            )
+            for legacy_alias in ("company", "options", "command_payload", "collector_inputs"):
+                self.assertNotIn(legacy_alias, forced_planned["workflow_command"]["payload"])
+        finally:
+            api_store.close()
+
+    def test_company_public_web_operation_forged_phase_targets_fail_before_phase_writes(self) -> None:
+        for forged_phase in ("root", "source_collect", "materialize", "source_collect_causality"):
+            with self.subTest(forged_phase=forged_phase):
+                effective_phase = "source_collect" if forged_phase == "source_collect_causality" else forged_phase
+                target_company = f"Forged {forged_phase.replace('_', ' ').title()} Labs"
+                company_key = f"forged{forged_phase.replace('_', '')}labs"
+                settings = AppSettings(
+                    project_root=self.runtime_dir,
+                    runtime_dir=self.runtime_dir,
+                    secrets_file=self.runtime_dir / "secrets.toml",
+                    db_path=self.runtime_dir / f"company-public-web-forged-{forged_phase}.db",
+                    jobs_dir=self.runtime_dir / "jobs",
+                    company_assets_dir=self.runtime_dir / "company_assets",
+                    qwen=QwenSettings(enabled=False),
+                    semantic=SemanticProviderSettings(enabled=False),
+                    harvest=HarvestSettings(profile_scraper=HarvestActorSettings(enabled=False)),
+                )
+                api_store = ControlPlaneStore(settings.db_path)
+                catalog = AssetCatalog.discover()
+                model_client = DeterministicModelClient()
+                orchestrator = SourcingOrchestrator(
+                    catalog=catalog,
+                    store=api_store,
+                    jobs_dir=settings.jobs_dir,
+                    model_client=model_client,
+                    semantic_provider=LocalSemanticProvider(),
+                    acquisition_engine=AcquisitionEngine(catalog, settings, api_store, model_client),
+                )
+                try:
+                    submitted = orchestrator.submit_operation_action(
+                        {
+                            "action_type": ACTION_REFRESH_COMPANY_PUBLIC_WEB,
+                            "input": {
+                                "target_company": target_company,
+                                "source_families": ["company_homepage"],
+                                "seed_urls": [f"https://{company_key}.example/"],
+                            },
+                            "budget": {"max_provider_calls": 0, "max_usd": 0.0},
+                            "idempotency_key": f"company-public-web:forged-{forged_phase}",
+                        }
+                    )
+                    approved = orchestrator.approve_operation_action_api(
+                        submitted["action"]["action_id"],
+                        {"actor": "unit-test"},
+                    )
+                    planned = orchestrator.dispatch_operation_run_api(
+                        approved["operation_run"]["operation_run_id"],
+                        {"actor": "unit-test"},
+                    )
+                    self.assertEqual(planned["status"], "planned", planned)
+                    workflow_run_id = planned["workflow_command"]["workflow_run_id"]
+                    target_command = dict(planned["workflow_command"])
+
+                    if effective_phase != "root":
+                        root_drain = orchestrator._drain_company_public_web_refresh_commands(  # noqa: SLF001
+                            {"workflow_run_id": workflow_run_id, "command_limit": 1}
+                        )
+                        self.assertEqual(root_drain["completed_count"], 1, root_drain)
+                        root_command = api_store.get_workflow_command(planned["workflow_command"]["command_id"])
+                        source_command_id = root_command["result"]["downstream_command_ids"][0]
+                        target_command = api_store.get_workflow_command(source_command_id)
+
+                    if effective_phase == "materialize":
+                        source_drain = orchestrator._drain_company_public_web_refresh_commands(  # noqa: SLF001
+                            {"workflow_run_id": workflow_run_id, "command_limit": 1}
+                        )
+                        self.assertEqual(source_drain["completed_count"], 1, source_drain)
+                        source_command = api_store.get_workflow_command(target_command["command_id"])
+                        materialize_command_id = source_command["result"]["downstream_command_ids"][0]
+                        target_command = api_store.get_workflow_command(materialize_command_id)
+                        self.assertEqual(
+                            len(api_store.list_company_public_web_asset_runs(company_key=company_key)),
+                            1,
+                        )
+
+                    forged_payload = dict(target_command["payload"])
+                    if forged_phase == "source_collect_causality":
+                        forged_causality = dict(forged_payload["causality"])
+                        forged_causality["source_event_id"] = "evt_forged_company_public_web"
+                        forged_payload["causality"] = forged_causality
+                    else:
+                        forged_target = dict(forged_payload["company_public_web_target"])
+                        forged_target["company_key"] = "anthropic"
+                        forged_payload["company_public_web_target"] = forged_target
+                    api_store.update_workflow_command_payload(
+                        target_command["command_id"],
+                        payload=forged_payload,
+                    )
+
+                    drain = orchestrator._drain_company_public_web_refresh_commands(  # noqa: SLF001
+                        {"workflow_run_id": workflow_run_id, "command_limit": 1}
+                    )
+
+                    self.assertEqual(drain["completed_count"], 0, drain)
+                    self.assertEqual(drain["failed_count"], 1, drain)
+                    expected_reason = (
+                        "company_public_web_source_command_payload_mismatch"
+                        if forged_phase == "source_collect_causality"
+                        else "company_public_web_bound_target_mismatch"
+                    )
+                    self.assertEqual(drain["items"][0]["reason"], expected_reason)
+                    failed_command = api_store.get_workflow_command(target_command["command_id"])
+                    self.assertEqual(failed_command["status"], "failed_terminal")
+                    self.assertEqual(
+                        api_store.repos.workflow_runtime.list_activity_runs(command_id=target_command["command_id"]),
+                        [],
+                    )
+                    self.assertEqual(
+                        api_store.repos.workflow_runtime.list_activity_attempts(
+                            command_id=target_command["command_id"]
+                        ),
+                        [],
+                    )
+                    self.assertEqual(
+                        api_store.repos.workflow_runtime.list_entity_deltas(command_id=target_command["command_id"]),
+                        [],
+                    )
+                    self.assertEqual(api_store.list_company_assets(company_key=company_key), [])
+                    self.assertEqual(api_store.list_company_evidence(company_key=company_key), [])
+                    commands = api_store.list_workflow_commands(workflow_run_id=workflow_run_id, limit=0)
+                    expected_command_count = {"root": 1, "source_collect": 2, "materialize": 3}[effective_phase]
+                    self.assertEqual(len(commands), expected_command_count)
+                    if effective_phase in {"root", "source_collect"}:
+                        self.assertEqual(api_store.list_company_public_web_asset_runs(company_key=company_key), [])
+                finally:
+                    api_store.close()
+
+    def test_company_public_web_joined_run_and_materialize_planning_fail_closed(self) -> None:
+        settings = AppSettings(
+            project_root=self.runtime_dir,
+            runtime_dir=self.runtime_dir,
+            secrets_file=self.runtime_dir / "secrets.toml",
+            db_path=self.runtime_dir / "company-public-web-joined-and-plan-failure.db",
+            jobs_dir=self.runtime_dir / "jobs",
+            company_assets_dir=self.runtime_dir / "company_assets",
+            qwen=QwenSettings(enabled=False),
+            semantic=SemanticProviderSettings(enabled=False),
+            harvest=HarvestSettings(profile_scraper=HarvestActorSettings(enabled=False)),
+        )
+        api_store = ControlPlaneStore(settings.db_path)
+        orchestrator = SourcingOrchestrator(
+            catalog=AssetCatalog.discover(),
+            store=api_store,
+            jobs_dir=settings.jobs_dir,
+            model_client=DeterministicModelClient(),
+            semantic_provider=LocalSemanticProvider(),
+            acquisition_engine=AcquisitionEngine(
+                AssetCatalog.discover(),
+                settings,
+                api_store,
+                DeterministicModelClient(),
+            ),
+        )
+
+        def plan_source_command(
+            *, company: str, company_key: str, suffix: str
+        ) -> tuple[dict[str, Any], dict[str, Any]]:
+            submitted = orchestrator.submit_operation_action(
+                {
+                    "action_type": ACTION_REFRESH_COMPANY_PUBLIC_WEB,
+                    "input": {
+                        "target_company": company,
+                        "source_families": ["company_homepage"],
+                        "seed_urls": [f"https://{company_key}.example/"],
+                    },
+                    "budget": {"max_provider_calls": 0, "max_usd": 0.0},
+                    "idempotency_key": f"company-public-web:joined-state:{suffix}",
+                }
+            )
+            approved = orchestrator.approve_operation_action_api(
+                submitted["action"]["action_id"],
+                {"actor": "unit-test"},
+            )
+            planned = orchestrator.dispatch_operation_run_api(
+                approved["operation_run"]["operation_run_id"],
+                {"actor": "unit-test"},
+            )
+            root_drain = orchestrator._drain_company_public_web_refresh_commands(  # noqa: SLF001
+                {"workflow_run_id": planned["workflow_command"]["workflow_run_id"], "command_limit": 1}
+            )
+            self.assertEqual(root_drain["completed_count"], 1, root_drain)
+            root_command = api_store.get_workflow_command(planned["workflow_command"]["command_id"])
+            source_command = api_store.get_workflow_command(root_command["result"]["downstream_command_ids"][0])
+            return planned, source_command
+
+        try:
+            root_submitted = orchestrator.submit_operation_action(
+                {
+                    "action_type": ACTION_REFRESH_COMPANY_PUBLIC_WEB,
+                    "input": {
+                        "target_company": "Root Plan Failure Labs",
+                        "source_families": ["company_homepage"],
+                        "seed_urls": ["https://root-plan-failure.example/"],
+                    },
+                    "budget": {"max_provider_calls": 0, "max_usd": 0.0},
+                    "idempotency_key": "company-public-web:root-plan-exception",
+                }
+            )
+            root_approved = orchestrator.approve_operation_action_api(
+                root_submitted["action"]["action_id"],
+                {"actor": "unit-test"},
+            )
+            root_planned = orchestrator.dispatch_operation_run_api(
+                root_approved["operation_run"]["operation_run_id"],
+                {"actor": "unit-test"},
+            )
+            with mock.patch.object(
+                orchestrator,
+                "_plan_company_public_web_phase_command",
+                side_effect=RuntimeError("synthetic root planner failure"),
+            ):
+                root_drain = orchestrator._drain_company_public_web_refresh_commands(  # noqa: SLF001
+                    {"workflow_run_id": root_planned["workflow_command"]["workflow_run_id"], "command_limit": 1}
+                )
+            self.assertEqual(root_drain["completed_count"], 0, root_drain)
+            self.assertEqual(root_drain["failed_count"], 1, root_drain)
+            self.assertEqual(
+                root_drain["items"][0]["reason"],
+                "company_public_web_source_collect_command_plan_failed",
+            )
+            root_after = api_store.get_workflow_command(root_planned["workflow_command"]["command_id"])
+            self.assertEqual(root_after["status"], "retry_wait")
+            self.assertEqual(root_after["result"].get("downstream_command_ids", []), [])
+
+            for joined_status, expected_command_status in (("running", "retry_wait"), ("failed", "failed_terminal")):
+                with self.subTest(joined_status=joined_status):
+                    planned, source_command = plan_source_command(
+                        company=f"Joined {joined_status.title()} Labs",
+                        company_key=f"joined{joined_status}labs",
+                        suffix=joined_status,
+                    )
+                    joined_result = {
+                        "status": "joined",
+                        "run": {
+                            "run_id": f"company-public-web-run-joined-{joined_status}",
+                            "target_company": f"Joined {joined_status.title()} Labs",
+                            "company_key": f"joined{joined_status}labs",
+                            "status": joined_status,
+                        },
+                        "assets": [],
+                        "summary": {},
+                    }
+                    with mock.patch(
+                        "sourcing_agent.orchestrator.refresh_company_public_web_assets_service",
+                        return_value=joined_result,
+                    ):
+                        source_drain = orchestrator._drain_company_public_web_refresh_commands(  # noqa: SLF001
+                            {"workflow_run_id": planned["workflow_command"]["workflow_run_id"], "command_limit": 1}
+                        )
+                    self.assertEqual(source_drain["completed_count"], 0, source_drain)
+                    self.assertEqual(source_drain["failed_count"], 1, source_drain)
+                    self.assertEqual(
+                        source_drain["items"][0]["reason"],
+                        "company_public_web_joined_run_not_completed",
+                    )
+                    self.assertEqual(source_drain["items"][0]["joined_run_status"], joined_status)
+                    source_after = api_store.get_workflow_command(source_command["command_id"])
+                    self.assertEqual(source_after["status"], expected_command_status)
+                    self.assertEqual(source_after["result"].get("downstream_command_ids", []), [])
+                    self.assertEqual(
+                        api_store.repos.workflow_runtime.list_entity_deltas(command_id=source_command["command_id"]),
+                        [],
+                    )
+
+            planned, source_command = plan_source_command(
+                company="Joined Identity Labs",
+                company_key="joinedidentitylabs",
+                suffix="identity-mismatch",
+            )
+            with mock.patch(
+                "sourcing_agent.orchestrator.refresh_company_public_web_assets_service",
+                return_value={
+                    "status": "joined",
+                    "run": {
+                        "run_id": "company-public-web-run-joined-foreign",
+                        "target_company": "Foreign Labs",
+                        "company_key": "foreignlabs",
+                        "status": "completed",
+                    },
+                    "assets": [],
+                    "summary": {},
+                },
+            ):
+                source_drain = orchestrator._drain_company_public_web_refresh_commands(  # noqa: SLF001
+                    {"workflow_run_id": planned["workflow_command"]["workflow_run_id"], "command_limit": 1}
+                )
+            self.assertEqual(source_drain["completed_count"], 0, source_drain)
+            self.assertEqual(source_drain["failed_count"], 1, source_drain)
+            self.assertEqual(
+                source_drain["items"][0]["reason"],
+                "company_public_web_source_run_identity_mismatch",
+            )
+            source_after = api_store.get_workflow_command(source_command["command_id"])
+            self.assertEqual(source_after["status"], "failed_terminal")
+            self.assertEqual(source_after["result"].get("downstream_command_ids", []), [])
+            self.assertEqual(
+                api_store.repos.workflow_runtime.list_entity_deltas(command_id=source_command["command_id"]),
+                [],
+            )
+
+            planned, source_command = plan_source_command(
+                company="Legacy Snapshot Labs",
+                company_key="legacysnapshotlabs",
+                suffix="legacy-snapshot",
+            )
+            with mock.patch(
+                "sourcing_agent.orchestrator.refresh_company_public_web_assets_service",
+                return_value={
+                    "status": "joined",
+                    "run": {
+                        "run_id": "company-public-web-run-legacy-snapshot",
+                        "target_company": "Legacy Snapshot Labs",
+                        "company_key": "legacysnapshotlabs",
+                        "status": "completed",
+                        "discovered_assets": [
+                            {
+                                "asset_id": "legacy-compact-asset",
+                                "source_family": "company_homepage",
+                                "url": "https://legacysnapshotlabs.example/",
+                            }
+                        ],
+                    },
+                    "assets": [],
+                    "summary": {"asset_count": 1},
+                },
+            ):
+                source_drain = orchestrator._drain_company_public_web_refresh_commands(  # noqa: SLF001
+                    {"workflow_run_id": planned["workflow_command"]["workflow_run_id"], "command_limit": 1}
+                )
+            self.assertEqual(source_drain["completed_count"], 0, source_drain)
+            self.assertEqual(source_drain["failed_count"], 1, source_drain)
+            self.assertEqual(source_drain["items"][0]["reason"], "company_public_web_source_snapshot_invalid")
+            self.assertEqual(
+                api_store.repos.workflow_runtime.list_entity_deltas(command_id=source_command["command_id"]),
+                [],
+            )
+
+            first_reuse_planned, first_reuse_source = plan_source_command(
+                company="Completed Read Only Reuse Labs",
+                company_key="completedreadonlyreuselabs",
+                suffix="completed-read-only-first",
+            )
+            first_reuse_drain = orchestrator._drain_company_public_web_refresh_commands(  # noqa: SLF001
+                {
+                    "workflow_run_id": first_reuse_planned["workflow_command"]["workflow_run_id"],
+                    "command_limit": 1,
+                }
+            )
+            self.assertEqual(first_reuse_drain["completed_count"], 1, first_reuse_drain)
+            first_reuse_after = api_store.get_workflow_command(first_reuse_source["command_id"])
+            self.assertEqual(first_reuse_after["status"], "succeeded")
+            source_assets_before_reuse = api_store.list_company_public_web_assets(
+                company_key="completedreadonlyreuselabs"
+            )
+            self.assertTrue(source_assets_before_reuse)
+            self.assertEqual(api_store.list_company_assets(company_key="completedreadonlyreuselabs"), [])
+            self.assertEqual(api_store.list_company_evidence(company_key="completedreadonlyreuselabs"), [])
+
+            second_reuse_planned, second_reuse_source = plan_source_command(
+                company="Completed Read Only Reuse Labs",
+                company_key="completedreadonlyreuselabs",
+                suffix="completed-read-only-second",
+            )
+            with (
+                mock.patch(
+                    "sourcing_agent.company_public_web_assets.publish_company_public_web_artifact_publication"
+                ) as artifact_publisher,
+                mock.patch(
+                    "sourcing_agent.company_public_web_assets.publish_company_public_web_completed_run_effects"
+                ) as effect_publisher,
+            ):
+                second_reuse_drain = orchestrator._drain_company_public_web_refresh_commands(  # noqa: SLF001
+                    {
+                        "workflow_run_id": second_reuse_planned["workflow_command"]["workflow_run_id"],
+                        "command_limit": 1,
+                    }
+                )
+
+            self.assertEqual(second_reuse_drain["completed_count"], 1, second_reuse_drain)
+            self.assertEqual(
+                second_reuse_drain["items"][0]["reason"],
+                "company_public_web_completed_run_read_only_join",
+            )
+            second_reuse_after = api_store.get_workflow_command(second_reuse_source["command_id"])
+            self.assertEqual(second_reuse_after["status"], "succeeded")
+            self.assertEqual(
+                second_reuse_after["result"]["source_effect_publication"],
+                {
+                    "status": "not_attempted",
+                    "reason": "completed_run_reused_without_publication_authority",
+                    "source_asset_count": 0,
+                },
+            )
+            self.assertEqual(
+                api_store.list_company_public_web_assets(company_key="completedreadonlyreuselabs"),
+                source_assets_before_reuse,
+            )
+            self.assertEqual(api_store.list_company_assets(company_key="completedreadonlyreuselabs"), [])
+            self.assertEqual(api_store.list_company_evidence(company_key="completedreadonlyreuselabs"), [])
+            artifact_publisher.assert_not_called()
+            effect_publisher.assert_not_called()
+
+            drift_planned, drift_source_command = plan_source_command(
+                company="Snapshot Drift Labs",
+                company_key="snapshotdriftlabs",
+                suffix="snapshot-drift",
+            )
+            drift_source_drain = orchestrator._drain_company_public_web_refresh_commands(  # noqa: SLF001
+                {"workflow_run_id": drift_planned["workflow_command"]["workflow_run_id"], "command_limit": 1}
+            )
+            self.assertEqual(drift_source_drain["completed_count"], 1, drift_source_drain)
+            drift_source_after = api_store.get_workflow_command(drift_source_command["command_id"])
+            drift_run = dict(drift_source_after["result"]["run"])
+            drift_snapshot = [dict(asset) for asset in list(drift_run["discovered_assets"])]
+            drift_snapshot[0]["title"] = "Tampered after materialize planning"
+            api_store.upsert_company_public_web_asset_run(
+                {
+                    **drift_run,
+                    "discovered_assets": drift_snapshot,
+                }
+            )
+            drift_materialize_drain = orchestrator._drain_company_public_web_refresh_commands(  # noqa: SLF001
+                {"workflow_run_id": drift_planned["workflow_command"]["workflow_run_id"], "command_limit": 1}
+            )
+            self.assertEqual(drift_materialize_drain["completed_count"], 0, drift_materialize_drain)
+            self.assertEqual(drift_materialize_drain["failed_count"], 1, drift_materialize_drain)
+            self.assertEqual(
+                drift_materialize_drain["items"][0]["reason"],
+                "company_public_web_materialize_target_mismatch",
+            )
+            self.assertEqual(api_store.list_company_assets(company_key="snapshotdriftlabs"), [])
+            self.assertEqual(api_store.list_company_evidence(company_key="snapshotdriftlabs"), [])
+
+            for drift_kind in ("summary", "artifact_paths", "started_at", "completed_at"):
+                with self.subTest(drift_kind=drift_kind):
+                    company_key = f"snapshot{drift_kind.replace('_', '')}labs"
+                    planned, source_command = plan_source_command(
+                        company=f"Snapshot {drift_kind.title()} Labs",
+                        company_key=company_key,
+                        suffix=f"snapshot-{drift_kind}-drift",
+                    )
+                    source_drain = orchestrator._drain_company_public_web_refresh_commands(  # noqa: SLF001
+                        {"workflow_run_id": planned["workflow_command"]["workflow_run_id"], "command_limit": 1}
+                    )
+                    self.assertEqual(source_drain["completed_count"], 1, source_drain)
+                    source_after = api_store.get_workflow_command(source_command["command_id"])
+                    source_run = dict(source_after["result"]["run"])
+                    if drift_kind == "summary":
+                        drifted_run = {**source_run, "summary": {**source_run["summary"], "asset_count": 999}}
+                    elif drift_kind == "artifact_paths":
+                        drifted_run = {
+                            **source_run,
+                            "metadata": {
+                                **source_run["metadata"],
+                                "artifact_paths": {
+                                    **dict(source_run["metadata"].get("artifact_paths") or {}),
+                                    "manifest": "/tmp/forged-post-plan-manifest.json",
+                                },
+                            },
+                        }
+                    else:
+                        drifted_run = {
+                            **source_run,
+                            drift_kind: "2099-12-31 23:59:59",
+                        }
+                    api_store.upsert_company_public_web_asset_run(drifted_run)
+                    materialize_drain = orchestrator._drain_company_public_web_refresh_commands(  # noqa: SLF001
+                        {"workflow_run_id": planned["workflow_command"]["workflow_run_id"], "command_limit": 1}
+                    )
+                    self.assertEqual(materialize_drain["completed_count"], 0, materialize_drain)
+                    self.assertEqual(materialize_drain["failed_count"], 1, materialize_drain)
+                    self.assertEqual(
+                        materialize_drain["items"][0]["reason"],
+                        "company_public_web_materialize_target_mismatch",
+                    )
+                    self.assertEqual(api_store.list_company_assets(company_key=company_key), [])
+                    self.assertEqual(api_store.list_company_evidence(company_key=company_key), [])
+
+            for planner_failure in ("empty", "exception"):
+                with self.subTest(planner_failure=planner_failure):
+                    company = f"Materialize Plan {planner_failure.title()} Labs"
+                    company_key = f"materializeplan{planner_failure}labs"
+                    suffix = f"materialize-plan-{planner_failure}"
+                    planned, source_command = plan_source_command(
+                        company=company,
+                        company_key=company_key,
+                        suffix=suffix,
+                    )
+                    planner_patch = (
+                        mock.patch.object(orchestrator, "_company_public_web_phase_command_contract", return_value={})
+                        if planner_failure == "empty"
+                        else mock.patch.object(
+                            orchestrator,
+                            "_company_public_web_phase_command_contract",
+                            side_effect=RuntimeError("synthetic materialize planner failure"),
+                        )
+                    )
+                    with planner_patch:
+                        source_drain = orchestrator._drain_company_public_web_refresh_commands(  # noqa: SLF001
+                            {"workflow_run_id": planned["workflow_command"]["workflow_run_id"], "command_limit": 1}
+                        )
+                    self.assertEqual(source_drain["completed_count"], 0, source_drain)
+                    self.assertEqual(source_drain["failed_count"], 1, source_drain)
+                    self.assertEqual(
+                        source_drain["items"][0]["reason"],
+                        "company_public_web_materialize_command_plan_failed",
+                    )
+                    source_after = api_store.get_workflow_command(source_command["command_id"])
+                    self.assertEqual(source_after["status"], "retry_wait")
+                    self.assertLess(int(source_after["attempt"]), int(source_after["max_attempts"]))
+                    self.assertEqual(source_after["result"].get("downstream_command_ids", []), [])
+                    failure_deltas = api_store.repos.workflow_runtime.list_entity_deltas(
+                        command_id=source_command["command_id"]
+                    )
+                    self.assertEqual(failure_deltas, [])
+                    expected_artifact_refs = list(source_drain["items"][0]["artifact_paths"].values())
+                    self.assertTrue(expected_artifact_refs)
+                    activities = api_store.repos.workflow_runtime.list_activity_runs(
+                        command_id=source_command["command_id"]
+                    )
+                    self.assertEqual(len(activities), 1)
+                    self.assertEqual(activities[0]["status"], "retry_wait")
+                    self.assertEqual(
+                        activities[0]["phase"],
+                        "company_public_web_materialize_command_plan_failed",
+                    )
+                    self.assertEqual(activities[0]["artifact_refs"], expected_artifact_refs)
+                    if planner_failure == "empty":
+                        api_store._control_plane_postgres._execute_non_query(  # noqa: SLF001
+                            "UPDATE workflow_commands SET not_before_at = '', lease_expires_at = '' "
+                            "WHERE command_id = %s",
+                            (source_command["command_id"],),
+                        )
+                        retry_drain = orchestrator._drain_company_public_web_refresh_commands(  # noqa: SLF001
+                            {
+                                "workflow_run_id": planned["workflow_command"]["workflow_run_id"],
+                                "command_limit": 1,
+                            }
+                        )
+                        self.assertEqual(retry_drain["completed_count"], 1, retry_drain)
+                        source_after_retry = api_store.get_workflow_command(source_command["command_id"])
+                        self.assertEqual(source_after_retry["status"], "succeeded")
+                        self.assertEqual(int(source_after_retry["attempt"]), 2)
+                        activity_after_retry = api_store.repos.workflow_runtime.list_activity_runs(
+                            command_id=source_command["command_id"]
+                        )
+                        self.assertEqual(len(activity_after_retry), 1)
+                        self.assertEqual(activity_after_retry[0]["status"], "succeeded")
+                        self.assertEqual(
+                            activity_after_retry[0]["phase"],
+                            "company_public_web_sources_collected",
+                        )
+                        activity_attempts = api_store.repos.workflow_runtime.list_activity_attempts(
+                            command_id=source_command["command_id"]
+                        )
+                        self.assertEqual(
+                            [
+                                item["status"]
+                                for item in sorted(
+                                    activity_attempts,
+                                    key=lambda item: int(item["attempt_number"]),
+                                )
+                            ],
+                            ["failed", "succeeded"],
+                        )
+                        retry_deltas = api_store.repos.workflow_runtime.list_entity_deltas(
+                            command_id=source_command["command_id"]
+                        )
+                        self.assertEqual(len(retry_deltas), 1)
+                        retry_attempt = next(item for item in activity_attempts if int(item["attempt_number"]) == 2)
+                        self.assertEqual(retry_deltas[0]["attempt_id"], retry_attempt["attempt_id"])
+                        self.assertEqual(len(source_after_retry["result"]["downstream_command_ids"]), 1)
+        finally:
+            api_store.close()
+
+    def test_company_public_web_post_cas_exception_attempt2_repairs_without_inline_canonical_write(self) -> None:
+        from sourcing_agent import company_public_web_assets as company_public_web_module
+
+        api_store, orchestrator = self._company_public_web_test_runtime("post-cas-repair")
+        try:
+            planned, source_command = self._plan_company_public_web_source_command(
+                orchestrator,
+                company="Post CAS Repair Labs",
+                company_key="postcasrepairlabs",
+                suffix="post-cas-repair",
+            )
+            real_publisher = company_public_web_module.publish_company_public_web_completed_run_effects
+            with mock.patch.object(
+                company_public_web_module,
+                "publish_company_public_web_completed_run_effects",
+                side_effect=RuntimeError("synthetic post-CAS source publication crash"),
+            ):
+                failed_drain = orchestrator._drain_company_public_web_refresh_commands(  # noqa: SLF001
+                    {"workflow_run_id": planned["workflow_command"]["workflow_run_id"], "command_limit": 1}
+                )
+
+            self.assertEqual(failed_drain["completed_count"], 0, failed_drain)
+            self.assertEqual(failed_drain["failed_count"], 1, failed_drain)
+            failed_command = api_store.get_workflow_command(source_command["command_id"])
+            self.assertEqual(failed_command["status"], "retry_wait")
+            self.assertEqual(int(failed_command["attempt"]), 1)
+            completed_runs = api_store.list_company_public_web_asset_runs(company_key="postcasrepairlabs")
+            self.assertEqual(len(completed_runs), 1)
+            self.assertEqual(completed_runs[0]["status"], "completed")
+            self.assertEqual(api_store.list_company_public_web_assets(company_key="postcasrepairlabs"), [])
+            self.assertEqual(api_store.list_company_assets(company_key="postcasrepairlabs"), [])
+            self.assertEqual(api_store.list_company_evidence(company_key="postcasrepairlabs"), [])
+
+            # This field is intentionally not an authority input for a typed
+            # source command. A post-CAS mutation cannot turn attempt-2 repair
+            # into an inline canonical write.
+            completed_run = completed_runs[0]
+            api_store.upsert_company_public_web_asset_run(
+                {
+                    **completed_run,
+                    "metadata": {
+                        **dict(completed_run.get("metadata") or {}),
+                        "company_asset_sync_policy": "inline_after_owner_finalize",
+                        "company_asset_sync": {
+                            "status": "pending",
+                            "reason": "forged_inline_policy",
+                        },
+                    },
+                }
+            )
+            api_store._control_plane_postgres._execute_non_query(  # noqa: SLF001
+                "UPDATE workflow_commands SET not_before_at = '', lease_expires_at = '' WHERE command_id = %s",
+                (source_command["command_id"],),
+            )
+
+            retry_drain = orchestrator._drain_company_public_web_refresh_commands(  # noqa: SLF001
+                {"workflow_run_id": planned["workflow_command"]["workflow_run_id"], "command_limit": 1}
+            )
+            self.assertEqual(retry_drain["completed_count"], 1, retry_drain)
+            repaired_command = api_store.get_workflow_command(source_command["command_id"])
+            self.assertEqual(repaired_command["status"], "succeeded")
+            self.assertEqual(int(repaired_command["attempt"]), 2)
+            self.assertEqual(
+                repaired_command["result"]["company_asset_sync"]["reason"],
+                "company_asset_sync_deferred_to_typed_command",
+            )
+            self.assertEqual(len(api_store.list_company_public_web_assets(company_key="postcasrepairlabs")), 1)
+            self.assertEqual(api_store.list_company_assets(company_key="postcasrepairlabs"), [])
+            self.assertEqual(api_store.list_company_evidence(company_key="postcasrepairlabs"), [])
+            attempts = sorted(
+                api_store.repos.workflow_runtime.list_activity_attempts(command_id=source_command["command_id"]),
+                key=lambda item: int(item["attempt_number"]),
+            )
+            self.assertEqual(
+                [(int(item["attempt_number"]), item["status"]) for item in attempts], [(1, "failed"), (2, "succeeded")]
+            )
+            activities = api_store.repos.workflow_runtime.list_activity_runs(command_id=source_command["command_id"])
+            self.assertEqual(
+                [(item["status"], item["phase"]) for item in activities],
+                [("succeeded", "company_public_web_sources_collected")],
+            )
+
+            materialize_drain = orchestrator._drain_company_public_web_refresh_commands(  # noqa: SLF001
+                {"workflow_run_id": planned["workflow_command"]["workflow_run_id"], "command_limit": 1}
+            )
+            self.assertEqual(materialize_drain["completed_count"], 1, materialize_drain)
+            self.assertEqual(len(api_store.list_company_assets(company_key="postcasrepairlabs")), 1)
+            self.assertEqual(len(api_store.list_company_evidence(company_key="postcasrepairlabs")), 1)
+            operation_run_id = str(planned["workflow_command"]["operation_id"])
+            self.assertEqual(api_store.repos.workflow_runtime.get_operation(operation_run_id)["status"], "completed")
+            self.assertIs(
+                company_public_web_module.publish_company_public_web_completed_run_effects,
+                real_publisher,
+            )
+        finally:
+            api_store.close()
+
+    def test_company_public_web_revisionless_completed_collision_terminalizes_exact_source_claim_once(self) -> None:
+        api_store, orchestrator = self._company_public_web_test_runtime("legacy-completed-terminal")
+        try:
+            planned, source_command = self._plan_company_public_web_source_command(
+                orchestrator,
+                company="Legacy Completed Terminal Labs",
+                company_key="legacycompletedterminallabs",
+                suffix="legacy-completed-terminal",
+            )
+            source_payload = dict(source_command["payload"])
+            options = normalize_company_public_web_options(source_payload)
+            idempotency_key = build_company_public_web_run_idempotency_key(
+                target_company=str(source_payload["target_company"]),
+                company_key=str(source_payload["company_key"]),
+                source_families=list(source_payload["source_families"]),
+                seed_urls=list(source_payload["seed_urls"]),
+                options=options,
+                force_refresh=bool(source_payload.get("force_refresh")),
+                nonce=str(source_payload.get("refresh_nonce") or ""),
+            )
+            run_id = f"company-public-web-run-{short_hash(idempotency_key)}"
+            legacy_run = api_store.upsert_company_public_web_asset_run(
+                {
+                    "run_id": run_id,
+                    "target_company": source_payload["target_company"],
+                    "company_key": source_payload["company_key"],
+                    "idempotency_key": idempotency_key,
+                    "status": "completed",
+                    "phase": "completed",
+                    "source_families": source_payload["source_families"],
+                    "seed_urls": source_payload["seed_urls"],
+                    "options": options,
+                    "discovered_assets": [],
+                    "summary": {"asset_count": 0},
+                    "requested_by": "brownfield-import",
+                    "started_at": "2025-01-01 00:00:00",
+                    "completed_at": "2025-01-01 00:00:01",
+                    "metadata": {"legacy_import": True},
+                }
+            )
+            self.assertEqual(legacy_run["status"], "completed")
+            self.assertNotIn("source_projection_revision", legacy_run["metadata"])
+            self.assertNotIn("materialization_snapshot_schema_version", legacy_run["metadata"])
+            source_runs_before = api_store.list_company_public_web_asset_runs(company_key="legacycompletedterminallabs")
+            source_assets_before = api_store.list_company_public_web_assets(company_key="legacycompletedterminallabs")
+            canonical_assets_before = api_store.list_company_assets(company_key="legacycompletedterminallabs")
+            canonical_evidence_before = api_store.list_company_evidence(company_key="legacycompletedterminallabs")
+
+            with (
+                mock.patch(
+                    "sourcing_agent.company_public_web_assets.publish_company_public_web_artifact_publication"
+                ) as artifact_publisher,
+                mock.patch(
+                    "sourcing_agent.company_public_web_assets.publish_company_public_web_completed_run_effects"
+                ) as effect_publisher,
+            ):
+                failed_drain = orchestrator._drain_company_public_web_refresh_commands(  # noqa: SLF001
+                    {
+                        "workflow_run_id": planned["workflow_command"]["workflow_run_id"],
+                        "command_limit": 1,
+                    }
+                )
+
+            terminal_reason = "company_public_web_legacy_completed_requires_force_refresh"
+            self.assertEqual(failed_drain["completed_count"], 0, failed_drain)
+            self.assertEqual(failed_drain["failed_count"], 1, failed_drain)
+            self.assertEqual(failed_drain["items"][0]["reason"], terminal_reason)
+            self.assertEqual(
+                failed_drain["items"][0]["source_owner_lost_reason"],
+                "company_public_web_completed_run_replay_read_only",
+            )
+            self.assertEqual(
+                failed_drain["items"][0]["activity_terminal_closure"]["outcome"],
+                "terminalized",
+            )
+            self.assertTrue(failed_drain["items"][0]["activity_terminal_closure"]["command_closed"])
+            terminal_command = api_store.get_workflow_command(source_command["command_id"])
+            self.assertEqual(terminal_command["status"], "failed_terminal")
+            self.assertEqual(terminal_command["attempt"], 1)
+            self.assertEqual(terminal_command["last_error"], terminal_reason)
+            self.assertEqual(terminal_command["result"]["status"], "invalid")
+            self.assertEqual(terminal_command["result"]["reason"], terminal_reason)
+
+            activities = api_store.repos.workflow_runtime.list_activity_runs(command_id=source_command["command_id"])
+            attempts = api_store.repos.workflow_runtime.list_activity_attempts(command_id=source_command["command_id"])
+            self.assertEqual([(item["status"], item["phase"]) for item in activities], [("failed", terminal_reason)])
+            self.assertEqual([(item["attempt_number"], item["status"]) for item in attempts], [(1, "failed")])
+            self.assertEqual(attempts[0]["output"]["status"], "invalid")
+            self.assertEqual(attempts[0]["error"]["reason"], terminal_reason)
+            self.assertEqual(
+                api_store.repos.workflow_runtime.list_entity_deltas(command_id=source_command["command_id"]),
+                [],
+            )
+            self.assertEqual(
+                api_store.list_company_public_web_asset_runs(company_key="legacycompletedterminallabs"),
+                source_runs_before,
+            )
+            self.assertEqual(
+                api_store.list_company_public_web_assets(company_key="legacycompletedterminallabs"),
+                source_assets_before,
+            )
+            self.assertEqual(
+                api_store.list_company_assets(company_key="legacycompletedterminallabs"),
+                canonical_assets_before,
+            )
+            self.assertEqual(
+                api_store.list_company_evidence(company_key="legacycompletedterminallabs"),
+                canonical_evidence_before,
+            )
+            artifact_publisher.assert_not_called()
+            effect_publisher.assert_not_called()
+
+            second_drain = orchestrator._drain_company_public_web_refresh_commands(  # noqa: SLF001
+                {
+                    "workflow_run_id": planned["workflow_command"]["workflow_run_id"],
+                    "command_limit": 1,
+                }
+            )
+            self.assertEqual(second_drain["status"], "idle", second_drain)
+            self.assertEqual(second_drain["executed_command_count"], 0, second_drain)
+            self.assertEqual(
+                api_store.claim_workflow_command(
+                    source_command["command_id"],
+                    lease_owner="must-not-reclaim-terminal-command",
+                    lease_seconds=30,
+                ),
+                {},
+            )
+            self.assertEqual(api_store.get_workflow_command(source_command["command_id"])["attempt"], 1)
+            operation = api_store.repos.workflow_runtime.get_operation(str(source_command["operation_id"]))
+            self.assertEqual(operation["status"], "failed")
+        finally:
+            api_store.close()
+
+    def test_company_public_web_revisionless_collision_expired_lease_cannot_terminalize_exact_source_claim(
+        self,
+    ) -> None:
+        api_store, orchestrator = self._company_public_web_test_runtime("legacy-completed-expired-closure")
+        expired_running: dict[str, Any] = {}
+        try:
+            planned, source_command = self._plan_company_public_web_source_command(
+                orchestrator,
+                company="Legacy Completed Expired Closure Labs",
+                company_key="legacycompletedexpiredclosurelabs",
+                suffix="legacy-completed-expired-closure",
+            )
+            source_payload = dict(source_command["payload"])
+            options = normalize_company_public_web_options(source_payload)
+            idempotency_key = build_company_public_web_run_idempotency_key(
+                target_company=str(source_payload["target_company"]),
+                company_key=str(source_payload["company_key"]),
+                source_families=list(source_payload["source_families"]),
+                seed_urls=list(source_payload["seed_urls"]),
+                options=options,
+                force_refresh=bool(source_payload.get("force_refresh")),
+                nonce=str(source_payload.get("refresh_nonce") or ""),
+            )
+            run_id = f"company-public-web-run-{short_hash(idempotency_key)}"
+            api_store.upsert_company_public_web_asset_run(
+                {
+                    "run_id": run_id,
+                    "target_company": source_payload["target_company"],
+                    "company_key": source_payload["company_key"],
+                    "idempotency_key": idempotency_key,
+                    "status": "completed",
+                    "phase": "completed",
+                    "source_families": source_payload["source_families"],
+                    "seed_urls": source_payload["seed_urls"],
+                    "options": options,
+                    "discovered_assets": [],
+                    "summary": {"asset_count": 0},
+                    "requested_by": "brownfield-import",
+                    "started_at": "2025-01-01 00:00:00",
+                    "completed_at": "2025-01-01 00:00:01",
+                    "metadata": {"legacy_import": True},
+                }
+            )
+            source_runs_before = api_store.list_company_public_web_asset_runs(
+                company_key="legacycompletedexpiredclosurelabs"
+            )
+            source_assets_before = api_store.list_company_public_web_assets(
+                company_key="legacycompletedexpiredclosurelabs"
+            )
+            canonical_assets_before = api_store.list_company_assets(company_key="legacycompletedexpiredclosurelabs")
+            canonical_evidence_before = api_store.list_company_evidence(company_key="legacycompletedexpiredclosurelabs")
+            real_execute = orchestrator._execute_company_public_web_refresh_command_payload  # noqa: SLF001
+
+            def expire_exact_lease_after_owner_lost(command: dict[str, Any]) -> dict[str, Any]:
+                result = real_execute(command)
+                self.assertEqual(result["status"], "owner_lost")
+                self.assertEqual(result["reason"], "company_public_web_completed_run_replay_read_only")
+                api_store._control_plane_postgres._execute_non_query(  # noqa: SLF001
+                    "UPDATE workflow_commands "
+                    "SET lease_expires_at = TO_CHAR(clock_timestamp() AT TIME ZONE 'UTC' - INTERVAL '1 second', "
+                    "'YYYY-MM-DD HH24:MI:SS') "
+                    "WHERE command_id = %s AND attempt = %s AND lease_owner = %s",
+                    (
+                        command["command_id"],
+                        int(command["attempt"]),
+                        command["lease_owner"],
+                    ),
+                )
+                expired_running.update(api_store.get_workflow_command(command["command_id"]))
+                self.assertEqual(expired_running["status"], "running")
+                self.assertEqual(int(expired_running["attempt"]), 1)
+                self.assertEqual(expired_running["lease_owner"], command["lease_owner"])
+                return result
+
+            with (
+                mock.patch.object(
+                    orchestrator,
+                    "_execute_company_public_web_refresh_command_payload",
+                    side_effect=expire_exact_lease_after_owner_lost,
+                ),
+                mock.patch(
+                    "sourcing_agent.company_public_web_assets.publish_company_public_web_artifact_publication"
+                ) as artifact_publisher,
+                mock.patch(
+                    "sourcing_agent.company_public_web_assets.publish_company_public_web_completed_run_effects"
+                ) as effect_publisher,
+            ):
+                response = orchestrator._run_company_public_web_refresh_command(  # noqa: SLF001
+                    source_command,
+                    lease_seconds=30,
+                )
+
+            self.assertEqual(response["status"], "skipped")
+            self.assertEqual(response["reason"], "company_public_web_completed_run_replay_read_only")
+            closure = response["activity_owner_lost_closure"]
+            self.assertFalse(closure["command_closed"])
+            self.assertFalse(closure["activity_closed"])
+            self.assertEqual(api_store.get_workflow_command(source_command["command_id"]), expired_running)
+            activities = api_store.repos.workflow_runtime.list_activity_runs(command_id=source_command["command_id"])
+            self.assertEqual(len(activities), 1)
+            self.assertEqual(activities[0]["status"], "running")
+            attempts = api_store.repos.workflow_runtime.list_activity_attempts(command_id=source_command["command_id"])
+            self.assertEqual(len(attempts), 1)
+            self.assertEqual(attempts[0]["status"], "failed" if closure["attempt_closed"] else "running")
+            self.assertEqual(
+                api_store.repos.workflow_runtime.list_entity_deltas(command_id=source_command["command_id"]),
+                [],
+            )
+            self.assertEqual(
+                api_store.list_company_public_web_asset_runs(company_key="legacycompletedexpiredclosurelabs"),
+                source_runs_before,
+            )
+            self.assertEqual(
+                api_store.list_company_public_web_assets(company_key="legacycompletedexpiredclosurelabs"),
+                source_assets_before,
+            )
+            self.assertEqual(
+                api_store.list_company_assets(company_key="legacycompletedexpiredclosurelabs"),
+                canonical_assets_before,
+            )
+            self.assertEqual(
+                api_store.list_company_evidence(company_key="legacycompletedexpiredclosurelabs"),
+                canonical_evidence_before,
+            )
+            artifact_publisher.assert_not_called()
+            effect_publisher.assert_not_called()
+        finally:
+            api_store.close()
+
+    def test_company_public_web_mid_terminal_closure_lease_expiry_falls_back_to_owner_lost_only(self) -> None:
+        from sourcing_agent import control_plane_live_postgres as control_plane_postgres_module
+
+        api_store, orchestrator = self._company_public_web_test_runtime("mid-terminal-closure-lease-expiry")
+        try:
+            command = api_store.upsert_workflow_command(
+                workflow_run_id="wf-company-public-web-mid-terminal-closure-lease-expiry",
+                command_id="cmd-company-public-web-mid-terminal-closure-lease-expiry",
+                command_type=COMPANY_PUBLIC_WEB_SOURCE_COLLECT_COMMAND_TYPE,
+                owner=COMPANY_PUBLIC_WEB_REFRESH_OWNER,
+                idempotency_key="company.public-web.source-collect:mid-terminal-closure-lease-expiry",
+                payload={
+                    "target_company": "Mid Terminal Closure Lease Expiry Labs",
+                    "company_key": "midterminalclosureleaseexpirylabs",
+                    "source_families": ["company_homepage"],
+                    "seed_urls": ["https://mid-terminal-closure-lease-expiry.example/"],
+                    "collection_mode": "seed_url_only",
+                },
+                max_attempts=4,
+            )
+            claimed = api_store.claim_workflow_command(
+                command["command_id"],
+                lease_owner="company-public-web-mid-terminal-closure-owner",
+                lease_seconds=30,
+            )
+            self.assertEqual(int(claimed["attempt"]), 1)
+            running = api_store.mark_workflow_command_running(
+                command["command_id"],
+                lease_owner="company-public-web-mid-terminal-closure-owner",
+            )
+            self.assertEqual(running["status"], "running")
+            activity, attempt = orchestrator._start_workflow_command_activity_attempt(  # noqa: SLF001
+                running,
+                activity_type=COMPANY_PUBLIC_WEB_SOURCE_COLLECT_COMMAND_TYPE,
+                owner=COMPANY_PUBLIC_WEB_REFRESH_OWNER,
+                phase="company_public_web_source_collect_started",
+                lease_owner=running["lease_owner"],
+                provider="seed_url_only",
+                provider_request_ref=running["command_id"],
+                input_payload={
+                    "target_company": "Mid Terminal Closure Lease Expiry Labs",
+                    "company_key": "midterminalclosureleaseexpirylabs",
+                    "collection_mode": "seed_url_only",
+                },
+                entity_counts={"company_public_web_run_count": 1},
+                metadata={"activity_owner": COMPANY_PUBLIC_WEB_REFRESH_OWNER},
+                attempt_suffix="company_public_web_refresh",
+            )
+            self.assertEqual(activity["status"], "running")
+            self.assertEqual(attempt["status"], "running")
+
+            api_store._control_plane_postgres._execute_non_query(  # noqa: SLF001
+                "UPDATE workflow_commands "
+                "SET lease_expires_at = TO_CHAR(clock_timestamp() AT TIME ZONE 'UTC' + INTERVAL '2 seconds', "
+                "'YYYY-MM-DD HH24:MI:SS') "
+                "WHERE command_id = %s AND attempt = %s AND lease_owner = %s",
+                (running["command_id"], int(running["attempt"]), running["lease_owner"]),
+            )
+            expiring_running = api_store.get_workflow_command(command["command_id"])
+            self.assertTrue(orchestrator._workflow_command_lease_active(expiring_running))  # noqa: SLF001
+            activity_before = api_store.repos.workflow_runtime.get_activity_run(activity["activity_run_id"])
+            source_runs_before = api_store.list_company_public_web_asset_runs(
+                company_key="midterminalclosureleaseexpirylabs"
+            )
+            source_assets_before = api_store.list_company_public_web_assets(
+                company_key="midterminalclosureleaseexpirylabs"
+            )
+            canonical_assets_before = api_store.list_company_assets(company_key="midterminalclosureleaseexpirylabs")
+            canonical_evidence_before = api_store.list_company_evidence(company_key="midterminalclosureleaseexpirylabs")
+            real_now = control_plane_postgres_module._utc_now_sql_timestamp  # noqa: SLF001
+            post_guard_hook_calls = 0
+
+            def sleep_across_exact_lease_after_python_guard() -> str:
+                nonlocal post_guard_hook_calls
+                post_guard_hook_calls += 1
+                if post_guard_hook_calls == 1:
+                    self.assertTrue(orchestrator._workflow_command_lease_active(expiring_running))  # noqa: SLF001
+                    threading.Event().wait(timeout=2.25)
+                return real_now()
+
+            terminal_reason = "company_public_web_legacy_completed_requires_force_refresh"
+            with mock.patch.object(
+                control_plane_postgres_module,
+                "_utc_now_sql_timestamp",
+                side_effect=sleep_across_exact_lease_after_python_guard,
+            ):
+                closure = orchestrator._close_company_public_web_owner_lost_activity_attempt(  # noqa: SLF001
+                    command=expiring_running,
+                    activity=activity,
+                    attempt=attempt,
+                    reason=terminal_reason,
+                    terminalize_exact_command=True,
+                )
+
+            self.assertGreaterEqual(post_guard_hook_calls, 1)
+            self.assertEqual(closure["outcome"], "closed")
+            self.assertTrue(closure["attempt_closed"])
+            self.assertFalse(closure["activity_closed"])
+            self.assertFalse(closure["command_closed"])
+            command_after = api_store.get_workflow_command(command["command_id"])
+            self.assertEqual(command_after, expiring_running)
+            self.assertEqual(command_after["status"], "running")
+            self.assertFalse(orchestrator._workflow_command_lease_active(command_after))  # noqa: SLF001
+            self.assertEqual(
+                api_store.repos.workflow_runtime.get_activity_run(activity["activity_run_id"]),
+                activity_before,
+            )
+            attempt_after = api_store.repos.workflow_runtime.get_activity_attempt(attempt["attempt_id"])
+            self.assertEqual(attempt_after["status"], "failed")
+            self.assertEqual(attempt_after["error"]["reason"], terminal_reason)
+            self.assertTrue(attempt_after["error"]["owner_lost"])
+            self.assertFalse(attempt_after["error"]["deterministic_terminal_failure"])
+            self.assertEqual(attempt_after["output"]["status"], "skipped")
+            self.assertEqual(
+                api_store.repos.workflow_runtime.list_entity_deltas(command_id=command["command_id"]),
+                [],
+            )
+            workflow_commands = api_store.list_workflow_commands(
+                workflow_run_id=command["workflow_run_id"],
+                limit=0,
+            )
+            self.assertEqual([item["command_id"] for item in workflow_commands], [command["command_id"]])
+            self.assertEqual(
+                api_store.list_company_public_web_asset_runs(company_key="midterminalclosureleaseexpirylabs"),
+                source_runs_before,
+            )
+            self.assertEqual(
+                api_store.list_company_public_web_assets(company_key="midterminalclosureleaseexpirylabs"),
+                source_assets_before,
+            )
+            self.assertEqual(
+                api_store.list_company_assets(company_key="midterminalclosureleaseexpirylabs"),
+                canonical_assets_before,
+            )
+            self.assertEqual(
+                api_store.list_company_evidence(company_key="midterminalclosureleaseexpirylabs"),
+                canonical_evidence_before,
+            )
+        finally:
+            api_store.close()
+
+    def test_company_public_web_foreign_live_source_owner_terminalizes_colliding_command_once(self) -> None:
+        api_store, orchestrator = self._company_public_web_test_runtime("foreign-live-source-owner")
+        try:
+            planned_a, source_a = self._plan_company_public_web_source_command(
+                orchestrator,
+                company="Foreign Live Source Owner Labs",
+                company_key="foreignlivesourceownerlabs",
+                suffix="foreign-live-source-owner-a",
+            )
+            planned_b, source_b = self._plan_company_public_web_source_command(
+                orchestrator,
+                company="Foreign Live Source Owner Labs",
+                company_key="foreignlivesourceownerlabs",
+                suffix="foreign-live-source-owner-b",
+            )
+            source_a_claim = api_store.claim_workflow_command(
+                source_a["command_id"],
+                lease_owner="company-public-web-foreign-live-owner-a",
+                lease_seconds=300,
+            )
+            self.assertTrue(source_a_claim)
+            source_a_running = api_store.mark_workflow_command_running(
+                source_a["command_id"],
+                lease_owner="company-public-web-foreign-live-owner-a",
+            )
+            self.assertEqual(source_a_running["status"], "running")
+
+            source_payload = dict(source_a["payload"])
+            options = normalize_company_public_web_options(source_payload)
+            idempotency_key = build_company_public_web_run_idempotency_key(
+                target_company=str(source_payload["target_company"]),
+                company_key=str(source_payload["company_key"]),
+                source_families=list(source_payload["source_families"]),
+                seed_urls=list(source_payload["seed_urls"]),
+                options=options,
+                force_refresh=bool(source_payload.get("force_refresh")),
+                nonce=str(source_payload.get("refresh_nonce") or ""),
+            )
+            foreign_run = api_store.create_company_public_web_asset_run_if_absent(
+                {
+                    "run_id": f"company-public-web-run-{short_hash(idempotency_key)}",
+                    "idempotency_key": idempotency_key,
+                    "target_company": source_payload["target_company"],
+                    "company_key": source_payload["company_key"],
+                    "source_families": source_payload["source_families"],
+                    "seed_urls": source_payload["seed_urls"],
+                    "options": options,
+                    "requested_by": "company-public-web-foreign-live-owner-a",
+                    "status": "running",
+                    "phase": "source_collect",
+                    "metadata": {
+                        "source_workflow_command_id": source_a_running["command_id"],
+                        "source_workflow_command_attempt": int(source_a_running["attempt"]),
+                        "source_workflow_command_lease_owner": source_a_running["lease_owner"],
+                    },
+                }
+            )
+            self.assertTrue(foreign_run["created"])
+            foreign_run_before = api_store.get_company_public_web_asset_run(run_id=foreign_run["run"]["run_id"])
+            source_b_payload = dict(source_b["payload"])
+            self.assertEqual(
+                build_company_public_web_run_idempotency_key(
+                    target_company=str(source_b_payload["target_company"]),
+                    company_key=str(source_b_payload["company_key"]),
+                    source_families=list(source_b_payload["source_families"]),
+                    seed_urls=list(source_b_payload["seed_urls"]),
+                    options=normalize_company_public_web_options(source_b_payload),
+                    force_refresh=bool(source_b_payload.get("force_refresh")),
+                    nonce=str(source_b_payload.get("refresh_nonce") or ""),
+                ),
+                idempotency_key,
+            )
+            b_max_attempts = int(source_b["max_attempts"])
+            drains: list[dict[str, Any]] = []
+
+            with (
+                mock.patch(
+                    "sourcing_agent.company_public_web_assets.publish_company_public_web_artifact_publication"
+                ) as artifact_publisher,
+                mock.patch(
+                    "sourcing_agent.company_public_web_assets.publish_company_public_web_completed_run_effects"
+                ) as effect_publisher,
+            ):
+                for _ in range(b_max_attempts + 2):
+                    drains.append(
+                        orchestrator._drain_company_public_web_refresh_commands(  # noqa: SLF001
+                            {
+                                "workflow_run_id": planned_b["workflow_command"]["workflow_run_id"],
+                                "command_limit": 1,
+                            }
+                        )
+                    )
+
+            self.assertEqual(drains[0]["completed_count"], 0, drains[0])
+            self.assertEqual(drains[0]["failed_count"], 1, drains[0])
+            self.assertEqual(
+                drains[0]["items"][0]["reason"],
+                "company_public_web_source_run_owner_not_current",
+            )
+            self.assertTrue(all(drain["status"] == "idle" for drain in drains[1:]), drains)
+            source_b_after = api_store.get_workflow_command(source_b["command_id"])
+            self.assertEqual(source_b_after["status"], "failed_terminal")
+            self.assertEqual(int(source_b_after["attempt"]), 1)
+            self.assertLessEqual(int(source_b_after["attempt"]), int(source_b_after["max_attempts"]))
+            self.assertEqual(source_b_after["result"].get("downstream_command_ids", []), [])
+            self.assertEqual(api_store.get_workflow_command(source_a["command_id"]), source_a_running)
+            self.assertEqual(
+                api_store.get_company_public_web_asset_run(run_id=foreign_run["run"]["run_id"]),
+                foreign_run_before,
+            )
+            self.assertEqual(
+                api_store.repos.workflow_runtime.list_entity_deltas(command_id=source_b["command_id"]),
+                [],
+            )
+            b_commands = api_store.list_workflow_commands(
+                workflow_run_id=planned_b["workflow_command"]["workflow_run_id"],
+                limit=0,
+            )
+            self.assertEqual(
+                [
+                    command
+                    for command in b_commands
+                    if command["command_type"] == COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE
+                ],
+                [],
+            )
+            self.assertEqual(api_store.list_company_public_web_assets(company_key="foreignlivesourceownerlabs"), [])
+            self.assertEqual(api_store.list_company_assets(company_key="foreignlivesourceownerlabs"), [])
+            self.assertEqual(api_store.list_company_evidence(company_key="foreignlivesourceownerlabs"), [])
+            later_drain = orchestrator._drain_company_public_web_refresh_commands(  # noqa: SLF001
+                {
+                    "workflow_run_id": planned_b["workflow_command"]["workflow_run_id"],
+                    "command_limit": 1,
+                }
+            )
+            self.assertEqual(later_drain["status"], "idle", later_drain)
+            self.assertEqual(later_drain["executed_command_count"], 0, later_drain)
+            self.assertEqual(
+                api_store.claim_workflow_command(
+                    source_b["command_id"],
+                    lease_owner="must-not-reclaim-foreign-owner-collision",
+                    lease_seconds=30,
+                ),
+                {},
+            )
+            self.assertEqual(api_store.get_workflow_command(source_a["command_id"]), source_a_running)
+            artifact_publisher.assert_not_called()
+            effect_publisher.assert_not_called()
+            self.assertNotEqual(
+                planned_a["workflow_command"]["workflow_run_id"], planned_b["workflow_command"]["workflow_run_id"]
+            )
+        finally:
+            api_store.close()
+
+    def test_company_public_web_canonical_second_table_failure_rolls_back_then_attempt2_converges(self) -> None:
+        api_store, orchestrator = self._company_public_web_test_runtime("canonical-uow-rollback")
+        constraint_name = "company_evidence_d1m_forced_failure_ck"
+        constraint_installed = False
+        try:
+            planned, source_command = self._plan_company_public_web_source_command(
+                orchestrator,
+                company="Canonical Rollback Labs",
+                company_key="canonicalrollbacklabs",
+                suffix="canonical-uow-rollback",
+            )
+            source_drain = orchestrator._drain_company_public_web_refresh_commands(  # noqa: SLF001
+                {"workflow_run_id": planned["workflow_command"]["workflow_run_id"], "command_limit": 1}
+            )
+            self.assertEqual(source_drain["completed_count"], 1, source_drain)
+            source_after = api_store.get_workflow_command(source_command["command_id"])
+            materialize_command_id = source_after["result"]["downstream_command_ids"][0]
+            api_store._control_plane_postgres._execute_non_query(  # noqa: SLF001
+                f"ALTER TABLE company_evidence ADD CONSTRAINT {constraint_name} "
+                "CHECK ((COALESCE(metadata_json, '{}')::jsonb ->> 'source') "
+                "IS DISTINCT FROM 'company_public_web_assets')",
+                (),
+            )
+            constraint_installed = True
+
+            failed_drain = orchestrator._drain_company_public_web_refresh_commands(  # noqa: SLF001
+                {"workflow_run_id": planned["workflow_command"]["workflow_run_id"], "command_limit": 1}
+            )
+            self.assertEqual(failed_drain["completed_count"], 0, failed_drain)
+            self.assertEqual(failed_drain["failed_count"], 1, failed_drain)
+            failed_command = api_store.get_workflow_command(materialize_command_id)
+            self.assertEqual(failed_command["status"], "retry_wait")
+            self.assertEqual(int(failed_command["attempt"]), 1)
+            self.assertEqual(api_store.list_company_assets(company_key="canonicalrollbacklabs"), [])
+            self.assertEqual(api_store.list_company_evidence(company_key="canonicalrollbacklabs"), [])
+
+            api_store._control_plane_postgres._execute_non_query(  # noqa: SLF001
+                f"ALTER TABLE company_evidence DROP CONSTRAINT {constraint_name}",
+                (),
+            )
+            constraint_installed = False
+            api_store._control_plane_postgres._execute_non_query(  # noqa: SLF001
+                "UPDATE workflow_commands SET not_before_at = '', lease_expires_at = '' WHERE command_id = %s",
+                (materialize_command_id,),
+            )
+            retry_drain = orchestrator._drain_company_public_web_refresh_commands(  # noqa: SLF001
+                {"workflow_run_id": planned["workflow_command"]["workflow_run_id"], "command_limit": 1}
+            )
+            self.assertEqual(retry_drain["completed_count"], 1, retry_drain)
+            repaired_command = api_store.get_workflow_command(materialize_command_id)
+            self.assertEqual(repaired_command["status"], "succeeded")
+            self.assertEqual(int(repaired_command["attempt"]), 2)
+            self.assertEqual(len(api_store.list_company_assets(company_key="canonicalrollbacklabs")), 1)
+            self.assertEqual(len(api_store.list_company_evidence(company_key="canonicalrollbacklabs")), 1)
+            attempts = sorted(
+                api_store.repos.workflow_runtime.list_activity_attempts(command_id=materialize_command_id),
+                key=lambda item: int(item["attempt_number"]),
+            )
+            self.assertEqual(
+                [(int(item["attempt_number"]), item["status"]) for item in attempts], [(1, "failed"), (2, "succeeded")]
+            )
+            operation_run_id = str(planned["workflow_command"]["operation_id"])
+            self.assertEqual(api_store.repos.workflow_runtime.get_operation(operation_run_id)["status"], "completed")
+        finally:
+            if constraint_installed:
+                api_store._control_plane_postgres._execute_non_query(  # noqa: SLF001
+                    f"ALTER TABLE company_evidence DROP CONSTRAINT IF EXISTS {constraint_name}",
+                    (),
+                )
+            api_store.close()
+
+    def test_company_public_web_concurrent_source_runs_reserve_distinct_positive_revisions(self) -> None:
+        api_store, orchestrator = self._company_public_web_test_runtime("concurrent-revision-reserve")
+        try:
+            planned_commands = [
+                self._plan_company_public_web_source_command(
+                    orchestrator,
+                    company=f"Concurrent Revision {suffix.upper()} Labs",
+                    company_key=f"concurrentrevision{suffix}labs",
+                    suffix=f"concurrent-revision-{suffix}",
+                )
+                for suffix in ("a", "b")
+            ]
+            barrier = threading.Barrier(2)
+            results: dict[str, dict[str, Any]] = {}
+
+            def drain_source(label: str, planned: dict[str, Any]) -> None:
+                barrier.wait(timeout=10)
+                results[label] = orchestrator._drain_company_public_web_refresh_commands(  # noqa: SLF001
+                    {"workflow_run_id": planned["workflow_command"]["workflow_run_id"], "command_limit": 1}
+                )
+
+            workers = [
+                threading.Thread(target=drain_source, args=(label, planned), daemon=True)
+                for label, (planned, _source) in zip(("a", "b"), planned_commands, strict=True)
+            ]
+            for worker in workers:
+                worker.start()
+            for worker in workers:
+                worker.join(timeout=20)
+                self.assertFalse(worker.is_alive())
+
+            self.assertEqual(set(results), {"a", "b"})
+            self.assertTrue(all(result["completed_count"] == 1 for result in results.values()), results)
+            completed_commands = [
+                api_store.get_workflow_command(source["command_id"]) for _planned, source in planned_commands
+            ]
+            revisions = [
+                int(dict(command["result"]["run"]["metadata"])["source_projection_revision"])
+                for command in completed_commands
+            ]
+            self.assertTrue(all(revision > 0 for revision in revisions))
+            self.assertEqual(len(set(revisions)), 2)
+        finally:
+            api_store.close()
+
+    def test_company_public_web_revision_orders_public_readers_and_preserves_mutation_timestamp(self) -> None:
+        from sourcing_agent.company_public_web_assets import list_company_public_web_assets
+
+        api_store, orchestrator = self._company_public_web_test_runtime("revision-reader-order")
+        try:
+            first_planned, first_source = self._plan_company_public_web_source_command(
+                orchestrator,
+                company="Revision Reader Labs",
+                company_key="revisionreaderlabs",
+                suffix="revision-reader-first",
+            )
+            for _phase in range(2):
+                drain = orchestrator._drain_company_public_web_refresh_commands(  # noqa: SLF001
+                    {"workflow_run_id": first_planned["workflow_command"]["workflow_run_id"], "command_limit": 1}
+                )
+                self.assertEqual(drain["completed_count"], 1, drain)
+            first_source_after = api_store.get_workflow_command(first_source["command_id"])
+            first_run = dict(first_source_after["result"]["run"])
+            first_revision = int(first_run["metadata"]["source_projection_revision"])
+            frozen_updated_at = "2099-12-31 23:59:59"
+            for table_name, where_column, where_value in (
+                ("company_public_web_asset_runs", "run_id", first_run["run_id"]),
+                ("company_public_web_assets", "company_key", "revisionreaderlabs"),
+                ("company_assets", "company_key", "revisionreaderlabs"),
+                ("company_evidence", "company_key", "revisionreaderlabs"),
+            ):
+                api_store._control_plane_postgres._execute_non_query(  # noqa: SLF001
+                    f"UPDATE {table_name} SET updated_at = %s WHERE {where_column} = %s",
+                    (frozen_updated_at, where_value),
+                )
+
+            second_planned, second_source = self._plan_company_public_web_source_command(
+                orchestrator,
+                company="Revision Reader Labs",
+                company_key="revisionreaderlabs",
+                suffix="revision-reader-second",
+                force_refresh=True,
+            )
+            second_source_drain = orchestrator._drain_company_public_web_refresh_commands(  # noqa: SLF001
+                {"workflow_run_id": second_planned["workflow_command"]["workflow_run_id"], "command_limit": 1}
+            )
+            self.assertEqual(second_source_drain["completed_count"], 1, second_source_drain)
+            second_source_after = api_store.get_workflow_command(second_source["command_id"])
+            second_run = dict(second_source_after["result"]["run"])
+            second_revision = int(second_run["metadata"]["source_projection_revision"])
+            self.assertGreater(second_revision, first_revision)
+
+            # A wall-clock-future brownfield row is still behind every valid
+            # positive revision. Brownfield-only rows retain timestamp/run-id
+            # ordering as an explicit migration fallback.
+            api_store.upsert_company_public_web_asset_run(
+                {
+                    "run_id": "company-public-web-run-brownfield-future",
+                    "target_company": "Revision Reader Labs",
+                    "company_key": "revisionreaderlabs",
+                    "idempotency_key": "company-public-web:brownfield-future",
+                    "status": "completed",
+                    "phase": "completed",
+                    "metadata": {},
+                }
+            )
+            api_store._control_plane_postgres._execute_non_query(  # noqa: SLF001
+                "UPDATE company_public_web_asset_runs SET updated_at = '9999-12-31 23:59:59' "
+                "WHERE run_id = 'company-public-web-run-brownfield-future'",
+                (),
+            )
+            ordered_runs = api_store.list_company_public_web_asset_runs(company_key="revisionreaderlabs")
+            self.assertEqual([row["run_id"] for row in ordered_runs[:2]], [second_run["run_id"], first_run["run_id"]])
+            self.assertEqual(ordered_runs[-1]["run_id"], "company-public-web-run-brownfield-future")
+            latest = api_store.list_latest_company_public_web_asset_runs_by_company_keys(["revisionreaderlabs"])
+            self.assertEqual([row["run_id"] for row in latest], [second_run["run_id"]])
+            public_read = list_company_public_web_assets(
+                store=api_store,
+                payload={"company_key": "revisionreaderlabs"},
+            )
+            self.assertEqual(public_read["runs"][0]["run_id"], second_run["run_id"])
+            source_asset = api_store.list_company_public_web_assets(company_key="revisionreaderlabs")[0]
+            self.assertEqual(source_asset["latest_run_id"], second_run["run_id"])
+            self.assertEqual(source_asset["metadata"]["source_projection_revision"], second_revision)
+            self.assertEqual(source_asset["updated_at"], frozen_updated_at)
+
+            second_materialize_drain = orchestrator._drain_company_public_web_refresh_commands(  # noqa: SLF001
+                {"workflow_run_id": second_planned["workflow_command"]["workflow_run_id"], "command_limit": 1}
+            )
+            self.assertEqual(second_materialize_drain["completed_count"], 1, second_materialize_drain)
+            canonical_asset = api_store.list_company_assets(company_key="revisionreaderlabs")[0]
+            canonical_evidence = api_store.list_company_evidence(company_key="revisionreaderlabs")[0]
+            self.assertEqual(canonical_asset["metadata"]["source_projection_revision"], second_revision)
+            self.assertEqual(canonical_evidence["metadata"]["source_projection_revision"], second_revision)
+            self.assertEqual(canonical_asset["updated_at"], frozen_updated_at)
+            self.assertEqual(canonical_evidence["updated_at"], frozen_updated_at)
+
+            for suffix, updated_at in (("old", "2026-01-01 00:00:00"), ("new", "2026-02-01 00:00:00")):
+                run_id = f"company-public-web-run-brownfield-{suffix}"
+                api_store.upsert_company_public_web_asset_run(
+                    {
+                        "run_id": run_id,
+                        "target_company": "Brownfield Only Labs",
+                        "company_key": "brownfieldonlylabs",
+                        "idempotency_key": f"company-public-web:brownfield-{suffix}",
+                        "status": "completed",
+                        "phase": "completed",
+                        "metadata": {},
+                    }
+                )
+                api_store._control_plane_postgres._execute_non_query(  # noqa: SLF001
+                    "UPDATE company_public_web_asset_runs SET updated_at = %s WHERE run_id = %s",
+                    (updated_at, run_id),
+                )
+            brownfield_runs = api_store.list_company_public_web_asset_runs(company_key="brownfieldonlylabs")
+            self.assertEqual(
+                [row["run_id"] for row in brownfield_runs],
+                ["company-public-web-run-brownfield-new", "company-public-web-run-brownfield-old"],
+            )
+        finally:
+            api_store.close()
+
+    def test_company_public_web_takeover_before_preflight_keeps_old_execution_read_only(self) -> None:
+        settings = AppSettings(
+            project_root=self.runtime_dir,
+            runtime_dir=self.runtime_dir,
+            secrets_file=self.runtime_dir / "secrets.toml",
+            db_path=self.runtime_dir / "company-public-web-takeover-before-preflight.db",
+            jobs_dir=self.runtime_dir / "jobs",
+            company_assets_dir=self.runtime_dir / "company_assets",
+            qwen=QwenSettings(enabled=False),
+            semantic=SemanticProviderSettings(enabled=False),
+            harvest=HarvestSettings(profile_scraper=HarvestActorSettings(enabled=False)),
+        )
+        api_store = ControlPlaneStore(settings.db_path)
+        orchestrator = SourcingOrchestrator(
+            catalog=AssetCatalog.discover(),
+            store=api_store,
+            jobs_dir=settings.jobs_dir,
+            model_client=DeterministicModelClient(),
+            semantic_provider=LocalSemanticProvider(),
+            acquisition_engine=AcquisitionEngine(
+                AssetCatalog.discover(),
+                settings,
+                api_store,
+                DeterministicModelClient(),
+            ),
+        )
+        try:
+            submitted = orchestrator.submit_operation_action(
+                {
+                    "action_type": ACTION_REFRESH_COMPANY_PUBLIC_WEB,
+                    "input": {
+                        "target_company": "Preflight Takeover Labs",
+                        "source_families": ["company_homepage"],
+                        "seed_urls": ["https://preflight-takeover.example/"],
+                    },
+                    "budget": {"max_provider_calls": 0, "max_usd": 0.0},
+                    "idempotency_key": "company-public-web:takeover-before-preflight",
+                }
+            )
+            approved = orchestrator.approve_operation_action_api(
+                submitted["action"]["action_id"],
+                {"actor": "unit-test"},
+            )
+            operation_run_id = approved["operation_run"]["operation_run_id"]
+            planned = orchestrator.dispatch_operation_run_api(operation_run_id, {"actor": "unit-test"})
+            root_drain = orchestrator._drain_company_public_web_refresh_commands(  # noqa: SLF001
+                {"workflow_run_id": planned["workflow_command"]["workflow_run_id"], "command_limit": 1}
+            )
+            self.assertEqual(root_drain["completed_count"], 1, root_drain)
+            root_command = api_store.get_workflow_command(planned["workflow_command"]["command_id"])
+            source_command = api_store.get_workflow_command(root_command["result"]["downstream_command_ids"][0])
+            operation_before = api_store.repos.workflow_runtime.get_operation(operation_run_id)
+            original_mark_running = api_store.mark_workflow_command_running
+            takeover: dict[str, Any] = {}
+
+            def mark_running_then_take_over(command_id: str, *, lease_owner: str = "") -> dict[str, Any]:
+                stale_running = original_mark_running(command_id, lease_owner=lease_owner)
+                api_store._control_plane_postgres._execute_non_query(  # noqa: SLF001
+                    "UPDATE workflow_commands "
+                    "SET lease_expires_at = TO_CHAR(clock_timestamp() AT TIME ZONE 'UTC' - INTERVAL '1 second', "
+                    "'YYYY-MM-DD HH24:MI:SS') WHERE command_id = %s",
+                    (command_id,),
+                )
+                takeover["claim"] = api_store.claim_workflow_command(
+                    command_id,
+                    lease_owner="company-public-web-preflight-takeover-owner",
+                    lease_seconds=60,
+                )
+                takeover["running"] = original_mark_running(
+                    command_id,
+                    lease_owner="company-public-web-preflight-takeover-owner",
+                )
+                return stale_running
+
+            with (
+                mock.patch.object(
+                    api_store,
+                    "mark_workflow_command_running",
+                    side_effect=mark_running_then_take_over,
+                ),
+                mock.patch("sourcing_agent.orchestrator.refresh_company_public_web_assets_service") as source_service,
+            ):
+                response = orchestrator._run_company_public_web_refresh_command(  # noqa: SLF001
+                    source_command,
+                    lease_seconds=30,
+                )
+
+            self.assertEqual(response["status"], "skipped")
+            self.assertEqual(response["reason"], "company_public_web_command_claim_not_current")
+            self.assertEqual(int(takeover["claim"]["attempt"]), 2)
+            self.assertEqual(api_store.get_workflow_command(source_command["command_id"]), takeover["running"])
+            self.assertEqual(api_store.repos.workflow_runtime.get_operation(operation_run_id), operation_before)
+            self.assertEqual(api_store.list_company_public_web_asset_runs(company_key="preflighttakeoverlabs"), [])
+            self.assertEqual(api_store.list_company_public_web_assets(company_key="preflighttakeoverlabs"), [])
+            self.assertEqual(api_store.list_company_assets(company_key="preflighttakeoverlabs"), [])
+            self.assertEqual(api_store.list_company_evidence(company_key="preflighttakeoverlabs"), [])
+            self.assertEqual(
+                api_store.repos.workflow_runtime.list_activity_runs(command_id=source_command["command_id"]),
+                [],
+            )
+            self.assertEqual(
+                api_store.repos.workflow_runtime.list_activity_attempts(command_id=source_command["command_id"]),
+                [],
+            )
+            self.assertEqual(
+                api_store.repos.workflow_runtime.list_entity_deltas(command_id=source_command["command_id"]),
+                [],
+            )
+            source_service.assert_not_called()
+        finally:
+            api_store.close()
+
+    def test_company_public_web_duplicate_current_owner_busy_has_zero_terminal_mutation(self) -> None:
+        settings = AppSettings(
+            project_root=self.runtime_dir,
+            runtime_dir=self.runtime_dir,
+            secrets_file=self.runtime_dir / "secrets.toml",
+            db_path=self.runtime_dir / "company-public-web-owner-busy.db",
+            jobs_dir=self.runtime_dir / "jobs",
+            company_assets_dir=self.runtime_dir / "company_assets",
+            qwen=QwenSettings(enabled=False),
+            semantic=SemanticProviderSettings(enabled=False),
+            harvest=HarvestSettings(profile_scraper=HarvestActorSettings(enabled=False)),
+        )
+        api_store = ControlPlaneStore(settings.db_path)
+        orchestrator = SourcingOrchestrator(
+            catalog=AssetCatalog.discover(),
+            store=api_store,
+            jobs_dir=settings.jobs_dir,
+            model_client=DeterministicModelClient(),
+            semantic_provider=LocalSemanticProvider(),
+            acquisition_engine=AcquisitionEngine(
+                AssetCatalog.discover(),
+                settings,
+                api_store,
+                DeterministicModelClient(),
+            ),
+        )
+        observed: dict[str, Any] = {}
+        try:
+            submitted = orchestrator.submit_operation_action(
+                {
+                    "action_type": ACTION_REFRESH_COMPANY_PUBLIC_WEB,
+                    "input": {
+                        "target_company": "Owner Busy Labs",
+                        "source_families": ["company_homepage"],
+                        "seed_urls": ["https://owner-busy.example/"],
+                    },
+                    "budget": {"max_provider_calls": 0, "max_usd": 0.0},
+                    "idempotency_key": "company-public-web:owner-busy",
+                }
+            )
+            approved = orchestrator.approve_operation_action_api(
+                submitted["action"]["action_id"],
+                {"actor": "unit-test"},
+            )
+            planned = orchestrator.dispatch_operation_run_api(
+                approved["operation_run"]["operation_run_id"],
+                {"actor": "unit-test"},
+            )
+            root_drain = orchestrator._drain_company_public_web_refresh_commands(  # noqa: SLF001
+                {"workflow_run_id": planned["workflow_command"]["workflow_run_id"], "command_limit": 1}
+            )
+            self.assertEqual(root_drain["completed_count"], 1, root_drain)
+            root_command = api_store.get_workflow_command(planned["workflow_command"]["command_id"])
+            source_command = api_store.get_workflow_command(root_command["result"]["downstream_command_ids"][0])
+
+            def return_joined_running(**service_kwargs: Any) -> dict[str, Any]:
+                service_payload = dict(service_kwargs.get("payload") or {})
+                observed["command"] = api_store.get_workflow_command(source_command["command_id"])
+                observed["source_runs"] = api_store.list_company_public_web_asset_runs(company_key="ownerbusylabs")
+                observed["activities"] = api_store.repos.workflow_runtime.list_activity_runs(
+                    command_id=source_command["command_id"]
+                )
+                observed["attempts"] = api_store.repos.workflow_runtime.list_activity_attempts(
+                    command_id=source_command["command_id"]
+                )
+                return {
+                    "status": "joined",
+                    "run": {
+                        "run_id": "company-public-web-run-owner-busy",
+                        "target_company": "Owner Busy Labs",
+                        "company_key": "ownerbusylabs",
+                        "status": "running",
+                        "metadata": {
+                            "source_workflow_command_id": service_payload["_source_workflow_command_id"],
+                            "source_workflow_command_attempt": service_payload["_source_workflow_command_attempt"],
+                            "source_workflow_command_lease_owner": service_payload[
+                                "_source_workflow_command_lease_owner"
+                            ],
+                        },
+                    },
+                    "assets": [],
+                    "summary": {},
+                }
+
+            with mock.patch(
+                "sourcing_agent.orchestrator.refresh_company_public_web_assets_service",
+                side_effect=return_joined_running,
+            ):
+                response = orchestrator._run_company_public_web_refresh_command(  # noqa: SLF001
+                    source_command,
+                    lease_seconds=30,
+                )
+
+            self.assertEqual(response["status"], "skipped")
+            self.assertEqual(
+                response["reason"],
+                "company_public_web_source_run_owned_by_current_command_attempt",
+            )
+            self.assertEqual(
+                response["activity_owner_busy_observation"]["outcome"],
+                "shared_current_attempt_in_progress",
+            )
+            self.assertFalse(response["activity_owner_busy_observation"]["attempt_closed"])
+            self.assertFalse(response["activity_owner_busy_observation"]["activity_closed"])
+            self.assertEqual(api_store.get_workflow_command(source_command["command_id"]), observed["command"])
+            self.assertEqual(
+                api_store.list_company_public_web_asset_runs(company_key="ownerbusylabs"),
+                observed["source_runs"],
+            )
+            activities_after = api_store.repos.workflow_runtime.list_activity_runs(
+                command_id=source_command["command_id"]
+            )
+            attempts_after = api_store.repos.workflow_runtime.list_activity_attempts(
+                command_id=source_command["command_id"]
+            )
+            self.assertEqual(activities_after, observed["activities"])
+            self.assertEqual(attempts_after, observed["attempts"])
+            self.assertEqual(activities_after[0]["status"], "running")
+            self.assertEqual(attempts_after[0]["status"], "running")
+        finally:
+            api_store.close()
+
+    def test_company_public_web_owner_lost_closes_only_stale_attempt_during_takeover(self) -> None:
+        settings = AppSettings(
+            project_root=self.runtime_dir,
+            runtime_dir=self.runtime_dir,
+            secrets_file=self.runtime_dir / "secrets.toml",
+            db_path=self.runtime_dir / "company-public-web-owner-lost-takeover.db",
+            jobs_dir=self.runtime_dir / "jobs",
+            company_assets_dir=self.runtime_dir / "company_assets",
+            qwen=QwenSettings(enabled=False),
+            semantic=SemanticProviderSettings(enabled=False),
+            harvest=HarvestSettings(profile_scraper=HarvestActorSettings(enabled=False)),
+        )
+        api_store = ControlPlaneStore(settings.db_path)
+        orchestrator = SourcingOrchestrator(
+            catalog=AssetCatalog.discover(),
+            store=api_store,
+            jobs_dir=settings.jobs_dir,
+            model_client=DeterministicModelClient(),
+            semantic_provider=LocalSemanticProvider(),
+            acquisition_engine=AcquisitionEngine(
+                AssetCatalog.discover(),
+                settings,
+                api_store,
+                DeterministicModelClient(),
+            ),
+        )
+        entered = threading.Event()
+        release = threading.Event()
+        thread_result: dict[str, Any] = {}
+        try:
+            submitted = orchestrator.submit_operation_action(
+                {
+                    "action_type": ACTION_REFRESH_COMPANY_PUBLIC_WEB,
+                    "input": {
+                        "target_company": "Owner Takeover Labs",
+                        "source_families": ["company_homepage"],
+                        "seed_urls": ["https://owner-takeover.example/"],
+                    },
+                    "budget": {"max_provider_calls": 0, "max_usd": 0.0},
+                    "idempotency_key": "company-public-web:owner-lost-takeover",
+                }
+            )
+            approved = orchestrator.approve_operation_action_api(
+                submitted["action"]["action_id"],
+                {"actor": "unit-test"},
+            )
+            planned = orchestrator.dispatch_operation_run_api(
+                approved["operation_run"]["operation_run_id"],
+                {"actor": "unit-test"},
+            )
+            root_drain = orchestrator._drain_company_public_web_refresh_commands(  # noqa: SLF001
+                {"workflow_run_id": planned["workflow_command"]["workflow_run_id"], "command_limit": 1}
+            )
+            self.assertEqual(root_drain["completed_count"], 1, root_drain)
+            root_command = api_store.get_workflow_command(planned["workflow_command"]["command_id"])
+            source_command = api_store.get_workflow_command(root_command["result"]["downstream_command_ids"][0])
+
+            def return_owner_lost(_command: dict[str, Any]) -> dict[str, Any]:
+                entered.set()
+                if not release.wait(timeout=10):  # pragma: no cover - protects a failed test from hanging
+                    raise TimeoutError("owner-lost takeover test release timed out")
+                return {
+                    "status": "owner_lost",
+                    "reason": "company_public_web_source_command_claim_not_current",
+                    "run": {},
+                    "assets": [],
+                    "summary": {},
+                }
+
+            def run_stale_execution() -> None:
+                try:
+                    thread_result["result"] = orchestrator._run_company_public_web_refresh_command(  # noqa: SLF001
+                        source_command,
+                        lease_seconds=30,
+                    )
+                except Exception as exc:  # pragma: no cover - asserted below
+                    thread_result["error"] = exc
+
+            with mock.patch.object(
+                orchestrator,
+                "_execute_company_public_web_refresh_command_payload",
+                side_effect=return_owner_lost,
+            ):
+                stale_thread = threading.Thread(target=run_stale_execution, daemon=True)
+                stale_thread.start()
+                self.assertTrue(entered.wait(timeout=10))
+                try:
+                    stale_running = api_store.get_workflow_command(source_command["command_id"])
+                    self.assertEqual(stale_running["status"], "running")
+                    self.assertEqual(int(stale_running["attempt"]), 1)
+                    stale_attempts = api_store.repos.workflow_runtime.list_activity_attempts(
+                        command_id=source_command["command_id"]
+                    )
+                    self.assertEqual(len(stale_attempts), 1)
+                    self.assertEqual(stale_attempts[0]["status"], "running")
+
+                    api_store._control_plane_postgres._execute_non_query(  # noqa: SLF001
+                        "UPDATE workflow_commands "
+                        "SET lease_expires_at = TO_CHAR(clock_timestamp() AT TIME ZONE 'UTC' - INTERVAL '1 second', "
+                        "'YYYY-MM-DD HH24:MI:SS') WHERE command_id = %s",
+                        (source_command["command_id"],),
+                    )
+                    takeover_claim = api_store.claim_workflow_command(
+                        source_command["command_id"],
+                        lease_owner="company-public-web-takeover-owner",
+                        lease_seconds=60,
+                    )
+                    self.assertEqual(int(takeover_claim["attempt"]), 2)
+                    takeover_running = api_store.mark_workflow_command_running(
+                        source_command["command_id"],
+                        lease_owner="company-public-web-takeover-owner",
+                    )
+                    self.assertEqual(takeover_running["status"], "running")
+                    takeover_activity, takeover_attempt = orchestrator._start_workflow_command_activity_attempt(  # noqa: SLF001
+                        takeover_running,
+                        activity_type=COMPANY_PUBLIC_WEB_SOURCE_COLLECT_COMMAND_TYPE,
+                        owner=COMPANY_PUBLIC_WEB_REFRESH_OWNER,
+                        phase="company_public_web_source_collect_started",
+                        lease_owner="company-public-web-takeover-owner",
+                        provider="seed_url_only",
+                        provider_request_ref=source_command["command_id"],
+                        input_payload={
+                            "target_company": "Owner Takeover Labs",
+                            "company_key": "ownertakeoverlabs",
+                            "collection_mode": "seed_url_only",
+                        },
+                        entity_counts={"company_public_web_run_count": 1},
+                        metadata={"activity_owner": COMPANY_PUBLIC_WEB_REFRESH_OWNER},
+                        attempt_suffix="company_public_web_refresh",
+                    )
+                    self.assertEqual(takeover_attempt["status"], "running")
+                    takeover_activity_before_release = api_store.repos.workflow_runtime.get_activity_run(
+                        takeover_activity["activity_run_id"]
+                    )
+                    source_rows_before_release = api_store.list_company_public_web_asset_runs(
+                        company_key="ownertakeoverlabs"
+                    )
+                finally:
+                    release.set()
+                stale_thread.join(timeout=10)
+                self.assertFalse(stale_thread.is_alive())
+
+            self.assertNotIn("error", thread_result, thread_result)
+            stale_result = dict(thread_result.get("result") or {})
+            self.assertEqual(stale_result["status"], "skipped")
+            self.assertEqual(
+                stale_result["reason"],
+                "company_public_web_source_command_claim_not_current",
+            )
+            self.assertTrue(stale_result["activity_owner_lost_closure"]["attempt_closed"])
+            self.assertFalse(stale_result["activity_owner_lost_closure"]["activity_closed"])
+
+            command_after = api_store.get_workflow_command(source_command["command_id"])
+            self.assertEqual(command_after, takeover_running)
+            self.assertEqual(
+                api_store.list_company_public_web_asset_runs(company_key="ownertakeoverlabs"),
+                source_rows_before_release,
+            )
+            attempts_after = sorted(
+                api_store.repos.workflow_runtime.list_activity_attempts(command_id=source_command["command_id"]),
+                key=lambda item: int(item["attempt_number"]),
+            )
+            self.assertEqual(
+                [(int(item["attempt_number"]), item["status"]) for item in attempts_after],
+                [(1, "failed"), (2, "running")],
+            )
+            self.assertTrue(attempts_after[0]["error"]["owner_lost"])
+            self.assertEqual(
+                attempts_after[0]["error"]["reason"],
+                "company_public_web_source_command_claim_not_current",
+            )
+            activity_after = api_store.repos.workflow_runtime.get_activity_run(takeover_activity["activity_run_id"])
+            self.assertEqual(activity_after, takeover_activity_before_release)
+            self.assertEqual(activity_after["status"], "running")
+            self.assertEqual(
+                activity_after["metadata"]["lease_owner"],
+                "company-public-web-takeover-owner",
+            )
+        finally:
+            release.set()
+            api_store.close()
+
+    def test_company_public_web_completed_source_service_takeover_fences_stale_attempt_post_effects(self) -> None:
+        from sourcing_agent import orchestrator as orchestrator_module
+
+        api_store, orchestrator = self._company_public_web_test_runtime("completed-service-takeover")
+        entered = threading.Event()
+        release = threading.Event()
+        thread_result: dict[str, Any] = {}
+        service_result: dict[str, Any] = {}
+        try:
+            planned, source_command = self._plan_company_public_web_source_command(
+                orchestrator,
+                company="Completed Service Takeover Labs",
+                company_key="completedservicetakeoverlabs",
+                suffix="completed-service-takeover",
+            )
+            real_source_service = orchestrator_module.refresh_company_public_web_assets_service
+
+            def pause_after_completed_source_service(**service_kwargs: Any) -> dict[str, Any]:
+                result = real_source_service(**service_kwargs)
+                service_result.update(dict(result or {}))
+                self.assertEqual(service_result["status"], "completed")
+                entered.set()
+                if not release.wait(timeout=10):  # pragma: no cover - protects a failed test from hanging
+                    raise TimeoutError("completed source service takeover test release timed out")
+                return result
+
+            def run_attempt_one() -> None:
+                try:
+                    thread_result["result"] = orchestrator._run_company_public_web_refresh_command(  # noqa: SLF001
+                        source_command,
+                        lease_seconds=30,
+                    )
+                except Exception as exc:  # pragma: no cover - asserted below
+                    thread_result["error"] = exc
+
+            with mock.patch.object(
+                orchestrator_module,
+                "refresh_company_public_web_assets_service",
+                side_effect=pause_after_completed_source_service,
+            ):
+                stale_thread = threading.Thread(target=run_attempt_one, daemon=True)
+                stale_thread.start()
+                self.assertTrue(entered.wait(timeout=10))
+                try:
+                    stale_running = api_store.get_workflow_command(source_command["command_id"])
+                    self.assertEqual(stale_running["status"], "running")
+                    self.assertEqual(int(stale_running["attempt"]), 1)
+                    attempt_one_rows = api_store.repos.workflow_runtime.list_activity_attempts(
+                        command_id=source_command["command_id"]
+                    )
+                    self.assertEqual(len(attempt_one_rows), 1)
+                    self.assertEqual(attempt_one_rows[0]["status"], "running")
+                    source_runs_after_service = api_store.list_company_public_web_asset_runs(
+                        company_key="completedservicetakeoverlabs"
+                    )
+                    source_assets_after_service = api_store.list_company_public_web_assets(
+                        company_key="completedservicetakeoverlabs"
+                    )
+                    canonical_assets_after_service = api_store.list_company_assets(
+                        company_key="completedservicetakeoverlabs"
+                    )
+                    canonical_evidence_after_service = api_store.list_company_evidence(
+                        company_key="completedservicetakeoverlabs"
+                    )
+                    self.assertEqual(len(source_runs_after_service), 1)
+                    self.assertEqual(source_runs_after_service[0]["status"], "completed")
+                    self.assertEqual(len(source_assets_after_service), 1)
+                    self.assertEqual(canonical_assets_after_service, [])
+                    self.assertEqual(canonical_evidence_after_service, [])
+
+                    api_store._control_plane_postgres._execute_non_query(  # noqa: SLF001
+                        "UPDATE workflow_commands "
+                        "SET lease_expires_at = TO_CHAR(clock_timestamp() AT TIME ZONE 'UTC' - INTERVAL '1 second', "
+                        "'YYYY-MM-DD HH24:MI:SS') "
+                        "WHERE command_id = %s AND attempt = %s AND lease_owner = %s",
+                        (
+                            stale_running["command_id"],
+                            int(stale_running["attempt"]),
+                            stale_running["lease_owner"],
+                        ),
+                    )
+                    takeover_claim = api_store.claim_workflow_command(
+                        source_command["command_id"],
+                        lease_owner="company-public-web-completed-service-takeover-owner",
+                        lease_seconds=60,
+                    )
+                    self.assertEqual(int(takeover_claim["attempt"]), 2)
+                    takeover_running = api_store.mark_workflow_command_running(
+                        source_command["command_id"],
+                        lease_owner="company-public-web-completed-service-takeover-owner",
+                    )
+                    self.assertEqual(takeover_running["status"], "running")
+                    takeover_activity, takeover_attempt = orchestrator._start_workflow_command_activity_attempt(  # noqa: SLF001
+                        takeover_running,
+                        activity_type=COMPANY_PUBLIC_WEB_SOURCE_COLLECT_COMMAND_TYPE,
+                        owner=COMPANY_PUBLIC_WEB_REFRESH_OWNER,
+                        phase="company_public_web_source_collect_started",
+                        lease_owner="company-public-web-completed-service-takeover-owner",
+                        provider="seed_url_only",
+                        provider_request_ref=source_command["command_id"],
+                        input_payload={
+                            "target_company": "Completed Service Takeover Labs",
+                            "company_key": "completedservicetakeoverlabs",
+                            "collection_mode": "seed_url_only",
+                        },
+                        entity_counts={"company_public_web_run_count": 1},
+                        metadata={"activity_owner": COMPANY_PUBLIC_WEB_REFRESH_OWNER},
+                        attempt_suffix="company_public_web_refresh",
+                    )
+                    self.assertEqual(takeover_attempt["status"], "running")
+                    takeover_activity_before_release = api_store.repos.workflow_runtime.get_activity_run(
+                        takeover_activity["activity_run_id"]
+                    )
+                    takeover_attempt_before_release = api_store.repos.workflow_runtime.get_activity_attempt(
+                        takeover_attempt["attempt_id"]
+                    )
+                finally:
+                    release.set()
+                stale_thread.join(timeout=10)
+                self.assertFalse(stale_thread.is_alive())
+
+            self.assertNotIn("error", thread_result, thread_result)
+            stale_result = dict(thread_result.get("result") or {})
+            self.assertEqual(stale_result["status"], "skipped")
+            self.assertEqual(
+                stale_result["reason"],
+                "company_public_web_command_claim_lost_after_source_effect",
+            )
+            self.assertTrue(stale_result["activity_owner_lost_closure"]["attempt_closed"])
+            self.assertFalse(stale_result["activity_owner_lost_closure"]["activity_closed"])
+            self.assertFalse(stale_result["activity_owner_lost_closure"]["command_closed"])
+            self.assertEqual(api_store.get_workflow_command(source_command["command_id"]), takeover_running)
+            self.assertEqual(
+                api_store.repos.workflow_runtime.get_activity_run(takeover_activity["activity_run_id"]),
+                takeover_activity_before_release,
+            )
+            self.assertEqual(
+                api_store.repos.workflow_runtime.get_activity_attempt(takeover_attempt["attempt_id"]),
+                takeover_attempt_before_release,
+            )
+            attempts_after = sorted(
+                api_store.repos.workflow_runtime.list_activity_attempts(command_id=source_command["command_id"]),
+                key=lambda item: int(item["attempt_number"]),
+            )
+            self.assertEqual(
+                [(int(item["attempt_number"]), item["status"]) for item in attempts_after],
+                [(1, "failed"), (2, "running")],
+            )
+            self.assertTrue(attempts_after[0]["error"]["owner_lost"])
+            self.assertEqual(
+                attempts_after[0]["error"]["reason"],
+                "company_public_web_command_claim_lost_after_source_effect",
+            )
+            self.assertEqual(
+                api_store.repos.workflow_runtime.list_entity_deltas(command_id=source_command["command_id"]),
+                [],
+            )
+            workflow_commands = api_store.list_workflow_commands(
+                workflow_run_id=planned["workflow_command"]["workflow_run_id"],
+                limit=0,
+            )
+            self.assertEqual(
+                [
+                    command
+                    for command in workflow_commands
+                    if command["command_type"] == COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE
+                ],
+                [],
+            )
+            self.assertEqual(
+                api_store.list_company_public_web_asset_runs(company_key="completedservicetakeoverlabs"),
+                source_runs_after_service,
+            )
+            self.assertEqual(
+                api_store.list_company_public_web_assets(company_key="completedservicetakeoverlabs"),
+                source_assets_after_service,
+            )
+            self.assertEqual(
+                api_store.list_company_assets(company_key="completedservicetakeoverlabs"),
+                canonical_assets_after_service,
+            )
+            self.assertEqual(
+                api_store.list_company_evidence(company_key="completedservicetakeoverlabs"),
+                canonical_evidence_after_service,
+            )
+        finally:
+            release.set()
+            api_store.close()
+
+    def test_company_public_web_takeover_before_source_completion_uow_fences_stale_bundle(self) -> None:
+        api_store, orchestrator = self._company_public_web_test_runtime("takeover-before-source-completion-uow")
+        entered_completion = threading.Event()
+        release_completion = threading.Event()
+        thread_result: dict[str, Any] = {}
+        try:
+            planned, source_command = self._plan_company_public_web_source_command(
+                orchestrator,
+                company="Takeover Before Source Completion UOW Labs",
+                company_key="takeoverbeforesourcecompletionuowlabs",
+                suffix="takeover-before-source-completion-uow",
+            )
+            workflow_runtime = api_store.repos.workflow_runtime
+            real_complete_source = workflow_runtime.complete_company_public_web_source_command
+
+            def pause_before_native_completion_uow(*args: Any, **kwargs: Any) -> dict[str, Any]:
+                entered_completion.set()
+                if not release_completion.wait(timeout=10):  # pragma: no cover - protects a failed test from hanging
+                    raise TimeoutError("source completion UOW takeover test release timed out")
+                return real_complete_source(*args, **kwargs)
+
+            def run_attempt_one() -> None:
+                try:
+                    thread_result["result"] = orchestrator._run_company_public_web_refresh_command(  # noqa: SLF001
+                        source_command,
+                        lease_seconds=30,
+                    )
+                except Exception as exc:  # pragma: no cover - asserted below
+                    thread_result["error"] = exc
+
+            with mock.patch.object(
+                workflow_runtime,
+                "complete_company_public_web_source_command",
+                side_effect=pause_before_native_completion_uow,
+            ):
+                stale_thread = threading.Thread(target=run_attempt_one, daemon=True)
+                stale_thread.start()
+                self.assertTrue(entered_completion.wait(timeout=10))
+                try:
+                    stale_running = api_store.get_workflow_command(source_command["command_id"])
+                    self.assertEqual(stale_running["status"], "running")
+                    self.assertEqual(int(stale_running["attempt"]), 1)
+                    stale_attempts = workflow_runtime.list_activity_attempts(command_id=source_command["command_id"])
+                    self.assertEqual(len(stale_attempts), 1)
+                    self.assertEqual(stale_attempts[0]["status"], "running")
+                    source_runs_before_release = api_store.list_company_public_web_asset_runs(
+                        company_key="takeoverbeforesourcecompletionuowlabs"
+                    )
+                    source_assets_before_release = api_store.list_company_public_web_assets(
+                        company_key="takeoverbeforesourcecompletionuowlabs"
+                    )
+                    canonical_assets_before_release = api_store.list_company_assets(
+                        company_key="takeoverbeforesourcecompletionuowlabs"
+                    )
+                    canonical_evidence_before_release = api_store.list_company_evidence(
+                        company_key="takeoverbeforesourcecompletionuowlabs"
+                    )
+                    self.assertEqual(len(source_runs_before_release), 1)
+                    self.assertEqual(source_runs_before_release[0]["status"], "completed")
+                    self.assertEqual(len(source_assets_before_release), 1)
+                    self.assertEqual(canonical_assets_before_release, [])
+                    self.assertEqual(canonical_evidence_before_release, [])
+
+                    api_store._control_plane_postgres._execute_non_query(  # noqa: SLF001
+                        "UPDATE workflow_commands "
+                        "SET lease_expires_at = TO_CHAR(clock_timestamp() AT TIME ZONE 'UTC' - INTERVAL '1 second', "
+                        "'YYYY-MM-DD HH24:MI:SS') "
+                        "WHERE command_id = %s AND attempt = %s AND lease_owner = %s",
+                        (
+                            stale_running["command_id"],
+                            int(stale_running["attempt"]),
+                            stale_running["lease_owner"],
+                        ),
+                    )
+                    takeover_claim = api_store.claim_workflow_command(
+                        source_command["command_id"],
+                        lease_owner="company-public-web-source-completion-uow-takeover-owner",
+                        lease_seconds=60,
+                    )
+                    self.assertEqual(int(takeover_claim["attempt"]), 2)
+                    takeover_running = api_store.mark_workflow_command_running(
+                        source_command["command_id"],
+                        lease_owner="company-public-web-source-completion-uow-takeover-owner",
+                    )
+                    self.assertEqual(takeover_running["status"], "running")
+                    takeover_activity, takeover_attempt = orchestrator._start_workflow_command_activity_attempt(  # noqa: SLF001
+                        takeover_running,
+                        activity_type=COMPANY_PUBLIC_WEB_SOURCE_COLLECT_COMMAND_TYPE,
+                        owner=COMPANY_PUBLIC_WEB_REFRESH_OWNER,
+                        phase="company_public_web_source_collect_started",
+                        lease_owner="company-public-web-source-completion-uow-takeover-owner",
+                        provider="seed_url_only",
+                        provider_request_ref=source_command["command_id"],
+                        input_payload={
+                            "target_company": "Takeover Before Source Completion UOW Labs",
+                            "company_key": "takeoverbeforesourcecompletionuowlabs",
+                            "collection_mode": "seed_url_only",
+                        },
+                        entity_counts={"company_public_web_run_count": 1},
+                        metadata={"activity_owner": COMPANY_PUBLIC_WEB_REFRESH_OWNER},
+                        attempt_suffix="company_public_web_refresh",
+                    )
+                    self.assertEqual(takeover_attempt["status"], "running")
+                    takeover_activity_before_release = workflow_runtime.get_activity_run(
+                        takeover_activity["activity_run_id"]
+                    )
+                    takeover_attempt_before_release = workflow_runtime.get_activity_attempt(
+                        takeover_attempt["attempt_id"]
+                    )
+                finally:
+                    release_completion.set()
+                stale_thread.join(timeout=10)
+                self.assertFalse(stale_thread.is_alive())
+
+            self.assertNotIn("error", thread_result, thread_result)
+            stale_result = dict(thread_result.get("result") or {})
+            self.assertEqual(stale_result["status"], "skipped")
+            self.assertEqual(
+                stale_result["reason"],
+                "company_public_web_command_claim_lost_before_terminal_commit",
+            )
+            self.assertTrue(stale_result["activity_owner_lost_closure"]["attempt_closed"])
+            self.assertFalse(stale_result["activity_owner_lost_closure"]["activity_closed"])
+            self.assertFalse(stale_result["activity_owner_lost_closure"]["command_closed"])
+            self.assertEqual(api_store.get_workflow_command(source_command["command_id"]), takeover_running)
+            self.assertEqual(
+                workflow_runtime.get_activity_run(takeover_activity["activity_run_id"]),
+                takeover_activity_before_release,
+            )
+            self.assertEqual(
+                workflow_runtime.get_activity_attempt(takeover_attempt["attempt_id"]),
+                takeover_attempt_before_release,
+            )
+            attempts_after = sorted(
+                workflow_runtime.list_activity_attempts(command_id=source_command["command_id"]),
+                key=lambda item: int(item["attempt_number"]),
+            )
+            self.assertEqual(
+                [(int(item["attempt_number"]), item["status"]) for item in attempts_after],
+                [(1, "failed"), (2, "running")],
+            )
+            self.assertTrue(attempts_after[0]["error"]["owner_lost"])
+            self.assertEqual(
+                attempts_after[0]["error"]["reason"],
+                "company_public_web_command_claim_lost_before_terminal_commit",
+            )
+            self.assertEqual(workflow_runtime.list_entity_deltas(command_id=source_command["command_id"]), [])
+            workflow_commands = api_store.list_workflow_commands(
+                workflow_run_id=planned["workflow_command"]["workflow_run_id"],
+                limit=0,
+            )
+            self.assertEqual(
+                [
+                    command
+                    for command in workflow_commands
+                    if command["command_type"] == COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE
+                ],
+                [],
+            )
+            self.assertEqual(
+                api_store.list_company_public_web_asset_runs(company_key="takeoverbeforesourcecompletionuowlabs"),
+                source_runs_before_release,
+            )
+            self.assertEqual(
+                api_store.list_company_public_web_assets(company_key="takeoverbeforesourcecompletionuowlabs"),
+                source_assets_before_release,
+            )
+            self.assertEqual(
+                api_store.list_company_assets(company_key="takeoverbeforesourcecompletionuowlabs"),
+                canonical_assets_before_release,
+            )
+            self.assertEqual(
+                api_store.list_company_evidence(company_key="takeoverbeforesourcecompletionuowlabs"),
+                canonical_evidence_before_release,
+            )
+        finally:
+            release_completion.set()
+            api_store.close()
+
+    def test_company_public_web_source_completion_commit_ack_loss_recovers_exact_bundle_once(self) -> None:
+        api_store, orchestrator = self._company_public_web_test_runtime("source-completion-commit-ack-loss")
+        committed_response: dict[str, Any] = {}
+        retry_call: dict[str, Any] = {}
+        completion_call_count = 0
+        try:
+            planned, source_command = self._plan_company_public_web_source_command(
+                orchestrator,
+                company="Source Completion Commit Ack Loss Labs",
+                company_key="sourcecompletioncommitacklosslabs",
+                suffix="source-completion-commit-ack-loss",
+            )
+            workflow_runtime = api_store.repos.workflow_runtime
+            real_complete_source = workflow_runtime.complete_company_public_web_source_command
+
+            def commit_then_lose_acknowledgement(*args: Any, **kwargs: Any) -> dict[str, Any]:
+                nonlocal completion_call_count
+                completion_call_count += 1
+                retry_call["args"] = args
+                retry_call["kwargs"] = kwargs
+                result = real_complete_source(*args, **kwargs)
+                committed_response.update(dict(result or {}))
+                if completion_call_count == 1:
+                    raise RuntimeError("synthetic source completion commit acknowledgement loss")
+                return result
+
+            with mock.patch.object(
+                workflow_runtime,
+                "complete_company_public_web_source_command",
+                side_effect=commit_then_lose_acknowledgement,
+            ):
+                source_drain = orchestrator._drain_company_public_web_refresh_commands(  # noqa: SLF001
+                    {
+                        "workflow_run_id": planned["workflow_command"]["workflow_run_id"],
+                        "command_limit": 1,
+                    }
+                )
+
+            self.assertEqual(completion_call_count, 1)
+            self.assertEqual(committed_response["outcome"], "applied")
+            self.assertEqual(source_drain["completed_count"], 1, source_drain)
+            self.assertEqual(source_drain["failed_count"], 0, source_drain)
+            source_after = api_store.get_workflow_command(source_command["command_id"])
+            self.assertEqual(source_after["status"], "succeeded")
+            self.assertEqual(int(source_after["attempt"]), 1)
+            self.assertEqual(len(source_after["result"]["downstream_command_ids"]), 1)
+            self.assertEqual(len(source_after["result"]["entity_delta_ids"]), 1)
+            materialize_command_id = source_after["result"]["downstream_command_ids"][0]
+            source_delta_id = source_after["result"]["entity_delta_ids"][0]
+            self.assertEqual(source_after["downstream_command_ids"], [materialize_command_id])
+
+            workflow_commands_before_retry = api_store.list_workflow_commands(
+                workflow_run_id=planned["workflow_command"]["workflow_run_id"],
+                limit=0,
+            )
+            materialize_children = [
+                command
+                for command in workflow_commands_before_retry
+                if command["command_type"] == COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE
+                and command["parent_command_id"] == source_command["command_id"]
+            ]
+            self.assertEqual(len(materialize_children), 1)
+            self.assertEqual(materialize_children[0]["command_id"], materialize_command_id)
+            source_deltas_before_retry = workflow_runtime.list_entity_deltas(command_id=source_command["command_id"])
+            self.assertEqual(len(source_deltas_before_retry), 1)
+            self.assertEqual(source_deltas_before_retry[0]["delta_id"], source_delta_id)
+            activities_before_retry = workflow_runtime.list_activity_runs(command_id=source_command["command_id"])
+            attempts_before_retry = workflow_runtime.list_activity_attempts(command_id=source_command["command_id"])
+            self.assertEqual(
+                [(activity["status"], activity["phase"]) for activity in activities_before_retry],
+                [("succeeded", "company_public_web_sources_collected")],
+            )
+            self.assertEqual(
+                [(attempt["attempt_number"], attempt["status"]) for attempt in attempts_before_retry],
+                [(1, "succeeded")],
+            )
+            source_plan_events_before_retry = [
+                event
+                for event in workflow_runtime.list_workflow_events(
+                    planned["workflow_command"]["workflow_run_id"],
+                    limit=0,
+                )
+                if event["command_id"] == source_command["command_id"] and event["event_type"] == "CommandPlanRequested"
+            ]
+            self.assertEqual(len(source_plan_events_before_retry), 1)
+            source_runs_before_retry = api_store.list_company_public_web_asset_runs(
+                company_key="sourcecompletioncommitacklosslabs"
+            )
+            source_assets_before_retry = api_store.list_company_public_web_assets(
+                company_key="sourcecompletioncommitacklosslabs"
+            )
+            self.assertEqual(len(source_runs_before_retry), 1)
+            self.assertEqual(len(source_assets_before_retry), 1)
+            self.assertEqual(api_store.list_company_assets(company_key="sourcecompletioncommitacklosslabs"), [])
+            self.assertEqual(api_store.list_company_evidence(company_key="sourcecompletioncommitacklosslabs"), [])
+
+            repository_retry = real_complete_source(
+                *tuple(retry_call["args"]),
+                **dict(retry_call["kwargs"]),
+            )
+            self.assertEqual(repository_retry["outcome"], "stale_claim")
+            observation = orchestrator._run_company_public_web_refresh_command(  # noqa: SLF001
+                source_after,
+                lease_seconds=30,
+            )
+            self.assertEqual(observation["status"], "skipped")
+            self.assertEqual(observation["reason"], "company_public_web_refresh_command_not_claimed")
+
+            self.assertEqual(api_store.get_workflow_command(source_command["command_id"]), source_after)
+            self.assertEqual(
+                api_store.list_workflow_commands(
+                    workflow_run_id=planned["workflow_command"]["workflow_run_id"],
+                    limit=0,
+                ),
+                workflow_commands_before_retry,
+            )
+            self.assertEqual(
+                workflow_runtime.list_entity_deltas(command_id=source_command["command_id"]),
+                source_deltas_before_retry,
+            )
+            self.assertEqual(
+                workflow_runtime.list_activity_runs(command_id=source_command["command_id"]),
+                activities_before_retry,
+            )
+            self.assertEqual(
+                workflow_runtime.list_activity_attempts(command_id=source_command["command_id"]),
+                attempts_before_retry,
+            )
+            self.assertEqual(
+                [
+                    event
+                    for event in workflow_runtime.list_workflow_events(
+                        planned["workflow_command"]["workflow_run_id"],
+                        limit=0,
+                    )
+                    if event["command_id"] == source_command["command_id"]
+                    and event["event_type"] == "CommandPlanRequested"
+                ],
+                source_plan_events_before_retry,
+            )
+            self.assertEqual(
+                api_store.list_company_public_web_asset_runs(company_key="sourcecompletioncommitacklosslabs"),
+                source_runs_before_retry,
+            )
+            self.assertEqual(
+                api_store.list_company_public_web_assets(company_key="sourcecompletioncommitacklosslabs"),
+                source_assets_before_retry,
+            )
+            self.assertEqual(api_store.list_company_assets(company_key="sourcecompletioncommitacklosslabs"), [])
+            self.assertEqual(api_store.list_company_evidence(company_key="sourcecompletioncommitacklosslabs"), [])
+        finally:
+            api_store.close()
+
+    def test_company_public_web_source_commit_ack_loss_ignores_existing_control_delta(self) -> None:
+        api_store, orchestrator = self._company_public_web_test_runtime("source-commit-ack-loss-control-delta")
+        committed_response: dict[str, Any] = {}
+        completion_call_count = 0
+        try:
+            planned, source_command = self._plan_company_public_web_source_command(
+                orchestrator,
+                company="Source Commit Ack Loss Control Delta Labs",
+                company_key="sourcecommitacklosscontroldeltalabs",
+                suffix="source-commit-ack-loss-control-delta",
+            )
+            operation_run_id = str(source_command["operation_id"])
+            action_id = str(api_store.repos.workflow_runtime.get_operation(operation_run_id)["action_id"])
+            claimed_for_control = api_store.claim_workflow_command(
+                source_command["command_id"],
+                lease_owner="company-public-web-control-resume-owner",
+                lease_seconds=60,
+            )
+            self.assertEqual(int(claimed_for_control["attempt"]), 1)
+            running_for_control = api_store.mark_workflow_command_running(
+                source_command["command_id"],
+                lease_owner="company-public-web-control-resume-owner",
+            )
+            self.assertEqual(running_for_control["status"], "running")
+            forced_resume = orchestrator.resume_workflow_command_api(
+                source_command["command_id"],
+                {
+                    "actor": "unit-test",
+                    "reason": "seed-valid-control-delta-before-source-completion",
+                    "force": True,
+                },
+            )
+            self.assertEqual(forced_resume["status"], "queued")
+            self.assertEqual(forced_resume["workflow_command"]["status"], "queued")
+            control_delta = dict(forced_resume["workflow_entity_delta"])
+            self.assertEqual(control_delta["entity_type"], "company_public_web_source_collect")
+            self.assertEqual(control_delta["delta_kind"], "company_public_web_source_collect_resume_queued")
+            self.assertEqual(
+                api_store.repos.workflow_runtime.get_operation(operation_run_id)["status"],
+                "planned",
+            )
+            self.assertEqual(api_store.repos.workflow_runtime.get_action(action_id)["status"], "planned")
+
+            workflow_runtime = api_store.repos.workflow_runtime
+            real_complete_source = workflow_runtime.complete_company_public_web_source_command
+
+            def commit_then_lose_acknowledgement(*args: Any, **kwargs: Any) -> dict[str, Any]:
+                nonlocal completion_call_count
+                completion_call_count += 1
+                result = real_complete_source(*args, **kwargs)
+                committed_response.update(dict(result or {}))
+                if completion_call_count == 1:
+                    raise RuntimeError("synthetic source commit acknowledgement loss with control delta")
+                return result
+
+            with mock.patch.object(
+                workflow_runtime,
+                "complete_company_public_web_source_command",
+                side_effect=commit_then_lose_acknowledgement,
+            ):
+                source_drain = orchestrator._drain_company_public_web_refresh_commands(  # noqa: SLF001
+                    {
+                        "workflow_run_id": planned["workflow_command"]["workflow_run_id"],
+                        "command_limit": 1,
+                    }
+                )
+
+            self.assertEqual(completion_call_count, 1)
+            self.assertEqual(committed_response["outcome"], "applied")
+            self.assertEqual(source_drain["completed_count"], 1, source_drain)
+            self.assertEqual(source_drain["failed_count"], 0, source_drain)
+            source_after = api_store.get_workflow_command(source_command["command_id"])
+            self.assertEqual(source_after["status"], "succeeded")
+            self.assertEqual(int(source_after["attempt"]), 1)
+            self.assertEqual(len(source_after["result"]["downstream_command_ids"]), 1)
+            self.assertEqual(len(source_after["result"]["entity_delta_ids"]), 1)
+            materialize_command_id = source_after["result"]["downstream_command_ids"][0]
+            source_delta_id = source_after["result"]["entity_delta_ids"][0]
+            materialize_children = [
+                command
+                for command in api_store.list_workflow_commands(
+                    workflow_run_id=planned["workflow_command"]["workflow_run_id"],
+                    limit=0,
+                )
+                if command["command_type"] == COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE
+                and command["parent_command_id"] == source_command["command_id"]
+            ]
+            self.assertEqual(len(materialize_children), 1)
+            self.assertEqual(materialize_children[0]["command_id"], materialize_command_id)
+
+            command_deltas = workflow_runtime.list_entity_deltas(command_id=source_command["command_id"], limit=0)
+            self.assertEqual(len(command_deltas), 2)
+            self.assertEqual(
+                {delta["delta_kind"] for delta in command_deltas},
+                {
+                    "company_public_web_source_collect_resume_queued",
+                    "company_public_web_refreshed",
+                },
+            )
+            self.assertEqual(
+                {delta["delta_id"] for delta in command_deltas},
+                {control_delta["delta_id"], source_delta_id},
+            )
+            activities = workflow_runtime.list_activity_runs(command_id=source_command["command_id"])
+            attempts = workflow_runtime.list_activity_attempts(command_id=source_command["command_id"], limit=0)
+            self.assertEqual(
+                [(activity["status"], activity["phase"]) for activity in activities],
+                [("succeeded", "company_public_web_sources_collected")],
+            )
+            self.assertEqual(len(attempts), 2)
+            self.assertTrue(all(attempt["status"] == "succeeded" for attempt in attempts))
+            self.assertEqual(len({attempt["attempt_id"] for attempt in attempts}), 2)
+            operation_after = workflow_runtime.get_operation(operation_run_id)
+            action_after = workflow_runtime.get_action(action_id)
+            self.assertEqual(operation_after["status"], "running")
+            self.assertEqual(operation_after["progress"]["phase"], "company_public_web_assets_materialize_queued")
+            self.assertEqual(operation_after["progress"]["command_status"], "succeeded")
+            self.assertEqual(action_after["status"], "running")
+            self.assertEqual(action_after["metadata"]["last_operation_command_status"], "succeeded")
+            self.assertEqual(api_store.list_company_assets(company_key="sourcecommitacklosscontroldeltalabs"), [])
+            self.assertEqual(api_store.list_company_evidence(company_key="sourcecommitacklosscontroldeltalabs"), [])
+        finally:
+            api_store.close()
+
+    def test_company_public_web_claimed_lease_recovery_is_scoped_to_expiry_across_all_command_stages(
+        self,
+    ) -> None:
+        api_store, orchestrator = self._company_public_web_test_runtime("claimed-lease-recovery-all-stages")
+        try:
+            submitted = orchestrator.submit_operation_action(
+                {
+                    "action_type": ACTION_REFRESH_COMPANY_PUBLIC_WEB,
+                    "input": {
+                        "target_company": "Claimed Lease Recovery Labs",
+                        "source_families": ["company_homepage"],
+                        "seed_urls": ["https://claimed-lease-recovery.example/"],
+                    },
+                    "budget": {"max_provider_calls": 0, "max_usd": 0.0},
+                    "idempotency_key": "company-public-web:claimed-lease-recovery-all-stages",
+                }
+            )
+            approved = orchestrator.approve_operation_action_api(
+                submitted["action"]["action_id"],
+                {"actor": "unit-test"},
+            )
+            planned = orchestrator.dispatch_operation_run_api(
+                approved["operation_run"]["operation_run_id"],
+                {"actor": "unit-test"},
+            )
+            workflow_run_id = planned["workflow_command"]["workflow_run_id"]
+
+            def recover_expired_claim(command: dict[str, Any], *, stage: str) -> dict[str, Any]:
+                command_id = str(command["command_id"])
+                old_owner = f"company-public-web-{stage}-crashed-before-running"
+                old_claim = api_store.claim_workflow_command(
+                    command_id,
+                    lease_owner=old_owner,
+                    lease_seconds=60,
+                )
+                self.assertEqual(old_claim["status"], "claimed")
+                self.assertEqual(int(old_claim["attempt"]), 1)
+                self.assertEqual(old_claim["lease_owner"], old_owner)
+                self.assertNotIn(
+                    command_id,
+                    {
+                        item["command_id"]
+                        for item in api_store.list_ready_workflow_commands(
+                            workflow_run_id=workflow_run_id,
+                            owner=COMPANY_PUBLIC_WEB_REFRESH_OWNER,
+                            command_type=command["command_type"],
+                            reclaim_claimed=True,
+                            limit=10,
+                        )
+                    },
+                )
+                active_drain = orchestrator._drain_company_public_web_refresh_commands(  # noqa: SLF001
+                    {"workflow_run_id": workflow_run_id, "command_limit": 1}
+                )
+                self.assertEqual(active_drain["status"], "idle", active_drain)
+                active_claim = api_store.get_workflow_command(command_id)
+                self.assertEqual(active_claim["status"], "claimed")
+                self.assertEqual(active_claim["lease_owner"], old_owner)
+                self.assertEqual(int(active_claim["attempt"]), 1)
+
+                api_store._control_plane_postgres._execute_non_query(  # noqa: SLF001
+                    "UPDATE workflow_commands "
+                    "SET lease_expires_at = TO_CHAR(clock_timestamp() AT TIME ZONE 'UTC' - INTERVAL '1 second', "
+                    "'YYYY-MM-DD HH24:MI:SS') WHERE command_id = %s",
+                    (command_id,),
+                )
+                self.assertIn(
+                    command_id,
+                    {
+                        item["command_id"]
+                        for item in api_store.list_ready_workflow_commands(
+                            workflow_run_id=workflow_run_id,
+                            owner=COMPANY_PUBLIC_WEB_REFRESH_OWNER,
+                            command_type=command["command_type"],
+                            reclaim_claimed=True,
+                            limit=10,
+                        )
+                    },
+                )
+
+                real_mark_running = api_store.mark_workflow_command_running
+                stale_mark_results: list[dict[str, Any]] = []
+
+                def mark_new_owner_after_stale_resume(
+                    claimed_command_id: str,
+                    *,
+                    lease_owner: str = "",
+                ) -> dict[str, Any]:
+                    if lease_owner != old_owner and not stale_mark_results:
+                        stale_mark_results.append(real_mark_running(claimed_command_id, lease_owner=old_owner))
+                    return real_mark_running(claimed_command_id, lease_owner=lease_owner)
+
+                with mock.patch.object(
+                    api_store,
+                    "mark_workflow_command_running",
+                    side_effect=mark_new_owner_after_stale_resume,
+                ):
+                    recovered_drain = orchestrator._drain_company_public_web_refresh_commands(  # noqa: SLF001
+                        {"workflow_run_id": workflow_run_id, "command_limit": 1}
+                    )
+
+                self.assertEqual(stale_mark_results, [{}])
+                self.assertEqual(recovered_drain["completed_count"], 1, recovered_drain)
+                self.assertEqual(recovered_drain["failed_count"], 0, recovered_drain)
+                recovered = api_store.get_workflow_command(command_id)
+                self.assertEqual(recovered["status"], "succeeded")
+                self.assertEqual(int(recovered["attempt"]), 2)
+                self.assertEqual(recovered["lease_owner"], "")
+                self.assertEqual(
+                    real_mark_running(command_id, lease_owner=old_owner),
+                    {},
+                )
+                return recovered
+
+            with self.subTest(stage="root"):
+                root_after = recover_expired_claim(
+                    api_store.get_workflow_command(planned["workflow_command"]["command_id"]),
+                    stage="root",
+                )
+                source_ids = root_after["result"]["downstream_command_ids"]
+                self.assertEqual(len(source_ids), 1)
+                self.assertEqual(
+                    api_store.repos.workflow_runtime.list_entity_deltas(
+                        command_id=root_after["command_id"],
+                        limit=0,
+                    ),
+                    [],
+                )
+                self.assertEqual(
+                    api_store.list_company_public_web_asset_runs(company_key="claimedleaserecoverylabs"),
+                    [],
+                )
+
+            with self.subTest(stage="source"):
+                source_after = recover_expired_claim(
+                    api_store.get_workflow_command(source_ids[0]),
+                    stage="source",
+                )
+                materialize_ids = source_after["result"]["downstream_command_ids"]
+                self.assertEqual(len(materialize_ids), 1)
+                source_deltas = api_store.repos.workflow_runtime.list_entity_deltas(
+                    command_id=source_after["command_id"],
+                    limit=0,
+                )
+                self.assertEqual(len(source_deltas), 1)
+                self.assertEqual(
+                    len(api_store.list_company_public_web_asset_runs(company_key="claimedleaserecoverylabs")),
+                    1,
+                )
+                self.assertEqual(
+                    len(api_store.list_company_public_web_assets(company_key="claimedleaserecoverylabs")),
+                    1,
+                )
+                self.assertEqual(api_store.list_company_assets(company_key="claimedleaserecoverylabs"), [])
+                self.assertEqual(api_store.list_company_evidence(company_key="claimedleaserecoverylabs"), [])
+
+            with self.subTest(stage="materialize"):
+                materialize_after = recover_expired_claim(
+                    api_store.get_workflow_command(materialize_ids[0]),
+                    stage="materialize",
+                )
+                self.assertEqual(materialize_after["result"]["downstream_command_ids"], [])
+                materialize_deltas = api_store.repos.workflow_runtime.list_entity_deltas(
+                    command_id=materialize_after["command_id"],
+                    limit=0,
+                )
+                self.assertEqual(len(materialize_deltas), 3)
+                self.assertEqual(
+                    {delta["entity_type"] for delta in materialize_deltas},
+                    {"company_public_web_run", "company_asset", "company_evidence"},
+                )
+                self.assertEqual(
+                    len(api_store.list_company_assets(company_key="claimedleaserecoverylabs")),
+                    1,
+                )
+                self.assertEqual(
+                    len(api_store.list_company_evidence(company_key="claimedleaserecoverylabs")),
+                    1,
+                )
+                self.assertEqual(
+                    len(
+                        [
+                            command
+                            for command in api_store.list_workflow_commands(
+                                workflow_run_id=workflow_run_id,
+                                limit=0,
+                            )
+                            if command["command_type"] == COMPANY_PUBLIC_WEB_SOURCE_COLLECT_COMMAND_TYPE
+                        ]
+                    ),
+                    1,
+                )
+                self.assertEqual(
+                    len(
+                        [
+                            command
+                            for command in api_store.list_workflow_commands(
+                                workflow_run_id=workflow_run_id,
+                                limit=0,
+                            )
+                            if command["command_type"] == COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE
+                        ]
+                    ),
+                    1,
+                )
+        finally:
+            api_store.close()
+
+    def test_company_public_web_exhausted_source_partial_exact_activity_spines_terminalize(self) -> None:
+        for partial_spine in ("activity_only", "attempt_only"):
+            with self.subTest(partial_spine=partial_spine):
+                api_store, orchestrator = self._company_public_web_test_runtime(f"exhausted-partial-{partial_spine}")
+                try:
+                    planned, running, operation_run_id, action_id = (
+                        self._prepare_exhausted_company_public_web_source_command(
+                            api_store,
+                            orchestrator,
+                            suffix=f"partial-{partial_spine}",
+                        )
+                    )
+                    identity = self._company_public_web_source_activity_identity(running)
+                    if partial_spine == "activity_only":
+                        activity = self._insert_company_public_web_source_activity(
+                            api_store,
+                            running,
+                            identity,
+                        )
+                        self.assertEqual(activity["activity_run_id"], identity["activity_run_id"])
+                    else:
+                        attempt = self._insert_company_public_web_source_attempt(
+                            api_store,
+                            running,
+                            identity,
+                        )
+                        self.assertEqual(attempt["attempt_id"], identity["attempt_id"])
+                    api_store._control_plane_postgres._execute_non_query(  # noqa: SLF001
+                        "UPDATE workflow_commands "
+                        "SET lease_expires_at = TO_CHAR(clock_timestamp() AT TIME ZONE 'UTC' - INTERVAL '1 second', "
+                        "'YYYY-MM-DD HH24:MI:SS') WHERE command_id = %s",
+                        (running["command_id"],),
+                    )
+
+                    drain = orchestrator._drain_company_public_web_refresh_commands(  # noqa: SLF001
+                        {
+                            "workflow_run_id": planned["workflow_command"]["workflow_run_id"],
+                            "command_limit": 1,
+                        }
+                    )
+
+                    terminal_reason = "workflow_command_attempts_exhausted_after_lease_expiry"
+                    self.assertEqual(drain["failed_count"], 1, drain)
+                    self.assertEqual(drain["items"][0]["reason"], terminal_reason)
+                    terminal_command = api_store.get_workflow_command(running["command_id"])
+                    self.assertEqual(terminal_command["status"], "failed_terminal")
+                    activities = api_store.repos.workflow_runtime.list_activity_runs(
+                        command_id=running["command_id"],
+                        limit=0,
+                    )
+                    attempts = api_store.repos.workflow_runtime.list_activity_attempts(
+                        command_id=running["command_id"],
+                        limit=0,
+                    )
+                    if partial_spine == "activity_only":
+                        self.assertEqual(
+                            [(item["activity_run_id"], item["status"], item["phase"]) for item in activities],
+                            [(identity["activity_run_id"], "failed", terminal_reason)],
+                        )
+                        self.assertEqual(attempts, [])
+                    else:
+                        self.assertEqual(activities, [])
+                        self.assertEqual(
+                            [(item["attempt_id"], item["status"], item["error"]["reason"]) for item in attempts],
+                            [(identity["attempt_id"], "failed", terminal_reason)],
+                        )
+                    self.assertEqual(
+                        api_store.repos.workflow_runtime.get_operation(operation_run_id)["status"],
+                        "failed",
+                    )
+                    self.assertEqual(
+                        api_store.repos.workflow_runtime.get_action(action_id)["status"],
+                        "failed",
+                    )
+                    self.assertEqual(
+                        api_store.repos.workflow_runtime.list_entity_deltas(
+                            command_id=running["command_id"],
+                            limit=0,
+                        ),
+                        [],
+                    )
+                    self.assertEqual(
+                        [
+                            command
+                            for command in api_store.list_workflow_commands(
+                                workflow_run_id=running["workflow_run_id"],
+                                limit=0,
+                            )
+                            if command["command_type"] == COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE
+                        ],
+                        [],
+                    )
+                    company_key = str(dict(running["payload"])["company_key"])
+                    self.assertEqual(api_store.list_company_public_web_asset_runs(company_key=company_key), [])
+                    self.assertEqual(api_store.list_company_public_web_assets(company_key=company_key), [])
+                    self.assertEqual(api_store.list_company_assets(company_key=company_key), [])
+                    self.assertEqual(api_store.list_company_evidence(company_key=company_key), [])
+                finally:
+                    api_store.close()
+
+    def test_company_public_web_exhausted_source_wrong_partial_identity_conflicts_without_writes(self) -> None:
+        for row_kind, mismatch in (
+            ("activity", "deterministic_id"),
+            ("activity", "idempotency_key"),
+            ("attempt", "deterministic_id"),
+            ("attempt", "idempotency_key"),
+        ):
+            case = f"{row_kind}-{mismatch}"
+            with self.subTest(case=case):
+                api_store, orchestrator = self._company_public_web_test_runtime(f"exhausted-wrong-partial-{case}")
+                try:
+                    _, running, operation_run_id, action_id = self._prepare_exhausted_company_public_web_source_command(
+                        api_store,
+                        orchestrator,
+                        suffix=f"wrong-partial-{case}",
+                    )
+                    identity = self._company_public_web_source_activity_identity(running)
+                    wrong_identity = dict(identity)
+                    if row_kind == "activity" and mismatch == "deterministic_id":
+                        wrong_identity["activity_run_id"] = f"actrun_wrong_{short_hash(case)}"
+                    elif row_kind == "activity":
+                        wrong_identity["activity_idempotency_key"] = f"workflow_activity:wrong:{case}"
+                    elif mismatch == "deterministic_id":
+                        wrong_identity["attempt_id"] = f"actattempt_wrong_{short_hash(case)}"
+                    else:
+                        wrong_identity["attempt_idempotency_key"] = f"workflow_activity_attempt:wrong:{case}"
+                    if row_kind == "activity":
+                        self._insert_company_public_web_source_activity(
+                            api_store,
+                            running,
+                            wrong_identity,
+                        )
+                    else:
+                        self._insert_company_public_web_source_attempt(
+                            api_store,
+                            running,
+                            wrong_identity,
+                        )
+                    api_store._control_plane_postgres._execute_non_query(  # noqa: SLF001
+                        "UPDATE workflow_commands "
+                        "SET lease_expires_at = TO_CHAR(clock_timestamp() AT TIME ZONE 'UTC' - INTERVAL '1 second', "
+                        "'YYYY-MM-DD HH24:MI:SS') WHERE command_id = %s",
+                        (running["command_id"],),
+                    )
+                    command_before = api_store.get_workflow_command(running["command_id"])
+                    activities_before = api_store.repos.workflow_runtime.list_activity_runs(
+                        command_id=running["command_id"],
+                        limit=0,
+                    )
+                    attempts_before = api_store.repos.workflow_runtime.list_activity_attempts(
+                        command_id=running["command_id"],
+                        limit=0,
+                    )
+                    operation_before = api_store.repos.workflow_runtime.get_operation(operation_run_id)
+                    action_before = api_store.repos.workflow_runtime.get_action(action_id)
+
+                    result = orchestrator._run_company_public_web_refresh_command(  # noqa: SLF001
+                        dict(command_before),
+                        lease_seconds=60,
+                    )
+
+                    self.assertEqual(result["status"], "invalid", result)
+                    self.assertEqual(
+                        result["reason"],
+                        "company_public_web_exhausted_activity_identity_conflict",
+                    )
+                    self.assertEqual(
+                        api_store.get_workflow_command(running["command_id"]),
+                        command_before,
+                    )
+                    self.assertEqual(
+                        api_store.repos.workflow_runtime.list_activity_runs(
+                            command_id=running["command_id"],
+                            limit=0,
+                        ),
+                        activities_before,
+                    )
+                    self.assertEqual(
+                        api_store.repos.workflow_runtime.list_activity_attempts(
+                            command_id=running["command_id"],
+                            limit=0,
+                        ),
+                        attempts_before,
+                    )
+                    self.assertEqual(
+                        api_store.repos.workflow_runtime.get_operation(operation_run_id),
+                        operation_before,
+                    )
+                    self.assertEqual(
+                        api_store.repos.workflow_runtime.get_action(action_id),
+                        action_before,
+                    )
+                    self.assertEqual(
+                        api_store.repos.workflow_runtime.list_entity_deltas(
+                            command_id=running["command_id"],
+                            limit=0,
+                        ),
+                        [],
+                    )
+                    company_key = str(dict(running["payload"])["company_key"])
+                    self.assertEqual(api_store.list_company_public_web_asset_runs(company_key=company_key), [])
+                    self.assertEqual(api_store.list_company_public_web_assets(company_key=company_key), [])
+                    self.assertEqual(api_store.list_company_assets(company_key=company_key), [])
+                    self.assertEqual(api_store.list_company_evidence(company_key=company_key), [])
+                finally:
+                    api_store.close()
+
+    def test_company_public_web_exhausted_source_partial_semantic_mismatch_conflicts_without_writes(self) -> None:
+        for row_kind, field_name, wrong_value in (
+            ("activity", "workflow_run_id", "wf-wrong-semantic-identity"),
+            ("activity", "operation_run_id", "op-wrong-semantic-identity"),
+            ("activity", "activity_type", "company.public_web.source.collect.wrong"),
+            ("activity", "owner", "wrong_company_public_web_owner"),
+            ("activity", "acquisition_run_id", "acq-must-be-empty-for-d1m"),
+            ("activity", "parent_activity_run_id", "actrun-parent-must-be-empty-for-d1m"),
+            ("attempt", "workflow_run_id", "wf-wrong-semantic-identity"),
+            ("attempt", "provider", "wrong-source-provider"),
+        ):
+            case = f"{row_kind}-{field_name}"
+            with self.subTest(case=case):
+                api_store, orchestrator = self._company_public_web_test_runtime(f"exhausted-semantic-mismatch-{case}")
+                try:
+                    planned, running, operation_run_id, action_id = (
+                        self._prepare_exhausted_company_public_web_source_command(
+                            api_store,
+                            orchestrator,
+                            suffix=f"semantic-mismatch-{case}",
+                        )
+                    )
+                    identity = self._company_public_web_source_activity_identity(running)
+                    if row_kind == "activity":
+                        inserted = self._insert_company_public_web_source_activity(
+                            api_store,
+                            running,
+                            identity,
+                            overrides={field_name: wrong_value},
+                        )
+                        self.assertEqual(inserted["activity_run_id"], identity["activity_run_id"])
+                        self.assertEqual(inserted["idempotency_key"], identity["activity_idempotency_key"])
+                    else:
+                        inserted = self._insert_company_public_web_source_attempt(
+                            api_store,
+                            running,
+                            identity,
+                            overrides={field_name: wrong_value},
+                        )
+                        self.assertEqual(inserted["attempt_id"], identity["attempt_id"])
+                        self.assertEqual(inserted["idempotency_key"], identity["attempt_idempotency_key"])
+                    self.assertEqual(
+                        inserted["workspace_id"],
+                        str(dict(running["payload"]).get("workspace_id") or "default"),
+                    )
+                    self.assertEqual(inserted[field_name], wrong_value)
+                    api_store._control_plane_postgres._execute_non_query(  # noqa: SLF001
+                        "UPDATE workflow_commands "
+                        "SET lease_expires_at = TO_CHAR(clock_timestamp() AT TIME ZONE 'UTC' - INTERVAL '1 second', "
+                        "'YYYY-MM-DD HH24:MI:SS') WHERE command_id = %s",
+                        (running["command_id"],),
+                    )
+                    command_before = api_store.get_workflow_command(running["command_id"])
+                    activities_before = api_store.repos.workflow_runtime.list_activity_runs(
+                        command_id=running["command_id"],
+                        limit=0,
+                    )
+                    attempts_before = api_store.repos.workflow_runtime.list_activity_attempts(
+                        command_id=running["command_id"],
+                        limit=0,
+                    )
+                    operation_before = api_store.repos.workflow_runtime.get_operation(operation_run_id)
+                    action_before = api_store.repos.workflow_runtime.get_action(action_id)
+
+                    result = orchestrator._run_company_public_web_refresh_command(  # noqa: SLF001
+                        dict(command_before),
+                        lease_seconds=60,
+                    )
+
+                    self.assertEqual(result["status"], "invalid", result)
+                    self.assertEqual(
+                        result["reason"],
+                        "company_public_web_exhausted_activity_semantic_identity_conflict",
+                    )
+                    self.assertEqual(api_store.get_workflow_command(running["command_id"]), command_before)
+                    self.assertEqual(
+                        api_store.repos.workflow_runtime.list_activity_runs(
+                            command_id=running["command_id"],
+                            limit=0,
+                        ),
+                        activities_before,
+                    )
+                    self.assertEqual(
+                        api_store.repos.workflow_runtime.list_activity_attempts(
+                            command_id=running["command_id"],
+                            limit=0,
+                        ),
+                        attempts_before,
+                    )
+                    self.assertEqual(
+                        api_store.repos.workflow_runtime.get_operation(operation_run_id),
+                        operation_before,
+                    )
+                    self.assertEqual(api_store.repos.workflow_runtime.get_action(action_id), action_before)
+                    self.assertEqual(
+                        api_store.repos.workflow_runtime.list_entity_deltas(
+                            command_id=running["command_id"],
+                            limit=0,
+                        ),
+                        [],
+                    )
+                    self.assertEqual(
+                        [
+                            command
+                            for command in api_store.list_workflow_commands(
+                                workflow_run_id=planned["workflow_command"]["workflow_run_id"],
+                                limit=0,
+                            )
+                            if command["command_type"] == COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE
+                        ],
+                        [],
+                    )
+                    company_key = str(dict(running["payload"])["company_key"])
+                    self.assertEqual(api_store.list_company_public_web_asset_runs(company_key=company_key), [])
+                    self.assertEqual(api_store.list_company_public_web_assets(company_key=company_key), [])
+                    self.assertEqual(api_store.list_company_assets(company_key=company_key), [])
+                    self.assertEqual(api_store.list_company_evidence(company_key=company_key), [])
+                finally:
+                    api_store.close()
+
+    def test_company_public_web_guarded_current_start_rejects_alternate_or_terminal_spine_without_writes(
+        self,
+    ) -> None:
+        for case in (
+            "alternate_attempt_id",
+            "alternate_attempt_key",
+            "alternate_attempt_workflow",
+            "alternate_attempt_provider",
+            "current_attempt_failed",
+            "shared_activity_failed",
+        ):
+            with self.subTest(case=case):
+                api_store, orchestrator = self._company_public_web_test_runtime(f"guarded-current-{case}")
+                try:
+                    planned, running, operation_run_id, action_id = (
+                        self._prepare_exhausted_company_public_web_source_command(
+                            api_store,
+                            orchestrator,
+                            suffix=f"guarded-current-{case}",
+                        )
+                    )
+                    if case == "current_attempt_failed":
+                        prior_identity = self._company_public_web_source_activity_identity(running)
+                        prior_attempt = self._insert_company_public_web_source_attempt(
+                            api_store,
+                            running,
+                            prior_identity,
+                            status="succeeded",
+                        )
+                        self.assertEqual(prior_attempt["status"], "succeeded")
+                        api_store._control_plane_postgres._execute_non_query(  # noqa: SLF001
+                            "UPDATE workflow_commands "
+                            "SET max_attempts = 3, "
+                            "lease_expires_at = TO_CHAR(clock_timestamp() AT TIME ZONE 'UTC' - INTERVAL '1 second', "
+                            "'YYYY-MM-DD HH24:MI:SS') WHERE command_id = %s",
+                            (running["command_id"],),
+                        )
+                        second_owner = "company-public-web-guarded-current-failed-attempt-2"
+                        second_claim = api_store.claim_workflow_command(
+                            running["command_id"],
+                            lease_owner=second_owner,
+                            lease_seconds=60,
+                        )
+                        self.assertEqual(int(second_claim["attempt"]), 2)
+                        running = api_store.mark_workflow_command_running(
+                            running["command_id"],
+                            lease_owner=second_owner,
+                        )
+                        self.assertEqual(int(running["attempt"]), 2)
+                    identity = self._company_public_web_source_activity_identity(running)
+                    if case.startswith("alternate_attempt"):
+                        alternate_identity = dict(identity)
+                        overrides: dict[str, Any] = {}
+                        if case == "alternate_attempt_id":
+                            alternate_identity["attempt_id"] = f"actattempt_alternate_{short_hash(case)}"
+                        elif case == "alternate_attempt_key":
+                            alternate_identity["attempt_idempotency_key"] = (
+                                f"workflow_activity_attempt:alternate:{short_hash(case)}"
+                            )
+                        elif case == "alternate_attempt_workflow":
+                            overrides["workflow_run_id"] = "wf-alternate-current-attempt"
+                        else:
+                            overrides["provider"] = "alternate-current-provider"
+                        inserted_attempt = self._insert_company_public_web_source_attempt(
+                            api_store,
+                            running,
+                            alternate_identity,
+                            overrides=overrides,
+                        )
+                        self.assertEqual(inserted_attempt["status"], "running")
+                    elif case == "current_attempt_failed":
+                        inserted_attempt = self._insert_company_public_web_source_attempt(
+                            api_store,
+                            running,
+                            identity,
+                            status="failed",
+                        )
+                        self.assertEqual(inserted_attempt["status"], "failed")
+                    else:
+                        inserted_activity = self._insert_company_public_web_source_activity(
+                            api_store,
+                            running,
+                            identity,
+                            status="failed",
+                        )
+                        self.assertEqual(inserted_activity["status"], "failed")
+                    command_before = api_store.get_workflow_command(running["command_id"])
+                    activities_before = api_store.repos.workflow_runtime.list_activity_runs(
+                        command_id=running["command_id"],
+                        limit=0,
+                    )
+                    attempts_before = api_store.repos.workflow_runtime.list_activity_attempts(
+                        command_id=running["command_id"],
+                        limit=0,
+                    )
+                    operation_before = api_store.repos.workflow_runtime.get_operation(operation_run_id)
+                    action_before = api_store.repos.workflow_runtime.get_action(action_id)
+
+                    activity, attempt = self._start_guarded_company_public_web_source_activity(
+                        orchestrator,
+                        command_before,
+                    )
+
+                    self.assertEqual(activity, {})
+                    self.assertEqual(attempt, {})
+                    self.assertEqual(api_store.get_workflow_command(running["command_id"]), command_before)
+                    self.assertEqual(
+                        api_store.repos.workflow_runtime.list_activity_runs(
+                            command_id=running["command_id"],
+                            limit=0,
+                        ),
+                        activities_before,
+                    )
+                    self.assertEqual(
+                        api_store.repos.workflow_runtime.list_activity_attempts(
+                            command_id=running["command_id"],
+                            limit=0,
+                        ),
+                        attempts_before,
+                    )
+                    self.assertEqual(
+                        api_store.repos.workflow_runtime.get_operation(operation_run_id),
+                        operation_before,
+                    )
+                    self.assertEqual(api_store.repos.workflow_runtime.get_action(action_id), action_before)
+                    self.assertEqual(
+                        api_store.repos.workflow_runtime.list_entity_deltas(
+                            command_id=running["command_id"],
+                            limit=0,
+                        ),
+                        [],
+                    )
+                    self.assertEqual(
+                        [
+                            command
+                            for command in api_store.list_workflow_commands(
+                                workflow_run_id=planned["workflow_command"]["workflow_run_id"],
+                                limit=0,
+                            )
+                            if command["command_type"] == COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE
+                        ],
+                        [],
+                    )
+                    company_key = str(dict(running["payload"])["company_key"])
+                    self.assertEqual(api_store.list_company_public_web_asset_runs(company_key=company_key), [])
+                    self.assertEqual(api_store.list_company_public_web_assets(company_key=company_key), [])
+                    self.assertEqual(api_store.list_company_assets(company_key=company_key), [])
+                    self.assertEqual(api_store.list_company_evidence(company_key=company_key), [])
+                finally:
+                    api_store.close()
+
+    def test_company_public_web_guarded_current_start_replays_exact_running_spine(self) -> None:
+        api_store, orchestrator = self._company_public_web_test_runtime("guarded-current-exact-replay")
+        try:
+            _, running, operation_run_id, action_id = self._prepare_exhausted_company_public_web_source_command(
+                api_store,
+                orchestrator,
+                suffix="guarded-current-exact-replay",
+            )
+            identity = self._company_public_web_source_activity_identity(running)
+            first_activity, first_attempt = self._start_guarded_company_public_web_source_activity(
+                orchestrator,
+                running,
+            )
+            self.assertEqual(first_activity["status"], "running")
+            self.assertEqual(first_attempt["status"], "running")
+            command_before_replay = api_store.get_workflow_command(running["command_id"])
+            operation_before_replay = api_store.repos.workflow_runtime.get_operation(operation_run_id)
+            action_before_replay = api_store.repos.workflow_runtime.get_action(action_id)
+
+            replay_activity, replay_attempt = self._start_guarded_company_public_web_source_activity(
+                orchestrator,
+                command_before_replay,
+            )
+
+            self.assertEqual(replay_activity["activity_run_id"], identity["activity_run_id"])
+            self.assertEqual(replay_activity["idempotency_key"], identity["activity_idempotency_key"])
+            self.assertEqual(replay_activity["status"], "running")
+            self.assertEqual(replay_activity["metadata"]["lease_owner"], running["lease_owner"])
+            self.assertEqual(replay_attempt["attempt_id"], identity["attempt_id"])
+            self.assertEqual(replay_attempt["idempotency_key"], identity["attempt_idempotency_key"])
+            self.assertEqual(replay_attempt["status"], "running")
+            self.assertEqual(int(replay_attempt["attempt_number"]), int(running["attempt"]))
+            self.assertEqual(replay_attempt["metadata"]["lease_owner"], running["lease_owner"])
+            self.assertEqual(replay_activity["activity_run_id"], first_activity["activity_run_id"])
+            self.assertEqual(replay_attempt["attempt_id"], first_attempt["attempt_id"])
+            self.assertEqual(
+                len(
+                    api_store.repos.workflow_runtime.list_activity_runs(
+                        command_id=running["command_id"],
+                        limit=0,
+                    )
+                ),
+                1,
+            )
+            self.assertEqual(
+                len(
+                    api_store.repos.workflow_runtime.list_activity_attempts(
+                        command_id=running["command_id"],
+                        limit=0,
+                    )
+                ),
+                1,
+            )
+            self.assertEqual(api_store.get_workflow_command(running["command_id"]), command_before_replay)
+            self.assertEqual(
+                api_store.repos.workflow_runtime.get_operation(operation_run_id),
+                operation_before_replay,
+            )
+            self.assertEqual(api_store.repos.workflow_runtime.get_action(action_id), action_before_replay)
+            self.assertEqual(
+                api_store.repos.workflow_runtime.list_entity_deltas(
+                    command_id=running["command_id"],
+                    limit=0,
+                ),
+                [],
+            )
+            company_key = str(dict(running["payload"])["company_key"])
+            self.assertEqual(api_store.list_company_public_web_asset_runs(company_key=company_key), [])
+            self.assertEqual(api_store.list_company_public_web_assets(company_key=company_key), [])
+            self.assertEqual(api_store.list_company_assets(company_key=company_key), [])
+            self.assertEqual(api_store.list_company_evidence(company_key=company_key), [])
+        finally:
+            api_store.close()
+
+    def test_company_public_web_guarded_start_rejects_semantically_invalid_prior_terminal_attempt(
+        self,
+    ) -> None:
+        for field_name, wrong_value in (
+            ("workspace_id", "workspace-wrong-prior-terminal"),
+            ("activity_run_id", "actrun_wrong_prior_terminal"),
+            ("workflow_run_id", "wf-wrong-prior-terminal"),
+            ("provider", "wrong-prior-terminal-provider"),
+            ("lease_owner", ""),
+        ):
+            with self.subTest(field_name=field_name):
+                api_store, orchestrator = self._company_public_web_test_runtime(
+                    f"guarded-invalid-prior-terminal-{field_name}"
+                )
+                try:
+                    planned, first_running, operation_run_id, action_id = (
+                        self._prepare_exhausted_company_public_web_source_command(
+                            api_store,
+                            orchestrator,
+                            suffix=f"invalid-prior-terminal-{field_name}",
+                        )
+                    )
+                    prior_identity = self._company_public_web_source_activity_identity(first_running)
+                    prior_overrides: dict[str, Any]
+                    if field_name == "lease_owner":
+                        prior_overrides = {
+                            "metadata": {
+                                "lease_owner": wrong_value,
+                                "activity_spine_contract": "command_activity_attempt_entity_delta_v1",
+                            }
+                        }
+                    else:
+                        prior_overrides = {field_name: wrong_value}
+                    prior_attempt = self._insert_company_public_web_source_attempt(
+                        api_store,
+                        first_running,
+                        prior_identity,
+                        status="failed",
+                        overrides=prior_overrides,
+                    )
+                    self.assertEqual(prior_attempt["attempt_id"], prior_identity["attempt_id"])
+                    self.assertEqual(prior_attempt["idempotency_key"], prior_identity["attempt_idempotency_key"])
+                    if field_name == "lease_owner":
+                        self.assertEqual(prior_attempt["metadata"]["lease_owner"], wrong_value)
+                    else:
+                        self.assertEqual(prior_attempt[field_name], wrong_value)
+                    api_store._control_plane_postgres._execute_non_query(  # noqa: SLF001
+                        "UPDATE workflow_commands "
+                        "SET max_attempts = 3, "
+                        "lease_expires_at = TO_CHAR(clock_timestamp() AT TIME ZONE 'UTC' - INTERVAL '1 second', "
+                        "'YYYY-MM-DD HH24:MI:SS') WHERE command_id = %s",
+                        (first_running["command_id"],),
+                    )
+                    second_owner = f"company-public-web-current-attempt-2-{short_hash(field_name)}"
+                    second_claim = api_store.claim_workflow_command(
+                        first_running["command_id"],
+                        lease_owner=second_owner,
+                        lease_seconds=60,
+                    )
+                    self.assertEqual(int(second_claim["attempt"]), 2)
+                    second_running = api_store.mark_workflow_command_running(
+                        first_running["command_id"],
+                        lease_owner=second_owner,
+                    )
+                    self.assertEqual(int(second_running["attempt"]), 2)
+                    command_before = api_store.get_workflow_command(second_running["command_id"])
+                    activities_before = api_store.repos.workflow_runtime.list_activity_runs(
+                        command_id=second_running["command_id"],
+                        limit=0,
+                    )
+                    attempts_before = api_store.repos.workflow_runtime.list_activity_attempts(
+                        command_id=second_running["command_id"],
+                        limit=0,
+                    )
+                    operation_before = api_store.repos.workflow_runtime.get_operation(operation_run_id)
+                    action_before = api_store.repos.workflow_runtime.get_action(action_id)
+
+                    activity, attempt = self._start_guarded_company_public_web_source_activity(
+                        orchestrator,
+                        command_before,
+                    )
+
+                    self.assertEqual(activity, {})
+                    self.assertEqual(attempt, {})
+                    self.assertEqual(api_store.get_workflow_command(second_running["command_id"]), command_before)
+                    self.assertEqual(
+                        api_store.repos.workflow_runtime.list_activity_runs(
+                            command_id=second_running["command_id"],
+                            limit=0,
+                        ),
+                        activities_before,
+                    )
+                    self.assertEqual(
+                        api_store.repos.workflow_runtime.list_activity_attempts(
+                            command_id=second_running["command_id"],
+                            limit=0,
+                        ),
+                        attempts_before,
+                    )
+                    self.assertEqual(
+                        api_store.repos.workflow_runtime.get_operation(operation_run_id),
+                        operation_before,
+                    )
+                    self.assertEqual(api_store.repos.workflow_runtime.get_action(action_id), action_before)
+                    current_identity = self._company_public_web_source_activity_identity(second_running)
+                    self.assertEqual(
+                        api_store.repos.workflow_runtime.get_activity_run(current_identity["activity_run_id"]),
+                        {},
+                    )
+                    self.assertEqual(
+                        api_store.repos.workflow_runtime.get_activity_attempt(current_identity["attempt_id"]),
+                        {},
+                    )
+                    self.assertEqual(
+                        api_store.repos.workflow_runtime.list_entity_deltas(
+                            command_id=second_running["command_id"],
+                            limit=0,
+                        ),
+                        [],
+                    )
+                    self.assertEqual(
+                        [
+                            command
+                            for command in api_store.list_workflow_commands(
+                                workflow_run_id=planned["workflow_command"]["workflow_run_id"],
+                                limit=0,
+                            )
+                            if command["command_type"] == COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE
+                        ],
+                        [],
+                    )
+                    company_key = str(dict(second_running["payload"])["company_key"])
+                    self.assertEqual(api_store.list_company_public_web_asset_runs(company_key=company_key), [])
+                    self.assertEqual(api_store.list_company_public_web_assets(company_key=company_key), [])
+                    self.assertEqual(api_store.list_company_assets(company_key=company_key), [])
+                    self.assertEqual(api_store.list_company_evidence(company_key=company_key), [])
+                finally:
+                    api_store.close()
+
+    def test_company_public_web_guarded_start_allows_exact_prior_failed_terminal_attempt(self) -> None:
+        api_store, orchestrator = self._company_public_web_test_runtime("guarded-exact-prior-failed-terminal")
+        try:
+            _, first_running, operation_run_id, action_id = self._prepare_exhausted_company_public_web_source_command(
+                api_store,
+                orchestrator,
+                suffix="exact-prior-failed-terminal",
+            )
+            prior_identity = self._company_public_web_source_activity_identity(first_running)
+            prior_attempt = self._insert_company_public_web_source_attempt(
+                api_store,
+                first_running,
+                prior_identity,
+                status="failed",
+            )
+            api_store._control_plane_postgres._execute_non_query(  # noqa: SLF001
+                "UPDATE workflow_commands "
+                "SET max_attempts = 3, "
+                "lease_expires_at = TO_CHAR(clock_timestamp() AT TIME ZONE 'UTC' - INTERVAL '1 second', "
+                "'YYYY-MM-DD HH24:MI:SS') WHERE command_id = %s",
+                (first_running["command_id"],),
+            )
+            second_owner = "company-public-web-current-attempt-2-with-valid-prior-terminal"
+            second_claim = api_store.claim_workflow_command(
+                first_running["command_id"],
+                lease_owner=second_owner,
+                lease_seconds=60,
+            )
+            self.assertEqual(int(second_claim["attempt"]), 2)
+            second_running = api_store.mark_workflow_command_running(
+                first_running["command_id"],
+                lease_owner=second_owner,
+            )
+            command_before = api_store.get_workflow_command(second_running["command_id"])
+            operation_before = api_store.repos.workflow_runtime.get_operation(operation_run_id)
+            action_before = api_store.repos.workflow_runtime.get_action(action_id)
+
+            activity, current_attempt = self._start_guarded_company_public_web_source_activity(
+                orchestrator,
+                command_before,
+            )
+
+            current_identity = self._company_public_web_source_activity_identity(second_running)
+            self.assertEqual(activity["activity_run_id"], current_identity["activity_run_id"])
+            self.assertEqual(activity["status"], "running")
+            self.assertEqual(activity["metadata"]["lease_owner"], second_owner)
+            self.assertEqual(current_attempt["attempt_id"], current_identity["attempt_id"])
+            self.assertEqual(current_attempt["status"], "running")
+            self.assertEqual(int(current_attempt["attempt_number"]), 2)
+            self.assertEqual(current_attempt["metadata"]["lease_owner"], second_owner)
+            self.assertEqual(
+                api_store.repos.workflow_runtime.get_activity_attempt(prior_attempt["attempt_id"]),
+                prior_attempt,
+            )
+            attempts = api_store.repos.workflow_runtime.list_activity_attempts(
+                command_id=second_running["command_id"],
+                limit=0,
+            )
+            self.assertEqual(
+                {(int(item["attempt_number"]), item["status"]) for item in attempts},
+                {(1, "failed"), (2, "running")},
+            )
+            self.assertEqual(api_store.get_workflow_command(second_running["command_id"]), command_before)
+            self.assertEqual(
+                api_store.repos.workflow_runtime.get_operation(operation_run_id),
+                operation_before,
+            )
+            self.assertEqual(api_store.repos.workflow_runtime.get_action(action_id), action_before)
+            self.assertEqual(
+                api_store.repos.workflow_runtime.list_entity_deltas(
+                    command_id=second_running["command_id"],
+                    limit=0,
+                ),
+                [],
+            )
+            company_key = str(dict(second_running["payload"])["company_key"])
+            self.assertEqual(api_store.list_company_public_web_asset_runs(company_key=company_key), [])
+            self.assertEqual(api_store.list_company_public_web_assets(company_key=company_key), [])
+            self.assertEqual(api_store.list_company_assets(company_key=company_key), [])
+            self.assertEqual(api_store.list_company_evidence(company_key=company_key), [])
+        finally:
+            api_store.close()
+
+    def test_company_public_web_guarded_current_start_rejects_future_terminal_attempt_without_writes(self) -> None:
+        api_store, orchestrator = self._company_public_web_test_runtime("guarded-future-terminal-attempt")
+        try:
+            planned, running, operation_run_id, action_id = self._prepare_exhausted_company_public_web_source_command(
+                api_store,
+                orchestrator,
+                suffix="guarded-future-terminal-attempt",
+            )
+            api_store._control_plane_postgres._execute_non_query(  # noqa: SLF001
+                "UPDATE workflow_commands SET max_attempts = 3 WHERE command_id = %s",
+                (running["command_id"],),
+            )
+            current_command = api_store.get_workflow_command(running["command_id"])
+            self.assertEqual(int(current_command["attempt"]), 1)
+            future_command = {
+                **current_command,
+                "attempt": 2,
+                "lease_owner": "company-public-web-impossible-future-attempt-2-owner",
+            }
+            future_identity = self._company_public_web_source_activity_identity(future_command)
+            future_attempt = self._insert_company_public_web_source_attempt(
+                api_store,
+                future_command,
+                future_identity,
+                status="failed",
+            )
+            self.assertEqual(int(future_attempt["attempt_number"]), 2)
+            self.assertEqual(future_attempt["attempt_id"], future_identity["attempt_id"])
+            self.assertEqual(future_attempt["idempotency_key"], future_identity["attempt_idempotency_key"])
+            command_before = api_store.get_workflow_command(running["command_id"])
+            activities_before = api_store.repos.workflow_runtime.list_activity_runs(
+                command_id=running["command_id"],
+                limit=0,
+            )
+            attempts_before = api_store.repos.workflow_runtime.list_activity_attempts(
+                command_id=running["command_id"],
+                limit=0,
+            )
+            operation_before = api_store.repos.workflow_runtime.get_operation(operation_run_id)
+            action_before = api_store.repos.workflow_runtime.get_action(action_id)
+
+            activity, attempt = self._start_guarded_company_public_web_source_activity(
+                orchestrator,
+                command_before,
+            )
+
+            self.assertEqual(activity, {})
+            self.assertEqual(attempt, {})
+            self.assertEqual(api_store.get_workflow_command(running["command_id"]), command_before)
+            self.assertEqual(
+                api_store.repos.workflow_runtime.list_activity_runs(
+                    command_id=running["command_id"],
+                    limit=0,
+                ),
+                activities_before,
+            )
+            self.assertEqual(
+                api_store.repos.workflow_runtime.list_activity_attempts(
+                    command_id=running["command_id"],
+                    limit=0,
+                ),
+                attempts_before,
+            )
+            self.assertEqual(
+                api_store.repos.workflow_runtime.get_operation(operation_run_id),
+                operation_before,
+            )
+            self.assertEqual(api_store.repos.workflow_runtime.get_action(action_id), action_before)
+            current_identity = self._company_public_web_source_activity_identity(command_before)
+            self.assertEqual(
+                api_store.repos.workflow_runtime.get_activity_run(current_identity["activity_run_id"]),
+                {},
+            )
+            self.assertEqual(
+                api_store.repos.workflow_runtime.get_activity_attempt(current_identity["attempt_id"]),
+                {},
+            )
+            self.assertEqual(
+                api_store.repos.workflow_runtime.list_entity_deltas(
+                    command_id=running["command_id"],
+                    limit=0,
+                ),
+                [],
+            )
+            self.assertEqual(
+                [
+                    command
+                    for command in api_store.list_workflow_commands(
+                        workflow_run_id=planned["workflow_command"]["workflow_run_id"],
+                        limit=0,
+                    )
+                    if command["command_type"] == COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE
+                ],
+                [],
+            )
+            company_key = str(dict(running["payload"])["company_key"])
+            self.assertEqual(api_store.list_company_public_web_asset_runs(company_key=company_key), [])
+            self.assertEqual(api_store.list_company_public_web_assets(company_key=company_key), [])
+            self.assertEqual(api_store.list_company_assets(company_key=company_key), [])
+            self.assertEqual(api_store.list_company_evidence(company_key=company_key), [])
+        finally:
+            api_store.close()
+
+    def test_company_public_web_exhausted_final_closure_rejects_future_terminal_attempt_without_writes(self) -> None:
+        api_store, orchestrator = self._company_public_web_test_runtime("exhausted-future-terminal-attempt")
+        try:
+            planned, running, operation_run_id, action_id = self._prepare_exhausted_company_public_web_source_command(
+                api_store,
+                orchestrator,
+                suffix="exhausted-future-terminal-attempt",
+            )
+            self.assertEqual(int(running["attempt"]), 1)
+            self.assertEqual(int(running["max_attempts"]), 1)
+            future_command = {
+                **running,
+                "attempt": 2,
+                "lease_owner": "company-public-web-impossible-future-terminal-owner",
+            }
+            future_identity = self._company_public_web_source_activity_identity(future_command)
+            future_attempt = self._insert_company_public_web_source_attempt(
+                api_store,
+                future_command,
+                future_identity,
+                status="failed",
+            )
+            self.assertEqual(int(future_attempt["attempt_number"]), 2)
+            self.assertGreater(int(future_attempt["attempt_number"]), int(running["max_attempts"]))
+            api_store._control_plane_postgres._execute_non_query(  # noqa: SLF001
+                "UPDATE workflow_commands "
+                "SET lease_expires_at = TO_CHAR(clock_timestamp() AT TIME ZONE 'UTC' - INTERVAL '1 second', "
+                "'YYYY-MM-DD HH24:MI:SS') WHERE command_id = %s",
+                (running["command_id"],),
+            )
+            command_before = api_store.get_workflow_command(running["command_id"])
+            activities_before = api_store.repos.workflow_runtime.list_activity_runs(
+                command_id=running["command_id"],
+                limit=0,
+            )
+            attempts_before = api_store.repos.workflow_runtime.list_activity_attempts(
+                command_id=running["command_id"],
+                limit=0,
+            )
+            operation_before = api_store.repos.workflow_runtime.get_operation(operation_run_id)
+            action_before = api_store.repos.workflow_runtime.get_action(action_id)
+
+            result = orchestrator._run_company_public_web_refresh_command(  # noqa: SLF001
+                command_before,
+                lease_seconds=60,
+            )
+
+            self.assertEqual(result["status"], "invalid", result)
+            self.assertEqual(
+                result["reason"],
+                "company_public_web_exhausted_activity_identity_conflict",
+            )
+            self.assertEqual(api_store.get_workflow_command(running["command_id"]), command_before)
+            self.assertEqual(
+                api_store.repos.workflow_runtime.list_activity_runs(
+                    command_id=running["command_id"],
+                    limit=0,
+                ),
+                activities_before,
+            )
+            self.assertEqual(
+                api_store.repos.workflow_runtime.list_activity_attempts(
+                    command_id=running["command_id"],
+                    limit=0,
+                ),
+                attempts_before,
+            )
+            self.assertEqual(
+                api_store.repos.workflow_runtime.get_operation(operation_run_id),
+                operation_before,
+            )
+            self.assertEqual(api_store.repos.workflow_runtime.get_action(action_id), action_before)
+            self.assertEqual(
+                api_store.repos.workflow_runtime.list_entity_deltas(
+                    command_id=running["command_id"],
+                    limit=0,
+                ),
+                [],
+            )
+            self.assertEqual(
+                [
+                    command
+                    for command in api_store.list_workflow_commands(
+                        workflow_run_id=planned["workflow_command"]["workflow_run_id"],
+                        limit=0,
+                    )
+                    if command["command_type"] == COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE
+                ],
+                [],
+            )
+            company_key = str(dict(running["payload"])["company_key"])
+            self.assertEqual(api_store.list_company_public_web_asset_runs(company_key=company_key), [])
+            self.assertEqual(api_store.list_company_public_web_assets(company_key=company_key), [])
+            self.assertEqual(api_store.list_company_assets(company_key=company_key), [])
+            self.assertEqual(api_store.list_company_evidence(company_key=company_key), [])
+        finally:
+            api_store.close()
+
+    def test_company_public_web_guarded_current_start_rejects_future_resume_attempt_without_writes(self) -> None:
+        api_store, orchestrator = self._company_public_web_test_runtime("guarded-future-resume-attempt")
+        try:
+            planned, running, operation_run_id, action_id = self._prepare_exhausted_company_public_web_source_command(
+                api_store,
+                orchestrator,
+                suffix="guarded-future-resume-attempt",
+            )
+            api_store._control_plane_postgres._execute_non_query(  # noqa: SLF001
+                "UPDATE workflow_commands SET max_attempts = 3 WHERE command_id = %s",
+                (running["command_id"],),
+            )
+            current_command = api_store.get_workflow_command(running["command_id"])
+            future_command = {
+                **current_command,
+                "attempt": 2,
+                "lease_owner": "company-public-web-impossible-future-resume-owner",
+            }
+            future_resume_attempt = self._insert_company_public_web_source_resume_attempt(
+                api_store,
+                future_command,
+            )
+            self.assertEqual(int(future_resume_attempt["attempt_number"]), 2)
+            self.assertEqual(future_resume_attempt["status"], "succeeded")
+            self.assertEqual(future_resume_attempt["input"]["control_action"], "resume")
+            self.assertEqual(future_resume_attempt["output"]["control_action"], "resume")
+            command_before = api_store.get_workflow_command(running["command_id"])
+            activities_before = api_store.repos.workflow_runtime.list_activity_runs(
+                command_id=running["command_id"],
+                limit=0,
+            )
+            attempts_before = api_store.repos.workflow_runtime.list_activity_attempts(
+                command_id=running["command_id"],
+                limit=0,
+            )
+            operation_before = api_store.repos.workflow_runtime.get_operation(operation_run_id)
+            action_before = api_store.repos.workflow_runtime.get_action(action_id)
+
+            activity, attempt = self._start_guarded_company_public_web_source_activity(
+                orchestrator,
+                command_before,
+            )
+
+            self.assertEqual(activity, {})
+            self.assertEqual(attempt, {})
+            self.assertEqual(api_store.get_workflow_command(running["command_id"]), command_before)
+            self.assertEqual(
+                api_store.repos.workflow_runtime.list_activity_runs(
+                    command_id=running["command_id"],
+                    limit=0,
+                ),
+                activities_before,
+            )
+            self.assertEqual(
+                api_store.repos.workflow_runtime.list_activity_attempts(
+                    command_id=running["command_id"],
+                    limit=0,
+                ),
+                attempts_before,
+            )
+            self.assertEqual(
+                api_store.repos.workflow_runtime.get_operation(operation_run_id),
+                operation_before,
+            )
+            self.assertEqual(api_store.repos.workflow_runtime.get_action(action_id), action_before)
+            expected_activity_identity = self._company_public_web_source_activity_identity(command_before)
+            self.assertEqual(
+                api_store.repos.workflow_runtime.get_activity_run(expected_activity_identity["activity_run_id"]),
+                {},
+            )
+            self.assertEqual(
+                api_store.repos.workflow_runtime.get_activity_attempt(expected_activity_identity["attempt_id"]),
+                {},
+            )
+            self.assertEqual(
+                api_store.repos.workflow_runtime.list_entity_deltas(
+                    command_id=running["command_id"],
+                    limit=0,
+                ),
+                [],
+            )
+            self.assertEqual(
+                [
+                    command
+                    for command in api_store.list_workflow_commands(
+                        workflow_run_id=planned["workflow_command"]["workflow_run_id"],
+                        limit=0,
+                    )
+                    if command["command_type"] == COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE
+                ],
+                [],
+            )
+            company_key = str(dict(running["payload"])["company_key"])
+            self.assertEqual(api_store.list_company_public_web_asset_runs(company_key=company_key), [])
+            self.assertEqual(api_store.list_company_public_web_assets(company_key=company_key), [])
+            self.assertEqual(api_store.list_company_assets(company_key=company_key), [])
+            self.assertEqual(api_store.list_company_evidence(company_key=company_key), [])
+        finally:
+            api_store.close()
+
+    def test_company_public_web_exhausted_final_closure_rejects_future_resume_attempt_without_writes(self) -> None:
+        api_store, orchestrator = self._company_public_web_test_runtime("exhausted-future-resume-attempt")
+        try:
+            planned, running, operation_run_id, action_id = self._prepare_exhausted_company_public_web_source_command(
+                api_store,
+                orchestrator,
+                suffix="exhausted-future-resume-attempt",
+            )
+            future_command = {
+                **running,
+                "attempt": 2,
+                "lease_owner": "company-public-web-impossible-future-resume-terminal-owner",
+            }
+            future_resume_attempt = self._insert_company_public_web_source_resume_attempt(
+                api_store,
+                future_command,
+            )
+            self.assertEqual(int(future_resume_attempt["attempt_number"]), 2)
+            self.assertGreater(int(future_resume_attempt["attempt_number"]), int(running["max_attempts"]))
+            api_store._control_plane_postgres._execute_non_query(  # noqa: SLF001
+                "UPDATE workflow_commands "
+                "SET lease_expires_at = TO_CHAR(clock_timestamp() AT TIME ZONE 'UTC' - INTERVAL '1 second', "
+                "'YYYY-MM-DD HH24:MI:SS') WHERE command_id = %s",
+                (running["command_id"],),
+            )
+            command_before = api_store.get_workflow_command(running["command_id"])
+            activities_before = api_store.repos.workflow_runtime.list_activity_runs(
+                command_id=running["command_id"],
+                limit=0,
+            )
+            attempts_before = api_store.repos.workflow_runtime.list_activity_attempts(
+                command_id=running["command_id"],
+                limit=0,
+            )
+            operation_before = api_store.repos.workflow_runtime.get_operation(operation_run_id)
+            action_before = api_store.repos.workflow_runtime.get_action(action_id)
+
+            result = orchestrator._run_company_public_web_refresh_command(  # noqa: SLF001
+                command_before,
+                lease_seconds=60,
+            )
+
+            self.assertEqual(result["status"], "invalid", result)
+            self.assertEqual(
+                result["reason"],
+                "company_public_web_exhausted_activity_identity_conflict",
+            )
+            self.assertEqual(api_store.get_workflow_command(running["command_id"]), command_before)
+            self.assertEqual(
+                api_store.repos.workflow_runtime.list_activity_runs(
+                    command_id=running["command_id"],
+                    limit=0,
+                ),
+                activities_before,
+            )
+            self.assertEqual(
+                api_store.repos.workflow_runtime.list_activity_attempts(
+                    command_id=running["command_id"],
+                    limit=0,
+                ),
+                attempts_before,
+            )
+            self.assertEqual(
+                api_store.repos.workflow_runtime.get_operation(operation_run_id),
+                operation_before,
+            )
+            self.assertEqual(api_store.repos.workflow_runtime.get_action(action_id), action_before)
+            self.assertEqual(
+                api_store.repos.workflow_runtime.list_entity_deltas(
+                    command_id=running["command_id"],
+                    limit=0,
+                ),
+                [],
+            )
+            self.assertEqual(
+                [
+                    command
+                    for command in api_store.list_workflow_commands(
+                        workflow_run_id=planned["workflow_command"]["workflow_run_id"],
+                        limit=0,
+                    )
+                    if command["command_type"] == COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE
+                ],
+                [],
+            )
+            company_key = str(dict(running["payload"])["company_key"])
+            self.assertEqual(api_store.list_company_public_web_asset_runs(company_key=company_key), [])
+            self.assertEqual(api_store.list_company_public_web_assets(company_key=company_key), [])
+            self.assertEqual(api_store.list_company_assets(company_key=company_key), [])
+            self.assertEqual(api_store.list_company_evidence(company_key=company_key), [])
+        finally:
+            api_store.close()
+
+    def test_company_public_web_resume_terminal_semantic_tampering_fails_closed_across_paths(self) -> None:
+        for path in ("guarded_start", "exhausted_closure"):
+            for tamper in (
+                "target_company",
+                "company_key",
+                "force_mismatch",
+                "provider_request_ref",
+            ):
+                case = f"{path}-{tamper}"
+                with self.subTest(case=case):
+                    api_store, orchestrator = self._company_public_web_test_runtime(f"resume-semantic-tamper-{case}")
+                    try:
+                        planned, running, operation_run_id, action_id = (
+                            self._prepare_exhausted_company_public_web_source_command(
+                                api_store,
+                                orchestrator,
+                                suffix=f"resume-semantic-tamper-{case}",
+                            )
+                        )
+                        resume_command = {
+                            **running,
+                            "lease_owner": f"company-public-web-resume-control-{short_hash(case)}",
+                        }
+                        if tamper == "target_company":
+                            overrides = {
+                                "input": {"target_company": "Wrong Resume Target Labs"},
+                                "output": {"target_company": "Wrong Resume Target Labs"},
+                            }
+                        elif tamper == "company_key":
+                            overrides = {
+                                "input": {"company_key": "wrongresumecompanykey"},
+                                "output": {"company_key": "wrongresumecompanykey"},
+                            }
+                        elif tamper == "force_mismatch":
+                            overrides = {"output": {"force": False}}
+                        else:
+                            overrides = {"provider_request_ref": "wrong-resume-provider-request-ref"}
+                        resume_attempt = self._insert_company_public_web_source_resume_attempt(
+                            api_store,
+                            resume_command,
+                            overrides=overrides,
+                        )
+                        self.assertEqual(resume_attempt["status"], "succeeded")
+                        self.assertEqual(int(resume_attempt["attempt_number"]), int(running["attempt"]))
+                        if path == "exhausted_closure":
+                            api_store._control_plane_postgres._execute_non_query(  # noqa: SLF001
+                                "UPDATE workflow_commands "
+                                "SET lease_expires_at = TO_CHAR("
+                                "clock_timestamp() AT TIME ZONE 'UTC' - INTERVAL '1 second', "
+                                "'YYYY-MM-DD HH24:MI:SS') WHERE command_id = %s",
+                                (running["command_id"],),
+                            )
+                        command_before = api_store.get_workflow_command(running["command_id"])
+                        activities_before = api_store.repos.workflow_runtime.list_activity_runs(
+                            command_id=running["command_id"],
+                            limit=0,
+                        )
+                        attempts_before = api_store.repos.workflow_runtime.list_activity_attempts(
+                            command_id=running["command_id"],
+                            limit=0,
+                        )
+                        operation_before = api_store.repos.workflow_runtime.get_operation(operation_run_id)
+                        action_before = api_store.repos.workflow_runtime.get_action(action_id)
+
+                        if path == "guarded_start":
+                            activity, attempt = self._start_guarded_company_public_web_source_activity(
+                                orchestrator,
+                                command_before,
+                            )
+                            self.assertEqual(activity, {})
+                            self.assertEqual(attempt, {})
+                        else:
+                            result = orchestrator._run_company_public_web_refresh_command(  # noqa: SLF001
+                                command_before,
+                                lease_seconds=60,
+                            )
+                            self.assertEqual(result["status"], "invalid", result)
+                            self.assertEqual(
+                                result["reason"],
+                                (
+                                    "company_public_web_exhausted_activity_semantic_identity_conflict"
+                                    if tamper in {"target_company", "company_key"}
+                                    else "company_public_web_exhausted_activity_identity_conflict"
+                                ),
+                            )
+
+                        self.assertEqual(api_store.get_workflow_command(running["command_id"]), command_before)
+                        self.assertEqual(
+                            api_store.repos.workflow_runtime.list_activity_runs(
+                                command_id=running["command_id"],
+                                limit=0,
+                            ),
+                            activities_before,
+                        )
+                        self.assertEqual(
+                            api_store.repos.workflow_runtime.list_activity_attempts(
+                                command_id=running["command_id"],
+                                limit=0,
+                            ),
+                            attempts_before,
+                        )
+                        self.assertEqual(
+                            api_store.repos.workflow_runtime.get_operation(operation_run_id),
+                            operation_before,
+                        )
+                        self.assertEqual(api_store.repos.workflow_runtime.get_action(action_id), action_before)
+                        expected_identity = self._company_public_web_source_activity_identity(command_before)
+                        self.assertEqual(
+                            api_store.repos.workflow_runtime.get_activity_run(expected_identity["activity_run_id"]),
+                            {},
+                        )
+                        self.assertEqual(
+                            api_store.repos.workflow_runtime.get_activity_attempt(expected_identity["attempt_id"]),
+                            {},
+                        )
+                        self.assertEqual(
+                            api_store.repos.workflow_runtime.list_entity_deltas(
+                                command_id=running["command_id"],
+                                limit=0,
+                            ),
+                            [],
+                        )
+                        self.assertEqual(
+                            [
+                                command
+                                for command in api_store.list_workflow_commands(
+                                    workflow_run_id=planned["workflow_command"]["workflow_run_id"],
+                                    limit=0,
+                                )
+                                if command["command_type"] == COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE
+                            ],
+                            [],
+                        )
+                        company_key = str(dict(running["payload"])["company_key"])
+                        self.assertEqual(api_store.list_company_public_web_asset_runs(company_key=company_key), [])
+                        self.assertEqual(api_store.list_company_public_web_assets(company_key=company_key), [])
+                        self.assertEqual(api_store.list_company_assets(company_key=company_key), [])
+                        self.assertEqual(api_store.list_company_evidence(company_key=company_key), [])
+                    finally:
+                        api_store.close()
+
+    def test_company_public_web_exhausted_owner_loss_terminal_proof_tampering_conflicts_without_writes(
+        self,
+    ) -> None:
+        for tamper in (
+            "error_reason_empty",
+            "metadata_reason_mismatch",
+            "output_reason_empty",
+            "output_status_not_skipped",
+            "deterministic_terminal_failure_true",
+        ):
+            with self.subTest(tamper=tamper):
+                api_store, orchestrator = self._company_public_web_test_runtime(f"exhausted-owner-loss-proof-{tamper}")
+                try:
+                    planned, running, operation_run_id, action_id = (
+                        self._prepare_exhausted_company_public_web_source_command(
+                            api_store,
+                            orchestrator,
+                            suffix=f"owner-loss-proof-{tamper}",
+                        )
+                    )
+                    activity, attempt = self._start_guarded_company_public_web_source_activity(
+                        orchestrator,
+                        running,
+                    )
+                    owner_loss_reason = "synthetic_owner_lost_before_exhausted_closure"
+                    first_closure = orchestrator._close_company_public_web_owner_lost_activity_attempt(  # noqa: SLF001
+                        command=running,
+                        activity=activity,
+                        attempt=attempt,
+                        reason=owner_loss_reason,
+                    )
+                    self.assertEqual(first_closure["outcome"], "closed", first_closure)
+                    activity_retry = api_store.repos.workflow_runtime.get_activity_run(activity["activity_run_id"])
+                    failed_attempt = api_store.repos.workflow_runtime.get_activity_attempt(attempt["attempt_id"])
+                    self.assertEqual(activity_retry["status"], "retry_wait")
+                    self.assertEqual(failed_attempt["status"], "failed")
+                    tampered_error = dict(failed_attempt["error"])
+                    tampered_output = dict(failed_attempt["output"])
+                    tampered_metadata = dict(failed_attempt["metadata"])
+                    if tamper == "error_reason_empty":
+                        tampered_error["reason"] = ""
+                    elif tamper == "metadata_reason_mismatch":
+                        tampered_metadata["owner_lost_reason"] = "different_owner_lost_reason"
+                    elif tamper == "output_reason_empty":
+                        tampered_output["reason"] = ""
+                    elif tamper == "output_status_not_skipped":
+                        tampered_output["status"] = "invalid"
+                    else:
+                        tampered_error["deterministic_terminal_failure"] = True
+                    api_store._control_plane_postgres._execute_non_query(  # noqa: SLF001
+                        "UPDATE workflow_activity_attempts "
+                        "SET error_json = %s, output_json = %s, metadata_json = %s "
+                        "WHERE attempt_id = %s",
+                        (
+                            json.dumps(tampered_error, sort_keys=True),
+                            json.dumps(tampered_output, sort_keys=True),
+                            json.dumps(tampered_metadata, sort_keys=True),
+                            failed_attempt["attempt_id"],
+                        ),
+                    )
+                    api_store._control_plane_postgres._execute_non_query(  # noqa: SLF001
+                        "UPDATE workflow_commands "
+                        "SET lease_expires_at = TO_CHAR(clock_timestamp() AT TIME ZONE 'UTC' - INTERVAL '1 second', "
+                        "'YYYY-MM-DD HH24:MI:SS') WHERE command_id = %s",
+                        (running["command_id"],),
+                    )
+                    command_before = api_store.get_workflow_command(running["command_id"])
+                    activities_before = api_store.repos.workflow_runtime.list_activity_runs(
+                        command_id=running["command_id"],
+                        limit=0,
+                    )
+                    attempts_before = api_store.repos.workflow_runtime.list_activity_attempts(
+                        command_id=running["command_id"],
+                        limit=0,
+                    )
+                    operation_before = api_store.repos.workflow_runtime.get_operation(operation_run_id)
+                    action_before = api_store.repos.workflow_runtime.get_action(action_id)
+
+                    result = orchestrator._run_company_public_web_refresh_command(  # noqa: SLF001
+                        command_before,
+                        lease_seconds=60,
+                    )
+
+                    self.assertEqual(result["status"], "invalid", result)
+                    self.assertEqual(
+                        result["reason"],
+                        "company_public_web_exhausted_activity_identity_conflict",
+                    )
+                    self.assertEqual(api_store.get_workflow_command(running["command_id"]), command_before)
+                    self.assertEqual(
+                        api_store.repos.workflow_runtime.list_activity_runs(
+                            command_id=running["command_id"],
+                            limit=0,
+                        ),
+                        activities_before,
+                    )
+                    self.assertEqual(
+                        api_store.repos.workflow_runtime.list_activity_attempts(
+                            command_id=running["command_id"],
+                            limit=0,
+                        ),
+                        attempts_before,
+                    )
+                    self.assertEqual(
+                        api_store.repos.workflow_runtime.get_operation(operation_run_id),
+                        operation_before,
+                    )
+                    self.assertEqual(api_store.repos.workflow_runtime.get_action(action_id), action_before)
+                    self.assertEqual(
+                        api_store.repos.workflow_runtime.list_entity_deltas(
+                            command_id=running["command_id"],
+                            limit=0,
+                        ),
+                        [],
+                    )
+                    self.assertEqual(
+                        [
+                            command
+                            for command in api_store.list_workflow_commands(
+                                workflow_run_id=planned["workflow_command"]["workflow_run_id"],
+                                limit=0,
+                            )
+                            if command["command_type"] == COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE
+                        ],
+                        [],
+                    )
+                    company_key = str(dict(running["payload"])["company_key"])
+                    self.assertEqual(api_store.list_company_public_web_asset_runs(company_key=company_key), [])
+                    self.assertEqual(api_store.list_company_public_web_assets(company_key=company_key), [])
+                    self.assertEqual(api_store.list_company_assets(company_key=company_key), [])
+                    self.assertEqual(api_store.list_company_evidence(company_key=company_key), [])
+                finally:
+                    api_store.close()
+
+    def test_company_public_web_split_identity_collisions_fail_closed_across_start_and_closure(self) -> None:
+        for path in ("guarded_start", "exhausted_closure"):
+            for collision in (
+                "attempt_expected_id",
+                "attempt_expected_key",
+                "activity_expected_id",
+                "activity_expected_key",
+            ):
+                case = f"{path}-{collision}"
+                with self.subTest(case=case):
+                    api_store, orchestrator = self._company_public_web_test_runtime(f"split-identity-{case}")
+                    try:
+                        planned, running, operation_run_id, action_id = (
+                            self._prepare_exhausted_company_public_web_source_command(
+                                api_store,
+                                orchestrator,
+                                suffix=f"split-identity-{case}",
+                            )
+                        )
+                        expected_identity = self._company_public_web_source_activity_identity(running)
+                        foreign_command = api_store.upsert_workflow_command(
+                            workflow_run_id=f"wf-split-identity-foreign-{case}",
+                            operation_id=f"op-split-identity-foreign-{case}",
+                            command_id=f"cmd-split-identity-foreign-{short_hash(case)}",
+                            command_type=COMPANY_PUBLIC_WEB_SOURCE_COLLECT_COMMAND_TYPE,
+                            owner=COMPANY_PUBLIC_WEB_REFRESH_OWNER,
+                            idempotency_key=f"company.public-web.split-identity.foreign:{case}",
+                            payload={
+                                "workspace_id": "default",
+                                "target_company": "Foreign Split Identity Labs",
+                                "company_key": f"foreignsplitidentity{short_hash(case)}",
+                                "collection_mode": "seed_url_only",
+                            },
+                            max_attempts=3,
+                        )
+                        foreign_owner = f"company-public-web-split-identity-foreign-{short_hash(case)}"
+                        api_store.claim_workflow_command(
+                            foreign_command["command_id"],
+                            lease_owner=foreign_owner,
+                            lease_seconds=60,
+                        )
+                        foreign_running = api_store.mark_workflow_command_running(
+                            foreign_command["command_id"],
+                            lease_owner=foreign_owner,
+                        )
+                        collision_identity = dict(expected_identity)
+                        if collision == "attempt_expected_id":
+                            collision_identity["attempt_idempotency_key"] = (
+                                f"workflow_activity_attempt:foreign:{short_hash(case)}"
+                            )
+                            collision_row = self._insert_company_public_web_source_attempt(
+                                api_store,
+                                foreign_running,
+                                collision_identity,
+                            )
+                            self.assertEqual(collision_row["attempt_id"], expected_identity["attempt_id"])
+                            self.assertNotEqual(
+                                collision_row["idempotency_key"],
+                                expected_identity["attempt_idempotency_key"],
+                            )
+                        elif collision == "attempt_expected_key":
+                            collision_identity["attempt_id"] = f"actattempt_foreign_{short_hash(case)}"
+                            collision_row = self._insert_company_public_web_source_attempt(
+                                api_store,
+                                foreign_running,
+                                collision_identity,
+                            )
+                            self.assertNotEqual(collision_row["attempt_id"], expected_identity["attempt_id"])
+                            self.assertEqual(
+                                collision_row["idempotency_key"],
+                                expected_identity["attempt_idempotency_key"],
+                            )
+                        elif collision == "activity_expected_id":
+                            collision_identity["activity_idempotency_key"] = (
+                                f"workflow_activity:foreign:{short_hash(case)}"
+                            )
+                            collision_row = self._insert_company_public_web_source_activity(
+                                api_store,
+                                foreign_running,
+                                collision_identity,
+                            )
+                            self.assertEqual(
+                                collision_row["activity_run_id"],
+                                expected_identity["activity_run_id"],
+                            )
+                            self.assertNotEqual(
+                                collision_row["idempotency_key"],
+                                expected_identity["activity_idempotency_key"],
+                            )
+                        else:
+                            collision_identity["activity_run_id"] = f"actrun_foreign_{short_hash(case)}"
+                            collision_row = self._insert_company_public_web_source_activity(
+                                api_store,
+                                foreign_running,
+                                collision_identity,
+                            )
+                            self.assertNotEqual(
+                                collision_row["activity_run_id"],
+                                expected_identity["activity_run_id"],
+                            )
+                            self.assertEqual(
+                                collision_row["idempotency_key"],
+                                expected_identity["activity_idempotency_key"],
+                            )
+                        if path == "exhausted_closure":
+                            api_store._control_plane_postgres._execute_non_query(  # noqa: SLF001
+                                "UPDATE workflow_commands "
+                                "SET lease_expires_at = TO_CHAR("
+                                "clock_timestamp() AT TIME ZONE 'UTC' - INTERVAL '1 second', "
+                                "'YYYY-MM-DD HH24:MI:SS') WHERE command_id = %s",
+                                (running["command_id"],),
+                            )
+                        command_before = api_store.get_workflow_command(running["command_id"])
+                        foreign_command_before = api_store.get_workflow_command(foreign_running["command_id"])
+                        activities_before = api_store.repos.workflow_runtime.list_activity_runs(
+                            workspace_id="default",
+                            limit=0,
+                        )
+                        attempts_before = api_store.repos.workflow_runtime.list_activity_attempts(
+                            workspace_id="default",
+                            limit=0,
+                        )
+                        operation_before = api_store.repos.workflow_runtime.get_operation(operation_run_id)
+                        action_before = api_store.repos.workflow_runtime.get_action(action_id)
+
+                        if path == "guarded_start":
+                            activity, attempt = self._start_guarded_company_public_web_source_activity(
+                                orchestrator,
+                                command_before,
+                            )
+                            self.assertEqual(activity, {})
+                            self.assertEqual(attempt, {})
+                        else:
+                            result = orchestrator._run_company_public_web_refresh_command(  # noqa: SLF001
+                                command_before,
+                                lease_seconds=60,
+                            )
+                            self.assertEqual(result["status"], "invalid", result)
+                            self.assertEqual(
+                                result["reason"],
+                                "company_public_web_exhausted_activity_identity_conflict",
+                            )
+
+                        self.assertEqual(api_store.get_workflow_command(running["command_id"]), command_before)
+                        self.assertEqual(
+                            api_store.get_workflow_command(foreign_running["command_id"]),
+                            foreign_command_before,
+                        )
+                        self.assertEqual(
+                            api_store.repos.workflow_runtime.list_activity_runs(
+                                workspace_id="default",
+                                limit=0,
+                            ),
+                            activities_before,
+                        )
+                        self.assertEqual(
+                            api_store.repos.workflow_runtime.list_activity_attempts(
+                                workspace_id="default",
+                                limit=0,
+                            ),
+                            attempts_before,
+                        )
+                        self.assertEqual(
+                            api_store.repos.workflow_runtime.get_operation(operation_run_id),
+                            operation_before,
+                        )
+                        self.assertEqual(api_store.repos.workflow_runtime.get_action(action_id), action_before)
+                        if collision.startswith("attempt") or collision == "activity_expected_key":
+                            self.assertEqual(
+                                api_store.repos.workflow_runtime.get_activity_run(expected_identity["activity_run_id"]),
+                                {},
+                            )
+                        self.assertEqual(
+                            api_store.repos.workflow_runtime.list_entity_deltas(
+                                command_id=running["command_id"],
+                                limit=0,
+                            ),
+                            [],
+                        )
+                        self.assertEqual(
+                            [
+                                command
+                                for command in api_store.list_workflow_commands(
+                                    workflow_run_id=planned["workflow_command"]["workflow_run_id"],
+                                    limit=0,
+                                )
+                                if command["command_type"] == COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE
+                            ],
+                            [],
+                        )
+                        company_key = str(dict(running["payload"])["company_key"])
+                        self.assertEqual(api_store.list_company_public_web_asset_runs(company_key=company_key), [])
+                        self.assertEqual(api_store.list_company_public_web_assets(company_key=company_key), [])
+                        self.assertEqual(api_store.list_company_assets(company_key=company_key), [])
+                        self.assertEqual(api_store.list_company_evidence(company_key=company_key), [])
+                    finally:
+                        api_store.close()
+
+    def test_company_public_web_final_expiry_closes_prior_running_attempt_after_two_pre_activity_crashes(
+        self,
+    ) -> None:
+        api_store, orchestrator = self._company_public_web_test_runtime("final-expiry-prior-running-attempt")
+        try:
+            planned, source_command = self._plan_company_public_web_source_command(
+                orchestrator,
+                company="Final Expiry Prior Running Attempt Labs",
+                company_key="finalexpirypriorrunningattemptlabs",
+                suffix="final-expiry-prior-running-attempt",
+            )
+            operation_run_id = str(source_command["operation_id"])
+            action_id = str(api_store.repos.workflow_runtime.get_operation(operation_run_id)["action_id"])
+            api_store._control_plane_postgres._execute_non_query(  # noqa: SLF001
+                "UPDATE workflow_commands SET max_attempts = 3 WHERE command_id = %s",
+                (source_command["command_id"],),
+            )
+
+            first_owner = "company-public-web-hard-crash-after-attempt-1-guarded-start"
+            first_claim = api_store.claim_workflow_command(
+                source_command["command_id"],
+                lease_owner=first_owner,
+                lease_seconds=60,
+            )
+            first_running = api_store.mark_workflow_command_running(
+                source_command["command_id"],
+                lease_owner=first_owner,
+            )
+            self.assertEqual(int(first_running["attempt"]), 1)
+            activity, first_attempt = self._start_guarded_company_public_web_source_activity(
+                orchestrator,
+                first_running,
+            )
+            self.assertEqual(activity["status"], "running")
+            self.assertEqual(first_attempt["status"], "running")
+            self.assertEqual(int(first_attempt["attempt_number"]), 1)
+            self.assertEqual(first_claim["lease_owner"], first_owner)
+            api_store._control_plane_postgres._execute_non_query(  # noqa: SLF001
+                "UPDATE workflow_commands "
+                "SET lease_expires_at = TO_CHAR(clock_timestamp() AT TIME ZONE 'UTC' - INTERVAL '1 second', "
+                "'YYYY-MM-DD HH24:MI:SS') WHERE command_id = %s",
+                (source_command["command_id"],),
+            )
+
+            for attempt_number in (2, 3):
+                owner = f"company-public-web-pre-activity-crash-attempt-{attempt_number}"
+                claim = api_store.claim_workflow_command(
+                    source_command["command_id"],
+                    lease_owner=owner,
+                    lease_seconds=60,
+                )
+                self.assertEqual(int(claim["attempt"]), attempt_number)
+                running = api_store.mark_workflow_command_running(
+                    source_command["command_id"],
+                    lease_owner=owner,
+                )
+                self.assertEqual(running["status"], "running")
+                self.assertEqual(int(running["attempt"]), attempt_number)
+                api_store._control_plane_postgres._execute_non_query(  # noqa: SLF001
+                    "UPDATE workflow_commands "
+                    "SET lease_expires_at = TO_CHAR(clock_timestamp() AT TIME ZONE 'UTC' - INTERVAL '1 second', "
+                    "'YYYY-MM-DD HH24:MI:SS') WHERE command_id = %s",
+                    (source_command["command_id"],),
+                )
+
+            drain = orchestrator._drain_company_public_web_refresh_commands(  # noqa: SLF001
+                {
+                    "workflow_run_id": planned["workflow_command"]["workflow_run_id"],
+                    "command_limit": 1,
+                }
+            )
+
+            terminal_reason = "workflow_command_attempts_exhausted_after_lease_expiry"
+            self.assertEqual(drain["failed_count"], 1, drain)
+            self.assertEqual(drain["items"][0]["reason"], terminal_reason)
+            terminal_command = api_store.get_workflow_command(source_command["command_id"])
+            self.assertEqual(terminal_command["status"], "failed_terminal")
+            self.assertEqual(int(terminal_command["attempt"]), 3)
+            self.assertEqual(int(terminal_command["max_attempts"]), 3)
+            activity_after = api_store.repos.workflow_runtime.get_activity_run(activity["activity_run_id"])
+            first_attempt_after = api_store.repos.workflow_runtime.get_activity_attempt(first_attempt["attempt_id"])
+            self.assertEqual(activity_after["status"], "failed")
+            self.assertEqual(activity_after["phase"], terminal_reason)
+            self.assertEqual(first_attempt_after["status"], "failed")
+            self.assertEqual(first_attempt_after["error"]["reason"], terminal_reason)
+            attempts = api_store.repos.workflow_runtime.list_activity_attempts(
+                command_id=source_command["command_id"],
+                limit=0,
+            )
+            self.assertEqual(len(attempts), 1)
+            self.assertFalse(any(item["status"] == "running" for item in attempts))
+            self.assertEqual(
+                api_store.repos.workflow_runtime.get_operation(operation_run_id)["status"],
+                "failed",
+            )
+            self.assertEqual(api_store.repos.workflow_runtime.get_action(action_id)["status"], "failed")
+            self.assertEqual(
+                api_store.repos.workflow_runtime.list_entity_deltas(
+                    command_id=source_command["command_id"],
+                    limit=0,
+                ),
+                [],
+            )
+            self.assertEqual(
+                [
+                    command
+                    for command in api_store.list_workflow_commands(
+                        workflow_run_id=planned["workflow_command"]["workflow_run_id"],
+                        limit=0,
+                    )
+                    if command["command_type"] == COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE
+                ],
+                [],
+            )
+            self.assertEqual(
+                api_store.list_company_public_web_asset_runs(company_key="finalexpirypriorrunningattemptlabs"),
+                [],
+            )
+            self.assertEqual(
+                api_store.list_company_public_web_assets(company_key="finalexpirypriorrunningattemptlabs"),
+                [],
+            )
+            self.assertEqual(api_store.list_company_assets(company_key="finalexpirypriorrunningattemptlabs"), [])
+            self.assertEqual(api_store.list_company_evidence(company_key="finalexpirypriorrunningattemptlabs"), [])
+        finally:
+            api_store.close()
+
+    def test_company_public_web_takeover_start_closes_prior_attempt_before_unique_success_effect(self) -> None:
+        api_store, orchestrator = self._company_public_web_test_runtime("takeover-closes-prior-attempt")
+        try:
+            planned, source_command = self._plan_company_public_web_source_command(
+                orchestrator,
+                company="Takeover Closes Prior Attempt Labs",
+                company_key="takeoverclosespriorattemptlabs",
+                suffix="takeover-closes-prior-attempt",
+            )
+            operation_run_id = str(source_command["operation_id"])
+            action_id = str(api_store.repos.workflow_runtime.get_operation(operation_run_id)["action_id"])
+            api_store._control_plane_postgres._execute_non_query(  # noqa: SLF001
+                "UPDATE workflow_commands SET max_attempts = 3 WHERE command_id = %s",
+                (source_command["command_id"],),
+            )
+            first_owner = "company-public-web-hard-crash-before-attempt-1-effect"
+            api_store.claim_workflow_command(
+                source_command["command_id"],
+                lease_owner=first_owner,
+                lease_seconds=60,
+            )
+            first_running = api_store.mark_workflow_command_running(
+                source_command["command_id"],
+                lease_owner=first_owner,
+            )
+            activity, first_attempt = self._start_guarded_company_public_web_source_activity(
+                orchestrator,
+                first_running,
+            )
+            self.assertEqual(activity["status"], "running")
+            self.assertEqual(first_attempt["status"], "running")
+            api_store._control_plane_postgres._execute_non_query(  # noqa: SLF001
+                "UPDATE workflow_commands "
+                "SET lease_expires_at = TO_CHAR(clock_timestamp() AT TIME ZONE 'UTC' - INTERVAL '1 second', "
+                "'YYYY-MM-DD HH24:MI:SS') WHERE command_id = %s",
+                (source_command["command_id"],),
+            )
+
+            source_drain = orchestrator._drain_company_public_web_refresh_commands(  # noqa: SLF001
+                {
+                    "workflow_run_id": planned["workflow_command"]["workflow_run_id"],
+                    "command_limit": 1,
+                }
+            )
+
+            self.assertEqual(source_drain["completed_count"], 1, source_drain)
+            self.assertEqual(source_drain["failed_count"], 0, source_drain)
+            source_after = api_store.get_workflow_command(source_command["command_id"])
+            self.assertEqual(source_after["status"], "succeeded")
+            self.assertEqual(int(source_after["attempt"]), 2)
+            self.assertEqual(len(source_after["result"]["downstream_command_ids"]), 1)
+            self.assertEqual(len(source_after["result"]["entity_delta_ids"]), 1)
+            source_activity = api_store.repos.workflow_runtime.get_activity_run(activity["activity_run_id"])
+            self.assertEqual(source_activity["status"], "succeeded")
+            self.assertEqual(source_activity["phase"], "company_public_web_sources_collected")
+            attempts = api_store.repos.workflow_runtime.list_activity_attempts(
+                command_id=source_command["command_id"],
+                limit=0,
+            )
+            attempts_by_number = {int(item["attempt_number"]): item for item in attempts}
+            self.assertEqual(set(attempts_by_number), {1, 2})
+            self.assertEqual(attempts_by_number[1]["status"], "failed")
+            self.assertTrue(attempts_by_number[1]["error"]["owner_lost"])
+            self.assertEqual(attempts_by_number[2]["status"], "succeeded")
+            self.assertFalse(any(item["status"] == "running" for item in attempts))
+            source_deltas = api_store.repos.workflow_runtime.list_entity_deltas(
+                command_id=source_command["command_id"],
+                limit=0,
+            )
+            self.assertEqual(len(source_deltas), 1)
+            self.assertEqual(source_deltas[0]["delta_id"], source_after["result"]["entity_delta_ids"][0])
+            materialize_children = [
+                command
+                for command in api_store.list_workflow_commands(
+                    workflow_run_id=planned["workflow_command"]["workflow_run_id"],
+                    limit=0,
+                )
+                if command["command_type"] == COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE
+                and command["parent_command_id"] == source_command["command_id"]
+            ]
+            self.assertEqual(len(materialize_children), 1)
+            self.assertEqual(
+                materialize_children[0]["command_id"],
+                source_after["result"]["downstream_command_ids"][0],
+            )
+            self.assertEqual(
+                len(api_store.list_company_public_web_asset_runs(company_key="takeoverclosespriorattemptlabs")),
+                1,
+            )
+            self.assertEqual(
+                len(api_store.list_company_public_web_assets(company_key="takeoverclosespriorattemptlabs")),
+                1,
+            )
+
+            materialize_drain = orchestrator._drain_company_public_web_refresh_commands(  # noqa: SLF001
+                {
+                    "workflow_run_id": planned["workflow_command"]["workflow_run_id"],
+                    "command_limit": 1,
+                }
+            )
+
+            self.assertEqual(materialize_drain["completed_count"], 1, materialize_drain)
+            self.assertEqual(
+                api_store.repos.workflow_runtime.get_operation(operation_run_id)["status"],
+                "completed",
+            )
+            self.assertEqual(api_store.repos.workflow_runtime.get_action(action_id)["status"], "completed")
+            self.assertEqual(len(api_store.list_company_assets(company_key="takeoverclosespriorattemptlabs")), 1)
+            self.assertEqual(len(api_store.list_company_evidence(company_key="takeoverclosespriorattemptlabs")), 1)
+            attempts_after_materialize = api_store.repos.workflow_runtime.list_activity_attempts(
+                command_id=source_command["command_id"],
+                limit=0,
+            )
+            self.assertFalse(any(item["status"] == "running" for item in attempts_after_materialize))
+        finally:
+            api_store.close()
+
+    def test_company_public_web_exhausted_source_retry_wait_activity_and_failed_attempt_converge(self) -> None:
+        api_store, orchestrator = self._company_public_web_test_runtime("exhausted-retry-wait-converges")
+        try:
+            planned, running, operation_run_id, action_id = self._prepare_exhausted_company_public_web_source_command(
+                api_store,
+                orchestrator,
+                suffix="retry-wait-converges",
+            )
+            identity = self._company_public_web_source_activity_identity(running)
+            activity = self._insert_company_public_web_source_activity(api_store, running, identity)
+            attempt = self._insert_company_public_web_source_attempt(api_store, running, identity)
+
+            first_closure = orchestrator._close_company_public_web_owner_lost_activity_attempt(  # noqa: SLF001
+                command=running,
+                activity=activity,
+                attempt=attempt,
+                reason="synthetic_owner_lost_before_final_lease_expiry",
+            )
+
+            self.assertEqual(first_closure["outcome"], "closed", first_closure)
+            self.assertTrue(first_closure["activity_closed"])
+            self.assertTrue(first_closure["attempt_closed"])
+            self.assertEqual(api_store.get_workflow_command(running["command_id"])["status"], "running")
+            activity_retry = api_store.repos.workflow_runtime.get_activity_run(identity["activity_run_id"])
+            attempt_failed = api_store.repos.workflow_runtime.get_activity_attempt(identity["attempt_id"])
+            self.assertEqual(activity_retry["status"], "retry_wait")
+            self.assertEqual(attempt_failed["status"], "failed")
+            api_store._control_plane_postgres._execute_non_query(  # noqa: SLF001
+                "UPDATE workflow_commands "
+                "SET lease_expires_at = TO_CHAR(clock_timestamp() AT TIME ZONE 'UTC' - INTERVAL '1 second', "
+                "'YYYY-MM-DD HH24:MI:SS') WHERE command_id = %s",
+                (running["command_id"],),
+            )
+
+            drain = orchestrator._drain_company_public_web_refresh_commands(  # noqa: SLF001
+                {
+                    "workflow_run_id": planned["workflow_command"]["workflow_run_id"],
+                    "command_limit": 1,
+                }
+            )
+
+            terminal_reason = "workflow_command_attempts_exhausted_after_lease_expiry"
+            self.assertEqual(drain["failed_count"], 1, drain)
+            self.assertEqual(api_store.get_workflow_command(running["command_id"])["status"], "failed_terminal")
+            final_activity = api_store.repos.workflow_runtime.get_activity_run(identity["activity_run_id"])
+            final_attempt = api_store.repos.workflow_runtime.get_activity_attempt(identity["attempt_id"])
+            self.assertEqual(final_activity["status"], "failed")
+            self.assertEqual(final_activity["phase"], terminal_reason)
+            self.assertEqual(final_attempt["status"], "failed")
+            self.assertEqual(final_attempt["error"]["reason"], "synthetic_owner_lost_before_final_lease_expiry")
+            self.assertEqual(
+                api_store.repos.workflow_runtime.get_operation(operation_run_id)["status"],
+                "failed",
+            )
+            self.assertEqual(api_store.repos.workflow_runtime.get_action(action_id)["status"], "failed")
+            self.assertEqual(
+                len(api_store.repos.workflow_runtime.list_activity_runs(command_id=running["command_id"], limit=0)),
+                1,
+            )
+            self.assertEqual(
+                len(api_store.repos.workflow_runtime.list_activity_attempts(command_id=running["command_id"], limit=0)),
+                1,
+            )
+        finally:
+            api_store.close()
+
+    def test_company_public_web_exhausted_source_after_forced_resume_closes_queued_activity_only(self) -> None:
+        api_store, orchestrator = self._company_public_web_test_runtime("exhausted-after-forced-resume")
+        try:
+            planned, source_command = self._plan_company_public_web_source_command(
+                orchestrator,
+                company="Exhausted After Forced Resume Labs",
+                company_key="exhaustedafterforcedresumelabs",
+                suffix="exhausted-after-forced-resume",
+            )
+            operation_run_id = str(source_command["operation_id"])
+            action_id = str(api_store.repos.workflow_runtime.get_operation(operation_run_id)["action_id"])
+            first_owner = "company-public-web-forced-resume-attempt-1"
+            first_claim = api_store.claim_workflow_command(
+                source_command["command_id"],
+                lease_owner=first_owner,
+                lease_seconds=60,
+            )
+            self.assertEqual(int(first_claim["attempt"]), 1)
+            first_running = api_store.mark_workflow_command_running(
+                source_command["command_id"],
+                lease_owner=first_owner,
+            )
+            self.assertEqual(first_running["status"], "running")
+
+            forced_resume = orchestrator.resume_workflow_command_api(
+                source_command["command_id"],
+                {
+                    "actor": "unit-test-forced-resume",
+                    "reason": "requeue-before-final-source-attempt",
+                    "force": True,
+                },
+            )
+
+            self.assertEqual(forced_resume["status"], "queued", forced_resume)
+            queued_activity = api_store.repos.workflow_runtime.get_activity_run(
+                forced_resume["workflow_activity"]["activity_run_id"]
+            )
+            control_attempt = api_store.repos.workflow_runtime.get_activity_attempt(
+                forced_resume["workflow_activity_attempt"]["attempt_id"]
+            )
+            control_delta = next(
+                delta
+                for delta in api_store.repos.workflow_runtime.list_entity_deltas(
+                    command_id=source_command["command_id"],
+                    limit=0,
+                )
+                if delta["delta_id"] == forced_resume["workflow_entity_delta"]["delta_id"]
+            )
+            self.assertEqual(queued_activity["status"], "queued")
+            self.assertEqual(queued_activity["phase"], "owner_specific_resume_queued")
+            self.assertEqual(control_attempt["status"], "succeeded")
+            self.assertEqual(int(control_attempt["attempt_number"]), 1)
+            self.assertEqual(control_delta["status"], "queued")
+            self.assertEqual(control_delta["delta_kind"], "company_public_web_source_collect_resume_queued")
+            api_store._control_plane_postgres._execute_non_query(  # noqa: SLF001
+                "UPDATE workflow_commands SET max_attempts = 1 WHERE command_id = %s",
+                (source_command["command_id"],),
+            )
+
+            final_owner = "company-public-web-final-attempt-crash-before-guarded-start"
+            final_claim = api_store.claim_workflow_command(
+                source_command["command_id"],
+                lease_owner=final_owner,
+                lease_seconds=60,
+            )
+            self.assertEqual(int(final_claim["attempt"]), 1)
+            self.assertEqual(int(final_claim["max_attempts"]), 1)
+            final_running = api_store.mark_workflow_command_running(
+                source_command["command_id"],
+                lease_owner=final_owner,
+            )
+            self.assertEqual(final_running["status"], "running")
+            self.assertEqual(
+                api_store.repos.workflow_runtime.get_activity_run(queued_activity["activity_run_id"]),
+                queued_activity,
+            )
+            self.assertEqual(
+                api_store.repos.workflow_runtime.get_activity_attempt(control_attempt["attempt_id"]),
+                control_attempt,
+            )
+            api_store._control_plane_postgres._execute_non_query(  # noqa: SLF001
+                "UPDATE workflow_commands "
+                "SET lease_expires_at = TO_CHAR(clock_timestamp() AT TIME ZONE 'UTC' - INTERVAL '1 second', "
+                "'YYYY-MM-DD HH24:MI:SS') WHERE command_id = %s",
+                (source_command["command_id"],),
+            )
+
+            drain = orchestrator._drain_company_public_web_refresh_commands(  # noqa: SLF001
+                {
+                    "workflow_run_id": planned["workflow_command"]["workflow_run_id"],
+                    "command_limit": 1,
+                }
+            )
+
+            terminal_reason = "workflow_command_attempts_exhausted_after_lease_expiry"
+            self.assertEqual(drain["failed_count"], 1, drain)
+            self.assertEqual(drain["items"][0]["reason"], terminal_reason)
+            terminal_command = api_store.get_workflow_command(source_command["command_id"])
+            self.assertEqual(terminal_command["status"], "failed_terminal")
+            self.assertEqual(int(terminal_command["attempt"]), 1)
+            self.assertEqual(int(terminal_command["max_attempts"]), 1)
+            terminal_activity = api_store.repos.workflow_runtime.get_activity_run(queued_activity["activity_run_id"])
+            self.assertEqual(terminal_activity["status"], "failed")
+            self.assertEqual(terminal_activity["phase"], terminal_reason)
+            self.assertEqual(
+                api_store.repos.workflow_runtime.get_activity_attempt(control_attempt["attempt_id"]),
+                control_attempt,
+            )
+            self.assertEqual(
+                api_store.repos.workflow_runtime.list_activity_attempts(
+                    command_id=source_command["command_id"],
+                    limit=0,
+                ),
+                [control_attempt],
+            )
+            self.assertEqual(
+                api_store.repos.workflow_runtime.list_entity_deltas(
+                    command_id=source_command["command_id"],
+                    limit=0,
+                ),
+                [control_delta],
+            )
+            self.assertEqual(
+                [
+                    command
+                    for command in api_store.list_workflow_commands(
+                        workflow_run_id=planned["workflow_command"]["workflow_run_id"],
+                        limit=0,
+                    )
+                    if command["command_type"] == COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE
+                ],
+                [],
+            )
+            self.assertEqual(
+                api_store.repos.workflow_runtime.get_operation(operation_run_id)["status"],
+                "failed",
+            )
+            self.assertEqual(api_store.repos.workflow_runtime.get_action(action_id)["status"], "failed")
+            self.assertEqual(
+                api_store.list_company_public_web_asset_runs(company_key="exhaustedafterforcedresumelabs"),
+                [],
+            )
+            self.assertEqual(
+                api_store.list_company_public_web_assets(company_key="exhaustedafterforcedresumelabs"),
+                [],
+            )
+            self.assertEqual(api_store.list_company_assets(company_key="exhaustedafterforcedresumelabs"), [])
+            self.assertEqual(api_store.list_company_evidence(company_key="exhaustedafterforcedresumelabs"), [])
+        finally:
+            api_store.close()
+
+    def test_company_public_web_exhausted_source_full_spine_uses_authenticated_command_workspace(self) -> None:
+        api_store, orchestrator = self._company_public_web_test_runtime("exhausted-authenticated-workspace")
+        workspace_id = "workspace-exhausted-source"
+        owner_user_id = "exhausted-source-owner"
+        try:
+            submitted = orchestrator.submit_operation_action(
+                {
+                    "action_type": ACTION_REFRESH_COMPANY_PUBLIC_WEB,
+                    "workspace_id": workspace_id,
+                    "actor": owner_user_id,
+                    "input": {
+                        "target_company": "Exhausted Authenticated Workspace Labs",
+                        "source_families": ["company_homepage"],
+                        "seed_urls": ["https://exhausted-authenticated-workspace.example/"],
+                    },
+                    "budget": {"max_provider_calls": 0, "max_usd": 0.0},
+                    "idempotency_key": "company-public-web:exhausted-authenticated-workspace",
+                },
+                expected_workspace_id=workspace_id,
+                expected_owner_user_id=owner_user_id,
+            )
+            approved = orchestrator.approve_operation_action_api(
+                submitted["action"]["action_id"],
+                {"actor": owner_user_id},
+                expected_workspace_id=workspace_id,
+            )
+            operation_run_id = str(approved["operation_run"]["operation_run_id"])
+            action_id = str(submitted["action"]["action_id"])
+            planned = orchestrator.dispatch_operation_run_api(
+                operation_run_id,
+                {"actor": owner_user_id},
+                expected_workspace_id=workspace_id,
+            )
+            root_drain = orchestrator._drain_company_public_web_refresh_commands(  # noqa: SLF001
+                {
+                    "workflow_run_id": planned["workflow_command"]["workflow_run_id"],
+                    "command_limit": 1,
+                }
+            )
+            self.assertEqual(root_drain["completed_count"], 1, root_drain)
+            root_command = api_store.get_workflow_command(planned["workflow_command"]["command_id"])
+            source_command = api_store.get_workflow_command(root_command["result"]["downstream_command_ids"][0])
+            self.assertEqual(source_command["payload"]["workspace_id"], workspace_id)
+            api_store._control_plane_postgres._execute_non_query(  # noqa: SLF001
+                "UPDATE workflow_commands SET max_attempts = 1 WHERE command_id = %s",
+                (source_command["command_id"],),
+            )
+            lease_owner = "company-public-web-authenticated-workspace-final-attempt"
+            claimed = api_store.claim_workflow_command(
+                source_command["command_id"],
+                lease_owner=lease_owner,
+                lease_seconds=60,
+            )
+            self.assertEqual(int(claimed["attempt"]), 1)
+            running = api_store.mark_workflow_command_running(
+                source_command["command_id"],
+                lease_owner=lease_owner,
+            )
+            activity, attempt = orchestrator._start_workflow_command_activity_attempt(  # noqa: SLF001
+                running,
+                activity_type=COMPANY_PUBLIC_WEB_SOURCE_COLLECT_COMMAND_TYPE,
+                owner=COMPANY_PUBLIC_WEB_REFRESH_OWNER,
+                phase="company_public_web_source_collect_started",
+                lease_owner=lease_owner,
+                provider="seed_url_only",
+                provider_request_ref=source_command["command_id"],
+                input_payload={
+                    "target_company": "Exhausted Authenticated Workspace Labs",
+                    "company_key": "exhaustedauthenticatedworkspacelabs",
+                    "collection_mode": "seed_url_only",
+                },
+                entity_counts={"company_public_web_run_count": 1},
+                metadata={"activity_owner": COMPANY_PUBLIC_WEB_REFRESH_OWNER},
+                attempt_suffix="company_public_web_refresh",
+            )
+            self.assertEqual(activity["workspace_id"], workspace_id)
+            self.assertEqual(attempt["workspace_id"], workspace_id)
+            api_store._control_plane_postgres._execute_non_query(  # noqa: SLF001
+                "UPDATE workflow_commands "
+                "SET lease_expires_at = TO_CHAR(clock_timestamp() AT TIME ZONE 'UTC' - INTERVAL '1 second', "
+                "'YYYY-MM-DD HH24:MI:SS') WHERE command_id = %s",
+                (source_command["command_id"],),
+            )
+
+            drain = orchestrator._drain_company_public_web_refresh_commands(  # noqa: SLF001
+                {
+                    "workflow_run_id": planned["workflow_command"]["workflow_run_id"],
+                    "command_limit": 1,
+                }
+            )
+
+            terminal_reason = "workflow_command_attempts_exhausted_after_lease_expiry"
+            self.assertEqual(drain["failed_count"], 1, drain)
+            self.assertEqual(drain["items"][0]["reason"], terminal_reason)
+            self.assertNotEqual(drain["items"][0]["status"], "invalid")
+            self.assertEqual(api_store.get_workflow_command(source_command["command_id"])["status"], "failed_terminal")
+            activity_after = api_store.repos.workflow_runtime.get_activity_run(activity["activity_run_id"])
+            attempt_after = api_store.repos.workflow_runtime.get_activity_attempt(attempt["attempt_id"])
+            self.assertEqual(activity_after["workspace_id"], workspace_id)
+            self.assertEqual(activity_after["status"], "failed")
+            self.assertEqual(activity_after["phase"], terminal_reason)
+            self.assertEqual(attempt_after["workspace_id"], workspace_id)
+            self.assertEqual(attempt_after["status"], "failed")
+            self.assertEqual(attempt_after["error"]["reason"], terminal_reason)
+            operation_after = api_store.repos.workflow_runtime.get_operation(operation_run_id)
+            action_after = api_store.repos.workflow_runtime.get_action(action_id)
+            self.assertEqual(operation_after["workspace_id"], workspace_id)
+            self.assertEqual(operation_after["status"], "failed")
+            self.assertEqual(action_after["workspace_id"], workspace_id)
+            self.assertEqual(action_after["status"], "failed")
+            self.assertEqual(
+                api_store.repos.workflow_runtime.list_entity_deltas(
+                    workspace_id=workspace_id,
+                    command_id=source_command["command_id"],
+                    limit=0,
+                ),
+                [],
+            )
+            self.assertEqual(
+                [
+                    command
+                    for command in api_store.list_workflow_commands(
+                        workflow_run_id=planned["workflow_command"]["workflow_run_id"],
+                        limit=0,
+                    )
+                    if command["command_type"] == COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE
+                ],
+                [],
+            )
+            self.assertEqual(
+                api_store.list_company_public_web_asset_runs(company_key="exhaustedauthenticatedworkspacelabs"),
+                [],
+            )
+            self.assertEqual(
+                api_store.list_company_assets(
+                    workspace_id=workspace_id,
+                    company_key="exhaustedauthenticatedworkspacelabs",
+                ),
+                [],
+            )
+            self.assertEqual(
+                api_store.list_company_evidence(
+                    workspace_id=workspace_id,
+                    company_key="exhaustedauthenticatedworkspacelabs",
+                ),
+                [],
+            )
+        finally:
+            api_store.close()
+
+    def test_company_public_web_exhausted_source_sql_cas_uses_pg_clock_when_app_clock_lags(self) -> None:
+        api_store, orchestrator = self._company_public_web_test_runtime("exhausted-pg-clock-authority")
+        try:
+            _, running, operation_run_id, action_id = self._prepare_exhausted_company_public_web_source_command(
+                api_store,
+                orchestrator,
+                suffix="pg-clock-authority",
+            )
+            api_store._control_plane_postgres._execute_non_query(  # noqa: SLF001
+                "UPDATE workflow_commands "
+                "SET lease_expires_at = TO_CHAR(clock_timestamp() AT TIME ZONE 'UTC' - INTERVAL '1 second', "
+                "'YYYY-MM-DD HH24:MI:SS') WHERE command_id = %s",
+                (running["command_id"],),
+            )
+            expired_by_pg = api_store.get_workflow_command(running["command_id"])
+
+            with mock.patch.object(
+                orchestrator,
+                "_workflow_command_lease_active",
+                return_value=True,
+            ) as app_clock_view:
+                self.assertTrue(orchestrator._workflow_command_lease_active(expired_by_pg))  # noqa: SLF001
+                result = orchestrator._run_company_public_web_refresh_command(  # noqa: SLF001
+                    expired_by_pg,
+                    lease_seconds=60,
+                )
+
+            app_clock_view.assert_called_once_with(expired_by_pg)
+            self.assertEqual(result["status"], "failed", result)
+            self.assertEqual(
+                result["reason"],
+                "workflow_command_attempts_exhausted_after_lease_expiry",
+            )
+            self.assertEqual(api_store.get_workflow_command(running["command_id"])["status"], "failed_terminal")
+            self.assertEqual(
+                api_store.repos.workflow_runtime.get_operation(operation_run_id)["status"],
+                "failed",
+            )
+            self.assertEqual(api_store.repos.workflow_runtime.get_action(action_id)["status"], "failed")
+        finally:
+            api_store.close()
+
+    def test_company_public_web_exhausted_source_sql_cas_rejects_fast_app_clock_with_active_pg_lease(
+        self,
+    ) -> None:
+        api_store, orchestrator = self._company_public_web_test_runtime("exhausted-active-pg-lease")
+        try:
+            _, running, operation_run_id, action_id = self._prepare_exhausted_company_public_web_source_command(
+                api_store,
+                orchestrator,
+                suffix="active-pg-lease",
+            )
+            identity = self._company_public_web_source_activity_identity(running)
+            self._insert_company_public_web_source_activity(api_store, running, identity)
+            self._insert_company_public_web_source_attempt(api_store, running, identity)
+            command_before = api_store.get_workflow_command(running["command_id"])
+            activity_before = api_store.repos.workflow_runtime.get_activity_run(identity["activity_run_id"])
+            attempt_before = api_store.repos.workflow_runtime.get_activity_attempt(identity["attempt_id"])
+            operation_before = api_store.repos.workflow_runtime.get_operation(operation_run_id)
+            action_before = api_store.repos.workflow_runtime.get_action(action_id)
+
+            with mock.patch.object(
+                orchestrator,
+                "_workflow_command_lease_active",
+                return_value=False,
+            ) as fast_app_clock:
+                self.assertFalse(orchestrator._workflow_command_lease_active(command_before))  # noqa: SLF001
+                closure = orchestrator._terminalize_exhausted_company_public_web_source_command(  # noqa: SLF001
+                    command_before
+                )
+
+            fast_app_clock.assert_called_once_with(command_before)
+            self.assertEqual(closure["outcome"], "stale_or_already_closed", closure)
+            self.assertFalse(closure["command_closed"])
+            self.assertFalse(closure["activity_closed"])
+            self.assertFalse(closure["attempt_closed"])
+            self.assertEqual(api_store.get_workflow_command(running["command_id"]), command_before)
+            self.assertEqual(
+                api_store.repos.workflow_runtime.get_activity_run(identity["activity_run_id"]),
+                activity_before,
+            )
+            self.assertEqual(
+                api_store.repos.workflow_runtime.get_activity_attempt(identity["attempt_id"]),
+                attempt_before,
+            )
+            self.assertEqual(
+                api_store.repos.workflow_runtime.get_operation(operation_run_id),
+                operation_before,
+            )
+            self.assertEqual(api_store.repos.workflow_runtime.get_action(action_id), action_before)
+            self.assertEqual(
+                api_store.repos.workflow_runtime.list_entity_deltas(command_id=running["command_id"], limit=0),
+                [],
+            )
+            company_key = str(dict(running["payload"])["company_key"])
+            self.assertEqual(api_store.list_company_public_web_asset_runs(company_key=company_key), [])
+            self.assertEqual(api_store.list_company_public_web_assets(company_key=company_key), [])
+            self.assertEqual(api_store.list_company_assets(company_key=company_key), [])
+            self.assertEqual(api_store.list_company_evidence(company_key=company_key), [])
+        finally:
+            api_store.close()
+
+    def test_company_public_web_exhausted_source_closure_wins_before_guarded_activity_start(self) -> None:
+        api_store, orchestrator = self._company_public_web_test_runtime("exhausted-closure-start-barrier")
+        try:
+            _, running, _, _ = self._prepare_exhausted_company_public_web_source_command(
+                api_store,
+                orchestrator,
+                suffix="closure-start-barrier",
+            )
+            api_store._control_plane_postgres._execute_non_query(  # noqa: SLF001
+                "UPDATE workflow_commands "
+                "SET lease_expires_at = TO_CHAR(clock_timestamp() AT TIME ZONE 'UTC' - INTERVAL '1 second', "
+                "'YYYY-MM-DD HH24:MI:SS') WHERE command_id = %s",
+                (running["command_id"],),
+            )
+            stale_claim = api_store.get_workflow_command(running["command_id"])
+            barrier = threading.Barrier(2)
+            closure_finished = threading.Event()
+            effect_probe = mock.Mock()
+
+            def terminalize_exhausted() -> dict[str, Any]:
+                barrier.wait(timeout=5)
+                try:
+                    return orchestrator._terminalize_exhausted_company_public_web_source_command(  # noqa: SLF001
+                        stale_claim
+                    )
+                finally:
+                    closure_finished.set()
+
+            def resume_stale_worker() -> tuple[dict[str, Any], dict[str, Any]]:
+                barrier.wait(timeout=5)
+                self.assertTrue(closure_finished.wait(timeout=5))
+                activity, attempt = orchestrator._start_workflow_command_activity_attempt(  # noqa: SLF001
+                    stale_claim,
+                    activity_type=COMPANY_PUBLIC_WEB_SOURCE_COLLECT_COMMAND_TYPE,
+                    owner=COMPANY_PUBLIC_WEB_REFRESH_OWNER,
+                    phase="company_public_web_source_collect_started",
+                    lease_owner=stale_claim["lease_owner"],
+                    provider="seed_url_only",
+                    provider_request_ref=stale_claim["command_id"],
+                    input_payload={"company_key": dict(stale_claim["payload"])["company_key"]},
+                    entity_counts={"company_public_web_run_count": 1},
+                    metadata={"activity_owner": COMPANY_PUBLIC_WEB_REFRESH_OWNER},
+                    attempt_suffix="company_public_web_refresh",
+                    require_current_command_claim=True,
+                )
+                if activity or attempt:
+                    effect_probe()
+                return activity, attempt
+
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                closure_future = executor.submit(terminalize_exhausted)
+                stale_worker_future = executor.submit(resume_stale_worker)
+                closure = closure_future.result(timeout=10)
+                stale_activity, stale_attempt = stale_worker_future.result(timeout=10)
+
+            self.assertEqual(closure["outcome"], "terminalized", closure)
+            self.assertTrue(closure["command_closed"])
+            self.assertEqual(stale_activity, {})
+            self.assertEqual(stale_attempt, {})
+            effect_probe.assert_not_called()
+            self.assertEqual(api_store.get_workflow_command(running["command_id"])["status"], "failed_terminal")
+            self.assertEqual(
+                api_store.repos.workflow_runtime.list_activity_runs(command_id=running["command_id"], limit=0),
+                [],
+            )
+            self.assertEqual(
+                api_store.repos.workflow_runtime.list_activity_attempts(command_id=running["command_id"], limit=0),
+                [],
+            )
+            self.assertEqual(
+                api_store.repos.workflow_runtime.list_entity_deltas(command_id=running["command_id"], limit=0),
+                [],
+            )
+            company_key = str(dict(running["payload"])["company_key"])
+            self.assertEqual(api_store.list_company_public_web_asset_runs(company_key=company_key), [])
+            self.assertEqual(api_store.list_company_public_web_assets(company_key=company_key), [])
+            self.assertEqual(api_store.list_company_assets(company_key=company_key), [])
+            self.assertEqual(api_store.list_company_evidence(company_key=company_key), [])
+        finally:
+            api_store.close()
+
+    def test_company_public_web_expired_final_source_attempt_terminalizes_full_owner_spine(self) -> None:
+        api_store, orchestrator = self._company_public_web_test_runtime("expired-final-source-attempt")
+        try:
+            planned, source_command = self._plan_company_public_web_source_command(
+                orchestrator,
+                company="Expired Final Source Attempt Labs",
+                company_key="expiredfinalsourceattemptlabs",
+                suffix="expired-final-source-attempt",
+            )
+            operation_run_id = str(source_command["operation_id"])
+            action_id = str(api_store.repos.workflow_runtime.get_operation(operation_run_id)["action_id"])
+            api_store._control_plane_postgres._execute_non_query(  # noqa: SLF001
+                "UPDATE workflow_commands SET max_attempts = 1 WHERE command_id = %s",
+                (source_command["command_id"],),
+            )
+            first_claim = api_store.claim_workflow_command(
+                source_command["command_id"],
+                lease_owner="company-public-web-crashed-final-source-owner",
+                lease_seconds=60,
+            )
+            self.assertEqual(int(first_claim["attempt"]), 1)
+            first_running = api_store.mark_workflow_command_running(
+                source_command["command_id"],
+                lease_owner="company-public-web-crashed-final-source-owner",
+            )
+            self.assertEqual(first_running["status"], "running")
+            activity, attempt = orchestrator._start_workflow_command_activity_attempt(  # noqa: SLF001
+                first_running,
+                activity_type=COMPANY_PUBLIC_WEB_SOURCE_COLLECT_COMMAND_TYPE,
+                owner=COMPANY_PUBLIC_WEB_REFRESH_OWNER,
+                phase="company_public_web_source_collect_started",
+                lease_owner=first_running["lease_owner"],
+                provider="seed_url_only",
+                provider_request_ref=source_command["command_id"],
+                input_payload={
+                    "target_company": "Expired Final Source Attempt Labs",
+                    "company_key": "expiredfinalsourceattemptlabs",
+                    "collection_mode": "seed_url_only",
+                },
+                entity_counts={"company_public_web_run_count": 1},
+                metadata={"activity_owner": COMPANY_PUBLIC_WEB_REFRESH_OWNER},
+                attempt_suffix="company_public_web_refresh",
+            )
+            self.assertEqual(activity["status"], "running")
+            self.assertEqual(attempt["status"], "running")
+            api_store._control_plane_postgres._execute_non_query(  # noqa: SLF001
+                "UPDATE workflow_commands "
+                "SET lease_expires_at = TO_CHAR(clock_timestamp() AT TIME ZONE 'UTC' - INTERVAL '1 second', "
+                "'YYYY-MM-DD HH24:MI:SS') WHERE command_id = %s",
+                (source_command["command_id"],),
+            )
+
+            failed_drain = orchestrator._drain_company_public_web_refresh_commands(  # noqa: SLF001
+                {
+                    "workflow_run_id": planned["workflow_command"]["workflow_run_id"],
+                    "command_limit": 1,
+                }
+            )
+
+            terminal_reason = "workflow_command_attempts_exhausted_after_lease_expiry"
+            self.assertEqual(failed_drain["completed_count"], 0, failed_drain)
+            self.assertEqual(failed_drain["failed_count"], 1, failed_drain)
+            self.assertEqual(failed_drain["items"][0]["reason"], terminal_reason)
+            terminal_command = api_store.get_workflow_command(source_command["command_id"])
+            self.assertEqual(terminal_command["status"], "failed_terminal")
+            self.assertEqual(int(terminal_command["attempt"]), 1)
+            self.assertEqual(int(terminal_command["max_attempts"]), 1)
+            self.assertEqual(terminal_command["lease_owner"], "")
+            self.assertEqual(terminal_command["lease_expires_at"], "")
+            self.assertEqual(terminal_command["last_error"], terminal_reason)
+            activity_after = api_store.repos.workflow_runtime.get_activity_run(activity["activity_run_id"])
+            attempt_after = api_store.repos.workflow_runtime.get_activity_attempt(attempt["attempt_id"])
+            self.assertEqual(activity_after["status"], "failed")
+            self.assertEqual(activity_after["phase"], terminal_reason)
+            self.assertEqual(attempt_after["status"], "failed")
+            self.assertEqual(attempt_after["error"]["reason"], terminal_reason)
+            self.assertEqual(api_store.repos.workflow_runtime.get_operation(operation_run_id)["status"], "failed")
+            self.assertEqual(api_store.repos.workflow_runtime.get_action(action_id)["status"], "failed")
+            self.assertEqual(
+                api_store.repos.workflow_runtime.list_entity_deltas(command_id=source_command["command_id"]),
+                [],
+            )
+            self.assertEqual(
+                [
+                    command
+                    for command in api_store.list_workflow_commands(
+                        workflow_run_id=planned["workflow_command"]["workflow_run_id"],
+                        limit=0,
+                    )
+                    if command["command_type"] == COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE
+                ],
+                [],
+            )
+            self.assertEqual(
+                api_store.list_company_public_web_asset_runs(company_key="expiredfinalsourceattemptlabs"), []
+            )
+            self.assertEqual(api_store.list_company_public_web_assets(company_key="expiredfinalsourceattemptlabs"), [])
+            self.assertEqual(api_store.list_company_assets(company_key="expiredfinalsourceattemptlabs"), [])
+            self.assertEqual(api_store.list_company_evidence(company_key="expiredfinalsourceattemptlabs"), [])
+            later_drain = orchestrator._drain_company_public_web_refresh_commands(  # noqa: SLF001
+                {
+                    "workflow_run_id": planned["workflow_command"]["workflow_run_id"],
+                    "command_limit": 1,
+                }
+            )
+            self.assertEqual(later_drain["status"], "idle", later_drain)
+            self.assertEqual(
+                api_store.claim_workflow_command(
+                    source_command["command_id"],
+                    lease_owner="must-not-reclaim-terminal-source-attempt",
+                    lease_seconds=60,
+                ),
+                {},
+            )
+        finally:
+            api_store.close()
+
+    def test_company_public_web_source_completion_returned_stale_claim_replays_exact_bundle(self) -> None:
+        api_store, orchestrator = self._company_public_web_test_runtime("source-completion-returned-stale-claim")
+        committed_response: dict[str, Any] = {}
+        try:
+            planned, source_command = self._plan_company_public_web_source_command(
+                orchestrator,
+                company="Source Completion Returned Stale Claim Labs",
+                company_key="sourcecompletionreturnedstaleclaimlabs",
+                suffix="source-completion-returned-stale-claim",
+            )
+            operation_run_id = str(source_command["operation_id"])
+            action_id = str(api_store.repos.workflow_runtime.get_operation(operation_run_id)["action_id"])
+            workflow_runtime = api_store.repos.workflow_runtime
+            real_complete_source = workflow_runtime.complete_company_public_web_source_command
+
+            def commit_then_return_stale_claim(*args: Any, **kwargs: Any) -> dict[str, Any]:
+                committed = real_complete_source(*args, **kwargs)
+                committed_response.update(dict(committed or {}))
+                return {"outcome": "stale_claim", "reason": "synthetic_returned_completion_ambiguity"}
+
+            with mock.patch.object(
+                workflow_runtime,
+                "complete_company_public_web_source_command",
+                side_effect=commit_then_return_stale_claim,
+            ):
+                source_drain = orchestrator._drain_company_public_web_refresh_commands(  # noqa: SLF001
+                    {
+                        "workflow_run_id": planned["workflow_command"]["workflow_run_id"],
+                        "command_limit": 1,
+                    }
+                )
+
+            self.assertEqual(committed_response["outcome"], "applied")
+            self.assertEqual(source_drain["completed_count"], 1, source_drain)
+            self.assertEqual(source_drain["failed_count"], 0, source_drain)
+            source_after = api_store.get_workflow_command(source_command["command_id"])
+            self.assertEqual(source_after["status"], "succeeded")
+            self.assertEqual(len(source_after["result"]["downstream_command_ids"]), 1)
+            self.assertEqual(len(source_after["result"]["entity_delta_ids"]), 1)
+            materialize_children = [
+                command
+                for command in api_store.list_workflow_commands(
+                    workflow_run_id=planned["workflow_command"]["workflow_run_id"],
+                    limit=0,
+                )
+                if command["command_type"] == COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE
+                and command["parent_command_id"] == source_command["command_id"]
+            ]
+            self.assertEqual(len(materialize_children), 1)
+            self.assertEqual(
+                len(workflow_runtime.list_entity_deltas(command_id=source_command["command_id"], limit=0)),
+                1,
+            )
+            activities = workflow_runtime.list_activity_runs(command_id=source_command["command_id"])
+            attempts = workflow_runtime.list_activity_attempts(command_id=source_command["command_id"], limit=0)
+            self.assertEqual(
+                [(item["status"], item["phase"]) for item in activities],
+                [("succeeded", "company_public_web_sources_collected")],
+            )
+            self.assertEqual([(item["attempt_number"], item["status"]) for item in attempts], [(1, "succeeded")])
+            operation_after = workflow_runtime.get_operation(operation_run_id)
+            action_after = workflow_runtime.get_action(action_id)
+            self.assertEqual(operation_after["status"], "running")
+            self.assertEqual(operation_after["progress"]["phase"], "company_public_web_assets_materialize_queued")
+            self.assertEqual(action_after["status"], "running")
+            self.assertEqual(api_store.list_company_assets(company_key="sourcecompletionreturnedstaleclaimlabs"), [])
+            self.assertEqual(api_store.list_company_evidence(company_key="sourcecompletionreturnedstaleclaimlabs"), [])
+        finally:
+            api_store.close()
+
+    def test_company_public_web_nondefault_workspace_postcommit_raise_replays_expected_delta(self) -> None:
+        api_store, orchestrator = self._company_public_web_test_runtime("nondefault-workspace-postcommit-raise")
+        workspace_id = "workspace-source-ack-loss"
+        owner_user_id = "source-ack-loss-owner"
+        committed_response: dict[str, Any] = {}
+        try:
+            submitted = orchestrator.submit_operation_action(
+                {
+                    "action_type": ACTION_REFRESH_COMPANY_PUBLIC_WEB,
+                    "workspace_id": workspace_id,
+                    "actor": owner_user_id,
+                    "input": {
+                        "target_company": "Nondefault Workspace Postcommit Raise Labs",
+                        "source_families": ["company_homepage"],
+                        "seed_urls": ["https://nondefault-workspace-postcommit-raise.example/"],
+                    },
+                    "budget": {"max_provider_calls": 0, "max_usd": 0.0},
+                    "idempotency_key": "company-public-web:nondefault-workspace-postcommit-raise",
+                },
+                expected_workspace_id=workspace_id,
+                expected_owner_user_id=owner_user_id,
+            )
+            approved = orchestrator.approve_operation_action_api(
+                submitted["action"]["action_id"],
+                {"actor": "unit-test"},
+                expected_workspace_id=workspace_id,
+            )
+            planned = orchestrator.dispatch_operation_run_api(
+                approved["operation_run"]["operation_run_id"],
+                {"actor": "unit-test"},
+                expected_workspace_id=workspace_id,
+            )
+            root_drain = orchestrator._drain_company_public_web_refresh_commands(  # noqa: SLF001
+                {
+                    "workflow_run_id": planned["workflow_command"]["workflow_run_id"],
+                    "command_limit": 1,
+                }
+            )
+            self.assertEqual(root_drain["completed_count"], 1, root_drain)
+            root_command = api_store.get_workflow_command(planned["workflow_command"]["command_id"])
+            source_command = api_store.get_workflow_command(root_command["result"]["downstream_command_ids"][0])
+            self.assertEqual(source_command["payload"]["workspace_id"], workspace_id)
+            workflow_runtime = api_store.repos.workflow_runtime
+            real_complete_source = workflow_runtime.complete_company_public_web_source_command
+
+            def commit_then_raise(*args: Any, **kwargs: Any) -> dict[str, Any]:
+                committed = real_complete_source(*args, **kwargs)
+                committed_response.update(dict(committed or {}))
+                raise RuntimeError("synthetic nondefault workspace source commit acknowledgement loss")
+
+            with mock.patch.object(
+                workflow_runtime,
+                "complete_company_public_web_source_command",
+                side_effect=commit_then_raise,
+            ):
+                source_drain = orchestrator._drain_company_public_web_refresh_commands(  # noqa: SLF001
+                    {
+                        "workflow_run_id": planned["workflow_command"]["workflow_run_id"],
+                        "command_limit": 1,
+                    }
+                )
+
+            self.assertEqual(committed_response["outcome"], "applied")
+            self.assertEqual(source_drain["completed_count"], 1, source_drain)
+            self.assertEqual(source_drain["failed_count"], 0, source_drain)
+            source_after = api_store.get_workflow_command(source_command["command_id"])
+            self.assertEqual(source_after["status"], "succeeded")
+            self.assertEqual(len(source_after["result"]["downstream_command_ids"]), 1)
+            self.assertEqual(len(source_after["result"]["entity_delta_ids"]), 1)
+            source_deltas = workflow_runtime.list_entity_deltas(
+                workspace_id=workspace_id,
+                command_id=source_command["command_id"],
+                limit=0,
+            )
+            self.assertEqual(len(source_deltas), 1)
+            self.assertEqual(source_deltas[0]["delta_id"], source_after["result"]["entity_delta_ids"][0])
+            self.assertEqual(source_deltas[0]["workspace_id"], workspace_id)
+            self.assertEqual(source_deltas[0]["entity_type"], "company_public_web_run")
+            self.assertEqual(
+                workflow_runtime.list_entity_deltas(
+                    workspace_id="default",
+                    command_id=source_command["command_id"],
+                    limit=0,
+                ),
+                [],
+            )
+            materialize_children = [
+                command
+                for command in api_store.list_workflow_commands(
+                    workflow_run_id=planned["workflow_command"]["workflow_run_id"],
+                    limit=0,
+                )
+                if command["command_type"] == COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE
+                and command["parent_command_id"] == source_command["command_id"]
+            ]
+            self.assertEqual(len(materialize_children), 1)
+            self.assertEqual(materialize_children[0]["payload"]["workspace_id"], workspace_id)
+            activities = workflow_runtime.list_activity_runs(
+                workspace_id=workspace_id,
+                command_id=source_command["command_id"],
+                limit=0,
+            )
+            attempts = workflow_runtime.list_activity_attempts(
+                workspace_id=workspace_id,
+                command_id=source_command["command_id"],
+                limit=0,
+            )
+            self.assertEqual(
+                [(item["status"], item["phase"]) for item in activities],
+                [("succeeded", "company_public_web_sources_collected")],
+            )
+            self.assertEqual([(item["attempt_number"], item["status"]) for item in attempts], [(1, "succeeded")])
+            operation_after = workflow_runtime.get_operation(approved["operation_run"]["operation_run_id"])
+            action_after = workflow_runtime.get_action(submitted["action"]["action_id"])
+            self.assertEqual(operation_after["workspace_id"], workspace_id)
+            self.assertEqual(operation_after["status"], "running")
+            self.assertEqual(operation_after["progress"]["phase"], "company_public_web_assets_materialize_queued")
+            self.assertEqual(action_after["workspace_id"], workspace_id)
+            self.assertEqual(action_after["status"], "running")
+            self.assertEqual(
+                api_store.list_company_assets(
+                    workspace_id=workspace_id,
+                    company_key="nondefaultworkspacepostcommitraiselabs",
+                ),
+                [],
+            )
+            self.assertEqual(
+                api_store.list_company_evidence(
+                    workspace_id=workspace_id,
+                    company_key="nondefaultworkspacepostcommitraiselabs",
+                ),
+                [],
+            )
+        finally:
+            api_store.close()
+
+    def test_company_public_web_source_completion_precommit_exception_syncs_operation_retry_wait(self) -> None:
+        api_store, orchestrator = self._company_public_web_test_runtime("source-completion-precommit-exception")
+        try:
+            planned, source_command = self._plan_company_public_web_source_command(
+                orchestrator,
+                company="Source Completion Precommit Exception Labs",
+                company_key="sourcecompletionprecommitexceptionlabs",
+                suffix="source-completion-precommit-exception",
+            )
+            operation_run_id = str(source_command["operation_id"])
+            operation_before = api_store.repos.workflow_runtime.get_operation(operation_run_id)
+            action_id = str(operation_before["action_id"])
+            self.assertEqual(operation_before["status"], "running")
+            self.assertEqual(api_store.repos.workflow_runtime.get_action(action_id)["status"], "running")
+
+            with mock.patch.object(
+                api_store.repos.workflow_runtime,
+                "complete_company_public_web_source_command",
+                side_effect=RuntimeError("synthetic source completion precommit failure"),
+            ):
+                failed_drain = orchestrator._drain_company_public_web_refresh_commands(  # noqa: SLF001
+                    {
+                        "workflow_run_id": planned["workflow_command"]["workflow_run_id"],
+                        "command_limit": 1,
+                    }
+                )
+
+            self.assertEqual(failed_drain["completed_count"], 0, failed_drain)
+            self.assertEqual(failed_drain["failed_count"], 1, failed_drain)
+            self.assertEqual(
+                failed_drain["items"][0]["reason"],
+                "company_public_web_source_completion_uow_failed",
+            )
+            source_after = api_store.get_workflow_command(source_command["command_id"])
+            self.assertEqual(source_after["status"], "retry_wait")
+            self.assertEqual(int(source_after["attempt"]), 1)
+            self.assertEqual(source_after["result"].get("downstream_command_ids", []), [])
+            activities = api_store.repos.workflow_runtime.list_activity_runs(command_id=source_command["command_id"])
+            attempts = api_store.repos.workflow_runtime.list_activity_attempts(command_id=source_command["command_id"])
+            self.assertEqual(
+                [(activity["status"], activity["phase"]) for activity in activities],
+                [("retry_wait", "company_public_web_source_completion_uow_failed")],
+            )
+            self.assertEqual([(attempt["attempt_number"], attempt["status"]) for attempt in attempts], [(1, "failed")])
+            self.assertEqual(
+                api_store.repos.workflow_runtime.list_entity_deltas(command_id=source_command["command_id"]),
+                [],
+            )
+            self.assertEqual(
+                [
+                    command
+                    for command in api_store.list_workflow_commands(
+                        workflow_run_id=planned["workflow_command"]["workflow_run_id"],
+                        limit=0,
+                    )
+                    if command["command_type"] == COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE
+                ],
+                [],
+            )
+            operation_after = api_store.repos.workflow_runtime.get_operation(operation_run_id)
+            action_after = api_store.repos.workflow_runtime.get_action(action_id)
+            self.assertEqual(operation_after["status"], "planned")
+            self.assertEqual(operation_after["progress"]["phase"], "workflow_command_retry_wait")
+            self.assertEqual(operation_after["progress"]["command_status"], "retry_wait")
+            self.assertEqual(operation_after["result_ref"]["workflow_command"]["status"], "retry_wait")
+            self.assertEqual(action_after["status"], "planned")
+            self.assertEqual(action_after["metadata"]["last_operation_command_status"], "retry_wait")
+            self.assertIn(
+                "OperationCommandRetryWaiting",
+                [
+                    event["event_type"]
+                    for event in api_store.repos.workflow_runtime.list_operation_events(operation_run_id)
+                ],
+            )
+            self.assertEqual(api_store.list_company_assets(company_key="sourcecompletionprecommitexceptionlabs"), [])
+            self.assertEqual(api_store.list_company_evidence(company_key="sourcecompletionprecommitexceptionlabs"), [])
+        finally:
+            api_store.close()
+
+    def test_company_public_web_source_completion_exact_current_conflict_syncs_operation_terminal_failure(
+        self,
+    ) -> None:
+        api_store, orchestrator = self._company_public_web_test_runtime("source-completion-exact-current-conflict")
+        try:
+            planned, source_command = self._plan_company_public_web_source_command(
+                orchestrator,
+                company="Source Completion Exact Current Conflict Labs",
+                company_key="sourcecompletionexactcurrentconflictlabs",
+                suffix="source-completion-exact-current-conflict",
+            )
+            operation_run_id = str(source_command["operation_id"])
+            action_id = str(api_store.repos.workflow_runtime.get_operation(operation_run_id)["action_id"])
+            conflict_reason = "company_public_web_source_bundle_synthetic_exact_current_conflict"
+
+            with mock.patch.object(
+                api_store.repos.workflow_runtime,
+                "complete_company_public_web_source_command",
+                return_value={"outcome": "conflict", "reason": conflict_reason},
+            ):
+                failed_drain = orchestrator._drain_company_public_web_refresh_commands(  # noqa: SLF001
+                    {
+                        "workflow_run_id": planned["workflow_command"]["workflow_run_id"],
+                        "command_limit": 1,
+                    }
+                )
+
+            self.assertEqual(failed_drain["completed_count"], 0, failed_drain)
+            self.assertEqual(failed_drain["failed_count"], 1, failed_drain)
+            self.assertEqual(failed_drain["items"][0]["reason"], conflict_reason)
+            source_after = api_store.get_workflow_command(source_command["command_id"])
+            self.assertEqual(source_after["status"], "failed_terminal")
+            self.assertEqual(source_after["last_error"], conflict_reason)
+            self.assertEqual(source_after["result"].get("downstream_command_ids", []), [])
+            activities = api_store.repos.workflow_runtime.list_activity_runs(command_id=source_command["command_id"])
+            attempts = api_store.repos.workflow_runtime.list_activity_attempts(command_id=source_command["command_id"])
+            self.assertEqual(
+                [(activity["status"], activity["phase"]) for activity in activities],
+                [("failed", conflict_reason)],
+            )
+            self.assertEqual([(attempt["attempt_number"], attempt["status"]) for attempt in attempts], [(1, "failed")])
+            self.assertEqual(
+                api_store.repos.workflow_runtime.list_entity_deltas(command_id=source_command["command_id"]),
+                [],
+            )
+            self.assertEqual(
+                [
+                    command
+                    for command in api_store.list_workflow_commands(
+                        workflow_run_id=planned["workflow_command"]["workflow_run_id"],
+                        limit=0,
+                    )
+                    if command["command_type"] == COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE
+                ],
+                [],
+            )
+            operation_after = api_store.repos.workflow_runtime.get_operation(operation_run_id)
+            action_after = api_store.repos.workflow_runtime.get_action(action_id)
+            self.assertEqual(operation_after["status"], "failed")
+            self.assertEqual(operation_after["progress"]["phase"], "workflow_command_failed")
+            self.assertEqual(operation_after["progress"]["command_status"], "failed_terminal")
+            self.assertEqual(operation_after["result_ref"]["workflow_command"]["status"], "failed_terminal")
+            self.assertEqual(action_after["status"], "failed")
+            self.assertEqual(action_after["metadata"]["last_operation_command_status"], "failed_terminal")
+            self.assertIn(
+                "OperationCommandFailed",
+                [
+                    event["event_type"]
+                    for event in api_store.repos.workflow_runtime.list_operation_events(operation_run_id)
+                ],
+            )
+            self.assertEqual(api_store.list_company_assets(company_key="sourcecompletionexactcurrentconflictlabs"), [])
+            self.assertEqual(
+                api_store.list_company_evidence(company_key="sourcecompletionexactcurrentconflictlabs"), []
+            )
         finally:
             api_store.close()
 

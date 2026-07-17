@@ -2,8 +2,11 @@
 
 > Status: tracked durable-runtime hardening (opened 2026-06-15 by the C1.4a
 > async-Codex re-review). NOT yet implemented. Owner-approved scoping: keep the
-> expired-`claimed` reclaim **export-only** for now (idempotent-safe), and do the
-> general fencing as this focused track rather than ballooning C1.
+> expired-`claimed` reclaim **export-only** for the original C1 slice
+> (idempotent-safe), and do the general fencing as this focused track rather
+> than ballooning C1. D1m later added a second bounded opt-in for its
+> exact-claim-guarded three-phase owner; this does not change the global default
+> or close the general hardening track.
 
 ## The gap (pre-existing, surfaced by C1.4a)
 
@@ -33,19 +36,42 @@ stale-write after another worker takes over an expired lease:
 This gap is **pre-existing**: `running`-with-expired-lease was already reclaimable
 by `list_ready_workflow_commands`, so the same double-run exposure existed before
 C1. C1.4a's reclaim fix widened it to `claimed` and (briefly) to all command
-types; that widening was then **scoped back to export only** (see below).
+types; that widening was then **scoped back to bounded owners only** (see below).
 
 ## Current scoping (the interim, shipped)
 
 `list_ready_workflow_commands` / `claim_workflow_command` gained an opt-in
-`reclaim_claimed: bool = False` parameter (SQLite + PG). Only the **export**
-drain/run path passes `reclaim_claimed=True`
-(`_drain_export_projection_generate_commands`,
-`_run_projection_export_generate_command`). Export builds are idempotent
-(deterministic archive + atomic `os.replace` artifact publish + idempotent
-disk-replay), so even if a stalled original claimant resumes after reclaim, the
-re-run produces the same artifact — harmless. **Non-export command types keep the
-original `queued/retry_wait/running` ready/claim set** (no new exposure).
+`reclaim_claimed: bool = False` parameter (SQLite + PG). Two bounded paths pass
+`reclaim_claimed=True`:
+
+- The **export** drain/run path
+  (`_drain_export_projection_generate_commands`,
+  `_run_projection_export_generate_command`). Export builds are idempotent
+  (deterministic archive + atomic `os.replace` artifact publish + idempotent
+  disk replay).
+- The D1m `company.public_web.refresh` owner across root, source, and
+  materialize commands. It checks the returned `mark-running` claim, guards
+  Activity creation and every domain/completion write with the exact physical
+  claim, and stops an old claimant after takeover. Guarded Activity start uses
+  the PostgreSQL clock, deterministic ActivityRun/all-prior-ActivityAttempt
+  identities, and full immutable spine validation. Split identities, alternate
+  nonterminal rows, current/future terminal execution Activity/Attempt rows, and future or
+  malformed resume evidence fail closed; a fully exact prior terminal may
+  remain. A succeeded owner-specific resume Attempt may coexist only with its
+  deterministic id/key, generation `<=` current, and exact workspace/activity/
+  workflow/command/provider/request-ref/lease plus target/company/boolean-force/
+  nonblank-output-reason semantics. Successful takeover closes superseded
+  exact running execution attempts before the returned exact current Activity/
+  Attempt spine is accepted as `running`. An exhausted final source attempt uses
+  a D1m-only, DB-clock-authoritative atomic Command/Activity/Attempt closure. It
+  retains a valid resume-control Attempt and converges an exact current failed
+  owner-loss partial only when error/metadata/output carry one nonblank reason,
+  `skipped`, `owner_lost=true`, and `deterministic_terminal_failure=false`; the
+  shared claim API's attempt-budget semantics remain unchanged.
+
+All other command types keep the original `queued/retry_wait/running`
+ready/claim set. The flag remains opt-in; these bounded paths are not evidence
+that end-to-end ownership fencing is globally complete.
 
 ## The hardening (this track — to implement)
 

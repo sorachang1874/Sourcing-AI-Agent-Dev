@@ -39,9 +39,10 @@ linked-operation command predicate in `storage.py`:
 - `GET /api/operations/action-registry` remains a shared registry read rather than a workspace-owned aggregate read.
 
 D1g did not define schemas or binders for the 12 schema-less actions at its checkpoint. Later checkpoints reduced that
-population through D1h=11, D1i=10, D1j=9, D1k=8, and D1l=6; the current partition is **9 schema-defined / 6 schema-less
-/ served=0**. D1g does not add an action to the served Agent registry, change D1f's CRM target contract, add a
-provider/model path, add a workflow-command type, or migrate storage.
+population through D1h=11, D1i=10, D1j=9, D1k=8, and D1l=6. The later D1m candidate activates
+`refresh_company_public_web_assets`, so the current candidate partition is
+**10 schema-defined / 5 schema-less / served=0**. D1g does not add an action to the served Agent registry, change
+D1f's CRM target contract, add a provider/model path, add a workflow-command type, or migrate storage.
 
 ## 2. Canonical owner and caller provenance
 
@@ -133,9 +134,9 @@ not run the normal first-plan approval writer against a separately claimable com
 - R-028 remains open and is not triggered by D1g. No CRM writer or effect boundary changes; D1f's target
   owner/version revalidation and the outstanding command/effect/terminal UoW remain exactly as documented.
 - R-029 remained open at **12/15 schema-less** actions at the D1g checkpoint; later checkpoints reduced it through
-  D1h=11, D1i=10, D1j=9, and D1k=8. D1l owns the current **6/15 schema-less / served=0** partition. D1g
-  protects existing Operation reads/controls; it does not claim that schema-less submission is served, reviewed, or
-  migration-complete.
+  D1h=11, D1i=10, D1j=9, D1k=8, and D1l=6. The later D1m candidate moves the current candidate partition to
+  **10 schema-defined / 5 schema-less / served=0**. D1g protects existing Operation reads/controls; it does not claim
+  that schema-less submission is served, reviewed, or migration-complete.
 - Served Agent tool population remains zero. Fake/scripted or local open-mode testing does not authorize live/provider
   use.
 

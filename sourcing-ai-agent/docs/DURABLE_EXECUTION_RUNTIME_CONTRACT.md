@@ -57,14 +57,44 @@ W8 operation persistence contract:
   scan populated tables; validation of existing rows is a later, separately deployed transaction. The database CHECK
   owns pair shape; repository/upsert and runtime preflight own immutable replay identity. No direct-SQL
   immutability-trigger guarantee is claimed.
-- After D1l, nine production actions have implemented explicit closed schemas and owner-minted targets; the remaining
-  **6/15**
+- In the D1m candidate registry, ten production actions have implemented explicit closed schemas and owner-minted
+  targets; the remaining **5/15**
   stay on the R-029 schema-less compatibility bridge with empty/empty physical pins. Schema-less submissions record
   `request_schema_status=schema_less_compatibility` and `request_schema_compatibility_hit=true`, while their
   replay/approve/retry/dispatch continuations record a pre-mutation, release-epoch-scoped
   `ActionRequestSchemaCompatibilityObserved` event, including brownfield origin. Served Agent tool population remains
   zero. The bridge closes only after all API-submittable actions have reviewed schemas/owner binders and the complete
   population records zero hits for one release window; measuring only a future served subset is insufficient.
+- The D1m candidate activates only `refresh_company_public_web_assets` with deterministic `seed_url_only` input. The
+  request requires canonical company, source-family, and normalized seed-URL fields; the owner mints exact
+  `workspace_id + company_key` through the canonical alias resolver. Authenticated transport uses server-derived scope
+  and open mode preserves explicit operator workspace. Persisted action/run, dispatch, root refresh, source collection,
+  and asset materialization each reload and exact-compare the canonical request/target plus OperationRun/AgentAction
+  and command causality before their new effect. Source collection uses one normalized idempotency-key owner: a partial
+  unique index plus sorted key/run advisory locks prevent split identity; current command attempt and lease ownership
+  fence reclaim and terminalization; stale attempts return `owner_lost` without changing the source run. Completed
+  D1m root, source, and materialize drains opt into bounded expired-`claimed` recovery while the shared default remains
+  unchanged. Activity start and exhausted-final-source closure use the PostgreSQL clock, deterministic ActivityRun plus
+  all deterministic ActivityAttempt identities through the current attempt, and full immutable validation of primary
+  ids/keys, workspace, command/activity/workflow/operation/type/owner/provider links, attempt, lease, and owner metadata.
+  Split identities, alternate nonterminal rows, current/future terminal execution Activity/Attempt rows, future/malformed resume
+  evidence, semantic drift, and still-active database leases fail closed before writes; fully exact prior terminal
+  execution evidence may remain. A succeeded owner-specific resume terminal may coexist only under its deterministic
+  resume id/key, at generation `<=` current, with complete workspace/activity/workflow/command/provider/request-ref/
+  lease and target/company/boolean-force/nonblank-output-reason semantics. Successful takeover first closes exact
+  superseded prior running execution attempts; returned Activity/Attempt rows are accepted only as the exact current
+  `running` spine. Exhausted closure atomically fails the exact Command/Activity/Attempts, retains a valid resume-control
+  Attempt, and converges an exact current failed owner-loss partial only when error/metadata/output share one nonblank
+  reason, `output.status=skipped`, `error.owner_lost=true`, and
+  `error.deterministic_terminal_failure=false`. Completed materialization consumes
+  `company_public_web_run_snapshot_v3`, whose digest binds assets, summary, artifact paths,
+  artifact-publication digest, positive source revision/completion time, started_at, and completed_at, rather than
+  rereading mutable source rows or a later clock. Positive logical revision
+  owns latest ordering, with explicit brownfield fallback; exact-claim canonical rows share one PG transaction. These
+  bounded owner/effect fences do not claim a global
+  submit/command/effect/terminal/linked-Operation UoW or close R-019. The current direct state-sync caller ratchet is
+  **24**. Served population remains zero because this action still has no populated action-specific revisioned result
+  spec, result/simulate serializer mapping, or complete served predicate.
 - D1i's `start_acquisition_run` root validates exact OperationRun/AgentAction/request/target plus canonical source-event/
   causality and current claim-owner/attempt/lease authority. Lease validity uses the PG repository clock with persisted
   naive timestamps interpreted as UTC, and persisted root/event/child/result contracts use strict JSON container and
@@ -74,10 +104,11 @@ W8 operation persistence contract:
   root, while preserving generic workflow fan-out; conflict reread accepts only the exact canonical winner. Succeeded
   replay exact-matches that complete persisted tuple while treating scheduler
   fields as mutable lifecycle state. A driver exception after successful commit is reconciled only by a fresh
-  authoritative succeeded read plus exact replay; pre-commit failures are re-raised. R-019 and its 26-call ratchet remain
-  open because this is not a global command-generation fence, OperationRun/AgentAction preflight is outside this UoW,
+  authoritative succeeded read plus exact replay; pre-commit failures are re-raised. R-019 remains open because this is
+  not a global command-generation fence, OperationRun/AgentAction preflight is outside this UoW,
   state/wakeup/linked-Operation sync remains post-commit, and a committed failure CAS can still lose its acknowledgement.
-  No provider/model/live authorization follows.
+  D1i's **26-call** ratchet is a historical checkpoint; the current D1m state-sync ratchet is **24**. No
+  provider/model/live authorization follows.
 - Operation-layer persistence must not create `workflow_commands`, CRM rows, projection rows, person assets/evidence/assertions, provider registry rows, or export artifacts. Those remain module-owner effects.
 - W9 backend operation controls may approve, reject, query, and cancel operation state through operation runtime tables and append-only events. They must still not execute module side effects or bypass workflow command owners.
 - `store.repos.workflow_runtime` is the public storage owner for `agent_actions`, `operation_runs`, `operation_events`,
@@ -219,7 +250,40 @@ W11d activity spine:
 - CRM Public Web retry is a stable control intent. The public retry API must not create a random force-refresh nonce when the caller omits one; it must derive a deterministic retry idempotency key from source run ids, retry reason, workspace, and requester, then use force-refresh with that explicit nonce. Repeated retry requests for the same terminal source run must join the same child batch/run and queue command. Ordinary manual force-refresh without a caller nonce may still create a distinct run, but retry-owner paths cannot duplicate provider/model work because of HTTP retries, lost responses, or accidental double-clicks. This is a storage-level contract, not only an application-level lookup: normal PG schemas and SQLite-to-PG sync must enforce unique `crm_public_web_batches.idempotency_key` and `crm_public_web_runs.idempotency_key` for non-empty keys.
 - CRM writer commands (`crm.record.add_from_projection`, `crm.record.update`, `crm.note.add`, `crm.task.create`) are bounded activities. Operation dispatch may plan these commands only; the `crm_writer` owner must record a `workflow_activity_runs` row, a `workflow_activity_attempts` row, and EntityDeltas for CRM record plus event/note/task effects when it mutates `crm_records`, `crm_engagements`, `crm_tasks`, or `crm_events`. Agent/debug queries must follow command/activity/entity-delta causality instead of inferring mutation provenance only from CRM table timestamps. Running CRM writer command cancel is owner-specific only before mutation attempt creation through `crm_writer.cancel_before_mutation_attempt`; it is blocked after ActivityAttempt, EntityDelta, or downstream command creation. Running resume is owner-specific through `crm_writer.resume_crm_writer_command`, which only records control evidence and requeues the command after expired lease or explicit force. Control APIs must not write CRM tables directly.
 - CRM Public Web queue-batch is a root orchestration command. `crm.public_web.queue_batch` may be cancelled while running only before per-run phase commands exist; the owner-specific cancel marks the batch/run read models cancelled and then cancels the command. After phase command planning, cancellation must target the per-run phase command owner or fail closed.
-- Company Public Web refresh is split into a root orchestration command and bounded phase commands. Operation dispatch may plan `company.public_web.refresh` only; the root owner does not call the refresh service directly and instead plans `company.public_web.source.collect`. The root command may be cancelled while running only before downstream source/materialize commands exist and only after lease expiry or explicit force. The source collection phase writes source-specific company Public Web rows and artifacts with canonical asset sync deferred, then plans `company.public_web.assets.materialize`. This defer rule also applies when source collection joins an existing source run; joined source rows must not opportunistically sync canonical company facts. The materialization phase syncs model-safe rows into PG-only `CompanyAsset` / `CompanyEvidence` and records ActivityRun/Attempt plus `company_public_web_run`, `company_asset`, and `company_evidence` EntityDeltas. Stale running source-collection commands may be resumed only through the source owner; stale running asset-materialization commands may be cancelled only before sync attempt or resumed through owner-specific delegates. Both delegates record control evidence and must not perform request-path canonical sync. Agent/debug queries must follow command/activity/entity-delta causality instead of inferring refresh provenance from source-specific `company_public_web_assets` timestamps. The synchronous refresh service remains a manual API/CLI service entry and is not the Agent normal path.
+- Company Public Web refresh is split into a root orchestration command and bounded phase commands. D1m's Operation
+  request is canonical deterministic `seed_url_only`, with required company/source families/seed URLs and owner-minted
+  exact `workspace_id + company_key`; provider-search or collector-bundle fallbacks are not part of this action.
+  Operation dispatch may plan `company.public_web.refresh` only; the root owner does not call the refresh service
+  directly and instead plans `company.public_web.source.collect`. Persisted action/run, dispatch, root, source
+  collection, and materialization each revalidate the same canonical request/target plus exact OperationRun/AgentAction
+  and command causality before their new effect. The root command may be cancelled while running only before downstream
+  source/materialize commands exist and only after lease expiry or explicit force. The source collection phase writes
+  source-specific company Public Web rows and artifacts with canonical asset sync deferred. It then derives a pure
+  materialize plan and commits the `CommandPlanRequested` event, deterministic
+  `company.public_web.assets.materialize` child, one source-run EntityDelta, physical downstream edge, and exact parent
+  success CAS in one PostgreSQL transaction. Its normalized effective idempotency key is enforced by a partial unique
+  index; sorted effective-key/run-id advisory locks reject split identity, and physical command id/current attempt/lease
+  ownership fences reclaim and terminal writes. A newer current retry attempt may reclaim `running` or `failed` work;
+  an older attempt receives `owner_lost` and cannot overwrite source-run terminal state. The retry ActivityRun remains
+  `retry_wait` between attempts and converges to `succeeded` only with the successful attempt. A plan-spec failure
+  writes no child or EntityDelta; a stale claim or final-CAS failure rolls the entire completion bundle back. Exact
+  bundle validation repairs a post-commit acknowledgement loss before Activity/Operation synchronization. The defer rule also
+  applies when source collection joins an existing source run; joined source rows must not opportunistically sync
+  canonical company facts. The completed source owner freezes `company_public_web_run_snapshot_v3`; its digest binds
+  discovered assets, summary, artifact paths, artifact-publication digest, source revision/completion time, started_at,
+  and completed_at, and materialization reconstructs that exact immutable snapshot instead
+  of rereading mutable source rows. The materialization phase validates source-run identity, syncs model-safe rows into
+  PG-only `CompanyAsset` / `CompanyEvidence`, and records ActivityRun/Attempt plus `company_public_web_run`,
+  `company_asset`, and `company_evidence` EntityDeltas. Asset upserts return the just-written current-run payload so a
+  concurrent writer cannot contaminate the frozen snapshot through a post-upsert reread. Stale running
+  source-collection commands may be resumed only through the source owner; stale running asset-materialization commands
+  may be cancelled only before sync attempt or resumed through owner-specific delegates. Both delegates record control
+  evidence and must not perform request-path canonical sync. Agent/debug queries must follow
+  command/activity/entity-delta causality instead of inferring refresh provenance from source-specific
+  `company_public_web_assets` timestamps. The synchronous refresh service remains a manual API/CLI service entry and is
+  not the Agent normal path. The source row/artifact effect remains before the completion bundle, while Activity and
+  linked Operation/action synchronization remain after it. These bounded owner/effect transactions therefore do not make
+  submit/command/effect/terminal/linked-Operation state one global exactly-once transaction.
 - Profile-experience company logo discovery (`company.logo.profile_experience.discover`) is a non-blocking company asset command owned by `company_asset_owner`. Local profile apply may only plan this command after a fresh Harvest/profile delta; it must not scan profile JSON, fetch media, or write `CompanyEvidence` in the local-apply/materialization path. The owner reads at most one profile payload, extracts unexpired target-company `companyLogo` URL evidence, writes `CompanyEvidence(evidence_type='logo_url')`, records ActivityRun/Attempt plus `company_evidence` or no-op discovery EntityDelta, and then plans `media.asset.cache`. If a stable `CompanyAsset.logo_media` already exists, the planner no-ops. If the selected profile has no eligible or unexpired logo URL, the owner completes with `source_discovery_required`; explicit logo source discovery remains a separate path. This stage must not block profile fetch, board-visible publication, projection finalization, or collection-authoritative merge.
 - Media cache (`media.asset.cache`) is a bounded activity owned by `media_asset_owner`. It imports or fetches bounded media inputs, uploads normalized bytes to object storage, writes stable `PersonAsset(asset_type='avatar_media')` or `CompanyAsset(asset_type='logo_media')`, and records ActivityRun/Attempt plus `person_asset` or `company_asset` EntityDeltas. `/api/media/assets/{asset_id}` is the fail-closed read API for object-backed cached media and must not fetch provider URLs or repair missing assets in the request path. Provider avatar/logo URLs are metadata until this command owner writes a stable asset; readers must not hotlink provider media as a normal fallback. Running cancel is owner-specific only before fetch/upload attempt creation through `media_asset_owner.cancel_before_fetch_upload_attempt`; it is blocked after ActivityAttempt, EntityDelta, or downstream command creation. Stale running resume is owner-specific through `media_asset_owner.resume_media_asset_cache`; it only records ActivityRun/Attempt/EntityDelta control evidence and requeues the command, and must not fetch, upload, or write PersonAsset/CompanyAsset rows in the resume API. Agent/UI callers must not expose broader media cancel semantics than the control policy reports.
 - Export commands are bounded activities. `export.projection.generate` and `export.crm_public_web.generate` must record ActivityRun/ActivityAttempt evidence and an export EntityDelta with artifact refs when an archive is generated or a failed/not-ok reason when generation fails. The ZIP artifact is an output ref, not the source of execution truth.
@@ -966,7 +1030,30 @@ W7 status and rules:
 - Excel intake first-owner slice is active: upload planning writes `excel.intake.run` with physical causality, produced counts, and owner `excel_intake_owner`. The route may synchronously drain the just-planned command to start the async workflow for current UX, but stale recovery must requeue/plan and drain `excel.intake.run`; it must not call `_run_excel_intake_workflow(...)` directly. This command currently owns durable start/recovery and cooperative running cancel of the intake run. Remaining Agent-grade operation control work is richer status/resume/progress UX, not a second Excel execution owner.
 - Projection export and CRM Public Web export first-owner slices are active: `export.projection.generate` and `export.crm_public_web.generate` own ZIP generation, artifact persistence, idempotency, and replay-from-artifact behavior. Current HTTP routes may synchronously drain the command for small exports. Large/bulk exports must move to explicit query/retry/cancel/status APIs before Agent can call them as long-running operations.
 - CRM writer operation slices are active for Agent/Operation-driven `add_to_crm`, `set_crm_stage`, `add_crm_note`, and `create_crm_task`. Operation dispatch plans typed commands only; `crm_writer` command owner calls `CRMWriter` and writes `crm_records`, `crm_engagements`, PG-only `crm_tasks`, and `crm_events`. `add_to_crm` uses an owner-bound projection-selection target and revalidates the exact projection membership snapshot at submit, dispatch, and command-owner time before CRM effects. Sensitive or bulk stage mutations are approval-gated before command planning. Stale `claimed/running` CRM writer commands may be resumed only through the owner-specific command control delegate; the delegate records Activity/Attempt/EntityDelta resume evidence and returns the command to `queued` without applying CRM mutations from the request path.
-- Company Public Web refresh is active for Agent/Operation-driven company enrichment. Operation dispatch plans `company.public_web.refresh` only; the root command plans `company.public_web.source.collect`, which writes or joins source-specific company Public Web rows/artifacts with canonical asset sync deferred, and then `company.public_web.assets.materialize`, which syncs canonical `CompanyAsset` / `CompanyEvidence` and records ActivityRun/Attempt/EntityDelta evidence. Running root refresh commands may be cancelled through `workflow_orchestrator.cancel_orchestration_before_downstream` only when no downstream source/materialize command exists and the lease is expired or force is explicit. Stale running source-collection commands may be resumed only through `company_public_web_owner.resume_source_collect`, which records ActivityRun/Attempt/EntityDelta control evidence and requeues the command without syncing canonical company facts. Stale running asset-materialization commands may be cancelled before sync through `company_public_web_owner.cancel_assets_materialize_before_sync` or resumed through `company_public_web_owner.resume_assets_materialize`; neither control delegate may write CompanyAsset/CompanyEvidence from the request path. The normal Agent path must not call the synchronous refresh service inline, treat source-specific rows as execution truth, or sync canonical company facts from the source-collection/join branch.
+- Company Public Web refresh is active for Agent/Operation-driven company enrichment. The D1m candidate request is
+  closed, canonical, and deterministic `seed_url_only`; its owner target is exact `workspace_id + company_key`, and
+  persisted action/run plus every dispatch/root/source/materialize boundary revalidates that request/target and its
+  Operation/command links before a new effect. Operation dispatch plans `company.public_web.refresh` only; the root
+  command plans `company.public_web.source.collect`. The source owner uses one normalized idempotency-key identity,
+  sorted key/run advisory locks, and physical current-attempt/lease ownership to create, reclaim, join, and terminalize
+  source work without stale-attempt writes. It writes or joins source-specific company Public Web rows/artifacts with
+  canonical asset sync deferred, then freezes the full digest-bound `company_public_web_run_snapshot_v3` (assets,
+  summary, artifact paths/publication digest, revision/completion time, and run timestamps). A closed source-completion
+  PG UoW then exact-creates/reuses the plan event, deterministic `company.public_web.assets.materialize` child, one
+  source-run EntityDelta, and parent success CAS together; stale/taken-over claims and any final-CAS failure leave that
+  bundle at zero writes, while an acknowledgement loss must exact-validate the committed bundle before continuing.
+  Materialization validates source-run identity, consumes only that immutable
+  snapshot, syncs canonical `CompanyAsset` / `CompanyEvidence`, and records ActivityRun/Attempt/EntityDelta evidence.
+  Running root refresh commands may be cancelled through `workflow_orchestrator.cancel_orchestration_before_downstream`
+  only when no downstream source/materialize command exists and the lease is expired or force is explicit. Stale running
+  source-collection commands may be resumed only through `company_public_web_owner.resume_source_collect`, which records
+  ActivityRun/Attempt/EntityDelta control evidence and requeues the command without syncing canonical company facts.
+  Stale running asset-materialization commands may be cancelled before sync through
+  `company_public_web_owner.cancel_assets_materialize_before_sync` or resumed through
+  `company_public_web_owner.resume_assets_materialize`; neither control delegate may write CompanyAsset/CompanyEvidence
+  from the request path. The normal Agent path must not call the synchronous refresh service inline, treat mutable
+  source-specific rows as execution truth, or sync canonical company facts from the source-collection/join branch. This
+  does not close R-019 or claim one global command/effect/terminal/Operation-sync UoW.
 - Stable media cache is active for bounded avatar/logo imports through `media.asset.cache`. The owner writes canonical `PersonAsset.avatar_media` / `CompanyAsset.logo_media` and Activity/EntityDelta evidence, and the read side serves object-backed cached media through `/api/media/assets/{asset_id}`; provider media URLs remain metadata until cached. Stale running media cache commands can be cancelled only before fetch/upload attempt creation or resumed only through the owner-specific command API; both delegates update command/activity evidence and never fetch, upload, or materialize assets from the request path.
 
 After W7, the next pre-Agent layers are:

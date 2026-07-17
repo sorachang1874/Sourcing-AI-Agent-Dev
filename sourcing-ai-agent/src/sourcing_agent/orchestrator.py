@@ -32,6 +32,7 @@ from .action_target_binding import (
     ACQUISITION_ROOT_TARGET_INVALID,
     AUTHORIZATION_MODE_AUTHENTICATED,
     AUTHORIZATION_MODE_OPEN_OPERATOR,
+    COMPANY_PUBLIC_WEB_TARGET_INVALID,
     CRM_PROJECTION_SELECTION_SELECTOR_ALIASES,
     CRM_PROJECTION_SELECTION_TARGET_INVALID,
     CRM_PROJECTION_SELECTION_TARGET_NOT_FOUND,
@@ -41,10 +42,12 @@ from .action_target_binding import (
     AcquisitionRootTargetBinder,
     ActionBindContext,
     ActionTargetBindingError,
+    CompanyPublicWebTargetBinder,
     CRMProjectionSelectionTargetBinder,
     CRMRecordBatchTargetBinder,
     CRMRecordTargetBinder,
     build_acquisition_root_target_binder_registry,
+    build_company_public_web_target_binder_registry,
     build_crm_existing_record_target_binder_registry,
     build_crm_projection_selection_target_binder_registry,
     build_crm_record_batch_target_binder_registry,
@@ -110,13 +113,19 @@ from .company_asset_completion import CompanyAssetCompletionManager
 from .company_asset_supplement import CompanyAssetSupplementManager
 from .company_asset_writer import CompanyAssetWriter
 from .company_public_web_assets import (
+    COMPANY_PUBLIC_WEB_MATERIALIZATION_SNAPSHOT_DIGEST_KEY,
+    COMPANY_PUBLIC_WEB_MATERIALIZATION_SNAPSHOT_SCHEMA_KEY,
+    company_public_web_materialization_assets_for_run,
+    company_public_web_materialization_snapshot_identity,
+    sync_company_public_web_assets_to_company_asset_layer,
+)
+from .company_public_web_assets import (
     list_company_public_web_assets as list_company_public_web_assets_service,
 )
 from .company_public_web_assets import (
     refresh_company_public_web_assets as refresh_company_public_web_assets_service,
 )
-from .company_public_web_assets import sync_company_public_web_assets_to_company_asset_layer
-from .company_registry import builtin_company_identity, normalize_company_key
+from .company_registry import builtin_company_identity, normalize_company_key, resolve_company_alias_key
 from .confidence_policy import apply_policy_control, build_confidence_policy
 from .connectors import CompanyIdentity, CompanyRosterSnapshot, resolve_company_identity
 from .control_plane_live_postgres import (
@@ -250,10 +259,12 @@ from .operation_runtime import (
     ACTION_CREATE_CRM_TASK,
     ACTION_ENRICH_PERSON_PUBLIC_WEB,
     ACTION_EXPORT_CANDIDATES,
+    ACTION_REFRESH_COMPANY_PUBLIC_WEB,
     ACTION_REQUEST_PIN_FIELDS,
     ACTION_SEARCH_PROJECTION,
     ACTION_SET_CRM_STAGE,
     ACTION_START_ACQUISITION_RUN,
+    COMPANY_PUBLIC_WEB_ACTION_TYPES,
     CRM_EXISTING_RECORD_ACTION_TYPES,
     CRM_PROJECTION_SELECTION_ACTION_TYPES,
     CRM_RECORD_BATCH_ACTION_TYPES,
@@ -980,6 +991,10 @@ class SourcingOrchestrator:
         self._acquisition_root_target_binder = AcquisitionRootTargetBinder()
         self._acquisition_root_target_binder_registry = build_acquisition_root_target_binder_registry(
             binder=self._acquisition_root_target_binder,
+        )
+        self._company_public_web_target_binder = CompanyPublicWebTargetBinder()
+        self._company_public_web_target_binder_registry = build_company_public_web_target_binder_registry(
+            binder=self._company_public_web_target_binder,
         )
         self._crm_record_target_binder = CRMRecordTargetBinder(self.store)
         self._crm_existing_record_target_binder_registry = build_crm_existing_record_target_binder_registry(
@@ -14512,6 +14527,7 @@ class SourcingOrchestrator:
         entity_counts: dict[str, Any] | None = None,
         metadata: dict[str, Any] | None = None,
         attempt_suffix: str = "",
+        require_current_command_claim: bool = False,
     ) -> tuple[dict[str, Any], dict[str, Any]]:
         return self._command_kernel._start_workflow_command_activity_attempt(
             command,
@@ -14525,6 +14541,7 @@ class SourcingOrchestrator:
             entity_counts=entity_counts,
             metadata=metadata,
             attempt_suffix=attempt_suffix,
+            require_current_command_claim=require_current_command_claim,
         )
 
     def _finish_workflow_command_activity_attempt(
@@ -49015,6 +49032,8 @@ class SourcingOrchestrator:
                         if action_type in PROJECTION_READ_ACTION_TYPES
                         else "projection_export_target_selector_invalid"
                         if action_type == ACTION_EXPORT_CANDIDATES
+                        else COMPANY_PUBLIC_WEB_TARGET_INVALID
+                        if action_type in COMPANY_PUBLIC_WEB_ACTION_TYPES
                         else ACQUISITION_ROOT_TARGET_INVALID
                     ),
                 }
@@ -49096,6 +49115,19 @@ class SourcingOrchestrator:
         target_ref = dict(acquisition_binding.get("target_ref") or {})
         input_payload = dict(acquisition_binding.get("input_payload") or input_payload)
         owner_bound_target_ref = acquisition_binding.get("owner_bound_target_ref") or owner_bound_target_ref
+        company_public_web_binding = self._bind_operation_company_public_web_target(
+            action_type=action_type,
+            workspace_id=str(payload.get("workspace_id") or "default").strip() or "default",
+            expected_workspace_id=expected_workspace_id,
+            expected_owner_user_id=expected_owner_user_id,
+            target_ref=target_ref,
+            input_payload=input_payload,
+        )
+        if str(company_public_web_binding.get("status") or "") != "ready":
+            return company_public_web_binding
+        target_ref = dict(company_public_web_binding.get("target_ref") or {})
+        input_payload = dict(company_public_web_binding.get("input_payload") or input_payload)
+        owner_bound_target_ref = company_public_web_binding.get("owner_bound_target_ref") or owner_bound_target_ref
         try:
             result = self.operation_runtime_writer.submit_action(
                 action_type=action_type,
@@ -49267,6 +49299,64 @@ class SourcingOrchestrator:
         return {
             "status": "ready",
             "target_ref": {},
+            "owner_bound_target_ref": owner_bound_target_ref,
+        }
+
+    def _bind_operation_company_public_web_target(
+        self,
+        *,
+        action_type: str,
+        workspace_id: str,
+        expected_workspace_id: str,
+        expected_owner_user_id: str,
+        target_ref: dict[str, Any],
+        input_payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        if action_type not in COMPANY_PUBLIC_WEB_ACTION_TYPES:
+            return {
+                "status": "ready",
+                "target_ref": target_ref,
+                "input_payload": input_payload,
+                "owner_bound_target_ref": None,
+            }
+        expected_workspace = str(expected_workspace_id or "").strip()
+        expected_owner = str(expected_owner_user_id or "").strip()
+        if bool(expected_workspace) != bool(expected_owner):
+            return {"status": "invalid", "reason": "action_bind_context_owner_incomplete"}
+        normalized_workspace = str(workspace_id or "default").strip() or "default"
+        if expected_workspace and normalized_workspace != expected_workspace:
+            return {"status": "invalid", "reason": COMPANY_PUBLIC_WEB_TARGET_INVALID}
+        if target_ref:
+            return {"status": "invalid", "reason": COMPANY_PUBLIC_WEB_TARGET_INVALID}
+        spec = DEFAULT_ACTION_REGISTRY.spec_for(action_type)
+        forbidden_input_fields = sorted(spec.owner_reserved_request_fields & set(input_payload))
+        if forbidden_input_fields:
+            return {
+                "status": "invalid",
+                "reason": ("action_request_target_fields_are_owner_reserved:" + ",".join(forbidden_input_fields)),
+            }
+        raw_target_company = input_payload.get("target_company")
+        if not isinstance(raw_target_company, str):
+            return {"status": "invalid", "reason": COMPANY_PUBLIC_WEB_TARGET_INVALID}
+        try:
+            context = ActionBindContext(
+                authorization_mode=(
+                    AUTHORIZATION_MODE_AUTHENTICATED if expected_workspace else AUTHORIZATION_MODE_OPEN_OPERATOR
+                ),
+                workspace_id=expected_workspace or normalized_workspace,
+                owner_user_id=expected_owner,
+                target_selector={"target_company": raw_target_company},
+            )
+            owner_bound_target_ref = self._company_public_web_target_binder_registry.bind(
+                action_type=action_type,
+                context=context,
+            )
+        except ActionTargetBindingError as exc:
+            return {"status": "invalid", "reason": exc.reason}
+        return {
+            "status": "ready",
+            "target_ref": {},
+            "input_payload": dict(input_payload),
             "owner_bound_target_ref": owner_bound_target_ref,
         }
 
@@ -50216,6 +50306,8 @@ class SourcingOrchestrator:
         if not action:
             return {"status": "not_found", "action_id": str(action_id or "").strip()}
         target_preflight = self._preflight_acquisition_root_action_control(action=action)
+        if str(target_preflight.get("status") or "") == "ready":
+            target_preflight = self._preflight_company_public_web_action_control(action=action)
         if str(target_preflight.get("status") or "") != "ready":
             return {
                 **target_preflight,
@@ -50371,6 +50463,11 @@ class SourcingOrchestrator:
             action=action,
             operation_run=operation_run,
         )
+        if str(target_preflight.get("status") or "") == "ready":
+            target_preflight = self._preflight_company_public_web_action_control(
+                action=action,
+                operation_run=operation_run,
+            )
         if str(target_preflight.get("status") or "") != "ready":
             return {
                 **target_preflight,
@@ -50446,6 +50543,11 @@ class SourcingOrchestrator:
             action=action,
             operation_run=operation_run,
         )
+        if str(target_preflight.get("status") or "") == "ready":
+            target_preflight = self._preflight_company_public_web_action_control(
+                action=action,
+                operation_run=operation_run,
+            )
         if str(target_preflight.get("status") or "") != "ready":
             return {
                 **target_preflight,
@@ -50721,6 +50823,18 @@ class SourcingOrchestrator:
                 "module_state_mutated": False,
                 "contract": "w11_agent_callable_workflow_command_dispatch_v1",
             }
+        company_public_web_target_preflight = self._revalidate_company_public_web_action_target(
+            operation_run=operation_run,
+            action=action,
+        )
+        if str(company_public_web_target_preflight.get("status") or "") != "ready":
+            return {
+                **company_public_web_target_preflight,
+                "operation_run": operation_run,
+                "action": action,
+                "module_state_mutated": False,
+                "contract": "w11_agent_callable_workflow_command_dispatch_v1",
+            }
         plan = self._build_agent_callable_workflow_command_plan(operation_run=operation_run, action=action)
         if str(plan.get("status") or "") != "ok":
             return {
@@ -50860,6 +50974,144 @@ class SourcingOrchestrator:
             operation_run=workspace_record,
             action=action,
         )
+
+    def _revalidate_company_public_web_action_target(
+        self,
+        *,
+        operation_run: Mapping[str, Any],
+        action: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        if str(action.get("action_type") or "").strip() not in COMPANY_PUBLIC_WEB_ACTION_TYPES:
+            return {"status": "ready"}
+        raw_target_ref = action.get("target_ref")
+        raw_input_payload = action.get("input")
+        if not isinstance(raw_target_ref, Mapping) or not isinstance(raw_input_payload, Mapping):
+            return {"status": "invalid", "reason": COMPANY_PUBLIC_WEB_TARGET_INVALID}
+        operation_workspace_id = str(operation_run.get("workspace_id") or "default").strip() or "default"
+        try:
+            target = self._company_public_web_target_binder.revalidate_snapshot(
+                target_ref=raw_target_ref,
+                operation_workspace_id=operation_workspace_id,
+            )
+        except ActionTargetBindingError as exc:
+            return {"status": "invalid", "reason": exc.reason}
+        input_payload = dict(raw_input_payload)
+        target_company = str(input_payload.get("target_company") or "").strip()
+        expected_company_key = resolve_company_alias_key(target_company)
+        if (
+            not target_company
+            or not expected_company_key
+            or expected_company_key != str(target.get("company_key") or "").strip()
+            or str(action.get("workspace_id") or "default").strip() != operation_workspace_id
+            or str(input_payload.get("collection_mode") or "").strip() != "seed_url_only"
+        ):
+            return {"status": "invalid", "reason": COMPANY_PUBLIC_WEB_TARGET_INVALID}
+        return {
+            "status": "ready",
+            "company_public_web_target": target,
+            "company_public_web_input": input_payload,
+        }
+
+    def _preflight_company_public_web_action_control(
+        self,
+        *,
+        action: Mapping[str, Any],
+        operation_run: Mapping[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        if str(action.get("action_type") or "").strip() not in COMPANY_PUBLIC_WEB_ACTION_TYPES:
+            return {"status": "ready"}
+        try:
+            self.operation_runtime_writer.validate_persisted_action_request(
+                action=action,
+                operation_run=operation_run,
+            )
+        except OperationRuntimeStateConflict as exc:
+            return {"status": "conflict", "reason": exc.reason}
+        workspace_record: Mapping[str, Any] = operation_run or {
+            "workspace_id": str(action.get("workspace_id") or "default").strip() or "default"
+        }
+        return self._revalidate_company_public_web_action_target(
+            operation_run=workspace_record,
+            action=action,
+        )
+
+    @staticmethod
+    def _schema_defined_company_public_web_command_plan(
+        *,
+        operation_run: Mapping[str, Any],
+        action: Mapping[str, Any],
+        owner: str,
+    ) -> dict[str, Any]:
+        raw_input_payload = action.get("input")
+        raw_target_ref = action.get("target_ref")
+        if not isinstance(raw_input_payload, Mapping) or not isinstance(raw_target_ref, Mapping):
+            return {
+                "status": "invalid",
+                "reason": "company_public_web_action_request_invalid",
+                "command_type": COMPANY_PUBLIC_WEB_REFRESH_COMMAND_TYPE,
+            }
+        input_payload = dict(raw_input_payload)
+        target_ref = dict(raw_target_ref)
+        target_company = str(input_payload.get("target_company") or "").strip()
+        workspace_id = str(operation_run.get("workspace_id") or "default").strip() or "default"
+        company_key = str(target_ref.get("company_key") or "").strip()
+        source_families = list(input_payload.get("source_families") or [])
+        seed_urls = list(input_payload.get("seed_urls") or [])
+        max_assets = input_payload.get("max_assets")
+        force_refresh = input_payload.get("force_refresh")
+        collection_mode = str(input_payload.get("collection_mode") or "").strip()
+        refresh_nonce = str(input_payload.get("refresh_nonce") or "").strip()
+        if (
+            set(target_ref) != {"workspace_id", "company_key"}
+            or str(target_ref.get("workspace_id") or "").strip() != workspace_id
+            or not target_company
+            or not company_key
+            or not source_families
+            or not seed_urls
+            or isinstance(max_assets, bool)
+            or not isinstance(max_assets, int)
+            or not isinstance(force_refresh, bool)
+            or collection_mode != "seed_url_only"
+            or (force_refresh and not refresh_nonce)
+            or (not force_refresh and "refresh_nonce" in input_payload)
+        ):
+            return {
+                "status": "invalid",
+                "reason": "company_public_web_action_request_invalid",
+                "command_type": COMPANY_PUBLIC_WEB_REFRESH_COMMAND_TYPE,
+            }
+        operation_run_id = str(operation_run.get("operation_run_id") or "").strip()
+        workflow_run_id = f"wf_company_public_web_{hashlib.sha1(operation_run_id.encode('utf-8')).hexdigest()[:24]}"
+        command_payload: dict[str, Any] = {
+            "company_public_web_target": target_ref,
+            "target_company": target_company,
+            "company_key": company_key,
+            "workspace_id": workspace_id,
+            "source_families": source_families,
+            "seed_urls": seed_urls,
+            "max_assets": max_assets,
+            "force_refresh": force_refresh,
+            "collection_mode": "seed_url_only",
+            "operation_run_id": operation_run_id,
+            "action_id": str(action.get("action_id") or "").strip(),
+            "requested_by": COMPANY_PUBLIC_WEB_REFRESH_OWNER,
+            "source": "operation_run_dispatch",
+            "migration_phase": "W11_company_public_web_refresh_command",
+            "company_asset_write_owner": COMPANY_PUBLIC_WEB_REFRESH_OWNER,
+            "normal_path_executes_api_refresh_inline": False,
+            "produced_entity_counts": {"company_public_web_run": 1},
+        }
+        if force_refresh:
+            command_payload["refresh_nonce"] = refresh_nonce
+        return {
+            "status": "ok",
+            "command_type": COMPANY_PUBLIC_WEB_REFRESH_COMMAND_TYPE,
+            "owner": owner,
+            "workflow_run_id": workflow_run_id,
+            "command_payload": command_payload,
+            "max_attempts": 3,
+            "retry_policy": {"kind": "company_public_web_refresh", "retry_delay_seconds": 30},
+        }
 
     @staticmethod
     def _schema_defined_acquisition_root_command_plan(
@@ -51193,6 +51445,12 @@ class SourcingOrchestrator:
             return {"status": "invalid", "reason": "unknown_workflow_command_type", "command_type": command_type}
         if action_type == ACTION_START_ACQUISITION_RUN and spec is not None and spec.has_request_schema:
             return self._schema_defined_acquisition_root_command_plan(
+                operation_run=operation_run,
+                action=action,
+                owner=owner,
+            )
+        if action_type == ACTION_REFRESH_COMPANY_PUBLIC_WEB and spec is not None and spec.has_request_schema:
+            return self._schema_defined_company_public_web_command_plan(
                 operation_run=operation_run,
                 action=action,
                 owner=owner,
@@ -52914,8 +53172,9 @@ class SourcingOrchestrator:
         ).hexdigest()[:24]
         workflow_run_id = f"wf_crm_writer_op_{digest}"
         command_idempotency_key = f"{normalized_type}:operation:{digest}"
+        phase_payload = {key: value for key, value in dict(command_payload or {}).items() if key != "causality"}
         payload = {
-            **dict(command_payload or {}),
+            **phase_payload,
             "operation_run_id": operation_run_id,
             "action_id": action_id,
             "materialization_metadata": {
@@ -54400,7 +54659,7 @@ class SourcingOrchestrator:
             "items": results,
         }
 
-    def _plan_company_public_web_phase_command(
+    def _company_public_web_phase_command_contract(
         self,
         *,
         parent_command: dict[str, Any],
@@ -54422,10 +54681,12 @@ class SourcingOrchestrator:
             str(parent_payload.get("operation_id") or "").strip()
             or str(dict(parent_payload.get("payload") or {}).get("operation_id") or "").strip()
         )
-        if not workflow_run_id:
+        if not workflow_run_id or not operation_id or not parent_command_id:
             return {}
+        phase_payload = {key: value for key, value in dict(command_payload or {}).items() if key != "causality"}
         payload = {
-            **dict(command_payload or {}),
+            **phase_payload,
+            "operation_id": operation_id,
             "parent_command_id": parent_command_id,
             "causal_group_id": parent_command_id
             or str(parent_payload.get("idempotency_key") or "").strip()
@@ -54437,34 +54698,929 @@ class SourcingOrchestrator:
             f"{normalized_type}:{parent_command_id or workflow_run_id}:"
             f"{hashlib.sha1(str(idempotency_suffix or payload).encode('utf-8')).hexdigest()[:24]}"
         )
+        stage_id = default_stage_id_for_command_type(normalized_type)
+        child_owner = DEFAULT_COMMAND_OWNER_REGISTRY.owner_for(normalized_type)
+        retry_policy = {"kind": "company_public_web_phase", "retry_delay_seconds": 30}
+        plan_event_payload = {
+            "workflow_type": "company_public_web_refresh",
+            "stage_key": stage_id,
+            "command_type": normalized_type,
+            "idempotency_key": idempotency_key,
+            "parent_command_id": parent_command_id,
+            "causal_group_id": payload["causal_group_id"],
+            "payload": payload,
+            "max_attempts": 3,
+            "retry_policy": retry_policy,
+        }
+        source_event_template = {
+            "event_id": "",
+            "workflow_run_id": workflow_run_id,
+            "operation_id": operation_id,
+            "command_id": parent_command_id,
+            "event_type": "CommandPlanRequested",
+            "payload": plan_event_payload,
+        }
+        child_causality = command_causality_for(
+            workflow_run_id=workflow_run_id,
+            operation_id=operation_id,
+            stage_id=stage_id,
+            command_type=normalized_type,
+            owner=child_owner,
+            idempotency_key=idempotency_key,
+            source_event=source_event_template,
+            command_payload=payload,
+            artifact_refs=(),
+        ).to_payload()
+        return {
+            "plan_event": {
+                "workflow_run_id": workflow_run_id,
+                "operation_id": operation_id,
+                "command_id": parent_command_id,
+                "event_family": "workflow_event",
+                "event_type": "CommandPlanRequested",
+                "idempotency_key": f"{idempotency_key}:plan",
+                "actor": "company_public_web_phase_planner",
+                "source": str(source or "company_public_web_refresh_owner").strip(),
+                "payload": plan_event_payload,
+                "artifact_refs": [],
+            },
+            "child_command": {
+                "workflow_run_id": workflow_run_id,
+                "operation_id": operation_id,
+                "command_id": command_id_for(workflow_run_id, idempotency_key),
+                "command_type": normalized_type,
+                "owner": child_owner,
+                "idempotency_key": idempotency_key,
+                "parent_command_id": parent_command_id,
+                "payload": payload,
+                "artifact_refs": [],
+                "not_before_at": "",
+                "max_attempts": 3,
+                "retry_policy": retry_policy,
+            },
+            "child_causality": child_causality,
+        }
+
+    def _plan_company_public_web_phase_command(
+        self,
+        *,
+        parent_command: dict[str, Any],
+        command_type: str,
+        command_payload: dict[str, Any],
+        idempotency_suffix: str,
+        source: str = "company_public_web_refresh_owner",
+    ) -> dict[str, Any]:
+        contract = self._company_public_web_phase_command_contract(
+            parent_command=parent_command,
+            command_type=command_type,
+            command_payload=command_payload,
+            idempotency_suffix=idempotency_suffix,
+            source=source,
+        )
+        plan_event = dict(contract.get("plan_event") or {})
+        child_command = dict(contract.get("child_command") or {})
+        if not plan_event or not child_command:
+            return {}
         try:
             apply_result = self.durable_runtime_writer.append_event_and_reduce(
-                workflow_run_id=workflow_run_id,
-                operation_id=operation_id,
-                command_id=parent_command_id,
-                event_family="workflow_event",
-                event_type="CommandPlanRequested",
-                idempotency_key=f"{idempotency_key}:plan",
-                actor="company_public_web_phase_planner",
-                source=str(source or "company_public_web_refresh_owner").strip(),
-                payload={
-                    "workflow_type": "company_public_web_refresh",
-                    "stage_key": default_stage_id_for_command_type(normalized_type),
-                    "command_type": normalized_type,
-                    "idempotency_key": idempotency_key,
-                    "parent_command_id": parent_command_id,
-                    "causal_group_id": payload["causal_group_id"],
-                    "payload": payload,
-                    "max_attempts": 3,
-                    "retry_policy": {"kind": "company_public_web_phase", "retry_delay_seconds": 30},
-                },
+                workflow_run_id=str(plan_event.get("workflow_run_id") or "").strip(),
+                operation_id=str(plan_event.get("operation_id") or "").strip(),
+                command_id=str(plan_event.get("command_id") or "").strip(),
+                event_family=str(plan_event.get("event_family") or "").strip(),
+                event_type=str(plan_event.get("event_type") or "").strip(),
+                idempotency_key=str(plan_event.get("idempotency_key") or "").strip(),
+                actor=str(plan_event.get("actor") or "").strip(),
+                source=str(plan_event.get("source") or "").strip(),
+                payload=dict(plan_event.get("payload") or {}),
+                artifact_refs=list(plan_event.get("artifact_refs") or []),
             )
         except Exception:
             return {}
         return self._workflow_command_from_apply_result_or_store(
             apply_result=apply_result,
+            workflow_run_id=str(child_command.get("workflow_run_id") or "").strip(),
+            idempotency_key=str(child_command.get("idempotency_key") or "").strip(),
+        )
+
+    def _company_public_web_command_causality_matches(
+        self,
+        *,
+        command_record: Mapping[str, Any],
+        command_payload: Mapping[str, Any],
+        workflow_type: str,
+        actor: str,
+        source: str,
+        source_command_id: str,
+        expected_idempotency_key: str,
+        max_attempts: int,
+        retry_policy: Mapping[str, Any],
+        event_payload_causality: Mapping[str, Any] | None = None,
+        parent_command_id: str = "",
+        causal_group_id: str = "",
+        expected_terminal_downstream_command_ids: list[str] | None = None,
+    ) -> bool:
+        """Rebuild and compare the immutable plan event plus canonical causal envelope."""
+
+        command_id = str(command_record.get("command_id") or "").strip()
+        workflow_run_id = str(command_record.get("workflow_run_id") or "").strip()
+        operation_id = str(command_record.get("operation_id") or "").strip()
+        command_type = str(command_record.get("command_type") or "").strip()
+        owner = str(command_record.get("owner") or "").strip()
+        idempotency_key = str(command_record.get("idempotency_key") or "").strip()
+        normalized_expected_idempotency_key = str(expected_idempotency_key or "").strip()
+        if (
+            not command_id
+            or not workflow_run_id
+            or not operation_id
+            or not command_type
+            or owner != COMPANY_PUBLIC_WEB_REFRESH_OWNER
+            or not idempotency_key
+            or idempotency_key != normalized_expected_idempotency_key
+            or command_id != command_id_for(workflow_run_id, idempotency_key)
+        ):
+            return False
+        event_command_payload = dict(command_payload)
+        if event_payload_causality is not None:
+            event_command_payload["causality"] = dict(event_payload_causality)
+        expected_event_payload: dict[str, Any] = {
+            "workflow_type": str(workflow_type or "").strip(),
+            "stage_key": default_stage_id_for_command_type(command_type),
+            "command_type": command_type,
+            "idempotency_key": idempotency_key,
+            "payload": event_command_payload,
+            "max_attempts": int(max_attempts),
+            "retry_policy": dict(retry_policy),
+        }
+        if parent_command_id:
+            expected_event_payload["parent_command_id"] = str(parent_command_id).strip()
+            expected_event_payload["causal_group_id"] = str(causal_group_id).strip()
+        source_events = [
+            dict(event or {})
+            for event in self.store.repos.workflow_runtime.list_workflow_events(workflow_run_id, limit=0)
+            if str(dict(event or {}).get("idempotency_key") or "").strip() == f"{idempotency_key}:plan"
+        ]
+        if len(source_events) != 1:
+            return False
+        source_event = self.store.repos.workflow_runtime.get_persisted_workflow_event_contract(
+            str(source_events[0].get("event_id") or "").strip()
+        )
+        if not source_event or not bool(source_event.get("persisted_json_contract_valid")):
+            return False
+        source_sequence = max(0, int(source_event.get("sequence_number") or 0))
+        expected_source_event_id = (
+            "evt_"
+            + hashlib.sha1(
+                f"{workflow_run_id}:{source_sequence}:{normalized_expected_idempotency_key}:plan".encode("utf-8")
+            ).hexdigest()[:24]
+        )
+        if not (
+            source_sequence > 0
+            and str(source_event.get("event_id") or "").strip() == expected_source_event_id
+            and str(source_event.get("workflow_run_id") or "").strip() == workflow_run_id
+            and str(source_event.get("operation_id") or "").strip() == operation_id
+            and str(source_event.get("command_id") or "").strip() == str(source_command_id or "").strip()
+            and str(source_event.get("activity_attempt_id") or "").strip() == ""
+            and str(source_event.get("event_family") or "").strip() == "workflow_event"
+            and str(source_event.get("event_type") or "").strip() == "CommandPlanRequested"
+            and str(source_event.get("actor") or "").strip() == str(actor or "").strip()
+            and str(source_event.get("source") or "").strip() == str(source or "").strip()
+            and json_contract_equal(dict(source_event.get("payload") or {}), expected_event_payload)
+            and json_contract_equal(list(source_event.get("artifact_refs") or []), [])
+            and str(source_event.get("schema_version") or "").strip() == "workflow_event_v1"
+        ):
+            return False
+        expected_causality = command_causality_for(
             workflow_run_id=workflow_run_id,
+            operation_id=operation_id,
+            stage_id=default_stage_id_for_command_type(command_type),
+            command_type=command_type,
+            owner=owner,
             idempotency_key=idempotency_key,
+            source_event=source_event,
+            command_payload=event_command_payload,
+            artifact_refs=(),
+        ).to_payload()
+        expected_stored_payload = {**event_command_payload, "causality": expected_causality}
+        physical_text_fields = {
+            "schema_version": "workflow_command_v1",
+            "stage_id": str(expected_causality.get("stage_id") or "").strip(),
+            "causal_group_id": str(expected_causality.get("causal_group_id") or "").strip(),
+            "parent_command_id": str(expected_causality.get("parent_command_id") or "").strip(),
+            "source_event_id": str(source_event.get("event_id") or "").strip(),
+            "source_event_type": "CommandPlanRequested",
+            "no_op_reason": str(expected_causality.get("no_op_reason") or "").strip(),
+            "readiness_effect": str(expected_causality.get("readiness_effect") or "").strip(),
+            "causality_schema_version": str(expected_causality.get("schema_version") or "").strip(),
+        }
+        expected_downstream_command_ids = (
+            [str(item or "").strip() for item in expected_terminal_downstream_command_ids]
+            if expected_terminal_downstream_command_ids is not None
+            else list(expected_causality.get("downstream_command_ids") or [])
+        )
+        return bool(
+            json_contract_equal(dict(command_record.get("payload") or {}), expected_stored_payload)
+            and all(
+                str(command_record.get(field) or "").strip() == expected
+                for field, expected in physical_text_fields.items()
+            )
+            and json_contract_equal(list(command_record.get("artifact_refs") or []), [])
+            and json_contract_equal(
+                list(command_record.get("input_artifact_refs") or []),
+                list(expected_causality.get("input_artifact_refs") or []),
+            )
+            and json_contract_equal(
+                list(command_record.get("output_artifact_refs") or []),
+                list(expected_causality.get("output_artifact_refs") or []),
+            )
+            and json_contract_equal(
+                dict(command_record.get("produced_entity_counts") or {}),
+                dict(expected_causality.get("produced_entity_counts") or {}),
+            )
+            and json_contract_equal(
+                list(command_record.get("downstream_command_ids") or []),
+                expected_downstream_command_ids,
+            )
+            and int(command_record.get("max_attempts") or 0) == int(max_attempts)
+            and json_contract_equal(dict(command_record.get("retry_policy") or {}), dict(retry_policy))
+        )
+
+    @staticmethod
+    def _company_public_web_physical_claim_pin(command: Mapping[str, Any]) -> dict[str, Any]:
+        raw_attempt = command.get("attempt")
+        try:
+            attempt = 0 if isinstance(raw_attempt, bool) else int(raw_attempt or 0)
+        except (TypeError, ValueError):
+            attempt = 0
+        command_id = str(command.get("command_id") or "").strip()
+        lease_owner = str(command.get("lease_owner") or "").strip()
+        lease_expires_at = str(command.get("lease_expires_at") or "").strip()
+        if not command_id or not lease_owner or not lease_expires_at or attempt <= 0:
+            return {}
+        return {
+            "command_id": command_id,
+            "attempt": attempt,
+            "lease_owner": lease_owner,
+            "lease_expires_at": lease_expires_at,
+        }
+
+    @staticmethod
+    def _company_public_web_locked_command_identity(command: Mapping[str, Any]) -> dict[str, Any]:
+        command_payload = dict(command or {})
+        return {
+            "command_id": str(command_payload.get("command_id") or "").strip(),
+            "workflow_run_id": str(command_payload.get("workflow_run_id") or "").strip(),
+            "operation_id": str(command_payload.get("operation_id") or "").strip(),
+            "command_type": str(command_payload.get("command_type") or "").strip(),
+            "owner": str(command_payload.get("owner") or "").strip(),
+            "stage_id": str(command_payload.get("stage_id") or "").strip(),
+            "causal_group_id": str(command_payload.get("causal_group_id") or "").strip(),
+            "parent_command_id": str(command_payload.get("parent_command_id") or "").strip(),
+            "source_event_id": str(command_payload.get("source_event_id") or "").strip(),
+            "source_event_type": str(command_payload.get("source_event_type") or "").strip(),
+            "input_artifact_refs": list(command_payload.get("input_artifact_refs") or []),
+            "output_artifact_refs": list(command_payload.get("output_artifact_refs") or []),
+            "produced_entity_counts": dict(command_payload.get("produced_entity_counts") or {}),
+            "no_op_reason": str(command_payload.get("no_op_reason") or "").strip(),
+            "readiness_effect": str(command_payload.get("readiness_effect") or "").strip(),
+            "downstream_command_ids": list(command_payload.get("downstream_command_ids") or []),
+            "causality_schema_version": str(command_payload.get("causality_schema_version") or "").strip(),
+            "idempotency_key": str(command_payload.get("idempotency_key") or "").strip(),
+            "payload": dict(command_payload.get("payload") or {}),
+            "artifact_refs": list(command_payload.get("artifact_refs") or []),
+            "not_before_at": str(command_payload.get("not_before_at") or "").strip(),
+            "max_attempts": max(0, int(command_payload.get("max_attempts") or 0)),
+            "retry_policy": dict(command_payload.get("retry_policy") or {}),
+            "result": dict(command_payload.get("result") or {}),
+            "schema_version": str(command_payload.get("schema_version") or "").strip(),
+        }
+
+    def _validate_company_public_web_source_completion_bundle(
+        self,
+        *,
+        source_command: Mapping[str, Any],
+        completion_contract: Mapping[str, Any],
+        entity_delta_specs: list[dict[str, Any]],
+        terminal_result: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        """Validate a committed D1m source bundle after an acknowledgement loss."""
+
+        expected_source = self._company_public_web_locked_command_identity(source_command)
+        command_id = str(expected_source.get("command_id") or "").strip()
+        current = self.store.repos.workflow_runtime.get_persisted_workflow_command_contract(command_id)
+        if not current or not bool(current.get("persisted_json_contract_valid")):
+            return {"status": "invalid", "reason": "company_public_web_source_terminal_command_invalid"}
+        current_identity = self._company_public_web_locked_command_identity(current)
+        immutable_fields = set(expected_source) - {"downstream_command_ids", "result"}
+        if (
+            str(current.get("status") or "").strip() != "succeeded"
+            or int(current.get("attempt") or 0) != int(source_command.get("attempt") or 0)
+            or any(
+                not json_contract_equal(current_identity.get(field), expected_source.get(field))
+                for field in immutable_fields
+            )
+            or not json_contract_equal(dict(current.get("result") or {}), dict(terminal_result or {}))
+        ):
+            return {"status": "invalid", "reason": "company_public_web_source_terminal_result_mismatch"}
+        plan_event_spec = dict(completion_contract.get("plan_event") or {})
+        child_spec = dict(completion_contract.get("child_command") or {})
+        expected_child_id = str(child_spec.get("command_id") or "").strip()
+        if list(current.get("downstream_command_ids") or []) != [expected_child_id]:
+            return {"status": "invalid", "reason": "company_public_web_source_terminal_edge_mismatch"}
+        candidate_events = [
+            dict(item or {})
+            for item in self.store.repos.workflow_runtime.list_workflow_events(
+                str(current.get("workflow_run_id") or "").strip(), limit=0
+            )
+            if str(dict(item or {}).get("idempotency_key") or "").strip()
+            == str(plan_event_spec.get("idempotency_key") or "").strip()
+        ]
+        if len(candidate_events) != 1:
+            return {"status": "invalid", "reason": "company_public_web_source_plan_event_ambiguous"}
+        event = self.store.repos.workflow_runtime.get_persisted_workflow_event_contract(
+            str(candidate_events[0].get("event_id") or "").strip()
+        )
+        if (
+            not event
+            or not bool(event.get("persisted_json_contract_valid"))
+            or str(event.get("workflow_run_id") or "").strip()
+            != str(plan_event_spec.get("workflow_run_id") or "").strip()
+            or str(event.get("operation_id") or "").strip() != str(plan_event_spec.get("operation_id") or "").strip()
+            or str(event.get("command_id") or "").strip() != str(plan_event_spec.get("command_id") or "").strip()
+            or str(event.get("event_family") or "").strip() != str(plan_event_spec.get("event_family") or "").strip()
+            or str(event.get("event_type") or "").strip() != str(plan_event_spec.get("event_type") or "").strip()
+            or str(event.get("actor") or "").strip() != str(plan_event_spec.get("actor") or "").strip()
+            or str(event.get("source") or "").strip() != str(plan_event_spec.get("source") or "").strip()
+            or not json_contract_equal(dict(event.get("payload") or {}), dict(plan_event_spec.get("payload") or {}))
+            or not json_contract_equal(
+                list(event.get("artifact_refs") or []), list(plan_event_spec.get("artifact_refs") or [])
+            )
+        ):
+            return {"status": "invalid", "reason": "company_public_web_source_plan_event_mismatch"}
+        child = self.store.repos.workflow_runtime.get_persisted_workflow_command_contract(expected_child_id)
+        child_payload = dict(child_spec.get("payload") or {})
+        if (
+            not child
+            or not bool(child.get("persisted_json_contract_valid"))
+            or str(child.get("command_id") or "").strip() != expected_child_id
+            or not self._company_public_web_command_causality_matches(
+                command_record=child,
+                command_payload=child_payload,
+                workflow_type="company_public_web_refresh",
+                actor=str(plan_event_spec.get("actor") or "").strip(),
+                source=str(plan_event_spec.get("source") or "").strip(),
+                source_command_id=command_id,
+                expected_idempotency_key=str(child_spec.get("idempotency_key") or "").strip(),
+                max_attempts=int(child_spec.get("max_attempts") or 0),
+                retry_policy=dict(child_spec.get("retry_policy") or {}),
+                parent_command_id=command_id,
+                causal_group_id=command_id,
+            )
+        ):
+            return {"status": "invalid", "reason": "company_public_web_source_materialize_child_mismatch"}
+        expected_delta_ids = [str(item.get("delta_id") or "").strip() for item in entity_delta_specs]
+        expected_delta_workspaces = {
+            str(item.get("workspace_id") or "").strip() for item in entity_delta_specs if isinstance(item, Mapping)
+        }
+        if (
+            any(not delta_id for delta_id in expected_delta_ids)
+            or len(set(expected_delta_ids)) != len(expected_delta_ids)
+            or len(expected_delta_workspaces) != 1
+            or not next(iter(expected_delta_workspaces), "")
+        ):
+            return {"status": "invalid", "reason": "company_public_web_source_entity_delta_ambiguous"}
+        expected_delta_id_set = set(expected_delta_ids)
+        expected_delta_workspace = next(iter(expected_delta_workspaces))
+        persisted_deltas = [
+            dict(item or {})
+            for item in self.store.repos.workflow_runtime.list_entity_deltas(
+                workspace_id=expected_delta_workspace,
+                command_id=command_id,
+                limit=0,
+            )
+            if str(dict(item or {}).get("delta_id") or "").strip() in expected_delta_id_set
+        ]
+        if len(persisted_deltas) != len(entity_delta_specs):
+            return {"status": "invalid", "reason": "company_public_web_source_entity_delta_ambiguous"}
+        deltas_by_id = {str(item.get("delta_id") or "").strip(): dict(item or {}) for item in persisted_deltas}
+        for spec in entity_delta_specs:
+            delta = deltas_by_id.get(str(spec.get("delta_id") or "").strip())
+            if not delta or any(
+                not json_contract_equal(delta.get(field), spec.get(field))
+                for field in (
+                    "workspace_id",
+                    "workflow_run_id",
+                    "operation_run_id",
+                    "command_id",
+                    "activity_run_id",
+                    "attempt_id",
+                    "acquisition_run_id",
+                    "entity_type",
+                    "entity_key",
+                    "delta_kind",
+                    "status",
+                    "reason",
+                    "source_ref",
+                    "entity_payload",
+                    "projection_effect",
+                    "artifact_refs",
+                    "idempotency_key",
+                    "metadata",
+                )
+            ):
+                return {"status": "invalid", "reason": "company_public_web_source_entity_delta_mismatch"}
+        return {
+            "status": "ready",
+            "workflow_command": current,
+            "child_command": child,
+            "event": event,
+            "entity_deltas": persisted_deltas,
+        }
+
+    def _mark_company_public_web_command_succeeded_for_exact_claim(
+        self,
+        command: Mapping[str, Any],
+        *,
+        result: dict[str, Any],
+    ) -> dict[str, Any]:
+        claim = self._company_public_web_physical_claim_pin(command)
+        if not claim:
+            return {}
+        return self.store.mark_workflow_command_succeeded(
+            str(claim["command_id"]),
+            result=dict(result or {}),
+            expected_attempt=int(claim["attempt"]),
+            expected_lease_owner=str(claim["lease_owner"]),
+            expected_lease_expires_at=str(claim["lease_expires_at"]),
+        )
+
+    def _mark_company_public_web_command_failed_for_exact_claim(
+        self,
+        command: Mapping[str, Any],
+        *,
+        error_text: str,
+        retryable: bool,
+        retry_delay_seconds: int,
+    ) -> dict[str, Any]:
+        claim = self._company_public_web_physical_claim_pin(command)
+        if not claim:
+            return {}
+        return self.store.mark_workflow_command_failed(
+            str(claim["command_id"]),
+            error_text=str(error_text or "").strip(),
+            retryable=bool(retryable),
+            retry_delay_seconds=max(0, int(retry_delay_seconds or 0)),
+            expected_attempt=int(claim["attempt"]),
+            expected_lease_owner=str(claim["lease_owner"]),
+            expected_lease_expires_at=str(claim["lease_expires_at"]),
+        )
+
+    def _company_public_web_command_matches_physical_claim(
+        self,
+        command: Mapping[str, Any],
+        expected_claim: Mapping[str, Any],
+    ) -> bool:
+        expected = self._company_public_web_physical_claim_pin(expected_claim)
+        current = self._company_public_web_physical_claim_pin(command)
+        return bool(
+            expected
+            and current == expected
+            and str(command.get("status") or "").strip() in {"claimed", "running"}
+            and self._workflow_command_lease_active(dict(command))
+        )
+
+    def _revalidate_company_public_web_command_target(
+        self,
+        command: Mapping[str, Any],
+        *,
+        expected_physical_claim: Mapping[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        command_id = str(command.get("command_id") or "").strip()
+        command_record = self.store.repos.workflow_runtime.get_persisted_workflow_command_contract(command_id)
+        if expected_physical_claim is not None and (
+            not command_record
+            or not self._company_public_web_command_matches_physical_claim(
+                command_record,
+                expected_physical_claim,
+            )
+        ):
+            return {
+                "status": "owner_lost",
+                "reason": "company_public_web_command_claim_not_current",
+                "workflow_command": dict(command_record or {}),
+            }
+        if not command_record or not bool(command_record.get("persisted_json_contract_valid")):
+            return {"status": "invalid", "reason": "company_public_web_command_persisted_json_invalid"}
+        raw_payload = command_record.get("payload")
+        if not isinstance(raw_payload, Mapping):
+            return {"status": "invalid", "reason": "company_public_web_command_payload_invalid"}
+        payload = dict(raw_payload)
+        command_type = str(command_record.get("command_type") or "").strip()
+        if (
+            command_type
+            not in {
+                COMPANY_PUBLIC_WEB_REFRESH_COMMAND_TYPE,
+                COMPANY_PUBLIC_WEB_SOURCE_COLLECT_COMMAND_TYPE,
+                COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE,
+            }
+            or str(command_record.get("owner") or "").strip() != COMPANY_PUBLIC_WEB_REFRESH_OWNER
+        ):
+            return {"status": "invalid", "reason": "company_public_web_command_owner_mismatch"}
+        operation_run_id = str(command_record.get("operation_id") or "").strip()
+        if not operation_run_id or str(payload.get("operation_id") or "").strip() != operation_run_id:
+            return {"status": "invalid", "reason": "company_public_web_command_operation_mismatch"}
+        operation_run = self.store.repos.workflow_runtime.get_operation(operation_run_id)
+        if not operation_run:
+            return {"status": "invalid", "reason": "company_public_web_command_operation_missing"}
+        action_id = str(operation_run.get("action_id") or "").strip()
+        action = self.store.repos.workflow_runtime.get_action(action_id) if action_id else {}
+        if (
+            not action
+            or str(action.get("action_type") or "").strip() != ACTION_REFRESH_COMPANY_PUBLIC_WEB
+            or str(payload.get("action_id") or "").strip() != action_id
+            or str(payload.get("operation_run_id") or "").strip() != operation_run_id
+        ):
+            return {"status": "invalid", "reason": "company_public_web_command_action_mismatch"}
+        try:
+            spec = self.operation_runtime_writer.validate_persisted_action_request(
+                action=action,
+                operation_run=operation_run,
+            )
+        except OperationRuntimeStateConflict:
+            return {"status": "invalid", "reason": "company_public_web_action_request_conflict"}
+        if (
+            str(spec.default_workflow_command_type or "").strip() != COMPANY_PUBLIC_WEB_REFRESH_COMMAND_TYPE
+            or COMPANY_PUBLIC_WEB_REFRESH_COMMAND_TYPE not in spec.allowed_workflow_command_types
+            or str(spec.owner_module or "").strip() != COMPANY_PUBLIC_WEB_REFRESH_OWNER
+            or str(action.get("operation_type") or "").strip() != str(spec.operation_type or "").strip()
+            or str(operation_run.get("operation_type") or "").strip() != str(spec.operation_type or "").strip()
+            or str(operation_run.get("status") or "").strip() in OPERATION_RUN_TERMINAL_STATUSES
+            or str(action.get("status") or "").strip() in OPERATION_ACTION_TERMINAL_STATUSES
+            or str(action.get("approval_status") or "").strip() != "approved"
+        ):
+            return {"status": "invalid", "reason": "company_public_web_command_contract_mismatch"}
+        target_preflight = self._revalidate_company_public_web_action_target(
+            operation_run=operation_run,
+            action=action,
+        )
+        if str(target_preflight.get("status") or "") != "ready":
+            return target_preflight
+        target = dict(target_preflight.get("company_public_web_target") or {})
+        action_input = dict(target_preflight.get("company_public_web_input") or {})
+        raw_bound_target = payload.get("company_public_web_target")
+        if (
+            not isinstance(raw_bound_target, Mapping)
+            or not json_contract_equal(dict(raw_bound_target), target)
+            or str(payload.get("workspace_id") or "").strip() != str(target.get("workspace_id") or "").strip()
+            or str(payload.get("company_key") or "").strip() != str(target.get("company_key") or "").strip()
+            or str(payload.get("target_company") or "").strip() != str(action_input.get("target_company") or "").strip()
+        ):
+            return {"status": "invalid", "reason": "company_public_web_bound_target_mismatch"}
+        root_plan = self._schema_defined_company_public_web_command_plan(
+            operation_run=operation_run,
+            action=action,
+            owner=COMPANY_PUBLIC_WEB_REFRESH_OWNER,
+        )
+        if str(root_plan.get("status") or "") != "ok":
+            return {"status": "invalid", "reason": "company_public_web_command_payload_invalid"}
+        expected_workflow_run_id = str(root_plan.get("workflow_run_id") or "").strip()
+        if (
+            str(command_record.get("workflow_run_id") or "").strip() != expected_workflow_run_id
+            or str(operation_run.get("workspace_id") or "").strip() != str(target.get("workspace_id") or "").strip()
+        ):
+            return {"status": "invalid", "reason": "company_public_web_command_workflow_mismatch"}
+        if command_type == COMPANY_PUBLIC_WEB_REFRESH_COMMAND_TYPE:
+            root_command_payload = dict(root_plan.get("command_payload") or {})
+            expected_payload = {
+                **root_command_payload,
+                "operation_id": operation_run_id,
+            }
+            root_payload_hash = hashlib.sha1(
+                json.dumps(root_command_payload, ensure_ascii=False, sort_keys=True).encode("utf-8")
+            ).hexdigest()[:24]
+            expected_root_idempotency_key = (
+                f"{COMPANY_PUBLIC_WEB_REFRESH_COMMAND_TYPE}:operation:{operation_run_id}:{root_payload_hash}"
+            )
+            workflow_ref = {
+                "workflow_run_id": expected_workflow_run_id,
+                "command_id": command_id,
+                "command_type": COMPANY_PUBLIC_WEB_REFRESH_COMMAND_TYPE,
+                "owner": COMPANY_PUBLIC_WEB_REFRESH_OWNER,
+            }
+            causal_envelope_matches = self._company_public_web_command_causality_matches(
+                command_record=command_record,
+                command_payload=expected_payload,
+                workflow_type="agent_callable_workflow_command",
+                actor="operation_workflow_command_planner",
+                source="operation_run_dispatch",
+                source_command_id="",
+                expected_idempotency_key=expected_root_idempotency_key,
+                max_attempts=int(root_plan.get("max_attempts") or 0),
+                retry_policy=dict(root_plan.get("retry_policy") or {}),
+                event_payload_causality={
+                    "operation_id": operation_run_id,
+                    "action_id": action_id,
+                    "action_type": ACTION_REFRESH_COMPANY_PUBLIC_WEB,
+                    "migration_phase": "W11_agent_callable_workflow_command",
+                },
+            )
+            if not causal_envelope_matches or (
+                str(command_record.get("status") or "").strip() != "succeeded"
+                and not json_contract_equal(dict(operation_run.get("workflow_ref") or {}), workflow_ref)
+            ):
+                return {"status": "invalid", "reason": "company_public_web_root_command_payload_mismatch"}
+            return {
+                "status": "ready",
+                "workflow_command": command_record,
+                "operation_run": operation_run,
+                "action": action,
+                "company_public_web_target": target,
+                "company_public_web_input": action_input,
+                "company_public_web_root_plan": root_plan,
+            }
+
+        parent_command_id = str(command_record.get("parent_command_id") or "").strip()
+        if not parent_command_id or str(payload.get("parent_command_id") or "").strip() != parent_command_id:
+            return {"status": "invalid", "reason": "company_public_web_phase_parent_mismatch"}
+        parent_command = self.store.repos.workflow_runtime.get_persisted_workflow_command_contract(parent_command_id)
+        if not parent_command or not bool(parent_command.get("persisted_json_contract_valid")):
+            return {"status": "invalid", "reason": "company_public_web_phase_parent_missing"}
+        expected_parent_type = (
+            COMPANY_PUBLIC_WEB_REFRESH_COMMAND_TYPE
+            if command_type == COMPANY_PUBLIC_WEB_SOURCE_COLLECT_COMMAND_TYPE
+            else COMPANY_PUBLIC_WEB_SOURCE_COLLECT_COMMAND_TYPE
+        )
+        if (
+            str(parent_command.get("command_type") or "").strip() != expected_parent_type
+            or str(parent_command.get("status") or "").strip() != "succeeded"
+            or str(parent_command.get("operation_id") or "").strip() != operation_run_id
+            or str(parent_command.get("workflow_run_id") or "").strip() != expected_workflow_run_id
+        ):
+            return {"status": "invalid", "reason": "company_public_web_phase_parent_mismatch"}
+        parent_result = dict(parent_command.get("result") or {})
+        if command_id not in [
+            str(item or "").strip() for item in list(parent_result.get("downstream_command_ids") or [])
+        ]:
+            return {"status": "invalid", "reason": "company_public_web_phase_causality_mismatch"}
+        parent_preflight = self._revalidate_company_public_web_command_target(parent_command)
+        if str(parent_preflight.get("status") or "") != "ready":
+            return parent_preflight
+        if command_type == COMPANY_PUBLIC_WEB_SOURCE_COLLECT_COMMAND_TYPE:
+            expected_payload = {
+                **dict(root_plan.get("command_payload") or {}),
+                "operation_id": operation_run_id,
+                "phase_command_type": COMPANY_PUBLIC_WEB_SOURCE_COLLECT_COMMAND_TYPE,
+                "parent_command_id": parent_command_id,
+                "causal_group_id": parent_command_id,
+                "source": "company_public_web_refresh_owner",
+                "migration_phase": "W11_company_public_web_phase_command",
+            }
+            parent_payload_json = json.dumps(
+                dict(parent_command.get("payload") or {}),
+                ensure_ascii=False,
+                sort_keys=True,
+            )
+            expected_source_idempotency_key = (
+                f"{COMPANY_PUBLIC_WEB_SOURCE_COLLECT_COMMAND_TYPE}:{parent_command_id}:"
+                f"{hashlib.sha1(parent_payload_json.encode('utf-8')).hexdigest()[:24]}"
+            )
+            expected_terminal_downstream_ids: list[str] | None = None
+            if str(command_record.get("status") or "").strip() == "succeeded":
+                terminal_run = dict(dict(command_record.get("result") or {}).get("run") or {})
+                terminal_run_id = str(terminal_run.get("run_id") or "").strip()
+                terminal_snapshot = company_public_web_materialization_snapshot_identity(terminal_run)
+                terminal_snapshot_schema = str(
+                    terminal_snapshot.get(COMPANY_PUBLIC_WEB_MATERIALIZATION_SNAPSHOT_SCHEMA_KEY) or ""
+                ).strip()
+                terminal_snapshot_sha256 = str(
+                    terminal_snapshot.get(COMPANY_PUBLIC_WEB_MATERIALIZATION_SNAPSHOT_DIGEST_KEY) or ""
+                ).strip()
+                if not terminal_run_id or not terminal_snapshot:
+                    return {"status": "invalid", "reason": "company_public_web_source_terminal_result_invalid"}
+                terminal_materialize_suffix = f"{terminal_run_id}:{terminal_snapshot_schema}:{terminal_snapshot_sha256}"
+                terminal_materialize_idempotency_key = (
+                    f"{COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE}:{command_id}:"
+                    f"{hashlib.sha1(terminal_materialize_suffix.encode('utf-8')).hexdigest()[:24]}"
+                )
+                expected_terminal_downstream_ids = [
+                    command_id_for(expected_workflow_run_id, terminal_materialize_idempotency_key)
+                ]
+            if not self._company_public_web_command_causality_matches(
+                command_record=command_record,
+                command_payload=expected_payload,
+                workflow_type="company_public_web_refresh",
+                actor="company_public_web_phase_planner",
+                source="company_public_web_refresh_owner",
+                source_command_id=parent_command_id,
+                expected_idempotency_key=expected_source_idempotency_key,
+                max_attempts=3,
+                retry_policy={"kind": "company_public_web_phase", "retry_delay_seconds": 30},
+                parent_command_id=parent_command_id,
+                causal_group_id=parent_command_id,
+                expected_terminal_downstream_command_ids=expected_terminal_downstream_ids,
+            ):
+                return {"status": "invalid", "reason": "company_public_web_source_command_payload_mismatch"}
+        else:
+            run_id = str(payload.get("run_id") or "").strip()
+            source_run = dict(parent_result.get("run") or {})
+            run = self.store.get_company_public_web_asset_run(run_id=run_id) if run_id else None
+            source_snapshot_identity = company_public_web_materialization_snapshot_identity(source_run)
+            current_snapshot_identity = company_public_web_materialization_snapshot_identity(dict(run or {}))
+            snapshot_schema_version = str(
+                source_snapshot_identity.get(COMPANY_PUBLIC_WEB_MATERIALIZATION_SNAPSHOT_SCHEMA_KEY) or ""
+            ).strip()
+            snapshot_sha256 = str(
+                source_snapshot_identity.get(COMPANY_PUBLIC_WEB_MATERIALIZATION_SNAPSHOT_DIGEST_KEY) or ""
+            ).strip()
+            expected_materialize_payload = {
+                "run_id": run_id,
+                "materialization_snapshot_schema_version": snapshot_schema_version,
+                "materialization_snapshot_sha256": snapshot_sha256,
+                "company_public_web_target": target,
+                "target_company": str(action_input.get("target_company") or "").strip(),
+                "company_key": str(target.get("company_key") or "").strip(),
+                "workspace_id": str(target.get("workspace_id") or "").strip(),
+                "max_assets": int(action_input.get("max_assets") or 50),
+                "collection_mode": "seed_url_only",
+                "operation_run_id": operation_run_id,
+                "action_id": action_id,
+                "operation_id": operation_run_id,
+                "phase_command_type": COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE,
+                "parent_command_id": parent_command_id,
+                "causal_group_id": parent_command_id,
+                "source": "company_public_web_source_collect_owner",
+                "migration_phase": "W11_company_public_web_phase_command",
+            }
+            materialize_identity_suffix = f"{run_id}:{snapshot_schema_version}:{snapshot_sha256}"
+            expected_materialize_idempotency_key = (
+                f"{COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE}:{parent_command_id}:"
+                f"{hashlib.sha1(materialize_identity_suffix.encode('utf-8')).hexdigest()[:24]}"
+            )
+            if (
+                not run_id
+                or not run
+                or not source_snapshot_identity
+                or current_snapshot_identity != source_snapshot_identity
+                or str(run.get("status") or "").strip().lower() != "completed"
+                or str(source_run.get("run_id") or "").strip() != run_id
+                or str(source_run.get("status") or "").strip().lower() != "completed"
+                or str(source_run.get("target_company") or "").strip()
+                != str(action_input.get("target_company") or "").strip()
+                or str(source_run.get("company_key") or "").strip() != str(target.get("company_key") or "").strip()
+                or str(run.get("target_company") or "").strip() != str(action_input.get("target_company") or "").strip()
+                or str(run.get("company_key") or "").strip() != str(target.get("company_key") or "").strip()
+                or not self._company_public_web_command_causality_matches(
+                    command_record=command_record,
+                    command_payload=expected_materialize_payload,
+                    workflow_type="company_public_web_refresh",
+                    actor="company_public_web_phase_planner",
+                    source="company_public_web_source_collect_owner",
+                    source_command_id=parent_command_id,
+                    expected_idempotency_key=expected_materialize_idempotency_key,
+                    max_attempts=3,
+                    retry_policy={"kind": "company_public_web_phase", "retry_delay_seconds": 30},
+                    parent_command_id=parent_command_id,
+                    causal_group_id=parent_command_id,
+                )
+            ):
+                return {"status": "invalid", "reason": "company_public_web_materialize_target_mismatch"}
+        return {
+            "status": "ready",
+            "workflow_command": command_record,
+            "operation_run": operation_run,
+            "action": action,
+            "company_public_web_target": target,
+            "company_public_web_input": action_input,
+            "company_public_web_root_plan": root_plan,
+        }
+
+    def _fail_company_public_web_target_preflight(
+        self,
+        *,
+        command_id: str,
+        latest_command: Mapping[str, Any],
+        target_preflight: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        reason = str(
+            target_preflight.get("reason")
+            or target_preflight.get("status")
+            or "company_public_web_command_target_preflight_failed"
+        ).strip()
+        failed = self._mark_company_public_web_command_failed_for_exact_claim(
+            latest_command,
+            error_text=reason,
+            retryable=False,
+            retry_delay_seconds=0,
+        )
+        if not failed:
+            current_command = self.store.get_workflow_command(command_id) or dict(latest_command)
+            return {
+                "status": "skipped",
+                "reason": "company_public_web_command_claim_not_current",
+                "workflow_command": self._workflow_command_observation(
+                    current_command,
+                    migration_phase="W11_company_public_web_refresh",
+                ),
+            }
+        self._sync_operation_run_from_workflow_command(
+            failed or dict(latest_command),
+            actor=COMPANY_PUBLIC_WEB_REFRESH_OWNER,
+            source="company_public_web.command_owner",
+        )
+        return {
+            **dict(target_preflight),
+            "status": "failed",
+            "workflow_command": self._workflow_command_observation(
+                failed or dict(latest_command),
+                migration_phase="W11_company_public_web_refresh",
+            ),
+        }
+
+    def _close_company_public_web_owner_lost_activity_attempt(
+        self,
+        *,
+        command: Mapping[str, Any],
+        activity: Mapping[str, Any],
+        attempt: Mapping[str, Any],
+        reason: str,
+        terminalize_exact_command: bool = False,
+        terminalize_exhausted_command: bool = False,
+    ) -> dict[str, Any]:
+        """Close a stale D1m attempt or one exact deterministic terminal failure.
+
+        ActivityRun is shared by every physical attempt for a command. The
+        native closure uses the same advisory identities as the runtime
+        repository and updates that shared row only while its metadata still
+        names this attempt's lease owner. This keeps a later attempt's running
+        ActivityRun intact while ensuring the losing ActivityAttempt is not
+        left hanging. The opt-in terminal mode is used only for a deterministic
+        brownfield collision and atomically fails the exact current command,
+        ActivityRun, and ActivityAttempt.
+        """
+
+        command_payload = dict(command or {})
+        activity_payload = dict(activity or {})
+        attempt_payload = dict(attempt or {})
+        normalized_reason = str(reason or "company_public_web_source_run_owner_lost").strip()
+        if (not activity_payload or not attempt_payload) and not terminalize_exhausted_command:
+            return {
+                "outcome": "not_started",
+                "reason": normalized_reason,
+                "attempt_closed": False,
+                "activity_closed": False,
+            }
+        closure = self.store._call_control_plane_postgres_native(  # noqa: SLF001
+            "close_company_public_web_owner_lost_activity_attempt",
+            table_name="workflow_activity_attempts",
+            command_id=str(command_payload.get("command_id") or "").strip(),
+            expected_command_attempt=max(0, int(command_payload.get("attempt") or 0)),
+            expected_lease_owner=str(command_payload.get("lease_owner") or "").strip(),
+            expected_lease_expires_at=str(command_payload.get("lease_expires_at") or "").strip(),
+            activity_run_id=str(activity_payload.get("activity_run_id") or "").strip(),
+            activity_idempotency_key=str(activity_payload.get("idempotency_key") or "").strip(),
+            attempt_id=str(attempt_payload.get("attempt_id") or "").strip(),
+            attempt_idempotency_key=str(attempt_payload.get("idempotency_key") or "").strip(),
+            workspace_id=str(
+                activity_payload.get("workspace_id")
+                or dict(command_payload.get("payload") or {}).get("workspace_id")
+                or "default"
+            ).strip()
+            or "default",
+            reason=normalized_reason,
+            terminalize_exact_command=bool(terminalize_exact_command),
+            terminalize_exhausted_command=bool(terminalize_exhausted_command),
+        )
+        result = dict(closure or {})
+        return {
+            "outcome": str(result.get("outcome") or "unavailable").strip(),
+            "reason": str(result.get("reason") or normalized_reason).strip(),
+            "attempt_closed": bool(result.get("attempt_closed")),
+            "activity_closed": bool(result.get("activity_closed")),
+            "command_closed": bool(result.get("command_closed")),
+            "attempt_id": str(dict(result.get("attempt") or {}).get("attempt_id") or "").strip(),
+            "activity_run_id": str(dict(result.get("activity") or {}).get("activity_run_id") or "").strip(),
+            "command_id": str(dict(result.get("command") or {}).get("command_id") or "").strip(),
+        }
+
+    def _terminalize_exhausted_company_public_web_source_command(
+        self,
+        command: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        """Atomically close one expired final D1m source attempt before reclaim."""
+
+        command_payload = dict(command or {})
+        if (
+            str(command_payload.get("command_type") or "").strip() != COMPANY_PUBLIC_WEB_SOURCE_COLLECT_COMMAND_TYPE
+            or str(command_payload.get("owner") or "").strip() != COMPANY_PUBLIC_WEB_REFRESH_OWNER
+            or str(command_payload.get("status") or "").strip() != "running"
+            or int(command_payload.get("attempt") or 0) < max(1, int(command_payload.get("max_attempts") or 1))
+        ):
+            return {"outcome": "not_exhausted", "command_closed": False}
+        return self._close_company_public_web_owner_lost_activity_attempt(
+            command=command_payload,
+            activity={},
+            attempt={},
+            reason="workflow_command_attempts_exhausted_after_lease_expiry",
+            terminalize_exhausted_command=True,
         )
 
     def _run_company_public_web_refresh_command(
@@ -54477,11 +55633,41 @@ class SourcingOrchestrator:
         command_id = str(command_payload.get("command_id") or "").strip()
         if not command_id:
             return {"status": "skipped", "reason": "company_public_web_refresh_command_id_missing"}
+        exhausted_closure = self._terminalize_exhausted_company_public_web_source_command(command_payload)
+        if bool(exhausted_closure.get("command_closed")):
+            terminal_command = self.store.get_workflow_command(command_id) or command_payload
+            self._sync_operation_run_from_workflow_command(
+                terminal_command,
+                actor=COMPANY_PUBLIC_WEB_REFRESH_OWNER,
+                source="company_public_web.command_owner",
+            )
+            return {
+                "status": "failed",
+                "reason": "workflow_command_attempts_exhausted_after_lease_expiry",
+                "activity_terminal_closure": exhausted_closure,
+                "workflow_command": self._workflow_command_observation(
+                    terminal_command,
+                    migration_phase="W11_company_public_web_refresh",
+                ),
+            }
+        if str(exhausted_closure.get("outcome") or "").strip() in {"conflict", "invalid"}:
+            return {
+                "status": "invalid",
+                "reason": str(
+                    exhausted_closure.get("reason") or "company_public_web_exhausted_activity_identity_conflict"
+                ).strip(),
+                "activity_terminal_closure": exhausted_closure,
+                "workflow_command": self._workflow_command_observation(
+                    self.store.get_workflow_command(command_id) or command_payload,
+                    migration_phase="W11_company_public_web_refresh",
+                ),
+            }
         lease_owner = f"{COMPANY_PUBLIC_WEB_REFRESH_OWNER}-{uuid.uuid4().hex[:8]}"
         claimed = self.store.claim_workflow_command(
             command_id,
             lease_owner=lease_owner,
             lease_seconds=max(30, int(lease_seconds or 300)),
+            reclaim_claimed=True,
         )
         if not claimed:
             latest = self.store.get_workflow_command(command_id) or command_payload
@@ -54499,19 +55685,63 @@ class SourcingOrchestrator:
                     migration_phase="W11_company_public_web_refresh",
                 ),
             }
-        self.store.mark_workflow_command_running(command_id, lease_owner=lease_owner)
-        latest_command = self.store.get_workflow_command(command_id) or claimed
+        physical_claim = self._company_public_web_physical_claim_pin(claimed)
+        running = self.store.mark_workflow_command_running(command_id, lease_owner=lease_owner)
+        if not running or not self._company_public_web_command_matches_physical_claim(running, physical_claim):
+            current_command = self.store.get_workflow_command(command_id) or command_payload
+            return {
+                "status": "skipped",
+                "reason": "company_public_web_command_claim_not_current",
+                "workflow_command": self._workflow_command_observation(
+                    current_command,
+                    migration_phase="W11_company_public_web_refresh",
+                ),
+            }
+        latest_command = dict(running)
+        target_preflight = self._revalidate_company_public_web_command_target(
+            latest_command,
+            expected_physical_claim=physical_claim,
+        )
+        if str(target_preflight.get("status") or "") != "ready":
+            if str(target_preflight.get("status") or "") == "owner_lost":
+                current_command = dict(target_preflight.get("workflow_command") or {}) or (
+                    self.store.get_workflow_command(command_id) or latest_command
+                )
+                return {
+                    **dict(target_preflight),
+                    "status": "skipped",
+                    "workflow_command": self._workflow_command_observation(
+                        current_command,
+                        migration_phase="W11_company_public_web_refresh",
+                    ),
+                }
+            return self._fail_company_public_web_target_preflight(
+                command_id=command_id,
+                latest_command=latest_command,
+                target_preflight=target_preflight,
+            )
+        latest_command = dict(target_preflight.get("workflow_command") or latest_command)
         command_type = str(latest_command.get("command_type") or "").strip()
         if command_type == COMPANY_PUBLIC_WEB_REFRESH_COMMAND_TYPE:
             payload = dict(latest_command.get("payload") or {})
             target_company = str(payload.get("target_company") or payload.get("company") or "").strip()
             if not target_company:
-                failed = self.store.mark_workflow_command_failed(
-                    command_id,
+                failed = self._mark_company_public_web_command_failed_for_exact_claim(
+                    latest_command,
                     error_text="target_company is required",
                     retryable=False,
                     retry_delay_seconds=0,
                 )
+                if not failed:
+                    current_command = self.store.get_workflow_command(command_id) or latest_command
+                    return {
+                        "status": "skipped",
+                        "reason": "company_public_web_command_claim_not_current",
+                        "workflow_command": self._workflow_command_observation(
+                            current_command,
+                            migration_phase="W11_company_public_web_refresh",
+                        ),
+                    }
                 self._sync_operation_run_from_workflow_command(
                     failed or latest_command,
                     actor=COMPANY_PUBLIC_WEB_REFRESH_OWNER,
@@ -54525,25 +55755,37 @@ class SourcingOrchestrator:
                         migration_phase="W11_company_public_web_refresh",
                     ),
                 }
-            downstream = self._plan_company_public_web_phase_command(
-                parent_command=latest_command,
-                command_type=COMPANY_PUBLIC_WEB_SOURCE_COLLECT_COMMAND_TYPE,
-                command_payload={
-                    **payload,
-                    "target_company": target_company,
-                    "company": target_company,
-                    "phase_command_type": COMPANY_PUBLIC_WEB_SOURCE_COLLECT_COMMAND_TYPE,
-                },
-                idempotency_suffix=json.dumps(payload, ensure_ascii=False, sort_keys=True),
-                source="company_public_web_refresh_owner",
-            )
+            try:
+                downstream = self._plan_company_public_web_phase_command(
+                    parent_command=latest_command,
+                    command_type=COMPANY_PUBLIC_WEB_SOURCE_COLLECT_COMMAND_TYPE,
+                    command_payload={
+                        **payload,
+                        "target_company": target_company,
+                        "phase_command_type": COMPANY_PUBLIC_WEB_SOURCE_COLLECT_COMMAND_TYPE,
+                    },
+                    idempotency_suffix=json.dumps(payload, ensure_ascii=False, sort_keys=True),
+                    source="company_public_web_refresh_owner",
+                )
+            except Exception:
+                downstream = {}
             if not downstream:
-                failed = self.store.mark_workflow_command_failed(
-                    command_id,
+                failed = self._mark_company_public_web_command_failed_for_exact_claim(
+                    latest_command,
                     error_text="company_public_web_source_collect_command_plan_failed",
                     retryable=True,
                     retry_delay_seconds=30,
                 )
+                if not failed:
+                    current_command = self.store.get_workflow_command(command_id) or latest_command
+                    return {
+                        "status": "skipped",
+                        "reason": "company_public_web_command_claim_not_current",
+                        "workflow_command": self._workflow_command_observation(
+                            current_command,
+                            migration_phase="W11_company_public_web_refresh",
+                        ),
+                    }
                 self._sync_operation_run_from_workflow_command(
                     failed or latest_command,
                     actor=COMPANY_PUBLIC_WEB_REFRESH_OWNER,
@@ -54557,8 +55799,8 @@ class SourcingOrchestrator:
                         migration_phase="W11_company_public_web_refresh",
                     ),
                 }
-            succeeded = self.store.mark_workflow_command_succeeded(
-                command_id,
+            succeeded = self._mark_company_public_web_command_succeeded_for_exact_claim(
+                latest_command,
                 result={
                     "status": "downstream_queued",
                     "operation_completion_deferred": True,
@@ -54570,6 +55812,17 @@ class SourcingOrchestrator:
                     "migration_phase": "W11_company_public_web_refresh_root_orchestration",
                 },
             )
+            if not succeeded:
+                current_command = self.store.get_workflow_command(command_id) or latest_command
+                return {
+                    "status": "skipped",
+                    "reason": "company_public_web_command_claim_not_current",
+                    "downstream_commands": [downstream],
+                    "workflow_command": self._workflow_command_observation(
+                        current_command,
+                        migration_phase="W11_company_public_web_refresh_root_orchestration",
+                    ),
+                }
             self._sync_operation_run_from_workflow_command(
                 succeeded or latest_command,
                 actor=COMPANY_PUBLIC_WEB_REFRESH_OWNER,
@@ -54620,25 +55873,99 @@ class SourcingOrchestrator:
                 "company_asset_layer": "company_assets/company_evidence/company_assertions",
             },
             attempt_suffix="company_public_web_refresh",
+            require_current_command_claim=True,
         )
+        current_after_activity_start = self.store.get_workflow_command(command_id) or {}
+        if (
+            not activity
+            or not attempt
+            or not self._company_public_web_command_matches_physical_claim(
+                current_after_activity_start,
+                physical_claim,
+            )
+        ):
+            if (
+                str(current_after_activity_start.get("status") or "").strip() == "failed_terminal"
+                and str(current_after_activity_start.get("last_error") or "").strip()
+                == "workflow_command_attempts_exhausted_after_lease_expiry"
+            ):
+                self._sync_operation_run_from_workflow_command(
+                    current_after_activity_start,
+                    actor=COMPANY_PUBLIC_WEB_REFRESH_OWNER,
+                    source="company_public_web.command_owner",
+                )
+                return {
+                    "status": "failed",
+                    "reason": "workflow_command_attempts_exhausted_after_lease_expiry",
+                    "workflow_command": self._workflow_command_observation(
+                        current_after_activity_start,
+                        migration_phase="W11_company_public_web_refresh",
+                    ),
+                }
+            activity_closure = self._close_company_public_web_owner_lost_activity_attempt(
+                command=latest_command,
+                activity=activity,
+                attempt=attempt,
+                reason="company_public_web_command_claim_lost_during_activity_start",
+            )
+            return {
+                "status": "skipped",
+                "reason": "company_public_web_command_claim_lost_during_activity_start",
+                "activity_owner_lost_closure": activity_closure,
+                "workflow_command": self._workflow_command_observation(
+                    current_after_activity_start or latest_command,
+                    migration_phase="W11_company_public_web_refresh",
+                ),
+            }
+
+        def _post_effect_owner_lost(reason: str) -> dict[str, Any] | None:
+            current_command = self.store.get_workflow_command(command_id) or {}
+            if self._company_public_web_command_matches_physical_claim(current_command, physical_claim):
+                return None
+            normalized_reason = str(reason or "company_public_web_command_claim_not_current").strip()
+            activity_closure = self._close_company_public_web_owner_lost_activity_attempt(
+                command=latest_command,
+                activity=activity,
+                attempt=attempt,
+                reason=normalized_reason,
+            )
+            return {
+                "status": "skipped",
+                "reason": normalized_reason,
+                "activity_owner_lost_closure": activity_closure,
+                "workflow_command": self._workflow_command_observation(
+                    current_command or latest_command,
+                    migration_phase="W11_company_public_web_refresh",
+                ),
+            }
+
         try:
             result = self._execute_company_public_web_refresh_command_payload(latest_command)
         except Exception as exc:
+            owner_lost = _post_effect_owner_lost("company_public_web_command_claim_lost_after_source_effect")
+            if owner_lost is not None:
+                return {**owner_lost, "error": str(exc)}
+            command_can_retry = int(latest_command.get("attempt") or 0) < max(
+                1, int(latest_command.get("max_attempts") or 1)
+            )
+            failed = self._mark_company_public_web_command_failed_for_exact_claim(
+                latest_command,
+                error_text=f"company_public_web_refresh_command_failed:{exc}",
+                retryable=True,
+                retry_delay_seconds=30,
+            )
+            if not failed:
+                owner_lost = _post_effect_owner_lost("company_public_web_command_claim_lost_before_failure_commit")
+                return {**dict(owner_lost or {}), "status": "skipped", "error": str(exc)}
             self._finish_workflow_command_activity_attempt(
                 activity=activity,
                 attempt=attempt,
-                status="failed",
+                status="retry_wait" if command_can_retry else "failed",
                 phase="company_public_web_refresh_failed",
                 output={"status": "failed", "reason": "company_public_web_refresh_command_failed", "error": str(exc)},
                 error={"reason": "company_public_web_refresh_command_failed", "error": str(exc)},
                 metadata={"company_public_web_owner": COMPANY_PUBLIC_WEB_REFRESH_OWNER},
                 attempt_status="failed",
-            )
-            failed = self.store.mark_workflow_command_failed(
-                command_id,
-                error_text=f"company_public_web_refresh_command_failed:{exc}",
-                retryable=True,
-                retry_delay_seconds=30,
             )
             self._sync_operation_run_from_workflow_command(
                 failed or latest_command,
@@ -54654,25 +55981,138 @@ class SourcingOrchestrator:
                     migration_phase="W11_company_public_web_refresh",
                 ),
             }
-        if str(result.get("status") or "").strip() != "completed":
-            self._finish_workflow_command_activity_attempt(
+        completed_replay_owner_lost = bool(
+            str(result.get("status") or "").strip() == "owner_lost"
+            and str(result.get("reason") or "").strip() == "company_public_web_completed_run_replay_read_only"
+        )
+        if not completed_replay_owner_lost:
+            post_effect_reason = (
+                str(result.get("reason") or "").strip()
+                if str(result.get("status") or "").strip() == "owner_lost"
+                else "company_public_web_command_claim_lost_after_source_effect"
+            )
+            owner_lost = _post_effect_owner_lost(post_effect_reason)
+            if owner_lost is not None:
+                return {**dict(result or {}), **owner_lost}
+        if str(result.get("status") or "").strip() == "owner_busy":
+            current_command = self.store.get_workflow_command(command_id) or latest_command
+            return {
+                **result,
+                "status": "skipped",
+                "reason": str(
+                    result.get("reason") or "company_public_web_source_run_owned_by_current_command_attempt"
+                ).strip(),
+                "activity_owner_busy_observation": {
+                    "outcome": "shared_current_attempt_in_progress",
+                    "attempt_closed": False,
+                    "activity_closed": False,
+                    "attempt_id": str(attempt.get("attempt_id") or "").strip(),
+                    "activity_run_id": str(activity.get("activity_run_id") or "").strip(),
+                },
+                "workflow_command": self._workflow_command_observation(
+                    current_command,
+                    migration_phase="W11_company_public_web_refresh",
+                ),
+            }
+        if str(result.get("status") or "").strip() == "owner_lost":
+            owner_lost_reason = str(result.get("reason") or "company_public_web_source_run_owner_lost").strip()
+            if owner_lost_reason == "company_public_web_completed_run_replay_read_only":
+                terminal_reason = "company_public_web_legacy_completed_requires_force_refresh"
+                activity_closure = self._close_company_public_web_owner_lost_activity_attempt(
+                    command=latest_command,
+                    activity=activity,
+                    attempt=attempt,
+                    reason=terminal_reason,
+                    terminalize_exact_command=True,
+                )
+                if bool(activity_closure.get("command_closed")):
+                    failed_command = self.store.get_workflow_command(command_id) or latest_command
+                    self._sync_operation_run_from_workflow_command(
+                        failed_command,
+                        actor=COMPANY_PUBLIC_WEB_REFRESH_OWNER,
+                        source="company_public_web.command_owner",
+                    )
+                    return {
+                        **result,
+                        "status": "failed",
+                        "reason": terminal_reason,
+                        "source_owner_lost_reason": owner_lost_reason,
+                        "activity_terminal_closure": activity_closure,
+                        "workflow_command": self._workflow_command_observation(
+                            failed_command,
+                            migration_phase="W11_company_public_web_refresh",
+                        ),
+                    }
+                current_command = self.store.get_workflow_command(command_id) or latest_command
+                return {
+                    **result,
+                    "status": "skipped",
+                    "reason": owner_lost_reason,
+                    "activity_owner_lost_closure": activity_closure,
+                    "workflow_command": self._workflow_command_observation(
+                        current_command,
+                        migration_phase="W11_company_public_web_refresh",
+                    ),
+                }
+            activity_closure = self._close_company_public_web_owner_lost_activity_attempt(
+                command=latest_command,
                 activity=activity,
                 attempt=attempt,
-                status="failed",
-                phase=str(result.get("reason") or "company_public_web_refresh_failed"),
-                output=dict(result or {}),
-                error={"reason": str(result.get("reason") or "company_public_web_refresh_not_completed")},
-                metadata={"company_public_web_owner": COMPANY_PUBLIC_WEB_REFRESH_OWNER},
-                attempt_status="failed",
+                reason=owner_lost_reason,
+                terminalize_exact_command=command_type == COMPANY_PUBLIC_WEB_SOURCE_COLLECT_COMMAND_TYPE,
             )
+            current_command = self.store.get_workflow_command(command_id) or latest_command
+            if bool(activity_closure.get("command_closed")):
+                self._sync_operation_run_from_workflow_command(
+                    current_command,
+                    actor=COMPANY_PUBLIC_WEB_REFRESH_OWNER,
+                    source="company_public_web.command_owner",
+                )
+                return {
+                    **result,
+                    "status": "failed",
+                    "reason": owner_lost_reason,
+                    "activity_terminal_closure": activity_closure,
+                    "workflow_command": self._workflow_command_observation(
+                        current_command,
+                        migration_phase="W11_company_public_web_refresh",
+                    ),
+                }
+            return {
+                **result,
+                "status": "skipped",
+                "reason": owner_lost_reason,
+                "activity_owner_lost_closure": activity_closure,
+                "workflow_command": self._workflow_command_observation(
+                    current_command,
+                    migration_phase="W11_company_public_web_refresh",
+                ),
+            }
+        if str(result.get("status") or "").strip() != "completed":
             retryable = str(result.get("status") or "").strip() == "failed"
-            failed = self.store.mark_workflow_command_failed(
-                command_id,
+            command_can_retry = bool(retryable) and int(latest_command.get("attempt") or 0) < max(
+                1, int(latest_command.get("max_attempts") or 1)
+            )
+            failed = self._mark_company_public_web_command_failed_for_exact_claim(
+                latest_command,
                 error_text=str(
                     result.get("reason") or result.get("status") or "company_public_web_refresh_not_completed"
                 ),
                 retryable=retryable,
                 retry_delay_seconds=30 if retryable else 0,
+            )
+            if not failed:
+                owner_lost = _post_effect_owner_lost("company_public_web_command_claim_lost_before_failure_commit")
+                return {**result, **dict(owner_lost or {"status": "skipped", "reason": "owner_lost"})}
+            self._finish_workflow_command_activity_attempt(
+                activity=activity,
+                attempt=attempt,
+                status="retry_wait" if command_can_retry else "failed",
+                phase=str(result.get("reason") or "company_public_web_refresh_failed"),
+                output=dict(result or {}),
+                error={"reason": str(result.get("reason") or "company_public_web_refresh_not_completed")},
+                metadata={"company_public_web_owner": COMPANY_PUBLIC_WEB_REFRESH_OWNER},
+                attempt_status="failed",
             )
             self._sync_operation_run_from_workflow_command(
                 failed or latest_command,
@@ -54687,75 +56127,159 @@ class SourcingOrchestrator:
                     migration_phase="W11_company_public_web_refresh",
                 ),
             }
-        entity_delta_ids = self._record_company_public_web_refresh_entity_deltas(
-            command=latest_command,
-            activity=activity,
-            attempt=attempt,
-            result=result,
-        )
+        entity_delta_ids: list[str] = []
         downstream_commands: list[dict[str, Any]] = []
+        source_completion_contract: dict[str, Any] = {}
+        source_delta_specs: list[dict[str, Any]] = []
         if command_type == COMPANY_PUBLIC_WEB_SOURCE_COLLECT_COMMAND_TYPE:
             run = dict(result.get("run") or {})
             run_id = str(run.get("run_id") or "").strip()
-            if run_id:
-                materialize_command = self._plan_company_public_web_phase_command(
-                    parent_command=latest_command,
-                    command_type=COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE,
-                    command_payload={
-                        "run_id": run_id,
-                        "target_company": str(run.get("target_company") or payload.get("target_company") or "").strip(),
-                        "company": str(run.get("target_company") or payload.get("company") or "").strip(),
-                        "company_key": str(run.get("company_key") or payload.get("company_key") or "").strip(),
-                        "phase_command_type": COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE,
-                    },
-                    idempotency_suffix=run_id,
-                    source="company_public_web_source_collect_owner",
+            snapshot_identity = company_public_web_materialization_snapshot_identity(run)
+            snapshot_schema_version = str(
+                snapshot_identity.get(COMPANY_PUBLIC_WEB_MATERIALIZATION_SNAPSHOT_SCHEMA_KEY) or ""
+            ).strip()
+            snapshot_sha256 = str(
+                snapshot_identity.get(COMPANY_PUBLIC_WEB_MATERIALIZATION_SNAPSHOT_DIGEST_KEY) or ""
+            ).strip()
+            try:
+                source_completion_contract = (
+                    self._company_public_web_phase_command_contract(
+                        parent_command=latest_command,
+                        command_type=COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE,
+                        command_payload={
+                            "run_id": run_id,
+                            "materialization_snapshot_schema_version": snapshot_schema_version,
+                            "materialization_snapshot_sha256": snapshot_sha256,
+                            "company_public_web_target": dict(target_preflight.get("company_public_web_target") or {}),
+                            "target_company": str(
+                                run.get("target_company") or payload.get("target_company") or ""
+                            ).strip(),
+                            "company_key": str(run.get("company_key") or payload.get("company_key") or "").strip(),
+                            "workspace_id": str(payload.get("workspace_id") or "").strip(),
+                            "max_assets": int(
+                                dict(target_preflight.get("company_public_web_input") or {}).get("max_assets") or 50
+                            ),
+                            "collection_mode": "seed_url_only",
+                            "operation_run_id": str(payload.get("operation_run_id") or "").strip(),
+                            "action_id": str(payload.get("action_id") or "").strip(),
+                            "phase_command_type": COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE,
+                        },
+                        idempotency_suffix=f"{run_id}:{snapshot_schema_version}:{snapshot_sha256}",
+                        source="company_public_web_source_collect_owner",
+                    )
+                    if run_id and snapshot_identity
+                    else {}
                 )
-                if materialize_command:
-                    downstream_commands.append(materialize_command)
-        final_activity, final_attempt = self._finish_workflow_command_activity_attempt(
-            activity=activity,
-            attempt=attempt,
-            status="succeeded",
-            phase=(
-                "company_public_web_sources_collected"
-                if command_type == COMPANY_PUBLIC_WEB_SOURCE_COLLECT_COMMAND_TYPE
-                else "company_public_web_assets_materialized"
-                if command_type == COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE
-                else "company_public_web_refreshed"
-            ),
-            output={
-                "status": "completed",
-                "run_id": str(dict(result.get("run") or {}).get("run_id") or ""),
-                "asset_count": int(
-                    dict(result.get("summary") or {}).get("asset_count") or len(result.get("assets") or [])
-                ),
-                "company_asset_sync": dict(result.get("company_asset_sync") or {}),
-                "entity_delta_ids": entity_delta_ids,
-                "downstream_command_ids": [
-                    str(command.get("command_id") or "").strip()
-                    for command in downstream_commands
-                    if str(command.get("command_id") or "").strip()
-                ],
-            },
-            entity_counts={
-                "company_public_web_run_count": 1,
-                "company_public_web_asset_count": len(list(result.get("assets") or [])),
-                "company_asset_count": len(
-                    list(dict(result.get("company_asset_sync") or {}).get("company_asset_ids") or [])
-                ),
-                "company_evidence_count": len(
-                    list(dict(result.get("company_asset_sync") or {}).get("company_evidence_ids") or [])
-                ),
-            },
-            artifact_refs=list(dict(result.get("artifact_paths") or {}).values()),
-            metadata={"company_public_web_owner": COMPANY_PUBLIC_WEB_REFRESH_OWNER},
+            except Exception:
+                source_completion_contract = {}
+            materialize_command = dict(source_completion_contract.get("child_command") or {})
+            source_delta = self._company_public_web_source_entity_delta_spec(
+                command=latest_command,
+                activity=activity,
+                attempt=attempt,
+                result=result,
+            )
+            if source_delta:
+                source_delta_specs = [source_delta]
+                entity_delta_ids = [str(source_delta.get("delta_id") or "").strip()]
+            if not materialize_command or not source_delta_specs or any(not item for item in entity_delta_ids):
+                failure_reason = "company_public_web_materialize_command_plan_failed"
+                entity_delta_ids = []
+                source_delta_specs = []
+                command_can_retry = int(latest_command.get("attempt") or 0) < max(
+                    1, int(latest_command.get("max_attempts") or 1)
+                )
+                failed = self._mark_company_public_web_command_failed_for_exact_claim(
+                    latest_command,
+                    error_text=failure_reason,
+                    retryable=True,
+                    retry_delay_seconds=30,
+                )
+                if not failed:
+                    owner_lost = _post_effect_owner_lost("company_public_web_command_claim_lost_before_failure_commit")
+                    return {
+                        **result,
+                        **dict(owner_lost or {"status": "skipped", "reason": "owner_lost"}),
+                        "entity_delta_ids": entity_delta_ids,
+                    }
+                self._finish_workflow_command_activity_attempt(
+                    activity=activity,
+                    attempt=attempt,
+                    status="retry_wait" if command_can_retry else "failed",
+                    phase=failure_reason,
+                    output={
+                        "status": "failed",
+                        "reason": failure_reason,
+                        "run_id": run_id,
+                        "entity_delta_ids": entity_delta_ids,
+                        "downstream_command_required": True,
+                        "downstream_command_count": 0,
+                    },
+                    error={"reason": failure_reason},
+                    artifact_refs=list(dict(result.get("artifact_paths") or {}).values()),
+                    metadata={"company_public_web_owner": COMPANY_PUBLIC_WEB_REFRESH_OWNER},
+                    attempt_status="failed",
+                )
+                self._sync_operation_run_from_workflow_command(
+                    failed or latest_command,
+                    actor=COMPANY_PUBLIC_WEB_REFRESH_OWNER,
+                    source="company_public_web.command_owner",
+                )
+                return {
+                    **result,
+                    "status": "failed",
+                    "reason": failure_reason,
+                    "entity_delta_ids": entity_delta_ids,
+                    "downstream_command_required": True,
+                    "downstream_command_count": 0,
+                    "operation_completion_deferred": True,
+                    "workflow_command": self._workflow_command_observation(
+                        failed or latest_command,
+                        migration_phase="W11_company_public_web_refresh",
+                    ),
+                }
+            downstream_commands.append(materialize_command)
+        else:
+            entity_delta_ids = self._record_company_public_web_refresh_entity_deltas(
+                command=latest_command,
+                activity=activity,
+                attempt=attempt,
+                result=result,
+            )
+        final_phase = (
+            "company_public_web_sources_collected"
+            if command_type == COMPANY_PUBLIC_WEB_SOURCE_COLLECT_COMMAND_TYPE
+            else "company_public_web_assets_materialized"
+            if command_type == COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE
+            else "company_public_web_refreshed"
         )
+        final_output = {
+            "status": "completed",
+            "run_id": str(dict(result.get("run") or {}).get("run_id") or ""),
+            "asset_count": int(dict(result.get("summary") or {}).get("asset_count") or len(result.get("assets") or [])),
+            "company_asset_sync": dict(result.get("company_asset_sync") or {}),
+            "entity_delta_ids": entity_delta_ids,
+            "downstream_command_ids": [
+                str(command.get("command_id") or "").strip()
+                for command in downstream_commands
+                if str(command.get("command_id") or "").strip()
+            ],
+        }
+        final_entity_counts = {
+            "company_public_web_run_count": 1,
+            "company_public_web_asset_count": len(list(result.get("assets") or [])),
+            "company_asset_count": len(
+                list(dict(result.get("company_asset_sync") or {}).get("company_asset_ids") or [])
+            ),
+            "company_evidence_count": len(
+                list(dict(result.get("company_asset_sync") or {}).get("company_evidence_ids") or [])
+            ),
+        }
         result = {
             **result,
             "status": "completed",
-            "activity_run_id": str(final_activity.get("activity_run_id") or activity.get("activity_run_id") or ""),
-            "attempt_id": str(final_attempt.get("attempt_id") or attempt.get("attempt_id") or ""),
+            "activity_run_id": str(activity.get("activity_run_id") or ""),
+            "attempt_id": str(attempt.get("attempt_id") or ""),
             "entity_delta_ids": entity_delta_ids,
             "downstream_command_required": command_type == COMPANY_PUBLIC_WEB_SOURCE_COLLECT_COMMAND_TYPE,
             "downstream_command_count": len(downstream_commands),
@@ -54775,12 +56299,209 @@ class SourcingOrchestrator:
             ),
             "activity_spine_contract": "command_activity_attempt_entity_delta_v1",
         }
-        succeeded = self.store.mark_workflow_command_succeeded(
-            command_id,
-            result={**result, "migration_phase": "W11_company_public_web_refresh"},
+        if command_type == COMPANY_PUBLIC_WEB_SOURCE_COLLECT_COMMAND_TYPE:
+            result = {
+                **result,
+                "completed_claim_attempt": max(0, int(latest_command.get("attempt") or 0)),
+                "migration_phase": "W11_company_public_web_refresh",
+            }
+            try:
+                completion = self.store.repos.workflow_runtime.complete_company_public_web_source_command(
+                    command_id,
+                    expected_lease_owner=str(latest_command.get("lease_owner") or "").strip(),
+                    expected_lease_expires_at=str(latest_command.get("lease_expires_at") or "").strip(),
+                    expected_attempt=max(0, int(latest_command.get("attempt") or 0)),
+                    expected_root_command=self._company_public_web_locked_command_identity(latest_command),
+                    plan_event=dict(source_completion_contract.get("plan_event") or {}),
+                    child_command=dict(source_completion_contract.get("child_command") or {}),
+                    child_causality=dict(source_completion_contract.get("child_causality") or {}),
+                    entity_deltas=source_delta_specs,
+                    root_result=result,
+                )
+            except Exception as exc:
+                replay = self._validate_company_public_web_source_completion_bundle(
+                    source_command=latest_command,
+                    completion_contract=source_completion_contract,
+                    entity_delta_specs=source_delta_specs,
+                    terminal_result=result,
+                )
+                if str(replay.get("status") or "").strip() == "ready":
+                    completion = {**replay, "outcome": "applied", "reason": "commit_acknowledgement_replayed"}
+                else:
+                    current_after_exception = self.store.get_workflow_command(command_id) or {}
+                    if str(current_after_exception.get("status") or "").strip() == "succeeded" and int(
+                        current_after_exception.get("attempt") or 0
+                    ) == int(latest_command.get("attempt") or 0):
+                        return {
+                            **result,
+                            "status": "invalid",
+                            "reason": "company_public_web_source_completion_replay_invalid",
+                            "replay_reason": str(replay.get("reason") or "").strip(),
+                            "error": str(exc),
+                            "workflow_command": self._workflow_command_observation(
+                                current_after_exception,
+                                migration_phase="W11_company_public_web_refresh",
+                            ),
+                        }
+                    failed = self._mark_company_public_web_command_failed_for_exact_claim(
+                        latest_command,
+                        error_text=f"company_public_web_source_completion_uow_failed:{exc}",
+                        retryable=True,
+                        retry_delay_seconds=30,
+                    )
+                    if not failed:
+                        owner_lost = _post_effect_owner_lost(
+                            "company_public_web_command_claim_lost_before_failure_commit"
+                        )
+                        return {
+                            **result,
+                            **dict(owner_lost or {"status": "skipped", "reason": "owner_lost"}),
+                            "error": str(exc),
+                        }
+                    self._finish_workflow_command_activity_attempt(
+                        activity=activity,
+                        attempt=attempt,
+                        status="retry_wait",
+                        phase="company_public_web_source_completion_uow_failed",
+                        output={"status": "failed", "reason": "company_public_web_source_completion_uow_failed"},
+                        error={"reason": "company_public_web_source_completion_uow_failed", "error": str(exc)},
+                        artifact_refs=list(dict(result.get("artifact_paths") or {}).values()),
+                        metadata={"company_public_web_owner": COMPANY_PUBLIC_WEB_REFRESH_OWNER},
+                        attempt_status="failed",
+                    )
+                    self._sync_operation_run_from_workflow_command(
+                        failed or latest_command,
+                        actor=COMPANY_PUBLIC_WEB_REFRESH_OWNER,
+                        source="company_public_web.command_owner",
+                    )
+                    return {
+                        **result,
+                        "status": "failed",
+                        "reason": "company_public_web_source_completion_uow_failed",
+                        "error": str(exc),
+                        "workflow_command": self._workflow_command_observation(
+                            failed,
+                            migration_phase="W11_company_public_web_refresh",
+                        ),
+                    }
+            if str(completion.get("outcome") or "").strip() != "applied":
+                replay = self._validate_company_public_web_source_completion_bundle(
+                    source_command=latest_command,
+                    completion_contract=source_completion_contract,
+                    entity_delta_specs=source_delta_specs,
+                    terminal_result=result,
+                )
+                if str(replay.get("status") or "").strip() == "ready":
+                    completion = {**replay, "outcome": "applied", "reason": "commit_outcome_replayed"}
+            if str(completion.get("outcome") or "").strip() != "applied":
+                current_after_conflict = self.store.get_workflow_command(command_id) or {}
+                if str(current_after_conflict.get("status") or "").strip() == "succeeded" and int(
+                    current_after_conflict.get("attempt") or 0
+                ) == int(latest_command.get("attempt") or 0):
+                    return {
+                        **result,
+                        "status": "invalid",
+                        "reason": "company_public_web_source_completion_replay_invalid",
+                        "replay_reason": str(replay.get("reason") or "").strip(),
+                        "workflow_command": self._workflow_command_observation(
+                            current_after_conflict,
+                            migration_phase="W11_company_public_web_refresh",
+                        ),
+                    }
+                if self._company_public_web_command_matches_physical_claim(
+                    current_after_conflict,
+                    physical_claim,
+                ):
+                    conflict_reason = str(
+                        completion.get("reason") or "company_public_web_source_completion_bundle_conflict"
+                    ).strip()
+                    failed = self._mark_company_public_web_command_failed_for_exact_claim(
+                        latest_command,
+                        error_text=conflict_reason,
+                        retryable=False,
+                        retry_delay_seconds=0,
+                    )
+                    if failed:
+                        self._finish_workflow_command_activity_attempt(
+                            activity=activity,
+                            attempt=attempt,
+                            status="failed",
+                            phase=conflict_reason,
+                            output={"status": "failed", "reason": conflict_reason},
+                            error={"reason": conflict_reason},
+                            artifact_refs=list(dict(result.get("artifact_paths") or {}).values()),
+                            metadata={"company_public_web_owner": COMPANY_PUBLIC_WEB_REFRESH_OWNER},
+                            attempt_status="failed",
+                        )
+                        self._sync_operation_run_from_workflow_command(
+                            failed or latest_command,
+                            actor=COMPANY_PUBLIC_WEB_REFRESH_OWNER,
+                            source="company_public_web.command_owner",
+                        )
+                        return {
+                            **result,
+                            "status": "failed",
+                            "reason": conflict_reason,
+                            "workflow_command": self._workflow_command_observation(
+                                failed,
+                                migration_phase="W11_company_public_web_refresh",
+                            ),
+                        }
+                owner_lost = _post_effect_owner_lost("company_public_web_command_claim_lost_before_terminal_commit")
+                return {
+                    **result,
+                    **dict(owner_lost or {"status": "skipped", "reason": str(completion.get("reason") or "")}),
+                }
+            succeeded = dict(completion.get("workflow_command") or {})
+            committed_child = dict(completion.get("child_command") or {})
+            committed_deltas = [dict(item or {}) for item in list(completion.get("entity_deltas") or [])]
+            downstream_commands = [committed_child] if committed_child else downstream_commands
+            entity_delta_ids = [
+                str(item.get("delta_id") or "").strip()
+                for item in committed_deltas
+                if str(item.get("delta_id") or "").strip()
+            ]
+            result = {
+                **result,
+                "entity_delta_ids": entity_delta_ids,
+                "downstream_commands": downstream_commands,
+            }
+            try:
+                self.durable_runtime_writer.reduce_and_persist(
+                    workflow_run_id=str(latest_command.get("workflow_run_id") or "").strip(),
+                    event=dict(completion.get("event") or {}),
+                )
+                self.durable_runtime_writer.signal_recovery_for_committed_commands(tuple(downstream_commands))
+            except Exception:
+                # Event, child, delta, and parent terminal state are already one
+                # durable bundle. The regular reducer/recovery sweep repairs this
+                # derived checkpoint and wakeup after an acknowledgement loss.
+                pass
+        else:
+            succeeded = self._mark_company_public_web_command_succeeded_for_exact_claim(
+                latest_command,
+                result={**result, "migration_phase": "W11_company_public_web_refresh"},
+            )
+        if not succeeded:
+            owner_lost = _post_effect_owner_lost("company_public_web_command_claim_lost_before_terminal_commit")
+            return {**result, **dict(owner_lost or {"status": "skipped", "reason": "owner_lost"})}
+        final_activity, final_attempt = self._finish_workflow_command_activity_attempt(
+            activity=activity,
+            attempt=attempt,
+            status="succeeded",
+            phase=final_phase,
+            output=final_output,
+            entity_counts=final_entity_counts,
+            artifact_refs=list(dict(result.get("artifact_paths") or {}).values()),
+            metadata={"company_public_web_owner": COMPANY_PUBLIC_WEB_REFRESH_OWNER},
         )
+        result = {
+            **result,
+            "activity_run_id": str(final_activity.get("activity_run_id") or result.get("activity_run_id") or ""),
+            "attempt_id": str(final_attempt.get("attempt_id") or result.get("attempt_id") or ""),
+        }
         self._sync_operation_run_from_workflow_command(
-            succeeded or latest_command,
+            succeeded,
             actor=COMPANY_PUBLIC_WEB_REFRESH_OWNER,
             source="company_public_web.command_owner",
         )
@@ -54793,8 +56514,15 @@ class SourcingOrchestrator:
         }
 
     def _execute_company_public_web_refresh_command_payload(self, command: dict[str, Any]) -> dict[str, Any]:
-        payload = dict(dict(command or {}).get("payload") or {})
-        command_type = str(dict(command or {}).get("command_type") or "").strip()
+        target_preflight = self._revalidate_company_public_web_command_target(
+            command,
+            expected_physical_claim=command,
+        )
+        if str(target_preflight.get("status") or "") != "ready":
+            return dict(target_preflight)
+        command_record = dict(target_preflight.get("workflow_command") or command)
+        payload = dict(command_record.get("payload") or {})
+        command_type = str(command_record.get("command_type") or "").strip()
         if not self.store.control_plane_postgres_is_postgres_only():
             return {
                 "status": "invalid",
@@ -54803,27 +56531,71 @@ class SourcingOrchestrator:
             }
         if command_type == COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE:
             run_id = str(payload.get("run_id") or "").strip()
-            company_key = str(payload.get("company_key") or "").strip()
-            target_company = str(payload.get("target_company") or payload.get("company") or "").strip()
             run = self.store.get_company_public_web_asset_run(run_id=run_id) if run_id else None
             if not run:
                 return {"status": "invalid", "reason": "company_public_web_materialize_requires_run_id"}
-            assets = self.store.list_company_public_web_assets(
-                target_company=target_company,
-                company_key=company_key or str(run.get("company_key") or ""),
-                limit=int(payload.get("max_assets") or 500),
+            snapshot_identity = company_public_web_materialization_snapshot_identity(dict(run))
+            if (
+                not snapshot_identity
+                or str(payload.get(COMPANY_PUBLIC_WEB_MATERIALIZATION_SNAPSHOT_SCHEMA_KEY) or "").strip()
+                != str(snapshot_identity.get(COMPANY_PUBLIC_WEB_MATERIALIZATION_SNAPSHOT_SCHEMA_KEY) or "").strip()
+                or str(payload.get(COMPANY_PUBLIC_WEB_MATERIALIZATION_SNAPSHOT_DIGEST_KEY) or "").strip()
+                != str(snapshot_identity.get(COMPANY_PUBLIC_WEB_MATERIALIZATION_SNAPSHOT_DIGEST_KEY) or "").strip()
+            ):
+                return {
+                    "status": "invalid",
+                    "reason": "company_public_web_materialization_snapshot_identity_mismatch",
+                    "run_id": run_id,
+                }
+            assets = company_public_web_materialization_assets_for_run(
+                dict(run),
+                max_assets=int(payload.get("max_assets") or 500),
             )
-            sync = sync_company_public_web_assets_to_company_asset_layer(
-                store=self.store,
+            raw_snapshot = run.get("discovered_assets")
+            summary = dict(run.get("summary") or {})
+            raw_asset_count = summary.get("asset_count")
+            if (
+                not assets
+                or not isinstance(raw_snapshot, list)
+                or len(assets) != len(raw_snapshot)
+                or (
+                    raw_asset_count is not None
+                    and (
+                        isinstance(raw_asset_count, bool)
+                        or not isinstance(raw_asset_count, int)
+                        or raw_asset_count != len(raw_snapshot)
+                    )
+                )
+            ):
+                return {
+                    "status": "invalid",
+                    "reason": "company_public_web_materialization_snapshot_invalid",
+                    "run_id": run_id,
+                }
+            sync = self.store.materialize_company_public_web_assets_for_exact_workflow_claim(
+                command=command_record,
                 run=dict(run),
                 assets=[dict(asset or {}) for asset in list(assets or [])],
             )
+            if str(sync.get("status") or "").strip() == "owner_lost":
+                return {
+                    "status": "owner_lost",
+                    "reason": str(
+                        sync.get("reason") or "company_public_web_materialize_command_claim_not_current"
+                    ).strip(),
+                    "run": dict(run),
+                    "assets": [],
+                    "summary": summary,
+                    "artifact_paths": {},
+                    "company_asset_sync": sync,
+                    "phase_command_type": COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE,
+                }
             return {
                 "status": "completed" if str(sync.get("status") or "") in {"synced", "skipped"} else "failed",
                 "reason": "company_public_web_assets_materialized",
                 "run": dict(run),
                 "assets": [dict(asset or {}) for asset in list(assets or [])],
-                "summary": dict(run.get("summary") or {}),
+                "summary": summary,
                 "artifact_paths": dict(dict(run.get("metadata") or {}).get("artifact_paths") or {}),
                 "company_asset_sync": sync,
                 "phase_command_type": COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE,
@@ -54850,6 +56622,14 @@ class SourcingOrchestrator:
             "collection_mode": collection_mode,
             "defer_company_asset_sync": command_type == COMPANY_PUBLIC_WEB_SOURCE_COLLECT_COMMAND_TYPE,
         }
+        if command_type == COMPANY_PUBLIC_WEB_SOURCE_COLLECT_COMMAND_TYPE:
+            request_payload.update(
+                {
+                    "_source_workflow_command_id": str(command_record.get("command_id") or "").strip(),
+                    "_source_workflow_command_attempt": int(command_record.get("attempt") or 0),
+                    "_source_workflow_command_lease_owner": str(command_record.get("lease_owner") or "").strip(),
+                }
+            )
         result = refresh_company_public_web_assets_service(
             store=self.store,
             runtime_dir=self.runtime_dir,
@@ -54857,8 +56637,95 @@ class SourcingOrchestrator:
             search_provider=search_provider,
         )
         result_payload = dict(result or {})
+        read_only_completed_replay = False
+        if (
+            command_type == COMPANY_PUBLIC_WEB_SOURCE_COLLECT_COMMAND_TYPE
+            and str(result_payload.get("status") or "").strip() == "owner_lost"
+            and str(result_payload.get("reason") or "").strip() == "company_public_web_completed_run_replay_read_only"
+        ):
+            completed_run = dict(result_payload.get("run") or {})
+            completed_assets = company_public_web_materialization_assets_for_run(
+                completed_run,
+                max_assets=int(payload.get("max_assets") or 500),
+            )
+            if str(completed_run.get("status") or "").strip().lower() == "completed" and completed_assets:
+                read_only_completed_replay = True
+                result_payload = {
+                    **result_payload,
+                    "status": "joined",
+                    "reason": "company_public_web_completed_run_read_only_join",
+                    "assets": [dict(asset or {}) for asset in completed_assets],
+                    "summary": dict(completed_run.get("summary") or {}),
+                    "artifact_paths": dict(dict(completed_run.get("metadata") or {}).get("artifact_paths") or {}),
+                    "source_effect_publication": {
+                        "status": "not_attempted",
+                        "reason": "completed_run_reused_without_publication_authority",
+                        "source_asset_count": 0,
+                    },
+                }
         if str(result_payload.get("status") or "").strip() == "joined":
             run = dict(result_payload.get("run") or {})
+            joined_run_status = str(run.get("status") or "").strip().lower()
+            if joined_run_status != "completed":
+                if command_type == COMPANY_PUBLIC_WEB_SOURCE_COLLECT_COMMAND_TYPE:
+                    source_owner = dict(run.get("metadata") or {})
+                    source_command_id = str(source_owner.get("source_workflow_command_id") or "").strip()
+                    try:
+                        source_command_attempt = int(source_owner.get("source_workflow_command_attempt") or 0)
+                    except (TypeError, ValueError):
+                        source_command_attempt = 0
+                    source_lease_owner = str(source_owner.get("source_workflow_command_lease_owner") or "").strip()
+                    current_command = self.store.get_workflow_command(
+                        str(command_record.get("command_id") or "").strip()
+                    )
+                    caller_matches_source_owner = bool(
+                        source_command_id
+                        and source_command_attempt > 0
+                        and source_lease_owner
+                        and source_command_id == str(command_record.get("command_id") or "").strip()
+                        and source_command_attempt == int(command_record.get("attempt") or 0)
+                        and source_lease_owner == str(command_record.get("lease_owner") or "").strip()
+                    )
+                    current_claim_matches_source_owner = bool(
+                        current_command
+                        and source_command_id == str(current_command.get("command_id") or "").strip()
+                        and source_command_attempt == int(current_command.get("attempt") or 0)
+                        and source_lease_owner == str(current_command.get("lease_owner") or "").strip()
+                        and str(current_command.get("status") or "").strip() in {"claimed", "running"}
+                        and self._workflow_command_lease_active(current_command)
+                    )
+                    if caller_matches_source_owner and current_claim_matches_source_owner:
+                        return {
+                            **result_payload,
+                            "status": "owner_busy",
+                            "reason": "company_public_web_source_run_owned_by_current_command_attempt",
+                            "joined_run_status": joined_run_status or "missing",
+                            "company_asset_sync": {
+                                "status": "not_attempted",
+                                "reason": "current_command_attempt_source_run_in_progress",
+                            },
+                        }
+                    if source_command_id or source_command_attempt or source_lease_owner:
+                        return {
+                            **result_payload,
+                            "status": "owner_lost",
+                            "reason": "company_public_web_source_command_claim_not_current",
+                            "joined_run_status": joined_run_status or "missing",
+                            "company_asset_sync": {
+                                "status": "not_attempted",
+                                "reason": "source_run_owner_lost",
+                            },
+                        }
+                return {
+                    **result_payload,
+                    "status": "failed" if joined_run_status in {"queued", "running"} else "invalid",
+                    "reason": "company_public_web_joined_run_not_completed",
+                    "joined_run_status": joined_run_status or "missing",
+                    "company_asset_sync": {
+                        "status": "not_attempted",
+                        "reason": "joined_run_not_completed",
+                    },
+                }
             assets = [
                 dict(asset or {}) for asset in list(result_payload.get("assets") or []) if isinstance(asset, dict)
             ]
@@ -54879,8 +56746,111 @@ class SourcingOrchestrator:
                     assets=assets,
                 )
             result_payload["status"] = "completed"
-            result_payload["reason"] = "company_public_web_refresh_joined_existing_run"
+            result_payload["reason"] = (
+                "company_public_web_completed_run_read_only_join"
+                if read_only_completed_replay
+                else "company_public_web_refresh_joined_existing_run"
+            )
+        if (
+            command_type == COMPANY_PUBLIC_WEB_SOURCE_COLLECT_COMMAND_TYPE
+            and str(result_payload.get("status") or "").strip() == "completed"
+        ):
+            source_run = dict(result_payload.get("run") or {})
+            expected_target = dict(target_preflight.get("company_public_web_target") or {})
+            expected_input = dict(target_preflight.get("company_public_web_input") or {})
+            if (
+                not str(source_run.get("run_id") or "").strip()
+                or str(source_run.get("status") or "").strip().lower() != "completed"
+                or str(source_run.get("target_company") or "").strip()
+                != str(expected_input.get("target_company") or "").strip()
+                or str(source_run.get("company_key") or "").strip()
+                != str(expected_target.get("company_key") or "").strip()
+            ):
+                return {
+                    **result_payload,
+                    "status": "invalid",
+                    "reason": "company_public_web_source_run_identity_mismatch",
+                    "company_asset_sync": {
+                        "status": "not_attempted",
+                        "reason": "source_run_identity_mismatch",
+                    },
+                }
+            if not company_public_web_materialization_snapshot_identity(source_run):
+                return {
+                    **result_payload,
+                    "status": "invalid",
+                    "reason": "company_public_web_source_snapshot_invalid",
+                    "company_asset_sync": {
+                        "status": "not_attempted",
+                        "reason": "source_snapshot_invalid",
+                    },
+                }
         return result_payload
+
+    @staticmethod
+    def _company_public_web_source_entity_delta_spec(
+        *,
+        command: Mapping[str, Any],
+        activity: Mapping[str, Any],
+        attempt: Mapping[str, Any],
+        result: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        command_payload = dict(command or {})
+        result_payload = dict(result or {})
+        run = dict(result_payload.get("run") or {})
+        run_id = str(run.get("run_id") or "").strip()
+        command_id = str(command_payload.get("command_id") or "").strip()
+        workflow_run_id = str(command_payload.get("workflow_run_id") or "").strip()
+        operation_run_id = str(command_payload.get("operation_id") or "").strip()
+        activity_run_id = str(dict(activity or {}).get("activity_run_id") or "").strip()
+        attempt_id = str(dict(attempt or {}).get("attempt_id") or "").strip()
+        if not all((run_id, command_id, workflow_run_id, operation_run_id, activity_run_id, attempt_id)):
+            return {}
+        workspace_id = str(dict(command_payload.get("payload") or {}).get("workspace_id") or "default").strip()
+        workspace_id = workspace_id or "default"
+        idempotency_key = (
+            f"workflow_command_entity_delta:company_public_web_run:{command_id}:company_public_web_run:{run_id}"
+        )
+        artifact_refs = [
+            str(ref or "").strip()
+            for ref in list(dict(result_payload.get("artifact_paths") or {}).values())
+            if str(ref or "").strip()
+        ]
+        return {
+            "delta_id": "entitydelta_" + hashlib.sha1(idempotency_key.encode("utf-8")).hexdigest()[:24],
+            "workspace_id": workspace_id,
+            "workflow_run_id": workflow_run_id,
+            "operation_run_id": operation_run_id,
+            "command_id": command_id,
+            "activity_run_id": activity_run_id,
+            "attempt_id": attempt_id,
+            "acquisition_run_id": "",
+            "entity_type": "company_public_web_run",
+            "entity_key": run_id,
+            "delta_kind": "company_public_web_refreshed",
+            "status": "recorded",
+            "reason": "company_public_web_refresh_completed",
+            "source_ref": {
+                "run_id": run_id,
+                "target_company": str(run.get("target_company") or "").strip(),
+                "company_key": str(run.get("company_key") or "").strip(),
+                "command_type": str(command_payload.get("command_type") or "").strip(),
+            },
+            "entity_payload": {
+                "run_id": run_id,
+                "summary": dict(result_payload.get("summary") or {}),
+            },
+            "projection_effect": {
+                "entered_projection": False,
+                "company_asset_layer_synced": False,
+            },
+            "artifact_refs": artifact_refs,
+            "idempotency_key": idempotency_key,
+            "metadata": {
+                "company_public_web_owner": COMPANY_PUBLIC_WEB_REFRESH_OWNER,
+                "activity_spine_contract": "command_activity_attempt_entity_delta_v1",
+            },
+        }
 
     def _record_company_public_web_refresh_entity_deltas(
         self,
@@ -54902,66 +56872,113 @@ class SourcingOrchestrator:
         ]
         deltas: list[dict[str, Any]] = []
         run_id = str(run.get("run_id") or "").strip()
+        command_id = str(command.get("command_id") or "").strip()
+        activity_run_id = str(activity.get("activity_run_id") or "").strip()
+        delta_workspace_id = (
+            str(dict(command.get("payload") or {}).get("workspace_id") or "default").strip() or "default"
+        )
+
+        def record_or_reuse_delta(
+            *,
+            entity_type: str,
+            entity_key: str,
+            delta_kind: str,
+            reason: str,
+            source_ref: dict[str, Any],
+            entity_payload: dict[str, Any],
+            projection_effect: dict[str, Any],
+            delta_artifact_refs: list[str],
+            idempotency_scope: str,
+        ) -> dict[str, Any]:
+            existing = self.store.repos.workflow_runtime.list_entity_deltas(
+                workspace_id=delta_workspace_id,
+                command_id=command_id,
+                activity_run_id=activity_run_id,
+                entity_type=entity_type,
+                entity_key=entity_key,
+                limit=2,
+            )
+            if existing:
+                if (
+                    len(existing) != 1
+                    or str(existing[0].get("delta_kind") or "").strip() != delta_kind
+                    or str(existing[0].get("status") or "").strip() != "recorded"
+                    or str(existing[0].get("reason") or "").strip() != reason
+                    or not json_contract_equal(dict(existing[0].get("source_ref") or {}), source_ref)
+                    or not json_contract_equal(dict(existing[0].get("entity_payload") or {}), entity_payload)
+                    or not json_contract_equal(dict(existing[0].get("projection_effect") or {}), projection_effect)
+                    or not json_contract_equal(list(existing[0].get("artifact_refs") or []), delta_artifact_refs)
+                ):
+                    raise RuntimeError("company_public_web_entity_delta_replay_conflict")
+                return dict(existing[0])
+            return self._record_command_activity_entity_delta(
+                command=command,
+                activity=activity,
+                attempt=attempt,
+                entity_type=entity_type,
+                entity_key=entity_key,
+                delta_kind=delta_kind,
+                status="recorded",
+                reason=reason,
+                source_ref=source_ref,
+                entity_payload=entity_payload,
+                projection_effect=projection_effect,
+                artifact_refs=delta_artifact_refs,
+                metadata={"company_public_web_owner": COMPANY_PUBLIC_WEB_REFRESH_OWNER},
+                idempotency_scope=idempotency_scope,
+            )
+
         if run_id:
+            company_asset_layer_synced = str(sync.get("status") or "").strip().lower() == "synced"
             deltas.append(
-                self._record_command_activity_entity_delta(
-                    command=command,
-                    activity=activity,
-                    attempt=attempt,
+                record_or_reuse_delta(
                     entity_type="company_public_web_run",
                     entity_key=run_id,
                     delta_kind="company_public_web_refreshed",
-                    status="recorded",
                     reason="company_public_web_refresh_completed",
                     source_ref={
                         "run_id": run_id,
                         "target_company": str(run.get("target_company") or "").strip(),
                         "company_key": str(run.get("company_key") or "").strip(),
-                        "command_type": COMPANY_PUBLIC_WEB_REFRESH_COMMAND_TYPE,
+                        "command_type": str(command.get("command_type") or "").strip(),
                     },
                     entity_payload={
                         "run_id": run_id,
                         "summary": dict(result_payload.get("summary") or {}),
                     },
-                    projection_effect={"entered_projection": False, "company_asset_layer_synced": bool(sync)},
-                    artifact_refs=artifact_refs,
-                    metadata={"company_public_web_owner": COMPANY_PUBLIC_WEB_REFRESH_OWNER},
+                    projection_effect={
+                        "entered_projection": False,
+                        "company_asset_layer_synced": company_asset_layer_synced,
+                    },
+                    delta_artifact_refs=artifact_refs,
                     idempotency_scope="company_public_web_run",
                 )
             )
         for asset_id in _dedupe_texts(sync.get("company_asset_ids") or []):
             deltas.append(
-                self._record_command_activity_entity_delta(
-                    command=command,
-                    activity=activity,
-                    attempt=attempt,
+                record_or_reuse_delta(
                     entity_type="company_asset",
                     entity_key=asset_id,
                     delta_kind="company_asset_synced_from_public_web",
-                    status="recorded",
                     reason="company_public_web_refresh_completed",
                     source_ref={"run_id": run_id, "company_public_web_owner": COMPANY_PUBLIC_WEB_REFRESH_OWNER},
                     entity_payload={"company_asset_id": asset_id},
                     projection_effect={"entered_projection": False},
-                    metadata={"company_public_web_owner": COMPANY_PUBLIC_WEB_REFRESH_OWNER},
+                    delta_artifact_refs=[],
                     idempotency_scope="company_asset_sync",
                 )
             )
         for evidence_id in _dedupe_texts(sync.get("company_evidence_ids") or []):
             deltas.append(
-                self._record_command_activity_entity_delta(
-                    command=command,
-                    activity=activity,
-                    attempt=attempt,
+                record_or_reuse_delta(
                     entity_type="company_evidence",
                     entity_key=evidence_id,
                     delta_kind="company_evidence_synced_from_public_web",
-                    status="recorded",
                     reason="company_public_web_refresh_completed",
                     source_ref={"run_id": run_id, "company_public_web_owner": COMPANY_PUBLIC_WEB_REFRESH_OWNER},
                     entity_payload={"company_evidence_id": evidence_id},
                     projection_effect={"entered_projection": False},
-                    metadata={"company_public_web_owner": COMPANY_PUBLIC_WEB_REFRESH_OWNER},
+                    delta_artifact_refs=[],
                     idempotency_scope="company_evidence_sync",
                 )
             )
@@ -54990,6 +57007,7 @@ class SourcingOrchestrator:
         ready_commands = self.store.list_ready_workflow_commands(
             workflow_run_id=workflow_run_id,
             owner=COMPANY_PUBLIC_WEB_REFRESH_OWNER,
+            reclaim_claimed=True,
             limit=limit,
         )
         results: list[dict[str, Any]] = []

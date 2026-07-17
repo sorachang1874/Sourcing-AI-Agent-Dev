@@ -1019,6 +1019,7 @@ class WorkflowRuntimeRepository(Repository):
         immutable_columns: tuple[str, ...],
         terminal_statuses: tuple[str, ...],
         write_once: bool = False,
+        expected_command_claim: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         if self._should_prefer_read(table_name):
             row = self._call_native_write(
@@ -1029,9 +1030,12 @@ class WorkflowRuntimeRepository(Repository):
                 immutable_columns=immutable_columns,
                 terminal_statuses=terminal_statuses,
                 write_once=write_once,
+                expected_command_claim=dict(expected_command_claim or {}),
             )
             if row is not None:
                 return row_builder(row)
+            if expected_command_claim:
+                return {}
             if self._strict_authoritative(table_name):
                 self._raise_write_failure(
                     table_name=table_name,
@@ -1162,6 +1166,71 @@ class WorkflowRuntimeRepository(Repository):
         self._raise_postgres_only_invariant(
             table_name="workflow_commands",
             method_name="complete_acquisition_root_command",
+        )
+        raise AssertionError("unreachable")
+
+    def complete_company_public_web_source_command(
+        self,
+        command_id: str,
+        *,
+        expected_lease_owner: str,
+        expected_lease_expires_at: str,
+        expected_attempt: int,
+        expected_root_command: dict[str, Any],
+        plan_event: dict[str, Any],
+        child_command: dict[str, Any],
+        child_causality: dict[str, Any],
+        entity_deltas: list[dict[str, Any]],
+        root_result: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Commit the D1m source delta, materialize child, and parent terminal CAS in one PG UoW."""
+
+        self._require_postgres_for_durable_runtime("workflow_commands")
+        normalized_command_id = str(command_id or "").strip()
+        normalized_lease_owner = str(expected_lease_owner or "").strip()
+        normalized_lease_expires_at = str(expected_lease_expires_at or "").strip()
+        normalized_attempt = max(0, int(expected_attempt or 0))
+        if (
+            not normalized_command_id
+            or not normalized_lease_owner
+            or not normalized_lease_expires_at
+            or normalized_attempt <= 0
+        ):
+            return {}
+        if self._should_prefer_read("workflow_commands"):
+            result = self._call_native_write(
+                "complete_company_public_web_source_command",
+                table_name="workflow_commands",
+                command_id=normalized_command_id,
+                expected_lease_owner=normalized_lease_owner,
+                expected_lease_expires_at=normalized_lease_expires_at,
+                expected_attempt=normalized_attempt,
+                expected_root_command=dict(expected_root_command or {}),
+                plan_event=dict(plan_event or {}),
+                child_command=dict(child_command or {}),
+                child_causality=dict(child_causality or {}),
+                entity_deltas=[dict(item or {}) for item in list(entity_deltas or [])],
+                root_result=dict(root_result or {}),
+            )
+            if result is not None:
+                payload = dict(result)
+                return {
+                    "outcome": str(payload.get("outcome") or "conflict").strip() or "conflict",
+                    "reason": str(payload.get("reason") or "").strip(),
+                    "workflow_command": WORKFLOW_COMMANDS.from_row(payload.get("command")),
+                    "child_command": WORKFLOW_COMMANDS.from_row(payload.get("child_command")),
+                    "event": WORKFLOW_EVENTS.from_row(payload.get("event")),
+                    "entity_deltas": WORKFLOW_ENTITY_DELTAS.from_rows(payload.get("entity_deltas")),
+                }
+            if self._strict_authoritative("workflow_commands"):
+                self._raise_write_failure(
+                    table_name="workflow_commands",
+                    method_name="complete_company_public_web_source_command",
+                    reason="postgres-only: authoritative company-public-web source UoW returned no result",
+                )
+        self._raise_postgres_only_invariant(
+            table_name="workflow_commands",
+            method_name="complete_company_public_web_source_command",
         )
         raise AssertionError("unreachable")
 
@@ -1463,7 +1532,12 @@ class WorkflowRuntimeRepository(Repository):
             offset=max(0, int(offset or 0)),
         )
 
-    def upsert_activity_run(self, payload: dict[str, Any]) -> dict[str, Any]:
+    def upsert_activity_run(
+        self,
+        payload: dict[str, Any],
+        *,
+        expected_command_claim: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         self._require_postgres_for_durable_runtime("workflow_activity_runs")
         normalized = dict(payload or {})
         workspace_id = str(normalized.get("workspace_id") or "default").strip() or "default"
@@ -1529,6 +1603,7 @@ class WorkflowRuntimeRepository(Repository):
             row_builder=self._activity_run_from_row,
             immutable_columns=self._ACTIVITY_RUN_IMMUTABLE_COLUMNS,
             terminal_statuses=self._ACTIVITY_RUN_TERMINAL_STATUSES,
+            expected_command_claim=expected_command_claim,
         )
 
     def get_activity_run(self, activity_run_id: str) -> dict[str, Any]:
@@ -1619,7 +1694,12 @@ class WorkflowRuntimeRepository(Repository):
             offset=max(0, int(offset or 0)),
         )
 
-    def upsert_activity_attempt(self, payload: dict[str, Any]) -> dict[str, Any]:
+    def upsert_activity_attempt(
+        self,
+        payload: dict[str, Any],
+        *,
+        expected_command_claim: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         self._require_postgres_for_durable_runtime("workflow_activity_attempts")
         normalized = dict(payload or {})
         workspace_id = str(normalized.get("workspace_id") or "default").strip() or "default"
@@ -1675,6 +1755,7 @@ class WorkflowRuntimeRepository(Repository):
             row_builder=self._activity_attempt_from_row,
             immutable_columns=self._ACTIVITY_ATTEMPT_IMMUTABLE_COLUMNS,
             terminal_statuses=self._ACTIVITY_ATTEMPT_TERMINAL_STATUSES,
+            expected_command_claim=expected_command_claim,
         )
 
     def get_activity_attempt(self, attempt_id: str) -> dict[str, Any]:

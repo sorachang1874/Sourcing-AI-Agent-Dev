@@ -8,8 +8,9 @@
 > exists, formal review remains pending.
 > This was a bounded, non-live D1 foundation batch: all 15 production actions were schema-less at its checkpoint.
 > D1f later activated exactly three existing-record CRM actions, D1h activated `enrich_person_public_web`, D1i
-> activated `start_acquisition_run`, D1j/D1k activated projection-selection/export, and D1l activated both projection
-> reads. The current partition is **9 schema-defined / 6 schema-less / served=0**. It is not D1
+> activated `start_acquisition_run`, D1j/D1k activated projection-selection/export, D1l activated both projection
+> reads, and D1m candidate activates `refresh_company_public_web_assets`. The current candidate partition is
+> **10 schema-defined / 5 schema-less / served=0**. It is not D1
 > completion, a formal independent-review `GO`, live-provider approval,
 > manual/product signoff, or milestone closure. A fresh pinned non-author review is required after the author commit.
 > D1b has only a scope-local advisory `GO`; its formal review remains pending. C2.8 is separately formal-pending after
@@ -34,8 +35,9 @@ served to a model. It deliberately does not populate a production schema or expo
 The implementation was intentionally exercised with a synthetic schema-defined action. At the D1c checkpoint every
 action in `DEFAULT_ACTION_REGISTRY` had `request_schema=None`, an empty version/digest pair, and no served-tool status.
 D1f later activated exactly three existing-record CRM actions, D1h activated `enrich_person_public_web`, D1i activated
-`start_acquisition_run`, D1j/D1k activated projection-selection/export, and D1l activated both projection reads. The
-current partition is nine explicit schemas and six empty-pin bridge actions; no action has served-tool status. The
+`start_acquisition_run`, D1j/D1k activated projection-selection/export, D1l activated both projection reads, and D1m
+candidate activates `refresh_company_public_web_assets`. The current candidate partition is ten explicit schemas and
+five empty-pin bridge actions; no action has served-tool status. The
 existing 12 supported/three unsupported dispatch behavior
 remains the D1b contract; D1c only inserts a
 request-pin preflight before an existing adapter may run.
@@ -108,8 +110,8 @@ the persisted pins match the current request identity.
 At the D1c checkpoint all 15 production action specs used the temporary bridge. D1f removes exactly
 `set_crm_stage`, `add_crm_note`, and `create_crm_task` from that numerator; D1h additionally removes
 `enrich_person_public_web`; D1i removes `start_acquisition_run`; D1j/D1k/D1l remove `add_to_crm`,
-`export_candidates`, `search_projection`, and `filter_projection`. The following behavior remains current for the
-other 6:
+`export_candidates`, `search_projection`, and `filter_projection`; D1m candidate removes
+`refresh_company_public_web_assets`. The following behavior remains current for the other 5:
 
 - physical action and run pins are exactly `""` / `""`;
 - action metadata records `request_schema_status="schema_less_compatibility"` and
@@ -135,9 +137,9 @@ sufficient.
 
 | Contract | Owner/source of truth | Consumers | Forbidden source/fallback | Migration/deletion status |
 | --- | --- | --- | --- | --- |
-| request schema/version | checked-in `ActionRequestSpec` in `ActionRegistry` | HTTP submit, writer validation, dispatch preflight; future planner projection | caller metadata, API fields, persisted metadata mirror | foundation active; D1l current partition is nine explicit schemas / 6 schema-less |
+| request schema/version | checked-in `ActionRequestSpec` in `ActionRegistry` | HTTP submit, writer validation, dispatch preflight; future planner projection | caller metadata, API fields, persisted metadata mirror | foundation active; D1m candidate partition is ten explicit schemas / 5 schema-less |
 | schema digest/validation | D0 `ToolSpec.input_schema_digest` and `ToolSpec.validate_input` | D1 submit/revalidation; future served tool parser | second D1 validator or ad hoc JSON hash | canonical shared owner active |
-| target resource identity | action owner through `OwnerBoundTargetRef` | schema-defined submit and dispatch | caller/model raw target or input alias | D1f activates the CRM existing-record binder for three actions; D1h adds the CRM Public Web batch binder; D1i adds the acquisition-root workspace binder; D1j/D1k add projection-selection/export binders; D1l adds the shared-canonical projection-read binder; remaining six binders deferred |
+| target resource identity | action owner through `OwnerBoundTargetRef` | schema-defined submit and dispatch | caller/model raw target or input alias | D1f activates the CRM existing-record binder for three actions; D1h adds the CRM Public Web batch binder; D1i adds the acquisition-root workspace binder; D1j/D1k add projection-selection/export binders; D1l adds the shared-canonical projection-read binder; D1m adds the canonical company-alias/workspace binder; remaining five binders deferred |
 | AgentAction physical pin | `OperationRuntimeWriter` derived from current registry at submit | replay, approve, retry, dispatch, audit/API records | caller-supplied pin, metadata-only pin | active columns; empty/empty marks R-029 |
 | OperationRun physical pin | run creator copying the linked AgentAction | immediate/approve/retry run replay and dispatch | current-registry re-derivation without action equality | active columns; copy/verify required |
 | schema-less hit evidence | action metadata/submission event plus epoch-scoped continuation observation event | residual reporting/audit across submit replay, approve, retry, and dispatch | absence interpreted as strict validation; cross-release event-key reuse | R-029 pending; bump epoch per observation window and require one-window zero-hit deletion gate |
@@ -147,7 +149,7 @@ sufficient.
 
 D1c does not implement or claim:
 
-- any of the nine later D1f/D1h/D1i/D1j/D1k/D1l production request schemas or owner-target binders, served predicate, or
+- any of the ten later D1f/D1h/D1i/D1j/D1k/D1l/D1m production request schemas or owner-target binders, served predicate, or
   `GET /api/agent/tool-registry`;
 - revisioned `model_safe_result_schema`, its validator owner, or simulate-dispatch serializer preflight;
 - model-turn/journal/result-slot propagation, tool schema pinning at turn creation, Agent Session, SSE, provider/model

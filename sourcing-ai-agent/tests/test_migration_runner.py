@@ -46,6 +46,7 @@ _D3_ACTIVITY_MIGRATION = "0005_d3_activity_claim_chain_foundation"
 _D3_EVENT_MIGRATION = "0006_d3_workflow_event_terminal_lineage_foundation"
 _D0F_ENVELOPE_MIGRATION = "0007_model_invocation_envelopes"
 _D1I_PARENT_UNIQUENESS_MIGRATION = "0008_acquisition_intent_parent_uniqueness"
+_D1M_COMPANY_PUBLIC_WEB_RUN_IDEMPOTENCY_MIGRATION = "0009_company_public_web_asset_run_idempotency"
 _ALL_MIGRATIONS = [
     "0001_baseline",
     "0002_action_request_schema_pins",
@@ -55,6 +56,7 @@ _ALL_MIGRATIONS = [
     _D3_EVENT_MIGRATION,
     _D0F_ENVELOPE_MIGRATION,
     _D1I_PARENT_UNIQUENESS_MIGRATION,
+    _D1M_COMPANY_PUBLIC_WEB_RUN_IDEMPOTENCY_MIGRATION,
 ]
 _D3_COMMAND_COLUMNS = (
     ("runtime_namespace", "text", "NO", "''::text"),
@@ -365,6 +367,31 @@ class MigrationRunnerTest(unittest.TestCase):
             with conn.cursor() as cur:
                 cur.execute(f"DROP SCHEMA IF EXISTS {quoted} CASCADE")
 
+    def _insert_company_public_web_asset_run(
+        self,
+        cursor,
+        *,
+        run_id: str,
+        idempotency_key: str,
+    ) -> None:
+        cursor.execute(
+            """
+            INSERT INTO company_public_web_asset_runs (
+                run_id, target_company, company_key, idempotency_key,
+                status, phase, source_families_json, seed_urls_json,
+                options_json, discovered_assets_json, summary_json,
+                artifact_root, requested_by, force_refresh, last_error,
+                metadata_json
+            ) VALUES (
+                %s, 'OpenAI', 'openai', %s,
+                'queued', 'queued', '["company_homepage"]',
+                '["https://openai.com/"]', '{}', '[]', '{}',
+                '', 'migration-test', 0, '', '{}'
+            )
+            """,
+            (run_id, idempotency_key),
+        )
+
     def test_runner_built_schema_matches_live_bootstrap(self) -> None:
         # Track B B4.1a: migrations are the sole schema source of truth, so there is no longer an
         # independent SQLite oracle to diff against — the migration files ARE the golden. The
@@ -444,6 +471,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 _D3_EVENT_MIGRATION,
                 _D0F_ENVELOPE_MIGRATION,
                 _D1I_PARENT_UNIQUENESS_MIGRATION,
+                _D1M_COMPANY_PUBLIC_WEB_RUN_IDEMPOTENCY_MIGRATION,
             ],
         )
         self.assertEqual(ledger, _ALL_MIGRATIONS)
@@ -493,6 +521,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 _D3_EVENT_MIGRATION,
                 _D0F_ENVELOPE_MIGRATION,
                 _D1I_PARENT_UNIQUENESS_MIGRATION,
+                _D1M_COMPANY_PUBLIC_WEB_RUN_IDEMPOTENCY_MIGRATION,
             ],
         )
         self.assertEqual(
@@ -715,6 +744,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 _D3_EVENT_MIGRATION,
                 _D0F_ENVELOPE_MIGRATION,
                 _D1I_PARENT_UNIQUENESS_MIGRATION,
+                _D1M_COMPANY_PUBLIC_WEB_RUN_IDEMPOTENCY_MIGRATION,
             ],
         )
         self.assertEqual(columns, list(_D3_COMMAND_COLUMNS))
@@ -886,6 +916,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 _D3_EVENT_MIGRATION,
                 _D0F_ENVELOPE_MIGRATION,
                 _D1I_PARENT_UNIQUENESS_MIGRATION,
+                _D1M_COMPANY_PUBLIC_WEB_RUN_IDEMPOTENCY_MIGRATION,
             ],
         )
         self.assertEqual(again.applied, [])
@@ -974,6 +1005,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 _D3_EVENT_MIGRATION,
                 _D0F_ENVELOPE_MIGRATION,
                 _D1I_PARENT_UNIQUENESS_MIGRATION,
+                _D1M_COMPANY_PUBLIC_WEB_RUN_IDEMPOTENCY_MIGRATION,
             ],
         )
         self.assertEqual(session_columns, list(_D3_SCOPED_SESSION_COLUMNS))
@@ -1171,6 +1203,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 _D3_EVENT_MIGRATION,
                 _D0F_ENVELOPE_MIGRATION,
                 _D1I_PARENT_UNIQUENESS_MIGRATION,
+                _D1M_COMPANY_PUBLIC_WEB_RUN_IDEMPOTENCY_MIGRATION,
             ],
         )
         self.assertEqual(again.applied, [])
@@ -1258,6 +1291,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 _D3_EVENT_MIGRATION,
                 _D0F_ENVELOPE_MIGRATION,
                 _D1I_PARENT_UNIQUENESS_MIGRATION,
+                _D1M_COMPANY_PUBLIC_WEB_RUN_IDEMPOTENCY_MIGRATION,
             ],
         )
         self.assertEqual(run_columns, list(_D3_ACTIVITY_RUN_COLUMNS))
@@ -1468,6 +1502,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 _D3_EVENT_MIGRATION,
                 _D0F_ENVELOPE_MIGRATION,
                 _D1I_PARENT_UNIQUENESS_MIGRATION,
+                _D1M_COMPANY_PUBLIC_WEB_RUN_IDEMPOTENCY_MIGRATION,
             ],
         )
         self.assertEqual(again.applied, [])
@@ -1542,7 +1577,12 @@ class MigrationRunnerTest(unittest.TestCase):
         sentinel = ("", "", "", "", None, "", 0, 0, "", "", None)
         self.assertEqual(
             result.applied,
-            [_D3_EVENT_MIGRATION, _D0F_ENVELOPE_MIGRATION, _D1I_PARENT_UNIQUENESS_MIGRATION],
+            [
+                _D3_EVENT_MIGRATION,
+                _D0F_ENVELOPE_MIGRATION,
+                _D1I_PARENT_UNIQUENESS_MIGRATION,
+                _D1M_COMPANY_PUBLIC_WEB_RUN_IDEMPOTENCY_MIGRATION,
+            ],
         )
         self.assertEqual(columns, list(_D3_EVENT_COLUMNS))
         self.assertEqual(legacy_sentinel, sentinel)
@@ -1676,7 +1716,12 @@ class MigrationRunnerTest(unittest.TestCase):
             again = mr.apply_pending_migrations(conn, schema=schema)
         self.assertEqual(
             recovered.applied,
-            [_D3_EVENT_MIGRATION, _D0F_ENVELOPE_MIGRATION, _D1I_PARENT_UNIQUENESS_MIGRATION],
+            [
+                _D3_EVENT_MIGRATION,
+                _D0F_ENVELOPE_MIGRATION,
+                _D1I_PARENT_UNIQUENESS_MIGRATION,
+                _D1M_COMPANY_PUBLIC_WEB_RUN_IDEMPOTENCY_MIGRATION,
+            ],
         )
         self.assertEqual(again.applied, [])
         self.assertEqual(again.already_applied, _ALL_MIGRATIONS)
@@ -1903,7 +1948,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 with self.assertRaises(psycopg.errors.CheckViolation) as raised:
                     mr.apply_pending_migrations(conn, schema=schema)
 
-        self.assertEqual(prefix.applied, _ALL_MIGRATIONS[:-1])
+        self.assertEqual(prefix.applied, _ALL_MIGRATIONS[:-2])
         self.assertEqual(
             raised.exception.diag.constraint_name,
             "workflow_commands_acquisition_root_child_shape_ck",
@@ -1926,7 +1971,7 @@ class MigrationRunnerTest(unittest.TestCase):
                     (schema,),
                 )
                 trigger_count = int(cur.fetchone()[0])
-        self.assertEqual(ledger, _ALL_MIGRATIONS[:-1])
+        self.assertEqual(ledger, _ALL_MIGRATIONS[:-2])
         self.assertIsNone(index_name)
         self.assertIsNone(old_unique_index_name)
         self.assertEqual(trigger_count, 0)
@@ -1964,7 +2009,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 with self.assertRaises(psycopg.errors.UniqueViolation) as raised:
                     mr.apply_pending_migrations(conn, schema=schema)
 
-        self.assertEqual(prefix.applied, _ALL_MIGRATIONS[:-1])
+        self.assertEqual(prefix.applied, _ALL_MIGRATIONS[:-2])
         self.assertEqual(
             raised.exception.diag.constraint_name,
             "workflow_commands_acquisition_root_single_child_uk",
@@ -1984,7 +2029,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 index_name = cur.fetchone()[0]
                 cur.execute("SELECT to_regclass('workflow_commands_acquisition_intent_parent_uk')")
                 old_unique_index_name = cur.fetchone()[0]
-        self.assertEqual(ledger, _ALL_MIGRATIONS[:-1])
+        self.assertEqual(ledger, _ALL_MIGRATIONS[:-2])
         self.assertEqual(duplicate_count, 2)
         self.assertIsNone(index_name)
         self.assertIsNone(old_unique_index_name)
@@ -2205,6 +2250,138 @@ class MigrationRunnerTest(unittest.TestCase):
                 )
                 child_types = [row[0] for row in cur.fetchall()]
         self.assertEqual(child_types, ["acquisition.intent.resolve"])
+
+    def test_company_public_web_asset_run_idempotency_migration_has_exact_partial_unique_scope(
+        self,
+    ) -> None:
+        schema = self._fresh_schema("d1m_company_public_web_idempotency")
+        quoted = quote_control_plane_postgres_identifier(schema)
+        with psycopg.connect(self.dsn, client_encoding="utf8") as conn:
+            result = mr.apply_pending_migrations(conn, schema=schema)
+            with conn.cursor() as cur:
+                cur.execute(f"SET search_path TO {quoted}")
+                cur.execute(
+                    "SELECT indexdef FROM pg_indexes "
+                    "WHERE schemaname = %s AND tablename = 'company_public_web_asset_runs' "
+                    "AND indexname = 'company_public_web_asset_runs_idempotency_key_uk'",
+                    (schema,),
+                )
+                index_row = cur.fetchone()
+                cur.execute("SELECT to_regclass('company_public_web_source_projection_revision_seq')")
+                revision_sequence_name = cur.fetchone()[0]
+                self._insert_company_public_web_asset_run(
+                    cur,
+                    run_id="d1m-empty-a",
+                    idempotency_key="   ",
+                )
+                self._insert_company_public_web_asset_run(
+                    cur,
+                    run_id="d1m-empty-b",
+                    idempotency_key="   ",
+                )
+                self._insert_company_public_web_asset_run(
+                    cur,
+                    run_id="d1m-effective-a",
+                    idempotency_key=" \t\nd1m-effective-key\r\f ",
+                )
+                self._insert_company_public_web_asset_run(
+                    cur,
+                    run_id="d1m-literal-v",
+                    idempotency_key="d1m-literal-v",
+                )
+                self._insert_company_public_web_asset_run(
+                    cur,
+                    run_id="d1m-literal-without-v",
+                    idempotency_key="d1m-literal-",
+                )
+                cur.execute("SAVEPOINT duplicate_effective_key")
+                with self.assertRaises(psycopg.errors.UniqueViolation) as raised:
+                    self._insert_company_public_web_asset_run(
+                        cur,
+                        run_id="d1m-effective-b",
+                        idempotency_key="d1m-effective-key",
+                    )
+                self.assertEqual(
+                    raised.exception.diag.constraint_name,
+                    "company_public_web_asset_runs_idempotency_key_uk",
+                )
+                cur.execute("ROLLBACK TO SAVEPOINT duplicate_effective_key")
+                self._insert_company_public_web_asset_run(
+                    cur,
+                    run_id="d1m-vt-a",
+                    idempotency_key="\vd1m-vt-key\v",
+                )
+                cur.execute("SAVEPOINT duplicate_vt_key")
+                with self.assertRaises(psycopg.errors.UniqueViolation) as vt_raised:
+                    self._insert_company_public_web_asset_run(
+                        cur,
+                        run_id="d1m-vt-b",
+                        idempotency_key="d1m-vt-key",
+                    )
+                self.assertEqual(
+                    vt_raised.exception.diag.constraint_name,
+                    "company_public_web_asset_runs_idempotency_key_uk",
+                )
+                cur.execute("ROLLBACK TO SAVEPOINT duplicate_vt_key")
+            conn.rollback()
+
+        self.assertEqual(result.applied, _ALL_MIGRATIONS)
+        self.assertIsNotNone(index_row)
+        self.assertEqual(revision_sequence_name, "company_public_web_source_projection_revision_seq")
+        normalized_index = " ".join(str((index_row or [""])[0]).replace(f"{schema}.", "").split())
+        self.assertIn("CREATE UNIQUE INDEX company_public_web_asset_runs_idempotency_key_uk", normalized_index)
+        self.assertIn("btrim(idempotency_key,", normalized_index)
+        self.assertIn("WHERE (btrim(idempotency_key,", normalized_index)
+
+    def test_company_public_web_asset_run_idempotency_migration_fails_closed_on_brownfield_duplicates(
+        self,
+    ) -> None:
+        schema = self._fresh_schema("d1m_company_public_web_brownfield_duplicate")
+        quoted = quote_control_plane_postgres_identifier(schema)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            migrations_dir = Path(temp_dir)
+            _copy_migrations_through(migrations_dir, 8)
+            with psycopg.connect(self.dsn, client_encoding="utf8") as conn:
+                prefix = mr.apply_pending_migrations(conn, schema=schema, migrations_dir=migrations_dir)
+                with conn.cursor() as cur:
+                    cur.execute(f"SET search_path TO {quoted}")
+                    self._insert_company_public_web_asset_run(
+                        cur,
+                        run_id="d1m-brownfield-a",
+                        idempotency_key="d1m-brownfield-duplicate",
+                    )
+                    self._insert_company_public_web_asset_run(
+                        cur,
+                        run_id="d1m-brownfield-b",
+                        idempotency_key="\t\nd1m-brownfield-duplicate\r\f",
+                    )
+                conn.commit()
+                with self.assertRaises(psycopg.errors.UniqueViolation) as raised:
+                    mr.apply_pending_migrations(conn, schema=schema)
+
+        self.assertEqual(prefix.applied, _ALL_MIGRATIONS[:-1])
+        self.assertEqual(
+            raised.exception.diag.constraint_name,
+            "company_public_web_asset_runs_idempotency_key_uk",
+        )
+        with psycopg.connect(self.dsn, autocommit=True, client_encoding="utf8") as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"SET search_path TO {quoted}")
+                cur.execute("SELECT version FROM schema_migrations ORDER BY version")
+                ledger = [row[0] for row in cur.fetchall()]
+                cur.execute("SELECT to_regclass('company_public_web_asset_runs_idempotency_key_uk')")
+                index_name = cur.fetchone()[0]
+                cur.execute("SELECT to_regclass('company_public_web_source_projection_revision_seq')")
+                revision_sequence_name = cur.fetchone()[0]
+                cur.execute(
+                    "SELECT COUNT(*) FROM company_public_web_asset_runs "
+                    "WHERE btrim(idempotency_key, E' \\t\\n\\r\\f\\013') = 'd1m-brownfield-duplicate'"
+                )
+                duplicate_count = int(cur.fetchone()[0])
+        self.assertEqual(ledger, _ALL_MIGRATIONS[:-1])
+        self.assertIsNone(index_name)
+        self.assertIsNone(revision_sequence_name)
+        self.assertEqual(duplicate_count, 2)
 
     def test_applied_migration_checksum_change_fails_closed(self) -> None:
         schema = self._fresh_schema("checksum")

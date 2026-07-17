@@ -24,8 +24,9 @@ served Agent tool path is authorized by this batch.
 
 ## Residuals
 
-- At the D1k checkpoint R-029 remained open at 8/15 schema-less actions; D1l now owns the current
-  **9 schema-defined / 6 schema-less / served=0** partition.
+- At the D1k checkpoint R-029 remained open at 8/15 schema-less actions; D1l later reached its
+  **9 schema-defined / 6 schema-less / served=0** checkpoint, and the D1m candidate now makes the current candidate
+  partition **10 schema-defined / 5 schema-less / served=0**.
 - R-028 is unchanged: this batch does not alter CRM mutation, effect/terminal synchronization, legacy CRM writers, or
   command completion exactly-once boundaries.
 - R-019 is unchanged: this batch does not add a global operation/command UoW or claim-generation fence.

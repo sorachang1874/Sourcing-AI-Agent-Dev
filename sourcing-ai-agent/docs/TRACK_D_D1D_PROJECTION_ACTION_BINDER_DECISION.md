@@ -111,8 +111,10 @@ After the owner choice is physical and reviewed, the bounded implementation must
 
 Only then may these two actions leave the R-029 numerator. D1f reduced that numerator to 12 by activating three CRM
 actions; D1h then reduced it to 11, D1i to 10, D1j to 9, and D1k to 8 through their own owner/schema contracts. D1l
-implements the shared-canonical-read decision and reduces the current numerator to 6. This activation does not close
-R-029 for the remaining API-submittable actions or authorize removal of the compatibility epoch/evidence.
+implements the shared-canonical-read decision and reduced its checkpoint numerator to 6. The later D1m candidate
+activates `refresh_company_public_web_assets`, so the current candidate partition is
+**10 schema-defined / 5 schema-less / served=0**. Neither activation closes R-029 for the remaining API-submittable
+actions or authorizes removal of the compatibility epoch/evidence.
 
 ## 5. Executable oracle and validation
 

@@ -930,6 +930,7 @@ class CommandKernel:
         entity_counts: dict[str, Any] | None = None,
         metadata: dict[str, Any] | None = None,
         attempt_suffix: str = "",
+        require_current_command_claim: bool = False,
     ) -> tuple[dict[str, Any], dict[str, Any]]:
         command_payload = dict(command or {})
         payload = dict(command_payload.get("payload") or {})
@@ -942,6 +943,7 @@ class CommandKernel:
         normalized_owner = str(owner or "").strip()
         normalized_phase = str(phase or "").strip()
         workspace_id = str(payload.get("workspace_id") or "default").strip() or "default"
+        expected_command_claim = command_payload if require_current_command_claim else None
         activity = self._store.repos.workflow_runtime.upsert_activity_run(
             {
                 "workspace_id": workspace_id,
@@ -965,9 +967,12 @@ class CommandKernel:
                     "workflow_command_owner": str(command_payload.get("owner") or "").strip(),
                     "activity_spine_contract": "command_activity_attempt_entity_delta_v1",
                 },
-            }
+            },
+            expected_command_claim=expected_command_claim,
         )
         activity_run_id = str(activity.get("activity_run_id") or "").strip()
+        if not activity_run_id:
+            return {}, {}
         attempt_number = max(1, _coerce_int(command_payload.get("attempt"), 1))
         normalized_suffix = str(attempt_suffix or normalized_phase or "attempt").strip()
         attempt_key = hashlib.sha1(
@@ -993,8 +998,33 @@ class CommandKernel:
                     "lease_owner": str(lease_owner or "").strip(),
                     "activity_spine_contract": "command_activity_attempt_entity_delta_v1",
                 },
-            }
+            },
+            expected_command_claim=expected_command_claim,
         )
+        if require_current_command_claim:
+            activity_metadata = dict(activity.get("metadata") or {})
+            attempt_metadata = dict(attempt.get("metadata") or {})
+            expected_provider = str(provider or normalized_owner).strip()
+            exact_running_spine = bool(
+                str(activity.get("status") or "").strip() == "running"
+                and str(activity.get("workspace_id") or "default").strip() == workspace_id
+                and str(activity.get("workflow_run_id") or "").strip() == workflow_run_id
+                and str(activity.get("operation_run_id") or "").strip() == operation_run_id
+                and str(activity.get("command_id") or "").strip() == command_id
+                and str(activity.get("activity_type") or "").strip() == normalized_activity_type
+                and str(activity.get("owner") or "").strip() == normalized_owner
+                and str(activity_metadata.get("lease_owner") or "").strip() == str(lease_owner or "").strip()
+                and str(attempt.get("status") or "").strip() == "running"
+                and str(attempt.get("workspace_id") or "default").strip() == workspace_id
+                and str(attempt.get("activity_run_id") or "").strip() == activity_run_id
+                and str(attempt.get("workflow_run_id") or "").strip() == workflow_run_id
+                and str(attempt.get("command_id") or "").strip() == command_id
+                and int(attempt.get("attempt_number") or 0) == attempt_number
+                and str(attempt.get("provider") or "").strip() == expected_provider
+                and str(attempt_metadata.get("lease_owner") or "").strip() == str(lease_owner or "").strip()
+            )
+            if not exact_running_spine:
+                return {}, {}
         return activity, attempt
 
     def _finish_workflow_command_activity_attempt(

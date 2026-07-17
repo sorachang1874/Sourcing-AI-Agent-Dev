@@ -1380,6 +1380,62 @@ class RequestScopeWiringTest(unittest.TestCase):
         self.assertNotIn("expected_workspace_id", captured_root)
         self.assertNotIn("expected_owner_user_id", captured_root)
 
+    def test_company_public_web_operation_transport_derives_owner_and_preserves_open_mode(self) -> None:
+        request_input = {
+            "target_company": "Thinking Machines Lab",
+            "source_families": ["company_homepage", "company_news"],
+            "seed_urls": [
+                "https://thinkingmachines.ai/",
+                "https://thinkingmachines.ai/news/",
+            ],
+            "max_assets": 20,
+            "force_refresh": False,
+            "collection_mode": "seed_url_only",
+        }
+
+        base, opener, orchestrator = self._start_server()
+        status, _ = self._request(
+            opener,
+            f"{base}/api/operations/actions",
+            method="POST",
+            body={
+                "action_type": "refresh_company_public_web_assets",
+                "workspace_id": "user-bob",
+                "actor": "bob",
+                "input": request_input,
+            },
+        )
+        self.assertEqual(status, 202)
+        captured = orchestrator.captured["operation_action"][-1]
+        self.assertEqual(captured["workspace_id"], "user-alice")
+        self.assertEqual(captured["actor"], "alice")
+        self.assertEqual(captured["expected_workspace_id"], "user-alice")
+        self.assertEqual(captured["expected_owner_user_id"], "alice")
+        self.assertEqual(captured["input"], request_input)
+        self.assertNotIn("target_ref", captured)
+
+        open_base, open_opener, open_orchestrator = self._start_server(authenticated=False)
+        open_status, _ = self._request(
+            open_opener,
+            f"{open_base}/api/operations/actions",
+            method="POST",
+            body={
+                "action_type": "refresh_company_public_web_assets",
+                "workspace_id": "operator-workspace",
+                "actor": "legacy-operator",
+                "input": request_input,
+            },
+            token=None,
+        )
+        self.assertEqual(open_status, 202)
+        open_captured = open_orchestrator.captured["operation_action"][-1]
+        self.assertEqual(open_captured["workspace_id"], "operator-workspace")
+        self.assertEqual(open_captured["actor"], "legacy-operator")
+        self.assertEqual(open_captured["input"], request_input)
+        self.assertNotIn("target_ref", open_captured)
+        self.assertNotIn("expected_workspace_id", open_captured)
+        self.assertNotIn("expected_owner_user_id", open_captured)
+
     def test_authenticated_operation_reads_and_controls_use_exact_workspace_scope(self) -> None:
         base, opener, orchestrator = self._start_server()
 

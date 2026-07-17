@@ -196,19 +196,19 @@ CURRENT_FRONTEND_WORKFLOW_COMMAND_REF_COUNT = 7
 CURRENT_COMMAND_EFFECT_CALL_COUNTS = {
     "append_event_and_reduce": 62,
     "claim_workflow_command": 29,
-    "mark_workflow_command_failed": 75,
+    "mark_workflow_command_failed": 73,
     "mark_workflow_command_partial_progress": 15,
     "mark_workflow_command_running": 29,
-    "mark_workflow_command_succeeded": 38,
+    "mark_workflow_command_succeeded": 37,
     "mark_workflow_command_waiting_prerequisite": 3,
 }
-CURRENT_COMMAND_PLAN_REQUESTED_CALL_COUNT = 34
+CURRENT_COMMAND_PLAN_REQUESTED_CALL_COUNT = 33
 CURRENT_R019_STATE_SYNC_COUNTS = {
     "src/sourcing_agent/acquisition_command_owner.py": 8,
     "src/sourcing_agent/command_kernel.py": 2,
     "src/sourcing_agent/crm_public_web_owner.py": 2,
     "src/sourcing_agent/operation_runtime.py": 2,
-    "src/sourcing_agent/orchestrator.py": 12,
+    "src/sourcing_agent/orchestrator.py": 10,
 }
 
 EXPECTED_PHYSICAL_WORKFLOW_COMMAND_MUTATORS = frozenset(
@@ -218,6 +218,7 @@ EXPECTED_PHYSICAL_WORKFLOW_COMMAND_MUTATORS = frozenset(
         "checkpoint_running_workflow_command_payload",
         "claim_workflow_command",
         "complete_acquisition_root_command",
+        "close_company_public_web_owner_lost_activity_attempt",
         "fail_acquisition_root_command_claim",
         "mark_workflow_command_failed",
         "mark_workflow_command_partial_progress",
@@ -3032,7 +3033,7 @@ def test_current_descriptors_freeze_private_capability_absence_and_generic_carri
 def test_current_command_effect_and_r019_populations_are_mechanically_frozen() -> None:
     physical_mutators = _physical_workflow_command_sql_mutators()
     assert physical_mutators == EXPECTED_PHYSICAL_WORKFLOW_COMMAND_MUTATORS
-    assert len(physical_mutators) == 16
+    assert len(physical_mutators) == 17
 
     calls, state_sync_counts = _command_effect_and_r019_populations(frozenset(CURRENT_COMMAND_EFFECT_CALL_COUNTS))
     assert {name: len(call_sites) for name, call_sites in calls.items()} == CURRENT_COMMAND_EFFECT_CALL_COUNTS
@@ -3042,7 +3043,7 @@ def test_current_command_effect_and_r019_populations_are_mechanically_frozen() -
     )
 
     assert state_sync_counts == CURRENT_R019_STATE_SYNC_COUNTS
-    assert sum(state_sync_counts.values()) == 26
+    assert sum(state_sync_counts.values()) == 24
 
 
 def test_d3c1_public_mapper_is_closed_and_preserves_only_safe_diagnostics() -> None:

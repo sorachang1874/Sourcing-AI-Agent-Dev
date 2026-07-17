@@ -9,6 +9,13 @@ from types import MappingProxyType
 from typing import Any, Mapping
 
 from sourcing_agent.action_request_schema import DEFAULT_ACTION_REQUEST_SCHEMA_BUILDER
+from sourcing_agent.company_public_web_assets import (
+    COMPANY_PUBLIC_WEB_ALLOWED_SOURCE_FAMILIES,
+    infer_company_public_web_source_family,
+)
+from sourcing_agent.company_public_web_assets import (
+    normalize_public_web_url as normalize_company_public_web_url,
+)
 from sourcing_agent.crm_contract import CRM_STAGE_VALUES
 from sourcing_agent.durable_runtime import (
     ACQUISITION_RUN_CREATE_COMMAND_TYPE,
@@ -64,6 +71,7 @@ CRM_PROJECTION_SELECTION_ACTION_TYPES = (ACTION_ADD_TO_CRM,)
 ACQUISITION_ROOT_ACTION_TYPES = (ACTION_START_ACQUISITION_RUN,)
 PROJECTION_READ_ACTION_TYPES = (ACTION_SEARCH_PROJECTION, ACTION_FILTER_PROJECTION)
 PROJECTION_EXPORT_ACTION_TYPES = (ACTION_EXPORT_CANDIDATES,)
+COMPANY_PUBLIC_WEB_ACTION_TYPES = (ACTION_REFRESH_COMPANY_PUBLIC_WEB,)
 CRM_RESOURCE_BOUND_ACTION_TYPES = CRM_EXISTING_RECORD_ACTION_TYPES + CRM_RECORD_BATCH_ACTION_TYPES
 OPERATION_OWNER_BOUND_ACTION_TYPES = (
     CRM_RESOURCE_BOUND_ACTION_TYPES
@@ -71,6 +79,7 @@ OPERATION_OWNER_BOUND_ACTION_TYPES = (
     + ACQUISITION_ROOT_ACTION_TYPES
     + PROJECTION_READ_ACTION_TYPES
     + PROJECTION_EXPORT_ACTION_TYPES
+    + COMPANY_PUBLIC_WEB_ACTION_TYPES
 )
 
 APPROVAL_NOT_REQUIRED = "not_required"
@@ -567,6 +576,100 @@ PROJECTION_READ_ACTION_REQUEST_CONTRACTS: Mapping[str, Mapping[str, Any]] = Mapp
     }
 )
 
+_COMPANY_PUBLIC_WEB_INPUT_PROPERTIES: dict[str, dict[str, Any]] = {
+    "target_company": {"type": "string", "minLength": 1, "maxLength": 500, "pattern": r"\S"},
+    # This is an independent allow-set, not a positional companion to seed_urls.
+    # Each canonical seed URL is classified by the company Public Web URL owner.
+    "source_families": {
+        "type": "array",
+        "items": {"type": "string", "enum": list(COMPANY_PUBLIC_WEB_ALLOWED_SOURCE_FAMILIES)},
+        "minItems": 1,
+        "maxItems": len(COMPANY_PUBLIC_WEB_ALLOWED_SOURCE_FAMILIES),
+    },
+    "seed_urls": {
+        "type": "array",
+        "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "pattern": r"^https?://[^\s]+$",
+        },
+        "minItems": 1,
+        "maxItems": 500,
+    },
+    "max_assets": {"type": "integer", "minimum": 1, "maximum": 500},
+    "force_refresh": {"type": "boolean"},
+    "refresh_nonce": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": r"\S"},
+    "collection_mode": {"type": "string", "const": "seed_url_only"},
+}
+_COMPANY_PUBLIC_WEB_TARGET_PROPERTIES: dict[str, dict[str, Any]] = {
+    "workspace_id": {"type": "string", "minLength": 1, "maxLength": 200, "pattern": r"\S"},
+    "company_key": {"type": "string", "minLength": 1, "maxLength": 200, "pattern": r"\S"},
+}
+
+COMPANY_PUBLIC_WEB_ACTION_REQUEST_CONTRACTS: Mapping[str, Mapping[str, Any]] = MappingProxyType(
+    {
+        ACTION_REFRESH_COMPANY_PUBLIC_WEB: MappingProxyType(
+            {
+                "request_schema": _freeze_action_request_json(
+                    DEFAULT_ACTION_REQUEST_SCHEMA_BUILDER.build(
+                        input_properties=_COMPANY_PUBLIC_WEB_INPUT_PROPERTIES,
+                        input_required=("target_company", "source_families", "seed_urls"),
+                        target_properties=_COMPANY_PUBLIC_WEB_TARGET_PROPERTIES,
+                        target_required=tuple(_COMPANY_PUBLIC_WEB_TARGET_PROPERTIES),
+                    )
+                ),
+                "request_schema_version": "company_public_web_refresh_request_v1",
+                "request_identity_target_fields": ("workspace_id", "company_key"),
+                "target_ref_field_aliases": (
+                    ("workspace_id", ("tenant_id",)),
+                    ("company_key", ("company", "company_name")),
+                ),
+            }
+        )
+    }
+)
+
+
+def _canonical_company_public_web_action_input(input_payload: Mapping[str, Any]) -> dict[str, Any]:
+    """Return the deterministic seed-only request with URL-owned family classification."""
+
+    normalized = dict(input_payload)
+    target_company = str(normalized.get("target_company") or "").strip()
+    source_families = sorted(set(str(item) for item in list(normalized.get("source_families") or [])))
+    raw_seed_urls = list(normalized.get("seed_urls") or [])
+    normalized_seed_urls = [normalize_company_public_web_url(str(item)) for item in raw_seed_urls]
+    if any(not canonical_url for canonical_url in normalized_seed_urls):
+        raise ActionRequestValidationError("company_public_web_request_canonicalization_failed")
+    seed_urls = sorted(set(normalized_seed_urls))
+    if not target_company or not source_families or not seed_urls:
+        raise ActionRequestValidationError("company_public_web_request_canonicalization_failed")
+    requested_source_families = set(source_families)
+    for seed_url in seed_urls:
+        inferred_source_family = infer_company_public_web_source_family(seed_url)
+        if inferred_source_family not in COMPANY_PUBLIC_WEB_ALLOWED_SOURCE_FAMILIES:
+            raise ActionRequestValidationError("company_public_web_seed_source_family_invalid")
+        if inferred_source_family not in requested_source_families:
+            raise ActionRequestValidationError("company_public_web_seed_source_family_not_requested")
+    force_refresh = bool(normalized.get("force_refresh", False))
+    refresh_nonce_present = "refresh_nonce" in normalized
+    refresh_nonce = str(normalized.get("refresh_nonce") or "").strip()
+    if force_refresh and not refresh_nonce:
+        raise ActionRequestValidationError("company_public_web_refresh_nonce_required")
+    if not force_refresh and refresh_nonce_present:
+        raise ActionRequestValidationError("company_public_web_refresh_nonce_requires_force_refresh")
+    canonical = {
+        "target_company": target_company,
+        "source_families": source_families,
+        "seed_urls": seed_urls,
+        "max_assets": int(normalized.get("max_assets", 50)),
+        "force_refresh": force_refresh,
+        "collection_mode": str(normalized.get("collection_mode") or "seed_url_only"),
+    }
+    if force_refresh:
+        canonical["refresh_nonce"] = refresh_nonce
+    return canonical
+
 
 class ActionRequestValidationError(ValueError):
     """Raised before persistence when an action request violates its checked-in contract."""
@@ -778,6 +881,8 @@ class ActionRequestSpec:
         normalized_target = normalized.get("target_ref")
         if not isinstance(normalized_input, dict) or not isinstance(normalized_target, dict):
             raise ActionRequestValidationError("action_request_schema_segments_invalid")
+        if self.action_type == ACTION_REFRESH_COMPANY_PUBLIC_WEB:
+            normalized_input = _canonical_company_public_web_action_input(normalized_input)
         return dict(normalized_input), dict(normalized_target)
 
     @property
@@ -1155,6 +1260,7 @@ DEFAULT_ACTION_REGISTRY = ActionRegistry(
             display_category="public_web",
             allowed_workflow_command_types=(COMPANY_PUBLIC_WEB_REFRESH_COMMAND_TYPE,),
             default_workflow_command_type=COMPANY_PUBLIC_WEB_REFRESH_COMMAND_TYPE,
+            **dict(COMPANY_PUBLIC_WEB_ACTION_REQUEST_CONTRACTS[ACTION_REFRESH_COMPANY_PUBLIC_WEB]),
         ),
         ACTION_PROMOTE_PERSON_ASSERTION: ActionSpec(
             action_type=ACTION_PROMOTE_PERSON_ASSERTION,
@@ -1550,7 +1656,7 @@ class OperationRuntimeWriter:
                     action_record,
                 )
             try:
-                spec.validate_request(
+                normalized_input, normalized_target = spec.validate_request(
                     input_payload=persisted_input,
                     target_ref=persisted_target,
                 )
@@ -1559,6 +1665,13 @@ class OperationRuntimeWriter:
                     "operation_action_request_schema_validation_conflict",
                     action_record,
                 ) from exc
+            if action_type == ACTION_REFRESH_COMPANY_PUBLIC_WEB and (
+                dict(persisted_input) != normalized_input or dict(persisted_target) != normalized_target
+            ):
+                raise OperationRuntimeStateConflict(
+                    "operation_action_request_schema_validation_conflict",
+                    action_record,
+                )
         if operation_run is not None:
             operation_record = dict(operation_run or {})
             if (

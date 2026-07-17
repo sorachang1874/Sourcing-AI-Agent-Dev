@@ -1,7 +1,8 @@
 > Status: bounded non-live implementation candidate after D1i. This activates
 > `add_to_crm` as the sixth schema-defined production action. The D1j checkpoint
-> partition was **6 schema-defined / 9 schema-less / served=0**; D1l now owns the current **9/6/0** partition. It does not
-> authorize live provider/model calls, product signoff, or closure of R-028/R-029.
+> partition was **6 schema-defined / 9 schema-less / served=0**; D1l later reached its **9/6/0** checkpoint, and the
+> D1m candidate now makes the current candidate partition **10 schema-defined / 5 schema-less / served=0**. It does
+> not authorize live provider/model calls, product signoff, or closure of R-028/R-029.
 
 # Track D D1j Add-to-CRM Projection Selection Action Activation
 
