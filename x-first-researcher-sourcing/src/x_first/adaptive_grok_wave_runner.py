@@ -38,6 +38,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from email.utils import format_datetime, parsedate_to_datetime
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any, Protocol
 from urllib.parse import quote
 
@@ -273,6 +274,59 @@ AUTHORITY = {
     "protected_identity_inference_authorized": False,
     "provider_fallback_authorized": False,
 }
+
+# One immutable registry owns every retained run artifact name.  Recovery's
+# post-consumption fence, runtime_layout, and the actual publication call sites
+# all resolve through this table so adding or renaming a durable artifact cannot
+# silently leave the consumption-boundary classifier behind.
+_RUN_ARTIFACT_NAME_REGISTRY = MappingProxyType(
+    {
+        "compiled_prompt": "compiled-prompt.txt",
+        "operator_request": "operator-request.json",
+        "operator_intent": "operator-intent.json",
+        "stdout_spool": ".stdout-spool",
+        "stderr_spool": ".stderr-spool",
+        "process_ledger": "process-ledger.json",
+        "process_result": "process-result.json",
+        "session_updates": "session-updates.jsonl",
+        "raw_stdout": "raw.stdout",
+        "stderr": "stderr.txt",
+        "sanitized": "sanitized.json",
+        "operator_receipt": "operator-receipt.json",
+        "ephemeral_home": "ephemeral-home",
+        "run_lock": "run.lock",
+    }
+)
+_RUNTIME_LAYOUT_ARTIFACT_KEYS = MappingProxyType(
+    {
+        "compiled_prompt_name": "compiled_prompt",
+        "stdout_spool_name": "stdout_spool",
+        "stderr_spool_name": "stderr_spool",
+        "ephemeral_home_name": "ephemeral_home",
+        "session_updates_name": "session_updates",
+        "run_lock_name": "run_lock",
+    }
+)
+_POST_CONSUMPTION_ARTIFACT_KEYS = frozenset(
+    {
+        "stdout_spool",
+        "stderr_spool",
+        "process_ledger",
+        "process_result",
+        "session_updates",
+        "raw_stdout",
+        "stderr",
+        "sanitized",
+        "operator_receipt",
+    }
+)
+_PRE_CONSUMPTION_PENDING_ARTIFACT_KEYS = frozenset(
+    {
+        "compiled_prompt",
+        "operator_request",
+        "operator_intent",
+    }
+)
 
 _SHA256_RE = re.compile(r"[0-9a-f]{64}")
 _HANDLE_RE = re.compile(r"[A-Za-z0-9_]{1,15}")
@@ -5290,7 +5344,7 @@ def _create_run_root(runtime_root: Path, run_id: str) -> Path:
 
 @contextmanager
 def _run_lease(run_root: Path, *, create: bool) -> Any:
-    path = run_root / "run.lock"
+    path = run_root / _RUN_ARTIFACT_NAME_REGISTRY["run_lock"]
     flags = os.O_RDWR
     if create:
         flags |= os.O_CREAT | os.O_EXCL
@@ -5333,7 +5387,13 @@ def _run_lease(run_root: Path, *, create: bool) -> Any:
 
 
 def _read_run_lease_sha256(run_root: Path) -> str:
-    return bytes_sha256(_read_regular_owned_bounded(run_root / "run.lock", maximum_bytes=64, required_mode=0o600))
+    return bytes_sha256(
+        _read_regular_owned_bounded(
+            run_root / _RUN_ARTIFACT_NAME_REGISTRY["run_lock"],
+            maximum_bytes=64,
+            required_mode=0o600,
+        )
+    )
 
 
 def _load_request(path: Path) -> dict[str, Any]:
@@ -5493,7 +5553,7 @@ def _discard_run_root_without_intent_on_failure(run_root: Path) -> Any:
     try:
         yield
     except BaseException:
-        intent_path = run_root / "operator-intent.json"
+        intent_path = run_root / _RUN_ARTIFACT_NAME_REGISTRY["operator_intent"]
         try:
             intent_metadata = intent_path.lstat()
             durable_intent_present = (
@@ -5541,8 +5601,16 @@ def _publish_process_spools(
     promoted: list[bytes] = []
     removed_spool = False
     for final_path, spool_path, ceiling in (
-        (run_root / "raw.stdout", stdout_spool, max_stdout_bytes),
-        (run_root / "stderr.txt", stderr_spool, max_stderr_bytes),
+        (
+            run_root / _RUN_ARTIFACT_NAME_REGISTRY["raw_stdout"],
+            stdout_spool,
+            max_stdout_bytes,
+        ),
+        (
+            run_root / _RUN_ARTIFACT_NAME_REGISTRY["stderr"],
+            stderr_spool,
+            max_stderr_bytes,
+        ),
     ):
         final_raw: bytes | None = None
         spool_raw: bytes | None = None
@@ -5647,20 +5715,13 @@ def _run_adaptive_wave(
     with _discard_run_root_without_intent_on_failure(run_root), _run_lease(run_root, create=True) as run_lease_sha:
         workspace = run_root / "workspace"
         workspace.mkdir(mode=0o700)
-        ephemeral_home = run_root / "ephemeral-home"
+        ephemeral_home = run_root / _RUN_ARTIFACT_NAME_REGISTRY["ephemeral_home"]
         ephemeral_home.mkdir(mode=0o700)
-        compiled_prompt_path = run_root / "compiled-prompt.txt"
-        stdout_spool = run_root / ".stdout-spool"
-        stderr_spool = run_root / ".stderr-spool"
-        retained_updates_path = run_root / "session-updates.jsonl"
-        runtime_layout = {
-            "compiled_prompt_name": compiled_prompt_path.name,
-            "stdout_spool_name": stdout_spool.name,
-            "stderr_spool_name": stderr_spool.name,
-            "ephemeral_home_name": ephemeral_home.name,
-            "session_updates_name": retained_updates_path.name,
-            "run_lock_name": "run.lock",
-        }
+        compiled_prompt_path = run_root / _RUN_ARTIFACT_NAME_REGISTRY["compiled_prompt"]
+        stdout_spool = run_root / _RUN_ARTIFACT_NAME_REGISTRY["stdout_spool"]
+        stderr_spool = run_root / _RUN_ARTIFACT_NAME_REGISTRY["stderr_spool"]
+        retained_updates_path = run_root / _RUN_ARTIFACT_NAME_REGISTRY["session_updates"]
+        runtime_layout = _runtime_layout_from_registry()
         _atomic_publish(compiled_prompt_path, compiled_prompt_raw)
         isolated_environment = _isolated_environment(ephemeral_home)
         binary_sha: str | None = None
@@ -5744,8 +5805,14 @@ def _run_adaptive_wave(
         }
         if current_process_evidence_generation:
             intent["process_evidence_generation"] = PROCESS_EVIDENCE_GENERATION
-        _atomic_publish(run_root / "operator-request.json", (canonical_json(request) + "\n").encode())
-        _atomic_publish(run_root / "operator-intent.json", (canonical_json(intent) + "\n").encode())
+        _atomic_publish(
+            run_root / _RUN_ARTIFACT_NAME_REGISTRY["operator_request"],
+            (canonical_json(request) + "\n").encode(),
+        )
+        _atomic_publish(
+            run_root / _RUN_ARTIFACT_NAME_REGISTRY["operator_intent"],
+            (canonical_json(intent) + "\n").encode(),
+        )
 
         approval_consumption_sha: str | None = None
         consumed_grant: ConsumedGrant | None = None
@@ -5841,7 +5908,10 @@ def _run_adaptive_wave(
                 "spawned_at": _timestamp(launcher_verified_clock),
             }
             raw_ledger = (canonical_json(ledger) + "\n").encode()
-            _atomic_publish(run_root / "process-ledger.json", raw_ledger)
+            _atomic_publish(
+                run_root / _RUN_ARTIFACT_NAME_REGISTRY["process_ledger"],
+                raw_ledger,
+            )
             process_ledger_sha = bytes_sha256(raw_ledger)
             # Durable spawn identity transfers all process/session/auth cleanup
             # to recovery immediately.  The executor may still raise before
@@ -5918,7 +5988,7 @@ def _run_adaptive_wave(
                 raise AdaptiveWaveValidationError("process_result_unrecoverable")
             process_result_journal_raw = (canonical_json(process_result_journal) + "\n").encode()
             _atomic_publish(
-                run_root / "process-result.json",
+                run_root / _RUN_ARTIFACT_NAME_REGISTRY["process_result"],
                 process_result_journal_raw,
             )
             process_result_journal_sha = bytes_sha256(process_result_journal_raw)
@@ -6100,7 +6170,10 @@ def _run_adaptive_wave(
                 technical_limit_kind = technical_limit_kind or projection_limit_kind
         sanitized_sha: str | None = None
         if sanitized is not None:
-            _atomic_publish(run_root / "sanitized.json", sanitized)
+            _atomic_publish(
+                run_root / _RUN_ARTIFACT_NAME_REGISTRY["sanitized"],
+                sanitized,
+            )
             sanitized_sha = bytes_sha256(sanitized)
 
         if technical_limit_kind is not None:
@@ -6205,7 +6278,10 @@ def _run_adaptive_wave(
         receipt_errors = validate_operator_receipt(receipt)
         if receipt_errors:
             raise AdaptiveWaveValidationError("generated_receipt_invalid:" + ",".join(receipt_errors))
-        _atomic_publish(run_root / "operator-receipt.json", (canonical_json(receipt) + "\n").encode())
+        _atomic_publish(
+            run_root / _RUN_ARTIFACT_NAME_REGISTRY["operator_receipt"],
+            (canonical_json(receipt) + "\n").encode(),
+        )
         return receipt, run_root
 
 
@@ -6412,19 +6488,39 @@ def _approval_binding_valid(
     )
 
 
+def _runtime_layout_from_registry() -> dict[str, str]:
+    return {
+        layout_key: _RUN_ARTIFACT_NAME_REGISTRY[artifact_key]
+        for layout_key, artifact_key in _RUNTIME_LAYOUT_ARTIFACT_KEYS.items()
+    }
+
+
+def _post_consumption_artifact_names(runtime_layout: Mapping[str, Any]) -> frozenset[str]:
+    """Return every durable artifact that proves a live run crossed consumption."""
+
+    expected_runtime_layout = _runtime_layout_from_registry()
+    if dict(runtime_layout) != expected_runtime_layout:
+        raise AdaptiveWaveValidationError(
+            "recovery_post_consumption_artifact_registry_mismatch"
+        )
+    names = {
+        _RUN_ARTIFACT_NAME_REGISTRY[key]
+        for key in _POST_CONSUMPTION_ARTIFACT_KEYS
+        if key not in _RUNTIME_LAYOUT_ARTIFACT_KEYS.values()
+    }
+    names.update(
+        runtime_layout[layout_key]
+        for layout_key, artifact_key in _RUNTIME_LAYOUT_ARTIFACT_KEYS.items()
+        if artifact_key in _POST_CONSUMPTION_ARTIFACT_KEYS
+    )
+    return frozenset(names)
+
+
 def _runtime_layout_valid(value: Any) -> bool:
     return (
         isinstance(value, dict)
         and set(value) == _RUNTIME_LAYOUT_KEYS
-        and value
-        == {
-            "compiled_prompt_name": "compiled-prompt.txt",
-            "stdout_spool_name": ".stdout-spool",
-            "stderr_spool_name": ".stderr-spool",
-            "ephemeral_home_name": "ephemeral-home",
-            "session_updates_name": "session-updates.jsonl",
-            "run_lock_name": "run.lock",
-        }
+        and value == _runtime_layout_from_registry()
     )
 
 
@@ -7122,12 +7218,18 @@ def validate_operator_bundle(
     errors: list[str] = []
     try:
         _ensure_private_directory(run_root, create=False)
-        request = _read_private_json(run_root / "operator-request.json")
-        intent = _read_private_json(run_root / "operator-intent.json")
+        request = _read_private_json(
+            run_root / _RUN_ARTIFACT_NAME_REGISTRY["operator_request"]
+        )
+        intent = _read_private_json(
+            run_root / _RUN_ARTIFACT_NAME_REGISTRY["operator_intent"]
+        )
         receipt = (
             dict(receipt_override)
             if receipt_override is not None
-            else _read_private_json(run_root / "operator-receipt.json")
+            else _read_private_json(
+                run_root / _RUN_ARTIFACT_NAME_REGISTRY["operator_receipt"]
+            )
         )
     except AdaptiveWaveValidationError as exc:
         return [str(exc)]
@@ -7187,7 +7289,7 @@ def validate_operator_bundle(
             if intent_approval.get("consumption_sha256") is not None:
                 errors.append("intent_contains_terminal_consumption")
     prior_candidates: dict[str, PriorCandidateFacts] = {}
-    compiled_prompt_path = run_root / "compiled-prompt.txt"
+    compiled_prompt_path = run_root / _RUN_ARTIFACT_NAME_REGISTRY["compiled_prompt"]
     try:
         compiled_actual = _read_regular_owned_bounded(
             compiled_prompt_path,
@@ -7231,7 +7333,10 @@ def validate_operator_bundle(
             if intent.get("input_binding") != expected_input or receipt.get("input_binding") != expected_input:
                 errors.append("input_binding_replay_mismatch")
 
-    ephemeral_home = run_root / intent.get("runtime_layout", {}).get("ephemeral_home_name", "ephemeral-home")
+    ephemeral_home = run_root / intent.get("runtime_layout", {}).get(
+        "ephemeral_home_name",
+        _RUN_ARTIFACT_NAME_REGISTRY["ephemeral_home"],
+    )
     if ephemeral_home.exists() or ephemeral_home.is_symlink():
         errors.append("ephemeral_tree_not_deleted")
 
@@ -7357,7 +7462,11 @@ def validate_operator_bundle(
             binary=command_binary,
             cwd=run_root / "workspace",
             request=request,
-            prompt_file=run_root / runtime_layout.get("compiled_prompt_name", "compiled-prompt.txt"),
+            prompt_file=run_root
+            / runtime_layout.get(
+                "compiled_prompt_name",
+                _RUN_ARTIFACT_NAME_REGISTRY["compiled_prompt"],
+            ),
             leader_socket=ephemeral_home / "leader.sock",
             session_id=session_id,
             result_schema=_load_result_schema(legacy_v2=legacy_result_schema_replay),
@@ -7507,7 +7616,7 @@ def validate_operator_bundle(
             errors.append("receipt_emergency_binding_mismatch")
         if process.get("started_at") != intent.get("started_at"):
             errors.append("receipt_started_at_intent_mismatch")
-    ledger_path = run_root / "process-ledger.json"
+    ledger_path = run_root / _RUN_ARTIFACT_NAME_REGISTRY["process_ledger"]
     if isinstance(process, dict) and process.get("process_spawn_attempted") is True:
         try:
             ledger = _read_private_json(ledger_path)
@@ -7555,7 +7664,7 @@ def validate_operator_bundle(
     elif ledger_path.exists():
         errors.append("unexpected_process_ledger")
 
-    process_result_path = run_root / "process-result.json"
+    process_result_path = run_root / _RUN_ARTIFACT_NAME_REGISTRY["process_result"]
     process_result_journal: dict[str, Any] | None = None
     process_result_journal_raw: bytes | None = None
     if process_result_path.exists() or process_result_path.is_symlink():
@@ -7624,8 +7733,8 @@ def validate_operator_bundle(
     elif current_process_evidence:
         errors.append("process_result_journal_missing")
 
-    raw_path = run_root / "raw.stdout"
-    stderr_path = run_root / "stderr.txt"
+    raw_path = run_root / _RUN_ARTIFACT_NAME_REGISTRY["raw_stdout"]
+    stderr_path = run_root / _RUN_ARTIFACT_NAME_REGISTRY["stderr"]
     limits = request.get("technical_limits", {})
     if not _technical_limits_valid(limits):
         return errors + ["technical_limits_replay_invalid"]
@@ -7685,7 +7794,10 @@ def validate_operator_bundle(
     session_proof: SessionProof | None = None
     session_raw: bytes | None = None
     session_status = "not_applicable" if mode == "fixture" else "missing"
-    updates_path = run_root / intent.get("runtime_layout", {}).get("session_updates_name", "session-updates.jsonl")
+    updates_path = run_root / intent.get("runtime_layout", {}).get(
+        "session_updates_name",
+        _RUN_ARTIFACT_NAME_REGISTRY["session_updates"],
+    )
     if mode == "live" and updates_path.exists():
         try:
             session_raw = _read_regular_owned_bounded(
@@ -7811,7 +7923,7 @@ def validate_operator_bundle(
     )
     if receipt.get("reconciliation") != expected_reconciliation:
         errors.append("receipt_reconciliation_mismatch")
-    sanitized_path = run_root / "sanitized.json"
+    sanitized_path = run_root / _RUN_ARTIFACT_NAME_REGISTRY["sanitized"]
     if sanitized is None:
         if artifacts.get("sanitized_output_sha256") is not None or sanitized_path.exists():
             errors.append("unexpected_sanitized_artifact")
@@ -7997,7 +8109,7 @@ def _load_bound_recovery_process_evidence(
 
     process_result_journal: dict[str, Any] | None = None
     process_result_journal_raw: bytes | None = None
-    process_result_path = run_root / "process-result.json"
+    process_result_path = run_root / _RUN_ARTIFACT_NAME_REGISTRY["process_result"]
     if process_result_path.exists() or process_result_path.is_symlink():
         process_result_value = _read_private_json(process_result_path)
         if not _process_result_journal_valid(
@@ -8022,7 +8134,7 @@ def _load_bound_recovery_process_evidence(
 
     ledger: dict[str, Any] | None = None
     process_ledger_sha: str | None = None
-    ledger_path = run_root / "process-ledger.json"
+    ledger_path = run_root / _RUN_ARTIFACT_NAME_REGISTRY["process_ledger"]
     if ledger_path.exists() or ledger_path.is_symlink():
         ledger_value = _read_private_json(ledger_path)
         if not _process_ledger_valid(ledger_value):
@@ -8092,14 +8204,18 @@ def _recover_incomplete_run_locked(
 ) -> dict[str, Any]:
     """Seal an interrupted run only after its recorded process group is dead."""
 
-    if (run_root / "operator-receipt.json").exists():
+    if (run_root / _RUN_ARTIFACT_NAME_REGISTRY["operator_receipt"]).exists():
         raise AdaptiveWaveValidationError("run_already_terminal")
-    intent = _read_private_json(run_root / "operator-intent.json")
+    intent = _read_private_json(
+        run_root / _RUN_ARTIFACT_NAME_REGISTRY["operator_intent"]
+    )
     if not _intent_valid(intent):
         raise AdaptiveWaveValidationError("intent_invalid")
     if intent["run_lease_sha256"] != held_lease_sha:
         raise AdaptiveWaveValidationError("recovery_run_lease_binding_invalid")
-    request = _read_private_json(run_root / "operator-request.json")
+    request = _read_private_json(
+        run_root / _RUN_ARTIFACT_NAME_REGISTRY["operator_request"]
+    )
     if validate_request(request) or canonical_sha256(request) != intent["request_sha256"]:
         raise AdaptiveWaveValidationError("recovery_request_invalid")
     recovery_recorded_command_policy = intent["command_binding"]["command_policy_sha256"]
@@ -8147,8 +8263,7 @@ def _recover_incomplete_run_locked(
     # mutate any retained run artifact.  In particular, a deleted consumption
     # ledger must not be downgraded to a pre-consumption crash merely by also
     # deleting or origin-rewriting the active-use claim.
-    process_result_path = run_root / "process-result.json"
-    ledger_path = run_root / "process-ledger.json"
+    process_result_path = run_root / _RUN_ARTIFACT_NAME_REGISTRY["process_result"]
     (
         process_result_journal,
         process_result_journal_raw,
@@ -8163,18 +8278,16 @@ def _recover_incomplete_run_locked(
 
     stdout_spool_path = run_root / intent["runtime_layout"]["stdout_spool_name"]
     stderr_spool_path = run_root / intent["runtime_layout"]["stderr_spool_name"]
-    process_evidence_names = {
-        process_result_path.name,
-        ledger_path.name,
-        stdout_spool_path.name,
-        stderr_spool_path.name,
-    }
-    pending_process_evidence_present = any(
-        match is not None and match.group("name") in process_evidence_names
+    post_consumption_artifact_names = _post_consumption_artifact_names(
+        intent["runtime_layout"]
+    )
+    pending_post_consumption_evidence_present = any(
+        match is not None
+        and match.group("name") in post_consumption_artifact_names
         for path in run_root.iterdir()
         for match in (_PENDING_RE.fullmatch(path.name),)
     )
-    process_spool_evidence_present = pending_process_evidence_present or any(
+    process_spool_evidence_present = pending_post_consumption_evidence_present or any(
         path.exists() or path.is_symlink()
         for path in (stdout_spool_path, stderr_spool_path)
     )
@@ -8541,7 +8654,7 @@ def _recover_incomplete_run_locked(
         allow_legacy_plain=intent["execution_mode"] == "fixture" or recovery_legacy_plain,
         result_normalization_policy_version=recovery_result_normalization_policy_version,
     )
-    sanitized_path = run_root / "sanitized.json"
+    sanitized_path = run_root / _RUN_ARTIFACT_NAME_REGISTRY["sanitized"]
     compiled_prompt_path = run_root / intent["runtime_layout"]["compiled_prompt_name"]
     try:
         compiled_raw = _read_regular_owned_bounded(
@@ -8719,7 +8832,10 @@ def _recover_incomplete_run_locked(
     )
     if replay_errors:
         raise AdaptiveWaveValidationError("recovery_bundle_replay_invalid:" + ",".join(replay_errors))
-    _atomic_publish(run_root / "operator-receipt.json", (canonical_json(receipt) + "\n").encode())
+    _atomic_publish(
+        run_root / _RUN_ARTIFACT_NAME_REGISTRY["operator_receipt"],
+        (canonical_json(receipt) + "\n").encode(),
+    )
     return receipt
 
 
@@ -8863,7 +8979,9 @@ def purge_expired_adaptive_runs(
                 raise AdaptiveWaveValidationError("deletion_run_path_invalid")
             with _run_lease(run_root, create=False) as lease_sha:
                 operator_raw = _read_regular_owned_bounded(
-                    run_root / "operator-receipt.json", maximum_bytes=67_108_864, required_mode=0o600
+                    run_root / _RUN_ARTIFACT_NAME_REGISTRY["operator_receipt"],
+                    maximum_bytes=67_108_864,
+                    required_mode=0o600,
                 )
                 operator = strict_json_loads(operator_raw)
                 if (
@@ -8900,7 +9018,9 @@ def purge_expired_adaptive_runs(
             if bundle_errors:
                 raise AdaptiveWaveValidationError("purge_bundle_replay_invalid:" + ",".join(bundle_errors))
             operator_raw = _read_regular_owned_bounded(
-                run_root / "operator-receipt.json", maximum_bytes=67_108_864, required_mode=0o600
+                run_root / _RUN_ARTIFACT_NAME_REGISTRY["operator_receipt"],
+                maximum_bytes=67_108_864,
+                required_mode=0o600,
             )
             operator = strict_json_loads(operator_raw)
             delete_after = _parse_timestamp(operator["retention"]["delete_after"])

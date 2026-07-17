@@ -5809,6 +5809,160 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             self.assertFalse((run_root / "operator-receipt.json").exists())
             self.assertFalse(runner._auth_digest_is_tainted(approvals, auth_sha))
 
+    def _assert_pending_post_consumption_target_is_pre_mutation(
+        self,
+        artifact_key: str,
+    ) -> None:
+        self.assertIn(artifact_key, runner._POST_CONSUMPTION_ARTIFACT_KEYS)
+        target_name = runner._RUN_ARTIFACT_NAME_REGISTRY[artifact_key]
+        with tempfile.TemporaryDirectory() as directory:
+            state = _incomplete_live_run_after_executor_return(
+                Path(directory),
+                spawn=True,
+            )
+            run_root = state["run_root"]
+            approvals = state["approvals"]
+            auth_sha = state["auth_sha"]
+            state["consumption_path"].unlink()
+            state["active_claim"].unlink()
+            for evidence_key in (
+                "process_result",
+                "process_ledger",
+                "stdout_spool",
+                "stderr_spool",
+            ):
+                evidence_path = run_root / runner._RUN_ARTIFACT_NAME_REGISTRY[evidence_key]
+                if evidence_path.exists() or evidence_path.is_symlink():
+                    evidence_path.unlink()
+            pending_path = run_root / f".pending-{target_name}-{'d' * 32}"
+            _write_private(pending_path, b"retained post-consumption publication")
+            run_snapshot = _tree_snapshot(run_root)
+            approvals_snapshot = _tree_snapshot(approvals)
+            process_group_is_alive = mock.Mock(return_value=False)
+            process_group_identity_matches = mock.Mock(return_value=True)
+            terminate_process_group = mock.Mock(return_value=(False, False))
+
+            with self.assertRaisesRegex(
+                AdaptiveWaveValidationError,
+                "recovery_grant_consumption_missing",
+            ):
+                recover_incomplete_run(
+                    run_root,
+                    approval_root=approvals,
+                    process_group_is_alive=process_group_is_alive,
+                    process_group_identity_matches=process_group_identity_matches,
+                    terminate_process_group=terminate_process_group,
+                    wall_clock=lambda: FIXED_TIME + timedelta(minutes=5),
+                )
+
+            process_group_is_alive.assert_not_called()
+            process_group_identity_matches.assert_not_called()
+            terminate_process_group.assert_not_called()
+            self.assertEqual(_tree_snapshot(run_root), run_snapshot)
+            self.assertEqual(_tree_snapshot(approvals), approvals_snapshot)
+            self.assertTrue(pending_path.is_file())
+            self.assertFalse(state["active_claim"].exists())
+            self.assertFalse(runner._auth_digest_is_tainted(approvals, auth_sha))
+
+    def test_post_consumption_artifact_registry_is_explicit_and_phase_disjoint(self) -> None:
+        runtime_layout = runner._runtime_layout_from_registry()
+        self.assertEqual(
+            runner._post_consumption_artifact_names(runtime_layout),
+            {
+                ".stdout-spool",
+                ".stderr-spool",
+                "process-ledger.json",
+                "process-result.json",
+                "session-updates.jsonl",
+                "raw.stdout",
+                "stderr.txt",
+                "sanitized.json",
+                "operator-receipt.json",
+            },
+        )
+        self.assertTrue(
+            runner._POST_CONSUMPTION_ARTIFACT_KEYS.isdisjoint(
+                runner._PRE_CONSUMPTION_PENDING_ARTIFACT_KEYS
+            )
+        )
+        self.assertEqual(
+            {
+                runner._RUN_ARTIFACT_NAME_REGISTRY[key]
+                for key in runner._PRE_CONSUMPTION_PENDING_ARTIFACT_KEYS
+            },
+            {
+                "compiled-prompt.txt",
+                "operator-request.json",
+                "operator-intent.json",
+            },
+        )
+
+    def test_recovery_pending_raw_stdout_is_pre_mutation(self) -> None:
+        self._assert_pending_post_consumption_target_is_pre_mutation("raw_stdout")
+
+    def test_recovery_pending_stderr_is_pre_mutation(self) -> None:
+        self._assert_pending_post_consumption_target_is_pre_mutation("stderr")
+
+    def test_recovery_pending_session_updates_is_pre_mutation(self) -> None:
+        self._assert_pending_post_consumption_target_is_pre_mutation("session_updates")
+
+    def test_recovery_pending_sanitized_output_is_pre_mutation(self) -> None:
+        self._assert_pending_post_consumption_target_is_pre_mutation("sanitized")
+
+    def test_recovery_pending_operator_receipt_is_pre_mutation(self) -> None:
+        self._assert_pending_post_consumption_target_is_pre_mutation("operator_receipt")
+
+    def test_recovery_pending_process_result_is_pre_mutation(self) -> None:
+        self._assert_pending_post_consumption_target_is_pre_mutation("process_result")
+
+    def test_recovery_pending_process_ledger_is_pre_mutation(self) -> None:
+        self._assert_pending_post_consumption_target_is_pre_mutation("process_ledger")
+
+    def test_recovery_pre_consumption_pending_targets_retain_legacy_path(self) -> None:
+        for artifact_key in sorted(runner._PRE_CONSUMPTION_PENDING_ARTIFACT_KEYS):
+            with self.subTest(artifact_key=artifact_key), tempfile.TemporaryDirectory() as directory:
+                state = _incomplete_live_run_before_consumption(Path(directory))
+                run_root = state["run_root"]
+                approvals = state["approvals"]
+                target_name = runner._RUN_ARTIFACT_NAME_REGISTRY[artifact_key]
+                pending_path = run_root / f".pending-{target_name}-{'e' * 32}"
+                _write_private(pending_path, b"retained pre-consumption publication")
+                home_snapshot = _tree_snapshot(
+                    run_root / runner._RUN_ARTIFACT_NAME_REGISTRY["ephemeral_home"]
+                )
+                process_group_is_alive = mock.Mock(return_value=False)
+                process_group_identity_matches = mock.Mock(return_value=True)
+                terminate_process_group = mock.Mock(return_value=(False, False))
+
+                with self.assertRaisesRegex(
+                    AdaptiveWaveValidationError,
+                    "recovery_process_identity_unavailable",
+                ):
+                    recover_incomplete_run(
+                        run_root,
+                        approval_root=approvals,
+                        process_group_is_alive=process_group_is_alive,
+                        process_group_identity_matches=process_group_identity_matches,
+                        terminate_process_group=terminate_process_group,
+                        wall_clock=lambda: FIXED_TIME + timedelta(minutes=5),
+                    )
+
+                process_group_is_alive.assert_not_called()
+                process_group_identity_matches.assert_not_called()
+                terminate_process_group.assert_not_called()
+                self.assertFalse(pending_path.exists())
+                self.assertFalse(state["consumption_path"].exists())
+                self.assertEqual(
+                    json.loads(state["active_claim"].read_text())["claim_origin"],
+                    "legacy_recovery",
+                )
+                self.assertEqual(
+                    _tree_snapshot(
+                        run_root / runner._RUN_ARTIFACT_NAME_REGISTRY["ephemeral_home"]
+                    ),
+                    home_snapshot,
+                )
+
     def test_recovery_missing_consumption_and_claim_fails_before_any_mutation(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             state = _incomplete_live_run_after_executor_return(

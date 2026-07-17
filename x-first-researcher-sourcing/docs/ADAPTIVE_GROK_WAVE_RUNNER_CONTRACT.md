@@ -336,8 +336,12 @@ then read-binds the consumption record and every independently durable process-b
 the claim or retained run. Missing exact consumption plus a bound `live_consumption` claim, current executor-return
 journal (including no-spawn), process ledger, process spool, or pending publication fails with the typed
 `recovery_grant_consumption_missing`; deleting the claim or rewriting its origin to `legacy_recovery` cannot downgrade
-that state. Only a genuine pre-D2/pre-consumption incomplete run with no such evidence may receive the synthesized
-`legacy_recovery` claim that closes its reuse window.
+that state. One explicit artifact-name registry owns both the runtime layout/real publication call sites and this
+classifier. Its post-consumption set includes process journal/ledger/spools, retained session updates, promoted raw
+stdout/stderr, sanitized output, and the terminal receipt, including their `_atomic_publish` pending files. Pending
+compiled prompt, operator request, or operator intent files are explicitly pre-consumption and do not by themselves
+upgrade the state. Only a genuine pre-D2/pre-consumption incomplete run with no post-consumption evidence may receive
+the synthesized `legacy_recovery` claim that closes its reuse window.
 
 The separate `auth-taint-<original-auth-sha256>.json` marker contains only the original digest, source run/request
 digests, detection time, closed reason, and blocking state—never a token, claim value, profile field, or refreshed
@@ -552,9 +556,11 @@ Recovery first acquires the nonblocking run lease. Before pending-publication cl
 liveness/termination hooks, spool promotion, copied-home audit/deletion, tainting, or receipt output, it read-binds the
 current executor-return journal, process ledger, process spools/pending publications, exact grant consumption, and
 active-use claim. A missing consumption record is a typed pre-mutation failure whenever any independently bound
-current evidence exists; a `legacy_recovery` claim origin is not authority to override that evidence. Only an actual
-pre-consumption state with no current evidence may synthesize a legacy claim and retain the former recovery path. A
-sibling claim blocks recovery without mutation. After any recorded process group is confirmed dead, recovery audits
+current evidence exists. Pending post-consumption targets are phase-classified from the same immutable registry used
+to construct `runtime_layout` and the publication paths; the pre-consumption prompt/request/intent targets remain
+outside that set. A `legacy_recovery` claim origin is not authority to override current evidence. Only an actual
+pre-consumption state with no post-consumption evidence may synthesize a legacy claim and retain the former recovery
+path. A sibling claim blocks recovery without mutation. After any recorded process group is confirmed dead, recovery audits
 the copied auth before measuring retained session state, durably deletes the ephemeral home, and only then resolves
 the claim. Audit/taint or deletion failure leaves the claim blocking retries. If recovery finds a
 `live_consumption` claim but the ephemeral home is already absent, D2 ordering proves that audit and durable deletion
