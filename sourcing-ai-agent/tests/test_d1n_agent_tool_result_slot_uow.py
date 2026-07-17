@@ -4,6 +4,7 @@ import tempfile
 import threading
 import unittest
 from collections.abc import Mapping
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, cast
 
@@ -14,7 +15,15 @@ from sourcing_agent.acquisition_plan_preview import (
 )
 from sourcing_agent.agent_canary_registry import PLAN_ACQUISITION_TOOL_SPEC
 from sourcing_agent.agent_tool_result_postgres import ACQUISITION_PLAN_PREVIEW_OWNER_TARGET_KIND
-from sourcing_agent.agent_tool_result_slot import AgentToolOccurrence, AgentToolTerminalResult
+from sourcing_agent.agent_tool_result_slot import (
+    AGENT_TOOL_RESULT_ATTEMPT_SCHEMA_VERSION,
+    AGENT_TOOL_RESULT_ATTEMPT_SCHEMA_VERSION_V2,
+    AGENT_TOOL_RESULT_JOURNAL_SCHEMA_VERSION,
+    AGENT_TOOL_RESULT_JOURNAL_SCHEMA_VERSION_V2,
+    AGENT_TOOL_RESULT_SLOT_SCHEMA_VERSION,
+    AgentToolOccurrence,
+    AgentToolTerminalResult,
+)
 from tests.pg_store_fixture import PGControlPlaneStoreTestMixin
 from tests.test_d1n_acquisition_plan_preview_uow import _uow_kwargs
 
@@ -100,6 +109,78 @@ class D1nAgentToolResultSlotUowPGTest(PGControlPlaneStoreTestMixin, unittest.Tes
                     counts[table_name] = int(cursor.fetchone()[0])
                 return counts
 
+    def _token_terminal(
+        self,
+        bundle: dict[str, object],
+        *,
+        attempt_id: str = "resultattempt_token_1",
+        provider_call_id: str = "provider-call-token-1",
+        tool_call_id: str = "tool-call-token-1",
+        token: str = "membership_revision:01HZX.same-token",
+    ) -> AgentToolTerminalResult:
+        return replace(
+            self._terminal(
+                bundle,
+                attempt_id=attempt_id,
+                provider_call_id=provider_call_id,
+                tool_call_id=tool_call_id,
+            ),
+            owner_target_revision=0,
+            owner_target_generation=0,
+            owner_target_revision_token=token,
+        )
+
+    def _accept_synthetic_token_owner(
+        self,
+        *,
+        occurrence: AgentToolOccurrence,
+        terminal: AgentToolTerminalResult,
+        attempted_slot_generation: int = 1,
+        physical_owner_revision_token: str = "membership_revision:01HZX.same-token",
+    ) -> dict[str, Any]:
+        def load_base_owner(
+            cursor: Any,
+            *,
+            occurrence: AgentToolOccurrence,
+            terminal: AgentToolTerminalResult,
+        ) -> dict[str, str]:
+            del cursor, occurrence, terminal
+            return {
+                "owner": "synthetic_equality_only_storage_owner_v1",
+                "owner_target_revision_token": physical_owner_revision_token,
+            }
+
+        def assert_locked_owner(
+            cursor: Any,
+            *,
+            occurrence: AgentToolOccurrence,
+            terminal: AgentToolTerminalResult,
+            base_owner: dict[str, str],
+        ) -> None:
+            del cursor, occurrence
+            self.assertEqual(base_owner["owner"], "synthetic_equality_only_storage_owner_v1")
+            if terminal.owner_target_revision_token != base_owner["owner_target_revision_token"]:
+                raise ValueError("synthetic storage owner revision token mismatch")
+            self.assertEqual(terminal.owner_target_revision, 0)
+            self.assertEqual(terminal.owner_target_generation, 0)
+
+        outcome = result_postgres._accept_exact_agent_tool_result_uow(  # noqa: SLF001
+            self.adapter,
+            occurrence=occurrence,
+            terminal=terminal,
+            attempted_slot_generation=attempted_slot_generation,
+            required_tables=(
+                "agent_tool_result_slots",
+                "agent_tool_result_attempts",
+                "agent_tool_result_journal",
+            ),
+            lock_groups=((f"agent_tool_result_slots:id:{occurrence.result_slot_id}",),),
+            load_base_owner=load_base_owner,
+            assert_locked_owner=assert_locked_owner,
+        )
+        assert outcome is not None
+        return outcome
+
     def test_reserve_is_exactly_replayable_and_rejects_split_logical_identity(self) -> None:
         occurrence = self._occurrence()
 
@@ -136,7 +217,9 @@ class D1nAgentToolResultSlotUowPGTest(PGControlPlaneStoreTestMixin, unittest.Tes
         occurrence = self._occurrence()
         bundle = self._preview_bundle()
         terminal = self._terminal(bundle)
-        self.repository.reserve_agent_tool_result_slot(occurrence=occurrence)
+        pending = self.repository.reserve_agent_tool_result_slot(occurrence=occurrence)
+        self.assertEqual(pending["slot"]["status"], "pending")
+        self.assertEqual(pending["slot"]["schema_version"], AGENT_TOOL_RESULT_SLOT_SCHEMA_VERSION)
 
         with self.assertRaisesRegex(ValueError, "generation must be positive"):
             self.adapter.accept_acquisition_plan_tool_result_uow(
@@ -164,6 +247,9 @@ class D1nAgentToolResultSlotUowPGTest(PGControlPlaneStoreTestMixin, unittest.Tes
         self.assertEqual(replay["slot"]["tool_result_message"]["content"], terminal.serialized_result_json)
         self.assertEqual(replay["attempt"]["disposition"], "accepted")
         self.assertEqual(replay["journal"]["tool_spec_digest"], occurrence.tool_spec_digest)
+        self.assertEqual(replay["slot"]["schema_version"], AGENT_TOOL_RESULT_SLOT_SCHEMA_VERSION)
+        self.assertEqual(replay["attempt"]["schema_version"], AGENT_TOOL_RESULT_ATTEMPT_SCHEMA_VERSION)
+        self.assertEqual(replay["journal"]["schema_version"], AGENT_TOOL_RESULT_JOURNAL_SCHEMA_VERSION)
         self.assertEqual(
             self._counts(),
             {
@@ -231,6 +317,99 @@ class D1nAgentToolResultSlotUowPGTest(PGControlPlaneStoreTestMixin, unittest.Tes
         self.assertEqual(quarantined["slot"]["result_attempt_id"], winner.result_attempt_id)
         self.assertEqual(quarantined["journal"]["journal_id"], accepted["journal"]["journal_id"])
         self.assertEqual(self._counts()["agent_tool_result_attempts"], 2)
+
+    def test_opaque_revision_token_exact_copies_through_accept_quarantine_and_replay(self) -> None:
+        occurrence = self._occurrence(suffix="token")
+        bundle = self._preview_bundle(suffix="token")
+        winner = self._token_terminal(bundle)
+        self.repository.reserve_agent_tool_result_slot(occurrence=occurrence)
+
+        accepted = self._accept_synthetic_token_owner(occurrence=occurrence, terminal=winner)
+        replayed = self._accept_synthetic_token_owner(occurrence=occurrence, terminal=winner)
+
+        self.assertEqual(accepted["outcome"], "accepted")
+        self.assertEqual(replayed["outcome"], "replayed")
+        for aggregate_row in (accepted["slot"], accepted["attempt"], accepted["journal"]):
+            self.assertEqual(
+                aggregate_row["owner_target_revision_token"],
+                winner.owner_target_revision_token,
+            )
+            self.assertEqual(aggregate_row["owner_target_revision"], 0)
+            self.assertEqual(aggregate_row["owner_target_generation"], 0)
+        self.assertEqual(accepted["slot"]["schema_version"], AGENT_TOOL_RESULT_SLOT_SCHEMA_VERSION)
+        self.assertEqual(accepted["attempt"]["schema_version"], AGENT_TOOL_RESULT_ATTEMPT_SCHEMA_VERSION_V2)
+        self.assertEqual(accepted["journal"]["schema_version"], AGENT_TOOL_RESULT_JOURNAL_SCHEMA_VERSION_V2)
+
+        late = self._token_terminal(
+            bundle,
+            attempt_id="resultattempt_token_late",
+            provider_call_id="provider-call-token-late",
+            tool_call_id="tool-call-token-late",
+            token=winner.owner_target_revision_token,
+        )
+        quarantined = self._accept_synthetic_token_owner(occurrence=occurrence, terminal=late)
+        quarantine_replay = self._accept_synthetic_token_owner(occurrence=occurrence, terminal=late)
+
+        self.assertEqual(quarantined["outcome"], "quarantined")
+        self.assertFalse(quarantined["replayed"])
+        self.assertEqual(quarantine_replay["outcome"], "quarantined")
+        self.assertTrue(quarantine_replay["replayed"])
+        self.assertEqual(
+            quarantined["attempt"]["owner_target_revision_token"],
+            late.owner_target_revision_token,
+        )
+        self.assertEqual(
+            quarantined["slot"]["owner_target_revision_token"],
+            winner.owner_target_revision_token,
+        )
+        self.assertEqual(
+            quarantined["journal"]["owner_target_revision_token"],
+            winner.owner_target_revision_token,
+        )
+        self.assertEqual(quarantined["attempt"]["schema_version"], AGENT_TOOL_RESULT_ATTEMPT_SCHEMA_VERSION_V2)
+
+    def test_synthetic_storage_owner_token_mismatch_fails_before_terminal_writes(self) -> None:
+        occurrence = self._occurrence(suffix="tokenownermismatch")
+        bundle = self._preview_bundle(suffix="tokenownermismatch")
+        terminal = self._token_terminal(
+            bundle,
+            attempt_id="resultattempt_tokenownermismatch",
+            token="membership_revision:01HZX.proposed-token",
+        )
+        self.repository.reserve_agent_tool_result_slot(occurrence=occurrence)
+
+        with self.assertRaisesRegex(ValueError, "synthetic storage owner revision token mismatch"):
+            self._accept_synthetic_token_owner(
+                occurrence=occurrence,
+                terminal=terminal,
+                physical_owner_revision_token="membership_revision:01HZX.physical-token",
+            )
+
+        slot = self.repository.get_agent_tool_result_slot(
+            occurrence.result_slot_id,
+            workspace_id=occurrence.workspace_id,
+            actor_id=occurrence.actor_id,
+            runtime_namespace=occurrence.runtime_namespace,
+            provider_mode=occurrence.provider_mode,
+        )
+        self.assertEqual(slot["status"], "pending")
+        self.assertEqual(slot["schema_version"], AGENT_TOOL_RESULT_SLOT_SCHEMA_VERSION)
+        self.assertEqual(self.repository.list_agent_tool_result_attempts(occurrence.result_slot_id), [])
+        self.assertEqual(self._counts()["agent_tool_result_journal"], 0)
+
+    def test_opaque_revision_token_collision_fails_exact_replay(self) -> None:
+        occurrence = self._occurrence(suffix="tokencollision")
+        bundle = self._preview_bundle(suffix="tokencollision")
+        terminal = self._token_terminal(bundle)
+        self.repository.reserve_agent_tool_result_slot(occurrence=occurrence)
+        self._accept_synthetic_token_owner(occurrence=occurrence, terminal=terminal)
+
+        collision = replace(
+            terminal,
+            owner_target_revision_token="membership_revision:01HZX.colliding-token",
+        )
+        with self.assertRaisesRegex(ValueError, "accepted slot terminal collision.*owner_target_revision_token"):
+            self._accept_synthetic_token_owner(occurrence=occurrence, terminal=collision)
 
     def test_owner_or_serializer_mismatch_fails_with_zero_terminal_writes(self) -> None:
         occurrence = self._occurrence()
@@ -382,6 +561,62 @@ class D1nAgentToolResultSlotUowPGTest(PGControlPlaneStoreTestMixin, unittest.Tes
                     cursor,
                     table_name="agent_tool_result_attempts",
                     row=attempt_row,
+                )
+            with self.assertRaises(psycopg.errors.RaiseException) as raised:
+                connection.commit()
+            self.assertEqual(raised.exception.diag.constraint_name, "agent_tool_terminal_aggregate_incomplete")
+            connection.rollback()
+        self.assertEqual(self.repository.list_agent_tool_result_attempts(occurrence.result_slot_id), [])
+
+    @unittest.skipIf(psycopg is None, "psycopg unavailable")
+    def test_deferred_database_guard_rejects_opaque_revision_token_aggregate_mismatch(self) -> None:
+        occurrence = self._occurrence(suffix="tokenaggregate")
+        bundle = self._preview_bundle(suffix="tokenaggregate")
+        terminal = self._token_terminal(bundle, attempt_id="resultattempt_tokenaggregate")
+        mismatched_terminal = replace(
+            terminal,
+            owner_target_revision_token="membership_revision:01HZX.aggregate-mismatch",
+        )
+        self.repository.reserve_agent_tool_result_slot(occurrence=occurrence)
+        attempt_row = result_postgres._attempt_insert_row(  # noqa: SLF001
+            occurrence=occurrence,
+            terminal=terminal,
+            attempted_slot_generation=1,
+            disposition="accepted",
+            quarantine_reason="",
+        )
+        slot_updates = result_postgres._slot_terminal_update(mismatched_terminal)  # noqa: SLF001
+        journal_row = result_postgres._journal_insert_row(  # noqa: SLF001
+            occurrence=occurrence,
+            terminal=terminal,
+            journal_id="tooljournal_tokenaggregate",
+        )
+
+        with self.adapter._connect() as connection:  # noqa: SLF001
+            with connection.cursor() as cursor:
+                result_postgres._insert_dict(  # noqa: SLF001
+                    cursor,
+                    table_name="agent_tool_result_attempts",
+                    row=attempt_row,
+                )
+                assignments = ", ".join(f'"{column}" = %s' for column in slot_updates)
+                cursor.execute(
+                    (
+                        f"UPDATE agent_tool_result_slots SET {assignments}, "
+                        "accepted_at = transaction_timestamp() "
+                        "WHERE result_slot_id = %s AND slot_generation = %s AND status = 'pending'"
+                    ),
+                    (*tuple(slot_updates.values()), occurrence.result_slot_id, occurrence.slot_generation),
+                )
+                journal_columns = list(journal_row)
+                quoted_journal_columns = ", ".join('"' + column + '"' for column in journal_columns)
+                cursor.execute(
+                    (
+                        "INSERT INTO agent_tool_result_journal "
+                        f"({quoted_journal_columns}, accepted_at) "
+                        f"VALUES ({', '.join(['%s'] * len(journal_columns))}, transaction_timestamp())"
+                    ),
+                    tuple(journal_row[column] for column in journal_columns),
                 )
             with self.assertRaises(psycopg.errors.RaiseException) as raised:
                 connection.commit()

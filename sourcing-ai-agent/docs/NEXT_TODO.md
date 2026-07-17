@@ -378,11 +378,14 @@
   `OperationCommandPlanned` event 同时一致，同 `operation_id` 的非引用 row 不进入 owner。prepare 后 event revision
   漂移保持 slot pending 且 attempt/journal 零写，commandless + command-backed terminal success 均有 PG 证据，prepare
   不触发 write-schema bootstrap。`inspect_operation` 已 fixed-forward 到 v2；readiness 由一个 owner matrix 贯穿
-  snapshot/execution/serializer/PG，completed 且无 durable result ref 只能 `pending/fail_closed`。下一批必须补
-  `start_acquisition_run` command/activity owner，并为
-  `filter_projection` 的 equality-only opaque
-  `membership_revision` 增加显式 owner-revision carrier 后实现 membership/publication adapter，之后才组装四工具 PG
-  simulate/model-turn loop。剩余 5/15 schema-less action、R-029、scripted two-lab、live checkpoint 与 paid TML
+  snapshot/execution/serializer/PG，completed 且无 durable result ref 只能 `pending/fail_closed`。S1c candidate
+  已增加 equality-only `owner_target_revision_token`，保持 logical occurrence digest v1；numeric-only
+  attempt/journal 仍为 v1，token-bearing aggregate 使用 v2/v2，旧 writer 默认与历史 numeric replay 保持可用，
+  token-only activation 要求旧 replicas drain/quiesce。该 synthetic carrier 只证明 storage transport，不是
+  `filter_projection` physical-owner evidence。下一批先以显式 link policy 区分 command acceptance 与 Activity
+  terminal，补 `start_acquisition_run` exact command-acceptance owner；随后实现 `filter_projection` 的
+  membership/publication adapter，之后才组装四工具 PG simulate/model-turn loop。剩余 5/15 schema-less action、
+  R-029、scripted two-lab、live checkpoint 与 paid TML
   全部继续 open；无 provider/model/live 调用。fresh pinned non-author review pending，不得把作者证据写成 formal GO。
 - [ ] D1m mixed-version rollout gate（R-019）：pre-D1m binary 可继续写 revisionless source row 并绕开
   revision-aware exact-claim canonical materializer。任何 hosted activation 前必须选择并验证其一：quiesced

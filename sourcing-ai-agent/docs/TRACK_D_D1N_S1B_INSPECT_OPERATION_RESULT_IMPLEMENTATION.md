@@ -96,9 +96,10 @@ S1 still needs two canary owner adapters:
 
 The filter adapter cannot safely reuse the existing integer-only target revision: canonical
 `membership_revision` is an opaque equality token and must not be parsed, ordered, or hashed into an invented
-integer. The next bounded storage batch must add an explicit opaque owner-revision carrier to slot/attempt/journal
-aggregates and preserve the existing integer revision/generation fields for owners that genuinely have numeric
-revisions.
+integer. S1c fixed-forwards the storage/result aggregate with an explicit equality-only token while preserving the
+numeric revision/generation carriers. That carrier is foundation only: the next filter batch must still load and lock
+the exact projection publication/membership owner, copy its canonical token, reserialize inside the acceptance UoW,
+and prove mismatch and foreign/missing zero writes.
 
 Default/public serving remains `0`; scripted model-loop assembly and live provider/model work remain blocked on their
 separate gates.

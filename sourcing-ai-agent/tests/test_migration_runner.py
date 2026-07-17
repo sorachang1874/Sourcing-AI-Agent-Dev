@@ -49,6 +49,7 @@ _D1I_PARENT_UNIQUENESS_MIGRATION = "0008_acquisition_intent_parent_uniqueness"
 _D1M_COMPANY_PUBLIC_WEB_RUN_IDEMPOTENCY_MIGRATION = "0009_company_public_web_asset_run_idempotency"
 _D1N_ACQUISITION_PLAN_PREVIEW_MIGRATION = "0010_acquisition_plan_preview_uow"
 _D1N_AGENT_TOOL_RESULT_SLOT_MIGRATION = "0011_agent_tool_result_slots"
+_D1N_AGENT_TOOL_OWNER_REVISION_TOKEN_MIGRATION = "0012_agent_tool_result_owner_revision_token"
 _ALL_MIGRATIONS = [
     "0001_baseline",
     "0002_action_request_schema_pins",
@@ -61,6 +62,7 @@ _ALL_MIGRATIONS = [
     _D1M_COMPANY_PUBLIC_WEB_RUN_IDEMPOTENCY_MIGRATION,
     _D1N_ACQUISITION_PLAN_PREVIEW_MIGRATION,
     _D1N_AGENT_TOOL_RESULT_SLOT_MIGRATION,
+    _D1N_AGENT_TOOL_OWNER_REVISION_TOKEN_MIGRATION,
 ]
 _D3_COMMAND_COLUMNS = (
     ("runtime_namespace", "text", "NO", "''::text"),
@@ -396,6 +398,229 @@ class MigrationRunnerTest(unittest.TestCase):
             (run_id, idempotency_key),
         )
 
+    def _insert_agent_tool_pending_slot(
+        self,
+        cursor,
+        *,
+        result_slot_id: str,
+        owner_target_revision_token: str | None = None,
+    ) -> None:
+        token_column = ""
+        token_value = ""
+        parameters: dict[str, object] = {
+            "result_slot_id": result_slot_id,
+            "logical_occurrence_digest": uuid4().hex * 2,
+        }
+        if owner_target_revision_token is not None:
+            token_column = ", owner_target_revision_token"
+            token_value = ", %(owner_target_revision_token)s"
+            parameters["owner_target_revision_token"] = owner_target_revision_token
+        cursor.execute(
+            f"""
+            INSERT INTO agent_tool_result_slots (
+                result_slot_id, slot_generation, workspace_id, actor_id,
+                runtime_namespace, provider_mode, turn_id, step_id,
+                tool_name, tool_kind, effect_class,
+                tool_spec_version, tool_spec_digest,
+                canonical_args_json, canonical_args_digest, occurrence_ordinal,
+                logical_occurrence_digest,
+                request_schema_version, request_schema_digest,
+                result_schema_version, result_schema_digest,
+                serializer_owner, serializer_revision, serializer_contract_digest
+                {token_column}
+            ) VALUES (
+                %(result_slot_id)s, 1, 'workspace-s1c', 'actor-s1c',
+                'local_canary', 'simulate', 'turn-s1c', 'step-s1c',
+                'inspect_operation', 'query', 'read_only',
+                'inspect_operation_tool_v2', repeat('a', 64),
+                '{{"operation_run_id":"operation-s1c"}}'::jsonb, repeat('b', 64), 1,
+                %(logical_occurrence_digest)s,
+                'inspect_operation_request_v1', repeat('c', 64),
+                'inspect_operation_result_v2', repeat('d', 64),
+                'operation_query_owner', 'operation_query_owner_v2', repeat('e', 64)
+                {token_value}
+            )
+            """,
+            parameters,
+        )
+
+    def _insert_agent_tool_result_attempt(
+        self,
+        cursor,
+        *,
+        result_slot_id: str,
+        result_attempt_id: str,
+        disposition: str,
+        quarantine_reason: str,
+        owner_target_revision: int,
+        owner_target_generation: int,
+        owner_target_revision_token: str | None,
+        schema_version: str | None = None,
+    ) -> None:
+        token_column = ""
+        token_value = ""
+        schema_column = ""
+        schema_value = ""
+        parameters: dict[str, object] = {
+            "result_slot_id": result_slot_id,
+            "result_attempt_id": result_attempt_id,
+            "disposition": disposition,
+            "quarantine_reason": quarantine_reason,
+            "owner_target_revision": owner_target_revision,
+            "owner_target_generation": owner_target_generation,
+        }
+        if owner_target_revision_token is not None:
+            token_column = ", owner_target_revision_token"
+            token_value = ", %(owner_target_revision_token)s"
+            parameters["owner_target_revision_token"] = owner_target_revision_token
+        if schema_version is not None:
+            schema_column = ", schema_version"
+            schema_value = ", %(schema_version)s"
+            parameters["schema_version"] = schema_version
+        cursor.execute(
+            f"""
+            INSERT INTO agent_tool_result_attempts (
+                result_attempt_id, result_slot_id, attempted_slot_generation,
+                disposition, quarantine_reason, provider_call_id, tool_call_id,
+                owner_target_kind, owner_target_id,
+                owner_target_revision, owner_target_generation {token_column}{schema_column},
+                terminal_winner_id, owner_result_ref_json, owner_result_digest,
+                serialized_result_json, serialized_result_digest,
+                tool_result_message_json, tool_result_message_digest, is_error
+            ) VALUES (
+                %(result_attempt_id)s, %(result_slot_id)s, 1,
+                %(disposition)s, %(quarantine_reason)s, 'provider-call-s1c', 'tool-call-s1c',
+                'projection_membership', 'projection-s1c',
+                %(owner_target_revision)s, %(owner_target_generation)s {token_value}{schema_value},
+                'winner-s1c', '{{"ref":"owner"}}'::jsonb, repeat('f', 64),
+                '{{"ok":true}}', repeat('1', 64),
+                '{{"content":"ok"}}'::jsonb, repeat('2', 64), FALSE
+            )
+            """,
+            parameters,
+        )
+
+    def _insert_agent_tool_accepted_aggregate(
+        self,
+        cursor,
+        *,
+        result_slot_id: str,
+        result_attempt_id: str,
+        owner_target_revision: int,
+        owner_target_generation: int,
+        slot_token: str | None,
+        attempt_token: str | None = None,
+        journal_token: str | None = None,
+        attempt_schema_version: str | None = None,
+        journal_schema_version: str | None = None,
+    ) -> None:
+        effective_attempt_token = slot_token if attempt_token is None else attempt_token
+        effective_journal_token = slot_token if journal_token is None else journal_token
+        self._insert_agent_tool_result_attempt(
+            cursor,
+            result_slot_id=result_slot_id,
+            result_attempt_id=result_attempt_id,
+            disposition="accepted",
+            quarantine_reason="",
+            owner_target_revision=owner_target_revision,
+            owner_target_generation=owner_target_generation,
+            owner_target_revision_token=effective_attempt_token,
+            schema_version=attempt_schema_version,
+        )
+        token_assignment = ""
+        update_parameters: dict[str, object] = {
+            "result_slot_id": result_slot_id,
+            "result_attempt_id": result_attempt_id,
+            "owner_target_revision": owner_target_revision,
+            "owner_target_generation": owner_target_generation,
+        }
+        if slot_token is not None:
+            token_assignment = ", owner_target_revision_token = %(slot_token)s"
+            update_parameters["slot_token"] = slot_token
+        cursor.execute(
+            f"""
+            UPDATE agent_tool_result_slots
+            SET status = 'accepted',
+                result_attempt_id = %(result_attempt_id)s,
+                provider_call_id = 'provider-call-s1c',
+                tool_call_id = 'tool-call-s1c',
+                owner_target_kind = 'projection_membership',
+                owner_target_id = 'projection-s1c',
+                owner_target_revision = %(owner_target_revision)s,
+                owner_target_generation = %(owner_target_generation)s
+                {token_assignment},
+                terminal_winner_id = 'winner-s1c',
+                owner_result_ref_json = '{{"ref":"owner"}}'::jsonb,
+                owner_result_digest = repeat('f', 64),
+                serialized_result_json = '{{"ok":true}}',
+                serialized_result_digest = repeat('1', 64),
+                tool_result_message_json = '{{"content":"ok"}}'::jsonb,
+                tool_result_message_digest = repeat('2', 64),
+                is_error = FALSE,
+                accepted_at = transaction_timestamp()
+            WHERE result_slot_id = %(result_slot_id)s
+            """,
+            update_parameters,
+        )
+        token_column = ""
+        token_value = ""
+        schema_column = ""
+        schema_value = ""
+        journal_parameters: dict[str, object] = {
+            "result_slot_id": result_slot_id,
+            "journal_id": f"journal-{result_attempt_id}",
+        }
+        if effective_journal_token is not None:
+            token_column = ", owner_target_revision_token"
+            token_value = ", %(journal_token)s"
+            journal_parameters["journal_token"] = effective_journal_token
+        if journal_schema_version is not None:
+            schema_column = ", schema_version"
+            schema_value = ", %(schema_version)s"
+            journal_parameters["schema_version"] = journal_schema_version
+        cursor.execute(
+            f"""
+            INSERT INTO agent_tool_result_journal (
+                journal_id, result_slot_id, result_attempt_id,
+                workspace_id, actor_id, runtime_namespace, provider_mode,
+                turn_id, step_id, tool_name, tool_spec_version, tool_spec_digest,
+                canonical_args_digest, occurrence_ordinal,
+                request_schema_version, request_schema_digest,
+                result_schema_version, result_schema_digest,
+                serializer_owner, serializer_revision, serializer_contract_digest,
+                action_id, operation_run_id, workflow_command_id,
+                activity_run_id, activity_attempt_id,
+                command_attempt, command_generation, control_epoch,
+                owner_target_kind, owner_target_id,
+                owner_target_revision, owner_target_generation {token_column}{schema_column},
+                terminal_winner_id, owner_result_ref_json, owner_result_digest,
+                serialized_result_json, serialized_result_digest,
+                tool_result_message_json, tool_result_message_digest, is_error,
+                accepted_at
+            )
+            SELECT
+                %(journal_id)s, result_slot_id, result_attempt_id,
+                workspace_id, actor_id, runtime_namespace, provider_mode,
+                turn_id, step_id, tool_name, tool_spec_version, tool_spec_digest,
+                canonical_args_digest, occurrence_ordinal,
+                request_schema_version, request_schema_digest,
+                result_schema_version, result_schema_digest,
+                serializer_owner, serializer_revision, serializer_contract_digest,
+                action_id, operation_run_id, workflow_command_id,
+                activity_run_id, activity_attempt_id,
+                command_attempt, command_generation, control_epoch,
+                owner_target_kind, owner_target_id,
+                owner_target_revision, owner_target_generation {token_value}{schema_value},
+                terminal_winner_id, owner_result_ref_json, owner_result_digest,
+                serialized_result_json, serialized_result_digest,
+                tool_result_message_json, tool_result_message_digest, is_error,
+                accepted_at
+            FROM agent_tool_result_slots
+            WHERE result_slot_id = %(result_slot_id)s
+            """,
+            journal_parameters,
+        )
+
     def test_runner_built_schema_matches_live_bootstrap(self) -> None:
         # Track B B4.1a: migrations are the sole schema source of truth, so there is no longer an
         # independent SQLite oracle to diff against — the migration files ARE the golden. The
@@ -478,6 +703,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 _D1M_COMPANY_PUBLIC_WEB_RUN_IDEMPOTENCY_MIGRATION,
                 _D1N_ACQUISITION_PLAN_PREVIEW_MIGRATION,
                 _D1N_AGENT_TOOL_RESULT_SLOT_MIGRATION,
+                _D1N_AGENT_TOOL_OWNER_REVISION_TOKEN_MIGRATION,
             ],
         )
         self.assertEqual(ledger, _ALL_MIGRATIONS)
@@ -530,6 +756,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 _D1M_COMPANY_PUBLIC_WEB_RUN_IDEMPOTENCY_MIGRATION,
                 _D1N_ACQUISITION_PLAN_PREVIEW_MIGRATION,
                 _D1N_AGENT_TOOL_RESULT_SLOT_MIGRATION,
+                _D1N_AGENT_TOOL_OWNER_REVISION_TOKEN_MIGRATION,
             ],
         )
         self.assertEqual(
@@ -755,6 +982,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 _D1M_COMPANY_PUBLIC_WEB_RUN_IDEMPOTENCY_MIGRATION,
                 _D1N_ACQUISITION_PLAN_PREVIEW_MIGRATION,
                 _D1N_AGENT_TOOL_RESULT_SLOT_MIGRATION,
+                _D1N_AGENT_TOOL_OWNER_REVISION_TOKEN_MIGRATION,
             ],
         )
         self.assertEqual(columns, list(_D3_COMMAND_COLUMNS))
@@ -929,6 +1157,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 _D1M_COMPANY_PUBLIC_WEB_RUN_IDEMPOTENCY_MIGRATION,
                 _D1N_ACQUISITION_PLAN_PREVIEW_MIGRATION,
                 _D1N_AGENT_TOOL_RESULT_SLOT_MIGRATION,
+                _D1N_AGENT_TOOL_OWNER_REVISION_TOKEN_MIGRATION,
             ],
         )
         self.assertEqual(again.applied, [])
@@ -1020,6 +1249,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 _D1M_COMPANY_PUBLIC_WEB_RUN_IDEMPOTENCY_MIGRATION,
                 _D1N_ACQUISITION_PLAN_PREVIEW_MIGRATION,
                 _D1N_AGENT_TOOL_RESULT_SLOT_MIGRATION,
+                _D1N_AGENT_TOOL_OWNER_REVISION_TOKEN_MIGRATION,
             ],
         )
         self.assertEqual(session_columns, list(_D3_SCOPED_SESSION_COLUMNS))
@@ -1220,6 +1450,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 _D1M_COMPANY_PUBLIC_WEB_RUN_IDEMPOTENCY_MIGRATION,
                 _D1N_ACQUISITION_PLAN_PREVIEW_MIGRATION,
                 _D1N_AGENT_TOOL_RESULT_SLOT_MIGRATION,
+                _D1N_AGENT_TOOL_OWNER_REVISION_TOKEN_MIGRATION,
             ],
         )
         self.assertEqual(again.applied, [])
@@ -1310,6 +1541,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 _D1M_COMPANY_PUBLIC_WEB_RUN_IDEMPOTENCY_MIGRATION,
                 _D1N_ACQUISITION_PLAN_PREVIEW_MIGRATION,
                 _D1N_AGENT_TOOL_RESULT_SLOT_MIGRATION,
+                _D1N_AGENT_TOOL_OWNER_REVISION_TOKEN_MIGRATION,
             ],
         )
         self.assertEqual(run_columns, list(_D3_ACTIVITY_RUN_COLUMNS))
@@ -1523,6 +1755,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 _D1M_COMPANY_PUBLIC_WEB_RUN_IDEMPOTENCY_MIGRATION,
                 _D1N_ACQUISITION_PLAN_PREVIEW_MIGRATION,
                 _D1N_AGENT_TOOL_RESULT_SLOT_MIGRATION,
+                _D1N_AGENT_TOOL_OWNER_REVISION_TOKEN_MIGRATION,
             ],
         )
         self.assertEqual(again.applied, [])
@@ -1604,6 +1837,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 _D1M_COMPANY_PUBLIC_WEB_RUN_IDEMPOTENCY_MIGRATION,
                 _D1N_ACQUISITION_PLAN_PREVIEW_MIGRATION,
                 _D1N_AGENT_TOOL_RESULT_SLOT_MIGRATION,
+                _D1N_AGENT_TOOL_OWNER_REVISION_TOKEN_MIGRATION,
             ],
         )
         self.assertEqual(columns, list(_D3_EVENT_COLUMNS))
@@ -1745,6 +1979,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 _D1M_COMPANY_PUBLIC_WEB_RUN_IDEMPOTENCY_MIGRATION,
                 _D1N_ACQUISITION_PLAN_PREVIEW_MIGRATION,
                 _D1N_AGENT_TOOL_RESULT_SLOT_MIGRATION,
+                _D1N_AGENT_TOOL_OWNER_REVISION_TOKEN_MIGRATION,
             ],
         )
         self.assertEqual(again.applied, [])
@@ -1972,7 +2207,8 @@ class MigrationRunnerTest(unittest.TestCase):
                 with self.assertRaises(psycopg.errors.CheckViolation) as raised:
                     mr.apply_pending_migrations(conn, schema=schema)
 
-        self.assertEqual(prefix.applied, _ALL_MIGRATIONS[:-4])
+        migrations_through_0007 = _ALL_MIGRATIONS[: _ALL_MIGRATIONS.index(_D1I_PARENT_UNIQUENESS_MIGRATION)]
+        self.assertEqual(prefix.applied, migrations_through_0007)
         self.assertEqual(
             raised.exception.diag.constraint_name,
             "workflow_commands_acquisition_root_child_shape_ck",
@@ -1995,7 +2231,7 @@ class MigrationRunnerTest(unittest.TestCase):
                     (schema,),
                 )
                 trigger_count = int(cur.fetchone()[0])
-        self.assertEqual(ledger, _ALL_MIGRATIONS[:-4])
+        self.assertEqual(ledger, migrations_through_0007)
         self.assertIsNone(index_name)
         self.assertIsNone(old_unique_index_name)
         self.assertEqual(trigger_count, 0)
@@ -2033,7 +2269,8 @@ class MigrationRunnerTest(unittest.TestCase):
                 with self.assertRaises(psycopg.errors.UniqueViolation) as raised:
                     mr.apply_pending_migrations(conn, schema=schema)
 
-        self.assertEqual(prefix.applied, _ALL_MIGRATIONS[:-4])
+        migrations_through_0007 = _ALL_MIGRATIONS[: _ALL_MIGRATIONS.index(_D1I_PARENT_UNIQUENESS_MIGRATION)]
+        self.assertEqual(prefix.applied, migrations_through_0007)
         self.assertEqual(
             raised.exception.diag.constraint_name,
             "workflow_commands_acquisition_root_single_child_uk",
@@ -2053,7 +2290,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 index_name = cur.fetchone()[0]
                 cur.execute("SELECT to_regclass('workflow_commands_acquisition_intent_parent_uk')")
                 old_unique_index_name = cur.fetchone()[0]
-        self.assertEqual(ledger, _ALL_MIGRATIONS[:-4])
+        self.assertEqual(ledger, migrations_through_0007)
         self.assertEqual(duplicate_count, 2)
         self.assertIsNone(index_name)
         self.assertIsNone(old_unique_index_name)
@@ -2383,7 +2620,10 @@ class MigrationRunnerTest(unittest.TestCase):
                 with self.assertRaises(psycopg.errors.UniqueViolation) as raised:
                     mr.apply_pending_migrations(conn, schema=schema)
 
-        self.assertEqual(prefix.applied, _ALL_MIGRATIONS[:-3])
+        migrations_through_0008 = _ALL_MIGRATIONS[
+            : _ALL_MIGRATIONS.index(_D1M_COMPANY_PUBLIC_WEB_RUN_IDEMPOTENCY_MIGRATION)
+        ]
+        self.assertEqual(prefix.applied, migrations_through_0008)
         self.assertEqual(
             raised.exception.diag.constraint_name,
             "company_public_web_asset_runs_idempotency_key_uk",
@@ -2402,10 +2642,390 @@ class MigrationRunnerTest(unittest.TestCase):
                     "WHERE btrim(idempotency_key, E' \\t\\n\\r\\f\\013') = 'd1m-brownfield-duplicate'"
                 )
                 duplicate_count = int(cur.fetchone()[0])
-        self.assertEqual(ledger, _ALL_MIGRATIONS[:-3])
+        self.assertEqual(ledger, migrations_through_0008)
         self.assertIsNone(index_name)
         self.assertIsNone(revision_sequence_name)
         self.assertEqual(duplicate_count, 2)
+
+    def test_agent_tool_owner_revision_token_migration_discovery_fresh_and_rerun(self) -> None:
+        schema = self._fresh_schema("d1n_owner_token_fresh")
+        quoted = quote_control_plane_postgres_identifier(schema)
+        discovered = [version for version, _ in mr.discover_migrations()]
+        with psycopg.connect(self.dsn, client_encoding="utf8") as conn:
+            first = mr.apply_pending_migrations(conn, schema=schema)
+            second = mr.apply_pending_migrations(conn, schema=schema)
+            with conn.cursor() as cur:
+                cur.execute(f"SET search_path TO {quoted}")
+                cur.execute(
+                    """
+                    SELECT table_name, column_name, data_type, is_nullable, column_default
+                    FROM information_schema.columns
+                    WHERE table_schema = %s
+                      AND table_name IN (
+                          'agent_tool_result_slots',
+                          'agent_tool_result_attempts',
+                          'agent_tool_result_journal'
+                      )
+                      AND column_name = 'owner_target_revision_token'
+                    ORDER BY table_name
+                    """,
+                    (schema,),
+                )
+                columns = cur.fetchall()
+                self._insert_agent_tool_pending_slot(cur, result_slot_id="slot-s1c-pending")
+                cur.execute(
+                    "SELECT status, owner_target_revision_token "
+                    "FROM agent_tool_result_slots WHERE result_slot_id = 'slot-s1c-pending'"
+                )
+                pending = cur.fetchone()
+            conn.rollback()
+
+        self.assertEqual(discovered, _ALL_MIGRATIONS)
+        self.assertEqual(first.applied, _ALL_MIGRATIONS)
+        self.assertEqual(second.applied, [])
+        self.assertEqual(second.already_applied, _ALL_MIGRATIONS)
+        self.assertEqual(
+            columns,
+            [
+                ("agent_tool_result_attempts", "owner_target_revision_token", "text", "NO", "''::text"),
+                ("agent_tool_result_journal", "owner_target_revision_token", "text", "NO", "''::text"),
+                ("agent_tool_result_slots", "owner_target_revision_token", "text", "NO", "''::text"),
+            ],
+        )
+        self.assertEqual(pending, ("pending", ""))
+
+    def test_agent_tool_owner_revision_token_upgrade_preserves_numeric_accepted_aggregate(self) -> None:
+        schema = self._fresh_schema("d1n_owner_token_upgrade")
+        quoted = quote_control_plane_postgres_identifier(schema)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            migrations_dir = Path(temp_dir)
+            _copy_migrations_through(migrations_dir, 11)
+            with psycopg.connect(self.dsn, client_encoding="utf8") as conn:
+                prefix = mr.apply_pending_migrations(conn, schema=schema, migrations_dir=migrations_dir)
+                with conn.cursor() as cur:
+                    cur.execute(f"SET search_path TO {quoted}")
+                    self._insert_agent_tool_pending_slot(cur, result_slot_id="slot-s1c-historical")
+                    self._insert_agent_tool_accepted_aggregate(
+                        cur,
+                        result_slot_id="slot-s1c-historical",
+                        result_attempt_id="attempt-s1c-historical",
+                        owner_target_revision=7,
+                        owner_target_generation=0,
+                        slot_token=None,
+                    )
+                conn.commit()
+                upgraded = mr.apply_pending_migrations(conn, schema=schema)
+                with conn.cursor() as cur:
+                    cur.execute(f"SET search_path TO {quoted}")
+                    cur.execute(
+                        """
+                        SELECT slot.status, attempt.disposition,
+                               slot.owner_target_revision, attempt.owner_target_revision,
+                               journal.owner_target_revision,
+                               slot.owner_target_revision_token,
+                               attempt.owner_target_revision_token,
+                               journal.owner_target_revision_token,
+                               attempt.schema_version,
+                               journal.schema_version
+                        FROM agent_tool_result_slots AS slot
+                        JOIN agent_tool_result_attempts AS attempt
+                          ON attempt.result_attempt_id = slot.result_attempt_id
+                        JOIN agent_tool_result_journal AS journal
+                          ON journal.result_attempt_id = attempt.result_attempt_id
+                        WHERE slot.result_slot_id = 'slot-s1c-historical'
+                        """
+                    )
+                    aggregate = cur.fetchone()
+
+        migrations_through_0011 = _ALL_MIGRATIONS[
+            : _ALL_MIGRATIONS.index(_D1N_AGENT_TOOL_OWNER_REVISION_TOKEN_MIGRATION)
+        ]
+        self.assertEqual(prefix.applied, migrations_through_0011)
+        self.assertEqual(upgraded.applied, [_D1N_AGENT_TOOL_OWNER_REVISION_TOKEN_MIGRATION])
+        self.assertEqual(
+            aggregate,
+            (
+                "accepted",
+                "accepted",
+                7,
+                7,
+                7,
+                "",
+                "",
+                "",
+                "agent_tool_result_attempt_v1",
+                "agent_tool_result_journal_v1",
+            ),
+        )
+
+    def test_agent_tool_owner_revision_token_old_writer_defaults_to_numeric_v1_aggregate(self) -> None:
+        schema = self._fresh_schema("d1n_owner_token_old_writer")
+        quoted = quote_control_plane_postgres_identifier(schema)
+        with psycopg.connect(self.dsn, client_encoding="utf8") as conn:
+            mr.apply_pending_migrations(conn, schema=schema)
+            with conn.cursor() as cur:
+                cur.execute(f"SET search_path TO {quoted}")
+                self._insert_agent_tool_pending_slot(cur, result_slot_id="slot-s1c-old-writer")
+                self._insert_agent_tool_accepted_aggregate(
+                    cur,
+                    result_slot_id="slot-s1c-old-writer",
+                    result_attempt_id="attempt-s1c-old-writer",
+                    owner_target_revision=9,
+                    owner_target_generation=0,
+                    slot_token=None,
+                )
+            conn.commit()
+            with conn.cursor() as cur:
+                cur.execute(f"SET search_path TO {quoted}")
+                cur.execute(
+                    """
+                    SELECT slot.owner_target_revision_token,
+                           attempt.owner_target_revision_token,
+                           journal.owner_target_revision_token,
+                           attempt.schema_version,
+                           journal.schema_version
+                    FROM agent_tool_result_slots AS slot
+                    JOIN agent_tool_result_attempts AS attempt
+                      ON attempt.result_attempt_id = slot.result_attempt_id
+                    JOIN agent_tool_result_journal AS journal
+                      ON journal.result_attempt_id = attempt.result_attempt_id
+                    WHERE slot.result_slot_id = 'slot-s1c-old-writer'
+                    """
+                )
+                aggregate = cur.fetchone()
+
+        self.assertEqual(
+            aggregate,
+            ("", "", "", "agent_tool_result_attempt_v1", "agent_tool_result_journal_v1"),
+        )
+
+    def test_agent_tool_owner_revision_token_accepts_exact_token_only_aggregate(self) -> None:
+        schema = self._fresh_schema("d1n_owner_token_exact")
+        quoted = quote_control_plane_postgres_identifier(schema)
+        token = "projidxinput_membership.revision:opaque-7"
+        with psycopg.connect(self.dsn, client_encoding="utf8") as conn:
+            mr.apply_pending_migrations(conn, schema=schema)
+            with conn.cursor() as cur:
+                cur.execute(f"SET search_path TO {quoted}")
+                self._insert_agent_tool_pending_slot(cur, result_slot_id="slot-s1c-token-only")
+                self._insert_agent_tool_accepted_aggregate(
+                    cur,
+                    result_slot_id="slot-s1c-token-only",
+                    result_attempt_id="attempt-s1c-token-only",
+                    owner_target_revision=0,
+                    owner_target_generation=0,
+                    slot_token=token,
+                    attempt_schema_version="agent_tool_result_attempt_v2",
+                    journal_schema_version="agent_tool_result_journal_v2",
+                )
+            conn.commit()
+            with conn.cursor() as cur:
+                cur.execute(f"SET search_path TO {quoted}")
+                cur.execute(
+                    """
+                    SELECT slot.owner_target_revision, slot.owner_target_generation,
+                           slot.owner_target_revision_token,
+                           attempt.owner_target_revision_token,
+                           journal.owner_target_revision_token,
+                           attempt.schema_version,
+                           journal.schema_version
+                    FROM agent_tool_result_slots AS slot
+                    JOIN agent_tool_result_attempts AS attempt
+                      ON attempt.result_attempt_id = slot.result_attempt_id
+                    JOIN agent_tool_result_journal AS journal
+                      ON journal.result_attempt_id = attempt.result_attempt_id
+                    WHERE slot.result_slot_id = 'slot-s1c-token-only'
+                    """
+                )
+                aggregate = cur.fetchone()
+
+        self.assertEqual(
+            aggregate,
+            (
+                0,
+                0,
+                token,
+                token,
+                token,
+                "agent_tool_result_attempt_v2",
+                "agent_tool_result_journal_v2",
+            ),
+        )
+
+    def test_agent_tool_owner_revision_token_rejects_missing_blank_invalid_and_oversized(self) -> None:
+        schema = self._fresh_schema("d1n_owner_token_shape")
+        quoted = quote_control_plane_postgres_identifier(schema)
+        invalid_tokens = ("", " ", "bad/token", "a" * 257)
+        with psycopg.connect(self.dsn, client_encoding="utf8") as conn:
+            mr.apply_pending_migrations(conn, schema=schema)
+            with conn.cursor() as cur:
+                cur.execute(f"SET search_path TO {quoted}")
+                self._insert_agent_tool_pending_slot(cur, result_slot_id="slot-s1c-shape")
+                for index, token in enumerate(invalid_tokens):
+                    cur.execute(f"SAVEPOINT invalid_token_{index}")
+                    with self.assertRaises(psycopg.errors.CheckViolation) as raised:
+                        self._insert_agent_tool_result_attempt(
+                            cur,
+                            result_slot_id="slot-s1c-shape",
+                            result_attempt_id=f"attempt-s1c-invalid-{index}",
+                            disposition="quarantined",
+                            quarantine_reason="invalid-owner-token",
+                            owner_target_revision=0,
+                            owner_target_generation=0,
+                            owner_target_revision_token=token,
+                            schema_version="agent_tool_result_attempt_v2",
+                        )
+                    self.assertEqual(raised.exception.diag.constraint_name, "agent_tool_attempts_shape_ck")
+                    cur.execute(f"ROLLBACK TO SAVEPOINT invalid_token_{index}")
+
+                cur.execute("SAVEPOINT pending_token_nonempty")
+                with self.assertRaises(psycopg.errors.CheckViolation) as pending_raised:
+                    self._insert_agent_tool_pending_slot(
+                        cur,
+                        result_slot_id="slot-s1c-pending-with-token",
+                        owner_target_revision_token="membership-revision-present-too-early",
+                    )
+                self.assertEqual(pending_raised.exception.diag.constraint_name, "agent_tool_slots_terminal_shape_ck")
+                cur.execute("ROLLBACK TO SAVEPOINT pending_token_nonempty")
+
+                self._insert_agent_tool_result_attempt(
+                    cur,
+                    result_slot_id="slot-s1c-shape",
+                    result_attempt_id="attempt-s1c-valid-quarantine",
+                    disposition="quarantined",
+                    quarantine_reason="late-winner",
+                    owner_target_revision=0,
+                    owner_target_generation=0,
+                    owner_target_revision_token="membership-revision-valid",
+                    schema_version="agent_tool_result_attempt_v2",
+                )
+            conn.commit()
+
+        with psycopg.connect(self.dsn, autocommit=True, client_encoding="utf8") as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"SET search_path TO {quoted}")
+                cur.execute(
+                    "SELECT owner_target_revision_token, schema_version FROM agent_tool_result_attempts "
+                    "WHERE result_attempt_id = 'attempt-s1c-valid-quarantine'"
+                )
+                accepted_token = cur.fetchone()
+        self.assertEqual(
+            accepted_token,
+            ("membership-revision-valid", "agent_tool_result_attempt_v2"),
+        )
+
+    def test_agent_tool_owner_revision_token_v1_rejects_nonempty_token(self) -> None:
+        schema = self._fresh_schema("d1n_owner_token_v1_reject")
+        quoted = quote_control_plane_postgres_identifier(schema)
+        with psycopg.connect(self.dsn, client_encoding="utf8") as conn:
+            mr.apply_pending_migrations(conn, schema=schema)
+            with conn.cursor() as cur:
+                cur.execute(f"SET search_path TO {quoted}")
+                self._insert_agent_tool_pending_slot(cur, result_slot_id="slot-s1c-v1-token")
+                with self.assertRaises(psycopg.errors.CheckViolation) as raised:
+                    self._insert_agent_tool_result_attempt(
+                        cur,
+                        result_slot_id="slot-s1c-v1-token",
+                        result_attempt_id="attempt-s1c-v1-token",
+                        disposition="quarantined",
+                        quarantine_reason="invalid-v1-owner-token",
+                        owner_target_revision=11,
+                        owner_target_generation=0,
+                        owner_target_revision_token="membership-revision-v2-only",
+                        schema_version="agent_tool_result_attempt_v1",
+                    )
+
+        self.assertEqual(raised.exception.diag.constraint_name, "agent_tool_attempts_shape_ck")
+
+    def test_agent_tool_owner_revision_token_v1_journal_rejects_nonempty_token(self) -> None:
+        schema = self._fresh_schema("d1n_owner_token_v1_journal_reject")
+        quoted = quote_control_plane_postgres_identifier(schema)
+        with psycopg.connect(self.dsn, client_encoding="utf8") as conn:
+            mr.apply_pending_migrations(conn, schema=schema)
+            with conn.cursor() as cur:
+                cur.execute(f"SET search_path TO {quoted}")
+                cur.execute("SAVEPOINT v1_journal_token")
+                self._insert_agent_tool_pending_slot(cur, result_slot_id="slot-s1c-v1-journal-token")
+                with self.assertRaises(psycopg.errors.CheckViolation) as raised:
+                    self._insert_agent_tool_accepted_aggregate(
+                        cur,
+                        result_slot_id="slot-s1c-v1-journal-token",
+                        result_attempt_id="attempt-s1c-v1-journal-token",
+                        owner_target_revision=11,
+                        owner_target_generation=0,
+                        slot_token="membership-revision-v2-only",
+                        attempt_schema_version="agent_tool_result_attempt_v2",
+                        journal_schema_version="agent_tool_result_journal_v1",
+                    )
+                cur.execute("ROLLBACK TO SAVEPOINT v1_journal_token")
+
+        self.assertEqual(raised.exception.diag.constraint_name, "agent_tool_journal_shape_ck")
+
+    def test_agent_tool_owner_revision_token_deferred_aggregate_requires_exact_equality(self) -> None:
+        mismatch_cases = (
+            ("attempt", "membership-revision-slot", "membership-revision-attempt", "membership-revision-slot"),
+            ("journal", "membership-revision-slot", "membership-revision-slot", "membership-revision-journal"),
+        )
+        for label, slot_token, attempt_token, journal_token in mismatch_cases:
+            with self.subTest(mismatch=label):
+                schema = self._fresh_schema(f"d1n_owner_token_mismatch_{label}")
+                quoted = quote_control_plane_postgres_identifier(schema)
+                with psycopg.connect(self.dsn, client_encoding="utf8") as conn:
+                    mr.apply_pending_migrations(conn, schema=schema)
+                    with conn.cursor() as cur:
+                        cur.execute(f"SET search_path TO {quoted}")
+                        self._insert_agent_tool_pending_slot(cur, result_slot_id=f"slot-s1c-mismatch-{label}")
+                        self._insert_agent_tool_accepted_aggregate(
+                            cur,
+                            result_slot_id=f"slot-s1c-mismatch-{label}",
+                            result_attempt_id=f"attempt-s1c-mismatch-{label}",
+                            owner_target_revision=0,
+                            owner_target_generation=0,
+                            slot_token=slot_token,
+                            attempt_token=attempt_token,
+                            journal_token=journal_token,
+                            attempt_schema_version="agent_tool_result_attempt_v2",
+                            journal_schema_version="agent_tool_result_journal_v2",
+                        )
+                    with self.assertRaises(psycopg.errors.RaiseException) as raised:
+                        conn.commit()
+                    conn.rollback()
+                self.assertEqual(
+                    raised.exception.diag.constraint_name,
+                    "agent_tool_terminal_aggregate_incomplete",
+                )
+
+    def test_agent_tool_owner_revision_token_deferred_aggregate_rejects_mixed_schema_versions(self) -> None:
+        mismatch_cases = (
+            ("attempt_v1", "agent_tool_result_attempt_v1", "agent_tool_result_journal_v2"),
+            ("journal_v1", "agent_tool_result_attempt_v2", "agent_tool_result_journal_v1"),
+        )
+        for label, attempt_schema_version, journal_schema_version in mismatch_cases:
+            with self.subTest(mismatch=label):
+                schema = self._fresh_schema(f"d1n_owner_token_schema_mismatch_{label}")
+                quoted = quote_control_plane_postgres_identifier(schema)
+                with psycopg.connect(self.dsn, client_encoding="utf8") as conn:
+                    mr.apply_pending_migrations(conn, schema=schema)
+                    with conn.cursor() as cur:
+                        cur.execute(f"SET search_path TO {quoted}")
+                        self._insert_agent_tool_pending_slot(cur, result_slot_id=f"slot-s1c-{label}")
+                        self._insert_agent_tool_accepted_aggregate(
+                            cur,
+                            result_slot_id=f"slot-s1c-{label}",
+                            result_attempt_id=f"attempt-s1c-{label}",
+                            owner_target_revision=13,
+                            owner_target_generation=0,
+                            slot_token=None,
+                            attempt_schema_version=attempt_schema_version,
+                            journal_schema_version=journal_schema_version,
+                        )
+                    with self.assertRaises(psycopg.errors.RaiseException) as raised:
+                        conn.commit()
+                    conn.rollback()
+                self.assertEqual(
+                    raised.exception.diag.constraint_name,
+                    "agent_tool_terminal_aggregate_incomplete",
+                )
 
     def test_applied_migration_checksum_change_fails_closed(self) -> None:
         schema = self._fresh_schema("checksum")

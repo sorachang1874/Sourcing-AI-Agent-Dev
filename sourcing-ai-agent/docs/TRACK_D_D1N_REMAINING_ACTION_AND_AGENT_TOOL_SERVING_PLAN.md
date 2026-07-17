@@ -188,7 +188,8 @@ canonical_args_digest, occurrence_ordinal
 request_schema_version/digest, result_schema_version/digest, serializer_owner/revision
 action_id, operation_run_id, workflow_command_id (nullable for query tools)
 activity_run_id, activity_attempt_id, command_attempt, command_generation, control_epoch
-owner_target_revision/generation, terminal_winner_id, owner_result_ref/digest
+owner_target_revision/generation or equality-only owner_target_revision_token
+terminal_winner_id, owner_result_ref/digest
 ```
 
 The same tool/result pins are exact-copied into AgentAction/OperationRun when present, the accepted terminal result,
@@ -197,6 +198,12 @@ command/attempt, physical target revision, and terminal CAS winner. A changed re
 result; historical result specs remain lookup-capable. A late/old attempt is retained only as quarantined attempt
 evidence and never wins or serializes. Repeated identical tool calls in one turn use the D0 stable
 `occurrence_ordinal`; provider call ids are evidence, not idempotency authority.
+
+S1a/S1b now implement the result slot and the first two exact physical owners. S1c adds the opaque token as an
+additive terminal carrier without changing the v1 logical-occurrence digest: numeric-only attempt/journal records
+remain v1, token-bearing records are v2, and the deferred aggregate requires exact token plus terminal-schema parity.
+This is not `filter_projection` owner evidence; the adapter must exact-copy the canonical membership token from the
+locked publication/membership owner before any terminal write.
 
 ### 4.3 One `AgentToolSpec` for actions and queries
 

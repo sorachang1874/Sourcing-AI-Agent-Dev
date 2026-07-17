@@ -20,9 +20,13 @@ from typing import Any, Literal, Mapping, TypeAlias
 
 from .agent_tool_registry import AgentToolSpec
 
+# This value is also pinned into ``logical_occurrence_digest``. Additive
+# terminal-payload migrations must not bump or reinterpret it in place.
 AGENT_TOOL_RESULT_SLOT_SCHEMA_VERSION = "agent_tool_result_slot_v1"
 AGENT_TOOL_RESULT_ATTEMPT_SCHEMA_VERSION = "agent_tool_result_attempt_v1"
+AGENT_TOOL_RESULT_ATTEMPT_SCHEMA_VERSION_V2 = "agent_tool_result_attempt_v2"
 AGENT_TOOL_RESULT_JOURNAL_SCHEMA_VERSION = "agent_tool_result_journal_v1"
+AGENT_TOOL_RESULT_JOURNAL_SCHEMA_VERSION_V2 = "agent_tool_result_journal_v2"
 
 AgentToolResultDisposition: TypeAlias = Literal["accepted", "quarantined"]
 
@@ -335,6 +339,7 @@ class AgentToolTerminalResult:
     serialized_result_json: str
     serialized_result_digest: str
     is_error: bool
+    owner_target_revision_token: str = ""
 
     def __post_init__(self) -> None:
         for field_name in ("result_attempt_id", "terminal_winner_id"):
@@ -367,7 +372,16 @@ class AgentToolTerminalResult:
                 field_name,
                 _required_nonnegative_integer(field_name, getattr(self, field_name)),
             )
-        if self.owner_target_revision == 0 and self.owner_target_generation == 0:
+        object.__setattr__(
+            self,
+            "owner_target_revision_token",
+            _optional_identifier("owner_target_revision_token", self.owner_target_revision_token),
+        )
+        if (
+            self.owner_target_revision == 0
+            and self.owner_target_generation == 0
+            and not self.owner_target_revision_token
+        ):
             raise AgentToolResultSlotError("agent_tool_result_owner_target_version_missing")
         object.__setattr__(
             self, "owner_result_digest", _required_sha256("owner_result_digest", self.owner_result_digest)
@@ -416,6 +430,7 @@ class AgentToolTerminalResult:
         owner_target_id: str,
         owner_target_revision: int = 0,
         owner_target_generation: int = 0,
+        owner_target_revision_token: str = "",
         terminal_winner_id: str,
         owner_result_ref: Mapping[str, Any],
         owner_result_digest: str,
@@ -446,6 +461,7 @@ class AgentToolTerminalResult:
             serialized_result_json=serialized_result_json,
             serialized_result_digest=_sha256_text(serialized_result_json),
             is_error=is_error,
+            owner_target_revision_token=owner_target_revision_token,
         )
 
     def _validate_link_group(self) -> None:
@@ -519,6 +535,7 @@ class AgentToolTerminalResult:
             serialized_result_json=self.serialized_result_json,
             serialized_result_digest=self.serialized_result_digest,
             is_error=self.is_error,
+            owner_target_revision_token=self.owner_target_revision_token,
         )
 
     def tool_result_message_record(self) -> dict[str, object]:
@@ -533,9 +550,25 @@ class AgentToolTerminalResult:
     def tool_result_message_digest(self) -> str:
         return _sha256_text(_canonical_json(self.tool_result_message_record()))
 
+    @property
+    def attempt_schema_version(self) -> str:
+        return (
+            AGENT_TOOL_RESULT_ATTEMPT_SCHEMA_VERSION_V2
+            if self.owner_target_revision_token
+            else AGENT_TOOL_RESULT_ATTEMPT_SCHEMA_VERSION
+        )
+
+    @property
+    def journal_schema_version(self) -> str:
+        return (
+            AGENT_TOOL_RESULT_JOURNAL_SCHEMA_VERSION_V2
+            if self.owner_target_revision_token
+            else AGENT_TOOL_RESULT_JOURNAL_SCHEMA_VERSION
+        )
+
     def to_record(self) -> dict[str, object]:
         return {
-            "schema_version": AGENT_TOOL_RESULT_ATTEMPT_SCHEMA_VERSION,
+            "schema_version": self.attempt_schema_version,
             "result_attempt_id": self.result_attempt_id,
             "provider_call_id": self.provider_call_id,
             "tool_call_id": self.tool_call_id,
@@ -551,6 +584,7 @@ class AgentToolTerminalResult:
             "owner_target_id": self.owner_target_id,
             "owner_target_revision": self.owner_target_revision,
             "owner_target_generation": self.owner_target_generation,
+            "owner_target_revision_token": self.owner_target_revision_token,
             "terminal_winner_id": self.terminal_winner_id,
             "owner_result_ref": self.owner_result_ref,
             "owner_result_digest": self.owner_result_digest,
@@ -564,7 +598,9 @@ class AgentToolTerminalResult:
 
 __all__ = [
     "AGENT_TOOL_RESULT_ATTEMPT_SCHEMA_VERSION",
+    "AGENT_TOOL_RESULT_ATTEMPT_SCHEMA_VERSION_V2",
     "AGENT_TOOL_RESULT_JOURNAL_SCHEMA_VERSION",
+    "AGENT_TOOL_RESULT_JOURNAL_SCHEMA_VERSION_V2",
     "AGENT_TOOL_RESULT_SLOT_SCHEMA_VERSION",
     "AgentToolOccurrence",
     "AgentToolResultDisposition",

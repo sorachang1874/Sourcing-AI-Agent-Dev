@@ -16,8 +16,6 @@ from hashlib import sha1
 from typing import Any
 
 from .agent_tool_result_slot import (
-    AGENT_TOOL_RESULT_ATTEMPT_SCHEMA_VERSION,
-    AGENT_TOOL_RESULT_JOURNAL_SCHEMA_VERSION,
     AGENT_TOOL_RESULT_SLOT_SCHEMA_VERSION,
     AgentToolOccurrence,
     AgentToolTerminalResult,
@@ -152,6 +150,7 @@ def _attempt_insert_row(
         "owner_target_id": terminal.owner_target_id,
         "owner_target_revision": terminal.owner_target_revision,
         "owner_target_generation": terminal.owner_target_generation,
+        "owner_target_revision_token": terminal.owner_target_revision_token,
         "terminal_winner_id": terminal.terminal_winner_id,
         "owner_result_ref_json": terminal.owner_result_ref_json,
         "owner_result_digest": terminal.owner_result_digest,
@@ -160,7 +159,7 @@ def _attempt_insert_row(
         "tool_result_message_json": _json_dump(terminal.tool_result_message_record()),
         "tool_result_message_digest": terminal.tool_result_message_digest,
         "is_error": terminal.is_error,
-        "schema_version": AGENT_TOOL_RESULT_ATTEMPT_SCHEMA_VERSION,
+        "schema_version": terminal.attempt_schema_version,
     }
 
 
@@ -184,6 +183,7 @@ _ATTEMPT_FIELDS = (
     "owner_target_id",
     "owner_target_revision",
     "owner_target_generation",
+    "owner_target_revision_token",
     "terminal_winner_id",
     "owner_result_digest",
     "serialized_result_json",
@@ -402,7 +402,7 @@ def _assert_plan_owner(
         "preview_digest": terminal.owner_result_digest,
     }
     mismatches = [field for field, value in preview_expected.items() if str(preview.get(field)) != str(value)]
-    if mismatches or terminal.owner_target_generation != 0:
+    if mismatches or terminal.owner_target_generation != 0 or terminal.owner_target_revision_token:
         raise ValueError("agent tool plan result preview exact-owner mismatch: " + ", ".join(mismatches))
     event_expected = {
         "event_id": terminal.terminal_winner_id,
@@ -519,6 +519,7 @@ def _journal_insert_row(
         "owner_target_id": terminal.owner_target_id,
         "owner_target_revision": terminal.owner_target_revision,
         "owner_target_generation": terminal.owner_target_generation,
+        "owner_target_revision_token": terminal.owner_target_revision_token,
         "terminal_winner_id": terminal.terminal_winner_id,
         "owner_result_ref_json": terminal.owner_result_ref_json,
         "owner_result_digest": terminal.owner_result_digest,
@@ -527,7 +528,7 @@ def _journal_insert_row(
         "tool_result_message_json": _json_dump(terminal.tool_result_message_record()),
         "tool_result_message_digest": terminal.tool_result_message_digest,
         "is_error": terminal.is_error,
-        "schema_version": AGENT_TOOL_RESULT_JOURNAL_SCHEMA_VERSION,
+        "schema_version": terminal.journal_schema_version,
     }
 
 
@@ -549,6 +550,7 @@ def _slot_terminal_update(terminal: AgentToolTerminalResult) -> dict[str, Any]:
         "owner_target_id": terminal.owner_target_id,
         "owner_target_revision": terminal.owner_target_revision,
         "owner_target_generation": terminal.owner_target_generation,
+        "owner_target_revision_token": terminal.owner_target_revision_token,
         "terminal_winner_id": terminal.terminal_winner_id,
         "owner_result_ref_json": terminal.owner_result_ref_json,
         "owner_result_digest": terminal.owner_result_digest,

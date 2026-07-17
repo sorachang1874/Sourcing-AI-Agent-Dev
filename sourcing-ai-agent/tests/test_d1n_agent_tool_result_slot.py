@@ -10,6 +10,10 @@ from sourcing_agent.agent_canary_registry import (
     START_ACQUISITION_RUN_TOOL_SPEC,
 )
 from sourcing_agent.agent_tool_result_slot import (
+    AGENT_TOOL_RESULT_ATTEMPT_SCHEMA_VERSION,
+    AGENT_TOOL_RESULT_ATTEMPT_SCHEMA_VERSION_V2,
+    AGENT_TOOL_RESULT_JOURNAL_SCHEMA_VERSION,
+    AGENT_TOOL_RESULT_JOURNAL_SCHEMA_VERSION_V2,
     AgentToolOccurrence,
     AgentToolResultSlotError,
     AgentToolTerminalResult,
@@ -101,6 +105,9 @@ def test_terminal_result_builds_exact_tool_result_message_and_content_digest() -
         "is_error": False,
     }
     assert len(terminal.tool_result_message_digest) == 64
+    assert terminal.attempt_schema_version == AGENT_TOOL_RESULT_ATTEMPT_SCHEMA_VERSION
+    assert terminal.journal_schema_version == AGENT_TOOL_RESULT_JOURNAL_SCHEMA_VERSION
+    assert terminal.to_record()["schema_version"] == AGENT_TOOL_RESULT_ATTEMPT_SCHEMA_VERSION
 
 
 def test_commandless_action_requires_action_run_and_forbids_command_chain() -> None:
@@ -160,7 +167,37 @@ def test_terminal_result_rejects_partial_owner_link_zero_target_version_and_payl
     with pytest.raises(AgentToolResultSlotError, match="action_link_group_incomplete"):
         _terminal(operation_run_id="")
     with pytest.raises(AgentToolResultSlotError, match="owner_target_version_missing"):
-        _terminal(owner_target_revision=0, owner_target_generation=0)
+        _terminal(owner_target_revision=0, owner_target_generation=0, owner_target_revision_token="")
     terminal = _terminal()
     with pytest.raises(AgentToolResultSlotError, match="serialized_result_digest_mismatch"):
         replace(terminal, serialized_result_digest="f" * 64)
+
+
+def test_terminal_result_accepts_opaque_equality_only_owner_revision_token() -> None:
+    terminal = _terminal(
+        owner_target_revision=0,
+        owner_target_generation=0,
+        owner_target_revision_token="membership_revision:01HZX.same-token",
+    )
+
+    assert terminal.owner_target_revision_token == "membership_revision:01HZX.same-token"
+    assert terminal.revalidated().owner_target_revision_token == terminal.owner_target_revision_token
+    assert terminal.to_record()["owner_target_revision_token"] == terminal.owner_target_revision_token
+    assert terminal.attempt_schema_version == AGENT_TOOL_RESULT_ATTEMPT_SCHEMA_VERSION_V2
+    assert terminal.journal_schema_version == AGENT_TOOL_RESULT_JOURNAL_SCHEMA_VERSION_V2
+    assert terminal.to_record()["schema_version"] == AGENT_TOOL_RESULT_ATTEMPT_SCHEMA_VERSION_V2
+
+
+@pytest.mark.parametrize(
+    "token",
+    (
+        " membership_revision:1",
+        "membership revision:1",
+        "membership_revision/1",
+        "membership_revision:\n1",
+        "r" * 257,
+    ),
+)
+def test_terminal_result_rejects_noncanonical_owner_revision_token(token: str) -> None:
+    with pytest.raises(AgentToolResultSlotError, match="owner_target_revision_token_invalid"):
+        _terminal(owner_target_revision=0, owner_target_revision_token=token)

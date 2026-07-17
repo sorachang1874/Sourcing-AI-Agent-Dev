@@ -79,8 +79,11 @@ other three isolated canary declarations, but each needs its own physical-owner 
 Until those adapters and the assembled scripted model loop land, S1 is partial and no tool is advertised as served.
 
 Fixed-forward checkpoint: S1b subsequently completed the `inspect_operation` physical event-revision adapter while
-reusing the S1a acceptance state machine. `start_acquisition_run` and `filter_projection` remain open; see
-`TRACK_D_D1N_S1B_INSPECT_OPERATION_RESULT_IMPLEMENTATION.md`.
+reusing the S1a acceptance state machine. S1c then added an equality-only opaque owner-revision carrier with
+rolling-safe attempt/journal schema discrimination for the future `filter_projection` adapter. Neither fixed-forward
+batch serves a tool. `start_acquisition_run` and the physical `filter_projection` adapter remain open; see
+`TRACK_D_D1N_S1B_INSPECT_OPERATION_RESULT_IMPLEMENTATION.md` and
+`TRACK_D_D1N_S1C_OPAQUE_OWNER_REVISION_CARRIER_IMPLEMENTATION.md`.
 
 ## Author validation evidence
 
