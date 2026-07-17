@@ -8967,6 +8967,60 @@ class LiveControlPlanePostgresAdapter:
             fault_injection_point=fault_injection_point,
         )
 
+    def prepare_inspect_operation_tool_result(
+        self,
+        *,
+        table_name: str = "agent_tool_result_slots",
+        occurrence: Any,
+        result_attempt_id: str,
+        provider_call_id: str,
+        tool_call_id: str,
+        action_id: str,
+        operation_run_id: str,
+        lock_timeout_seconds: float = 5.0,
+    ) -> Any:
+        """Build one exact read-only Operation query result from locked owner rows."""
+
+        if _normalize_postgres_identifier(table_name) != "agent_tool_result_slots":
+            raise ValueError("prepare_inspect_operation_tool_result requires table_name=agent_tool_result_slots")
+        from .agent_tool_result_postgres import prepare_inspect_operation_tool_result
+
+        return prepare_inspect_operation_tool_result(
+            self,
+            occurrence=occurrence,
+            result_attempt_id=result_attempt_id,
+            provider_call_id=provider_call_id,
+            tool_call_id=tool_call_id,
+            action_id=action_id,
+            operation_run_id=operation_run_id,
+            lock_timeout_seconds=lock_timeout_seconds,
+        )
+
+    def accept_inspect_operation_tool_result_uow(
+        self,
+        *,
+        table_name: str = "agent_tool_result_slots",
+        occurrence: Any,
+        terminal: Any,
+        attempted_slot_generation: int,
+        lock_timeout_seconds: float = 5.0,
+        fault_injection_point: str = "",
+    ) -> dict[str, Any] | None:
+        """Accept one exact Operation event-revision result and immutable journal."""
+
+        if _normalize_postgres_identifier(table_name) != "agent_tool_result_slots":
+            raise ValueError("accept_inspect_operation_tool_result_uow requires table_name=agent_tool_result_slots")
+        from .agent_tool_result_postgres import accept_inspect_operation_tool_result_uow
+
+        return accept_inspect_operation_tool_result_uow(
+            self,
+            occurrence=occurrence,
+            terminal=terminal,
+            attempted_slot_generation=attempted_slot_generation,
+            lock_timeout_seconds=lock_timeout_seconds,
+            fault_injection_point=fault_injection_point,
+        )
+
     def upsert_workflow_runtime_identity_row(
         self,
         row: dict[str, Any] | None = None,

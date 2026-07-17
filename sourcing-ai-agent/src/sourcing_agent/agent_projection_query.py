@@ -48,11 +48,11 @@ FILTER_PROJECTION_V2_SERIALIZER_OWNER = "projection_search_service.filter_projec
 FILTER_PROJECTION_V2_SERIALIZER_REVISION = "filter_projection_result_serializer_v2"
 
 INSPECT_OPERATION_REQUEST_SCHEMA_VERSION = "inspect_operation_request_v1"
-INSPECT_OPERATION_RESULT_SCHEMA_VERSION = "inspect_operation_result_v1"
+INSPECT_OPERATION_RESULT_SCHEMA_VERSION = "inspect_operation_result_v2"
 INSPECT_OPERATION_QUERY_OWNER_ID = "operation_query_service.inspect_operation"
-INSPECT_OPERATION_QUERY_OWNER_REVISION = "inspect_operation_v1"
-INSPECT_OPERATION_SERIALIZER_OWNER = "operation_query_service.inspect_operation_result_serializer_v1"
-INSPECT_OPERATION_SERIALIZER_REVISION = "inspect_operation_result_serializer_v1"
+INSPECT_OPERATION_QUERY_OWNER_REVISION = "inspect_operation_v2"
+INSPECT_OPERATION_SERIALIZER_OWNER = "operation_query_service.inspect_operation_result_serializer_v2"
+INSPECT_OPERATION_SERIALIZER_REVISION = "inspect_operation_result_serializer_v2"
 
 PROJECTION_SHARED_ACCESS_SCOPE = "shared_canonical_read"
 PROJECTION_MEMBERSHIP_OWNER = "projection_search_service.cohort_lane_membership"
@@ -60,6 +60,7 @@ PROJECTION_PUBLICATION_IDENTITY_OWNER = "projection_search_service.publication_i
 OPERATION_QUERY_OWNER_PREFLIGHT = "operation_query_service.exact_workspace_action_run_preflight"
 OPERATION_PROGRESS_OWNER = "operation_runs.progress"
 OPERATION_RESULT_READINESS_OWNER = "operation_query_service.result_readiness_projection"
+OPERATION_RESULT_READINESS_DERIVATION_REVISION = "operation_result_readiness_v1"
 OPERATION_PROVENANCE_OWNER = "operation_runs.agent_actions.workflow_commands.operation_events"
 
 FILTER_PROJECTION_DEFAULT_LIMIT = 50
@@ -1132,7 +1133,7 @@ def _result_readiness_schema() -> dict[str, Any]:
         {
             "status": {
                 "type": "string",
-                "enum": ["pending", "ready", "failed", "cancelled", "not_applicable"],
+                "enum": ["pending", "ready", "failed", "cancelled"],
             },
             "result_ref_present": {"type": "boolean"},
             "source_of_truth": {"type": "string", "const": OPERATION_RESULT_READINESS_OWNER},
@@ -1180,7 +1181,7 @@ _INSPECT_OWNER_SNAPSHOT_TOOL_SPEC = ToolSpec(
     name="inspect_operation_owner_snapshot",
     description="Validate one canonical bounded Operation query projection.",
     input_schema=_inspect_owner_snapshot_schema(),
-    schema_version="inspect_operation_owner_snapshot_v1",
+    schema_version="inspect_operation_owner_snapshot_v2",
     approval_policy="validation_only",
     budget_required=False,
 )
@@ -1219,12 +1220,15 @@ _INSPECT_DISPLAY_PATHS = frozenset(
 
 INSPECT_OPERATION_QUERY_OWNER_CONTRACT = MappingProxyType(
     {
-        "schema_version": "inspect_operation_query_owner_contract_v1",
+        "schema_version": "inspect_operation_query_owner_contract_v2",
         "owner_id": INSPECT_OPERATION_QUERY_OWNER_ID,
         "owner_revision": INSPECT_OPERATION_QUERY_OWNER_REVISION,
         "request_schema_version": INSPECT_OPERATION_REQUEST_SCHEMA_VERSION,
         "request_schema_digest": INSPECT_OPERATION_REQUEST_SCHEMA_DIGEST,
         "owner_preflight": OPERATION_QUERY_OWNER_PREFLIGHT,
+        "result_readiness_owner": OPERATION_RESULT_READINESS_OWNER,
+        "result_readiness_derivation_revision": OPERATION_RESULT_READINESS_DERIVATION_REVISION,
+        "completed_without_result_ref": "pending_fail_closed",
         "projection_fields": (
             "control_state",
             "control_policy",
@@ -1250,7 +1254,7 @@ INSPECT_OPERATION_RESULT_SPEC = ActionResultSpec(
     serializer_owner=INSPECT_OPERATION_SERIALIZER_OWNER,
     serializer_revision=INSPECT_OPERATION_SERIALIZER_REVISION,
     serializer_contract={
-        "schema_version": "inspect_operation_result_serializer_contract_v1",
+        "schema_version": "inspect_operation_result_serializer_contract_v2",
         "owner_output": "exact_bounded_operation_query_projection",
         "owner_preflight": OPERATION_QUERY_OWNER_PREFLIGHT,
         "writes": "forbidden",
@@ -1269,6 +1273,35 @@ INSPECT_OPERATION_RESULT_SPEC = ActionResultSpec(
     max_depth=8,
     artifact_ref_schemes=(),
 )
+
+
+def operation_result_readiness_projection(
+    *,
+    operation_status: str,
+    result_ref_present: bool,
+) -> dict[str, Any]:
+    """Derive the canonical fail-closed readiness projection for one Operation."""
+
+    normalized_status = str(operation_status or "").strip()
+    if normalized_status not in _OPERATION_STATUSES or type(result_ref_present) is not bool:
+        raise AgentProjectionQueryError("operation_result_readiness_input_invalid")
+    if normalized_status == "completed" and result_ref_present:
+        readiness_status = "ready"
+    elif normalized_status == "failed":
+        readiness_status = "failed"
+    elif normalized_status == "cancelled":
+        readiness_status = "cancelled"
+    else:
+        # A completed Operation without a durable result reference is incomplete,
+        # not implicitly inapplicable. Only a future explicit owner contract may
+        # emit not_applicable.
+        readiness_status = "pending"
+    return {
+        "status": readiness_status,
+        "result_ref_present": result_ref_present,
+        "source_of_truth": OPERATION_RESULT_READINESS_OWNER,
+        "fallback_status": "fail_closed",
+    }
 
 
 def execute_inspect_operation(
@@ -1312,7 +1345,7 @@ def execute_inspect_operation(
         "provenance": _thaw_json(snapshot["provenance"]),
     }
     try:
-        INSPECT_OPERATION_RESULT_SPEC.serialize(result)
+        serialize_inspect_operation_result(result)
     except ActionResultSchemaError as exc:
         raise AgentProjectionQueryError("inspect_operation_result_not_model_safe", detail=str(exc)) from exc
     return result
@@ -1344,6 +1377,10 @@ def inspect_operation_error_result(*, reason: str) -> dict[str, Any]:
 def serialize_inspect_operation_result(owner_output: dict[str, Any]) -> str:
     if owner_output.get("variant") == "success":
         _validate_control_policy_projection(dict(owner_output.get("control_policy") or {}))
+        _validate_operation_result_readiness_projection(
+            operation_status=dict(owner_output.get("control_state") or {}).get("operation_status"),
+            readiness=owner_output.get("result_readiness"),
+        )
     return INSPECT_OPERATION_RESULT_SPEC.serialize(owner_output)
 
 
@@ -1354,6 +1391,7 @@ def _validate_inspect_owner_snapshot_semantics(snapshot: Mapping[str, Any]) -> N
     display = dict(snapshot["display_contract"])
     progress = dict(snapshot["progress"])
     policy = dict(snapshot["control_policy"])
+    readiness = dict(snapshot["result_readiness"])
     provenance = dict(snapshot["provenance"])
     if (
         operation["owner_module"] != action["owner_module"]
@@ -1366,6 +1404,10 @@ def _validate_inspect_owner_snapshot_semantics(snapshot: Mapping[str, Any]) -> N
         or display["operation_type"] != action["operation_type"]
     ):
         raise AgentProjectionQueryError("inspect_operation_owner_projection_mismatch")
+    _validate_operation_result_readiness_projection(
+        operation_status=operation["status"],
+        readiness=readiness,
+    )
     allowed_actions = list(control_state["allowed_actions"])
     if len(allowed_actions) != len(set(allowed_actions)):
         raise AgentProjectionQueryError("inspect_operation_control_state_duplicate_action")
@@ -1385,6 +1427,27 @@ def _validate_inspect_owner_snapshot_semantics(snapshot: Mapping[str, Any]) -> N
         or provenance.get("latest_workflow_command_type")
     ):
         raise AgentProjectionQueryError("inspect_operation_control_policy_not_applicable_mismatch")
+
+
+def _validate_operation_result_readiness_projection(
+    *,
+    operation_status: Any,
+    readiness: Any,
+) -> None:
+    if not isinstance(readiness, Mapping):
+        raise AgentProjectionQueryError("inspect_operation_result_readiness_mismatch")
+    result_ref_present = readiness.get("result_ref_present")
+    if type(result_ref_present) is not bool:
+        raise AgentProjectionQueryError("inspect_operation_result_readiness_mismatch")
+    try:
+        expected = operation_result_readiness_projection(
+            operation_status=str(operation_status or ""),
+            result_ref_present=result_ref_present,
+        )
+    except AgentProjectionQueryError as exc:
+        raise AgentProjectionQueryError("inspect_operation_result_readiness_mismatch") from exc
+    if dict(readiness) != expected:
+        raise AgentProjectionQueryError("inspect_operation_result_readiness_mismatch")
 
 
 def _validate_control_policy_projection(policy: Mapping[str, Any]) -> None:
@@ -1500,6 +1563,7 @@ __all__ = [
     "inspect_operation_deferred_result",
     "inspect_operation_error_result",
     "inspect_operation_request_schema",
+    "operation_result_readiness_projection",
     "projection_candidate_ref",
     "serialize_filter_projection_v2_result",
     "serialize_inspect_operation_result",

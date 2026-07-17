@@ -2423,6 +2423,106 @@ class WorkflowRuntimeRepository(Repository):
             reason="native writer returned no result bundle",
         )
 
+    def prepare_inspect_operation_tool_result(
+        self,
+        *,
+        occurrence: Any,
+        result_attempt_id: str,
+        provider_call_id: str,
+        tool_call_id: str,
+        action_id: str,
+        operation_run_id: str,
+        lock_timeout_seconds: float = 5.0,
+    ) -> Any:
+        """Build one exact query terminal without mutating the result slot."""
+
+        from ..agent_tool_result_slot import AgentToolOccurrence, AgentToolTerminalResult
+
+        if not isinstance(occurrence, AgentToolOccurrence):
+            raise ValueError("prepare inspect result requires exact occurrence")
+        for table_name in ("operation_events", "operation_runs", "agent_actions", "workflow_commands"):
+            self._require_postgres_for_durable_runtime(table_name)
+        reader = getattr(self._adapter, "prepare_inspect_operation_tool_result", None)
+        if not callable(reader):
+            self._raise_read_failure(
+                table_name="agent_tool_result_slots",
+                method_name="prepare_inspect_operation_tool_result",
+                reason="native owner reader is unavailable",
+            )
+            raise AssertionError("unreachable after native owner reader failure")
+        try:
+            terminal = reader(
+                table_name="agent_tool_result_slots",
+                occurrence=occurrence,
+                result_attempt_id=result_attempt_id,
+                provider_call_id=provider_call_id,
+                tool_call_id=tool_call_id,
+                action_id=action_id,
+                operation_run_id=operation_run_id,
+                lock_timeout_seconds=lock_timeout_seconds,
+            )
+        except ValueError:
+            raise
+        except Exception as exc:
+            self._raise_read_failure(
+                table_name="agent_tool_result_slots",
+                method_name="prepare_inspect_operation_tool_result",
+                reason=f"{type(exc).__name__}: {exc}",
+                error=exc,
+            )
+        if isinstance(terminal, AgentToolTerminalResult):
+            return terminal
+        self._raise_read_failure(
+            table_name="agent_tool_result_slots",
+            method_name="prepare_inspect_operation_tool_result",
+            reason="native owner reader returned no terminal result",
+        )
+        raise AssertionError("unreachable after native owner reader failure")
+
+    def accept_inspect_operation_tool_result_uow(
+        self,
+        *,
+        occurrence: Any,
+        terminal: Any,
+        attempted_slot_generation: int,
+        lock_timeout_seconds: float = 5.0,
+    ) -> dict[str, Any]:
+        """Accept one exact read-only Operation query result and journal."""
+
+        from ..agent_tool_result_slot import AgentToolOccurrence, AgentToolTerminalResult
+
+        if not isinstance(occurrence, AgentToolOccurrence) or not isinstance(terminal, AgentToolTerminalResult):
+            raise ValueError("accept inspect result requires exact occurrence and terminal result")
+        for table_name in (
+            "agent_tool_result_slots",
+            "agent_tool_result_attempts",
+            "agent_tool_result_journal",
+        ):
+            self._require_postgres_for_durable_runtime(table_name)
+        result = self._call_native_write(
+            "accept_inspect_operation_tool_result_uow",
+            table_name="agent_tool_result_slots",
+            occurrence=occurrence,
+            terminal=terminal,
+            attempted_slot_generation=attempted_slot_generation,
+            lock_timeout_seconds=lock_timeout_seconds,
+        )
+        if result is not None:
+            payload = dict(result)
+            return {
+                "outcome": str(payload.get("outcome") or "").strip(),
+                "replayed": bool(payload.get("replayed")),
+                "slot": self._agent_tool_result_slot_from_row(payload.get("slot")),
+                "attempt": self._agent_tool_result_attempt_from_row(payload.get("attempt")),
+                "journal": self._agent_tool_result_journal_from_row(payload.get("journal")),
+            }
+        self._raise_write_failure(
+            table_name="agent_tool_result_slots",
+            method_name="accept_inspect_operation_tool_result_uow",
+            reason="native writer returned no result bundle",
+        )
+        raise AssertionError("unreachable after native inspect result write failure")
+
     def get_agent_tool_result_slot(
         self,
         result_slot_id: str,

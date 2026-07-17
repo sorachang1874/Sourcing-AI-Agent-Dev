@@ -32,6 +32,7 @@ from sourcing_agent.agent_projection_query import (
     execute_inspect_operation,
     filter_projection_v2_request_schema,
     inspect_operation_request_schema,
+    operation_result_readiness_projection,
     projection_candidate_ref,
     serialize_filter_projection_v2_result,
     serialize_inspect_operation_result,
@@ -608,6 +609,91 @@ def test_inspect_operation_exact_owner_preflight_and_closed_projection() -> None
     encoded = serialize_inspect_operation_result(result)
     assert json.loads(encoded) == result
     assert not ({"next_controls", "repair", "command", "events", "metadata", "workflow_ref"} & set(result))
+
+
+@pytest.mark.parametrize(
+    ("operation_status", "result_ref_present", "expected_status"),
+    (
+        ("queued", False, "pending"),
+        ("planned", False, "pending"),
+        ("running", True, "pending"),
+        ("completed", False, "pending"),
+        ("completed", True, "ready"),
+        ("failed", True, "failed"),
+        ("cancelled", True, "cancelled"),
+    ),
+)
+def test_operation_result_readiness_is_canonical_and_completed_without_ref_fails_closed(
+    operation_status: str,
+    result_ref_present: bool,
+    expected_status: str,
+) -> None:
+    assert operation_result_readiness_projection(
+        operation_status=operation_status,
+        result_ref_present=result_ref_present,
+    ) == {
+        "status": expected_status,
+        "result_ref_present": result_ref_present,
+        "source_of_truth": "operation_query_service.result_readiness_projection",
+        "fallback_status": "fail_closed",
+    }
+
+
+@pytest.mark.parametrize("forged_status", ("ready", "failed", "cancelled"))
+def test_inspect_operation_rejects_schema_valid_result_readiness_drift(forged_status: str) -> None:
+    snapshot = _inspect_snapshot()
+    snapshot["result_readiness"]["status"] = forged_status
+
+    with pytest.raises(AgentProjectionQueryError, match="inspect_operation_result_readiness_mismatch"):
+        execute_inspect_operation(request=_inspect_bound_request(), owner_snapshot=snapshot)
+
+
+def test_inspect_operation_completed_without_result_ref_cannot_be_ready_or_not_applicable() -> None:
+    snapshot = _inspect_snapshot()
+    snapshot["operation_run"]["status"] = "completed"
+    snapshot["control_state"]["operation_status"] = "completed"
+    snapshot["result_readiness"]["status"] = "ready"
+
+    with pytest.raises(AgentProjectionQueryError, match="inspect_operation_result_readiness_mismatch"):
+        execute_inspect_operation(request=_inspect_bound_request(), owner_snapshot=snapshot)
+
+    snapshot["result_readiness"]["status"] = "not_applicable"
+    with pytest.raises(AgentProjectionQueryError, match="inspect_operation_owner_snapshot_invalid"):
+        execute_inspect_operation(request=_inspect_bound_request(), owner_snapshot=snapshot)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    (
+        ("source_of_truth", "invented.readiness.owner"),
+        ("fallback_status", "allow_inference"),
+    ),
+)
+def test_inspect_operation_rejects_result_readiness_owner_contract_drift(
+    field: str,
+    value: str,
+) -> None:
+    snapshot = _inspect_snapshot()
+    snapshot["result_readiness"][field] = value
+
+    with pytest.raises(AgentProjectionQueryError, match="inspect_operation_owner_snapshot_invalid"):
+        execute_inspect_operation(request=_inspect_bound_request(), owner_snapshot=snapshot)
+
+
+def test_inspect_operation_serializer_rechecks_readiness_semantics() -> None:
+    result = execute_inspect_operation(
+        request=_inspect_bound_request(),
+        owner_snapshot=_inspect_snapshot(),
+    )
+    result["control_state"]["operation_status"] = "completed"
+    result["result_readiness"]["status"] = "ready"
+
+    with pytest.raises(AgentProjectionQueryError, match="inspect_operation_result_readiness_mismatch"):
+        serialize_inspect_operation_result(result)
+
+    result["result_readiness"]["status"] = "not_applicable"
+    with pytest.raises(ActionResultSchemaError):
+        INSPECT_OPERATION_RESULT_SPEC.serialize(result)
 
 
 def test_inspect_operation_supports_explicit_commandless_policy_without_inference() -> None:

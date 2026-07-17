@@ -372,9 +372,16 @@
   **0**。S1a 已新增 `0011` occurrence/attempt/journal storage，F4a Action/Operation exact-copy
   `plan_acquisition` tool pins，并以同一 PG transaction 完成 accepted attempt + pending→accepted slot CAS + journal；
   exact preview/action/run/event reload 后从 owner state 重跑 serializer。lost ACK、precommit fault、stale generation、
-  late attempt、foreign/missing target、serializer drift 与 concurrent single-winner 已覆盖。当前仍只支持
-  `plan_acquisition` terminal adapter；下一批必须补 `start_acquisition_run` command/activity owner、
-  `filter_projection` membership/publication owner、`inspect_operation` operation-state owner，之后才组装四工具 PG
+  late attempt、foreign/missing target、serializer drift 与 concurrent single-winner 已覆盖。S1b 已将 acceptance
+  状态机抽成共享内核，并补 `inspect_operation` exact Action/Operation/event-sequence/workflow-ref-command owner
+  adapter；command 必须与 ActionRegistry、durable owner registry、`OperationRun.workflow_ref` 和匹配的
+  `OperationCommandPlanned` event 同时一致，同 `operation_id` 的非引用 row 不进入 owner。prepare 后 event revision
+  漂移保持 slot pending 且 attempt/journal 零写，commandless + command-backed terminal success 均有 PG 证据，prepare
+  不触发 write-schema bootstrap。`inspect_operation` 已 fixed-forward 到 v2；readiness 由一个 owner matrix 贯穿
+  snapshot/execution/serializer/PG，completed 且无 durable result ref 只能 `pending/fail_closed`。下一批必须补
+  `start_acquisition_run` command/activity owner，并为
+  `filter_projection` 的 equality-only opaque
+  `membership_revision` 增加显式 owner-revision carrier 后实现 membership/publication adapter，之后才组装四工具 PG
   simulate/model-turn loop。剩余 5/15 schema-less action、R-029、scripted two-lab、live checkpoint 与 paid TML
   全部继续 open；无 provider/model/live 调用。fresh pinned non-author review pending，不得把作者证据写成 formal GO。
 - [ ] D1m mixed-version rollout gate（R-019）：pre-D1m binary 可继续写 revisionless source row 并绕开

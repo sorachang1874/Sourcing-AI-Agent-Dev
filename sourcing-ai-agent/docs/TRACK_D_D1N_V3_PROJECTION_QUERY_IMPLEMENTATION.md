@@ -1,8 +1,9 @@
 # Track D D1n V3 — projection filter and Operation query contracts
 
-> Status: Current non-live implementation candidate (2026-07-17). Author evidence only; fresh pinned non-author
-> review is pending. This pure leaf does not populate a registry, authorize a served tool, persist or repair state, or
-> call a provider/model/network transport; public `served` remains zero.
+> Status: Non-live contract leaf (2026-07-17), fixed-forward integrated by D1n S1b. Author evidence only; fresh pinned
+> non-author review is pending. S1b adds isolated registry pins and a PostgreSQL result-slot adapter but does not
+> populate the public/default registry, authorize a served tool, repair state, or call a provider/model/network
+> transport; public `served` remains zero.
 
 ## Outcome
 
@@ -11,8 +12,13 @@ unchanged:
 
 - `filter_projection` v2 binds a canonical `cohort_selection.v1` plus server-owned projection, membership-revision,
   Cohort-registry, and selection-digest pins;
-- `inspect_operation` v1 binds a model-visible OperationRun id to authenticated workspace/action/actor context and
-  projects only canonical control, display, progress, result-readiness, and bounded provenance state.
+- `inspect_operation` v2 result/query-owner semantics bind a model-visible OperationRun id to authenticated
+  workspace/action/actor context and project only canonical control, display, progress, result-readiness, and bounded
+  provenance state.
+
+The request schema remains `inspect_operation_request_v1`; S1b advanced the result, query owner, serializer, tool,
+adapter, and fixture revisions together. The fixed-forward readiness owner treats completed-without-result-ref as
+`pending/fail_closed`, and validates that rule at owner snapshot, execution, serialization, and PostgreSQL rebuild.
 
 Neither surface infers a next command or performs a repair/write. Missing or unproved projection access is one
 `projection_not_found` result. Missing or foreign Operation action/run ownership is one `operation_not_found` result.
@@ -51,7 +57,8 @@ projection and membership revision; it must not treat the digest as a global per
 the canonical `operation_run_control_state`, workflow-command control-policy projection, ActionRegistry display
 contract, OperationRun progress, result readiness, and bounded event/command provenance. Cross-owner drift,
 control-state flag/list mismatch, invented policy fields, command-policy mismatch, private fields, and raw local paths
-fail closed.
+fail closed. Result readiness is derived once from Operation status plus durable result-reference presence; a
+schema-valid but semantically forged readiness projection also fails closed.
 
 The query owner is separately identified by owner id, revision, and contract digest for later F3 population. It does
 not change the 15-row ActionRegistry denominator.
@@ -60,9 +67,10 @@ not change the 15-row ActionRegistry denominator.
 
 - The leaf does not change historical `projection_search_request_v1` or `projection_filter_request_v1` rows.
 - `filter_projection` v2 is not yet installed as the current request contract or Agent tool.
-- `inspect_operation` has no storage adapter or served population yet.
-- Candidate-ref lookup/indexing, result occurrence persistence, PG simulate fixtures, release evidence, and the local
-  Agent harness remain integration-owner work.
+- S1b supplies `inspect_operation` physical-owner result persistence and PG terminal fixtures, but public/default
+  served population remains zero.
+- Candidate-ref lookup/indexing, the two remaining canary physical-owner adapters, release evidence, and the assembled
+  local Agent harness remain integration-owner work.
 - Scope-matched independent review remains mandatory before hosted/live activation.
 
 ## Author validation
@@ -71,4 +79,6 @@ not change the 15-row ActionRegistry denominator.
 - Cohort/F1/F3/canonical runtime adjacency: `313 passed + 60 subtests`;
 - scoped Ruff, format, Python compilation, and mypy (`0 issues`): green.
 
-These are author results, not an independent-review verdict or live-provider authorization.
+These are the original V3 leaf author results. S1b fixed-forward validation and review scope are recorded in
+`TRACK_D_D1N_S1B_INSPECT_OPERATION_RESULT_IMPLEMENTATION.md`; neither artifact is an independent-review verdict or
+live-provider authorization.

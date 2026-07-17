@@ -78,6 +78,10 @@ other three isolated canary declarations, but each needs its own physical-owner 
 
 Until those adapters and the assembled scripted model loop land, S1 is partial and no tool is advertised as served.
 
+Fixed-forward checkpoint: S1b subsequently completed the `inspect_operation` physical event-revision adapter while
+reusing the S1a acceptance state machine. `start_acquisition_run` and `filter_projection` remain open; see
+`TRACK_D_D1N_S1B_INSPECT_OPERATION_RESULT_IMPLEMENTATION.md`.
+
 ## Author validation evidence
 
 Run from the repository root with no live provider/model variables:

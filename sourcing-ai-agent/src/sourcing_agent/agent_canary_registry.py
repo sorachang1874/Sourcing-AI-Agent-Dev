@@ -371,7 +371,7 @@ _FIXTURE_RECORDS = {
     ),
     "inspect_operation": _fixture_record(
         "inspect_operation",
-        fixture_revision="inspect_operation_fixture_v1",
+        fixture_revision="inspect_operation_fixture_v2",
         approval_required=False,
         effect_class="read_only",
     ),
@@ -539,7 +539,7 @@ FILTER_PROJECTION_TOOL_SPEC = AgentToolSpec(
 )
 
 INSPECT_OPERATION_TOOL_SPEC = AgentToolSpec(
-    tool_spec_version="inspect_operation_tool_v1",
+    tool_spec_version="inspect_operation_tool_v2",
     tool_name="inspect_operation",
     model_description="Read bounded canonical operation state without repairing or controlling it.",
     tool_kind="query",
@@ -554,7 +554,7 @@ INSPECT_OPERATION_TOOL_SPEC = AgentToolSpec(
         ),
         adapter=_route_pin(
             "sourcing_agent.agent_projection_query.execute_inspect_operation",
-            "inspect_operation_adapter_v1",
+            "inspect_operation_adapter_v2",
             {"effects": "read_only", "repair": False, "control_inference": False},
         ),
     ),

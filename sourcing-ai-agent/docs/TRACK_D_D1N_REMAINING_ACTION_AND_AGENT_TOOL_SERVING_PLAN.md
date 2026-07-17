@@ -529,12 +529,18 @@ deletes historical serializers. Hosted serving is fail-closed during registry/ac
 | `C1-paid-tml` | S3, L1, L2 + §6.3 | canary owner | one bounded paid local TML manifest and result review; no automatic scale-out |
 | `H1-hosted` | B0 + R-029 closed + hosted reviews | release owner | first `served=true`; outside 24-hour local canary goal |
 
-2026-07-17 implementation checkpoint: S1a now has the generic durable occurrence/attempt/journal schema and the
-owner-specific `plan_acquisition` pending-to-accepted PG UoW. It includes exact preview/action/run/event reload,
-serializer reconstruction, lost-ACK replay, stale/late quarantine, fault rollback, and concurrent single-winner
-evidence. S1 remains incomplete until equivalent physical-owner adapters and terminal-success fixtures exist for
-`start_acquisition_run`, `filter_projection`, and `inspect_operation`; default/public serving remains zero. See
-`TRACK_D_D1N_S1A_AGENT_TOOL_RESULT_SLOT_IMPLEMENTATION.md`.
+2026-07-17 implementation checkpoint: S1a has the generic durable occurrence/attempt/journal schema and the
+owner-specific `plan_acquisition` pending-to-accepted PG UoW. S1b factors the acceptance state machine for reuse and
+adds `inspect_operation` prepare/accept against exact Action/Operation/event/workflow-ref-command state. The referenced
+command must match its planned event and registries; unrelated same-operation rows are excluded from the owner.
+The pre-served inspect result/query-owner/serializer/tool/adapter/fixture contract is fixed-forward v2, with one
+central readiness derivation: completed without durable result ref remains `pending/fail_closed`. Evidence includes
+event-revision drift zero-write and both commandless/command-backed success fixtures. S1 remains
+incomplete until physical-owner
+adapters and terminal-success fixtures exist for `start_acquisition_run` and `filter_projection`; the latter first
+needs an explicit opaque target-revision carrier because `membership_revision` is equality-only, not an integer.
+Default/public serving remains zero. See `TRACK_D_D1N_S1A_AGENT_TOOL_RESULT_SLOT_IMPLEMENTATION.md` and
+`TRACK_D_D1N_S1B_INSPECT_OPERATION_RESULT_IMPLEMENTATION.md`.
 
 Shared hotspots—`operation_runtime.py`, `orchestrator.py`, public API routing, registry aggregation, migrations, and
 release-state derivation—have one serial integration owner. Leaf modules/tests may be developed in parallel. No leaf

@@ -134,13 +134,18 @@ def test_effects_cover_commandless_command_backed_action_read_and_query_without_
 
 def test_inspect_query_pins_do_not_create_a_sixteenth_action() -> None:
     assert len(DEFAULT_ACTION_REGISTRY.to_record(include_command_contracts=False)) == 15
+    assert INSPECT_OPERATION_TOOL_SPEC.tool_spec_version == "inspect_operation_tool_v2"
     assert INSPECT_OPERATION_TOOL_SPEC.request.schema_digest == INSPECT_OPERATION_REQUEST_SCHEMA_DIGEST
     query_owner = INSPECT_OPERATION_TOOL_SPEC.request.query_owner
     assert query_owner is not None
     assert query_owner.owner_id == INSPECT_OPERATION_QUERY_OWNER_ID
-    assert query_owner.owner_revision == INSPECT_OPERATION_QUERY_OWNER_REVISION
+    assert query_owner.owner_revision == INSPECT_OPERATION_QUERY_OWNER_REVISION == "inspect_operation_v2"
     assert query_owner.owner_contract_digest == INSPECT_OPERATION_QUERY_OWNER_CONTRACT_DIGEST
     assert INSPECT_OPERATION_TOOL_SPEC.result.query_owner == query_owner
+    assert INSPECT_OPERATION_RESULT_SPEC.result_schema_version == "inspect_operation_result_v2"
+    assert INSPECT_OPERATION_RESULT_SPEC.serializer_revision == "inspect_operation_result_serializer_v2"
+    assert INSPECT_OPERATION_TOOL_SPEC.route.adapter.owner_revision == "inspect_operation_adapter_v2"
+    assert INSPECT_OPERATION_TOOL_SPEC.simulate_fixture.fixture_revision == "inspect_operation_fixture_v2"
 
 
 def test_simulate_fixture_pins_are_real_content_digests_and_require_terminal_success() -> None:

@@ -32,7 +32,17 @@ class _ResultSlotLockBusy(RuntimeError):
 
 
 def _runtime_dependencies(adapter: Any, table_names: tuple[str, ...]) -> bool:
-    return all(adapter._require_operation_runtime_table(table_name) for table_name in table_names)
+    for table_name in table_names:
+        if not adapter.should_prefer_read(table_name):
+            return False
+        adapter._ensure_table_write_schema(table_name)
+    return True
+
+
+def _read_dependencies(adapter: Any, table_names: tuple[str, ...]) -> bool:
+    """Check native read routing without bootstrapping or mutating schemas."""
+
+    return all(adapter.should_prefer_read(table_name) for table_name in table_names)
 
 
 def _deadline_seconds(lock_timeout_seconds: float) -> tuple[float, float]:
@@ -420,6 +430,58 @@ def _assert_plan_owner(
         raise ValueError("agent tool plan result serializer output mismatch")
 
 
+def _load_plan_base_owner(
+    cursor: Any,
+    *,
+    occurrence: AgentToolOccurrence,
+    terminal: AgentToolTerminalResult,
+) -> dict[str, dict[str, Any]]:
+    del occurrence
+    from .control_plane_live_postgres import _fetch_one_dict_row
+
+    cursor.execute(
+        "SELECT * FROM operation_runs WHERE operation_run_id = %s FOR UPDATE",
+        (terminal.operation_run_id,),
+    )
+    operation = _fetch_one_dict_row(cursor, cursor.fetchone()) or {}
+    cursor.execute("SELECT * FROM agent_actions WHERE action_id = %s FOR UPDATE", (terminal.action_id,))
+    action = _fetch_one_dict_row(cursor, cursor.fetchone()) or {}
+    return {"action": action, "operation_run": operation}
+
+
+def _assert_locked_plan_owner(
+    cursor: Any,
+    *,
+    occurrence: AgentToolOccurrence,
+    terminal: AgentToolTerminalResult,
+    base_owner: dict[str, dict[str, Any]],
+) -> None:
+    from .control_plane_live_postgres import _fetch_one_dict_row
+
+    cursor.execute(
+        "SELECT * FROM acquisition_plan_previews WHERE preview_id = %s FOR UPDATE",
+        (terminal.owner_target_id,),
+    )
+    preview = _fetch_one_dict_row(cursor, cursor.fetchone()) or {}
+    cursor.execute(
+        "SELECT * FROM operation_events WHERE event_id = %s FOR UPDATE",
+        (terminal.terminal_winner_id,),
+    )
+    event = _fetch_one_dict_row(cursor, cursor.fetchone()) or {}
+    action = dict(base_owner.get("action") or {})
+    operation = dict(base_owner.get("operation_run") or {})
+    if not all((operation, action, preview, event)):
+        raise ValueError("agent tool plan result exact owner not found")
+    _assert_plan_owner(
+        occurrence=occurrence,
+        terminal=terminal,
+        action=action,
+        operation=operation,
+        preview=preview,
+        event=event,
+    )
+
+
 def _journal_insert_row(
     *, occurrence: AgentToolOccurrence, terminal: AgentToolTerminalResult, journal_id: str
 ) -> dict[str, Any]:
@@ -534,41 +596,30 @@ def _assert_exact_journal(
             raise ValueError(f"agent tool result journal {field} collision")
 
 
-def accept_acquisition_plan_tool_result_uow(
+def _accept_exact_agent_tool_result_uow(
     adapter: Any,
     *,
     occurrence: AgentToolOccurrence,
     terminal: AgentToolTerminalResult,
     attempted_slot_generation: int,
+    required_tables: tuple[str, ...],
+    lock_groups: tuple[tuple[str, ...], ...],
+    load_base_owner: Any,
+    assert_locked_owner: Any,
     lock_timeout_seconds: float = 5.0,
     fault_injection_point: str = "",
 ) -> dict[str, Any] | None:
-    """Accept one exact plan-preview result or append a late-attempt quarantine."""
+    """Shared pending-to-accepted state machine around one physical owner."""
 
     from .control_plane_live_postgres import _fetch_one_dict_row, _quote_identifier
 
     if not isinstance(occurrence, AgentToolOccurrence) or not isinstance(terminal, AgentToolTerminalResult):
-        raise ValueError("accept plan result requires exact occurrence and terminal result")
+        raise ValueError("accept tool result requires exact occurrence and terminal result")
     occurrence = occurrence.revalidated()
     terminal = terminal.revalidated()
     terminal.validate_for_occurrence(occurrence)
-    if (
-        occurrence.tool_name != "plan_acquisition"
-        or occurrence.effect_class != "commandless_action"
-        or terminal.owner_target_kind != ACQUISITION_PLAN_PREVIEW_OWNER_TARGET_KIND
-    ):
-        raise ValueError("accept plan result requires plan_acquisition preview owner")
     if type(attempted_slot_generation) is not int or attempted_slot_generation <= 0:
         raise ValueError("agent tool result attempted slot generation must be positive")
-    required_tables = (
-        "operation_events",
-        "operation_runs",
-        "agent_actions",
-        "agent_tool_result_slots",
-        "acquisition_plan_previews",
-        "agent_tool_result_attempts",
-        "agent_tool_result_journal",
-    )
     if not _runtime_dependencies(adapter, required_tables):
         return None
     allowed_faults = {"", "after_attempt_write", "after_slot_write", "after_journal_write", "after_commit"}
@@ -598,26 +649,17 @@ def accept_acquisition_plan_tool_result_uow(
             with connection.cursor() as cursor:
                 milliseconds = max(1, int((deadline - time.monotonic()) * 1000))
                 cursor.execute("SELECT set_config('lock_timeout', %s, true)", (f"{milliseconds}ms",))
-                lock_groups = (
-                    (f"operation_events:{terminal.operation_run_id}",),
-                    (f"operation_runs:id:{terminal.operation_run_id}",),
-                    (f"agent_actions:id:{terminal.action_id}",),
-                    (f"agent_tool_result_slots:id:{occurrence.result_slot_id}",),
-                    (f"acquisition_plan_previews:id:{terminal.owner_target_id}",),
-                )
                 for lock_group in lock_groups:
                     for lock_key in lock_group:
                         last_busy_key = lock_key
                         if not adapter._try_acquire_transaction_lock(cursor, lock_key):
                             raise _ResultSlotLockBusy
 
-                cursor.execute(
-                    "SELECT * FROM operation_runs WHERE operation_run_id = %s FOR UPDATE",
-                    (terminal.operation_run_id,),
+                base_owner = load_base_owner(
+                    cursor,
+                    occurrence=occurrence,
+                    terminal=terminal,
                 )
-                operation = _fetch_one_dict_row(cursor, cursor.fetchone()) or {}
-                cursor.execute("SELECT * FROM agent_actions WHERE action_id = %s FOR UPDATE", (terminal.action_id,))
-                action = _fetch_one_dict_row(cursor, cursor.fetchone()) or {}
                 cursor.execute(
                     "SELECT * FROM agent_tool_result_slots WHERE result_slot_id = %s FOR UPDATE",
                     (occurrence.result_slot_id,),
@@ -637,6 +679,20 @@ def accept_acquisition_plan_tool_result_uow(
                     (occurrence.result_slot_id,),
                 )
                 existing_journal = _fetch_one_dict_row(cursor, cursor.fetchone()) or {}
+
+                owner_asserted_for_write = False
+
+                def assert_owner_before_write() -> None:
+                    nonlocal owner_asserted_for_write
+                    if owner_asserted_for_write:
+                        return
+                    assert_locked_owner(
+                        cursor,
+                        occurrence=occurrence,
+                        terminal=terminal,
+                        base_owner=base_owner,
+                    )
+                    owner_asserted_for_write = True
 
                 if str(slot.get("status") or "") == "accepted":
                     if terminal.result_attempt_id == str(slot.get("result_attempt_id") or ""):
@@ -677,6 +733,7 @@ def accept_acquisition_plan_tool_result_uow(
                             quarantined_attempt = existing_attempt
                             replayed = True
                         else:
+                            assert_owner_before_write()
                             quarantined_attempt = _insert_dict(
                                 cursor,
                                 table_name="agent_tool_result_attempts",
@@ -705,6 +762,7 @@ def accept_acquisition_plan_tool_result_uow(
                         quarantined_attempt = existing_attempt
                         replayed = True
                     else:
+                        assert_owner_before_write()
                         quarantined_attempt = _insert_dict(
                             cursor,
                             table_name="agent_tool_result_attempts",
@@ -721,26 +779,7 @@ def accept_acquisition_plan_tool_result_uow(
                 else:
                     if existing_attempt or existing_journal:
                         raise ValueError("agent tool result pending aggregate has partial terminal rows")
-                    cursor.execute(
-                        "SELECT * FROM acquisition_plan_previews WHERE preview_id = %s FOR UPDATE",
-                        (terminal.owner_target_id,),
-                    )
-                    preview = _fetch_one_dict_row(cursor, cursor.fetchone()) or {}
-                    cursor.execute(
-                        "SELECT * FROM operation_events WHERE event_id = %s FOR UPDATE",
-                        (terminal.terminal_winner_id,),
-                    )
-                    event = _fetch_one_dict_row(cursor, cursor.fetchone()) or {}
-                    if not all((operation, action, preview, event)):
-                        raise ValueError("agent tool plan result exact owner not found")
-                    _assert_plan_owner(
-                        occurrence=occurrence,
-                        terminal=terminal,
-                        action=action,
-                        operation=operation,
-                        preview=preview,
-                        event=event,
-                    )
+                    assert_owner_before_write()
                     accepted_attempt_row = _attempt_insert_row(
                         occurrence=occurrence,
                         terminal=terminal,
@@ -819,8 +858,231 @@ def accept_acquisition_plan_tool_result_uow(
             connection.close()
 
 
+def accept_acquisition_plan_tool_result_uow(
+    adapter: Any,
+    *,
+    occurrence: AgentToolOccurrence,
+    terminal: AgentToolTerminalResult,
+    attempted_slot_generation: int,
+    lock_timeout_seconds: float = 5.0,
+    fault_injection_point: str = "",
+) -> dict[str, Any] | None:
+    """Accept one exact plan-preview result or append a late-attempt quarantine."""
+
+    if not isinstance(occurrence, AgentToolOccurrence) or not isinstance(terminal, AgentToolTerminalResult):
+        raise ValueError("accept plan result requires exact occurrence and terminal result")
+    if (
+        occurrence.tool_name != "plan_acquisition"
+        or occurrence.effect_class != "commandless_action"
+        or terminal.owner_target_kind != ACQUISITION_PLAN_PREVIEW_OWNER_TARGET_KIND
+    ):
+        raise ValueError("accept plan result requires plan_acquisition preview owner")
+    return _accept_exact_agent_tool_result_uow(
+        adapter,
+        occurrence=occurrence,
+        terminal=terminal,
+        attempted_slot_generation=attempted_slot_generation,
+        required_tables=(
+            "operation_events",
+            "operation_runs",
+            "agent_actions",
+            "agent_tool_result_slots",
+            "acquisition_plan_previews",
+            "agent_tool_result_attempts",
+            "agent_tool_result_journal",
+        ),
+        lock_groups=(
+            (f"operation_events:{terminal.operation_run_id}",),
+            (f"operation_runs:id:{terminal.operation_run_id}",),
+            (f"agent_actions:id:{terminal.action_id}",),
+            (f"agent_tool_result_slots:id:{occurrence.result_slot_id}",),
+            (f"acquisition_plan_previews:id:{terminal.owner_target_id}",),
+        ),
+        load_base_owner=_load_plan_base_owner,
+        assert_locked_owner=_assert_locked_plan_owner,
+        lock_timeout_seconds=lock_timeout_seconds,
+        fault_injection_point=fault_injection_point,
+    )
+
+
+def prepare_inspect_operation_tool_result(
+    adapter: Any,
+    *,
+    occurrence: AgentToolOccurrence,
+    result_attempt_id: str,
+    provider_call_id: str,
+    tool_call_id: str,
+    action_id: str,
+    operation_run_id: str,
+    lock_timeout_seconds: float = 5.0,
+) -> AgentToolTerminalResult | None:
+    """Read and serialize one exact Operation snapshot without result-slot writes."""
+
+    from .agent_operation_query_postgres import (
+        inspect_operation_result_lock_groups,
+        load_inspect_operation_base_owner,
+        terminal_from_locked_inspect_operation_owner,
+        validate_inspect_operation_occurrence,
+    )
+
+    if not isinstance(occurrence, AgentToolOccurrence):
+        raise ValueError("prepare inspect result requires exact occurrence")
+    occurrence = occurrence.revalidated()
+    validate_inspect_operation_occurrence(
+        occurrence,
+        action_id=action_id,
+        operation_run_id=operation_run_id,
+    )
+    required_tables = (
+        "operation_events",
+        "operation_runs",
+        "agent_actions",
+        "workflow_commands",
+    )
+    if not _read_dependencies(adapter, required_tables):
+        return None
+    timeout_seconds, deadline = _deadline_seconds(lock_timeout_seconds)
+    retry_attempt = 0
+    last_busy_key = f"operation_events:{operation_run_id}"
+    lock_groups = inspect_operation_result_lock_groups(
+        occurrence=occurrence,
+        action_id=action_id,
+        operation_run_id=operation_run_id,
+        include_result_slot=False,
+    )
+    (
+        busy_error,
+        is_retryable,
+        retry_delay,
+        max_retries,
+        poll_seconds,
+    ) = _with_retry_dependencies()
+
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise busy_error(lock_key=last_busy_key, timeout_seconds=timeout_seconds)
+        connection = adapter._connect_with_timeout(remaining)
+        try:
+            with connection.cursor() as cursor:
+                milliseconds = max(1, int((deadline - time.monotonic()) * 1000))
+                cursor.execute("SELECT set_config('lock_timeout', %s, true)", (f"{milliseconds}ms",))
+                for lock_group in lock_groups:
+                    for lock_key in lock_group:
+                        last_busy_key = lock_key
+                        if not adapter._try_acquire_transaction_lock(cursor, lock_key):
+                            raise _ResultSlotLockBusy
+                base_owner = load_inspect_operation_base_owner(
+                    cursor,
+                    action_id=action_id,
+                    operation_run_id=operation_run_id,
+                )
+                terminal = terminal_from_locked_inspect_operation_owner(
+                    cursor,
+                    occurrence=occurrence,
+                    result_attempt_id=result_attempt_id,
+                    provider_call_id=provider_call_id,
+                    tool_call_id=tool_call_id,
+                    action_id=action_id,
+                    operation_run_id=operation_run_id,
+                    base_owner=base_owner,
+                )
+            connection.commit()
+            return terminal
+        except _ResultSlotLockBusy:
+            connection.rollback()
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise busy_error(lock_key=last_busy_key, timeout_seconds=timeout_seconds)
+            time.sleep(min(poll_seconds, remaining))
+        except Exception as exc:
+            connection.rollback()
+            retry_attempt += 1
+            if is_retryable(exc) and retry_attempt < max_retries and deadline > time.monotonic():
+                time.sleep(min(retry_delay(retry_attempt), deadline - time.monotonic()))
+            else:
+                raise
+        finally:
+            connection.close()
+
+
+def accept_inspect_operation_tool_result_uow(
+    adapter: Any,
+    *,
+    occurrence: AgentToolOccurrence,
+    terminal: AgentToolTerminalResult,
+    attempted_slot_generation: int,
+    lock_timeout_seconds: float = 5.0,
+    fault_injection_point: str = "",
+) -> dict[str, Any] | None:
+    """Accept one revision-bound, read-only Operation query result."""
+
+    from .agent_operation_query_postgres import (
+        INSPECT_OPERATION_OWNER_TARGET_KIND,
+        assert_exact_inspect_operation_terminal,
+        inspect_operation_result_lock_groups,
+        load_inspect_operation_base_owner,
+        validate_inspect_operation_occurrence,
+    )
+
+    if not isinstance(occurrence, AgentToolOccurrence) or not isinstance(terminal, AgentToolTerminalResult):
+        raise ValueError("accept inspect result requires exact occurrence and terminal result")
+    validate_inspect_operation_occurrence(
+        occurrence,
+        action_id=terminal.action_id,
+        operation_run_id=terminal.operation_run_id,
+    )
+    if (
+        terminal.owner_target_kind != INSPECT_OPERATION_OWNER_TARGET_KIND
+        or terminal.owner_target_id != terminal.operation_run_id
+        or terminal.is_error
+    ):
+        raise ValueError("accept inspect result requires exact Operation event owner")
+
+    def load_owner(
+        cursor: Any,
+        *,
+        occurrence: AgentToolOccurrence,
+        terminal: AgentToolTerminalResult,
+    ) -> dict[str, dict[str, Any]]:
+        del occurrence
+        return load_inspect_operation_base_owner(
+            cursor,
+            action_id=terminal.action_id,
+            operation_run_id=terminal.operation_run_id,
+        )
+
+    return _accept_exact_agent_tool_result_uow(
+        adapter,
+        occurrence=occurrence,
+        terminal=terminal,
+        attempted_slot_generation=attempted_slot_generation,
+        required_tables=(
+            "operation_events",
+            "operation_runs",
+            "agent_actions",
+            "workflow_commands",
+            "agent_tool_result_slots",
+            "agent_tool_result_attempts",
+            "agent_tool_result_journal",
+        ),
+        lock_groups=inspect_operation_result_lock_groups(
+            occurrence=occurrence,
+            action_id=terminal.action_id,
+            operation_run_id=terminal.operation_run_id,
+            include_result_slot=True,
+        ),
+        load_base_owner=load_owner,
+        assert_locked_owner=assert_exact_inspect_operation_terminal,
+        lock_timeout_seconds=lock_timeout_seconds,
+        fault_injection_point=fault_injection_point,
+    )
+
+
 __all__ = [
     "ACQUISITION_PLAN_PREVIEW_OWNER_TARGET_KIND",
     "accept_acquisition_plan_tool_result_uow",
+    "accept_inspect_operation_tool_result_uow",
+    "prepare_inspect_operation_tool_result",
     "reserve_agent_tool_result_slot",
 ]
