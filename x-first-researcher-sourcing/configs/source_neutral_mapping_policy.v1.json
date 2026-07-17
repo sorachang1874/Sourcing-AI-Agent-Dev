@@ -127,7 +127,7 @@
     "consecutive_materially_distinct_zero_waves": 2,
     "zero_dimensions": [
       "new_stable_post_id_count",
-      "luna_qualified_state_upgrade_count"
+      "authorized_semantic_state_transition_count"
     ]
   },
   "kpis": {
@@ -135,7 +135,7 @@
       "execution_compliance",
       "stable_post_id_retrieval",
       "exact_hydration",
-      "luna_qualified_state_upgrades"
+      "luna_diagnostic_review_coverage"
     ],
     "model_call_counts_allowed": false,
     "aggregate_must_be_candidate_free": true,

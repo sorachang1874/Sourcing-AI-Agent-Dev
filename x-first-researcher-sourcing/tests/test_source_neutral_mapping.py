@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import inspect
 import json
 import tempfile
 import unittest
@@ -17,6 +18,7 @@ from x_first.recall_pool_schema import assert_schema_valid
 from x_first.source_neutral_mapping import (
     AGGREGATE_SCHEMA_FILE,
     CALIBRATION_SCHEMA_FILE,
+    LUNA_AXIS_REDUCTION_SCHEMA_FILE,
     MANIFEST_SCHEMA_FILE,
     PLAN_SCHEMA_FILE,
     POLICY_SCHEMA_FILE,
@@ -28,6 +30,7 @@ from x_first.source_neutral_mapping import (
     build_exact_post_hydration_projection,
     build_executed_wave_facts,
     build_frontier_queues,
+    build_luna_axis_reduction,
     build_luna_input_queue,
     build_luna_state_review_projection,
     build_mapping_session_projection,
@@ -214,6 +217,8 @@ def _hydration_projection(
     index: int = 1,
     *,
     session_namespace: str = "fixture-hydration",
+    session_id_override: str | None = None,
+    request_id_override: str | None = None,
 ) -> ExactPostHydrationProjection:
     text = f"Synthetic source-bound technical Post {index}."
     terminal = {
@@ -227,8 +232,8 @@ def _hydration_projection(
         "full_text_sha256": hashlib.sha256(text.encode()).hexdigest(),
         "lookup_status": "matched",
     }
-    session_id = f"{session_namespace}-session-{index:04d}"
-    request_id = f"{session_namespace}-request-{index:04d}"
+    session_id = session_id_override or f"{session_namespace}-session-{index:04d}"
+    request_id = request_id_override or f"{session_namespace}-request-{index:04d}"
     precommit = fixture_grok_session_precommit(
         session_id=session_id,
         request_id=request_id,
@@ -253,8 +258,9 @@ def _luna_projection(
     hydration: ExactPostHydrationProjection,
     *,
     index: int,
-    upgrade: bool = False,
     review_namespace: str = "fixture_luna_review",
+    lab_state: str = "current",
+    pretraining_state: str = "current",
 ):
     terminal = json.loads(hydration.terminal_json)
     result = {
@@ -265,10 +271,10 @@ def _luna_projection(
         "hydration_projection_sha256": hydration.projection_sha256,
         "source_text_sha256": hashlib.sha256(hydration.source_text).hexdigest(),
         "terminal_status": "reviewed",
-        "lab_affiliation_state": "current",
-        "pretraining_experience_state": "current",
-        "qualified_state_upgrade": upgrade,
-        "upgrade_id": f"fixture_upgrade_{index:04d}" if upgrade else None,
+        "authority_status": "diagnostic_only_unattested",
+        "model_claim_scope": "state_proposal_only",
+        "proposed_lab_affiliation_state": lab_state,
+        "proposed_pretraining_experience_state": pretraining_state,
     }
     return build_luna_state_review_projection(hydration_projection=hydration, result=result)
 
@@ -739,7 +745,206 @@ class SourceNeutralMappingTests(unittest.TestCase):
                 policy=policy,
             )
 
-    def test_structural_stop_requires_empty_queues_and_two_distinct_double_zero_waves(self) -> None:
+    def test_execution_identity_registry_rejects_cross_lane_and_campaign_reuse(self) -> None:
+        source = _manifest()
+        manifest = freeze_candidate_manifest(
+            manifest_id="fixture_identity_registry_manifest_v1",
+            lab_descriptor=source["lab_descriptor"],
+            candidates=[source["candidates"][0]],
+        )
+        policy = load_policy()
+        plan = plan_wave_p(manifest, policy, plan_id="fixture_identity_registry_plan_v1")
+        sessions = _all_session_projections(
+            manifest,
+            plan,
+            session_namespace="fixture-identity-map",
+        )
+        frontier = build_frontier_queues(
+            manifest=manifest,
+            plan=plan,
+            session_projections=sessions,
+            policy=policy,
+        )
+        task = frontier["thread_hydration_queue"][0]
+        mapping_session_id = sessions[0].grok_precommit.expected_session_id
+        mapping_request_id = sessions[0].grok_precommit.expected_request_id
+        same_session = _hydration_projection(
+            task,
+            session_id_override=mapping_session_id,
+            request_id_override="fixture-identity-hydration-request-0001",
+        )
+        with self.assertRaisesRegex(SourceNeutralMappingError, "execution_identity_registry_duplicate"):
+            build_luna_input_queue(
+                manifest=manifest,
+                plan=plan,
+                session_projections=sessions,
+                hydration_projections=[same_session],
+                policy=policy,
+            )
+        same_request = _hydration_projection(
+            task,
+            session_id_override="fixture-identity-hydration-session-0002",
+            request_id_override=mapping_request_id,
+        )
+        with self.assertRaisesRegex(SourceNeutralMappingError, "execution_identity_registry_duplicate"):
+            build_luna_input_queue(
+                manifest=manifest,
+                plan=plan,
+                session_projections=sessions,
+                hydration_projections=[same_request],
+                policy=policy,
+            )
+
+        hydration = _hydration_projection(task, session_namespace="fixture-identity-base-hydration")
+        luna = _luna_projection(hydration, index=1, review_namespace="fixture_identity_base_luna")
+        base = build_executed_wave_facts(
+            campaign_id="fixture_identity_campaign_v1",
+            wave_id="identity_base_wave",
+            manifest=manifest,
+            policy=policy,
+            plan=plan,
+            session_projections=sessions,
+            hydration_projections=[hydration],
+            luna_review_projections=[luna],
+        )
+        next_plan = plan_wave_p(manifest, policy, plan_id="fixture_identity_registry_plan_v2")
+        next_sessions = _all_session_projections(
+            manifest,
+            next_plan,
+            session_namespace="fixture-identity-next-map",
+        )
+        with self.assertRaisesRegex(SourceNeutralMappingError, "reused_without_cache_projection"):
+            build_executed_wave_facts(
+                campaign_id="fixture_identity_campaign_v1",
+                wave_id="identity_reuse_wave",
+                manifest=manifest,
+                policy=policy,
+                plan=next_plan,
+                session_projections=next_sessions,
+                hydration_projections=[hydration],
+                luna_review_projections=[luna],
+                predecessor_wave_facts=base,
+            )
+
+    def test_diagnostic_luna_reducer_is_complete_set_bound_and_never_authorizes_transitions(self) -> None:
+        source = _manifest()
+        candidate = copy.deepcopy(source["candidates"][0])
+        candidate["lab_affiliation_prior"] = {"state": "current", "evidence_status": "fixture_asserted"}
+        candidate["pretraining_experience_prior"] = {
+            "state": "current",
+            "evidence_status": "fixture_asserted",
+        }
+        manifest = freeze_candidate_manifest(
+            manifest_id="fixture_luna_reducer_manifest_v1",
+            lab_descriptor=source["lab_descriptor"],
+            candidates=[candidate],
+        )
+        policy = load_policy()
+        plan = plan_wave_p(manifest, policy, plan_id="fixture_luna_reducer_plan_v1")
+        sessions = _all_session_projections(
+            manifest,
+            plan,
+            references_per_candidate=2,
+            session_namespace="fixture-luna-reducer-map",
+        )
+        frontier = build_frontier_queues(
+            manifest=manifest,
+            plan=plan,
+            session_projections=sessions,
+            policy=policy,
+        )
+        hydrations = [
+            _hydration_projection(task, index, session_namespace="fixture-luna-reducer-hydration")
+            for index, task in enumerate(frontier["thread_hydration_queue"], 1)
+        ]
+        first = _luna_projection(
+            hydrations[0],
+            index=1,
+            review_namespace="fixture_luna_reducer",
+            lab_state="unsupported",
+            pretraining_state="unsupported",
+        )
+        partial = build_luna_axis_reduction(
+            manifest=manifest,
+            plan=plan,
+            session_projections=sessions,
+            hydration_projections=hydrations,
+            luna_review_projections=[first],
+            policy=policy,
+        )
+        assert_schema_valid(partial, LUNA_AXIS_REDUCTION_SCHEMA_FILE)
+        self.assertEqual(partial["coverage_status"], "incomplete")
+        self.assertEqual(partial["authorized_transition_count"], 0)
+        self.assertTrue(all(row["diagnostic_proposed_state"] is None for row in partial["candidate_axis_rows"]))
+        self.assertTrue(all(row["resolved_state"] == "current" for row in partial["candidate_axis_rows"]))
+
+        second = _luna_projection(
+            hydrations[1],
+            index=2,
+            review_namespace="fixture_luna_reducer",
+            lab_state="historical",
+            pretraining_state="historical",
+        )
+        complete = build_luna_axis_reduction(
+            manifest=manifest,
+            plan=plan,
+            session_projections=sessions,
+            hydration_projections=hydrations,
+            luna_review_projections=[first, second],
+            policy=policy,
+        )
+        shuffled = build_luna_axis_reduction(
+            manifest=manifest,
+            plan=plan,
+            session_projections=sessions,
+            hydration_projections=hydrations,
+            luna_review_projections=[second, first],
+            policy=policy,
+        )
+        self.assertEqual(complete, shuffled)
+        self.assertEqual(complete["coverage_status"], "complete")
+        self.assertEqual(len(complete["candidate_axis_rows"]), 2)
+        self.assertTrue(all(row["diagnostic_proposed_state"] == "ambiguous" for row in complete["candidate_axis_rows"]))
+        self.assertTrue(all(row["resolved_state"] == "current" for row in complete["candidate_axis_rows"]))
+        self.assertTrue(all(row["transition_id"] is None for row in complete["candidate_axis_rows"]))
+
+        forged_result = json.loads(first.result_json)
+        forged_result["qualified_state_upgrade"] = True
+        forged_result["upgrade_id"] = "caller_forged_upgrade"
+        with self.assertRaisesRegex(SourceNeutralMappingError, "luna_review_schema_invalid"):
+            build_luna_state_review_projection(
+                hydration_projection=hydrations[0],
+                result=forged_result,
+            )
+
+        aggregate = build_candidate_free_aggregate(
+            manifest=manifest,
+            policy=policy,
+            plan=plan,
+            session_projections=sessions,
+            hydration_projections=hydrations,
+            luna_review_projections=[first],
+        )
+        self.assertEqual(aggregate["semantic_review_coverage_status"], "incomplete")
+        self.assertEqual(aggregate["authorized_semantic_transition_count"], 0)
+        self.assertEqual(aggregate["metric_denominators"]["luna_diagnostic_review_coverage"], 2)
+        self.assertEqual(aggregate["metric_numerators"]["luna_diagnostic_review_coverage"], 1)
+        partial_facts = build_executed_wave_facts(
+            campaign_id="fixture_luna_diagnostic_campaign_v1",
+            wave_id="fixture_luna_partial_wave",
+            manifest=manifest,
+            policy=policy,
+            plan=plan,
+            session_projections=sessions,
+            hydration_projections=hydrations,
+            luna_review_projections=[first],
+        )
+        remaining = json.loads(partial_facts.remaining_queues_json)
+        self.assertEqual(len(remaining["luna_input_queue"]), 1)
+        self.assertEqual(partial_facts.semantic_review_coverage_status, "incomplete")
+        self.assertEqual(partial_facts.authorized_semantic_transition_ids, ())
+
+    def test_campaign_lineage_strategy_and_diagnostic_stop_are_fail_closed(self) -> None:
         source_manifest = _manifest()
         candidates = copy.deepcopy(source_manifest["candidates"])
         for candidate in candidates:
@@ -768,6 +973,7 @@ class SourceNeutralMappingTests(unittest.TestCase):
             plan_id: str,
             policy: dict,
             namespace: str,
+            predecessor: ExecutedWaveFacts | None,
         ) -> ExecutedWaveFacts:
             plan = plan_wave_p(manifest, policy, plan_id=plan_id)
             sessions = _all_session_projections(
@@ -800,98 +1006,75 @@ class SourceNeutralMappingTests(unittest.TestCase):
                 for index, hydration in enumerate(hydrations, 1)
             ]
             return build_executed_wave_facts(
+                campaign_id="fixture_mapping_campaign_v1",
                 wave_id=wave_id,
                 manifest=manifest,
                 policy=policy,
                 plan=plan,
-                strategy_payload={
-                    "strategy_id": plan["plan_id"],
-                    "strategy_family": "wave_p",
-                    "plan_sha256": plan["plan_sha256"],
-                    "query_surface": "candidate_authored",
-                    "mode": policy["wave_p"]["champion_cells"][0]["mode"],
-                    "time_window": None,
-                },
                 session_projections=sessions,
                 hydration_projections=hydrations,
                 luna_review_projections=luna,
-                prior_stable_post_ids=[task["stable_post_id"] for task in frontier["thread_hydration_queue"]],
+                predecessor_wave_facts=predecessor,
             )
 
-        waves = [
-            facts(
-                wave_id="wave_a",
-                plan_id="fixture_zero_top_plan_v1",
-                policy=top_policy,
-                namespace="fixture-zero-top",
-            ),
-            facts(
-                wave_id="wave_b",
-                plan_id="fixture_zero_latest_plan_v1",
-                policy=latest_policy,
-                namespace="fixture-zero-latest",
-            ),
-        ]
-        empty = json.loads(waves[-1].remaining_queues_json)
+        base = facts(
+            wave_id="wave_base",
+            plan_id="fixture_base_top_plan_v1",
+            policy=top_policy,
+            namespace="fixture-base-top",
+            predecessor=None,
+        )
+        top_zero = facts(
+            wave_id="wave_top_zero",
+            plan_id="fixture_zero_top_plan_v2",
+            policy=top_policy,
+            namespace="fixture-zero-top",
+            predecessor=base,
+        )
+        latest_zero = facts(
+            wave_id="wave_latest_zero",
+            plan_id="fixture_zero_latest_plan_v1",
+            policy=latest_policy,
+            namespace="fixture-zero-latest",
+            predecessor=top_zero,
+        )
+        waves = [top_zero, latest_zero]
+        self.assertGreater(len(base.new_stable_post_ids), 0)
+        self.assertEqual(top_zero.new_stable_post_ids, ())
+        self.assertEqual(latest_zero.new_stable_post_ids, ())
+        self.assertEqual(base.strategy_signature_sha256, top_zero.strategy_signature_sha256)
+        self.assertNotEqual(top_zero.strategy_signature_sha256, latest_zero.strategy_signature_sha256)
+        self.assertEqual(top_zero.campaign_ordinal, 1)
+        self.assertEqual(latest_zero.campaign_ordinal, 2)
+        self.assertEqual(latest_zero.predecessor_wave_facts_sha256, top_zero.wave_facts_sha256)
+        builder_parameters = inspect.signature(build_executed_wave_facts).parameters
+        self.assertNotIn("prior_stable_post_ids", builder_parameters)
+        self.assertNotIn("strategy_payload", builder_parameters)
+        empty = json.loads(latest_zero.remaining_queues_json)
         self.assertTrue(all(not empty[key] for key in latest_policy["queues"]["queue_order"]))
-        self.assertTrue(structural_stop(queues=empty, recent_waves=waves, policy=latest_policy)["stop"])
+        stopped = structural_stop(queues=empty, recent_waves=waves, policy=latest_policy)
+        self.assertFalse(stopped["stop"])
+        self.assertTrue(stopped["lineage_adjacent"])
+        self.assertFalse(stopped["semantic_transition_authoritative"])
+        self.assertEqual(stopped["reason"], "semantic_transition_authority_unavailable")
+        skipped = structural_stop(queues=empty, recent_waves=[base, latest_zero], policy=latest_policy)
+        self.assertFalse(skipped["stop"])
+        self.assertFalse(skipped["lineage_adjacent"])
         nonempty = copy.deepcopy(empty)
         nonempty["luna_input_queue"] = [{}]
         self.assertFalse(structural_stop(queues=nonempty, recent_waves=waves, policy=latest_policy)["stop"])
-        forged = replace(waves[1], strategy_signature_sha256="c" * 64)
-        self.assertFalse(structural_stop(queues=empty, recent_waves=[waves[0], forged], policy=latest_policy)["stop"])
+        forged = replace(latest_zero, semantic_transition_authority="receipt_first_authoritative_complete")
+        self.assertFalse(structural_stop(queues=empty, recent_waves=[top_zero, forged], policy=latest_policy)["stop"])
+        forged = replace(latest_zero, prior_frontier_sha256="c" * 64)
+        self.assertFalse(structural_stop(queues=empty, recent_waves=[top_zero, forged], policy=latest_policy)["stop"])
+        forged = replace(latest_zero, campaign_ordinal=9)
+        self.assertFalse(structural_stop(queues=empty, recent_waves=[top_zero, forged], policy=latest_policy)["stop"])
+        forged = replace(latest_zero, campaign_id="fixture_forged_campaign_v1")
+        self.assertFalse(structural_stop(queues=empty, recent_waves=[top_zero, forged], policy=latest_policy)["stop"])
 
         malformed_empty = copy.deepcopy(empty)
         malformed_empty["challenger_queue"] = ""
         self.assertFalse(structural_stop(queues=malformed_empty, recent_waves=waves, policy=latest_policy)["stop"])
-
-        sparse_waves: list[ExecutedWaveFacts] = []
-        for wave_id, plan_id, policy, namespace in (
-            ("sparse_wave_a", "fixture_sparse_top_plan_v1", top_policy, "fixture-sparse-top"),
-            (
-                "sparse_wave_b",
-                "fixture_sparse_latest_plan_v1",
-                latest_policy,
-                "fixture-sparse-latest",
-            ),
-        ):
-            plan = plan_wave_p(manifest, policy, plan_id=plan_id)
-            sessions = _all_session_projections(
-                manifest,
-                plan,
-                include_references=False,
-                session_namespace=namespace,
-                policy=policy,
-            )
-            sparse_waves.append(
-                build_executed_wave_facts(
-                    wave_id=wave_id,
-                    manifest=manifest,
-                    policy=policy,
-                    plan=plan,
-                    strategy_payload={
-                        "strategy_id": plan["plan_id"],
-                        "strategy_family": "wave_p",
-                        "plan_sha256": plan["plan_sha256"],
-                        "query_surface": "candidate_authored",
-                        "mode": policy["wave_p"]["champion_cells"][0]["mode"],
-                        "time_window": None,
-                    },
-                    session_projections=sessions,
-                    hydration_projections=[],
-                    luna_review_projections=[],
-                    prior_stable_post_ids=[],
-                )
-            )
-        sparse_remaining = json.loads(sparse_waves[-1].remaining_queues_json)
-        self.assertGreater(len(sparse_remaining["challenger_queue"]), 0)
-        self.assertFalse(
-            structural_stop(
-                queues=empty,
-                recent_waves=sparse_waves,
-                policy=latest_policy,
-            )["stop"]
-        )
 
     def test_structural_stop_derives_distinctness_and_rejects_flags_or_malformed_hashes(self) -> None:
         empty = {key: [] for key in load_policy()["queues"]["queue_order"]}
@@ -900,13 +1083,13 @@ class SourceNeutralMappingTests(unittest.TestCase):
                 "wave_id": "wave_a",
                 "strategy_signature_sha256": "a" * 64,
                 "new_stable_post_id_count": 0,
-                "luna_qualified_state_upgrade_count": 0,
+                "authorized_semantic_state_transition_count": 0,
             },
             {
                 "wave_id": "wave_b",
                 "strategy_signature_sha256": "a" * 64,
                 "new_stable_post_id_count": 0,
-                "luna_qualified_state_upgrade_count": 0,
+                "authorized_semantic_state_transition_count": 0,
             },
         ]
         self.assertFalse(structural_stop(queues=empty, recent_waves=waves, policy=load_policy())["stop"])
@@ -932,7 +1115,7 @@ class SourceNeutralMappingTests(unittest.TestCase):
         hydrations = [
             _hydration_projection(task, index) for index, task in enumerate(frontier["thread_hydration_queue"][:2], 1)
         ]
-        luna = [_luna_projection(hydrations[0], index=1, upgrade=True)]
+        luna = [_luna_projection(hydrations[0], index=1)]
         aggregate = build_candidate_free_aggregate(
             manifest=manifest,
             policy=policy,
@@ -948,12 +1131,14 @@ class SourceNeutralMappingTests(unittest.TestCase):
                 "execution_compliance",
                 "stable_post_id_retrieval",
                 "exact_hydration",
-                "luna_qualified_state_upgrades",
+                "luna_diagnostic_review_coverage",
             ],
         )
         self.assertFalse(aggregate["model_call_counts_included"])
         self.assertEqual(aggregate["metric_numerators"]["exact_hydration"], 2)
-        self.assertEqual(aggregate["metric_denominators"]["luna_qualified_state_upgrades"], 1)
+        self.assertEqual(aggregate["metric_denominators"]["luna_diagnostic_review_coverage"], 2)
+        self.assertEqual(aggregate["metric_numerators"]["luna_diagnostic_review_coverage"], 1)
+        self.assertEqual(aggregate["semantic_review_coverage_status"], "incomplete")
         serialized = json.dumps(aggregate).casefold()
         for token in ("candidate_ref", "handle", "profile_url", "source_text", "excerpt"):
             self.assertNotIn(token, serialized)
@@ -971,7 +1156,8 @@ class SourceNeutralMappingTests(unittest.TestCase):
         self.assertEqual(empty["metric_numerators"]["execution_compliance"], 0)
         self.assertEqual(empty["metric_numerators"]["stable_post_id_retrieval"], 0)
         self.assertEqual(empty["metric_numerators"]["exact_hydration"], 0)
-        self.assertEqual(empty["metric_numerators"]["luna_qualified_state_upgrades"], 0)
+        self.assertEqual(empty["metric_numerators"]["luna_diagnostic_review_coverage"], 0)
+        self.assertEqual(empty["semantic_review_coverage_status"], "not_applicable")
         self.assertIsNone(empty["metric_rates"]["stable_post_id_retrieval"])
 
         sessions = _all_session_projections(manifest, plan)
@@ -982,7 +1168,7 @@ class SourceNeutralMappingTests(unittest.TestCase):
             policy=policy,
         )
         hydration = _hydration_projection(frontier["thread_hydration_queue"][0])
-        luna = _luna_projection(hydration, index=1, upgrade=True)
+        luna = _luna_projection(hydration, index=1)
         with self.assertRaisesRegex(SourceNeutralMappingError, "hydration_binding"):
             build_candidate_free_aggregate(
                 manifest=manifest,

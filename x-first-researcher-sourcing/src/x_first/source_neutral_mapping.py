@@ -39,6 +39,7 @@ AGGREGATE_SCHEMA_VERSION = "x.source_neutral.mapping.candidate_free_aggregate.v1
 CALIBRATION_SCHEMA_VERSION = "x.source_neutral.mapping.calibration_aggregate.v1"
 EXACT_HYDRATION_SCHEMA_VERSION = "x.source_neutral.mapping.exact_post_hydration.v1"
 LUNA_REVIEW_SCHEMA_VERSION = "x.source_neutral.mapping.luna_state_review.v1"
+LUNA_AXIS_REDUCTION_SCHEMA_VERSION = "x.source_neutral.mapping.luna_axis_reduction.v1"
 
 POLICY_SCHEMA_FILE = "x.source_neutral.mapping.policy.v1.schema.json"
 MANIFEST_SCHEMA_FILE = "x.source_neutral.mapping.candidate_manifest.v1.schema.json"
@@ -48,6 +49,7 @@ AGGREGATE_SCHEMA_FILE = "x.source_neutral.mapping.candidate_free_aggregate.v1.sc
 CALIBRATION_SCHEMA_FILE = "x.source_neutral.mapping.calibration_aggregate.v1.schema.json"
 EXACT_HYDRATION_SCHEMA_FILE = "x.source_neutral.mapping.exact_post_hydration.v1.schema.json"
 LUNA_REVIEW_SCHEMA_FILE = "x.source_neutral.mapping.luna_state_review.v1.schema.json"
+LUNA_AXIS_REDUCTION_SCHEMA_FILE = "x.source_neutral.mapping.luna_axis_reduction.v1.schema.json"
 
 CONTRACT_SCHEMA_FILES = (
     POLICY_SCHEMA_FILE,
@@ -56,6 +58,7 @@ CONTRACT_SCHEMA_FILES = (
     RECEIPT_SCHEMA_FILE,
     EXACT_HYDRATION_SCHEMA_FILE,
     LUNA_REVIEW_SCHEMA_FILE,
+    LUNA_AXIS_REDUCTION_SCHEMA_FILE,
     AGGREGATE_SCHEMA_FILE,
     CALIBRATION_SCHEMA_FILE,
 )
@@ -108,7 +111,13 @@ class ExactPostHydrationProjection:
 
 @dataclass(frozen=True)
 class LunaStateReviewProjection:
-    """Canonical Luna result bound to one exact hydration projection."""
+    """Unattested diagnostic state proposal bound to one exact hydration.
+
+    This projection deliberately carries no transition authority.  A future
+    receipt-first model execution contract may consume the same source-bound
+    hydration, but caller-created result JSON can never authorize upgrades or
+    structural stopping.
+    """
 
     result_json: bytes
     result_sha256: str
@@ -122,7 +131,14 @@ class ExecutedWaveFacts:
     relation and digest instead of treating dataclass identity as authority.
     """
 
+    campaign_id: str
+    campaign_ordinal: int
     wave_id: str
+    predecessor_wave_facts: ExecutedWaveFacts | None
+    predecessor_wave_facts_sha256: str | None
+    prior_frontier_sha256: str
+    cumulative_stable_post_ids: tuple[str, ...]
+    cumulative_frontier_sha256: str
     manifest_json: bytes
     policy_json: bytes
     plan_json: bytes
@@ -130,7 +146,6 @@ class ExecutedWaveFacts:
     session_projections: tuple[MappingSessionProjection, ...]
     hydration_projections: tuple[ExactPostHydrationProjection, ...]
     luna_review_projections: tuple[LunaStateReviewProjection, ...]
-    prior_stable_post_ids: tuple[str, ...]
     strategy_signature_sha256: str
     planned_work_item_ids: tuple[str, ...]
     completed_work_item_ids: tuple[str, ...]
@@ -141,9 +156,14 @@ class ExecutedWaveFacts:
     exact_hydration_projection_sha256s: tuple[str, ...]
     luna_result_sha256s: tuple[str, ...]
     new_stable_post_ids: tuple[str, ...]
-    luna_qualified_upgrade_ids: tuple[str, ...]
+    luna_axis_reduction_json: bytes
+    luna_axis_reduction_sha256: str
+    semantic_review_coverage_status: str
+    semantic_transition_authority: str
+    authorized_semantic_transition_ids: tuple[str, ...]
     remaining_queues_json: bytes
     remaining_queue_state_sha256: str
+    wave_facts_sha256: str
 
 
 def project_root() -> Path:
@@ -309,7 +329,7 @@ def validate_policy(policy: Any) -> None:
         "execution_compliance",
         "stable_post_id_retrieval",
         "exact_hydration",
-        "luna_qualified_state_upgrades",
+        "luna_diagnostic_review_coverage",
     ]
     if policy["kpis"]["denominator_registry"] != expected_denominators:
         raise SourceNeutralMappingError("mapping_policy_denominator_registry_invalid")
@@ -1307,6 +1327,160 @@ def _replay_luna_review_projection(
     return result
 
 
+def _review_coverage_status(expected: int, completed: int) -> str:
+    if expected == 0:
+        return "not_applicable"
+    if completed == expected:
+        return "complete"
+    if completed == 0:
+        return "not_started"
+    return "incomplete"
+
+
+def _collect_luna_reviews(
+    *,
+    hydration_by_sha: Mapping[str, ExactPostHydrationProjection],
+    luna_review_projections: Sequence[LunaStateReviewProjection],
+) -> dict[str, dict[str, Any]]:
+    if type(luna_review_projections) not in {list, tuple}:
+        raise SourceNeutralMappingError("luna_review_projections_invalid")
+    checked: dict[str, dict[str, Any]] = {}
+    review_ids: set[str] = set()
+    for projection in luna_review_projections:
+        if type(projection) is not LunaStateReviewProjection:
+            raise SourceNeutralMappingError("luna_review_projection_required")
+        raw = strict_load_json_bytes(projection.result_json, error="luna_review_projection_result_invalid")
+        hydration_sha = raw.get("hydration_projection_sha256")
+        if hydration_sha not in hydration_by_sha or hydration_sha in checked or raw.get("review_id") in review_ids:
+            raise SourceNeutralMappingError("luna_review_coverage_invalid")
+        if raw.get("authority_status") != "diagnostic_only_unattested":
+            raise SourceNeutralMappingError("luna_review_authority_invalid")
+        review_ids.add(raw["review_id"])
+        checked[hydration_sha] = _replay_luna_review_projection(
+            projection,
+            hydration_projection=hydration_by_sha[hydration_sha],
+        )
+    return checked
+
+
+def _build_luna_axis_reduction(
+    *,
+    manifest: Mapping[str, Any],
+    hydration_by_sha: Mapping[str, ExactPostHydrationProjection],
+    checked_luna: Mapping[str, Mapping[str, Any]],
+) -> dict[str, Any]:
+    """Reduce diagnostic Post proposals once per candidate/axis/version.
+
+    Caller-created Luna proposals are preserved for analysis, but the frozen
+    manifest prior remains the resolved state and no transition is authorized.
+    This prevents a selected Post, repeated Posts, or a contradictory model run
+    from upgrading or downgrading a candidate state.
+    """
+
+    validate_candidate_manifest(manifest)
+    if any(key not in hydration_by_sha for key in checked_luna):
+        raise SourceNeutralMappingError("luna_axis_reduction_hydration_unknown")
+    expected_by_candidate: dict[str, int] = {row["candidate_ref"]: 0 for row in manifest["candidates"]}
+    expected_evidence_by_candidate: dict[str, list[str]] = {row["candidate_ref"]: [] for row in manifest["candidates"]}
+    reviewed_by_candidate: dict[str, list[tuple[str, Mapping[str, Any]]]] = {
+        row["candidate_ref"]: [] for row in manifest["candidates"]
+    }
+    for hydration_sha, projection in hydration_by_sha.items():
+        terminal = strict_load_json_bytes(
+            projection.terminal_json,
+            error="luna_axis_reduction_hydration_terminal_invalid",
+        )
+        candidate_ref = terminal["candidate_ref"]
+        if candidate_ref not in expected_by_candidate:
+            raise SourceNeutralMappingError("luna_axis_reduction_candidate_unknown")
+        expected_by_candidate[candidate_ref] += 1
+        expected_evidence_by_candidate[candidate_ref].append(hydration_sha)
+        if hydration_sha in checked_luna:
+            reviewed_by_candidate[candidate_ref].append((hydration_sha, checked_luna[hydration_sha]))
+
+    rows: list[dict[str, Any]] = []
+    axis_fields = (
+        ("lab_affiliation", "lab_affiliation_prior", "proposed_lab_affiliation_state"),
+        (
+            "pretraining_experience",
+            "pretraining_experience_prior",
+            "proposed_pretraining_experience_state",
+        ),
+    )
+    for candidate in manifest["candidates"]:
+        candidate_ref = candidate["candidate_ref"]
+        expected = expected_by_candidate[candidate_ref]
+        reviewed = sorted(reviewed_by_candidate[candidate_ref], key=lambda item: item[0])
+        completed = len(reviewed)
+        row_coverage = "not_applicable" if expected == 0 else _review_coverage_status(expected, completed)
+        for axis, prior_field, proposal_field in axis_fields:
+            proposed_states = {item[1][proposal_field] for item in reviewed}
+            proposed_state: str | None
+            if row_coverage != "complete" or not proposed_states:
+                proposed_state = None
+            elif len(proposed_states) == 1:
+                proposed_state = next(iter(proposed_states))
+            else:
+                proposed_state = "ambiguous"
+            prior = candidate[prior_field]
+            expected_evidence = sorted(expected_evidence_by_candidate[candidate_ref])
+            reviewed_evidence = [item[0] for item in reviewed]
+            proposal_set = [
+                {
+                    "hydration_projection_sha256": hydration_sha,
+                    "proposed_state": result[proposal_field],
+                }
+                for hydration_sha, result in reviewed
+            ]
+            state_version_sha256 = canonical_sha256(
+                {
+                    "candidate_manifest_sha256": manifest["manifest_sha256"],
+                    "candidate_ref": candidate_ref,
+                    "axis": axis,
+                    "frozen_prior": prior,
+                }
+            )
+            rows.append(
+                {
+                    "candidate_ref": candidate_ref,
+                    "axis": axis,
+                    "state_version_sha256": state_version_sha256,
+                    "prior_state": prior["state"],
+                    "prior_evidence_status": prior["evidence_status"],
+                    "expected_evidence_count": expected,
+                    "reviewed_evidence_count": completed,
+                    "expected_evidence_manifest_sha256": canonical_sha256(expected_evidence),
+                    "reviewed_evidence_manifest_sha256": canonical_sha256(reviewed_evidence),
+                    "proposal_set_sha256": canonical_sha256(proposal_set),
+                    "coverage_status": row_coverage,
+                    "diagnostic_proposed_state": proposed_state,
+                    "resolved_state": prior["state"],
+                    "transition_status": "not_authorized",
+                    "transition_id": None,
+                }
+            )
+    unique_row_keys = {(row["candidate_ref"], row["axis"], row["state_version_sha256"]) for row in rows}
+    if len(rows) != len(manifest["candidates"]) * 2 or len(unique_row_keys) != len(rows):
+        raise SourceNeutralMappingError("luna_axis_reduction_row_cardinality_invalid")
+    expected_total = len(hydration_by_sha)
+    completed_total = len(checked_luna)
+    payload: dict[str, Any] = {
+        "schema_version": LUNA_AXIS_REDUCTION_SCHEMA_VERSION,
+        "reducer_version": "source_neutral_mapping_luna_axis_reducer.v1",
+        "candidate_manifest_sha256": manifest["manifest_sha256"],
+        "expected_review_count": expected_total,
+        "completed_review_count": completed_total,
+        "coverage_status": _review_coverage_status(expected_total, completed_total),
+        "transition_authority": "diagnostic_only_unattested",
+        "candidate_axis_rows": rows,
+        "authorized_transition_count": 0,
+        "reduction_sha256": "",
+    }
+    payload["reduction_sha256"] = _content_sha256(payload, "reduction_sha256")
+    assert_schema_valid(payload, LUNA_AXIS_REDUCTION_SCHEMA_FILE)
+    return payload
+
+
 def _validated_hydration_outputs(
     *,
     manifest: Mapping[str, Any],
@@ -1359,6 +1533,14 @@ def _validated_hydration_outputs(
                 "review_purpose": "lab_and_pretraining_temporal_state_transition",
             }
         )
+    mapping_session_ids = [projection.grok_precommit.expected_session_id for projection in session_projections]
+    mapping_request_ids = [projection.grok_precommit.expected_request_id for projection in session_projections]
+    hydration_session_ids = [projection.grok_precommit.expected_session_id for projection in hydration_projections]
+    hydration_request_ids = [projection.grok_precommit.expected_request_id for projection in hydration_projections]
+    all_session_ids = mapping_session_ids + hydration_session_ids
+    all_request_ids = mapping_request_ids + hydration_request_ids
+    if len(all_session_ids) != len(set(all_session_ids)) or len(all_request_ids) != len(set(all_request_ids)):
+        raise SourceNeutralMappingError("execution_identity_registry_duplicate")
     return output, checked_by_sha
 
 
@@ -1380,59 +1562,109 @@ def build_luna_input_queue(
     return output
 
 
-def _validate_strategy_payload(value: Any, *, plan: Mapping[str, Any]) -> Mapping[str, Any]:
-    payload = _exact_keys(
-        value,
-        {
-            "strategy_id",
-            "strategy_family",
-            "plan_sha256",
-            "query_surface",
-            "mode",
-            "time_window",
-        },
-        "executed_wave_strategy_shape_invalid",
+def build_luna_axis_reduction(
+    *,
+    manifest: Mapping[str, Any],
+    plan: Mapping[str, Any],
+    session_projections: Sequence[MappingSessionProjection],
+    hydration_projections: Sequence[ExactPostHydrationProjection],
+    luna_review_projections: Sequence[LunaStateReviewProjection],
+    policy: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Build the deterministic diagnostic candidate-axis reduction."""
+
+    _, checked_hydrations = _validated_hydration_outputs(
+        manifest=manifest,
+        plan=plan,
+        session_projections=session_projections,
+        hydration_projections=hydration_projections,
+        policy=policy,
     )
-    if payload["strategy_id"] != plan["plan_id"] or payload["strategy_family"] != "wave_p":
-        raise SourceNeutralMappingError("executed_wave_strategy_identity_mismatch")
-    if payload["plan_sha256"] != plan["plan_sha256"]:
-        raise SourceNeutralMappingError("executed_wave_strategy_plan_mismatch")
-    if payload["query_surface"] != "candidate_authored":
-        raise SourceNeutralMappingError("executed_wave_query_surface_invalid")
-    modes = {call["arguments"]["mode"] for batch in plan["batches"] for call in batch["calls"]}
-    expected_mode = next(iter(modes)) if len(modes) == 1 else "mixed"
-    if payload["mode"] != expected_mode:
-        raise SourceNeutralMappingError("executed_wave_mode_invalid")
-    if payload["time_window"] is not None:
-        raise SourceNeutralMappingError("executed_wave_time_window_invalid")
-    return payload
+    checked_luna = _collect_luna_reviews(
+        hydration_by_sha=checked_hydrations,
+        luna_review_projections=luna_review_projections,
+    )
+    return _build_luna_axis_reduction(
+        manifest=manifest,
+        hydration_by_sha=checked_hydrations,
+        checked_luna=checked_luna,
+    )
+
+
+def _derive_semantic_strategy_payload(plan: Mapping[str, Any]) -> dict[str, Any]:
+    """Describe retrieval semantics without scheduling or execution identity."""
+
+    cells: dict[str, dict[str, Any]] = {}
+    for batch in plan["batches"]:
+        for call in batch["calls"]:
+            aliases = list(call["topic_aliases"])
+            cell = {
+                "tool_name": call["tool_name"],
+                "query_template": f"from:{{candidate_handle}} ({' OR '.join(aliases)})",
+                "topic_aliases": aliases,
+                "mode": call["arguments"]["mode"],
+                "request_limit": call["arguments"]["limit"],
+                "time_window": None,
+            }
+            cells[canonical_json(cell)] = cell
+    return {
+        "strategy_family": "wave_p",
+        "query_surface": "candidate_authored",
+        "relationship_topology": "self_authored",
+        "retrieval_cells": [cells[key] for key in sorted(cells)],
+    }
 
 
 def _derive_executed_wave_facts(
     *,
+    campaign_id: str,
     wave_id: str,
     manifest: Mapping[str, Any],
     policy: Mapping[str, Any],
     plan: Mapping[str, Any],
-    strategy_payload: Mapping[str, Any],
     session_projections: Sequence[MappingSessionProjection],
     hydration_projections: Sequence[ExactPostHydrationProjection],
     luna_review_projections: Sequence[LunaStateReviewProjection],
-    prior_stable_post_ids: Sequence[str],
+    predecessor_wave_facts: ExecutedWaveFacts | None,
+    replay_seen_object_ids: set[int] | None = None,
+    replay_depth: int = 0,
 ) -> ExecutedWaveFacts:
+    _identifier(campaign_id, "executed_wave_campaign_id_invalid")
     _identifier(wave_id, "executed_wave_id_invalid")
     validate_wave_plan(plan, manifest=manifest, policy=policy)
-    strategy = _validate_strategy_payload(strategy_payload, plan=plan)
+    strategy = _derive_semantic_strategy_payload(plan)
     if type(session_projections) not in {list, tuple}:
         raise SourceNeutralMappingError("executed_wave_session_projections_invalid")
     if type(hydration_projections) not in {list, tuple} or type(luna_review_projections) not in {list, tuple}:
         raise SourceNeutralMappingError("executed_wave_downstream_projections_invalid")
-    if (
-        type(prior_stable_post_ids) not in {list, tuple}
-        or any(not isinstance(item, str) or _STATUS_ID_RE.fullmatch(item) is None for item in prior_stable_post_ids)
-        or len(set(prior_stable_post_ids)) != len(prior_stable_post_ids)
-    ):
-        raise SourceNeutralMappingError("executed_wave_prior_stable_ids_invalid")
+
+    checked_predecessor: ExecutedWaveFacts | None = None
+    if predecessor_wave_facts is not None:
+        checked_predecessor = _replay_executed_wave_facts(
+            predecessor_wave_facts,
+            seen_object_ids=replay_seen_object_ids,
+            depth=replay_depth + 1,
+        )
+        if checked_predecessor.campaign_id != campaign_id:
+            raise SourceNeutralMappingError("executed_wave_campaign_mismatch")
+        if checked_predecessor.manifest_json != _canonical_json_bytes(manifest):
+            raise SourceNeutralMappingError("executed_wave_manifest_lineage_mismatch")
+    campaign_ordinal = 0 if checked_predecessor is None else checked_predecessor.campaign_ordinal + 1
+    predecessor_digest = None if checked_predecessor is None else checked_predecessor.wave_facts_sha256
+    prior_stable_ids = () if checked_predecessor is None else checked_predecessor.cumulative_stable_post_ids
+    prior_frontier_sha256 = (
+        canonical_sha256(
+            {
+                "campaign_id": campaign_id,
+                "candidate_manifest_sha256": manifest["manifest_sha256"],
+                "frontier_ordinal": -1,
+                "predecessor_wave_facts_sha256": None,
+                "stable_post_ids": [],
+            }
+        )
+        if checked_predecessor is None
+        else checked_predecessor.cumulative_frontier_sha256
+    )
 
     queues = build_frontier_queues(
         manifest=manifest,
@@ -1452,22 +1684,15 @@ def _derive_executed_wave_facts(
     if len(hydration_outputs) != len(queues["thread_hydration_queue"]):
         raise SourceNeutralMappingError("executed_wave_hydration_incomplete")
     hydration_by_sha = checked_hydrations
-    checked_luna: dict[str, dict[str, Any]] = {}
-    review_ids: set[str] = set()
-    for projection in luna_review_projections:
-        if type(projection) is not LunaStateReviewProjection:
-            raise SourceNeutralMappingError("executed_wave_luna_projection_invalid")
-        raw = strict_load_json_bytes(projection.result_json, error="executed_wave_luna_result_invalid")
-        hydration_sha = raw.get("hydration_projection_sha256")
-        if hydration_sha not in hydration_by_sha or hydration_sha in checked_luna or raw.get("review_id") in review_ids:
-            raise SourceNeutralMappingError("executed_wave_luna_coverage_invalid")
-        review_ids.add(raw["review_id"])
-        checked_luna[hydration_sha] = _replay_luna_review_projection(
-            projection,
-            hydration_projection=hydration_by_sha[hydration_sha],
-        )
-    if set(checked_luna) != set(hydration_by_sha):
-        raise SourceNeutralMappingError("executed_wave_luna_coverage_incomplete")
+    checked_luna = _collect_luna_reviews(
+        hydration_by_sha=hydration_by_sha,
+        luna_review_projections=luna_review_projections,
+    )
+    reduction = _build_luna_axis_reduction(
+        manifest=manifest,
+        hydration_by_sha=hydration_by_sha,
+        checked_luna=checked_luna,
+    )
 
     receipt_by_batch: dict[str, tuple[MappingSessionProjection, dict[str, Any]]] = {}
     for projection in session_projections:
@@ -1497,19 +1722,115 @@ def _derive_executed_wave_facts(
         },
         key=int,
     )
-    prior = set(prior_stable_post_ids)
+    prior = set(prior_stable_ids)
     new_ids = tuple(item for item in all_stable_ids if item not in prior)
-    upgrades = tuple(
-        sorted(result["upgrade_id"] for result in checked_luna.values() if result["qualified_state_upgrade"] is True)
+    cumulative_stable_post_ids = tuple(sorted(prior | set(all_stable_ids), key=int))
+    cumulative_frontier_sha256 = canonical_sha256(
+        {
+            "campaign_id": campaign_id,
+            "campaign_ordinal": campaign_ordinal,
+            "predecessor_frontier_sha256": prior_frontier_sha256,
+            "added_stable_post_ids": list(new_ids),
+            "cumulative_stable_post_ids": list(cumulative_stable_post_ids),
+        }
     )
-    if len(upgrades) != len(set(upgrades)):
-        raise SourceNeutralMappingError("executed_wave_luna_upgrade_duplicate")
+
+    current_session_ids = [
+        projection.grok_precommit.expected_session_id
+        for projection in (*tuple(session_projections), *tuple(hydration_projections))
+    ]
+    current_request_ids = [
+        projection.grok_precommit.expected_request_id
+        for projection in (*tuple(session_projections), *tuple(hydration_projections))
+    ]
+    current_execution_digests = [
+        *(projection.receipt_sha256 for projection in session_projections),
+        *(projection.projection_sha256 for projection in hydration_projections),
+    ]
+    current_luna_digests = [projection.result_sha256 for projection in luna_review_projections]
+    current_review_ids = [result["review_id"] for result in checked_luna.values()]
+    historical_session_ids: set[str] = set()
+    historical_request_ids: set[str] = set()
+    historical_execution_digests: set[str] = set()
+    historical_luna_digests: set[str] = set()
+    historical_review_ids: set[str] = set()
+    cursor = checked_predecessor
+    while cursor is not None:
+        for projection in (*cursor.session_projections, *cursor.hydration_projections):
+            historical_session_ids.add(projection.grok_precommit.expected_session_id)
+            historical_request_ids.add(projection.grok_precommit.expected_request_id)
+        historical_execution_digests.update(cursor.session_projection_sha256s)
+        historical_execution_digests.update(cursor.exact_hydration_projection_sha256s)
+        historical_luna_digests.update(cursor.luna_result_sha256s)
+        for projection in cursor.luna_review_projections:
+            result = strict_load_json_bytes(
+                projection.result_json,
+                error="executed_wave_historical_luna_result_invalid",
+            )
+            historical_review_ids.add(result["review_id"])
+        cursor = cursor.predecessor_wave_facts
+    if (
+        len(current_session_ids) != len(set(current_session_ids))
+        or len(current_request_ids) != len(set(current_request_ids))
+        or len(current_execution_digests) != len(set(current_execution_digests))
+        or len(current_luna_digests) != len(set(current_luna_digests))
+        or len(current_review_ids) != len(set(current_review_ids))
+        or historical_session_ids.intersection(current_session_ids)
+        or historical_request_ids.intersection(current_request_ids)
+        or historical_execution_digests.intersection(current_execution_digests)
+        or historical_luna_digests.intersection(current_luna_digests)
+        or historical_review_ids.intersection(current_review_ids)
+    ):
+        raise SourceNeutralMappingError("campaign_execution_identity_reused_without_cache_projection")
+
     remaining_queues = json.loads(canonical_json(queues))
     remaining_queues["thread_hydration_queue"] = []
-    remaining_queues["luna_input_queue"] = []
+    remaining_queues["luna_input_queue"] = [
+        row for row in hydration_outputs if row["hydration_projection_sha256"] not in checked_luna
+    ]
     remaining_queues_json = _canonical_json_bytes(remaining_queues)
+    reduction_json = _canonical_json_bytes(reduction)
+    session_projection_sha256s = tuple(receipt_by_batch[batch_id][0].receipt_sha256 for batch_id in completed)
+    exact_hydration_projection_sha256s = tuple(sorted(hydration_by_sha))
+    luna_result_sha256s = tuple(sorted(item.result_sha256 for item in luna_review_projections))
+    remaining_queue_state_sha256 = hashlib.sha256(remaining_queues_json).hexdigest()
+    wave_facts_body = {
+        "campaign_id": campaign_id,
+        "campaign_ordinal": campaign_ordinal,
+        "wave_id": wave_id,
+        "predecessor_wave_facts_sha256": predecessor_digest,
+        "prior_frontier_sha256": prior_frontier_sha256,
+        "cumulative_frontier_sha256": cumulative_frontier_sha256,
+        "cumulative_stable_post_ids": list(cumulative_stable_post_ids),
+        "manifest_sha256": manifest["manifest_sha256"],
+        "policy_sha256": canonical_sha256(policy),
+        "plan_sha256": plan["plan_sha256"],
+        "strategy_signature_sha256": canonical_sha256(strategy),
+        "planned_work_item_ids": list(planned),
+        "completed_work_item_ids": list(completed),
+        "rejected_work_item_ids": list(rejected),
+        "covered_candidate_refs": list(covered_refs),
+        "expected_candidate_refs": list(expected_refs),
+        "session_projection_sha256s": list(session_projection_sha256s),
+        "exact_hydration_projection_sha256s": list(exact_hydration_projection_sha256s),
+        "luna_result_sha256s": list(luna_result_sha256s),
+        "new_stable_post_ids": list(new_ids),
+        "luna_axis_reduction_sha256": reduction["reduction_sha256"],
+        "semantic_review_coverage_status": reduction["coverage_status"],
+        "semantic_transition_authority": "diagnostic_only_unattested",
+        "authorized_semantic_transition_ids": [],
+        "remaining_queue_state_sha256": remaining_queue_state_sha256,
+    }
+    wave_facts_sha256 = canonical_sha256(wave_facts_body)
     return ExecutedWaveFacts(
+        campaign_id=campaign_id,
+        campaign_ordinal=campaign_ordinal,
         wave_id=wave_id,
+        predecessor_wave_facts=checked_predecessor,
+        predecessor_wave_facts_sha256=predecessor_digest,
+        prior_frontier_sha256=prior_frontier_sha256,
+        cumulative_stable_post_ids=cumulative_stable_post_ids,
+        cumulative_frontier_sha256=cumulative_frontier_sha256,
         manifest_json=_canonical_json_bytes(manifest),
         policy_json=_canonical_json_bytes(policy),
         plan_json=_canonical_json_bytes(plan),
@@ -1517,69 +1838,88 @@ def _derive_executed_wave_facts(
         session_projections=tuple(session_projections),
         hydration_projections=tuple(hydration_projections),
         luna_review_projections=tuple(luna_review_projections),
-        prior_stable_post_ids=tuple(prior_stable_post_ids),
         strategy_signature_sha256=canonical_sha256(strategy),
         planned_work_item_ids=planned,
         completed_work_item_ids=completed,
         rejected_work_item_ids=rejected,
         covered_candidate_refs=covered_refs,
         expected_candidate_refs=expected_refs,
-        session_projection_sha256s=tuple(receipt_by_batch[batch_id][0].receipt_sha256 for batch_id in completed),
-        exact_hydration_projection_sha256s=tuple(sorted(hydration_by_sha)),
-        luna_result_sha256s=tuple(sorted(item.result_sha256 for item in luna_review_projections)),
+        session_projection_sha256s=session_projection_sha256s,
+        exact_hydration_projection_sha256s=exact_hydration_projection_sha256s,
+        luna_result_sha256s=luna_result_sha256s,
         new_stable_post_ids=new_ids,
-        luna_qualified_upgrade_ids=upgrades,
+        luna_axis_reduction_json=reduction_json,
+        luna_axis_reduction_sha256=reduction["reduction_sha256"],
+        semantic_review_coverage_status=reduction["coverage_status"],
+        semantic_transition_authority="diagnostic_only_unattested",
+        authorized_semantic_transition_ids=(),
         remaining_queues_json=remaining_queues_json,
-        remaining_queue_state_sha256=hashlib.sha256(remaining_queues_json).hexdigest(),
+        remaining_queue_state_sha256=remaining_queue_state_sha256,
+        wave_facts_sha256=wave_facts_sha256,
     )
 
 
 def build_executed_wave_facts(
     *,
+    campaign_id: str,
     wave_id: str,
     manifest: Mapping[str, Any],
     policy: Mapping[str, Any],
     plan: Mapping[str, Any],
-    strategy_payload: Mapping[str, Any],
     session_projections: Sequence[MappingSessionProjection],
     hydration_projections: Sequence[ExactPostHydrationProjection],
     luna_review_projections: Sequence[LunaStateReviewProjection],
-    prior_stable_post_ids: Sequence[str],
+    predecessor_wave_facts: ExecutedWaveFacts | None = None,
 ) -> ExecutedWaveFacts:
     return _derive_executed_wave_facts(
+        campaign_id=campaign_id,
         wave_id=wave_id,
         manifest=manifest,
         policy=policy,
         plan=plan,
-        strategy_payload=strategy_payload,
         session_projections=session_projections,
         hydration_projections=hydration_projections,
         luna_review_projections=luna_review_projections,
-        prior_stable_post_ids=prior_stable_post_ids,
+        predecessor_wave_facts=predecessor_wave_facts,
     )
 
 
-def _replay_executed_wave_facts(value: Any) -> ExecutedWaveFacts:
+def _replay_executed_wave_facts(
+    value: Any,
+    *,
+    seen_object_ids: set[int] | None = None,
+    depth: int = 0,
+) -> ExecutedWaveFacts:
     if type(value) is not ExecutedWaveFacts:
         raise SourceNeutralMappingError("executed_wave_facts_required")
+    if depth > 256:
+        raise SourceNeutralMappingError("executed_wave_lineage_depth_invalid")
+    seen = set() if seen_object_ids is None else seen_object_ids
+    if id(value) in seen:
+        raise SourceNeutralMappingError("executed_wave_lineage_cycle")
+    seen.add(id(value))
     manifest = strict_load_json_bytes(value.manifest_json, error="executed_wave_manifest_invalid")
     policy = strict_load_json_bytes(value.policy_json, error="executed_wave_policy_invalid")
     plan = strict_load_json_bytes(value.plan_json, error="executed_wave_plan_invalid")
-    strategy = strict_load_json_bytes(value.strategy_payload_json, error="executed_wave_strategy_invalid")
-    recomputed = _derive_executed_wave_facts(
-        wave_id=value.wave_id,
-        manifest=manifest,
-        policy=policy,
-        plan=plan,
-        strategy_payload=strategy,
-        session_projections=value.session_projections,
-        hydration_projections=value.hydration_projections,
-        luna_review_projections=value.luna_review_projections,
-        prior_stable_post_ids=value.prior_stable_post_ids,
-    )
-    if recomputed != value:
-        raise SourceNeutralMappingError("executed_wave_facts_content_mismatch")
-    return recomputed
+    try:
+        recomputed = _derive_executed_wave_facts(
+            campaign_id=value.campaign_id,
+            wave_id=value.wave_id,
+            manifest=manifest,
+            policy=policy,
+            plan=plan,
+            session_projections=value.session_projections,
+            hydration_projections=value.hydration_projections,
+            luna_review_projections=value.luna_review_projections,
+            predecessor_wave_facts=value.predecessor_wave_facts,
+            replay_seen_object_ids=seen,
+            replay_depth=depth,
+        )
+        if recomputed != value:
+            raise SourceNeutralMappingError("executed_wave_facts_content_mismatch")
+        return recomputed
+    finally:
+        seen.remove(id(value))
 
 
 def structural_stop(
@@ -1611,13 +1951,17 @@ def structural_stop(
             )
         except SourceNeutralMappingError:
             derived_queues = None
-    remaining_states = [
-        strict_load_json_bytes(
-            row.remaining_queues_json,
-            error="executed_wave_remaining_queues_invalid",
-        )
-        for row in checked
-    ]
+    try:
+        remaining_states = [
+            strict_load_json_bytes(
+                row.remaining_queues_json,
+                error="executed_wave_remaining_queues_invalid",
+            )
+            for row in checked
+        ]
+    except SourceNeutralMappingError:
+        checked = []
+        remaining_states = []
     queue_state_matches = False
     if queue_shape_valid and derived_queues is not None:
         try:
@@ -1625,32 +1969,57 @@ def structural_stop(
         except (TypeError, ValueError):
             queue_state_matches = False
     queues_empty = queue_state_matches and all(not derived_queues[key] for key in QUEUE_KEYS)
-    valid_waves = len(checked) == required and all(
+    mechanically_zero_waves = len(checked) == required and all(
         row.planned_work_item_ids
         and row.completed_work_item_ids == row.planned_work_item_ids
         and not row.rejected_work_item_ids
         and row.covered_candidate_refs == row.expected_candidate_refs
         and not row.new_stable_post_ids
-        and not row.luna_qualified_upgrade_ids
+        and not row.authorized_semantic_transition_ids
         and all(not remaining_states[index][key] for key in QUEUE_KEYS)
         for index, row in enumerate(checked)
     )
-    campaign_continuity = valid_waves and len({row.manifest_json for row in checked}) == 1
+    lineage_adjacent = mechanically_zero_waves and all(
+        current.campaign_id == previous.campaign_id
+        and current.campaign_ordinal == previous.campaign_ordinal + 1
+        and current.predecessor_wave_facts_sha256 == previous.wave_facts_sha256
+        and current.prior_frontier_sha256 == previous.cumulative_frontier_sha256
+        and current.predecessor_wave_facts == previous
+        for previous, current in zip(checked[:-1], checked[1:], strict=True)
+    )
+    campaign_continuity = (
+        mechanically_zero_waves
+        and lineage_adjacent
+        and len({row.campaign_id for row in checked}) == 1
+        and len({row.manifest_json for row in checked}) == 1
+    )
+    semantic_transition_authoritative = mechanically_zero_waves and all(
+        row.semantic_transition_authority == "receipt_first_authoritative_complete" for row in checked
+    )
     session_ids = [
-        projection.grok_precommit.expected_session_id for row in checked for projection in row.session_projections
+        projection.grok_precommit.expected_session_id
+        for row in checked
+        for projection in (*row.session_projections, *row.hydration_projections)
     ]
     request_ids = [
-        projection.grok_precommit.expected_request_id for row in checked for projection in row.session_projections
+        projection.grok_precommit.expected_request_id
+        for row in checked
+        for projection in (*row.session_projections, *row.hydration_projections)
+    ]
+    execution_digests = [
+        digest
+        for row in checked
+        for digest in (*row.session_projection_sha256s, *row.exact_hydration_projection_sha256s)
     ]
     cross_wave_execution_distinct = (
         len(session_ids) == len(set(session_ids))
         and len(request_ids) == len(set(request_ids))
-        and len([digest for row in checked for digest in row.session_projection_sha256s])
-        == len({digest for row in checked for digest in row.session_projection_sha256s})
+        and len(execution_digests) == len(set(execution_digests))
     )
     distinct = (
-        valid_waves
+        mechanically_zero_waves
         and campaign_continuity
+        and semantic_transition_authoritative
         and cross_wave_execution_distinct
         and len({row.wave_id for row in checked}) == required
         and len({row.strategy_signature_sha256 for row in checked}) == required
@@ -1659,9 +2028,17 @@ def structural_stop(
     return {
         "stop": stopped,
         "queues_empty": queues_empty,
-        "trailing_zero_wave_count": len(trailing) if valid_waves else 0,
+        "trailing_zero_wave_count": len(trailing) if mechanically_zero_waves else 0,
         "materially_distinct": bool(distinct),
-        "reason": "structural_convergence" if stopped else "continue_mapping",
+        "lineage_adjacent": bool(lineage_adjacent),
+        "semantic_transition_authoritative": bool(semantic_transition_authoritative),
+        "reason": (
+            "structural_convergence"
+            if stopped
+            else "semantic_transition_authority_unavailable"
+            if mechanically_zero_waves and not semantic_transition_authoritative
+            else "continue_mapping"
+        ),
     }
 
 
@@ -1715,36 +2092,24 @@ def build_candidate_free_aggregate(
         policy=policy,
     )
     exact_source_bound_hydrations = len(hydration_outputs)
-    checked_luna: list[dict[str, Any]] = []
-    seen_hydrations: set[str] = set()
-    review_ids: set[str] = set()
-    for projection in luna_review_projections:
-        if type(projection) is not LunaStateReviewProjection:
-            raise SourceNeutralMappingError("aggregate_luna_projection_invalid")
-        result = strict_load_json_bytes(projection.result_json, error="aggregate_luna_result_invalid")
-        hydration_sha = result.get("hydration_projection_sha256")
-        if (
-            hydration_sha not in checked_hydrations
-            or hydration_sha in seen_hydrations
-            or result.get("review_id") in review_ids
-        ):
-            raise SourceNeutralMappingError("aggregate_luna_hydration_binding_invalid")
-        seen_hydrations.add(hydration_sha)
-        review_ids.add(result["review_id"])
-        checked_luna.append(
-            _replay_luna_review_projection(
-                projection,
-                hydration_projection=checked_hydrations[hydration_sha],
-            )
+    try:
+        checked_luna = _collect_luna_reviews(
+            hydration_by_sha=checked_hydrations,
+            luna_review_projections=luna_review_projections,
         )
+    except SourceNeutralMappingError as exc:
+        raise SourceNeutralMappingError("aggregate_luna_hydration_binding_invalid") from exc
+    reduction = _build_luna_axis_reduction(
+        manifest=manifest,
+        hydration_by_sha=checked_hydrations,
+        checked_luna=checked_luna,
+    )
     luna_terminal_reviews = len(checked_luna)
-    luna_qualified_state_upgrades = sum(result["qualified_state_upgrade"] is True for result in checked_luna)
     if (
         attested_completed_native_x_calls > planned_native_x_calls
         or unique_stable_post_ids > attested_completed_native_x_calls * policy["search"]["request_limit"]
         or exact_source_bound_hydrations > unique_stable_post_ids
         or luna_terminal_reviews > exact_source_bound_hydrations
-        or luna_qualified_state_upgrades > luna_terminal_reviews
         or (attested_completed_native_x_calls == 0 and unique_stable_post_ids != 0)
         or (unique_stable_post_ids == 0 and (exact_source_bound_hydrations or luna_terminal_reviews))
         or (exact_source_bound_hydrations == 0 and luna_terminal_reviews != 0)
@@ -1761,6 +2126,7 @@ def build_candidate_free_aggregate(
         "luna_result_manifest_sha256": canonical_sha256(
             sorted(projection.result_sha256 for projection in luna_review_projections)
         ),
+        "luna_axis_reduction_sha256": reduction["reduction_sha256"],
     }
     payload: dict[str, Any] = {
         "schema_version": AGGREGATE_SCHEMA_VERSION,
@@ -1771,20 +2137,23 @@ def build_candidate_free_aggregate(
             "execution_compliance": planned_native_x_calls,
             "stable_post_id_retrieval": attested_completed_native_x_calls,
             "exact_hydration": unique_stable_post_ids,
-            "luna_qualified_state_upgrades": luna_terminal_reviews,
+            "luna_diagnostic_review_coverage": exact_source_bound_hydrations,
         },
         "metric_numerators": {
             "execution_compliance": attested_completed_native_x_calls,
             "stable_post_id_retrieval": unique_stable_post_ids,
             "exact_hydration": exact_source_bound_hydrations,
-            "luna_qualified_state_upgrades": luna_qualified_state_upgrades,
+            "luna_diagnostic_review_coverage": luna_terminal_reviews,
         },
         "metric_rates": {
             "execution_compliance": _rate(attested_completed_native_x_calls, planned_native_x_calls),
             "stable_post_id_retrieval": _rate(unique_stable_post_ids, attested_completed_native_x_calls),
             "exact_hydration": _rate(exact_source_bound_hydrations, unique_stable_post_ids),
-            "luna_qualified_state_upgrades": _rate(luna_qualified_state_upgrades, luna_terminal_reviews),
+            "luna_diagnostic_review_coverage": _rate(luna_terminal_reviews, exact_source_bound_hydrations),
         },
+        "semantic_review_coverage_status": reduction["coverage_status"],
+        "semantic_transition_authority": "diagnostic_only_unattested",
+        "authorized_semantic_transition_count": 0,
         "model_call_counts_included": False,
         "aggregate_sha256": "",
     }

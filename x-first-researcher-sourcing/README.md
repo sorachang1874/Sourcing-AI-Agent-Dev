@@ -134,7 +134,10 @@ candidate, model, or business-volume cap. Its default Wave P is empirical grain 
 per candidate, exact manifest+policy plan reconstruction, literal per-call URL blocks, and six-file raw-session
 replay. Frontier/Luna/metric consumers replay typed retained-source projections; unexecuted and rejected batches stay
 separate from sparse evidence; exact `x_thread_fetch` hydration binds descriptor host, author, Post ID, and text bytes;
-and structural stopping requires six empty queues plus two replayed, fully covered zero waves. Historical calibration sessions remain exploratory because they did
+caller Luna output is diagnostic-only and a deterministic candidate-by-axis reducer preserves frozen priors; campaign
+facts now use a replayed append-only predecessor frontier, semantic strategy digest, and campaign-wide
+mapping/hydration identity registry. Diagnostic Luna cannot authorize an upgrade or structural stop, even at complete
+review coverage; receipt-first semantic execution is the next required authority gate. Historical calibration sessions remain exploratory because they did
 not retain the typed precommit required for `commit_allowed`; see
 `docs/SOURCE_NEUTRAL_MAPPING_CONTROLLER.md`.
 

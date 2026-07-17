@@ -146,7 +146,7 @@
       "properties": {
         "all_queues_must_be_empty": {"const": true},
         "consecutive_materially_distinct_zero_waves": {"const": 2},
-        "zero_dimensions": {"const": ["new_stable_post_id_count", "luna_qualified_state_upgrade_count"]}
+        "zero_dimensions": {"const": ["new_stable_post_id_count", "authorized_semantic_state_transition_count"]}
       }
     },
     "kpis": {
@@ -154,7 +154,7 @@
       "additionalProperties": false,
       "required": ["denominator_registry", "model_call_counts_allowed", "aggregate_must_be_candidate_free", "aggregate_hash_binding_required"],
       "properties": {
-        "denominator_registry": {"const": ["execution_compliance", "stable_post_id_retrieval", "exact_hydration", "luna_qualified_state_upgrades"]},
+        "denominator_registry": {"const": ["execution_compliance", "stable_post_id_retrieval", "exact_hydration", "luna_diagnostic_review_coverage"]},
         "model_call_counts_allowed": {"const": false},
         "aggregate_must_be_candidate_free": {"const": true},
         "aggregate_hash_binding_required": {"const": true}

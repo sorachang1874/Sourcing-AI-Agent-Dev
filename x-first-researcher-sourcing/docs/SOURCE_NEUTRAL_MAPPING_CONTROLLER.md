@@ -84,18 +84,36 @@ is omitted unless at least one stable Post ID exists. Challenger evidence is alw
 Accepted stable IDs enter an exact thread-hydration queue. Luna input accepts only a typed `x_thread_fetch`
 projection that retains the six raw files and operator precommit, replays exactly one call for the queued Post ID, and
 binds descriptor host, queued URL, expected author, requested/returned ID, and exact UTF-8 full-text bytes. Luna state
-reviews are separately typed and bind the hydration projection and source-text digest.
+reviews are separately typed and bind the hydration projection and source-text digest. Their current contract is
+explicitly `diagnostic_only_unattested`: the model may propose the two axis states, but it does not emit an upgrade
+Boolean or transition ID and cannot change product or campaign state.
 
-The campaign stops only when all six queues are empty and two consecutive, materially distinct strategy waves each
-produce both zero new stable Post IDs and zero Luna-qualified state upgrades. A zero-wave fact retains the manifest,
-policy, plan, strategy payload, typed session/hydration/Luna projections, and prior stable-ID set; stopping replays all
-of them, recomputes the strategy digest, requires exact planned/completed work and manifest coverage, and derives the
-remaining queue state after completed hydration/Luna work. The caller queue must equal that derived state, so an empty
-queue mapping cannot hide pending, retry, saturation, hydration, Luna, or challenger work. Distinct zero waves also
-require the same frozen manifest, an empty derived queue state in each trailing fact, distinct strategy-bound plans,
-and disjoint session/request/receipt identities. Answer length, one zero-yield
-call, an unexecuted/rejected wave, or a model claim that the search is
-complete cannot stop the campaign.
+Deterministic code reduces the full available review set to exactly one row per candidate, axis, and manifest-bound
+state version. Every row binds the frozen prior, expected/reviewed evidence manifests, proposal-set digest, and
+coverage. An incomplete review set has no reduced proposal; conflicting complete proposals reduce to `ambiguous`.
+Because the current Luna boundary is unattested, `resolved_state` always remains the frozen prior,
+`transition_status=not_authorized`, and there are zero authorized transitions. This prevents multiple Posts from being
+counted as multiple candidate-state upgrades or a single model run from downgrading a prior.
+
+Wave facts form one append-only campaign chain. The public builder accepts a campaign ID and an optional replayable
+predecessor fact; it does not accept prior stable IDs, an ordinal, or a strategy payload. It recursively replays the
+predecessor, derives the monotonic ordinal, exact predecessor-fact digest, prior frontier, new IDs, cumulative frontier,
+and current fact digest. The strategy signature is independently derived from the validated plan's actual native tool,
+handle-neutral query template, ordered aliases, mode, limit, time window, and relationship topology. Plan, batch, wave,
+session, request, candidate, and other execution IDs/hashes are excluded, so rescheduling an identical strategy cannot
+pretend to be a new challenger.
+
+Stopping replays the two trailing facts and requires exact predecessor adjacency; passing `[F1,F3]` while omitting
+`F2` fails closed. One proof-identity registry covers mapping and hydration session IDs, request IDs, and projection
+digests within the wave and across the complete predecessor chain. Silent cache reuse is unsupported: a future cache
+must introduce an explicit source/consumer-bound cache projection before any identity can be reused.
+
+All six queues must still be empty and two adjacent, materially distinct strategies must produce zero new stable Post
+IDs and zero **authorized** semantic transitions. Diagnostic Luna output cannot prove the latter. Therefore a campaign
+with hydrated semantic evidence deliberately remains `continue_mapping` even when diagnostic coverage is complete and
+all queues appear empty. Structural stopping for that lane remains unavailable until a receipt-first contract binds
+approval, exact route/model, request/prompt/schema/policy, retained raw response, transport receipt, and deterministic
+semantic replay. This is fail-closed, not a recall plateau claim.
 
 ## Metrics and calibration binding
 
@@ -104,12 +122,15 @@ The candidate-free aggregate carries four explicit denominators:
 1. execution compliance / planned native-X calls;
 2. stable Post-ID retrieval / raw-replay-attested completed native-X calls;
 3. exact hydration / unique stable Post IDs enqueued;
-4. Luna-qualified upgrades / terminal Luna reviews.
+4. Luna diagnostic-review coverage / exact source-bound hydrations.
 
 The aggregate builder derives every count and binding from the exact plan plus replayed typed session, hydration, and
-Luna projections; independent caller integers are not accepted. It enforces zero propagation and legal cross-stage
-cardinalities, binds policy, manifest, plan, session-receipt, hydration-receipt, and Luna-result manifests by SHA-256,
-and contains no model-call count. The tracked 46-call calibration aggregate is diagnostic method evidence only: it binds the
+Luna projections; independent caller integers are not accepted. It exposes
+`not_applicable|not_started|incomplete|complete` review coverage,
+`semantic_transition_authority=diagnostic_only_unattested`, and an authorized transition count fixed at zero. It
+enforces zero propagation and legal cross-stage cardinalities, binds policy, manifest, plan, session-receipt,
+hydration-receipt, Luna-result, and candidate-axis-reduction manifests by SHA-256, and contains no model-call count. The
+tracked 46-call calibration aggregate is diagnostic method evidence only: it binds the
 owner-private candidate-free summary and receipt by hash, retains only counts/hashes, and explicitly does not claim a
 global recall plateau. Its calibrated frontier moved `17 -> 37` over 31 authored expansion calls; the three-candidate,
 six-call flat canary passed ledger/format checks and added four marginal stable references.
@@ -125,6 +146,12 @@ PYTHONPATH=src ../sourcing-ai-agent/.venv/bin/python -m x_first.source_neutral_m
   --private-calibration-receipt <owner-private-receipt.json> \
   --private-calibration-summary <owner-private-summary.json>
 ```
+
+## Contract correction status
+
+The first v1 source-neutral mapping contract was pinned for review but never promoted: its rereview returned `NO-GO`.
+This round corrects that unpromoted v1 contract in place by removing caller transition authority and caller-owned
+frontier/strategy inputs. It does not reinterpret a previously promoted live artifact.
 
 ## Offline validation
 

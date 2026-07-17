@@ -27,6 +27,10 @@
       "path": "contracts/x.source_neutral.mapping.luna_state_review.v1.schema.json"
     },
     {
+      "schema_version": "x.source_neutral.mapping.luna_axis_reduction.v1",
+      "path": "contracts/x.source_neutral.mapping.luna_axis_reduction.v1.schema.json"
+    },
+    {
       "schema_version": "x.source_neutral.mapping.candidate_free_aggregate.v1",
       "path": "contracts/x.source_neutral.mapping.candidate_free_aggregate.v1.schema.json"
     },

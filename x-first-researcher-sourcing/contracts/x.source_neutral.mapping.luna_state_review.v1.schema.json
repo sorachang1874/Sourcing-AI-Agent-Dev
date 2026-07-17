@@ -11,10 +11,10 @@
     "hydration_projection_sha256",
     "source_text_sha256",
     "terminal_status",
-    "lab_affiliation_state",
-    "pretraining_experience_state",
-    "qualified_state_upgrade",
-    "upgrade_id"
+    "authority_status",
+    "model_claim_scope",
+    "proposed_lab_affiliation_state",
+    "proposed_pretraining_experience_state"
   ],
   "properties": {
     "schema_version": {"const": "x.source_neutral.mapping.luna_state_review.v1"},
@@ -24,21 +24,9 @@
     "hydration_projection_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "source_text_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "terminal_status": {"const": "reviewed"},
-    "lab_affiliation_state": {"enum": ["current", "historical", "ambiguous", "unsupported"]},
-    "pretraining_experience_state": {"enum": ["current", "historical", "ambiguous", "unsupported"]},
-    "qualified_state_upgrade": {"type": "boolean"},
-    "upgrade_id": {
-      "oneOf": [
-        {"type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]{0,127}$"},
-        {"type": "null"}
-      ]
-    }
-  },
-  "allOf": [
-    {
-      "if": {"properties": {"qualified_state_upgrade": {"const": true}}},
-      "then": {"properties": {"upgrade_id": {"type": "string"}}},
-      "else": {"properties": {"upgrade_id": {"type": "null"}}}
-    }
-  ]
+    "authority_status": {"const": "diagnostic_only_unattested"},
+    "model_claim_scope": {"const": "state_proposal_only"},
+    "proposed_lab_affiliation_state": {"enum": ["current", "historical", "ambiguous", "unsupported"]},
+    "proposed_pretraining_experience_state": {"enum": ["current", "historical", "ambiguous", "unsupported"]}
+  }
 }
