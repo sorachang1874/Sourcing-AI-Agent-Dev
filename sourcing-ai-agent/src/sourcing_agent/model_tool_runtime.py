@@ -21,6 +21,7 @@ from datetime import datetime, timedelta, timezone
 from types import MappingProxyType
 from typing import Any, Iterable, Iterator, Literal, Mapping, TypeAlias, cast
 
+from .agent_contract_identity import is_valid_agent_tool_name
 from .model_route_registry import (
     EFFECTIVE_MODEL_ROUTE_SNAPSHOT_REF_PREFIX,
     EffectiveModelRouteSnapshot,
@@ -623,7 +624,8 @@ class ToolCallRecord:
 
     def __post_init__(self) -> None:
         _required_text("tool_call_id", self.provider_call_id)
-        _required_text("tool_name", self.name)
+        if not is_valid_agent_tool_name(self.name):
+            raise ModelToolRuntimeError("model_tool_invalid_tool_name")
         if self.occurrence_ordinal < 1:
             raise ModelToolRuntimeError("model_tool_occurrence_ordinal_invalid")
         try:
@@ -732,6 +734,40 @@ ModelTurnMessage: TypeAlias = (
 )
 
 
+def _freeze_validated_tool_schema(input_schema: Mapping[str, Any]) -> Mapping[str, Any]:
+    """Canonicalize and validate the one schema dialect shared by tool boundaries."""
+
+    try:
+        encoded_schema = _canonical_json(input_schema)
+        if len(encoded_schema.encode("utf-8")) > MAX_TOOL_SCHEMA_BYTES:
+            raise ModelToolSchemaError("model_tool_schema_too_large")
+        copied_schema = _json_loads_strict(encoded_schema)
+    except (json.JSONDecodeError, ValueError) as exc:
+        raise ModelToolSchemaError("model_tool_schema_not_json") from exc
+    if not isinstance(copied_schema, dict):
+        raise ModelToolSchemaError("model_tool_schema_must_be_object")
+    _validate_schema_definition(copied_schema, path="$", require_object=True)
+    return cast(Mapping[str, Any], _freeze_json(copied_schema))
+
+
+def _validate_tool_input(
+    input_schema: Mapping[str, Any],
+    value: Mapping[str, Any],
+) -> dict[str, JsonValue]:
+    """Validate one strict-JSON object through the shared bounded schema engine."""
+
+    try:
+        copied_value = _json_loads_strict(_canonical_json(value))
+    except (ModelToolRuntimeError, json.JSONDecodeError, ValueError) as exc:
+        raise ModelToolSchemaError("model_tool_argument_not_json") from exc
+    if not isinstance(copied_value, dict):
+        raise ModelToolSchemaError("model_tool_argument_must_be_object")
+    schema = _thaw_json(input_schema)
+    assert isinstance(schema, dict)
+    _validate_json_value(copied_value, schema, path="$")
+    return copied_value
+
+
 @dataclass(frozen=True, slots=True)
 class ToolSpec:
     name: str
@@ -742,23 +778,14 @@ class ToolSpec:
     budget_required: bool
 
     def __post_init__(self) -> None:
-        _required_text("tool_name", self.name)
+        if not is_valid_agent_tool_name(self.name):
+            raise ModelToolRuntimeError("model_tool_invalid_tool_name")
         _bounded_text("tool_description", self.description, maximum_bytes=16 * 1024)
         _required_text("tool_schema_version", self.schema_version)
         _required_text("tool_approval_policy", self.approval_policy)
         if not isinstance(self.budget_required, bool):
             raise ModelToolSchemaError("model_tool_budget_required_invalid")
-        try:
-            encoded_schema = _canonical_json(self.input_schema)
-            if len(encoded_schema.encode("utf-8")) > MAX_TOOL_SCHEMA_BYTES:
-                raise ModelToolSchemaError("model_tool_schema_too_large")
-            copied_schema = _json_loads_strict(encoded_schema)
-        except (json.JSONDecodeError, ValueError) as exc:
-            raise ModelToolSchemaError("model_tool_schema_not_json") from exc
-        if not isinstance(copied_schema, dict):
-            raise ModelToolSchemaError("model_tool_schema_must_be_object")
-        _validate_schema_definition(copied_schema, path="$", require_object=True)
-        object.__setattr__(self, "input_schema", _freeze_json(copied_schema))
+        object.__setattr__(self, "input_schema", _freeze_validated_tool_schema(self.input_schema))
 
     def to_wire_record(self) -> dict[str, object]:
         return {
@@ -793,16 +820,33 @@ class ToolSpec:
         implementation so the served schema cannot acquire a second validator.
         """
 
-        try:
-            copied_value = _json_loads_strict(_canonical_json(value))
-        except (ModelToolRuntimeError, json.JSONDecodeError, ValueError) as exc:
-            raise ModelToolSchemaError("model_tool_argument_not_json") from exc
-        if not isinstance(copied_value, dict):
-            raise ModelToolSchemaError("model_tool_argument_must_be_object")
-        schema = _thaw_json(self.input_schema)
-        assert isinstance(schema, dict)
-        _validate_json_value(copied_value, schema, path="$")
-        return copied_value
+        return _validate_tool_input(self.input_schema, value)
+
+
+@dataclass(frozen=True, slots=True)
+class InternalToolValidatorSpec:
+    """Closed-schema validator that is never a provider-visible Agent tool.
+
+    Result variants need the same bounded JSON-schema implementation as a
+    :class:`ToolSpec`, but their diagnostic identities contain separators that
+    are intentionally outside the canonical Agent tool-name grammar.  Keeping
+    this as a distinct type prevents those internal names from leaking into a
+    provider declaration or a ``ToolCallRecord``.
+    """
+
+    name: str
+    description: str
+    input_schema: Mapping[str, Any]
+    schema_version: str
+
+    def __post_init__(self) -> None:
+        _bounded_text("internal_validator_name", self.name, maximum_bytes=512)
+        _bounded_text("internal_validator_description", self.description, maximum_bytes=16 * 1024)
+        _required_text("internal_validator_schema_version", self.schema_version)
+        object.__setattr__(self, "input_schema", _freeze_validated_tool_schema(self.input_schema))
+
+    def validate_input(self, value: Mapping[str, Any]) -> dict[str, JsonValue]:
+        return _validate_tool_input(self.input_schema, value)
 
 
 @dataclass(frozen=True, slots=True)
@@ -2475,6 +2519,7 @@ __all__ = [
     "AgentTurnEvent",
     "AssistantTextMessage",
     "AssistantToolCallsMessage",
+    "InternalToolValidatorSpec",
     "D0A_EFFECT_AUTHORIZATION_AVAILABLE",
     "ErrorEvent",
     "MODEL_INVOCATION_ENVELOPE_RECORD_KEYS",

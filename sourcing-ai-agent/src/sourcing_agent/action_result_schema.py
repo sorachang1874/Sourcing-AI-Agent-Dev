@@ -6,9 +6,11 @@ discover serializers, or mark any action as served.  A caller must first invoke
 the declared owner serializer and then pass the resulting mapping through an
 ``ActionResultSpec``.
 
-Result schemas reuse :class:`model_tool_runtime.ToolSpec` as their sole JSON
-schema validator.  Each terminal variant has its own closed schema because the
-bounded ToolSpec dialect intentionally has no union/``oneOf`` support.
+Result schemas reuse the bounded JSON-schema implementation through the
+internal-only :class:`model_tool_runtime.InternalToolValidatorSpec`.  They do
+not mint provider-visible ``ToolSpec`` names.  Each terminal variant has its
+own closed schema because the bounded dialect intentionally has no
+union/``oneOf`` support.
 """
 
 from __future__ import annotations
@@ -27,17 +29,17 @@ from urllib.parse import urlsplit
 from .agent_contract_identity import is_valid_agent_tool_name
 from .model_tool_runtime import (
     MAX_MESSAGE_CONTENT_BYTES,
+    InternalToolValidatorSpec,
     ModelToolRuntimeError,
     ModelToolSchemaError,
-    ToolSpec,
 )
 
 ACTION_RESULT_REGISTRY_SCHEMA_VERSION = "action_result_registry_v2"
-ACTION_RESULT_VALIDATOR_OWNER = "sourcing_agent.model_tool_runtime.ToolSpec.validate_input"
-ACTION_RESULT_INTERPRETATION_CONTRACT_VERSION = "action_result_interpretation_contract_v2"
-ACTION_RESULT_CANONICALIZER_REVISION = "action_result_canonical_json_utf8_v2"
-ACTION_RESULT_VALUE_POLICY_REVISION = "action_result_explicit_value_roles_v2"
-ACTION_RESULT_LIMIT_POLICY_REVISION = "action_result_prevalidation_limits_v2"
+ACTION_RESULT_VALIDATOR_OWNER = "sourcing_agent.model_tool_runtime.InternalToolValidatorSpec.validate_input"
+ACTION_RESULT_INTERPRETATION_CONTRACT_VERSION = "action_result_interpretation_contract_v3"
+ACTION_RESULT_CANONICALIZER_REVISION = "action_result_canonical_json_utf8_v3"
+ACTION_RESULT_VALUE_POLICY_REVISION = "action_result_positive_value_roles_v3"
+ACTION_RESULT_LIMIT_POLICY_REVISION = "action_result_prevalidation_limits_v3"
 ACTION_RESULT_SERIALIZER_CONTRACT_VERSION = "action_result_serializer_contract_v1"
 ACTION_RESULT_MAX_SCHEMA_BYTES = 32 * 1024
 ACTION_RESULT_MAX_SCHEMA_DOCUMENT_DEPTH = 128
@@ -102,7 +104,11 @@ _WINDOWS_ROOT_RELATIVE_PATH_PATTERN = re.compile(
 )
 _GENERIC_RELATIVE_FILE_PATH_PATTERN = re.compile(
     r"(?<![A-Za-z0-9/])(?:[^/\\\s:]+[/\\])+[^/\\\s:]+\."
-    r"(?:avro|bin|csv|db|doc|docx|htm|html|jpeg|jpg|json|jsonl|log|md|parquet|pdf|png|ppt|pptx|py|sql|sqlite|sqlite3|toml|txt|webp|xls|xlsx|xml|yaml|yml)\b",
+    r"(?:avro|bin|csv|db|doc|docx|htm|html|jpeg|jpg|json|jsonl|log|md|parquet|pdf|pem|png|ppt|pptx|py|sql|sqlite|sqlite3|toml|txt|webp|xls|xlsx|xml|yaml|yml|zip)\b",
+    re.IGNORECASE,
+)
+_SENSITIVE_RELATIVE_FILE_PATTERN = re.compile(
+    r"(?<![A-Za-z0-9/])(?:[^/\\\s:]+[/\\])+(?:authorized_keys|id_(?:dsa|ecdsa|ed25519|rsa)|known_hosts)\b",
     re.IGNORECASE,
 )
 _NETWORK_URL_PATTERN = re.compile(r"https?://[^\s)\]}>;,]+", re.IGNORECASE)
@@ -130,6 +136,8 @@ _ARTIFACT_LOCATOR_TOKENS = frozenset(
         "pointers",
         "src",
         "srcs",
+        "target",
+        "targets",
         "ref",
         "refs",
         "reference",
@@ -138,8 +146,12 @@ _ARTIFACT_LOCATOR_TOKENS = frozenset(
         "addresses",
         "download",
         "downloads",
+        "destination",
+        "destinations",
         "endpoint",
         "endpoints",
+        "key",
+        "keys",
         "uri",
         "uris",
         "url",
@@ -324,11 +336,23 @@ def _artifact_role_field(path_segments: tuple[str, ...]) -> str | None:
     return fields[-1] if fields else None
 
 
-def _looks_like_artifact_locator_path(path_segments: tuple[str, ...]) -> bool:
+def _looks_like_artifact_locator_path(
+    path_segments: tuple[str, ...],
+    *,
+    interpretation_contract_version: str,
+) -> bool:
     fields = tuple(segment for segment in path_segments if segment != "*")
     tokens = frozenset(token for field_name in fields for token in _field_name_tokens(field_name))
     if tokens & {"artifact", "artifacts"} and tokens & _ARTIFACT_LOCATOR_TOKENS:
         return True
+    compact_field = "".join(re.findall(r"[A-Za-z0-9]+", fields[-1])).casefold() if fields else ""
+    if re.fullmatch(
+        r"(?:result)?artifacts?(?:address|destination|download|endpoint|file|filename|handle|href|hyperlink|key|link|location|locator|path|pointer|ref|reference|src|target|uri|url)(?:value|values)?",
+        compact_field,
+    ):
+        return True
+    if interpretation_contract_version != "action_result_interpretation_contract_v2":
+        return False
     for field_name in fields:
         compact = "".join(re.findall(r"[A-Za-z0-9]+", field_name)).casefold()
         artifact_index = compact.find("artifact")
@@ -339,7 +363,11 @@ def _looks_like_artifact_locator_path(path_segments: tuple[str, ...]) -> bool:
     return False
 
 
-def _is_artifact_context_path(path_segments: tuple[str, ...]) -> bool:
+def _is_artifact_context_path(
+    path_segments: tuple[str, ...],
+    *,
+    interpretation_contract_version: str,
+) -> bool:
     """Return whether any schema-path component declares artifact context."""
 
     for field_name in path_segments:
@@ -348,7 +376,7 @@ def _is_artifact_context_path(path_segments: tuple[str, ...]) -> bool:
         if _field_name_tokens(field_name) & {"artifact", "artifacts"}:
             return True
         compact = "".join(re.findall(r"[A-Za-z0-9]+", field_name)).casefold()
-        if "artifact" in compact:
+        if interpretation_contract_version == "action_result_interpretation_contract_v2" and "artifact" in compact:
             return True
     return False
 
@@ -497,10 +525,12 @@ def _contains_raw_local_path(
     ) is not None:
         return True
     if re.search(
-        r"(?<![A-Za-z0-9_.-])(?:\.cache|cache|logs?|private|runtime|tmp|workspace)[/\\]\S+",
+        r"(?<![A-Za-z0-9_.-])(?:\.cache|cache|logs?|private|relative|runtime|tmp|workspace)[/\\]\S+",
         scan_value,
         re.IGNORECASE,
     ):
+        return True
+    if _SENSITIVE_RELATIVE_FILE_PATTERN.search(scan_value) is not None:
         return True
     for match in re.finditer(r"(?:^|[\s:(\[{=\"'])(/(?!/)[^\s)\]}>;,]+)", scan_value):
         token = match.group(1)
@@ -528,6 +558,7 @@ def _validate_schema_policy(
     max_items: int,
     max_depth: int,
     artifact_ref_schemes: tuple[str, ...],
+    interpretation_contract_version: str,
     depth: int = 1,
     path: str = "$",
     path_segments: tuple[str, ...] = (),
@@ -549,9 +580,10 @@ def _validate_schema_policy(
             if field_name == "*":
                 raise ActionResultSchemaError(f"action_result_schema_field_reserved:{path}.{field_name}")
             child_segments = (*path_segments, field_name)
-            if _looks_like_artifact_locator_path(child_segments) and not (
-                _is_canonical_artifact_ref_field(field_name) or _is_canonical_artifact_refs_field(field_name)
-            ):
+            if _looks_like_artifact_locator_path(
+                child_segments,
+                interpretation_contract_version=interpretation_contract_version,
+            ) and not (_is_canonical_artifact_ref_field(field_name) or _is_canonical_artifact_refs_field(field_name)):
                 raise ActionResultSchemaError(f"action_result_artifact_locator_field_noncanonical:{path}.{field_name}")
             is_artifact_ref = _is_canonical_artifact_ref_field(field_name)
             is_artifact_refs = _is_canonical_artifact_refs_field(field_name)
@@ -566,6 +598,7 @@ def _validate_schema_policy(
                 max_items=max_items,
                 max_depth=max_depth,
                 artifact_ref_schemes=artifact_ref_schemes,
+                interpretation_contract_version=interpretation_contract_version,
                 depth=depth + 1,
                 path=f"{path}.{field_name}",
                 path_segments=child_segments,
@@ -582,6 +615,7 @@ def _validate_schema_policy(
             max_items=max_items,
             max_depth=max_depth,
             artifact_ref_schemes=artifact_ref_schemes,
+            interpretation_contract_version=interpretation_contract_version,
             depth=depth + 1,
             path=f"{path}[]",
             path_segments=(*path_segments, "*"),
@@ -690,6 +724,46 @@ def _validate_schema_document(value: object) -> None:
     walk(value, depth=1, path="$")
 
 
+def _validate_positive_display_text(value: str, *, path: str) -> None:
+    """Accept human-readable text while rejecting high-confidence private locators.
+
+    Slashes are ordinary display characters in role labels, ratios, commands,
+    Markdown links, and public root-relative routes.  Network URLs are also
+    display data here; fields that own a URL contract still use ``web_url``.
+    Strip valid network URLs before looking for other URI schemes, then apply
+    the filesystem parser instead of treating every separator as a path.
+    """
+
+    if (
+        not value
+        or value != value.strip()
+        or any(ord(character) < 0x20 and character not in {"\t", "\n", "\r"} for character in value)
+        or any(0x7F <= ord(character) <= 0x9F for character in value)
+        or _URI_SCHEME_VALUE_PATTERN.search(_strip_valid_network_urls(value)) is not None
+        or _contains_raw_local_path(
+            value,
+            allow_embedded_network_urls=True,
+            allow_public_root_relative_urls=True,
+        )
+    ):
+        raise ActionResultSchemaError(f"action_result_raw_local_path_forbidden:{path}")
+
+
+def _validate_positive_identifier(value: str, *, path: str) -> None:
+    """Keep identifiers transport-neutral and separator-free."""
+
+    if (
+        not value
+        or value != value.strip()
+        or any(character.isspace() for character in value)
+        or "/" in value
+        or "\\" in value
+        or _URI_SCHEME_VALUE_PATTERN.search(value) is not None
+        or any(ord(character) < 0x20 or 0x7F <= ord(character) <= 0x9F for character in value)
+    ):
+        raise ActionResultSchemaError(f"action_result_identifier_noncanonical:{path}")
+
+
 def _validate_payload_policy(
     value: object,
     *,
@@ -698,6 +772,7 @@ def _validate_payload_policy(
     max_serialized_bytes: int,
     artifact_ref_schemes: tuple[str, ...],
     field_value_roles: Mapping[str, str],
+    interpretation_contract_version: str,
     depth: int = 1,
     path: str = "$",
     schema_path: str = "",
@@ -736,6 +811,7 @@ def _validate_payload_policy(
                 max_serialized_bytes=max_serialized_bytes,
                 artifact_ref_schemes=artifact_ref_schemes,
                 field_value_roles=field_value_roles,
+                interpretation_contract_version=interpretation_contract_version,
                 depth=depth + 1,
                 path=f"{path}.{field_name}",
                 schema_path=child_schema_path,
@@ -756,6 +832,7 @@ def _validate_payload_policy(
                 max_serialized_bytes=max_serialized_bytes,
                 artifact_ref_schemes=artifact_ref_schemes,
                 field_value_roles=field_value_roles,
+                interpretation_contract_version=interpretation_contract_version,
                 depth=depth + 1,
                 path=f"{path}[{index}]",
                 schema_path=f"{schema_path}/*",
@@ -787,8 +864,15 @@ def _validate_payload_policy(
             _validate_web_url(value, path=path)
         elif role == "opaque_artifact_ref":
             _validate_opaque_artifact_ref(value, allowed_schemes=artifact_ref_schemes, path=path)
-        elif _is_artifact_context_path(_schema_path_segments(schema_path)) and _URI_SCHEME_VALUE_PATTERN.search(value):
+        elif _is_artifact_context_path(
+            _schema_path_segments(schema_path),
+            interpretation_contract_version=interpretation_contract_version,
+        ) and _URI_SCHEME_VALUE_PATTERN.search(value):
             raise ActionResultSchemaError(f"action_result_artifact_locator_value_noncanonical:{path}")
+        elif role == "display_text" and interpretation_contract_version != "action_result_interpretation_contract_v2":
+            _validate_positive_display_text(value, path=path)
+        elif role == "identifier" and interpretation_contract_version != "action_result_interpretation_contract_v2":
+            _validate_positive_identifier(value, path=path)
         elif role == "display_text" and _contains_raw_local_path(
             value,
             allow_embedded_network_urls=True,
@@ -824,33 +908,73 @@ def _json_pointer_segments(path: str) -> tuple[str, ...]:
     return tuple(token.replace("~1", "/").replace("~0", "~") for token in path[1:].split("/"))
 
 
-def _interpretation_contract_record() -> dict[str, object]:
-    """Canonical behavior identity for every result-spec interpreter."""
-
-    return {
-        "schema_version": ACTION_RESULT_INTERPRETATION_CONTRACT_VERSION,
-        "validator_owner": ACTION_RESULT_VALIDATOR_OWNER,
-        "canonicalizer_revision": ACTION_RESULT_CANONICALIZER_REVISION,
-        "value_policy_revision": ACTION_RESULT_VALUE_POLICY_REVISION,
-        "limit_policy_revision": ACTION_RESULT_LIMIT_POLICY_REVISION,
-        "schema_document_limits": {
-            "max_bytes": ACTION_RESULT_MAX_SCHEMA_BYTES,
-            "max_depth": ACTION_RESULT_MAX_SCHEMA_DOCUMENT_DEPTH,
-            "max_items": ACTION_RESULT_MAX_SCHEMA_DOCUMENT_ITEMS,
-        },
-        "max_integer_bits": ACTION_RESULT_MAX_INTEGER_BITS,
-        "value_roles": list(ACTION_RESULT_VALUE_ROLES),
-        "canonical_json": {
-            "ensure_ascii": False,
-            "sort_keys": True,
-            "separators": [",", ":"],
-            "allow_nan": False,
-            "utf8_byte_limit": "prevalidated_exact",
-        },
+_ACTION_RESULT_INTERPRETATION_CONTRACTS: Mapping[str, Mapping[str, object]] = MappingProxyType(
+    {
+        "action_result_interpretation_contract_v2": cast(
+            Mapping[str, object],
+            _freeze_json(
+                {
+                    "schema_version": "action_result_interpretation_contract_v2",
+                    "validator_owner": "sourcing_agent.model_tool_runtime.ToolSpec.validate_input",
+                    "canonicalizer_revision": "action_result_canonical_json_utf8_v2",
+                    "value_policy_revision": "action_result_explicit_value_roles_v2",
+                    "limit_policy_revision": "action_result_prevalidation_limits_v2",
+                    "schema_document_limits": {"max_bytes": 32768, "max_depth": 128, "max_items": 10000},
+                    "max_integer_bits": 13600,
+                    "value_roles": ["control", "identifier", "display_text", "web_url", "opaque_artifact_ref"],
+                    "canonical_json": {
+                        "ensure_ascii": False,
+                        "sort_keys": True,
+                        "separators": [",", ":"],
+                        "allow_nan": False,
+                        "utf8_byte_limit": "prevalidated_exact",
+                    },
+                }
+            ),
+        ),
+        ACTION_RESULT_INTERPRETATION_CONTRACT_VERSION: cast(
+            Mapping[str, object],
+            _freeze_json(
+                {
+                    "schema_version": ACTION_RESULT_INTERPRETATION_CONTRACT_VERSION,
+                    "validator_owner": ACTION_RESULT_VALIDATOR_OWNER,
+                    "canonicalizer_revision": ACTION_RESULT_CANONICALIZER_REVISION,
+                    "value_policy_revision": ACTION_RESULT_VALUE_POLICY_REVISION,
+                    "limit_policy_revision": ACTION_RESULT_LIMIT_POLICY_REVISION,
+                    "schema_document_limits": {"max_bytes": 32768, "max_depth": 128, "max_items": 10000},
+                    "max_integer_bits": 13600,
+                    "value_roles": ["control", "identifier", "display_text", "web_url", "opaque_artifact_ref"],
+                    "canonical_json": {
+                        "ensure_ascii": False,
+                        "sort_keys": True,
+                        "separators": [",", ":"],
+                        "allow_nan": False,
+                        "utf8_byte_limit": "prevalidated_exact",
+                    },
+                }
+            ),
+        ),
     }
+)
 
 
-ACTION_RESULT_INTERPRETATION_CONTRACT_DIGEST = _sha256_json(_interpretation_contract_record())
+def _interpretation_contract_record(version: object) -> dict[str, object]:
+    """Return one retained interpreter record by exact historical version."""
+
+    normalized_version = _required_identifier(
+        "interpretation_contract_version",
+        version,
+        pattern=_VERSION_PATTERN,
+    )
+    record = _ACTION_RESULT_INTERPRETATION_CONTRACTS.get(normalized_version)
+    if record is None:
+        raise ActionResultSchemaError(f"action_result_interpretation_contract_unknown:{normalized_version}")
+    return cast(dict[str, object], _thaw_json(record))
+
+
+ACTION_RESULT_INTERPRETATION_CONTRACT_DIGEST = _sha256_json(
+    _interpretation_contract_record(ACTION_RESULT_INTERPRETATION_CONTRACT_VERSION)
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -906,6 +1030,52 @@ class ActionResultQueryOwner:
 ActionResultOwnerBinding: TypeAlias = ActionResultActionOwner | ActionResultQueryOwner
 
 
+def _schema_at_result_path(schema: Mapping[str, Any], field_path: str) -> Mapping[str, Any] | None:
+    current: Mapping[str, Any] = schema
+    for segment in _json_pointer_segments(field_path):
+        if segment == "*":
+            child = current.get("items")
+        else:
+            properties = current.get("properties")
+            child = properties.get(segment) if isinstance(properties, Mapping) else None
+        if not isinstance(child, Mapping):
+            return None
+        current = child
+    return current
+
+
+def _schema_has_closed_control_values(schema: Mapping[str, Any]) -> bool:
+    if type(schema.get("const")) is str:
+        return True
+    values = schema.get("enum")
+    return isinstance(values, (list, tuple)) and bool(values) and all(type(value) is str for value in values)
+
+
+def _schema_has_bounded_identifier_values(schema: Mapping[str, Any]) -> bool:
+    if _schema_has_closed_control_values(schema):
+        return True
+    return (
+        schema.get("type") == "string"
+        and type(schema.get("maxLength")) is int
+        and int(schema["maxLength"]) > 0
+        and type(schema.get("pattern")) is str
+        and bool(schema.get("pattern"))
+    )
+
+
+def _provenance_for_value_path(provenance: Mapping[str, str], field_path: str) -> str:
+    direct = provenance.get(field_path)
+    if direct is not None:
+        return direct
+    ancestor = field_path
+    while "/" in ancestor:
+        ancestor = ancestor.rsplit("/", 1)[0]
+        inherited = provenance.get(ancestor)
+        if inherited is not None:
+            return inherited
+    raise ActionResultSchemaError(f"action_result_field_provenance_value_path_missing:{field_path}")
+
+
 @dataclass(frozen=True, slots=True)
 class ActionResultSpec:
     """Immutable result schema, owner, and serialization policy for one tool."""
@@ -925,7 +1095,10 @@ class ActionResultSpec:
     max_items: int
     max_depth: int
     artifact_ref_schemes: tuple[str, ...]
-    _variant_tools: Mapping[str, ToolSpec] = field(init=False, repr=False, compare=False)
+    interpretation_contract_version: str = ACTION_RESULT_INTERPRETATION_CONTRACT_VERSION
+    externally_controlled_identifier_paths: tuple[str, ...] = ()
+    _interpretation_contract: Mapping[str, object] = field(init=False, repr=False, compare=False)
+    _variant_tools: Mapping[str, InternalToolValidatorSpec] = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         if not is_valid_agent_tool_name(self.tool_name):
@@ -937,6 +1110,19 @@ class ActionResultSpec:
             raise ActionResultSchemaError("action_result_action_owner_binding_required")
         if self.tool_kind == "query" and not isinstance(self.owner_binding, ActionResultQueryOwner):
             raise ActionResultSchemaError("action_result_query_owner_binding_required")
+        interpretation_contract_version = _required_identifier(
+            "interpretation_contract_version",
+            self.interpretation_contract_version,
+            pattern=_VERSION_PATTERN,
+        )
+        interpretation_contract = _interpretation_contract_record(interpretation_contract_version)
+        if type(self.externally_controlled_identifier_paths) is not tuple:
+            raise ActionResultSchemaError("action_result_external_identifier_paths_invalid")
+        external_identifier_paths = tuple(sorted(self.externally_controlled_identifier_paths))
+        if len(external_identifier_paths) != len(set(external_identifier_paths)) or any(
+            type(path) is not str or not path.startswith("/") for path in external_identifier_paths
+        ):
+            raise ActionResultSchemaError("action_result_external_identifier_paths_invalid")
         version = _required_identifier(
             "schema_version",
             self.result_schema_version,
@@ -961,6 +1147,7 @@ class ActionResultSpec:
             max_serialized_bytes=8192,
             artifact_ref_schemes=(),
             field_value_roles={},
+            interpretation_contract_version=interpretation_contract_version,
         )
         serialized_contract = json.loads(_canonical_json(self.serializer_contract))
         assert isinstance(serialized_contract, dict)
@@ -970,7 +1157,8 @@ class ActionResultSpec:
             self.validator_owner,
             pattern=_OWNER_PATTERN,
         )
-        if validator_owner != ACTION_RESULT_VALIDATOR_OWNER:
+        expected_validator_owner = interpretation_contract.get("validator_owner")
+        if type(expected_validator_owner) is not str or validator_owner != expected_validator_owner:
             raise ActionResultSchemaError("action_result_validator_owner_not_canonical")
         if (
             type(self.max_serialized_bytes) is not int
@@ -997,7 +1185,7 @@ class ActionResultSpec:
         if not isinstance(self.variant_schemas, Mapping) or set(self.variant_schemas) != set(ACTION_RESULT_VARIANTS):
             raise ActionResultSchemaError("action_result_variants_incomplete")
         frozen_schemas: dict[str, Mapping[str, Any]] = {}
-        variant_tools: dict[str, ToolSpec] = {}
+        variant_tools: dict[str, InternalToolValidatorSpec] = {}
         for variant in ACTION_RESULT_VARIANTS:
             schema = self.variant_schemas.get(variant)
             if not isinstance(schema, Mapping):
@@ -1009,14 +1197,13 @@ class ActionResultSpec:
                     max_items=self.max_items,
                     max_depth=self.max_depth,
                     artifact_ref_schemes=canonical_schemes,
+                    interpretation_contract_version=interpretation_contract_version,
                 )
-                tool = ToolSpec(
+                tool = InternalToolValidatorSpec(
                     name=f"{tool_name}:{variant}:result",
                     description=f"Model-safe {variant} result for {tool_name}.",
                     input_schema=schema,
                     schema_version=version,
-                    approval_policy="result_validation_only",
-                    budget_required=False,
                 )
             except (ModelToolRuntimeError, ModelToolSchemaError, RecursionError, UnicodeError) as exc:
                 raise ActionResultSchemaError(f"action_result_variant_schema_invalid:{variant}:{exc}") from exc
@@ -1069,6 +1256,7 @@ class ActionResultSpec:
             raise ActionResultSchemaError("action_result_field_value_roles_variants_incomplete")
         frozen_value_roles: dict[str, Mapping[str, ActionResultValueRole]] = {}
         artifact_role_found = False
+        used_external_identifier_paths: set[str] = set()
         for variant in ACTION_RESULT_VARIANTS:
             roles = self.field_value_roles.get(variant)
             if not isinstance(roles, Mapping) or any(type(path) is not str for path in roles):
@@ -1089,12 +1277,33 @@ class ActionResultSpec:
                     raise ActionResultSchemaError(f"action_result_field_value_role_invalid:{variant}:{field_path}")
                 segments = _json_pointer_segments(field_path)
                 field_name = _artifact_role_field(segments)
-                artifact_context = any(
-                    _field_name_tokens(segment) & {"artifact", "artifacts"} for segment in segments if segment != "*"
+                artifact_context = _is_artifact_context_path(
+                    segments,
+                    interpretation_contract_version=interpretation_contract_version,
                 )
                 canonical_artifact_path = field_name is not None and (
                     _is_canonical_artifact_ref_field(field_name) or _is_canonical_artifact_refs_field(field_name)
                 )
+                provenance_class = _provenance_for_value_path(frozen_provenance[variant], field_path)
+                externally_controlled = provenance_class in {"user_supplied", "provider_observed", "model_inferred"}
+                field_schema = _schema_at_result_path(frozen_schemas[variant], field_path)
+                assert field_schema is not None
+                if role == "control" and (externally_controlled or not _schema_has_closed_control_values(field_schema)):
+                    raise ActionResultSchemaError(
+                        f"action_result_control_provenance_or_schema_invalid:{variant}:{field_path}"
+                    )
+                if role == "identifier" and externally_controlled:
+                    if field_path not in external_identifier_paths or not _schema_has_bounded_identifier_values(
+                        field_schema
+                    ):
+                        raise ActionResultSchemaError(
+                            f"action_result_external_identifier_exception_required:{variant}:{field_path}"
+                        )
+                    used_external_identifier_paths.add(field_path)
+                if role == "opaque_artifact_ref" and externally_controlled:
+                    raise ActionResultSchemaError(
+                        f"action_result_external_artifact_ref_forbidden:{variant}:{field_path}"
+                    )
                 if canonical_artifact_path and role != "opaque_artifact_ref":
                     raise ActionResultSchemaError(f"action_result_artifact_ref_role_required:{variant}:{field_path}")
                 if role == "opaque_artifact_ref" and not canonical_artifact_path:
@@ -1109,6 +1318,11 @@ class ActionResultSpec:
                     artifact_role_found = True
                 normalized_roles[field_path] = cast(ActionResultValueRole, role)
             frozen_value_roles[variant] = MappingProxyType(normalized_roles)
+        unused_external_identifier_paths = sorted(set(external_identifier_paths) - used_external_identifier_paths)
+        if unused_external_identifier_paths:
+            raise ActionResultSchemaError(
+                "action_result_external_identifier_exception_unused:" + ",".join(unused_external_identifier_paths)
+            )
         if artifact_role_found and not canonical_schemes:
             raise ActionResultSchemaError("action_result_artifact_ref_policy_required")
         if canonical_schemes and not artifact_role_found:
@@ -1121,6 +1335,9 @@ class ActionResultSpec:
         object.__setattr__(self, "serializer_contract", frozen_serializer_contract)
         object.__setattr__(self, "validator_owner", validator_owner)
         object.__setattr__(self, "artifact_ref_schemes", canonical_schemes)
+        object.__setattr__(self, "interpretation_contract_version", interpretation_contract_version)
+        object.__setattr__(self, "externally_controlled_identifier_paths", external_identifier_paths)
+        object.__setattr__(self, "_interpretation_contract", _freeze_json(interpretation_contract))
         object.__setattr__(self, "variant_schemas", MappingProxyType(frozen_schemas))
         object.__setattr__(self, "field_provenance", MappingProxyType(frozen_provenance))
         object.__setattr__(self, "field_value_roles", MappingProxyType(frozen_value_roles))
@@ -1153,7 +1370,7 @@ class ActionResultSpec:
 
     @property
     def interpretation_contract_digest(self) -> str:
-        return ACTION_RESULT_INTERPRETATION_CONTRACT_DIGEST
+        return _sha256_json(self._interpretation_contract)
 
     @property
     def allowed_variants(self) -> tuple[ActionResultVariant, ...]:
@@ -1170,8 +1387,9 @@ class ActionResultSpec:
             "serializer_contract": _thaw_json(self.serializer_contract),
             "serializer_contract_digest": self.serializer_contract_digest,
             "validator_owner": self.validator_owner,
-            "interpretation_contract": _interpretation_contract_record(),
+            "interpretation_contract": _thaw_json(self._interpretation_contract),
             "interpretation_contract_digest": self.interpretation_contract_digest,
+            "externally_controlled_identifier_paths": list(self.externally_controlled_identifier_paths),
             "variant_schemas": _thaw_json(self.variant_schemas),
             "field_provenance": _thaw_json(self.field_provenance),
             "field_value_roles": _thaw_json(self.field_value_roles),
@@ -1207,6 +1425,7 @@ class ActionResultSpec:
             max_serialized_bytes=self.max_serialized_bytes,
             artifact_ref_schemes=self.artifact_ref_schemes,
             field_value_roles=self.field_value_roles[variant],
+            interpretation_contract_version=self.interpretation_contract_version,
         )
         tool = self._variant_tools[variant]
         try:
@@ -1236,7 +1455,7 @@ class ActionResultRegistry:
         by_tool: dict[str, list[ActionResultSpec]] = {}
         historical: dict[tuple[str, str, str], ActionResultSpec] = {}
         version_digests: dict[tuple[str, str], str] = {}
-        owner_bindings: dict[str, dict[str, object]] = {}
+        tool_routes: dict[str, tuple[str, str]] = {}
         route_to_tool: dict[tuple[str, str], str] = {}
         for spec in materialized:
             if not isinstance(spec, ActionResultSpec):
@@ -1248,15 +1467,14 @@ class ActionResultRegistry:
             prior_digest = version_digests.get(version_key)
             if prior_digest is not None and prior_digest != spec.result_schema_digest:
                 raise ActionResultSchemaError(f"action_result_registry_version_digest_drift:{spec.tool_name}")
-            binding_record = spec.owner_binding.to_fingerprint_record()
-            prior_binding = owner_bindings.get(spec.tool_name)
-            if prior_binding is not None and prior_binding != binding_record:
+            prior_route = tool_routes.get(spec.tool_name)
+            if prior_route is not None and prior_route != spec.route_identity:
                 raise ActionResultSchemaError(f"action_result_registry_owner_binding_drift:{spec.tool_name}")
             prior_tool_name = route_to_tool.get(spec.route_identity)
             if prior_tool_name is not None and prior_tool_name != spec.tool_name:
                 raise ActionResultSchemaError(f"action_result_registry_owner_route_collision:{spec.route_identity[1]}")
             version_digests[version_key] = spec.result_schema_digest
-            owner_bindings[spec.tool_name] = binding_record
+            tool_routes[spec.tool_name] = spec.route_identity
             route_to_tool[spec.route_identity] = spec.tool_name
             historical[historical_key] = spec
             by_tool.setdefault(spec.tool_name, []).append(spec)

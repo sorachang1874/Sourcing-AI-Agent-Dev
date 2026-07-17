@@ -42,6 +42,7 @@ from sourcing_agent.model_tool_runtime import (
     MAX_TOTAL_TOOL_SCHEMA_BYTES,
     MODEL_TURN_BUDGET_SCHEMA_VERSION,
     MODEL_TURN_IDEMPOTENCY_KEY_PREFIX,
+    InternalToolValidatorSpec,
     ModelToolProtocolError,
     ModelToolRequestBindingError,
     ModelToolRuntimeError,
@@ -54,6 +55,7 @@ from sourcing_agent.model_tool_runtime import (
     SystemMessage,
     TerminalEvent,
     ToolCallingSessionBase,
+    ToolCallRecord,
     ToolSpec,
     UserMessage,
     canonical_model_turn_transcript_sha256,
@@ -205,6 +207,62 @@ def _tool_spec(name: str, *, description: str = "Synthetic tool.") -> ToolSpec:
         approval_policy="none_simulated",
         budget_required=False,
     )
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["search.tool", "search:tool", "_search_tool", "a" * 129, "搜索工具"],
+)
+def test_provider_tool_declarations_and_calls_share_the_canonical_agent_name_grammar(name: str) -> None:
+    with pytest.raises(ModelToolRuntimeError, match="invalid_tool_name"):
+        _tool_spec(name)
+    with pytest.raises(ModelToolRuntimeError, match="invalid_tool_name"):
+        ToolCallRecord.from_arguments(
+            provider_call_id="call_invalid_name",
+            name=name,
+            arguments={},
+        )
+
+
+@pytest.mark.parametrize("name", ["a", "Search_Tool-9", "a" * 128])
+def test_provider_tool_declarations_and_calls_accept_the_same_canonical_name_boundaries(name: str) -> None:
+    assert _tool_spec(name).name == name
+    assert (
+        ToolCallRecord.from_arguments(
+            provider_call_id="call_valid_name",
+            name=name,
+            arguments={},
+        ).name
+        == name
+    )
+
+
+def test_provider_and_internal_tool_specs_share_one_schema_validation_engine() -> None:
+    provider_spec = _tool_spec("search_public_evidence")
+    internal_spec = InternalToolValidatorSpec(
+        name="search_public_evidence:success:result",
+        description="Internal result validator.",
+        input_schema={"type": "object", "properties": {}, "additionalProperties": False},
+        schema_version="synthetic_result_v1",
+    )
+    assert provider_spec.input_schema == internal_spec.input_schema
+
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        calls: list[Mapping[str, object]] = []
+        shared_validator = model_tool_runtime_module._validate_tool_input
+
+        def record_call(
+            input_schema: Mapping[str, object],
+            value: Mapping[str, object],
+        ):
+            calls.append(input_schema)
+            return shared_validator(input_schema, value)
+
+        monkeypatch.setattr(model_tool_runtime_module, "_validate_tool_input", record_call)
+        assert provider_spec.validate_input({}) == {}
+        assert internal_spec.validate_input({}) == {}
+
+    assert calls == [provider_spec.input_schema, internal_spec.input_schema]
 
 
 def _frame(payload: object) -> bytes:

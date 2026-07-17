@@ -9,6 +9,8 @@ from unittest.mock import patch
 import pytest
 
 from sourcing_agent.action_result_schema import (
+    ACTION_RESULT_INTERPRETATION_CONTRACT_DIGEST,
+    ACTION_RESULT_INTERPRETATION_CONTRACT_VERSION,
     ACTION_RESULT_PROVENANCE_CLASSES,
     ACTION_RESULT_REGISTRY_SCHEMA_VERSION,
     ACTION_RESULT_VALIDATOR_OWNER,
@@ -21,7 +23,7 @@ from sourcing_agent.action_result_schema import (
     ActionResultSchemaError,
     ActionResultSpec,
 )
-from sourcing_agent.model_tool_runtime import MAX_MESSAGE_CONTENT_BYTES, ToolResultMessage, ToolSpec
+from sourcing_agent.model_tool_runtime import MAX_MESSAGE_CONTENT_BYTES, InternalToolValidatorSpec, ToolResultMessage
 
 _SERIALIZER_CONTRACT = {
     "schema_version": "projection_search_result_serializer_contract_v1",
@@ -150,6 +152,9 @@ def _spec(
     max_depth: int = 6,
     artifact_ref_schemes: tuple[str, ...] = (),
     tool_kind: str = "action",
+    interpretation_contract_version: str = ACTION_RESULT_INTERPRETATION_CONTRACT_VERSION,
+    externally_controlled_identifier_paths: tuple[str, ...] = (),
+    validator_owner: str | None = None,
 ) -> ActionResultSpec:
     effective_schemas = _schemas() if schemas is None else schemas
     owner_binding = (
@@ -169,7 +174,13 @@ def _spec(
         serializer_owner="projection_search_service.result_serializer_v1",
         serializer_revision="projection_search_result_serializer_v1",
         serializer_contract=_SERIALIZER_CONTRACT,
-        validator_owner=ACTION_RESULT_VALIDATOR_OWNER,
+        validator_owner=(
+            "sourcing_agent.model_tool_runtime.ToolSpec.validate_input"
+            if interpretation_contract_version == "action_result_interpretation_contract_v2"
+            else ACTION_RESULT_VALIDATOR_OWNER
+        )
+        if validator_owner is None
+        else validator_owner,
         variant_schemas=effective_schemas,
         field_provenance=_provenance(effective_schemas) if field_provenance is None else field_provenance,
         field_value_roles=_value_roles(effective_schemas) if field_value_roles is None else field_value_roles,
@@ -177,6 +188,8 @@ def _spec(
         max_items=max_items,
         max_depth=max_depth,
         artifact_ref_schemes=artifact_ref_schemes,
+        interpretation_contract_version=interpretation_contract_version,
+        externally_controlled_identifier_paths=externally_controlled_identifier_paths,
     )
 
 
@@ -278,6 +291,7 @@ def test_result_digest_binds_interpreter_policy_value_roles_and_canonical_serial
     assert baseline.result_schema_digest == reordered.result_schema_digest
     assert baseline.result_schema_digest != changed_role.result_schema_digest
     assert baseline.to_manifest_record()["interpretation_contract_digest"] == baseline.interpretation_contract_digest
+    assert baseline.interpretation_contract_digest == ACTION_RESULT_INTERPRETATION_CONTRACT_DIGEST
     assert len(baseline.interpretation_contract_digest) == 64
     assert set(ACTION_RESULT_VALUE_ROLES) == {
         "control",
@@ -286,6 +300,145 @@ def test_result_digest_binds_interpreter_policy_value_roles_and_canonical_serial
         "web_url",
         "opaque_artifact_ref",
     }
+
+
+def test_interpreter_contract_is_frozen_per_spec_and_v2_v3_history_coexists() -> None:
+    current = _spec()
+    historical = _spec(interpretation_contract_version="action_result_interpretation_contract_v2")
+    historical = replace(
+        historical,
+        result_schema_version="search_projection_result_v2",
+        serializer_revision="projection_search_result_serializer_v2",
+        serializer_contract={"schema_version": "projection_search_result_serializer_contract_v2"},
+    )
+    frozen_digest = current.result_schema_digest
+
+    with patch("sourcing_agent.action_result_schema._interpretation_contract_record", return_value={"forged": True}):
+        assert current.result_schema_digest == frozen_digest
+
+    assert historical.validator_owner == "sourcing_agent.model_tool_runtime.ToolSpec.validate_input"
+    assert current.validator_owner == ACTION_RESULT_VALIDATOR_OWNER
+    with pytest.raises(ActionResultSchemaError, match="validator_owner_not_canonical"):
+        _spec(
+            interpretation_contract_version="action_result_interpretation_contract_v2",
+            validator_owner=ACTION_RESULT_VALIDATOR_OWNER,
+        )
+    assert current.interpretation_contract_digest != historical.interpretation_contract_digest
+    assert (
+        ActionResultRegistry((current, historical)).require_historical(
+            historical.tool_name,
+            historical.result_schema_version,
+            historical.result_schema_digest,
+        )
+        is historical
+    )
+    assert json.loads(historical.serialize({**_payload(), "status": "research/engineering"}))["status"] == (
+        "research/engineering"
+    )
+    assert json.loads(current.serialize({**_payload(), "status": "research/engineering"}))["status"] == (
+        "research/engineering"
+    )
+
+
+@pytest.mark.parametrize(
+    ("version", "error"),
+    [
+        ([], "interpretation_contract_version_invalid"),
+        ("action_result_interpretation_contract_v99", "interpretation_contract_unknown"),
+    ],
+)
+def test_interpreter_contract_version_is_exact_and_fail_closed(version: object, error: str) -> None:
+    with pytest.raises(ActionResultSchemaError, match=error):
+        _spec(interpretation_contract_version=version)  # type: ignore[arg-type]
+
+
+def test_provenance_and_value_roles_form_one_closed_authority_matrix() -> None:
+    schemas = _schemas()
+    roles = _value_roles(schemas)
+    provenance = _provenance(schemas)
+
+    roles["success"]["/status"] = "control"
+    provenance["success"]["/status"] = "user_supplied"
+    with pytest.raises(ActionResultSchemaError, match="control_provenance_or_schema_invalid"):
+        _spec(schemas=schemas, field_provenance=provenance, field_value_roles=roles)
+
+    schemas = _schemas()
+    roles = _value_roles(schemas)
+    provenance = _provenance(schemas)
+    provenance["success"]["/items/*/id"] = "provider_observed"
+    with pytest.raises(ActionResultSchemaError, match="external_identifier_exception_required"):
+        _spec(schemas=schemas, field_provenance=provenance, field_value_roles=roles)
+
+    item_schema = dict(dict(dict(schemas["success"]["properties"])["items"])["items"])
+    item_properties = dict(item_schema["properties"])
+    item_properties["id"] = {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 80,
+        "pattern": "^[A-Za-z0-9_]+$",
+    }
+    item_schema["properties"] = item_properties
+    success_properties = dict(schemas["success"]["properties"])
+    success_items = dict(success_properties["items"])
+    success_items["items"] = item_schema
+    success_properties["items"] = success_items
+    schemas["success"]["properties"] = success_properties
+    accepted = _spec(
+        schemas=schemas,
+        field_provenance=provenance,
+        field_value_roles=roles,
+        externally_controlled_identifier_paths=("/items/*/id",),
+    )
+    assert json.loads(accepted.serialize(_payload()))["items"][0]["id"] == "person_2"
+
+
+@pytest.mark.parametrize("provenance_class", ["user_supplied", "provider_observed", "model_inferred"])
+@pytest.mark.parametrize(
+    ("role", "error"),
+    [
+        ("control", "control_provenance_or_schema_invalid"),
+        ("identifier", "external_identifier_exception_required"),
+        ("opaque_artifact_ref", "external_artifact_ref_forbidden"),
+    ],
+)
+def test_every_external_provenance_class_is_blocked_from_authoritative_roles_without_explicit_policy(
+    provenance_class: str,
+    role: str,
+    error: str,
+) -> None:
+    schemas = _schemas(with_artifact_ref=role == "opaque_artifact_ref")
+    roles = _value_roles(schemas)
+    provenance = _provenance(schemas)
+    if role == "control":
+        field_path = "/status"
+        roles["success"][field_path] = role
+    elif role == "identifier":
+        field_path = "/items/*/id"
+    else:
+        field_path = "/result_artifact_ref"
+    provenance["success"][field_path] = provenance_class
+
+    with pytest.raises(ActionResultSchemaError, match=error):
+        _spec(
+            schemas=schemas,
+            field_provenance=provenance,
+            field_value_roles=roles,
+            artifact_ref_schemes=("artifact",) if role == "opaque_artifact_ref" else (),
+        )
+
+
+def test_owner_control_roles_require_closed_schema_values() -> None:
+    schemas = _schemas()
+    roles = _value_roles(schemas)
+    roles["success"]["/status"] = "control"
+    with pytest.raises(ActionResultSchemaError, match="control_provenance_or_schema_invalid"):
+        _spec(schemas=schemas, field_value_roles=roles)
+
+    success_properties = dict(schemas["success"]["properties"])
+    success_properties["status"] = {"type": "string", "const": "ready"}
+    schemas["success"]["properties"] = success_properties
+    spec = _spec(schemas=schemas, field_value_roles=roles)
+    assert json.loads(spec.serialize(_payload()))["status"] == "ready"
 
 
 @pytest.mark.parametrize("variant", ACTION_RESULT_VARIANTS)
@@ -298,10 +451,14 @@ def test_all_declared_variants_validate_and_are_tool_result_message_safe(variant
     assert ToolResultMessage(tool_call_id="call_1", content=content).content == content
 
 
-def test_tool_spec_validate_input_is_the_single_schema_validator() -> None:
+def test_internal_validator_is_the_single_schema_validator_without_agent_tool_identity() -> None:
     spec = _spec()
     payload = _payload()
-    with patch.object(ToolSpec, "validate_input", autospec=True, return_value=payload) as validator:
+    assert ACTION_RESULT_VALIDATOR_OWNER == (
+        "sourcing_agent.model_tool_runtime.InternalToolValidatorSpec.validate_input"
+    )
+    assert spec.validator_owner == ACTION_RESULT_VALIDATOR_OWNER
+    with patch.object(InternalToolValidatorSpec, "validate_input", autospec=True, return_value=payload) as validator:
         assert json.loads(spec.serialize(payload)) == payload
     validator.assert_called_once()
     assert validator.call_args.args[0].name == "search_projection:success:result"
@@ -345,6 +502,9 @@ def test_nonfinite_and_non_json_owner_output_fail_closed(payload: dict[str, obje
         "C:\\private\\result.json",
         "runtime/results/result.json",
         "relative/results.json",
+        "relative/archive.zip",
+        "relative/secret.pem",
+        "relative/id_rsa",
     ],
 )
 def test_raw_local_path_values_fail_closed(raw_path: str) -> None:
@@ -476,6 +636,37 @@ def test_nested_artifact_locator_is_rejected_by_ancestor_aware_schema_path_polic
         _spec(schemas=schemas)
 
 
+def test_artifact_lifecycle_metadata_uses_exact_tokens_without_ref_substring_false_positives() -> None:
+    schemas = _schemas()
+    for schema in schemas.values():
+        properties = dict(schema["properties"])
+        properties["artifact_refresh_status"] = {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40,
+            "pattern": "^[a-z_]+$",
+        }
+        properties["artifact_preference"] = {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40,
+            "pattern": "^[a-z_]+$",
+        }
+        schema["properties"] = properties
+    spec = _spec(schemas=schemas)
+    serialized = json.loads(
+        spec.serialize(
+            {
+                **_payload(),
+                "artifact_refresh_status": "ready",
+                "artifact_preference": "canonical",
+            }
+        )
+    )
+    assert serialized["artifact_refresh_status"] == "ready"
+    assert serialized["artifact_preference"] == "canonical"
+
+
 def test_unknown_artifact_string_role_cannot_carry_a_network_locator() -> None:
     schemas = _schemas()
     for schema in schemas.values():
@@ -490,6 +681,7 @@ def test_unknown_artifact_string_role_cannot_carry_a_network_locator() -> None:
 @pytest.mark.parametrize(
     ("field_name", "value"),
     [
+        ("artifact_destination", "bucket/private-object"),
         ("artifact_destination", "s3:bucket/object"),
         ("artifact_target", "gs:bucket/object"),
         ("artifact_key", "urn:private-result"),
@@ -509,9 +701,8 @@ def test_noncanonical_artifact_metadata_cannot_carry_opaque_locator(field_name: 
         required = schema["required"]
         assert isinstance(required, list)
         required.append(field_name)
-    spec = _spec(schemas=schemas)
-    with pytest.raises(ActionResultSchemaError, match="artifact_locator_value_noncanonical"):
-        spec.serialize({**_payload(), field_name: value})
+    with pytest.raises(ActionResultSchemaError, match="artifact_locator_field_noncanonical"):
+        _spec(schemas=schemas)
 
 
 @pytest.mark.parametrize("nested_field", ["destination", "target", "key"])
@@ -529,12 +720,11 @@ def test_nested_artifact_metadata_cannot_carry_opaque_locator(nested_field: str)
         required = schema["required"]
         assert isinstance(required, list)
         required.append("artifact")
-    spec = _spec(schemas=schemas)
-    with pytest.raises(ActionResultSchemaError, match="artifact_locator_value_noncanonical"):
-        spec.serialize({**_payload(), "artifact": {nested_field: "s3:bucket/object"}})
+    with pytest.raises(ActionResultSchemaError, match="artifact_locator_field_noncanonical"):
+        _spec(schemas=schemas)
 
 
-def test_ordinary_url_fields_and_natural_language_slashes_are_not_false_positive_paths() -> None:
+def test_web_urls_require_an_explicit_role_without_rejecting_display_separators() -> None:
     schemas = _schemas()
     for schema in schemas.values():
         properties = dict(schema["properties"])
@@ -542,13 +732,16 @@ def test_ordinary_url_fields_and_natural_language_slashes_are_not_false_positive
         schema["properties"] = properties
     spec = _spec(schemas=schemas)
 
+    assert json.loads(spec.serialize({**_payload(), "source_url": "https://example.test/a/b"}))["source_url"] == (
+        "https://example.test/a/b"
+    )
+    assert json.loads(spec.serialize({**_payload(), "source_url": "/api/results"}))["source_url"] == "/api/results"
     assert (
         json.loads(
             spec.serialize({**_payload(), "status": "research/engineering", "source_url": "https://example.test/a/b"})
-        )["source_url"]
-        == "https://example.test/a/b"
+        )["status"]
+        == "research/engineering"
     )
-    assert json.loads(spec.serialize({**_payload(), "source_url": "/api/results"}))["source_url"] == "/api/results"
     for invalid_url in (
         "/Users/operator/private/result.json",
         "/workspace/private/result.json",
@@ -615,7 +808,7 @@ def test_scheme_prefixed_absolute_local_paths_fail_closed(raw_path: str) -> None
         "See /docs/getting-started for help",
     ],
 )
-def test_display_urls_and_non_path_slash_tokens_remain_model_safe(status: str) -> None:
+def test_display_text_preserves_urls_slash_commands_ratios_and_language_names(status: str) -> None:
     assert json.loads(_spec().serialize({**_payload(), "status": status}))["status"] == status
 
 
@@ -750,7 +943,10 @@ def test_every_schema_keyword_is_bounded_before_tool_spec(mutation: str) -> None
     success_properties["status"] = status_schema
     schemas["success"]["properties"] = success_properties
 
-    with patch("sourcing_agent.action_result_schema.ToolSpec", side_effect=AssertionError("ToolSpec reached")) as tool:
+    with patch(
+        "sourcing_agent.action_result_schema.InternalToolValidatorSpec",
+        side_effect=AssertionError("validator reached"),
+    ) as tool:
         with pytest.raises(ActionResultSchemaError, match=error):
             _spec(schemas=schemas)
     tool.assert_not_called()
@@ -759,7 +955,7 @@ def test_every_schema_keyword_is_bounded_before_tool_spec(mutation: str) -> None
 def test_oversize_payload_fails_before_schema_validator_allocation() -> None:
     spec = _spec(max_serialized_bytes=100)
     payload = {**_payload(), "status": "x" * 100_000}
-    with patch.object(ToolSpec, "validate_input", autospec=True) as validator:
+    with patch.object(InternalToolValidatorSpec, "validate_input", autospec=True) as validator:
         with pytest.raises(ActionResultSchemaError, match="serialized_bytes_exceeded"):
             spec.serialize(payload)
     validator.assert_not_called()
@@ -768,7 +964,7 @@ def test_oversize_payload_fails_before_schema_validator_allocation() -> None:
 def test_huge_integer_payload_fails_with_bounded_contract_error_before_tool_spec() -> None:
     payload = _payload()
     payload["items"] = [{"id": "person_1", "score": 10**5_000}]
-    with patch.object(ToolSpec, "validate_input", autospec=True) as validator:
+    with patch.object(InternalToolValidatorSpec, "validate_input", autospec=True) as validator:
         with pytest.raises(ActionResultSchemaError, match="integer_too_large"):
             _spec().serialize(payload)
     validator.assert_not_called()
@@ -1063,7 +1259,7 @@ def test_registry_retains_versions_and_rejects_duplicate_or_drifting_history() -
         ActionResultRegistry((search, digest_drift))
 
 
-def test_registry_rejects_action_and_query_owner_drift_for_one_tool_name() -> None:
+def test_registry_rejects_stable_route_drift_but_retains_query_owner_revisions() -> None:
     action = _spec(action_type="search_projection")
     action_drift = replace(
         action,
@@ -1085,8 +1281,24 @@ def test_registry_rejects_action_and_query_owner_drift_for_one_tool_name() -> No
         result_schema_version="inspect_operation_result_v2",
         serializer_contract=dict(query.serializer_contract),
     )
+    registry = ActionResultRegistry((query, query_drift))
+    retained = registry.specs_for_tool("inspect_operation")
+    assert len(retained) == 2
+    assert query in retained
+    assert query_drift in retained
+
+    query_route_drift = replace(
+        query_drift,
+        owner_binding=ActionResultQueryOwner(
+            owner_id="different_query_owner",
+            owner_revision="operation_query_owner_v2",
+            owner_contract_digest="2" * 64,
+        ),
+        result_schema_version="inspect_operation_result_v3",
+        serializer_contract=dict(query.serializer_contract),
+    )
     with pytest.raises(ActionResultSchemaError, match="registry_owner_binding_drift:inspect_operation"):
-        ActionResultRegistry((query, query_drift))
+        ActionResultRegistry((query, query_route_drift))
 
 
 def test_registry_rejects_two_tool_names_for_one_owner_route() -> None:
