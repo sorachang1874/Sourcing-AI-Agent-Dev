@@ -538,19 +538,19 @@ def test_tool_kind_and_route_variant_must_match_exactly(
         replace(_action_spec(), tool_kind=tool_kind, route=route, behavior=behavior)  # type: ignore[arg-type]
 
 
-def test_action_cannot_be_declared_as_read_only_and_query_cannot_mutate_or_require_approval() -> None:
-    with pytest.raises(AgentToolRegistryError, match="action_effect_invalid"):
-        replace(_action_spec(), behavior=_query_behavior())
+def test_action_backed_read_adapter_can_be_read_only_but_no_read_surface_can_mutate_or_require_approval() -> None:
+    read_only_action = replace(_action_spec(), behavior=_query_behavior())
+    assert read_only_action.tool_kind == "action"
+    assert read_only_action.behavior.effect_class == "read_only"
+    assert read_only_action.behavior.command_exposure == "none"
     with pytest.raises(AgentToolRegistryError, match="query_behavior_invalid"):
         _query_spec(behavior=_action_behavior())
-    with pytest.raises(AgentToolRegistryError, match="query_behavior_invalid"):
-        _query_spec(
-            behavior=AgentToolBehavior(
-                effect_class="read_only",
-                command_exposure="none",
-                approval=_approval(required=True),
-                control_policy=_owner("agent.control.query_policy"),
-            )
+    with pytest.raises(AgentToolRegistryError, match="read_only_approval_forbidden"):
+        AgentToolBehavior(
+            effect_class="read_only",
+            command_exposure="none",
+            approval=_approval(required=True),
+            control_policy=_owner("agent.control.query_policy"),
         )
 
 

@@ -26,6 +26,10 @@ This fixed-forward closes the four P1 findings in the advisory `NO-GO` (`0/4/0/0
 4. Budget reservation and provider capability requirements are legal only for `command_backed_action`. Read-only
    queries and commandless actions reject both requirements. A live capability additionally requires a parent budget
    reservation and the existing dispatch-acceptance checkpoint.
+5. `read_only` describes effects rather than registry kind. It is valid for a query or for an action-backed canonical
+   read adapter such as `filter_projection`; both forms require zero command exposure and forbid human approval,
+   budget reservation, and provider capability. This preserves the 15-row action identity without falsely recording
+   a read as a commandless write.
 
 ## Exact scope
 

@@ -501,6 +501,8 @@ class AgentToolBehavior:
             raise AgentToolRegistryError("agent_tool_command_exposure_effect_mismatch")
         if self.effect_class == "command_backed_action" and self.command_exposure != "owner_command_only":
             raise AgentToolRegistryError("agent_tool_command_exposure_effect_mismatch")
+        if self.effect_class == "read_only" and self.approval.required:
+            raise AgentToolRegistryError("agent_tool_read_only_approval_forbidden")
 
     def to_fingerprint_record(self) -> dict[str, object]:
         return {
@@ -610,8 +612,6 @@ class AgentToolSpec:
         if self.tool_kind == "action":
             if not isinstance(self.route, AgentActionToolRoute):
                 raise AgentToolRegistryError("agent_tool_action_route_required")
-            if self.behavior.effect_class == "read_only":
-                raise AgentToolRegistryError("agent_tool_action_effect_invalid")
             if self.request.tool_kind != "action" or self.request.action_type != self.route.action_type:
                 raise AgentToolRegistryError("agent_tool_request_route_mismatch")
             if (
