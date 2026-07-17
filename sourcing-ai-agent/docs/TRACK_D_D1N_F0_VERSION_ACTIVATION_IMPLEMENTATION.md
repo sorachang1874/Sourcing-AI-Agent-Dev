@@ -145,7 +145,8 @@ F0-A does not implement:
 - copying active pins into AgentAction, invocation, approval, dispatch, or result-slot rows;
 - execution/authenticity verification of provider mode, workspace/requester allowlists, hosted/R-029 artifacts, the
   catalog/served predicate, local harness authorization, or request/tool expiry polling;
-- a full `action_contract_digest` builder over the existing action registry.
+- action-contract digest construction is now owned by the separate F0-A2 fixed-forward implementation; F0-B must
+  consume its exact versioned pins rather than minting a second fingerprint format.
 
 F0-B owns the PostgreSQL activation/repository, review-scope coverage verification, hosted-gate invocation, trusted
 review/gate receipt minting and persistence, server-clock checks, historical lookup, and append-only retention. F0-C/F4
