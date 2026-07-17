@@ -6516,6 +6516,28 @@ def _post_consumption_artifact_names(runtime_layout: Mapping[str, Any]) -> froze
     return frozenset(names)
 
 
+def _post_consumption_artifact_presence(
+    run_root: Path,
+    runtime_layout: Mapping[str, Any],
+) -> tuple[frozenset[str], frozenset[str]]:
+    """Classify registered pending and already-published boundary evidence."""
+
+    names = _post_consumption_artifact_names(runtime_layout)
+    pending: set[str] = set()
+    promoted: set[str] = set()
+    for path in run_root.iterdir():
+        if path.name in names:
+            # Existence under a registered post-consumption final name is
+            # conservative boundary evidence even when the entry is a symlink
+            # or otherwise malformed. Deep-bound artifacts are validated by
+            # their owner before this classifier is used.
+            promoted.add(path.name)
+        match = _PENDING_RE.fullmatch(path.name)
+        if match is not None and match.group("name") in names:
+            pending.add(match.group("name"))
+    return frozenset(pending), frozenset(promoted)
+
+
 def _runtime_layout_valid(value: Any) -> bool:
     return (
         isinstance(value, dict)
@@ -8276,20 +8298,16 @@ def _recover_incomplete_run_locked(
         current_process_evidence=current_process_evidence,
     )
 
-    stdout_spool_path = run_root / intent["runtime_layout"]["stdout_spool_name"]
-    stderr_spool_path = run_root / intent["runtime_layout"]["stderr_spool_name"]
-    post_consumption_artifact_names = _post_consumption_artifact_names(
-        intent["runtime_layout"]
+    (
+        pending_post_consumption_artifact_names,
+        promoted_post_consumption_artifact_names,
+    ) = _post_consumption_artifact_presence(
+        run_root,
+        intent["runtime_layout"],
     )
-    pending_post_consumption_evidence_present = any(
-        match is not None
-        and match.group("name") in post_consumption_artifact_names
-        for path in run_root.iterdir()
-        for match in (_PENDING_RE.fullmatch(path.name),)
-    )
-    process_spool_evidence_present = pending_post_consumption_evidence_present or any(
-        path.exists() or path.is_symlink()
-        for path in (stdout_spool_path, stderr_spool_path)
+    registered_post_consumption_evidence_present = bool(
+        pending_post_consumption_artifact_names
+        or promoted_post_consumption_artifact_names
     )
     recovery_effective_prompt_policy: EffectivePromptPolicyBinding | None = None
     recovery_auth_sha256: str | None = None
@@ -8377,7 +8395,7 @@ def _recover_incomplete_run_locked(
                 )
                 or (current_process_evidence and process_result_journal is not None)
                 or ledger is not None
-                or process_spool_evidence_present
+                or registered_post_consumption_evidence_present
             )
             if recovery_consumption is None and crossed_consumption_boundary:
                 # Each evidence family is independent of the mutable claim

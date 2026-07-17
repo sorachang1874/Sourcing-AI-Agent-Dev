@@ -340,8 +340,13 @@ that state. One explicit artifact-name registry owns both the runtime layout/rea
 classifier. Its post-consumption set includes process journal/ledger/spools, retained session updates, promoted raw
 stdout/stderr, sanitized output, and the terminal receipt, including their `_atomic_publish` pending files. Pending
 compiled prompt, operator request, or operator intent files are explicitly pre-consumption and do not by themselves
-upgrade the state. Only a genuine pre-D2/pre-consumption incomplete run with no post-consumption evidence may receive
-the synthesized `legacy_recovery` claim that closes its reuse window.
+upgrade the state. The same registry drives two independent pre-mutation scans: registered `.pending-*` target names
+and already-published registered final names, including a dangling symlink under such a final name. Journal and ledger
+contents remain deeply bound before that presence classifier; the classifier is not a substitute for their schema and
+run/session/lease validation. A fully published `operator-receipt.json` takes the earlier terminal-run path and returns
+`run_already_terminal` without consulting or mutating approval state, while a pending receipt is still incomplete
+post-consumption evidence. Only a genuine pre-D2/pre-consumption incomplete run with no post-consumption evidence may
+receive the synthesized `legacy_recovery` claim that closes its reuse window.
 
 The separate `auth-taint-<original-auth-sha256>.json` marker contains only the original digest, source run/request
 digests, detection time, closed reason, and blocking state—never a token, claim value, profile field, or refreshed
@@ -557,10 +562,13 @@ liveness/termination hooks, spool promotion, copied-home audit/deletion, taintin
 current executor-return journal, process ledger, process spools/pending publications, exact grant consumption, and
 active-use claim. A missing consumption record is a typed pre-mutation failure whenever any independently bound
 current evidence exists. Pending post-consumption targets are phase-classified from the same immutable registry used
-to construct `runtime_layout` and the publication paths; the pre-consumption prompt/request/intent targets remain
-outside that set. A `legacy_recovery` claim origin is not authority to override current evidence. Only an actual
-pre-consumption state with no post-consumption evidence may synthesize a legacy claim and retain the former recovery
-path. A sibling claim blocks recovery without mutation. After any recorded process group is confirmed dead, recovery audits
+to construct `runtime_layout` and the publication paths, and existence under each registered final name is classified
+from that same set. The pre-consumption prompt/request/intent targets remain outside it, even though their final files
+normally exist before consumption. A `legacy_recovery` claim origin is not authority to override current evidence.
+Only an actual pre-consumption state with no post-consumption evidence may synthesize a legacy claim and retain the
+former recovery path. A fully published terminal receipt is not an incomplete run: it returns
+`run_already_terminal`, byte-preserving both trees and invoking no process hook. A sibling claim blocks recovery
+without mutation. After any recorded process group is confirmed dead, recovery audits
 the copied auth before measuring retained session state, durably deletes the ephemeral home, and only then resolves
 the claim. Audit/taint or deletion failure leaves the claim blocking retries. If recovery finds a
 `live_consumption` claim but the ephemeral home is already absent, D2 ordering proves that audit and durable deletion
