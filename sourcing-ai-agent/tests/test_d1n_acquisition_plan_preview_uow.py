@@ -17,6 +17,7 @@ from sourcing_agent.acquisition_plan_preview import (
     ACQUISITION_PLAN_PREVIEW_RESULT_SPEC,
     ACQUISITION_PLAN_PREVIEW_SOURCE_PREFERENCE,
 )
+from sourcing_agent.agent_canary_registry import PLAN_ACQUISITION_TOOL_SPEC
 from sourcing_agent.control_plane_live_postgres import ControlPlaneAdvisoryLockBusy
 from sourcing_agent.local_postgres import quote_control_plane_postgres_identifier
 from tests.pg_store_fixture import PGControlPlaneStoreTestMixin, psycopg
@@ -86,6 +87,9 @@ def _uow_kwargs(*, suffix: str = "1", thematic_constraints: list[str] | None = N
         "idempotency_key": f"plan_acquisition:{suffix}",
         "request_schema_version": ACQUISITION_PLAN_PREVIEW_REQUEST_SCHEMA_VERSION,
         "request_schema_digest": ACQUISITION_PLAN_PREVIEW_REQUEST_SCHEMA_DIGEST,
+        "tool_name": PLAN_ACQUISITION_TOOL_SPEC.tool_name,
+        "tool_spec_version": PLAN_ACQUISITION_TOOL_SPEC.tool_spec_version,
+        "tool_spec_digest": PLAN_ACQUISITION_TOOL_SPEC.tool_spec_digest,
         "result_schema_version": ACQUISITION_PLAN_PREVIEW_RESULT_SPEC.result_schema_version,
         "result_schema_digest": ACQUISITION_PLAN_PREVIEW_RESULT_SPEC.result_schema_digest,
         "result_serializer_owner": ACQUISITION_PLAN_PREVIEW_RESULT_SPEC.serializer_owner,

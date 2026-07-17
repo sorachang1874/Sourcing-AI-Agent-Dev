@@ -251,6 +251,9 @@ CONTROL_PLANE_LIVE_TABLES = (
     "agent_actions",
     "operation_runs",
     "acquisition_plan_previews",
+    "agent_tool_result_slots",
+    "agent_tool_result_attempts",
+    "agent_tool_result_journal",
     "acquisition_runs",
     "workflow_activity_runs",
     "workflow_activity_attempts",
@@ -341,6 +344,9 @@ _PRIMARY_KEY_COLUMNS = {
     "agent_actions": ("action_id",),
     "operation_runs": ("operation_run_id",),
     "acquisition_plan_previews": ("preview_id",),
+    "agent_tool_result_slots": ("result_slot_id",),
+    "agent_tool_result_attempts": ("result_attempt_id",),
+    "agent_tool_result_journal": ("journal_id",),
     "acquisition_runs": ("acquisition_run_id",),
     "workflow_activity_runs": ("activity_run_id",),
     "workflow_activity_attempts": ("attempt_id",),
@@ -558,6 +564,9 @@ _RUNTIME_COORDINATION_TABLES = {
     "agent_actions",
     "operation_runs",
     "acquisition_plan_previews",
+    "agent_tool_result_slots",
+    "agent_tool_result_attempts",
+    "agent_tool_result_journal",
     "acquisition_runs",
     "workflow_activity_runs",
     "workflow_activity_attempts",
@@ -576,6 +585,9 @@ _OPERATION_RUNTIME_TABLES = {
     "agent_actions",
     "operation_runs",
     "acquisition_plan_previews",
+    "agent_tool_result_slots",
+    "agent_tool_result_attempts",
+    "agent_tool_result_journal",
     "acquisition_runs",
     "workflow_activity_runs",
     "workflow_activity_attempts",
@@ -8110,6 +8122,9 @@ class LiveControlPlanePostgresAdapter:
         idempotency_key: str,
         request_schema_version: str,
         request_schema_digest: str,
+        tool_name: str,
+        tool_spec_version: str,
+        tool_spec_digest: str,
         result_schema_version: str,
         result_schema_digest: str,
         result_serializer_owner: str,
@@ -8139,6 +8154,7 @@ class LiveControlPlanePostgresAdapter:
             ACQUISITION_PLAN_PREVIEW_SCHEMA_VERSION,
             build_acquisition_plan_preview,
         )
+        from .agent_canary_registry import PLAN_ACQUISITION_TOOL_SPEC
 
         if _normalize_postgres_identifier(table_name) != "acquisition_plan_previews":
             raise ValueError("create_acquisition_plan_preview_uow requires table_name=acquisition_plan_previews")
@@ -8162,6 +8178,9 @@ class LiveControlPlanePostgresAdapter:
             "idempotency_key": idempotency_key,
             "request_schema_version": request_schema_version,
             "request_schema_digest": request_schema_digest,
+            "tool_name": tool_name,
+            "tool_spec_version": tool_spec_version,
+            "tool_spec_digest": tool_spec_digest,
             "result_schema_version": result_schema_version,
             "result_schema_digest": result_schema_digest,
             "result_serializer_owner": result_serializer_owner,
@@ -8199,6 +8218,8 @@ class LiveControlPlanePostgresAdapter:
                 raise ValueError(f"acquisition plan preview {name} is invalid")
         for name in (
             "request_schema_version",
+            "tool_name",
+            "tool_spec_version",
             "result_schema_version",
             "result_serializer_owner",
             "result_serializer_revision",
@@ -8208,6 +8229,7 @@ class LiveControlPlanePostgresAdapter:
                 raise ValueError(f"acquisition plan preview {name} is invalid")
         for name in (
             "request_schema_digest",
+            "tool_spec_digest",
             "result_schema_digest",
             "result_serializer_contract_digest",
             "start_request_schema_digest",
@@ -8218,6 +8240,9 @@ class LiveControlPlanePostgresAdapter:
         expected_result_pins = {
             "request_schema_version": ACQUISITION_PLAN_PREVIEW_REQUEST_SCHEMA_VERSION,
             "request_schema_digest": ACQUISITION_PLAN_PREVIEW_REQUEST_SCHEMA_DIGEST,
+            "tool_name": PLAN_ACQUISITION_TOOL_SPEC.tool_name,
+            "tool_spec_version": PLAN_ACQUISITION_TOOL_SPEC.tool_spec_version,
+            "tool_spec_digest": PLAN_ACQUISITION_TOOL_SPEC.tool_spec_digest,
             "result_schema_version": ACQUISITION_PLAN_PREVIEW_RESULT_SPEC.result_schema_version,
             "result_schema_digest": ACQUISITION_PLAN_PREVIEW_RESULT_SPEC.result_schema_digest,
             "result_serializer_owner": ACQUISITION_PLAN_PREVIEW_RESULT_SPEC.serializer_owner,
@@ -8328,6 +8353,9 @@ class LiveControlPlanePostgresAdapter:
                 "input_json": _json_dump(canonical_input),
                 "request_schema_version": request_schema_version,
                 "request_schema_digest": request_schema_digest,
+                "tool_name": tool_name,
+                "tool_spec_version": tool_spec_version,
+                "tool_spec_digest": tool_spec_digest,
                 "result_schema_version": result_schema_version,
                 "result_schema_digest": result_schema_digest,
                 "result_serializer_owner": result_serializer_owner,
@@ -8351,6 +8379,9 @@ class LiveControlPlanePostgresAdapter:
                 "operation_type": "acquisition_plan",
                 "request_schema_version": request_schema_version,
                 "request_schema_digest": request_schema_digest,
+                "tool_name": tool_name,
+                "tool_spec_version": tool_spec_version,
+                "tool_spec_digest": tool_spec_digest,
                 "result_schema_version": result_schema_version,
                 "result_schema_digest": result_schema_digest,
                 "result_serializer_owner": result_serializer_owner,
@@ -8450,6 +8481,9 @@ class LiveControlPlanePostgresAdapter:
                         "operation_type",
                         "request_schema_version",
                         "request_schema_digest",
+                        "tool_name",
+                        "tool_spec_version",
+                        "tool_spec_digest",
                         "result_schema_version",
                         "result_schema_digest",
                         "result_serializer_owner",
@@ -8475,6 +8509,9 @@ class LiveControlPlanePostgresAdapter:
                         "operation_type",
                         "request_schema_version",
                         "request_schema_digest",
+                        "tool_name",
+                        "tool_spec_version",
+                        "tool_spec_digest",
                         "result_schema_version",
                         "result_schema_digest",
                         "result_serializer_owner",
@@ -8883,6 +8920,52 @@ class LiveControlPlanePostgresAdapter:
                     raise
             finally:
                 connection.close()
+
+    def reserve_agent_tool_result_slot(
+        self,
+        *,
+        table_name: str = "agent_tool_result_slots",
+        occurrence: Any,
+        lock_timeout_seconds: float = 5.0,
+        fault_injection_point: str = "",
+    ) -> dict[str, Any] | None:
+        """Reserve one exact logical Agent-tool occurrence without executing it."""
+
+        if _normalize_postgres_identifier(table_name) != "agent_tool_result_slots":
+            raise ValueError("reserve_agent_tool_result_slot requires table_name=agent_tool_result_slots")
+        from .agent_tool_result_postgres import reserve_agent_tool_result_slot
+
+        return reserve_agent_tool_result_slot(
+            self,
+            occurrence=occurrence,
+            lock_timeout_seconds=lock_timeout_seconds,
+            fault_injection_point=fault_injection_point,
+        )
+
+    def accept_acquisition_plan_tool_result_uow(
+        self,
+        *,
+        table_name: str = "agent_tool_result_slots",
+        occurrence: Any,
+        terminal: Any,
+        attempted_slot_generation: int,
+        lock_timeout_seconds: float = 5.0,
+        fault_injection_point: str = "",
+    ) -> dict[str, Any] | None:
+        """Accept the exact plan-preview owner result and journal it atomically."""
+
+        if _normalize_postgres_identifier(table_name) != "agent_tool_result_slots":
+            raise ValueError("accept_acquisition_plan_tool_result_uow requires table_name=agent_tool_result_slots")
+        from .agent_tool_result_postgres import accept_acquisition_plan_tool_result_uow
+
+        return accept_acquisition_plan_tool_result_uow(
+            self,
+            occurrence=occurrence,
+            terminal=terminal,
+            attempted_slot_generation=attempted_slot_generation,
+            lock_timeout_seconds=lock_timeout_seconds,
+            fault_injection_point=fault_injection_point,
+        )
 
     def upsert_workflow_runtime_identity_row(
         self,

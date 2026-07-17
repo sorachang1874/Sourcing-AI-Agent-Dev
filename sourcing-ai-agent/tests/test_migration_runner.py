@@ -48,6 +48,7 @@ _D0F_ENVELOPE_MIGRATION = "0007_model_invocation_envelopes"
 _D1I_PARENT_UNIQUENESS_MIGRATION = "0008_acquisition_intent_parent_uniqueness"
 _D1M_COMPANY_PUBLIC_WEB_RUN_IDEMPOTENCY_MIGRATION = "0009_company_public_web_asset_run_idempotency"
 _D1N_ACQUISITION_PLAN_PREVIEW_MIGRATION = "0010_acquisition_plan_preview_uow"
+_D1N_AGENT_TOOL_RESULT_SLOT_MIGRATION = "0011_agent_tool_result_slots"
 _ALL_MIGRATIONS = [
     "0001_baseline",
     "0002_action_request_schema_pins",
@@ -59,6 +60,7 @@ _ALL_MIGRATIONS = [
     _D1I_PARENT_UNIQUENESS_MIGRATION,
     _D1M_COMPANY_PUBLIC_WEB_RUN_IDEMPOTENCY_MIGRATION,
     _D1N_ACQUISITION_PLAN_PREVIEW_MIGRATION,
+    _D1N_AGENT_TOOL_RESULT_SLOT_MIGRATION,
 ]
 _D3_COMMAND_COLUMNS = (
     ("runtime_namespace", "text", "NO", "''::text"),
@@ -430,7 +432,7 @@ class MigrationRunnerTest(unittest.TestCase):
             runner_fp["columns"], live_fp["columns"], "column: schema created outside the migration ledger"
         )
         self.assertEqual(runner_fp["indexes"], live_fp["indexes"], "index: schema created outside the migration ledger")
-        self.assertEqual(len(runner_fp["tables"]), 85)
+        self.assertEqual(len(runner_fp["tables"]), 88)
 
     def test_runner_is_idempotent(self) -> None:
         schema = self._fresh_schema("idem")
@@ -475,6 +477,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 _D1I_PARENT_UNIQUENESS_MIGRATION,
                 _D1M_COMPANY_PUBLIC_WEB_RUN_IDEMPOTENCY_MIGRATION,
                 _D1N_ACQUISITION_PLAN_PREVIEW_MIGRATION,
+                _D1N_AGENT_TOOL_RESULT_SLOT_MIGRATION,
             ],
         )
         self.assertEqual(ledger, _ALL_MIGRATIONS)
@@ -526,6 +529,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 _D1I_PARENT_UNIQUENESS_MIGRATION,
                 _D1M_COMPANY_PUBLIC_WEB_RUN_IDEMPOTENCY_MIGRATION,
                 _D1N_ACQUISITION_PLAN_PREVIEW_MIGRATION,
+                _D1N_AGENT_TOOL_RESULT_SLOT_MIGRATION,
             ],
         )
         self.assertEqual(
@@ -750,6 +754,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 _D1I_PARENT_UNIQUENESS_MIGRATION,
                 _D1M_COMPANY_PUBLIC_WEB_RUN_IDEMPOTENCY_MIGRATION,
                 _D1N_ACQUISITION_PLAN_PREVIEW_MIGRATION,
+                _D1N_AGENT_TOOL_RESULT_SLOT_MIGRATION,
             ],
         )
         self.assertEqual(columns, list(_D3_COMMAND_COLUMNS))
@@ -923,6 +928,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 _D1I_PARENT_UNIQUENESS_MIGRATION,
                 _D1M_COMPANY_PUBLIC_WEB_RUN_IDEMPOTENCY_MIGRATION,
                 _D1N_ACQUISITION_PLAN_PREVIEW_MIGRATION,
+                _D1N_AGENT_TOOL_RESULT_SLOT_MIGRATION,
             ],
         )
         self.assertEqual(again.applied, [])
@@ -1013,6 +1019,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 _D1I_PARENT_UNIQUENESS_MIGRATION,
                 _D1M_COMPANY_PUBLIC_WEB_RUN_IDEMPOTENCY_MIGRATION,
                 _D1N_ACQUISITION_PLAN_PREVIEW_MIGRATION,
+                _D1N_AGENT_TOOL_RESULT_SLOT_MIGRATION,
             ],
         )
         self.assertEqual(session_columns, list(_D3_SCOPED_SESSION_COLUMNS))
@@ -1212,6 +1219,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 _D1I_PARENT_UNIQUENESS_MIGRATION,
                 _D1M_COMPANY_PUBLIC_WEB_RUN_IDEMPOTENCY_MIGRATION,
                 _D1N_ACQUISITION_PLAN_PREVIEW_MIGRATION,
+                _D1N_AGENT_TOOL_RESULT_SLOT_MIGRATION,
             ],
         )
         self.assertEqual(again.applied, [])
@@ -1301,6 +1309,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 _D1I_PARENT_UNIQUENESS_MIGRATION,
                 _D1M_COMPANY_PUBLIC_WEB_RUN_IDEMPOTENCY_MIGRATION,
                 _D1N_ACQUISITION_PLAN_PREVIEW_MIGRATION,
+                _D1N_AGENT_TOOL_RESULT_SLOT_MIGRATION,
             ],
         )
         self.assertEqual(run_columns, list(_D3_ACTIVITY_RUN_COLUMNS))
@@ -1513,6 +1522,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 _D1I_PARENT_UNIQUENESS_MIGRATION,
                 _D1M_COMPANY_PUBLIC_WEB_RUN_IDEMPOTENCY_MIGRATION,
                 _D1N_ACQUISITION_PLAN_PREVIEW_MIGRATION,
+                _D1N_AGENT_TOOL_RESULT_SLOT_MIGRATION,
             ],
         )
         self.assertEqual(again.applied, [])
@@ -1593,6 +1603,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 _D1I_PARENT_UNIQUENESS_MIGRATION,
                 _D1M_COMPANY_PUBLIC_WEB_RUN_IDEMPOTENCY_MIGRATION,
                 _D1N_ACQUISITION_PLAN_PREVIEW_MIGRATION,
+                _D1N_AGENT_TOOL_RESULT_SLOT_MIGRATION,
             ],
         )
         self.assertEqual(columns, list(_D3_EVENT_COLUMNS))
@@ -1733,6 +1744,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 _D1I_PARENT_UNIQUENESS_MIGRATION,
                 _D1M_COMPANY_PUBLIC_WEB_RUN_IDEMPOTENCY_MIGRATION,
                 _D1N_ACQUISITION_PLAN_PREVIEW_MIGRATION,
+                _D1N_AGENT_TOOL_RESULT_SLOT_MIGRATION,
             ],
         )
         self.assertEqual(again.applied, [])
@@ -1960,7 +1972,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 with self.assertRaises(psycopg.errors.CheckViolation) as raised:
                     mr.apply_pending_migrations(conn, schema=schema)
 
-        self.assertEqual(prefix.applied, _ALL_MIGRATIONS[:-3])
+        self.assertEqual(prefix.applied, _ALL_MIGRATIONS[:-4])
         self.assertEqual(
             raised.exception.diag.constraint_name,
             "workflow_commands_acquisition_root_child_shape_ck",
@@ -1983,7 +1995,7 @@ class MigrationRunnerTest(unittest.TestCase):
                     (schema,),
                 )
                 trigger_count = int(cur.fetchone()[0])
-        self.assertEqual(ledger, _ALL_MIGRATIONS[:-3])
+        self.assertEqual(ledger, _ALL_MIGRATIONS[:-4])
         self.assertIsNone(index_name)
         self.assertIsNone(old_unique_index_name)
         self.assertEqual(trigger_count, 0)
@@ -2021,7 +2033,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 with self.assertRaises(psycopg.errors.UniqueViolation) as raised:
                     mr.apply_pending_migrations(conn, schema=schema)
 
-        self.assertEqual(prefix.applied, _ALL_MIGRATIONS[:-3])
+        self.assertEqual(prefix.applied, _ALL_MIGRATIONS[:-4])
         self.assertEqual(
             raised.exception.diag.constraint_name,
             "workflow_commands_acquisition_root_single_child_uk",
@@ -2041,7 +2053,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 index_name = cur.fetchone()[0]
                 cur.execute("SELECT to_regclass('workflow_commands_acquisition_intent_parent_uk')")
                 old_unique_index_name = cur.fetchone()[0]
-        self.assertEqual(ledger, _ALL_MIGRATIONS[:-3])
+        self.assertEqual(ledger, _ALL_MIGRATIONS[:-4])
         self.assertEqual(duplicate_count, 2)
         self.assertIsNone(index_name)
         self.assertIsNone(old_unique_index_name)
@@ -2371,7 +2383,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 with self.assertRaises(psycopg.errors.UniqueViolation) as raised:
                     mr.apply_pending_migrations(conn, schema=schema)
 
-        self.assertEqual(prefix.applied, _ALL_MIGRATIONS[:-2])
+        self.assertEqual(prefix.applied, _ALL_MIGRATIONS[:-3])
         self.assertEqual(
             raised.exception.diag.constraint_name,
             "company_public_web_asset_runs_idempotency_key_uk",
@@ -2390,7 +2402,7 @@ class MigrationRunnerTest(unittest.TestCase):
                     "WHERE btrim(idempotency_key, E' \\t\\n\\r\\f\\013') = 'd1m-brownfield-duplicate'"
                 )
                 duplicate_count = int(cur.fetchone()[0])
-        self.assertEqual(ledger, _ALL_MIGRATIONS[:-2])
+        self.assertEqual(ledger, _ALL_MIGRATIONS[:-3])
         self.assertIsNone(index_name)
         self.assertIsNone(revision_sequence_name)
         self.assertEqual(duplicate_count, 2)

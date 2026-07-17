@@ -367,6 +367,16 @@
   `702de97` 已统一经 production binder 生成 target，exact **7 passed + 35 subtests**，不把该 fixture 漂移记作
   D1m regression。Enclosing D1m commit 与 fresh pinned non-author review 仍 pending；R-019/R-029 open，无
   provider/model/live/served authorization。
+- [ ] D1n local Agent / 15-action completion（2026-07-17 active）：top-down plan、完整 Action digest、F3
+  registry 与 isolated four-tool local-canary population 已落；production/default registry 与 global `served` 仍为
+  **0**。S1a 已新增 `0011` occurrence/attempt/journal storage，F4a Action/Operation exact-copy
+  `plan_acquisition` tool pins，并以同一 PG transaction 完成 accepted attempt + pending→accepted slot CAS + journal；
+  exact preview/action/run/event reload 后从 owner state 重跑 serializer。lost ACK、precommit fault、stale generation、
+  late attempt、foreign/missing target、serializer drift 与 concurrent single-winner 已覆盖。当前仍只支持
+  `plan_acquisition` terminal adapter；下一批必须补 `start_acquisition_run` command/activity owner、
+  `filter_projection` membership/publication owner、`inspect_operation` operation-state owner，之后才组装四工具 PG
+  simulate/model-turn loop。剩余 5/15 schema-less action、R-029、scripted two-lab、live checkpoint 与 paid TML
+  全部继续 open；无 provider/model/live 调用。fresh pinned non-author review pending，不得把作者证据写成 formal GO。
 - [ ] D1m mixed-version rollout gate（R-019）：pre-D1m binary 可继续写 revisionless source row 并绕开
   revision-aware exact-claim canonical materializer。任何 hosted activation 前必须选择并验证其一：quiesced
   single-version cutover，或 separately reviewed dual-write/compatibility bridge；完成前不得声称 rolling overlap

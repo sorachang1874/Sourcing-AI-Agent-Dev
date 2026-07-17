@@ -131,6 +131,9 @@ AGENT_ACTIONS = TableDescriptor(
         Column("input_json", Kind.JSON, field="input"),
         Column("request_schema_version"),
         Column("request_schema_digest"),
+        Column("tool_name", read_default=""),
+        Column("tool_spec_version", read_default=""),
+        Column("tool_spec_digest", read_default=""),
         Column("result_schema_version", read_default=""),
         Column("result_schema_digest", read_default=""),
         Column("result_serializer_owner", read_default=""),
@@ -160,6 +163,9 @@ OPERATION_RUNS = TableDescriptor(
         Column("operation_type"),
         Column("request_schema_version"),
         Column("request_schema_digest"),
+        Column("tool_name", read_default=""),
+        Column("tool_spec_version", read_default=""),
+        Column("tool_spec_digest", read_default=""),
         Column("result_schema_version", read_default=""),
         Column("result_schema_digest", read_default=""),
         Column("result_serializer_owner", read_default=""),
@@ -212,6 +218,153 @@ ACQUISITION_PLAN_PREVIEWS = TableDescriptor(
         Column("schema_version"),
         Column("created_at", Kind.TIMESTAMPTZ),
         Column("expires_at", Kind.TIMESTAMPTZ),
+    ),
+)
+
+
+AGENT_TOOL_RESULT_SLOTS = TableDescriptor(
+    table="agent_tool_result_slots",
+    pk=("result_slot_id",),
+    columns=(
+        Column("result_slot_id"),
+        Column("slot_generation", Kind.INT),
+        Column("workspace_id"),
+        Column("actor_id"),
+        Column("runtime_namespace"),
+        Column("provider_mode"),
+        Column("turn_id"),
+        Column("step_id"),
+        Column("tool_name"),
+        Column("tool_kind"),
+        Column("effect_class"),
+        Column("tool_spec_version"),
+        Column("tool_spec_digest"),
+        Column("canonical_args_json", Kind.JSON, field="canonical_args"),
+        Column("canonical_args_digest"),
+        Column("occurrence_ordinal", Kind.INT),
+        Column("logical_occurrence_digest"),
+        Column("request_schema_version"),
+        Column("request_schema_digest"),
+        Column("result_schema_version"),
+        Column("result_schema_digest"),
+        Column("serializer_owner"),
+        Column("serializer_revision"),
+        Column("serializer_contract_digest"),
+        Column("status"),
+        Column("result_attempt_id"),
+        Column("provider_call_id"),
+        Column("tool_call_id"),
+        Column("action_id"),
+        Column("operation_run_id"),
+        Column("workflow_command_id"),
+        Column("activity_run_id"),
+        Column("activity_attempt_id"),
+        Column("command_attempt", Kind.INT),
+        Column("command_generation", Kind.INT),
+        Column("control_epoch", Kind.INT),
+        Column("owner_target_kind"),
+        Column("owner_target_id"),
+        Column("owner_target_revision", Kind.INT),
+        Column("owner_target_generation", Kind.INT),
+        Column("terminal_winner_id"),
+        Column("owner_result_ref_json", Kind.JSON, field="owner_result_ref"),
+        Column("owner_result_digest"),
+        Column("serialized_result_json"),
+        Column("serialized_result_digest"),
+        Column("tool_result_message_json", Kind.JSON, field="tool_result_message"),
+        Column("tool_result_message_digest"),
+        Column("is_error", Kind.BOOL_INT),
+        Column("schema_version"),
+        Column("created_at", Kind.TIMESTAMPTZ),
+        Column("accepted_at", Kind.TIMESTAMPTZ),
+    ),
+)
+
+
+AGENT_TOOL_RESULT_ATTEMPTS = TableDescriptor(
+    table="agent_tool_result_attempts",
+    pk=("result_attempt_id",),
+    columns=(
+        Column("result_attempt_id"),
+        Column("result_slot_id"),
+        Column("attempted_slot_generation", Kind.INT),
+        Column("disposition"),
+        Column("quarantine_reason"),
+        Column("provider_call_id"),
+        Column("tool_call_id"),
+        Column("action_id"),
+        Column("operation_run_id"),
+        Column("workflow_command_id"),
+        Column("activity_run_id"),
+        Column("activity_attempt_id"),
+        Column("command_attempt", Kind.INT),
+        Column("command_generation", Kind.INT),
+        Column("control_epoch", Kind.INT),
+        Column("owner_target_kind"),
+        Column("owner_target_id"),
+        Column("owner_target_revision", Kind.INT),
+        Column("owner_target_generation", Kind.INT),
+        Column("terminal_winner_id"),
+        Column("owner_result_ref_json", Kind.JSON, field="owner_result_ref"),
+        Column("owner_result_digest"),
+        Column("serialized_result_json"),
+        Column("serialized_result_digest"),
+        Column("tool_result_message_json", Kind.JSON, field="tool_result_message"),
+        Column("tool_result_message_digest"),
+        Column("is_error", Kind.BOOL_INT),
+        Column("schema_version"),
+        Column("recorded_at", Kind.TIMESTAMPTZ),
+    ),
+)
+
+
+AGENT_TOOL_RESULT_JOURNAL = TableDescriptor(
+    table="agent_tool_result_journal",
+    pk=("journal_id",),
+    columns=(
+        Column("journal_id"),
+        Column("result_slot_id"),
+        Column("result_attempt_id"),
+        Column("workspace_id"),
+        Column("actor_id"),
+        Column("runtime_namespace"),
+        Column("provider_mode"),
+        Column("turn_id"),
+        Column("step_id"),
+        Column("tool_name"),
+        Column("tool_spec_version"),
+        Column("tool_spec_digest"),
+        Column("canonical_args_digest"),
+        Column("occurrence_ordinal", Kind.INT),
+        Column("request_schema_version"),
+        Column("request_schema_digest"),
+        Column("result_schema_version"),
+        Column("result_schema_digest"),
+        Column("serializer_owner"),
+        Column("serializer_revision"),
+        Column("serializer_contract_digest"),
+        Column("action_id"),
+        Column("operation_run_id"),
+        Column("workflow_command_id"),
+        Column("activity_run_id"),
+        Column("activity_attempt_id"),
+        Column("command_attempt", Kind.INT),
+        Column("command_generation", Kind.INT),
+        Column("control_epoch", Kind.INT),
+        Column("owner_target_kind"),
+        Column("owner_target_id"),
+        Column("owner_target_revision", Kind.INT),
+        Column("owner_target_generation", Kind.INT),
+        Column("terminal_winner_id"),
+        Column("owner_result_ref_json", Kind.JSON, field="owner_result_ref"),
+        Column("owner_result_digest"),
+        Column("serialized_result_json"),
+        Column("serialized_result_digest"),
+        Column("tool_result_message_json", Kind.JSON, field="tool_result_message"),
+        Column("tool_result_message_digest"),
+        Column("is_error", Kind.BOOL_INT),
+        Column("schema_version"),
+        Column("accepted_at", Kind.TIMESTAMPTZ),
     ),
 )
 
@@ -2087,6 +2240,9 @@ class WorkflowRuntimeRepository(Repository):
         idempotency_key: str,
         request_schema_version: str,
         request_schema_digest: str,
+        tool_name: str,
+        tool_spec_version: str,
+        tool_spec_digest: str,
         result_schema_version: str,
         result_schema_digest: str,
         result_serializer_owner: str,
@@ -2123,6 +2279,9 @@ class WorkflowRuntimeRepository(Repository):
             "idempotency_key": idempotency_key,
             "request_schema_version": request_schema_version,
             "request_schema_digest": request_schema_digest,
+            "tool_name": tool_name,
+            "tool_spec_version": tool_spec_version,
+            "tool_spec_digest": tool_spec_digest,
             "result_schema_version": result_schema_version,
             "result_schema_digest": result_schema_digest,
             "result_serializer_owner": result_serializer_owner,
@@ -2153,6 +2312,9 @@ class WorkflowRuntimeRepository(Repository):
                 idempotency_key=str(idempotency_key),
                 request_schema_version=str(request_schema_version),
                 request_schema_digest=str(request_schema_digest),
+                tool_name=str(tool_name),
+                tool_spec_version=str(tool_spec_version),
+                tool_spec_digest=str(tool_spec_digest),
                 result_schema_version=str(result_schema_version),
                 result_schema_digest=str(result_schema_digest),
                 result_serializer_owner=str(result_serializer_owner),
@@ -2184,6 +2346,130 @@ class WorkflowRuntimeRepository(Repository):
         self._raise_postgres_only_invariant(
             table_name="acquisition_plan_previews",
             method_name="create_acquisition_plan_preview_uow",
+        )
+
+    def reserve_agent_tool_result_slot(
+        self,
+        *,
+        occurrence: Any,
+        lock_timeout_seconds: float = 5.0,
+    ) -> dict[str, Any]:
+        """Reserve or exact-reload one pending Agent-tool occurrence."""
+
+        from ..agent_tool_result_slot import AgentToolOccurrence
+
+        if not isinstance(occurrence, AgentToolOccurrence):
+            raise ValueError("reserve_agent_tool_result_slot requires AgentToolOccurrence")
+        self._require_postgres_for_durable_runtime("agent_tool_result_slots")
+        result = self._call_native_write(
+            "reserve_agent_tool_result_slot",
+            table_name="agent_tool_result_slots",
+            occurrence=occurrence,
+            lock_timeout_seconds=lock_timeout_seconds,
+        )
+        if result is not None:
+            payload = dict(result)
+            return {
+                "outcome": str(payload.get("outcome") or "").strip(),
+                "replayed": bool(payload.get("replayed")),
+                "slot": self._agent_tool_result_slot_from_row(payload.get("slot")),
+            }
+        self._raise_write_failure(
+            table_name="agent_tool_result_slots",
+            method_name="reserve_agent_tool_result_slot",
+            reason="native writer returned no slot",
+        )
+
+    def accept_acquisition_plan_tool_result_uow(
+        self,
+        *,
+        occurrence: Any,
+        terminal: Any,
+        attempted_slot_generation: int,
+        lock_timeout_seconds: float = 5.0,
+    ) -> dict[str, Any]:
+        """Accept one exact commandless preview result and immutable journal."""
+
+        from ..agent_tool_result_slot import AgentToolOccurrence, AgentToolTerminalResult
+
+        if not isinstance(occurrence, AgentToolOccurrence) or not isinstance(terminal, AgentToolTerminalResult):
+            raise ValueError("accept plan result requires exact occurrence and terminal result")
+        for table_name in (
+            "agent_tool_result_slots",
+            "agent_tool_result_attempts",
+            "agent_tool_result_journal",
+        ):
+            self._require_postgres_for_durable_runtime(table_name)
+        result = self._call_native_write(
+            "accept_acquisition_plan_tool_result_uow",
+            table_name="agent_tool_result_slots",
+            occurrence=occurrence,
+            terminal=terminal,
+            attempted_slot_generation=attempted_slot_generation,
+            lock_timeout_seconds=lock_timeout_seconds,
+        )
+        if result is not None:
+            payload = dict(result)
+            return {
+                "outcome": str(payload.get("outcome") or "").strip(),
+                "replayed": bool(payload.get("replayed")),
+                "slot": self._agent_tool_result_slot_from_row(payload.get("slot")),
+                "attempt": self._agent_tool_result_attempt_from_row(payload.get("attempt")),
+                "journal": self._agent_tool_result_journal_from_row(payload.get("journal")),
+            }
+        self._raise_write_failure(
+            table_name="agent_tool_result_slots",
+            method_name="accept_acquisition_plan_tool_result_uow",
+            reason="native writer returned no result bundle",
+        )
+
+    def get_agent_tool_result_slot(
+        self,
+        result_slot_id: str,
+        *,
+        workspace_id: str,
+        actor_id: str,
+        runtime_namespace: str,
+        provider_mode: str,
+    ) -> dict[str, Any]:
+        """Read a slot only through its exact execution subject."""
+
+        self._require_postgres_for_durable_runtime("agent_tool_result_slots")
+        values = tuple(
+            str(value or "").strip()
+            for value in (
+                result_slot_id,
+                workspace_id,
+                actor_id,
+                runtime_namespace,
+                provider_mode,
+            )
+        )
+        if any(not value for value in values):
+            return {}
+        row = self._select_row(
+            "agent_tool_result_slots",
+            row_builder=self._agent_tool_result_slot_from_row,
+            where_sql=(
+                "result_slot_id = %s AND workspace_id = %s AND actor_id = %s "
+                "AND runtime_namespace = %s AND provider_mode = %s"
+            ),
+            params=list(values),
+        )
+        return row or {}
+
+    def list_agent_tool_result_attempts(self, result_slot_id: str) -> list[dict[str, Any]]:
+        self._require_postgres_for_durable_runtime("agent_tool_result_attempts")
+        normalized_slot_id = str(result_slot_id or "").strip()
+        if not normalized_slot_id:
+            return []
+        return self._select_rows(
+            "agent_tool_result_attempts",
+            row_builder=self._agent_tool_result_attempt_from_row,
+            where_sql="result_slot_id = %s",
+            params=[normalized_slot_id],
+            order_by_sql="recorded_at ASC, result_attempt_id ASC",
+            limit=1000,
         )
 
     def get_acquisition_plan_preview(
@@ -3077,6 +3363,15 @@ class WorkflowRuntimeRepository(Repository):
 
     def _acquisition_plan_preview_from_row(self, row: Any) -> dict[str, Any]:
         return ACQUISITION_PLAN_PREVIEWS.from_row(row)
+
+    def _agent_tool_result_slot_from_row(self, row: Any) -> dict[str, Any]:
+        return AGENT_TOOL_RESULT_SLOTS.from_row(row)
+
+    def _agent_tool_result_attempt_from_row(self, row: Any) -> dict[str, Any]:
+        return AGENT_TOOL_RESULT_ATTEMPTS.from_row(row)
+
+    def _agent_tool_result_journal_from_row(self, row: Any) -> dict[str, Any]:
+        return AGENT_TOOL_RESULT_JOURNAL.from_row(row)
 
     def _operation_event_from_row(self, row: Any) -> dict[str, Any]:
         return OPERATION_EVENTS.from_row(row)
