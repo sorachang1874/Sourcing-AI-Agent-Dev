@@ -150,7 +150,7 @@ class GrokOperatorSessionReplay:
     system_prompt_sha256: str
     prompt_context_sha256: str
     user_prompt_sha256: str
-    terminal: dict[str, Any]
+    terminal: dict[str, Any] | str
     terminal_sha256: str
     terminal_start_byte_offset: int
     terminal_end_byte_offset_exclusive: int
@@ -790,12 +790,15 @@ def replay_grok_operator_session(
     allowed_tool_names: frozenset[str],
     expected_terminal: Mapping[str, Any] | None = None,
     terminal_validator: Callable[[Any], Sequence[str]] | None = None,
+    expected_terminal_text: str | None = None,
 ) -> GrokOperatorSessionReplay:
     """Replay one complete Grok session from immutable raw artifacts.
 
     Every tool-shaped update is accounted for, starts and completions pair by
-    call id, unsupported tool families fail closed, and the unique terminal JSON
-    must begin strictly after the final native-tool update.
+    call id, and unsupported tool families fail closed.  The default path binds
+    one unique terminal JSON object.  ``expected_terminal_text`` is the narrow
+    literal-text alternative: it requires the complete assistant surface to be
+    exactly those bytes and every assistant chunk to follow all native tools.
     """
 
     validate_session_precommit(session_precommit)
@@ -809,6 +812,16 @@ def replay_grok_operator_session(
         or any(not isinstance(name, str) or not name for name in allowed_tool_names)
     ):
         raise GrokOperatorSessionReplayError("allowed_tool_registry_invalid")
+    if expected_terminal_text is not None:
+        if (
+            expected_terminal is not None
+            or terminal_validator is not None
+            or not isinstance(expected_terminal_text, str)
+            or not expected_terminal_text
+            or expected_terminal_text.endswith("\n")
+            or len(expected_terminal_text.encode("utf-8")) > 5_000_000
+        ):
+            raise GrokOperatorSessionReplayError("expected_terminal_text_invalid")
 
     sources = {name: bytes(raw_session_files[name]) for name in RAW_SESSION_FILES}
     frozen = tuple(
@@ -1200,85 +1213,110 @@ def replay_grok_operator_session(
         raise GrokOperatorSessionReplayError("raw_session_assistant_chunk_order_invalid")
     assistant_output = "".join(assistant_chunks).encode("utf-8") + b"\n"
     last_tool_index = max(tool_indices) if tool_indices else None
-    schema_valid_candidates: list[tuple[dict[str, Any], int, int, int, int]] = []
-    for candidate, start_byte, end_byte in _json_object_slices(assistant_output):
-        if terminal_validator is not None and terminal_validator(candidate):
-            continue
-        start_chunk_index = next(
-            (
-                index
-                for index, (start, end) in enumerate(assistant_chunk_ranges)
-                if start <= start_byte < end
-            ),
-            None,
-        )
-        end_chunk_index = next(
-            (
-                index
-                for index, (start, end) in enumerate(assistant_chunk_ranges)
-                if start <= end_byte - 1 < end
-            ),
-            None,
-        )
-        if start_chunk_index is None or end_chunk_index is None:
-            raise GrokOperatorSessionReplayError(
-                "assistant_output_terminal_json_chunk_mapping_invalid"
-            )
-        schema_valid_candidates.append(
-            (
-                candidate,
-                start_byte,
-                end_byte,
-                assistant_indices[start_chunk_index],
-                assistant_indices[end_chunk_index],
-            )
-        )
-    candidates_after_tools = [
-        candidate
-        for candidate in schema_valid_candidates
-        if last_tool_index is None or candidate[3] > last_tool_index
-    ]
-    if last_tool_index is not None and any(
-        candidate[3] <= last_tool_index for candidate in schema_valid_candidates
-    ):
-        raise GrokOperatorSessionReplayError(
-            "raw_session_terminal_assistant_causality_invalid"
-        )
-    if len(candidates_after_tools) != 1:
-        if not candidates_after_tools and schema_valid_candidates:
+    if expected_terminal_text is not None:
+        if last_tool_index is not None and any(index <= last_tool_index for index in assistant_indices):
             raise GrokOperatorSessionReplayError(
                 "raw_session_terminal_assistant_causality_invalid"
             )
-        raise GrokOperatorSessionReplayError(
-            "assistant_output_schema_valid_terminal_count_invalid"
-        )
-    (
-        terminal,
-        terminal_start_byte_offset,
-        terminal_end_byte_offset_exclusive,
-        terminal_start_update_index,
-        terminal_end_update_index,
-    ) = candidates_after_tools[0]
-    if expected_terminal is not None:
+        terminal = expected_terminal_text
+        terminal_text = expected_terminal_text
+        terminal_start_byte_offset = 0
+        terminal_end_byte_offset_exclusive = len(expected_terminal_text.encode("utf-8"))
+        terminal_start_update_index = assistant_indices[0]
+        terminal_end_update_index = assistant_indices[-1]
         try:
-            expected_terminal_sha256 = canonical_sha256(dict(expected_terminal))
-        except (TypeError, ValueError) as exc:
+            observed_terminal_text = assistant_output[:-1].decode("utf-8")
+        except UnicodeError as exc:
             raise GrokOperatorSessionReplayError(
-                "assistant_output_result_binding_invalid"
+                "raw_session_chat_history_assistant_binding_invalid"
             ) from exc
-        if canonical_sha256(terminal) != expected_terminal_sha256:
+        if observed_terminal_text != expected_terminal_text:
             raise GrokOperatorSessionReplayError("assistant_output_result_binding_mismatch")
-    if assistant_output[terminal_end_byte_offset_exclusive:].strip():
-        raise GrokOperatorSessionReplayError("assistant_output_after_terminal_invalid")
-    try:
-        terminal_text = assistant_output[
-            terminal_start_byte_offset:terminal_end_byte_offset_exclusive
-        ].decode("utf-8")
-    except UnicodeError as exc:
-        raise GrokOperatorSessionReplayError(
-            "raw_session_chat_history_assistant_binding_invalid"
-        ) from exc
-    if final_chat_assistant["content"].strip() != terminal_text.strip():
+    else:
+        schema_valid_candidates: list[tuple[dict[str, Any], int, int, int, int]] = []
+        for candidate, start_byte, end_byte in _json_object_slices(assistant_output):
+            if terminal_validator is not None and terminal_validator(candidate):
+                continue
+            start_chunk_index = next(
+                (
+                    index
+                    for index, (start, end) in enumerate(assistant_chunk_ranges)
+                    if start <= start_byte < end
+                ),
+                None,
+            )
+            end_chunk_index = next(
+                (
+                    index
+                    for index, (start, end) in enumerate(assistant_chunk_ranges)
+                    if start <= end_byte - 1 < end
+                ),
+                None,
+            )
+            if start_chunk_index is None or end_chunk_index is None:
+                raise GrokOperatorSessionReplayError(
+                    "assistant_output_terminal_json_chunk_mapping_invalid"
+                )
+            schema_valid_candidates.append(
+                (
+                    candidate,
+                    start_byte,
+                    end_byte,
+                    assistant_indices[start_chunk_index],
+                    assistant_indices[end_chunk_index],
+                )
+            )
+        candidates_after_tools = [
+            candidate
+            for candidate in schema_valid_candidates
+            if last_tool_index is None or candidate[3] > last_tool_index
+        ]
+        if last_tool_index is not None and any(
+            candidate[3] <= last_tool_index for candidate in schema_valid_candidates
+        ):
+            raise GrokOperatorSessionReplayError(
+                "raw_session_terminal_assistant_causality_invalid"
+            )
+        if len(candidates_after_tools) != 1:
+            if not candidates_after_tools and schema_valid_candidates:
+                raise GrokOperatorSessionReplayError(
+                    "raw_session_terminal_assistant_causality_invalid"
+                )
+            raise GrokOperatorSessionReplayError(
+                "assistant_output_schema_valid_terminal_count_invalid"
+            )
+        (
+            terminal,
+            terminal_start_byte_offset,
+            terminal_end_byte_offset_exclusive,
+            terminal_start_update_index,
+            terminal_end_update_index,
+        ) = candidates_after_tools[0]
+        if expected_terminal is not None:
+            try:
+                expected_terminal_sha256 = canonical_sha256(dict(expected_terminal))
+            except (TypeError, ValueError) as exc:
+                raise GrokOperatorSessionReplayError(
+                    "assistant_output_result_binding_invalid"
+                ) from exc
+            if canonical_sha256(terminal) != expected_terminal_sha256:
+                raise GrokOperatorSessionReplayError("assistant_output_result_binding_mismatch")
+        if assistant_output[terminal_end_byte_offset_exclusive:].strip():
+            raise GrokOperatorSessionReplayError("assistant_output_after_terminal_invalid")
+        try:
+            terminal_text = assistant_output[
+                terminal_start_byte_offset:terminal_end_byte_offset_exclusive
+            ].decode("utf-8")
+        except UnicodeError as exc:
+            raise GrokOperatorSessionReplayError(
+                "raw_session_chat_history_assistant_binding_invalid"
+            ) from exc
+    chat_terminal_matches = (
+        final_chat_assistant["content"] == terminal_text
+        if expected_terminal_text is not None
+        else final_chat_assistant["content"].strip() == terminal_text.strip()
+    )
+    if not chat_terminal_matches:
         raise GrokOperatorSessionReplayError(
             "raw_session_chat_history_assistant_binding_mismatch"
         )

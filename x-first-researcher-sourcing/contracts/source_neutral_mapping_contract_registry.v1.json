@@ -1,0 +1,37 @@
+{
+  "schema_version": "x.source_neutral.mapping.contract_registry.v1",
+  "registry_version": "source_neutral_mapping_contract_registry.v1",
+  "contracts": [
+    {
+      "schema_version": "x.source_neutral.mapping.policy.v1",
+      "path": "contracts/x.source_neutral.mapping.policy.v1.schema.json"
+    },
+    {
+      "schema_version": "x.source_neutral.mapping.candidate_manifest.v1",
+      "path": "contracts/x.source_neutral.mapping.candidate_manifest.v1.schema.json"
+    },
+    {
+      "schema_version": "x.source_neutral.mapping.wave_plan.v1",
+      "path": "contracts/x.source_neutral.mapping.wave_plan.v1.schema.json"
+    },
+    {
+      "schema_version": "x.source_neutral.mapping.session_receipt.v1",
+      "path": "contracts/x.source_neutral.mapping.session_receipt.v1.schema.json"
+    },
+    {
+      "schema_version": "x.source_neutral.mapping.candidate_free_aggregate.v1",
+      "path": "contracts/x.source_neutral.mapping.candidate_free_aggregate.v1.schema.json"
+    },
+    {
+      "schema_version": "x.source_neutral.mapping.calibration_aggregate.v1",
+      "path": "contracts/x.source_neutral.mapping.calibration_aggregate.v1.schema.json"
+    }
+  ],
+  "checked_assets": [
+    "configs/source_neutral_mapping_policy.v1.json",
+    "fixtures/source_neutral_mapping_manifest_fixture_v1.json",
+    "docs/live-evidence/2026-07-17-gdm-query-family-calibration.aggregate.v1.json"
+  ],
+  "provider_calls_allowed": false,
+  "product_writes_allowed": false
+}

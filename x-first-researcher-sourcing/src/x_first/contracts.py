@@ -1040,6 +1040,9 @@ def main() -> int:
     )
     metrics = evaluate_selection(fixture, gold)
     errors.extend(validate_acceptance(fixture, gold, metrics=metrics))
+    from x_first.source_neutral_mapping import validate_checked_in_assets
+
+    errors.extend(validate_checked_in_assets())
     errors = sorted(set(errors))
     result = {"errors": errors, "metrics": asdict(metrics), "status": "valid" if not errors else "invalid"}
     print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))

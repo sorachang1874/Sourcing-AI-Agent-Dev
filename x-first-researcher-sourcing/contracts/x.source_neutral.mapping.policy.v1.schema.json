@@ -1,0 +1,164 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sourcing-ai-agent.invalid/contracts/x.source_neutral.mapping.policy.v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "policy_version",
+    "authority",
+    "wave_p",
+    "search",
+    "concept_alias_groups",
+    "saturation",
+    "queues",
+    "stop",
+    "kpis"
+  ],
+  "properties": {
+    "schema_version": {"const": "x.source_neutral.mapping.policy.v1"},
+    "policy_version": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]{0,127}$"},
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_calls_allowed",
+        "product_writes_allowed",
+        "business_candidate_cap",
+        "business_reference_cap",
+        "candidate_grain_is_empirical_not_business_cap",
+        "calls_per_candidate_is_empirical_not_business_cap",
+        "invalid_batch_zero_commit"
+      ],
+      "properties": {
+        "provider_calls_allowed": {"const": false},
+        "product_writes_allowed": {"const": false},
+        "business_candidate_cap": {"type": "null"},
+        "business_reference_cap": {"type": "null"},
+        "candidate_grain_is_empirical_not_business_cap": {"const": true},
+        "calls_per_candidate_is_empirical_not_business_cap": {"const": true},
+        "invalid_batch_zero_commit": {"const": true}
+      }
+    },
+    "wave_p": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_grain",
+        "calls_per_candidate",
+        "cover_manifest_exactly_once",
+        "invalid_batch_split_strategy",
+        "champion_cells"
+      ],
+      "properties": {
+        "candidate_grain": {"type": "integer", "minimum": 1, "maximum": 100},
+        "calls_per_candidate": {"type": "integer", "minimum": 1, "maximum": 20},
+        "cover_manifest_exactly_once": {"const": true},
+        "invalid_batch_split_strategy": {"const": "three_to_two_plus_one_then_binary"},
+        "champion_cells": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["cell_id", "concept_alias_group_id", "mode"],
+            "properties": {
+              "cell_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]{0,127}$"},
+              "concept_alias_group_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]{0,127}$"},
+              "mode": {"enum": ["Top", "Latest"]}
+            }
+          }
+        }
+      }
+    },
+    "search": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["native_tool_name", "request_limit", "saturation_semantics"],
+      "properties": {
+        "native_tool_name": {"const": "x_keyword_search"},
+        "request_limit": {"type": "integer", "minimum": 1, "maximum": 100},
+        "saturation_semantics": {"const": "count_equal_request_limit_is_lower_bound_only"}
+      }
+    },
+    "concept_alias_groups": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["group_id", "aliases"],
+        "properties": {
+          "group_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]{0,127}$"},
+          "aliases": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {"type": "string", "minLength": 1, "maxLength": 160}
+          }
+        }
+      }
+    },
+    "saturation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["child_lineage", "mode_children", "time_children"],
+      "properties": {
+        "child_lineage": {"const": ["topic", "mode", "time"]},
+        "mode_children": {
+          "type": "array",
+          "minItems": 2,
+          "uniqueItems": true,
+          "items": {"enum": ["Top", "Latest"]}
+        },
+        "time_children": {
+          "type": "array",
+          "minItems": 2,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}\\.\\.[0-9]{4}-[0-9]{2}-[0-9]{2}$"}
+        }
+      }
+    },
+    "queues": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "queue_order",
+        "thread_hydration_requires_exact_stable_post_id",
+        "luna_requires_exact_source_bound_hydration",
+        "authored_sparse_max_references",
+        "challenger_types",
+        "challenger_self_evidence_allowed"
+      ],
+      "properties": {
+        "queue_order": {"const": ["saturation_queue", "thread_hydration_queue", "luna_input_queue", "challenger_queue"]},
+        "thread_hydration_requires_exact_stable_post_id": {"const": true},
+        "luna_requires_exact_source_bound_hydration": {"const": true},
+        "authored_sparse_max_references": {"type": "integer", "minimum": 0},
+        "challenger_types": {"const": ["official_exact_mention", "project_alias", "thread"]},
+        "challenger_self_evidence_allowed": {"const": false}
+      }
+    },
+    "stop": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["all_queues_must_be_empty", "consecutive_materially_distinct_zero_waves", "zero_dimensions"],
+      "properties": {
+        "all_queues_must_be_empty": {"const": true},
+        "consecutive_materially_distinct_zero_waves": {"const": 2},
+        "zero_dimensions": {"const": ["new_stable_post_id_count", "luna_qualified_state_upgrade_count"]}
+      }
+    },
+    "kpis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["denominator_registry", "model_call_counts_allowed", "aggregate_must_be_candidate_free", "aggregate_hash_binding_required"],
+      "properties": {
+        "denominator_registry": {"const": ["execution_compliance", "stable_post_id_retrieval", "exact_hydration", "luna_qualified_state_upgrades"]},
+        "model_call_counts_allowed": {"const": false},
+        "aggregate_must_be_candidate_free": {"const": true},
+        "aggregate_hash_binding_required": {"const": true}
+      }
+    }
+  }
+}

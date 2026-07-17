@@ -129,6 +129,13 @@ The first vertical slice covers OpenAI with:
 - raw observations and evidence proposals only;
 - explicit non-exhaustiveness and zero protected-trait output.
 
+A provider-free source-neutral mapping controller now freezes the calibrated large-lab query method without a lab,
+candidate, model, or business-volume cap. Its default Wave P is empirical grain `3`, two exact champion keyword calls
+per candidate, complete manifest coverage, literal per-call URL blocks, six-file raw-session replay, exact hydration
+and Luna queues, and a structural two-wave stop. Historical calibration sessions remain exploratory because they did
+not retain the typed precommit required for `commit_allowed`; see
+`docs/SOURCE_NEUTRAL_MAPPING_CONTROLLER.md`.
+
 All URLs use the reserved `.invalid` domain. No real person, handle, post, or X URL appears in the fixture.
 
 An additional Stage 1 offline slice now validates synthetic capability-probe request/result envelopes. It remains
@@ -242,6 +249,8 @@ PYTHONPATH=src ../sourcing-ai-agent/.venv/bin/python -m unittest tests.test_grok
 PYTHONPATH=src ../sourcing-ai-agent/.venv/bin/python -m unittest tests.test_reported_profile_text_semantic -v
 PYTHONPATH=src ../sourcing-ai-agent/.venv/bin/python scripts/generate_stage2_field_capability_fixture.py --check
 PYTHONPATH=src ../sourcing-ai-agent/.venv/bin/python -m unittest tests.test_stage2_field_capability -v
+PYTHONPATH=src ../sourcing-ai-agent/.venv/bin/python -m x_first.source_neutral_mapping
+PYTHONPATH=src ../sourcing-ai-agent/.venv/bin/python -m unittest tests.test_source_neutral_mapping -v
 ```
 
 Regenerate the deterministic fixture only when the contract intentionally changes:
