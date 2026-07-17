@@ -7,8 +7,10 @@
 # fail closed. This script materializes an isolated CODEX_HOME whose
 # config.toml is derived from the CURRENT shared config with the three
 # reviewer policy values (configs/reviewer-codex/reviewer.toml) forced on
-# top. Everything else (auth.json, sessions/, caches, ...) is symlinked back
-# to the real ~/.codex so login state and rollout persistence keep working.
+# top. Login/session/catalog state is symlinked back to the real ~/.codex so
+# authentication and rollout persistence keep working. Version-sensitive
+# models_cache.json is reviewer-private because its schema must match the
+# reviewer runtime, not whichever Desktop/CLI runtime last refreshed source.
 #
 # GUARANTEE: this script only READS the real ~/.codex. It never writes,
 # touches, or re-permissions anything under it.
@@ -39,6 +41,13 @@ POLICY_FILE="$REPO_ROOT/configs/reviewer-codex/reviewer.toml"
 mkdir -p "$TARGET_HOME"
 chmod 0700 "$TARGET_HOME"
 
+is_reviewer_private_runtime_entry() {
+  case "$1" in
+    models_cache.json) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 # Fail before linking anything if an earlier/manual target contains a real
 # entry with the same name. `ln -sfn SOURCE REAL_DIR` creates a nested link
 # inside REAL_DIR instead of replacing it, so silently continuing would leave
@@ -48,6 +57,7 @@ for entry in "$SOURCE_HOME"/* "$SOURCE_HOME"/.[!.]*; do
   [ -e "$entry" ] || continue
   base="$(basename "$entry")"
   [ "$base" = "config.toml" ] && continue
+  is_reviewer_private_runtime_entry "$base" && continue
   target_entry="$TARGET_HOME/$base"
   if { [ -e "$target_entry" ] || [ -L "$target_entry" ]; } && [ ! -L "$target_entry" ]; then
     echo "refusing to replace non-symlink reviewer entry: $target_entry" >&2
@@ -60,12 +70,28 @@ done
   exit 1
 }
 
-# Symlink every top-level entry except config.toml (refresh on every run so
-# newly created entries in the real home are picked up).
+# A previous bootstrap may have linked the source model cache into the
+# reviewer home. Remove only that target-side link so the reviewer runtime can
+# create a cache with its own schema. Preserve an already-private regular file
+# byte-for-byte across refreshes; other real entry types fail closed.
+for base in models_cache.json; do
+  target_entry="$TARGET_HOME/$base"
+  if [ -L "$target_entry" ]; then
+    rm -- "$target_entry"
+  elif [ -e "$target_entry" ] && [ ! -f "$target_entry" ]; then
+    echo "refusing non-file reviewer-private entry: $target_entry" >&2
+    exit 1
+  fi
+done
+
+# Symlink every shared top-level entry (refresh on every run so newly created
+# entries in the real home are picked up). Reviewer-private runtime entries
+# remain local to TARGET_HOME and are never copied from or written to source.
 for entry in "$SOURCE_HOME"/* "$SOURCE_HOME"/.[!.]*; do
   [ -e "$entry" ] || continue
   base="$(basename "$entry")"
   [ "$base" = "config.toml" ] && continue
+  is_reviewer_private_runtime_entry "$base" && continue
   ln -sfn "$entry" "$TARGET_HOME/$base"
 done
 
