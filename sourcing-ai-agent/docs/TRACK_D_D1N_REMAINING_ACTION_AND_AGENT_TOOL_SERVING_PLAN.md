@@ -19,7 +19,7 @@ The work is deliberately split into three gates so unrelated migrations do not b
 | Layer | Required outcome | Explicit non-claim |
 | --- | --- | --- |
 | **D1n implementation** | all 15 API-submittable actions have current request pins, retained historical lookup, owner binders, registered adapters, result contracts, and exact rollout state; R-029 can begin its final zero-hit observation epoch | does not make all 15 actions model-served and does not authorize any provider |
-| **local fake Agent slice** | isolated local PG executes `plan_acquisition -> exact action approval -> start_acquisition_run -> inspect_operation -> filter_projection`; provider transport and model turn are scripted/simulated, while AgentAction/Operation/Command/result persistence is production-shaped | `local_canary` is not the global `served=true` state; public/hosted served population remains zero |
+| **local fake Agent slice** | isolated local PG executes `plan_acquisition -> exact action approval -> start_acquisition_run -> inspect_operation -> filter_projection`; provider transport and model turn are scripted/simulated, while AgentAction/Operation/Command/result persistence is production-shaped | the isolated harness authorization is not a production release state and never derives `served=true`; public/hosted served population remains zero |
 | **paid local live gate** | the same reviewed slice uses the real Agent model route and canonical Cohort Harvest boundary only after durable live lane checkpoints, cost reservation, manifest identity, result-slot identity, and bounded canary approval are present | does not activate hosted serving, widen company/provider scope, or close R-019/R-028/R-029 |
 
 The intended 24-hour critical path is:
@@ -35,7 +35,7 @@ F1 result core -> V1 plan preview -> V2 start-v2 -> V3 AgentToolSpec/query/filte
                                                          v
                                       TML + second-lab scripted proof
                                                          v
-                                      local_canary scripted Agent
+                                      isolated scripted Agent harness
                                                          v
                             paid local TML canary only if every paid gate is green
 ```
@@ -77,7 +77,7 @@ activation; `implementation-pinned` is a fail-closed placeholder, not an accepte
 
 | # | Action | Current request version / digest | Target request state | Canonical target binder | Dispatch adapter | Migration/review state |
 | ---: | --- | --- | --- | --- | --- | --- |
-| 1 | `plan_acquisition` | empty / empty | `acquisition_plan_preview_request_v1` / implementation-pinned | `AcquisitionPlanPreviewTargetBinder` mints workspace/requester/company target | new `commandless_preview` | D1n V1; no activation before pinned review |
+| 1 | `plan_acquisition` | empty / empty | `acquisition_plan_preview_request_v2` / implementation-pinned | `AcquisitionPlanPreviewTargetBinder` mints workspace/requester/company target | new `commandless_preview` | D1n V1 fixed-forward candidate; no activation before fresh pinned review |
 | 2 | `start_acquisition_run` | `acquisition_root_request_v1` / `3409f3c878b2ca8e67bb4d4511c9e188c94ead14797abd2e27ebdc7b138bfd70` | retain v1 historically; new submissions use `acquisition_root_request_v2` / implementation-pinned | `AcquisitionRootTargetBinder` plus exact approved preview/action receipt | `agent_callable_workflow_command` | D1i v1 remains historical; D1n V2 review required |
 | 3 | `fetch_profile_sample` | empty / empty | `profile_sample_request_v1` / implementation-pinned | new `ProfileSampleTargetBinder`; no Activity/Delta mint at ingress | `agent_callable_workflow_command` | D1n M1 |
 | 4 | `continue_acquisition_run` | empty / empty | `acquisition_continue_request_v1` / implementation-pinned | new discriminated `AcquisitionContinuationTargetBinder` | `agent_callable_workflow_command` | D1n M2 |
@@ -130,7 +130,7 @@ one role, multiple roles, `any`, `all`, current-only, former-only, and both stat
 
 ### 3.2 Preview and approval are the durable user confirmation
 
-`plan_acquisition` writes one immutable `acquisition_plan_preview.v1` in its commandless PG UoW. The preview contains:
+`plan_acquisition` writes one immutable `acquisition_plan_preview.v2` in its commandless PG UoW. The preview contains:
 
 - workspace/requester, canonical company id, company-registry revision/digest;
 - exact canonical effective request and digest;
@@ -157,14 +157,16 @@ submit the action, but it cannot mint this receipt or approve itself.
 
 ### 4.1 F1 result registry
 
-`src/sourcing_agent/action_result_schema.py` and `tests/test_d1n_action_result_schema.py` are an in-progress F1 leaf
-at the time of this plan. Their presence is not a commit, test result, or activation claim. The accepted F1 contract
-must provide one immutable `ActionResultSpec` per eligible tool with:
+`src/sourcing_agent/action_result_schema.py` and `tests/test_d1n_action_result_schema.py` contain the F1 fixed-forward
+candidate at the time of this plan. The prior pinned Ultra review remains `NO-GO`; this candidate is not accepted
+until a fresh pinned non-author review says `GO`. Presence is not activation. The accepted F1 contract must provide
+one immutable, tool-neutral `ActionResultSpec` per eligible action or query tool with:
 
 - result schema version and canonical digest;
 - exact success, deferred, and terminal-error closed variants;
 - serializer owner and canonical validator owner;
-- deterministic byte/item/depth limits and opaque artifact-reference policy;
+- one cross-layer canonical tool-name grammar, deterministic schema/payload byte/item/depth limits, explicit
+  string-value roles, and a canonical opaque artifact-reference policy;
 - a parallel, digest-bound per-field provenance map: `server_derived`, `owner_state`, `user_supplied`,
   `provider_observed`, or `model_inferred`.
 
@@ -226,12 +228,13 @@ controls”, repair state, execute a command, or reinterpret terminal statuses.
 
 ### 4.4 Release state machine
 
-`AgentToolReleaseRegistry` owns routing/visibility; absence, stale evidence, unknown state, or expired activation is
-`disabled`:
+The production activation owner keeps request and tool release dimensions separate. Request state is
+`disabled -> shadow -> current`; tool state is `disabled -> shadow -> hosted`. Absence, stale evidence, unknown state,
+or expired activation is `disabled`:
 
 ```text
-disabled -> shadow -> local_canary -> hosted
-                 \-> disabled      \-> disabled
+request: disabled -> shadow -> current -> disabled
+tool:    disabled -> shadow -> hosted  -> disabled
 ```
 
 Each transition binds tool/version/digest, exact code commit and scope digest, valid review artifact, runtime
@@ -239,13 +242,12 @@ namespace and provider-mode allowlist, optional workspace/requester allowlist di
 transition actor/reason. Meanings are exact:
 
 - `shadow`: registry-visible to preflight only; never sent to a model.
-- `local_canary`: available only in an isolated named local runtime and explicitly allowed workspace. This is reported
-  as `available_in_local_canary=true`, **not** global `served=true`.
 - `hosted`: the only state deriving `served=true`; requires R-029 closed for the complete 15-action denominator,
   scope-matched hosted reviews, non-stale activation, and hosted owner/runtime gates.
 
-A paid local TML canary is an additional expiring authorization on `local_canary`; it does not transition the tool to
-`hosted`. Public production served population remains zero until at least one tool reaches `hosted`.
+Scripted and paid local canaries run through an isolated harness authorization outside this production state machine.
+They do not create an `available_in_local_canary` release state and do not transition a tool to `hosted`. Public
+production served population remains zero until at least one tool reaches `hosted`.
 
 ## 5. Action and query contract locks
 
@@ -285,7 +287,7 @@ control state, and next canonical control refs.
 
 This is a commandless pure preview, not an alias for side-effecting `plan_workflow`. Its owner validates company
 identity and `cohort_selection.v1`, compiles the capability-free canonical provider manifest, and persists
-AgentAction/OperationRun/event plus `acquisition_plan_preview.v1` in one PG UoW. It creates no provider call, plan
+AgentAction/OperationRun/event plus `acquisition_plan_preview.v2` in one PG UoW. It creates no provider call, plan
 review, acquisition run, or workflow command. Its success result returns the immutable preview and exact confirmation
 instructions; deferred is not accepted as simulate-success evidence.
 
@@ -424,7 +426,7 @@ The paid gate requires all of the following; none may be waived implicitly:
 1. V1/V2/V3/F1/F3/F4 and the result-slot occurrence path committed with valid scope-matched `GO` reviews;
 2. local PG terminal-success simulate plus TML/Anthropic scripted proof green and contamination clean;
 3. L1/CS6 live checkpoint committed, reviewed, and exercised with fake ambiguous-submit/resume/terminal reuse;
-4. the `agent.planner.loop` model route in `local_canary` with full `ModelTurnExecutionContext`, exact requested/effective
+4. the `agent.planner.loop` model route in the isolated local harness with full `ModelTurnExecutionContext`, exact requested/effective
    model identity, cost reservation/exposure, circuit, no silent fallback, and durable accepted-result slot;
 5. canonical TML company identity and `cohort_provider_manifest.v2`, with user-confirmed Cohort and budget;
 6. an expiring canary receipt binding workspace/requester, exact commits/review scope digests, model/provider routes,
@@ -508,7 +510,7 @@ deletes historical serializers. Hosted serving is fail-closed during registry/ac
 | --- | --- | --- | --- |
 | `P0-d1m` | none | D1m owner | exact D1m commit + valid review + 10/5 generated roster; required for 15/15/R-029/hosted, not for independent leaf coding |
 | `F1-result-core` | plan | result-contract leaf | immutable `ActionResultSpec` registry core and focused tests; no action marked ready |
-| `F0-version-activation` | plan | migration/registry owner | historical request/result lookup + PG activation row + mixed-replica/backout tests |
+| `F0-version-activation` | plan | migration/registry owner | pure immutable pin/transition contract first, then historical request/result lookup + PG activation row + mixed-replica/backout tests; no local-canary production state |
 | `F4-uow` | plan | repository/UoW owner | touched-path command creation/terminal/commandless UoWs and concurrency/fault matrix |
 | `M1-profile-sample` | F0, F4 | profile leaf | closed request/binder/adapter/result owner; ingress mints no Activity/Delta |
 | `M2-continue` | F0, F4 | acquisition leaf | seven closed variants, exact owners, results, success fixtures |
@@ -521,7 +523,7 @@ deletes historical serializers. Hosted serving is fail-closed during registry/ac
 | `B0-15-row-integration` | P0, M1, M2, V1, M4, M5, F0 | one registry/API owner | generated 15/15 roster; no schema-less current submissions; R-029 epoch may start |
 | `S1-pg-simulate` | F3, V1, V2, V3, F4 | simulate owner | mandatory PG terminal-success for every canary tool; negative states separate |
 | `S2-lab-scripted` | S1, manifest-v2 | E2E owner | TML + Anthropic same-path fake/scripted proof, clean provider-mode/contamination report |
-| `S3-local-agent` | S2 + scope reviews | local runtime owner | scripted model drives the exact local Agent slice in isolated PG; `local_canary`, not hosted |
+| `S3-local-agent` | S2 + scope reviews | local runtime owner | scripted model drives the exact local Agent slice in isolated PG under harness-only authorization; not hosted |
 | `L1-cohort-live-checkpoint` | manifest-v2, F4 | separate provider-runtime owner | durable lane/cost/ambiguous-submit/resume/reuse capability; reviewed predecessor for paid call |
 | `L2-agent-live-route` | F3, result slot | model-turn owner | reviewed local-canary model route/context/cost/circuit/result slot |
 | `C1-paid-tml` | S3, L1, L2 + §6.3 | canary owner | one bounded paid local TML manifest and result review; no automatic scale-out |
@@ -650,7 +652,7 @@ Before fake/scripted E2E:
 - `inspect_operation` parity with canonical control/display contracts and zero repair/domain writes;
 - filter-v2 `any|all|all-roles` mapping, status lanes, stale publication, total/returned/truncation, and provenance;
 - action/query release-state mutation tests: removing any pin/binder/adapter/success fixture/review/expiry condition makes
-  it unavailable; `local_canary` never yields global `served=true`;
+  it unavailable; local harness authorization never yields global `served=true`;
 - UoW fault plus concurrency races from §7;
 - simulate/scripted/live namespace contamination negatives.
 
@@ -701,7 +703,7 @@ and operability evidence, not automatic scale or production signoff.
 | 5 | search v1 cannot carry roles/status | §5 V3 | text search stays v1; filter v2 owns Cohort any/all/all-role mapping and result provenance |
 | 6 | query tool outside readiness path | §4.3 | one `AgentToolSpec` for action/query; query owner/binder/result/simulate/release pins; canonical controls only |
 | 7 | result not bound to occurrence | §4.1-4.2 | result-slot/ordinal/action/run/command/attempt/target/terminal-winner pins and provenance map |
-| 8 | incomplete serving ownership | §4.4 | fail-closed `disabled -> shadow -> local_canary -> hosted`; only hosted derives global served |
+| 8 | incomplete serving ownership | §4.4 | fail-closed request `disabled -> shadow -> current` and tool `disabled -> shadow -> hosted`; only hosted derives global served; local canary remains outside production release state |
 | 9 | missing Cohort live prerequisite | §6.2-6.3 | reviewed durable lane checkpoint/cost/ambiguous-submit/resume/reuse before live capability issuance |
 | 10 | noncanonical canary manifest | §6.1, §12 | `cohort_provider_manifest.v2`, company-registry target, TML+Anthropic same-path proof, no lab branches |
 | 11 | evidence revision not promotion approval | §5 M4 | durable human approval receipt, eligibility recheck, distinct suggestion/promotion/export states |
@@ -720,7 +722,7 @@ and operability evidence, not automatic scale or production signoff.
 3. **N3, critical slice:** integrate V1 -> V2 -> V3, then unified `AgentToolSpec`, result occurrence pins, and canonical
    release-state derivation.
 4. **N4:** run PG terminal-success simulate, then TML + Anthropic fake/scripted same-path Agent E2E; open
-   `local_canary` only after exact reviews verify green.
+   isolated local harness only after exact reviews verify green.
 5. **N5, parallel paid predecessor:** implement and review L1 Cohort live checkpoints plus L2 Agent model-route live
    owner. Keep all network transport fake until both are complete.
 6. **N6:** run the paid TML preflight artifact verifier. Only if every §6.3 item is green, execute one expiring bounded

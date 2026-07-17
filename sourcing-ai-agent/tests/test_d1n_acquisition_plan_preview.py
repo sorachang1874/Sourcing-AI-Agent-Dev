@@ -70,6 +70,8 @@ def _input(
     max_provider_calls: int = 4,
     max_provider_items: int = 20,
     max_output_candidates: int = 10,
+    max_cost_micro_usd: int = 2_000_000,
+    max_elapsed_seconds: int = 900,
 ) -> dict[str, Any]:
     return {
         "cohort_selection": _cohort() if cohort is None else cohort,
@@ -81,8 +83,8 @@ def _input(
             "max_provider_calls": max_provider_calls,
             "max_provider_items": max_provider_items,
             "max_output_candidates": max_output_candidates,
-            "max_cost_micro_usd": 2_000_000,
-            "max_elapsed_seconds": 900,
+            "max_cost_micro_usd": max_cost_micro_usd,
+            "max_elapsed_seconds": max_elapsed_seconds,
         },
     }
 
@@ -150,6 +152,14 @@ def _rebind_preview_digest(record: dict[str, Any]) -> None:
     record["confirmation"]["preview_digest"] = digest
 
 
+def _rebind_provider_manifest_digest(record: dict[str, Any]) -> None:
+    manifest = record["provider_planning_manifest"]
+    candidate = {key: value for key, value in manifest.items() if key not in {"manifest_id", "manifest_digest"}}
+    digest = _json_digest(candidate)
+    manifest["manifest_id"] = f"acquisition-provider-plan:{digest}"
+    manifest["manifest_digest"] = digest
+
+
 def test_request_contract_is_closed_revisioned_and_digest_pinned() -> None:
     schema = acquisition_plan_preview_request_schema()
 
@@ -158,7 +168,7 @@ def test_request_contract_is_closed_revisioned_and_digest_pinned() -> None:
     assert schema["properties"]["input_payload"]["additionalProperties"] is False
     assert schema["properties"]["target_ref"]["additionalProperties"] is False
     assert schema["properties"]["target_ref"]["properties"]["company_target"]["additionalProperties"] is False
-    assert ACQUISITION_PLAN_PREVIEW_REQUEST_SCHEMA_VERSION == "acquisition_plan_preview_request_v1"
+    assert ACQUISITION_PLAN_PREVIEW_REQUEST_SCHEMA_VERSION == "acquisition_plan_preview_request_v2"
     assert len(ACQUISITION_PLAN_PREVIEW_REQUEST_SCHEMA_DIGEST) == 64
     assert (
         ACQUISITION_PLAN_PREVIEW_REQUEST_SCHEMA_DIGEST
@@ -191,7 +201,7 @@ def test_preview_is_deterministic_deeply_immutable_and_defensively_exported() ->
 
 
 def test_preview_digest_binds_content_but_canonicalizes_order_insensitive_sets() -> None:
-    first_input = _input(thematic_constraints=["Pre-training", "Distributed Systems"])
+    first_input = _input(thematic_constraints=["Pre-training", "AI Safety"])
     first_target = _target()
     first_target["company_target"]["provider_company_labels"] = [
         "thinkingmachinesai",
@@ -199,7 +209,7 @@ def test_preview_digest_binds_content_but_canonicalizes_order_insensitive_sets()
     ]
     second_input = _input(
         cohort=_cohort(roles=["engineering", "research"], statuses=["former", "current"]),
-        thematic_constraints=["Distributed Systems", "Pre-training"],
+        thematic_constraints=["AI Safety", "Pre-training"],
     )
     second = _build(input_payload=second_input)
     first = _build(input_payload=first_input, target_ref=first_target)
@@ -234,9 +244,16 @@ def test_preview_pins_canonical_request_company_cohort_manifest_and_future_start
     assert effective["cohort_selection_digest"] == cohort_selection_digest(effective["cohort_selection"])
     assert record["effective_request_digest"] == _json_digest(effective)
     assert manifest["manifest_id"] == f"acquisition-provider-plan:{manifest['manifest_digest']}"
-    assert manifest["schema_version"] == "acquisition_provider_plan.v1"
+    assert record["schema_version"] == "acquisition_plan_preview.v2"
+    assert effective["schema_version"] == "acquisition_plan_effective_request.v2"
+    assert manifest["schema_version"] == "acquisition_provider_plan.v2"
+    assert manifest["canonical_company_id"] == company["canonical_company_id"]
+    assert manifest["company_target_digest"] == company["company_target_digest"]
+    assert manifest["company_registry_revision"] == company["company_registry_revision"]
+    assert manifest["company_registry_digest"] == company["company_registry_digest"]
     assert manifest["compiler_manifest_schema_version"] == "cohort_provider_manifest.v1"
-    assert len(manifest["compiler_manifest_digest"]) == 64
+    assert len(manifest["physical_query_digest"]) == 64
+    assert manifest["budget_ceiling"] == effective["budget"]
     assert manifest["provider"] == COHORT_PROVIDER
     assert manifest["capability_included"] is False
     assert manifest["execution_authorized"] is False
@@ -399,12 +416,97 @@ def test_final_output_ceiling_is_distinct_and_bound_by_presented_manifest_digest
     assert ten["provider_planning_manifest"]["planned_output_candidates"] == 10
     assert fifteen["provider_planning_manifest"]["planned_output_candidates"] == 15
     assert (
-        ten["provider_planning_manifest"]["compiler_manifest_digest"]
-        == fifteen["provider_planning_manifest"]["compiler_manifest_digest"]
+        ten["provider_planning_manifest"]["physical_query_digest"]
+        == fifteen["provider_planning_manifest"]["physical_query_digest"]
     )
     assert (
         ten["provider_planning_manifest"]["manifest_digest"] != fifteen["provider_planning_manifest"]["manifest_digest"]
     )
+
+
+@pytest.mark.parametrize(
+    ("field", "replacement"),
+    [
+        ("canonical_company_id", "thinkingmachineslab_v2"),
+        ("company_registry_revision", "company_registry.v2"),
+        ("company_registry_digest", "a" * 64),
+    ],
+)
+def test_provider_manifest_identity_binds_each_direct_company_pin(field: str, replacement: str) -> None:
+    baseline = _build().to_record()["provider_planning_manifest"]
+    target = _target()
+    target["company_target"][field] = replacement
+    changed = _build(target_ref=target).to_record()["provider_planning_manifest"]
+
+    assert changed["manifest_digest"] != baseline["manifest_digest"]
+    assert changed["physical_query_digest"] == baseline["physical_query_digest"]
+    assert changed[field] == replacement
+
+
+def test_provider_manifest_identity_binds_canonical_name_and_provider_labels() -> None:
+    baseline = _build().to_record()["provider_planning_manifest"]
+
+    renamed_target = _target()
+    renamed_target["company_target"]["canonical_name"] = "Thinking Machines Research Lab"
+    renamed_target["company_target"]["provider_company_labels"] = [
+        "Thinking Machines Research Lab",
+        "thinkingmachinesai",
+    ]
+    renamed = _build(target_ref=renamed_target).to_record()["provider_planning_manifest"]
+
+    extra_label_target = _target()
+    extra_label_target["company_target"]["provider_company_labels"].append("tml-research")
+    extra_label = _build(target_ref=extra_label_target).to_record()["provider_planning_manifest"]
+
+    assert len({baseline["manifest_digest"], renamed["manifest_digest"], extra_label["manifest_digest"]}) == 3
+    assert renamed["company_target_digest"] != baseline["company_target_digest"]
+    assert extra_label["company_target_digest"] != baseline["company_target_digest"]
+
+
+@pytest.mark.parametrize(
+    ("field", "replacement", "physical_query_changes"),
+    [
+        ("max_provider_calls", 5, False),
+        ("max_provider_items", 24, True),
+        ("max_output_candidates", 11, False),
+        ("max_cost_micro_usd", 2_000_001, False),
+        ("max_elapsed_seconds", 901, False),
+    ],
+)
+def test_provider_manifest_identity_binds_all_five_budget_ceilings(
+    field: str,
+    replacement: int,
+    physical_query_changes: bool,
+) -> None:
+    baseline = _build().to_record()["provider_planning_manifest"]
+    request = _input()
+    request["budget"][field] = replacement
+    changed = _build(input_payload=request).to_record()["provider_planning_manifest"]
+
+    assert changed["budget_ceiling"][field] == replacement
+    assert changed["manifest_digest"] != baseline["manifest_digest"]
+    assert (changed["physical_query_digest"] != baseline["physical_query_digest"]) is physical_query_changes
+
+
+def test_hydration_recomputes_complete_provider_manifest_identity() -> None:
+    forged_records: list[dict[str, Any]] = []
+
+    company_forgery = _build().to_record()
+    company_forgery["provider_planning_manifest"]["company_registry_revision"] = "company_registry.v9"
+    forged_records.append(company_forgery)
+
+    budget_forgery = _build().to_record()
+    budget_forgery["provider_planning_manifest"]["budget_ceiling"]["max_cost_micro_usd"] += 1
+    forged_records.append(budget_forgery)
+
+    for record in forged_records:
+        _rebind_provider_manifest_digest(record)
+        _rebind_preview_digest(record)
+        with pytest.raises(
+            AcquisitionPlanPreviewError,
+            match="acquisition_plan_preview_provider_manifest_mismatch",
+        ):
+            AcquisitionPlanPreview(record)
 
 
 @pytest.mark.parametrize(
@@ -474,6 +576,36 @@ def test_owner_target_validation_fails_closed(mutator: Any) -> None:
         _build(target_ref=target)
 
 
+@pytest.mark.parametrize("identity_field", ["workspace_id", "requester_id"])
+@pytest.mark.parametrize("malformed", [" value", "value ", "value   child"])
+def test_authenticated_owner_identity_must_already_be_canonical(
+    identity_field: str,
+    malformed: str,
+) -> None:
+    target = _target()
+    target[identity_field] = malformed
+    with pytest.raises(AcquisitionPlanPreviewError) as captured:
+        _build(target_ref=target)
+    assert captured.value.code == "acquisition_plan_preview_owner_identity_noncanonical"
+    assert captured.value.field == f"target_ref.{identity_field}"
+
+
+@pytest.mark.parametrize("identity_field", ["workspace_id", "requester_id"])
+@pytest.mark.parametrize("malformed", [" value", "value ", "value   child"])
+def test_hydration_revalidates_authenticated_owner_identity_exactly(
+    identity_field: str,
+    malformed: str,
+) -> None:
+    record = _build().to_record()
+    record[identity_field] = malformed
+    _rebind_preview_digest(record)
+
+    with pytest.raises(AcquisitionPlanPreviewError) as captured:
+        AcquisitionPlanPreview(record)
+    assert captured.value.code == "acquisition_plan_preview_owner_identity_noncanonical"
+    assert captured.value.field == identity_field
+
+
 def test_company_labels_require_canonical_label_and_reject_duplicates() -> None:
     missing = _target()
     missing["company_target"]["provider_company_labels"] = ["thinkingmachinesai"]
@@ -527,6 +659,32 @@ def test_thematic_constraints_are_bounded_canonical_and_model_safe() -> None:
         _build(input_payload=_input(thematic_constraints=["read /tmp/private.json"]))
 
 
+def test_accepted_thematic_constraint_changes_physical_and_presented_manifest_identity() -> None:
+    unconstrained = _build(input_payload=_input(thematic_constraints=[])).to_record()["provider_planning_manifest"]
+    constrained = _build(input_payload=_input(thematic_constraints=["AI safety"])).to_record()[
+        "provider_planning_manifest"
+    ]
+
+    assert constrained["physical_query_digest"] != unconstrained["physical_query_digest"]
+    assert constrained["manifest_digest"] != unconstrained["manifest_digest"]
+
+
+@pytest.mark.parametrize(
+    "constraint",
+    [
+        "AI safety research",
+        "distributed systems engineering",
+    ],
+)
+def test_compiler_removed_or_role_like_thematic_constraint_fails_closed(constraint: str) -> None:
+    with pytest.raises(AcquisitionPlanPreviewError) as captured:
+        _build(input_payload=_input(thematic_constraints=[constraint]))
+
+    assert captured.value.code == "acquisition_plan_preview_thematic_constraint_rejected"
+    assert captured.value.field == "input_payload.thematic_constraints"
+    assert captured.value.detail == "put role intent in cohort_selection.role_bucket_ids"
+
+
 @pytest.mark.parametrize(
     "kwargs",
     [
@@ -544,6 +702,73 @@ def test_thematic_constraints_are_bounded_canonical_and_model_safe() -> None:
 def test_server_owned_identity_time_and_schema_pins_fail_closed(kwargs: dict[str, Any]) -> None:
     with pytest.raises(AcquisitionPlanPreviewError):
         _build(**kwargs)
+
+
+@pytest.mark.parametrize(
+    ("section", "field", "forged_value"),
+    [
+        ("", "preview_id", "preview_1 forged"),
+        ("", "preview_id", "preview_1/evil"),
+        ("schema_pins", "intended_start_request_schema_version", "start.v1 forged"),
+        ("schema_pins", "intended_start_request_schema_digest", f"{'a' * 64}suffix"),
+    ],
+)
+def test_whole_value_schema_patterns_reject_suffixes_before_hydration(
+    section: str,
+    field: str,
+    forged_value: str,
+) -> None:
+    record = _build().to_record()
+    target = record if not section else record[section]
+    target[field] = forged_value
+    if field == "preview_id":
+        record["confirmation"]["preview_id"] = forged_value
+    _rebind_preview_digest(record)
+
+    with pytest.raises(AcquisitionPlanPreviewError) as captured:
+        AcquisitionPlanPreview(record)
+    assert captured.value.code == "acquisition_plan_preview_record_invalid"
+
+
+@pytest.mark.parametrize(
+    ("section", "field", "forged_value", "error_code"),
+    [
+        ("", "preview_id", "preview_1 forged", "acquisition_plan_preview_identifier_invalid"),
+        ("", "preview_id", "preview_1/evil", "acquisition_plan_preview_identifier_invalid"),
+        (
+            "schema_pins",
+            "intended_start_request_schema_version",
+            "start.v1 forged",
+            "acquisition_plan_preview_version_invalid",
+        ),
+        (
+            "schema_pins",
+            "intended_start_request_schema_digest",
+            f"{'a' * 64}suffix",
+            "acquisition_plan_preview_digest_invalid",
+        ),
+        ("", "preview_digest", f"{'a' * 64}suffix", "acquisition_plan_preview_digest_invalid"),
+        (
+            "",
+            "effective_request_digest",
+            f"{'a' * 64}suffix",
+            "acquisition_plan_preview_digest_invalid",
+        ),
+    ],
+)
+def test_semantic_hydration_reapplies_identity_version_and_digest_validators(
+    section: str,
+    field: str,
+    forged_value: str,
+    error_code: str,
+) -> None:
+    record = _build().to_record()
+    target = record if not section else record[section]
+    target[field] = forged_value
+
+    with pytest.raises(AcquisitionPlanPreviewError) as captured:
+        preview_module._validate_preview_semantics(record)
+    assert captured.value.code == error_code
 
 
 def test_direct_construction_rejects_digest_tampering() -> None:
@@ -580,6 +805,9 @@ def test_recomputed_outer_digest_cannot_forge_confirmation_instruction() -> None
 
 
 def test_result_spec_has_all_closed_variants_and_exact_provenance() -> None:
+    assert ACQUISITION_PLAN_PREVIEW_RESULT_SCHEMA_VERSION == "acquisition_plan_preview_result_v2"
+    assert preview_module.ACQUISITION_PLAN_PREVIEW_SERIALIZER_REVISION.endswith("_v2")
+    assert preview_module.ACQUISITION_PLAN_PREVIEW_SERIALIZER_OWNER.endswith("_v2")
     assert ACQUISITION_PLAN_PREVIEW_RESULT_SPEC.allowed_variants == ACTION_RESULT_VARIANTS
     assert len(ACQUISITION_PLAN_PREVIEW_RESULT_SPEC.result_schema_digest) == 64
     for variant in ACTION_RESULT_VARIANTS:
@@ -593,6 +821,45 @@ def test_result_spec_has_all_closed_variants_and_exact_provenance() -> None:
     assert success_provenance["/preview/effective_request/budget/max_provider_calls"] == "user_supplied"
     assert success_provenance["/preview/effective_request/cohort_selection_registry_digest"] == "server_derived"
     assert success_provenance["/preview/provider_planning_manifest/manifest_digest"] == "server_derived"
+
+
+def test_retired_v1_result_pin_is_not_reinterpreted_under_v2() -> None:
+    record = _build().to_record()
+    record["schema_pins"]["plan_result_schema_version"] = "acquisition_plan_preview_result_v1"
+    _rebind_preview_digest(record)
+
+    with pytest.raises(AcquisitionPlanPreviewError) as captured:
+        AcquisitionPlanPreview(record)
+    assert captured.value.code == "acquisition_plan_preview_record_invalid"
+
+
+@pytest.mark.parametrize(
+    ("section", "retired_version"),
+    [
+        ("preview", "acquisition_plan_preview.v1"),
+        ("effective_request", "acquisition_plan_effective_request.v1"),
+        ("provider_planning_manifest", "acquisition_provider_plan.v1"),
+        ("plan_request", "acquisition_plan_preview_request_v1"),
+    ],
+)
+def test_retired_v1_contract_versions_are_not_reinterpreted_under_v2(
+    section: str,
+    retired_version: str,
+) -> None:
+    record = _build().to_record()
+    if section == "preview":
+        record["schema_version"] = retired_version
+    elif section == "plan_request":
+        record["schema_pins"]["plan_request_schema_version"] = retired_version
+    else:
+        record[section]["schema_version"] = retired_version
+    if section == "provider_planning_manifest":
+        _rebind_provider_manifest_digest(record)
+    _rebind_preview_digest(record)
+
+    with pytest.raises(AcquisitionPlanPreviewError) as captured:
+        AcquisitionPlanPreview(record)
+    assert captured.value.code == "acquisition_plan_preview_record_invalid"
 
 
 def test_success_deferred_and_error_results_serialize_to_tool_messages() -> None:
@@ -609,6 +876,40 @@ def test_success_deferred_and_error_results_serialize_to_tool_messages() -> None
         assert ToolResultMessage(tool_call_id=f"call_{variant}", content=content).content == content
     assert json.loads(serialize_acquisition_plan_preview_result(payloads[1]))["status"] == "deferred"
     assert json.loads(serialize_acquisition_plan_preview_result(payloads[2]))["retryable"] is False
+
+
+@pytest.mark.parametrize("reason", ["owner busy", "UPPER_busy", "ok trailing!"])
+def test_terminal_reason_requires_a_full_machine_code_match(reason: str) -> None:
+    with pytest.raises(AcquisitionPlanPreviewError, match="acquisition_plan_preview_terminal_reason_invalid"):
+        acquisition_plan_preview_deferred_result(reason=reason, retryable=True)
+    with pytest.raises(AcquisitionPlanPreviewError, match="acquisition_plan_preview_terminal_reason_invalid"):
+        acquisition_plan_preview_error_result(reason=reason, field="preview_id")
+    with pytest.raises(AcquisitionPlanPreviewError, match="acquisition_plan_preview_terminal_reason_invalid"):
+        serialize_acquisition_plan_preview_result(
+            {
+                "variant": "deferred",
+                "status": "deferred",
+                "reason": reason,
+                "retryable": True,
+            }
+        )
+
+
+def test_preview_error_to_result_uses_canonical_serializer_shape_without_raw_detail() -> None:
+    error = AcquisitionPlanPreviewError(
+        "acquisition_plan_preview_request_invalid",
+        "input_payload",
+        "raw parser diagnostics must remain private",
+    )
+
+    payload = error.to_result()
+
+    assert payload == acquisition_plan_preview_error_result(
+        reason="acquisition_plan_preview_request_invalid",
+        field="input_payload",
+    )
+    assert "detail" not in payload
+    assert json.loads(serialize_acquisition_plan_preview_result(payload)) == payload
 
 
 def test_deferred_cannot_masquerade_as_simulate_success() -> None:
