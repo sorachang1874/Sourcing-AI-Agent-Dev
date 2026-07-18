@@ -1127,10 +1127,11 @@ class D1nStartAcquisitionV2CreatePGMatrixTest(PGControlPlaneStoreTestMixin, unit
                 self.assertEqual(self._table_snapshot(), baseline)
 
     def test_dormant_start_v2_root_command_blocks_native_command_mutators_without_writes(self) -> None:
-        cases: tuple[tuple[str, str, Callable[[str], dict[str, Any] | None]], ...] = (
+        cases: tuple[tuple[str, str, str, Callable[[str], dict[str, Any] | None]], ...] = (
             (
                 "cancel",
                 "queued",
+                "",
                 lambda command_id: self.store.cancel_workflow_command(
                     command_id,
                     reason="native cancel must not clear hold",
@@ -1141,6 +1142,7 @@ class D1nStartAcquisitionV2CreatePGMatrixTest(PGControlPlaneStoreTestMixin, unit
             (
                 "retry",
                 "cancelled",
+                "",
                 lambda command_id: self.store.retry_workflow_command(
                     command_id,
                     reason="native retry must not clear hold",
@@ -1151,6 +1153,7 @@ class D1nStartAcquisitionV2CreatePGMatrixTest(PGControlPlaneStoreTestMixin, unit
             (
                 "resume",
                 "retry_wait",
+                "",
                 lambda command_id: self.store.resume_workflow_command(
                     command_id,
                     reason="native resume must not clear hold",
@@ -1158,9 +1161,53 @@ class D1nStartAcquisitionV2CreatePGMatrixTest(PGControlPlaneStoreTestMixin, unit
                     result={"control_source": "native_test"},
                 ),
             ),
+            (
+                "retry_failed_terminal",
+                "failed_terminal",
+                "",
+                lambda command_id: self.store.retry_workflow_command(
+                    command_id,
+                    reason="native retry must not clear failed-terminal hold",
+                    actor="native-control-test",
+                    result={"control_source": "native_test"},
+                ),
+            ),
+            (
+                "cancel_malformed_payload",
+                "queued",
+                "payload_json",
+                lambda command_id: self.store.cancel_workflow_command(
+                    command_id,
+                    reason="native cancel must not bypass malformed held root",
+                    actor="native-control-test",
+                    result={"control_source": "native_test"},
+                ),
+            ),
+            (
+                "update_payload",
+                "queued",
+                "",
+                lambda command_id: self.store.update_workflow_command_payload(
+                    command_id,
+                    payload={"schema_version": "forged_release"},
+                    not_before_at="",
+                    result={"control_source": "native_test"},
+                ),
+            ),
+            (
+                "waiting_prerequisite",
+                "queued",
+                "",
+                lambda command_id: self.store.mark_workflow_command_waiting_prerequisite(
+                    command_id,
+                    retry_delay_seconds=1,
+                    result={"control_source": "native_test"},
+                    from_statuses=("queued",),
+                ),
+            ),
         )
 
-        for ordinal, (label, status, mutator) in enumerate(cases, start=1):
+        for ordinal, (label, status, corruption, mutator) in enumerate(cases, start=1):
             with self.subTest(control=label):
                 occurrence = self._arrange_pending(suffix=f"native_command_control_closed_{ordinal}")
                 created = self._create(occurrence)
@@ -1169,6 +1216,11 @@ class D1nStartAcquisitionV2CreatePGMatrixTest(PGControlPlaneStoreTestMixin, unit
                     self._execute(
                         "UPDATE {schema}.workflow_commands SET status = %s WHERE command_id = %s",
                         (status, command_id),
+                    )
+                if corruption == "payload_json":
+                    self._execute(
+                        "UPDATE {schema}.workflow_commands SET payload_json = %s WHERE command_id = %s",
+                        ("{bad", command_id),
                     )
                 baseline = self._table_snapshot()
 

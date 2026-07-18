@@ -12,6 +12,11 @@ This batch remains non-live and non-served. It does not close `R-019`, `R-029`, 
   still the `not_before_at=9999-12-31 23:59:59` release gate; only result acceptance may clear it.
 - Native PG command mutators (`cancel_workflow_command`, `retry_workflow_command`, `resume_workflow_command`) now apply
   the same held-root fence before clearing `not_before_at`, so direct store callers cannot bypass the API preflight.
+- The native held-root fence is now status-independent and provenance-aware: a command retaining the result-acceptance
+  hold sentinel is protected when command type, owner, payload schema, start snapshot, or confirmation receipt evidence
+  identifies an exact, partial, or corrupt start-v2 root. The same fence is applied to alternate native writers
+  `update_workflow_command_payload` and `mark_workflow_command_waiting_prerequisite`, leaving result acceptance as the
+  only owner that may clear the sentinel.
 - OperationRun public `control_state` now uses the same start-v2 generic-control preflight before exposing affordances:
   exact or corrupt start-v2 Operations advertise no dispatch/resume/retry/cancel actions while the generic controls are
   unsupported or invalid.
@@ -45,7 +50,8 @@ This batch remains non-live and non-served. It does not close `R-019`, `R-029`, 
   - held command ready-list absence and direct claim zero-write;
   - cancel/retry/resume command-control zero-write;
   - OperationRun detail/control-response affordance parity for unsupported start-v2 controls;
-  - direct PG cancel/retry/resume mutator zero-write for held queued/cancelled/retry-wait root commands;
+  - direct PG cancel/retry/resume mutator zero-write for held queued/cancelled/retry-wait/failed-terminal root commands,
+    malformed held-root payloads, and alternate update-payload/waiting-prerequisite writers;
   - action-type drift, empty schema pair, alternate schema pair, and action+operation pin erasure with retained
     target/result/occurrence provenance operation-control zero-write;
   - unrelated schema-less non-start Actions with preview-named input keys still classify as `ready`;

@@ -10955,6 +10955,11 @@ class LiveControlPlanePostgresAdapter:
         if not normalized_command_id:
             return None
         self._ensure_runtime_coordination_schema()
+        current = self.select_one("workflow_commands", where_sql="command_id = %s", params=[normalized_command_id])
+        if current is None:
+            return None
+        if _is_start_v2_root_command_result_acceptance_hold(current):
+            return None
         now = _utc_now_sql_timestamp()
         causality_columns = _workflow_command_causality_columns_from_payload(payload or {})
         return self._execute_returning_one(
@@ -12290,6 +12295,8 @@ class LiveControlPlanePostgresAdapter:
             return None
         current = self.select_one("workflow_commands", where_sql="command_id = %s", params=[normalized_command_id])
         if current is None:
+            return None
+        if _is_start_v2_root_command_result_acceptance_hold(current):
             return None
         attempt = max(0, int(current.get("attempt") or 0) - 1)
         now = _utc_now_sql_timestamp()
@@ -15916,13 +15923,15 @@ def _json_load_dict(payload: Any) -> dict[str, Any]:
 def _is_start_v2_root_command_result_acceptance_hold(command: dict[str, Any] | None) -> bool:
     if not isinstance(command, dict):
         return False
+    if str(command.get("not_before_at") or "").strip() != "9999-12-31 23:59:59":
+        return False
     payload = _json_load_dict(command.get("payload_json"))
     return (
         str(command.get("command_type") or "").strip() == "acquisition.run.create"
-        and str(command.get("owner") or "").strip() == "acquisition_run_writer"
-        and str(command.get("status") or "").strip() in {"queued", "retry_wait", "cancelled"}
-        and str(command.get("not_before_at") or "").strip() == "9999-12-31 23:59:59"
-        and str(payload.get("schema_version") or "").strip() == "acquisition_root_command_payload.v2"
+        or str(command.get("owner") or "").strip() == "acquisition_run_writer"
+        or str(payload.get("schema_version") or "").strip() == "acquisition_root_command_payload.v2"
+        or isinstance(payload.get("start_snapshot"), dict)
+        or isinstance(payload.get("confirmation_receipt"), dict)
     )
 
 
