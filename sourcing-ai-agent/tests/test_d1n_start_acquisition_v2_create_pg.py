@@ -209,6 +209,19 @@ class D1nStartAcquisitionV2CreatePGMatrixTest(PGControlPlaneStoreTestMixin, unit
         options = {**_APPROVAL, **overrides}
         return create_pg.create_acquisition_start_v2_uow(self.adapter, occurrence=occurrence, **options)
 
+    def _prepare_terminal(
+        self,
+        occurrence: AgentToolOccurrence,
+        *,
+        suffix: str,
+    ) -> Any:
+        return self.repository.prepare_start_acquisition_tool_result(
+            occurrence=occurrence,
+            result_attempt_id=f"attempt_start_create_matrix_{suffix}",
+            provider_call_id=f"provider_start_create_matrix_{suffix}",
+            tool_call_id=f"tool_start_create_matrix_{suffix}",
+        )
+
     def _orchestrator(self) -> SourcingOrchestrator:
         runtime_dir = Path(self.tempdir.name) / "runtime"
         settings = AppSettings(
@@ -417,6 +430,124 @@ class D1nStartAcquisitionV2CreatePGMatrixTest(PGControlPlaneStoreTestMixin, unit
                     self._create(occurrence, fault_injection_point=fault_point)
                 self.assertEqual(self._table_counts(), baseline_counts)
                 self.assertEqual(self._table_snapshot(), baseline_snapshot)
+
+    def test_prepare_start_result_rebuilds_exact_terminal_without_writes(self) -> None:
+        occurrence = self._arrange_pending(suffix="prepare_result")
+        bundle = self._create(occurrence)
+        baseline_counts = self._table_counts()
+        terminal = self._prepare_terminal(occurrence, suffix="prepare_result")
+
+        self.assertEqual(self._table_counts(), baseline_counts)
+        self.assertFalse(terminal.is_error)
+        self.assertEqual(terminal.action_id, bundle["action"]["action_id"])
+        self.assertEqual(terminal.operation_run_id, bundle["operation_run"]["operation_run_id"])
+        self.assertEqual(terminal.workflow_command_id, bundle["workflow_command"]["command_id"])
+        self.assertEqual(terminal.owner_target_kind, "acquisition_start_command_acceptance_v1")
+        self.assertEqual(terminal.owner_target_id, bundle["workflow_command"]["command_id"])
+        self.assertEqual(terminal.owner_target_revision, 1)
+        self.assertEqual(terminal.owner_target_generation, 0)
+        self.assertEqual(terminal.owner_target_revision_token, "")
+        self.assertEqual(terminal.terminal_winner_id, bundle["planned_event"]["event_id"])
+        self.assertEqual(terminal.owner_result_ref, bundle["owner_result_ref"])
+        self.assertEqual(terminal.owner_result_digest, bundle["owner_result_digest"])
+        self.assertEqual(
+            terminal.serialized_result,
+            {
+                "variant": "success",
+                "status": "accepted",
+                "action_id": bundle["action"]["action_id"],
+                "operation_run_id": bundle["operation_run"]["operation_run_id"],
+                "workflow_command_id": bundle["workflow_command"]["command_id"],
+                "preview_id": bundle["confirmation_receipt"]["preview_ref"]["preview_id"],
+                "preview_revision": bundle["confirmation_receipt"]["preview_ref"]["preview_revision"],
+                "preview_digest": bundle["confirmation_receipt"]["preview_ref"]["preview_digest"],
+                "confirmation_receipt_id": bundle["confirmation_receipt"]["receipt_id"],
+                "confirmation_receipt_digest": bundle["confirmation_receipt"]["receipt_digest"],
+            },
+        )
+
+    def test_accept_start_result_journals_and_releases_dormant_command_without_outbox(self) -> None:
+        occurrence = self._arrange_pending(suffix="accept_result")
+        bundle = self._create(occurrence)
+        terminal = self._prepare_terminal(occurrence, suffix="accept_result")
+        command_id = bundle["workflow_command"]["command_id"]
+        before = self._rows("workflow_commands", where="command_id = %s", params=(command_id,))[0]
+        self.assertEqual(before["not_before_at"], _RESULT_ACCEPTANCE_HOLD_UNTIL)
+
+        accepted = self.repository.accept_start_acquisition_tool_result_uow(
+            occurrence=occurrence,
+            terminal=terminal,
+            attempted_slot_generation=occurrence.slot_generation,
+        )
+
+        self.assertEqual(accepted["outcome"], "accepted")
+        self.assertFalse(accepted["replayed"])
+        self.assertEqual(accepted["slot"]["status"], "accepted")
+        self.assertEqual(accepted["attempt"]["disposition"], "accepted")
+        self.assertEqual(accepted["journal"]["result_attempt_id"], terminal.result_attempt_id)
+        self.assertEqual(accepted["released_workflow_command"]["command_id"], command_id)
+        self.assertEqual(accepted["released_workflow_command"]["not_before_at"], "")
+        self.assertIn("recovery_wakeup", accepted)
+        after = self._rows("workflow_commands", where="command_id = %s", params=(command_id,))[0]
+        self.assertEqual(after["not_before_at"], "")
+        counts = self._table_counts()
+        self.assertEqual(counts["agent_tool_result_attempts"], 1)
+        self.assertEqual(counts["agent_tool_result_journal"], 1)
+        self.assertEqual(counts["runtime_outbox"], 0)
+        self.assertEqual(counts["acquisition_runs"], 0)
+
+    def test_accept_start_result_exact_replay_and_late_attempt_quarantine_do_not_rewrite_owner(self) -> None:
+        occurrence = self._arrange_pending(suffix="replay_result")
+        self._create(occurrence)
+        terminal = self._prepare_terminal(occurrence, suffix="replay_result")
+        accepted = self.repository.accept_start_acquisition_tool_result_uow(
+            occurrence=occurrence,
+            terminal=terminal,
+            attempted_slot_generation=occurrence.slot_generation,
+        )
+        self.assertEqual(accepted["outcome"], "accepted")
+        baseline_snapshot = self._table_snapshot()
+
+        replay = self.repository.accept_start_acquisition_tool_result_uow(
+            occurrence=occurrence,
+            terminal=terminal,
+            attempted_slot_generation=occurrence.slot_generation,
+        )
+        self.assertEqual(replay["outcome"], "replayed")
+        self.assertEqual(self._table_snapshot(), baseline_snapshot)
+
+        late_terminal = self._prepare_terminal(occurrence, suffix="late_result")
+        quarantined = self.repository.accept_start_acquisition_tool_result_uow(
+            occurrence=occurrence,
+            terminal=late_terminal,
+            attempted_slot_generation=occurrence.slot_generation,
+        )
+        self.assertEqual(quarantined["outcome"], "quarantined")
+        self.assertEqual(quarantined["attempt"]["disposition"], "quarantined")
+        self.assertEqual(quarantined["attempt"]["quarantine_reason"], "terminal_winner_already_accepted")
+        counts = self._table_counts()
+        self.assertEqual(counts["agent_tool_result_attempts"], 2)
+        self.assertEqual(counts["agent_tool_result_journal"], 1)
+        self.assertEqual(counts["runtime_outbox"], 0)
+
+    def test_accept_start_result_fault_rolls_back_journal_and_command_release(self) -> None:
+        occurrence = self._arrange_pending(suffix="accept_fault")
+        bundle = self._create(occurrence)
+        terminal = self._prepare_terminal(occurrence, suffix="accept_fault")
+        command_id = bundle["workflow_command"]["command_id"]
+        baseline_snapshot = self._table_snapshot()
+
+        with self.assertRaisesRegex(RuntimeError, "injected agent tool result fault after journal write"):
+            self.adapter.accept_start_acquisition_tool_result_uow(
+                occurrence=occurrence,
+                terminal=terminal,
+                attempted_slot_generation=occurrence.slot_generation,
+                fault_injection_point="after_journal_write",
+            )
+
+        self.assertEqual(self._table_snapshot(), baseline_snapshot)
+        command = self._rows("workflow_commands", where="command_id = %s", params=(command_id,))[0]
+        self.assertEqual(command["not_before_at"], _RESULT_ACCEPTANCE_HOLD_UNTIL)
 
     def test_postcommit_lost_ack_exact_replay_preserves_the_committed_bundle(self) -> None:
         occurrence = self._arrange_pending(suffix="lost_ack")

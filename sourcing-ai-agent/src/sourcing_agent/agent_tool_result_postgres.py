@@ -660,6 +660,8 @@ def _accept_exact_agent_tool_result_uow(
     lock_groups: tuple[tuple[str, ...], ...],
     load_base_owner: Any,
     assert_locked_owner: Any,
+    apply_acceptance_effect: Any | None = None,
+    assert_accepted_replay_effect: Any | None = None,
     lock_timeout_seconds: float = 5.0,
     fault_injection_point: str = "",
 ) -> dict[str, Any] | None:
@@ -767,12 +769,24 @@ def _accept_exact_agent_tool_result_uow(
                             terminal=terminal,
                             journal_id=journal_id,
                         )
+                        replay_effect = {}
+                        if assert_accepted_replay_effect is not None:
+                            replay_effect = (
+                                assert_accepted_replay_effect(
+                                    cursor,
+                                    occurrence=occurrence,
+                                    terminal=terminal,
+                                    base_owner=base_owner,
+                                )
+                                or {}
+                            )
                         outcome = {
                             "outcome": "replayed",
                             "replayed": True,
                             "slot": slot,
                             "attempt": existing_attempt,
                             "journal": existing_journal,
+                            **dict(replay_effect),
                         }
                     else:
                         expected_attempt = _attempt_insert_row(
@@ -882,6 +896,17 @@ def _accept_exact_agent_tool_result_uow(
                     journal = _fetch_one_dict_row(cursor, cursor.fetchone()) or {}
                     if not journal:
                         raise RuntimeError("agent tool result journal insert returned no row")
+                    acceptance_effect = {}
+                    if apply_acceptance_effect is not None:
+                        acceptance_effect = (
+                            apply_acceptance_effect(
+                                cursor,
+                                occurrence=occurrence,
+                                terminal=terminal,
+                                base_owner=base_owner,
+                            )
+                            or {}
+                        )
                     if fault_injection_point == "after_journal_write":
                         raise RuntimeError("injected agent tool result fault after journal write")
                     outcome = {
@@ -890,6 +915,7 @@ def _accept_exact_agent_tool_result_uow(
                         "slot": accepted_slot,
                         "attempt": accepted_attempt,
                         "journal": journal,
+                        **dict(acceptance_effect),
                     }
             connection.commit()
             if fault_injection_point == "after_commit":

@@ -114,9 +114,9 @@ owner. No `runtime_outbox` row is created.
 
 ## Explicit non-closure
 
-- S1e2c still owns read-only owner reconstruction, start-specific shared result acceptance, clearing the
-  result-acceptance hold, post-accept recovery wake, result attempt/slot/journal terminal success, and post-accept exact
-  replay/corruption proof.
+- S1e2c has a separate author candidate for read-only owner reconstruction, start-specific shared result acceptance,
+  result-acceptance hold release, post-accept recovery wake, result attempt/slot/journal terminal success, and
+  post-accept exact replay/quarantine/rollback proof. Its formal independent review remains pending.
 - The dormant queued root command is visible only in an isolated test database. This batch does not start the shared
   recovery daemon or prove the root consumer against the v2 payload.
 - Generic approve/reject/cancel/retry/resume/dispatch API controls reject this v2 action before any runtime writer

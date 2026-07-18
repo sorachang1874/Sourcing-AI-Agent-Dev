@@ -1,9 +1,9 @@
 # Track D D1n S1e1 — acquisition-start authority owner decision
 
-> Status: non-live, zero-migration owner decision lock (2026-07-18; S1e2a/S1e2b implementation transitions
+> Status: non-live, zero-migration owner decision lock (2026-07-18; S1e2a/S1e2b/S1e2c implementation transitions
 > recorded). The decision batch itself changed no product writer, schema, migration, registry population,
-> provider/model route, or serving state. S1e2a and S1e2b now implement submit and create as non-live author
-> candidates; result acceptance remains open. None of these records is an independent review `GO`.
+> provider/model route, or serving state. S1e2a, S1e2b, and S1e2c now implement submit, create, and result
+> acceptance as non-live author candidates. None of these records is an independent review `GO`.
 
 ## 1. Outcome
 
@@ -242,9 +242,10 @@ It rebuilds the receipt, budget ref, root payload, source-event digest, owner re
 `acquisition_start_result_v2` success serialization. Any mismatch returns a typed conflict and writes nothing.
 
 `accept_start_acquisition_tool_result_uow` reuses the shared pending-to-accepted result-slot state machine with the
-start-specific owner assertion. One transaction accepts attempt + slot + journal, or exact-replays it. A losing later
-attempt may append only the existing quarantined attempt evidence; it writes zero Action, Operation, command, event,
-outbox, provider, model, or domain state. `runtime_outbox` delta is always zero in all three UoWs.
+start-specific owner assertion. One transaction accepts attempt + slot + journal and releases the exact queued root
+command's dormant `not_before_at` hold, or exact-replays the already accepted aggregate and released command. A losing
+later attempt may append only the existing quarantined attempt evidence; it writes zero Action, Operation, event, outbox,
+provider, model, or domain state. `runtime_outbox` delta is always zero in all three UoWs.
 
 ## 6. Lock order, concurrency, and lost acknowledgement
 
@@ -321,7 +322,7 @@ S1e2b closes the implementation details that were not independently meaningful i
   fresh timestamp. Every inserted/updated physical row is exact-compared before commit;
 - the queued command and sequence-2 source event carry the fixed result-acceptance hold
   `not_before_at=9999-12-31 23:59:59`; normal ready-list polling cannot claim it. Create does not wake the owner.
-  S1e2c owns clearing the hold and post-accept wake after shared result acceptance.
+  S1e2c clears the hold in the shared result-accept transaction and requests a best-effort post-commit recovery wake.
 
 These shapes are implementation contracts for S1e2c prepare/rebuild. They do not turn the admission envelope into
 D3 spend/exposure accounting and do not enable a daemon, provider, model, served registry, or live path.
@@ -365,9 +366,9 @@ durable-scope gate remains open because Action/Operation do not yet have the req
 columns. OB-2.2, OB-10.3, and OB-10.4 remain open. The D3 money/exposure ledger, release/consume CAS, S2/S3, L1/L2,
 paid TML canary, hosted activation, and all five remaining action migrations remain outside this decision.
 
-S1e2a and S1e2b now implement the two specialized start UoWs and update the S1e0 transition oracle. The next bounded
-batch is S1e2c read-only prepare plus start-specific shared acceptance, followed by PG terminal-success and exact
-rebuild/corruption tests. This decision-only batch itself still does not constitute product activation.
+S1e2a, S1e2b, and S1e2c now implement the three specialized start UoWs and update the S1e0 transition oracle. The next
+bounded batch is the root command consumer/simulated execution path that can consume the released v2 command without
+changing served/live gates. This decision-only batch itself still does not constitute product activation.
 
 Fresh pinned non-author review is required. Author tests do not constitute formal `GO`, and this decision authorizes
 neither serving nor live validation.
