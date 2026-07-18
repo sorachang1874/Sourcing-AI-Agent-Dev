@@ -549,6 +549,50 @@ class D1nStartAcquisitionV2CreatePGMatrixTest(PGControlPlaneStoreTestMixin, unit
         command = self._rows("workflow_commands", where="command_id = %s", params=(command_id,))[0]
         self.assertEqual(command["not_before_at"], _RESULT_ACCEPTANCE_HOLD_UNTIL)
 
+    def test_released_start_v2_root_command_drains_into_intent_command_without_live_provider(self) -> None:
+        occurrence = self._arrange_pending(suffix="root_owner")
+        bundle = self._create(occurrence)
+        terminal = self._prepare_terminal(occurrence, suffix="root_owner")
+        accepted = self.repository.accept_start_acquisition_tool_result_uow(
+            occurrence=occurrence,
+            terminal=terminal,
+            attempted_slot_generation=occurrence.slot_generation,
+        )
+        self.assertEqual(accepted["released_workflow_command"]["not_before_at"], "")
+
+        owner_result = self._orchestrator()._drain_acquisition_run_create_commands(  # noqa: SLF001
+            {"acquisition_run_create_command_limit": 5}
+        )
+
+        self.assertEqual(owner_result["status"], "completed")
+        self.assertEqual(owner_result["completed_count"], 1)
+        command_id = bundle["workflow_command"]["command_id"]
+        root_command = self.store.get_workflow_command(command_id)
+        self.assertEqual(root_command["status"], "succeeded")
+        self.assertTrue(root_command["result"]["operation_completion_deferred"])
+        self.assertFalse(root_command["result"]["queue_workflow_called"])
+        self.assertFalse(root_command["result"]["legacy_job_shell_created"])
+        self.assertEqual(root_command["result"]["next_phase"], "W11b_acquisition_intent_plan_commands")
+        self.assertEqual(root_command["result"]["downstream_command_count"], 1)
+        child_command_id = root_command["result"]["downstream_command_ids"][0]
+        child_command = self.store.get_workflow_command(child_command_id)
+        self.assertEqual(child_command["command_type"], "acquisition.intent.resolve")
+        self.assertEqual(child_command["owner"], "acquisition_planner")
+        self.assertEqual(child_command["parent_command_id"], command_id)
+        self.assertEqual(child_command["status"], "queued")
+        self.assertEqual(
+            child_command["payload"]["workflow_payload"]["schema_version"],
+            "acquisition_start_v2_root_owner_compat_payload.v1",
+        )
+        self.assertEqual(child_command["payload"]["workflow_payload"]["target_company"], "Thinking Machines Lab")
+        self.assertEqual(
+            child_command["payload"]["workflow_payload"]["cohort_selection"]["role_bucket_ids"],
+            ["research", "engineering"],
+        )
+        counts = self._table_counts()
+        self.assertEqual(counts["runtime_outbox"], 0)
+        self.assertEqual(counts["acquisition_runs"], 0)
+
     def test_postcommit_lost_ack_exact_replay_preserves_the_committed_bundle(self) -> None:
         occurrence = self._arrange_pending(suffix="lost_ack")
 

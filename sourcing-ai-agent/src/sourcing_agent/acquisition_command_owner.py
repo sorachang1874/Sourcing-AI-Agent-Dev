@@ -73,6 +73,8 @@ from .durable_runtime import (
 )
 from .json_contract import json_contract_equal
 
+_ACQUISITION_START_V2_ROOT_COMMAND_PAYLOAD_SCHEMA_VERSION = "acquisition_root_command_payload.v2"
+
 # NOTE: the helpers below duplicate small module-level helpers in
 # ``orchestrator.py`` (which imports this module — importing them back from
 # orchestrator would create a cycle).  The bodies are copied verbatim; several
@@ -156,7 +158,104 @@ class AcquisitionCommandOwner:
     ) -> dict[str, Any]:
         """Require exact Operation/action authority for every executable root."""
 
+        start_v2 = self._preflight_start_v2_acquisition_root_command(command)
+        if start_v2:
+            return start_v2
         return self._revalidate_operation_action_target(dict(command))
+
+    def _preflight_start_v2_acquisition_root_command(self, command: Mapping[str, Any]) -> dict[str, Any]:
+        root = dict(command or {})
+        payload = dict(root.get("payload") or {})
+        if (
+            str(payload.get("schema_version") or "").strip()
+            != _ACQUISITION_START_V2_ROOT_COMMAND_PAYLOAD_SCHEMA_VERSION
+        ):
+            return {}
+        command_id = str(root.get("command_id") or "").strip()
+        operation_run_id = str(root.get("operation_id") or payload.get("operation_run_id") or "").strip()
+        action_id = str(payload.get("action_id") or "").strip()
+        if (
+            not command_id
+            or not operation_run_id
+            or not action_id
+            or str(root.get("command_type") or "").strip() != ACQUISITION_RUN_CREATE_COMMAND_TYPE
+            or str(root.get("owner") or "").strip() != ACQUISITION_RUN_CREATE_OWNER
+            or str(root.get("workflow_run_id") or "").strip() != str(payload.get("workflow_run_id") or "").strip()
+        ):
+            return {"status": "invalid", "reason": "acquisition_start_v2_root_command_identity_mismatch"}
+        action = self.store.repos.workflow_runtime.get_action(action_id)
+        operation = self.store.repos.workflow_runtime.get_operation(operation_run_id)
+        owner_ref = dict(action.get("result_ref") or {})
+        if (
+            not action
+            or not operation
+            or str(action.get("action_type") or "").strip() != "start_acquisition_run"
+            or str(action.get("status") or "").strip() != "queued"
+            or str(action.get("approval_status") or "").strip() != "approved"
+            or str(operation.get("operation_type") or "").strip() != "acquisition_run"
+            or str(operation.get("status") or "").strip() != "queued"
+            or str(operation.get("action_id") or "").strip() != action_id
+            or dict(operation.get("result_ref") or {}) != owner_ref
+            or owner_ref.get("action_id") != action_id
+            or owner_ref.get("operation_run_id") != operation_run_id
+            or owner_ref.get("workflow_run_id") != root.get("workflow_run_id")
+            or owner_ref.get("workflow_command_id") != command_id
+            or owner_ref.get("root_command_payload_digest") != payload.get("payload_digest")
+        ):
+            return {"status": "invalid", "reason": "acquisition_start_v2_root_owner_mismatch"}
+        return {
+            "status": "ready",
+            "action": action,
+            "operation_run": operation,
+            "workflow_command": root,
+            "contract": "acquisition_start_v2_root_command_owner_preflight_v1",
+        }
+
+    @staticmethod
+    def _start_v2_root_workflow_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
+        root = dict(payload or {})
+        if str(root.get("schema_version") or "").strip() != _ACQUISITION_START_V2_ROOT_COMMAND_PAYLOAD_SCHEMA_VERSION:
+            return {}
+        snapshot = dict(root.get("start_snapshot") or {})
+        preview = dict(snapshot.get("preview") or {})
+        company = dict(preview.get("company_target") or {})
+        effective = dict(preview.get("effective_request") or {})
+        manifest = dict(preview.get("provider_planning_manifest") or {})
+        target_company = str(company.get("canonical_name") or company.get("canonical_company_id") or "").strip()
+        if not target_company:
+            return {}
+        lane_queries: list[str] = []
+        for lane in list(manifest.get("lanes") or []):
+            provider_payload = dict(dict(lane or {}).get("provider_payload") or {})
+            query_text = str(provider_payload.get("query_text") or "").strip()
+            if query_text and query_text not in lane_queries:
+                lane_queries.append(query_text)
+        return {
+            "schema_version": "acquisition_start_v2_root_owner_compat_payload.v1",
+            "target_company": target_company,
+            "canonical_company_id": str(company.get("canonical_company_id") or "").strip(),
+            "provider_company_labels": list(company.get("provider_company_labels") or []),
+            "query": " | ".join(lane_queries),
+            "cohort_selection": dict(effective.get("cohort_selection") or {}),
+            "source_preferences": list(effective.get("source_preferences") or []),
+            "coverage_intent": str(effective.get("coverage_intent") or "").strip(),
+            "thematic_constraints": list(effective.get("thematic_constraints") or []),
+            "provider_mode_intent": str(effective.get("provider_mode_intent") or "").strip(),
+            "budget": dict(effective.get("budget") or {}),
+            "provider_planning_manifest_ref": {
+                "schema_version": str(manifest.get("schema_version") or "").strip(),
+                "manifest_digest": str(manifest.get("manifest_digest") or "").strip(),
+                "physical_query_digest": str(manifest.get("physical_query_digest") or "").strip(),
+            },
+            "preview_ref": {
+                "preview_id": str(preview.get("preview_id") or "").strip(),
+                "preview_revision": int(preview.get("preview_revision") or 0),
+                "preview_digest": str(preview.get("preview_digest") or "").strip(),
+            },
+            "start_snapshot_digest": str(root.get("start_snapshot_digest") or "").strip(),
+            "confirmation_receipt_ref": dict(root.get("confirmation_receipt_ref") or {}),
+            "start_action_id": str(root.get("action_id") or "").strip(),
+        }
 
     def _acquisition_root_preflight_failure(
         self,
@@ -211,6 +310,8 @@ class AcquisitionCommandOwner:
         root = dict(command or {})
         payload = dict(root.get("payload") or {})
         workflow_payload = dict(payload.get("workflow_payload") or {})
+        if not workflow_payload:
+            workflow_payload = self._start_v2_root_workflow_payload(payload)
         workflow_run_id = str(root.get("workflow_run_id") or "").strip()
         operation_id = str(root.get("operation_id") or "").strip()
         root_command_id = str(root.get("command_id") or "").strip()

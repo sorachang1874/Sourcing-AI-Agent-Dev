@@ -481,7 +481,12 @@
   R-019/R-029、Plan §6#6、OB-2.2/10.3/10.4 均继续 open，fresh pinned non-author review pending。实现记录见
   `TRACK_D_D1N_S1E2A_START_SUBMIT_UOW_IMPLEMENTATION.md` 与
   `TRACK_D_D1N_S1E2B_START_CREATE_UOW_IMPLEMENTATION.md`、
-  `TRACK_D_D1N_S1E2C_START_RESULT_ACCEPT_UOW_IMPLEMENTATION.md`。
+  `TRACK_D_D1N_S1E2C_START_RESULT_ACCEPT_UOW_IMPLEMENTATION.md`。S1e2d author candidate 已补 first consumer hop：
+  acquisition root owner 对 `acquisition_root_command_payload.v2` 走 v2-only Action/Operation/owner-ref preflight，从
+  immutable `start_snapshot.preview` 派生 downstream intent compatibility payload；accepted start result -> released
+  root command -> root drain -> queued `acquisition.intent.resolve` 已由 PG test 覆盖。Evidence：root-hop node=`1
+  passed`，create/result/root PG matrix=`14 passed + 21 subtests`，legacy adjacent root owner=`1 passed`，scoped
+  mypy=`0/1`、Ruff green。S1e2d 不改变 served/live/provider/model=0，也不关闭 S1e2b formal `NO-GO`。
 - [ ] D1m mixed-version rollout gate（R-019）：pre-D1m binary 可继续写 revisionless source row 并绕开
   revision-aware exact-claim canonical materializer。任何 hosted activation 前必须选择并验证其一：quiesced
   single-version cutover，或 separately reviewed dual-write/compatibility bridge；完成前不得声称 rolling overlap

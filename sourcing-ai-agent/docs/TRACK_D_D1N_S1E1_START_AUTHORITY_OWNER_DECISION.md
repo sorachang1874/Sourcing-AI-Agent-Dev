@@ -366,9 +366,10 @@ durable-scope gate remains open because Action/Operation do not yet have the req
 columns. OB-2.2, OB-10.3, and OB-10.4 remain open. The D3 money/exposure ledger, release/consume CAS, S2/S3, L1/L2,
 paid TML canary, hosted activation, and all five remaining action migrations remain outside this decision.
 
-S1e2a, S1e2b, and S1e2c now implement the three specialized start UoWs and update the S1e0 transition oracle. The next
-bounded batch is the root command consumer/simulated execution path that can consume the released v2 command without
-changing served/live gates. This decision-only batch itself still does not constitute product activation.
+S1e2a, S1e2b, and S1e2c now implement the three specialized start UoWs and update the S1e0 transition oracle. S1e2d
+adds the first consumer-hop author candidate: the acquisition root command owner can consume a released v2 root command
+and plan the downstream intent command without changing served/live gates. This decision-only batch itself still does
+not constitute product activation.
 
 Fresh pinned non-author review is required. Author tests do not constitute formal `GO`, and this decision authorizes
 neither serving nor live validation.
