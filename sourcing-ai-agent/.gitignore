@@ -4,6 +4,7 @@ __pycache__/
 .venv-tests/
 .pytest_cache/
 .cache/
+.coord/
 .playwright-cli/
 .wrangler/
 .local-postgres.env
