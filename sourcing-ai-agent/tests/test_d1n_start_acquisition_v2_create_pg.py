@@ -986,6 +986,50 @@ class D1nStartAcquisitionV2CreatePGMatrixTest(PGControlPlaneStoreTestMixin, unit
 
         self.assertEqual(self._table_snapshot(), baseline)
 
+    def test_corrupted_pending_action_or_slot_json_rejects_before_create_writes(self) -> None:
+        mutations: tuple[tuple[str, Callable[[AgentToolOccurrence], tuple[str, tuple[Any, ...]]]], ...] = (
+            (
+                "blank_action_result_ref",
+                lambda occurrence: (
+                    "UPDATE {schema}.agent_actions SET result_ref_json = '' WHERE action_id = %s",
+                    (submit_pg.revalidate_acquisition_start_v2_occurrence(occurrence).action_id,),
+                ),
+            ),
+            (
+                "malformed_action_metadata",
+                lambda occurrence: (
+                    "UPDATE {schema}.agent_actions SET metadata_json = '{bad' WHERE action_id = %s",
+                    (submit_pg.revalidate_acquisition_start_v2_occurrence(occurrence).action_id,),
+                ),
+            ),
+            (
+                "duplicate_action_budget_key",
+                lambda occurrence: (
+                    'UPDATE {schema}.agent_actions SET budget_json = \'{"a":1,"a":2}\' WHERE action_id = %s',
+                    (submit_pg.revalidate_acquisition_start_v2_occurrence(occurrence).action_id,),
+                ),
+            ),
+            (
+                "wrong_container_action_result_ref",
+                lambda occurrence: (
+                    "UPDATE {schema}.agent_actions SET result_ref_json = '[]' WHERE action_id = %s",
+                    (submit_pg.revalidate_acquisition_start_v2_occurrence(occurrence).action_id,),
+                ),
+            ),
+        )
+
+        for ordinal, (label, mutation) in enumerate(mutations, start=1):
+            with self.subTest(owner=label):
+                occurrence = self._arrange_pending(suffix=f"pending_json_{ordinal}")
+                sql, params = mutation(occurrence)
+                self._execute(sql, params)
+                baseline = self._table_snapshot()
+
+                with self.assertRaisesRegex(ValueError, "immutable identity collision"):
+                    self._create(occurrence)
+
+                self.assertEqual(self._table_snapshot(), baseline)
+
     def test_corrupted_committed_owner_rows_are_zero_write_collisions(self) -> None:
         mutations: tuple[tuple[str, Callable[[dict[str, Any]], tuple[str, tuple[Any, ...]]]], ...] = (
             (

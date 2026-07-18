@@ -27,6 +27,9 @@ This batch remains non-live and non-served. It does not close `R-019`, `R-029`, 
 - Start-v2 create and result-acceptance UoWs now use the same ratified advisory lock group order:
   Operation -> Action -> result slot -> preview -> root command -> workflow current state -> event streams. Result
   acceptance now also includes the operation idempotency and root-command idempotency advisory keys.
+- Start-v2 create fresh-acceptance prerequisites no longer use the shared lossy pending Action/result-slot JSON checker:
+  pending Action JSON carriers and the reserved result slot are validated with the create module's strict decoder,
+  duplicate-key rejection, wrong-container rejection, and type-sensitive equality before the first create write.
 
 ## New regression evidence
 
@@ -39,6 +42,9 @@ This batch remains non-live and non-served. It does not close `R-019`, `R-029`, 
   the start-v2 result hold/release owner row or key contract tokens disappear.
 - `tests/test_d1n_start_acquisition_v2_create_uow.py::test_create_and_result_share_ratified_lock_topology` asserts the
   exact shared lock topology and byte-sorted keys for create and result acceptance.
+- `tests/test_d1n_start_acquisition_v2_create_pg.py::test_corrupted_pending_action_or_slot_json_rejects_before_create_writes`
+  covers blank, malformed, duplicate-key, and wrong-container pending Action JSON corruption with full-table zero-write
+  assertions.
 - Existing accept/replay/quarantine/root-hop tests continue to exercise the held-command release path and zero
   `runtime_outbox`/provider/model behavior.
 

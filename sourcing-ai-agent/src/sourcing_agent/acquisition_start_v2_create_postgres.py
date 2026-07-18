@@ -30,8 +30,6 @@ from .acquisition_start_v2 import (
 )
 from .acquisition_start_v2_postgres import (
     AcquisitionStartV2SubmissionBinding,
-    _assert_exact_action,
-    _assert_pending_result_slot,
     _assert_replayable_result_slot,
     _canonical_submit_rows,
     _insert_row,
@@ -41,6 +39,7 @@ from .acquisition_start_v2_postgres import (
     revalidate_acquisition_start_v2_occurrence,
 )
 from .agent_tool_result_slot import AgentToolOccurrence
+from .agent_tool_result_postgres import _SLOT_IDENTITY_FIELDS, _slot_insert_row
 from .durable_runtime import (
     ACQUISITION_RUN_CREATE_COMMAND_TYPE,
     DEFAULT_COMMAND_OWNER_REGISTRY,
@@ -232,6 +231,20 @@ def _assert_row_exact(
             mismatches.append(field)
     if mismatches:
         raise ValueError(f"acquisition start create {label} immutable identity collision: " + ", ".join(mismatches))
+
+
+def _assert_strict_pending_result_slot(row: Mapping[str, Any], occurrence: AgentToolOccurrence) -> None:
+    expected = _slot_insert_row(occurrence)
+    _assert_row_exact(
+        "result slot",
+        row,
+        {field: expected[field] for field in _SLOT_IDENTITY_FIELDS},
+    )
+    _assert_json_equal("result slot.canonical_args_json", row.get("canonical_args_json"), expected["canonical_args_json"])
+    if str(row.get("status") or "") != "pending":
+        raise ValueError("acquisition start create result slot immutable identity collision: status")
+    if str(row.get("schema_version") or "") != str(expected["schema_version"]):
+        raise ValueError("acquisition start create result slot immutable identity collision: schema_version")
 
 
 def _operation_event_contract_digest(event: Mapping[str, Any]) -> str:
@@ -1234,8 +1247,8 @@ def create_acquisition_start_v2_uow(
                         ),
                     }
                 else:
-                    _assert_exact_action(existing_action, pending_action)
-                    _assert_pending_result_slot(slot_candidates[0], binding.occurrence)
+                    _assert_row_exact("pending action", existing_action, pending_action, json_fields=_ACTION_JSON_FIELDS)
+                    _assert_strict_pending_result_slot(slot_candidates[0], binding.occurrence)
                     _assert_event_set_exact(
                         "operation events",
                         operation_event_rows,
