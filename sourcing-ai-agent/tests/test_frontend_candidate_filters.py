@@ -9,6 +9,45 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
+_API_VM_STATIC_DEPENDENCIES_MARKER = "__API_VM_STATIC_DEPENDENCIES__"
+_API_VM_STATIC_DEPENDENCIES = textwrap.dedent(
+    """
+    if (specifier === "./cohortSelection") {
+      const unexpectedCohortSelectionCall = () => {
+        throw new Error("candidate-filter helper unexpectedly used cohort selection");
+      };
+      return {
+        cloneCohortSelection: unexpectedCohortSelectionCall,
+        equalCohortSelection: unexpectedCohortSelectionCall,
+        parseCohortSelectionOptionsPayload: unexpectedCohortSelectionCall,
+        parseCohortSelectionPayload: unexpectedCohortSelectionCall,
+      };
+    }
+    if (specifier === "../../../contracts/frontend_api_runtime_contract") {
+      const contractSource = fs.readFileSync(
+        path.join(process.cwd(), "contracts/frontend_api_runtime_contract.ts"),
+        "utf8",
+      );
+      const contractCompiled = ts.transpileModule(contractSource, {
+        compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+      }).outputText;
+      const contractModule = { exports: {} };
+      vm.runInNewContext(contractCompiled, {
+        module: contractModule,
+        exports: contractModule.exports,
+        TextEncoder: globalThis.TextEncoder,
+      });
+      return contractModule.exports;
+    }
+    """
+).strip()
+
+
+def _api_vm_script(source: str) -> str:
+    script = textwrap.dedent(source)
+    assert script.count(_API_VM_STATIC_DEPENDENCIES_MARKER) == 1
+    return script.replace(_API_VM_STATIC_DEPENDENCIES_MARKER, _API_VM_STATIC_DEPENDENCIES)
+
 
 class FrontendCandidateFiltersTest(unittest.TestCase):
     def test_excel_intake_job_scoped_marker_becomes_recall_bucket(self) -> None:
@@ -359,7 +398,7 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
     def test_global_facet_summary_page_merge_replaces_stale_partial_summary(self) -> None:
         if shutil.which("node") is None:
             self.skipTest("node is required for frontend TypeScript helper checks")
-        script = textwrap.dedent(
+        script = _api_vm_script(
             """
             const fs = require("fs");
             const path = require("path");
@@ -429,33 +468,7 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
                     resolveWorkflowStatus: () => ({ status: "failed", terminal: true }),
                   };
                 }
-                if (specifier === "./cohortSelection") {
-                  const unexpectedCohortSelectionCall = () => {
-                    throw new Error("candidate-filter helper unexpectedly used cohort selection");
-                  };
-                  return {
-                    cloneCohortSelection: unexpectedCohortSelectionCall,
-                    equalCohortSelection: unexpectedCohortSelectionCall,
-                    parseCohortSelectionOptionsPayload: unexpectedCohortSelectionCall,
-                    parseCohortSelectionPayload: unexpectedCohortSelectionCall,
-                  };
-                }
-                if (specifier === "../../../contracts/frontend_api_runtime_contract") {
-                  const contractSource = fs.readFileSync(
-                    path.join(process.cwd(), "contracts/frontend_api_runtime_contract.ts"),
-                    "utf8",
-                  );
-                  const contractCompiled = ts.transpileModule(contractSource, {
-                    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
-                  }).outputText;
-                  const contractModule = { exports: {} };
-                  vm.runInNewContext(contractCompiled, {
-                    module: contractModule,
-                    exports: contractModule.exports,
-                    TextEncoder: globalThis.TextEncoder,
-                  });
-                  return contractModule.exports;
-                }
+                __API_VM_STATIC_DEPENDENCIES__
                 return require(specifier);
               };
               vm.runInNewContext(
@@ -553,7 +566,7 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
     def test_progress_merge_does_not_regress_complete_board_runtime_contract(self) -> None:
         if shutil.which("node") is None:
             self.skipTest("node is required for frontend TypeScript helper checks")
-        script = textwrap.dedent(
+        script = _api_vm_script(
             """
             const fs = require("fs");
             const path = require("path");
@@ -605,33 +618,7 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
                   resolveWorkflowStatus: () => ({ status: "failed", terminal: true }),
                 };
               }
-              if (specifier === "./cohortSelection") {
-                const unexpectedCohortSelectionCall = () => {
-                  throw new Error("candidate-filter helper unexpectedly used cohort selection");
-                };
-                return {
-                  cloneCohortSelection: unexpectedCohortSelectionCall,
-                  equalCohortSelection: unexpectedCohortSelectionCall,
-                  parseCohortSelectionOptionsPayload: unexpectedCohortSelectionCall,
-                  parseCohortSelectionPayload: unexpectedCohortSelectionCall,
-                };
-              }
-              if (specifier === "../../../contracts/frontend_api_runtime_contract") {
-                const contractSource = fs.readFileSync(
-                  path.join(process.cwd(), "contracts/frontend_api_runtime_contract.ts"),
-                  "utf8",
-                );
-                const contractCompiled = ts.transpileModule(contractSource, {
-                  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
-                }).outputText;
-                const contractModule = { exports: {} };
-                vm.runInNewContext(contractCompiled, {
-                  module: contractModule,
-                  exports: contractModule.exports,
-                  TextEncoder: globalThis.TextEncoder,
-                });
-                return contractModule.exports;
-              }
+              __API_VM_STATIC_DEPENDENCIES__
               return require(specifier);
             };
             vm.runInNewContext(
@@ -731,7 +718,7 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
     def test_board_runtime_final_projection_outranks_newer_partial_sequence(self) -> None:
         if shutil.which("node") is None:
             self.skipTest("node is required for frontend TypeScript helper checks")
-        script = textwrap.dedent(
+        script = _api_vm_script(
             """
             const fs = require("fs");
             const path = require("path");
@@ -764,33 +751,7 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
                   resolveWorkflowStatus: () => ({ status: "failed", terminal: true }),
                 };
               }
-              if (specifier === "./cohortSelection") {
-                const unexpectedCohortSelectionCall = () => {
-                  throw new Error("candidate-filter helper unexpectedly used cohort selection");
-                };
-                return {
-                  cloneCohortSelection: unexpectedCohortSelectionCall,
-                  equalCohortSelection: unexpectedCohortSelectionCall,
-                  parseCohortSelectionOptionsPayload: unexpectedCohortSelectionCall,
-                  parseCohortSelectionPayload: unexpectedCohortSelectionCall,
-                };
-              }
-              if (specifier === "../../../contracts/frontend_api_runtime_contract") {
-                const contractSource = fs.readFileSync(
-                  path.join(process.cwd(), "contracts/frontend_api_runtime_contract.ts"),
-                  "utf8",
-                );
-                const contractCompiled = ts.transpileModule(contractSource, {
-                  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
-                }).outputText;
-                const contractModule = { exports: {} };
-                vm.runInNewContext(contractCompiled, {
-                  module: contractModule,
-                  exports: contractModule.exports,
-                  TextEncoder: globalThis.TextEncoder,
-                });
-                return contractModule.exports;
-              }
+              __API_VM_STATIC_DEPENDENCIES__
               return require(specifier);
             };
             vm.runInNewContext(
@@ -1048,7 +1009,7 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
     def test_board_runtime_total_candidates_stays_canonical_when_published_is_higher(self) -> None:
         if shutil.which("node") is None:
             self.skipTest("node is required for frontend TypeScript helper checks")
-        script = textwrap.dedent(
+        script = _api_vm_script(
             """
             const fs = require("fs");
             const path = require("path");
@@ -1100,33 +1061,7 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
                     resolveWorkflowStatus: () => ({ status: "failed", terminal: true }),
                   };
                 }
-                if (specifier === "./cohortSelection") {
-                  const unexpectedCohortSelectionCall = () => {
-                    throw new Error("candidate-filter helper unexpectedly used cohort selection");
-                  };
-                  return {
-                    cloneCohortSelection: unexpectedCohortSelectionCall,
-                    equalCohortSelection: unexpectedCohortSelectionCall,
-                    parseCohortSelectionOptionsPayload: unexpectedCohortSelectionCall,
-                    parseCohortSelectionPayload: unexpectedCohortSelectionCall,
-                  };
-                }
-                if (specifier === "../../../contracts/frontend_api_runtime_contract") {
-                  const contractSource = fs.readFileSync(
-                    path.join(process.cwd(), "contracts/frontend_api_runtime_contract.ts"),
-                    "utf8",
-                  );
-                  const contractCompiled = ts.transpileModule(contractSource, {
-                    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
-                  }).outputText;
-                  const contractModule = { exports: {} };
-                  vm.runInNewContext(contractCompiled, {
-                    module: contractModule,
-                    exports: contractModule.exports,
-                    TextEncoder: globalThis.TextEncoder,
-                  });
-                  return contractModule.exports;
-                }
+                __API_VM_STATIC_DEPENDENCIES__
                 return require(specifier);
               };
               vm.runInNewContext(
@@ -1235,7 +1170,7 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
     def test_board_runtime_drops_stale_partial_facet_summary(self) -> None:
         if shutil.which("node") is None:
             self.skipTest("node is required for frontend TypeScript helper checks")
-        script = textwrap.dedent(
+        script = _api_vm_script(
             """
             const fs = require("fs");
             const path = require("path");
@@ -1287,33 +1222,7 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
                     resolveWorkflowStatus: () => ({ status: "failed", terminal: true }),
                   };
                 }
-                if (specifier === "./cohortSelection") {
-                  const unexpectedCohortSelectionCall = () => {
-                    throw new Error("candidate-filter helper unexpectedly used cohort selection");
-                  };
-                  return {
-                    cloneCohortSelection: unexpectedCohortSelectionCall,
-                    equalCohortSelection: unexpectedCohortSelectionCall,
-                    parseCohortSelectionOptionsPayload: unexpectedCohortSelectionCall,
-                    parseCohortSelectionPayload: unexpectedCohortSelectionCall,
-                  };
-                }
-                if (specifier === "../../../contracts/frontend_api_runtime_contract") {
-                  const contractSource = fs.readFileSync(
-                    path.join(process.cwd(), "contracts/frontend_api_runtime_contract.ts"),
-                    "utf8",
-                  );
-                  const contractCompiled = ts.transpileModule(contractSource, {
-                    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
-                  }).outputText;
-                  const contractModule = { exports: {} };
-                  vm.runInNewContext(contractCompiled, {
-                    module: contractModule,
-                    exports: contractModule.exports,
-                    TextEncoder: globalThis.TextEncoder,
-                  });
-                  return contractModule.exports;
-                }
+                __API_VM_STATIC_DEPENDENCIES__
                 return require(specifier);
               };
               vm.runInNewContext(
@@ -1864,7 +1773,7 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
     def test_get_dashboard_candidate_page_force_refresh_supersedes_inflight_request(self) -> None:
         if shutil.which("node") is None:
             self.skipTest("node is required for frontend TypeScript helper checks")
-        script = textwrap.dedent(
+        script = _api_vm_script(
             """
             const fs = require("fs");
             const path = require("path");
@@ -1918,33 +1827,7 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
                     resolveWorkflowStatus: () => ({ status: "failed", terminal: true }),
                   };
                 }
-                if (specifier === "./cohortSelection") {
-                  const unexpectedCohortSelectionCall = () => {
-                    throw new Error("candidate-filter helper unexpectedly used cohort selection");
-                  };
-                  return {
-                    cloneCohortSelection: unexpectedCohortSelectionCall,
-                    equalCohortSelection: unexpectedCohortSelectionCall,
-                    parseCohortSelectionOptionsPayload: unexpectedCohortSelectionCall,
-                    parseCohortSelectionPayload: unexpectedCohortSelectionCall,
-                  };
-                }
-                if (specifier === "../../../contracts/frontend_api_runtime_contract") {
-                  const contractSource = fs.readFileSync(
-                    path.join(process.cwd(), "contracts/frontend_api_runtime_contract.ts"),
-                    "utf8",
-                  );
-                  const contractCompiled = ts.transpileModule(contractSource, {
-                    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
-                  }).outputText;
-                  const contractModule = { exports: {} };
-                  vm.runInNewContext(contractCompiled, {
-                    module: contractModule,
-                    exports: contractModule.exports,
-                    TextEncoder: globalThis.TextEncoder,
-                  });
-                  return contractModule.exports;
-                }
+                __API_VM_STATIC_DEPENDENCIES__
                 return require(specifier);
               };
               vm.runInNewContext(
