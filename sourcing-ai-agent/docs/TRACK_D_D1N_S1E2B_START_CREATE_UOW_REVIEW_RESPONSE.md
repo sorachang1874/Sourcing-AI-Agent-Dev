@@ -29,7 +29,10 @@ This batch remains non-live and non-served. It does not close `R-019`, `R-029`, 
 - The classifier is now shared by Operation control APIs and the physical `inspect_operation` owner path. Fail-closed
   start-v2 control states are emitted through `operation_runtime.operation_run_control_state` with registered
   fail-closed override reasons, so HTTP detail/control responses and Agent inspect results expose the same
-  `control_state` without changing the schema-owned `control_source_of_truth`.
+  `control_state` without changing the schema-owned `control_source_of_truth`. Strong v2 markers such as request pins,
+  target snapshots, result-occurrence refs, and result serializer pins are classified even if the mutable `action_type`
+  string has drifted; only preview-named input fields alone remain start-action-scoped to preserve non-start
+  schema-less compatibility.
 - `inspect_operation` now recognizes the exact start-v2 `OperationCommandPlanned` physical owner encoding:
   `schema_version=acquisition_start_command_acceptance.v1` plus the nested
   `acquisition_start_command_acceptance_owner_result_ref.v1` envelope. The nested envelope must still match the locked

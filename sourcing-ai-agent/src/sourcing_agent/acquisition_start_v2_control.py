@@ -96,12 +96,12 @@ def classify_acquisition_start_v2_generic_control_provenance(
         or str(action.get("result_serializer_contract_digest") or "").strip()
         == ACQUISITION_START_V2_RESULT_SPEC.serializer_contract_digest
     )
-    action_has_v2_provenance = action_type == ACTION_START_ACQUISITION_RUN and (
-        action_has_any_v2_input_key
-        or action_has_any_current_v2_pin
+    action_has_v2_provenance = (
+        action_has_any_current_v2_pin
         or action_has_v2_start_snapshot
         or action_has_result_occurrence
         or action_has_v2_result_pins
+        or action_has_any_v2_input_key
     )
     operation_has_v2_provenance = (
         bool(operation)

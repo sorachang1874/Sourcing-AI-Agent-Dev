@@ -1084,6 +1084,11 @@ class D1nStartAcquisitionV2CreatePGMatrixTest(PGControlPlaneStoreTestMixin, unit
                 "input_json = %s WHERE action_id = %s",
                 ("acquisition_root_request_legacy", ACQUISITION_START_V2_REQUEST_SCHEMA_DIGEST, "{}"),
             ),
+            (
+                "action_type_drift_retains_strong_v2_markers",
+                "UPDATE {schema}.agent_actions SET action_type = %s WHERE action_id = %s",
+                ("legacy_start_acquisition_run",),
+            ),
         )
         for ordinal, (label, sql, params) in enumerate(cases, start=1):
             with self.subTest(case=label):
