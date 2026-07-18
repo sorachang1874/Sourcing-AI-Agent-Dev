@@ -17,6 +17,12 @@ This batch remains non-live and non-served. It does not close `R-019`, `R-029`, 
   unsupported or invalid.
 - Generic operation controls now distinguish non-v2, exact-v2, and mixed/partial v2 identity. Mixed action/operation
   pins fail closed with zero writes instead of falling back to generic mutation.
+- The generic operation-control classifier now uses a single owner-defined provenance classification across the Action,
+  OperationRun, target snapshot, result/serializer pins, and result-occurrence metadata. Non-start schema-less Actions
+  are not classified as v2 merely because their open input happens to contain `preview_*` field names; start-v2 rows
+  with current request pins and preview keys erased still fail closed when retained v2 provenance remains.
+- Generic cancel/retry/resume/dispatch preflight failures now route through the same operation-control response projector
+  as normal control responses, preserving top-level `control_state` and `display_contract` parity.
 - Generic action controls now also fail closed for pending `start_acquisition_run` Actions that carry only partial v2
   discriminators: schema version/digest without the exact input shape, one/two preview keys without the full
   `preview_id + preview_revision + preview_digest` tuple, or one exact schema pin paired with a mismatching peer. These
@@ -40,7 +46,9 @@ This batch remains non-live and non-served. It does not close `R-019`, `R-029`, 
   - cancel/retry/resume command-control zero-write;
   - OperationRun detail/control-response affordance parity for unsupported start-v2 controls;
   - direct PG cancel/retry/resume mutator zero-write for held queued/cancelled/retry-wait root commands;
-  - action-type drift, empty schema pair, and alternate schema pair operation-control zero-write;
+  - action-type drift, empty schema pair, alternate schema pair, and action+operation pin erasure with retained
+    target/result/occurrence provenance operation-control zero-write;
+  - unrelated schema-less non-start Actions with preview-named input keys still classify as `ready`;
   - pending partial-v2 approve/reject zero-write for schema-only, preview-key-only, and single-pin mismatch cases;
   - raw text owner corruption replay rejection;
   - blank JSON carrier replay rejection;

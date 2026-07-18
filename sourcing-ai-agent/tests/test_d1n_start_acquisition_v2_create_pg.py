@@ -170,7 +170,9 @@ class D1nStartAcquisitionV2CreatePGMatrixTest(PGControlPlaneStoreTestMixin, unit
         assert psycopg is not None
         with psycopg.connect(fixture.dsn, client_encoding="utf8") as connection:
             with connection.cursor() as cursor:
-                preview_table = f"{quoted_schema}.{quote_control_plane_postgres_identifier('acquisition_plan_previews')}"
+                preview_table = (
+                    f"{quoted_schema}.{quote_control_plane_postgres_identifier('acquisition_plan_previews')}"
+                )
                 cursor.execute(f"ALTER TABLE {preview_table} DISABLE TRIGGER USER")
                 try:
                     cursor.execute(sql.replace("{schema}", quoted_schema), params)
@@ -770,7 +772,9 @@ class D1nStartAcquisitionV2CreatePGMatrixTest(PGControlPlaneStoreTestMixin, unit
         )
         self.assertEqual(quarantined["outcome"], "quarantined")
         late_after_counts = self._table_counts()
-        self.assertEqual(late_after_counts["agent_tool_result_attempts"], late_before_counts["agent_tool_result_attempts"] + 1)
+        self.assertEqual(
+            late_after_counts["agent_tool_result_attempts"], late_before_counts["agent_tool_result_attempts"] + 1
+        )
         for table_name in (
             "runtime_outbox",
             "acquisition_runs",
@@ -914,8 +918,13 @@ class D1nStartAcquisitionV2CreatePGMatrixTest(PGControlPlaneStoreTestMixin, unit
                     "acquisition_start_v2_generic_operation_control_not_enabled",
                 )
                 self.assertFalse(response["module_state_mutated"])
-                if "control_state" in dict(response.get("operation_run") or {}):
+                if label in {"cancel", "retry", "resume", "dispatch"}:
                     self.assertEqual(response["operation_run"]["control_state"], control_state)
+                    self.assertEqual(response["control_state"], control_state)
+                    self.assertEqual(
+                        response["display_contract"],
+                        response["operation_run"]["display_contract"],
+                    )
                 self.assertEqual(self._table_snapshot(), baseline)
 
     def test_generic_operation_controls_fail_closed_on_start_v2_action_drift_without_writes(self) -> None:
@@ -937,6 +946,12 @@ class D1nStartAcquisitionV2CreatePGMatrixTest(PGControlPlaneStoreTestMixin, unit
                 "WHERE action_id = %s",
                 ("start_acquisition_run_request.v999", "0" * 64),
             ),
+            (
+                "action_operation_pins_erased_preview_keys_removed",
+                "UPDATE {schema}.agent_actions SET request_schema_version = %s, request_schema_digest = %s, "
+                "input_json = %s WHERE action_id = %s",
+                ("legacy_start_acquisition_run", "0" * 64, "{}"),
+            ),
         )
         for label, sql, params in cases:
             with self.subTest(case=label):
@@ -944,6 +959,12 @@ class D1nStartAcquisitionV2CreatePGMatrixTest(PGControlPlaneStoreTestMixin, unit
                 created = self._create(occurrence)
                 owner_ref = created["owner_result_ref"]
                 self._execute(sql, (*params, owner_ref["action_id"]))
+                if label == "action_operation_pins_erased_preview_keys_removed":
+                    self._execute(
+                        "UPDATE {schema}.operation_runs SET request_schema_version = %s, "
+                        "request_schema_digest = %s WHERE operation_run_id = %s",
+                        ("legacy_start_acquisition_run", "0" * 64, owner_ref["operation_run_id"]),
+                    )
                 orchestrator = self._orchestrator()
                 baseline = self._table_snapshot()
 
@@ -960,6 +981,34 @@ class D1nStartAcquisitionV2CreatePGMatrixTest(PGControlPlaneStoreTestMixin, unit
                 )
                 self.assertFalse(response["module_state_mutated"])
                 self.assertEqual(self._table_snapshot(), baseline)
+
+    def test_unrelated_schema_less_action_with_preview_named_input_remains_controllable(self) -> None:
+        orchestrator = self._orchestrator()
+        baseline = self._table_snapshot()
+
+        preflight = orchestrator._preflight_acquisition_start_v2_generic_operation_control(  # noqa: SLF001
+            action={
+                "action_id": "act_schema_less_preview_key",
+                "action_type": "fetch_profile_sample",
+                "workspace_id": "workspace_1",
+                "input": {"preview_id": "not-start", "preview_revision": 1},
+                "request_schema_version": "",
+                "request_schema_digest": "",
+                "status": "queued",
+            },
+            operation_run={
+                "operation_run_id": "op_schema_less_preview_key",
+                "action_id": "act_schema_less_preview_key",
+                "operation_type": "linkedin_profile_fetch",
+                "workspace_id": "workspace_1",
+                "request_schema_version": "",
+                "request_schema_digest": "",
+                "status": "queued",
+            },
+        )
+
+        self.assertEqual(preflight, {"status": "ready"})
+        self.assertEqual(self._table_snapshot(), baseline)
 
     def test_generic_action_controls_fail_closed_on_partial_start_v2_pending_action_without_writes(self) -> None:
         cases = (
