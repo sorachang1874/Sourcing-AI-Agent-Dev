@@ -941,6 +941,56 @@ class D1nStartAcquisitionV2CreatePGMatrixTest(PGControlPlaneStoreTestMixin, unit
                 self.assertFalse(response["module_state_mutated"])
                 self.assertEqual(self._table_snapshot(), baseline)
 
+    def test_dormant_start_v2_root_command_blocks_native_command_mutators_without_writes(self) -> None:
+        cases: tuple[tuple[str, str, Callable[[str], dict[str, Any] | None]], ...] = (
+            (
+                "cancel",
+                "queued",
+                lambda command_id: self.store.cancel_workflow_command(
+                    command_id,
+                    reason="native cancel must not clear hold",
+                    actor="native-control-test",
+                    result={"control_source": "native_test"},
+                ),
+            ),
+            (
+                "retry",
+                "cancelled",
+                lambda command_id: self.store.retry_workflow_command(
+                    command_id,
+                    reason="native retry must not clear hold",
+                    actor="native-control-test",
+                    result={"control_source": "native_test"},
+                ),
+            ),
+            (
+                "resume",
+                "retry_wait",
+                lambda command_id: self.store.resume_workflow_command(
+                    command_id,
+                    reason="native resume must not clear hold",
+                    actor="native-control-test",
+                    result={"control_source": "native_test"},
+                ),
+            ),
+        )
+
+        for ordinal, (label, status, mutator) in enumerate(cases, start=1):
+            with self.subTest(control=label):
+                occurrence = self._arrange_pending(suffix=f"native_command_control_closed_{ordinal}")
+                created = self._create(occurrence)
+                command_id = created["owner_result_ref"]["workflow_command_id"]
+                if status != "queued":
+                    self._execute(
+                        "UPDATE {schema}.workflow_commands SET status = %s WHERE command_id = %s",
+                        (status, command_id),
+                    )
+                baseline = self._table_snapshot()
+
+                self.assertEqual(mutator(command_id), {})
+
+                self.assertEqual(self._table_snapshot(), baseline)
+
     def test_create_replay_rejects_noncanonical_string_identity_without_writes(self) -> None:
         occurrence = self._arrange_pending(suffix="noncanonical_text")
         created = self._create(occurrence)

@@ -13104,6 +13104,8 @@ class LiveControlPlanePostgresAdapter:
         current = self.select_one("workflow_commands", where_sql="command_id = %s", params=[normalized_command_id])
         if current is None:
             return None
+        if _is_start_v2_root_command_result_acceptance_hold(current):
+            return None
         existing_result = _json_load_dict(current.get("result_json"))
         next_result = {
             **existing_result,
@@ -13162,6 +13164,8 @@ class LiveControlPlanePostgresAdapter:
         current = self.select_one("workflow_commands", where_sql="command_id = %s", params=[normalized_command_id])
         if current is None:
             return None
+        if _is_start_v2_root_command_result_acceptance_hold(current):
+            return None
         existing_result = _json_load_dict(current.get("result_json"))
         next_result = {
             **existing_result,
@@ -13205,6 +13209,8 @@ class LiveControlPlanePostgresAdapter:
             return None
         current = self.select_one("workflow_commands", where_sql="command_id = %s", params=[normalized_command_id])
         if current is None:
+            return None
+        if _is_start_v2_root_command_result_acceptance_hold(current):
             return None
         existing_result = _json_load_dict(current.get("result_json"))
         attempt = max(0, int(current.get("attempt") or 0) - 1)
@@ -15905,6 +15911,19 @@ def _json_load_dict(payload: Any) -> dict[str, Any]:
     except (TypeError, ValueError, json.JSONDecodeError):
         return {}
     return dict(loaded) if isinstance(loaded, dict) else {}
+
+
+def _is_start_v2_root_command_result_acceptance_hold(command: dict[str, Any] | None) -> bool:
+    if not isinstance(command, dict):
+        return False
+    payload = _json_load_dict(command.get("payload_json"))
+    return (
+        str(command.get("command_type") or "").strip() == "acquisition.run.create"
+        and str(command.get("owner") or "").strip() == "acquisition_run_writer"
+        and str(command.get("status") or "").strip() in {"queued", "retry_wait", "cancelled"}
+        and str(command.get("not_before_at") or "").strip() == "9999-12-31 23:59:59"
+        and str(payload.get("schema_version") or "").strip() == "acquisition_root_command_payload.v2"
+    )
 
 
 def _invalidate_projection_search_index_products(
