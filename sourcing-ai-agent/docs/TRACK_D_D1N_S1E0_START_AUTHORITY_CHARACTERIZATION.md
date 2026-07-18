@@ -1,8 +1,15 @@
 # Track D D1n S1e0 — acquisition-start authority characterization
 
-> Status: Current non-live decision-lock characterization (2026-07-17). This batch adds no product writer,
+> Status: Historical non-live decision-lock characterization (2026-07-17; S1e2a transition recorded 2026-07-18).
+> This batch added no product writer,
 > migration, registry activation, provider/model call, or serving authority. It is author evidence only; it is not an
 > independent-review `GO` and does not authorize S1e1 implementation to guess a physical schema.
+
+S1e1 has since supplied the owner decision and S1e2a has implemented only the specialized pending-submit UoW. The
+former “physical adapter absent” assertion is therefore superseded by a positive submit-surface ratchet; the generic
+approval/dispatch and physical cost-reservation characterizations below remain valid, and create/result/served/live
+remain absent. See `TRACK_D_D1N_S1E1_START_AUTHORITY_OWNER_DECISION.md` and
+`TRACK_D_D1N_S1E2A_START_SUBMIT_UOW_IMPLEMENTATION.md`.
 
 ## Outcome
 

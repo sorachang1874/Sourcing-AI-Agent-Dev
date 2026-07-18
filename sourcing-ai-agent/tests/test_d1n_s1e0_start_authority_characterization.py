@@ -262,7 +262,7 @@ def test_parent_budget_owner_is_only_a_registry_pin_without_a_physical_reservati
     assert adapter_budget_methods == set()
 
 
-def test_s1e0_keeps_start_shadow_only_and_proves_the_physical_adapter_is_absent() -> None:
+def test_s1e2a_keeps_start_shadow_only_while_exposing_only_the_submit_uow() -> None:
     assert DEFAULT_AGENT_TOOL_REGISTRY.declared_tool_count == 0
     assert DEFAULT_AGENT_TOOL_REGISTRY.tool_names == ()
     assert ACQUISITION_START_V2_REQUEST_SCHEMA_VERSION == "acquisition_root_request_v2"
@@ -276,7 +276,9 @@ def test_s1e0_keeps_start_shadow_only_and_proves_the_physical_adapter_is_absent(
     assert route.adapter.owner_id == "acquisition.start_v2_pg_uow"
     assert route.adapter.owner_revision == "acquisition_start_v2_pg_uow_v1"
 
-    assert not (SOURCE_ROOT / "acquisition_start_v2_postgres.py").exists()
+    assert (SOURCE_ROOT / "acquisition_start_v2_postgres.py").exists()
+    assert hasattr(WorkflowRuntimeRepository, "submit_acquisition_start_v2_action_uow")
+    assert hasattr(LiveControlPlanePostgresAdapter, "submit_acquisition_start_v2_action_uow")
     assert not hasattr(WorkflowRuntimeRepository, "create_acquisition_start_v2_uow")
     assert not hasattr(LiveControlPlanePostgresAdapter, "create_acquisition_start_v2_uow")
     assert not hasattr(agent_tool_result_postgres, "prepare_start_acquisition_tool_result")
@@ -286,7 +288,8 @@ def test_s1e0_keeps_start_shadow_only_and_proves_the_physical_adapter_is_absent(
 def test_decision_doc_carries_exact_non_closure_and_two_file_scope() -> None:
     document = DECISION_DOC_PATH.read_text(encoding="utf-8")
     required_tokens = (
-        "> Status: Current non-live decision-lock characterization",
+        "> Status: Historical non-live decision-lock characterization",
+        "S1e2a has implemented only the specialized pending-submit UoW",
         "approval_receipt_physical_owner_status=characterized_not_ratified",
         "command_acceptance_winner_status=characterized_not_ratified",
         "parent_budget_physical_owner_status=declared_policy_pin_only",

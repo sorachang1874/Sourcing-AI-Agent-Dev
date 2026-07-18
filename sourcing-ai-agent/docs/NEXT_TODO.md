@@ -454,10 +454,19 @@
   SOT 与五字段 acquisition parent-budget envelope；WorkflowStarted/CommandPlanRequested seq1/2 创建 root command，
   同 UoW reduce 到 exact `workflow_current_state`，OperationCommandPlanned seq1 是
   `workflow_command_acceptance_v1` winner。仅允许
-  `isolated_local_canary + simulate|scripted`，generic approve/dispatch 不扩张，runtime_outbox delta=0。下一批 S1e2
-  实现 specialized repository/adapter + read-only prepare/shared accept 与 PG fault/concurrency/terminal-success。
-  S1e1 author test/future review 都不改变 `10/5`、served=0、provider/model/live=0；R-019/R-029、Plan §6#6、
-  OB-2.2/10.3/10.4 均继续 open，fresh pinned non-author review pending。
+  `isolated_local_canary + simulate|scripted`，generic approve/dispatch 不扩张，runtime_outbox delta=0。S1e2a current
+  author candidate 已实现 specialized pending-submit repository/adapter：任何连接前 revalidate current occurrence /
+  mode / exact full bound root；同一有限 deadline 按 event-stream→Action→slot→preview 加锁，locked preview 再 bind；
+  一个事务 create-or-exact-replay `approval_required` Action + `ActionApprovalRequired` seq1，fault/lost-ACK/
+  concurrency 保持单 aggregate；仅 ratified `queued/approved` + accepted-slot successor 可继续 replay；四表必须
+  PG-authoritative，slow-connect/statement 使用同一总 deadline，且 Operation/command/attempt/journal/outbox/provider/
+  model/domain 零新增。Author exact=`37 passed + 2 subtests`，含 S1e0=`42 + 2`，adjacent=`267 + 13`，scoped
+  mypy=`0/1`、global=`81/4`、lint green；首轮 local advisory `NO-GO 0/2/1/0` 已 fixed-forward，同 reviewer bounded
+  re-audit=`GO 0/0/0/0`，不是 formal verdict。下一批
+  S1e2b 实现 exact receipt-backed budget ref + approval/create UoW；S1e2c 再实现 read-only prepare/shared accept 与
+  terminal-success proof。S1e1/S1e2a author evidence/future review 都不改变 `10/5`、served=0、provider/model/live=0；
+  R-019/R-029、Plan §6#6、OB-2.2/10.3/10.4 均继续 open，fresh pinned non-author review pending。实现记录见
+  `TRACK_D_D1N_S1E2A_START_SUBMIT_UOW_IMPLEMENTATION.md`。
 - [ ] D1m mixed-version rollout gate（R-019）：pre-D1m binary 可继续写 revisionless source row 并绕开
   revision-aware exact-claim canonical materializer。任何 hosted activation 前必须选择并验证其一：quiesced
   single-version cutover，或 separately reviewed dual-write/compatibility bridge；完成前不得声称 rolling overlap

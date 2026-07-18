@@ -2366,6 +2366,45 @@ class WorkflowRuntimeRepository(Repository):
             method_name="create_acquisition_plan_preview_uow",
         )
 
+    def submit_acquisition_start_v2_action_uow(
+        self,
+        *,
+        occurrence: Any,
+        lock_timeout_seconds: float = 5.0,
+    ) -> dict[str, Any]:
+        """Create or exact-reload one approval-required v2 acquisition-start Action."""
+
+        from ..agent_tool_result_slot import AgentToolOccurrence
+
+        if not isinstance(occurrence, AgentToolOccurrence):
+            raise ValueError("submit acquisition start v2 requires AgentToolOccurrence")
+        for table_name in (
+            "agent_actions",
+            "operation_events",
+            "agent_tool_result_slots",
+            "acquisition_plan_previews",
+        ):
+            self._require_postgres_for_durable_runtime(table_name)
+        result = self._call_native_write(
+            "submit_acquisition_start_v2_action_uow",
+            table_name="agent_actions",
+            occurrence=occurrence,
+            lock_timeout_seconds=lock_timeout_seconds,
+        )
+        if result is not None:
+            payload = dict(result)
+            return {
+                "outcome": str(payload.get("outcome") or "").strip(),
+                "replayed": bool(payload.get("replayed")),
+                "action": self._action_from_row(payload.get("action")),
+                "event": self._operation_event_from_row(payload.get("event")),
+            }
+        self._raise_write_failure(
+            table_name="agent_actions",
+            method_name="submit_acquisition_start_v2_action_uow",
+            reason="native writer returned no bundle",
+        )
+
     def reserve_agent_tool_result_slot(
         self,
         *,

@@ -238,6 +238,20 @@
   This annotation changes neither row status nor R-019's current ratchet, and does not close R-029's 5/15 bridge,
   Plan §6#6, OB-2.2/10.3/10.4, or served=0. S1e2 product implementation and fresh pinned review remain pending.
 
+- **R-019 / R-029 / D1n S1e2a (2026-07-18):** the first product slice implements only the specialized pending-submit
+  aggregate selected by S1e1. It revalidates the current local-canary occurrence, mode, pins, and complete bound root
+  before adapter access; then exact-locks the Action stream, Action identities, reserved pending result slot, and
+  immutable preview under one deadline, rebinds the locked preview using one DB-owned timestamp, and atomically
+  inserts or exact-replays the `approval_required` Action plus `ActionApprovalRequired` sequence 1. Fault and
+  lost-ack paths preserve one aggregate; eight-way concurrency produces one submit plus seven exact replays. A bounded
+  local audit's successor-replay, deadline, and PG-authority findings were fixed-forward and its re-audit was advisory
+  `GO 0/0/0/0`, not a formal verdict. Submit creates
+  no Operation, workflow event/command/current state, result attempt/journal, outbox, Activity, AcquisitionRun,
+  provider/model, or domain row. This implementation advances neither the R-019 direct state-sync ratchet nor R-029's
+  population/observation epoch: the partition remains 10/5, public/default served population remains zero, and
+  S1e2b/S1e2c plus fresh pinned review remain pending. Plan §6#6, OB-2.2/10.3/10.4, provider/live, and all other
+  residuals remain open.
+
 - **R-019 / D3c2h1 fixed-forward (2026-07-15):** the first pinned highest-effort non-author review of
   `1c4a2d9177dcb3470117700086b12fd533898bb7` returned formal `NO-GO 0/3/3/0`. The author repair addresses all six
   findings without SQL/runtime: classification now has nonterminal `current_pending_apply` plus a fresh normal-terminal

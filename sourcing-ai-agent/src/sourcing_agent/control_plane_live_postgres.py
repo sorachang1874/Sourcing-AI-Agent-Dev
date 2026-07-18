@@ -8921,6 +8921,27 @@ class LiveControlPlanePostgresAdapter:
             finally:
                 connection.close()
 
+    def submit_acquisition_start_v2_action_uow(
+        self,
+        *,
+        table_name: str = "agent_actions",
+        occurrence: Any,
+        lock_timeout_seconds: float = 5.0,
+        fault_injection_point: str = "",
+    ) -> dict[str, Any] | None:
+        """Create or exact-reload the pending v2 acquisition-start Action bundle."""
+
+        if _normalize_postgres_identifier(table_name) != "agent_actions":
+            raise ValueError("submit_acquisition_start_v2_action_uow requires table_name=agent_actions")
+        from .acquisition_start_v2_postgres import submit_acquisition_start_v2_action_uow
+
+        return submit_acquisition_start_v2_action_uow(
+            self,
+            occurrence=occurrence,
+            lock_timeout_seconds=lock_timeout_seconds,
+            fault_injection_point=fault_injection_point,
+        )
+
     def reserve_agent_tool_result_slot(
         self,
         *,
