@@ -1,6 +1,11 @@
 import type { ReactNode } from "react";
-import { summarizeCohortSelection } from "../lib/cohortSelection";
+import {
+  buildCohortShardPreview,
+  summarizeCohortLocations,
+  summarizeCohortSelection,
+} from "../lib/cohortSelection";
 import type {
+  CohortLocationSelection,
   CohortSelectionOptions,
   DemoPlan,
   PlanReviewDecision,
@@ -205,6 +210,17 @@ export function PlanCard({
       plan.providerExecutionLanes?.length ||
       reviewGate?.editableFields.length,
   );
+  // Effective (editable) cohort state: the review decision overrides the
+  // frozen plan mirror; locations are sibling request fields (FT0 §7.2).
+  const effectiveCohortSelection = reviewDecision.cohortSelection || plan.cohortSelection || null;
+  const effectiveLocations: CohortLocationSelection = {
+    targetLocations: reviewDecision.targetLocations ?? plan.targetLocations ?? [],
+    excludeTargetLocations: reviewDecision.excludeTargetLocations ?? plan.excludeTargetLocations ?? [],
+  };
+  const planShardPreview =
+    effectiveCohortSelection && cohortOptions
+      ? buildCohortShardPreview(effectiveCohortSelection, cohortOptions)
+      : null;
 
   return (
     <section
@@ -236,6 +252,9 @@ export function PlanCard({
           <div className="plan-grid-wide" data-testid="plan-cohort-summary">
             <dt>精确人群筛选</dt>
             <dd>{summarizeCohortSelection(plan.cohortSelection, cohortOptions)}</dd>
+            <dd data-testid="plan-cohort-locations">
+              {summarizeCohortLocations(plan.targetLocations, plan.excludeTargetLocations)}
+            </dd>
           </div>
         ) : null}
         {showProjectScope ? (
@@ -318,9 +337,45 @@ export function PlanCard({
           isLoading={isLoadingCohortOptions}
           errorMessage={cohortOptionsError}
           locked={Boolean(plan.cohortSelection)}
+          locationValue={effectiveLocations}
+          showShardPreview={false}
           onChange={(value) => onReviewDecisionChange({ cohortSelection: value || undefined })}
+          onLocationChange={(next) =>
+            onReviewDecisionChange({
+              targetLocations: next.targetLocations,
+              excludeTargetLocations: next.excludeTargetLocations,
+            })
+          }
           onRetryOptions={onRetryCohortOptions}
         />
+
+        {planShardPreview ? (
+          <div className="plan-shard-preview" data-testid="plan-cohort-shard-preview">
+            <p className="plan-shard-preview-count" data-testid="plan-cohort-shard-count">
+              本次方案计划执行 {planShardPreview.shardCount} 个召回分片（在职状态 × 角色）：
+            </p>
+            <ul className="cohort-shard-list">
+              {planShardPreview.shards.map((shard) => (
+                <li key={shard.shardId} data-testid={`plan-cohort-shard-${shard.shardId}`}>
+                  {shard.statusLabel} · {shard.roleLabel}
+                </li>
+              ))}
+            </ul>
+            {planShardPreview.isFullRecall ? (
+              <p
+                className="cohort-full-recall-warning"
+                role="alert"
+                data-testid="plan-full-recall-warning"
+              >
+                ⚠ 未限定角色且覆盖全部在职状态：将对目标公司全量成员发起全量召回，结果量与执行耗时显著增加。
+              </p>
+            ) : null}
+            <p className="muted plan-shard-budget-note" data-testid="plan-shard-budget-note">
+              每个分片执行全量成员召回，实际消耗受服务端分片预算上限与 provider
+              限额约束（上限数值由运营方配置，确认前不展示预估值）。
+            </p>
+          </div>
+        ) : null}
 
         {hasAdvancedContent ? (
           <details className="advanced-review-panel">

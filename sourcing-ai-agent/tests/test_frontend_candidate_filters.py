@@ -257,6 +257,130 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
         payload = json.loads(completed.stdout)
         self.assertEqual(payload["summary"], "全量")
 
+    def test_function_facets_consume_server_computed_bucket_ids(self) -> None:
+        if shutil.which("node") is None:
+            self.skipTest("node is required for frontend TypeScript helper checks")
+        script = textwrap.dedent(
+            """
+            const fs = require("fs");
+            const path = require("path");
+            const vm = require("vm");
+            const ts = require("./frontend-demo/node_modules/typescript");
+            const source = fs.readFileSync(
+              path.join(process.cwd(), "frontend-demo/src/lib/candidateFilters.ts"),
+              "utf8",
+            );
+            const compiled = ts.transpileModule(source, {
+              compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+            }).outputText;
+            const module = { exports: {} };
+            vm.runInNewContext(compiled, { module, exports: module.exports, require, console }, {
+              filename: "candidateFilters.js",
+            });
+            const {
+              buildFunctionOptions,
+              defaultFunctionSelection,
+              filterCandidatesByFacets,
+            } = module.exports;
+            const baseCandidate = {
+              name: "",
+              summary: "",
+              currentCompany: "",
+              notesSnippet: "",
+              team: "Unknown",
+              focusAreas: [],
+              matchReasons: [],
+              education: [],
+              experience: [],
+              matchedKeywords: [],
+              sourceMatches: [],
+              employmentStatus: "current",
+              outreachLayer: null,
+            };
+            const candidates = [
+              {
+                ...baseCandidate,
+                id: "dual-bucket-member",
+                headline: "Software Engineer",
+                functionBucketIds: ["engineering", "infra_systems"],
+                functionBucketSource: "lane_membership",
+              },
+              {
+                ...baseCandidate,
+                id: "server-says-research",
+                // Headline text would have inferred engineering under the
+                // deleted local taxonomy; the server id is authoritative.
+                headline: "Member of Technical Staff",
+                functionBucketIds: ["research"],
+                functionBucketSource: "registry_evidence",
+              },
+              {
+                ...baseCandidate,
+                id: "founder-member",
+                headline: "Founder",
+                functionBucketIds: ["founding"],
+                functionBucketSource: "lane_membership",
+              },
+              {
+                ...baseCandidate,
+                id: "no-server-buckets",
+                headline: "Research Scientist",
+                functionIds: ["24"],
+              },
+            ];
+            const options = buildFunctionOptions(candidates);
+            const filterSelection = (functionBuckets) => ({
+              layers: [],
+              recallBuckets: [],
+              employmentStatuses: [],
+              locations: [],
+              functionBuckets,
+              searchKeyword: "",
+            });
+            console.log(JSON.stringify({
+              options,
+              engineeringHits: filterCandidatesByFacets(candidates, filterSelection(["engineering"]), [])
+                .map((candidate) => candidate.id),
+              infraHits: filterCandidatesByFacets(candidates, filterSelection(["infra_systems"]), [])
+                .map((candidate) => candidate.id),
+              foundingHits: filterCandidatesByFacets(candidates, filterSelection(["founding"]), [])
+                .map((candidate) => candidate.id),
+              unknownHits: filterCandidatesByFacets(candidates, filterSelection(["unknown"]), [])
+                .map((candidate) => candidate.id),
+              researchHits: filterCandidatesByFacets(candidates, filterSelection(["research"]), [])
+                .map((candidate) => candidate.id),
+              defaultSelection: defaultFunctionSelection(options),
+            }));
+            """
+        )
+        completed = subprocess.run(
+            ["node", "-e", script],
+            cwd=REPO_ROOT,
+            text=True,
+            capture_output=True,
+            check=True,
+        )
+        payload = json.loads(completed.stdout)
+        self.assertEqual(
+            payload["options"],
+            [
+                {"id": "engineering", "label": "engineering", "count": 1},
+                {"id": "founding", "label": "founding", "count": 1},
+                {"id": "infra_systems", "label": "infra_systems", "count": 1},
+                {"id": "research", "label": "research", "count": 1},
+                {"id": "unknown", "label": "unknown", "count": 1},
+            ],
+        )
+        self.assertEqual(payload["engineeringHits"], ["dual-bucket-member"])
+        self.assertEqual(payload["infraHits"], ["dual-bucket-member"])
+        self.assertEqual(payload["foundingHits"], ["founder-member"])
+        self.assertEqual(payload["unknownHits"], ["no-server-buckets"])
+        self.assertEqual(payload["researchHits"], ["server-says-research"])
+        self.assertEqual(
+            payload["defaultSelection"],
+            ["engineering", "founding", "infra_systems", "research", "unknown"],
+        )
+
     def test_results_board_uses_canonical_facet_summary_for_global_filters(self) -> None:
         source = (REPO_ROOT / "frontend-demo/src/components/ResultsBoardPanel.tsx").read_text(encoding="utf-8")
         self.assertIn("candidateFacetSummary?.employment", source)

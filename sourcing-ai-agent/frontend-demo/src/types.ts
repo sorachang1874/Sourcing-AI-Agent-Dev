@@ -25,6 +25,17 @@ export interface CohortSelection {
   source: "user_explicit";
 }
 
+/**
+ * Location targeting selection. The wire fields `target_locations` /
+ * `exclude_target_locations` ride ALONGSIDE the closed cohort_selection.v1
+ * object at request top level; they are never part of the cohort object.
+ * Free-text provider location names; no client-side enum (backend-validated).
+ */
+export interface CohortLocationSelection {
+  targetLocations: string[];
+  excludeTargetLocations: string[];
+}
+
 export type CandidateConfidence = "high" | "medium" | "lead_only";
 export type WorkflowPhase = "idle" | "plan" | "running" | "results";
 export type TimelineStepStatus = "completed" | "running" | "pending" | "failed" | "cancelled";
@@ -85,6 +96,8 @@ export interface PlanReviewDecision {
   reuseExistingRoster?: boolean;
   runFormerSearchSeed?: boolean;
   cohortSelection?: CohortSelection;
+  targetLocations?: string[];
+  excludeTargetLocations?: string[];
 }
 
 export interface TargetCompanyIdentityPreview {
@@ -137,6 +150,8 @@ export interface DemoPlan {
   reviewGate?: PlanReviewGate;
   reviewDecisionDefaults?: PlanReviewDecision;
   cohortSelection?: CohortSelection;
+  targetLocations?: string[];
+  excludeTargetLocations?: string[];
 }
 
 export interface TimelineSourceTag {
@@ -205,6 +220,10 @@ export interface Candidate {
   location?: string;
   roleBucket?: string;
   functionIds?: string[];
+  /** Server-computed multi-valued function facet ids (FT0 §5.2); never re-derived locally. */
+  functionBucketIds?: string[];
+  /** Provenance of `functionBucketIds`, pinned by FT0 §5.2. */
+  functionBucketSource?: "lane_membership" | "registry_evidence" | "legacy_inference";
   linkedinUrl?: string;
   sourceDataset?: string;
   notesSnippet?: string;

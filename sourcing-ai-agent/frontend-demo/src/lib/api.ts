@@ -6,8 +6,12 @@ import {
 } from "./dashboardHydration";
 import { lifecycleEffectiveDeltaMaterializedCount } from "./resultViewLifecycle";
 import {
+  buildCohortLocationApiPayload,
+  cloneCohortLocationSelection,
   cloneCohortSelection,
+  equalCohortLocationSelection,
   equalCohortSelection,
+  parseCohortLocationMirror,
   parseCohortSelectionOptionsPayload,
   parseCohortSelectionPayload,
 } from "./cohortSelection";
@@ -39,6 +43,7 @@ import type {
   CandidateReviewStatus,
   CandidateSourceMatch,
   BoardRuntimeState,
+  CohortLocationSelection,
   CohortSelection,
   CohortSelectionOptions,
   DashboardData,
@@ -5053,11 +5058,49 @@ function extractPlanCohortSelection(
   return cloneCohortSelection(canonical);
 }
 
+/**
+ * Location fields are siblings of cohort_selection at request top level
+ * (FT0 §7.2). They are extracted from the same request mirror records with
+ * the same conflict posture, but they NEVER enter the cohort object.
+ */
+function extractPlanCohortLocations(
+  payload: any,
+  explainPayload: any,
+  requestPreview: Record<string, unknown>,
+): CohortLocationSelection | undefined {
+  const metadata = (payload?.metadata as Record<string, unknown>) || {};
+  const records = [
+    payload?.request,
+    explainPayload?.request,
+    requestPreview,
+    payload?.intent_view,
+    explainPayload?.intent_view,
+    payload?.plan?.intent_view,
+    metadata.request,
+    metadata.request_preview,
+  ].filter(
+    (value): value is Record<string, unknown> =>
+      Boolean(value) && typeof value === "object" && !Array.isArray(value),
+  );
+  const mirrors = records
+    .map((record) => parseCohortLocationMirror(record))
+    .filter((value): value is CohortLocationSelection => Boolean(value));
+  if (mirrors.length === 0) {
+    return undefined;
+  }
+  const canonical = mirrors[0];
+  if (mirrors.some((mirror) => !equalCohortLocationSelection(canonical, mirror))) {
+    throw new Error("Plan response contains conflicting target_locations mirrors.");
+  }
+  return cloneCohortLocationSelection(canonical);
+}
+
 function mapPlanReviewDecisionDefaults(
   payload: any,
   requestPreview: Record<string, unknown>,
   reviewGate: PlanReviewGate,
   cohortSelection?: CohortSelection,
+  cohortLocations?: CohortLocationSelection,
 ): PlanReviewDecision {
   const intentAxes = ((requestPreview.intent_axes as Record<string, unknown>) || {});
   const scopeBoundary = ((intentAxes.scope_boundary as Record<string, unknown>) || {});
@@ -5106,6 +5149,8 @@ function mapPlanReviewDecisionDefaults(
       asOptionalBoolean(fallbackPolicy.run_former_search_seed) ??
       asOptionalBoolean(recommendedPatch.run_former_search_seed),
     cohortSelection: cohortSelection ? cloneCohortSelection(cohortSelection) : undefined,
+    targetLocations: cohortLocations ? [...cohortLocations.targetLocations] : undefined,
+    excludeTargetLocations: cohortLocations ? [...cohortLocations.excludeTargetLocations] : undefined,
   };
 }
 
@@ -5167,6 +5212,12 @@ export function planReviewDecisionToApiPayload(
   if (decision.cohortSelection) {
     payload.cohort_selection = cloneCohortSelection(decision.cohortSelection);
   }
+  // Location fields ride alongside (never inside) the cohort object; empty
+  // lists are omitted so the server default applies (FT0 §7.2).
+  Object.assign(
+    payload,
+    buildCohortLocationApiPayload(decision.targetLocations, decision.excludeTargetLocations),
+  );
   return payload;
 }
 
@@ -5216,6 +5267,7 @@ function mapPlanPayloadToDemoPlan(payload: any, queryText: string, explainPayloa
     {}
   );
   const cohortSelection = extractPlanCohortSelection(payload, explain, requestPreview);
+  const cohortLocations = extractPlanCohortLocations(payload, explain, requestPreview);
   const organizationExecutionProfile =
     (explain.organization_execution_profile as Record<string, unknown>) ||
     (payload.organization_execution_profile as Record<string, unknown>) ||
@@ -5297,18 +5349,32 @@ function mapPlanPayloadToDemoPlan(payload: any, queryText: string, explainPayloa
     targetCompanyIdentity,
     providerExecutionLanes,
     reviewGate,
-    reviewDecisionDefaults: mapPlanReviewDecisionDefaults(payload, requestPreview, reviewGate, cohortSelection),
+    reviewDecisionDefaults: mapPlanReviewDecisionDefaults(
+      payload,
+      requestPreview,
+      reviewGate,
+      cohortSelection,
+      cohortLocations,
+    ),
     cohortSelection,
+    targetLocations: cohortLocations ? [...cohortLocations.targetLocations] : undefined,
+    excludeTargetLocations: cohortLocations ? [...cohortLocations.excludeTargetLocations] : undefined,
   };
 }
 
-export async function getWorkflowExplain(queryText: string, cohortSelection?: CohortSelection): Promise<any> {
+export async function getWorkflowExplain(
+  queryText: string,
+  cohortSelection?: CohortSelection,
+  targetLocations?: string[],
+  excludeTargetLocations?: string[],
+): Promise<any> {
   return fetchJson<any>("/api/workflows/explain", {
     method: "POST",
     body: JSON.stringify({
       raw_user_request: queryText,
       planning_mode: "model_assisted",
       ...(cohortSelection ? { cohort_selection: cloneCohortSelection(cohortSelection) } : {}),
+      ...buildCohortLocationApiPayload(targetLocations, excludeTargetLocations),
       ...DEFAULT_RECALL_LIMITS,
     }),
   }, PLAN_API_TIMEOUT_MS);
@@ -5396,12 +5462,15 @@ function buildPlanSubmitPayload(
   queryText: string,
   historyId = "",
   cohortSelection?: CohortSelection,
+  targetLocations?: string[],
+  excludeTargetLocations?: string[],
 ): Record<string, unknown> {
   const normalizedHistoryId = historyId.trim();
   return {
     raw_user_request: queryText,
     ...(normalizedHistoryId ? { history_id: normalizedHistoryId } : {}),
     ...(cohortSelection ? { cohort_selection: cloneCohortSelection(cohortSelection) } : {}),
+    ...buildCohortLocationApiPayload(targetLocations, excludeTargetLocations),
     planning_mode: "model_assisted",
     ...DEFAULT_RECALL_LIMITS,
   };
@@ -5426,8 +5495,16 @@ export async function submitPlanEnvelope(
   queryText: string,
   historyId = "",
   cohortSelection?: CohortSelection,
+  targetLocations?: string[],
+  excludeTargetLocations?: string[],
 ): Promise<{ plan: DemoPlan | null; reviewId: string; historyId: string; status: string; raw: any; explain: any }> {
-  const requestPayload = buildPlanSubmitPayload(queryText, historyId, cohortSelection);
+  const requestPayload = buildPlanSubmitPayload(
+    queryText,
+    historyId,
+    cohortSelection,
+    targetLocations,
+    excludeTargetLocations,
+  );
   const payload = await fetchJson<any>("/api/plan/submit", {
     method: "POST",
     body: JSON.stringify(requestPayload),
@@ -5452,8 +5529,16 @@ export function __testBuildPlanSubmitPayload(
   queryText: string,
   historyId = "",
   cohortSelection?: CohortSelection,
+  targetLocations?: string[],
+  excludeTargetLocations?: string[],
 ): Record<string, unknown> {
-  return buildPlanSubmitPayload(queryText, historyId, cohortSelection);
+  return buildPlanSubmitPayload(
+    queryText,
+    historyId,
+    cohortSelection,
+    targetLocations,
+    excludeTargetLocations,
+  );
 }
 
 export function __testResolvePlanSubmitHistoryId(
@@ -9649,6 +9734,36 @@ function pickFunctionIds(sourceShardFilters: unknown, ...sources: unknown[]): st
   return values;
 }
 
+/**
+ * First non-empty normalized string list across sources, or undefined.
+ * Used for the server-computed per-candidate function bucket ids
+ * (`function_bucket_ids`, FT0 §5.2), which the frontend transports verbatim
+ * and never re-derives locally.
+ */
+function pickNonEmptyStringList(...sources: unknown[]): string[] | undefined {
+  for (const source of sources) {
+    const values = asArray(source).map((item) => asString(item)).filter(Boolean);
+    if (values.length > 0) {
+      return Array.from(new Set(values));
+    }
+  }
+  return undefined;
+}
+
+function pickFunctionBucketSource(...sources: unknown[]): Candidate["functionBucketSource"] {
+  for (const source of sources) {
+    const value = asString(source);
+    if (
+      value === "lane_membership" ||
+      value === "registry_evidence" ||
+      value === "legacy_inference"
+    ) {
+      return value;
+    }
+  }
+  return undefined;
+}
+
 function deriveCandidate(record: Record<string, unknown>): Candidate {
   const metadata = (record.metadata as Record<string, unknown>) || {};
   const structuredEducationLines = asArray(record.education_lines).map((value) => asString(value)).filter(Boolean);
@@ -9784,6 +9899,8 @@ function deriveCandidate(record: Record<string, unknown>): Candidate {
       pickFirstString(record, ["role_bucket"]) ||
       pickFirstString(metadata, ["role_bucket"]),
     functionIds,
+    functionBucketIds: pickNonEmptyStringList(record.function_bucket_ids, metadata.function_bucket_ids),
+    functionBucketSource: pickFunctionBucketSource(record.function_bucket_source, metadata.function_bucket_source),
     linkedinUrl:
       pickFirstString(record, ["linkedin_url"]) ||
       pickFirstString(metadata, ["linkedin_url", "profile_url"]),
@@ -9896,6 +10013,9 @@ function deriveCandidateFromNormalizedRecord(
       materialized.function_ids,
       base.functionIds,
     ),
+    functionBucketIds: pickNonEmptyStringList(materialized.function_bucket_ids, base.functionBucketIds),
+    functionBucketSource:
+      pickFunctionBucketSource(materialized.function_bucket_source) || base.functionBucketSource,
     linkedinUrl,
     sourceDataset:
       normalizeDatasetLabel(pickFirstString(materialized, ["source_dataset"])) ||
@@ -10038,6 +10158,8 @@ function deriveCandidateFromDocument(
     location: pickFirstString(record, ["profile_location", "location"]),
     roleBucket: pickFirstString(record, ["role_bucket"]),
     functionIds: pickFunctionIds(metadata.source_shard_filters, record.function_ids, metadata.function_ids),
+    functionBucketIds: pickNonEmptyStringList(record.function_bucket_ids, metadata.function_bucket_ids),
+    functionBucketSource: pickFunctionBucketSource(record.function_bucket_source, metadata.function_bucket_source),
     linkedinUrl: resolveLinkedinUrl(pickFirstString(record, ["linkedin_url"]), pickFirstString(record, ["display_name", "name_en", "full_name", "name"])),
     sourceDataset: normalizeDatasetLabel(pickFirstString(record, ["source_dataset"])),
     notesSnippet: firstLine(pickFirstString(record, ["notes"])),

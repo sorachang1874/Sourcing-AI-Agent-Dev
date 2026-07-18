@@ -1,4 +1,5 @@
 import type {
+  CohortLocationSelection,
   CohortSelection,
   CohortSelectionOption,
   CohortSelectionOptions,
@@ -178,4 +179,184 @@ export function summarizeCohortSelection(
     options?.roleMatchOptions.find((option) => option.id === selection.role_match)?.label
     || selection.role_match;
   return `${roleLabels.join(", ")} · ${statusLabels.join(", ")} · ${matchLabel}`;
+}
+
+/**
+ * Location targeting (FT0 D7): the `target_locations` /
+ * `exclude_target_locations` request fields are siblings of the closed
+ * cohort_selection.v1 object, never members of it. The v1 parser above stays
+ * byte-compatible; everything location-related lives below this line.
+ */
+
+/** Server-side default injected for explicit-Cohort requests without the field. */
+export const DEFAULT_TARGET_LOCATIONS = ["United States"];
+
+export function createDefaultCohortLocationSelection(): CohortLocationSelection {
+  return {
+    targetLocations: [...DEFAULT_TARGET_LOCATIONS],
+    excludeTargetLocations: [],
+  };
+}
+
+/**
+ * Trim, collapse inner whitespace, dedupe, and preserve order (FT0 §7.2).
+ * Absent (null/undefined) normalizes to the empty list; wrong shapes fail
+ * closed, mirroring the backend ingress posture.
+ */
+export function normalizeLocationList(value: unknown, field: string): string[] {
+  if (value === undefined || value === null) {
+    return [];
+  }
+  if (!Array.isArray(value)) {
+    throw new Error(`Location field ${field} must be a list of names.`);
+  }
+  const normalized: string[] = [];
+  const seen = new Set<string>();
+  for (const item of value) {
+    if (typeof item !== "string" || !item.trim()) {
+      throw new Error(`Location field ${field} must contain non-empty names.`);
+    }
+    const name = item.trim().replace(/\s+/g, " ");
+    if (!seen.has(name)) {
+      seen.add(name);
+      normalized.push(name);
+    }
+  }
+  return normalized;
+}
+
+export function cloneCohortLocationSelection(value: CohortLocationSelection): CohortLocationSelection {
+  return {
+    targetLocations: [...value.targetLocations],
+    excludeTargetLocations: [...value.excludeTargetLocations],
+  };
+}
+
+export function equalCohortLocationSelection(
+  left: CohortLocationSelection,
+  right: CohortLocationSelection,
+): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+/**
+ * Read the sibling location fields from one request mirror record. Returns
+ * null when the record carries neither key (legacy requests); invalid shapes
+ * fail closed.
+ */
+export function parseCohortLocationMirror(record: Record<string, unknown>): CohortLocationSelection | null {
+  const hasTarget = Object.prototype.hasOwnProperty.call(record, "target_locations");
+  const hasExclude = Object.prototype.hasOwnProperty.call(record, "exclude_target_locations");
+  if (!hasTarget && !hasExclude) {
+    return null;
+  }
+  return {
+    targetLocations: normalizeLocationList(record.target_locations, "target_locations"),
+    excludeTargetLocations: normalizeLocationList(record.exclude_target_locations, "exclude_target_locations"),
+  };
+}
+
+/**
+ * Build the request-payload fragment for the location fields. Empty lists are
+ * omitted: an absent `target_locations` means the server default
+ * (["United States"] for explicit-Cohort requests) applies.
+ */
+export function buildCohortLocationApiPayload(
+  targetLocations?: string[],
+  excludeTargetLocations?: string[],
+): Record<string, unknown> {
+  const payload: Record<string, unknown> = {};
+  const target = normalizeLocationList(targetLocations, "target_locations");
+  const exclude = normalizeLocationList(excludeTargetLocations, "exclude_target_locations");
+  if (target.length > 0) {
+    payload.target_locations = target;
+  }
+  if (exclude.length > 0) {
+    payload.exclude_target_locations = exclude;
+  }
+  return payload;
+}
+
+export function appendLocationValue(list: string[], value: string): string[] {
+  const name = value.trim().replace(/\s+/g, " ");
+  if (!name || list.includes(name)) {
+    return list;
+  }
+  return [...list, name];
+}
+
+export function removeLocationValue(list: string[], value: string): string[] {
+  return list.filter((item) => item !== value);
+}
+
+export function summarizeCohortLocations(
+  targetLocations: string[] | undefined,
+  excludeTargetLocations: string[] | undefined,
+): string {
+  const targetLabel =
+    targetLocations && targetLocations.length > 0
+      ? targetLocations.join("、")
+      : `${DEFAULT_TARGET_LOCATIONS[0]}（默认）`;
+  const excludeLabel =
+    excludeTargetLocations && excludeTargetLocations.length > 0
+      ? ` · 排除: ${excludeTargetLocations.join("、")}`
+      : "";
+  return `目标地区: ${targetLabel}${excludeLabel}`;
+}
+
+export interface CohortShardPreviewItem {
+  shardId: string;
+  statusId: string;
+  statusLabel: string;
+  roleId: string | null;
+  roleLabel: string;
+}
+
+export interface CohortShardPreview {
+  /** Planned shard count: S * max(1, R) (FT0 §8.1). */
+  shardCount: number;
+  shards: CohortShardPreviewItem[];
+  /** Roles empty + every server-provided status selected => full-population recall. */
+  isFullRecall: boolean;
+}
+
+/**
+ * Client-side preview of the compiler's shard expansion. The
+ * CohortProviderCompiler remains the SOLE expansion layer; this projection
+ * only explains the pending selection before confirmation.
+ */
+export function buildCohortShardPreview(
+  selection: CohortSelection,
+  options: CohortSelectionOptions,
+): CohortShardPreview {
+  const selectedStatuses = options.employmentStatuses.filter((option) =>
+    selection.employment_statuses.includes(option.id),
+  );
+  const selectedRoles = options.roleBuckets.filter((option) =>
+    selection.role_bucket_ids.includes(option.id),
+  );
+  const effectiveRoles: Array<{ id: string | null; label: string }> =
+    selectedRoles.length > 0
+      ? selectedRoles.map((option) => ({ id: option.id, label: option.label }))
+      : [{ id: null, label: "All roles" }];
+  const shards: CohortShardPreviewItem[] = [];
+  for (const status of selectedStatuses) {
+    for (const role of effectiveRoles) {
+      shards.push({
+        shardId: `${status.id}:${role.id || "all_roles"}`,
+        statusId: status.id,
+        statusLabel: status.label,
+        roleId: role.id,
+        roleLabel: role.label,
+      });
+    }
+  }
+  const allStatusesSelected =
+    options.employmentStatuses.length > 0 &&
+    options.employmentStatuses.every((option) => selection.employment_statuses.includes(option.id));
+  return {
+    shardCount: shards.length,
+    shards,
+    isFullRecall: selection.role_bucket_ids.length === 0 && allStatusesSelected,
+  };
 }

@@ -198,123 +198,19 @@ function candidateLocationBucket(candidate: Candidate): string {
   return "us";
 }
 
-const ROLE_BUCKET_TO_FUNCTION_BUCKET: Record<string, string> = {
-  research: "research",
-  engineering: "engineering",
-  infra_systems: "engineering",
-  product_management: "product_management",
-};
-
-const FUNCTION_BUCKET_KEYWORDS: Record<string, string[]> = {
-  research: [
-    "research scientist",
-    "applied scientist",
-    "research engineer",
-    "member of research staff",
-    "researcher",
-    "scientist",
-    "research",
-  ],
-  engineering: [
-    "member of technical staff",
-    "technical staff",
-    "software engineer",
-    "machine learning engineer",
-    "research engineer",
-    "systems engineer",
-    "devops engineer",
-    "platform engineer",
-    "engineer",
-    "engineering",
-    "developer",
-    "devops",
-    "infrastructure",
-    "backend",
-    "frontend",
-    "full stack",
-    "architect",
-  ],
-  product_management: [
-    "product manager",
-    "group product manager",
-    "senior product manager",
-    "director of product",
-    "head of product",
-    "product management",
-  ],
-};
-
-function countKeywordOccurrences(corpus: string, pattern: string): number {
-  const normalizedPattern = normalizeSearchText(pattern);
-  if (!normalizedPattern) {
-    return 0;
-  }
-  if (!/[a-z0-9]/i.test(normalizedPattern)) {
-    return corpus.includes(normalizedPattern) ? 1 : 0;
-  }
-  const escaped = normalizedPattern
-    .split(" ")
-    .filter(Boolean)
-    .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
-    .join("\\s+");
-  if (!escaped) {
-    return 0;
-  }
-  return (corpus.match(new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, "gi")) || []).length;
-}
-
-function inferredFunctionBucketFromProfile(candidate: Candidate): string[] {
-  const mappedRoleBucket = ROLE_BUCKET_TO_FUNCTION_BUCKET[normalizeToken(candidate.roleBucket || "")];
-  const corpus = candidateKeywordCorpus(candidate);
-  const scoredBuckets = Object.entries(FUNCTION_BUCKET_KEYWORDS).map(([bucket, patterns]) => {
-    const keywordScore = patterns.reduce((total, pattern) => total + countKeywordOccurrences(corpus, pattern), 0);
-    const roleBucketBoost = mappedRoleBucket === bucket ? 3 : 0;
-    return {
-      bucket,
-      score: keywordScore + roleBucketBoost,
-    };
-  });
-  const maxScore = Math.max(...scoredBuckets.map((entry) => entry.score), 0);
-  if (maxScore > 0) {
-    return [
-      scoredBuckets
-        .filter((entry) => entry.score === maxScore)
-        .sort((left, right) => {
-          const priority = ["research", "engineering", "product_management"];
-          return priority.indexOf(left.bucket) - priority.indexOf(right.bucket);
-        })[0]?.bucket || "other",
-    ];
-  }
-  if (mappedRoleBucket) {
-    return [mappedRoleBucket];
-  }
-  return ["unknown"];
-}
-
+/**
+ * Function facet membership is SERVER-computed (FT0 §5.1/§5.2): the frontend
+ * consumes the per-candidate `functionBucketIds` verbatim and must not carry
+ * a second local taxonomy. The deleted local maps
+ * (ROLE_BUCKET_TO_FUNCTION_BUCKET / FUNCTION_BUCKET_KEYWORDS / numeric
+ * function-id mapping / local option enum) may not return.
+ */
 function candidateFunctionBuckets(candidate: Candidate): string[] {
-  const normalizedIds = (candidate.functionIds || [])
+  const serverIds = (candidate.functionBucketIds || [])
     .map((item) => normalizeToken(item))
     .filter(Boolean);
-  if (normalizedIds.length !== 1) {
-    return inferredFunctionBucketFromProfile(candidate);
-  }
-  const buckets = new Set<string>();
-  if (normalizedIds.includes("24")) {
-    buckets.add("research");
-  }
-  if (normalizedIds.includes("8")) {
-    buckets.add("engineering");
-  }
-  if (normalizedIds.includes("19")) {
-    buckets.add("product_management");
-  }
-  if (normalizedIds.some((item) => !["24", "8", "19"].includes(item))) {
-    buckets.add("other");
-  }
-  if (buckets.size === 0) {
-    buckets.add("other");
-  }
-  return Array.from(buckets);
+  const unique = Array.from(new Set(serverIds));
+  return unique.length > 0 ? unique : ["unknown"];
 }
 
 export function summarizeSelectedFacet(
@@ -470,28 +366,21 @@ export function buildFunctionOptions(candidates: Candidate[]): CandidateFacetOpt
     }
     return accumulator;
   }, {});
-  const ordered: Array<{ id: string; label: string }> = [
-    { id: "research", label: "Researcher" },
-    { id: "engineering", label: "Engineer" },
-    { id: "product_management", label: "Product Manager" },
-    { id: "other", label: "其他" },
-    { id: "unknown", label: "未提供职能信息" },
-  ];
-  return ordered.map((item) => ({ ...item, count: counts[item.id] || 0 }));
+  // Options are derived from server-provided bucket ids only; the canonical
+  // board path prefers the backend facet summary (labels included) and this
+  // local fallback intentionally keeps raw server ids as labels instead of
+  // re-creating a local option enum.
+  return Object.entries(counts)
+    .sort((left, right) => left[0].localeCompare(right[0]))
+    .map(([id, count]) => ({ id, label: id, count }));
 }
 
 export function defaultFunctionSelection(options: CandidateFacetOption[]): string[] {
-  const baseline = options
-    .filter((option) => (option.id === "research" || option.id === "engineering") && option.count > 0)
-    .map((option) => option.id);
-  if (baseline.length > 0) {
-    return baseline;
+  const nonEmpty = options.filter((option) => option.count > 0).map((option) => option.id);
+  if (nonEmpty.length > 0) {
+    return nonEmpty;
   }
-  if (options.some((option) => option.id === "unknown" && option.count > 0)) {
-    return ["unknown"];
-  }
-  const firstNonEmpty = options.find((option) => option.count > 0);
-  return firstNonEmpty ? [firstNonEmpty.id] : options.slice(0, 1).map((option) => option.id);
+  return options.slice(0, 1).map((option) => option.id);
 }
 
 export function computeCandidateIntentKeywordHits(candidate: Candidate, intentKeywords: string[]): string[] {
