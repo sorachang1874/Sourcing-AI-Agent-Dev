@@ -15901,9 +15901,11 @@ class LiveControlPlanePostgresAdapter:
                 time.sleep(_control_plane_postgres_retry_delay_seconds(attempt))
 
     def execute_returning_one(self, sql: str, params: tuple[Any, ...] | list[Any]) -> dict[str, Any] | None:
+        _require_no_public_workflow_command_sql_mutation(sql, method="execute_returning_one")
         return self._execute_returning_one(sql, params)
 
     def execute_non_query(self, sql: str, params: tuple[Any, ...] | list[Any]) -> int:
+        _require_no_public_workflow_command_sql_mutation(sql, method="execute_non_query")
         return self._execute_non_query(sql, params)
 
     def _advisory_lock_key(self, lock_key: str) -> str:
@@ -16169,6 +16171,269 @@ def _normalize_postgres_identifier(value: Any) -> str:
 def _require_dedicated_workflow_command_writer(*table_names: str, method: str) -> None:
     if "workflow_commands" in {_normalize_postgres_identifier(table_name) for table_name in table_names}:
         raise ValueError(f"{method} requires a dedicated workflow command writer")
+
+
+_PostgresSqlToken = tuple[str, str]
+
+
+def _require_no_public_workflow_command_sql_mutation(sql: str, *, method: str) -> None:
+    """Keep raw public SQL from bypassing the durable command owner.
+
+    The public helpers remain useful for read probes and migration tests on
+    ordinary tables.  ``workflow_commands`` writes, however, must enter via a
+    dedicated command method so its hold, claim, and causality contracts stay
+    atomic.  Inspect SQL tokens rather than raw substrings so comments and
+    string literals cannot either hide a write or cause a false rejection.
+    """
+
+    if _postgres_sql_mutates_workflow_commands(sql):
+        raise ValueError(f"{method} requires a dedicated workflow command writer")
+
+
+def _postgres_sql_mutates_workflow_commands(sql: str) -> bool:
+    tokens = _tokenize_postgres_sql(sql)
+    depth = 0
+    statement_start = 0
+    for index, token in enumerate(tokens):
+        if token == ("symbol", "("):
+            depth += 1
+        elif token == ("symbol", ")"):
+            depth = max(0, depth - 1)
+        elif token == ("symbol", ";") and depth == 0:
+            if _postgres_statement_mutates_workflow_commands(tokens, statement_start, index):
+                return True
+            statement_start = index + 1
+    return _postgres_statement_mutates_workflow_commands(tokens, statement_start, len(tokens))
+
+
+def _postgres_statement_mutates_workflow_commands(
+    tokens: list[_PostgresSqlToken],
+    start: int,
+    end: int,
+) -> bool:
+    if start >= end:
+        return False
+    if _sql_word_is(tokens, start, "with"):
+        return any(
+            tokens[index - 1] in {("symbol", "("), ("symbol", ")")}
+            and _postgres_command_mutates_workflow_commands(tokens, index, end)
+            for index in range(start + 1, end)
+            if tokens[index][0] == "word"
+        )
+    return _postgres_command_mutates_workflow_commands(tokens, start, end)
+
+
+def _postgres_command_mutates_workflow_commands(
+    tokens: list[_PostgresSqlToken],
+    start: int,
+    end: int,
+) -> bool:
+    command = tokens[start][1] if tokens[start][0] == "word" else ""
+    index = start + 1
+    if command == "update":
+        index += int(_sql_word_is(tokens, index, "only"))
+        return _sql_target_is_workflow_commands(tokens, index, end)
+    if command == "delete":
+        index += int(_sql_word_is(tokens, index, "from"))
+        index += int(_sql_word_is(tokens, index, "only"))
+        return _sql_target_is_workflow_commands(tokens, index, end)
+    if command == "insert":
+        index += int(_sql_word_is(tokens, index, "into"))
+        index += int(_sql_word_is(tokens, index, "only"))
+        return _sql_target_is_workflow_commands(tokens, index, end)
+    if command == "truncate":
+        index += int(_sql_word_is(tokens, index, "table"))
+        return _sql_target_list_contains_workflow_commands(tokens, index, end)
+    if command == "alter":
+        if not _sql_word_is(tokens, index, "table"):
+            return False
+        index += 1
+        if _sql_word_is(tokens, index, "if") and _sql_word_is(tokens, index + 1, "exists"):
+            index += 2
+        index += int(_sql_word_is(tokens, index, "only"))
+        target, after_target = _sql_qualified_identifier(tokens, index, end)
+        if target == "workflow_commands":
+            return True
+        return (
+            _sql_word_is(tokens, after_target, "rename")
+            and _sql_word_is(tokens, after_target + 1, "to")
+            and (_sql_qualified_identifier(tokens, after_target + 2, end)[0] == "workflow_commands")
+        )
+    if command == "drop":
+        if not _sql_word_is(tokens, index, "table"):
+            return False
+        index += 1
+        if _sql_word_is(tokens, index, "if") and _sql_word_is(tokens, index + 1, "exists"):
+            index += 2
+        return _sql_target_list_contains_workflow_commands(tokens, index, end)
+    if command == "create":
+        return _postgres_create_mutates_workflow_commands(tokens, index, end)
+    return False
+
+
+def _postgres_create_mutates_workflow_commands(
+    tokens: list[_PostgresSqlToken],
+    start: int,
+    end: int,
+) -> bool:
+    index = start
+    while any(
+        _sql_word_is(tokens, index, modifier)
+        for modifier in {"global", "local", "temporary", "temp", "unlogged", "unique", "concurrently"}
+    ):
+        index += 1
+    if _sql_word_is(tokens, index, "table"):
+        index += 1
+        if (
+            _sql_word_is(tokens, index, "if")
+            and _sql_word_is(tokens, index + 1, "not")
+            and _sql_word_is(tokens, index + 2, "exists")
+        ):
+            index += 3
+        return _sql_target_is_workflow_commands(tokens, index, end)
+    if any(_sql_word_is(tokens, index, kind) for kind in {"index", "trigger", "rule", "policy"}):
+        for candidate in range(index + 1, end):
+            if _sql_word_is(tokens, candidate, "on"):
+                candidate += 1
+                candidate += int(_sql_word_is(tokens, candidate, "only"))
+                return _sql_target_is_workflow_commands(tokens, candidate, end)
+    return False
+
+
+def _sql_target_list_contains_workflow_commands(
+    tokens: list[_PostgresSqlToken],
+    start: int,
+    end: int,
+) -> bool:
+    index = start
+    while index < end:
+        index += int(_sql_word_is(tokens, index, "only"))
+        target, after_target = _sql_qualified_identifier(tokens, index, end)
+        if target == "workflow_commands":
+            return True
+        if not target or after_target >= end or tokens[after_target] != ("symbol", ","):
+            return False
+        index = after_target + 1
+    return False
+
+
+def _sql_target_is_workflow_commands(
+    tokens: list[_PostgresSqlToken],
+    start: int,
+    end: int,
+) -> bool:
+    return _sql_qualified_identifier(tokens, start, end)[0] == "workflow_commands"
+
+
+def _sql_qualified_identifier(
+    tokens: list[_PostgresSqlToken],
+    start: int,
+    end: int,
+) -> tuple[str, int]:
+    if start >= end or not _sql_identifier_at(tokens, start):
+        return "", start
+    target = tokens[start][1]
+    index = start + 1
+    while index + 1 < end and tokens[index] == ("symbol", ".") and _sql_identifier_at(tokens, index + 1):
+        target = tokens[index + 1][1]
+        index += 2
+    return target, index
+
+
+def _sql_word_is(tokens: list[_PostgresSqlToken], index: int, value: str) -> bool:
+    return 0 <= index < len(tokens) and tokens[index] == ("word", value)
+
+
+def _sql_identifier_at(tokens: list[_PostgresSqlToken], index: int) -> bool:
+    return 0 <= index < len(tokens) and tokens[index][0] in {"word", "quoted_identifier"}
+
+
+def _tokenize_postgres_sql(sql: str) -> list[_PostgresSqlToken]:
+    tokens: list[_PostgresSqlToken] = []
+    text = str(sql or "")
+    index = 0
+    while index < len(text):
+        character = text[index]
+        if character.isspace():
+            index += 1
+            continue
+        if text.startswith("--", index):
+            newline = text.find("\n", index + 2)
+            index = len(text) if newline < 0 else newline + 1
+            continue
+        if text.startswith("/*", index):
+            index = _skip_postgres_block_comment(text, index)
+            continue
+        if character == "'":
+            index = _skip_postgres_single_quoted_literal(text, index)
+            continue
+        if character == "$":
+            delimiter_match = re.match(r"\$[A-Za-z_][A-Za-z_0-9]*\$|\$\$", text[index:])
+            if delimiter_match is not None:
+                delimiter = delimiter_match.group(0)
+                closing = text.find(delimiter, index + len(delimiter))
+                index = len(text) if closing < 0 else closing + len(delimiter)
+                continue
+        if character == '"':
+            value, index = _read_postgres_quoted_identifier(text, index)
+            tokens.append(("quoted_identifier", value))
+            continue
+        if character.isalpha() or character == "_":
+            end = index + 1
+            while end < len(text) and (text[end].isalnum() or text[end] in {"_", "$"}):
+                end += 1
+            tokens.append(("word", text[index:end].lower()))
+            index = end
+            continue
+        if character in {"(", ")", ".", ",", ";"}:
+            tokens.append(("symbol", character))
+        index += 1
+    return tokens
+
+
+def _skip_postgres_block_comment(text: str, start: int) -> int:
+    depth = 1
+    index = start + 2
+    while index < len(text) and depth:
+        if text.startswith("/*", index):
+            depth += 1
+            index += 2
+        elif text.startswith("*/", index):
+            depth -= 1
+            index += 2
+        else:
+            index += 1
+    return index
+
+
+def _skip_postgres_single_quoted_literal(text: str, start: int) -> int:
+    index = start + 1
+    while index < len(text):
+        if text[index] == "'":
+            if index + 1 < len(text) and text[index + 1] == "'":
+                index += 2
+                continue
+            return index + 1
+        if text[index] == "\\" and index + 1 < len(text):
+            index += 2
+        else:
+            index += 1
+    return index
+
+
+def _read_postgres_quoted_identifier(text: str, start: int) -> tuple[str, int]:
+    value: list[str] = []
+    index = start + 1
+    while index < len(text):
+        if text[index] == '"':
+            if index + 1 < len(text) and text[index + 1] == '"':
+                value.append('"')
+                index += 2
+                continue
+            return "".join(value), index + 1
+        value.append(text[index])
+        index += 1
+    return "".join(value), index
 
 
 def _is_retryable_postgres_exception(error: Exception) -> bool:
