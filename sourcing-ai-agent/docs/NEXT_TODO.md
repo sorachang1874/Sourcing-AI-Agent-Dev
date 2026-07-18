@@ -512,6 +512,15 @@
   root command -> root drain -> queued `acquisition.intent.resolve` 已由 PG test 覆盖。Evidence：root-hop node=`1
   passed`，create/result/root PG matrix=`14 passed + 21 subtests`，legacy adjacent root owner=`1 passed`，scoped
   mypy=`0/1`、Ruff green。S1e2d 不改变 served/live/provider/model=0，也不关闭 S1e2b formal `NO-GO`。
+- [ ] D1n S1f filter-projection physical owner：S1f0a 已在
+  `modules/serving-product/decisions/TRACK_D_D1N_S1F0_FILTER_PROJECTION_OWNER_DECISION.md` decision-lock 零 DDL
+  方案。仅 exact start-v2 单 run 的 `run_scope_projection` 可写 parent
+  `metadata.filter_projection_owner_v1` + member `provenance.filter_projection_membership_v1`；planning digest 来自
+  `ActionApproved` receipt，execution/result/publication/runtime/lane owner 来自 committed Cohort result；terminal
+  owner 以 closed ref/digest 编码，Agent result 继续 `no_command_v1`。collection-authoritative、legacy、replay、live、
+  partial lane、backfill 均 fail closed。下一批 S1f0b 实现 atomic propagation、reserved-key/strip 规则与 PG matrix；
+  S1f1 再接 owner-only reader、existing v2 adapter 与 commandless result slot。当前 served=0、provider/model/live=0，
+  R-019/R-029 open；S1e2b NO-GO fixed-forward 独立进行。
 - [ ] D1m mixed-version rollout gate（R-019）：pre-D1m binary 可继续写 revisionless source row 并绕开
   revision-aware exact-claim canonical materializer。任何 hosted activation 前必须选择并验证其一：quiesced
   single-version cutover，或 separately reviewed dual-write/compatibility bridge；完成前不得声称 rolling overlap

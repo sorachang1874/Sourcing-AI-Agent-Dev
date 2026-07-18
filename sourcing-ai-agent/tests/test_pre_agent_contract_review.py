@@ -345,6 +345,8 @@ def test_agent_tool_result_aggregate_owner_contract_is_canonical() -> None:
         "`agent_tool_terminal_aggregate.result_link_policy`",
         "`start_acquisition_run.result_hold_release_owner`",
         "`inspect_operation.result_readiness`",
+        "`filter_projection.publication_owner`",
+        "`operation_run.control_state`",
         "`operation_runs.progress.reason`",
     }
     assert all(len(row) == len(expected_header) and all(row) for row in field_rows.values())

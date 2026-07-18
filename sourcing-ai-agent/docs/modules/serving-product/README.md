@@ -20,6 +20,7 @@ Code boundary examples: `src/sourcing_agent/serving_projection_*`,
 | Projection identity, readiness and public reader behavior | [CANONICAL_SERVING_PROJECTION_CONTRACT.md](../../CANONICAL_SERVING_PROJECTION_CONTRACT.md) | active contract |
 | Frontend/backend API fields and adapters | [FRONTEND_API_CONTRACT.md](../../FRONTEND_API_CONTRACT.md) | active contract; schema/adapter under `contracts/` |
 | Cohort/filter membership semantics | [COHORT_SELECTION_CONTRACT.md](../../COHORT_SELECTION_CONTRACT.md) | active contract |
+| Filter v2 publication owner/carrier decision | [TRACK_D_D1N_S1F0_FILTER_PROJECTION_OWNER_DECISION.md](decisions/TRACK_D_D1N_S1F0_FILTER_PROJECTION_OWNER_DECISION.md) | S1f0a non-live decision lock; physical propagation/review pending |
 | User-visible workflow progress | [WORKFLOW_PROGRESS_CONTRACT.md](../../WORKFLOW_PROGRESS_CONTRACT.md) | active cross-module contract; writer owned by workflow runtime |
 | Product requirements | [PRD.md](../../PRD.md) | background reference; active contracts win on drift |
 | Backend/product prototype boundary | [BACKEND_MVP.md](../../BACKEND_MVP.md) | background reference; verify current implementation |

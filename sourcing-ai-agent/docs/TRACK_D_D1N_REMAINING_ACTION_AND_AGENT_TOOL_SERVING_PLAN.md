@@ -652,6 +652,15 @@ See `TRACK_D_D1N_S1E1_START_AUTHORITY_OWNER_DECISION.md` and
 `TRACK_D_D1N_S1E2B_START_CREATE_UOW_IMPLEMENTATION.md` /
 `TRACK_D_D1N_S1E2B_START_CREATE_UOW_REVIEW_RESPONSE.md`.
 
+S1f0a now decision-locks the missing `filter_projection` physical owner without product code or DDL. Only one exact
+start-v2, single-run `run_scope_projection` may carry the closed parent/member owner records; the planning digest comes
+from the confirmation receipt, execution/result/publication/runtime/lane evidence comes from the exact committed
+Cohort result, and filter result acceptance remains `no_command_v1`. Collection-authoritative merge, legacy runs,
+replay, live, partial lanes, and backfill are ineligible. S1f0b owns atomic physical propagation/reserved-key behavior;
+S1f1 owns the owner-only reader, commandless result-slot acceptance, and existing v2 adapter connection. Default
+served population and provider/model/live invocation remain zero. See
+`modules/serving-product/decisions/TRACK_D_D1N_S1F0_FILTER_PROJECTION_OWNER_DECISION.md`.
+
 Shared hotspots—`operation_runtime.py`, `orchestrator.py`, public API routing, registry aggregation, migrations, and
 release-state derivation—have one serial integration owner. Leaf modules/tests may be developed in parallel. No leaf
 stages or commits another worker's files.
