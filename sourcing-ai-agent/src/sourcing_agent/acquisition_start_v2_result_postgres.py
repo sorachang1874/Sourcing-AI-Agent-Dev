@@ -600,8 +600,81 @@ def _assert_start_command_released(
     terminal: AgentToolTerminalResult,
     base_owner: dict[str, Any],
 ) -> dict[str, Any]:
-    _assert_start_owner(base_owner, terminal=terminal, released=True)
+    del cursor, occurrence
+    expected = dict(base_owner["expected"])
+    actual_command = dict(base_owner["workflow_command"])
+    if str(actual_command.get("not_before_at") or ""):
+        raise ValueError("acquisition start result command release missing")
+    owner_result_ref = dict(expected["owner_result_ref"])
+    if (
+        terminal.owner_target_kind != ACQUISITION_START_COMMAND_ACCEPTANCE_OWNER_TARGET_KIND
+        or terminal.owner_target_id != str(expected["workflow_command_id"])
+        or terminal.owner_target_revision != 1
+        or terminal.owner_target_generation != 0
+        or terminal.owner_target_revision_token
+        or terminal.terminal_winner_id != str(expected["planned_event"]["event_id"])
+        or terminal.owner_result_ref != owner_result_ref
+        or terminal.owner_result_digest != str(expected["owner_result_digest"])
+    ):
+        raise ValueError("acquisition start result accepted replay owner mismatch")
+    expected_terminal = _canonical_start_terminal_result_for_attempt(
+        terminal=terminal,
+        base_owner=base_owner,
+    )
+    if (
+        terminal.serialized_result_json != expected_terminal.serialized_result_json
+        or terminal.serialized_result_digest != expected_terminal.serialized_result_digest
+        or terminal.tool_result_message_digest != expected_terminal.tool_result_message_digest
+        or terminal.is_error
+    ):
+        raise ValueError("acquisition start result accepted replay serializer mismatch")
+    _assert_event_set_exact(
+        "operation events",
+        [base_owner["receipt_event"], base_owner["planned_event"]],
+        [expected["receipt_event"], expected["planned_event"]],
+        workflow=False,
+    )
     return {"released_workflow_command": dict(base_owner["workflow_command"])}
+
+
+def _assert_start_late_quarantine_owner(
+    cursor: Any,
+    *,
+    occurrence: AgentToolOccurrence,
+    terminal: AgentToolTerminalResult,
+    base_owner: dict[str, Any],
+) -> None:
+    del cursor, occurrence
+    expected = dict(base_owner["expected"])
+    owner_result_ref = dict(expected["owner_result_ref"])
+    if (
+        terminal.owner_target_kind != ACQUISITION_START_COMMAND_ACCEPTANCE_OWNER_TARGET_KIND
+        or terminal.owner_target_id != str(expected["workflow_command_id"])
+        or terminal.owner_target_revision != 1
+        or terminal.owner_target_generation != 0
+        or terminal.owner_target_revision_token
+        or terminal.terminal_winner_id != str(expected["planned_event"]["event_id"])
+        or terminal.owner_result_ref != owner_result_ref
+        or terminal.owner_result_digest != str(expected["owner_result_digest"])
+    ):
+        raise ValueError("acquisition start result late quarantine owner mismatch")
+    expected_terminal = _canonical_start_terminal_result_for_attempt(
+        terminal=terminal,
+        base_owner=base_owner,
+    )
+    if (
+        terminal.serialized_result_json != expected_terminal.serialized_result_json
+        or terminal.serialized_result_digest != expected_terminal.serialized_result_digest
+        or terminal.tool_result_message_digest != expected_terminal.tool_result_message_digest
+        or terminal.is_error
+    ):
+        raise ValueError("acquisition start result late quarantine serializer mismatch")
+    _assert_event_set_exact(
+        "operation events",
+        [base_owner["receipt_event"], base_owner["planned_event"]],
+        [expected["receipt_event"], expected["planned_event"]],
+        workflow=False,
+    )
 
 
 def accept_start_acquisition_tool_result_uow(
@@ -650,6 +723,7 @@ def accept_start_acquisition_tool_result_uow(
         assert_locked_owner=assert_exact_start_acquisition_result_owner,
         apply_acceptance_effect=_release_start_command_hold,
         assert_accepted_replay_effect=_assert_start_command_released,
+        assert_late_quarantine_owner=_assert_start_late_quarantine_owner,
         lock_timeout_seconds=lock_timeout_seconds,
         fault_injection_point=fault_injection_point,
     )

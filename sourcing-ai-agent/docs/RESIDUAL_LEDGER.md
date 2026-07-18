@@ -414,12 +414,12 @@
   formal `NO-GO`, so result acceptance, release replay after downstream progress, shared lock topology, central
   contract/preflight wiring, and live/signoff remain blocked.
 
-- **R-019 / R-029 / D1n S1e2c partial response (2026-07-18):** the first S1e2c response rejects forged
-  serialized-result/error terminals before writes, exact-loads slot and preview owner rows, and refreshes prepare
-  lock/statement timeout from the remaining deadline. It does not close the S1e2c formal `NO-GO`: post-progress replay
-  and late-result quarantine still need monotonic successor semantics, shared lock topology remains under R-019, the
-  central pre-agent matrix/preflight is not yet updated for hold/release ownership, and no provider/model/live/served
-  path is authorized.
+- **R-019 / R-029 / D1n S1e2c partial response (2026-07-18):** the S1e2c response rejects forged
+  serialized-result/error terminals before writes, exact-loads slot and preview owner rows, refreshes prepare
+  lock/statement timeout from the remaining deadline, and adds stable owner-result proof for accepted replay plus
+  late-result quarantine after downstream root-command progress. It does not close the S1e2c formal `NO-GO`: shared
+  lock topology remains under R-019, the central pre-agent matrix/preflight is not yet updated for hold/release
+  ownership, and no provider/model/live/served path is authorized.
 
 ## 使用方式
 

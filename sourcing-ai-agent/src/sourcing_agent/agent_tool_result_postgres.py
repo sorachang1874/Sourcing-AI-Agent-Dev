@@ -662,6 +662,7 @@ def _accept_exact_agent_tool_result_uow(
     assert_locked_owner: Any,
     apply_acceptance_effect: Any | None = None,
     assert_accepted_replay_effect: Any | None = None,
+    assert_late_quarantine_owner: Any | None = None,
     lock_timeout_seconds: float = 5.0,
     fault_injection_point: str = "",
 ) -> dict[str, Any] | None:
@@ -750,6 +751,19 @@ def _accept_exact_agent_tool_result_uow(
                     )
                     owner_asserted_for_write = True
 
+                def assert_late_quarantine_owner_before_write() -> None:
+                    nonlocal owner_asserted_for_write
+                    if owner_asserted_for_write:
+                        return
+                    owner_assert = assert_late_quarantine_owner or assert_locked_owner
+                    owner_assert(
+                        cursor,
+                        occurrence=occurrence,
+                        terminal=terminal,
+                        base_owner=base_owner,
+                    )
+                    owner_asserted_for_write = True
+
                 if str(slot.get("status") or "") == "accepted":
                     if terminal.result_attempt_id == str(slot.get("result_attempt_id") or ""):
                         expected_attempt = _attempt_insert_row(
@@ -769,7 +783,7 @@ def _accept_exact_agent_tool_result_uow(
                             terminal=terminal,
                             journal_id=journal_id,
                         )
-                        replay_effect = {}
+                        replay_effect: dict[str, Any] = {}
                         if assert_accepted_replay_effect is not None:
                             replay_effect = (
                                 assert_accepted_replay_effect(
@@ -801,7 +815,7 @@ def _accept_exact_agent_tool_result_uow(
                             quarantined_attempt = existing_attempt
                             replayed = True
                         else:
-                            assert_owner_before_write()
+                            assert_late_quarantine_owner_before_write()
                             quarantined_attempt = _insert_dict(
                                 cursor,
                                 table_name="agent_tool_result_attempts",
@@ -896,7 +910,7 @@ def _accept_exact_agent_tool_result_uow(
                     journal = _fetch_one_dict_row(cursor, cursor.fetchone()) or {}
                     if not journal:
                         raise RuntimeError("agent tool result journal insert returned no row")
-                    acceptance_effect = {}
+                    acceptance_effect: dict[str, Any] = {}
                     if apply_acceptance_effect is not None:
                         acceptance_effect = (
                             apply_acceptance_effect(

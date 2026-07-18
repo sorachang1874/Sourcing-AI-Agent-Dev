@@ -612,6 +612,7 @@ class D1nStartAcquisitionV2CreatePGMatrixTest(PGControlPlaneStoreTestMixin, unit
             attempted_slot_generation=occurrence.slot_generation,
         )
         self.assertEqual(accepted["released_workflow_command"]["not_before_at"], "")
+        late_terminal = self._prepare_terminal(occurrence, suffix="late_after_root_owner")
 
         owner_result = self._orchestrator()._drain_acquisition_run_create_commands(  # noqa: SLF001
             {"acquisition_run_create_command_limit": 5}
@@ -638,6 +639,39 @@ class D1nStartAcquisitionV2CreatePGMatrixTest(PGControlPlaneStoreTestMixin, unit
             "acquisition_start_v2_root_owner_compat_payload.v1",
         )
         self.assertEqual(child_command["payload"]["workflow_payload"]["target_company"], "Thinking Machines Lab")
+        accepted_downstream_snapshot = self._table_snapshot()
+
+        replay = self.repository.accept_start_acquisition_tool_result_uow(
+            occurrence=occurrence,
+            terminal=terminal,
+            attempted_slot_generation=occurrence.slot_generation,
+        )
+        self.assertEqual(replay["outcome"], "replayed")
+        self.assertEqual(self._table_snapshot(), accepted_downstream_snapshot)
+
+        late_before_counts = self._table_counts()
+        quarantined = self.repository.accept_start_acquisition_tool_result_uow(
+            occurrence=occurrence,
+            terminal=late_terminal,
+            attempted_slot_generation=occurrence.slot_generation,
+        )
+        self.assertEqual(quarantined["outcome"], "quarantined")
+        late_after_counts = self._table_counts()
+        self.assertEqual(late_after_counts["agent_tool_result_attempts"], late_before_counts["agent_tool_result_attempts"] + 1)
+        for table_name in (
+            "runtime_outbox",
+            "acquisition_runs",
+            "workflow_activity_runs",
+            "workflow_activity_attempts",
+            "workflow_entity_deltas",
+            "acquisition_discovery_lanes",
+            "plan_review_sessions",
+            "crm_tasks",
+            "company_assets",
+            "company_evidence",
+            "company_assertions",
+        ):
+            self.assertEqual(late_after_counts[table_name], late_before_counts[table_name])
         self.assertEqual(
             child_command["payload"]["workflow_payload"]["cohort_selection"]["role_bucket_ids"],
             ["research", "engineering"],
