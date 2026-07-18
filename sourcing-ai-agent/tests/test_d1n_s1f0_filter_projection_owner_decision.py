@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import json
 from pathlib import Path
 
@@ -59,6 +60,7 @@ _REQUEST_TARGET_FIELDS = (
 )
 _WRITER_INVENTORY = (
     "serving_projection_writer.ServingProjectionWriter.publish_run_scope_projection",
+    "serving_projection_writer.ServingProjectionWriter.publish_filter_projection_foundation_run_scope_projection",
     "serving_projection_writer.ServingProjectionWriter.publish_collection_authoritative_projection",
     "repositories.serving_projection.ServingProjectionRepository.upsert",
     "repositories.serving_projection.ServingProjectionRepository.upsert_members",
@@ -66,11 +68,24 @@ _WRITER_INVENTORY = (
     "repositories.serving_projection.ServingProjectionRepository.upsert_with_members",
     "repositories.serving_projection.ServingProjectionRepository.upsert_with_replaced_members",
     "repositories.serving_projection.ServingProjectionRepository.publish_run_scope_projection",
+    "repositories.serving_projection.ServingProjectionRepository.publish_filter_projection_foundation_run_scope_projection",
     "repositories.serving_projection.ServingProjectionRepository.publish_collection_authoritative_projection",
+    "repositories.serving_projection.ServingProjectionRepository.patch_publication_fields_under_lock",
+    "repositories.serving_projection.ServingProjectionRepository.update_person_search_index_build_state",
+    "control_plane_live_postgres.LiveControlPlanePostgresAdapter.insert_row_with_generated_id",
+    "control_plane_live_postgres.LiveControlPlanePostgresAdapter.upsert_row_with_generated_id",
+    "control_plane_live_postgres.LiveControlPlanePostgresAdapter.update_row_returning",
+    "control_plane_live_postgres.LiveControlPlanePostgresAdapter.delete_rows",
+    "control_plane_live_postgres.LiveControlPlanePostgresAdapter.update_rows",
+    "control_plane_live_postgres.LiveControlPlanePostgresAdapter.upsert_row",
+    "control_plane_live_postgres.LiveControlPlanePostgresAdapter.bulk_upsert_rows",
+    "control_plane_live_postgres.LiveControlPlanePostgresAdapter.replace_rows",
     "control_plane_live_postgres.LiveControlPlanePostgresAdapter.write_serving_projection_members_with_input_revision",
     "control_plane_live_postgres.LiveControlPlanePostgresAdapter.upsert_row_and_upsert_rows",
     "control_plane_live_postgres.LiveControlPlanePostgresAdapter.upsert_row_and_replace_rows",
     "control_plane_live_postgres.LiveControlPlanePostgresAdapter.publish_serving_projection",
+    "control_plane_live_postgres.LiveControlPlanePostgresAdapter.patch_serving_projection_publication_fields",
+    "control_plane_live_postgres.LiveControlPlanePostgresAdapter.update_projection_person_search_index_generation_state",
     "orchestrator.SourcingOrchestrator._publish_run_scope_projection_from_result_view_owner",
     "orchestrator.SourcingOrchestrator._execute_operation_native_projection_admission_command_payload",
     "orchestrator.SourcingOrchestrator._extend_run_scope_projection_from_board_visible_records",
@@ -164,6 +179,53 @@ def test_s1f0_writer_inventory_is_complete_and_uses_dedicated_carrier_registry()
     )
     for qualified_name in _WRITER_INVENTORY:
         assert qualified_name.rsplit(".", 1)[-1] in all_source
+
+    control_source = (REPO_ROOT / "src" / "sourcing_agent" / "control_plane_live_postgres.py").read_text(
+        encoding="utf-8"
+    )
+    control_tree = ast.parse(control_source)
+    adapter_class = next(
+        node
+        for node in control_tree.body
+        if isinstance(node, ast.ClassDef) and node.name == "LiveControlPlanePostgresAdapter"
+    )
+    generic_native_mutators: dict[str, ast.FunctionDef] = {}
+    for node in adapter_class.body:
+        if not isinstance(node, ast.FunctionDef):
+            continue
+        call_names = {
+            call.func.id if isinstance(call.func, ast.Name) else call.func.attr
+            for call in ast.walk(node)
+            if isinstance(call, ast.Call) and isinstance(call.func, (ast.Name, ast.Attribute))
+        }
+        if "_require_dedicated_workflow_command_writer" in call_names:
+            generic_native_mutators[node.name] = node
+
+    discovered_inventory = {
+        f"control_plane_live_postgres.LiveControlPlanePostgresAdapter.{name}" for name in generic_native_mutators
+    }
+    assert discovered_inventory <= set(_WRITER_INVENTORY)
+
+    prohibited_unscoped_dml = {
+        "insert_row_with_generated_id",
+        "upsert_row_with_generated_id",
+        "update_row_returning",
+        "delete_rows",
+        "update_rows",
+    }
+    for name in prohibited_unscoped_dml:
+        node = generic_native_mutators[name]
+        assert any(
+            isinstance(call, ast.Call)
+            and (
+                (isinstance(call.func, ast.Name) and call.func.id == "_reject_generic_serving_projection_mutation")
+                or (
+                    isinstance(call.func, ast.Attribute)
+                    and call.func.attr == "_reject_generic_serving_projection_mutation"
+                )
+            )
+            for call in ast.walk(node)
+        )
     assert "filter_projection_owner_v1" not in PROJECTION_SEARCH_INDEX_BINDING_KEYS
 
 

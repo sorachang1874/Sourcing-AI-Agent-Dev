@@ -28,6 +28,15 @@ from .control_plane_postgres import (
     ensure_acquisition_shard_registry_split_schema,
     upsert_acquisition_shard_registry_rows,
 )
+from .filter_projection_publication_owner import (
+    FILTER_PROJECTION_FOUNDATION_MEMBER_PROVENANCE_KEY,
+    FILTER_PROJECTION_FOUNDATION_METADATA_KEY,
+    FILTER_PROJECTION_FOUNDATION_PROJECTION_STATE,
+    FILTER_PROJECTION_FOUNDATION_ROUTE_TYPE,
+    FilterProjectionPublicationFoundation,
+    filter_projection_foundation_members_changed,
+    validate_filter_projection_publication_foundation,
+)
 from .json_contract import JsonContractShapeError, decode_json_contract, json_contract_equal
 from .local_postgres import (
     configure_control_plane_postgres_session,
@@ -45,7 +54,7 @@ from .projection_search_index_contract import (
     PROJECTION_SEARCH_INDEX_BUILD_INPUT_REVISION_KEY,
     PROJECTION_SEARCH_INDEX_BUILD_STATUS_KEY,
     PROJECTION_SEARCH_INDEX_INPUT_REVISION_KEY,
-    projection_search_index_members_changed,
+    preserve_projection_search_index_products,
 )
 from .runtime_lease_utils import worker_lease_owner_is_dead_local_process
 
@@ -1512,6 +1521,10 @@ class LiveControlPlanePostgresAdapter:
     ) -> dict[str, Any] | None:
         normalized_table = _normalize_postgres_identifier(table_name)
         _require_dedicated_workflow_command_writer(normalized_table, method="insert_row_with_generated_id")
+        _reject_generic_serving_projection_mutation(
+            table_name=normalized_table,
+            method="insert_row_with_generated_id",
+        )
         if not self.should_prefer_read(normalized_table):
             return None
         payload = _normalize_postgres_row_payload(dict(row or {}))
@@ -1544,6 +1557,10 @@ class LiveControlPlanePostgresAdapter:
     ) -> dict[str, Any] | None:
         normalized_table = _normalize_postgres_identifier(table_name)
         _require_dedicated_workflow_command_writer(normalized_table, method="upsert_row_with_generated_id")
+        _reject_generic_serving_projection_mutation(
+            table_name=normalized_table,
+            method="upsert_row_with_generated_id",
+        )
         if not self.should_prefer_read(normalized_table):
             return None
         payload = _normalize_postgres_row_payload(dict(row or {}))
@@ -1602,6 +1619,10 @@ class LiveControlPlanePostgresAdapter:
     ) -> dict[str, Any] | None:
         normalized_table = str(table_name or "").strip()
         _require_dedicated_workflow_command_writer(normalized_table, method="update_row_returning")
+        _reject_generic_serving_projection_mutation(
+            table_name=normalized_table,
+            method="update_row_returning",
+        )
         normalized_id_column = _normalize_postgres_identifier(id_column)
         if not self.should_prefer_read(normalized_table) or not normalized_id_column:
             return None
@@ -1803,6 +1824,10 @@ class LiveControlPlanePostgresAdapter:
     ) -> int:
         normalized_table = _normalize_postgres_identifier(table_name)
         _require_dedicated_workflow_command_writer(normalized_table, method="delete_rows")
+        _reject_generic_serving_projection_mutation(
+            table_name=normalized_table,
+            method="delete_rows",
+        )
         normalized_where_sql = _normalize_postgres_identifier(where_sql)
         if not self.should_prefer_read(normalized_table) or not normalized_where_sql:
             return 0
@@ -1830,6 +1855,10 @@ class LiveControlPlanePostgresAdapter:
     ) -> int:
         normalized_table = _normalize_postgres_identifier(table_name)
         _require_dedicated_workflow_command_writer(normalized_table, method="update_rows")
+        _reject_generic_serving_projection_mutation(
+            table_name=normalized_table,
+            method="update_rows",
+        )
         normalized_where_sql = _normalize_postgres_identifier(where_sql)
         if not self.should_prefer_read(normalized_table) or not normalized_where_sql:
             return 0
@@ -1966,11 +1995,17 @@ class LiveControlPlanePostgresAdapter:
             raise ValueError("projection_id is required")
         normalized_remove = tuple(str(key or "").strip() for key in counts_remove if str(key or "").strip())
         normalized_metadata_patch = dict(metadata_patch or {})
-        reserved_metadata_keys = sorted(set(normalized_metadata_patch) & set(PROJECTION_SEARCH_INDEX_BINDING_KEYS))
+        reserved_metadata_keys = sorted(
+            set(normalized_metadata_patch)
+            & {
+                *PROJECTION_SEARCH_INDEX_BINDING_KEYS,
+                FILTER_PROJECTION_FOUNDATION_METADATA_KEY,
+            }
+        )
         if reserved_metadata_keys:
             raise ValueError(
-                "projection publication patch cannot overwrite search-index binding metadata: "
-                + ", ".join(reserved_metadata_keys)
+                "projection publication patch cannot overwrite search-index binding metadata or other "
+                "reserved publication metadata: " + ", ".join(reserved_metadata_keys)
             )
         self._ensure_control_plane_writer_schema()
         attempt = 0
@@ -2038,10 +2073,25 @@ class LiveControlPlanePostgresAdapter:
         payload = _normalize_postgres_row_payload(dict(row or {}))
         if not payload:
             return
+        _reject_filter_projection_foundation_native_rows(
+            table_name=normalized_table,
+            rows=[payload],
+        )
         primary_keys = list(_PRIMARY_KEY_COLUMNS.get(normalized_table) or [])
         if not primary_keys or any(payload.get(column) in {None, ""} for column in primary_keys):
             return
         self.ensure_bootstrapped()
+        if normalized_table in {"serving_projections", "serving_projection_members"}:
+            projection_ids = _standalone_filter_projection_mutation_projection_ids(
+                table_name=normalized_table,
+                rows=[payload],
+            )
+            self.bulk_upsert_rows(
+                normalized_table,
+                [payload],
+                transaction_lock_key=(f"serving_projection_publication:{projection_ids[0]}" if projection_ids else ""),
+            )
+            return
         if normalized_table == ACQUISITION_SHARD_REGISTRY_LOGICAL_TABLE:
             self._ensure_table_write_schema(normalized_table)
             with self._connect() as connection:
@@ -2233,6 +2283,10 @@ class LiveControlPlanePostgresAdapter:
         ]
         if not payload_rows:
             return 0
+        _reject_filter_projection_foundation_native_rows(
+            table_name=normalized_table,
+            rows=payload_rows,
+        )
         if normalized_table == ACQUISITION_SHARD_REGISTRY_LOGICAL_TABLE:
             self.ensure_bootstrapped()
             self._ensure_table_write_schema(normalized_table)
@@ -2247,11 +2301,24 @@ class LiveControlPlanePostgresAdapter:
 
         self.ensure_bootstrapped()
         self._ensure_table_write_schema(normalized_table)
+        projection_ids = _standalone_filter_projection_mutation_projection_ids(
+            table_name=normalized_table,
+            rows=payload_rows,
+        )
+        effective_lock_key = (
+            f"serving_projection_publication:{projection_ids[0]}" if projection_ids else transaction_lock_key
+        )
         attempt = 0
         while True:
             try:
-                with self._connect_with_transaction_lock(transaction_lock_key) as connection:
+                with self._connect_with_transaction_lock(effective_lock_key) as connection:
                     with connection.cursor() as cursor:
+                        self._reject_standalone_filter_projection_foundation_mutation(
+                            cursor,
+                            table_name=normalized_table,
+                            rows=payload_rows,
+                            already_locked_projection_id=projection_ids[0] if projection_ids else "",
+                        )
                         affected = self._bulk_upsert_rows_with_cursor(
                             cursor,
                             table_name=normalized_table,
@@ -2273,7 +2340,6 @@ class LiveControlPlanePostgresAdapter:
         row: dict[str, Any],
         upsert_table_name: str,
         upsert_rows: list[dict[str, Any]] | tuple[dict[str, Any], ...] = (),
-        update_projection_index_input_revision: bool = False,
         transaction_lock_key: str = "",
     ) -> dict[str, int] | None:
         """Atomically publish a parent row and merge child rows under one lock."""
@@ -2290,12 +2356,31 @@ class LiveControlPlanePostgresAdapter:
         parent_rows = self._normalize_bulk_upsert_rows([row])
         if len(parent_rows) != 1:
             raise ValueError("upsert_row_and_upsert_rows requires one non-empty row")
-        if update_projection_index_input_revision and normalized_parent_table == "serving_projections":
-            parent_rows[0] = _invalidate_projection_search_index_products(
-                parent_rows[0],
-                build_status="stale",
+        foundation_pair = (
+            normalized_parent_table == "serving_projections" and normalized_child_table == "serving_projection_members"
+        )
+        if (
+            normalized_parent_table in {"serving_projections", "serving_projection_members"}
+            or normalized_child_table in {"serving_projections", "serving_projection_members"}
+        ) and not foundation_pair:
+            raise ValueError(
+                "combined serving projection mutation requires serving_projections parent and "
+                "serving_projection_members children"
             )
         child_rows = self._normalize_bulk_upsert_rows(upsert_rows)
+        if foundation_pair:
+            _validate_serving_projection_member_scope_binding(
+                projection_id=str(parent_rows[0].get("projection_id") or "").strip(),
+                member_rows=child_rows,
+            )
+        _reject_filter_projection_foundation_native_rows(
+            table_name=normalized_parent_table,
+            rows=parent_rows,
+        )
+        _reject_filter_projection_foundation_native_rows(
+            table_name=normalized_child_table,
+            rows=child_rows,
+        )
         parent_plan = self._bulk_upsert_plan(
             normalized_parent_table,
             parent_rows,
@@ -2314,14 +2399,42 @@ class LiveControlPlanePostgresAdapter:
         attempt = 0
         while True:
             try:
-                with self._connect_with_transaction_lock(transaction_lock_key) as connection:
+                effective_lock_key = (
+                    f"serving_projection_publication:{str(parent_rows[0].get('projection_id') or '').strip()}"
+                    if foundation_pair
+                    else transaction_lock_key
+                )
+                with self._connect_with_transaction_lock(effective_lock_key) as connection:
                     with connection.cursor() as cursor:
+                        parent_projection_id = str(parent_rows[0].get("projection_id") or "").strip()
+                        if foundation_pair and parent_projection_id:
+                            existing_projection, semantic_changed = (
+                                _apply_filter_projection_foundation_carrier_policy_with_cursor(
+                                    cursor,
+                                    projection_id=parent_projection_id,
+                                    parent_row=parent_rows[0],
+                                    member_rows=child_rows,
+                                    replace_members=False,
+                                )
+                            )
+                            if foundation_pair:
+                                parent_rows[0] = (
+                                    _preserve_projection_search_index_products_in_row(
+                                        parent_rows[0],
+                                        existing_projection,
+                                    )
+                                    if semantic_changed is False and existing_projection is not None
+                                    else _invalidate_projection_search_index_products(
+                                        parent_rows[0],
+                                        build_status="stale",
+                                    )
+                                )
                         parent_count = self._bulk_upsert_rows_with_cursor(
                             cursor,
                             table_name=normalized_parent_table,
                             payload_rows=parent_rows,
                             plan=parent_plan,
-                            preserve_projection_index_input_revision=not bool(update_projection_index_input_revision),
+                            preserve_projection_index_input_revision=not foundation_pair,
                         )
                         child_count = self._bulk_upsert_rows_with_cursor(
                             cursor,
@@ -2362,6 +2475,10 @@ class LiveControlPlanePostgresAdapter:
         if not self.should_prefer_read(normalized_table) or not normalized_where_sql:
             return 0
         payload_rows = self._normalize_bulk_upsert_rows(rows)
+        _reject_filter_projection_foundation_native_rows(
+            table_name=normalized_table,
+            rows=payload_rows,
+        )
         plan = self._bulk_upsert_plan(
             normalized_table,
             payload_rows,
@@ -2369,11 +2486,28 @@ class LiveControlPlanePostgresAdapter:
         )
         self.ensure_bootstrapped()
         self._ensure_table_write_schema(normalized_table)
+        projection_ids = _standalone_filter_projection_mutation_projection_ids(
+            table_name=normalized_table,
+            rows=payload_rows,
+            where_sql=normalized_where_sql,
+            params=params,
+        )
+        effective_lock_key = (
+            f"serving_projection_publication:{projection_ids[0]}" if projection_ids else transaction_lock_key
+        )
         attempt = 0
         while True:
             try:
-                with self._connect_with_transaction_lock(transaction_lock_key) as connection:
+                with self._connect_with_transaction_lock(effective_lock_key) as connection:
                     with connection.cursor() as cursor:
+                        self._reject_standalone_filter_projection_foundation_mutation(
+                            cursor,
+                            table_name=normalized_table,
+                            rows=payload_rows,
+                            where_sql=normalized_where_sql,
+                            params=params,
+                            already_locked_projection_id=projection_ids[0] if projection_ids else "",
+                        )
                         affected = self._replace_rows_with_cursor(
                             cursor,
                             table_name=normalized_table,
@@ -2412,6 +2546,14 @@ class LiveControlPlanePostgresAdapter:
         if not self.should_prefer_read(normalized_table) or not self.should_prefer_read("serving_projections"):
             return None
         payload_rows = self._normalize_bulk_upsert_rows(rows)
+        _validate_serving_projection_member_scope_binding(
+            projection_id=normalized_projection_id,
+            member_rows=payload_rows,
+        )
+        _reject_filter_projection_foundation_native_rows(
+            table_name=normalized_table,
+            rows=payload_rows,
+        )
         plan = self._bulk_upsert_plan(
             normalized_table,
             payload_rows,
@@ -2423,7 +2565,9 @@ class LiveControlPlanePostgresAdapter:
         attempt = 0
         while True:
             try:
-                with self._connect_with_transaction_lock(transaction_lock_key) as connection:
+                with self._connect_with_transaction_lock(
+                    f"serving_projection_publication:{normalized_projection_id}"
+                ) as connection:
                     with connection.cursor() as cursor:
                         cursor.execute(
                             "SELECT * FROM serving_projections WHERE projection_id = %s FOR UPDATE",
@@ -2470,11 +2614,39 @@ class LiveControlPlanePostgresAdapter:
                                 candidate_key = str(existing_row.get("candidate_identity_key") or "").strip()
                                 if candidate_key:
                                     existing_members_by_key[candidate_key] = existing_row
-                            semantic_changed = projection_search_index_members_changed(
+                            semantic_changed = filter_projection_foundation_members_changed(
                                 existing_rows=existing_members_by_key,
                                 next_rows=next_members_by_key,
                                 replace_members=replace_members,
                             )
+                            parent_carrier_present = bool(
+                                metadata.get(FILTER_PROJECTION_FOUNDATION_METADATA_KEY) is not None
+                            )
+                            if semantic_changed or not parent_carrier_present:
+                                _delete_filter_projection_foundation_route_with_cursor(
+                                    cursor,
+                                    projection_id=normalized_projection_id,
+                                )
+                            if semantic_changed:
+                                metadata.pop(FILTER_PROJECTION_FOUNDATION_METADATA_KEY, None)
+                            if (
+                                semantic_changed or not parent_carrier_present
+                            ) and _serving_projection_member_provenance_exists_with_cursor(
+                                cursor,
+                                projection_id=normalized_projection_id,
+                                provenance_key=FILTER_PROJECTION_FOUNDATION_MEMBER_PROVENANCE_KEY,
+                            ):
+                                _strip_serving_projection_member_provenance_with_cursor(
+                                    cursor,
+                                    projection_id=normalized_projection_id,
+                                    provenance_key=FILTER_PROJECTION_FOUNDATION_MEMBER_PROVENANCE_KEY,
+                                )
+                            elif not semantic_changed and parent_carrier_present:
+                                _preserve_serving_projection_member_provenance(
+                                    next_rows=payload_rows,
+                                    existing_rows_by_key=existing_members_by_key,
+                                    provenance_key=FILTER_PROJECTION_FOUNDATION_MEMBER_PROVENANCE_KEY,
+                                )
                             current_input_revision = str(
                                 metadata.get(PROJECTION_SEARCH_INDEX_INPUT_REVISION_KEY) or ""
                             ).strip()
@@ -2763,6 +2935,8 @@ class LiveControlPlanePostgresAdapter:
         normalized_generation = str(build_generation or "").strip()
         if not normalized_projection_id or not normalized_generation:
             return None
+        if FILTER_PROJECTION_FOUNDATION_METADATA_KEY in dict(metadata_patch or {}):
+            raise ValueError(f"filter_projection_foundation_reserved_key:{FILTER_PROJECTION_FOUNDATION_METADATA_KEY}")
         if not self.should_prefer_read("serving_projections") or not self.should_prefer_read(
             "projection_person_search_index"
         ):
@@ -2873,6 +3047,7 @@ class LiveControlPlanePostgresAdapter:
                                     PROJECTION_SEARCH_INDEX_BUILD_GENERATION_KEY,
                                     PROJECTION_SEARCH_INDEX_BUILD_INPUT_REVISION_KEY,
                                     PROJECTION_SEARCH_INDEX_INPUT_REVISION_KEY,
+                                    FILTER_PROJECTION_FOUNDATION_METADATA_KEY,
                                 ):
                                     safe_metadata_patch.pop(reserved_key, None)
                                 metadata.update(safe_metadata_patch)
@@ -2929,7 +3104,6 @@ class LiveControlPlanePostgresAdapter:
         replace_where_sql: str,
         replace_params: list[Any] | tuple[Any, ...] = (),
         replace_rows: list[dict[str, Any]] | tuple[dict[str, Any], ...] = (),
-        update_projection_index_input_revision: bool = False,
         transaction_lock_key: str = "",
     ) -> dict[str, int] | None:
         """Atomically publish a parent row and replace its child row scope."""
@@ -2951,12 +3125,34 @@ class LiveControlPlanePostgresAdapter:
         upsert_payload_rows = self._normalize_bulk_upsert_rows([row])
         if len(upsert_payload_rows) != 1:
             raise ValueError("upsert_row_and_replace_rows requires one non-empty row")
-        if update_projection_index_input_revision and normalized_upsert_table == "serving_projections":
-            upsert_payload_rows[0] = _invalidate_projection_search_index_products(
-                upsert_payload_rows[0],
-                build_status="stale",
+        foundation_pair = (
+            normalized_upsert_table == "serving_projections"
+            and normalized_replace_table == "serving_projection_members"
+        )
+        if (
+            normalized_upsert_table in {"serving_projections", "serving_projection_members"}
+            or normalized_replace_table in {"serving_projections", "serving_projection_members"}
+        ) and not foundation_pair:
+            raise ValueError(
+                "combined serving projection mutation requires serving_projections parent and "
+                "serving_projection_members children"
             )
         replacement_payload_rows = self._normalize_bulk_upsert_rows(replace_rows)
+        if foundation_pair:
+            _validate_serving_projection_member_scope_binding(
+                projection_id=str(upsert_payload_rows[0].get("projection_id") or "").strip(),
+                member_rows=replacement_payload_rows,
+                replace_where_sql=normalized_replace_where_sql,
+                replace_params=replace_params,
+            )
+        _reject_filter_projection_foundation_native_rows(
+            table_name=normalized_upsert_table,
+            rows=upsert_payload_rows,
+        )
+        _reject_filter_projection_foundation_native_rows(
+            table_name=normalized_replace_table,
+            rows=replacement_payload_rows,
+        )
         upsert_plan = self._bulk_upsert_plan(
             normalized_upsert_table,
             upsert_payload_rows,
@@ -2975,14 +3171,42 @@ class LiveControlPlanePostgresAdapter:
         attempt = 0
         while True:
             try:
-                with self._connect_with_transaction_lock(transaction_lock_key) as connection:
+                effective_lock_key = (
+                    f"serving_projection_publication:{str(upsert_payload_rows[0].get('projection_id') or '').strip()}"
+                    if foundation_pair
+                    else transaction_lock_key
+                )
+                with self._connect_with_transaction_lock(effective_lock_key) as connection:
                     with connection.cursor() as cursor:
+                        parent_projection_id = str(upsert_payload_rows[0].get("projection_id") or "").strip()
+                        if foundation_pair and parent_projection_id:
+                            existing_projection, semantic_changed = (
+                                _apply_filter_projection_foundation_carrier_policy_with_cursor(
+                                    cursor,
+                                    projection_id=parent_projection_id,
+                                    parent_row=upsert_payload_rows[0],
+                                    member_rows=replacement_payload_rows,
+                                    replace_members=True,
+                                )
+                            )
+                            if foundation_pair:
+                                upsert_payload_rows[0] = (
+                                    _preserve_projection_search_index_products_in_row(
+                                        upsert_payload_rows[0],
+                                        existing_projection,
+                                    )
+                                    if semantic_changed is False and existing_projection is not None
+                                    else _invalidate_projection_search_index_products(
+                                        upsert_payload_rows[0],
+                                        build_status="stale",
+                                    )
+                                )
                         upserted_count = self._bulk_upsert_rows_with_cursor(
                             cursor,
                             table_name=normalized_upsert_table,
                             payload_rows=upsert_payload_rows,
                             plan=upsert_plan,
-                            preserve_projection_index_input_revision=not bool(update_projection_index_input_revision),
+                            preserve_projection_index_input_revision=not foundation_pair,
                         )
                         replaced_count = self._replace_rows_with_cursor(
                             cursor,
@@ -3015,6 +3239,7 @@ class LiveControlPlanePostgresAdapter:
         member_identity_keys: list[str] | tuple[str, ...] = (),
         projection_id_factory: Any,
         payload_builder: Any,
+        filter_projection_foundation: FilterProjectionPublicationFoundation | None = None,
     ) -> dict[str, Any] | None:
         """Publish projection data and routing metadata in one locked transaction."""
 
@@ -3030,6 +3255,12 @@ class LiveControlPlanePostgresAdapter:
                 "table": "run_projection_links",
                 "where": "run_id = %s AND link_type = %s",
                 "params": (normalized_scope_key, "result"),
+                "projection_field": "projection_id",
+            },
+            "filter_projection_foundation": {
+                "table": "run_projection_links",
+                "where": "run_id = %s AND link_type = %s",
+                "params": (normalized_scope_key, FILTER_PROJECTION_FOUNDATION_ROUTE_TYPE),
                 "projection_field": "projection_id",
             },
             "collection_authoritative": {
@@ -3048,6 +3279,14 @@ class LiveControlPlanePostgresAdapter:
             raise TypeError("projection_id_factory must be callable")
         if not callable(payload_builder):
             raise TypeError("payload_builder must be callable")
+        if normalized_scope_kind == "filter_projection_foundation" and filter_projection_foundation is None:
+            raise ValueError("filter projection foundation scope requires a typed foundation")
+        if filter_projection_foundation is not None:
+            validate_filter_projection_publication_foundation(filter_projection_foundation)
+            if normalized_scope_kind != "filter_projection_foundation":
+                raise ValueError("filter projection foundation requires its dedicated publication scope")
+            if normalized_scope_key != filter_projection_foundation.source_run_id:
+                raise ValueError("filter_projection_foundation_source_run_mismatch")
         route_table = str(route_spec["table"])
         required_tables = ("serving_projections", "serving_projection_members", route_table)
         if any(not self.should_prefer_read(table_name) for table_name in required_tables):
@@ -3065,8 +3304,13 @@ class LiveControlPlanePostgresAdapter:
         lock_contention_attempt = 0
         while True:
             try:
+                scope_lock_kind = (
+                    "run"
+                    if normalized_scope_kind in {"run_scope", "filter_projection_foundation"}
+                    else normalized_scope_kind
+                )
                 with self._connect_with_transaction_lock(
-                    f"serving_projection_scope:{normalized_scope_kind}:{normalized_scope_key}"
+                    f"serving_projection_scope:{scope_lock_kind}:{normalized_scope_key}"
                 ) as connection:
                     with connection.cursor() as cursor:
                         cursor.execute(
@@ -3074,6 +3318,20 @@ class LiveControlPlanePostgresAdapter:
                             tuple(route_spec["params"]),
                         )
                         existing_route = _fetch_one_dict_row(cursor, cursor.fetchone()) or {}
+                        if normalized_scope_kind in {"run_scope", "filter_projection_foundation"}:
+                            conflicting_link_type = (
+                                "result"
+                                if normalized_scope_kind == "filter_projection_foundation"
+                                else FILTER_PROJECTION_FOUNDATION_ROUTE_TYPE
+                            )
+                            cursor.execute(
+                                "SELECT * FROM run_projection_links WHERE run_id = %s AND link_type = %s",
+                                (normalized_scope_key, conflicting_link_type),
+                            )
+                            if _fetch_one_dict_row(cursor, cursor.fetchone()) is not None:
+                                if normalized_scope_kind == "filter_projection_foundation":
+                                    raise ValueError("filter_projection_foundation_product_route_collision")
+                                raise ValueError("filter_projection_foundation_requires_candidate_aware_publication")
 
                         reusable_projection_id = str(
                             existing_route.get(str(route_spec["projection_field"])) or ""
@@ -3110,6 +3368,12 @@ class LiveControlPlanePostgresAdapter:
                             (selected_projection_id,),
                         )
                         existing_projection = _fetch_one_dict_row(cursor, cursor.fetchone()) or {}
+                        if (
+                            normalized_scope_kind == "run_scope"
+                            and FILTER_PROJECTION_FOUNDATION_METADATA_KEY
+                            in _json_load_dict(existing_projection.get("metadata_json"))
+                        ):
+                            raise ValueError("filter_projection_foundation_requires_candidate_aware_publication")
                         existing_members_by_key: dict[str, dict[str, Any]] = {}
                         member_key_chunks = (
                             [None]
@@ -3162,20 +3426,81 @@ class LiveControlPlanePostgresAdapter:
                         route_projection_id = str(routing_rows[0].get(str(route_spec["projection_field"])) or "")
                         if route_projection_id != selected_projection_id:
                             raise ValueError("routing payload does not use the selected projection_id")
+                        _validate_serving_projection_publication_scope_binding(
+                            scope_kind=normalized_scope_kind,
+                            scope_key=normalized_scope_key,
+                            active_collection_version=normalized_collection_version,
+                            projection_row=projection_rows[0],
+                            routing_row=routing_rows[0],
+                        )
+                        _validate_filter_projection_foundation_publication_carriers(
+                            projection_rows=projection_rows,
+                            member_rows=member_rows,
+                            routing_rows=routing_rows,
+                            existing_projection=existing_projection,
+                            existing_members_by_key=existing_members_by_key,
+                            foundation=filter_projection_foundation,
+                        )
                         next_members_by_key = {
                             str(row.get("candidate_identity_key") or "").strip(): row
                             for row in member_rows
                             if str(row.get("candidate_identity_key") or "").strip()
                         }
-                        semantic_changed = projection_search_index_members_changed(
+                        semantic_changed = filter_projection_foundation_members_changed(
                             existing_rows=existing_members_by_key,
                             next_rows=next_members_by_key,
                             replace_members=replace_members,
                         )
+                        existing_parent_carrier = _json_load_dict(existing_projection.get("metadata_json")).get(
+                            FILTER_PROJECTION_FOUNDATION_METADATA_KEY
+                        )
+                        invalidate_foundation = bool(
+                            filter_projection_foundation is None
+                            and existing_parent_carrier is not None
+                            and (semantic_changed or normalized_scope_kind == "collection_authoritative")
+                        )
+                        if filter_projection_foundation is None and (
+                            invalidate_foundation or existing_parent_carrier is None
+                        ):
+                            _delete_filter_projection_foundation_route_with_cursor(
+                                cursor,
+                                projection_id=selected_projection_id,
+                            )
+                            projection_metadata = _json_load_dict(projection_rows[0].get("metadata_json"))
+                            projection_metadata.pop(FILTER_PROJECTION_FOUNDATION_METADATA_KEY, None)
+                            projection_rows[0]["metadata_json"] = _json_dump(projection_metadata)
+                            if _serving_projection_member_provenance_exists_with_cursor(
+                                cursor,
+                                projection_id=selected_projection_id,
+                                provenance_key=FILTER_PROJECTION_FOUNDATION_MEMBER_PROVENANCE_KEY,
+                            ):
+                                _strip_serving_projection_member_provenance_with_cursor(
+                                    cursor,
+                                    projection_id=selected_projection_id,
+                                    provenance_key=FILTER_PROJECTION_FOUNDATION_MEMBER_PROVENANCE_KEY,
+                                )
+                            for member_row in member_rows:
+                                provenance = _json_load_dict(member_row.get("provenance_json"))
+                                provenance.pop(FILTER_PROJECTION_FOUNDATION_MEMBER_PROVENANCE_KEY, None)
+                                member_row["provenance_json"] = _json_dump(provenance)
+                        elif filter_projection_foundation is None and existing_parent_carrier is not None:
+                            projection_metadata = _json_load_dict(projection_rows[0].get("metadata_json"))
+                            projection_metadata[FILTER_PROJECTION_FOUNDATION_METADATA_KEY] = existing_parent_carrier
+                            projection_rows[0]["metadata_json"] = _json_dump(projection_metadata)
+                            _preserve_serving_projection_member_provenance(
+                                next_rows=member_rows,
+                                existing_rows_by_key=existing_members_by_key,
+                                provenance_key=FILTER_PROJECTION_FOUNDATION_MEMBER_PROVENANCE_KEY,
+                            )
                         if semantic_changed:
                             projection_rows[0] = _invalidate_projection_search_index_products(
                                 projection_rows[0],
                                 build_status="stale",
+                            )
+                        elif existing_projection:
+                            projection_rows[0] = _preserve_projection_search_index_products_in_row(
+                                projection_rows[0],
+                                existing_projection,
                             )
 
                         projection_plan = self._bulk_upsert_plan(
@@ -3969,6 +4294,38 @@ class LiveControlPlanePostgresAdapter:
             "SELECT pg_advisory_xact_lock(hashtext(%s))",
             (self._advisory_lock_key(normalized_lock_key),),
         )
+
+    def _reject_standalone_filter_projection_foundation_mutation(
+        self,
+        cursor: Any,
+        *,
+        table_name: str,
+        rows: list[dict[str, Any]],
+        where_sql: str = "",
+        params: list[Any] | tuple[Any, ...] = (),
+        already_locked_projection_id: str = "",
+    ) -> None:
+        projection_ids = _standalone_filter_projection_mutation_projection_ids(
+            table_name=table_name,
+            rows=rows,
+            where_sql=where_sql,
+            params=params,
+        )
+        for projection_id in projection_ids:
+            if projection_id != str(already_locked_projection_id or "").strip():
+                self._acquire_transaction_lock(
+                    cursor,
+                    f"serving_projection_publication:{projection_id}",
+                )
+            cursor.execute(
+                "SELECT metadata_json FROM serving_projections WHERE projection_id = %s FOR UPDATE",
+                (projection_id,),
+            )
+            existing = _fetch_one_dict_row(cursor, cursor.fetchone())
+            if existing is not None and FILTER_PROJECTION_FOUNDATION_METADATA_KEY in _json_load_dict(
+                existing.get("metadata_json")
+            ):
+                raise ValueError("filter_projection_foundation_requires_candidate_aware_publication")
 
     def _try_acquire_transaction_lock(self, cursor: Any, lock_key: str) -> bool:
         normalized_lock_key = str(lock_key or "").strip()
@@ -16031,6 +16388,403 @@ def _invalidate_projection_search_index_products(
         }
     )
     return payload
+
+
+def _preserve_projection_search_index_products_in_row(
+    next_row: dict[str, Any],
+    existing_row: dict[str, Any],
+) -> dict[str, Any]:
+    """Keep the exact opaque revision and derived products for a semantic no-op."""
+
+    payload = dict(next_row or {})
+    counts, readiness, metadata = preserve_projection_search_index_products(
+        existing_counts=_json_load_dict(existing_row.get("counts_json")),
+        existing_readiness=_json_load_dict(existing_row.get("readiness_json")),
+        existing_metadata=_json_load_dict(existing_row.get("metadata_json")),
+        next_counts=_json_load_dict(payload.get("counts_json")),
+        next_readiness=_json_load_dict(payload.get("readiness_json")),
+        next_metadata=_json_load_dict(payload.get("metadata_json")),
+    )
+    existing_metadata = _json_load_dict(existing_row.get("metadata_json"))
+    for key in PROJECTION_SEARCH_INDEX_BINDING_KEYS:
+        if key in existing_metadata:
+            metadata[key] = existing_metadata[key]
+        else:
+            metadata.pop(key, None)
+    payload["counts_json"] = _json_dump(counts)
+    payload["readiness_json"] = _json_dump(readiness)
+    payload["metadata_json"] = _json_dump(metadata)
+    payload["raw_profile_index_watermark"] = existing_row.get("raw_profile_index_watermark") or ""
+    payload["evidence_index_watermark"] = existing_row.get("evidence_index_watermark") or ""
+    return payload
+
+
+def _reject_filter_projection_foundation_native_rows(
+    *,
+    table_name: str,
+    rows: list[dict[str, Any]],
+) -> None:
+    normalized_table = str(table_name or "").strip()
+    if normalized_table == "serving_projections":
+        json_field = "metadata_json"
+        reserved_key = FILTER_PROJECTION_FOUNDATION_METADATA_KEY
+    elif normalized_table == "serving_projection_members":
+        json_field = "provenance_json"
+        reserved_key = FILTER_PROJECTION_FOUNDATION_MEMBER_PROVENANCE_KEY
+    else:
+        return
+    for row in rows:
+        if reserved_key in _json_load_dict(row.get(json_field)):
+            raise ValueError(f"filter_projection_foundation_reserved_key:{reserved_key}")
+
+
+def _reject_generic_serving_projection_mutation(
+    *,
+    table_name: str,
+    method: str,
+) -> None:
+    if str(table_name or "").strip() in {"serving_projections", "serving_projection_members"}:
+        raise ValueError(f"{method} cannot mutate serving projection tables; use a dedicated atomic publication method")
+
+
+def _validate_serving_projection_member_scope_binding(
+    *,
+    projection_id: str,
+    member_rows: list[dict[str, Any]],
+    replace_where_sql: str = "",
+    replace_params: list[Any] | tuple[Any, ...] = (),
+) -> None:
+    normalized_projection_id = str(projection_id or "").strip()
+    if not normalized_projection_id:
+        raise ValueError("serving projection parent projection_id is required")
+    if any(str(row.get("projection_id") or "").strip() != normalized_projection_id for row in member_rows):
+        raise ValueError("serving projection member rows must match parent projection_id")
+    if replace_where_sql and (
+        str(replace_where_sql or "").strip() != "projection_id = %s"
+        or len(replace_params) != 1
+        or str(replace_params[0] or "").strip() != normalized_projection_id
+    ):
+        raise ValueError("serving projection replacement scope must match parent projection_id")
+
+
+def _delete_filter_projection_foundation_route_with_cursor(
+    cursor: Any,
+    *,
+    projection_id: str,
+) -> None:
+    normalized_projection_id = str(projection_id or "").strip()
+    if not normalized_projection_id:
+        raise ValueError("projection_id is required to invalidate filter projection foundation route")
+    cursor.execute(
+        "DELETE FROM run_projection_links WHERE projection_id = %s AND link_type = %s",
+        (normalized_projection_id, FILTER_PROJECTION_FOUNDATION_ROUTE_TYPE),
+    )
+
+
+def _standalone_filter_projection_mutation_projection_ids(
+    *,
+    table_name: str,
+    rows: list[dict[str, Any]],
+    where_sql: str = "",
+    params: list[Any] | tuple[Any, ...] = (),
+) -> list[str]:
+    normalized_table = str(table_name or "").strip()
+    if normalized_table not in {"serving_projections", "serving_projection_members"}:
+        return []
+    projection_ids = {
+        str(row.get("projection_id") or "").strip() for row in rows if str(row.get("projection_id") or "").strip()
+    }
+    if where_sql:
+        if str(where_sql or "").strip() != "projection_id = %s" or len(params) != 1:
+            raise ValueError("serving projection replacement requires exact projection_id scope")
+        normalized_param = str(params[0] or "").strip()
+        if not normalized_param:
+            raise ValueError("serving projection replacement requires projection_id")
+        if projection_ids and projection_ids != {normalized_param}:
+            raise ValueError("serving projection replacement rows must match the exact projection_id scope")
+        projection_ids.add(normalized_param)
+    return sorted(projection_ids)
+
+
+def _validate_serving_projection_publication_scope_binding(
+    *,
+    scope_kind: str,
+    scope_key: str,
+    active_collection_version: str,
+    projection_row: dict[str, Any],
+    routing_row: dict[str, Any],
+) -> None:
+    normalized_scope_kind = str(scope_kind or "").strip()
+    normalized_scope_key = str(scope_key or "").strip()
+    if normalized_scope_kind in {"run_scope", "filter_projection_foundation"}:
+        expected_link_type = (
+            "result" if normalized_scope_kind == "run_scope" else FILTER_PROJECTION_FOUNDATION_ROUTE_TYPE
+        )
+        if (
+            str(projection_row.get("projection_type") or "").strip() != "run_scope_projection"
+            or str(projection_row.get("source_run_id") or "").strip() != normalized_scope_key
+            or str(routing_row.get("run_id") or "").strip() != normalized_scope_key
+            or str(routing_row.get("link_type") or "").strip() != expected_link_type
+        ):
+            raise ValueError("serving projection run scope payload binding mismatch")
+        return
+    if normalized_scope_kind == "collection_authoritative" and (
+        str(projection_row.get("projection_type") or "").strip() != "collection_authoritative_projection"
+        or str(projection_row.get("collection_id") or "").strip() != normalized_scope_key
+        or str(projection_row.get("source_collection_version") or "").strip()
+        != str(active_collection_version or "").strip()
+        or str(routing_row.get("collection_id") or "").strip() != normalized_scope_key
+        or str(routing_row.get("active_collection_version") or "").strip()
+        != str(active_collection_version or "").strip()
+    ):
+        raise ValueError("serving projection collection scope payload binding mismatch")
+
+
+def _validate_filter_projection_foundation_publication_carriers(
+    *,
+    projection_rows: list[dict[str, Any]],
+    member_rows: list[dict[str, Any]],
+    routing_rows: list[dict[str, Any]],
+    existing_projection: dict[str, Any],
+    existing_members_by_key: dict[str, dict[str, Any]],
+    foundation: FilterProjectionPublicationFoundation | None,
+) -> None:
+    existing_parent_carrier = _json_load_dict(existing_projection.get("metadata_json")).get(
+        FILTER_PROJECTION_FOUNDATION_METADATA_KEY
+    )
+    if foundation is not None:
+        validate_filter_projection_publication_foundation(foundation)
+        if len(projection_rows) != 1 or len(routing_rows) != 1:
+            raise ValueError("filter_projection_foundation_publication_shape_invalid")
+        incoming_parent_carrier = _json_load_dict(projection_rows[0].get("metadata_json")).get(
+            FILTER_PROJECTION_FOUNDATION_METADATA_KEY
+        )
+        if not json_contract_equal(incoming_parent_carrier, foundation.foundation_wrapper):
+            raise ValueError("filter_projection_foundation_parent_binding_invalid")
+        if str(projection_rows[0].get("state") or "").strip() != FILTER_PROJECTION_FOUNDATION_PROJECTION_STATE:
+            raise ValueError("filter_projection_foundation_projection_state_invalid")
+        if str(routing_rows[0].get("link_type") or "").strip() != FILTER_PROJECTION_FOUNDATION_ROUTE_TYPE:
+            raise ValueError("filter_projection_foundation_route_type_invalid")
+        if (
+            str(projection_rows[0].get("source_run_id") or "").strip() != foundation.source_run_id
+            or str(routing_rows[0].get("run_id") or "").strip() != foundation.source_run_id
+        ):
+            raise ValueError("filter_projection_foundation_source_run_mismatch")
+        if existing_projection and (
+            existing_parent_carrier is None
+            or not json_contract_equal(existing_parent_carrier, foundation.foundation_wrapper)
+        ):
+            raise ValueError("filter_projection_foundation_projection_collision")
+        expected_member_carriers = {
+            str(member.get("candidate_identity_key") or "").strip(): dict(member.get("provenance") or {}).get(
+                FILTER_PROJECTION_FOUNDATION_MEMBER_PROVENANCE_KEY
+            )
+            for member in foundation.members
+        }
+        incoming_member_carriers = {
+            str(row.get("candidate_identity_key") or "").strip(): _json_load_dict(row.get("provenance_json")).get(
+                FILTER_PROJECTION_FOUNDATION_MEMBER_PROVENANCE_KEY
+            )
+            for row in member_rows
+        }
+        if set(incoming_member_carriers) != set(expected_member_carriers) or any(
+            not json_contract_equal(incoming_member_carriers[key], expected_member_carriers[key])
+            for key in expected_member_carriers
+        ):
+            raise ValueError("filter_projection_foundation_member_binding_invalid")
+        return
+    for row in projection_rows:
+        incoming_carrier = _json_load_dict(row.get("metadata_json")).get(FILTER_PROJECTION_FOUNDATION_METADATA_KEY)
+        if incoming_carrier is not None and (
+            existing_parent_carrier is None or not json_contract_equal(incoming_carrier, existing_parent_carrier)
+        ):
+            raise ValueError(f"filter_projection_foundation_reserved_key:{FILTER_PROJECTION_FOUNDATION_METADATA_KEY}")
+    for row in member_rows:
+        incoming_carrier = _json_load_dict(row.get("provenance_json")).get(
+            FILTER_PROJECTION_FOUNDATION_MEMBER_PROVENANCE_KEY
+        )
+        if incoming_carrier is None:
+            continue
+        candidate_key = str(row.get("candidate_identity_key") or "").strip()
+        existing_carrier = _json_load_dict(
+            (existing_members_by_key.get(candidate_key) or {}).get("provenance_json")
+        ).get(FILTER_PROJECTION_FOUNDATION_MEMBER_PROVENANCE_KEY)
+        if existing_carrier is None or not json_contract_equal(
+            incoming_carrier,
+            existing_carrier,
+        ):
+            raise ValueError(
+                f"filter_projection_foundation_reserved_key:{FILTER_PROJECTION_FOUNDATION_MEMBER_PROVENANCE_KEY}"
+            )
+
+
+def _apply_filter_projection_foundation_carrier_policy_with_cursor(
+    cursor: Any,
+    *,
+    projection_id: str,
+    parent_row: dict[str, Any],
+    member_rows: list[dict[str, Any]],
+    replace_members: bool,
+) -> tuple[dict[str, Any] | None, bool | None]:
+    """Preserve a shadow carrier on no-op or invalidate the full scope on change."""
+
+    normalized_projection_id = str(projection_id or "").strip()
+    if not normalized_projection_id:
+        raise ValueError("projection_id is required for filter projection foundation carrier policy")
+
+    cursor.execute(
+        "SELECT * FROM serving_projections WHERE projection_id = %s FOR UPDATE",
+        (normalized_projection_id,),
+    )
+    existing_projection = _fetch_one_dict_row(cursor, cursor.fetchone())
+    if not existing_projection:
+        return None, None
+
+    existing_metadata = _json_load_dict(existing_projection.get("metadata_json"))
+    foundation_carrier = existing_metadata.get(FILTER_PROJECTION_FOUNDATION_METADATA_KEY)
+    incoming_metadata = _json_load_dict(parent_row.get("metadata_json"))
+
+    next_members_by_key = {
+        str(row.get("candidate_identity_key") or "").strip(): row
+        for row in member_rows
+        if str(row.get("candidate_identity_key") or "").strip()
+    }
+    if replace_members:
+        cursor.execute(
+            "SELECT * FROM serving_projection_members WHERE projection_id = %s FOR UPDATE",
+            (normalized_projection_id,),
+        )
+        existing_rows = _fetch_all_dict_rows(cursor)
+    elif next_members_by_key:
+        existing_rows = []
+        candidate_keys = sorted(next_members_by_key)
+        for offset in range(0, len(candidate_keys), 500):
+            chunk = candidate_keys[offset : offset + 500]
+            placeholders = ", ".join("%s" for _ in chunk)
+            cursor.execute(
+                "SELECT * FROM serving_projection_members "
+                f"WHERE projection_id = %s AND candidate_identity_key IN ({placeholders}) "
+                "FOR UPDATE",
+                (normalized_projection_id, *chunk),
+            )
+            existing_rows.extend(_fetch_all_dict_rows(cursor))
+    else:
+        existing_rows = []
+    existing_members_by_key = {
+        str(row.get("candidate_identity_key") or "").strip(): row
+        for row in existing_rows
+        if str(row.get("candidate_identity_key") or "").strip()
+    }
+    semantic_changed = filter_projection_foundation_members_changed(
+        existing_rows=existing_members_by_key,
+        next_rows=next_members_by_key,
+        replace_members=replace_members,
+    )
+    if foundation_carrier is None or semantic_changed:
+        _delete_filter_projection_foundation_route_with_cursor(
+            cursor,
+            projection_id=normalized_projection_id,
+        )
+    if foundation_carrier is None:
+        incoming_metadata.pop(FILTER_PROJECTION_FOUNDATION_METADATA_KEY, None)
+        if _serving_projection_member_provenance_exists_with_cursor(
+            cursor,
+            projection_id=normalized_projection_id,
+            provenance_key=FILTER_PROJECTION_FOUNDATION_MEMBER_PROVENANCE_KEY,
+        ):
+            _strip_serving_projection_member_provenance_with_cursor(
+                cursor,
+                projection_id=normalized_projection_id,
+                provenance_key=FILTER_PROJECTION_FOUNDATION_MEMBER_PROVENANCE_KEY,
+            )
+    elif semantic_changed:
+        incoming_metadata.pop(FILTER_PROJECTION_FOUNDATION_METADATA_KEY, None)
+        _strip_serving_projection_member_provenance_with_cursor(
+            cursor,
+            projection_id=normalized_projection_id,
+            provenance_key=FILTER_PROJECTION_FOUNDATION_MEMBER_PROVENANCE_KEY,
+        )
+    else:
+        incoming_metadata[FILTER_PROJECTION_FOUNDATION_METADATA_KEY] = foundation_carrier
+        _preserve_serving_projection_member_provenance(
+            next_rows=member_rows,
+            existing_rows_by_key=existing_members_by_key,
+            provenance_key=FILTER_PROJECTION_FOUNDATION_MEMBER_PROVENANCE_KEY,
+        )
+    parent_row["metadata_json"] = _json_dump(incoming_metadata)
+    return existing_projection, semantic_changed
+
+
+def _preserve_serving_projection_member_provenance(
+    *,
+    next_rows: list[dict[str, Any]],
+    existing_rows_by_key: dict[str, dict[str, Any]],
+    provenance_key: str,
+) -> None:
+    normalized_key = str(provenance_key or "").strip()
+    if not normalized_key:
+        return
+    for row in next_rows:
+        candidate_key = str(row.get("candidate_identity_key") or "").strip()
+        existing_row = existing_rows_by_key.get(candidate_key) or {}
+        existing_provenance = _json_load_dict(existing_row.get("provenance_json"))
+        carrier = existing_provenance.get(normalized_key)
+        if carrier is None:
+            continue
+        next_provenance = _json_load_dict(row.get("provenance_json"))
+        next_provenance[normalized_key] = carrier
+        row["provenance_json"] = _json_dump(next_provenance)
+
+
+def _serving_projection_member_provenance_exists_with_cursor(
+    cursor: Any,
+    *,
+    projection_id: str,
+    provenance_key: str,
+) -> bool:
+    normalized_projection_id = str(projection_id or "").strip()
+    normalized_key = str(provenance_key or "").strip()
+    if not normalized_projection_id or not normalized_key:
+        return False
+    cursor.execute(
+        "SELECT 1 FROM serving_projection_members "
+        "WHERE projection_id = %s "
+        "AND COALESCE(NULLIF(provenance_json, ''), '{}')::jsonb ? %s LIMIT 1",
+        (normalized_projection_id, normalized_key),
+    )
+    return cursor.fetchone() is not None
+
+
+def _strip_serving_projection_member_provenance_with_cursor(
+    cursor: Any,
+    *,
+    projection_id: str,
+    provenance_key: str,
+) -> int:
+    """Invalidate one owner carrier across the complete locked member scope."""
+
+    normalized_projection_id = str(projection_id or "").strip()
+    normalized_key = str(provenance_key or "").strip()
+    if not normalized_projection_id or not normalized_key:
+        return 0
+    cursor.execute(
+        """
+        UPDATE serving_projection_members
+        SET provenance_json = (
+                COALESCE(NULLIF(provenance_json, ''), '{}')::jsonb - %s
+            )::text,
+            updated_at = %s
+        WHERE projection_id = %s
+          AND COALESCE(NULLIF(provenance_json, ''), '{}')::jsonb ? %s
+        """,
+        (
+            normalized_key,
+            _utc_now_sql_timestamp(),
+            normalized_projection_id,
+            normalized_key,
+        ),
+    )
+    return max(0, int(cursor.rowcount or 0))
 
 
 def _json_load_list(payload: Any) -> list[Any]:

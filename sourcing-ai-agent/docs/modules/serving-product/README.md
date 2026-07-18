@@ -25,6 +25,7 @@ Code boundary examples: `src/sourcing_agent/serving_projection_*`,
 | Filter v2 foundation machine contract | [filter_projection_foundation_boundary_v1.json](contracts/filter_projection_foundation_boundary_v1.json) | closed S1f0a fixed-forward status, dependency graph, writer inventory, and forbidden claims |
 | Filter v2 operation-native lineage and terminal-owner decision | [TRACK_D_D1N_S1F0C_LINEAGE_TERMINAL_OWNER_DECISION.md](decisions/TRACK_D_D1N_S1F0C_LINEAGE_TERMINAL_OWNER_DECISION.md) | S1f0c0 author candidate; future start propagation, exact recompile, commit-once Cohort terminal, and final projection authority; no runtime/served delta |
 | Filter v2 lineage and terminal-owner machine decision | [filter_projection_lineage_terminal_owner_decision_v1.json](contracts/filter_projection_lineage_terminal_owner_decision_v1.json) | closed decision shape and S1f0c1-S1f1 dependency graph; fresh pinned review pending |
+| Filter v2 S1f0b foundation implementation | [TRACK_D_D1N_S1F0B_FILTER_PROJECTION_FOUNDATION_IMPLEMENTATION.md](implementation/TRACK_D_D1N_S1F0B_FILTER_PROJECTION_FOUNDATION_IMPLEMENTATION.md) | non-product carrier reservation plus generic/native preserve-or-invalidate policy in the existing projection UoW; served remains zero |
 | User-visible workflow progress | [WORKFLOW_PROGRESS_CONTRACT.md](../../WORKFLOW_PROGRESS_CONTRACT.md) | active cross-module contract; writer owned by workflow runtime |
 | Product requirements | [PRD.md](../../PRD.md) | background reference; active contracts win on drift |
 | Backend/product prototype boundary | [BACKEND_MVP.md](../../BACKEND_MVP.md) | background reference; verify current implementation |
@@ -43,6 +44,7 @@ Code boundary examples: `src/sourcing_agent/serving_projection_*`,
 - Contracts: `docs/modules/serving-product/contracts/`
 - Product requirements/prototypes: `docs/modules/serving-product/product/`
 - Architecture/decisions: `docs/modules/serving-product/architecture/` and `decisions/`
+- Implementations: `docs/modules/serving-product/implementation/`
 - Testing/operations: `docs/modules/serving-product/testing/` and `operations/`
 - Migrations/reviews: `docs/modules/serving-product/migrations/` and `reviews/`
 

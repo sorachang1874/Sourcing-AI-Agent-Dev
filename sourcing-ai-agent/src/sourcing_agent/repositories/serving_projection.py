@@ -23,6 +23,19 @@ from uuid import uuid4
 from ..control_plane_repository import Column, Kind, Repository, TableDescriptor
 from ..control_plane_serde import json_safe_payload
 from ..control_plane_time import utc_now_timestamp
+from ..filter_projection_publication_owner import (
+    FILTER_PROJECTION_FOUNDATION_MEMBER_PROVENANCE_KEY,
+    FILTER_PROJECTION_FOUNDATION_METADATA_KEY,
+    FILTER_PROJECTION_FOUNDATION_ROUTE_TYPE,
+    FilterProjectionPublicationFoundation,
+    FilterProjectionPublicationFoundationError,
+    filter_projection_foundation_members_changed,
+    projection_has_filter_projection_foundation,
+    reject_filter_projection_foundation_member_carriers,
+    reject_filter_projection_foundation_metadata,
+    strip_filter_projection_foundation_carriers,
+    validate_filter_projection_publication_foundation,
+)
 from ..person_identity import (
     build_person_summary_view,
     resolve_candidate_identity_key,
@@ -36,13 +49,17 @@ from ..projection_search_index_contract import (
     PROJECTION_SEARCH_INDEX_INPUT_REVISION_KEY,
     new_projection_search_index_input_revision,
     preserve_projection_search_index_products,
-    projection_search_index_members_changed,
 )
 from ..public_candidate_facets import (
     candidate_matches_candidate_page_filter as _candidate_matches_candidate_page_filter,
 )
 from ..public_candidate_facets import candidate_page_filter_active as _candidate_page_filter_active
 from ..public_candidate_facets import candidate_page_filter_text as _candidate_page_filter_text
+
+PROJECTION_PUBLICATION_RESERVED_METADATA_KEYS = (
+    *PROJECTION_SEARCH_INDEX_BINDING_KEYS,
+    FILTER_PROJECTION_FOUNDATION_METADATA_KEY,
+)
 
 SERVING_PROJECTIONS = TableDescriptor(
     table="serving_projections",
@@ -544,6 +561,7 @@ class ServingProjectionRepository(Repository):
         normalized_projection_id = str(projection_id or "").strip()
         if not normalized_projection_id:
             return 0
+        reject_filter_projection_foundation_member_carriers(members)
         row_payloads = self._member_row_payloads(normalized_projection_id, members)
         if not row_payloads:
             return 0
@@ -642,6 +660,7 @@ class ServingProjectionRepository(Repository):
         normalized_projection_id = str(projection_id or "").strip()
         if not normalized_projection_id:
             return 0
+        reject_filter_projection_foundation_member_carriers(members)
         if self._should_prefer_read("serving_projection_members"):
             row_payloads = self._member_row_payloads(normalized_projection_id, members)
             result = self._call_native_write(
@@ -1108,6 +1127,7 @@ class ServingProjectionRepository(Repository):
                 "projection_id": normalized_projection_id,
                 "updated_count": 0,
             }
+        reject_filter_projection_foundation_metadata(metadata_patch)
         result = self._call_native_write(
             "update_projection_person_search_index_generation_state",
             table_name="serving_projections",
@@ -1684,7 +1704,15 @@ class ServingProjectionRepository(Repository):
         )
 
     def upsert(self, payload: dict[str, Any]) -> dict[str, Any]:
+        normalized = dict(payload or {})
+        reject_filter_projection_foundation_metadata(normalized.get("metadata") or normalized.get("metadata_json"))
         projection_id, row_payload = self._projection_row_payload(payload)
+        existing = self.get(projection_id)
+        if projection_has_filter_projection_foundation(dict(existing.get("metadata") or {})):
+            raise FilterProjectionPublicationFoundationError(
+                "filter_projection_foundation_requires_candidate_aware_publication",
+                projection_id,
+            )
         if self._write_row("serving_projections", row_payload):
             return self.get(projection_id)
         self._raise_write_failure(
@@ -1717,11 +1745,13 @@ class ServingProjectionRepository(Repository):
             raise ValueError("projection_id is required")
         normalized_remove = tuple(str(key or "").strip() for key in counts_remove if str(key or "").strip())
         normalized_metadata_patch = dict(metadata_patch or {})
-        reserved_metadata_keys = sorted(set(normalized_metadata_patch) & set(PROJECTION_SEARCH_INDEX_BINDING_KEYS))
+        reserved_metadata_keys = sorted(
+            set(normalized_metadata_patch) & set(PROJECTION_PUBLICATION_RESERVED_METADATA_KEYS)
+        )
         if reserved_metadata_keys:
             raise ValueError(
-                "projection publication patch cannot overwrite search-index binding metadata: "
-                + ", ".join(reserved_metadata_keys)
+                "projection publication patch cannot overwrite search-index binding metadata or other "
+                "reserved publication metadata: " + ", ".join(reserved_metadata_keys)
             )
         with self.hold_publication_lock(normalized_projection_id):
             row = self._call_native_write(
@@ -1750,6 +1780,12 @@ class ServingProjectionRepository(Repository):
     ) -> dict[str, Any]:
         """Atomically persist projection metadata and its complete member scope."""
 
+        normalized_payload = dict(payload or {})
+        reject_filter_projection_foundation_metadata(
+            normalized_payload.get("metadata") or normalized_payload.get("metadata_json")
+        )
+        reject_filter_projection_foundation_member_carriers(members)
+
         if not self._should_prefer_read("serving_projections"):
             self._raise_postgres_only_invariant(
                 table_name="serving_projections",
@@ -1772,7 +1808,6 @@ class ServingProjectionRepository(Repository):
             replace_where_sql="projection_id = %s",
             replace_params=[projection_id],
             replace_rows=member_rows,
-            update_projection_index_input_revision=True,
             transaction_lock_key=f"serving_projection_publication:{projection_id}",
         )
         if not isinstance(result, dict):
@@ -1800,6 +1835,12 @@ class ServingProjectionRepository(Repository):
     ) -> dict[str, Any]:
         """Atomically persist projection metadata and merge incremental members."""
 
+        normalized_payload = dict(payload or {})
+        reject_filter_projection_foundation_metadata(
+            normalized_payload.get("metadata") or normalized_payload.get("metadata_json")
+        )
+        reject_filter_projection_foundation_member_carriers(members)
+
         if not self._should_prefer_read("serving_projections"):
             self._raise_postgres_only_invariant(
                 table_name="serving_projections",
@@ -1820,7 +1861,6 @@ class ServingProjectionRepository(Repository):
             row=projection_row,
             upsert_table_name="serving_projection_members",
             upsert_rows=member_rows,
-            update_projection_index_input_revision=True,
             transaction_lock_key=f"serving_projection_publication:{projection_id}",
         )
         if not isinstance(result, dict):
@@ -1851,6 +1891,10 @@ class ServingProjectionRepository(Repository):
     ) -> dict[str, Any]:
         normalized_projection = dict(projection_payload or {})
         normalized_link = dict(run_link_payload or {})
+        reject_filter_projection_foundation_metadata(
+            normalized_projection.get("metadata") or normalized_projection.get("metadata_json")
+        )
+        reject_filter_projection_foundation_member_carriers(members)
         run_id = str(
             normalized_link.get("run_id")
             or normalized_projection.get("source_run_id")
@@ -1871,6 +1915,43 @@ class ServingProjectionRepository(Repository):
             replace_members=replace_members,
         )
 
+    def publish_filter_projection_foundation_run_scope_projection(
+        self,
+        *,
+        foundation: FilterProjectionPublicationFoundation,
+        projection_payload: dict[str, Any],
+        run_link_payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        validate_filter_projection_publication_foundation(foundation)
+        normalized_projection = dict(projection_payload or {})
+        normalized_link = dict(run_link_payload or {})
+        if (
+            str(normalized_projection.get("source_run_id") or "").strip() != foundation.source_run_id
+            or str(normalized_link.get("run_id") or "").strip() != foundation.source_run_id
+            or str(normalized_projection.get("projection_type") or "").strip() != "run_scope_projection"
+        ):
+            raise FilterProjectionPublicationFoundationError(
+                "filter_projection_foundation_source_run_mismatch",
+                "source_run_id",
+            )
+        normalized_projection["metadata"] = foundation.projection_metadata(
+            _normalize_json_object_payload(
+                normalized_projection.get("metadata") or normalized_projection.get("metadata_json")
+            )
+        )
+        normalized_projection.pop("metadata_json", None)
+        normalized_link["link_type"] = FILTER_PROJECTION_FOUNDATION_ROUTE_TYPE
+        return self._publish_projection_with_route(
+            scope_kind="filter_projection_foundation",
+            scope_key=foundation.source_run_id,
+            active_collection_version="",
+            projection_payload=normalized_projection,
+            routing_payload=normalized_link,
+            members=foundation.members,
+            replace_members=True,
+            foundation=foundation,
+        )
+
     def publish_collection_authoritative_projection(
         self,
         *,
@@ -1881,6 +1962,12 @@ class ServingProjectionRepository(Repository):
     ) -> dict[str, Any]:
         normalized_projection = dict(projection_payload or {})
         normalized_pointer = dict(pointer_payload or {})
+        stripped_metadata, stripped_members = strip_filter_projection_foundation_carriers(
+            metadata=normalized_projection.get("metadata") or normalized_projection.get("metadata_json"),
+            members=members,
+        )
+        normalized_projection["metadata"] = stripped_metadata
+        normalized_projection.pop("metadata_json", None)
         collection_id = str(
             normalized_pointer.get("collection_id") or normalized_projection.get("collection_id") or ""
         ).strip()
@@ -1901,7 +1988,7 @@ class ServingProjectionRepository(Repository):
             active_collection_version=active_collection_version,
             projection_payload=normalized_projection,
             routing_payload=normalized_pointer,
-            members=members,
+            members=stripped_members,
             replace_members=replace_members,
         )
 
@@ -1915,6 +2002,7 @@ class ServingProjectionRepository(Repository):
         routing_payload: dict[str, Any],
         members: builtins.list[dict[str, Any]] | tuple[dict[str, Any], ...],
         replace_members: bool,
+        foundation: FilterProjectionPublicationFoundation | None = None,
     ) -> dict[str, Any]:
         normalized_members = self._normalized_member_inputs(members)
         projection_input_revision = new_projection_search_index_input_revision()
@@ -1936,7 +2024,10 @@ class ServingProjectionRepository(Repository):
             )
             effective_projection_metadata = _normalize_json_object_payload(effective_projection_payload.get("metadata"))
             effective_projection_payload["metadata"] = effective_projection_metadata
-            if scope_kind == "run_scope" and not str(effective_projection_payload.get("collection_id") or "").strip():
+            if (
+                scope_kind in {"run_scope", "filter_projection_foundation"}
+                and not str(effective_projection_payload.get("collection_id") or "").strip()
+            ):
                 effective_projection_payload["collection_id"] = str(existing_route.get("collection_id") or "").strip()
             _, projection_row = self._projection_row_payload(
                 effective_projection_payload,
@@ -1955,17 +2046,36 @@ class ServingProjectionRepository(Repository):
                 for row in member_rows
                 if str(row.get("candidate_identity_key") or "").strip()
             }
-            membership_changed = projection_search_index_members_changed(
+            membership_changed = filter_projection_foundation_members_changed(
                 existing_rows=existing_members_by_key,
                 next_rows=next_members_by_key,
                 replace_members=replace_members,
             )
             existing_metadata = _loads_json_dict(existing_projection.get("metadata_json"))
+            projection_metadata = _loads_json_dict(projection_row.get("metadata_json"))
+            existing_foundation_wrapper = existing_metadata.get(FILTER_PROJECTION_FOUNDATION_METADATA_KEY)
+            if foundation is None and scope_kind == "collection_authoritative":
+                projection_metadata.pop(FILTER_PROJECTION_FOUNDATION_METADATA_KEY, None)
+            elif foundation is None and existing_foundation_wrapper is not None:
+                if membership_changed:
+                    projection_metadata.pop(FILTER_PROJECTION_FOUNDATION_METADATA_KEY, None)
+                else:
+                    projection_metadata[FILTER_PROJECTION_FOUNDATION_METADATA_KEY] = existing_foundation_wrapper
+                    for member_row in member_rows:
+                        candidate_key = str(member_row.get("candidate_identity_key") or "").strip()
+                        existing_member = existing_members_by_key.get(candidate_key) or {}
+                        existing_provenance = _loads_json_dict(existing_member.get("provenance_json"))
+                        member_foundation = existing_provenance.get(FILTER_PROJECTION_FOUNDATION_MEMBER_PROVENANCE_KEY)
+                        if member_foundation is None:
+                            continue
+                        next_provenance = _loads_json_dict(member_row.get("provenance_json"))
+                        next_provenance[FILTER_PROJECTION_FOUNDATION_MEMBER_PROVENANCE_KEY] = member_foundation
+                        member_row["provenance_json"] = json.dumps(next_provenance, ensure_ascii=False)
+            projection_row["metadata_json"] = json.dumps(projection_metadata, ensure_ascii=False)
             existing_input_revision = str(
                 existing_metadata.get(PROJECTION_SEARCH_INDEX_INPUT_REVISION_KEY) or ""
             ).strip()
             if existing_input_revision and not membership_changed:
-                projection_metadata = _loads_json_dict(projection_row.get("metadata_json"))
                 projection_metadata[PROJECTION_SEARCH_INDEX_INPUT_REVISION_KEY] = existing_input_revision
                 projection_counts, projection_readiness, projection_metadata = (
                     preserve_projection_search_index_products(
@@ -1986,7 +2096,7 @@ class ServingProjectionRepository(Repository):
                 ):
                     if not str(projection_row.get(watermark_field) or "").strip():
                         projection_row[watermark_field] = existing_projection.get(watermark_field) or ""
-            if scope_kind == "run_scope":
+            if scope_kind in {"run_scope", "filter_projection_foundation"}:
                 routing_row = self._run_link_row_payload(
                     {
                         **routing_payload,
@@ -2022,6 +2132,7 @@ class ServingProjectionRepository(Repository):
             member_identity_keys=builtins.list(normalized_members),
             projection_id_factory=_build_projection_id,
             payload_builder=build_payload,
+            filter_projection_foundation=foundation,
         )
         if not isinstance(result, dict):
             self._raise_write_failure(
@@ -2030,7 +2141,7 @@ class ServingProjectionRepository(Repository):
                 reason="postgres-only: atomic serving publication returned no confirmation",
             )
         projection = self._projection_from_row(result.get("projection_row"))
-        if scope_kind == "run_scope":
+        if scope_kind in {"run_scope", "filter_projection_foundation"}:
             routing = self._run_link_from_row(result.get("routing_row"))
             return {
                 "projection": projection,

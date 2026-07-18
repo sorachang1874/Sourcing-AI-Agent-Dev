@@ -112,12 +112,16 @@ S1f0b may improve the existing generic writer safely before S1f0c0 completes:
 - direct generic creation or overwrite of a reserved key fails before writes;
 - if an owner-unaware writer changes membership, the same existing UoW removes the parent carrier and every member
   carrier before committing the changed membership;
-- a semantic no-op preserves a valid carrier and the existing opaque membership revision;
+- a pure membership semantic no-op preserves a valid carrier, the existing opaque membership revision, and derived
+  products; creating or retargeting a product `result` route is not a membership no-op and fails while the foundation
+  carrier exists;
 - collection-authoritative publication always strips both carriers;
 - full run publication, incremental board/facet paths, repair/migration paths, direct member upsert/replace, combined
   parent/member writes, facade methods, repository delegates, and native PG adapters are all in the enumerated writer
-  inventory;
-- no new `_connect_with_transaction_lock` caller or lock order is introduced.
+  inventory, with native generic mutation surfaces discovered from source rather than accepted from the manifest
+  alone;
+- product and candidate run publication use the same run-scoped advisory key and retain the existing scope-before-
+  projection lock order; no new `_connect_with_transaction_lock` caller is introduced.
 
 Until S1f0d, any experimental carrier must be marked `foundation_only_unbound`, must use an identity/version distinct
 from the eventual product owner, and must be rejected by every Agent/product reader. It is disposable shadow evidence,

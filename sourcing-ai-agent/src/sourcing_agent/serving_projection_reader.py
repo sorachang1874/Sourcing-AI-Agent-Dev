@@ -4,6 +4,7 @@ import os
 from typing import Any
 
 from .control_plane_repository import ControlPlaneAuthoritativeReadError
+from .filter_projection_publication_owner import projection_has_filter_projection_foundation
 from .media_asset_owner import media_asset_frontend_url
 from .projection_search_index_contract import (
     PROJECTION_SEARCH_INDEX_BINDING_KEYS,
@@ -70,6 +71,12 @@ class ServingProjectionReader:
                 "projection_not_found",
                 projection_id=normalized_projection_id,
             )
+        if projection_has_filter_projection_foundation(dict(projection.get("metadata") or {})):
+            return self._projection_error(
+                "projection_not_servable",
+                projection_id=normalized_projection_id,
+                projection=projection,
+            )
         if str(projection.get("state") or "").strip().lower() not in _SERVABLE_PROJECTION_STATES:
             return self._projection_error(
                 "projection_not_servable",
@@ -107,6 +114,12 @@ class ServingProjectionReader:
             return self._projection_error(
                 "projection_not_found",
                 projection_id=normalized_projection_id,
+            )
+        if projection_has_filter_projection_foundation(dict(latest_projection.get("metadata") or {})):
+            return self._projection_error(
+                "projection_not_servable",
+                projection_id=normalized_projection_id,
+                projection=latest_projection,
             )
         if str(latest_projection.get("state") or "").strip().lower() not in _SERVABLE_PROJECTION_STATES:
             return self._projection_error(

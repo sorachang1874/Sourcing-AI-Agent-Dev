@@ -4735,9 +4735,10 @@ class LiveControlPlanePostgresRetryTest(unittest.TestCase):
             self.assertEqual(commit_counter["count"], 1)
             sql_calls = [str(call["sql"]) for call in calls]
             self.assertIn("pg_try_advisory_xact_lock", sql_calls[0])
-            self.assertIn('INSERT INTO "serving_projections"', sql_calls[1])
-            self.assertIn('DELETE FROM "serving_projection_members"', sql_calls[2])
-            self.assertIn("CREATE TEMP TABLE", sql_calls[3])
+            self.assertIn("SELECT * FROM serving_projections", sql_calls[1])
+            self.assertIn('INSERT INTO "serving_projections"', sql_calls[2])
+            self.assertIn('DELETE FROM "serving_projection_members"', sql_calls[3])
+            self.assertIn("CREATE TEMP TABLE", sql_calls[4])
             self.assertIn('INSERT INTO "serving_projection_members"', sql_calls[-1])
             self.assertEqual(
                 calls[0]["params"],
@@ -4803,7 +4804,8 @@ class LiveControlPlanePostgresRetryTest(unittest.TestCase):
             self.assertEqual(affected, 1)
             self.assertEqual(commit_counter["count"], 1)
             self.assertIn("pg_try_advisory_xact_lock", str(calls[0]["sql"]))
-            self.assertIn('INSERT INTO "serving_projection_members"', str(calls[1]["sql"]))
+            self.assertIn("SELECT metadata_json FROM serving_projections", str(calls[1]["sql"]))
+            self.assertIn('INSERT INTO "serving_projection_members"', str(calls[2]["sql"]))
 
     def test_projection_parent_and_incremental_members_share_one_locked_transaction(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -4832,8 +4834,9 @@ class LiveControlPlanePostgresRetryTest(unittest.TestCase):
             self.assertEqual(result, {"upserted_count": 1, "child_upserted_count": 1})
             self.assertEqual(commit_counter["count"], 1)
             self.assertIn("pg_try_advisory_xact_lock", str(calls[0]["sql"]))
-            self.assertIn('INSERT INTO "serving_projections"', str(calls[1]["sql"]))
-            self.assertIn('INSERT INTO "serving_projection_members"', str(calls[2]["sql"]))
+            self.assertIn("SELECT * FROM serving_projections", str(calls[1]["sql"]))
+            self.assertIn('INSERT INTO "serving_projections"', str(calls[2]["sql"]))
+            self.assertIn('INSERT INTO "serving_projection_members"', str(calls[3]["sql"]))
 
 
 if __name__ == "__main__":
