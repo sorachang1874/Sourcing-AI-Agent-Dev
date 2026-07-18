@@ -1232,6 +1232,17 @@ class D1nStartAcquisitionV2CreatePGMatrixTest(PGControlPlaneStoreTestMixin, unit
                 ),
             ),
             (
+                "cancel_receipt_ref_only_compound_corruption",
+                "queued",
+                "receipt_ref_only",
+                lambda command_id: self.store.cancel_workflow_command(
+                    command_id,
+                    reason="native cancel must honor canonical receipt ref marker",
+                    actor="native-control-test",
+                    result={"control_source": "native_test"},
+                ),
+            ),
+            (
                 "update_payload",
                 "queued",
                 "",
@@ -1253,6 +1264,15 @@ class D1nStartAcquisitionV2CreatePGMatrixTest(PGControlPlaneStoreTestMixin, unit
                     from_statuses=("queued",),
                 ),
             ),
+            (
+                "partial_progress",
+                "running",
+                "",
+                lambda command_id: self.store.mark_workflow_command_partial_progress(
+                    command_id,
+                    result={"control_source": "native_test"},
+                ),
+            ),
         )
 
         for ordinal, (label, status, corruption, mutator) in enumerate(cases, start=1):
@@ -1269,6 +1289,19 @@ class D1nStartAcquisitionV2CreatePGMatrixTest(PGControlPlaneStoreTestMixin, unit
                     self._execute(
                         "UPDATE {schema}.workflow_commands SET payload_json = %s WHERE command_id = %s",
                         ("{bad", command_id),
+                    )
+                if corruption == "receipt_ref_only":
+                    self._execute(
+                        "UPDATE {schema}.workflow_commands SET command_type = %s, owner = %s, payload_json = %s "
+                        "WHERE command_id = %s",
+                        (
+                            "legacy.acquisition.run.create",
+                            "legacy_acquisition_owner",
+                            json.dumps(
+                                {"confirmation_receipt_ref": created["owner_result_ref"]["confirmation_receipt_ref"]}
+                            ),
+                            command_id,
+                        ),
                     )
                 baseline = self._table_snapshot()
 

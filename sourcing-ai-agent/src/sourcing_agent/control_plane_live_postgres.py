@@ -10960,6 +10960,7 @@ class LiveControlPlanePostgresAdapter:
             return None
         if _is_start_v2_root_command_result_acceptance_hold(current):
             return None
+        current_not_before_at = str(current.get("not_before_at") or "").strip()
         now = _utc_now_sql_timestamp()
         causality_columns = _workflow_command_causality_columns_from_payload(payload or {})
         return self._execute_returning_one(
@@ -10984,6 +10985,7 @@ class LiveControlPlanePostgresAdapter:
                 updated_at = %s
             WHERE command_id = %s
               AND status IN ('queued', 'retry_wait')
+              AND not_before_at = %s
             RETURNING *
             """,
             (
@@ -11005,6 +11007,7 @@ class LiveControlPlanePostgresAdapter:
                 _json_dump(result or {}),
                 now,
                 normalized_command_id,
+                current_not_before_at,
             ),
         )
 
@@ -11311,6 +11314,7 @@ class LiveControlPlanePostgresAdapter:
               AND lease_expires_at = %s
               AND attempt = %s
               AND (NULLIF(lease_expires_at, '')::timestamp AT TIME ZONE 'UTC') > clock_timestamp()
+              AND not_before_at <> '9999-12-31 23:59:59'
             RETURNING *
             """,
             (
@@ -12259,6 +12263,9 @@ class LiveControlPlanePostgresAdapter:
         current = self.select_one("workflow_commands", where_sql="command_id = %s", params=[normalized_command_id])
         if current is None:
             return None
+        if _is_start_v2_root_command_result_acceptance_hold(current):
+            return None
+        current_not_before_at = str(current.get("not_before_at") or "").strip()
         attempt = max(0, int(current.get("attempt") or 0) - 1)
         now = _utc_now_sql_timestamp()
         return self._execute_returning_one(
@@ -12275,9 +12282,10 @@ class LiveControlPlanePostgresAdapter:
                 updated_at = %s
             WHERE command_id = %s
               AND status IN ('claimed', 'running')
+              AND not_before_at = %s
             RETURNING *
             """,
-            (now, attempt, _json_dump(result or {}), now, normalized_command_id),
+            (now, attempt, _json_dump(result or {}), now, normalized_command_id, current_not_before_at),
         )
 
     def mark_workflow_command_waiting_prerequisite(
@@ -12298,6 +12306,7 @@ class LiveControlPlanePostgresAdapter:
             return None
         if _is_start_v2_root_command_result_acceptance_hold(current):
             return None
+        current_not_before_at = str(current.get("not_before_at") or "").strip()
         attempt = max(0, int(current.get("attempt") or 0) - 1)
         now = _utc_now_sql_timestamp()
         allowed_statuses = [
@@ -12322,6 +12331,7 @@ class LiveControlPlanePostgresAdapter:
                 updated_at = %s
             WHERE command_id = %s
               AND status IN ({placeholders})
+              AND not_before_at = %s
             RETURNING *
             """,
             (
@@ -12332,6 +12342,7 @@ class LiveControlPlanePostgresAdapter:
                 now,
                 normalized_command_id,
                 *allowed_statuses,
+                current_not_before_at,
             ),
         )
 
@@ -13113,6 +13124,7 @@ class LiveControlPlanePostgresAdapter:
             return None
         if _is_start_v2_root_command_result_acceptance_hold(current):
             return None
+        current_not_before_at = str(current.get("not_before_at") or "").strip()
         existing_result = _json_load_dict(current.get("result_json"))
         next_result = {
             **existing_result,
@@ -13143,6 +13155,7 @@ class LiveControlPlanePostgresAdapter:
                 updated_at = %s
             WHERE command_id = %s
               AND status IN ({placeholders})
+              AND not_before_at = %s
             RETURNING *
             """,
             (
@@ -13152,6 +13165,7 @@ class LiveControlPlanePostgresAdapter:
                 now,
                 normalized_command_id,
                 *allowed_statuses,
+                current_not_before_at,
             ),
         )
 
@@ -13173,6 +13187,7 @@ class LiveControlPlanePostgresAdapter:
             return None
         if _is_start_v2_root_command_result_acceptance_hold(current):
             return None
+        current_not_before_at = str(current.get("not_before_at") or "").strip()
         existing_result = _json_load_dict(current.get("result_json"))
         next_result = {
             **existing_result,
@@ -13196,9 +13211,10 @@ class LiveControlPlanePostgresAdapter:
                 updated_at = %s
             WHERE command_id = %s
               AND status IN ('failed_terminal', 'cancelled')
+              AND not_before_at = %s
             RETURNING *
             """,
-            (_json_dump(next_result), now, normalized_command_id),
+            (_json_dump(next_result), now, normalized_command_id, current_not_before_at),
         )
 
     def resume_workflow_command(
@@ -13219,6 +13235,7 @@ class LiveControlPlanePostgresAdapter:
             return None
         if _is_start_v2_root_command_result_acceptance_hold(current):
             return None
+        current_not_before_at = str(current.get("not_before_at") or "").strip()
         existing_result = _json_load_dict(current.get("result_json"))
         attempt = max(0, int(current.get("attempt") or 0) - 1)
         next_result = {
@@ -13243,9 +13260,10 @@ class LiveControlPlanePostgresAdapter:
                 updated_at = %s
             WHERE command_id = %s
               AND status = 'retry_wait'
+              AND not_before_at = %s
             RETURNING *
             """,
-            (attempt, _json_dump(next_result), now, normalized_command_id),
+            (attempt, _json_dump(next_result), now, normalized_command_id, current_not_before_at),
         )
 
     def enqueue_runtime_outbox(
@@ -15931,7 +15949,7 @@ def _is_start_v2_root_command_result_acceptance_hold(command: dict[str, Any] | N
         or str(command.get("owner") or "").strip() == "acquisition_run_writer"
         or str(payload.get("schema_version") or "").strip() == "acquisition_root_command_payload.v2"
         or isinstance(payload.get("start_snapshot"), dict)
-        or isinstance(payload.get("confirmation_receipt"), dict)
+        or isinstance(payload.get("confirmation_receipt_ref"), dict)
     )
 
 
