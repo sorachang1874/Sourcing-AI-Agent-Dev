@@ -1,0 +1,115 @@
+{
+  "schema_version": "x.research_orchestration.policy.v1",
+  "policy_version": "research_orchestration_policy.v1",
+  "channel_order": [
+    "candidate_authored_surface",
+    "project_direct_credit",
+    "official_source",
+    "conversation_graph"
+  ],
+  "channel_registry": [
+    {
+      "channel_id": "candidate_authored_surface",
+      "default_enabled": true,
+      "authority": "primary_subject_evidence",
+      "supported_surfaces": [
+        "post",
+        "reply"
+      ]
+    },
+    {
+      "channel_id": "project_direct_credit",
+      "default_enabled": false,
+      "authority": "named_seed_requires_subject_followup",
+      "supported_surfaces": [
+        "post",
+        "reply",
+        "quote"
+      ]
+    },
+    {
+      "channel_id": "official_source",
+      "default_enabled": false,
+      "authority": "official_anchor_or_named_seed",
+      "supported_surfaces": [
+        "post"
+      ]
+    },
+    {
+      "channel_id": "conversation_graph",
+      "default_enabled": false,
+      "authority": "low_authority_graph_seed_only",
+      "supported_surfaces": [
+        "reply",
+        "quote",
+        "thread"
+      ]
+    }
+  ],
+  "supported_analysis_modes": [
+    "exploratory",
+    "verification",
+    "hybrid"
+  ],
+  "generic_relevance_states": [
+    "target_core",
+    "target_adjacent",
+    "ambiguous",
+    "out_of_scope"
+  ],
+  "active_followup_states": [
+    "target_core",
+    "target_adjacent",
+    "ambiguous"
+  ],
+  "default_precision_states": [
+    "target_core"
+  ],
+  "quality_metric_ids": [
+    "candidate_authored_both_surface_coverage_rate",
+    "source_bound_evidence_rate",
+    "target_direction_core_rate",
+    "target_direction_active_rate",
+    "evidence_backed_temporal_state_rate",
+    "target_core_unique_account_yield_per_native_call",
+    "cross_source_handle_resolution_rate"
+  ],
+  "supported_scope_node_kinds": [
+    "organization",
+    "model",
+    "product",
+    "application",
+    "research_program",
+    "capability",
+    "industry",
+    "team",
+    "initiative"
+  ],
+  "experience_verification": {
+    "default_enabled": false,
+    "dimension_ids": [
+      "china_asia_professional_educational_experience"
+    ],
+    "explicit_query_trigger_required": true,
+    "base_population_rewrite_allowed": false,
+    "identity_inference_allowed": false
+  },
+  "portability": {
+    "accepted_seed_source_kinds": [
+      "x_account",
+      "linkedin_profile",
+      "professional_profile",
+      "name_only"
+    ],
+    "runtime_import_allowed": false,
+    "canonical_person_write_allowed": false,
+    "x_account_is_canonical_person": false,
+    "cross_source_link_is_reversible_proposal": true
+  },
+  "authority": {
+    "provider_calls_allowed": false,
+    "product_writes_allowed": false,
+    "business_candidate_cap": null,
+    "technical_ceilings_are_business_caps": false
+  }
+}

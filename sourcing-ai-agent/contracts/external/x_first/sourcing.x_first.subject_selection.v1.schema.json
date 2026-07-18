@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sourcing-ai-agent.invalid/contracts/sourcing.x_first.subject_selection.v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "selection_id",
+    "exported_at",
+    "snapshot",
+    "subjects",
+    "authority",
+    "contract_schema_sha256",
+    "artifact_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "sourcing.x_first.subject_selection.v1"},
+    "selection_id": {"$ref": "#/$defs/identifier"},
+    "exported_at": {"$ref": "#/$defs/timestamp"},
+    "snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "workspace_ref",
+        "projection_ref",
+        "membership_revision",
+        "source_candidate_count",
+        "selected_candidate_count",
+        "selected_member_keys_sha256"
+      ],
+      "properties": {
+        "workspace_ref": {"type": "string", "minLength": 1, "maxLength": 256},
+        "projection_ref": {"type": "string", "minLength": 1, "maxLength": 256},
+        "membership_revision": {"type": "string", "minLength": 1, "maxLength": 256},
+        "source_candidate_count": {"type": "integer", "minimum": 1},
+        "selected_candidate_count": {"type": "integer", "minimum": 1},
+        "selected_member_keys_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "subjects": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/subject"}
+    },
+    "authority": {
+      "const": {
+        "provider_calls_allowed": false,
+        "product_writes_allowed": false,
+        "canonical_person_merge_allowed": false,
+        "outreach_allowed": false
+      }
+    },
+    "contract_schema_sha256": {"$ref": "#/$defs/sha256"},
+    "artifact_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "identifier": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]{0,127}$"},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "timestamp": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "nullable_text": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "string", "minLength": 1, "maxLength": 512}
+      ]
+    },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_subject_ref",
+        "source_record_ref",
+        "source_record_sha256",
+        "source_status",
+        "source_kind",
+        "source_profile_url",
+        "name_text",
+        "x_handle_proposals",
+        "professional_facts"
+      ],
+      "properties": {
+        "source_subject_ref": {"$ref": "#/$defs/identifier"},
+        "source_record_ref": {"type": "string", "minLength": 1, "maxLength": 512},
+        "source_record_sha256": {"$ref": "#/$defs/sha256"},
+        "source_status": {"const": "source_bound"},
+        "source_kind": {
+          "enum": ["linkedin_profile", "professional_profile", "name_only"]
+        },
+        "source_profile_url": {"$ref": "#/$defs/nullable_text"},
+        "name_text": {"$ref": "#/$defs/nullable_text"},
+        "x_handle_proposals": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["handle", "binding_status", "evidence_ref"],
+            "properties": {
+              "handle": {"type": "string", "pattern": "^[A-Za-z0-9_]{1,15}$"},
+              "binding_status": {"const": "cross_source_link_proposed"},
+              "evidence_ref": {"type": "string", "minLength": 1, "maxLength": 512}
+            }
+          }
+        },
+        "professional_facts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["fact_type", "value", "temporal_state", "evidence_ref"],
+            "properties": {
+              "fact_type": {
+                "enum": ["affiliation", "role", "education", "project", "location", "other"]
+              },
+              "value": {"type": "string", "minLength": 1, "maxLength": 1000},
+              "temporal_state": {
+                "enum": ["current", "historical", "ambiguous", "not_applicable"]
+              },
+              "evidence_ref": {"type": "string", "minLength": 1, "maxLength": 512}
+            }
+          }
+        }
+      }
+    }
+  }
+}

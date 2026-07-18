@@ -1,0 +1,372 @@
+{
+  "schema_version": "x.portable.research_campaign.result.v1",
+  "campaign_id": "fixture_general_research_campaign",
+  "request_sha256": "4391239b9c181c76be25bcfe2ac7cd1e299a609937c157745af5b48f5052d956",
+  "plan_sha256": "41456b8e4c0f076777fe4542c6db128bf684a15a6ca27bea48b43b83071536c2",
+  "catalog_sha256": "6730a9e079df2e25e74f9ba6b91b454a340cbc475e74829b984cf3a907f9b28b",
+  "execution_window": {
+    "started_at": "2026-07-18T07:59:00Z",
+    "completed_at": "2026-07-18T08:01:00Z"
+  },
+  "status": "partial",
+  "subject_outcomes": [
+    {
+      "seed_ref": "seed_x_account",
+      "terminal_state": "analyzed",
+      "x_account_refs": ["xacct_fixture_author"],
+      "reason": "fixture X account has terminal Post and Reply analysis"
+    },
+    {
+      "seed_ref": "seed_linkedin_profile",
+      "terminal_state": "analyzed",
+      "x_account_refs": ["xacct_linked_seed"],
+      "reason": "cross-source X handle remains a reversible proposal"
+    },
+    {
+      "seed_ref": "seed_name_only",
+      "terminal_state": "handle_resolution_required",
+      "x_account_refs": [],
+      "reason": "name-only seed has no asserted or proposed X handle"
+    }
+  ],
+  "external_accounts": [
+    {
+      "x_account_ref": "xacct_fixture_author",
+      "platform_user_id": null,
+      "current_handle": "fixture_author",
+      "profile_url": "https://x.com/fixture_author",
+      "identity_status": "provisional_handle",
+      "handle_history_proposals": []
+    },
+    {
+      "x_account_ref": "xacct_linked_seed",
+      "platform_user_id": null,
+      "current_handle": "linked_seed",
+      "profile_url": "https://x.com/linked_seed",
+      "identity_status": "provisional_handle",
+      "handle_history_proposals": []
+    }
+  ],
+  "cross_source_link_proposals": [
+    {
+      "proposal_id": "link_seed_linkedin_to_linked_seed",
+      "seed_ref": "seed_linkedin_profile",
+      "x_account_ref": "xacct_linked_seed",
+      "status": "proposed",
+      "evidence_refs": ["fixture://external/linkedin/fixture_researcher#x-link"],
+      "source_status": "fixture_synthetic",
+      "human_review_required": true,
+      "automatic_merge_authorized": false
+    }
+  ],
+  "discovery_origins": [],
+  "surface_attempts": [
+    {
+      "x_account_ref": "xacct_fixture_author",
+      "surface": "post",
+      "query_text": "from:fixture_author -filter:replies",
+      "query_sha256": "c432bc3e22f38e7eb458384863c4504a7b5131d7a15e06ff8cd590d7649a47cd",
+      "receipt_ref": "fixture://receipt/fixture_author/post",
+      "source_status": "fixture_synthetic",
+      "execution_state": "completed",
+      "bound_observation_count": 1,
+      "result_truncated": false,
+      "continuation_state": "unknown",
+      "continuation_ref": null
+    },
+    {
+      "x_account_ref": "xacct_fixture_author",
+      "surface": "reply",
+      "query_text": "from:fixture_author filter:replies",
+      "query_sha256": "1ad3c4d8bb3f53f3c5dce420e30e494629dde23496edc9e6e5534e68d7a2d7dc",
+      "receipt_ref": "fixture://receipt/fixture_author/reply",
+      "source_status": "fixture_synthetic",
+      "execution_state": "completed",
+      "bound_observation_count": 1,
+      "result_truncated": false,
+      "continuation_state": "unknown",
+      "continuation_ref": null
+    },
+    {
+      "x_account_ref": "xacct_linked_seed",
+      "surface": "post",
+      "query_text": "from:linked_seed -filter:replies",
+      "query_sha256": "f390888c5852844c24c1109fb64a56d44ab5a0b9a870423e66bea753b1cd927c",
+      "receipt_ref": "fixture://receipt/linked_seed/post",
+      "source_status": "fixture_synthetic",
+      "execution_state": "completed",
+      "bound_observation_count": 1,
+      "result_truncated": false,
+      "continuation_state": "unknown",
+      "continuation_ref": null
+    },
+    {
+      "x_account_ref": "xacct_linked_seed",
+      "surface": "reply",
+      "query_text": "from:linked_seed filter:replies",
+      "query_sha256": "73f12813eb35c79e20ad444e020f8e157e8c5b8ae7fa36f575ce79b1b3eb0db6",
+      "receipt_ref": "fixture://receipt/linked_seed/reply",
+      "source_status": "fixture_synthetic",
+      "execution_state": "completed",
+      "bound_observation_count": 1,
+      "result_truncated": false,
+      "continuation_state": "unknown",
+      "continuation_ref": null
+    }
+  ],
+  "semantic_recall_attempts": [],
+  "semantic_recall_outcomes": [
+    {
+      "x_account_ref": "xacct_fixture_author",
+      "question_id": "discover_research_topics",
+      "execution_policy": "authored_surface_only",
+      "terminal_state": "authored_surface_complete",
+      "attempted_query_sha256s": [],
+      "stop_reason": "no_configured_aliases",
+      "receipt_refs": ["fixture://receipt/fixture_author/post", "fixture://receipt/fixture_author/reply"],
+      "adaptive_stop_decision": null
+    },
+    {
+      "x_account_ref": "xacct_fixture_author",
+      "question_id": "verify_coding_work",
+      "execution_policy": "adaptive_marginal_gain",
+      "terminal_state": "not_run",
+      "attempted_query_sha256s": [],
+      "stop_reason": "not_run",
+      "receipt_refs": [],
+      "adaptive_stop_decision": null
+    },
+    {
+      "x_account_ref": "xacct_linked_seed",
+      "question_id": "discover_research_topics",
+      "execution_policy": "authored_surface_only",
+      "terminal_state": "authored_surface_complete",
+      "attempted_query_sha256s": [],
+      "stop_reason": "no_configured_aliases",
+      "receipt_refs": ["fixture://receipt/linked_seed/post", "fixture://receipt/linked_seed/reply"],
+      "adaptive_stop_decision": null
+    },
+    {
+      "x_account_ref": "xacct_linked_seed",
+      "question_id": "verify_coding_work",
+      "execution_policy": "adaptive_marginal_gain",
+      "terminal_state": "not_run",
+      "attempted_query_sha256s": [],
+      "stop_reason": "not_run",
+      "receipt_refs": [],
+      "adaptive_stop_decision": null
+    }
+  ],
+  "observations": [
+    {
+      "observation_id": "obs_fixture_post",
+      "x_account_ref": "xacct_fixture_author",
+      "surface": "post",
+      "platform_object_id": "1001",
+      "canonical_url": "https://x.com/fixture_author/status/1001",
+      "author_platform_user_id": null,
+      "author_handle": "fixture_author",
+      "published_at": "2026-07-17T08:00:00Z",
+      "observed_at": "2026-07-18T08:00:00Z",
+      "text_or_excerpt": "Fixture author discusses evaluation and coding research.",
+      "content_sha256": "92c5b767a185bc95efd89e0eb8b7a156d6a10c78a864ee15c118af9e4defbe32",
+      "source_status": "fixture_synthetic",
+      "receipt_ref": "fixture://receipt/fixture_author/post"
+    },
+    {
+      "observation_id": "obs_fixture_reply",
+      "x_account_ref": "xacct_fixture_author",
+      "surface": "reply",
+      "platform_object_id": "1002",
+      "canonical_url": "https://x.com/fixture_author/status/1002",
+      "author_platform_user_id": null,
+      "author_handle": "fixture_author",
+      "published_at": "2026-07-17T09:00:00Z",
+      "observed_at": "2026-07-18T08:00:00Z",
+      "text_or_excerpt": "Fixture author replies about current coding experiments.",
+      "content_sha256": "e9c4b3e3dced93f163922b89bb283b50b9db54d89fa543b77988a8c3624c4b33",
+      "source_status": "fixture_synthetic",
+      "receipt_ref": "fixture://receipt/fixture_author/reply"
+    },
+    {
+      "observation_id": "obs_linked_post",
+      "x_account_ref": "xacct_linked_seed",
+      "surface": "post",
+      "platform_object_id": "2001",
+      "canonical_url": "https://x.com/linked_seed/status/2001",
+      "author_platform_user_id": null,
+      "author_handle": "linked_seed",
+      "published_at": "2026-07-16T08:00:00Z",
+      "observed_at": "2026-07-18T08:00:00Z",
+      "text_or_excerpt": "Linked seed describes code-generation model training.",
+      "content_sha256": "f9310bcd7bb3e64702e09a01ae28bcdf45d06857e50facca1932ef6072289a61",
+      "source_status": "fixture_synthetic",
+      "receipt_ref": "fixture://receipt/linked_seed/post"
+    },
+    {
+      "observation_id": "obs_linked_reply",
+      "x_account_ref": "xacct_linked_seed",
+      "surface": "reply",
+      "platform_object_id": "2002",
+      "canonical_url": "https://x.com/linked_seed/status/2002",
+      "author_platform_user_id": null,
+      "author_handle": "linked_seed",
+      "published_at": "2026-07-16T09:00:00Z",
+      "observed_at": "2026-07-18T08:00:00Z",
+      "text_or_excerpt": "Linked seed replies about historical infrastructure work.",
+      "content_sha256": "f2c71703972970242dfd8c61a88e3c066f15d1a4fc9982d84b1e8a277fce39ab",
+      "source_status": "fixture_synthetic",
+      "receipt_ref": "fixture://receipt/linked_seed/reply"
+    }
+  ],
+  "affiliation_results": [
+    {
+      "x_account_ref": "xacct_fixture_author",
+      "scope_id": "fixture_lab",
+      "temporal_state": "current",
+      "matches_temporal_filter": true,
+      "evidence_refs": ["seed_x_account"],
+      "reason": "fixture seed reports current affiliation",
+      "source_status": "fixture_synthetic"
+    },
+    {
+      "x_account_ref": "xacct_linked_seed",
+      "scope_id": "fixture_lab",
+      "temporal_state": "current",
+      "matches_temporal_filter": true,
+      "evidence_refs": ["seed_linkedin_profile"],
+      "reason": "fixture external profile reports current affiliation",
+      "source_status": "fixture_synthetic"
+    }
+  ],
+  "dimension_results": [
+    {
+      "x_account_ref": "xacct_fixture_author",
+      "question_id": "discover_research_topics",
+      "dimension_id": "research_workstream",
+      "matched_label_ids": [],
+      "relevance_state": "ambiguous",
+      "target_activity_temporal_state": "current",
+      "matches_temporal_filter": true,
+      "evidence_refs": ["obs_fixture_post", "obs_fixture_reply"],
+      "reason": "exploratory mode proposes topics without forcing one configured target",
+      "source_status": "fixture_synthetic"
+    },
+    {
+      "x_account_ref": "xacct_fixture_author",
+      "question_id": "verify_coding_work",
+      "dimension_id": "research_workstream",
+      "matched_label_ids": ["coding"],
+      "relevance_state": "target_core",
+      "target_activity_temporal_state": "current",
+      "matches_temporal_filter": true,
+      "evidence_refs": ["obs_fixture_post", "obs_fixture_reply"],
+      "reason": "both synthetic authored surfaces explicitly discuss current coding research",
+      "source_status": "fixture_synthetic"
+    },
+    {
+      "x_account_ref": "xacct_linked_seed",
+      "question_id": "discover_research_topics",
+      "dimension_id": "research_workstream",
+      "matched_label_ids": [],
+      "relevance_state": "ambiguous",
+      "target_activity_temporal_state": "historical",
+      "matches_temporal_filter": true,
+      "evidence_refs": ["obs_linked_post", "obs_linked_reply"],
+      "reason": "exploratory mode retains coding and infrastructure as proposed topics",
+      "source_status": "fixture_synthetic"
+    },
+    {
+      "x_account_ref": "xacct_linked_seed",
+      "question_id": "verify_coding_work",
+      "dimension_id": "research_workstream",
+      "matched_label_ids": ["coding"],
+      "relevance_state": "target_adjacent",
+      "target_activity_temporal_state": "historical",
+      "matches_temporal_filter": true,
+      "evidence_refs": ["obs_linked_post", "obs_linked_reply"],
+      "reason": "synthetic evidence is relevant but mixes coding with historical infrastructure",
+      "source_status": "fixture_synthetic"
+    }
+  ],
+  "exploratory_findings": [
+    {
+      "finding_id": "finding_fixture_evaluation",
+      "x_account_ref": "xacct_fixture_author",
+      "question_id": "discover_research_topics",
+      "proposed_label": "evaluation",
+      "evidence_refs": ["obs_fixture_post"],
+      "reason": "self-authored synthetic Post explicitly discusses evaluation",
+      "source_status": "fixture_synthetic"
+    },
+    {
+      "finding_id": "finding_linked_infrastructure",
+      "x_account_ref": "xacct_linked_seed",
+      "question_id": "discover_research_topics",
+      "proposed_label": "infrastructure",
+      "evidence_refs": ["obs_linked_reply"],
+      "reason": "self-authored synthetic Reply explicitly discusses infrastructure",
+      "source_status": "fixture_synthetic"
+    }
+  ],
+  "experience_verification_queue": [],
+  "optional_channel_attempts": [
+    {
+      "attempt_id": "opt_attempt_direct_credit_1",
+      "task_id": "opt_5adcddeee4b0bd056f50cae8",
+      "ordinal": 1,
+      "receipt_ref": "fixture://receipt/optional/direct-credit/1",
+      "source_status": "fixture_synthetic",
+      "execution_state": "no_result",
+      "bound_evidence_count": 0,
+      "result_truncated": false,
+      "continuation_state": "exhausted",
+      "continuation_ref": null,
+      "evidence_refs": []
+    }
+  ],
+  "optional_channel_outcomes": [
+    {
+      "task_id": "opt_5adcddeee4b0bd056f50cae8",
+      "channel_id": "project_direct_credit",
+      "terminal_state": "no_result",
+      "attempt_ids": ["opt_attempt_direct_credit_1"],
+      "evidence_refs": [],
+      "reason": "synthetic fixture exercises the opt-in channel without producing a new lead",
+      "source_status": "fixture_synthetic"
+    }
+  ],
+  "relationship_results": [],
+  "coverage": {
+    "subjects_total": 3,
+    "terminal_subject_outcomes": 3,
+    "resolved_account_count": 2,
+    "candidate_authored_post_attempted": 2,
+    "candidate_authored_reply_attempted": 2,
+    "candidate_authored_both_surface_attempted": 2,
+    "observation_count": 4,
+    "coverage_source_status": "fixture_synthetic",
+    "metric_values": [
+      {"metric_id": "candidate_authored_both_surface_coverage_rate", "numerator": 2, "denominator": 2},
+      {"metric_id": "source_bound_evidence_rate", "numerator": 0, "denominator": 4},
+      {"metric_id": "target_direction_core_rate", "numerator": 1, "denominator": 2},
+      {"metric_id": "target_direction_active_rate", "numerator": 2, "denominator": 2},
+      {"metric_id": "evidence_backed_temporal_state_rate", "numerator": 4, "denominator": 4},
+      {"metric_id": "target_core_unique_account_yield_per_native_call", "numerator": 0, "denominator": 0},
+      {"metric_id": "cross_source_handle_resolution_rate", "numerator": 1, "denominator": 2}
+    ]
+  },
+  "limitations": [
+    "fixture-only artifact; no Grok, Luna, X, provider, or product runtime call occurred",
+    "semantic recall queries are planned but are not executed by this synthetic fixture",
+    "cross-source handle remains a reversible proposal and is not a canonical person merge",
+    "name-only subject remains in the handle-resolution queue"
+  ],
+  "authority": {
+    "product_writes_allowed": false,
+    "canonical_person_write_allowed": false,
+    "automatic_cross_source_merge_allowed": false,
+    "outreach_allowed": false
+  },
+  "result_sha256": "ae45eb84cc2e23a4afa0de7e2e8531b659c442f33a095a69a6368b931b91a150"
+}

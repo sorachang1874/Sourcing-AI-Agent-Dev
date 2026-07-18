@@ -23,6 +23,7 @@ Code boundary examples: `src/sourcing_agent/action_*`,
 | Current Agent rollout, ordering, served/live gates | [TRACK_D_AGENT_RUNTIME_PLAN.md](../../TRACK_D_AGENT_RUNTIME_PLAN.md) | active plan; confirm current batch in the project snapshots |
 | Pre-Agent contract/owner matrix | [PRE_AGENT_CONTRACT_REVIEW.md](../../PRE_AGENT_CONTRACT_REVIEW.md) | active review matrix; contract-heavy changes require independent review |
 | Tool/model invocation surface | [TRACK_D_D0_MODEL_TOOL_RUNTIME_DESIGN.md](../../TRACK_D_D0_MODEL_TOOL_RUNTIME_DESIGN.md) | design baseline; use current D0/D1 artifact for the exact slice |
+| Selected-person X research integration | [X_FIRST_SELECTED_PERSON_RESEARCH_FOUNDATION.md](X_FIRST_SELECTED_PERSON_RESEARCH_FOUNDATION.md) | provider-free artifact foundation; `served=0` until runtime/materialization gates close |
 | Current implementation/review artifact | [INDEX.md Tier 3](../../INDEX.md) | choose the exact Track D artifact; do not read all Track D docs by default |
 | Independent review procedure | [INDEPENDENT_REVIEW_GATE.md](../../INDEPENDENT_REVIEW_GATE.md) | required for activation, contract, owner, or milestone claims |
 
