@@ -160,7 +160,35 @@ SCAN_EXCLUDE_DIRS = {
     "__pycache__",
     "node_modules",
 }
+# Untracked local artifact prefixes (present only in a dirty integration tree).
+# The collision scan covers tracked source; these prefixes are never tracked
+# and can hold gigabytes of runtime payloads that would hang the walk.
+SCAN_EXCLUDE_PATH_PREFIXES = {
+    "output",
+    "logs",
+    "object_sync",
+    "hot_cache_company_assets",
+    "company_assets",
+    "job_locks",
+    "jobs",
+    "runtime_metrics",
+    "local_asset_packages",
+    "configs/scripted/samples",
+    "frontend-demo/dist",
+    "frontend-demo/public/tml",
+}
 SCAN_SKIP_FILES = {MANIFEST_PATH, DECISION_PATH, Path(__file__).resolve()}
+
+
+def _scan_path_excluded(rel: str) -> bool:
+    if rel in SCAN_EXCLUDE_PATH_PREFIXES:
+        return True
+    for prefix in SCAN_EXCLUDE_PATH_PREFIXES:
+        if rel.startswith(prefix + "/"):
+            return True
+    if rel == "runtime" or rel.startswith("runtime/"):
+        return not (rel == "runtime/reviews" or rel.startswith("runtime/reviews/"))
+    return False
 
 
 def _load(path: Path) -> dict[str, Any]:
@@ -701,10 +729,23 @@ def _validate_closed_manifest(value: object) -> dict[str, Any]:
 def _scan_repo_bytes() -> list[tuple[Path, bytes]]:
     payloads: list[tuple[Path, bytes]] = []
     for root, dirs, files in os.walk(REPO_ROOT):
-        dirs[:] = sorted(name for name in dirs if name not in SCAN_EXCLUDE_DIRS)
+        rel_root = Path(root).relative_to(REPO_ROOT)
+        rel_root_text = "" if str(rel_root) == "." else rel_root.as_posix()
+        kept_dirs: list[str] = []
+        for name in sorted(dirs):
+            if name in SCAN_EXCLUDE_DIRS:
+                continue
+            rel_dir = f"{rel_root_text}/{name}" if rel_root_text else name
+            if _scan_path_excluded(rel_dir):
+                continue
+            kept_dirs.append(name)
+        dirs[:] = kept_dirs
         for name in sorted(files):
             path = Path(root) / name
             if path in SCAN_SKIP_FILES:
+                continue
+            rel_file = f"{rel_root_text}/{name}" if rel_root_text else name
+            if _scan_path_excluded(rel_file):
                 continue
             payloads.append((path, path.read_bytes()))
     return payloads
