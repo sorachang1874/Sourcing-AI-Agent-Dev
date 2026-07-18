@@ -28,6 +28,8 @@ This batch remains non-live and non-served. It does not close `R-019`, `R-029`, 
 - Approval actor and policy revision validation now reuses the canonical pure start-v2 owner/version validators before
   adapter dependency checks or PostgreSQL connection/locking.
 - S1e2b documentation now states that create performs no wake; S1e2c owns hold release and post-accept wake.
+- `tests/test_d1n_start_wake_contract_docs.py` locks that cross-document contract across the remaining-action plan, the
+  S1e2b implementation record, and this response.
 
 ## New regression evidence
 
@@ -43,6 +45,8 @@ This batch remains non-live and non-served. It does not close `R-019`, `R-029`, 
   - raw text owner corruption replay rejection;
   - blank JSON carrier replay rejection;
   - JSON bool/int alias replay rejection.
+- `tests/test_d1n_start_wake_contract_docs.py::test_s1e2b_create_wake_contract_is_cross_document_consistent` covers
+  the no-create-wake / S1e2c-post-accept-wake wording across the controlling docs.
 
 ## Explicit non-closure
 

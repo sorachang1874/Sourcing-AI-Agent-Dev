@@ -476,7 +476,8 @@
   cancel/retry/resume/claim/ready-list zero-write coverage. Response evidence currently includes fast no-access
   `12 passed`, targeted partial-v2 PG node `1 passed + 15 subtests`, direct native command-control node
   `1 passed + 3 subtests`, control-state parity node `1 passed + 6 subtests`, and PG create matrix
-  `25 passed + 48 subtests`; fresh pinned re-review is pending. S1e2c author candidate 已实现 read-only
+  `25 passed + 48 subtests`; docs wake contract node=`1 passed`; fresh pinned re-review is pending. S1e2c author
+  candidate 已实现 read-only
   prepare + shared accept：locked owner 重建 `acquisition_start_result_v2` success terminal，fresh accept 同事务写
   attempt/slot/journal 并释放 dormant command hold，exact replay 校验已释放 command，late attempt 只追加 quarantined
   attempt，fault 回滚 journal+release，post-commit 仅 best-effort recovery wake，`runtime_outbox` 仍为 0。
