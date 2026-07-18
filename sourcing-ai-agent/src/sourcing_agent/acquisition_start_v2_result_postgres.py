@@ -114,6 +114,7 @@ def start_acquisition_result_lock_groups(
     operation_run_id: str,
     workflow_run_id: str,
     workflow_command_id: str,
+    command_key: str,
 ) -> tuple[tuple[str, ...], ...]:
     binding = revalidate_acquisition_start_v2_occurrence(occurrence)
 
@@ -122,11 +123,9 @@ def start_acquisition_result_lock_groups(
 
     return (
         _sorted(
-            f"operation_events:{binding.action_id}",
-            f"operation_events:{operation_run_id}",
-            f"workflow_events:{workflow_run_id}",
+            f"operation_runs:id:{operation_run_id}",
+            f"operation_runs:idempotency:{occurrence.workspace_id}:{binding.start_idempotency}",
         ),
-        _sorted(f"operation_runs:id:{operation_run_id}"),
         _sorted(
             f"agent_actions:id:{binding.action_id}",
             f"agent_actions:idempotency:{occurrence.workspace_id}:{binding.start_idempotency}",
@@ -139,8 +138,16 @@ def start_acquisition_result_lock_groups(
             f"acquisition_plan_previews:id:{binding.preview_id}",
             f"acquisition_plan_previews:revision:{binding.preview_revision}",
         ),
-        _sorted(f"workflow_commands:id:{workflow_command_id}"),
+        _sorted(
+            f"workflow_commands:id:{workflow_command_id}",
+            f"workflow_commands:idempotency:{workflow_run_id}:{command_key}",
+        ),
         _sorted(f"workflow_current_state:{workflow_run_id}"),
+        _sorted(
+            f"operation_events:{binding.action_id}",
+            f"operation_events:{operation_run_id}",
+            f"workflow_events:{workflow_run_id}",
+        ),
     )
 
 
@@ -185,7 +192,7 @@ def _discover_start_result_lock_identity(
     cursor: Any,
     *,
     occurrence: AgentToolOccurrence,
-) -> tuple[str, str, str]:
+) -> tuple[str, str, str, str]:
     binding = revalidate_acquisition_start_v2_occurrence(occurrence)
     operation_run_id = operation_run_id_for(
         action_id=binding.action_id,
@@ -209,7 +216,17 @@ def _discover_start_result_lock_identity(
         receipt=receipt,
         submitted_action=submitted_action,
     )
-    return operation_run_id, workflow_run_id, str(expected["workflow_command_id"])
+    return operation_run_id, workflow_run_id, str(expected["workflow_command_id"]), str(expected["command_key"])
+
+
+def _command_key_from_terminal_owner_ref(terminal: AgentToolTerminalResult) -> str:
+    receipt_ref = terminal.owner_result_ref.get("confirmation_receipt_ref")
+    receipt_digest = ""
+    if isinstance(receipt_ref, dict):
+        receipt_digest = str(receipt_ref.get("receipt_digest") or "")
+    if not receipt_digest:
+        raise ValueError("acquisition start result terminal receipt digest missing")
+    return f"acquisition.run.create:start-v2:{receipt_digest}"
 
 
 def load_start_acquisition_result_base_owner(
@@ -522,7 +539,7 @@ def prepare_start_acquisition_tool_result(
         try:
             with connection.cursor() as cursor:
                 _refresh_transaction_deadline(cursor, deadline=deadline)
-                operation_run_id, workflow_run_id, workflow_command_id = _discover_start_result_lock_identity(
+                operation_run_id, workflow_run_id, workflow_command_id, command_key = _discover_start_result_lock_identity(
                     cursor,
                     occurrence=occurrence,
                 )
@@ -531,6 +548,7 @@ def prepare_start_acquisition_tool_result(
                     operation_run_id=operation_run_id,
                     workflow_run_id=workflow_run_id,
                     workflow_command_id=workflow_command_id,
+                    command_key=command_key,
                 ):
                     for lock_key in lock_group:
                         _refresh_transaction_deadline(cursor, deadline=deadline)
@@ -718,6 +736,7 @@ def accept_start_acquisition_tool_result_uow(
             operation_run_id=operation_run_id,
             workflow_run_id=workflow_run_id,
             workflow_command_id=terminal.workflow_command_id,
+            command_key=_command_key_from_terminal_owner_ref(terminal),
         ),
         load_base_owner=load_start_acquisition_result_base_owner,
         assert_locked_owner=assert_exact_start_acquisition_result_owner,

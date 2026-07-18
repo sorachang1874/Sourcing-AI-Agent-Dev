@@ -418,7 +418,8 @@
   serialized-result/error terminals before writes, exact-loads slot and preview owner rows, refreshes prepare
   lock/statement timeout from the remaining deadline, and adds stable owner-result proof for accepted replay plus
   late-result quarantine after downstream root-command progress. The central pre-agent matrix/preflight now includes
-  the start-v2 result hold/release owner entry. It does not close the S1e2c formal `NO-GO`: shared lock topology remains
+  the start-v2 result hold/release owner entry. Start-v2 create and result acceptance now share the same advisory lock
+  topology and idempotency keys. It does not close the S1e2c formal `NO-GO`: broader completion/control topology remains
   under R-019, and no provider/model/live/served path is authorized.
 
 ## 使用方式

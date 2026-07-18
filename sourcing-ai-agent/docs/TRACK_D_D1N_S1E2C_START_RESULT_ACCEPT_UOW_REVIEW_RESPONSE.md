@@ -24,6 +24,9 @@ This batch remains non-live and non-served. It does not close `R-019`, `R-029`, 
 - `PRE_AGENT_CONTRACT_REVIEW.md` now has a `start_acquisition_run.result_hold_release_owner` matrix row, and the fast
   preflight asserts the owner, source-of-truth, allowed consumers, forbidden consumers, fail-closed fallback, and
   served-zero migration status.
+- Start-v2 create and result-acceptance UoWs now use the same ratified advisory lock group order:
+  Operation -> Action -> result slot -> preview -> root command -> workflow current state -> event streams. Result
+  acceptance now also includes the operation idempotency and root-command idempotency advisory keys.
 
 ## New regression evidence
 
@@ -34,12 +37,15 @@ This batch remains non-live and non-served. It does not close `R-019`, `R-029`, 
   writes.
 - `tests/test_pre_agent_contract_review.py::test_agent_tool_result_aggregate_owner_contract_is_canonical` now fails if
   the start-v2 result hold/release owner row or key contract tokens disappear.
+- `tests/test_d1n_start_acquisition_v2_create_uow.py::test_create_and_result_share_ratified_lock_topology` asserts the
+  exact shared lock topology and byte-sorted keys for create and result acceptance.
 - Existing accept/replay/quarantine/root-hop tests continue to exercise the held-command release path and zero
   `runtime_outbox`/provider/model behavior.
 
 ## Still open from the S1e2c formal review
 
-- A shared lock/probe topology across create, accept, completion, and controls remains open under `R-019`.
+- The shared lock/probe topology across start-v2 create and result acceptance is now ratified by a fast oracle. Broader
+  completion/control topology remains open under `R-019`.
 - The central pre-agent contract matrix entry is present in this response, but the formal S1e2c review remains open until
   a fresh pinned non-author artifact returns `GO`.
 - S1e2d covers the first released-root consumer hop, and the S1e2b response covers held generic command controls, but

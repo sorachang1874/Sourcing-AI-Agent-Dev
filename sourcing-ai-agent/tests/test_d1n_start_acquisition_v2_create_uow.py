@@ -5,6 +5,7 @@ from dataclasses import replace
 import pytest
 
 from sourcing_agent import acquisition_start_v2_create_postgres as create_pg
+from sourcing_agent import acquisition_start_v2_result_postgres as result_pg
 from sourcing_agent.agent_tool_result_slot import AgentToolResultSlotError
 from tests.test_d1n_s1e1_start_authority_owner_decision import _build_executable_contract
 
@@ -83,6 +84,50 @@ def test_create_rejects_nonhuman_or_unversioned_approval_before_dependency_or_pg
         )
 
     assert adapter.accesses == []
+
+
+def test_create_and_result_share_ratified_lock_topology() -> None:
+    occurrence = _build_executable_contract()["occurrence"]
+    binding = create_pg.revalidate_acquisition_start_v2_occurrence(occurrence)
+    operation_run_id = "op_start_lock_topology"
+    workflow_run_id = "workflow_start_lock_topology"
+    workflow_command_id = "command_start_lock_topology"
+    command_key = "acquisition.run.create:start-v2:receipt_lock_topology"
+
+    create_groups = create_pg._advisory_lock_groups(  # noqa: SLF001
+        binding=binding,
+        operation_run_id=operation_run_id,
+        workflow_run_id=workflow_run_id,
+        workflow_command_id=workflow_command_id,
+        command_key=command_key,
+    )
+    result_groups = result_pg.start_acquisition_result_lock_groups(
+        occurrence=occurrence,
+        operation_run_id=operation_run_id,
+        workflow_run_id=workflow_run_id,
+        workflow_command_id=workflow_command_id,
+        command_key=command_key,
+    )
+
+    assert create_groups == result_groups
+    flattened = [key for group in create_groups for key in group]
+    assert flattened == [
+        f"operation_runs:id:{operation_run_id}",
+        f"operation_runs:idempotency:{occurrence.workspace_id}:{binding.start_idempotency}",
+        f"agent_actions:id:{binding.action_id}",
+        f"agent_actions:idempotency:{occurrence.workspace_id}:{binding.start_idempotency}",
+        f"agent_tool_result_slots:id:{occurrence.result_slot_id}",
+        f"agent_tool_result_slots:occurrence:{occurrence.logical_occurrence_digest}",
+        f"acquisition_plan_previews:id:{binding.preview_id}",
+        f"acquisition_plan_previews:revision:{binding.preview_revision}",
+        f"workflow_commands:id:{workflow_command_id}",
+        f"workflow_commands:idempotency:{workflow_run_id}:{command_key}",
+        f"workflow_current_state:{workflow_run_id}",
+        f"operation_events:{binding.action_id}",
+        f"operation_events:{operation_run_id}",
+        f"workflow_events:{workflow_run_id}",
+    ]
+    assert all(list(group) == sorted(group, key=lambda value: value.encode("utf-8")) for group in create_groups)
 
 
 def test_create_fault_surface_is_closed() -> None:

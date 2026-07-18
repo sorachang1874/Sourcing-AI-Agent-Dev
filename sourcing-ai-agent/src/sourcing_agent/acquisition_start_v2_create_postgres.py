@@ -763,11 +763,6 @@ def _advisory_lock_groups(
 
     return (
         _sorted(
-            f"operation_events:{binding.action_id}",
-            f"operation_events:{operation_run_id}",
-            f"workflow_events:{workflow_run_id}",
-        ),
-        _sorted(
             f"operation_runs:id:{operation_run_id}",
             f"operation_runs:idempotency:{occurrence.workspace_id}:{binding.start_idempotency}",
         ),
@@ -788,6 +783,11 @@ def _advisory_lock_groups(
             f"workflow_commands:idempotency:{workflow_run_id}:{command_key}",
         ),
         _sorted(f"workflow_current_state:{workflow_run_id}"),
+        _sorted(
+            f"operation_events:{binding.action_id}",
+            f"operation_events:{operation_run_id}",
+            f"workflow_events:{workflow_run_id}",
+        ),
     )
 
 
