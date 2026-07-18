@@ -30,6 +30,10 @@ This batch remains non-live and non-served. It does not close `R-019`, `R-029`, 
 - Start-v2 create fresh-acceptance prerequisites no longer use the shared lossy pending Action/result-slot JSON checker:
   pending Action JSON carriers and the reserved result slot are validated with the create module's strict decoder,
   duplicate-key rejection, wrong-container rejection, and type-sensitive equality before the first create write.
+- Start-v2 create/replay now probes complete aggregate membership under the acquired locks for Operations linked to the
+  Action, workflow commands in the workflow, and Action/Operation/workflow event streams. Unknown Operation members,
+  unknown workflow commands other than the ratified root/intent successor, and event-stream suffix rows fail closed
+  instead of proving only the expected subset.
 
 ## New regression evidence
 
@@ -45,6 +49,9 @@ This batch remains non-live and non-served. It does not close `R-019`, `R-029`, 
 - `tests/test_d1n_start_acquisition_v2_create_pg.py::test_corrupted_pending_action_or_slot_json_rejects_before_create_writes`
   covers blank, malformed, duplicate-key, and wrong-container pending Action JSON corruption with full-table zero-write
   assertions.
+- `tests/test_d1n_start_acquisition_v2_create_pg.py::test_foreign_operation_membership_collision_writes_nothing` and
+  `test_committed_aggregate_suffix_membership_replay_collision_writes_nothing` cover foreign Operation membership plus
+  Action/workflow event suffix rows with zero-write assertions.
 - Existing accept/replay/quarantine/root-hop tests continue to exercise the held-command release path and zero
   `runtime_outbox`/provider/model behavior.
 

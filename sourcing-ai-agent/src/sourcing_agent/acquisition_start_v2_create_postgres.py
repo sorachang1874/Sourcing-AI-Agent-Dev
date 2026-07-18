@@ -41,6 +41,7 @@ from .acquisition_start_v2_postgres import (
 from .agent_tool_result_slot import AgentToolOccurrence
 from .agent_tool_result_postgres import _SLOT_IDENTITY_FIELDS, _slot_insert_row
 from .durable_runtime import (
+    ACQUISITION_INTENT_RESOLVE_COMMAND_TYPE,
     ACQUISITION_RUN_CREATE_COMMAND_TYPE,
     DEFAULT_COMMAND_OWNER_REGISTRY,
     attach_command_causality,
@@ -1084,6 +1085,20 @@ def create_acquisition_start_v2_uow(
 
                 _refresh_deadline(cursor)
                 cursor.execute(
+                    "SELECT * FROM operation_runs WHERE action_id = %s ORDER BY operation_run_id FOR UPDATE",
+                    (binding.action_id,),
+                )
+                operation_members = _raw_dict_rows(cursor)
+                unexpected_operations = [
+                    row
+                    for row in operation_members
+                    if str(row.get("operation_run_id") or "") != expected["operation_run"]["operation_run_id"]
+                ]
+                if unexpected_operations:
+                    raise ValueError("acquisition start create OperationRun membership collision")
+
+                _refresh_deadline(cursor)
+                cursor.execute(
                     "SELECT * FROM workflow_commands WHERE command_id = %s "
                     "OR (workflow_run_id = %s AND idempotency_key = %s) ORDER BY command_id FOR UPDATE",
                     (expected["workflow_command_id"], workflow_run_id, expected["command_key"]),
@@ -1092,6 +1107,24 @@ def create_acquisition_start_v2_uow(
                 if len(command_candidates) > 1:
                     raise ValueError("acquisition start create WorkflowCommand split identity collision")
                 existing_command = command_candidates[0] if command_candidates else None
+                _refresh_deadline(cursor)
+                cursor.execute(
+                    "SELECT * FROM workflow_commands WHERE workflow_run_id = %s ORDER BY command_id FOR UPDATE",
+                    (workflow_run_id,),
+                )
+                command_members = _raw_dict_rows(cursor)
+                unexpected_commands = [
+                    row
+                    for row in command_members
+                    if str(row.get("command_id") or "") != expected["workflow_command"]["command_id"]
+                    and not (
+                        str(row.get("parent_command_id") or "") == expected["workflow_command"]["command_id"]
+                        and str(row.get("command_type") or "") == ACQUISITION_INTENT_RESOLVE_COMMAND_TYPE
+                        and str(row.get("owner") or "") == "acquisition_planner"
+                    )
+                ]
+                if unexpected_commands:
+                    raise ValueError("acquisition start create WorkflowCommand membership collision")
 
                 _refresh_deadline(cursor)
                 cursor.execute(
@@ -1103,50 +1136,20 @@ def create_acquisition_start_v2_uow(
                     raise ValueError("acquisition start create workflow state identity collision")
                 existing_state = state_candidates[0] if state_candidates else None
 
-                operation_event_rows = _event_candidates(
-                    cursor,
-                    table_name="operation_events",
-                    stream_column="event_stream_id",
-                    identities=[
-                        (
-                            approval_required_event["event_id"],
-                            1,
-                            binding.action_id,
-                            approval_required_event["idempotency_key"],
-                        ),
-                        (
-                            expected["receipt_event"]["event_id"],
-                            2,
-                            binding.action_id,
-                            expected["receipt_event"]["idempotency_key"],
-                        ),
-                        (
-                            expected["planned_event"]["event_id"],
-                            1,
-                            operation_run_id,
-                            expected["planned_event"]["idempotency_key"],
-                        ),
-                    ],
+                _refresh_deadline(cursor)
+                cursor.execute(
+                    "SELECT * FROM operation_events WHERE event_stream_id IN (%s, %s) "
+                    "ORDER BY event_stream_id, sequence_number, event_id FOR UPDATE",
+                    (binding.action_id, operation_run_id),
                 )
-                workflow_event_rows = _event_candidates(
-                    cursor,
-                    table_name="workflow_events",
-                    stream_column="workflow_run_id",
-                    identities=[
-                        (
-                            expected["workflow_events"][0]["event_id"],
-                            1,
-                            workflow_run_id,
-                            expected["workflow_events"][0]["idempotency_key"],
-                        ),
-                        (
-                            expected["workflow_events"][1]["event_id"],
-                            2,
-                            workflow_run_id,
-                            expected["workflow_events"][1]["idempotency_key"],
-                        ),
-                    ],
+                operation_event_rows = _raw_dict_rows(cursor)
+                _refresh_deadline(cursor)
+                cursor.execute(
+                    "SELECT * FROM workflow_events WHERE workflow_run_id = %s "
+                    "ORDER BY sequence_number, event_id FOR UPDATE",
+                    (workflow_run_id,),
                 )
+                workflow_event_rows = _raw_dict_rows(cursor)
 
                 created_markers = (
                     existing_operation,

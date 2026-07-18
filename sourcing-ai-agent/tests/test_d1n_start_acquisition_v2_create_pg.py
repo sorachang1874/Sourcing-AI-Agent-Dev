@@ -986,6 +986,39 @@ class D1nStartAcquisitionV2CreatePGMatrixTest(PGControlPlaneStoreTestMixin, unit
 
         self.assertEqual(self._table_snapshot(), baseline)
 
+    def test_foreign_operation_membership_collision_writes_nothing(self) -> None:
+        occurrence = self._arrange_pending(suffix="foreign_operation")
+        binding = submit_pg.revalidate_acquisition_start_v2_occurrence(occurrence)
+        operation_run_id = operation_run_id_for(
+            action_id=binding.action_id,
+            operation_type="acquisition_run",
+            idempotency_key=binding.start_idempotency,
+        )
+        self._execute(
+            """
+            INSERT INTO {schema}.operation_runs (
+                operation_run_id, workspace_id, action_id, owner_module, operation_type,
+                status, progress_json, workflow_ref_json, cost_budget_json, idempotency_key,
+                result_ref_json, metadata_json, started_at, completed_at, created_at, updated_at
+            ) VALUES (
+                %s, %s, %s, 'foreign_collision', 'acquisition_run',
+                'queued', '{}', '{}', '{}', 'foreign_idempotency',
+                '{}', '{}', '', '', '2026-07-17T00:00:00Z', '2026-07-17T00:00:00Z'
+            )
+            """,
+            (
+                f"{operation_run_id}_foreign",
+                occurrence.workspace_id,
+                binding.action_id,
+            ),
+        )
+        baseline = self._table_snapshot()
+
+        with self.assertRaisesRegex(ValueError, "membership collision"):
+            self._create(occurrence)
+
+        self.assertEqual(self._table_snapshot(), baseline)
+
     def test_corrupted_pending_action_or_slot_json_rejects_before_create_writes(self) -> None:
         mutations: tuple[tuple[str, Callable[[AgentToolOccurrence], tuple[str, tuple[Any, ...]]]], ...] = (
             (
@@ -1102,6 +1135,72 @@ class D1nStartAcquisitionV2CreatePGMatrixTest(PGControlPlaneStoreTestMixin, unit
                 baseline = self._table_snapshot()
 
                 with self.assertRaises(ValueError):
+                    self._create(occurrence)
+
+                self.assertEqual(self._table_snapshot(), baseline)
+
+    def test_committed_aggregate_suffix_membership_replay_collision_writes_nothing(self) -> None:
+        mutations: tuple[tuple[str, Callable[[dict[str, Any]], tuple[str, tuple[Any, ...]]]], ...] = (
+            (
+                "action_event_suffix",
+                lambda ids: (
+                    """
+                    INSERT INTO {schema}.operation_events (
+                        event_id, workspace_id, event_stream_id, operation_run_id, action_id, event_family,
+                        event_type, sequence_number, idempotency_key, actor, source, payload_json,
+                        schema_version, created_at
+                    )
+                    SELECT
+                        %s, workspace_id, event_stream_id, operation_run_id, action_id, event_family,
+                        event_type, 3, %s, actor, source, payload_json, schema_version, created_at
+                    FROM {schema}.operation_events WHERE event_id = %s
+                    """,
+                    (
+                        f"{ids['receipt_event_id']}_suffix",
+                        f"{ids['receipt_event_id']}:suffix",
+                        ids["receipt_event_id"],
+                    ),
+                ),
+            ),
+            (
+                "workflow_event_suffix",
+                lambda ids: (
+                    """
+                    INSERT INTO {schema}.workflow_events (
+                        event_id, workflow_run_id, workspace_id, operation_id, command_id,
+                        activity_attempt_id, event_family, event_type, sequence_number,
+                        idempotency_key, actor, source, payload_json, schema_version, created_at
+                    )
+                    SELECT
+                        %s, workflow_run_id, workspace_id, operation_id, command_id,
+                        activity_attempt_id, event_family, event_type, 3,
+                        %s, actor, source, payload_json, schema_version, created_at
+                    FROM {schema}.workflow_events WHERE event_id = %s
+                    """,
+                    (
+                        f"{ids['source_event_id']}_suffix",
+                        f"{ids['source_event_id']}:suffix",
+                        ids["source_event_id"],
+                    ),
+                ),
+            ),
+        )
+
+        for ordinal, (label, mutation) in enumerate(mutations, start=1):
+            with self.subTest(owner=label):
+                occurrence = self._arrange_pending(suffix=f"membership_suffix_{ordinal}")
+                created = self._create(occurrence)
+                owner_ref = created["owner_result_ref"]
+                ids = {
+                    "receipt_event_id": owner_ref["confirmation_receipt_ref"]["receipt_id"],
+                    "source_event_id": owner_ref["command_source_event_id"],
+                    "command_id": owner_ref["workflow_command_id"],
+                }
+                sql, params = mutation(ids)
+                self._execute(sql, params)
+                baseline = self._table_snapshot()
+
+                with self.assertRaisesRegex(ValueError, "collision"):
                     self._create(occurrence)
 
                 self.assertEqual(self._table_snapshot(), baseline)
