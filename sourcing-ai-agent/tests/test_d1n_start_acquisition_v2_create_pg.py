@@ -4,6 +4,7 @@ import json
 import tempfile
 import unittest
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import Barrier
@@ -20,7 +21,7 @@ from sourcing_agent.acquisition_start_v2 import (
     AcquisitionStartV2ToolPins,
 )
 from sourcing_agent.agent_canary_registry import START_ACQUISITION_RUN_TOOL_SPEC
-from sourcing_agent.agent_tool_result_slot import AgentToolOccurrence
+from sourcing_agent.agent_tool_result_slot import AgentToolOccurrence, AgentToolTerminalResult
 from sourcing_agent.asset_catalog import AssetCatalog
 from sourcing_agent.local_postgres import quote_control_plane_postgres_identifier
 from sourcing_agent.model_provider import DeterministicModelClient
@@ -495,6 +496,58 @@ class D1nStartAcquisitionV2CreatePGMatrixTest(PGControlPlaneStoreTestMixin, unit
         self.assertEqual(counts["agent_tool_result_journal"], 1)
         self.assertEqual(counts["runtime_outbox"], 0)
         self.assertEqual(counts["acquisition_runs"], 0)
+
+    def test_accept_start_result_rejects_forged_terminal_bytes_without_writes(self) -> None:
+        occurrence = self._arrange_pending(suffix="forged_result")
+        self._create(occurrence)
+        terminal = self._prepare_terminal(occurrence, suffix="forged_result")
+        forged = AgentToolTerminalResult.from_serialized_result(
+            result_attempt_id=terminal.result_attempt_id,
+            provider_call_id=terminal.provider_call_id,
+            tool_call_id=terminal.tool_call_id,
+            action_id=terminal.action_id,
+            operation_run_id=terminal.operation_run_id,
+            workflow_command_id=terminal.workflow_command_id,
+            owner_target_kind=terminal.owner_target_kind,
+            owner_target_id=terminal.owner_target_id,
+            owner_target_revision=terminal.owner_target_revision,
+            owner_target_generation=terminal.owner_target_generation,
+            terminal_winner_id=terminal.terminal_winner_id,
+            owner_result_ref=terminal.owner_result_ref,
+            owner_result_digest=terminal.owner_result_digest,
+            serialized_result={
+                **terminal.serialized_result,
+                "status": "accepted",
+                "forged": True,
+            },
+            is_error=False,
+        )
+        baseline = self._table_snapshot()
+
+        with self.assertRaisesRegex(RuntimeError, "serializer output mismatch"):
+            self.repository.accept_start_acquisition_tool_result_uow(
+                occurrence=occurrence,
+                terminal=forged,
+                attempted_slot_generation=occurrence.slot_generation,
+            )
+
+        self.assertEqual(self._table_snapshot(), baseline)
+
+    def test_accept_start_result_rejects_error_terminal_without_writes(self) -> None:
+        occurrence = self._arrange_pending(suffix="forged_error")
+        self._create(occurrence)
+        terminal = self._prepare_terminal(occurrence, suffix="forged_error")
+        forged = replace(terminal, is_error=True)
+        baseline = self._table_snapshot()
+
+        with self.assertRaisesRegex(RuntimeError, "serializer output mismatch"):
+            self.repository.accept_start_acquisition_tool_result_uow(
+                occurrence=occurrence,
+                terminal=forged,
+                attempted_slot_generation=occurrence.slot_generation,
+            )
+
+        self.assertEqual(self._table_snapshot(), baseline)
 
     def test_accept_start_result_exact_replay_and_late_attempt_quarantine_do_not_rewrite_owner(self) -> None:
         occurrence = self._arrange_pending(suffix="replay_result")

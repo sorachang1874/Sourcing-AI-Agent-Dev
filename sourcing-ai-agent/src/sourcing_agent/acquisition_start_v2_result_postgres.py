@@ -79,6 +79,17 @@ def _deadline_seconds(lock_timeout_seconds: float) -> tuple[float, float]:
     return timeout_seconds, time.monotonic() + timeout_seconds
 
 
+def _refresh_transaction_deadline(cursor: Any, *, deadline: float) -> None:
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise RuntimeError("acquisition start result deadline exhausted")
+    milliseconds = max(1, int(remaining * 1000))
+    cursor.execute(
+        "SELECT set_config('lock_timeout', %s, true), set_config('statement_timeout', %s, true)",
+        (f"{milliseconds}ms", f"{milliseconds}ms"),
+    )
+
+
 def _with_retry_dependencies() -> tuple[Any, Any, Any, int, float]:
     from .control_plane_live_postgres import (
         _CONTROL_PLANE_POSTGRES_MAX_RETRIES,
@@ -149,6 +160,27 @@ def _load_one(cursor: Any, sql: str, params: tuple[Any, ...]) -> dict[str, Any]:
     return _fetch_one_dict_row(cursor, cursor.fetchone()) or {}
 
 
+def _assert_exact_preview_owner(
+    *,
+    preview: dict[str, Any],
+    occurrence: AgentToolOccurrence,
+    binding: Any,
+) -> None:
+    expected = {
+        "preview_id": binding.preview_id,
+        "workspace_id": occurrence.workspace_id,
+        "requester_id": occurrence.actor_id,
+        "preview_revision": binding.preview_revision,
+        "preview_digest": binding.preview_digest,
+    }
+    mismatches = [field for field, value in expected.items() if str(preview.get(field)) != str(value)]
+    if mismatches:
+        raise ValueError("acquisition start result preview exact-owner mismatch: " + ", ".join(mismatches))
+    preview_payload = _json_payload(preview, "preview_json")
+    if str(preview_payload.get("preview_digest") or "") != binding.preview_digest:
+        raise ValueError("acquisition start result preview payload digest mismatch")
+
+
 def _discover_start_result_lock_identity(
     cursor: Any,
     *,
@@ -195,11 +227,38 @@ def load_start_acquisition_result_base_owner(
     workflow_run_id = _workflow_run_id(operation_run_id)
 
     action = _load_one(cursor, "SELECT * FROM agent_actions WHERE action_id = %s FOR UPDATE", (binding.action_id,))
-    preview = _load_one(
-        cursor,
-        "SELECT * FROM acquisition_plan_previews WHERE preview_id = %s FOR UPDATE",
-        (binding.preview_id,),
+    cursor.execute(
+        "SELECT * FROM acquisition_plan_previews WHERE preview_id = %s OR "
+        "(workspace_id = %s AND requester_id = %s AND preview_revision = %s AND preview_digest = %s) "
+        "ORDER BY preview_id FOR UPDATE",
+        (
+            binding.preview_id,
+            binding.occurrence.workspace_id,
+            binding.occurrence.actor_id,
+            binding.preview_revision,
+            binding.preview_digest,
+        ),
     )
+    from .control_plane_live_postgres import _fetch_all_dict_rows
+
+    preview_candidates = _fetch_all_dict_rows(cursor)
+    if len(preview_candidates) != 1:
+        raise ValueError("acquisition start result preview exact owner not found")
+    preview = preview_candidates[0]
+    cursor.execute(
+        "SELECT * FROM agent_tool_result_slots WHERE result_slot_id = %s "
+        "OR logical_occurrence_digest = %s ORDER BY result_slot_id FOR UPDATE",
+        (binding.occurrence.result_slot_id, binding.occurrence.logical_occurrence_digest),
+    )
+
+    slot_candidates = _fetch_all_dict_rows(cursor)
+    if len(slot_candidates) != 1:
+        raise ValueError("acquisition start result slot exact owner not found")
+    slot = slot_candidates[0]
+    from .agent_tool_result_postgres import _assert_exact_slot
+
+    _assert_exact_slot(slot, binding.occurrence)
+    _assert_exact_preview_owner(preview=preview, occurrence=binding.occurrence, binding=binding)
     operation = _load_one(
         cursor,
         "SELECT * FROM operation_runs WHERE operation_run_id = %s FOR UPDATE",
@@ -250,8 +309,6 @@ def load_start_acquisition_result_base_owner(
         "ORDER BY sequence_number FOR UPDATE",
         (workflow_run_id,),
     )
-    from .control_plane_live_postgres import _fetch_all_dict_rows
-
     workflow_events = _fetch_all_dict_rows(cursor)
     if not workflow_command or not current_state or len(workflow_events) != 2:
         raise ValueError("acquisition start result exact workflow owner not found")
@@ -260,6 +317,7 @@ def load_start_acquisition_result_base_owner(
         "expected": expected,
         "action": action,
         "preview": preview,
+        "slot": slot,
         "operation_run": operation,
         "receipt_event": receipt_event,
         "workflow_events": workflow_events,
@@ -344,14 +402,22 @@ def _assert_start_owner(
         or terminal.owner_result_digest != str(expected["owner_result_digest"])
     ):
         raise ValueError("acquisition start result terminal exact-owner mismatch")
+    expected_terminal = _canonical_start_terminal_result_for_attempt(
+        terminal=terminal,
+        base_owner=base_owner,
+    )
+    if (
+        terminal.serialized_result_json != expected_terminal.serialized_result_json
+        or terminal.serialized_result_digest != expected_terminal.serialized_result_digest
+        or terminal.tool_result_message_digest != expected_terminal.tool_result_message_digest
+        or terminal.is_error
+    ):
+        raise ValueError("acquisition start result serializer output mismatch")
 
 
-def terminal_from_locked_start_acquisition_owner(
+def _canonical_start_terminal_result_for_attempt(
     *,
-    occurrence: AgentToolOccurrence,
-    result_attempt_id: str,
-    provider_call_id: str,
-    tool_call_id: str,
+    terminal: AgentToolTerminalResult,
     base_owner: dict[str, Any],
 ) -> AgentToolTerminalResult:
     expected = dict(base_owner["expected"])
@@ -365,10 +431,10 @@ def terminal_from_locked_start_acquisition_owner(
         receipt=receipt,
     )
     serialized = __import__("json").loads(serialize_acquisition_start_v2_result(serialized))
-    terminal = AgentToolTerminalResult.from_serialized_result(
-        result_attempt_id=result_attempt_id,
-        provider_call_id=provider_call_id,
-        tool_call_id=tool_call_id,
+    return AgentToolTerminalResult.from_serialized_result(
+        result_attempt_id=terminal.result_attempt_id,
+        provider_call_id=terminal.provider_call_id,
+        tool_call_id=terminal.tool_call_id,
         action_id=binding.action_id,
         operation_run_id=str(expected["operation_run_id"]),
         workflow_command_id=str(expected["workflow_command_id"]),
@@ -381,6 +447,36 @@ def terminal_from_locked_start_acquisition_owner(
         owner_result_digest=str(expected["owner_result_digest"]),
         serialized_result=serialized,
         is_error=False,
+    )
+
+
+def terminal_from_locked_start_acquisition_owner(
+    *,
+    occurrence: AgentToolOccurrence,
+    result_attempt_id: str,
+    provider_call_id: str,
+    tool_call_id: str,
+    base_owner: dict[str, Any],
+) -> AgentToolTerminalResult:
+    terminal = _canonical_start_terminal_result_for_attempt(
+        terminal=AgentToolTerminalResult.from_serialized_result(
+            result_attempt_id=result_attempt_id,
+            provider_call_id=provider_call_id,
+            tool_call_id=tool_call_id,
+            action_id=str(base_owner["binding"].action_id),
+            operation_run_id=str(base_owner["expected"]["operation_run_id"]),
+            workflow_command_id=str(base_owner["expected"]["workflow_command_id"]),
+            owner_target_kind=ACQUISITION_START_COMMAND_ACCEPTANCE_OWNER_TARGET_KIND,
+            owner_target_id=str(base_owner["expected"]["workflow_command_id"]),
+            owner_target_revision=1,
+            owner_target_generation=0,
+            terminal_winner_id=str(base_owner["expected"]["planned_event"]["event_id"]),
+            owner_result_ref=dict(base_owner["expected"]["owner_result_ref"]),
+            owner_result_digest=str(base_owner["expected"]["owner_result_digest"]),
+            serialized_result={"variant": "success"},
+            is_error=False,
+        ),
+        base_owner=base_owner,
     )
     terminal.validate_for_occurrence(occurrence)
     _assert_start_owner(base_owner, terminal=terminal, released=None)
@@ -425,8 +521,7 @@ def prepare_start_acquisition_tool_result(
         connection = adapter._connect_with_timeout(remaining)
         try:
             with connection.cursor() as cursor:
-                milliseconds = max(1, int((deadline - time.monotonic()) * 1000))
-                cursor.execute("SELECT set_config('lock_timeout', %s, true)", (f"{milliseconds}ms",))
+                _refresh_transaction_deadline(cursor, deadline=deadline)
                 operation_run_id, workflow_run_id, workflow_command_id = _discover_start_result_lock_identity(
                     cursor,
                     occurrence=occurrence,
@@ -438,9 +533,11 @@ def prepare_start_acquisition_tool_result(
                     workflow_command_id=workflow_command_id,
                 ):
                     for lock_key in lock_group:
+                        _refresh_transaction_deadline(cursor, deadline=deadline)
                         last_busy_key = lock_key
                         if not adapter._try_acquire_transaction_lock(cursor, lock_key):
                             raise RuntimeError("acquisition start result lock acquisition raced")
+                _refresh_transaction_deadline(cursor, deadline=deadline)
                 base_owner = load_start_acquisition_result_base_owner(
                     cursor,
                     occurrence=occurrence,

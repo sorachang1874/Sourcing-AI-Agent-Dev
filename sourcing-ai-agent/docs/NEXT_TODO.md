@@ -480,13 +480,18 @@
   Current S1e2c evidence：PG create/result matrix=`13 passed + 21 subtests`，delegate surface=`7 passed`，
   focused combined=`20 passed + 21 subtests`，PG adjacent/start/result=`53 passed + 36 subtests`，non-PG focused
   D1n=`122 passed`，scoped mypy=`0/1`，canonical global mypy ceiling unchanged=`81 errors/4 files`，lint/diff
-  green。S1e1/S1e2a/S1e2b/S1e2c author
+  green。Formal S1e2c review returned `NO-GO 0/6/4/0`; partial response now rejects forged serialized-result/error
+  terminals before writes, locks/exact-checks slot+preview owner rows during start result owner loading, and refreshes
+  prepare lock+statement timeout from the remaining deadline. Response evidence currently includes PG matrix
+  `21 passed + 27 subtests` and scoped mypy `0/1`; post-progress accepted replay/quarantine, shared lock topology, and
+  central preflight/matrix wiring remain open. S1e1/S1e2a/S1e2b/S1e2c author
   evidence/future review 都不改变 `10/5`、served=0、provider/model/live=0；
   R-019/R-029、Plan §6#6、OB-2.2/10.3/10.4 均继续 open，fresh pinned non-author review pending。实现记录见
   `TRACK_D_D1N_S1E2A_START_SUBMIT_UOW_IMPLEMENTATION.md` 与
   `TRACK_D_D1N_S1E2B_START_CREATE_UOW_IMPLEMENTATION.md`、
   `TRACK_D_D1N_S1E2B_START_CREATE_UOW_REVIEW_RESPONSE.md`、
-  `TRACK_D_D1N_S1E2C_START_RESULT_ACCEPT_UOW_IMPLEMENTATION.md`。S1e2d author candidate 已补 first consumer hop：
+  `TRACK_D_D1N_S1E2C_START_RESULT_ACCEPT_UOW_IMPLEMENTATION.md`、
+  `TRACK_D_D1N_S1E2C_START_RESULT_ACCEPT_UOW_REVIEW_RESPONSE.md`。S1e2d author candidate 已补 first consumer hop：
   acquisition root owner 对 `acquisition_root_command_payload.v2` 走 v2-only Action/Operation/owner-ref preflight，从
   immutable `start_snapshot.preview` 派生 downstream intent compatibility payload；accepted start result -> released
   root command -> root drain -> queued `acquisition.intent.resolve` 已由 PG test 覆盖。Evidence：root-hop node=`1
