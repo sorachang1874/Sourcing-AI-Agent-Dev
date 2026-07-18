@@ -1,11 +1,12 @@
 # Track D D1n S1e2b — formal review response
 
 Status: fixed-forward implementation response to the latest formal S1e2b `NO-GO` artifact
-`runtime/reviews/20260718T084752Z_Track_D_D1n_S1e2b_control_inspect_native_fence_3bd30d8.md`; earlier S1e2b
+`runtime/reviews/20260718T095734Z_Track_D_D1n_S1e2b_closed_acceptance_and_total_held-command_fence.md`; earlier S1e2b
 artifacts remain historical evidence, not a substitute for a fresh pinned review.
 
-This batch remains non-live and non-served. It does not close `R-019`, `R-029`, Plan §6#6, `OB-2.2`, `OB-10.3`,
-`OB-10.4`, hosted serving, or provider/model invocation gates.
+This batch remains non-live and non-served: served Agent tool population, provider calls, model calls, and live calls all
+remain zero. It does not close `R-019`, `R-029`, Plan §6#6, `OB-2.2`, `OB-10.3`, `OB-10.4`, hosted serving, or
+provider/model invocation gates.
 
 ## Fixed-forward scope
 
@@ -33,6 +34,11 @@ This batch remains non-live and non-served. It does not close `R-019`, `R-029`, 
   OperationRun, target snapshot, result/serializer pins, and result-occurrence metadata. Non-start schema-less Actions
   are not classified as v2 merely because their open input happens to contain `preview_*` field names; start-v2 rows
   with current request pins and preview keys erased still fail closed when retained v2 provenance remains.
+- `classify_acquisition_start_v2_generic_control_provenance` is now documented as the sole start-v2 override classifier.
+  Its owner row enumerates the closed Action input/target/occurrence carriers, Action identity/request/tool/result/
+  serializer/idempotency pins, and the matching Operation identity/request/tool/result/serializer/idempotency pins.
+  The fail-closed reason registry validates the classifier-selected reason only; the locked inspect acceptance validator
+  remains a physical integrity fence and cannot act as a parallel classifier.
 - The classifier is now shared by Operation control APIs and the physical `inspect_operation` owner path. Fail-closed
   start-v2 control states are emitted through `operation_runtime.operation_run_control_state` with registered
   fail-closed override reasons, so HTTP detail/control responses and Agent inspect results expose the same
@@ -59,6 +65,16 @@ This batch remains non-live and non-served. It does not close `R-019`, `R-029`, 
   row, allowed reason set, consumers, fallback, migration status, and deletion condition.
 - Generic cancel/retry/resume/dispatch preflight failures now route through the same operation-control response projector
   as normal control responses, preserving top-level `control_state` and `display_contract` parity.
+- The fast owner preflight now runs one 32-case data-driven provenance matrix through real Operation detail/list and
+  cancel/retry/resume/dispatch callables, the locked physical `inspect_operation` owner/serializer, and executable
+  frontend adapter mappers. Exact v2 and every Action/Operation hostile marker family must return the same canonical
+  all-controls-disabled projection, and a mutation-writer tripwire proves every case returns before a write delegate.
+- `Operation.action_id` mismatch is tested outside that override-parity matrix because exact-owner lookup precedes the
+  classifier: detail and all four controls return the normal masked `not_found`, list omits the unlinked Operation, and
+  locked Agent inspect serializes the same `operation_not_found` error. A separate real schema-less non-start/no-marker
+  positive proves `non_v2/ready` across detail/list, locked Agent serialization, and frontend mapping without either
+  start-v2 override reason. Generic control-response positives are intentionally not invoked because their legal path
+  delegates mutation; control-response cross-surface parity covers only exact/hostile fail-closed cases.
 - Generic action controls now also fail closed for pending `start_acquisition_run` Actions that carry only partial v2
   discriminators: schema version/digest without the exact input shape, one/two preview keys without the full
   `preview_id + preview_revision + preview_digest` tuple, or one exact schema pin paired with a mismatching peer. These
@@ -101,6 +117,11 @@ This batch remains non-live and non-served. It does not close `R-019`, `R-029`, 
     start-acceptance Operation event before result-attempt/journal writes.
 - `tests/test_d1n_start_wake_contract_docs.py::test_s1e2b_create_wake_contract_is_cross_document_consistent` covers
   the no-create-wake / S1e2c-post-accept-wake wording across the controlling docs.
+- `tests/test_pre_agent_contract_review.py::test_operation_run_control_state_is_contract_owned` covers exact v2 plus
+  Action input/target/occurrence, identity, request, tool, result, serializer, idempotency, and matching Operation hostile
+  families across backend detail/list, all four control responses, locked physical Agent inspect, and executable frontend
+  adapter output. It separately covers `Operation.action_id` owner masking and one true schema-less non-start/no-marker
+  positive without invoking a legal mutating control delegate.
 
 ## Fixed-forward validation evidence
 
@@ -110,6 +131,10 @@ This batch remains non-live and non-served. It does not close `R-019`, `R-029`, 
   subtests), zero failures/errors.
 - Create-delegate, historical-fixture, and owner-matrix adjacency: `12 passed`.
 - Contract documentation adjacency: `3 passed`.
+- FF-F callable owner/parity preflight: `1 passed`; `32` provenance cases each cross detail/list, four generic control
+  responses, locked Agent inspect, and frontend mapping, plus one owner-mismatch masked-absence case and one
+  schema-less non-start/no-marker positive (`37.31s` scoped author run).
+- FF-F callable preflight plus start-v2 classifier adjacency: `55 passed in 37.31s`.
 - Scoped mypy for acceptance/control/create/inspect: zero errors in four source files. The native store remains at its
   existing scoped baseline of `25 errors / 1 file`; repository `make typecheck` remains at the allowed global baseline
   of `81 errors / 4 files`.

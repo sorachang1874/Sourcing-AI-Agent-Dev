@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import copy
 import hashlib
 import importlib.util
 import json
@@ -10,15 +11,30 @@ import subprocess
 import sys
 from functools import lru_cache
 from pathlib import Path
-from typing import get_args
+from types import SimpleNamespace
+from typing import Any, get_args
 
-from sourcing_agent.agent_canary_registry import LOCAL_CANARY_AGENT_TOOL_REGISTRY
+from sourcing_agent.acquisition_start_v2_control import (
+    ACQUISITION_START_V2_GENERIC_OPERATION_CONTROL_IDENTITY_MISMATCH,
+    ACQUISITION_START_V2_GENERIC_OPERATION_CONTROL_NOT_ENABLED,
+    acquisition_start_v2_generic_operation_control_preflight,
+    classify_acquisition_start_v2_generic_control_provenance,
+)
+from sourcing_agent.agent_canary_registry import (
+    INSPECT_OPERATION_TOOL_SPEC,
+    LOCAL_CANARY_AGENT_TOOL_REGISTRY,
+)
+from sourcing_agent.agent_operation_query_postgres import (
+    terminal_from_locked_inspect_operation_owner,
+    validate_inspect_operation_occurrence,
+)
 from sourcing_agent.agent_projection_query import (
     OPERATION_RESULT_READINESS_OWNER,
     operation_result_readiness_projection,
 )
 from sourcing_agent.agent_tool_registry import AgentToolResultLinkPolicy
 from sourcing_agent.agent_tool_result_slot import AgentToolOccurrence
+from sourcing_agent.command_kernel import CommandKernel
 from sourcing_agent.durable_runtime import (
     ACQUISITION_INTENT_RESOLVE_COMMAND_TYPE,
     ACQUISITION_PLAN_BUILD_COMMAND_TYPE,
@@ -76,7 +92,9 @@ from sourcing_agent.operation_runtime import (
     operation_run_control_state_fail_closed,
     validate_operation_run_control_state_projection,
 )
+from sourcing_agent.orchestrator import SourcingOrchestrator
 from tests.source_inspection import all_source_files, find_class_method
+from tests.test_d1n_s1e2b_start_v2_provenance import _exact_records
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DOC_PATH = REPO_ROOT / "docs" / "PRE_AGENT_CONTRACT_REVIEW.md"
@@ -3614,7 +3632,7 @@ def test_owner_registry_running_command_control_is_explicit() -> None:
     assert residual_resume_only == set()
 
 
-def test_operation_run_control_state_is_contract_owned() -> None:
+def test_operation_run_control_state_is_contract_owned(tmp_path: Path) -> None:
     review_doc = DOC_PATH.read_text(encoding="utf-8")
     frontend_doc = FRONTEND_API_CONTRACT_DOC_PATH.read_text(encoding="utf-8")
     agent_doc = AGENT_OPERATION_PATH.read_text(encoding="utf-8")
@@ -3679,6 +3697,523 @@ def test_operation_run_control_state_is_contract_owned() -> None:
             ).to_record()
             == projected
         )
+
+    class _ReadOnlyWorkflowRuntimeRepository:
+        def __init__(self, *, action: dict[str, Any], operation_run: dict[str, Any]) -> None:
+            self._action = copy.deepcopy(action)
+            self._operation_run = copy.deepcopy(operation_run)
+
+        def get_action(self, action_id: str) -> dict[str, Any]:
+            if action_id != self._action["action_id"]:
+                return {}
+            return copy.deepcopy(self._action)
+
+        def get_operation(self, operation_run_id: str) -> dict[str, Any]:
+            if operation_run_id != self._operation_run["operation_run_id"]:
+                return {}
+            return copy.deepcopy(self._operation_run)
+
+        def list_operations(self, **_filters: Any) -> list[dict[str, Any]]:
+            if self._operation_run.get("action_id") != self._action.get("action_id"):
+                return []
+            return [copy.deepcopy(self._operation_run)]
+
+        @staticmethod
+        def list_operation_events(*_args: Any, **_kwargs: Any) -> list[dict[str, Any]]:
+            return []
+
+        def snapshot(self) -> tuple[dict[str, Any], dict[str, Any]]:
+            return copy.deepcopy(self._action), copy.deepcopy(self._operation_run)
+
+    class _ReadOnlyOperationStore:
+        def __init__(self, *, action: dict[str, Any], operation_run: dict[str, Any]) -> None:
+            self.repos = SimpleNamespace(
+                workflow_runtime=_ReadOnlyWorkflowRuntimeRepository(
+                    action=action,
+                    operation_run=operation_run,
+                )
+            )
+
+        @staticmethod
+        def list_workflow_commands(**_filters: Any) -> list[dict[str, Any]]:
+            return []
+
+    class _MutationForbiddenWriter:
+        def __getattr__(self, name: str) -> Any:
+            raise AssertionError(f"hostile provenance reached mutation writer: {name}")
+
+    def _replace_nested(record: dict[str, Any], path: tuple[str, ...], replacement: Any) -> None:
+        target: dict[str, Any] = record
+        for field in path[:-1]:
+            value = target[field]
+            assert isinstance(value, dict)
+            target = value
+        target[path[-1]] = replacement
+
+    def _inspect_serialized_result(
+        *,
+        action: dict[str, Any],
+        operation_run: dict[str, Any],
+        ordinal: int,
+    ) -> dict[str, Any]:
+        workspace_id = str(operation_run["workspace_id"])
+        operation_run_id = str(operation_run["operation_run_id"])
+        action_id = str(action["action_id"])
+        occurrence = AgentToolOccurrence.from_tool_spec(
+            result_slot_id=f"slot_contract_parity_{ordinal}",
+            slot_generation=1,
+            workspace_id=workspace_id,
+            actor_id="contract_preflight_actor",
+            runtime_namespace="isolated_local_canary",
+            provider_mode="simulate",
+            turn_id=f"turn_contract_parity_{ordinal}",
+            step_id="step_contract_parity",
+            tool_spec=INSPECT_OPERATION_TOOL_SPEC,
+            canonical_args={"operation_run_id": operation_run_id},
+            occurrence_ordinal=1,
+        )
+        preflight = validate_inspect_operation_occurrence(
+            occurrence,
+            action_id=action_id,
+            operation_run_id=operation_run_id,
+        )
+        event = {
+            "event_id": f"event_control_parity_{ordinal}",
+            "workspace_id": workspace_id,
+            "event_stream_id": operation_run_id,
+            "operation_run_id": operation_run_id,
+            "action_id": action_id,
+            "event_family": "operation_event",
+            "event_type": "OperationQueued",
+            "sequence_number": 1,
+            "idempotency_key": f"event-control-parity-{ordinal}",
+            "actor": "contract_preflight",
+            "source": "contract_preflight",
+            "schema_version": "operation_event_v1",
+            "payload_json": {},
+        }
+        terminal = terminal_from_locked_inspect_operation_owner(
+            None,
+            occurrence=occurrence,
+            result_attempt_id=f"attempt_contract_parity_{ordinal}",
+            provider_call_id=f"provider_contract_parity_{ordinal}",
+            tool_call_id=f"tool_call_contract_parity_{ordinal}",
+            action_id=action_id,
+            operation_run_id=operation_run_id,
+            base_owner={
+                "action": action,
+                "operation_run": operation_run,
+                "operation_events_desc": [event],
+                "workflow_commands": [],
+            },
+            preflight=preflight,
+        )
+        return terminal.serialized_result
+
+    base_action, base_operation = _exact_records()
+    for decoded_field, json_field in (
+        ("input", "input_json"),
+        ("target_ref", "target_ref_json"),
+        ("metadata", "metadata_json"),
+    ):
+        base_action[decoded_field] = json.loads(base_action[json_field])
+    base_action["result_ref"] = {}
+    base_operation.update(
+        {
+            "status": "queued",
+            "progress": {"phase": "queued"},
+            "progress_json": {"phase": "queued"},
+            "workflow_ref": {},
+            "workflow_ref_json": {},
+            "result_ref": {},
+            "result_ref_json": {},
+            "metadata": {},
+        }
+    )
+
+    hostile_mutations: tuple[tuple[str, str, tuple[str, ...], Any], ...] = (
+        ("action_input", "action", ("input", "preview_id"), "preview_drifted"),
+        (
+            "action_target",
+            "action",
+            ("target_ref", "start_snapshot", "snapshot_digest"),
+            "0" * 64,
+        ),
+        (
+            "action_metadata_occurrence",
+            "action",
+            ("metadata", "result_occurrence_ref", "slot_generation"),
+            True,
+        ),
+        ("action_type", "action", ("action_type",), "fetch_profile_sample"),
+        ("action_owner", "action", ("owner_module",), "foreign_owner"),
+        ("action_operation_type", "action", ("operation_type",), "foreign_operation"),
+        ("action_request_version", "action", ("request_schema_version",), "request_v999"),
+        ("action_request_digest", "action", ("request_schema_digest",), "1" * 64),
+        ("action_tool_name", "action", ("tool_name",), "foreign_tool"),
+        ("action_tool_version", "action", ("tool_spec_version",), "tool_v999"),
+        ("action_tool_digest", "action", ("tool_spec_digest",), "2" * 64),
+        ("action_result_version", "action", ("result_schema_version",), "result_v999"),
+        ("action_result_digest", "action", ("result_schema_digest",), "3" * 64),
+        ("action_serializer_owner", "action", ("result_serializer_owner",), "foreign_serializer"),
+        (
+            "action_serializer_revision",
+            "action",
+            ("result_serializer_revision",),
+            "serializer_v999",
+        ),
+        (
+            "action_serializer_digest",
+            "action",
+            ("result_serializer_contract_digest",),
+            "4" * 64,
+        ),
+        ("action_idempotency", "action", ("idempotency_key",), "agent-start-v2:" + "5" * 64),
+        ("action_operation_workspace", "both", ("workspace_id",), "workspace_drifted"),
+        ("operation_owner", "operation", ("owner_module",), "foreign_owner"),
+        ("operation_type", "operation", ("operation_type",), "foreign_operation"),
+        ("operation_request_version", "operation", ("request_schema_version",), "request_v999"),
+        ("operation_request_digest", "operation", ("request_schema_digest",), "6" * 64),
+        ("operation_tool_name", "operation", ("tool_name",), "foreign_tool"),
+        ("operation_tool_version", "operation", ("tool_spec_version",), "tool_v999"),
+        ("operation_tool_digest", "operation", ("tool_spec_digest",), "7" * 64),
+        ("operation_result_version", "operation", ("result_schema_version",), "result_v999"),
+        ("operation_result_digest", "operation", ("result_schema_digest",), "8" * 64),
+        (
+            "operation_serializer_owner",
+            "operation",
+            ("result_serializer_owner",),
+            "foreign_serializer",
+        ),
+        (
+            "operation_serializer_revision",
+            "operation",
+            ("result_serializer_revision",),
+            "serializer_v999",
+        ),
+        (
+            "operation_serializer_digest",
+            "operation",
+            ("result_serializer_contract_digest",),
+            "9" * 64,
+        ),
+        (
+            "operation_idempotency",
+            "operation",
+            ("idempotency_key",),
+            "agent-start-v2:" + "a" * 64,
+        ),
+    )
+    provenance_cases = (("exact_v2", "", (), None), *hostile_mutations)
+    control_methods = {
+        "cancel": "cancel_operation_run_api",
+        "retry": "retry_operation_run_api",
+        "resume": "resume_operation_run_api",
+        "dispatch": "dispatch_operation_run_api",
+    }
+    frontend_cases: list[dict[str, Any]] = []
+
+    for ordinal, (label, mutation_target, path, replacement) in enumerate(provenance_cases, start=1):
+        action = copy.deepcopy(base_action)
+        operation_run = copy.deepcopy(base_operation)
+        if mutation_target in {"action", "both"}:
+            _replace_nested(action, path, replacement)
+        if mutation_target in {"operation", "both"}:
+            _replace_nested(operation_run, path, replacement)
+
+        expected_classification = "exact_v2" if label == "exact_v2" else "partial_or_mixed_v2"
+        expected_reason = (
+            ACQUISITION_START_V2_GENERIC_OPERATION_CONTROL_NOT_ENABLED
+            if label == "exact_v2"
+            else ACQUISITION_START_V2_GENERIC_OPERATION_CONTROL_IDENTITY_MISMATCH
+        )
+        assert (
+            classify_acquisition_start_v2_generic_control_provenance(
+                action=action,
+                operation_run=operation_run,
+            )
+            == expected_classification
+        ), label
+
+        store = _ReadOnlyOperationStore(action=action, operation_run=operation_run)
+        orchestrator = object.__new__(SourcingOrchestrator)
+        orchestrator.store = store
+        orchestrator._command_kernel = CommandKernel(store)  # noqa: SLF001
+        orchestrator.operation_runtime_writer = _MutationForbiddenWriter()
+        workspace_id = str(operation_run["workspace_id"])
+        operation_run_id = str(operation_run["operation_run_id"])
+        before = store.repos.workflow_runtime.snapshot()
+
+        detail = orchestrator.get_operation_run_api(
+            operation_run_id,
+            expected_workspace_id=workspace_id,
+        )
+        listed = orchestrator.list_operation_runs_api(
+            {"workspace_id": workspace_id},
+            expected_workspace_id=workspace_id,
+        )
+        assert detail["status"] == "ok", label
+        assert listed["status"] == "ok", label
+        assert len(listed["operation_runs"]) == 1, label
+        expected_control_state = detail["operation_run"]["control_state"]
+        assert listed["operation_runs"][0]["control_state"] == expected_control_state, label
+        assert expected_control_state["allowed_actions"] == [], label
+        assert set(expected_control_state["disabled_reasons"].values()) == {expected_reason}, label
+
+        control_operation_runs: dict[str, dict[str, Any]] = {}
+        for control_name, method_name in control_methods.items():
+            response = getattr(orchestrator, method_name)(
+                operation_run_id,
+                {},
+                expected_workspace_id=workspace_id,
+            )
+            assert response["status"] == ("unsupported" if label == "exact_v2" else "invalid"), (
+                label,
+                control_name,
+            )
+            assert response["reason"] == expected_reason, (label, control_name)
+            assert response["module_state_mutated"] is False, (label, control_name)
+            assert response["control_state"] == expected_control_state, (label, control_name)
+            assert response["operation_run"]["control_state"] == expected_control_state, (label, control_name)
+            control_operation_runs[control_name] = response["operation_run"]
+
+        inspect_result = _inspect_serialized_result(
+            action=action,
+            operation_run=operation_run,
+            ordinal=ordinal,
+        )
+        assert inspect_result["control_state"] == expected_control_state, label
+        assert store.repos.workflow_runtime.snapshot() == before, label
+        frontend_cases.append(
+            {
+                "label": label,
+                "expected_control_state": expected_control_state,
+                "detail": detail,
+                "listed": listed,
+                "control_operation_runs": control_operation_runs,
+                "expected_control_names": sorted(control_methods),
+            }
+        )
+
+    owner_mismatch_action = copy.deepcopy(base_action)
+    owner_mismatch_operation = copy.deepcopy(base_operation)
+    owner_mismatch_operation["action_id"] = "action_foreign_owner"
+    assert (
+        classify_acquisition_start_v2_generic_control_provenance(
+            action=owner_mismatch_action,
+            operation_run=owner_mismatch_operation,
+        )
+        == "partial_or_mixed_v2"
+    )
+    mismatch_store = _ReadOnlyOperationStore(
+        action=owner_mismatch_action,
+        operation_run=owner_mismatch_operation,
+    )
+    mismatch_orchestrator = object.__new__(SourcingOrchestrator)
+    mismatch_orchestrator.store = mismatch_store
+    mismatch_orchestrator._command_kernel = CommandKernel(mismatch_store)  # noqa: SLF001
+    mismatch_orchestrator.operation_runtime_writer = _MutationForbiddenWriter()
+    mismatch_workspace_id = str(owner_mismatch_operation["workspace_id"])
+    mismatch_operation_run_id = str(owner_mismatch_operation["operation_run_id"])
+    mismatch_before = mismatch_store.repos.workflow_runtime.snapshot()
+    assert mismatch_orchestrator.get_operation_run_api(
+        mismatch_operation_run_id,
+        expected_workspace_id=mismatch_workspace_id,
+    ) == {"status": "not_found", "operation_run_id": mismatch_operation_run_id}
+    mismatch_list = mismatch_orchestrator.list_operation_runs_api(
+        {"workspace_id": mismatch_workspace_id},
+        expected_workspace_id=mismatch_workspace_id,
+    )
+    assert mismatch_list["status"] == "ok"
+    assert mismatch_list["operation_runs"] == []
+    for method_name in control_methods.values():
+        assert getattr(mismatch_orchestrator, method_name)(
+            mismatch_operation_run_id,
+            {},
+            expected_workspace_id=mismatch_workspace_id,
+        ) == {"status": "not_found", "operation_run_id": mismatch_operation_run_id}
+    mismatch_inspect = _inspect_serialized_result(
+        action=owner_mismatch_action,
+        operation_run=owner_mismatch_operation,
+        ordinal=33,
+    )
+    assert mismatch_inspect == {
+        "variant": "error",
+        "status": "failed",
+        "reason": "operation_not_found",
+        "retryable": False,
+    }
+    assert mismatch_store.repos.workflow_runtime.snapshot() == mismatch_before
+
+    non_start_action_id = "action_schema_less_non_start"
+    non_start_operation_run_id = "operation_schema_less_non_start"
+    non_start_workspace_id = "workspace_schema_less_non_start"
+    non_start_spec = DEFAULT_ACTION_REGISTRY.spec_for("fetch_profile_sample")
+    non_start_action = {
+        "action_id": non_start_action_id,
+        "workspace_id": non_start_workspace_id,
+        "action_type": non_start_spec.action_type,
+        "owner_module": non_start_spec.owner_module,
+        "operation_type": non_start_spec.operation_type,
+        "status": "queued",
+        "approval_status": "approved",
+        "request_schema_version": "",
+        "request_schema_digest": "",
+        "input": {},
+        "input_json": {},
+        "target_ref": {},
+        "target_ref_json": {},
+        "metadata": {},
+        "metadata_json": {},
+        "result_ref": {},
+        "result_ref_json": {},
+    }
+    non_start_operation = {
+        "operation_run_id": non_start_operation_run_id,
+        "action_id": non_start_action_id,
+        "workspace_id": non_start_workspace_id,
+        "owner_module": non_start_spec.owner_module,
+        "operation_type": non_start_spec.operation_type,
+        "status": "queued",
+        "request_schema_version": "",
+        "request_schema_digest": "",
+        "progress": {"phase": "queued"},
+        "progress_json": {"phase": "queued"},
+        "workflow_ref": {},
+        "workflow_ref_json": {},
+        "result_ref": {},
+        "result_ref_json": {},
+        "metadata": {},
+    }
+    assert (
+        classify_acquisition_start_v2_generic_control_provenance(
+            action=non_start_action,
+            operation_run=non_start_operation,
+        )
+        == "non_v2"
+    )
+    assert acquisition_start_v2_generic_operation_control_preflight(
+        action=non_start_action,
+        operation_run=non_start_operation,
+    ) == {"status": "ready"}
+    non_start_store = _ReadOnlyOperationStore(
+        action=non_start_action,
+        operation_run=non_start_operation,
+    )
+    non_start_orchestrator = object.__new__(SourcingOrchestrator)
+    non_start_orchestrator.store = non_start_store
+    non_start_orchestrator._command_kernel = CommandKernel(non_start_store)  # noqa: SLF001
+    non_start_orchestrator.operation_runtime_writer = _MutationForbiddenWriter()
+    non_start_detail = non_start_orchestrator.get_operation_run_api(
+        non_start_operation_run_id,
+        expected_workspace_id=non_start_workspace_id,
+    )
+    non_start_list = non_start_orchestrator.list_operation_runs_api(
+        {"workspace_id": non_start_workspace_id},
+        expected_workspace_id=non_start_workspace_id,
+    )
+    assert non_start_detail["status"] == "ok"
+    assert non_start_list["status"] == "ok"
+    assert len(non_start_list["operation_runs"]) == 1
+    non_start_control_state = non_start_detail["operation_run"]["control_state"]
+    assert non_start_list["operation_runs"][0]["control_state"] == non_start_control_state
+    assert set(non_start_control_state["allowed_actions"]) == {"dispatch", "resume", "cancel"}
+    assert set(non_start_control_state["disabled_reasons"].values()).isdisjoint(
+        OPERATION_RUN_CONTROL_FAIL_CLOSED_OVERRIDE_REASONS
+    )
+    non_start_inspect = _inspect_serialized_result(
+        action=non_start_action,
+        operation_run=non_start_operation,
+        ordinal=34,
+    )
+    assert non_start_inspect["variant"] == "success"
+    assert non_start_inspect["control_state"] == non_start_control_state
+    assert set(non_start_inspect["control_state"]["disabled_reasons"].values()).isdisjoint(
+        OPERATION_RUN_CONTROL_FAIL_CLOSED_OVERRIDE_REASONS
+    )
+    frontend_cases.append(
+        {
+            "label": "schema_less_non_start_no_marker",
+            "expected_control_state": non_start_control_state,
+            "detail": non_start_detail,
+            "listed": non_start_list,
+            "control_operation_runs": {},
+            "expected_control_names": [],
+        }
+    )
+
+    adapter_bundle = tmp_path / "frontend_api_adapter.cjs"
+    esbuild_module = Path(
+        os.environ.get(
+            "SOURCING_TEST_ESBUILD_MODULE_PATH",
+            str(REPO_ROOT / "frontend-demo" / "node_modules" / "esbuild" / "lib" / "main.js"),
+        )
+    )
+    bundle_script = """
+const esbuild = require(process.argv[1]);
+esbuild.buildSync({
+  entryPoints: [process.argv[2]],
+  outfile: process.argv[3],
+  bundle: true,
+  platform: "node",
+  format: "cjs",
+  target: "node20",
+  define: { "import.meta.env": "{}" },
+});
+"""
+    bundle = subprocess.run(
+        [
+            "node",
+            "-e",
+            bundle_script,
+            str(esbuild_module),
+            str(FRONTEND_API_ADAPTER_PATH),
+            str(adapter_bundle),
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert bundle.returncode == 0, bundle.stderr
+    frontend_input = tmp_path / "operation_control_parity.json"
+    frontend_input.write_text(json.dumps(frontend_cases, sort_keys=True), encoding="utf-8")
+    adapter_script = """
+const fs = require("node:fs");
+const adapter = require(process.argv[1]);
+const cases = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+const output = cases.map((item) => ({
+  label: item.label,
+  expectedControlNames: item.expected_control_names,
+  expected: adapter.mapOperationRunControlState(item.expected_control_state),
+  detail: adapter.mapOperationRunDetailResponse(item.detail).operation_run.control_state,
+  listed: adapter.mapOperationRunListResponse(item.listed).operation_runs[0].control_state,
+  controls: Object.fromEntries(
+    Object.entries(item.control_operation_runs).map(([name, operationRun]) => [
+      name,
+      adapter.mapOperationRunRecord(operationRun).control_state,
+    ]),
+  ),
+}));
+process.stdout.write(JSON.stringify(output));
+"""
+    adapter_result = subprocess.run(
+        ["node", "-e", adapter_script, str(adapter_bundle), str(frontend_input)],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert adapter_result.returncode == 0, adapter_result.stderr
+    frontend_output = json.loads(adapter_result.stdout)
+    assert len(frontend_output) == len(frontend_cases)
+    for item in frontend_output:
+        assert item["detail"] == item["expected"], item["label"]
+        assert item["listed"] == item["expected"], item["label"]
+        assert set(item["controls"]) == set(item["expectedControlNames"]), item["label"]
+        for control_name, control_state in item["controls"].items():
+            assert control_state == item["expected"], (item["label"], control_name)
+
     find_class_method("_operation_run_control_state_record")
     find_class_method("_operation_run_control_response_record")
 
