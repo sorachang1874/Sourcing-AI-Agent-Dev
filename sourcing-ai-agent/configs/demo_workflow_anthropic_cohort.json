@@ -1,0 +1,29 @@
+{
+  "raw_user_request": "Map current Anthropic engineers whose work spans engineering and infrastructure systems, with distributed training and inference infrastructure evidence prioritized for review.",
+  "target_company": "Anthropic",
+  "cohort_selection": {
+    "schema_version": "cohort_selection.v1",
+    "role_bucket_ids": [
+      "engineering",
+      "infra_systems"
+    ],
+    "employment_statuses": [
+      "current"
+    ],
+    "role_match": "all",
+    "source": "user_explicit"
+  },
+  "keywords": [
+    "distributed training",
+    "GPU infrastructure",
+    "inference systems"
+  ],
+  "organization_keywords": [
+    "Anthropic"
+  ],
+  "top_k": 6,
+  "slug_resolution_limit": 4,
+  "profile_detail_limit": 4,
+  "publication_scan_limit": 0,
+  "publication_lead_limit": 0
+}
