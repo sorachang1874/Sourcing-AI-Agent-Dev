@@ -50100,7 +50100,7 @@ class SourcingOrchestrator:
             action = {}
         progress = dict(record.get("progress") or {})
         action_metadata = dict((action or {}).get("metadata") or {})
-        return operation_run_control_state(
+        control_state = operation_run_control_state(
             operation_status=str(record.get("status") or "").strip(),
             operation_run_id=str(record.get("operation_run_id") or "").strip(),
             action_status=str((action or {}).get("status") or "").strip(),
@@ -50108,6 +50108,35 @@ class SourcingOrchestrator:
             action_retry_operation_run_id=str(action_metadata.get("retry_operation_run_id") or "").strip(),
             operation_phase=str(progress.get("phase") or "").strip(),
         ).to_record()
+        if action:
+            generic_control_preflight = self._preflight_acquisition_start_v2_generic_operation_control(
+                action=action,
+                operation_run=record,
+            )
+            if str(generic_control_preflight.get("status") or "") != "ready":
+                disabled_reason = str(
+                    generic_control_preflight.get("reason")
+                    or "acquisition_start_v2_generic_operation_control_not_available"
+                ).strip()
+                control_state.update(
+                    {
+                        "can_dispatch": False,
+                        "can_cancel": False,
+                        "can_retry": False,
+                        "can_resume": False,
+                        "allowed_actions": [],
+                        "disabled_reasons": {
+                            "dispatch": disabled_reason,
+                            "resume": disabled_reason,
+                            "retry": disabled_reason,
+                            "cancel": disabled_reason,
+                        },
+                        "control_source_of_truth": (
+                            "orchestrator._preflight_acquisition_start_v2_generic_operation_control"
+                        ),
+                    }
+                )
+        return control_state
 
     def _operation_run_api_record(self, operation_run: dict[str, Any]) -> dict[str, Any]:
         record = dict(operation_run or {})

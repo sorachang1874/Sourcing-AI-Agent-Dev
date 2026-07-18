@@ -770,6 +770,27 @@ class D1nStartAcquisitionV2CreatePGMatrixTest(PGControlPlaneStoreTestMixin, unit
             ),
         )
 
+        detail = orchestrator.get_operation_run_api(
+            owner_ref["operation_run_id"],
+            expected_workspace_id=occurrence.workspace_id,
+        )
+        self.assertEqual(detail["status"], "ok")
+        control_state = detail["operation_run"]["control_state"]
+        self.assertFalse(control_state["can_dispatch"])
+        self.assertFalse(control_state["can_resume"])
+        self.assertFalse(control_state["can_retry"])
+        self.assertFalse(control_state["can_cancel"])
+        self.assertEqual(control_state["allowed_actions"], [])
+        self.assertEqual(
+            control_state["disabled_reasons"],
+            {
+                "dispatch": "acquisition_start_v2_generic_operation_control_not_enabled",
+                "resume": "acquisition_start_v2_generic_operation_control_not_enabled",
+                "retry": "acquisition_start_v2_generic_operation_control_not_enabled",
+                "cancel": "acquisition_start_v2_generic_operation_control_not_enabled",
+            },
+        )
+
         for label, control in controls:
             with self.subTest(control=label):
                 baseline = self._table_snapshot()
@@ -780,6 +801,8 @@ class D1nStartAcquisitionV2CreatePGMatrixTest(PGControlPlaneStoreTestMixin, unit
                     "acquisition_start_v2_generic_operation_control_not_enabled",
                 )
                 self.assertFalse(response["module_state_mutated"])
+                if "control_state" in dict(response.get("operation_run") or {}):
+                    self.assertEqual(response["operation_run"]["control_state"], control_state)
                 self.assertEqual(self._table_snapshot(), baseline)
 
     def test_generic_operation_controls_fail_closed_on_start_v2_action_drift_without_writes(self) -> None:
