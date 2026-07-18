@@ -16241,6 +16241,14 @@ def _postgres_command_mutates_workflow_commands(
         index += int(_sql_word_is(tokens, index, "into"))
         index += int(_sql_word_is(tokens, index, "only"))
         return _sql_target_is_workflow_commands(tokens, index, end)
+    if command == "merge":
+        index += int(_sql_word_is(tokens, index, "into"))
+        return _sql_target_is_workflow_commands(tokens, index, end)
+    if command == "copy":
+        target, after_target = _sql_qualified_identifier(tokens, index, end)
+        return target == "workflow_commands" and any(
+            _sql_word_is(tokens, candidate, "from") for candidate in range(after_target, end)
+        )
     if command == "truncate":
         index += int(_sql_word_is(tokens, index, "table"))
         return _sql_target_list_contains_workflow_commands(tokens, index, end)
