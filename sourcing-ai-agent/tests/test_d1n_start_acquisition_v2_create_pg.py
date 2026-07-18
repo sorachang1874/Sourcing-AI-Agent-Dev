@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import tempfile
 import unittest
@@ -990,6 +991,11 @@ class D1nStartAcquisitionV2CreatePGMatrixTest(PGControlPlaneStoreTestMixin, unit
                 ("start_acquisition_run_request.v999", "0" * 64),
             ),
             (
+                "conflicting_result_serializer_tuple",
+                "UPDATE {schema}.agent_actions SET result_serializer_revision = %s WHERE action_id = %s",
+                ("legacy_serializer_revision",),
+            ),
+            (
                 "action_operation_pins_erased_preview_keys_removed",
                 "UPDATE {schema}.agent_actions SET request_schema_version = %s, request_schema_digest = %s, "
                 "input_json = %s WHERE action_id = %s",
@@ -1024,6 +1030,233 @@ class D1nStartAcquisitionV2CreatePGMatrixTest(PGControlPlaneStoreTestMixin, unit
                 )
                 self.assertFalse(response["module_state_mutated"])
                 self.assertEqual(self._table_snapshot(), baseline)
+
+                detail = orchestrator.get_operation_run_api(
+                    owner_ref["operation_run_id"],
+                    expected_workspace_id=occurrence.workspace_id,
+                )
+                control_state = detail["operation_run"]["control_state"]
+                self.assertEqual(control_state, response["control_state"])
+                self.assertEqual(control_state["allowed_actions"], [])
+                self.assertEqual(
+                    set(control_state["disabled_reasons"].values()),
+                    {"acquisition_start_v2_generic_operation_control_identity_mismatch"},
+                )
+                inspect_terminal = self._prepare_inspect_operation_terminal(
+                    occurrence=occurrence,
+                    owner_ref=owner_ref,
+                    suffix=f"generic_control_drift_{label}",
+                )
+                self.assertEqual(inspect_terminal.serialized_result["variant"], "success")
+                self.assertEqual(inspect_terminal.serialized_result["control_state"], control_state)
+
+    def test_operation_v2_pins_survive_compound_owner_type_drift_after_action_markers_are_erased(self) -> None:
+        occurrence = self._arrange_pending(suffix="generic_control_operation_pin_compound_drift")
+        created = self._create(occurrence)
+        owner_ref = created["owner_result_ref"]
+        self._execute(
+            "UPDATE {schema}.agent_actions SET action_type = %s, owner_module = %s, operation_type = %s, "
+            "request_schema_version = %s, request_schema_digest = %s, input_json = %s, target_ref_json = %s, "
+            "metadata_json = %s, result_schema_version = %s, result_schema_digest = %s, "
+            "result_serializer_owner = %s, result_serializer_revision = %s, "
+            "result_serializer_contract_digest = %s WHERE action_id = %s",
+            (
+                "legacy_start",
+                "legacy_owner",
+                "legacy_operation",
+                "legacy_request",
+                "0" * 64,
+                "{}",
+                "{}",
+                "{}",
+                "legacy_result",
+                "0" * 64,
+                "legacy_serializer",
+                "legacy_revision",
+                "0" * 64,
+                owner_ref["action_id"],
+            ),
+        )
+        self._execute(
+            "UPDATE {schema}.operation_runs SET operation_type = %s, owner_module = %s "
+            "WHERE operation_run_id = %s",
+            ("legacy_operation", "legacy_owner", owner_ref["operation_run_id"]),
+        )
+        orchestrator = self._orchestrator()
+        baseline = self._table_snapshot()
+
+        response = orchestrator.cancel_operation_run_api(
+            owner_ref["operation_run_id"],
+            {"actor": "generic-control-test", "reason": "not allowed"},
+            expected_workspace_id=occurrence.workspace_id,
+        )
+
+        self.assertEqual(response["status"], "invalid")
+        self.assertEqual(
+            response["reason"],
+            "acquisition_start_v2_generic_operation_control_identity_mismatch",
+        )
+        self.assertFalse(response["module_state_mutated"])
+        self.assertEqual(self._table_snapshot(), baseline)
+
+    def test_exact_v2_classifier_rejects_incomplete_result_tuple_without_database_writes(self) -> None:
+        occurrence = self._arrange_pending(suffix="generic_control_incomplete_result_tuple")
+        created = self._create(occurrence)
+        owner_ref = created["owner_result_ref"]
+        action = self._rows("agent_actions", where="action_id = %s", params=(owner_ref["action_id"],))[0]
+        operation = self._rows(
+            "operation_runs",
+            where="operation_run_id = %s",
+            params=(owner_ref["operation_run_id"],),
+        )[0]
+        action.pop("result_serializer_revision")
+        baseline = self._table_snapshot()
+
+        preflight = self._orchestrator()._preflight_acquisition_start_v2_generic_operation_control(  # noqa: SLF001
+            action=action,
+            operation_run=operation,
+        )
+
+        self.assertEqual(preflight["status"], "invalid")
+        self.assertEqual(
+            preflight["reason"],
+            "acquisition_start_v2_generic_operation_control_identity_mismatch",
+        )
+        self.assertFalse(preflight["module_state_mutated"])
+        self.assertEqual(self._table_snapshot(), baseline)
+
+    def test_inspect_rejects_swapped_or_noncanonical_start_acceptance_event_before_result_writes(self) -> None:
+        def digest(value: dict[str, Any]) -> str:
+            encoded = json.dumps(
+                value,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+                allow_nan=False,
+            ).encode("utf-8")
+            return hashlib.sha256(encoded).hexdigest()
+
+        cases = (
+            "nested_payload_with_legacy_schema",
+            "legacy_payload_with_acceptance_schema",
+            "hybrid_payload",
+            "digest_mismatch",
+            "non_string_digest",
+            "owner_ref_extra_field",
+            "noncanonical_identity_text",
+        )
+        for ordinal, label in enumerate(cases, start=1):
+            with self.subTest(case=label):
+                occurrence = self._arrange_pending(suffix=f"acceptance_event_discriminator_{ordinal}")
+                created = self._create(occurrence)
+                owner_ref = created["owner_result_ref"]
+                planned_event = self._rows(
+                    "operation_events",
+                    where="event_id = %s",
+                    params=(owner_ref["terminal_winner_id"],),
+                )[0]
+                payload = dict(planned_event["payload_json"])
+                schema_version = str(planned_event["schema_version"])
+                if label == "nested_payload_with_legacy_schema":
+                    schema_version = "operation_event_v1"
+                elif label == "legacy_payload_with_acceptance_schema":
+                    payload = {
+                        "workflow_run_id": owner_ref["workflow_run_id"],
+                        "command_id": owner_ref["workflow_command_id"],
+                        "command_type": "acquisition.run.create",
+                        "owner": "acquisition_run_writer",
+                        "module_state_mutated": False,
+                    }
+                elif label == "hybrid_payload":
+                    payload["workflow_run_id"] = owner_ref["workflow_run_id"]
+                elif label == "digest_mismatch":
+                    payload["owner_result_digest"] = "0" * 64
+                elif label == "non_string_digest":
+                    payload["owner_result_digest"] = 0
+                elif label == "owner_ref_extra_field":
+                    payload["owner_result_ref"] = {
+                        **dict(payload["owner_result_ref"]),
+                        "legacy_workflow_alias": owner_ref["workflow_run_id"],
+                    }
+                elif label == "noncanonical_identity_text":
+                    drifted_ref = {
+                        **dict(payload["owner_result_ref"]),
+                        "workflow_run_id": f" {owner_ref['workflow_run_id']}",
+                    }
+                    payload["owner_result_ref"] = drifted_ref
+                    payload["owner_result_digest"] = digest(drifted_ref)
+                self._execute(
+                    "UPDATE {schema}.operation_events SET schema_version = %s, payload_json = %s "
+                    "WHERE event_id = %s",
+                    (schema_version, json.dumps(payload), owner_ref["terminal_winner_id"]),
+                )
+
+                with self.assertRaisesRegex(ValueError, "workflow command link mismatch"):
+                    self._prepare_inspect_operation_terminal(
+                        occurrence=occurrence,
+                        owner_ref=owner_ref,
+                        suffix=f"acceptance_event_discriminator_{ordinal}",
+                    )
+                self.assertEqual(self._rows("agent_tool_result_attempts"), [])
+                self.assertEqual(self._rows("agent_tool_result_journal"), [])
+
+    def test_inspect_rejects_start_acceptance_physical_dependency_drift_before_result_writes(self) -> None:
+        cases = ("action_budget", "receipt_payload", "source_event", "root_command_payload")
+        for ordinal, label in enumerate(cases, start=1):
+            with self.subTest(case=label):
+                occurrence = self._arrange_pending(suffix=f"acceptance_dependency_drift_{ordinal}")
+                created = self._create(occurrence)
+                owner_ref = created["owner_result_ref"]
+                if label == "action_budget":
+                    action = self._rows(
+                        "agent_actions",
+                        where="action_id = %s",
+                        params=(owner_ref["action_id"],),
+                    )[0]
+                    budget = dict(action["budget_json"])
+                    budget["max_cost_micro_usd"] = int(budget["max_cost_micro_usd"]) + 1
+                    self._execute(
+                        "UPDATE {schema}.agent_actions SET budget_json = %s WHERE action_id = %s",
+                        (json.dumps(budget), owner_ref["action_id"]),
+                    )
+                elif label == "receipt_payload":
+                    receipt_event = self._rows(
+                        "operation_events",
+                        where="event_stream_id = %s AND sequence_number = %s",
+                        params=(owner_ref["action_id"], 2),
+                    )[0]
+                    receipt = dict(receipt_event["payload_json"])
+                    receipt["approved_at"] = "2099-01-01T00:00:00Z"
+                    self._execute(
+                        "UPDATE {schema}.operation_events SET payload_json = %s WHERE event_id = %s",
+                        (json.dumps(receipt), receipt_event["event_id"]),
+                    )
+                elif label == "source_event":
+                    self._execute(
+                        "UPDATE {schema}.workflow_events SET actor = %s WHERE event_id = %s",
+                        ("drifted_source_actor", owner_ref["command_source_event_id"]),
+                    )
+                elif label == "root_command_payload":
+                    command = self._rows(
+                        "workflow_commands",
+                        where="command_id = %s",
+                        params=(owner_ref["workflow_command_id"],),
+                    )[0]
+                    payload = dict(command["payload_json"])
+                    payload["operation_id"] = "op_drifted_root_payload"
+                    self._execute(
+                        "UPDATE {schema}.workflow_commands SET payload_json = %s WHERE command_id = %s",
+                        (json.dumps(payload), owner_ref["workflow_command_id"]),
+                    )
+
+                with self.assertRaisesRegex(ValueError, "workflow command link mismatch"):
+                    self._prepare_inspect_operation_terminal(
+                        occurrence=occurrence,
+                        owner_ref=owner_ref,
+                        suffix=f"acceptance_dependency_drift_{ordinal}",
+                    )
+                self.assertEqual(self._rows("agent_tool_result_attempts"), [])
+                self.assertEqual(self._rows("agent_tool_result_journal"), [])
 
     def test_unrelated_schema_less_action_with_preview_named_input_remains_controllable(self) -> None:
         orchestrator = self._orchestrator()
@@ -1273,6 +1506,61 @@ class D1nStartAcquisitionV2CreatePGMatrixTest(PGControlPlaneStoreTestMixin, unit
                     result={"control_source": "native_test"},
                 ),
             ),
+            (
+                "mark_running",
+                "claimed",
+                "",
+                lambda command_id: self.store.mark_workflow_command_running(command_id),
+            ),
+            (
+                "mark_succeeded",
+                "running",
+                "",
+                lambda command_id: self.store.mark_workflow_command_succeeded(
+                    command_id,
+                    result={"control_source": "native_test"},
+                ),
+            ),
+            (
+                "mark_failed_retryable",
+                "running",
+                "",
+                lambda command_id: self.store.mark_workflow_command_failed(
+                    command_id,
+                    error_text="held root must not retry",
+                    retryable=True,
+                ),
+            ),
+            (
+                "mark_failed_terminal",
+                "running",
+                "",
+                lambda command_id: self.store.mark_workflow_command_failed(
+                    command_id,
+                    error_text="held root must not terminalize",
+                    retryable=False,
+                ),
+            ),
+            (
+                "checkpoint_payload",
+                "running",
+                "lease_owner",
+                lambda command_id: self.store.checkpoint_running_workflow_command_payload(
+                    command_id,
+                    lease_owner="held-root-native-test",
+                    payload={"schema_version": "forged_release"},
+                ),
+            ),
+            (
+                "cancel_all_provenance_erased",
+                "queued",
+                "all_provenance",
+                lambda command_id: self.store.cancel_workflow_command(
+                    command_id,
+                    reason="sentinel alone is the physical hold",
+                    actor="native-control-test",
+                ),
+            ),
         )
 
         for ordinal, (label, status, corruption, mutator) in enumerate(cases, start=1):
@@ -1303,11 +1591,150 @@ class D1nStartAcquisitionV2CreatePGMatrixTest(PGControlPlaneStoreTestMixin, unit
                             command_id,
                         ),
                     )
+                if corruption == "lease_owner":
+                    self._execute(
+                        "UPDATE {schema}.workflow_commands SET lease_owner = %s, lease_expires_at = %s "
+                        "WHERE command_id = %s",
+                        ("held-root-native-test", "2099-01-01 00:00:00", command_id),
+                    )
+                if corruption == "all_provenance":
+                    self._execute(
+                        "UPDATE {schema}.workflow_commands SET command_type = %s, owner = %s, payload_json = %s "
+                        "WHERE command_id = %s",
+                        ("legacy.command", "legacy_owner", "{}", command_id),
+                    )
                 baseline = self._table_snapshot()
 
                 self.assertEqual(mutator(command_id), {})
 
                 self.assertEqual(self._table_snapshot(), baseline)
+
+    def test_dormant_start_v2_root_command_blocks_bulk_reawaken_without_writes(self) -> None:
+        occurrence = self._arrange_pending(suffix="native_bulk_reawaken")
+        created = self._create(occurrence)
+        owner_ref = created["owner_result_ref"]
+        command_id = owner_ref["workflow_command_id"]
+        snapshot_id = "snapshot_held_root_reawaken"
+        self._execute(
+            "UPDATE {schema}.workflow_commands SET status = %s, payload_json = %s, result_json = %s "
+            "WHERE command_id = %s",
+            (
+                "retry_wait",
+                json.dumps({"snapshot_id": snapshot_id}),
+                json.dumps({"status": "waiting_prerequisite"}),
+                command_id,
+            ),
+        )
+        baseline = self._table_snapshot()
+
+        reawakened = self.store.reawaken_waiting_prerequisite_workflow_commands(
+            workflow_run_id=owner_ref["workflow_run_id"],
+            snapshot_id=snapshot_id,
+            command_type="acquisition.run.create",
+            source="held-root-native-test",
+        )
+
+        self.assertEqual(reawakened, 0)
+        self.assertEqual(self._table_snapshot(), baseline)
+
+    def test_generic_postgres_crud_rejects_workflow_commands_before_sql(self) -> None:
+        occurrence = self._arrange_pending(suffix="generic_crud_fence")
+        self._create(occurrence)
+        baseline = self._table_snapshot()
+        calls = (
+            lambda: self.adapter.insert_row_with_generated_id(table_name="workflow_commands", row={}),
+            lambda: self.adapter.upsert_row_with_generated_id(
+                table_name="workflow_commands",
+                row={},
+                conflict_columns=("command_id",),
+            ),
+            lambda: self.adapter.update_row_returning(
+                table_name="workflow_commands",
+                id_column="command_id",
+                id_value="command_held",
+                row={"status": "cancelled"},
+            ),
+            lambda: self.adapter.delete_rows(
+                table_name="workflow_commands",
+                where_sql="command_id = %s",
+                params=("command_held",),
+            ),
+            lambda: self.adapter.update_rows(
+                table_name="workflow_commands",
+                where_sql="command_id = %s",
+                params=("command_held",),
+                values={"status": "cancelled"},
+            ),
+            lambda: self.adapter.upsert_row("workflow_commands", {"command_id": "command_held"}),
+            lambda: self.adapter.bulk_upsert_rows("workflow_commands", ({"command_id": "command_held"},)),
+            lambda: self.adapter.upsert_row_and_upsert_rows(
+                table_name="workflow_commands",
+                row={"command_id": "command_held"},
+                upsert_table_name="workflow_events",
+            ),
+            lambda: self.adapter.upsert_row_and_upsert_rows(
+                table_name="workflow_events",
+                row={"event_id": "event_held"},
+                upsert_table_name="workflow_commands",
+            ),
+            lambda: self.adapter.replace_rows(
+                table_name="workflow_commands",
+                where_sql="command_id = %s",
+                params=("command_held",),
+            ),
+            lambda: self.adapter.upsert_row_and_replace_rows(
+                table_name="workflow_commands",
+                row={"command_id": "command_held"},
+                replace_table_name="workflow_events",
+                replace_where_sql="event_id = %s",
+                replace_params=("event_held",),
+            ),
+            lambda: self.adapter.upsert_row_and_replace_rows(
+                table_name="workflow_events",
+                row={"event_id": "event_held"},
+                replace_table_name="workflow_commands",
+                replace_where_sql="command_id = %s",
+                replace_params=("command_held",),
+            ),
+        )
+        for ordinal, call in enumerate(calls, start=1):
+            with self.subTest(writer=ordinal):
+                with self.assertRaisesRegex(ValueError, "dedicated workflow command writer"):
+                    call()
+                self.assertEqual(self._table_snapshot(), baseline)
+
+    def test_dormant_start_v2_root_command_blocks_atomic_completion_without_writes(self) -> None:
+        occurrence = self._arrange_pending(suffix="native_atomic_completion")
+        created = self._create(occurrence)
+        command_id = created["owner_result_ref"]["workflow_command_id"]
+        lease_owner = "held-root-completion-test"
+        lease_expires_at = "2099-01-01 00:00:00"
+        self._execute(
+            "UPDATE {schema}.workflow_commands SET status = %s, lease_owner = %s, lease_expires_at = %s, "
+            "attempt = %s WHERE command_id = %s",
+            ("running", lease_owner, lease_expires_at, 1, command_id),
+        )
+        root = dict(self.store.get_workflow_command(command_id) or {})
+        orchestrator = self._orchestrator()
+        owner = orchestrator._acquisition_command_owner  # noqa: SLF001
+        contract = owner._acquisition_root_intent_plan_contract(root, claim_attempt=1)  # noqa: SLF001
+        self.assertTrue(contract)
+        baseline = self._table_snapshot()
+
+        completed = self.store.repos.workflow_runtime.complete_acquisition_root_command(
+            command_id,
+            expected_lease_owner=lease_owner,
+            expected_lease_expires_at=lease_expires_at,
+            expected_attempt=1,
+            expected_root_command=owner._acquisition_root_locked_identity(root),  # noqa: SLF001
+            plan_event=dict(contract.get("plan_event") or {}),
+            child_command=dict(contract.get("child_command") or {}),
+            child_causality=dict(contract.get("child_causality") or {}),
+            root_result=dict(contract.get("root_result") or {}),
+        )
+
+        self.assertEqual(completed["outcome"], "stale_claim")
+        self.assertEqual(self._table_snapshot(), baseline)
 
     def test_create_replay_rejects_noncanonical_string_identity_without_writes(self) -> None:
         occurrence = self._arrange_pending(suffix="noncanonical_text")

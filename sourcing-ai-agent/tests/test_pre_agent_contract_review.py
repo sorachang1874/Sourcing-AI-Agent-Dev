@@ -70,8 +70,11 @@ from sourcing_agent.operation_runtime import (
     OPERATION_PROJECTION_READ_MEMBERSHIP_REVISION_MISSING_PROGRESS_REASON,
     OPERATION_RESUME_REQUESTED_PROGRESS_REASON,
     OPERATION_RETRY_REQUESTED_PROGRESS_REASON,
+    OPERATION_RUN_CONTROL_FAIL_CLOSED_OVERRIDE_REASONS,
     OPERATION_SENSITIVE_CRM_STAGE_REQUIRES_APPROVAL_PROGRESS_REASON,
     operation_run_control_state,
+    operation_run_control_state_fail_closed,
+    validate_operation_run_control_state_projection,
 )
 from tests.source_inspection import all_source_files, find_class_method
 
@@ -3651,6 +3654,26 @@ def test_operation_run_control_state_is_contract_owned() -> None:
     for source in (review_doc, frontend_doc, agent_doc):
         assert "operation_runtime.operation_run_control_state" in source
         assert "terminal-status" in source or "terminal status" in source
+    assert "`operation_run.control_state`" in review_doc
+    assert OPERATION_RUN_CONTROL_FAIL_CLOSED_OVERRIDE_REASONS == {
+        "acquisition_start_v2_generic_operation_control_not_enabled",
+        "acquisition_start_v2_generic_operation_control_identity_mismatch",
+    }
+    for reason in OPERATION_RUN_CONTROL_FAIL_CLOSED_OVERRIDE_REASONS:
+        assert reason in review_doc
+        projected = operation_run_control_state_fail_closed(
+            operation_run_control_state(
+                operation_status="queued",
+                operation_run_id="operation_contract_preflight",
+                action_status="queued",
+                operation_phase="queued",
+            ),
+            disabled_reason=reason,
+        ).to_record()
+        assert validate_operation_run_control_state_projection(
+            projected,
+            operation_run_id="operation_contract_preflight",
+        ).to_record() == projected
     find_class_method("_operation_run_control_state_record")
     find_class_method("_operation_run_control_response_record")
 

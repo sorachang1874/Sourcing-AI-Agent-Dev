@@ -14,6 +14,19 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
+from .acquisition_start_command_acceptance import (
+    ACQUISITION_START_COMMAND_ACCEPTANCE_SCHEMA_VERSION,
+    AcquisitionStartCommandAcceptanceError,
+    AcquisitionStartCommandAcceptanceEvent,
+)
+from .acquisition_start_v2 import (
+    ACQUISITION_CONFIRMATION_RECEIPT_SCHEMA_VERSION,
+    AcquisitionConfirmationReceipt,
+    AcquisitionParentBudgetEnvelopeRef,
+    AcquisitionStartV2BoundRequest,
+    AcquisitionStartV2Error,
+    AcquisitionStartV2RootCommandPayload,
+)
 from .acquisition_start_v2_control import acquisition_start_v2_generic_operation_control_preflight
 from .action_result_schema import ActionResultSpec
 from .agent_projection_query import (
@@ -45,7 +58,7 @@ _WORKFLOW_REF_FIELDS = ("workflow_run_id", "command_id", "command_type", "owner"
 _OPERATION_EVENT_SCHEMA_BY_TYPE = {
     "OperationCommandPlanned": {
         "operation_event_v1",
-        "acquisition_start_command_acceptance.v1",
+        ACQUISITION_START_COMMAND_ACCEPTANCE_SCHEMA_VERSION,
     },
 }
 
@@ -189,6 +202,13 @@ def _optional_identity_text(value: object, *, field: str) -> str:
     return _required_identity_text(value, field=field)
 
 
+def _required_sha256(value: object, *, field: str) -> str:
+    normalized = _required_identity_text(value, field=field)
+    if len(normalized) != 64 or any(character not in "0123456789abcdef" for character in normalized):
+        raise ValueError(f"agent tool inspect result {field} invalid")
+    return normalized
+
+
 def _workflow_command_causal_identity(command: dict[str, Any]) -> dict[str, Any]:
     """Freeze the non-model workflow lineage used by the inspect owner."""
 
@@ -273,42 +293,132 @@ def _workflow_ref_identity(
 
 
 def _operation_command_planned_event_identity(
+    event: dict[str, Any],
     event_payload: dict[str, Any],
     *,
     normalized_workflow_ref: dict[str, str],
     workspace_id: str,
     action_id: str,
     operation_run_id: str,
+    action: dict[str, Any],
+    operation: dict[str, Any],
 ) -> dict[str, str]:
-    try:
+    schema_version = str(event.get("schema_version") or "")
+    if schema_version == "operation_event_v1":
+        allowed_fields = set(_WORKFLOW_REF_FIELDS) | {"module_state_mutated"}
+        if not set(_WORKFLOW_REF_FIELDS).issubset(event_payload) or not set(event_payload).issubset(allowed_fields):
+            raise ValueError("agent tool inspect result operation command planned event invalid")
+        if "module_state_mutated" in event_payload and type(event_payload["module_state_mutated"]) is not bool:
+            raise ValueError("agent tool inspect result operation command planned event invalid")
         return _workflow_ref_identity(
             event_payload,
             field="operation command planned event",
             allow_variant_fields=True,
         )
-    except ValueError:
-        owner_result_ref = event_payload.get("owner_result_ref")
-        if not isinstance(owner_result_ref, dict) or not normalized_workflow_ref:
-            raise
-        workflow_run_id = _required_identity_text(
-            owner_result_ref.get("workflow_run_id"),
-            field="operation command planned event owner_result_ref workflow_run_id",
+    if schema_version != ACQUISITION_START_COMMAND_ACCEPTANCE_SCHEMA_VERSION:
+        raise ValueError("agent tool inspect result operation command planned event invalid")
+    try:
+        acceptance = AcquisitionStartCommandAcceptanceEvent.from_payload(event_payload)
+    except AcquisitionStartCommandAcceptanceError as exc:
+        raise ValueError("agent tool inspect result operation command planned event invalid") from exc
+    owner_result_ref = acceptance.owner_result_ref.to_record()
+    if not normalized_workflow_ref:
+        raise ValueError("agent tool inspect result operation command planned event invalid")
+
+    text_fields = (
+        "schema_version",
+        "runtime_namespace",
+        "provider_mode",
+        "workspace_id",
+        "action_id",
+        "operation_run_id",
+        "workflow_run_id",
+        "workflow_command_id",
+        "terminal_winner_id",
+        "command_source_event_id",
+    )
+    normalized_ref = {
+        field: _required_identity_text(
+            owner_result_ref.get(field),
+            field=f"operation command planned event owner_result_ref {field}",
         )
-        workflow_command_id = _required_identity_text(
-            owner_result_ref.get("workflow_command_id"),
-            field="operation command planned event owner_result_ref workflow_command_id",
+        for field in text_fields
+    }
+    for field in (
+        "command_source_event_contract_digest",
+        "start_snapshot_digest",
+        "root_command_payload_digest",
+    ):
+        normalized_ref[field] = _required_sha256(
+            owner_result_ref.get(field),
+            field=f"operation command planned event owner_result_ref {field}",
         )
-        if (
-            workflow_run_id != normalized_workflow_ref["workflow_run_id"]
-            or workflow_command_id != normalized_workflow_ref["command_id"]
-            or str(owner_result_ref.get("workspace_id") or "").strip() != workspace_id
-            or str(owner_result_ref.get("action_id") or "").strip() != action_id
-            or str(owner_result_ref.get("operation_run_id") or "").strip() != operation_run_id
-            or str(owner_result_ref.get("schema_version") or "").strip()
-            != "acquisition_start_command_acceptance_owner_result_ref.v1"
-        ):
-            raise ValueError("agent tool inspect result operation command planned event invalid")
-        return dict(normalized_workflow_ref)
+
+    confirmation_receipt_ref = owner_result_ref.get("confirmation_receipt_ref")
+    result_occurrence_ref = owner_result_ref.get("result_occurrence_ref")
+    if (
+        type(confirmation_receipt_ref) is not dict
+        or set(confirmation_receipt_ref) != {"receipt_id", "receipt_digest"}
+        or type(result_occurrence_ref) is not dict
+        or set(result_occurrence_ref)
+        != {"result_slot_id", "slot_generation", "logical_occurrence_digest"}
+    ):
+        raise ValueError("agent tool inspect result operation command planned event invalid")
+    receipt_id = _required_identity_text(
+        confirmation_receipt_ref.get("receipt_id"),
+        field="operation command planned event owner_result_ref receipt_id",
+    )
+    receipt_digest = _required_sha256(
+        confirmation_receipt_ref.get("receipt_digest"),
+        field="operation command planned event owner_result_ref receipt_digest",
+    )
+    _required_identity_text(
+        result_occurrence_ref.get("result_slot_id"),
+        field="operation command planned event owner_result_ref result_slot_id",
+    )
+    slot_generation = result_occurrence_ref.get("slot_generation")
+    if type(slot_generation) is not int or slot_generation <= 0:
+        raise ValueError("agent tool inspect result operation command planned event invalid")
+    _required_sha256(
+        result_occurrence_ref.get("logical_occurrence_digest"),
+        field="operation command planned event owner_result_ref logical_occurrence_digest",
+    )
+    try:
+        budget_ref = AcquisitionParentBudgetEnvelopeRef(owner_result_ref.get("parent_budget_envelope_ref") or {})
+    except AcquisitionStartV2Error as exc:
+        raise ValueError("agent tool inspect result operation command planned event invalid") from exc
+
+    action_result_ref = _json_dict(action.get("result_ref_json"), field="action result ref")
+    operation_result_ref = _json_dict(operation.get("result_ref_json"), field="operation result ref")
+    action_target = _json_dict(action.get("target_ref_json"), field="action target ref")
+    action_metadata = _json_dict(action.get("metadata_json"), field="action metadata")
+    start_snapshot = action_target.get("start_snapshot")
+    start_snapshot_digest = start_snapshot.get("snapshot_digest") if isinstance(start_snapshot, dict) else None
+    event_sequence = event.get("sequence_number")
+    if (
+        normalized_ref["schema_version"] != "acquisition_start_command_acceptance_owner_result_ref.v1"
+        or normalized_ref["runtime_namespace"] != "isolated_local_canary"
+        or normalized_ref["provider_mode"] not in {"simulate", "scripted"}
+        or normalized_ref["workspace_id"] != workspace_id
+        or normalized_ref["action_id"] != action_id
+        or normalized_ref["operation_run_id"] != operation_run_id
+        or normalized_ref["workflow_run_id"] != normalized_workflow_ref["workflow_run_id"]
+        or normalized_ref["workflow_command_id"] != normalized_workflow_ref["command_id"]
+        or normalized_ref["terminal_winner_id"] != str(event.get("event_id") or "")
+        or type(event_sequence) is not int
+        or event_sequence != 1
+        or owner_result_ref.get("terminal_winner_sequence_number") != event_sequence
+        or owner_result_ref.get("command_source_event_sequence_number") != 2
+        or normalized_ref["start_snapshot_digest"] != start_snapshot_digest
+        or action_metadata.get("result_occurrence_ref") != result_occurrence_ref
+        or action_result_ref != owner_result_ref
+        or operation_result_ref != owner_result_ref
+        or budget_ref.confirmation_receipt_id != receipt_id
+        or budget_ref.confirmation_receipt_digest != receipt_digest
+        or acceptance.owner_result_digest != _sha256_json(owner_result_ref)
+    ):
+        raise ValueError("agent tool inspect result operation command planned event invalid")
+    return dict(normalized_workflow_ref)
 
 
 def _masked_absence_terminal(
@@ -437,23 +547,44 @@ def load_inspect_operation_base_owner(
     )
     commands: list[dict[str, Any]] = []
     events_desc: list[dict[str, Any]] = []
+    action_events_desc: list[dict[str, Any]] = []
+    workflow_events: list[dict[str, Any]] = []
     command_id = ""
+    workflow_run_id = ""
     if exact_owner:
         workflow_ref = _required_json_dict(
             operation.get("workflow_ref_json"),
             field="operation workflow ref",
         )
-        command_id = _workflow_ref_identity(
+        normalized_workflow_ref = _workflow_ref_identity(
             workflow_ref,
             field="operation workflow ref",
             allow_variant_fields=False,
-        ).get("command_id", "")
+        )
+        command_id = normalized_workflow_ref.get("command_id", "")
+        workflow_run_id = normalized_workflow_ref.get("workflow_run_id", "")
     if command_id:
         cursor.execute(
             "SELECT * FROM workflow_commands WHERE command_id = %s FOR UPDATE",
             (command_id,),
         )
         commands = _fetch_all_dict_rows(cursor)
+    if exact_owner:
+        cursor.execute(
+            "SELECT * FROM operation_events "
+            "WHERE event_stream_id = %s "
+            "ORDER BY sequence_number DESC LIMIT 100001 FOR UPDATE",
+            (action_id,),
+        )
+        action_events_desc = _fetch_all_dict_rows(cursor)
+    if workflow_run_id:
+        cursor.execute(
+            "SELECT * FROM workflow_events "
+            "WHERE workflow_run_id = %s "
+            "ORDER BY sequence_number LIMIT 100001 FOR UPDATE",
+            (workflow_run_id,),
+        )
+        workflow_events = _fetch_all_dict_rows(cursor)
     if exact_owner:
         cursor.execute(
             "SELECT * FROM operation_events "
@@ -467,7 +598,157 @@ def load_inspect_operation_base_owner(
         "operation_run": operation,
         "workflow_commands": commands,
         "operation_events_desc": events_desc,
+        "action_events_desc": action_events_desc,
+        "workflow_events": workflow_events,
     }
+
+
+def _validate_start_acceptance_physical_dependencies(
+    *,
+    owner_result_ref: dict[str, Any],
+    action: dict[str, Any],
+    operation: dict[str, Any],
+    workflow_command: dict[str, Any],
+    normalized_workflow_ref: dict[str, str],
+    action_events_desc: list[dict[str, Any]],
+    workflow_events: list[dict[str, Any]],
+) -> None:
+    """Bind the closed acceptance ref to every immutable physical owner."""
+
+    action_target = _required_json_dict(action.get("target_ref_json"), field="action target ref")
+    action_input = _required_json_dict(action.get("input_json"), field="action input")
+    try:
+        bound_request = AcquisitionStartV2BoundRequest(
+            {
+                "input_payload": action_input,
+                "target_ref": action_target,
+            }
+        )
+    except AcquisitionStartV2Error as exc:
+        raise ValueError("agent tool inspect result workflow command link mismatch") from exc
+    snapshot = bound_request.snapshot.to_record()
+
+    receipt_events = [
+        event
+        for event in action_events_desc
+        if str(event.get("event_type") or "") == "ActionApproved" and event.get("sequence_number") == 2
+    ]
+    if len(receipt_events) != 1:
+        raise ValueError("agent tool inspect result workflow command link mismatch")
+    receipt_event = receipt_events[0]
+    receipt_payload = _required_json_dict(receipt_event.get("payload_json"), field="action approval receipt")
+    try:
+        receipt = AcquisitionConfirmationReceipt(receipt_payload)
+    except AcquisitionStartV2Error as exc:
+        raise ValueError("agent tool inspect result workflow command link mismatch") from exc
+    receipt_record = receipt.to_record()
+    receipt_ref = owner_result_ref.get("confirmation_receipt_ref")
+    if not isinstance(receipt_ref, dict):
+        raise ValueError("agent tool inspect result workflow command link mismatch")
+    if (
+        str(receipt_event.get("event_id") or "") != receipt.receipt_id
+        or str(receipt_event.get("workspace_id") or "") != str(action.get("workspace_id") or "")
+        or str(receipt_event.get("event_stream_id") or "") != str(action.get("action_id") or "")
+        or str(receipt_event.get("operation_run_id") or "") != str(operation.get("operation_run_id") or "")
+        or str(receipt_event.get("action_id") or "") != str(action.get("action_id") or "")
+        or str(receipt_event.get("event_family") or "") != "operation_event"
+        or str(receipt_event.get("schema_version") or "") != ACQUISITION_CONFIRMATION_RECEIPT_SCHEMA_VERSION
+        or receipt_ref != {"receipt_id": receipt.receipt_id, "receipt_digest": receipt.receipt_digest}
+        or receipt_record.get("action_id") != str(action.get("action_id") or "")
+        or receipt_record.get("workspace_id") != str(action.get("workspace_id") or "")
+        or receipt_record.get("requester_id") != str(bound_request.target_ref.get("requester_id") or "")
+        or receipt_record.get("start_snapshot_digest") != snapshot.get("snapshot_digest")
+        or owner_result_ref.get("start_snapshot_digest") != snapshot.get("snapshot_digest")
+    ):
+        raise ValueError("agent tool inspect result workflow command link mismatch")
+
+    action_budget = _required_json_dict(action.get("budget_json"), field="action budget")
+    operation_budget = _required_json_dict(operation.get("cost_budget_json"), field="operation budget")
+    budget = receipt_record.get("budget")
+    try:
+        budget_ref = AcquisitionParentBudgetEnvelopeRef(owner_result_ref.get("parent_budget_envelope_ref") or {})
+    except AcquisitionStartV2Error as exc:
+        raise ValueError("agent tool inspect result workflow command link mismatch") from exc
+    if (
+        action_budget != budget
+        or operation_budget != budget
+        or budget_ref.confirmation_receipt_id != receipt.receipt_id
+        or budget_ref.confirmation_receipt_digest != receipt.receipt_digest
+        or budget_ref.budget_digest != _sha256_json(budget)
+    ):
+        raise ValueError("agent tool inspect result workflow command link mismatch")
+
+    source_events = [
+        event
+        for event in workflow_events
+        if str(event.get("event_id") or "") == str(owner_result_ref.get("command_source_event_id") or "")
+        and event.get("sequence_number") == owner_result_ref.get("command_source_event_sequence_number")
+    ]
+    if len(source_events) != 1:
+        raise ValueError("agent tool inspect result workflow command link mismatch")
+    source_event = source_events[0]
+    source_payload = _required_json_dict(source_event.get("payload_json"), field="workflow source event payload")
+    source_artifact_refs = _required_json_list(
+        source_event.get("artifact_refs_json"),
+        field="workflow source event artifact refs",
+    )
+    source_contract = {
+        "event_id": source_event.get("event_id"),
+        "workflow_run_id": source_event.get("workflow_run_id"),
+        "operation_id": source_event.get("operation_id"),
+        "command_id": source_event.get("command_id"),
+        "activity_attempt_id": source_event.get("activity_attempt_id"),
+        "event_family": source_event.get("event_family"),
+        "event_type": source_event.get("event_type"),
+        "sequence_number": source_event.get("sequence_number"),
+        "idempotency_key": source_event.get("idempotency_key"),
+        "actor": source_event.get("actor"),
+        "source": source_event.get("source"),
+        "payload": source_payload,
+        "artifact_refs": source_artifact_refs,
+        "schema_version": source_event.get("schema_version"),
+    }
+    command_payload = _required_json_dict(workflow_command.get("payload_json"), field="workflow command payload")
+    command_causality = command_payload.get("causality")
+    if not isinstance(command_causality, dict):
+        raise ValueError("agent tool inspect result workflow command link mismatch")
+    if (
+        str(source_event.get("workflow_run_id") or "") != normalized_workflow_ref["workflow_run_id"]
+        or str(source_event.get("operation_id") or "") != str(operation.get("operation_run_id") or "")
+        or str(source_event.get("event_family") or "") != "workflow_event"
+        or str(source_event.get("event_type") or "") != "CommandPlanRequested"
+        or str(source_event.get("schema_version") or "") != "workflow_event_v1"
+        or str(workflow_command.get("source_event_id") or "") != str(source_event.get("event_id") or "")
+        or str(workflow_command.get("source_event_type") or "") != "CommandPlanRequested"
+        or source_payload.get("payload") != command_payload
+        or source_payload.get("command_type") != str(workflow_command.get("command_type") or "")
+        or source_payload.get("idempotency_key") != str(workflow_command.get("idempotency_key") or "")
+        or command_payload.get("operation_id") != str(operation.get("operation_run_id") or "")
+        or command_causality.get("workflow_run_id") != normalized_workflow_ref["workflow_run_id"]
+        or command_causality.get("operation_id") != str(operation.get("operation_run_id") or "")
+        or command_causality.get("command_type") != normalized_workflow_ref["command_type"]
+        or command_causality.get("owner") != normalized_workflow_ref["owner"]
+        or command_causality.get("source_event_id") != str(source_event.get("event_id") or "")
+        or command_causality.get("source_event_type") != "CommandPlanRequested"
+        or _sha256_json(source_contract) != owner_result_ref.get("command_source_event_contract_digest")
+    ):
+        raise ValueError("agent tool inspect result workflow command link mismatch")
+
+    root_payload = {key: value for key, value in command_payload.items() if key not in {"operation_id", "causality"}}
+    try:
+        canonical_root = AcquisitionStartV2RootCommandPayload(root_payload).to_record()
+    except AcquisitionStartV2Error as exc:
+        raise ValueError("agent tool inspect result workflow command link mismatch") from exc
+    if (
+        canonical_root.get("payload_digest") != owner_result_ref.get("root_command_payload_digest")
+        or canonical_root.get("action_id") != str(action.get("action_id") or "")
+        or canonical_root.get("operation_run_id") != str(operation.get("operation_run_id") or "")
+        or canonical_root.get("workflow_run_id") != normalized_workflow_ref["workflow_run_id"]
+        or canonical_root.get("confirmation_receipt_ref") != receipt_ref
+        or canonical_root.get("start_snapshot") != snapshot
+        or canonical_root.get("start_snapshot_digest") != owner_result_ref.get("start_snapshot_digest")
+    ):
+        raise ValueError("agent tool inspect result workflow command link mismatch")
 
 
 def terminal_from_locked_inspect_operation_owner(
@@ -521,17 +802,26 @@ def terminal_from_locked_inspect_operation_owner(
         )
 
     action_type = str(action.get("action_type") or "").strip()
+    generic_control_preflight = acquisition_start_v2_generic_operation_control_preflight(
+        action=action,
+        operation_run=operation,
+    )
     try:
         action_spec = DEFAULT_ACTION_REGISTRY.spec_for(action_type)
         display_contract = DEFAULT_ACTION_REGISTRY.display_contract_for(action_type).to_record()
     except KeyError as exc:
-        raise ValueError("agent tool inspect result action contract not found") from exc
+        if str(generic_control_preflight.get("status") or "") == "ready":
+            raise ValueError("agent tool inspect result action contract not found") from exc
+        action_spec = DEFAULT_ACTION_REGISTRY.spec_for("start_acquisition_run")
+        display_contract = DEFAULT_ACTION_REGISTRY.display_contract_for("start_acquisition_run").to_record()
     owner_fields = {
         "owner_module": action_spec.owner_module,
         "operation_type": action_spec.operation_type,
     }
     for row in (action, operation):
-        if any(str(row.get(field) or "") != value for field, value in owner_fields.items()):
+        if str(generic_control_preflight.get("status") or "") == "ready" and any(
+            str(row.get(field) or "") != value for field, value in owner_fields.items()
+        ):
             raise ValueError("agent tool inspect result action operation owner mismatch")
 
     events_desc = list(base_owner.get("operation_events_desc") or [])
@@ -639,11 +929,14 @@ def terminal_from_locked_inspect_operation_owner(
         event_payload = _required_json_dict(event.get("payload_json"), field="operation event payload")
         try:
             event_identity = _operation_command_planned_event_identity(
+                event,
                 event_payload,
                 normalized_workflow_ref=normalized_workflow_ref,
                 workspace_id=occurrence.workspace_id,
                 action_id=action_id,
                 operation_run_id=operation_run_id,
+                action=action,
+                operation=operation,
             )
         except ValueError as exc:
             raise ValueError("agent tool inspect result workflow command link mismatch") from exc
@@ -677,6 +970,22 @@ def terminal_from_locked_inspect_operation_owner(
         plan_event, _plan_payload, plan_event_identity = command_plan_events[0]
         if plan_event_identity != normalized_workflow_ref:
             raise ValueError("agent tool inspect result workflow command link mismatch")
+        if str(plan_event.get("schema_version") or "") == ACQUISITION_START_COMMAND_ACCEPTANCE_SCHEMA_VERSION:
+            plan_payload = _required_json_dict(plan_event.get("payload_json"), field="operation event payload")
+            owner_result_ref = _required_json_dict(
+                plan_payload.get("owner_result_ref"),
+                field="operation command planned event owner_result_ref",
+            )
+            if str(generic_control_preflight.get("status") or "") == "unsupported":
+                _validate_start_acceptance_physical_dependencies(
+                    owner_result_ref=owner_result_ref,
+                    action=action,
+                    operation=operation,
+                    workflow_command=latest_command,
+                    normalized_workflow_ref=normalized_workflow_ref,
+                    action_events_desc=list(base_owner.get("action_events_desc") or []),
+                    workflow_events=list(base_owner.get("workflow_events") or []),
+                )
         selected_plan_event = next(
             evidence for evidence in event_evidence if evidence["event_id"] == str(plan_event.get("event_id") or "")
         )
@@ -689,10 +998,6 @@ def terminal_from_locked_inspect_operation_owner(
         action_approval_status=str(action.get("approval_status") or "").strip(),
         action_retry_operation_run_id=str(action_metadata.get("retry_operation_run_id") or "").strip(),
         operation_phase=phase,
-    )
-    generic_control_preflight = acquisition_start_v2_generic_operation_control_preflight(
-        action=action,
-        operation_run=operation,
     )
     if str(generic_control_preflight.get("status") or "") != "ready":
         control_state = operation_run_control_state_fail_closed(
@@ -722,21 +1027,28 @@ def terminal_from_locked_inspect_operation_owner(
     if binding.include_progress_reason and str(progress.get("reason") or "").strip():
         progress_projection["reason"] = str(progress["reason"])
 
+    fail_closed_identity_projection = str(generic_control_preflight.get("status") or "") != "ready"
+    projected_action_type = action_spec.action_type if fail_closed_identity_projection else action_type
+    projected_owner_module = action_spec.owner_module if fail_closed_identity_projection else str(action["owner_module"])
+    projected_operation_type = (
+        action_spec.operation_type if fail_closed_identity_projection else str(action["operation_type"])
+    )
+
     snapshot: dict[str, Any] = {
         "action": {
             "workspace_id": occurrence.workspace_id,
             "action_id": action_id,
-            "action_type": action_type,
-            "owner_module": str(action["owner_module"]),
-            "operation_type": str(action["operation_type"]),
+            "action_type": projected_action_type,
+            "owner_module": projected_owner_module,
+            "operation_type": projected_operation_type,
             "status": str(action["status"]),
         },
         "operation_run": {
             "workspace_id": occurrence.workspace_id,
             "action_id": action_id,
             "operation_run_id": operation_run_id,
-            "owner_module": str(operation["owner_module"]),
-            "operation_type": str(operation["operation_type"]),
+            "owner_module": projected_owner_module,
+            "operation_type": projected_operation_type,
             "status": operation_status,
         },
         "control_state": control_state_record,
@@ -776,6 +1088,16 @@ def terminal_from_locked_inspect_operation_owner(
     }
     if binding.physical_owner_revision == "v3":
         physical_owner_evidence["raw_progress_digest"] = _sha256_json(progress)
+        if fail_closed_identity_projection:
+            physical_owner_evidence["persisted_identity_drift_digest"] = _sha256_json(
+                {
+                    "action_type": action_type,
+                    "action_owner_module": str(action.get("owner_module") or ""),
+                    "action_operation_type": str(action.get("operation_type") or ""),
+                    "operation_owner_module": str(operation.get("owner_module") or ""),
+                    "operation_operation_type": str(operation.get("operation_type") or ""),
+                }
+            )
         physical_owner_evidence["audit_event_stream_digest"] = _sha256_json(
             {
                 "schema_version": "inspect_operation_audit_event_stream_v1",

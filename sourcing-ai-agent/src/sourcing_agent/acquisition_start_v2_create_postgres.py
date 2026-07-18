@@ -16,6 +16,13 @@ import time
 from collections.abc import Mapping
 from typing import Any
 
+from .acquisition_start_command_acceptance import (
+    ACQUISITION_START_COMMAND_ACCEPTANCE_OWNER_REF_FIELDS,
+    ACQUISITION_START_COMMAND_ACCEPTANCE_OWNER_REF_SCHEMA_VERSION,
+    ACQUISITION_START_COMMAND_ACCEPTANCE_SCHEMA_VERSION,
+    AcquisitionStartCommandAcceptanceEvent,
+    AcquisitionStartCommandAcceptanceOwnerRef,
+)
 from .acquisition_start_v2 import (
     ACQUISITION_CONFIRMATION_RECEIPT_SCHEMA_VERSION,
     ACQUISITION_START_ACTION_TYPE,
@@ -38,8 +45,8 @@ from .acquisition_start_v2_postgres import (
     acquisition_start_v2_operation_event_id,
     revalidate_acquisition_start_v2_occurrence,
 )
-from .agent_tool_result_slot import AgentToolOccurrence
 from .agent_tool_result_postgres import _SLOT_IDENTITY_FIELDS, _slot_insert_row
+from .agent_tool_result_slot import AgentToolOccurrence
 from .durable_runtime import (
     ACQUISITION_INTENT_RESOLVE_COMMAND_TYPE,
     ACQUISITION_RUN_CREATE_COMMAND_TYPE,
@@ -60,34 +67,15 @@ _WORKFLOW_TYPE = "agent_callable_workflow_command"
 _WORKFLOW_EVENT_SCHEMA_VERSION = "workflow_event_v1"
 _WORKFLOW_COMMAND_SCHEMA_VERSION = "workflow_command_v1"
 _WORKFLOW_CURRENT_STATE_SCHEMA_VERSION = "workflow_current_state_v1"
-_WINNER_SCHEMA_VERSION = "acquisition_start_command_acceptance.v1"
-_WINNER_OWNER_REF_SCHEMA_VERSION = "acquisition_start_command_acceptance_owner_result_ref.v1"
+_WINNER_SCHEMA_VERSION = ACQUISITION_START_COMMAND_ACCEPTANCE_SCHEMA_VERSION
+_WINNER_OWNER_REF_SCHEMA_VERSION = ACQUISITION_START_COMMAND_ACCEPTANCE_OWNER_REF_SCHEMA_VERSION
 _WORKFLOW_ACTOR = "operation_workflow_command_planner"
 _WORKFLOW_SOURCE = "operation_run_dispatch"
 _CREATE_SOURCE = "agent_start_v2_create_uow"
 _RESULT_ACCEPTANCE_HOLD_UNTIL = "9999-12-31 23:59:59"
 _MAX_ATTEMPTS = 5
 _RETRY_POLICY = {"kind": "operation_acquisition_run_create", "retry_delay_seconds": 30}
-_OWNER_RESULT_REF_FIELDS = (
-    "schema_version",
-    "runtime_namespace",
-    "provider_mode",
-    "workspace_id",
-    "action_id",
-    "operation_run_id",
-    "workflow_run_id",
-    "workflow_command_id",
-    "terminal_winner_id",
-    "terminal_winner_sequence_number",
-    "command_source_event_id",
-    "command_source_event_sequence_number",
-    "command_source_event_contract_digest",
-    "confirmation_receipt_ref",
-    "parent_budget_envelope_ref",
-    "start_snapshot_digest",
-    "root_command_payload_digest",
-    "result_occurrence_ref",
-)
+_OWNER_RESULT_REF_FIELDS = ACQUISITION_START_COMMAND_ACCEPTANCE_OWNER_REF_FIELDS
 
 _ACTION_JSON_FIELDS = frozenset({"target_ref_json", "input_json", "budget_json", "result_ref_json", "metadata_json"})
 _OPERATION_JSON_FIELDS = frozenset(
@@ -495,9 +483,9 @@ def _workflow_contracts(
         "root_command_payload_digest": root["payload_digest"],
         "result_occurrence_ref": binding.result_occurrence_ref,
     }
-    if tuple(owner_result_ref) != _OWNER_RESULT_REF_FIELDS:
-        raise ValueError("acquisition start create owner-result contract drift")
-    owner_result_digest = _sha256_json(owner_result_ref)
+    owner_result_value = AcquisitionStartCommandAcceptanceOwnerRef(owner_result_ref)
+    owner_result_ref = owner_result_value.to_record()
+    owner_result_digest = owner_result_value.digest
 
     causality_columns = _workflow_command_causality_columns_from_payload(command_payload)
     return {
@@ -669,6 +657,10 @@ def _canonical_create_rows(
         "created_at": approved_at,
         "updated_at": approved_at,
     }
+    acceptance_payload = AcquisitionStartCommandAcceptanceEvent(
+        owner_result_ref=AcquisitionStartCommandAcceptanceOwnerRef(owner_result_ref),
+        owner_result_digest=owner_result_digest,
+    ).to_payload()
     planned_event = {
         "event_id": contracts["planned_event_id"],
         "workspace_id": occurrence.workspace_id,
@@ -683,7 +675,7 @@ def _canonical_create_rows(
         "recorded_at": approved_at,
         "actor": _WORKFLOW_ACTOR,
         "source": _CREATE_SOURCE,
-        "payload_json": _json_dump({"owner_result_ref": owner_result_ref, "owner_result_digest": owner_result_digest}),
+        "payload_json": _json_dump(acceptance_payload),
         "schema_version": _WINNER_SCHEMA_VERSION,
         "created_at": approved_at,
     }

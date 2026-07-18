@@ -1511,6 +1511,7 @@ class LiveControlPlanePostgresAdapter:
         sequence_name: str = "",
     ) -> dict[str, Any] | None:
         normalized_table = _normalize_postgres_identifier(table_name)
+        _require_dedicated_workflow_command_writer(normalized_table, method="insert_row_with_generated_id")
         if not self.should_prefer_read(normalized_table):
             return None
         payload = _normalize_postgres_row_payload(dict(row or {}))
@@ -1542,6 +1543,7 @@ class LiveControlPlanePostgresAdapter:
         update_columns: list[str] | tuple[str, ...] | None = None,
     ) -> dict[str, Any] | None:
         normalized_table = _normalize_postgres_identifier(table_name)
+        _require_dedicated_workflow_command_writer(normalized_table, method="upsert_row_with_generated_id")
         if not self.should_prefer_read(normalized_table):
             return None
         payload = _normalize_postgres_row_payload(dict(row or {}))
@@ -1599,6 +1601,7 @@ class LiveControlPlanePostgresAdapter:
         row: dict[str, Any] | None,
     ) -> dict[str, Any] | None:
         normalized_table = str(table_name or "").strip()
+        _require_dedicated_workflow_command_writer(normalized_table, method="update_row_returning")
         normalized_id_column = _normalize_postgres_identifier(id_column)
         if not self.should_prefer_read(normalized_table) or not normalized_id_column:
             return None
@@ -1799,6 +1802,7 @@ class LiveControlPlanePostgresAdapter:
         params: list[Any] | tuple[Any, ...] = (),
     ) -> int:
         normalized_table = _normalize_postgres_identifier(table_name)
+        _require_dedicated_workflow_command_writer(normalized_table, method="delete_rows")
         normalized_where_sql = _normalize_postgres_identifier(where_sql)
         if not self.should_prefer_read(normalized_table) or not normalized_where_sql:
             return 0
@@ -1825,6 +1829,7 @@ class LiveControlPlanePostgresAdapter:
         values: dict[str, Any] | None = None,
     ) -> int:
         normalized_table = _normalize_postgres_identifier(table_name)
+        _require_dedicated_workflow_command_writer(normalized_table, method="update_rows")
         normalized_where_sql = _normalize_postgres_identifier(where_sql)
         if not self.should_prefer_read(normalized_table) or not normalized_where_sql:
             return 0
@@ -2027,6 +2032,7 @@ class LiveControlPlanePostgresAdapter:
 
     def upsert_row(self, table_name: str, row: dict[str, Any] | None) -> None:
         normalized_table = _normalize_postgres_identifier(table_name)
+        _require_dedicated_workflow_command_writer(normalized_table, method="upsert_row")
         if not self.should_mirror(normalized_table):
             return
         payload = _normalize_postgres_row_payload(dict(row or {}))
@@ -2217,6 +2223,7 @@ class LiveControlPlanePostgresAdapter:
         transaction_lock_key: str = "",
     ) -> int:
         normalized_table = _normalize_postgres_identifier(table_name)
+        _require_dedicated_workflow_command_writer(normalized_table, method="bulk_upsert_rows")
         if not self.should_mirror(normalized_table):
             return 0
         payload_rows = [
@@ -2273,6 +2280,11 @@ class LiveControlPlanePostgresAdapter:
 
         normalized_parent_table = _normalize_postgres_identifier(table_name)
         normalized_child_table = _normalize_postgres_identifier(upsert_table_name)
+        _require_dedicated_workflow_command_writer(
+            normalized_parent_table,
+            normalized_child_table,
+            method="upsert_row_and_upsert_rows",
+        )
         if not self.should_prefer_read(normalized_parent_table) or not self.should_prefer_read(normalized_child_table):
             return None
         parent_rows = self._normalize_bulk_upsert_rows([row])
@@ -2345,6 +2357,7 @@ class LiveControlPlanePostgresAdapter:
         """
 
         normalized_table = _normalize_postgres_identifier(table_name)
+        _require_dedicated_workflow_command_writer(normalized_table, method="replace_rows")
         normalized_where_sql = _normalize_postgres_identifier(where_sql)
         if not self.should_prefer_read(normalized_table) or not normalized_where_sql:
             return 0
@@ -2923,6 +2936,11 @@ class LiveControlPlanePostgresAdapter:
 
         normalized_upsert_table = _normalize_postgres_identifier(table_name)
         normalized_replace_table = _normalize_postgres_identifier(replace_table_name)
+        _require_dedicated_workflow_command_writer(
+            normalized_upsert_table,
+            normalized_replace_table,
+            method="upsert_row_and_replace_rows",
+        )
         normalized_replace_where_sql = _normalize_postgres_identifier(replace_where_sql)
         if (
             not self.should_prefer_read(normalized_upsert_table)
@@ -5871,6 +5889,7 @@ class LiveControlPlanePostgresAdapter:
                                   AND lease_expires_at = %s
                                   {attempt_exhaustion_predicate}
                                   AND {lease_terminal_predicate}
+                                  AND not_before_at <> '9999-12-31 23:59:59'
                                 RETURNING *
                                 """,
                                 (
@@ -7420,6 +7439,7 @@ class LiveControlPlanePostgresAdapter:
             WHERE status = 'retry_wait'
               AND workflow_run_id = %s
               AND command_type = %s
+              AND not_before_at <> '9999-12-31 23:59:59'
               AND COALESCE(COALESCE(NULLIF(payload_json, ''), '{}')::jsonb ->> 'snapshot_id', '') = %s
               AND COALESCE(last_error, '') = ''
               AND COALESCE(COALESCE(NULLIF(result_json, ''), '{}')::jsonb ->> 'status', '') = 'waiting_prerequisite'
@@ -10986,6 +11006,7 @@ class LiveControlPlanePostgresAdapter:
             WHERE command_id = %s
               AND status IN ('queued', 'retry_wait')
               AND not_before_at = %s
+              AND not_before_at <> '9999-12-31 23:59:59'
             RETURNING *
             """,
             (
@@ -11048,6 +11069,7 @@ class LiveControlPlanePostgresAdapter:
               AND status = 'running'
               AND lease_owner = %s
               AND (lease_expires_at = '' OR lease_expires_at > %s)
+              AND not_before_at <> '9999-12-31 23:59:59'
             RETURNING *
             """,
             (
@@ -11136,7 +11158,11 @@ class LiveControlPlanePostgresAdapter:
         if not normalized_command_id:
             return None
         now = _utc_now_sql_timestamp()
-        clauses = ["command_id = %s", "status = 'claimed'"]
+        clauses = [
+            "command_id = %s",
+            "status = 'claimed'",
+            "not_before_at <> '9999-12-31 23:59:59'",
+        ]
         params: list[Any] = [now, now, normalized_command_id]
         normalized_owner = str(lease_owner or "").strip()
         if normalized_owner:
@@ -11174,7 +11200,11 @@ class LiveControlPlanePostgresAdapter:
         ):
             return None
         now = _utc_now_sql_timestamp()
-        clauses = ["command_id = %s", "status IN ('claimed', 'running')"]
+        clauses = [
+            "command_id = %s",
+            "status IN ('claimed', 'running')",
+            "not_before_at <> '9999-12-31 23:59:59'",
+        ]
         params: list[Any] = [now, _json_dump(result or {}), now, str(command_id or "").strip()]
         if exact_claim_requested:
             clauses.extend(
@@ -11232,7 +11262,11 @@ class LiveControlPlanePostgresAdapter:
         max_attempts = max(1, int(current.get("max_attempts") or 5))
         should_retry = bool(retryable) and attempt < max_attempts
         now = _utc_now_sql_timestamp()
-        clauses = ["command_id = %s", "status IN ('claimed', 'running')"]
+        clauses = [
+            "command_id = %s",
+            "status IN ('claimed', 'running')",
+            "not_before_at <> '9999-12-31 23:59:59'",
+        ]
         params: list[Any] = [
             "retry_wait" if should_retry else "failed_terminal",
             now,
@@ -12178,6 +12212,7 @@ class LiveControlPlanePostgresAdapter:
                               AND lease_expires_at = %s
                               AND attempt = %s
                               AND (NULLIF(lease_expires_at, '')::timestamp AT TIME ZONE 'UTC') > clock_timestamp()
+                              AND not_before_at <> '9999-12-31 23:59:59'
                             RETURNING *
                             """,
                             (
@@ -12283,6 +12318,7 @@ class LiveControlPlanePostgresAdapter:
             WHERE command_id = %s
               AND status IN ('claimed', 'running')
               AND not_before_at = %s
+              AND not_before_at <> '9999-12-31 23:59:59'
             RETURNING *
             """,
             (now, attempt, _json_dump(result or {}), now, normalized_command_id, current_not_before_at),
@@ -12332,6 +12368,7 @@ class LiveControlPlanePostgresAdapter:
             WHERE command_id = %s
               AND status IN ({placeholders})
               AND not_before_at = %s
+              AND not_before_at <> '9999-12-31 23:59:59'
             RETURNING *
             """,
             (
@@ -13069,6 +13106,7 @@ class LiveControlPlanePostgresAdapter:
                                     result_json = %s,
                                     updated_at = %s
                                 WHERE command_id = %s
+                                  AND not_before_at <> '9999-12-31 23:59:59'
                                 RETURNING *
                                 """,
                                 (
@@ -13156,6 +13194,7 @@ class LiveControlPlanePostgresAdapter:
             WHERE command_id = %s
               AND status IN ({placeholders})
               AND not_before_at = %s
+              AND not_before_at <> '9999-12-31 23:59:59'
             RETURNING *
             """,
             (
@@ -13212,6 +13251,7 @@ class LiveControlPlanePostgresAdapter:
             WHERE command_id = %s
               AND status IN ('failed_terminal', 'cancelled')
               AND not_before_at = %s
+              AND not_before_at <> '9999-12-31 23:59:59'
             RETURNING *
             """,
             (_json_dump(next_result), now, normalized_command_id, current_not_before_at),
@@ -13261,6 +13301,7 @@ class LiveControlPlanePostgresAdapter:
             WHERE command_id = %s
               AND status = 'retry_wait'
               AND not_before_at = %s
+              AND not_before_at <> '9999-12-31 23:59:59'
             RETURNING *
             """,
             (attempt, _json_dump(next_result), now, normalized_command_id, current_not_before_at),
@@ -15766,6 +15807,11 @@ def _assert_request_schema_pin_identity(
 
 def _normalize_postgres_identifier(value: Any) -> str:
     return str(_normalize_postgres_textual_value(value) or "").strip()
+
+
+def _require_dedicated_workflow_command_writer(*table_names: str, method: str) -> None:
+    if "workflow_commands" in {_normalize_postgres_identifier(table_name) for table_name in table_names}:
+        raise ValueError(f"{method} requires a dedicated workflow command writer")
 
 
 def _is_retryable_postgres_exception(error: Exception) -> bool:
