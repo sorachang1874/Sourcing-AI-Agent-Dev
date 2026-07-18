@@ -138,9 +138,7 @@ def validate_policy(policy: Any) -> None:
         "conversation_graph": False,
     }:
         raise ResearchOrchestrationError("orchestration_channel_defaults_invalid")
-    if set(policy["active_followup_states"]) | {"out_of_scope"} != set(
-        policy["generic_relevance_states"]
-    ):
+    if set(policy["active_followup_states"]) | {"out_of_scope"} != set(policy["generic_relevance_states"]):
         raise ResearchOrchestrationError("orchestration_relevance_partition_invalid")
     if not set(policy["default_precision_states"]).issubset(policy["active_followup_states"]):
         raise ResearchOrchestrationError("orchestration_precision_states_invalid")
@@ -245,14 +243,9 @@ def validate_scope_catalog(catalog: Any, *, policy: Mapping[str, Any]) -> None:
         )
         if not set(member_ids).issubset(expected_members):
             raise ResearchOrchestrationError("scope_catalog_coverage_member_outside_claim")
-        if coverage["coverage_status"] == "complete" and (
-            member_ids != expected_members or coverage["open_gaps"]
-        ):
+        if coverage["coverage_status"] == "complete" and (member_ids != expected_members or coverage["open_gaps"]):
             raise ResearchOrchestrationError("scope_catalog_complete_membership_invalid")
-        if (
-            coverage["coverage_status"] == "complete"
-            and coverage["source_status"] == "model_mediated_unverified"
-        ):
+        if coverage["coverage_status"] == "complete" and coverage["source_status"] == "model_mediated_unverified":
             raise ResearchOrchestrationError("scope_catalog_complete_coverage_source_not_authoritative")
         last_verified = _timestamp(coverage["last_verified_at"], "scope_catalog_coverage_verified_at_invalid")
         refresh_after = _timestamp(coverage["refresh_after"], "scope_catalog_coverage_refresh_after_invalid")
@@ -300,22 +293,39 @@ def _x_profile_url_matches_handle(value: str, handle: str) -> bool:
 
 def _x_status_url_matches(value: str, handle: str, object_id: str) -> bool:
     parsed = urlsplit(value)
-    return (
-        parsed.query == ""
-        and parsed.path.strip("/").split("/") == [handle, "status", object_id]
-    )
+    return parsed.query == "" and parsed.path.strip("/").split("/") == [handle, "status", object_id]
 
 
 def _source_status_is_compatible(claim: str, evidence_statuses: set[str]) -> bool:
-    if claim == "source_bound":
-        return evidence_statuses == {"source_bound"}
-    if claim == "fixture_synthetic":
-        return evidence_statuses == {"fixture_synthetic"}
-    if claim == "human_supplied_unverified":
-        return bool(evidence_statuses) and evidence_statuses.issubset(
-            {"source_bound", "human_supplied_unverified"}
-        )
-    return claim == "model_mediated_unverified"
+    if not evidence_statuses:
+        return claim == "model_mediated_unverified"
+    if "fixture_synthetic" in evidence_statuses:
+        return evidence_statuses == {"fixture_synthetic"} and claim == "fixture_synthetic"
+    if "model_mediated_unverified" in evidence_statuses:
+        return claim == "model_mediated_unverified"
+    if "human_supplied_unverified" in evidence_statuses:
+        return claim == "human_supplied_unverified"
+    return evidence_statuses == {"source_bound"} and claim == "source_bound"
+
+
+def _observation_status_for_attempt(source_status: str) -> str:
+    return {
+        "fixture_synthetic": "fixture_synthetic",
+        "receipt_bound": "source_bound",
+        "unverified": "model_mediated_unverified",
+    }[source_status]
+
+
+def _attempt_status_summary(statuses: set[str]) -> str:
+    if not statuses:
+        return "unverified"
+    if "fixture_synthetic" in statuses:
+        if statuses != {"fixture_synthetic"}:
+            raise ResearchOrchestrationError("portable_result_mixed_fixture_attempt_provenance")
+        return "fixture_synthetic"
+    if statuses == {"receipt_bound"}:
+        return "receipt_bound"
+    return "unverified"
 
 
 def _validate_execution_attempt_shape(row: Mapping[str, Any], *, count_field: str) -> None:
@@ -329,9 +339,7 @@ def _validate_execution_attempt_shape(row: Mapping[str, Any], *, count_field: st
     if execution_state == "no_result" and continuation_state != "exhausted":
         raise ResearchOrchestrationError("portable_result_no_result_attempt_not_exhausted")
     if execution_state == "failed" and (
-        row["result_truncated"]
-        or continuation_state != "unknown"
-        or row["continuation_ref"] is not None
+        row["result_truncated"] or continuation_state != "unknown" or row["continuation_ref"] is not None
     ):
         raise ResearchOrchestrationError("portable_result_failed_attempt_frontier_invalid")
     if continuation_state == "continuation_available":
@@ -339,6 +347,33 @@ def _validate_execution_attempt_shape(row: Mapping[str, Any], *, count_field: st
             raise ResearchOrchestrationError("portable_result_attempt_continuation_invalid")
     elif row["result_truncated"] or row["continuation_ref"] is not None:
         raise ResearchOrchestrationError("portable_result_attempt_continuation_invalid")
+
+
+def _validate_pagination_chain(
+    attempts: list[Mapping[str, Any]],
+    *,
+    error: str,
+    ordinal_field: str = "ordinal",
+) -> bool:
+    """Validate an ordered continuation chain and return whether it is exhausted."""
+
+    if not attempts:
+        return False
+    ordered = sorted(attempts, key=lambda row: row[ordinal_field])
+    if [row[ordinal_field] for row in ordered] != list(range(1, len(ordered) + 1)):
+        raise ResearchOrchestrationError(error)
+    expected_input: str | None = None
+    for index, row in enumerate(ordered):
+        if row["input_continuation_ref"] != expected_input:
+            raise ResearchOrchestrationError(error)
+        if row["execution_state"] == "failed":
+            continue
+        if row["continuation_state"] == "continuation_available":
+            expected_input = row["continuation_ref"]
+            continue
+        if index < len(ordered) - 1:
+            raise ResearchOrchestrationError(error)
+    return ordered[-1]["execution_state"] != "failed" and ordered[-1]["continuation_state"] == "exhausted"
 
 
 def validate_campaign_request(
@@ -407,8 +442,7 @@ def validate_campaign_request(
             available_query_count = alias_count * 2
             if (
                 adaptive_policy["window_size"] > available_query_count
-                or adaptive_policy["window_size"]
-                < adaptive_policy["minimum_attempts_per_surface"] * 2
+                or adaptive_policy["window_size"] < adaptive_policy["minimum_attempts_per_surface"] * 2
             ):
                 raise ResearchOrchestrationError("portable_campaign_adaptive_stop_policy_unachievable")
         elif question["adaptive_stop_policy"] is not None:
@@ -450,11 +484,7 @@ def validate_campaign_request(
             ):
                 raise ResearchOrchestrationError("portable_x_seed_profile_handle_invalid")
         elif seed["source_kind"] == "name_only":
-            if (
-                seed["x_handle_proposals"]
-                or seed["name_text"] is None
-                or seed["source_profile_url"] is not None
-            ):
+            if seed["x_handle_proposals"] or seed["name_text"] is None or seed["source_profile_url"] is not None:
                 raise ResearchOrchestrationError("portable_name_only_seed_invalid")
         else:
             if seed["external_record_ref"] is None or seed["name_text"] is None:
@@ -529,7 +559,8 @@ def _resolve_fresh_scopes(
                 if row["coverage_status"] != "complete":
                     raise ResearchOrchestrationError("scope_catalog_coverage_incomplete")
                 if not (
-                    _timestamp(row["last_verified_at"], "scope_catalog_coverage_verified_at_invalid") <= as_of
+                    _timestamp(row["last_verified_at"], "scope_catalog_coverage_verified_at_invalid")
+                    <= as_of
                     < _timestamp(row["refresh_after"], "scope_catalog_coverage_refresh_after_invalid")
                 ):
                     raise ResearchOrchestrationError("scope_catalog_coverage_stale")
@@ -540,10 +571,7 @@ def _resolve_fresh_scopes(
                     raise ResearchOrchestrationError("scope_catalog_required_kind_empty")
     else:
         selected_ids = set(selection["selected_scope_ids"]) | set(roots)
-        if any(
-            not any(_descends_from(scope_id, root_id, nodes) for root_id in roots)
-            for scope_id in selected_ids
-        ):
+        if any(not any(_descends_from(scope_id, root_id, nodes) for root_id in roots) for scope_id in selected_ids):
             raise ResearchOrchestrationError("scope_catalog_explicit_node_outside_roots")
         if any(
             not any(nodes[scope_id]["scope_kind"] == scope_kind for scope_id in selected_ids)
@@ -592,9 +620,7 @@ def _resolved_questions(
                 "target_match_operator": question["target_match_operator"],
                 "recall_execution_policy": question["recall_execution_policy"],
                 "adaptive_stop_policy": (
-                    None
-                    if question["adaptive_stop_policy"] is None
-                    else dict(question["adaptive_stop_policy"])
+                    None if question["adaptive_stop_policy"] is None else dict(question["adaptive_stop_policy"])
                 ),
                 "classification_instruction": instruction,
             }
@@ -699,11 +725,7 @@ def build_campaign_plan(
             recall_targets: list[dict[str, Any]] = []
             for question in questions:
                 alias_rows = sorted(
-                    (
-                        (alias, label["label_id"])
-                        for label in question["target_labels"]
-                        for alias in label["aliases"]
-                    ),
+                    ((alias, label["label_id"]) for label in question["target_labels"] for alias in label["aliases"]),
                     key=lambda row: (row[0].casefold(), row[1]),
                 )
                 recall_queries = (
@@ -727,9 +749,7 @@ def build_campaign_plan(
                         "question_id": question["question_id"],
                         "execution_policy": question["recall_execution_policy"],
                         "adaptive_stop_policy": (
-                            None
-                            if question["adaptive_stop_policy"] is None
-                            else dict(question["adaptive_stop_policy"])
+                            None if question["adaptive_stop_policy"] is None else dict(question["adaptive_stop_policy"])
                         ),
                         "recall_aliases": [alias for alias, _label_id in alias_rows],
                         "recall_queries": recall_queries,
@@ -787,9 +807,7 @@ def build_campaign_plan(
                 "question_ids": question_ids,
                 "scope_ids": scope_ids,
                 "dependency": (
-                    "requires_direct_credit_or_official_anchor"
-                    if channel_id == "conversation_graph"
-                    else "none"
+                    "requires_direct_credit_or_official_anchor" if channel_id == "conversation_graph" else "none"
                 ),
                 "candidate_scoring_allowed": False,
             }
@@ -920,12 +938,8 @@ def validate_campaign_result(
             raise ResearchOrchestrationError("portable_result_account_profile_host_invalid")
         if not _x_profile_url_matches_handle(account["profile_url"], account["current_handle"]):
             raise ResearchOrchestrationError("portable_result_account_profile_handle_invalid")
-        if (
-            account["identity_status"] == "stable_platform_id"
-            and account["platform_user_id"] is None
-        ) or (
-            account["identity_status"] == "provisional_handle"
-            and account["platform_user_id"] is not None
+        if (account["identity_status"] == "stable_platform_id" and account["platform_user_id"] is None) or (
+            account["identity_status"] == "provisional_handle" and account["platform_user_id"] is not None
         ):
             raise ResearchOrchestrationError("portable_result_account_identity_status_invalid")
         platform_user_id = account["platform_user_id"]
@@ -939,21 +953,58 @@ def validate_campaign_result(
             if history_handle in history_handles:
                 raise ResearchOrchestrationError("portable_result_handle_history_duplicate")
             history_handles.add(history_handle)
-            if _timestamp(
-                history["first_observed_at"], "portable_result_handle_history_time_invalid"
-            ) > _timestamp(history["last_observed_at"], "portable_result_handle_history_time_invalid"):
+            if _timestamp(history["first_observed_at"], "portable_result_handle_history_time_invalid") > _timestamp(
+                history["last_observed_at"], "portable_result_handle_history_time_invalid"
+            ):
                 raise ResearchOrchestrationError("portable_result_handle_history_time_invalid")
+
+    handle_resolution_evidence_by_id: dict[str, Mapping[str, Any]] = {}
+    for evidence in result["handle_resolution_evidence"]:
+        evidence_id = evidence["evidence_id"]
+        seed = seeds.get(evidence["seed_ref"])
+        account = accounts.get(evidence["x_account_ref"])
+        if (
+            evidence_id in handle_resolution_evidence_by_id
+            or seed is None
+            or seed["source_kind"] == "x_account"
+            or account is None
+            or _profile_url_host(evidence["canonical_url"])
+            not in {"x.com", "www.x.com", "twitter.com", "www.twitter.com"}
+            or not _x_profile_url_matches_handle(evidence["canonical_url"], account["current_handle"])
+        ):
+            raise ResearchOrchestrationError("portable_result_handle_resolution_evidence_binding_invalid")
+        receipt = evidence["retrieval_receipt"]
+        if evidence["query_sha256"] != text_sha256(evidence["query_text"]) or evidence["content_sha256"] != text_sha256(
+            evidence["observed_value"]
+        ):
+            raise ResearchOrchestrationError("portable_result_handle_resolution_evidence_hash_invalid")
+        if (
+            receipt["receipt_sha256"] != _content_sha256(receipt, "receipt_sha256")
+            or evidence["receipt_ref"] != f"sha256:{receipt['receipt_sha256']}"
+            or receipt["query_sha256"] != evidence["query_sha256"]
+            or receipt["canonical_url"] != evidence["canonical_url"]
+            or receipt["observed_at"] != evidence["observed_at"]
+            or receipt["content_sha256"] != evidence["content_sha256"]
+            or receipt["source_status"] != evidence["source_status"]
+            or (evidence["source_status"] == "source_bound" and receipt["receipt_locator"] is None)
+        ):
+            raise ResearchOrchestrationError("portable_result_handle_resolution_receipt_invalid")
+        observed_at = _timestamp(evidence["observed_at"], "portable_result_handle_resolution_evidence_time_invalid")
+        if not execution_started_at <= observed_at <= execution_completed_at:
+            raise ResearchOrchestrationError("portable_result_handle_resolution_evidence_time_invalid")
+        handle_resolution_evidence_by_id[evidence_id] = evidence
 
     referenced_accounts: set[str] = set()
     for outcome in outcomes:
         if any(account_ref not in accounts for account_ref in outcome["x_account_refs"]):
             raise ResearchOrchestrationError("portable_result_subject_account_unknown")
-        if outcome["terminal_state"] == "analyzed" and not outcome["x_account_refs"]:
-            raise ResearchOrchestrationError("portable_result_analyzed_subject_without_account")
-        if outcome["terminal_state"] != "analyzed" and outcome["x_account_refs"]:
+        active_subject_states = {"analyzed", "research_in_progress"}
+        if outcome["terminal_state"] in active_subject_states and not outcome["x_account_refs"]:
+            raise ResearchOrchestrationError("portable_result_active_subject_without_account")
+        if outcome["terminal_state"] not in active_subject_states and outcome["x_account_refs"]:
             raise ResearchOrchestrationError("portable_result_nonanalyzed_subject_has_account")
         seed = seeds[outcome["seed_ref"]]
-        if seed["source_kind"] == "x_account" and outcome["terminal_state"] == "analyzed":
+        if seed["source_kind"] == "x_account" and outcome["terminal_state"] in active_subject_states:
             expected_handle = seed["x_handle_proposals"][0]["handle"].casefold()
             if any(
                 accounts[account_ref]["current_handle"].casefold() != expected_handle
@@ -980,6 +1031,7 @@ def validate_campaign_result(
     proposal_pairs: set[tuple[str, str]] = set()
     proposed_pairs: set[tuple[str, str]] = set()
     proposal_accounts: set[str] = set()
+    used_resolution_evidence: set[str] = set()
     for proposal in result["cross_source_link_proposals"]:
         if proposal["proposal_id"] in proposal_ids:
             raise ResearchOrchestrationError("portable_result_link_proposal_duplicate")
@@ -1000,28 +1052,47 @@ def validate_campaign_result(
         )
         if not matching_hint:
             raise ResearchOrchestrationError("portable_result_link_proposal_not_seeded")
-        if proposal["source_status"] != seed["source_status"]:
-            raise ResearchOrchestrationError("portable_result_link_proposal_source_status_invalid")
         allowed_evidence_refs = {
-            value
-            for value in (seed["external_record_ref"], seed["source_profile_url"])
-            if value is not None
+            value for value in (seed["external_record_ref"], seed["source_profile_url"]) if value is not None
         }
         allowed_evidence_refs.update(row["evidence_ref"] for row in seed["x_handle_proposals"])
         allowed_evidence_refs.update(row["evidence_ref"] for row in seed["professional_facts"])
+        matching_resolution_evidence = {
+            evidence_id
+            for evidence_id, evidence in handle_resolution_evidence_by_id.items()
+            if evidence["seed_ref"] == proposal["seed_ref"] and evidence["x_account_ref"] == proposal["x_account_ref"]
+        }
+        allowed_evidence_refs.update(matching_resolution_evidence)
         if not set(proposal["evidence_refs"]).issubset(allowed_evidence_refs):
             raise ResearchOrchestrationError("portable_result_link_proposal_evidence_invalid")
+        if not set(proposal["evidence_refs"]).intersection(matching_resolution_evidence):
+            raise ResearchOrchestrationError("portable_result_link_proposal_resolution_evidence_missing")
+        evidence_statuses = {
+            seed["source_status"]
+            for evidence_ref in proposal["evidence_refs"]
+            if evidence_ref not in handle_resolution_evidence_by_id
+        }
+        evidence_statuses.update(
+            handle_resolution_evidence_by_id[evidence_ref]["source_status"]
+            for evidence_ref in proposal["evidence_refs"]
+            if evidence_ref in handle_resolution_evidence_by_id
+        )
+        if not _source_status_is_compatible(proposal["source_status"], evidence_statuses):
+            raise ResearchOrchestrationError("portable_result_link_proposal_source_status_invalid")
+        used_resolution_evidence.update(set(proposal["evidence_refs"]).intersection(matching_resolution_evidence))
         if proposal["status"] == "proposed":
             proposed_pairs.add(pair)
     expected_proposed_pairs = {
         (outcome["seed_ref"], account_ref)
         for outcome in outcomes
-        if outcome["terminal_state"] == "analyzed"
+        if outcome["terminal_state"] in {"analyzed", "research_in_progress"}
         and seeds[outcome["seed_ref"]]["source_kind"] != "x_account"
         for account_ref in outcome["x_account_refs"]
     }
     if proposed_pairs != expected_proposed_pairs:
         raise ResearchOrchestrationError("portable_result_link_proposal_coverage_invalid")
+    if used_resolution_evidence != set(handle_resolution_evidence_by_id):
+        raise ResearchOrchestrationError("portable_result_handle_resolution_evidence_unreferenced")
     if referenced_accounts | discovery_accounts | proposal_accounts != set(accounts):
         raise ResearchOrchestrationError("portable_result_account_origin_binding_incomplete")
 
@@ -1030,9 +1101,10 @@ def validate_campaign_result(
         for task in plan["candidate_authored_tasks"]
         for query in task["coverage_queries"]
     }
-    surface_attempt_keys: set[tuple[str, str]] = set()
-    successful_surface_attempt_keys: set[tuple[str, str]] = set()
-    surface_attempt_receipts: dict[tuple[str, str], str] = {}
+    surface_attempt_keys: set[tuple[str, str, int]] = set()
+    terminal_surface_attempt_keys: set[tuple[str, str]] = set()
+    surface_attempt_groups: dict[tuple[str, str], list[Mapping[str, Any]]] = {}
+    surface_attempt_receipts: dict[tuple[str, str], list[str]] = {}
     surface_attempt_by_receipt: dict[str, Mapping[str, Any]] = {}
     attempt_receipts: dict[tuple[str, str], dict[str, str]] = {}
     receipt_statuses: dict[str, str] = {}
@@ -1048,7 +1120,8 @@ def validate_campaign_result(
 
     for attempt in result["surface_attempts"]:
         account = accounts.get(attempt["x_account_ref"])
-        key = (attempt["x_account_ref"], attempt["surface"])
+        group_key = (attempt["x_account_ref"], attempt["surface"])
+        key = (*group_key, attempt["ordinal"])
         if account is None or key in surface_attempt_keys:
             raise ResearchOrchestrationError("portable_result_surface_attempt_duplicate_or_unknown")
         _validate_execution_attempt_shape(attempt, count_field="bound_observation_count")
@@ -1056,20 +1129,32 @@ def validate_campaign_result(
         expected_surface = "authored_post" if attempt["surface"] == "post" else "authored_reply"
         if classified != (account["current_handle"].casefold(), expected_surface):
             raise ResearchOrchestrationError("portable_result_surface_attempt_query_invalid")
-        if planned_coverage_queries.get((account["current_handle"].casefold(), attempt["surface"])) != attempt[
-            "query_text"
-        ]:
+        if (
+            planned_coverage_queries.get((account["current_handle"].casefold(), attempt["surface"]))
+            != attempt["query_text"]
+        ):
             raise ResearchOrchestrationError("portable_result_surface_attempt_not_planned")
         if attempt["query_sha256"] != text_sha256(attempt["query_text"]):
             raise ResearchOrchestrationError("portable_result_surface_attempt_hash_invalid")
         surface_attempt_keys.add(key)
+        surface_attempt_groups.setdefault(group_key, []).append(attempt)
         register_receipt(attempt["receipt_ref"], attempt["source_status"])
         surface_attempt_by_receipt[attempt["receipt_ref"]] = attempt
+        attempt_source_statuses.add(attempt["source_status"])
         if attempt["execution_state"] != "failed":
-            successful_surface_attempt_keys.add(key)
-            surface_attempt_receipts[key] = attempt["receipt_ref"]
-            attempt_receipts.setdefault(key, {})[attempt["receipt_ref"]] = attempt["source_status"]
-            attempt_source_statuses.add(attempt["source_status"])
+            attempt_receipts.setdefault(group_key, {})[attempt["receipt_ref"]] = attempt["source_status"]
+
+    for group_key, attempts in surface_attempt_groups.items():
+        exhausted = _validate_pagination_chain(
+            attempts,
+            error="portable_result_surface_attempt_pagination_invalid",
+        )
+        ordered = sorted(attempts, key=lambda row: row["ordinal"])
+        surface_attempt_receipts[group_key] = [
+            row["receipt_ref"] for row in ordered if row["execution_state"] != "failed"
+        ]
+        if exhausted:
+            terminal_surface_attempt_keys.add(group_key)
 
     planned_recall_queries = {
         (
@@ -1083,18 +1168,21 @@ def validate_campaign_result(
         for target in task["recall_targets"]
         for query in target["recall_queries"]
     }
-    recall_attempt_keys: set[tuple[str, str, str, str, str]] = set()
+    recall_attempt_keys: set[tuple[str, str, int]] = set()
+    semantic_attempt_groups: dict[tuple[str, str, str, str, str], list[Mapping[str, Any]]] = {}
+    exhausted_semantic_query_keys: set[tuple[str, str, str, str, str]] = set()
     semantic_attempt_by_receipt: dict[str, Mapping[str, Any]] = {}
     for attempt in result["semantic_recall_attempts"]:
         account = accounts.get(attempt["x_account_ref"])
         _validate_execution_attempt_shape(attempt, count_field="bound_observation_count")
-        key = (
+        query_key = (
             attempt["x_account_ref"],
             attempt["question_id"],
             attempt["label_id"],
             attempt["surface"],
             attempt["query_text"],
         )
+        key = (attempt["x_account_ref"], attempt["question_id"], attempt["ordinal"])
         planned_key = (
             account["current_handle"].casefold() if account is not None else "",
             attempt["question_id"],
@@ -1107,12 +1195,22 @@ def validate_campaign_result(
         if attempt["query_sha256"] != text_sha256(attempt["query_text"]):
             raise ResearchOrchestrationError("portable_result_semantic_recall_attempt_hash_invalid")
         recall_attempt_keys.add(key)
+        semantic_attempt_groups.setdefault(query_key, []).append(attempt)
         register_receipt(attempt["receipt_ref"], attempt["source_status"])
         semantic_attempt_by_receipt[attempt["receipt_ref"]] = attempt
+        attempt_source_statuses.add(attempt["source_status"])
         if attempt["execution_state"] != "failed":
-            attempt_receipts.setdefault((attempt["x_account_ref"], attempt["surface"]), {})[
-                attempt["receipt_ref"]
-            ] = attempt["source_status"]
+            attempt_receipts.setdefault((attempt["x_account_ref"], attempt["surface"]), {})[attempt["receipt_ref"]] = (
+                attempt["source_status"]
+            )
+
+    for query_key, attempts in semantic_attempt_groups.items():
+        if _validate_pagination_chain(
+            attempts,
+            error="portable_result_semantic_recall_pagination_invalid",
+            ordinal_field="page_ordinal",
+        ):
+            exhausted_semantic_query_keys.add(query_key)
 
     observation_ids: set[str] = set()
     platform_object_ids: set[str] = set()
@@ -1149,15 +1247,13 @@ def validate_campaign_result(
             raise ResearchOrchestrationError("portable_result_observation_url_topology_invalid")
         if observation["content_sha256"] != text_sha256(observation["text_or_excerpt"]):
             raise ResearchOrchestrationError("portable_result_observation_content_hash_invalid")
-        matching_attempt_status = attempt_receipts.get(
-            (observation["x_account_ref"], observation["surface"]), {}
-        ).get(observation["receipt_ref"])
+        matching_attempt_status = attempt_receipts.get((observation["x_account_ref"], observation["surface"]), {}).get(
+            observation["receipt_ref"]
+        )
         if matching_attempt_status is None:
             raise ResearchOrchestrationError("portable_result_observation_attempt_binding_invalid")
-        if observation["source_status"] == "source_bound" and matching_attempt_status != "receipt_bound":
-            raise ResearchOrchestrationError("portable_result_observation_source_upgrade_invalid")
-        if observation["source_status"] == "fixture_synthetic" and matching_attempt_status != "fixture_synthetic":
-            raise ResearchOrchestrationError("portable_result_observation_fixture_binding_invalid")
+        if observation["source_status"] != _observation_status_for_attempt(matching_attempt_status):
+            raise ResearchOrchestrationError("portable_result_observation_source_status_invalid")
         published_at = _timestamp(observation["published_at"], "portable_result_published_at_invalid")
         observed_at = _timestamp(observation["observed_at"], "portable_result_observed_at_invalid")
         if (
@@ -1169,9 +1265,7 @@ def validate_campaign_result(
 
     observation_ids_by_receipt: dict[str, set[str]] = {}
     for observation in result["observations"]:
-        observation_ids_by_receipt.setdefault(observation["receipt_ref"], set()).add(
-            observation["observation_id"]
-        )
+        observation_ids_by_receipt.setdefault(observation["receipt_ref"], set()).add(observation["observation_id"])
     for receipt_ref, attempt in surface_attempt_by_receipt.items():
         if attempt["bound_observation_count"] != len(observation_ids_by_receipt.get(receipt_ref, set())):
             raise ResearchOrchestrationError("portable_result_surface_attempt_bound_count_invalid")
@@ -1186,8 +1280,7 @@ def validate_campaign_result(
     for account_ref, account in accounts.items():
         for history in account["handle_history_proposals"]:
             if any(
-                evidence_ref not in observation_by_id
-                or observation_by_id[evidence_ref]["x_account_ref"] != account_ref
+                evidence_ref not in observation_by_id or observation_by_id[evidence_ref]["x_account_ref"] != account_ref
                 for evidence_ref in history["evidence_refs"]
             ):
                 raise ResearchOrchestrationError("portable_result_handle_history_evidence_invalid")
@@ -1215,8 +1308,10 @@ def validate_campaign_result(
         matched_label_ids = set(dimension_result["matched_label_ids"])
         if not matched_label_ids.issubset(target_label_ids):
             raise ResearchOrchestrationError("portable_result_dimension_matched_label_invalid")
-        if question["analysis_mode"] == "exploratory" and matched_label_ids:
-            raise ResearchOrchestrationError("portable_result_exploratory_matched_label_invalid")
+        if question["analysis_mode"] == "exploratory" and (
+            matched_label_ids or dimension_result["relevance_state"] != "ambiguous"
+        ):
+            raise ResearchOrchestrationError("portable_result_exploratory_dimension_state_invalid")
         if dimension_result["relevance_state"] == "out_of_scope" and matched_label_ids:
             raise ResearchOrchestrationError("portable_result_out_of_scope_matched_label_invalid")
         if dimension_result["relevance_state"] == "target_core":
@@ -1224,13 +1319,15 @@ def validate_campaign_result(
                 raise ResearchOrchestrationError("portable_result_dimension_all_target_incomplete")
             if question["target_match_operator"] == "any" and not matched_label_ids:
                 raise ResearchOrchestrationError("portable_result_dimension_any_target_empty")
-        if dimension_result["relevance_state"] in {"target_core", "target_adjacent"} and not dimension_result[
-            "evidence_refs"
-        ]:
+        if (
+            dimension_result["relevance_state"] in {"target_core", "target_adjacent"}
+            and not dimension_result["evidence_refs"]
+        ):
             raise ResearchOrchestrationError("portable_result_positive_dimension_without_evidence")
-        if dimension_result["target_activity_temporal_state"] in {"current", "historical"} and not dimension_result[
-            "evidence_refs"
-        ]:
+        if (
+            dimension_result["target_activity_temporal_state"] in {"current", "historical"}
+            and not dimension_result["evidence_refs"]
+        ):
             raise ResearchOrchestrationError("portable_result_temporal_dimension_without_evidence")
         if any(evidence_ref not in observation_ids for evidence_ref in dimension_result["evidence_refs"]):
             raise ResearchOrchestrationError("portable_result_dimension_evidence_invalid")
@@ -1251,6 +1348,12 @@ def validate_campaign_result(
         if outcome["terminal_state"] == "analyzed"
         for account_ref in outcome["x_account_refs"]
     }
+    in_progress_accounts = {
+        account_ref
+        for outcome in outcomes
+        if outcome["terminal_state"] == "research_in_progress"
+        for account_ref in outcome["x_account_refs"]
+    }
     expected_result_keys = {
         (account_ref, question_id) for account_ref in analyzed_accounts for question_id in question_by_id
     }
@@ -1264,37 +1367,32 @@ def validate_campaign_result(
     ):
         raise ResearchOrchestrationError("portable_result_analyzed_account_not_planned")
     if any(
-        (account_ref, surface) not in successful_surface_attempt_keys
+        (account_ref, surface) not in terminal_surface_attempt_keys
         for account_ref in analyzed_accounts
         for surface in ("post", "reply")
     ):
         raise ResearchOrchestrationError("portable_result_analyzed_account_surface_incomplete")
-    if any(
-        accounts[account_ref]["identity_status"] == "quarantined_handle_reuse"
-        for account_ref in analyzed_accounts
-    ):
+    if any(accounts[account_ref]["identity_status"] == "quarantined_handle_reuse" for account_ref in analyzed_accounts):
         raise ResearchOrchestrationError("portable_result_quarantined_account_analyzed")
 
     recall_attempts_by_subject: dict[tuple[str, str], list[Mapping[str, Any]]] = {}
     for attempt in result["semantic_recall_attempts"]:
-        recall_attempts_by_subject.setdefault(
-            (attempt["x_account_ref"], attempt["question_id"]), []
-        ).append(attempt)
+        recall_attempts_by_subject.setdefault((attempt["x_account_ref"], attempt["question_id"]), []).append(attempt)
     for key, unordered_attempts in recall_attempts_by_subject.items():
         attempts = sorted(unordered_attempts, key=lambda row: row["ordinal"])
         if [row["ordinal"] for row in attempts] != list(range(1, len(attempts) + 1)):
             raise ResearchOrchestrationError("portable_result_semantic_recall_ordinal_invalid")
         seen_new_observations: set[str] = set()
         dimension_result = dimension_result_by_key.get(key)
-        if dimension_result is None:
+        if dimension_result is None and key[0] not in in_progress_accounts:
             raise ResearchOrchestrationError("portable_result_semantic_recall_subject_not_analyzed")
-        dimension_evidence = set(dimension_result["evidence_refs"])
+        dimension_evidence = (
+            set(dimension_result["evidence_refs"]) if dimension_result is not None else set(observation_ids)
+        )
         for attempt in attempts:
             new_observations = set(attempt["new_unique_observation_refs"])
             target_evidence = set(attempt["new_target_evidence_refs"])
-            if not target_evidence.issubset(new_observations) or not target_evidence.issubset(
-                dimension_evidence
-            ):
+            if not target_evidence.issubset(new_observations) or not target_evidence.issubset(dimension_evidence):
                 raise ResearchOrchestrationError("portable_result_semantic_recall_target_evidence_invalid")
             if seen_new_observations.intersection(new_observations):
                 raise ResearchOrchestrationError("portable_result_semantic_recall_new_observation_reused")
@@ -1318,24 +1416,33 @@ def validate_campaign_result(
         recall_outcome_keys.add(key)
         if outcome["execution_policy"] != question["recall_execution_policy"]:
             raise ResearchOrchestrationError("portable_result_semantic_recall_policy_invalid")
-        attempts = sorted(
-            recall_attempts_by_subject.get(key, []), key=lambda row: row["ordinal"]
-        )
+        attempts = sorted(recall_attempts_by_subject.get(key, []), key=lambda row: row["ordinal"])
         if outcome["attempted_query_sha256s"] != [row["query_sha256"] for row in attempts]:
             raise ResearchOrchestrationError("portable_result_semantic_recall_outcome_binding_invalid")
         execution_policy = outcome["execution_policy"]
         terminal_state = outcome["terminal_state"]
         stop_reason = outcome["stop_reason"]
+        outcome_query_keys = {
+            (
+                row["x_account_ref"],
+                row["question_id"],
+                row["label_id"],
+                row["surface"],
+                row["query_text"],
+            )
+            for row in attempts
+        }
+        attempted_queries_exhausted = outcome_query_keys.issubset(exhausted_semantic_query_keys)
         if execution_policy == "authored_surface_only":
             surface_receipts = {
-                surface_attempt_receipts[(outcome["x_account_ref"], surface)]
+                receipt_ref
                 for surface in ("post", "reply")
-                if (outcome["x_account_ref"], surface) in successful_surface_attempt_keys
+                for receipt_ref in surface_attempt_receipts.get((outcome["x_account_ref"], surface), [])
             }
             if (
                 attempts
                 or terminal_state != "authored_surface_complete"
-                or stop_reason != "no_configured_aliases"
+                or stop_reason != "broad_authored_surface_completed"
                 or set(outcome["receipt_refs"]) != surface_receipts
                 or outcome["adaptive_stop_decision"] is not None
             ):
@@ -1355,8 +1462,7 @@ def validate_campaign_result(
             window = attempts[-window_size:]
             minimum_per_surface = adaptive_policy["minimum_attempts_per_surface"]
             if any(
-                sum(row["surface"] == surface for row in window) < minimum_per_surface
-                for surface in ("post", "reply")
+                sum(row["surface"] == surface for row in window) < minimum_per_surface for surface in ("post", "reply")
             ):
                 raise ResearchOrchestrationError("portable_result_adaptive_recall_surface_window_incomplete")
             planned_query_hashes = {
@@ -1367,49 +1473,75 @@ def validate_campaign_result(
             }
             attempted_query_hashes = {row["query_sha256"] for row in attempts}
             target_label_ids = {row["label_id"] for row in question["target_labels"]}
-            attempted_label_ids = {row["label_id"] for row in attempts}
-            if (
-                question["target_match_operator"] == "all"
-                and not target_label_ids.issubset(attempted_label_ids)
-            ) or (
-                question["target_match_operator"] == "any"
-                and not target_label_ids.intersection(attempted_label_ids)
-            ):
+            required_label_surface_pairs = {
+                (label_id, surface) for label_id in target_label_ids for surface in ("post", "reply")
+            }
+            attempted_label_surface_pairs = {(row["label_id"], row["surface"]) for row in attempts}
+            if not required_label_surface_pairs.issubset(attempted_label_surface_pairs):
                 raise ResearchOrchestrationError("portable_result_adaptive_target_label_coverage_invalid")
-            window_new_observation_count = sum(
-                len(row["new_unique_observation_refs"]) for row in window
-            )
+            window_new_observation_count = sum(len(row["new_unique_observation_refs"]) for row in window)
             window_new_target_count = sum(len(row["new_target_evidence_refs"]) for row in window)
             if (
                 decision["decision_sha256"] != _content_sha256(decision, "decision_sha256")
                 or decision["window_size"] != window_size
                 or decision["window_query_sha256s"] != [row["query_sha256"] for row in window]
-                or decision["observed_new_unique_observation_count"]
-                != window_new_observation_count
+                or decision["observed_new_unique_observation_count"] != window_new_observation_count
                 or decision["observed_new_target_evidence_count"] != window_new_target_count
                 or decision["configured_maximum_new_target_evidence"]
                 != adaptive_policy["maximum_new_target_evidence_in_window"]
-                or window_new_target_count
-                > adaptive_policy["maximum_new_target_evidence_in_window"]
-                or decision["remaining_query_sha256s"]
-                != sorted(planned_query_hashes - attempted_query_hashes)
+                or window_new_target_count > adaptive_policy["maximum_new_target_evidence_in_window"]
+                or decision["remaining_query_sha256s"] != sorted(planned_query_hashes - attempted_query_hashes)
             ):
                 raise ResearchOrchestrationError("portable_result_adaptive_stop_decision_invalid")
             window_statuses = {row["source_status"] for row in window}
-            if (
-                decision["source_status"] == "fixture_synthetic"
-                and window_statuses != {"fixture_synthetic"}
-            ) or (
-                decision["source_status"] == "receipt_bound"
-                and window_statuses != {"receipt_bound"}
-            ):
+            if decision["source_status"] != _attempt_status_summary(window_statuses):
                 raise ResearchOrchestrationError("portable_result_adaptive_stop_source_upgrade_invalid")
+            audit = decision["scope_frontier_audit"]
+            expected_pairs = [
+                {"label_id": label_id, "surface": surface} for label_id, surface in sorted(required_label_surface_pairs)
+            ]
+            expected_attempted_hashes = sorted(attempted_query_hashes)
+            if (
+                audit["audit_sha256"] != _content_sha256(audit, "audit_sha256")
+                or decision["scope_frontier_audit_ref"] != f"sha256:{audit['audit_sha256']}"
+                or audit["x_account_ref"] != outcome["x_account_ref"]
+                or audit["question_id"] != outcome["question_id"]
+                or audit["covered_label_surface_pairs"] != expected_pairs
+                or audit["attempted_query_sha256s"] != expected_attempted_hashes
+                or audit["remaining_query_sha256s"] != decision["remaining_query_sha256s"]
+                or audit["source_status"] != decision["source_status"]
+            ):
+                raise ResearchOrchestrationError("portable_result_scope_frontier_audit_invalid")
             if (
                 execution_policy != "adaptive_marginal_gain"
                 or stop_reason != "marginal_gain_sustained_low"
-                or any(row["execution_state"] == "failed" for row in attempts)
+                or not attempted_queries_exhausted
             ):
                 raise ResearchOrchestrationError("portable_result_adaptive_recall_outcome_invalid")
+            recall_complete_keys.add(key)
+        elif terminal_state == "target_match_proven":
+            dimension_result = dimension_result_by_key[key]
+            matched_label_ids = set(dimension_result["matched_label_ids"])
+            target_label_ids = {row["label_id"] for row in question["target_labels"]}
+            proven_label_ids = {row["label_id"] for row in attempts if row["new_target_evidence_refs"]}
+            proven = dimension_result["relevance_state"] == "target_core"
+            if question["target_match_operator"] == "all":
+                proven = (
+                    proven
+                    and target_label_ids.issubset(matched_label_ids)
+                    and target_label_ids.issubset(proven_label_ids)
+                )
+            else:
+                proven = proven and bool(target_label_ids.intersection(matched_label_ids, proven_label_ids))
+            if (
+                execution_policy != "adaptive_marginal_gain"
+                or stop_reason != "configured_target_match_proven"
+                or outcome["adaptive_stop_decision"] is not None
+                or not attempts
+                or not attempted_queries_exhausted
+                or not proven
+            ):
+                raise ResearchOrchestrationError("portable_result_target_match_proven_invalid")
             recall_complete_keys.add(key)
         elif terminal_state == "exhaustive_complete":
             expected_attempts = {
@@ -1422,18 +1554,8 @@ def validate_campaign_result(
                 execution_policy != "exhaustive_alias_matrix"
                 or stop_reason != "alias_matrix_exhausted"
                 or outcome["adaptive_stop_decision"] is not None
-                or any(row["execution_state"] == "failed" for row in attempts)
-                or {
-                    (
-                        row["x_account_ref"],
-                        row["question_id"],
-                        row["label_id"],
-                        row["surface"],
-                        row["query_text"],
-                    )
-                    for row in attempts
-                }
-                != expected_attempts
+                or outcome_query_keys != expected_attempts
+                or not attempted_queries_exhausted
             ):
                 raise ResearchOrchestrationError("portable_result_exhaustive_recall_outcome_invalid")
             recall_complete_keys.add(key)
@@ -1457,14 +1579,9 @@ def validate_campaign_result(
     evidence_universe = observation_ids | set(seeds)
     evidence_source_status = {
         **{seed_ref: seed["source_status"] for seed_ref, seed in seeds.items()},
-        **{
-            observation_id: observation["source_status"]
-            for observation_id, observation in observation_by_id.items()
-        },
+        **{observation_id: observation["source_status"] for observation_id, observation in observation_by_id.items()},
     }
-    subject_seed_refs_by_account: dict[str, set[str]] = {
-        account_ref: set() for account_ref in accounts
-    }
+    subject_seed_refs_by_account: dict[str, set[str]] = {account_ref: set() for account_ref in accounts}
     for outcome in outcomes:
         if outcome["terminal_state"] != "analyzed":
             continue
@@ -1499,9 +1616,7 @@ def validate_campaign_result(
             {evidence_source_status[evidence_ref] for evidence_ref in affiliation["evidence_refs"]},
         ):
             raise ResearchOrchestrationError("portable_result_affiliation_source_upgrade_invalid")
-        if affiliation["temporal_state"] in {"current", "historical"} and not affiliation[
-            "evidence_refs"
-        ]:
+        if affiliation["temporal_state"] in {"current", "historical"} and not affiliation["evidence_refs"]:
             raise ResearchOrchestrationError("portable_result_affiliation_without_evidence")
         affiliation_keys.add(key)
     expected_affiliation_keys = {
@@ -1561,24 +1676,50 @@ def validate_campaign_result(
     if plan["experience_verification"]["enabled"] and experience_accounts != analyzed_accounts:
         raise ResearchOrchestrationError("portable_result_experience_queue_terminal_total_invalid")
 
+    optional_evidence_by_id: dict[str, Mapping[str, Any]] = {}
+    for evidence in result["optional_channel_evidence"]:
+        evidence_id = evidence["evidence_id"]
+        if (
+            evidence_id in optional_evidence_by_id
+            or evidence["task_id"] not in optional_tasks
+            or _profile_url_host(evidence["canonical_url"]) is None
+            or evidence["content_sha256"] != text_sha256(evidence["text_or_excerpt"])
+        ):
+            raise ResearchOrchestrationError("portable_result_optional_evidence_invalid")
+        observed_at = _timestamp(evidence["observed_at"], "portable_result_optional_evidence_time_invalid")
+        if not execution_started_at <= observed_at <= execution_completed_at:
+            raise ResearchOrchestrationError("portable_result_optional_evidence_time_invalid")
+        optional_evidence_by_id[evidence_id] = evidence
+
     optional_attempt_ids: set[str] = set()
     optional_attempts_by_task: dict[str, list[Mapping[str, Any]]] = {}
     for attempt in result["optional_channel_attempts"]:
         if attempt["attempt_id"] in optional_attempt_ids or attempt["task_id"] not in optional_tasks:
             raise ResearchOrchestrationError("portable_result_optional_channel_attempt_invalid")
         _validate_execution_attempt_shape(attempt, count_field="bound_evidence_count")
-        if attempt["bound_evidence_count"] != len(attempt["evidence_refs"]):
+        bound_evidence = [optional_evidence_by_id.get(ref) for ref in attempt["evidence_refs"]]
+        if (
+            attempt["bound_evidence_count"] != len(attempt["evidence_refs"])
+            or any(evidence is None for evidence in bound_evidence)
+            or any(evidence["task_id"] != attempt["task_id"] for evidence in bound_evidence)
+            or any(evidence["receipt_ref"] != attempt["receipt_ref"] for evidence in bound_evidence)
+            or any(
+                evidence["source_status"] != _observation_status_for_attempt(attempt["source_status"])
+                for evidence in bound_evidence
+            )
+        ):
             raise ResearchOrchestrationError("portable_result_optional_channel_attempt_bound_count_invalid")
         optional_attempt_ids.add(attempt["attempt_id"])
         register_receipt(attempt["receipt_ref"], attempt["source_status"])
         optional_attempts_by_task.setdefault(attempt["task_id"], []).append(attempt)
+        attempt_source_statuses.add(attempt["source_status"])
     for task_attempts in optional_attempts_by_task.values():
         task_attempts.sort(key=lambda row: row["ordinal"])
-        if [row["ordinal"] for row in task_attempts] != list(range(1, len(task_attempts) + 1)):
-            raise ResearchOrchestrationError("portable_result_optional_channel_attempt_ordinal_invalid")
-        evidence_refs = [
-            evidence_ref for row in task_attempts for evidence_ref in row["evidence_refs"]
-        ]
+        _validate_pagination_chain(
+            task_attempts,
+            error="portable_result_optional_channel_attempt_pagination_invalid",
+        )
+        evidence_refs = [evidence_ref for row in task_attempts for evidence_ref in row["evidence_refs"]]
         if len(evidence_refs) != len(set(evidence_refs)):
             raise ResearchOrchestrationError("portable_result_optional_channel_evidence_reused")
 
@@ -1587,36 +1728,37 @@ def validate_campaign_result(
     for outcome in result["optional_channel_outcomes"]:
         task = optional_tasks.get(outcome["task_id"])
         task_attempts = optional_attempts_by_task.get(outcome["task_id"], [])
-        if (
-            task is None
-            or outcome["task_id"] in optional_outcome_ids
-            or outcome["channel_id"] != task["channel_id"]
-        ):
+        if task is None or outcome["task_id"] in optional_outcome_ids or outcome["channel_id"] != task["channel_id"]:
             raise ResearchOrchestrationError("portable_result_optional_channel_outcome_invalid")
         if outcome["attempt_ids"] != [row["attempt_id"] for row in task_attempts]:
             raise ResearchOrchestrationError("portable_result_optional_channel_outcome_attempt_binding_invalid")
-        expected_evidence_refs = {
-            evidence_ref for row in task_attempts for evidence_ref in row["evidence_refs"]
-        }
+        expected_evidence_refs = {evidence_ref for row in task_attempts for evidence_ref in row["evidence_refs"]}
         if set(outcome["evidence_refs"]) != expected_evidence_refs:
             raise ResearchOrchestrationError("portable_result_optional_channel_outcome_evidence_binding_invalid")
         attempt_statuses = {row["source_status"] for row in task_attempts}
-        if (
-            outcome["source_status"] == "fixture_synthetic"
-            and attempt_statuses != {"fixture_synthetic"}
-        ) or (
-            outcome["source_status"] == "receipt_bound"
-            and attempt_statuses != {"receipt_bound"}
-        ):
+        if outcome["source_status"] != _attempt_status_summary(attempt_statuses):
             raise ResearchOrchestrationError("portable_result_optional_channel_source_upgrade_invalid")
-        if outcome["terminal_state"] == "completed" and not outcome["evidence_refs"]:
-            raise ResearchOrchestrationError("portable_result_optional_completed_without_evidence")
-        if outcome["terminal_state"] in {"no_result", "not_run"} and outcome["evidence_refs"]:
-            raise ResearchOrchestrationError("portable_result_optional_empty_state_with_evidence")
-        if outcome["terminal_state"] in {"completed", "no_result"} and not task_attempts:
-            raise ResearchOrchestrationError("portable_result_optional_success_without_attempt")
-        if outcome["terminal_state"] == "not_run" and task_attempts:
-            raise ResearchOrchestrationError("portable_result_optional_not_run_with_attempt")
+        chain_exhausted = bool(task_attempts) and _validate_pagination_chain(
+            task_attempts,
+            error="portable_result_optional_channel_attempt_pagination_invalid",
+        )
+        terminal_state = outcome["terminal_state"]
+        if terminal_state == "completed":
+            if not outcome["evidence_refs"] or not chain_exhausted:
+                raise ResearchOrchestrationError("portable_result_optional_completed_invalid")
+        elif terminal_state == "no_result":
+            if (
+                outcome["evidence_refs"]
+                or not chain_exhausted
+                or any(row["execution_state"] != "no_result" for row in task_attempts)
+            ):
+                raise ResearchOrchestrationError("portable_result_optional_no_result_invalid")
+        elif terminal_state == "failed":
+            if outcome["evidence_refs"] or not any(row["execution_state"] == "failed" for row in task_attempts):
+                raise ResearchOrchestrationError("portable_result_optional_failed_invalid")
+        elif terminal_state == "not_run":
+            if task_attempts or outcome["evidence_refs"]:
+                raise ResearchOrchestrationError("portable_result_optional_not_run_invalid")
         optional_outcome_ids.add(outcome["task_id"])
         optional_outcome_by_id[outcome["task_id"]] = outcome
     if optional_outcome_ids != set(optional_tasks):
@@ -1636,16 +1778,6 @@ def validate_campaign_result(
 
     relationship_ids: set[str] = set()
     relationship_keys: set[tuple[str, str, str, str]] = set()
-    optional_evidence_source_status: dict[tuple[str, str], str] = {}
-    for task_id, task_attempts in optional_attempts_by_task.items():
-        for attempt in task_attempts:
-            mapped_status = {
-                "fixture_synthetic": "fixture_synthetic",
-                "receipt_bound": "source_bound",
-                "unverified": "model_mediated_unverified",
-            }[attempt["source_status"]]
-            for evidence_ref in attempt["evidence_refs"]:
-                optional_evidence_source_status[(task_id, evidence_ref)] = mapped_status
     for relationship in result["relationship_results"]:
         task = optional_tasks.get(relationship["origin_task_id"])
         outcome = optional_outcome_by_id.get(relationship["origin_task_id"])
@@ -1671,54 +1803,57 @@ def validate_campaign_result(
             relationship["temporal_state"] in request["temporal_scope"]["affiliation_states"]
         ):
             raise ResearchOrchestrationError("portable_result_relationship_filter_flag_invalid")
+        if any(evidence_ref not in optional_evidence_by_id for evidence_ref in relationship["evidence_refs"]):
+            raise ResearchOrchestrationError("portable_result_relationship_source_upgrade_invalid")
         relationship_evidence_statuses = {
-            optional_evidence_source_status.get((relationship["origin_task_id"], evidence_ref), "")
-            for evidence_ref in relationship["evidence_refs"]
+            optional_evidence_by_id[evidence_ref]["source_status"] for evidence_ref in relationship["evidence_refs"]
         }
-        if "" in relationship_evidence_statuses or not _source_status_is_compatible(
-            relationship["source_status"], relationship_evidence_statuses
-        ):
+        if not _source_status_is_compatible(relationship["source_status"], relationship_evidence_statuses):
             raise ResearchOrchestrationError("portable_result_relationship_source_upgrade_invalid")
         relationship_ids.add(relationship["relationship_id"])
         relationship_keys.add(key)
     for origin in result["discovery_origins"]:
         outcome = optional_outcome_by_id[origin["origin_task_id"]]
-        if (
-            outcome["terminal_state"] != "completed"
-            or not set(origin["evidence_refs"]).issubset(outcome["evidence_refs"])
+        if outcome["terminal_state"] != "completed" or not set(origin["evidence_refs"]).issubset(
+            outcome["evidence_refs"]
         ):
             raise ResearchOrchestrationError("portable_result_discovery_origin_outcome_binding_invalid")
-        if origin["source_status"] == "fixture_synthetic" and outcome["source_status"] != "fixture_synthetic":
+        if any(evidence_ref not in optional_evidence_by_id for evidence_ref in origin["evidence_refs"]):
             raise ResearchOrchestrationError("portable_result_discovery_origin_source_upgrade_invalid")
-        if origin["source_status"] == "source_bound" and outcome["source_status"] != "receipt_bound":
+        if not _source_status_is_compatible(
+            origin["source_status"],
+            {optional_evidence_by_id[evidence_ref]["source_status"] for evidence_ref in origin["evidence_refs"]},
+        ):
             raise ResearchOrchestrationError("portable_result_discovery_origin_source_upgrade_invalid")
-        if origin["source_status"] in {"human_supplied_unverified", "model_mediated_unverified"} and outcome[
-            "source_status"
-        ] == "fixture_synthetic":
-            raise ResearchOrchestrationError("portable_result_discovery_origin_source_upgrade_invalid")
+    optional_outcome_evidence = {
+        evidence_ref for outcome in result["optional_channel_outcomes"] for evidence_ref in outcome["evidence_refs"]
+    }
+    if optional_outcome_evidence != set(optional_evidence_by_id):
+        raise ResearchOrchestrationError("portable_result_optional_evidence_terminal_binding_invalid")
 
     coverage = result["coverage"]
     attempted_surfaces: dict[str, set[str]] = {account_ref: set() for account_ref in accounts}
-    for account_ref, surface in successful_surface_attempt_keys:
+    completed_surfaces: dict[str, set[str]] = {account_ref: set() for account_ref in accounts}
+    for account_ref, surface in surface_attempt_groups:
         attempted_surfaces[account_ref].add(surface)
-    both_surface = sum(surfaces == {"post", "reply"} for surfaces in attempted_surfaces.values())
+    for account_ref, surface in terminal_surface_attempt_keys:
+        completed_surfaces[account_ref].add(surface)
+    both_surface_attempted = sum(surfaces == {"post", "reply"} for surfaces in attempted_surfaces.values())
+    both_surface_completed = sum(surfaces == {"post", "reply"} for surfaces in completed_surfaces.values())
     if (
         coverage["subjects_total"] != len(seeds)
-        or coverage["terminal_subject_outcomes"] != len(outcomes)
+        or coverage["terminal_subject_outcomes"]
+        != sum(row["terminal_state"] != "research_in_progress" for row in outcomes)
         or coverage["resolved_account_count"] != len(accounts)
         or coverage["observation_count"] != len(observation_ids)
-        or coverage["candidate_authored_post_attempted"] != sum(
-            "post" in surfaces for surfaces in attempted_surfaces.values()
-        )
-        or coverage["candidate_authored_reply_attempted"] != sum(
-            "reply" in surfaces for surfaces in attempted_surfaces.values()
-        )
-        or coverage["candidate_authored_both_surface_attempted"] != both_surface
+        or coverage["candidate_authored_post_attempted"]
+        != sum("post" in surfaces for surfaces in attempted_surfaces.values())
+        or coverage["candidate_authored_reply_attempted"]
+        != sum("reply" in surfaces for surfaces in attempted_surfaces.values())
+        or coverage["candidate_authored_both_surface_attempted"] != both_surface_attempted
     ):
         raise ResearchOrchestrationError("portable_result_coverage_counts_invalid")
-    if coverage["coverage_source_status"] != "unverified" and attempt_source_statuses != {
-        coverage["coverage_source_status"]
-    }:
+    if coverage["coverage_source_status"] != _attempt_status_summary(attempt_source_statuses):
         raise ResearchOrchestrationError("portable_result_coverage_source_status_invalid")
     metric_ids = [row["metric_id"] for row in coverage["metric_values"]]
     if metric_ids != policy["quality_metric_ids"]:
@@ -1728,26 +1863,18 @@ def validate_campaign_result(
         for question_id, question in question_by_id.items()
         if question["analysis_mode"] in {"verification", "hybrid"}
     }
-    target_results = [
-        row for row in result["dimension_results"] if row["question_id"] in target_question_ids
-    ]
+    target_results = [row for row in result["dimension_results"] if row["question_id"] in target_question_ids]
     temporal_results = list(result["affiliation_results"]) + target_results
     non_x_seeds = {seed_ref for seed_ref, seed in seeds.items() if seed["source_kind"] != "x_account"}
     resolved_non_x = {seed_ref for seed_ref, _account_ref in proposed_pairs if seed_ref in non_x_seeds}
-    native_attempts = [
-        row
-        for row in list(result["surface_attempts"]) + list(result["semantic_recall_attempts"])
-        if row["execution_state"] != "failed"
-    ]
+    native_attempts = (
+        list(result["surface_attempts"])
+        + list(result["semantic_recall_attempts"])
+        + list(result["optional_channel_attempts"])
+    )
     marginal_metric = (
         (
-            len(
-                {
-                    row["x_account_ref"]
-                    for row in target_results
-                    if row["relevance_state"] == "target_core"
-                }
-            ),
+            len({row["x_account_ref"] for row in target_results if row["relevance_state"] == "target_core"}),
             len(native_attempts),
         )
         if native_attempts and all(row["source_status"] == "receipt_bound" for row in native_attempts)
@@ -1755,7 +1882,7 @@ def validate_campaign_result(
     )
     expected_metrics = {
         "candidate_authored_both_surface_coverage_rate": (
-            both_surface,
+            both_surface_completed,
             len(plan["candidate_authored_tasks"]),
         ),
         "source_bound_evidence_rate": (
@@ -1763,24 +1890,12 @@ def validate_campaign_result(
             len(result["observations"]),
         ),
         "target_direction_core_rate": (
-            len(
-                {
-                    row["x_account_ref"]
-                    for row in target_results
-                    if row["relevance_state"] == "target_core"
-                }
-            ),
-            len({row["x_account_ref"] for row in target_results}),
+            sum(row["relevance_state"] == "target_core" for row in target_results),
+            len(target_results),
         ),
         "target_direction_active_rate": (
-            len(
-                {
-                    row["x_account_ref"]
-                    for row in target_results
-                    if row["relevance_state"] in {"target_core", "target_adjacent"}
-                }
-            ),
-            len({row["x_account_ref"] for row in target_results}),
+            sum(row["relevance_state"] in {"target_core", "target_adjacent"} for row in target_results),
+            len(target_results),
         ),
         "evidence_backed_temporal_state_rate": (
             sum(
@@ -1799,8 +1914,7 @@ def validate_campaign_result(
         if expected is not None and (metric["numerator"], metric["denominator"]) != expected:
             raise ResearchOrchestrationError("portable_result_quality_metric_value_invalid")
     optional_success = all(
-        outcome["terminal_state"] in {"completed", "no_result"}
-        for outcome in result["optional_channel_outcomes"]
+        outcome["terminal_state"] in {"completed", "no_result"} for outcome in result["optional_channel_outcomes"]
     )
     experience_complete = not plan["experience_verification"]["enabled"] or all(
         row["status"] != "pending" for row in result["experience_verification_queue"]
@@ -1812,10 +1926,7 @@ def validate_campaign_result(
         all(outcome["terminal_state"] == "analyzed" for outcome in outcomes)
         and not discovery_accounts
         and planned_handles_with_accounts == planned_handle_keys
-        and all(
-            attempted_surfaces[account_ref] == {"post", "reply"}
-            for account_ref in analyzed_accounts
-        )
+        and all(completed_surfaces[account_ref] == {"post", "reply"} for account_ref in analyzed_accounts)
         and optional_success
         and experience_complete
         and recall_complete_keys == expected_result_keys
@@ -1824,10 +1935,7 @@ def validate_campaign_result(
         not analyzed_accounts
         and not discovery_accounts
         and all(outcome["terminal_state"] in {"no_verified_account", "failed"} for outcome in outcomes)
-        and all(
-            outcome["terminal_state"] in {"failed", "not_run"}
-            for outcome in result["optional_channel_outcomes"]
-        )
+        and all(outcome["terminal_state"] in {"failed", "not_run"} for outcome in result["optional_channel_outcomes"])
     )
     expected_status = "complete" if complete_ready else "failed" if failed_ready else "partial"
     if result["status"] != expected_status:
@@ -1861,6 +1969,14 @@ def validate_checked_in_assets(root: Path | None = None) -> list[str]:
             (REQUEST_SCHEMA_VERSION, f"contracts/{REQUEST_SCHEMA_FILE}"),
             (PLAN_SCHEMA_VERSION, f"contracts/{PLAN_SCHEMA_FILE}"),
             (RESULT_SCHEMA_VERSION, f"contracts/{RESULT_SCHEMA_FILE}"),
+            (
+                "sourcing.x_first.subject_selection.v1",
+                "contracts/sourcing.x_first.subject_selection.v1.schema.json",
+            ),
+            (
+                "x.portable.selected_subject.request_binding.v1",
+                "contracts/x.portable.selected_subject.request_binding.v1.schema.json",
+            ),
         ]
         if (
             registry.get("schema_version") != "x.research_orchestration.contract_registry.v1"

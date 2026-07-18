@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sourcing-ai-agent.invalid/contracts/x.portable.research_campaign.semantic_validation_receipt.v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "receipt_id",
+    "package_id",
+    "manifest_sha256",
+    "campaign_id",
+    "selection_id",
+    "validator",
+    "validation_mode",
+    "validation_status",
+    "validated_at",
+    "checks",
+    "artifact_payload_sha256s",
+    "effects",
+    "authority",
+    "receipt_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "x.portable.research_campaign.semantic_validation_receipt.v1"},
+    "receipt_id": {"$ref": "#/$defs/identifier"},
+    "package_id": {"$ref": "#/$defs/identifier"},
+    "manifest_sha256": {"$ref": "#/$defs/sha256"},
+    "campaign_id": {"$ref": "#/$defs/identifier"},
+    "selection_id": {"$ref": "#/$defs/identifier"},
+    "validator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["validator_id", "validator_revision", "validator_revision_sha256"],
+      "properties": {
+        "validator_id": {"const": "x_first.portable_campaign.semantic_validator"},
+        "validator_revision": {"type": "string", "minLength": 1, "maxLength": 128},
+        "validator_revision_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "validation_mode": {"const": "fixture_simulate"},
+    "validation_status": {"const": "passed"},
+    "validated_at": {"$ref": "#/$defs/timestamp"},
+    "checks": {
+      "const": [
+        "selection_semantics_valid",
+        "request_binding_semantics_valid",
+        "policy_semantics_valid",
+        "catalog_semantics_valid",
+        "request_semantics_valid",
+        "canonical_plan_valid",
+        "result_semantics_valid",
+        "fixture_execution_only"
+      ]
+    },
+    "artifact_payload_sha256s": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["selection", "policy", "catalog", "request", "binding", "plan", "result"],
+      "properties": {
+        "selection": {"$ref": "#/$defs/sha256"},
+        "policy": {"$ref": "#/$defs/sha256"},
+        "catalog": {"$ref": "#/$defs/sha256"},
+        "request": {"$ref": "#/$defs/sha256"},
+        "binding": {"$ref": "#/$defs/sha256"},
+        "plan": {"$ref": "#/$defs/sha256"},
+        "result": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "effects": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "simulated_external_attempt_count",
+        "simulated_external_evidence_count",
+        "provider_call_count",
+        "model_call_count",
+        "product_write_count"
+      ],
+      "properties": {
+        "simulated_external_attempt_count": {"type": "integer", "minimum": 0},
+        "simulated_external_evidence_count": {"type": "integer", "minimum": 0},
+        "provider_call_count": {"const": 0},
+        "model_call_count": {"const": 0},
+        "product_write_count": {"const": 0}
+      }
+    },
+    "authority": {
+      "const": {
+        "live_authority": false,
+        "promotion_authorized": false,
+        "product_writes_allowed": false
+      }
+    },
+    "receipt_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "identifier": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]{0,127}$"},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "timestamp": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    }
+  }
+}

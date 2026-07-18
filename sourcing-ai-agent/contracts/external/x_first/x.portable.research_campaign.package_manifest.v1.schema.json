@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sourcing-ai-agent.invalid/contracts/x.portable.research_campaign.package_manifest.v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "package_id",
+    "package_mode",
+    "campaign_id",
+    "selection_id",
+    "artifacts",
+    "authority",
+    "manifest_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "x.portable.research_campaign.package_manifest.v1"},
+    "package_id": {"$ref": "#/$defs/identifier"},
+    "package_mode": {"const": "fixture_simulate"},
+    "campaign_id": {"$ref": "#/$defs/identifier"},
+    "selection_id": {"$ref": "#/$defs/identifier"},
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["selection", "policy", "catalog", "request", "binding", "plan", "result"],
+      "properties": {
+        "selection": {"$ref": "#/$defs/artifact_descriptor"},
+        "policy": {"$ref": "#/$defs/artifact_descriptor"},
+        "catalog": {"$ref": "#/$defs/artifact_descriptor"},
+        "request": {"$ref": "#/$defs/artifact_descriptor"},
+        "binding": {"$ref": "#/$defs/artifact_descriptor"},
+        "plan": {"$ref": "#/$defs/artifact_descriptor"},
+        "result": {"$ref": "#/$defs/artifact_descriptor"}
+      }
+    },
+    "authority": {
+      "const": {
+        "provider_calls_allowed": false,
+        "model_calls_allowed": false,
+        "product_writes_allowed": false,
+        "live_authority": false
+      }
+    },
+    "manifest_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "identifier": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]{0,127}$"},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "artifact_descriptor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "contract_schema_sha256",
+        "payload_sha256",
+        "declared_content_sha256"
+      ],
+      "properties": {
+        "schema_version": {"type": "string", "minLength": 1, "maxLength": 128},
+        "contract_schema_sha256": {"$ref": "#/$defs/sha256"},
+        "payload_sha256": {"$ref": "#/$defs/sha256"},
+        "declared_content_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}

@@ -12,6 +12,7 @@ import hashlib
 import json
 import re
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -22,9 +23,10 @@ IMPORT_PREVIEW_SCHEMA_VERSION = "sourcing.x_first.verification_import_preview.v1
 REQUEST_BINDING_SCHEMA_VERSION = "x.portable.selected_subject.request_binding.v1"
 PORTABLE_REQUEST_SCHEMA_VERSION = "x.portable.research_campaign.request.v1"
 PORTABLE_RESULT_SCHEMA_VERSION = "x.portable.research_campaign.result.v1"
-SELECTION_CONTRACT_SCHEMA_SHA256 = "e487190924efeaf9bf05f5836619867a5cece66d707891f4587665c115b281bc"
+PORTABLE_REQUEST_CONTRACT_SCHEMA_SHA256 = "b756a031a5cfca273ffc6b97b0d65dacc24811a0487a354a641c731122ce4c3b"
+SELECTION_CONTRACT_SCHEMA_SHA256 = "86a5924d6b551b6af61cfccd9e94a426bdd046db4545e922dc8ae3bc5483b754"
 REQUEST_BINDING_CONTRACT_SCHEMA_SHA256 = "ef2f6dc742658a5b6507f7320bc2ed5530612e97097eadf1c3e4a46405835c1d"
-IMPORT_PREVIEW_CONTRACT_SCHEMA_SHA256 = "0909da87ef12efb919e9c8f838d3c5b986c7f15d8cba5c2c12c7ef690c33a541"
+IMPORT_PREVIEW_CONTRACT_SCHEMA_SHA256 = "bdfbed843f326e010e0f38f64329c2c94e5552dd5b55d53fffeda624fe86a90a"
 
 _SELECTION_SCHEMA_RELATIVE_PATH = Path(
     "contracts/external/x_first/sourcing.x_first.subject_selection.v1.schema.json"
@@ -63,6 +65,8 @@ _SUBJECT_FIELDS = {
     "source_subject_ref",
     "source_record_ref",
     "source_record_sha256",
+    "source_public_summary_sha256",
+    "exported_seed_sha256",
     "source_status",
     "source_kind",
     "source_profile_url",
@@ -72,10 +76,31 @@ _SUBJECT_FIELDS = {
 }
 _FACT_TYPES = {"affiliation", "role", "education", "project", "location", "other"}
 _TEMPORAL_STATES = {"current", "historical", "ambiguous", "not_applicable"}
+_PREVIEW_OBSERVATION_PROVENANCE_LIMIT = 100
+_PREVIEW_HANDLE_PROVENANCE_LIMIT = 50
+_PREVIEW_SOURCE_STATUSES = {
+    "source_bound",
+    "fixture_synthetic",
+    "human_supplied_unverified",
+    "model_mediated_unverified",
+}
 
 
 class XFirstPortableAdapterError(ValueError):
     """Stable fail-closed error for the product-owned X-First boundary."""
+
+
+@dataclass(frozen=True, slots=True)
+class ProjectionSelectionMemberSnapshot:
+    """Revision-bound canonical projection member supplied by its owner."""
+
+    workspace_id: str
+    projection_id: str
+    membership_revision: str
+    candidate_identity_key: str
+    owner_row_sha256: str
+    public_summary_sha256: str
+    public_summary: Mapping[str, Any]
 
 
 def project_root() -> Path:
@@ -178,9 +203,18 @@ def _normalized_string_list(value: Any, *, maximum_items: int, maximum_text: int
     return result
 
 
-def _profile_kind(profile_url: str | None) -> str:
+def _profile_kind(
+    profile_url: str | None,
+    *,
+    has_x_handle_proposal: bool,
+    has_professional_facts: bool,
+) -> str:
     if profile_url is None:
-        return "name_only"
+        return (
+            "professional_profile"
+            if has_x_handle_proposal or has_professional_facts
+            else "name_only"
+        )
     try:
         parsed = urlsplit(profile_url)
     except ValueError as exc:
@@ -191,6 +225,20 @@ def _profile_kind(profile_url: str | None) -> str:
     if host in {"linkedin.com", "www.linkedin.com"}:
         return "linkedin_profile"
     return "professional_profile"
+
+
+def _portable_seed_from_subject(subject: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "seed_ref": subject["source_subject_ref"],
+        "source_kind": subject["source_kind"],
+        "external_record_ref": subject["source_record_ref"],
+        "source_record_sha256": subject["source_record_sha256"],
+        "source_status": subject["source_status"],
+        "source_profile_url": subject["source_profile_url"],
+        "name_text": subject["name_text"],
+        "x_handle_proposals": list(subject["x_handle_proposals"]),
+        "professional_facts": list(subject["professional_facts"]),
+    }
 
 
 def _subject_ref(*, workspace_id: str, projection_id: str, membership_revision: str, member_key: str) -> str:
@@ -288,7 +336,7 @@ def _handle_proposals(
 def build_subject_selection_artifact(
     *,
     bound_target_ref: Mapping[str, Any],
-    members: Sequence[Mapping[str, Any]],
+    members: Sequence[ProjectionSelectionMemberSnapshot],
     exported_at: str,
     selection_id: str | None = None,
     x_handle_proposals_by_candidate: Mapping[str, Sequence[str]] | None = None,
@@ -338,16 +386,24 @@ def build_subject_selection_artifact(
     )
     _identifier(resolved_selection_id, "x_first_selection_id_invalid")
 
-    member_by_key: dict[str, Mapping[str, Any]] = {}
-    for raw_member in members:
-        if not isinstance(raw_member, Mapping):
+    member_by_key: dict[str, ProjectionSelectionMemberSnapshot] = {}
+    for member in members:
+        if type(member) is not ProjectionSelectionMemberSnapshot:
             raise XFirstPortableAdapterError("x_first_selection_member_invalid")
-        member_key = str(raw_member.get("candidate_identity_key") or "").strip()
-        if member_key in member_by_key or member_key not in set(member_keys):
+        member_key = str(member.candidate_identity_key or "").strip()
+        if (
+            member_key in member_by_key
+            or member_key not in set(member_keys)
+            or member.workspace_id != workspace_id
+            or member.projection_id != projection_id
+            or member.membership_revision != membership_revision
+            or _SHA256_RE.fullmatch(member.owner_row_sha256) is None
+            or _SHA256_RE.fullmatch(member.public_summary_sha256) is None
+            or not isinstance(member.public_summary, Mapping)
+            or member.public_summary_sha256 != canonical_sha256(member.public_summary)
+        ):
             raise XFirstPortableAdapterError("x_first_selection_member_invalid")
-        if str(raw_member.get("projection_id") or projection_id).strip() != projection_id:
-            raise XFirstPortableAdapterError("x_first_selection_member_invalid")
-        member_by_key[member_key] = raw_member
+        member_by_key[member_key] = member
     if set(member_by_key) != set(member_keys):
         raise XFirstPortableAdapterError("x_first_selection_member_set_mismatch")
 
@@ -357,9 +413,7 @@ def build_subject_selection_artifact(
         raise XFirstPortableAdapterError("x_first_selection_handle_subject_unknown")
     for member_key in member_keys:
         member = member_by_key[member_key]
-        summary = member.get("public_summary")
-        if not isinstance(summary, Mapping):
-            raise XFirstPortableAdapterError("x_first_selection_public_summary_invalid")
+        summary = member.public_summary
         subject_ref = _subject_ref(
             workspace_id=workspace_id,
             projection_id=projection_id,
@@ -372,27 +426,35 @@ def build_subject_selection_artifact(
         profile_url = _normalized_text(
             summary.get("linkedin_url") or summary.get("profile_url"), maximum=512
         )
-        source_kind = _profile_kind(profile_url)
+        handle_proposals = _handle_proposals(
+            proposal_map.get(member_key),
+            selection_id=resolved_selection_id,
+            subject_ref=subject_ref,
+        )
+        professional_facts = _professional_facts(
+            summary,
+            selection_id=resolved_selection_id,
+            subject_ref=subject_ref,
+        )
+        source_kind = _profile_kind(
+            profile_url,
+            has_x_handle_proposal=bool(handle_proposals),
+            has_professional_facts=bool(professional_facts),
+        )
         subject: dict[str, Any] = {
             "source_subject_ref": subject_ref,
             "source_record_ref": member_key,
-            "source_record_sha256": "",
+            "source_record_sha256": member.owner_row_sha256,
+            "source_public_summary_sha256": member.public_summary_sha256,
+            "exported_seed_sha256": "",
             "source_status": "source_bound",
             "source_kind": source_kind,
             "source_profile_url": profile_url,
             "name_text": name_text,
-            "x_handle_proposals": _handle_proposals(
-                proposal_map.get(member_key),
-                selection_id=resolved_selection_id,
-                subject_ref=subject_ref,
-            ),
-            "professional_facts": _professional_facts(
-                summary,
-                selection_id=resolved_selection_id,
-                subject_ref=subject_ref,
-            ),
+            "x_handle_proposals": handle_proposals,
+            "professional_facts": professional_facts,
         }
-        subject["source_record_sha256"] = _content_sha256(subject, "source_record_sha256")
+        subject["exported_seed_sha256"] = canonical_sha256(_portable_seed_from_subject(subject))
         subjects.append(subject)
 
     artifact: dict[str, Any] = {
@@ -500,10 +562,11 @@ def validate_subject_selection_artifact(value: Any) -> None:
         profile_url = subject["source_profile_url"]
         if profile_url is not None and (not isinstance(profile_url, str) or len(profile_url) > 512):
             raise XFirstPortableAdapterError("x_first_selection_profile_url_invalid")
-        if _profile_kind(profile_url) != subject["source_kind"]:
-            raise XFirstPortableAdapterError("x_first_selection_source_kind_invalid")
-        if subject["source_record_sha256"] != _content_sha256(subject, "source_record_sha256"):
-            raise XFirstPortableAdapterError("x_first_selection_source_record_hash_mismatch")
+        _sha256(subject["source_record_sha256"], "x_first_selection_source_record_hash_invalid")
+        _sha256(
+            subject["source_public_summary_sha256"],
+            "x_first_selection_public_summary_hash_invalid",
+        )
         handles = subject["x_handle_proposals"]
         if not isinstance(handles, list):
             raise XFirstPortableAdapterError("x_first_selection_handle_invalid")
@@ -549,6 +612,14 @@ def validate_subject_selection_artifact(value: Any) -> None:
                 or len(fact["evidence_ref"]) > 512
             ):
                 raise XFirstPortableAdapterError("x_first_selection_fact_invalid")
+        if _profile_kind(
+            profile_url,
+            has_x_handle_proposal=bool(handles),
+            has_professional_facts=bool(facts),
+        ) != subject["source_kind"]:
+            raise XFirstPortableAdapterError("x_first_selection_source_kind_invalid")
+        if subject["exported_seed_sha256"] != canonical_sha256(_portable_seed_from_subject(subject)):
+            raise XFirstPortableAdapterError("x_first_selection_exported_seed_hash_mismatch")
     if snapshot["selected_member_keys_sha256"] != canonical_sha256(sorted(source_refs)):
         raise XFirstPortableAdapterError("x_first_selection_member_set_hash_mismatch")
 
@@ -620,18 +691,76 @@ def _validate_request_binding(binding: Any, *, selection: Mapping[str, Any]) -> 
     return mapped
 
 
-def build_verification_import_preview(
+def validate_request_binding_artifacts(
     *,
     selection: Mapping[str, Any],
     request_binding: Mapping[str, Any],
-    portable_result: Mapping[str, Any],
-) -> dict[str, Any]:
-    """Build a read-only review projection from a portable X-First result."""
+    portable_request: Mapping[str, Any],
+) -> dict[str, str]:
+    """Bind every selected subject to the exact approved portable request seed."""
 
-    import_preview_contract_schema_sha256()
     validate_subject_selection_artifact(selection)
     subject_to_seed = _validate_request_binding(request_binding, selection=selection)
-    result = dict(portable_result)
+    if not isinstance(portable_request, Mapping):
+        raise XFirstPortableAdapterError("x_first_portable_request_not_object")
+    request = dict(portable_request)
+    if (
+        request.get("schema_version") != PORTABLE_REQUEST_SCHEMA_VERSION
+        or request.get("request_sha256") != _content_sha256(request, "request_sha256")
+        or request.get("request_sha256") != request_binding["portable_request_sha256"]
+        or request_binding["portable_request_contract_schema_sha256"]
+        != PORTABLE_REQUEST_CONTRACT_SCHEMA_SHA256
+        or request.get("campaign_id") != request_binding["campaign_id"]
+        or request.get("authority") != _SELECTION_AUTHORITY
+    ):
+        raise XFirstPortableAdapterError("x_first_portable_request_binding_invalid")
+    seeds = request.get("seed_inputs")
+    if not isinstance(seeds, list):
+        raise XFirstPortableAdapterError("x_first_portable_request_seed_invalid")
+    seed_by_ref: dict[str, Mapping[str, Any]] = {}
+    for seed in seeds:
+        if not isinstance(seed, Mapping):
+            raise XFirstPortableAdapterError("x_first_portable_request_seed_invalid")
+        seed_ref = str(seed.get("seed_ref") or "")
+        if seed_ref in seed_by_ref:
+            raise XFirstPortableAdapterError("x_first_portable_request_seed_invalid")
+        seed_by_ref[seed_ref] = seed
+    expected_subjects = {
+        subject["source_subject_ref"]: subject for subject in selection["subjects"]
+    }
+    if set(seed_by_ref) != set(expected_subjects):
+        raise XFirstPortableAdapterError("x_first_portable_request_seed_incomplete")
+    binding_by_ref = {
+        row["source_subject_ref"]: row for row in request_binding["subject_bindings"]
+    }
+    for subject_ref, subject in expected_subjects.items():
+        expected_seed = _portable_seed_from_subject(subject)
+        seed = dict(seed_by_ref[subject_ref])
+        binding = binding_by_ref[subject_ref]
+        if (
+            seed != expected_seed
+            or canonical_sha256(seed) != subject["exported_seed_sha256"]
+            or binding["seed_ref"] != subject_to_seed[subject_ref]
+            or binding["seed_sha256"] != subject["exported_seed_sha256"]
+        ):
+            raise XFirstPortableAdapterError("x_first_portable_request_seed_rebound")
+    return subject_to_seed
+
+
+def build_verification_import_preview(
+    *,
+    validated_package: Any,
+) -> dict[str, Any]:
+    """Build a preview only from a fully bound, trusted fixture package."""
+
+    import_preview_contract_schema_sha256()
+    from sourcing_agent.x_first_portable_package import require_validated_package_capability
+
+    validated = require_validated_package_capability(validated_package)
+    selection = validated.artifacts["selection"]
+    request_binding = validated.artifacts["binding"]
+    subject_to_seed = _validate_request_binding(request_binding, selection=selection)
+    result = dict(validated.artifacts["result"])
     if result.get("schema_version") != PORTABLE_RESULT_SCHEMA_VERSION:
         raise XFirstPortableAdapterError("x_first_portable_result_version_invalid")
     if result.get("result_sha256") != _content_sha256(result, "result_sha256"):
@@ -673,7 +802,7 @@ def build_verification_import_preview(
             raise XFirstPortableAdapterError("x_first_portable_result_link_proposal_invalid")
         proposal_refs_by_seed.setdefault(seed_ref, []).append(proposal_ref)
 
-    observations_by_account: dict[str, list[str]] = {}
+    observations_by_account: dict[str, list[dict[str, Any]]] = {}
     for observation in result.get("observations", []):
         if not isinstance(observation, Mapping):
             raise XFirstPortableAdapterError("x_first_portable_result_observation_invalid")
@@ -681,7 +810,32 @@ def build_verification_import_preview(
         observation_ref = str(observation.get("observation_id") or "")
         if account_ref not in account_refs or not observation_ref:
             raise XFirstPortableAdapterError("x_first_portable_result_observation_invalid")
-        observations_by_account.setdefault(account_ref, []).append(observation_ref)
+        observations_by_account.setdefault(account_ref, []).append(
+            {
+                "observation_id": observation_ref,
+                "source_status": observation.get("source_status"),
+                "receipt_ref": observation.get("receipt_ref"),
+                "content_sha256": observation.get("content_sha256"),
+            }
+        )
+
+    handle_evidence_by_subject_account: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for evidence in result.get("handle_resolution_evidence", []):
+        if not isinstance(evidence, Mapping):
+            raise XFirstPortableAdapterError("x_first_portable_result_handle_evidence_invalid")
+        account_ref = str(evidence.get("x_account_ref") or "")
+        seed_ref = str(evidence.get("seed_ref") or "")
+        evidence_ref = str(evidence.get("evidence_id") or "")
+        if account_ref not in account_refs or seed_ref not in outcomes or not evidence_ref:
+            raise XFirstPortableAdapterError("x_first_portable_result_handle_evidence_invalid")
+        handle_evidence_by_subject_account.setdefault((seed_ref, account_ref), []).append(
+            {
+                "evidence_id": evidence_ref,
+                "source_status": evidence.get("source_status"),
+                "receipt_ref": evidence.get("receipt_ref"),
+                "content_sha256": evidence.get("content_sha256"),
+            }
+        )
 
     dimensions_by_account: dict[str, list[dict[str, Any]]] = {}
     for row in result.get("dimension_results", []):
@@ -698,6 +852,7 @@ def build_verification_import_preview(
                 "relevance_state": row.get("relevance_state"),
                 "target_activity_temporal_state": row.get("target_activity_temporal_state"),
                 "evidence_refs": list(row.get("evidence_refs") or []),
+                "source_status": row.get("source_status"),
             }
         )
 
@@ -714,6 +869,10 @@ def build_verification_import_preview(
             review_state = "identity_review_required"
             if not proposal_refs_by_seed.get(seed_ref):
                 raise XFirstPortableAdapterError("x_first_portable_result_link_proposal_missing")
+        elif terminal_state == "research_in_progress":
+            review_state = "research_continuation_required"
+            if not proposal_refs_by_seed.get(seed_ref):
+                raise XFirstPortableAdapterError("x_first_portable_result_link_proposal_missing")
         elif terminal_state == "handle_resolution_required":
             review_state = "handle_resolution_required"
         elif terminal_state == "no_verified_account":
@@ -722,6 +881,24 @@ def build_verification_import_preview(
             review_state = "execution_failed"
         else:
             raise XFirstPortableAdapterError("x_first_portable_result_subject_outcome_invalid")
+        observation_provenance = sorted(
+            [
+                provenance
+                for account_ref in x_account_refs
+                for provenance in observations_by_account.get(account_ref, [])
+            ],
+            key=lambda row: str(row["observation_id"]),
+        )
+        handle_resolution_provenance = sorted(
+            [
+                provenance
+                for account_ref in x_account_refs
+                for provenance in handle_evidence_by_subject_account.get(
+                    (seed_ref, account_ref), []
+                )
+            ],
+            key=lambda row: str(row["evidence_id"]),
+        )
         subjects.append(
             {
                 "source_subject_ref": source_subject_ref,
@@ -732,11 +909,27 @@ def build_verification_import_preview(
                 "link_proposal_refs": sorted(proposal_refs_by_seed.get(seed_ref, [])),
                 "observation_refs": sorted(
                     {
-                        observation_ref
+                        provenance["observation_id"]
                         for account_ref in x_account_refs
-                        for observation_ref in observations_by_account.get(account_ref, [])
+                        for provenance in observations_by_account.get(account_ref, [])
                     }
                 ),
+                "observation_provenance": observation_provenance[
+                    :_PREVIEW_OBSERVATION_PROVENANCE_LIMIT
+                ],
+                "observation_provenance_total_count": len(observation_provenance),
+                "observation_provenance_truncated": len(observation_provenance)
+                > _PREVIEW_OBSERVATION_PROVENANCE_LIMIT,
+                "handle_resolution_provenance": handle_resolution_provenance[
+                    :_PREVIEW_HANDLE_PROVENANCE_LIMIT
+                ],
+                "handle_resolution_provenance_total_count": len(
+                    handle_resolution_provenance
+                ),
+                "handle_resolution_provenance_truncated": len(
+                    handle_resolution_provenance
+                )
+                > _PREVIEW_HANDLE_PROVENANCE_LIMIT,
                 "verification_summaries": sorted(
                     [
                         summary
@@ -759,18 +952,213 @@ def build_verification_import_preview(
         "preview_sha256": "",
     }
     preview["preview_sha256"] = _content_sha256(preview, "preview_sha256")
+    validate_verification_import_preview(preview)
     return preview
+
+
+def validate_verification_import_preview(value: Any) -> None:
+    """Validate the complete product-owned preview before returning it."""
+
+    import_preview_contract_schema_sha256()
+    if not isinstance(value, Mapping):
+        raise XFirstPortableAdapterError("x_first_import_preview_not_object")
+    preview = dict(value)
+    if set(preview) != {
+        "schema_version",
+        "selection_artifact_sha256",
+        "request_binding_sha256",
+        "portable_result_sha256",
+        "portable_result_status",
+        "subjects",
+        "authority",
+        "preview_sha256",
+    }:
+        raise XFirstPortableAdapterError("x_first_import_preview_shape_invalid")
+    if (
+        preview["schema_version"] != IMPORT_PREVIEW_SCHEMA_VERSION
+        or preview["authority"] != _IMPORT_PREVIEW_AUTHORITY
+        or preview["portable_result_status"] not in {"complete", "partial", "failed"}
+        or preview["preview_sha256"] != _content_sha256(preview, "preview_sha256")
+    ):
+        raise XFirstPortableAdapterError("x_first_import_preview_invalid")
+    for field in (
+        "selection_artifact_sha256",
+        "request_binding_sha256",
+        "portable_result_sha256",
+        "preview_sha256",
+    ):
+        _sha256(preview[field], "x_first_import_preview_invalid")
+    subjects = preview["subjects"]
+    if not isinstance(subjects, list) or not subjects:
+        raise XFirstPortableAdapterError("x_first_import_preview_subject_invalid")
+    subject_refs: set[str] = set()
+    source_refs: set[str] = set()
+    for row in subjects:
+        if not isinstance(row, Mapping) or set(row) != {
+            "source_subject_ref",
+            "source_record_ref",
+            "seed_ref",
+            "terminal_state",
+            "x_account_refs",
+            "link_proposal_refs",
+            "observation_refs",
+            "observation_provenance",
+            "observation_provenance_total_count",
+            "observation_provenance_truncated",
+            "handle_resolution_provenance",
+            "handle_resolution_provenance_total_count",
+            "handle_resolution_provenance_truncated",
+            "verification_summaries",
+            "review_state",
+        }:
+            raise XFirstPortableAdapterError("x_first_import_preview_subject_invalid")
+        subject_ref = _identifier(row["source_subject_ref"], "x_first_import_preview_subject_invalid")
+        seed_ref = _identifier(row["seed_ref"], "x_first_import_preview_subject_invalid")
+        source_ref = row["source_record_ref"]
+        if (
+            subject_ref in subject_refs
+            or seed_ref != subject_ref
+            or not isinstance(source_ref, str)
+            or not source_ref
+            or len(source_ref) > 512
+            or source_ref in source_refs
+            or row["terminal_state"]
+            not in {
+                "analyzed",
+                "research_in_progress",
+                "handle_resolution_required",
+                "no_verified_account",
+                "failed",
+            }
+            or row["review_state"]
+            != {
+                "analyzed": "identity_review_required",
+                "research_in_progress": "research_continuation_required",
+                "handle_resolution_required": "handle_resolution_required",
+                "no_verified_account": "no_verified_account",
+                "failed": "execution_failed",
+            }[row["terminal_state"]]
+            or (
+                row["terminal_state"] in {"analyzed", "research_in_progress"}
+                and not row["x_account_refs"]
+            )
+            or (
+                row["terminal_state"]
+                in {"handle_resolution_required", "no_verified_account", "failed"}
+                and row["x_account_refs"]
+            )
+        ):
+            raise XFirstPortableAdapterError("x_first_import_preview_subject_invalid")
+        subject_refs.add(subject_ref)
+        source_refs.add(source_ref)
+        for field in ("x_account_refs", "link_proposal_refs", "observation_refs"):
+            values = row[field]
+            if (
+                not isinstance(values, list)
+                or values != sorted(values)
+                or len(values) != len(set(values))
+                or any(_IDENTIFIER_RE.fullmatch(str(item or "")) is None for item in values)
+            ):
+                raise XFirstPortableAdapterError("x_first_import_preview_subject_invalid")
+        for prefix, id_field, limit in (
+            ("observation", "observation_id", _PREVIEW_OBSERVATION_PROVENANCE_LIMIT),
+            ("handle_resolution", "evidence_id", _PREVIEW_HANDLE_PROVENANCE_LIMIT),
+        ):
+            provenance = row[f"{prefix}_provenance"]
+            total_count = row[f"{prefix}_provenance_total_count"]
+            truncated = row[f"{prefix}_provenance_truncated"]
+            if (
+                not isinstance(provenance, list)
+                or len(provenance) > limit
+                or any(not isinstance(item, Mapping) for item in provenance)
+                or provenance
+                != sorted(provenance, key=lambda item: str(item.get(id_field, "")))
+                or isinstance(total_count, bool)
+                or not isinstance(total_count, int)
+                or total_count < len(provenance)
+                or not isinstance(truncated, bool)
+                or truncated != (total_count > len(provenance))
+                or (not truncated and total_count != len(provenance))
+            ):
+                raise XFirstPortableAdapterError("x_first_import_preview_provenance_invalid")
+            seen_provenance_ids: set[str] = set()
+            for provenance_row in provenance:
+                if (
+                    not isinstance(provenance_row, Mapping)
+                    or set(provenance_row)
+                    != {id_field, "source_status", "receipt_ref", "content_sha256"}
+                ):
+                    raise XFirstPortableAdapterError(
+                        "x_first_import_preview_provenance_invalid"
+                    )
+                provenance_id = _identifier(
+                    provenance_row[id_field], "x_first_import_preview_provenance_invalid"
+                )
+                receipt_ref = provenance_row["receipt_ref"]
+                if (
+                    provenance_id in seen_provenance_ids
+                    or provenance_row["source_status"] not in _PREVIEW_SOURCE_STATUSES
+                    or not isinstance(receipt_ref, str)
+                    or not receipt_ref
+                    or len(receipt_ref) > 512
+                ):
+                    raise XFirstPortableAdapterError(
+                        "x_first_import_preview_provenance_invalid"
+                    )
+                _sha256(
+                    provenance_row["content_sha256"],
+                    "x_first_import_preview_provenance_invalid",
+                )
+                seen_provenance_ids.add(provenance_id)
+        if {
+            item["observation_id"] for item in row["observation_provenance"]
+        } - set(row["observation_refs"]):
+            raise XFirstPortableAdapterError("x_first_import_preview_provenance_invalid")
+        summaries = row["verification_summaries"]
+        if not isinstance(summaries, list):
+            raise XFirstPortableAdapterError("x_first_import_preview_summary_invalid")
+        for summary in summaries:
+            if not isinstance(summary, Mapping) or set(summary) != {
+                "question_id",
+                "dimension_id",
+                "matched_label_ids",
+                "relevance_state",
+                "target_activity_temporal_state",
+                "evidence_refs",
+                "source_status",
+            }:
+                raise XFirstPortableAdapterError("x_first_import_preview_summary_invalid")
+            _identifier(summary["question_id"], "x_first_import_preview_summary_invalid")
+            _identifier(summary["dimension_id"], "x_first_import_preview_summary_invalid")
+            for list_field in ("matched_label_ids", "evidence_refs"):
+                items = summary[list_field]
+                if (
+                    not isinstance(items, list)
+                    or len(items) != len(set(items))
+                    or any(_IDENTIFIER_RE.fullmatch(str(item or "")) is None for item in items)
+                ):
+                    raise XFirstPortableAdapterError("x_first_import_preview_summary_invalid")
+            if (
+                summary["relevance_state"]
+                not in {"target_core", "target_adjacent", "ambiguous", "out_of_scope"}
+                or summary["target_activity_temporal_state"]
+                not in {"current", "historical", "ambiguous", "unsupported", "not_applicable"}
+                or summary["source_status"] not in _PREVIEW_SOURCE_STATUSES
+            ):
+                raise XFirstPortableAdapterError("x_first_import_preview_summary_invalid")
 
 
 __all__ = [
     "IMPORT_PREVIEW_SCHEMA_VERSION",
     "IMPORT_PREVIEW_CONTRACT_SCHEMA_SHA256",
+    "PORTABLE_REQUEST_CONTRACT_SCHEMA_SHA256",
     "PORTABLE_REQUEST_SCHEMA_VERSION",
     "PORTABLE_RESULT_SCHEMA_VERSION",
     "REQUEST_BINDING_CONTRACT_SCHEMA_SHA256",
     "REQUEST_BINDING_SCHEMA_VERSION",
     "SELECTION_CONTRACT_SCHEMA_SHA256",
     "SELECTION_SCHEMA_VERSION",
+    "ProjectionSelectionMemberSnapshot",
     "XFirstPortableAdapterError",
     "build_subject_selection_artifact",
     "build_verification_import_preview",
@@ -779,5 +1167,7 @@ __all__ = [
     "import_preview_contract_schema_sha256",
     "request_binding_contract_schema_sha256",
     "selection_contract_schema_sha256",
+    "validate_request_binding_artifacts",
     "validate_subject_selection_artifact",
+    "validate_verification_import_preview",
 ]

@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sourcing-ai-agent.invalid/contracts/sourcing.x_first.simulate_owner_result.v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "simulation_state",
+    "state_trace",
+    "input_package_sha256",
+    "manifest_sha256",
+    "semantic_validation_receipt_sha256",
+    "selection_artifact_sha256",
+    "portable_request_sha256",
+    "portable_result_sha256",
+    "import_preview_sha256",
+    "error_code",
+    "subject_terminal_counts",
+    "effects",
+    "served",
+    "authority",
+    "owner_result_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "sourcing.x_first.simulate_owner_result.v1"},
+    "simulation_state": {"enum": ["preview_ready", "rejected"]},
+    "state_trace": {
+      "oneOf": [
+        {"const": ["received", "validating_package", "package_validated", "building_preview", "preview_ready"]},
+        {"const": ["received", "validating_package", "rejected"]}
+      ]
+    },
+    "input_package_sha256": {"$ref": "#/$defs/sha256"},
+    "manifest_sha256": {"$ref": "#/$defs/nullable_sha256"},
+    "semantic_validation_receipt_sha256": {"$ref": "#/$defs/nullable_sha256"},
+    "selection_artifact_sha256": {"$ref": "#/$defs/nullable_sha256"},
+    "portable_request_sha256": {"$ref": "#/$defs/nullable_sha256"},
+    "portable_result_sha256": {"$ref": "#/$defs/nullable_sha256"},
+    "import_preview_sha256": {"$ref": "#/$defs/nullable_sha256"},
+    "error_code": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "string", "pattern": "^[a-z0-9_]{1,128}$"}
+      ]
+    },
+    "subject_terminal_counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "selected",
+        "analyzed",
+        "research_in_progress",
+        "handle_resolution_required",
+        "no_verified_account",
+        "failed"
+      ],
+      "properties": {
+        "selected": {"type": "integer", "minimum": 0},
+        "analyzed": {"type": "integer", "minimum": 0},
+        "research_in_progress": {"type": "integer", "minimum": 0},
+        "handle_resolution_required": {"type": "integer", "minimum": 0},
+        "no_verified_account": {"type": "integer", "minimum": 0},
+        "failed": {"type": "integer", "minimum": 0}
+      }
+    },
+    "effects": {
+      "const": {
+        "provider_call_count": 0,
+        "model_call_count": 0,
+        "product_write_count": 0,
+        "canonical_person_merge_count": 0,
+        "outreach_count": 0
+      }
+    },
+    "served": {"const": false},
+    "authority": {
+      "const": {
+        "live_authority": false,
+        "promotion_authorized": false,
+        "product_writes_allowed": false
+      }
+    },
+    "owner_result_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "nullable_sha256": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "#/$defs/sha256"}
+      ]
+    }
+  }
+}

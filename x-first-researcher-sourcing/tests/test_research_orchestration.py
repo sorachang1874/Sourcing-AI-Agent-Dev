@@ -42,30 +42,28 @@ def _rehash(value: dict, field: str) -> None:
 
 def _complete_adaptive_recall(result: dict, plan: dict) -> None:
     task_by_handle = {row["handle"].casefold(): row for row in plan["candidate_authored_tasks"]}
+    question = next(row for row in plan["analysis_contract"]["questions"] if row["question_id"] == "verify_coding_work")
     for account in result["external_accounts"]:
         task = task_by_handle.get(account["current_handle"].casefold())
         if task is None:
             continue
-        target = next(
-            row for row in task["recall_targets"] if row["question_id"] == "verify_coding_work"
-        )
+        target = next(row for row in task["recall_targets"] if row["question_id"] == "verify_coding_work")
         selected_queries = [
             row
             for surface in ("post", "reply")
-            for row in [
-                item for item in target["recall_queries"] if item["surface"] == surface
-            ][: target["adaptive_stop_policy"]["minimum_attempts_per_surface"]]
+            for row in [item for item in target["recall_queries"] if item["surface"] == surface][
+                : target["adaptive_stop_policy"]["minimum_attempts_per_surface"]
+            ]
         ]
         attempts = []
         for ordinal, query in enumerate(selected_queries, start=1):
-            receipt_ref = (
-                f"fixture://receipt/{account['current_handle']}/semantic/{ordinal}"
-            )
+            receipt_ref = f"fixture://receipt/{account['current_handle']}/semantic/{ordinal}"
             attempt = {
                 "x_account_ref": account["x_account_ref"],
                 "question_id": "verify_coding_work",
                 "label_id": query["label_id"],
                 "ordinal": ordinal,
+                "page_ordinal": 1,
                 "surface": query["surface"],
                 "query_text": query["query_text"],
                 "query_sha256": orchestration.text_sha256(query["query_text"]),
@@ -75,6 +73,7 @@ def _complete_adaptive_recall(result: dict, plan: dict) -> None:
                 "bound_observation_count": 0,
                 "result_truncated": False,
                 "continuation_state": "exhausted",
+                "input_continuation_ref": None,
                 "continuation_ref": None,
                 "new_unique_observation_refs": [],
                 "new_target_evidence_refs": [],
@@ -84,8 +83,7 @@ def _complete_adaptive_recall(result: dict, plan: dict) -> None:
         outcome = next(
             row
             for row in result["semantic_recall_outcomes"]
-            if row["x_account_ref"] == account["x_account_ref"]
-            and row["question_id"] == "verify_coding_work"
+            if row["x_account_ref"] == account["x_account_ref"] and row["question_id"] == "verify_coding_work"
         )
         outcome.update(
             {
@@ -95,10 +93,24 @@ def _complete_adaptive_recall(result: dict, plan: dict) -> None:
                 "receipt_refs": [row["receipt_ref"] for row in attempts],
             }
         )
-        all_query_hashes = {
-            orchestration.text_sha256(row["query_text"])
-            for row in target["recall_queries"]
+        all_query_hashes = {orchestration.text_sha256(row["query_text"]) for row in target["recall_queries"]}
+        covered_pairs = [
+            {"label_id": label["label_id"], "surface": surface}
+            for label in question["target_labels"]
+            for surface in ("post", "reply")
+        ]
+        audit = {
+            "schema_version": "x.semantic_recall.scope_frontier_audit.v1",
+            "x_account_ref": account["x_account_ref"],
+            "question_id": "verify_coding_work",
+            "covered_label_surface_pairs": covered_pairs,
+            "attempted_query_sha256s": sorted({row["query_sha256"] for row in attempts}),
+            "remaining_query_sha256s": sorted(all_query_hashes - {row["query_sha256"] for row in attempts}),
+            "audit_status": "negative_stop_frontier_audited",
+            "source_status": "fixture_synthetic",
+            "audit_sha256": "",
         }
+        _rehash(audit, "audit_sha256")
         decision = {
             "window_size": target["adaptive_stop_policy"]["window_size"],
             "window_query_sha256s": [row["query_sha256"] for row in attempts],
@@ -107,12 +119,9 @@ def _complete_adaptive_recall(result: dict, plan: dict) -> None:
             "configured_maximum_new_target_evidence": target["adaptive_stop_policy"][
                 "maximum_new_target_evidence_in_window"
             ],
-            "remaining_query_sha256s": sorted(
-                all_query_hashes - {row["query_sha256"] for row in attempts}
-            ),
-            "scope_frontier_audit_ref": (
-                f"fixture://audit/{account['current_handle']}/verify_coding_work"
-            ),
+            "remaining_query_sha256s": sorted(all_query_hashes - {row["query_sha256"] for row in attempts}),
+            "scope_frontier_audit": audit,
+            "scope_frontier_audit_ref": f"sha256:{audit['audit_sha256']}",
             "source_status": "fixture_synthetic",
             "decision_sha256": "",
         }
@@ -155,9 +164,7 @@ class ResearchOrchestrationTests(unittest.TestCase):
 
     def test_verification_can_use_authored_post_and_reply_without_alias_searches(self) -> None:
         request = copy.deepcopy(self.request)
-        question = next(
-            row for row in request["analysis_questions"] if row["question_id"] == "verify_coding_work"
-        )
+        question = next(row for row in request["analysis_questions"] if row["question_id"] == "verify_coding_work")
         question["recall_execution_policy"] = "authored_surface_only"
         question["adaptive_stop_policy"] = None
         _rehash(request, "request_sha256")
@@ -165,9 +172,7 @@ class ResearchOrchestrationTests(unittest.TestCase):
         validate_campaign_request(request, catalog=self.catalog, policy=self.policy)
         plan = build_campaign_plan(request=request, catalog=self.catalog, policy=self.policy)
         for task in plan["candidate_authored_tasks"]:
-            target = next(
-                row for row in task["recall_targets"] if row["question_id"] == "verify_coding_work"
-            )
+            target = next(row for row in task["recall_targets"] if row["question_id"] == "verify_coding_work")
             self.assertEqual(target["execution_policy"], "authored_surface_only")
             self.assertEqual(target["recall_queries"], [])
 
@@ -424,8 +429,7 @@ class ResearchOrchestrationTests(unittest.TestCase):
         row = next(
             item
             for item in result["dimension_results"]
-            if item["question_id"] == "verify_coding_work"
-            and item["relevance_state"] == "target_core"
+            if item["question_id"] == "verify_coding_work" and item["relevance_state"] == "target_core"
         )
         row["evidence_refs"] = []
         row["source_status"] = "model_mediated_unverified"
@@ -440,9 +444,7 @@ class ResearchOrchestrationTests(unittest.TestCase):
             )
 
         request = copy.deepcopy(self.request)
-        question = next(
-            row for row in request["analysis_questions"] if row["question_id"] == "verify_coding_work"
-        )
+        question = next(row for row in request["analysis_questions"] if row["question_id"] == "verify_coding_work")
         question["target_label_ids"] = ["coding", "data"]
         question["target_match_operator"] = "all"
         _rehash(request, "request_sha256")
@@ -479,6 +481,580 @@ class ResearchOrchestrationTests(unittest.TestCase):
         )
         self.assertLess(len(result["semantic_recall_attempts"]), planned_query_count)
 
+    def test_surface_pagination_requires_consumed_continuation_and_allows_failed_retry(self) -> None:
+        result = copy.deepcopy(self.result)
+        first_page = result["surface_attempts"][0]
+        first_page.update(
+            {
+                "result_truncated": True,
+                "continuation_state": "continuation_available",
+                "continuation_ref": "fixture://cursor/fixture-author/post/page-2",
+            }
+        )
+        subject = next(row for row in result["subject_outcomes"] if row["seed_ref"] == "seed_x_account")
+        subject["terminal_state"] = "research_in_progress"
+        subject["reason"] = "Post pagination continuation remains unconsumed"
+        result["dimension_results"] = [
+            row for row in result["dimension_results"] if row["x_account_ref"] != "xacct_fixture_author"
+        ]
+        result["affiliation_results"] = [
+            row for row in result["affiliation_results"] if row["x_account_ref"] != "xacct_fixture_author"
+        ]
+        result["exploratory_findings"] = [
+            row for row in result["exploratory_findings"] if row["x_account_ref"] != "xacct_fixture_author"
+        ]
+        result["semantic_recall_outcomes"] = [
+            row for row in result["semantic_recall_outcomes"] if row["x_account_ref"] != "xacct_fixture_author"
+        ]
+        result["coverage"]["terminal_subject_outcomes"] = 2
+        metrics = {row["metric_id"]: row for row in result["coverage"]["metric_values"]}
+        metrics["candidate_authored_both_surface_coverage_rate"]["numerator"] = 1
+        metrics["target_direction_core_rate"].update({"numerator": 0, "denominator": 1})
+        metrics["target_direction_active_rate"].update({"numerator": 1, "denominator": 1})
+        metrics["evidence_backed_temporal_state_rate"].update({"numerator": 2, "denominator": 2})
+        _rehash(result, "result_sha256")
+        validate_campaign_result(
+            result,
+            request=self.request,
+            plan=self.plan,
+            catalog=self.catalog,
+            policy=self.policy,
+        )
+        complete_lie = copy.deepcopy(result)
+        complete_lie["status"] = "complete"
+        _rehash(complete_lie, "result_sha256")
+        with self.assertRaisesRegex(ResearchOrchestrationError, "portable_result_status_derivation_invalid"):
+            validate_campaign_result(
+                complete_lie,
+                request=self.request,
+                plan=self.plan,
+                catalog=self.catalog,
+                policy=self.policy,
+            )
+
+        result = copy.deepcopy(self.result)
+        first_page = result["surface_attempts"][0]
+        first_page.update(
+            {
+                "result_truncated": True,
+                "continuation_state": "continuation_available",
+                "continuation_ref": "fixture://cursor/fixture-author/post/page-2",
+            }
+        )
+        failed_page = {
+            **first_page,
+            "ordinal": 2,
+            "receipt_ref": "fixture://receipt/fixture_author/post/page-2-failed",
+            "source_status": "fixture_synthetic",
+            "execution_state": "failed",
+            "bound_observation_count": 0,
+            "result_truncated": False,
+            "continuation_state": "unknown",
+            "input_continuation_ref": first_page["continuation_ref"],
+            "continuation_ref": None,
+        }
+        retry_page = {
+            **failed_page,
+            "ordinal": 3,
+            "receipt_ref": "fixture://receipt/fixture_author/post/page-2-retry",
+            "execution_state": "no_result",
+            "continuation_state": "exhausted",
+        }
+        result["surface_attempts"].extend([failed_page, retry_page])
+        authored_outcome = next(
+            row
+            for row in result["semantic_recall_outcomes"]
+            if row["x_account_ref"] == "xacct_fixture_author" and row["execution_policy"] == "authored_surface_only"
+        )
+        authored_outcome["receipt_refs"].append(retry_page["receipt_ref"])
+        _rehash(result, "result_sha256")
+        validate_campaign_result(
+            result,
+            request=self.request,
+            plan=self.plan,
+            catalog=self.catalog,
+            policy=self.policy,
+        )
+
+        broken = copy.deepcopy(result)
+        broken["surface_attempts"][-1]["input_continuation_ref"] = "fixture://cursor/wrong"
+        _rehash(broken, "result_sha256")
+        with self.assertRaisesRegex(
+            ResearchOrchestrationError,
+            "portable_result_surface_attempt_pagination_invalid",
+        ):
+            validate_campaign_result(
+                broken,
+                request=self.request,
+                plan=self.plan,
+                catalog=self.catalog,
+                policy=self.policy,
+            )
+
+    def test_negative_adaptive_stop_covers_every_target_label_surface_pair(self) -> None:
+        request = copy.deepcopy(self.request)
+        question = next(row for row in request["analysis_questions"] if row["question_id"] == "verify_coding_work")
+        question["target_label_ids"] = ["coding", "data"]
+        _rehash(request, "request_sha256")
+        plan = build_campaign_plan(request=request, catalog=self.catalog, policy=self.policy)
+        result = copy.deepcopy(self.result)
+        result["request_sha256"] = request["request_sha256"]
+        result["plan_sha256"] = plan["plan_sha256"]
+        _complete_adaptive_recall(result, plan)
+        _rehash(result, "result_sha256")
+        with self.assertRaisesRegex(
+            ResearchOrchestrationError,
+            "portable_result_adaptive_target_label_coverage_invalid",
+        ):
+            validate_campaign_result(
+                result,
+                request=request,
+                plan=plan,
+                catalog=self.catalog,
+                policy=self.policy,
+            )
+
+    def test_adaptive_frontier_audit_is_content_addressed_and_recomputable(self) -> None:
+        result = copy.deepcopy(self.result)
+        _complete_adaptive_recall(result, self.plan)
+        outcome = next(
+            row for row in result["semantic_recall_outcomes"] if row["terminal_state"] == "adaptive_complete"
+        )
+        decision = outcome["adaptive_stop_decision"]
+        decision["scope_frontier_audit"]["question_id"] = "discover_research_topics"
+        _rehash(decision["scope_frontier_audit"], "audit_sha256")
+        decision["scope_frontier_audit_ref"] = f"sha256:{decision['scope_frontier_audit']['audit_sha256']}"
+        _rehash(decision, "decision_sha256")
+        _rehash(result, "result_sha256")
+        with self.assertRaisesRegex(
+            ResearchOrchestrationError,
+            "portable_result_scope_frontier_audit_invalid",
+        ):
+            validate_campaign_result(
+                result,
+                request=self.request,
+                plan=self.plan,
+                catalog=self.catalog,
+                policy=self.policy,
+            )
+
+    def test_positive_target_match_can_stop_before_the_alias_matrix_is_exhausted(self) -> None:
+        result = copy.deepcopy(self.result)
+        _complete_adaptive_recall(result, self.plan)
+        account_ref = "xacct_fixture_author"
+        matching_attempts = [row for row in result["semantic_recall_attempts"] if row["x_account_ref"] == account_ref]
+        winner = matching_attempts[0]
+        result["semantic_recall_attempts"] = [
+            row for row in result["semantic_recall_attempts"] if row["x_account_ref"] != account_ref
+        ] + [winner]
+        evidence_id = "obs_semantic_target_proven"
+        evidence_text = "Fixture author explicitly reports current coding research."
+        winner.update(
+            {
+                "execution_state": "completed",
+                "bound_observation_count": 1,
+                "new_unique_observation_refs": [evidence_id],
+                "new_target_evidence_refs": [evidence_id],
+            }
+        )
+        result["observations"].append(
+            {
+                "observation_id": evidence_id,
+                "x_account_ref": account_ref,
+                "surface": winner["surface"],
+                "platform_object_id": "3001",
+                "canonical_url": "https://x.com/fixture_author/status/3001",
+                "author_platform_user_id": None,
+                "author_handle": "fixture_author",
+                "published_at": "2026-07-17T10:00:00Z",
+                "observed_at": "2026-07-18T08:00:00Z",
+                "text_or_excerpt": evidence_text,
+                "content_sha256": orchestration.text_sha256(evidence_text),
+                "source_status": "fixture_synthetic",
+                "receipt_ref": winner["receipt_ref"],
+            }
+        )
+        dimension = next(
+            row
+            for row in result["dimension_results"]
+            if row["x_account_ref"] == account_ref and row["question_id"] == "verify_coding_work"
+        )
+        dimension["evidence_refs"].append(evidence_id)
+        outcome = next(
+            row
+            for row in result["semantic_recall_outcomes"]
+            if row["x_account_ref"] == account_ref and row["question_id"] == "verify_coding_work"
+        )
+        outcome.update(
+            {
+                "terminal_state": "target_match_proven",
+                "attempted_query_sha256s": [winner["query_sha256"]],
+                "stop_reason": "configured_target_match_proven",
+                "receipt_refs": [winner["receipt_ref"]],
+                "adaptive_stop_decision": None,
+            }
+        )
+        result["coverage"]["observation_count"] += 1
+        source_bound_metric = next(
+            row for row in result["coverage"]["metric_values"] if row["metric_id"] == "source_bound_evidence_rate"
+        )
+        source_bound_metric["denominator"] += 1
+        _rehash(result, "result_sha256")
+        validate_campaign_result(
+            result,
+            request=self.request,
+            plan=self.plan,
+            catalog=self.catalog,
+            policy=self.policy,
+        )
+
+    def test_fixture_and_account_resolution_provenance_cannot_be_laundered(self) -> None:
+        result = copy.deepcopy(self.result)
+        result["observations"][0]["source_status"] = "model_mediated_unverified"
+        _rehash(result, "result_sha256")
+        with self.assertRaisesRegex(
+            ResearchOrchestrationError,
+            "portable_result_observation_source_status_invalid",
+        ):
+            validate_campaign_result(
+                result,
+                request=self.request,
+                plan=self.plan,
+                catalog=self.catalog,
+                policy=self.policy,
+            )
+
+        result = copy.deepcopy(self.result)
+        result["handle_resolution_evidence"][0]["query_text"] += " tampered"
+        _rehash(result, "result_sha256")
+        with self.assertRaisesRegex(
+            ResearchOrchestrationError,
+            "portable_result_handle_resolution_evidence_hash_invalid",
+        ):
+            validate_campaign_result(
+                result,
+                request=self.request,
+                plan=self.plan,
+                catalog=self.catalog,
+                policy=self.policy,
+            )
+
+    def test_unseeded_same_name_handle_stays_an_auditable_ambiguous_proposal(self) -> None:
+        result = copy.deepcopy(self.result)
+        account_ref = "xacct_same_name_candidate"
+        result["external_accounts"].append(
+            {
+                "x_account_ref": account_ref,
+                "platform_user_id": None,
+                "current_handle": "same_name_ai",
+                "profile_url": "https://x.com/same_name_ai",
+                "identity_status": "provisional_handle",
+                "handle_history_proposals": [],
+            }
+        )
+        query_text = "Resolve seed_name_only against https://x.com/same_name_ai"
+        observed_value = "Same Name AI researcher profile"
+        receipt = {
+            "schema_version": "x.handle_resolution.retrieval_receipt.v1",
+            "query_sha256": orchestration.text_sha256(query_text),
+            "canonical_url": "https://x.com/same_name_ai",
+            "observed_at": "2026-07-18T08:00:00Z",
+            "content_sha256": orchestration.text_sha256(observed_value),
+            "source_status": "fixture_synthetic",
+            "receipt_locator": "fixture://receipt/handle-resolution/same-name-ai",
+            "receipt_sha256": "",
+        }
+        _rehash(receipt, "receipt_sha256")
+        evidence_id = "handle_resolution_same_name_candidate"
+        result["handle_resolution_evidence"].append(
+            {
+                "evidence_id": evidence_id,
+                "seed_ref": "seed_name_only",
+                "x_account_ref": account_ref,
+                "evidence_kind": "x_profile_name",
+                "canonical_url": "https://x.com/same_name_ai",
+                "observed_at": "2026-07-18T08:00:00Z",
+                "query_text": query_text,
+                "query_sha256": orchestration.text_sha256(query_text),
+                "observed_value": observed_value,
+                "content_sha256": orchestration.text_sha256(observed_value),
+                "source_status": "fixture_synthetic",
+                "receipt_ref": f"sha256:{receipt['receipt_sha256']}",
+                "retrieval_receipt": receipt,
+            }
+        )
+        result["cross_source_link_proposals"].append(
+            {
+                "proposal_id": "link_seed_name_only_to_same_name_ai",
+                "seed_ref": "seed_name_only",
+                "x_account_ref": account_ref,
+                "status": "ambiguous",
+                "evidence_refs": [evidence_id],
+                "source_status": "fixture_synthetic",
+                "human_review_required": True,
+                "automatic_merge_authorized": False,
+            }
+        )
+        result["coverage"]["resolved_account_count"] += 1
+        _rehash(result, "result_sha256")
+        validate_campaign_result(
+            result,
+            request=self.request,
+            plan=self.plan,
+            catalog=self.catalog,
+            policy=self.policy,
+        )
+
+        wrong_host = copy.deepcopy(result)
+        evidence = wrong_host["handle_resolution_evidence"][-1]
+        evidence["canonical_url"] = "https://example.com/same_name_ai"
+        evidence["retrieval_receipt"]["canonical_url"] = evidence["canonical_url"]
+        _rehash(evidence["retrieval_receipt"], "receipt_sha256")
+        evidence["receipt_ref"] = f"sha256:{evidence['retrieval_receipt']['receipt_sha256']}"
+        _rehash(wrong_host, "result_sha256")
+        with self.assertRaisesRegex(
+            ResearchOrchestrationError,
+            "portable_result_handle_resolution_evidence_binding_invalid",
+        ):
+            validate_campaign_result(
+                wrong_host,
+                request=self.request,
+                plan=self.plan,
+                catalog=self.catalog,
+                policy=self.policy,
+            )
+
+        result = copy.deepcopy(self.result)
+        result["handle_resolution_evidence"] = []
+        result["cross_source_link_proposals"][0]["evidence_refs"] = [
+            "fixture://external/linkedin/fixture_researcher#x-link"
+        ]
+        _rehash(result, "result_sha256")
+        with self.assertRaisesRegex(
+            ResearchOrchestrationError,
+            "portable_result_link_proposal_resolution_evidence_missing",
+        ):
+            validate_campaign_result(
+                result,
+                request=self.request,
+                plan=self.plan,
+                catalog=self.catalog,
+                policy=self.policy,
+            )
+
+    def test_optional_no_result_cannot_hide_failed_attempt_and_evidence_is_bound(self) -> None:
+        result = copy.deepcopy(self.result)
+        attempt = result["optional_channel_attempts"][0]
+        attempt.update(
+            {
+                "execution_state": "failed",
+                "continuation_state": "unknown",
+                "input_continuation_ref": None,
+                "continuation_ref": None,
+            }
+        )
+        _rehash(result, "result_sha256")
+        with self.assertRaisesRegex(
+            ResearchOrchestrationError,
+            "portable_result_optional_no_result_invalid",
+        ):
+            validate_campaign_result(
+                result,
+                request=self.request,
+                plan=self.plan,
+                catalog=self.catalog,
+                policy=self.policy,
+            )
+
+        result = copy.deepcopy(self.result)
+        attempt = result["optional_channel_attempts"][0]
+        evidence_text = "Fixture direct-credit page names one project contributor."
+        evidence_id = "optional_evidence_hash_bound"
+        result["optional_channel_evidence"] = [
+            {
+                "evidence_id": evidence_id,
+                "task_id": attempt["task_id"],
+                "evidence_kind": "project_direct_credit",
+                "canonical_url": "https://fixture.invalid/project/credits",
+                "observed_at": "2026-07-18T08:00:00Z",
+                "text_or_excerpt": evidence_text,
+                "content_sha256": "0" * 64,
+                "receipt_ref": attempt["receipt_ref"],
+                "source_status": "fixture_synthetic",
+            }
+        ]
+        attempt.update(
+            {
+                "execution_state": "completed",
+                "bound_evidence_count": 1,
+                "evidence_refs": [evidence_id],
+            }
+        )
+        result["optional_channel_outcomes"][0].update(
+            {
+                "terminal_state": "completed",
+                "evidence_refs": [evidence_id],
+            }
+        )
+        _rehash(result, "result_sha256")
+        with self.assertRaisesRegex(
+            ResearchOrchestrationError,
+            "portable_result_optional_evidence_invalid",
+        ):
+            validate_campaign_result(
+                result,
+                request=self.request,
+                plan=self.plan,
+                catalog=self.catalog,
+                policy=self.policy,
+            )
+
+    def test_exploratory_dimension_cannot_claim_target_state(self) -> None:
+        result = copy.deepcopy(self.result)
+        exploratory = next(
+            row for row in result["dimension_results"] if row["question_id"] == "discover_research_topics"
+        )
+        exploratory["relevance_state"] = "target_adjacent"
+        _rehash(result, "result_sha256")
+        with self.assertRaisesRegex(
+            ResearchOrchestrationError,
+            "portable_result_exploratory_dimension_state_invalid",
+        ):
+            validate_campaign_result(
+                result,
+                request=self.request,
+                plan=self.plan,
+                catalog=self.catalog,
+                policy=self.policy,
+            )
+
+    def test_native_call_cost_denominator_includes_failed_optional_calls(self) -> None:
+        result = copy.deepcopy(self.result)
+        for attempt in result["surface_attempts"]:
+            attempt["source_status"] = "receipt_bound"
+        for observation in result["observations"]:
+            observation["source_status"] = "source_bound"
+        for row in result["dimension_results"] + result["exploratory_findings"]:
+            row["source_status"] = "source_bound"
+        optional_attempt = result["optional_channel_attempts"][0]
+        optional_attempt.update(
+            {
+                "source_status": "receipt_bound",
+                "execution_state": "failed",
+                "continuation_state": "unknown",
+                "continuation_ref": None,
+            }
+        )
+        result["optional_channel_outcomes"][0].update(
+            {
+                "terminal_state": "failed",
+                "source_status": "receipt_bound",
+            }
+        )
+        result["coverage"]["coverage_source_status"] = "receipt_bound"
+        metrics = {row["metric_id"]: row for row in result["coverage"]["metric_values"]}
+        metrics["source_bound_evidence_rate"]["numerator"] = 4
+        metrics["target_core_unique_account_yield_per_native_call"].update({"numerator": 1, "denominator": 5})
+        _rehash(result, "result_sha256")
+        validate_campaign_result(
+            result,
+            request=self.request,
+            plan=self.plan,
+            catalog=self.catalog,
+            policy=self.policy,
+        )
+
+        result["coverage"]["metric_values"][5]["denominator"] = 4
+        _rehash(result, "result_sha256")
+        with self.assertRaisesRegex(
+            ResearchOrchestrationError,
+            "portable_result_quality_metric_value_invalid",
+        ):
+            validate_campaign_result(
+                result,
+                request=self.request,
+                plan=self.plan,
+                catalog=self.catalog,
+                policy=self.policy,
+            )
+
+    def test_target_direction_rate_denominator_is_question_account_rows(self) -> None:
+        request = copy.deepcopy(self.request)
+        request["analysis_questions"].append(
+            {
+                "question_id": "verify_data_work",
+                "analysis_mode": "verification",
+                "question_text": "Does this account provide evidence of data research?",
+                "dimension_id": "research_workstream",
+                "target_label_ids": ["data"],
+                "target_match_operator": "any",
+                "recall_execution_policy": "authored_surface_only",
+                "adaptive_stop_policy": None,
+            }
+        )
+        _rehash(request, "request_sha256")
+        plan = build_campaign_plan(request=request, catalog=self.catalog, policy=self.policy)
+        result = copy.deepcopy(self.result)
+        result["request_sha256"] = request["request_sha256"]
+        result["plan_sha256"] = plan["plan_sha256"]
+        for account in result["external_accounts"]:
+            account_ref = account["x_account_ref"]
+            result["dimension_results"].append(
+                {
+                    "x_account_ref": account_ref,
+                    "question_id": "verify_data_work",
+                    "dimension_id": "research_workstream",
+                    "matched_label_ids": [],
+                    "relevance_state": "out_of_scope",
+                    "target_activity_temporal_state": "unsupported",
+                    "matches_temporal_filter": False,
+                    "evidence_refs": [],
+                    "reason": "fixture carries no evidence for the second verification question",
+                    "source_status": "model_mediated_unverified",
+                }
+            )
+            surface_receipts = [
+                row["receipt_ref"] for row in result["surface_attempts"] if row["x_account_ref"] == account_ref
+            ]
+            result["semantic_recall_outcomes"].append(
+                {
+                    "x_account_ref": account_ref,
+                    "question_id": "verify_data_work",
+                    "execution_policy": "authored_surface_only",
+                    "terminal_state": "authored_surface_complete",
+                    "attempted_query_sha256s": [],
+                    "stop_reason": "broad_authored_surface_completed",
+                    "receipt_refs": surface_receipts,
+                    "adaptive_stop_decision": None,
+                }
+            )
+        metrics = {row["metric_id"]: row for row in result["coverage"]["metric_values"]}
+        metrics["target_direction_core_rate"].update({"numerator": 1, "denominator": 4})
+        metrics["target_direction_active_rate"].update({"numerator": 2, "denominator": 4})
+        metrics["evidence_backed_temporal_state_rate"].update({"numerator": 4, "denominator": 6})
+        _rehash(result, "result_sha256")
+        validate_campaign_result(
+            result,
+            request=request,
+            plan=plan,
+            catalog=self.catalog,
+            policy=self.policy,
+        )
+
+        metrics["target_direction_core_rate"]["denominator"] = 2
+        _rehash(result, "result_sha256")
+        with self.assertRaisesRegex(
+            ResearchOrchestrationError,
+            "portable_result_quality_metric_value_invalid",
+        ):
+            validate_campaign_result(
+                result,
+                request=request,
+                plan=plan,
+                catalog=self.catalog,
+                policy=self.policy,
+            )
+
     def test_identity_and_receipt_bindings_fail_closed(self) -> None:
         result = copy.deepcopy(self.result)
         for account in result["external_accounts"]:
@@ -509,6 +1085,7 @@ class ResearchOrchestrationTests(unittest.TestCase):
                 "question_id": "verify_coding_work",
                 "label_id": recall_query["label_id"],
                 "ordinal": 1,
+                "page_ordinal": 1,
                 "surface": recall_query["surface"],
                 "query_text": recall_query["query_text"],
                 "query_sha256": orchestration.text_sha256(recall_query["query_text"]),
@@ -518,6 +1095,7 @@ class ResearchOrchestrationTests(unittest.TestCase):
                 "bound_observation_count": 0,
                 "result_truncated": False,
                 "continuation_state": "exhausted",
+                "input_continuation_ref": None,
                 "continuation_ref": None,
                 "new_unique_observation_refs": [],
                 "new_target_evidence_refs": [],
@@ -548,6 +1126,7 @@ class ResearchOrchestrationTests(unittest.TestCase):
                 "question_id": "verify_coding_work",
                 "label_id": recall_query["label_id"],
                 "ordinal": 1,
+                "page_ordinal": 1,
                 "surface": recall_query["surface"],
                 "query_text": recall_query["query_text"],
                 "query_sha256": orchestration.text_sha256(recall_query["query_text"]),
@@ -557,6 +1136,7 @@ class ResearchOrchestrationTests(unittest.TestCase):
                 "bound_observation_count": 0,
                 "result_truncated": False,
                 "continuation_state": "exhausted",
+                "input_continuation_ref": None,
                 "continuation_ref": None,
                 "new_unique_observation_refs": [],
                 "new_target_evidence_refs": [],
@@ -577,8 +1157,7 @@ class ResearchOrchestrationTests(unittest.TestCase):
         row = next(
             item
             for item in result["dimension_results"]
-            if item["x_account_ref"] == "xacct_fixture_author"
-            and item["question_id"] == "verify_coding_work"
+            if item["x_account_ref"] == "xacct_fixture_author" and item["question_id"] == "verify_coding_work"
         )
         row["evidence_refs"] = ["obs_linked_post"]
         _rehash(result, "result_sha256")
@@ -629,17 +1208,13 @@ class ResearchOrchestrationTests(unittest.TestCase):
 
     def test_discovered_accounts_require_candidate_authored_followup_before_complete(self) -> None:
         request = copy.deepcopy(self.request)
-        request["seed_inputs"] = [
-            row for row in request["seed_inputs"] if row["seed_ref"] != "seed_name_only"
-        ]
+        request["seed_inputs"] = [row for row in request["seed_inputs"] if row["seed_ref"] != "seed_name_only"]
         _rehash(request, "request_sha256")
         plan = build_campaign_plan(request=request, catalog=self.catalog, policy=self.policy)
         result = copy.deepcopy(self.result)
         result["request_sha256"] = request["request_sha256"]
         result["plan_sha256"] = plan["plan_sha256"]
-        result["subject_outcomes"] = [
-            row for row in result["subject_outcomes"] if row["seed_ref"] != "seed_name_only"
-        ]
+        result["subject_outcomes"] = [row for row in result["subject_outcomes"] if row["seed_ref"] != "seed_name_only"]
         result["coverage"]["subjects_total"] = 2
         result["coverage"]["terminal_subject_outcomes"] = 2
         cross_source_metric = next(
@@ -669,12 +1244,27 @@ class ResearchOrchestrationTests(unittest.TestCase):
                 "handle_history_proposals": [],
             }
         )
+        optional_evidence_id = "optional_evidence_direct_credit_lead"
+        optional_evidence_text = "Fixture project credits @pending_lead as a contributor."
+        result["optional_channel_evidence"] = [
+            {
+                "evidence_id": optional_evidence_id,
+                "task_id": plan["optional_channel_tasks"][0]["task_id"],
+                "evidence_kind": "project_direct_credit",
+                "canonical_url": "https://fixture.invalid/project/direct-credit/lead",
+                "observed_at": "2026-07-18T08:00:00Z",
+                "text_or_excerpt": optional_evidence_text,
+                "content_sha256": orchestration.text_sha256(optional_evidence_text),
+                "receipt_ref": "fixture://receipt/optional/direct-credit/1",
+                "source_status": "fixture_synthetic",
+            }
+        ]
         result["discovery_origins"] = [
             {
                 "x_account_ref": "xacct_discovered_pending",
                 "origin_task_id": plan["optional_channel_tasks"][0]["task_id"],
                 "channel_id": "project_direct_credit",
-                "evidence_refs": ["fixture://optional/direct-credit/lead"],
+                "evidence_refs": [optional_evidence_id],
                 "source_status": "fixture_synthetic",
                 "requires_candidate_authored_followup": True,
             }
@@ -682,18 +1272,16 @@ class ResearchOrchestrationTests(unittest.TestCase):
         result["optional_channel_outcomes"][0].update(
             {
                 "terminal_state": "completed",
-                "evidence_refs": ["fixture://optional/direct-credit/lead"],
+                "evidence_refs": [optional_evidence_id],
                 "reason": "synthetic direct-credit discovery",
             }
         )
-        result["optional_channel_attempts"][0]["evidence_refs"] = [
-            "fixture://optional/direct-credit/lead"
-        ]
+        result["optional_channel_attempts"][0]["evidence_refs"] = [optional_evidence_id]
         result["optional_channel_attempts"][0].update(
             {
                 "execution_state": "completed",
                 "bound_evidence_count": 1,
-                "continuation_state": "unknown",
+                "continuation_state": "exhausted",
             }
         )
         result["coverage"]["resolved_account_count"] = 3

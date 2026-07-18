@@ -36,7 +36,9 @@ def _selection() -> dict:
         {
             "source_subject_ref": "selected_linkedin_subject",
             "source_record_ref": "fixture://product/snapshot/candidate-1",
-            "source_record_sha256": "",
+            "source_record_sha256": "1" * 64,
+            "source_public_summary_sha256": "3" * 64,
+            "exported_seed_sha256": "",
             "source_status": "source_bound",
             "source_kind": "linkedin_profile",
             "source_profile_url": "https://www.linkedin.com/in/selected-researcher",
@@ -58,9 +60,37 @@ def _selection() -> dict:
             ],
         },
         {
-            "source_subject_ref": "selected_name_only_subject",
+            "source_subject_ref": "selected_in_progress_subject",
             "source_record_ref": "fixture://product/snapshot/candidate-2",
-            "source_record_sha256": "",
+            "source_record_sha256": "2" * 64,
+            "source_public_summary_sha256": "4" * 64,
+            "exported_seed_sha256": "",
+            "source_status": "source_bound",
+            "source_kind": "professional_profile",
+            "source_profile_url": "https://example.com/selected-in-progress",
+            "name_text": "Selected In Progress",
+            "x_handle_proposals": [
+                {
+                    "handle": "progress_x",
+                    "binding_status": "cross_source_link_proposed",
+                    "evidence_ref": "fixture://product/snapshot/candidate-2#x-handle",
+                }
+            ],
+            "professional_facts": [
+                {
+                    "fact_type": "role",
+                    "value": "Research Engineer",
+                    "temporal_state": "current",
+                    "evidence_ref": "fixture://product/snapshot/candidate-2#role",
+                }
+            ],
+        },
+        {
+            "source_subject_ref": "selected_name_only_subject",
+            "source_record_ref": "fixture://product/snapshot/candidate-3",
+            "source_record_sha256": "5" * 64,
+            "source_public_summary_sha256": "6" * 64,
+            "exported_seed_sha256": "",
             "source_status": "source_bound",
             "source_kind": "name_only",
             "source_profile_url": None,
@@ -70,7 +100,7 @@ def _selection() -> dict:
         },
     ]
     for subject in subjects:
-        subject["source_record_sha256"] = _content_sha256(subject, "source_record_sha256")
+        subject["exported_seed_sha256"] = canonical_sha256(adapter._portable_seed(subject))
     selection = {
         "schema_version": "sourcing.x_first.subject_selection.v1",
         "selection_id": "fixture_selected_subjects",
@@ -129,7 +159,7 @@ class SelectedSubjectAdapterTests(unittest.TestCase):
             policy=self.policy,
         )
 
-    def test_round_trip_builds_one_authored_task_and_one_resolution_row(self) -> None:
+    def test_round_trip_builds_authored_tasks_and_one_resolution_row(self) -> None:
         request, binding = self._build()
         validate_subject_selection(self.selection)
         validate_request_binding(binding, selection=self.selection, request=request)
@@ -144,17 +174,24 @@ class SelectedSubjectAdapterTests(unittest.TestCase):
 
         self.assertEqual(
             [row["seed_ref"] for row in request["seed_inputs"]],
-            ["selected_linkedin_subject", "selected_name_only_subject"],
+            [
+                "selected_in_progress_subject",
+                "selected_linkedin_subject",
+                "selected_name_only_subject",
+            ],
         )
         self.assertTrue(all(row["source_status"] == "source_bound" for row in request["seed_inputs"]))
         self.assertEqual(
             binding["portable_request_contract_schema_sha256"],
             contract_schema_sha256(REQUEST_SCHEMA_FILE),
         )
-        self.assertEqual(len(binding["subject_bindings"]), 2)
+        self.assertEqual(len(binding["subject_bindings"]), 3)
 
         plan = build_campaign_plan(request=request, catalog=self.catalog, policy=self.policy)
-        self.assertEqual([row["handle"] for row in plan["candidate_authored_tasks"]], ["selected_x"])
+        self.assertEqual(
+            [row["handle"] for row in plan["candidate_authored_tasks"]],
+            ["progress_x", "selected_x"],
+        )
         self.assertEqual(
             [row["seed_ref"] for row in plan["handle_resolution_queue"]],
             ["selected_name_only_subject"],
@@ -177,7 +214,7 @@ class SelectedSubjectAdapterTests(unittest.TestCase):
             ),
             (
                 "count",
-                lambda value: value["snapshot"].__setitem__("selected_candidate_count", 3),
+                lambda value: value["snapshot"].__setitem__("selected_candidate_count", 4),
                 "subject_selection_count_invalid",
             ),
             (
@@ -202,7 +239,7 @@ class SelectedSubjectAdapterTests(unittest.TestCase):
             (
                 "source_record_hash",
                 lambda value: value["subjects"][0].__setitem__("name_text", "Rebound Subject"),
-                "subject_selection_source_record_sha256_mismatch",
+                "subject_selection_exported_seed_sha256_mismatch",
             ),
         ]
         for name, mutate, expected in cases:

@@ -51,13 +51,26 @@ or mixed reply filters makes a query ineligible for the coverage denominator eve
 The result records attempts independently from observations, so a zero-yield search can still be represented without
 pretending an observation existed.
 
+Every authored-surface, semantic-recall, and optional-channel call is an ordinal page in an explicit continuation
+chain. Page 1 has `input_continuation_ref=null`; a successor must consume the exact prior `continuation_ref`. Failed
+calls do not advance the frontier, so a retry consumes the same input continuation. A chain is complete only when its
+last successful page says `exhausted`. A result with an available continuation is persistable as `partial` by marking
+the subject `research_in_progress`; changing that artifact to `complete` fails validation.
+
 For `authored_surface_only`, exploratory, verification, and hybrid questions all consume the broad Post and Reply
 corpus and emit no alias-search tasks. This is the default fit for selected-person research: retrieve the person's own
 surface once, then use the configured taxonomy to explore or judge it. `adaptive_marginal_gain` and
 `exhaustive_alias_matrix` additionally expand catalog aliases into separate quoted, handle-scoped Post and Reply
 queries; those calls are recorded as `semantic_recall_attempts`. One account is retrieved once for all questions, so
 the planner does not duplicate the broad Post/Reply collection per question. Exploratory questions without predefined
-labels may propose new topics for later taxonomy review.
+labels may propose new topics for later taxonomy review. Their dimension row remains `ambiguous` with no configured
+matched labels; the discovered topics live only in `exploratory_findings`.
+
+Adaptive verification has two distinct terminal paths. A positive `target_match_proven` stop is allowed as soon as
+the configured `any` or `all` operator is proven by bound target evidence and all pages of the attempted queries are
+exhausted. A negative low-marginal-gain stop must first cover every configured target-label x Post/Reply pair, exhaust
+every attempted query chain, and carry an inline, recomputable scope-frontier audit. The audit's SHA-256 is the only
+allowed `scope_frontier_audit_ref`; an arbitrary path or prose reference is not accepted.
 
 ## Fresh Research Scope Catalog
 
@@ -131,9 +144,16 @@ The result artifact keeps these layers separate:
 source subject -> reversible link proposal -> X external account -> Post/Reply observations
 ```
 
-Every input subject receives exactly one terminal outcome. Post/Reply evidence belongs first to an X external account,
-not to a canonical person. The main product's adjudication owner must accept a link proposal before it may materialize
-that evidence on a person record.
+Every input subject receives exactly one outcome. `research_in_progress` preserves a resumable account and its
+attempt/observation frontier without claiming terminal analysis; the other subject states are terminal. Post/Reply
+evidence belongs first to an X external account, not to a canonical person. The main product's adjudication owner must
+accept a link proposal before it may materialize that evidence on a person record.
+
+A cross-source link proposal must cite account-side `handle_resolution_evidence`, even when the input already proposed
+a handle. Each evidence row binds the seed and X account to an X-host profile URL, observation time, query text/hash,
+observed value/content hash, and an inline content-addressed retrieval receipt. Name-only same-name matches can remain
+auditable `ambiguous` proposals, but cannot become an automatic merge or analyzed subject in the same pre-resolution
+plan.
 
 Selected people from `sourcing-ai-agent` use the product-owned
 `sourcing.x_first.subject_selection.v1` artifact. The X-First adapter validates the vendored schema byte digest,
@@ -146,10 +166,11 @@ adding product-internal fields to the generic campaign request.
 
 `x.portable.research_campaign.result.v1` binds the complete request, plan, and catalog hashes. It contains:
 
-- terminal subject outcomes;
+- subject outcomes, including a resumable `research_in_progress` state;
 - X external accounts and handle-history proposals;
+- query-, content-, and receipt-bound handle-resolution evidence;
 - reversible cross-source link proposals;
-- optional-channel terminal outcomes and discovery origins that require authored-surface follow-up;
+- optional-channel evidence, attempts, terminal outcomes, and discovery origins that require authored-surface follow-up;
 - mechanically attributable Post/Reply attempts;
 - separately bound semantic-recall attempts;
 - account-bound Post/Reply observations;
@@ -159,13 +180,17 @@ adding product-internal fields to the generic campaign request.
 - denominator-bound generic coverage metrics and limitations.
 
 Evidence status is preserved as `fixture_synthetic`, `source_bound`, `human_supplied_unverified`, or
-`model_mediated_unverified`. A dimension result
-cannot claim `source_bound` when any supporting observation has a weaker status. Fixture attempts are explicitly
-synthetic and cannot be presented as Grok/X coverage.
+`model_mediated_unverified`. A dimension result cannot claim `source_bound` when any supporting observation has a
+weaker status. Fixture attempts are explicitly synthetic and cannot be relabeled as unverified or presented as
+Grok/X coverage. Optional evidence has its own URL, timestamp, excerpt hash, receipt and task binding; a `no_result`
+outcome requires a fully exhausted chain of only `no_result` attempts and cannot conceal a failed call.
 
 `complete`, `partial`, and `failed` are derived states rather than producer prose. `complete` requires every input
-subject to be analyzed, both authored surfaces for every planned account, all planned semantic-recall attempts, all
-optional-channel outcomes, and a terminal experience row for every analyzed account when that queue is enabled.
+subject to be analyzed, exhausted Post and Reply chains for every analyzed account, a valid question/account semantic
+terminal path, successful terminal optional-channel outcomes, and a terminal experience row for every analyzed
+account when that queue is enabled. An authored-surface question uses the explicit
+`broad_authored_surface_completed` stop reason; it does not pretend that a missing alias matrix was the stopping
+cause.
 
 ## Optional China/Asia experience verification
 
@@ -184,18 +209,23 @@ The policy registry defines metrics in terms of the configured target direction:
 
 | Metric | Numerator | Denominator |
 | --- | --- | --- |
-| authored both-surface coverage | resolved X accounts with receipt-bound Post and Reply attempts | resolved X accounts |
+| authored both-surface coverage | planned accounts with exhausted Post and Reply chains | planned candidate-authored tasks |
 | source-bound evidence rate | source-bound Post/Reply observations | all retained Post/Reply observations |
 | target-direction core rate | `target_core` terminal verification results | terminal target-direction verification results |
 | target-direction active rate | `target_core + target_adjacent` results | terminal target-direction verification results |
 | evidence-backed temporal-state rate | supported temporal results with evidence | temporal results evaluated |
-| marginal unique target accounts per call | newly qualified unique X accounts in the evaluation window | completed native-X calls in that window |
+| marginal unique target accounts per call | unique `target_core` X accounts | all authored, semantic, and optional native calls, including failed calls |
 | cross-source handle-resolution rate | non-X seeds ending with a reviewable X account proposal | non-X seeds requiring resolution |
 
 There is no fixed business candidate, observation, answer-length, or call cap in this contract. A future live
 execution policy should stop on sustained low marginal target yield plus a scope-frontier audit, with thresholds owned
 by that campaign. Technical deadlines, byte limits, and provider limits remain safety ceilings rather than business
 completion criteria.
+
+`target_direction_core_rate` and `target_direction_active_rate` are owned per question/account result row, so multiple
+configured verification questions do not collapse into one account denominator. The marginal-call metric is emitted
+as `0/0` unless every included attempt is receipt-bound. `coverage_source_status` is likewise derived from all authored,
+semantic, and optional attempts; mixed fixture provenance is rejected rather than downgraded or upgraded.
 
 ## Product integration topology
 
@@ -224,6 +254,7 @@ CI. The X-First result is an evidence-source artifact, not a product writer.
 | Campaign intent and cross-source seeds | portable request producer | bad hash, source host confusion, ambiguous field shape |
 | Deterministic task resolution | `research_orchestration.py` + portable plan schema | plan differs from recomputation |
 | External-account observations and semantic outcomes | portable result producer plus receipts | bad bindings, missing terminal outcome, trust upgrade |
+| Handle-resolution evidence | content-addressed retrieval receipt plus downstream identity owner | wrong X host/handle, query/content/hash drift, missing account-side evidence |
 | Optional-channel execution and discovered seeds | optional task outcomes + discovery origins | missing outcome, unbound origin, or skipped required follow-up |
 | Source subject to X account link | downstream identity adjudication owner | automatic merge or missing human review |
 | Canonical person/evidence materialization | `sourcing-ai-agent` product owners | direct X-First write/import |
@@ -232,10 +263,12 @@ CI. The X-First result is an evidence-source artifact, not a product writer.
 ## Current validation boundary
 
 The checked campaign fixture includes one asserted X account, one LinkedIn-origin proposed handle, and one unresolved
-name-only seed. A separate selected-subject regression builds a source-bound LinkedIn seed and a source-bound name-only
+name-only seed. The LinkedIn-origin proposal cites a synthetic but fully content-addressed account-side resolution
+receipt. A separate selected-subject regression builds a source-bound LinkedIn seed and a source-bound name-only
 seed from the product-owned selection artifact, uses verification with `authored_surface_only`, and verifies the exact
 request binding. All checked campaign attempts and observations remain `fixture_synthetic`; no provider or product call
-occurs.
+occurs. The orchestration registry covers both selected-subject schemas in addition to policy, catalog, request, plan,
+and result schemas, so their presence is checked at the portable boundary.
 
 Run:
 

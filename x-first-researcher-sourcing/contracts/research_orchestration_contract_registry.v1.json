@@ -21,6 +21,14 @@
     {
       "schema_version": "x.portable.research_campaign.result.v1",
       "path": "contracts/x.portable.research_campaign.result.v1.schema.json"
+    },
+    {
+      "schema_version": "sourcing.x_first.subject_selection.v1",
+      "path": "contracts/sourcing.x_first.subject_selection.v1.schema.json"
+    },
+    {
+      "schema_version": "x.portable.selected_subject.request_binding.v1",
+      "path": "contracts/x.portable.selected_subject.request_binding.v1.schema.json"
     }
   ],
   "checked_assets": [

@@ -33,6 +33,12 @@
           "x_account_refs",
           "link_proposal_refs",
           "observation_refs",
+          "observation_provenance",
+          "observation_provenance_total_count",
+          "observation_provenance_truncated",
+          "handle_resolution_provenance",
+          "handle_resolution_provenance_total_count",
+          "handle_resolution_provenance_truncated",
           "verification_summaries",
           "review_state"
         ],
@@ -41,11 +47,51 @@
           "source_record_ref": {"type": "string", "minLength": 1, "maxLength": 512},
           "seed_ref": {"$ref": "#/$defs/identifier"},
           "terminal_state": {
-            "enum": ["analyzed", "handle_resolution_required", "no_verified_account", "failed"]
+            "enum": [
+              "analyzed",
+              "research_in_progress",
+              "handle_resolution_required",
+              "no_verified_account",
+              "failed"
+            ]
           },
           "x_account_refs": {"$ref": "#/$defs/id_array"},
           "link_proposal_refs": {"$ref": "#/$defs/id_array"},
           "observation_refs": {"$ref": "#/$defs/id_array"},
+          "observation_provenance": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["observation_id", "source_status", "receipt_ref", "content_sha256"],
+              "properties": {
+                "observation_id": {"$ref": "#/$defs/identifier"},
+                "source_status": {"$ref": "#/$defs/source_status"},
+                "receipt_ref": {"type": "string", "minLength": 1, "maxLength": 512},
+                "content_sha256": {"$ref": "#/$defs/sha256"}
+              }
+            }
+          },
+          "observation_provenance_total_count": {"type": "integer", "minimum": 0},
+          "observation_provenance_truncated": {"type": "boolean"},
+          "handle_resolution_provenance": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["evidence_id", "source_status", "receipt_ref", "content_sha256"],
+              "properties": {
+                "evidence_id": {"$ref": "#/$defs/identifier"},
+                "source_status": {"$ref": "#/$defs/source_status"},
+                "receipt_ref": {"type": "string", "minLength": 1, "maxLength": 512},
+                "content_sha256": {"$ref": "#/$defs/sha256"}
+              }
+            }
+          },
+          "handle_resolution_provenance_total_count": {"type": "integer", "minimum": 0},
+          "handle_resolution_provenance_truncated": {"type": "boolean"},
           "verification_summaries": {
             "type": "array",
             "items": {
@@ -57,7 +103,8 @@
                 "matched_label_ids",
                 "relevance_state",
                 "target_activity_temporal_state",
-                "evidence_refs"
+                "evidence_refs",
+                "source_status"
               ],
               "properties": {
                 "question_id": {"$ref": "#/$defs/identifier"},
@@ -69,13 +116,15 @@
                 "target_activity_temporal_state": {
                   "enum": ["current", "historical", "ambiguous", "unsupported", "not_applicable"]
                 },
-                "evidence_refs": {"$ref": "#/$defs/id_array"}
+                "evidence_refs": {"$ref": "#/$defs/id_array"},
+                "source_status": {"$ref": "#/$defs/source_status"}
               }
             }
           },
           "review_state": {
             "enum": [
               "identity_review_required",
+              "research_continuation_required",
               "handle_resolution_required",
               "no_verified_account",
               "execution_failed"
@@ -97,6 +146,14 @@
   "$defs": {
     "identifier": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]{0,127}$"},
     "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "source_status": {
+      "enum": [
+        "source_bound",
+        "fixture_synthetic",
+        "human_supplied_unverified",
+        "model_mediated_unverified"
+      ]
+    },
     "id_array": {
       "type": "array",
       "uniqueItems": true,

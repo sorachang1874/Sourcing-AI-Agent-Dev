@@ -1,0 +1,191 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sourcing-ai-agent.invalid/contracts/x.research_scope.catalog.v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "catalog_id",
+    "catalog_version",
+    "generated_at",
+    "scope_nodes",
+    "taxonomies",
+    "coverage_assertions",
+    "catalog_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "x.research_scope.catalog.v1"},
+    "catalog_id": {"$ref": "#/$defs/identifier"},
+    "catalog_version": {"$ref": "#/$defs/identifier"},
+    "generated_at": {"$ref": "#/$defs/timestamp"},
+    "scope_nodes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/scope_node"}
+    },
+    "taxonomies": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/taxonomy"}
+    },
+    "coverage_assertions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/coverage"}
+    },
+    "catalog_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "identifier": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]{0,127}$"},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "timestamp": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "id_array": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/identifier"}
+    },
+    "evidence_refs": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 512}
+    },
+    "scope_node": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scope_id",
+        "display_name",
+        "scope_kind",
+        "status",
+        "aliases",
+        "containment_parent_scope_ids",
+        "last_verified_at",
+        "refresh_after",
+        "evidence_refs",
+        "source_status"
+      ],
+      "properties": {
+        "scope_id": {"$ref": "#/$defs/identifier"},
+        "display_name": {"type": "string", "minLength": 1, "maxLength": 200},
+        "scope_kind": {
+          "enum": [
+            "organization",
+            "model",
+            "product",
+            "application",
+            "research_program",
+            "capability",
+            "industry",
+            "team",
+            "initiative"
+          ]
+        },
+        "status": {"enum": ["active", "historical", "unknown"]},
+        "aliases": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 200}
+        },
+        "containment_parent_scope_ids": {"$ref": "#/$defs/id_array"},
+        "last_verified_at": {"$ref": "#/$defs/timestamp"},
+        "refresh_after": {"$ref": "#/$defs/timestamp"},
+        "evidence_refs": {"$ref": "#/$defs/evidence_refs"},
+        "source_status": {
+          "enum": ["fixture_synthetic", "source_bound", "human_supplied_unverified", "model_mediated_unverified"]
+        }
+      }
+    },
+    "taxonomy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dimension_id", "display_name", "labels"],
+      "properties": {
+        "dimension_id": {"$ref": "#/$defs/identifier"},
+        "display_name": {"type": "string", "minLength": 1, "maxLength": 200},
+        "labels": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["label_id", "display_name", "aliases"],
+            "properties": {
+              "label_id": {"$ref": "#/$defs/identifier"},
+              "display_name": {"type": "string", "minLength": 1, "maxLength": 200},
+              "aliases": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {"type": "string", "minLength": 1, "maxLength": 200}
+              }
+            }
+          }
+        }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "coverage_id",
+        "root_scope_id",
+        "scope_kinds",
+        "member_scope_ids",
+        "member_set_sha256",
+        "coverage_status",
+        "refresh_method",
+        "source_status",
+        "open_gaps",
+        "last_verified_at",
+        "refresh_after",
+        "evidence_refs"
+      ],
+      "properties": {
+        "coverage_id": {"$ref": "#/$defs/identifier"},
+        "root_scope_id": {"$ref": "#/$defs/identifier"},
+        "scope_kinds": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "organization",
+              "model",
+              "product",
+              "application",
+              "research_program",
+              "capability",
+              "industry",
+              "team",
+              "initiative"
+            ]
+          }
+        },
+        "member_scope_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/identifier"}
+        },
+        "member_set_sha256": {"$ref": "#/$defs/sha256"},
+        "coverage_status": {"enum": ["complete", "partial", "unknown"]},
+        "refresh_method": {"enum": ["manual_verified", "source_snapshot", "model_assisted_review"]},
+        "source_status": {
+          "enum": ["fixture_synthetic", "source_bound", "human_supplied_unverified", "model_mediated_unverified"]
+        },
+        "open_gaps": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 1000}
+        },
+        "last_verified_at": {"$ref": "#/$defs/timestamp"},
+        "refresh_after": {"$ref": "#/$defs/timestamp"},
+        "evidence_refs": {"$ref": "#/$defs/evidence_refs"}
+      }
+    }
+  }
+}

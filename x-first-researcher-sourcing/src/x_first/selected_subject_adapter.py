@@ -27,7 +27,7 @@ SELECTION_SCHEMA_VERSION = "sourcing.x_first.subject_selection.v1"
 SELECTION_SCHEMA_FILE = "sourcing.x_first.subject_selection.v1.schema.json"
 BINDING_SCHEMA_VERSION = "x.portable.selected_subject.request_binding.v1"
 BINDING_SCHEMA_FILE = "x.portable.selected_subject.request_binding.v1.schema.json"
-SELECTION_CONTRACT_SCHEMA_SHA256 = "e487190924efeaf9bf05f5836619867a5cece66d707891f4587665c115b281bc"
+SELECTION_CONTRACT_SCHEMA_SHA256 = "86a5924d6b551b6af61cfccd9e94a426bdd046db4545e922dc8ae3bc5483b754"
 BINDING_CONTRACT_SCHEMA_SHA256 = "ef2f6dc742658a5b6507f7320bc2ed5530612e97097eadf1c3e4a46405835c1d"
 
 _FALSE_AUTHORITY = {
@@ -121,8 +121,8 @@ def validate_subject_selection(selection: Any) -> None:
         raise SelectedSubjectAdapterError("subject_selection_member_set_sha256_mismatch")
 
     for subject in subjects:
-        if subject["source_record_sha256"] != _content_sha256(subject, "source_record_sha256"):
-            raise SelectedSubjectAdapterError("subject_selection_source_record_sha256_mismatch")
+        if subject["exported_seed_sha256"] != canonical_sha256(_portable_seed(subject)):
+            raise SelectedSubjectAdapterError("subject_selection_exported_seed_sha256_mismatch")
         handles = [row["handle"].casefold() for row in subject["x_handle_proposals"]]
         if len(handles) != len(set(handles)):
             raise SelectedSubjectAdapterError("subject_selection_handle_proposal_duplicate")
@@ -130,6 +130,7 @@ def validate_subject_selection(selection: Any) -> None:
             subject["name_text"] is None
             or subject["source_profile_url"] is not None
             or subject["x_handle_proposals"]
+            or subject["professional_facts"]
         ):
             raise SelectedSubjectAdapterError("subject_selection_name_only_shape_invalid")
         if subject["source_kind"] != "name_only" and subject["name_text"] is None:

@@ -2,15 +2,42 @@ from __future__ import annotations
 
 import copy
 import inspect
+import json
 import unittest
+from pathlib import Path
 
 import sourcing_agent.x_first_portable_adapter as adapter
 from sourcing_agent.x_first_portable_adapter import (
+    ProjectionSelectionMemberSnapshot,
     XFirstPortableAdapterError,
     build_subject_selection_artifact,
     build_verification_import_preview,
     validate_subject_selection_artifact,
 )
+from sourcing_agent.x_first_portable_package import (
+    ExpectedSelectionSnapshot,
+    XFirstPortablePackageError,
+    validate_x_first_portable_package,
+)
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def _trusted_package() -> dict:
+    return json.loads(
+        (ROOT / "tests/fixtures/x_first/selected_subject_fixture_simulate_package_v1.json").read_text()
+    )
+
+
+def _expected_snapshot(package: dict) -> ExpectedSelectionSnapshot:
+    selection = package["artifacts"]["selection"]
+    snapshot = selection["snapshot"]
+    return ExpectedSelectionSnapshot(
+        workspace_ref=snapshot["workspace_ref"],
+        projection_ref=snapshot["projection_ref"],
+        membership_revision=snapshot["membership_revision"],
+        selection_artifact_sha256=selection["artifact_sha256"],
+    )
 
 
 def _bound_target() -> dict:
@@ -23,33 +50,43 @@ def _bound_target() -> dict:
     }
 
 
-def _members() -> list[dict]:
+def _members() -> list[ProjectionSelectionMemberSnapshot]:
+    grace_summary = {
+        "display_name": "Grace Example",
+        "headline": "Research Engineer",
+        "current_company": "Example AI",
+        "experience_lines": ["2022~Present, Example AI, Research Engineer"],
+        "education_lines": ["MS, Example University"],
+        "primary_email": "must-not-cross@example.invalid",
+        "raw_profile": {"must": "not cross"},
+    }
+    ada_summary = {
+        "display_name": "Ada Example",
+        "headline": "Pre-training Researcher",
+        "current_company": "Example AI",
+        "location": "San Francisco, CA",
+        "linkedin_url": "https://www.linkedin.com/in/ada-example/",
+        "summary": "Works on model training and evaluation.",
+    }
     return [
-        {
-            "projection_id": "projection_fixture",
-            "candidate_identity_key": "linkedin:grace",
-            "public_summary": {
-                "display_name": "Grace Example",
-                "headline": "Research Engineer",
-                "current_company": "Example AI",
-                "experience_lines": ["2022~Present, Example AI, Research Engineer"],
-                "education_lines": ["MS, Example University"],
-                "primary_email": "must-not-cross@example.invalid",
-                "raw_profile": {"must": "not cross"},
-            },
-        },
-        {
-            "projection_id": "projection_fixture",
-            "candidate_identity_key": "linkedin:ada",
-            "public_summary": {
-                "display_name": "Ada Example",
-                "headline": "Pre-training Researcher",
-                "current_company": "Example AI",
-                "location": "San Francisco, CA",
-                "linkedin_url": "https://www.linkedin.com/in/ada-example/",
-                "summary": "Works on model training and evaluation.",
-            },
-        },
+        ProjectionSelectionMemberSnapshot(
+            workspace_id="workspace_fixture",
+            projection_id="projection_fixture",
+            membership_revision="revision_fixture_1",
+            candidate_identity_key="linkedin:grace",
+            owner_row_sha256="1" * 64,
+            public_summary_sha256=adapter.canonical_sha256(grace_summary),
+            public_summary=grace_summary,
+        ),
+        ProjectionSelectionMemberSnapshot(
+            workspace_id="workspace_fixture",
+            projection_id="projection_fixture",
+            membership_revision="revision_fixture_1",
+            candidate_identity_key="linkedin:ada",
+            owner_row_sha256="2" * 64,
+            public_summary_sha256=adapter.canonical_sha256(ada_summary),
+            public_summary=ada_summary,
+        ),
     ]
 
 
@@ -60,146 +97,6 @@ def _selection() -> dict:
         exported_at="2026-07-18T04:00:00Z",
         x_handle_proposals_by_candidate={"linkedin:ada": ["ada_ai"]},
     )
-
-
-def _binding(selection: dict) -> dict:
-    def portable_seed(subject: dict) -> dict:
-        return {
-            "seed_ref": subject["source_subject_ref"],
-            "source_kind": subject["source_kind"],
-            "external_record_ref": subject["source_record_ref"],
-            "source_record_sha256": subject["source_record_sha256"],
-            "source_status": subject["source_status"],
-            "source_profile_url": subject["source_profile_url"],
-            "name_text": subject["name_text"],
-            "x_handle_proposals": subject["x_handle_proposals"],
-            "professional_facts": subject["professional_facts"],
-        }
-
-    record = {
-        "schema_version": adapter.REQUEST_BINDING_SCHEMA_VERSION,
-        "selection_id": selection["selection_id"],
-        "campaign_id": "campaign_fixture",
-        "selection_schema_version": adapter.SELECTION_SCHEMA_VERSION,
-        "selection_contract_schema_sha256": adapter.selection_contract_schema_sha256(),
-        "selection_artifact_sha256": selection["artifact_sha256"],
-        "portable_request_schema_version": adapter.PORTABLE_REQUEST_SCHEMA_VERSION,
-        "portable_request_contract_schema_sha256": "a" * 64,
-        "portable_request_sha256": "b" * 64,
-        "subject_bindings": [
-            {
-                "source_subject_ref": subject["source_subject_ref"],
-                "source_record_ref": subject["source_record_ref"],
-                "seed_ref": subject["source_subject_ref"],
-                "source_record_sha256": subject["source_record_sha256"],
-                "source_kind": subject["source_kind"],
-                "seed_sha256": adapter.canonical_sha256(portable_seed(subject)),
-            }
-            for subject in selection["subjects"]
-        ],
-        "authority": {
-            "provider_calls_allowed": False,
-            "product_writes_allowed": False,
-            "canonical_person_merge_allowed": False,
-            "outreach_allowed": False,
-        },
-        "binding_sha256": "",
-    }
-    record["binding_sha256"] = adapter._content_sha256(record, "binding_sha256")
-    return record
-
-
-def _result(selection: dict, binding: dict) -> dict:
-    subject_by_source = {subject["source_record_ref"]: subject for subject in selection["subjects"]}
-    ada_ref = subject_by_source["linkedin:ada"]["source_subject_ref"]
-    grace_ref = subject_by_source["linkedin:grace"]["source_subject_ref"]
-    record = {
-        "schema_version": adapter.PORTABLE_RESULT_SCHEMA_VERSION,
-        "campaign_id": "campaign_fixture",
-        "request_sha256": binding["portable_request_sha256"],
-        "plan_sha256": "c" * 64,
-        "catalog_sha256": "d" * 64,
-        "execution_window": {
-            "started_at": "2026-07-18T04:01:00Z",
-            "completed_at": "2026-07-18T04:02:00Z",
-        },
-        "status": "partial",
-        "subject_outcomes": [
-            {
-                "seed_ref": ada_ref,
-                "terminal_state": "analyzed",
-                "x_account_refs": ["xacct_ada"],
-                "reason": "fixture account resolved",
-            },
-            {
-                "seed_ref": grace_ref,
-                "terminal_state": "handle_resolution_required",
-                "x_account_refs": [],
-                "reason": "fixture handle missing",
-            },
-        ],
-        "external_accounts": [
-            {
-                "x_account_ref": "xacct_ada",
-                "platform_user_id": "1001",
-                "current_handle": "ada_ai",
-                "profile_url": "https://x.com/ada_ai",
-                "identity_status": "stable_platform_id",
-                "handle_history_proposals": [],
-            }
-        ],
-        "cross_source_link_proposals": [
-            {
-                "proposal_id": "link_ada",
-                "seed_ref": ada_ref,
-                "x_account_ref": "xacct_ada",
-                "status": "proposed",
-                "evidence_refs": [ada_ref],
-                "source_status": "source_bound",
-                "human_review_required": True,
-                "automatic_merge_authorized": False,
-            }
-        ],
-        "discovery_origins": [],
-        "surface_attempts": [],
-        "semantic_recall_attempts": [],
-        "semantic_recall_outcomes": [],
-        "observations": [
-            {
-                "observation_id": "obs_ada_pretraining",
-                "x_account_ref": "xacct_ada",
-                "surface": "post",
-            }
-        ],
-        "affiliation_results": [],
-        "dimension_results": [
-            {
-                "x_account_ref": "xacct_ada",
-                "question_id": "verify_training",
-                "dimension_id": "research_workstream",
-                "matched_label_ids": ["pretraining"],
-                "relevance_state": "target_core",
-                "target_activity_temporal_state": "historical",
-                "evidence_refs": ["obs_ada_pretraining"],
-            }
-        ],
-        "exploratory_findings": [],
-        "experience_verification_queue": [],
-        "optional_channel_attempts": [],
-        "optional_channel_outcomes": [],
-        "relationship_results": [],
-        "coverage": {},
-        "limitations": [],
-        "authority": {
-            "product_writes_allowed": False,
-            "canonical_person_write_allowed": False,
-            "automatic_cross_source_merge_allowed": False,
-            "outreach_allowed": False,
-        },
-        "result_sha256": "",
-    }
-    record["result_sha256"] = adapter._content_sha256(record, "result_sha256")
-    return record
 
 
 class XFirstPortableAdapterTests(unittest.TestCase):
@@ -224,7 +121,9 @@ class XFirstPortableAdapterTests(unittest.TestCase):
         subjects = {row["source_record_ref"]: row for row in selection["subjects"]}
         self.assertEqual(subjects["linkedin:ada"]["source_kind"], "linkedin_profile")
         self.assertEqual(subjects["linkedin:ada"]["x_handle_proposals"][0]["handle"], "ada_ai")
-        self.assertEqual(subjects["linkedin:grace"]["source_kind"], "name_only")
+        self.assertEqual(subjects["linkedin:grace"]["source_kind"], "professional_profile")
+        self.assertIsNone(subjects["linkedin:grace"]["source_profile_url"])
+        self.assertEqual(subjects["linkedin:grace"]["source_record_sha256"], "1" * 64)
         serialized = adapter.canonical_json(selection)
         self.assertNotIn("primary_email", serialized)
         self.assertNotIn("must-not-cross", serialized)
@@ -234,7 +133,7 @@ class XFirstPortableAdapterTests(unittest.TestCase):
         tampered = copy.deepcopy(selection)
         tampered["subjects"][0]["name_text"] = "Changed"
         tampered["artifact_sha256"] = adapter._content_sha256(tampered, "artifact_sha256")
-        with self.assertRaisesRegex(XFirstPortableAdapterError, "source_record_hash_mismatch"):
+        with self.assertRaisesRegex(XFirstPortableAdapterError, "exported_seed_hash_mismatch"):
             validate_subject_selection_artifact(tampered)
 
         target = _bound_target()
@@ -246,41 +145,118 @@ class XFirstPortableAdapterTests(unittest.TestCase):
                 exported_at="2026-07-18T04:00:00Z",
             )
 
-    def test_import_preview_roundtrips_subjects_without_materializing_product_state(self) -> None:
-        selection = _selection()
-        binding = _binding(selection)
-        result = _result(selection, binding)
-
-        preview = build_verification_import_preview(
-            selection=selection,
-            request_binding=binding,
-            portable_result=result,
+    def test_no_profile_url_with_handle_is_not_mislabeled_name_only(self) -> None:
+        summary = {"display_name": "Handle Only Example"}
+        member = ProjectionSelectionMemberSnapshot(
+            workspace_id="workspace_fixture",
+            projection_id="projection_fixture",
+            membership_revision="revision_fixture_1",
+            candidate_identity_key="linkedin:ada",
+            owner_row_sha256="a" * 64,
+            public_summary_sha256=adapter.canonical_sha256(summary),
+            public_summary=summary,
         )
+        artifact = build_subject_selection_artifact(
+            bound_target_ref={
+                **_bound_target(),
+                "candidate_identity_keys": ["linkedin:ada"],
+            },
+            members=[member],
+            exported_at="2026-07-18T04:00:00Z",
+            x_handle_proposals_by_candidate={"linkedin:ada": ["handle_only"]},
+        )
+
+        self.assertEqual(artifact["subjects"][0]["source_kind"], "professional_profile")
+        self.assertEqual(
+            artifact["subjects"][0]["exported_seed_sha256"],
+            adapter.canonical_sha256(adapter._portable_seed_from_subject(artifact["subjects"][0])),
+        )
+
+        stale_member = _members()[0]
+        stale_member = ProjectionSelectionMemberSnapshot(
+            workspace_id=stale_member.workspace_id,
+            projection_id=stale_member.projection_id,
+            membership_revision="revision_fixture_0",
+            candidate_identity_key=stale_member.candidate_identity_key,
+            owner_row_sha256=stale_member.owner_row_sha256,
+            public_summary_sha256=stale_member.public_summary_sha256,
+            public_summary=stale_member.public_summary,
+        )
+        with self.assertRaisesRegex(XFirstPortableAdapterError, "member_invalid"):
+            build_subject_selection_artifact(
+                bound_target_ref={
+                    **_bound_target(),
+                    "candidate_identity_keys": ["linkedin:grace"],
+                },
+                members=[stale_member],
+                exported_at="2026-07-18T04:00:00Z",
+            )
+
+        changed_summary = dict(_members()[0].public_summary)
+        changed_summary["headline"] = "Changed without owner digest"
+        mismatched = ProjectionSelectionMemberSnapshot(
+            workspace_id="workspace_fixture",
+            projection_id="projection_fixture",
+            membership_revision="revision_fixture_1",
+            candidate_identity_key="linkedin:grace",
+            owner_row_sha256="1" * 64,
+            public_summary_sha256=_members()[0].public_summary_sha256,
+            public_summary=changed_summary,
+        )
+        with self.assertRaisesRegex(XFirstPortableAdapterError, "member_invalid"):
+            build_subject_selection_artifact(
+                bound_target_ref={
+                    **_bound_target(),
+                    "candidate_identity_keys": ["linkedin:grace"],
+                },
+                members=[mismatched],
+                exported_at="2026-07-18T04:00:00Z",
+            )
+
+    def test_import_preview_roundtrips_subjects_without_materializing_product_state(self) -> None:
+        package = _trusted_package()
+        validated = validate_x_first_portable_package(
+            package,
+            fixture_id="x_first_selected_people_fixture_v1",
+            expected_snapshot=_expected_snapshot(package),
+        )
+        preview = build_verification_import_preview(validated_package=validated)
 
         rows = {row["source_record_ref"]: row for row in preview["subjects"]}
-        self.assertEqual(rows["linkedin:ada"]["review_state"], "identity_review_required")
-        self.assertEqual(rows["linkedin:ada"]["observation_refs"], ["obs_ada_pretraining"])
+        analyzed = rows["fixture://product/snapshot/candidate-1"]
+        in_progress = rows["fixture://product/snapshot/candidate-2"]
+        unresolved = rows["fixture://product/snapshot/candidate-3"]
+        self.assertEqual(analyzed["review_state"], "identity_review_required")
         self.assertEqual(
-            rows["linkedin:ada"]["verification_summaries"][0]["matched_label_ids"],
-            ["pretraining"],
+            analyzed["observation_refs"],
+            ["obs_selected_x_post", "obs_selected_x_reply"],
         )
-        self.assertEqual(rows["linkedin:grace"]["review_state"], "handle_resolution_required")
+        self.assertTrue(
+            all(
+                row["source_status"] == "fixture_synthetic"
+                for row in analyzed["observation_provenance"]
+            )
+        )
+        self.assertEqual(
+            analyzed["handle_resolution_provenance"][0]["source_status"],
+            "fixture_synthetic",
+        )
+        self.assertEqual(
+            analyzed["verification_summaries"][0]["source_status"],
+            "fixture_synthetic",
+        )
+        self.assertEqual(in_progress["terminal_state"], "research_in_progress")
+        self.assertEqual(in_progress["review_state"], "research_continuation_required")
+        self.assertEqual(in_progress["verification_summaries"], [])
+        self.assertEqual(unresolved["review_state"], "handle_resolution_required")
         self.assertFalse(preview["authority"]["product_writes_allowed"])
         self.assertFalse(preview["authority"]["automatic_cross_source_merge_allowed"])
 
-    def test_import_preview_fails_closed_on_request_rebinding(self) -> None:
-        selection = _selection()
-        binding = _binding(selection)
-        result = _result(selection, binding)
-        result["request_sha256"] = "e" * 64
-        result["result_sha256"] = adapter._content_sha256(result, "result_sha256")
-
-        with self.assertRaisesRegex(XFirstPortableAdapterError, "result_request_mismatch"):
-            build_verification_import_preview(
-                selection=selection,
-                request_binding=binding,
-                portable_result=result,
-            )
+    def test_import_preview_requires_internal_validated_package_capability(self) -> None:
+        with self.assertRaisesRegex(
+            XFirstPortablePackageError, "validated_package_capability_required"
+        ):
+            build_verification_import_preview(validated_package=_trusted_package())
 
     def test_adapter_has_no_x_first_runtime_import(self) -> None:
         source = inspect.getsource(adapter)
