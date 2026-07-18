@@ -664,6 +664,7 @@ def _accept_exact_agent_tool_result_uow(
     lock_groups: tuple[tuple[str, ...], ...],
     load_base_owner: Any,
     assert_locked_owner: Any,
+    resolve_lock_groups: Any | None = None,
     apply_acceptance_effect: Any | None = None,
     assert_accepted_replay_effect: Any | None = None,
     assert_late_quarantine_owner: Any | None = None,
@@ -710,7 +711,10 @@ def _accept_exact_agent_tool_result_uow(
             with connection.cursor() as cursor:
                 milliseconds = max(1, int((deadline - time.monotonic()) * 1000))
                 cursor.execute("SELECT set_config('lock_timeout', %s, true)", (f"{milliseconds}ms",))
-                for lock_group in lock_groups:
+                effective_lock_groups = (
+                    resolve_lock_groups(cursor, lock_groups) if resolve_lock_groups is not None else lock_groups
+                )
+                for lock_group in effective_lock_groups:
                     for lock_key in lock_group:
                         last_busy_key = lock_key
                         if not adapter._try_acquire_transaction_lock(cursor, lock_key):
@@ -1021,6 +1025,7 @@ def prepare_inspect_operation_tool_result(
     from .agent_operation_query_postgres import (
         inspect_operation_result_lock_groups,
         load_inspect_operation_base_owner,
+        preload_inspect_operation_start_occurrence_refs,
         terminal_from_locked_inspect_operation_owner,
         validate_inspect_operation_occurrence,
     )
@@ -1038,18 +1043,13 @@ def prepare_inspect_operation_tool_result(
         "operation_runs",
         "agent_actions",
         "workflow_commands",
+        "agent_tool_result_slots",
     )
     if not _read_dependencies(adapter, required_tables):
         return None
     timeout_seconds, deadline = _deadline_seconds(lock_timeout_seconds)
     retry_attempt = 0
     last_busy_key = f"operation_events:{preflight.request.operation_run_id}"
-    lock_groups = inspect_operation_result_lock_groups(
-        occurrence=occurrence,
-        action_id=preflight.request.action_id,
-        operation_run_id=preflight.request.operation_run_id,
-        include_result_slot=False,
-    )
     (
         busy_error,
         is_retryable,
@@ -1067,6 +1067,19 @@ def prepare_inspect_operation_tool_result(
             with connection.cursor() as cursor:
                 milliseconds = max(1, int((deadline - time.monotonic()) * 1000))
                 cursor.execute("SELECT set_config('lock_timeout', %s, true)", (f"{milliseconds}ms",))
+                start_occurrence_refs = preload_inspect_operation_start_occurrence_refs(
+                    cursor,
+                    workspace_id=preflight.request.workspace_id,
+                    action_id=preflight.request.action_id,
+                    operation_run_id=preflight.request.operation_run_id,
+                )
+                lock_groups = inspect_operation_result_lock_groups(
+                    occurrence=occurrence,
+                    action_id=preflight.request.action_id,
+                    operation_run_id=preflight.request.operation_run_id,
+                    include_result_slot=False,
+                    start_occurrence_refs=start_occurrence_refs,
+                )
                 for lock_group in lock_groups:
                     for lock_key in lock_group:
                         last_busy_key = lock_key
@@ -1077,6 +1090,7 @@ def prepare_inspect_operation_tool_result(
                     workspace_id=preflight.request.workspace_id,
                     action_id=preflight.request.action_id,
                     operation_run_id=preflight.request.operation_run_id,
+                    expected_start_occurrence_refs=start_occurrence_refs,
                 )
                 terminal = terminal_from_locked_inspect_operation_owner(
                     cursor,
@@ -1125,6 +1139,7 @@ def accept_inspect_operation_tool_result_uow(
         assert_exact_inspect_operation_terminal,
         inspect_operation_result_lock_groups,
         load_inspect_operation_base_owner,
+        preload_inspect_operation_start_occurrence_refs,
         validate_inspect_operation_occurrence,
     )
     from .agent_projection_query import inspect_operation_error_result
@@ -1155,6 +1170,24 @@ def accept_inspect_operation_tool_result_uow(
     if not (success_terminal or masked_error_terminal):
         raise ValueError("accept inspect result requires matching Operation owner result kind")
 
+    start_occurrence_refs: tuple[dict[str, Any], ...] = ()
+
+    def resolve_locks(cursor: Any, _base_lock_groups: tuple[tuple[str, ...], ...]) -> tuple[tuple[str, ...], ...]:
+        nonlocal start_occurrence_refs
+        start_occurrence_refs = preload_inspect_operation_start_occurrence_refs(
+            cursor,
+            workspace_id=preflight.request.workspace_id,
+            action_id=preflight.request.action_id,
+            operation_run_id=preflight.request.operation_run_id,
+        )
+        return inspect_operation_result_lock_groups(
+            occurrence=occurrence,
+            action_id=preflight.request.action_id,
+            operation_run_id=preflight.request.operation_run_id,
+            include_result_slot=True,
+            start_occurrence_refs=start_occurrence_refs,
+        )
+
     def load_owner(
         cursor: Any,
         *,
@@ -1166,6 +1199,7 @@ def accept_inspect_operation_tool_result_uow(
             workspace_id=preflight.request.workspace_id,
             action_id=preflight.request.action_id,
             operation_run_id=preflight.request.operation_run_id,
+            expected_start_occurrence_refs=start_occurrence_refs,
         )
 
     def assert_owner(
@@ -1205,6 +1239,7 @@ def accept_inspect_operation_tool_result_uow(
         ),
         load_base_owner=load_owner,
         assert_locked_owner=assert_owner,
+        resolve_lock_groups=resolve_locks,
         lock_timeout_seconds=lock_timeout_seconds,
         fault_injection_point=fault_injection_point,
     )

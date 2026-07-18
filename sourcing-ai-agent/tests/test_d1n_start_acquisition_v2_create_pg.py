@@ -1042,6 +1042,14 @@ class D1nStartAcquisitionV2CreatePGMatrixTest(PGControlPlaneStoreTestMixin, unit
                     set(control_state["disabled_reasons"].values()),
                     {"acquisition_start_v2_generic_operation_control_identity_mismatch"},
                 )
+                if label == "action_operation_pins_erased_preview_keys_removed":
+                    with self.assertRaisesRegex(ValueError, "workflow command link mismatch"):
+                        self._prepare_inspect_operation_terminal(
+                            occurrence=occurrence,
+                            owner_ref=owner_ref,
+                            suffix=f"generic_control_drift_{label}",
+                        )
+                    continue
                 inspect_terminal = self._prepare_inspect_operation_terminal(
                     occurrence=occurrence,
                     owner_ref=owner_ref,
@@ -1078,8 +1086,7 @@ class D1nStartAcquisitionV2CreatePGMatrixTest(PGControlPlaneStoreTestMixin, unit
             ),
         )
         self._execute(
-            "UPDATE {schema}.operation_runs SET operation_type = %s, owner_module = %s "
-            "WHERE operation_run_id = %s",
+            "UPDATE {schema}.operation_runs SET operation_type = %s, owner_module = %s WHERE operation_run_id = %s",
             ("legacy_operation", "legacy_owner", owner_ref["operation_run_id"]),
         )
         orchestrator = self._orchestrator()
@@ -1186,8 +1193,7 @@ class D1nStartAcquisitionV2CreatePGMatrixTest(PGControlPlaneStoreTestMixin, unit
                     payload["owner_result_ref"] = drifted_ref
                     payload["owner_result_digest"] = digest(drifted_ref)
                 self._execute(
-                    "UPDATE {schema}.operation_events SET schema_version = %s, payload_json = %s "
-                    "WHERE event_id = %s",
+                    "UPDATE {schema}.operation_events SET schema_version = %s, payload_json = %s WHERE event_id = %s",
                     (schema_version, json.dumps(payload), owner_ref["terminal_winner_id"]),
                 )
 
