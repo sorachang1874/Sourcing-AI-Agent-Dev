@@ -825,6 +825,75 @@ class D1nStartAcquisitionV2CreatePGMatrixTest(PGControlPlaneStoreTestMixin, unit
                 self.assertFalse(response["module_state_mutated"])
                 self.assertEqual(self._table_snapshot(), baseline)
 
+    def test_generic_action_controls_fail_closed_on_partial_start_v2_pending_action_without_writes(self) -> None:
+        cases = (
+            (
+                "schema_pair_only",
+                "UPDATE {schema}.agent_actions SET input_json = %s WHERE action_id = %s",
+                ('{"legacy_intent":"start"}',),
+            ),
+            (
+                "preview_id_only",
+                "UPDATE {schema}.agent_actions SET request_schema_version = %s, request_schema_digest = %s, "
+                "input_json = %s WHERE action_id = %s",
+                ("", "", '{"preview_id":"preview_partial"}'),
+            ),
+            (
+                "preview_pair_without_digest",
+                "UPDATE {schema}.agent_actions SET request_schema_version = %s, request_schema_digest = %s, "
+                "input_json = %s WHERE action_id = %s",
+                ("", "", '{"preview_id":"preview_partial","preview_revision":1}'),
+            ),
+            (
+                "version_match_digest_mismatch",
+                "UPDATE {schema}.agent_actions SET request_schema_version = %s, request_schema_digest = %s, "
+                "input_json = %s WHERE action_id = %s",
+                (ACQUISITION_START_V2_REQUEST_SCHEMA_VERSION, "0" * 64, "{}"),
+            ),
+            (
+                "digest_match_version_mismatch",
+                "UPDATE {schema}.agent_actions SET request_schema_version = %s, request_schema_digest = %s, "
+                "input_json = %s WHERE action_id = %s",
+                ("acquisition_root_request_legacy", ACQUISITION_START_V2_REQUEST_SCHEMA_DIGEST, "{}"),
+            ),
+        )
+        for ordinal, (label, sql, params) in enumerate(cases, start=1):
+            with self.subTest(case=label):
+                occurrence = self._arrange_pending(suffix=f"generic_partial_v2_{ordinal}")
+                action_id = submit_pg.revalidate_acquisition_start_v2_occurrence(occurrence).action_id
+                self._execute(sql, (*params, action_id))
+                orchestrator = self._orchestrator()
+                controls: tuple[tuple[str, Callable[[], dict[str, Any]]], ...] = (
+                    (
+                        "approve",
+                        lambda: orchestrator.approve_operation_action_api(
+                            action_id,
+                            {"actor": "generic-control-test"},
+                            expected_workspace_id=occurrence.workspace_id,
+                        ),
+                    ),
+                    (
+                        "reject",
+                        lambda: orchestrator.reject_operation_action_api(
+                            action_id,
+                            {"actor": "generic-control-test", "reason": "not allowed"},
+                            expected_workspace_id=occurrence.workspace_id,
+                        ),
+                    ),
+                )
+
+                for control_label, control in controls:
+                    with self.subTest(control=control_label):
+                        baseline = self._table_snapshot()
+                        response = control()
+                        self.assertEqual(response["status"], "invalid")
+                        self.assertEqual(
+                            response["reason"],
+                            "acquisition_start_v2_generic_operation_control_identity_mismatch",
+                        )
+                        self.assertFalse(response["module_state_mutated"])
+                        self.assertEqual(self._table_snapshot(), baseline)
+
     def test_dormant_start_v2_root_command_blocks_generic_command_control_claim_and_ready_list(self) -> None:
         occurrence = self._arrange_pending(suffix="command_control_closed")
         created = self._create(occurrence)

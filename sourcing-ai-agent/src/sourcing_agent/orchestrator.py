@@ -51134,8 +51134,13 @@ class SourcingOrchestrator:
             action_input = action.get("input_json")
         if not isinstance(action_input, Mapping):
             action_input = {}
-        action_has_v2_input_shape = {"preview_id", "preview_revision", "preview_digest"}.issubset(
-            {str(key) for key in action_input}
+        action_v2_input_keys = {"preview_id", "preview_revision", "preview_digest"}
+        action_input_key_set = {str(key) for key in action_input}
+        action_has_any_v2_input_key = bool(action_v2_input_keys & action_input_key_set)
+        action_has_v2_input_shape = action_v2_input_keys.issubset(action_input_key_set)
+        action_has_any_v2_pin = (
+            str(action.get("request_schema_version") or "").strip() == ACQUISITION_START_V2_REQUEST_SCHEMA_VERSION
+            or str(action.get("request_schema_digest") or "").strip() == ACQUISITION_START_V2_REQUEST_SCHEMA_DIGEST
         )
         action_has_v2_pin_pair = (
             str(action.get("request_schema_version") or "").strip() == ACQUISITION_START_V2_REQUEST_SCHEMA_VERSION
@@ -51145,6 +51150,10 @@ class SourcingOrchestrator:
             action_type == ACTION_START_ACQUISITION_RUN and action_has_v2_pin_pair and action_has_v2_input_shape
         )
         operation = dict(operation_run or {})
+        operation_has_any_v2_pin = bool(operation) and (
+            str(operation.get("request_schema_version") or "").strip() == ACQUISITION_START_V2_REQUEST_SCHEMA_VERSION
+            or str(operation.get("request_schema_digest") or "").strip() == ACQUISITION_START_V2_REQUEST_SCHEMA_DIGEST
+        )
         operation_has_v2_pins = (
             bool(operation)
             and str(operation.get("operation_type") or "").strip() == "acquisition_run"
@@ -51155,12 +51164,17 @@ class SourcingOrchestrator:
         )
         if (
             action_type != ACTION_START_ACQUISITION_RUN
-            and not action_has_v2_pin_pair
-            and not action_has_v2_input_shape
-            and not operation_has_v2_pins
+            and not action_has_any_v2_pin
+            and not action_has_any_v2_input_key
+            and not operation_has_any_v2_pin
         ):
             return {"status": "ready"}
-        if action_type == ACTION_START_ACQUISITION_RUN and not action_has_v2_input_shape and not operation_has_v2_pins:
+        if (
+            action_type == ACTION_START_ACQUISITION_RUN
+            and not action_has_any_v2_pin
+            and not action_has_any_v2_input_key
+            and not operation_has_any_v2_pin
+        ):
             return {"status": "ready"}
         if (
             not action_is_exact_v2

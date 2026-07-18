@@ -12,6 +12,10 @@ This batch remains non-live and non-served. It does not close `R-019`, `R-029`, 
   still the `not_before_at=9999-12-31 23:59:59` release gate; only result acceptance may clear it.
 - Generic operation controls now distinguish non-v2, exact-v2, and mixed/partial v2 identity. Mixed action/operation
   pins fail closed with zero writes instead of falling back to generic mutation.
+- Generic action controls now also fail closed for pending `start_acquisition_run` Actions that carry only partial v2
+  discriminators: schema version/digest without the exact input shape, one/two preview keys without the full
+  `preview_id + preview_revision + preview_digest` tuple, or one exact schema pin paired with a mismatching peer. These
+  rows are treated as corrupt start-v2 candidates, not legacy-ready Actions.
 - The create UoW uses raw, non-normalizing row reads for authority probes and exact replay comparison. Public PG row
   normalization is no longer used to certify physical owner identity.
 - JSON replay comparison rejects blank/malformed carriers, duplicate object keys, and type aliases such as JSON boolean
@@ -28,6 +32,7 @@ This batch remains non-live and non-served. It does not close `R-019`, `R-029`, 
   - held command ready-list absence and direct claim zero-write;
   - cancel/retry/resume command-control zero-write;
   - action-type drift, empty schema pair, and alternate schema pair operation-control zero-write;
+  - pending partial-v2 approve/reject zero-write for schema-only, preview-key-only, and single-pin mismatch cases;
   - raw text owner corruption replay rejection;
   - blank JSON carrier replay rejection;
   - JSON bool/int alias replay rejection.
