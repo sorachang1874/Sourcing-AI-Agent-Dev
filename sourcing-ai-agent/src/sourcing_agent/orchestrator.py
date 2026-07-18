@@ -48693,6 +48693,38 @@ class SourcingOrchestrator:
             self._cancel_workflow_command_api_unprojected(command_id, payload)
         )
 
+    @staticmethod
+    def _is_start_v2_root_command_waiting_for_result_acceptance(command: Mapping[str, Any]) -> bool:
+        payload = command.get("payload")
+        if not isinstance(payload, Mapping):
+            payload = command.get("payload_json")
+        if not isinstance(payload, Mapping):
+            payload = {}
+        return (
+            str(command.get("command_type") or "").strip() == ACQUISITION_RUN_CREATE_COMMAND_TYPE
+            and str(command.get("owner") or "").strip() == "acquisition_run_writer"
+            and str(command.get("status") or "").strip() in {"queued", "retry_wait", "cancelled"}
+            and str(command.get("not_before_at") or "").strip() == "9999-12-31 23:59:59"
+            and str(payload.get("schema_version") or "").strip() == "acquisition_root_command_payload.v2"
+        )
+
+    def _start_v2_root_command_control_blocked_response(
+        self,
+        command: Mapping[str, Any],
+        *,
+        control_action: str,
+    ) -> dict[str, Any]:
+        return {
+            "status": "unsupported",
+            "reason": "acquisition_start_v2_root_command_waiting_for_result_acceptance",
+            "control_action": str(control_action or "").strip(),
+            "command_status": str(command.get("status") or "").strip(),
+            "workflow_command": self._workflow_command_api_record(dict(command)),
+            **self._workflow_command_control_response_policy_records(dict(command)),
+            "module_state_mutated": False,
+            "contract": "w11_workflow_command_control_v1",
+        }
+
     def _cancel_workflow_command_api_unprojected(
         self,
         command_id: str,
@@ -48703,6 +48735,8 @@ class SourcingOrchestrator:
         command = self.store.get_workflow_command(normalized_command_id) if normalized_command_id else {}
         if not command:
             return {"status": "not_found", "command_id": normalized_command_id}
+        if self._is_start_v2_root_command_waiting_for_result_acceptance(command):
+            return self._start_v2_root_command_control_blocked_response(command, control_action="cancel")
         current_status = str(command.get("status") or "").strip()
         if current_status in {"claimed", "running"}:
             return self._cancel_running_workflow_command_via_owner(command, payload=payload)
@@ -48783,6 +48817,8 @@ class SourcingOrchestrator:
         command = self.store.get_workflow_command(normalized_command_id) if normalized_command_id else {}
         if not command:
             return {"status": "not_found", "command_id": normalized_command_id}
+        if self._is_start_v2_root_command_waiting_for_result_acceptance(command):
+            return self._start_v2_root_command_control_blocked_response(command, control_action="retry")
         current_status = str(command.get("status") or "").strip()
         if current_status not in {"failed_terminal", "cancelled"}:
             return {
@@ -48844,6 +48880,8 @@ class SourcingOrchestrator:
         command = self.store.get_workflow_command(normalized_command_id) if normalized_command_id else {}
         if not command:
             return {"status": "not_found", "command_id": normalized_command_id}
+        if self._is_start_v2_root_command_waiting_for_result_acceptance(command):
+            return self._start_v2_root_command_control_blocked_response(command, control_action="resume")
         current_status = str(command.get("status") or "").strip()
         if current_status in {"claimed", "running"}:
             return self._resume_running_workflow_command_via_owner(command, payload=payload)
@@ -51090,17 +51128,60 @@ class SourcingOrchestrator:
         action: Mapping[str, Any],
         operation_run: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
-        if str(action.get("action_type") or "").strip() != ACTION_START_ACQUISITION_RUN:
-            return {"status": "ready"}
+        action_type = str(action.get("action_type") or "").strip()
+        action_input = action.get("input")
+        if not isinstance(action_input, Mapping):
+            action_input = action.get("input_json")
+        if not isinstance(action_input, Mapping):
+            action_input = {}
+        action_has_v2_input_shape = {"preview_id", "preview_revision", "preview_digest"}.issubset(
+            {str(key) for key in action_input}
+        )
+        action_has_v2_pin_pair = (
+            str(action.get("request_schema_version") or "").strip() == ACQUISITION_START_V2_REQUEST_SCHEMA_VERSION
+            and str(action.get("request_schema_digest") or "").strip() == ACQUISITION_START_V2_REQUEST_SCHEMA_DIGEST
+        )
+        action_is_exact_v2 = (
+            action_type == ACTION_START_ACQUISITION_RUN and action_has_v2_pin_pair and action_has_v2_input_shape
+        )
+        operation = dict(operation_run or {})
+        operation_has_v2_pins = (
+            bool(operation)
+            and str(operation.get("operation_type") or "").strip() == "acquisition_run"
+            and str(operation.get("owner_module") or "").strip() == "acquisition_run_writer"
+            and str(operation.get("request_schema_version") or "").strip()
+            == ACQUISITION_START_V2_REQUEST_SCHEMA_VERSION
+            and str(operation.get("request_schema_digest") or "").strip() == ACQUISITION_START_V2_REQUEST_SCHEMA_DIGEST
+        )
         if (
-            str(action.get("request_schema_version") or "").strip() != ACQUISITION_START_V2_REQUEST_SCHEMA_VERSION
-            or str(action.get("request_schema_digest") or "").strip() != ACQUISITION_START_V2_REQUEST_SCHEMA_DIGEST
+            action_type != ACTION_START_ACQUISITION_RUN
+            and not action_has_v2_pin_pair
+            and not action_has_v2_input_shape
+            and not operation_has_v2_pins
         ):
             return {"status": "ready"}
+        if action_type == ACTION_START_ACQUISITION_RUN and not action_has_v2_input_shape and not operation_has_v2_pins:
+            return {"status": "ready"}
+        if (
+            not action_is_exact_v2
+            or (bool(operation) and not operation_has_v2_pins)
+            or (
+                bool(operation)
+                and str(operation.get("action_id") or "").strip()
+                and str(operation.get("action_id") or "").strip() != str(action.get("action_id") or "").strip()
+            )
+        ):
+            return {
+                "status": "invalid",
+                "reason": "acquisition_start_v2_generic_operation_control_identity_mismatch",
+                "operation_run": operation,
+                "action": dict(action),
+                "module_state_mutated": False,
+            }
         return {
             "status": "unsupported",
             "reason": "acquisition_start_v2_generic_operation_control_not_enabled",
-            "operation_run": dict(operation_run or {}),
+            "operation_run": operation,
             "action": dict(action),
             "module_state_mutated": False,
         }

@@ -469,7 +469,11 @@
   command/source-event 固定 `not_before_at=9999-12-31 23:59:59`，create 不唤醒 owner；generic
   approve/reject/cancel/retry/resume/dispatch 对 v2 action 统一 pre-writer unsupported + 零写；outbox/result/domain=0。
   Author focused=`120 passed`；real PG=`9 passed + 21 subtests`，adjacent PG=`49 passed + 36 subtests`；
-  scoped mypy=`0/1`、global mypy=`81/4`、Ruff/lint green。S1e2c author candidate 已实现 read-only
+  scoped mypy=`0/1`、global mypy=`81/4`、Ruff/lint green。Formal S1e2b review returned `NO-GO 0/5/1/1`;
+  current fixed-forward response adds canonical pre-adapter approval validation, raw-row exact replay, strict JSON
+  replay equality, mixed-v2 operation-control fail-closed, and held-root command cancel/retry/resume/claim/ready-list
+  zero-write coverage. Response evidence currently includes fast no-access `12 passed` and PG matrix
+  `19 passed + 27 subtests`; fresh pinned re-review is pending. S1e2c author candidate 已实现 read-only
   prepare + shared accept：locked owner 重建 `acquisition_start_result_v2` success terminal，fresh accept 同事务写
   attempt/slot/journal 并释放 dormant command hold，exact replay 校验已释放 command，late attempt 只追加 quarantined
   attempt，fault 回滚 journal+release，post-commit 仅 best-effort recovery wake，`runtime_outbox` 仍为 0。
@@ -481,6 +485,7 @@
   R-019/R-029、Plan §6#6、OB-2.2/10.3/10.4 均继续 open，fresh pinned non-author review pending。实现记录见
   `TRACK_D_D1N_S1E2A_START_SUBMIT_UOW_IMPLEMENTATION.md` 与
   `TRACK_D_D1N_S1E2B_START_CREATE_UOW_IMPLEMENTATION.md`、
+  `TRACK_D_D1N_S1E2B_START_CREATE_UOW_REVIEW_RESPONSE.md`、
   `TRACK_D_D1N_S1E2C_START_RESULT_ACCEPT_UOW_IMPLEMENTATION.md`。S1e2d author candidate 已补 first consumer hop：
   acquisition root owner 对 `acquisition_root_command_payload.v2` 走 v2-only Action/Operation/owner-ref preflight，从
   immutable `start_snapshot.preview` 派生 downstream intent compatibility payload；accepted start result -> released

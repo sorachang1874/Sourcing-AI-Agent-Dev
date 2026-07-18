@@ -112,6 +112,18 @@ claim it before S1e2c accepts and persists the start result. Create intentionall
 `DurableRuntimeWriter.signal_recovery_for_committed_commands`; result acceptance owns clearing the hold and waking the
 owner. No `runtime_outbox` row is created.
 
+The formal review response keeps this boundary explicit: generic command cancel/retry/resume must return unsupported
+with zero writes while the v2 root is held, direct claim must return no row, and ready-list polling must not surface the
+root before result acceptance clears the hold.
+
+## Formal review response
+
+The first formal pinned review returned `NO-GO` with five P1 findings, one P2, and one P3. The fixed-forward response is
+recorded in `TRACK_D_D1N_S1E2B_START_CREATE_UOW_REVIEW_RESPONSE.md`. It covers raw row exactness, strict JSON replay
+equality, canonical pre-adapter approval validation, mixed-v2 operation-control fail-closed behavior, and held-root
+generic command-control zero-write behavior. This response does not close S1e2c's separate formal `NO-GO` or global
+`R-019` / `R-029`.
+
 ## Explicit non-closure
 
 - S1e2c has a separate author candidate for read-only owner reconstruction, start-specific shared result acceptance,

@@ -695,6 +695,138 @@ class D1nStartAcquisitionV2CreatePGMatrixTest(PGControlPlaneStoreTestMixin, unit
                 self.assertFalse(response["module_state_mutated"])
                 self.assertEqual(self._table_snapshot(), baseline)
 
+    def test_generic_operation_controls_fail_closed_on_start_v2_action_drift_without_writes(self) -> None:
+        cases = (
+            (
+                "action_type_drift",
+                "UPDATE {schema}.agent_actions SET action_type = %s WHERE action_id = %s",
+                ("legacy_start_acquisition_run",),
+            ),
+            (
+                "empty_schema_pair",
+                "UPDATE {schema}.agent_actions SET request_schema_version = %s, request_schema_digest = %s "
+                "WHERE action_id = %s",
+                ("", ""),
+            ),
+            (
+                "alternate_schema_pair",
+                "UPDATE {schema}.agent_actions SET request_schema_version = %s, request_schema_digest = %s "
+                "WHERE action_id = %s",
+                ("start_acquisition_run_request.v999", "0" * 64),
+            ),
+        )
+        for label, sql, params in cases:
+            with self.subTest(case=label):
+                occurrence = self._arrange_pending(suffix=f"generic_control_drift_{label}")
+                created = self._create(occurrence)
+                owner_ref = created["owner_result_ref"]
+                self._execute(sql, (*params, owner_ref["action_id"]))
+                orchestrator = self._orchestrator()
+                baseline = self._table_snapshot()
+
+                response = orchestrator.cancel_operation_run_api(
+                    owner_ref["operation_run_id"],
+                    {"actor": "generic-control-test", "reason": "not allowed"},
+                    expected_workspace_id=occurrence.workspace_id,
+                )
+
+                self.assertEqual(response["status"], "invalid")
+                self.assertEqual(
+                    response["reason"],
+                    "acquisition_start_v2_generic_operation_control_identity_mismatch",
+                )
+                self.assertFalse(response["module_state_mutated"])
+                self.assertEqual(self._table_snapshot(), baseline)
+
+    def test_dormant_start_v2_root_command_blocks_generic_command_control_claim_and_ready_list(self) -> None:
+        occurrence = self._arrange_pending(suffix="command_control_closed")
+        created = self._create(occurrence)
+        owner_ref = created["owner_result_ref"]
+        command_id = owner_ref["workflow_command_id"]
+        orchestrator = self._orchestrator()
+
+        ready_commands = self.store.list_ready_workflow_commands(
+            owner="acquisition_run_writer",
+            command_type="acquisition.run.create",
+        )
+        self.assertNotIn(command_id, {str(command.get("command_id") or "") for command in ready_commands})
+        baseline = self._table_snapshot()
+        self.assertEqual(self.store.claim_workflow_command(command_id, lease_owner="generic-worker"), {})
+        self.assertEqual(self._table_snapshot(), baseline)
+
+        controls: tuple[tuple[str, Callable[[], dict[str, Any]]], ...] = (
+            (
+                "cancel",
+                lambda: orchestrator.cancel_workflow_command_api(
+                    command_id,
+                    {"actor": "generic-command-control-test", "reason": "not allowed"},
+                ),
+            ),
+            (
+                "retry",
+                lambda: orchestrator.retry_workflow_command_api(
+                    command_id,
+                    {"actor": "generic-command-control-test", "reason": "not allowed"},
+                ),
+            ),
+            (
+                "resume",
+                lambda: orchestrator.resume_workflow_command_api(
+                    command_id,
+                    {"actor": "generic-command-control-test", "reason": "not allowed"},
+                ),
+            ),
+        )
+        for label, control in controls:
+            with self.subTest(control=label):
+                response = control()
+                self.assertEqual(response["status"], "unsupported")
+                self.assertEqual(response["reason"], "acquisition_start_v2_root_command_waiting_for_result_acceptance")
+                self.assertFalse(response["module_state_mutated"])
+                self.assertEqual(self._table_snapshot(), baseline)
+
+    def test_create_replay_rejects_noncanonical_string_identity_without_writes(self) -> None:
+        occurrence = self._arrange_pending(suffix="noncanonical_text")
+        created = self._create(occurrence)
+        command_id = created["owner_result_ref"]["workflow_command_id"]
+        self._execute(
+            "UPDATE {schema}.workflow_commands SET owner = %s WHERE command_id = %s",
+            (" acquisition_run_writer ", command_id),
+        )
+        corrupted = self._table_snapshot()
+
+        with self.assertRaisesRegex(ValueError, "WorkflowCommand immutable identity collision: owner"):
+            self._create(occurrence)
+        self.assertEqual(self._table_snapshot(), corrupted)
+
+    def test_create_replay_rejects_blank_json_carrier_without_writes(self) -> None:
+        occurrence = self._arrange_pending(suffix="blank_json")
+        created = self._create(occurrence)
+        command_id = created["owner_result_ref"]["workflow_command_id"]
+        self._execute(
+            "UPDATE {schema}.workflow_commands SET result_json = %s WHERE command_id = %s",
+            ("", command_id),
+        )
+        corrupted = self._table_snapshot()
+
+        with self.assertRaisesRegex(ValueError, "WorkflowCommand.result_json"):
+            self._create(occurrence)
+        self.assertEqual(self._table_snapshot(), corrupted)
+
+    def test_create_replay_rejects_bool_int_json_alias_without_writes(self) -> None:
+        occurrence = self._arrange_pending(suffix="bool_int_json")
+        created = self._create(occurrence)
+        command_id = created["owner_result_ref"]["workflow_command_id"]
+        self._execute(
+            "UPDATE {schema}.workflow_commands SET retry_policy_json = %s WHERE command_id = %s",
+            (json.dumps({"kind": "operation_acquisition_run_create", "retry_delay_seconds": True}), command_id),
+        )
+        corrupted = self._table_snapshot()
+
+        with self.assertRaisesRegex(ValueError, "WorkflowCommand.retry_policy_json"):
+            self._create(occurrence)
+        self.assertEqual(self._table_snapshot(), corrupted)
+
     def test_eight_concurrent_identical_calls_commit_one_bundle(self) -> None:
         occurrence = self._arrange_pending(suffix="concurrent_exact")
         barrier = Barrier(8)

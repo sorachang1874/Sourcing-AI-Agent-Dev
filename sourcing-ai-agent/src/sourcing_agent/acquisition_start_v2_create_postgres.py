@@ -21,7 +21,10 @@ from .acquisition_start_v2 import (
     ACQUISITION_START_ACTION_TYPE,
     AcquisitionConfirmationReceipt,
     AcquisitionStartV2BindContext,
+    AcquisitionStartV2Error,
     AcquisitionStartV2OwnerBinder,
+    _require_owner_identity,
+    _require_version,
     build_acquisition_parent_budget_envelope_ref,
     build_acquisition_start_v2_root_command_payload,
 )
@@ -128,6 +131,7 @@ _FAULT_POINTS = frozenset(
     }
 )
 
+
 class _StartCreateLockBusy(RuntimeError):
     pass
 
@@ -161,15 +165,51 @@ def _json_value(value: Any) -> Any:
     if isinstance(value, (Mapping, list, tuple)):
         return _thaw_json_value(value)
     if value is None or value == "":
-        return {}
+        return None
     try:
-        return _thaw_json_value(json.loads(str(value)))
+        return _thaw_json_value(
+            json.loads(
+                str(value),
+                object_pairs_hook=_reject_duplicate_json_object_pairs,
+                parse_constant=_reject_json_constant,
+            )
+        )
     except (TypeError, ValueError, json.JSONDecodeError):
         return None
 
 
+def _reject_duplicate_json_object_pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        normalized_key = str(key)
+        if normalized_key in result:
+            raise ValueError("duplicate JSON key")
+        result[normalized_key] = value
+    return result
+
+
+def _reject_json_constant(value: str) -> None:
+    raise ValueError(f"unsupported JSON constant: {value}")
+
+
+def _json_equal_type_strict(actual: Any, expected: Any) -> bool:
+    if type(actual) is not type(expected):
+        return False
+    if isinstance(actual, dict):
+        if set(actual) != set(expected):
+            return False
+        return all(_json_equal_type_strict(actual[key], expected[key]) for key in actual)
+    if isinstance(actual, list):
+        return len(actual) == len(expected) and all(
+            _json_equal_type_strict(left, right) for left, right in zip(actual, expected)
+        )
+    return actual == expected
+
+
 def _assert_json_equal(label: str, actual: Any, expected: Any) -> None:
-    if _json_value(actual) != _json_value(expected):
+    actual_json = _json_value(actual)
+    expected_json = _json_value(expected)
+    if actual_json is None or expected_json is None or not _json_equal_type_strict(actual_json, expected_json):
         raise ValueError(f"acquisition start create {label} immutable identity collision")
 
 
@@ -669,6 +709,22 @@ def _require_authoritative_dependencies(adapter: Any) -> None:
         raise RuntimeError("acquisition start create requires authoritative PostgreSQL dependencies")
 
 
+def _validate_approval_identity(
+    *,
+    approval_actor_id: str,
+    approval_actor_kind: str,
+    approval_policy_revision: str,
+) -> None:
+    try:
+        _require_owner_identity(approval_actor_id, field="approval_actor_id")
+        _require_version(approval_policy_revision, field="approval_policy_revision")
+    except AcquisitionStartV2Error as exc:
+        detail = f" {exc.detail}" if exc.detail else ""
+        raise ValueError(f"acquisition start create{detail} is invalid") from exc
+    if approval_actor_kind not in _ALLOWED_APPROVAL_ACTOR_KINDS:
+        raise ValueError("acquisition start create approval_actor_kind is invalid")
+
+
 def _validate_invocation(
     *,
     approval_actor_id: str,
@@ -677,21 +733,11 @@ def _validate_invocation(
     lock_timeout_seconds: float,
     fault_injection_point: str,
 ) -> float:
-    if (
-        type(approval_actor_id) is not str
-        or not approval_actor_id
-        or approval_actor_id != approval_actor_id.strip()
-        or any(character.isspace() or ord(character) <= 0x1F for character in approval_actor_id)
-    ):
-        raise ValueError("acquisition start create approval_actor_id is invalid")
-    if approval_actor_kind not in _ALLOWED_APPROVAL_ACTOR_KINDS:
-        raise ValueError("acquisition start create approval_actor_kind is invalid")
-    if (
-        type(approval_policy_revision) is not str
-        or not approval_policy_revision
-        or approval_policy_revision != approval_policy_revision.strip()
-    ):
-        raise ValueError("acquisition start create approval_policy_revision is invalid")
+    _validate_approval_identity(
+        approval_actor_id=approval_actor_id,
+        approval_actor_kind=approval_actor_kind,
+        approval_policy_revision=approval_policy_revision,
+    )
     if isinstance(lock_timeout_seconds, bool):
         raise ValueError("acquisition start create lock timeout must be finite and positive")
     timeout_seconds = float(lock_timeout_seconds)
@@ -752,8 +798,6 @@ def _event_candidates(
     stream_column: str,
     identities: list[tuple[str, int, str, str]],
 ) -> list[dict[str, Any]]:
-    from .control_plane_live_postgres import _fetch_all_dict_rows
-
     clauses: list[str] = []
     params: list[Any] = []
     for event_id, sequence_number, stream_id, idempotency_key in identities:
@@ -767,7 +811,7 @@ def _event_candidates(
         f"ORDER BY {stream_column}, sequence_number, event_id FOR UPDATE",
         tuple(params),
     )
-    rows = _fetch_all_dict_rows(cursor)
+    rows = _raw_dict_rows(cursor)
     unique = {str(row.get("event_id") or ""): row for row in rows}
     if len(unique) != len(rows):
         raise ValueError(f"acquisition start create {table_name} duplicate event collision")
@@ -788,6 +832,26 @@ def _assert_event_set_exact(
     json_fields = frozenset({"payload_json", "artifact_refs_json"} if workflow else {"payload_json"})
     for event_id, expected_row in expected.items():
         _assert_row_exact(label, actual[event_id], expected_row, json_fields=json_fields)
+
+
+def _raw_column_name(value: Any) -> str:
+    text = str(value or "").strip()
+    if not text:
+        raise ValueError("acquisition start create raw row column identity collision")
+    return text
+
+
+def _raw_dict_row(cursor: Any, row: Any) -> dict[str, Any] | None:
+    if row is None:
+        return None
+    if isinstance(row, dict):
+        return {str(key): value for key, value in row.items()}
+    columns = [_raw_column_name(item[0]) for item in list(getattr(cursor, "description", []) or [])]
+    return {column: value for column, value in zip(columns, row)}
+
+
+def _raw_dict_rows(cursor: Any) -> list[dict[str, Any]]:
+    return [row for row in (_raw_dict_row(cursor, item) for item in cursor.fetchall()) if row is not None]
 
 
 def create_acquisition_start_v2_uow(
@@ -813,7 +877,6 @@ def create_acquisition_start_v2_uow(
     _require_authoritative_dependencies(adapter)
 
     from .agent_tool_result_postgres import _with_retry_dependencies
-    from .control_plane_live_postgres import _fetch_all_dict_rows, _fetch_one_dict_row
 
     operation_run_id = operation_run_id_for(
         action_id=binding.action_id,
@@ -870,7 +933,7 @@ def create_acquisition_start_v2_uow(
                     "SELECT * FROM operation_events WHERE event_id = %s LIMIT 1",
                     (_receipt_event_id(binding),),
                 )
-                discovered_receipt_event = _fetch_one_dict_row(cursor, cursor.fetchone())
+                discovered_receipt_event = _raw_dict_row(cursor, cursor.fetchone())
 
                 if discovered_receipt_event is None:
                     _refresh_deadline(cursor)
@@ -878,7 +941,7 @@ def create_acquisition_start_v2_uow(
                         "SELECT to_char(date_trunc('second', transaction_timestamp()) AT TIME ZONE 'UTC', "
                         '\'YYYY-MM-DD"T"HH24:MI:SS"Z"\') AS transaction_timestamp_iso'
                     )
-                    timestamp_row = _fetch_one_dict_row(cursor, cursor.fetchone()) or {}
+                    timestamp_row = _raw_dict_row(cursor, cursor.fetchone()) or {}
                     approved_at = str(timestamp_row.get("transaction_timestamp_iso") or "")
                 else:
                     discovered_payload = _json_value(discovered_receipt_event.get("payload_json"))
@@ -940,7 +1003,7 @@ def create_acquisition_start_v2_uow(
                     "OR (workspace_id = %s AND idempotency_key = %s) ORDER BY operation_run_id FOR UPDATE",
                     (operation_run_id, binding.occurrence.workspace_id, binding.start_idempotency),
                 )
-                operation_candidates = _fetch_all_dict_rows(cursor)
+                operation_candidates = _raw_dict_rows(cursor)
                 if len(operation_candidates) > 1:
                     raise ValueError("acquisition start create OperationRun split identity collision")
                 existing_operation = operation_candidates[0] if operation_candidates else None
@@ -951,7 +1014,7 @@ def create_acquisition_start_v2_uow(
                     "OR (workspace_id = %s AND idempotency_key = %s) ORDER BY action_id FOR UPDATE",
                     (binding.action_id, binding.occurrence.workspace_id, binding.start_idempotency),
                 )
-                action_candidates = _fetch_all_dict_rows(cursor)
+                action_candidates = _raw_dict_rows(cursor)
                 if len(action_candidates) != 1:
                     raise ValueError("acquisition start create Action identity collision")
                 existing_action = action_candidates[0]
@@ -962,7 +1025,7 @@ def create_acquisition_start_v2_uow(
                     "OR logical_occurrence_digest = %s ORDER BY result_slot_id FOR UPDATE",
                     (binding.occurrence.result_slot_id, binding.occurrence.logical_occurrence_digest),
                 )
-                slot_candidates = _fetch_all_dict_rows(cursor)
+                slot_candidates = _raw_dict_rows(cursor)
                 if len(slot_candidates) != 1:
                     raise ValueError("acquisition start create result slot identity collision")
 
@@ -979,7 +1042,7 @@ def create_acquisition_start_v2_uow(
                         binding.preview_digest,
                     ),
                 )
-                preview_candidates = _fetch_all_dict_rows(cursor)
+                preview_candidates = _raw_dict_rows(cursor)
                 if len(preview_candidates) != 1:
                     raise ValueError("acquisition start create preview identity collision")
                 preview_row = preview_candidates[0]
@@ -1012,7 +1075,7 @@ def create_acquisition_start_v2_uow(
                     "OR (workflow_run_id = %s AND idempotency_key = %s) ORDER BY command_id FOR UPDATE",
                     (expected["workflow_command_id"], workflow_run_id, expected["command_key"]),
                 )
-                command_candidates = _fetch_all_dict_rows(cursor)
+                command_candidates = _raw_dict_rows(cursor)
                 if len(command_candidates) > 1:
                     raise ValueError("acquisition start create WorkflowCommand split identity collision")
                 existing_command = command_candidates[0] if command_candidates else None
@@ -1022,7 +1085,7 @@ def create_acquisition_start_v2_uow(
                     "SELECT * FROM workflow_current_state WHERE workflow_run_id = %s FOR UPDATE",
                     (workflow_run_id,),
                 )
-                state_candidates = _fetch_all_dict_rows(cursor)
+                state_candidates = _raw_dict_rows(cursor)
                 if len(state_candidates) > 1:
                     raise ValueError("acquisition start create workflow state identity collision")
                 existing_state = state_candidates[0] if state_candidates else None
@@ -1208,7 +1271,7 @@ def create_acquisition_start_v2_uow(
                             binding.action_id,
                         ),
                     )
-                    action = _fetch_one_dict_row(cursor, cursor.fetchone())
+                    action = _raw_dict_row(cursor, cursor.fetchone())
                     if action is None:
                         raise ValueError("acquisition start create Action CAS collision")
                     _assert_row_exact(

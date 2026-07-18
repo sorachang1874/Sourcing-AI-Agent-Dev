@@ -405,6 +405,15 @@
   action-specific served evidence, and the complete 15-action release-window deletion condition remain open; current
   author PG evidence and any future scope-local review do not close this row.
 
+- **R-019 / R-029 / D1n S1e2b formal-review response (2026-07-18):** the response to the S1e2b formal `NO-GO`
+  hardens only the isolated start-v2 create boundary: held-root generic command controls/claim/ready-list are zero-write,
+  mixed v2 Action/Operation controls fail closed, replay uses raw physical row identity plus strict JSON equality, and
+  approval actor/policy validation happens before adapter/PG access. This does not add a direct
+  `update_action_state`/`update_operation_state` caller, does not change the current R-019 direct state-sync ratchet,
+  does not start the R-029 observation epoch, and does not populate served/default Agent tools. S1e2c has a separate
+  formal `NO-GO`, so result acceptance, release replay after downstream progress, shared lock topology, central
+  contract/preflight wiring, and live/signoff remain blocked.
+
 ## 使用方式
 
 - **批验收**：suite 失败 ⊆ 本台账未 closed 行 = 绿（green-modulo-ledger）；任何不在台账内的失败必须现场 worktree 归因，

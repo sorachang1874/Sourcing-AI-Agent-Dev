@@ -641,12 +641,16 @@ transaction persists the exact receipt, Action CAS, Operation, workflow source e
 current state, and planned winner; command-lock derivation recovers persisted `approved_at` under the event-stream
 locks before the remaining advisory groups, then repeats every official owner probe `FOR UPDATE`. Exact replay,
 eight write-boundary rollback, eight-way contention, distinct-approver collision, alternate identity, and seven
-owner-row corruption cases preserve zero partial writes and zero outbox/result/domain rows. The recovery wake is
-best-effort and post-commit. S1e2c still owns read-only preparation, shared acceptance, and terminal-success proof.
+owner-row corruption cases preserve zero partial writes and zero outbox/result/domain rows. Formal review response adds
+pre-adapter canonical approval validation, raw-row exact replay, strict JSON replay equality, mixed-v2 operation-control
+fail-closed, and generic command-control/claim/ready-list zero-write coverage for the held root command. Create performs
+no recovery wake; S1e2c owns hold release, read-only preparation, shared acceptance, terminal-success proof, and
+post-accept wake.
 R-019, R-029, Plan §6#6, OB-2.2/10.3/10.4, the `10/5` partition, provider/model/live=0, and `served=0` remain open.
 See `TRACK_D_D1N_S1E1_START_AUTHORITY_OWNER_DECISION.md` and
 `TRACK_D_D1N_S1E2A_START_SUBMIT_UOW_IMPLEMENTATION.md`, and
-`TRACK_D_D1N_S1E2B_START_CREATE_UOW_IMPLEMENTATION.md`.
+`TRACK_D_D1N_S1E2B_START_CREATE_UOW_IMPLEMENTATION.md` /
+`TRACK_D_D1N_S1E2B_START_CREATE_UOW_REVIEW_RESPONSE.md`.
 
 Shared hotspots—`operation_runtime.py`, `orchestrator.py`, public API routing, registry aggregation, migrations, and
 release-state derivation—have one serial integration owner. Leaf modules/tests may be developed in parallel. No leaf

@@ -59,8 +59,13 @@ def test_create_rejects_disallowed_namespace_before_dependency_or_pg_access() ->
     ("override", "error"),
     [
         ({"approval_actor_id": ""}, "approval_actor_id"),
+        ({"approval_actor_id": "x" * 201}, "approval_actor_id"),
+        ({"approval_actor_id": "human\x7f1"}, "approval_actor_id"),
+        ({"approval_actor_id": "human" + chr(0xD800)}, "approval_actor_id"),
         ({"approval_actor_kind": "service"}, "approval_actor_kind"),
         ({"approval_policy_revision": ""}, "approval_policy_revision"),
+        ({"approval_policy_revision": "bad revision"}, "approval_policy_revision"),
+        ({"approval_policy_revision": "v" + ("1" * 128)}, "approval_policy_revision"),
     ],
 )
 def test_create_rejects_nonhuman_or_unversioned_approval_before_dependency_or_pg_access(
