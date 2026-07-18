@@ -165,6 +165,19 @@ class D1nStartAcquisitionV2CreatePGMatrixTest(PGControlPlaneStoreTestMixin, unit
                 cursor.execute(sql.replace("{schema}", quoted_schema), params)
             connection.commit()
 
+    def _execute_with_preview_mutation_trigger_disabled(self, sql: str, params: tuple[Any, ...]) -> None:
+        fixture, quoted_schema = self._schema_connection()
+        assert psycopg is not None
+        with psycopg.connect(fixture.dsn, client_encoding="utf8") as connection:
+            with connection.cursor() as cursor:
+                preview_table = f"{quoted_schema}.{quote_control_plane_postgres_identifier('acquisition_plan_previews')}"
+                cursor.execute(f"ALTER TABLE {preview_table} DISABLE TRIGGER USER")
+                try:
+                    cursor.execute(sql.replace("{schema}", quoted_schema), params)
+                finally:
+                    cursor.execute(f"ALTER TABLE {preview_table} ENABLE TRIGGER USER")
+            connection.commit()
+
     def _arrange_pending(self, *, suffix: str) -> AgentToolOccurrence:
         kwargs = _uow_kwargs(suffix=f"create_matrix_{suffix}")
         kwargs["start_request_schema_version"] = ACQUISITION_START_V2_REQUEST_SCHEMA_VERSION
@@ -557,6 +570,81 @@ class D1nStartAcquisitionV2CreatePGMatrixTest(PGControlPlaneStoreTestMixin, unit
             )
 
         self.assertEqual(self._table_snapshot(), baseline)
+
+    def test_accept_start_result_revalidates_canonical_preview_owner_without_writes(self) -> None:
+        mutations: tuple[tuple[str, str], ...] = (
+            (
+                "nested_company_identity",
+                """
+                UPDATE {schema}.acquisition_plan_previews
+                SET canonical_company_id = %s,
+                    preview_json = jsonb_set(
+                        preview_json,
+                        '{company_target,canonical_company_id}',
+                        to_jsonb(%s::text),
+                        false
+                    )
+                WHERE preview_id = %s
+                """,
+            ),
+            (
+                "expired_row_and_payload",
+                """
+                UPDATE {schema}.acquisition_plan_previews
+                SET created_at = %s::timestamptz,
+                    expires_at = %s::timestamptz,
+                    preview_json = jsonb_set(
+                        jsonb_set(preview_json, '{created_at}', to_jsonb(%s::text), false),
+                        '{expires_at}',
+                        to_jsonb(%s::text),
+                        false
+                    )
+                WHERE preview_id = %s
+                """,
+            ),
+            (
+                "start_schema_pin",
+                """
+                UPDATE {schema}.acquisition_plan_previews
+                SET start_request_schema_version = %s,
+                    preview_json = jsonb_set(
+                        preview_json,
+                        '{schema_pins,intended_start_request_schema_version}',
+                        to_jsonb(%s::text),
+                        false
+                    )
+                WHERE preview_id = %s
+                """,
+            ),
+        )
+
+        for ordinal, (label, sql) in enumerate(mutations, start=1):
+            with self.subTest(owner=label):
+                occurrence = self._arrange_pending(suffix=f"accept_preview_owner_{ordinal}")
+                bundle = self._create(occurrence)
+                terminal = self._prepare_terminal(occurrence, suffix=f"accept_preview_owner_{ordinal}")
+                preview_id = bundle["confirmation_receipt"]["preview_ref"]["preview_id"]
+                if label == "expired_row_and_payload":
+                    params = (
+                        "2020-01-01T00:00:00Z",
+                        "2020-01-01T01:00:00Z",
+                        "2020-01-01T00:00:00Z",
+                        "2020-01-01T01:00:00Z",
+                        preview_id,
+                    )
+                else:
+                    params = ("forged_owner", "forged_owner", preview_id)
+                self._execute_with_preview_mutation_trigger_disabled(sql, params)
+                baseline = self._table_snapshot()
+
+                with self.assertRaisesRegex(RuntimeError, "acquisition_start_preview_not_found_or_conflict"):
+                    self.repository.accept_start_acquisition_tool_result_uow(
+                        occurrence=occurrence,
+                        terminal=terminal,
+                        attempted_slot_generation=occurrence.slot_generation,
+                    )
+
+                self.assertEqual(self._table_snapshot(), baseline)
 
     def test_accept_start_result_rejects_error_terminal_without_writes(self) -> None:
         occurrence = self._arrange_pending(suffix="forged_error")

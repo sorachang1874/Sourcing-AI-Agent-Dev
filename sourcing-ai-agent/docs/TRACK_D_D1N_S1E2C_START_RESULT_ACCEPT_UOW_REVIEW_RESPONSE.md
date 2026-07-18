@@ -37,6 +37,10 @@ This batch remains non-live and non-served. It does not close `R-019`, `R-029`, 
 - Shared Agent tool result acceptance now requires every required table to be both read-routed and authoritative before
   bootstrapping schemas or opening the write transaction. A direct `prefer_postgres` native adapter therefore returns
   `None` with zero result-slot/journal/command-release writes.
+- Result acceptance now reuses the start submit/create canonical locked-preview binder when loading the base owner.
+  Preview row candidates are still locked by exact id/revision/digest owner, but acceptance then revalidates the full
+  preview payload, nested company/effective/provider semantics, row/payload timestamps, expiry-at-submit, schema pins,
+  recomputed preview digest, and canonical start args before any result-slot, journal, or command-release write.
 
 ## New regression evidence
 
@@ -58,6 +62,9 @@ This batch remains non-live and non-served. It does not close `R-019`, `R-029`, 
 - `tests/test_d1n_start_acquisition_v2_create_pg.py::test_direct_accept_start_result_requires_authoritative_pg_before_writes`
   covers the direct native acceptance boundary in `prefer_postgres`: read routing is true, authoritative routing is
   false, the UoW returns `None`, the full-table snapshot is unchanged, and the root command hold remains intact.
+- `tests/test_d1n_start_acquisition_v2_create_pg.py::test_accept_start_result_revalidates_canonical_preview_owner_without_writes`
+  covers PG-admissible physical preview drift after terminal preparation: nested company identity drift, expired
+  row+payload timestamps, and start-schema pin drift all fail closed with a full-table zero-write snapshot.
 - Existing accept/replay/quarantine/root-hop tests continue to exercise the held-command release path and zero
   `runtime_outbox`/provider/model behavior.
 

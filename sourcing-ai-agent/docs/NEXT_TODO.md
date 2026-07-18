@@ -494,9 +494,12 @@
   advisory lock topology, including operation and command idempotency keys, with a fast topology oracle.
   Shared result acceptance now requires all required tables to be read-routed and authoritative before schema bootstrap
   or writes; direct `prefer_postgres` acceptance returns `None` with zero snapshot delta and preserves the root hold.
-  Response evidence currently includes PG create/result+delegate matrix `28 passed + 27 subtests`, direct
-  non-authoritative acceptance node=`1 passed`, and scoped mypy `0/1`; broader completion/control lock topology remains
-  open. S1e1/S1e2a/S1e2b/S1e2c author
+  Result acceptance now reuses the canonical locked-preview binder, so nested company/effective/provider semantics,
+  row/payload timestamps, expiry-at-submit, schema pins, recomputed preview digest, and canonical start args are checked
+  during base-owner load before result-slot/journal/command-release writes. Response evidence currently includes PG
+  create/result+delegate matrix `28 passed + 27 subtests`, direct non-authoritative acceptance node=`1 passed`,
+  canonical preview-owner revalidation node=`1 passed + 3 subtests`, and scoped mypy `0/1`; broader completion/control
+  lock topology remains open. S1e1/S1e2a/S1e2b/S1e2c author
   evidence/future review 都不改变 `10/5`、served=0、provider/model/live=0；
   R-019/R-029、Plan §6#6、OB-2.2/10.3/10.4 均继续 open，fresh pinned non-author review pending。实现记录见
   `TRACK_D_D1N_S1E2A_START_SUBMIT_UOW_IMPLEMENTATION.md` 与

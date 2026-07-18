@@ -422,8 +422,10 @@
   late-result quarantine after downstream root-command progress. The central pre-agent matrix/preflight now includes
   the start-v2 result hold/release owner entry. Start-v2 create and result acceptance now share the same advisory lock
   topology and idempotency keys. The shared result-acceptance native boundary now fails closed unless all required tables
-  are both read-routed and authoritative. It does not close the S1e2c formal `NO-GO`: broader completion/control topology
-  remains under R-019, and no provider/model/live/served path is authorized.
+  are both read-routed and authoritative. Result acceptance also reuses the canonical locked-preview binder during
+  base-owner load, so PG-admissible nested company drift, expired row+payload timestamps, and start-schema pin drift fail
+  closed with zero result-slot/journal/command-release writes. It does not close the S1e2c formal `NO-GO`: broader
+  completion/control topology remains under R-019, and no provider/model/live/served path is authorized.
 
 ## 使用方式
 

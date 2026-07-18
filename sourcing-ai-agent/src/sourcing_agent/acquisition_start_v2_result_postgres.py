@@ -30,6 +30,7 @@ from .acquisition_start_v2_create_postgres import (
     _workflow_run_id,
 )
 from .acquisition_start_v2_postgres import (
+    _bind_locked_preview,
     _canonical_submit_rows,
     _utc_second_iso,
     revalidate_acquisition_start_v2_occurrence,
@@ -167,27 +168,6 @@ def _load_one(cursor: Any, sql: str, params: tuple[Any, ...]) -> dict[str, Any]:
     return _fetch_one_dict_row(cursor, cursor.fetchone()) or {}
 
 
-def _assert_exact_preview_owner(
-    *,
-    preview: dict[str, Any],
-    occurrence: AgentToolOccurrence,
-    binding: Any,
-) -> None:
-    expected = {
-        "preview_id": binding.preview_id,
-        "workspace_id": occurrence.workspace_id,
-        "requester_id": occurrence.actor_id,
-        "preview_revision": binding.preview_revision,
-        "preview_digest": binding.preview_digest,
-    }
-    mismatches = [field for field, value in expected.items() if str(preview.get(field)) != str(value)]
-    if mismatches:
-        raise ValueError("acquisition start result preview exact-owner mismatch: " + ", ".join(mismatches))
-    preview_payload = _json_payload(preview, "preview_json")
-    if str(preview_payload.get("preview_digest") or "") != binding.preview_digest:
-        raise ValueError("acquisition start result preview payload digest mismatch")
-
-
 def _discover_start_result_lock_identity(
     cursor: Any,
     *,
@@ -275,7 +255,8 @@ def load_start_acquisition_result_base_owner(
     from .agent_tool_result_postgres import _assert_exact_slot
 
     _assert_exact_slot(slot, binding.occurrence)
-    _assert_exact_preview_owner(preview=preview, occurrence=binding.occurrence, binding=binding)
+    submitted_at = _utc_second_iso(action.get("created_at"))
+    _bind_locked_preview(binding=binding, preview_row=preview, submitted_at=submitted_at)
     operation = _load_one(
         cursor,
         "SELECT * FROM operation_runs WHERE operation_run_id = %s FOR UPDATE",
