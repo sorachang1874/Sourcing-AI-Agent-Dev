@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import unittest
 from pathlib import Path
@@ -120,6 +121,113 @@ class XFirstPortablePackageTests(unittest.TestCase):
                 mutated,
                 fixture_id=FIXTURE_ID,
                 expected_snapshot=_expected_snapshot(mutated),
+            )
+
+    def test_checked_in_registry_matches_pinned_digest(self) -> None:
+        payload = (ROOT / package_module._FIXTURE_REGISTRY_PATH).read_bytes()
+        self.assertEqual(
+            hashlib.sha256(payload).hexdigest(),
+            package_module.FIXTURE_REGISTRY_SHA256,
+        )
+
+    def test_registry_byte_drift_fails_closed(self) -> None:
+        value = _package()
+        original_read_bytes = Path.read_bytes
+        registry_path = ROOT / package_module._FIXTURE_REGISTRY_PATH
+
+        def drift_registry(path: Path) -> bytes:
+            payload = original_read_bytes(path)
+            return payload + b"\n" if path == registry_path else payload
+
+        with mock.patch.object(Path, "read_bytes", autospec=True, side_effect=drift_registry):
+            with self.assertRaisesRegex(
+                XFirstPortablePackageError, "fixture_registry_digest_mismatch"
+            ):
+                validate_x_first_portable_package(
+                    value,
+                    fixture_id=FIXTURE_ID,
+                    expected_snapshot=_expected_snapshot(value),
+                )
+
+    def test_capability_snapshots_survive_caller_mutation(self) -> None:
+        value = _package()
+        validated = validate_x_first_portable_package(
+            value,
+            fixture_id=FIXTURE_ID,
+            expected_snapshot=_expected_snapshot(value),
+        )
+
+        first_manifest = validated.manifest
+        self.assertIsNot(first_manifest, validated.manifest)
+        first_manifest["package_mode"] = "caller_mutated"
+        self.assertEqual(validated.manifest["package_mode"], "fixture_simulate")
+
+        result = validated.artifacts["result"]
+        original_state = result["dimension_results"][0]["relevance_state"]
+        original_hash = result["result_sha256"]
+        result["dimension_results"][0]["relevance_state"] = "out_of_scope"
+        result["result_sha256"] = package_module._content_sha256(result, "result_sha256")
+        fresh_result = validated.artifacts["result"]
+        self.assertEqual(fresh_result["dimension_results"][0]["relevance_state"], original_state)
+        self.assertEqual(fresh_result["result_sha256"], original_hash)
+
+        receipt = validated.semantic_validation_receipt
+        receipt["validation_status"] = "failed"
+        self.assertEqual(validated.semantic_validation_receipt["validation_status"], "passed")
+
+    def test_post_validation_result_mutation_cannot_reach_preview(self) -> None:
+        from sourcing_agent.x_first_portable_adapter import build_verification_import_preview
+
+        value = _package()
+        validated = validate_x_first_portable_package(
+            value,
+            fixture_id=FIXTURE_ID,
+            expected_snapshot=_expected_snapshot(value),
+        )
+        forged = validated.artifacts["result"]
+        forged["dimension_results"][0]["relevance_state"] = "out_of_scope"
+        forged["result_sha256"] = package_module._content_sha256(forged, "result_sha256")
+
+        preview = build_verification_import_preview(validated_package=validated)
+
+        rows = {row["source_record_ref"]: row for row in preview["subjects"]}
+        analyzed = rows["fixture://product/snapshot/candidate-1"]
+        self.assertEqual(
+            analyzed["verification_summaries"][0]["relevance_state"],
+            "target_core",
+        )
+        self.assertEqual(
+            preview["portable_result_sha256"],
+            validated.artifacts["result"]["result_sha256"],
+        )
+
+    def test_capability_cannot_be_constructed_without_seal(self) -> None:
+        value = _package()
+        validated = validate_x_first_portable_package(
+            value,
+            fixture_id=FIXTURE_ID,
+            expected_snapshot=_expected_snapshot(value),
+        )
+
+        with self.assertRaisesRegex(
+            XFirstPortablePackageError, "validated_package_capability_invalid"
+        ):
+            package_module._ValidatedPortableCampaignPackage(
+                _manifest_json=validated._manifest_json,
+                _semantic_validation_receipt_json=validated._semantic_validation_receipt_json,
+                _artifacts_json=validated._artifacts_json,
+                trusted_fixture_id=FIXTURE_ID,
+                _seal=object(),
+            )
+        with self.assertRaisesRegex(
+            XFirstPortablePackageError, "validated_package_snapshot_invalid"
+        ):
+            package_module._ValidatedPortableCampaignPackage(
+                _manifest_json={},
+                _semantic_validation_receipt_json=validated._semantic_validation_receipt_json,
+                _artifacts_json=validated._artifacts_json,
+                trusted_fixture_id=FIXTURE_ID,
+                _seal=package_module._CAPABILITY_SEAL,
             )
 
     def test_snapshot_revision_and_fixture_id_are_product_owned(self) -> None:

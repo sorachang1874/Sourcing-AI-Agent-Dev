@@ -36,7 +36,7 @@ _RECEIPT_SCHEMA_PATH = Path(
     "x.portable.research_campaign.semantic_validation_receipt.v1.schema.json"
 )
 _FIXTURE_REGISTRY_PATH = Path("configs/x_first_fixture_semantic_validation_registry.v1.json")
-FIXTURE_REGISTRY_SHA256 = "7dce6e35bb461909b42dfcc07434b7b7cfa751b8e9a4446a538f8e8996787256"
+FIXTURE_REGISTRY_SHA256 = "e8b5446a2719861f0e66de1c2e98bf328d58b40e23d499c84e1198d3abbb687a"
 _SHA256_RE = re.compile(r"[0-9a-f]{64}")
 _IDENTIFIER_RE = re.compile(r"[a-z0-9][a-z0-9_.-]{0,127}")
 _TIMESTAMP_RE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z")
@@ -186,16 +186,12 @@ class _TrustedSemanticValidationPin:
     """Capability minted only from the product-owned pinned fixture registry."""
 
     fixture_id: str
-    issuer_owner: str
-    issuer_owner_result_digest: str
     manifest_sha256: str
     receipt_sha256: str
     validator_revision_sha256: str
 
     def __post_init__(self) -> None:
         _identifier(self.fixture_id, "x_first_trusted_pin_fixture_id_invalid")
-        _identifier(self.issuer_owner, "x_first_trusted_pin_issuer_invalid")
-        _sha256(self.issuer_owner_result_digest, "x_first_trusted_pin_owner_result_invalid")
         _sha256(self.manifest_sha256, "x_first_trusted_pin_manifest_invalid")
         _sha256(self.receipt_sha256, "x_first_trusted_pin_receipt_invalid")
         _sha256(self.validator_revision_sha256, "x_first_trusted_pin_revision_invalid")
@@ -223,17 +219,52 @@ _CAPABILITY_SEAL = object()
 
 @dataclass(frozen=True, slots=True)
 class _ValidatedPortableCampaignPackage:
-    manifest: Mapping[str, Any]
-    semantic_validation_receipt: Mapping[str, Any]
-    artifacts: Mapping[str, Mapping[str, Any]]
+    """Sealed capability backed only by immutable canonical JSON snapshots.
+
+    The decoded mappings returned by the public properties are disposable
+    copies.  A caller may mutate those copies, but cannot change the package
+    state later consumed by the preview or fake owner.
+    """
+
+    _manifest_json: bytes
+    _semantic_validation_receipt_json: bytes
+    _artifacts_json: bytes
     trusted_fixture_id: str
-    trusted_issuer_owner: str
-    trusted_issuer_owner_result_digest: str
     _seal: object
 
     def __post_init__(self) -> None:
         if self._seal is not _CAPABILITY_SEAL:
             raise XFirstPortablePackageError("x_first_validated_package_capability_invalid")
+        for snapshot in (
+            self._manifest_json,
+            self._semantic_validation_receipt_json,
+            self._artifacts_json,
+        ):
+            if not isinstance(snapshot, bytes):
+                raise XFirstPortablePackageError(
+                    "x_first_validated_package_snapshot_invalid"
+                )
+
+    @staticmethod
+    def _decode_snapshot(snapshot: bytes) -> dict[str, Any]:
+        decoded = json.loads(snapshot)
+        if not isinstance(decoded, dict):
+            raise XFirstPortablePackageError(
+                "x_first_validated_package_snapshot_invalid"
+            )
+        return decoded
+
+    @property
+    def manifest(self) -> dict[str, Any]:
+        return self._decode_snapshot(self._manifest_json)
+
+    @property
+    def semantic_validation_receipt(self) -> dict[str, Any]:
+        return self._decode_snapshot(self._semantic_validation_receipt_json)
+
+    @property
+    def artifacts(self) -> dict[str, Any]:
+        return self._decode_snapshot(self._artifacts_json)
 
 
 def require_validated_package_capability(value: Any) -> _ValidatedPortableCampaignPackage:
@@ -270,8 +301,6 @@ def _load_trusted_fixture_pin(fixture_id: str) -> _TrustedSemanticValidationPin:
     matches = [row for row in registry["fixtures"] if isinstance(row, Mapping) and row.get("fixture_id") == fixture_id]
     if len(matches) != 1 or set(matches[0]) != {
         "fixture_id",
-        "issuer_owner",
-        "issuer_owner_result_digest",
         "manifest_sha256",
         "receipt_sha256",
         "validator_revision_sha256",
@@ -280,8 +309,6 @@ def _load_trusted_fixture_pin(fixture_id: str) -> _TrustedSemanticValidationPin:
     row = matches[0]
     return _TrustedSemanticValidationPin(
         fixture_id=row["fixture_id"],
-        issuer_owner=row["issuer_owner"],
-        issuer_owner_result_digest=row["issuer_owner_result_digest"],
         manifest_sha256=row["manifest_sha256"],
         receipt_sha256=row["receipt_sha256"],
         validator_revision_sha256=row["validator_revision_sha256"],
@@ -608,12 +635,10 @@ def validate_x_first_portable_package(
     ):
         raise XFirstPortablePackageError("x_first_semantic_receipt_effect_counts_invalid")
     return _ValidatedPortableCampaignPackage(
-        manifest=manifest,
-        semantic_validation_receipt=receipt,
-        artifacts=normalized_artifacts,
+        _manifest_json=canonical_json(manifest).encode("utf-8"),
+        _semantic_validation_receipt_json=canonical_json(receipt).encode("utf-8"),
+        _artifacts_json=canonical_json(normalized_artifacts).encode("utf-8"),
         trusted_fixture_id=trusted_pin.fixture_id,
-        trusted_issuer_owner=trusted_pin.issuer_owner,
-        trusted_issuer_owner_result_digest=trusted_pin.issuer_owner_result_digest,
         _seal=_CAPABILITY_SEAL,
     )
 

@@ -45,9 +45,12 @@ The sourcing-owned exporter:
 
 The import adapter no longer accepts a result or self-asserted receipt by itself. It requires selection, policy,
 catalog, request, binding, canonical plan, and result payloads; exact schema/payload/internal hashes; and a semantic
-receipt whose manifest, receipt, validator revision, and issuer-result digests match the product-owned checked-in
-fixture registry. A caller cannot manufacture trust by instantiating a pin from request data. The adapter then returns
-a validated review projection only; its authority always keeps product writes and automatic identity merge off.
+receipt whose manifest, receipt, and validator revision digests match the product-owned checked-in fixture registry.
+A caller cannot manufacture trust by instantiating a pin from request data. Successful validation mints a sealed
+capability that stores only immutable canonical JSON snapshots of the manifest, receipt, and artifacts; every read
+returns a disposable decode, so mutating a previously returned mapping cannot change the package state later consumed
+by the preview or the fake owner (no post-validation TOCTOU window). The adapter then returns a validated review
+projection only; its authority always keeps product writes and automatic identity merge off.
 The product keeps byte-identical local copies of the policy, catalog, request, plan, and result schemas and verifies
 all seven artifact schemas plus the manifest and receipt schemas before package validation. The validator revision
 also binds the X-First validator implementation sources, so changing code without publishing a newly reviewed fixture
@@ -170,13 +173,14 @@ The following work remains intentionally deferred and must land in order:
 
 1. extract the shared projection-selection binder and add the X owner wrapper;
 2. register `research_selected_people_on_x` with a closed request schema and explicit approval/budget policy;
-3. register durable commands `x.research_campaign.create`, `x.person_research.run`, and
-   `person.x_evidence.materialize` with ActivityAttempt accounting and cancellation semantics;
+3. register durable commands `x.research_campaign.create` and `x.person_research.run` with ActivityAttempt
+   accounting and cancellation semantics;
 4. replace the fixture registry with a durable owner-authenticated semantic receipt for scripted/live execution; the
    current checked-in registry is fixture-only and cannot authorize live execution;
 5. implement item-level retry, no-evidence success, cancellation quarantine, and terminal-total campaign recovery;
-6. implement a product-domain materializer that writes only through PersonAsset/PersonEvidence owners and remains
-   idempotent on campaign, person, evidence kind, and content hash;
+6. implement and verify a product-domain materializer that writes only through PersonAsset/PersonEvidence owners and
+   remains idempotent on campaign, person, evidence kind, and content hash; only then register its owner and the
+   `person.x_evidence.materialize` command atomically, so a materialize command never exists without a verified owner;
 7. refresh the projection person-search index without changing projection membership;
 8. add strict Agent result schemas and bounded frontend status/summary adapters; and
 9. complete targeted service simulation, independent pinned review, and only then change `served=0`.
@@ -193,6 +197,10 @@ Provider-free regression coverage includes:
 - LinkedIn, professional-profile, known-X-proposal, and name-only seed shapes;
 - request/result rebinding rejection;
 - byte parity for all seven portable artifact schemas and fail-closed local schema-drift detection;
+- checked-in fixture registry digest pinning with fail-closed registry byte-drift detection;
+- immutable validated-package capability: caller mutation of returned manifest/receipt/artifact mappings after
+  validation cannot reach the preview or fake owner, and the capability cannot be constructed without the
+  module-private seal;
 - read-only import preview with bounded observation/handle provenance, explicit source status, and no
   canonical/product write authority;
 - distinct `research_in_progress` / `research_continuation_required` handling and terminal-count reconciliation;
