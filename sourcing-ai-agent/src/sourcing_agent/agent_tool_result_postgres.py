@@ -38,9 +38,13 @@ def _revalidate_server_owned_occurrence(occurrence: AgentToolOccurrence) -> Agen
 
 
 def _runtime_dependencies(adapter: Any, table_names: tuple[str, ...]) -> bool:
+    authoritative = getattr(adapter, "is_authoritative", None)
+    if not callable(authoritative):
+        return False
     for table_name in table_names:
-        if not adapter.should_prefer_read(table_name):
+        if not adapter.should_prefer_read(table_name) or not authoritative(table_name):
             return False
+    for table_name in table_names:
         adapter._ensure_table_write_schema(table_name)
     return True
 

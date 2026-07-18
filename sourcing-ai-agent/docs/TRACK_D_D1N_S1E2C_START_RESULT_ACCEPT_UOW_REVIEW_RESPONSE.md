@@ -34,6 +34,9 @@ This batch remains non-live and non-served. It does not close `R-019`, `R-029`, 
   Action, workflow commands in the workflow, and Action/Operation/workflow event streams. Unknown Operation members,
   unknown workflow commands other than the ratified root/intent successor, and event-stream suffix rows fail closed
   instead of proving only the expected subset.
+- Shared Agent tool result acceptance now requires every required table to be both read-routed and authoritative before
+  bootstrapping schemas or opening the write transaction. A direct `prefer_postgres` native adapter therefore returns
+  `None` with zero result-slot/journal/command-release writes.
 
 ## New regression evidence
 
@@ -52,6 +55,9 @@ This batch remains non-live and non-served. It does not close `R-019`, `R-029`, 
 - `tests/test_d1n_start_acquisition_v2_create_pg.py::test_foreign_operation_membership_collision_writes_nothing` and
   `test_committed_aggregate_suffix_membership_replay_collision_writes_nothing` cover foreign Operation membership plus
   Action/workflow event suffix rows with zero-write assertions.
+- `tests/test_d1n_start_acquisition_v2_create_pg.py::test_direct_accept_start_result_requires_authoritative_pg_before_writes`
+  covers the direct native acceptance boundary in `prefer_postgres`: read routing is true, authoritative routing is
+  false, the UoW returns `None`, the full-table snapshot is unchanged, and the root command hold remains intact.
 - Existing accept/replay/quarantine/root-hop tests continue to exercise the held-command release path and zero
   `runtime_outbox`/provider/model behavior.
 

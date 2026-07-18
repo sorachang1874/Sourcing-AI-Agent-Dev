@@ -497,6 +497,31 @@ class D1nStartAcquisitionV2CreatePGMatrixTest(PGControlPlaneStoreTestMixin, unit
         self.assertEqual(counts["runtime_outbox"], 0)
         self.assertEqual(counts["acquisition_runs"], 0)
 
+    def test_direct_accept_start_result_requires_authoritative_pg_before_writes(self) -> None:
+        occurrence = self._arrange_pending(suffix="accept_non_authoritative")
+        bundle = self._create(occurrence)
+        terminal = self._prepare_terminal(occurrence, suffix="accept_non_authoritative")
+        command_id = bundle["workflow_command"]["command_id"]
+        baseline = self._table_snapshot()
+        original_mode = self.adapter.mode
+
+        try:
+            self.adapter.mode = "prefer_postgres"
+            self.assertTrue(self.adapter.should_prefer_read("agent_tool_result_slots"))
+            self.assertFalse(self.adapter.is_authoritative("agent_tool_result_slots"))
+            accepted = self.adapter.accept_start_acquisition_tool_result_uow(
+                occurrence=occurrence,
+                terminal=terminal,
+                attempted_slot_generation=occurrence.slot_generation,
+            )
+        finally:
+            self.adapter.mode = original_mode
+
+        self.assertIsNone(accepted)
+        self.assertEqual(self._table_snapshot(), baseline)
+        after = self._rows("workflow_commands", where="command_id = %s", params=(command_id,))[0]
+        self.assertEqual(after["not_before_at"], _RESULT_ACCEPTANCE_HOLD_UNTIL)
+
     def test_accept_start_result_rejects_forged_terminal_bytes_without_writes(self) -> None:
         occurrence = self._arrange_pending(suffix="forged_result")
         self._create(occurrence)
