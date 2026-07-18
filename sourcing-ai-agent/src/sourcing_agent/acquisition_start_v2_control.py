@@ -11,6 +11,7 @@ from .acquisition_start_v2 import (
     AcquisitionStartV2BoundRequest,
     AcquisitionStartV2Error,
 )
+from .agent_canary_registry import START_ACQUISITION_RUN_TOOL_SPEC
 from .operation_runtime import ACTION_START_ACQUISITION_RUN
 
 ACQUISITION_START_V2_GENERIC_OPERATION_CONTROL_NOT_ENABLED = (
@@ -42,11 +43,28 @@ def _exact_result_contract_pins(record: Mapping[str, Any]) -> bool:
         str(record.get("result_schema_version") or "") == ACQUISITION_START_V2_RESULT_SPEC.result_schema_version
         and str(record.get("result_schema_digest") or "") == ACQUISITION_START_V2_RESULT_SPEC.result_schema_digest
         and str(record.get("result_serializer_owner") or "") == ACQUISITION_START_V2_RESULT_SPEC.serializer_owner
-        and str(record.get("result_serializer_revision") or "")
-        == ACQUISITION_START_V2_RESULT_SPEC.serializer_revision
+        and str(record.get("result_serializer_revision") or "") == ACQUISITION_START_V2_RESULT_SPEC.serializer_revision
         and str(record.get("result_serializer_contract_digest") or "")
         == ACQUISITION_START_V2_RESULT_SPEC.serializer_contract_digest
     )
+
+
+def _has_any_current_start_v2_contract_pin(record: Mapping[str, Any]) -> bool:
+    """Return whether one independently identifying current start-v2 pin survives."""
+
+    expected = {
+        "request_schema_version": ACQUISITION_START_V2_REQUEST_SCHEMA_VERSION,
+        "request_schema_digest": ACQUISITION_START_V2_REQUEST_SCHEMA_DIGEST,
+        "tool_name": START_ACQUISITION_RUN_TOOL_SPEC.tool_name,
+        "tool_spec_version": START_ACQUISITION_RUN_TOOL_SPEC.tool_spec_version,
+        "tool_spec_digest": START_ACQUISITION_RUN_TOOL_SPEC.tool_spec_digest,
+        "result_schema_version": ACQUISITION_START_V2_RESULT_SPEC.result_schema_version,
+        "result_schema_digest": ACQUISITION_START_V2_RESULT_SPEC.result_schema_digest,
+        "result_serializer_owner": ACQUISITION_START_V2_RESULT_SPEC.serializer_owner,
+        "result_serializer_revision": ACQUISITION_START_V2_RESULT_SPEC.serializer_revision,
+        "result_serializer_contract_digest": ACQUISITION_START_V2_RESULT_SPEC.serializer_contract_digest,
+    }
+    return any(type(record.get(field)) is str and record.get(field) == value for field, value in expected.items())
 
 
 def _exact_result_occurrence_ref(value: object) -> bool:
@@ -89,6 +107,12 @@ def _exact_action_start_v2_contract(
         return False
     occurrence_ref = action_metadata.get("result_occurrence_ref")
     snapshot_tool_pins = request.snapshot.tool_pins.to_record()
+    logical_occurrence_digest = (
+        occurrence_ref.get("logical_occurrence_digest") if isinstance(occurrence_ref, Mapping) else None
+    )
+    expected_start_idempotency = (
+        f"agent-start-v2:{logical_occurrence_digest}" if type(logical_occurrence_digest) is str else ""
+    )
     return bool(
         str(action.get("action_type") or "") == ACTION_START_ACQUISITION_RUN
         and str(action.get("owner_module") or "") == "acquisition_run_writer"
@@ -96,10 +120,17 @@ def _exact_action_start_v2_contract(
         and str(action.get("workspace_id") or "") == str(request.target_ref.get("workspace_id") or "")
         and str(action.get("request_schema_version") or "") == ACQUISITION_START_V2_REQUEST_SCHEMA_VERSION
         and str(action.get("request_schema_digest") or "") == ACQUISITION_START_V2_REQUEST_SCHEMA_DIGEST
-        and str(action.get("tool_spec_version") or "") == snapshot_tool_pins["tool_spec_version"]
-        and str(action.get("tool_spec_digest") or "") == snapshot_tool_pins["tool_spec_digest"]
+        and str(action.get("tool_name") or "") == START_ACQUISITION_RUN_TOOL_SPEC.tool_name
+        and str(action.get("tool_spec_version") or "")
+        == snapshot_tool_pins["tool_spec_version"]
+        == START_ACQUISITION_RUN_TOOL_SPEC.tool_spec_version
+        and str(action.get("tool_spec_digest") or "")
+        == snapshot_tool_pins["tool_spec_digest"]
+        == START_ACQUISITION_RUN_TOOL_SPEC.tool_spec_digest
         and _exact_result_contract_pins(action)
         and _exact_result_occurrence_ref(occurrence_ref)
+        and type(action.get("idempotency_key")) is str
+        and action.get("idempotency_key") == expected_start_idempotency
     )
 
 
@@ -115,8 +146,13 @@ def _exact_operation_start_v2_contract(
         and str(operation.get("operation_type") or "") == "acquisition_run"
         and str(operation.get("request_schema_version") or "") == ACQUISITION_START_V2_REQUEST_SCHEMA_VERSION
         and str(operation.get("request_schema_digest") or "") == ACQUISITION_START_V2_REQUEST_SCHEMA_DIGEST
+        and str(operation.get("tool_name") or "")
+        == str(action.get("tool_name") or "")
+        == START_ACQUISITION_RUN_TOOL_SPEC.tool_name
         and str(operation.get("tool_spec_version") or "") == str(action.get("tool_spec_version") or "")
         and str(operation.get("tool_spec_digest") or "") == str(action.get("tool_spec_digest") or "")
+        and type(operation.get("idempotency_key")) is str
+        and operation.get("idempotency_key") == action.get("idempotency_key")
         and _exact_result_contract_pins(operation)
     )
 
@@ -144,56 +180,25 @@ def classify_acquisition_start_v2_generic_control_provenance(
     action_has_any_v2_input_key = action_type == ACTION_START_ACQUISITION_RUN and bool(
         action_v2_input_keys & action_input_key_set
     )
-    action_has_any_current_v2_pin = (
-        str(action.get("request_schema_version") or "").strip() == ACQUISITION_START_V2_REQUEST_SCHEMA_VERSION
-        or str(action.get("request_schema_digest") or "").strip() == ACQUISITION_START_V2_REQUEST_SCHEMA_DIGEST
-    )
-    operation_has_any_current_v2_pin = bool(operation) and (
-        str(operation.get("request_schema_version") or "").strip() == ACQUISITION_START_V2_REQUEST_SCHEMA_VERSION
-        or str(operation.get("request_schema_digest") or "").strip() == ACQUISITION_START_V2_REQUEST_SCHEMA_DIGEST
-    )
+    action_has_any_current_v2_pin = _has_any_current_start_v2_contract_pin(action)
+    operation_has_any_current_v2_pin = bool(operation) and _has_any_current_start_v2_contract_pin(operation)
     start_snapshot = action_target.get("start_snapshot")
     start_snapshot_mapping = dict(start_snapshot) if isinstance(start_snapshot, Mapping) else {}
     action_has_v2_start_snapshot = bool(start_snapshot_mapping) and bool(
         start_snapshot_mapping.get("schema_version") or start_snapshot_mapping.get("snapshot_digest")
     )
-    action_has_result_occurrence = isinstance(action_metadata.get("result_occurrence_ref"), Mapping)
-    action_has_v2_result_pins = (
-        str(action.get("result_schema_version") or "").strip() == ACQUISITION_START_V2_RESULT_SPEC.result_schema_version
-        or str(action.get("result_schema_digest") or "").strip()
-        == ACQUISITION_START_V2_RESULT_SPEC.result_schema_digest
-        or str(action.get("result_serializer_owner") or "").strip() == ACQUISITION_START_V2_RESULT_SPEC.serializer_owner
-        or str(action.get("result_serializer_revision") or "").strip()
-        == ACQUISITION_START_V2_RESULT_SPEC.serializer_revision
-        or str(action.get("result_serializer_contract_digest") or "").strip()
-        == ACQUISITION_START_V2_RESULT_SPEC.serializer_contract_digest
-    )
     action_has_v2_provenance = (
-        action_has_any_current_v2_pin
-        or action_has_v2_start_snapshot
-        or action_has_result_occurrence
-        or action_has_v2_result_pins
-        or action_has_any_v2_input_key
+        action_has_any_current_v2_pin or action_has_v2_start_snapshot or action_has_any_v2_input_key
     )
-    operation_has_v2_provenance = bool(operation) and (
-        operation_has_any_current_v2_pin
-        or (
-            action_type == ACTION_START_ACQUISITION_RUN
-            and str(operation.get("owner_module") or "").strip() == "acquisition_run_writer"
-            and bool(action_has_v2_provenance)
-        )
-    )
+    operation_has_v2_provenance = bool(operation) and operation_has_any_current_v2_pin
     if not action_has_v2_provenance and not operation_has_v2_provenance:
         return "non_v2"
-    if (
-        _exact_action_start_v2_contract(
-            action,
-            action_input=action_input,
-            action_target=action_target,
-            action_metadata=action_metadata,
-        )
-        and (not operation or _exact_operation_start_v2_contract(operation, action=action))
-    ):
+    if _exact_action_start_v2_contract(
+        action,
+        action_input=action_input,
+        action_target=action_target,
+        action_metadata=action_metadata,
+    ) and (not operation or _exact_operation_start_v2_contract(operation, action=action)):
         return "exact_v2"
     return "partial_or_mixed_v2"
 
