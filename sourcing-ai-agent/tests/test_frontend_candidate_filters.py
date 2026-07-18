@@ -429,6 +429,33 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
                     resolveWorkflowStatus: () => ({ status: "failed", terminal: true }),
                   };
                 }
+                if (specifier === "./cohortSelection") {
+                  const unexpectedCohortSelectionCall = () => {
+                    throw new Error("candidate-filter helper unexpectedly used cohort selection");
+                  };
+                  return {
+                    cloneCohortSelection: unexpectedCohortSelectionCall,
+                    equalCohortSelection: unexpectedCohortSelectionCall,
+                    parseCohortSelectionOptionsPayload: unexpectedCohortSelectionCall,
+                    parseCohortSelectionPayload: unexpectedCohortSelectionCall,
+                  };
+                }
+                if (specifier === "../../../contracts/frontend_api_runtime_contract") {
+                  const contractSource = fs.readFileSync(
+                    path.join(process.cwd(), "contracts/frontend_api_runtime_contract.ts"),
+                    "utf8",
+                  );
+                  const contractCompiled = ts.transpileModule(contractSource, {
+                    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+                  }).outputText;
+                  const contractModule = { exports: {} };
+                  vm.runInNewContext(contractCompiled, {
+                    module: contractModule,
+                    exports: contractModule.exports,
+                    TextEncoder: globalThis.TextEncoder,
+                  });
+                  return contractModule.exports;
+                }
                 return require(specifier);
               };
               vm.runInNewContext(
@@ -578,6 +605,33 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
                   resolveWorkflowStatus: () => ({ status: "failed", terminal: true }),
                 };
               }
+              if (specifier === "./cohortSelection") {
+                const unexpectedCohortSelectionCall = () => {
+                  throw new Error("candidate-filter helper unexpectedly used cohort selection");
+                };
+                return {
+                  cloneCohortSelection: unexpectedCohortSelectionCall,
+                  equalCohortSelection: unexpectedCohortSelectionCall,
+                  parseCohortSelectionOptionsPayload: unexpectedCohortSelectionCall,
+                  parseCohortSelectionPayload: unexpectedCohortSelectionCall,
+                };
+              }
+              if (specifier === "../../../contracts/frontend_api_runtime_contract") {
+                const contractSource = fs.readFileSync(
+                  path.join(process.cwd(), "contracts/frontend_api_runtime_contract.ts"),
+                  "utf8",
+                );
+                const contractCompiled = ts.transpileModule(contractSource, {
+                  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+                }).outputText;
+                const contractModule = { exports: {} };
+                vm.runInNewContext(contractCompiled, {
+                  module: contractModule,
+                  exports: contractModule.exports,
+                  TextEncoder: globalThis.TextEncoder,
+                });
+                return contractModule.exports;
+              }
               return require(specifier);
             };
             vm.runInNewContext(
@@ -709,6 +763,33 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
                   normalizeWorkflowStatus: () => "failed",
                   resolveWorkflowStatus: () => ({ status: "failed", terminal: true }),
                 };
+              }
+              if (specifier === "./cohortSelection") {
+                const unexpectedCohortSelectionCall = () => {
+                  throw new Error("candidate-filter helper unexpectedly used cohort selection");
+                };
+                return {
+                  cloneCohortSelection: unexpectedCohortSelectionCall,
+                  equalCohortSelection: unexpectedCohortSelectionCall,
+                  parseCohortSelectionOptionsPayload: unexpectedCohortSelectionCall,
+                  parseCohortSelectionPayload: unexpectedCohortSelectionCall,
+                };
+              }
+              if (specifier === "../../../contracts/frontend_api_runtime_contract") {
+                const contractSource = fs.readFileSync(
+                  path.join(process.cwd(), "contracts/frontend_api_runtime_contract.ts"),
+                  "utf8",
+                );
+                const contractCompiled = ts.transpileModule(contractSource, {
+                  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+                }).outputText;
+                const contractModule = { exports: {} };
+                vm.runInNewContext(contractCompiled, {
+                  module: contractModule,
+                  exports: contractModule.exports,
+                  TextEncoder: globalThis.TextEncoder,
+                });
+                return contractModule.exports;
               }
               return require(specifier);
             };
@@ -1019,6 +1100,33 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
                     resolveWorkflowStatus: () => ({ status: "failed", terminal: true }),
                   };
                 }
+                if (specifier === "./cohortSelection") {
+                  const unexpectedCohortSelectionCall = () => {
+                    throw new Error("candidate-filter helper unexpectedly used cohort selection");
+                  };
+                  return {
+                    cloneCohortSelection: unexpectedCohortSelectionCall,
+                    equalCohortSelection: unexpectedCohortSelectionCall,
+                    parseCohortSelectionOptionsPayload: unexpectedCohortSelectionCall,
+                    parseCohortSelectionPayload: unexpectedCohortSelectionCall,
+                  };
+                }
+                if (specifier === "../../../contracts/frontend_api_runtime_contract") {
+                  const contractSource = fs.readFileSync(
+                    path.join(process.cwd(), "contracts/frontend_api_runtime_contract.ts"),
+                    "utf8",
+                  );
+                  const contractCompiled = ts.transpileModule(contractSource, {
+                    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+                  }).outputText;
+                  const contractModule = { exports: {} };
+                  vm.runInNewContext(contractCompiled, {
+                    module: contractModule,
+                    exports: contractModule.exports,
+                    TextEncoder: globalThis.TextEncoder,
+                  });
+                  return contractModule.exports;
+                }
                 return require(specifier);
               };
               vm.runInNewContext(
@@ -1178,6 +1286,33 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
                     normalizeWorkflowStatus: () => "failed",
                     resolveWorkflowStatus: () => ({ status: "failed", terminal: true }),
                   };
+                }
+                if (specifier === "./cohortSelection") {
+                  const unexpectedCohortSelectionCall = () => {
+                    throw new Error("candidate-filter helper unexpectedly used cohort selection");
+                  };
+                  return {
+                    cloneCohortSelection: unexpectedCohortSelectionCall,
+                    equalCohortSelection: unexpectedCohortSelectionCall,
+                    parseCohortSelectionOptionsPayload: unexpectedCohortSelectionCall,
+                    parseCohortSelectionPayload: unexpectedCohortSelectionCall,
+                  };
+                }
+                if (specifier === "../../../contracts/frontend_api_runtime_contract") {
+                  const contractSource = fs.readFileSync(
+                    path.join(process.cwd(), "contracts/frontend_api_runtime_contract.ts"),
+                    "utf8",
+                  );
+                  const contractCompiled = ts.transpileModule(contractSource, {
+                    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+                  }).outputText;
+                  const contractModule = { exports: {} };
+                  vm.runInNewContext(contractCompiled, {
+                    module: contractModule,
+                    exports: contractModule.exports,
+                    TextEncoder: globalThis.TextEncoder,
+                  });
+                  return contractModule.exports;
                 }
                 return require(specifier);
               };
@@ -1782,6 +1917,33 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
                     normalizeWorkflowStatus: () => "failed",
                     resolveWorkflowStatus: () => ({ status: "failed", terminal: true }),
                   };
+                }
+                if (specifier === "./cohortSelection") {
+                  const unexpectedCohortSelectionCall = () => {
+                    throw new Error("candidate-filter helper unexpectedly used cohort selection");
+                  };
+                  return {
+                    cloneCohortSelection: unexpectedCohortSelectionCall,
+                    equalCohortSelection: unexpectedCohortSelectionCall,
+                    parseCohortSelectionOptionsPayload: unexpectedCohortSelectionCall,
+                    parseCohortSelectionPayload: unexpectedCohortSelectionCall,
+                  };
+                }
+                if (specifier === "../../../contracts/frontend_api_runtime_contract") {
+                  const contractSource = fs.readFileSync(
+                    path.join(process.cwd(), "contracts/frontend_api_runtime_contract.ts"),
+                    "utf8",
+                  );
+                  const contractCompiled = ts.transpileModule(contractSource, {
+                    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+                  }).outputText;
+                  const contractModule = { exports: {} };
+                  vm.runInNewContext(contractCompiled, {
+                    module: contractModule,
+                    exports: contractModule.exports,
+                    TextEncoder: globalThis.TextEncoder,
+                  });
+                  return contractModule.exports;
                 }
                 return require(specifier);
               };
