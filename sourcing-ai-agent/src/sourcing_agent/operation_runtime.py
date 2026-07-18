@@ -1661,6 +1661,40 @@ def operation_run_control_state(
     )
 
 
+OPERATION_RUN_CONTROL_FAIL_CLOSED_OVERRIDE_REASONS = frozenset(
+    {
+        "acquisition_start_v2_generic_operation_control_not_enabled",
+        "acquisition_start_v2_generic_operation_control_identity_mismatch",
+    }
+)
+
+
+def operation_run_control_state_fail_closed(
+    control_state: OperationRunControlState,
+    *,
+    disabled_reason: str,
+) -> OperationRunControlState:
+    normalized_reason = str(disabled_reason or "").strip()
+    if normalized_reason not in OPERATION_RUN_CONTROL_FAIL_CLOSED_OVERRIDE_REASONS:
+        raise ValueError("operation run control fail-closed reason is not registered")
+    return OperationRunControlState(
+        operation_status=control_state.operation_status,
+        action_status=control_state.action_status,
+        operation_phase=control_state.operation_phase,
+        can_dispatch=False,
+        can_cancel=False,
+        can_retry=False,
+        can_resume=False,
+        allowed_actions=(),
+        disabled_reasons={
+            "dispatch": normalized_reason,
+            "resume": normalized_reason,
+            "retry": normalized_reason,
+            "cancel": normalized_reason,
+        },
+    )
+
+
 def validate_operation_run_control_state_projection(
     value: Mapping[str, Any],
     *,
@@ -1695,6 +1729,11 @@ def validate_operation_run_control_state_projection(
         action_retry_operation_run_id=action_retry_operation_run_id,
         operation_phase=str(record.get("operation_phase") or ""),
     )
+    override_reasons = {str(reason or "").strip() for reason in disabled_reasons.values()}
+    if len(override_reasons) == 1:
+        override_reason = next(iter(override_reasons))
+        if override_reason in OPERATION_RUN_CONTROL_FAIL_CLOSED_OVERRIDE_REASONS:
+            expected = operation_run_control_state_fail_closed(expected, disabled_reason=override_reason)
     if record != expected.to_record():
         raise ValueError("operation_run_control_state_projection_invalid")
     return expected

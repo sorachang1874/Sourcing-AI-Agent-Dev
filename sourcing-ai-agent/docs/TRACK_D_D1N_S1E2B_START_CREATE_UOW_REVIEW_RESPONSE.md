@@ -26,6 +26,14 @@ This batch remains non-live and non-served. It does not close `R-019`, `R-029`, 
   OperationRun, target snapshot, result/serializer pins, and result-occurrence metadata. Non-start schema-less Actions
   are not classified as v2 merely because their open input happens to contain `preview_*` field names; start-v2 rows
   with current request pins and preview keys erased still fail closed when retained v2 provenance remains.
+- The classifier is now shared by Operation control APIs and the physical `inspect_operation` owner path. Fail-closed
+  start-v2 control states are emitted through `operation_runtime.operation_run_control_state` with registered
+  fail-closed override reasons, so HTTP detail/control responses and Agent inspect results expose the same
+  `control_state` without changing the schema-owned `control_source_of_truth`.
+- `inspect_operation` now recognizes the exact start-v2 `OperationCommandPlanned` physical owner encoding:
+  `schema_version=acquisition_start_command_acceptance.v1` plus the nested
+  `acquisition_start_command_acceptance_owner_result_ref.v1` envelope. The nested envelope must still match the locked
+  Action, OperationRun, workspace, and canonical Operation `workflow_ref`; other event schemas remain fail-closed.
 - Generic cancel/retry/resume/dispatch preflight failures now route through the same operation-control response projector
   as normal control responses, preserving top-level `control_state` and `display_contract` parity.
 - Generic action controls now also fail closed for pending `start_acquisition_run` Actions that carry only partial v2
@@ -50,6 +58,8 @@ This batch remains non-live and non-served. It does not close `R-019`, `R-029`, 
   - held command ready-list absence and direct claim zero-write;
   - cancel/retry/resume command-control zero-write;
   - OperationRun detail/control-response affordance parity for unsupported start-v2 controls;
+  - Agent `inspect_operation` parity with OperationRun detail for unsupported start-v2 control state and canonical
+    `operation_runtime.operation_run_control_state` ownership;
   - direct PG cancel/retry/resume mutator zero-write for held queued/cancelled/retry-wait/failed-terminal root commands,
     malformed held-root payloads, and alternate update-payload/waiting-prerequisite writers;
   - action-type drift, empty schema pair, alternate schema pair, and action+operation pin erasure with retained

@@ -20,7 +20,7 @@ from sourcing_agent.acquisition_start_v2 import (
     AcquisitionStartV2OwnerBinder,
     AcquisitionStartV2ToolPins,
 )
-from sourcing_agent.agent_canary_registry import START_ACQUISITION_RUN_TOOL_SPEC
+from sourcing_agent.agent_canary_registry import INSPECT_OPERATION_TOOL_SPEC, START_ACQUISITION_RUN_TOOL_SPEC
 from sourcing_agent.agent_tool_result_slot import AgentToolOccurrence, AgentToolTerminalResult
 from sourcing_agent.asset_catalog import AssetCatalog
 from sourcing_agent.local_postgres import quote_control_plane_postgres_identifier
@@ -236,6 +236,36 @@ class D1nStartAcquisitionV2CreatePGMatrixTest(PGControlPlaneStoreTestMixin, unit
             result_attempt_id=f"attempt_start_create_matrix_{suffix}",
             provider_call_id=f"provider_start_create_matrix_{suffix}",
             tool_call_id=f"tool_start_create_matrix_{suffix}",
+        )
+
+    def _prepare_inspect_operation_terminal(
+        self,
+        *,
+        occurrence: AgentToolOccurrence,
+        owner_ref: dict[str, Any],
+        suffix: str,
+    ) -> Any:
+        inspect_occurrence = AgentToolOccurrence.from_tool_spec(
+            result_slot_id=f"slot_start_create_matrix_inspect_{suffix}",
+            slot_generation=1,
+            workspace_id=occurrence.workspace_id,
+            actor_id=occurrence.actor_id,
+            runtime_namespace=occurrence.runtime_namespace,
+            provider_mode="simulate",
+            turn_id=f"turn_start_create_matrix_inspect_{suffix}",
+            step_id=f"step_start_create_matrix_inspect_{suffix}",
+            tool_spec=INSPECT_OPERATION_TOOL_SPEC,
+            canonical_args={"operation_run_id": str(owner_ref["operation_run_id"])},
+            occurrence_ordinal=1,
+        )
+        self.repository.reserve_agent_tool_result_slot(occurrence=inspect_occurrence)
+        return self.repository.prepare_inspect_operation_tool_result(
+            occurrence=inspect_occurrence,
+            result_attempt_id=f"attempt_start_create_matrix_inspect_{suffix}",
+            provider_call_id=f"provider_start_create_matrix_inspect_{suffix}",
+            tool_call_id=f"tool_start_create_matrix_inspect_{suffix}",
+            action_id=str(owner_ref["action_id"]),
+            operation_run_id=str(owner_ref["operation_run_id"]),
         )
 
     def _orchestrator(self) -> SourcingOrchestrator:
@@ -907,6 +937,19 @@ class D1nStartAcquisitionV2CreatePGMatrixTest(PGControlPlaneStoreTestMixin, unit
                 "cancel": "acquisition_start_v2_generic_operation_control_not_enabled",
             },
         )
+        self.assertEqual(
+            control_state["control_source_of_truth"],
+            "operation_runtime.operation_run_control_state",
+        )
+
+        inspect_terminal = self._prepare_inspect_operation_terminal(
+            occurrence=occurrence,
+            owner_ref=owner_ref,
+            suffix="generic_control_unsupported",
+        )
+        self.assertEqual(inspect_terminal.serialized_result["variant"], "success")
+        self.assertEqual(inspect_terminal.serialized_result["status"], "ready")
+        self.assertEqual(inspect_terminal.serialized_result["control_state"], control_state)
 
         for label, control in controls:
             with self.subTest(control=label):
