@@ -28,6 +28,10 @@ from zoneinfo import ZoneInfo
 
 from .acquisition import AcquisitionEngine, _normalize_company_employee_shards
 from .acquisition_command_owner import AcquisitionCommandOwner
+from .acquisition_start_v2 import (
+    ACQUISITION_START_V2_REQUEST_SCHEMA_DIGEST,
+    ACQUISITION_START_V2_REQUEST_SCHEMA_VERSION,
+)
 from .action_target_binding import (
     ACQUISITION_ROOT_TARGET_INVALID,
     AUTHORIZATION_MODE_AUTHENTICATED,
@@ -50320,6 +50324,16 @@ class SourcingOrchestrator:
         )
         if not action:
             return {"status": "not_found", "action_id": str(action_id or "").strip()}
+        generic_control_preflight = self._preflight_acquisition_start_v2_generic_operation_control(
+            action=action,
+        )
+        if str(generic_control_preflight.get("status") or "") != "ready":
+            return {
+                **generic_control_preflight,
+                "action_id": str(action_id or "").strip(),
+                "action": self._operation_action_api_record(action),
+                "contract": "w9_operation_action_approval_v1",
+            }
         target_preflight = self._preflight_acquisition_root_action_control(action=action)
         if str(target_preflight.get("status") or "") == "ready":
             target_preflight = self._preflight_company_public_web_action_control(action=action)
@@ -50380,11 +50394,22 @@ class SourcingOrchestrator:
         expected_workspace_id: str = "",
     ) -> dict[str, Any]:
         payload = dict(payload or {})
-        if str(expected_workspace_id or "").strip() and not self._operation_action_for_expected_workspace(
+        action = self._operation_action_for_expected_workspace(
             action_id,
             expected_workspace_id=expected_workspace_id,
-        ):
+        )
+        if not action:
             return {"status": "not_found", "action_id": str(action_id or "").strip()}
+        generic_control_preflight = self._preflight_acquisition_start_v2_generic_operation_control(
+            action=action,
+        )
+        if str(generic_control_preflight.get("status") or "") != "ready":
+            return {
+                **generic_control_preflight,
+                "action_id": str(action_id or "").strip(),
+                "action": self._operation_action_api_record(action),
+                "contract": "w9_operation_action_rejection_v1",
+            }
         try:
             action = self.operation_runtime_writer.reject_action(
                 action_id=action_id,
@@ -50421,11 +50446,33 @@ class SourcingOrchestrator:
         expected_workspace_id: str = "",
     ) -> dict[str, Any]:
         payload = dict(payload or {})
-        if str(expected_workspace_id or "").strip() and not self._operation_run_for_expected_workspace(
+        operation_run = self._operation_run_for_expected_workspace(
             operation_run_id,
             expected_workspace_id=expected_workspace_id,
-        ):
+        )
+        if not operation_run:
             return {"status": "not_found", "operation_run_id": str(operation_run_id or "").strip()}
+        action = self._operation_action_for_expected_workspace(
+            str(operation_run.get("action_id") or ""),
+            expected_workspace_id=expected_workspace_id,
+        )
+        if not action:
+            return {"status": "not_found", "operation_run_id": str(operation_run_id or "").strip()}
+        generic_control_preflight = self._preflight_acquisition_start_v2_generic_operation_control(
+            action=action,
+            operation_run=operation_run,
+        )
+        if str(generic_control_preflight.get("status") or "") != "ready":
+            return {
+                **generic_control_preflight,
+                "operation_run_id": str(operation_run_id or "").strip(),
+                "operation_run": self._operation_run_api_record_with_status_summary(
+                    operation_run,
+                    expected_workspace_id=expected_workspace_id,
+                ),
+                "action": self._operation_action_api_record(action),
+                "contract": "w9_operation_run_cancel_v1",
+            }
         try:
             operation_run = self.operation_runtime_writer.cancel_operation(
                 operation_run_id=operation_run_id,
@@ -50476,6 +50523,21 @@ class SourcingOrchestrator:
         )
         if not action:
             return {"status": "not_found", "operation_run_id": str(operation_run_id or "").strip()}
+        generic_control_preflight = self._preflight_acquisition_start_v2_generic_operation_control(
+            action=action,
+            operation_run=operation_run,
+        )
+        if str(generic_control_preflight.get("status") or "") != "ready":
+            return {
+                **generic_control_preflight,
+                "operation_run_id": str(operation_run_id or "").strip(),
+                "operation_run": self._operation_run_api_record_with_status_summary(
+                    operation_run,
+                    expected_workspace_id=expected_workspace_id,
+                ),
+                "action": self._operation_action_api_record(action),
+                "contract": "w9_operation_run_retry_v1",
+            }
         target_preflight = self._preflight_acquisition_root_action_control(
             action=action,
             operation_run=operation_run,
@@ -50556,6 +50618,21 @@ class SourcingOrchestrator:
         )
         if not action:
             return {"status": "not_found", "operation_run_id": str(operation_run_id or "").strip()}
+        generic_control_preflight = self._preflight_acquisition_start_v2_generic_operation_control(
+            action=action,
+            operation_run=operation_run,
+        )
+        if str(generic_control_preflight.get("status") or "") != "ready":
+            return {
+                **generic_control_preflight,
+                "operation_run_id": str(operation_run_id or "").strip(),
+                "operation_run": self._operation_run_api_record_with_status_summary(
+                    operation_run,
+                    expected_workspace_id=expected_workspace_id,
+                ),
+                "action": self._operation_action_api_record(action),
+                "contract": "w9_operation_run_resume_v1",
+            }
         target_preflight = self._preflight_acquisition_root_action_control(
             action=action,
             operation_run=operation_run,
@@ -50641,6 +50718,21 @@ class SourcingOrchestrator:
                 "status": "invalid",
                 "reason": "operation action not found",
                 "operation_run_id": str(operation_run_id or "").strip(),
+            }
+        generic_control_preflight = self._preflight_acquisition_start_v2_generic_operation_control(
+            action=action,
+            operation_run=operation_run,
+        )
+        if str(generic_control_preflight.get("status") or "") != "ready":
+            return {
+                **generic_control_preflight,
+                "operation_run_id": str(operation_run_id or "").strip(),
+                "operation_run": self._operation_run_api_record_with_status_summary(
+                    operation_run,
+                    expected_workspace_id=expected_workspace_id,
+                ),
+                "action": self._operation_action_api_record(action),
+                "contract": "w9_operation_run_dispatch_v1",
             }
         action_type = str(action.get("action_type") or "").strip()
         if action_type in {ACTION_EXPORT_CANDIDATES, ACTION_ADD_TO_CRM, *PROJECTION_READ_ACTION_TYPES}:
@@ -50991,6 +51083,27 @@ class SourcingOrchestrator:
             operation_run=workspace_record,
             action=action,
         )
+
+    @staticmethod
+    def _preflight_acquisition_start_v2_generic_operation_control(
+        *,
+        action: Mapping[str, Any],
+        operation_run: Mapping[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        if str(action.get("action_type") or "").strip() != ACTION_START_ACQUISITION_RUN:
+            return {"status": "ready"}
+        if (
+            str(action.get("request_schema_version") or "").strip() != ACQUISITION_START_V2_REQUEST_SCHEMA_VERSION
+            or str(action.get("request_schema_digest") or "").strip() != ACQUISITION_START_V2_REQUEST_SCHEMA_DIGEST
+        ):
+            return {"status": "ready"}
+        return {
+            "status": "unsupported",
+            "reason": "acquisition_start_v2_generic_operation_control_not_enabled",
+            "operation_run": dict(operation_run or {}),
+            "action": dict(action),
+            "module_state_mutated": False,
+        }
 
     def _revalidate_company_public_web_action_target(
         self,

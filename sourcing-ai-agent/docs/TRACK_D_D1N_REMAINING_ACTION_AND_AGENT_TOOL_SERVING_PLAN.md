@@ -636,11 +636,17 @@ adapter/repository delegates: current occurrence/mode/full-root preflight runs b
 deadline locks the event stream, Action identities, pending result slot, and immutable preview; the locked preview is
 rebound before one pending Action plus sequence-1 event is inserted or exact-replayed. Real-PG fault/lost-ACK/
 concurrency evidence is bounded to this aggregate, with zero new Operation/command/attempt/journal/outbox/domain rows.
-S1e2b still owns the receipt-backed budget-ref builder and approval/create UoW; S1e2c still owns read-only preparation,
-shared acceptance, and terminal-success proof.
+S1e2b now adds the typed receipt-backed budget-ref builder and the specialized approval/create UoW. One raw PG
+transaction persists the exact receipt, Action CAS, Operation, workflow source events, queued root command, canonical
+current state, and planned winner; command-lock derivation recovers persisted `approved_at` under the event-stream
+locks before the remaining advisory groups, then repeats every official owner probe `FOR UPDATE`. Exact replay,
+eight write-boundary rollback, eight-way contention, distinct-approver collision, alternate identity, and seven
+owner-row corruption cases preserve zero partial writes and zero outbox/result/domain rows. The recovery wake is
+best-effort and post-commit. S1e2c still owns read-only preparation, shared acceptance, and terminal-success proof.
 R-019, R-029, Plan §6#6, OB-2.2/10.3/10.4, the `10/5` partition, provider/model/live=0, and `served=0` remain open.
 See `TRACK_D_D1N_S1E1_START_AUTHORITY_OWNER_DECISION.md` and
-`TRACK_D_D1N_S1E2A_START_SUBMIT_UOW_IMPLEMENTATION.md`.
+`TRACK_D_D1N_S1E2A_START_SUBMIT_UOW_IMPLEMENTATION.md`, and
+`TRACK_D_D1N_S1E2B_START_CREATE_UOW_IMPLEMENTATION.md`.
 
 Shared hotspots—`operation_runtime.py`, `orchestrator.py`, public API routing, registry aggregation, migrations, and
 release-state derivation—have one serial integration owner. Leaf modules/tests may be developed in parallel. No leaf

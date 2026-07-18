@@ -8,13 +8,14 @@ from typing import Any
 
 from sourcing_agent.acquisition_start_v2 import (
     ACQUISITION_CONFIRMATION_RECEIPT_SCHEMA_VERSION,
+    ACQUISITION_PARENT_BUDGET_FIELDS,
     ACQUISITION_START_V2_REQUEST_TOOL_SPEC,
     ACQUISITION_START_V2_RESULT_SPEC,
-    AcquisitionConfirmationReceipt,
     AcquisitionStartV2OwnerBinder,
     AcquisitionStartV2ToolPins,
     acquisition_start_v2_persisted_action_record,
     acquisition_start_v2_success_result,
+    build_acquisition_parent_budget_envelope_ref,
     build_acquisition_start_v2_root_command_payload,
 )
 from sourcing_agent.agent_canary_registry import START_ACQUISITION_RUN_TOOL_SPEC
@@ -51,13 +52,6 @@ TODO = REPO_ROOT / "docs" / "NEXT_TODO.md"
 LEDGER = REPO_ROOT / "docs" / "RESIDUAL_LEDGER.md"
 INDEX = REPO_ROOT / "docs" / "INDEX.md"
 
-BUDGET_FIELDS = (
-    "max_provider_calls",
-    "max_provider_items",
-    "max_output_candidates",
-    "max_cost_micro_usd",
-    "max_elapsed_seconds",
-)
 OWNER_RESULT_FIELDS = (
     "schema_version",
     "runtime_namespace",
@@ -190,20 +184,6 @@ def _digest(value: Any) -> str:
 def _event_id(prefix: str, stream_id: str, sequence: int, idempotency_key: str) -> str:
     seed = f"{stream_id}:{sequence}:{idempotency_key}"
     return prefix + hashlib.sha1(seed.encode("utf-8")).hexdigest()[:24]
-
-
-def _typed_budget_envelope_ref(receipt: AcquisitionConfirmationReceipt) -> dict[str, Any]:
-    record = receipt.to_record()
-    budget = record["budget"]
-    assert set(budget) == set(BUDGET_FIELDS)
-    owner = START_ACQUISITION_RUN_TOOL_SPEC.budget.budget_owner
-    assert owner is not None
-    return {
-        **owner.to_fingerprint_record(),
-        "confirmation_receipt_id": receipt.receipt_id,
-        "confirmation_receipt_digest": receipt.receipt_digest,
-        "budget_digest": _digest(budget),
-    }
 
 
 def _section(document: str, start: str, end: str) -> str:
@@ -449,6 +429,12 @@ def _build_executable_contract() -> dict[str, Any]:
     planned_key = f"{start_key}:OperationCommandPlanned:{command_id}"
     planned_event_id = _event_id("opevt_", operation_run_id, 1, planned_key)
     budget = receipt.to_record()["budget"]
+    budget_owner = START_ACQUISITION_RUN_TOOL_SPEC.budget.budget_owner
+    assert budget_owner is not None
+    parent_budget_envelope_ref = build_acquisition_parent_budget_envelope_ref(
+        receipt,
+        budget_owner,
+    ).to_record()
     owner_result_ref = {
         "schema_version": "acquisition_start_command_acceptance_owner_result_ref.v1",
         "runtime_namespace": occurrence.runtime_namespace,
@@ -467,7 +453,7 @@ def _build_executable_contract() -> dict[str, Any]:
             "receipt_id": receipt.receipt_id,
             "receipt_digest": receipt.receipt_digest,
         },
-        "parent_budget_envelope_ref": _typed_budget_envelope_ref(receipt),
+        "parent_budget_envelope_ref": parent_budget_envelope_ref,
         "start_snapshot_digest": bound.snapshot.snapshot_digest,
         "root_command_payload_digest": root["payload_digest"],
         "result_occurrence_ref": {
@@ -510,6 +496,7 @@ def _build_executable_contract() -> dict[str, Any]:
         "owner_result_ref": owner_result_ref,
         "owner_result_digest": owner_result_digest,
         "budget": budget,
+        "parent_budget_envelope_ref": parent_budget_envelope_ref,
         "action": action,
         "action_id": action_id,
         "operation_run_id": operation_run_id,
@@ -580,7 +567,7 @@ def test_real_v2_helpers_form_one_receipt_budget_command_and_result_chain() -> N
     assert occurrence.canonical_args["target_ref"] == contract["action"]["request"]["target_ref"]
     assert receipt["schema_version"] == ACQUISITION_CONFIRMATION_RECEIPT_SCHEMA_VERSION
     assert receipt["receipt_id"].startswith("opevt_")
-    assert set(receipt["budget"]) == set(BUDGET_FIELDS)
+    assert set(receipt["budget"]) == set(ACQUISITION_PARENT_BUDGET_FIELDS)
     assert receipt["budget"] == contract["budget"]
     assert receipt["start_snapshot_digest"] == contract["bound"].snapshot.snapshot_digest
     assert contract["root"]["confirmation_receipt_ref"] == {
@@ -631,6 +618,9 @@ def test_real_v2_helpers_form_one_receipt_budget_command_and_result_chain() -> N
         "metadata": {},
     }
     assert tuple(contract["owner_result_ref"]) == OWNER_RESULT_FIELDS
+    assert contract["owner_result_ref"]["parent_budget_envelope_ref"] == contract[
+        "parent_budget_envelope_ref"
+    ]
     assert terminal.terminal_winner_id == contract["planned_event_id"]
     assert terminal.workflow_command_id == contract["command_id"]
     assert terminal.owner_target_revision == 1
@@ -655,7 +645,7 @@ def test_document_locks_exact_budget_owner_result_and_lock_order() -> None:
     document = DECISION_DOC.read_text(encoding="utf-8")
     budget_header, budget_rows = _table(_section(document, "### 4.1 Receipt-backed", "### 4.2 Exact"))
     assert budget_header == ("position", "field")
-    assert tuple(row[1].strip("`") for row in budget_rows) == BUDGET_FIELDS
+    assert tuple(row[1].strip("`") for row in budget_rows) == ACQUISITION_PARENT_BUDGET_FIELDS
 
     result_header, result_rows = _table(_section(document, "### 4.2 Exact", "## 5. Result"))
     assert result_header == ("position", "field")

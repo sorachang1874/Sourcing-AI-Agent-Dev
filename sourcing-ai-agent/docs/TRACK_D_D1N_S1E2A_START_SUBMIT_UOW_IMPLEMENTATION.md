@@ -1,8 +1,8 @@
 # Track D D1n S1e2a — acquisition-start pending submit PostgreSQL UoW
 
-> Status: Current non-live implementation candidate (2026-07-18). Author evidence only; fresh pinned non-author
-> review is pending. This batch keeps the public/default Agent population at `served=0` and authorizes no provider,
-> model, network, replay-mode, or live execution.
+> Status: Current non-live implementation candidate (2026-07-18; S1e2b follow-on recorded). Author evidence only;
+> fresh pinned non-author review is pending. This batch keeps the public/default Agent population at `served=0` and
+> authorizes no provider, model, network, replay-mode, or live execution.
 
 ## Outcome
 
@@ -71,7 +71,9 @@ Neither surface adds a public API route or a served registry entry.
 
 ## Explicit non-closure
 
-- S1e2b still owns the receipt-backed budget-envelope builder and specialized create UoW.
+- S1e2b has since implemented the receipt-backed budget-envelope builder and specialized create UoW; see
+  `TRACK_D_D1N_S1E2B_START_CREATE_UOW_IMPLEMENTATION.md`. That follow-on does not retroactively expand this submit
+  transaction.
 - S1e2c still owns read-only result preparation, start-specific shared acceptance, and terminal-success proof.
 - The production partition remains `10 schema-defined / 5 schema-less`; R-029 and its release-window deletion
   condition remain open.

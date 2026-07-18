@@ -8942,6 +8942,33 @@ class LiveControlPlanePostgresAdapter:
             fault_injection_point=fault_injection_point,
         )
 
+    def create_acquisition_start_v2_uow(
+        self,
+        *,
+        table_name: str = "agent_actions",
+        occurrence: Any,
+        approval_actor_id: str,
+        approval_actor_kind: str,
+        approval_policy_revision: str,
+        lock_timeout_seconds: float = 5.0,
+        fault_injection_point: str = "",
+    ) -> dict[str, Any] | None:
+        """Approve one pending v2 acquisition start and create its root command."""
+
+        if _normalize_postgres_identifier(table_name) != "agent_actions":
+            raise ValueError("create_acquisition_start_v2_uow requires table_name=agent_actions")
+        from .acquisition_start_v2_create_postgres import create_acquisition_start_v2_uow
+
+        return create_acquisition_start_v2_uow(
+            self,
+            occurrence=occurrence,
+            approval_actor_id=approval_actor_id,
+            approval_actor_kind=approval_actor_kind,
+            approval_policy_revision=approval_policy_revision,
+            lock_timeout_seconds=lock_timeout_seconds,
+            fault_injection_point=fault_injection_point,
+        )
+
     def reserve_agent_tool_result_slot(
         self,
         *,

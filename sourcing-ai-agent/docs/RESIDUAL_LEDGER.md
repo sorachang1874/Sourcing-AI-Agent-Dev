@@ -399,6 +399,12 @@
   Therefore this candidate changes neither R-019 status nor the 26-call ratchet, and it authorizes no runtime/live path;
   its exact implementation commit and fresh pinned review are recorded only after final validation.
 
+- **R-029 / D1n S1e2b (2026-07-18):** S1e2a/S1e2b add only isolated `start_acquisition_run` v2 submit/create
+  authority. They do not add an API-submittable production action, change the `10 schema-defined / 5 schema-less`
+  denominator, start an R-029 observation window, or populate the default/public Agent registry. Result acceptance,
+  action-specific served evidence, and the complete 15-action release-window deletion condition remain open; current
+  author PG evidence and any future scope-local review do not close this row.
+
 ## 使用方式
 
 - **批验收**：suite 失败 ⊆ 本台账未 closed 行 = 绿（green-modulo-ledger）；任何不在台账内的失败必须现场 worktree 归因，

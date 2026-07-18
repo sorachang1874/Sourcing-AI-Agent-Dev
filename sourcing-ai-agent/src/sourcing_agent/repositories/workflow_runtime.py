@@ -2405,6 +2405,63 @@ class WorkflowRuntimeRepository(Repository):
             reason="native writer returned no bundle",
         )
 
+    def create_acquisition_start_v2_uow(
+        self,
+        *,
+        occurrence: Any,
+        approval_actor_id: str,
+        approval_actor_kind: str,
+        approval_policy_revision: str,
+        lock_timeout_seconds: float = 5.0,
+    ) -> dict[str, Any]:
+        """Approve one pending v2 start and exact-map its durable command bundle."""
+
+        from ..agent_tool_result_slot import AgentToolOccurrence
+
+        if not isinstance(occurrence, AgentToolOccurrence):
+            raise ValueError("create acquisition start v2 requires AgentToolOccurrence")
+        for table_name in (
+            "operation_runs",
+            "agent_actions",
+            "operation_events",
+            "agent_tool_result_slots",
+            "acquisition_plan_previews",
+            "workflow_events",
+            "workflow_commands",
+            "workflow_current_state",
+        ):
+            self._require_postgres_for_durable_runtime(table_name)
+        result = self._call_native_write(
+            "create_acquisition_start_v2_uow",
+            table_name="agent_actions",
+            occurrence=occurrence,
+            approval_actor_id=approval_actor_id,
+            approval_actor_kind=approval_actor_kind,
+            approval_policy_revision=approval_policy_revision,
+            lock_timeout_seconds=lock_timeout_seconds,
+        )
+        if result is not None:
+            payload = dict(result)
+            return {
+                "outcome": str(payload.get("outcome") or "").strip(),
+                "replayed": bool(payload.get("replayed")),
+                "action": self._action_from_row(payload.get("action")),
+                "operation_run": self._operation_from_row(payload.get("operation_run")),
+                "receipt_event": self._operation_event_from_row(payload.get("receipt_event")),
+                "workflow_events": WORKFLOW_EVENTS.from_rows(payload.get("workflow_events")),
+                "workflow_command": WORKFLOW_COMMANDS.from_row(payload.get("workflow_command")),
+                "workflow_current_state": self._workflow_current_state_from_row(payload.get("workflow_current_state")),
+                "planned_event": self._operation_event_from_row(payload.get("planned_event")),
+                "confirmation_receipt": dict(payload.get("confirmation_receipt") or {}),
+                "owner_result_ref": dict(payload.get("owner_result_ref") or {}),
+                "owner_result_digest": str(payload.get("owner_result_digest") or "").strip(),
+            }
+        self._raise_write_failure(
+            table_name="agent_actions",
+            method_name="create_acquisition_start_v2_uow",
+            reason="native writer returned no bundle",
+        )
+
     def reserve_agent_tool_result_slot(
         self,
         *,

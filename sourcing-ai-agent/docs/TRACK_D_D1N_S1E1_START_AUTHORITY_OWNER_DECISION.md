@@ -1,15 +1,16 @@
 # Track D D1n S1e1 — acquisition-start authority owner decision
 
-> Status: non-live, zero-migration owner decision lock (2026-07-18). This batch changes no product writer, schema,
-> migration, registry population, provider/model route, or serving state. It is author evidence, not an independent
-> review `GO`.
+> Status: non-live, zero-migration owner decision lock (2026-07-18; S1e2a/S1e2b implementation transitions
+> recorded). The decision batch itself changed no product writer, schema, migration, registry population,
+> provider/model route, or serving state. S1e2a and S1e2b now implement submit and create as non-live author
+> candidates; result acceptance remains open. None of these records is an independent review `GO`.
 
 ## 1. Outcome
 
 S1e1 replaces the three `characterized_not_ratified` decisions from S1e0 with one bounded implementation target:
 
 ```text
-implementation_status=decision_locked_not_implemented
+implementation_status=submit_and_create_implemented_result_accept_open
 migration_delta=0
 pending_action_owner=submit_acquisition_start_v2_action_uow
 confirmation_receipt_physical_sot=operation_events.ActionApproved.sequence_2
@@ -123,10 +124,10 @@ Every pre-existing row/event is accepted only after full immutable equality. An 
 its persisted DB-minted timestamp; a different approval actor/kind/policy, receipt, command, or event is a collision
 and the transaction writes nothing.
 
-Only after the create transaction commits (including an exact lost-ack replay) the adapter passes the exact queued
-command to `DurableRuntimeWriter.signal_recovery_for_committed_commands`. That wake is best-effort, coalesced, and
-outside the transaction; its failure does not change the committed result, and the recovery daemon poll remains the
-backstop. No `runtime_outbox` row is created.
+S1e2b fixed-forward makes the queued root dormant until result acceptance: the command and its
+`CommandPlanRequested` event carry `not_before_at=9999-12-31 23:59:59`, create does not call
+`DurableRuntimeWriter.signal_recovery_for_committed_commands`, and no `runtime_outbox` row is created. S1e2c owns the
+start-specific result acceptance that clears the hold and wakes the command owner after terminal result persistence.
 
 ### 4.0 Exact workflow event and reducer contract
 
@@ -137,7 +138,7 @@ artifact refs. Their physical event ids use the derivation in section 2. The imm
 | sequence/type | exact payload |
 | --- | --- |
 | `1 / WorkflowStarted` | `workflow_type=agent_callable_workflow_command`; `stage_key=acquisition_run_create`; exact `operation_run_id`, `action_id`, `action_type=start_acquisition_run`; `migration_phase=W11_agent_callable_workflow_command` |
-| `2 / CommandPlanRequested` | the same workflow type and stage; `command_type=acquisition.run.create`; exact root command key; command payload equal to the closed root plus `operation_id` and the complete `command_causality_v1` envelope; `artifact_refs=[]`; `max_attempts=5`; `retry_policy={kind: operation_acquisition_run_create, retry_delay_seconds: 30}` |
+| `2 / CommandPlanRequested` | the same workflow type and stage; `command_type=acquisition.run.create`; exact root command key; command payload equal to the closed root plus `operation_id` and the complete `command_causality_v1` envelope; `artifact_refs=[]`; `max_attempts=5`; `retry_policy={kind: operation_acquisition_run_create, retry_delay_seconds: 30}`; `not_before_at=9999-12-31 23:59:59` |
 
 The causality envelope is produced by the existing `command_causality_for` owner using the precomputable sequence-2
 event id. It pins `owner=acquisition_run_writer`, `stage_id=acquisition_run_create`, the root command key,
@@ -188,7 +189,7 @@ This is admission-envelope reuse for `simulate|scripted`; it has no consume, rel
 CAS. It is explicitly **not** D3 `cost_reservations`/`dispatch_exposures`, does not claim money/exposure accounting, and
 cannot satisfy the live L1 predecessor. OB-2.2 and OB-10.3 remain open.
 
-S1e2 must add a typed pure `build_acquisition_parent_budget_envelope_ref(receipt, registered_owner_pin)` builder. It
+S1e2b adds the typed pure `build_acquisition_parent_budget_envelope_ref(receipt, registered_owner_pin)` builder. It
 accepts an already validated `AcquisitionConfirmationReceipt`, extracts the five fields, and recomputes the receipt and
 budget digests. Caller/model/raw dictionaries cannot mint or override the envelope or either budget projection.
 
@@ -295,9 +296,35 @@ result-slot lock as its serialization owner and the shared state machine's exact
 
 Concurrent exact submit/create/accept calls return the same rows and bytes. Two nonidentical approvers contend on the
 same Action stream and Action row; one bundle commits and the other observes a digest collision with zero writes.
-Cancel/retry/resume/dispatch are not enabled for this shadow-only adapter. A crash before commit rolls back every row.
-After a lost commit acknowledgement, retry first exact-reloads the deterministic identities and returns the committed
-bundle; it never creates a second receipt, command, event, attempt, or journal.
+Generic approve/reject/cancel/retry/resume/dispatch are not enabled for this shadow-only adapter and reject before
+runtime writer mutation. A crash before commit rolls back every row. After a lost commit acknowledgement, retry first
+exact-reloads the deterministic identities and returns the committed bundle; it never creates a second receipt,
+command, event, attempt, or journal.
+
+### 6.2 S1e2b implementation-fixed physical projections
+
+S1e2b closes the implementation details that were not independently meaningful in the decision-only batch:
+
+- the receipt row uses the human approval actor and `source=agent_start_v2_create_uow`; the planned winner uses
+  `actor=operation_workflow_command_planner` with the same create-UoW source; workflow events retain
+  `actor=operation_workflow_command_planner` and `source=operation_run_dispatch`;
+- the Action retains the submit-owned result-occurrence metadata and moves only to `queued/approved`, with the exact
+  owner-result ref; the Operation is `queued`, has `progress={phase: workflow_command_planned}`, the exact four-field
+  workflow ref (`workflow_run_id`, `command_id`, `command_type`, `owner`), the receipt budget projection, the same
+  owner-result ref, and empty metadata;
+- command advisory identities depend on `receipt_digest`, which includes `approved_at`. The create UoW therefore takes
+  all event-stream locks first, performs one non-locking deterministic receipt-id discovery solely to recover a
+  persisted replay timestamp and derive the remaining advisory keys, then takes groups 2–7 and performs every
+  official `FOR UPDATE` probe in the section-6.1 order. The locked receipt is rebuilt and exact-compared; discovery is
+  never accepted as authority;
+- a new create evaluates the DB transaction timestamp once. An exact replay does not evaluate, compare, or persist a
+  fresh timestamp. Every inserted/updated physical row is exact-compared before commit;
+- the queued command and sequence-2 source event carry the fixed result-acceptance hold
+  `not_before_at=9999-12-31 23:59:59`; normal ready-list polling cannot claim it. Create does not wake the owner.
+  S1e2c owns clearing the hold and post-accept wake after shared result acceptance.
+
+These shapes are implementation contracts for S1e2c prepare/rebuild. They do not turn the admission envelope into
+D3 spend/exposure accounting and do not enable a daemon, provider, model, served registry, or live path.
 
 ## 7. Fault and zero-effect matrix
 
@@ -338,9 +365,9 @@ durable-scope gate remains open because Action/Operation do not yet have the req
 columns. OB-2.2, OB-10.3, and OB-10.4 remain open. The D3 money/exposure ledger, release/consume CAS, S2/S3, L1/L2,
 paid TML canary, hosted activation, and all five remaining action migrations remain outside this decision.
 
-The next bounded batch is S1e2 product implementation of the two specialized start UoWs plus read-only prepare and
-start-specific shared acceptance, followed by PG fault/concurrency/terminal-success tests. S1e0 must then be updated by
-that implementation batch; this decision-only batch does not rewrite its characterization oracle.
+S1e2a and S1e2b now implement the two specialized start UoWs and update the S1e0 transition oracle. The next bounded
+batch is S1e2c read-only prepare plus start-specific shared acceptance, followed by PG terminal-success and exact
+rebuild/corruption tests. This decision-only batch itself still does not constitute product activation.
 
 Fresh pinned non-author review is required. Author tests do not constitute formal `GO`, and this decision authorizes
 neither serving nor live validation.

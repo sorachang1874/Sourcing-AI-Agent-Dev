@@ -26,6 +26,10 @@ from typing import Any, Literal, Protocol, TypeAlias, cast
 
 from .acquisition_plan_preview import (
     ACQUISITION_PLAN_PREVIEW_RESULT_SPEC,
+    MAX_PREVIEW_COST_MICRO_USD,
+    MAX_PREVIEW_ELAPSED_SECONDS,
+    MAX_PREVIEW_OUTPUT_CANDIDATES,
+    MAX_PREVIEW_PROVIDER_ITEMS,
     AcquisitionPlanPreview,
     AcquisitionPlanPreviewError,
 )
@@ -38,6 +42,8 @@ from .action_result_schema import (
     ActionResultSpec,
     ActionResultValueRole,
 )
+from .agent_tool_registry import AgentToolOwnerPin
+from .cohort_provider_compiler import MAX_COHORT_PROVIDER_LANES
 from .model_tool_runtime import InternalToolValidatorSpec, ModelToolSchemaError, ToolSpec
 
 ACQUISITION_START_ACTION_TYPE = "start_acquisition_run"
@@ -54,7 +60,24 @@ ACQUISITION_START_V2_PREVIEW_NOT_FOUND_OR_CONFLICT = "acquisition_start_preview_
 ACQUISITION_START_V2_REQUEST_INVALID = "acquisition_start_v2_request_invalid"
 ACQUISITION_START_V2_APPROVAL_INVALID = "acquisition_start_v2_approval_invalid"
 ACQUISITION_START_V2_RECEIPT_INVALID = "acquisition_confirmation_receipt_invalid"
+ACQUISITION_START_V2_PARENT_BUDGET_INVALID = "acquisition_start_v2_parent_budget_envelope_invalid"
 ACQUISITION_START_V2_COMMAND_INVALID = "acquisition_start_v2_root_command_invalid"
+
+ACQUISITION_PARENT_BUDGET_FIELDS = (
+    "max_provider_calls",
+    "max_provider_items",
+    "max_output_candidates",
+    "max_cost_micro_usd",
+    "max_elapsed_seconds",
+)
+_ACQUISITION_PARENT_BUDGET_ENVELOPE_REF_FIELDS = (
+    "owner_id",
+    "owner_revision",
+    "owner_contract_digest",
+    "confirmation_receipt_id",
+    "confirmation_receipt_digest",
+    "budget_digest",
+)
 
 MAX_START_V2_REVISION = 9_223_372_036_854_775_807
 _SHA256_PATTERN = re.compile(r"[0-9a-f]{64}")
@@ -848,6 +871,119 @@ class AcquisitionConfirmationReceipt:
 
 
 @dataclass(frozen=True, slots=True)
+class AcquisitionParentBudgetEnvelopeRef:
+    """Immutable reference to the receipt-owned acquisition budget envelope.
+
+    The reference deliberately carries no independently writable budget values.
+    The five values remain owned by the exact ``ActionApproved`` receipt; this
+    value pins their canonical digest and the registered budget-owner
+    fingerprint for downstream equality checks.
+    """
+
+    _record: Mapping[str, Any]
+
+    def __post_init__(self) -> None:
+        try:
+            record = _strict_mapping_copy(
+                self._record,
+                code=ACQUISITION_START_V2_PARENT_BUDGET_INVALID,
+            )
+            if set(record) != set(_ACQUISITION_PARENT_BUDGET_ENVELOPE_REF_FIELDS):
+                raise AcquisitionStartV2Error(ACQUISITION_START_V2_PARENT_BUDGET_INVALID)
+            _require_identifier(record.get("owner_id"), field="owner_id")
+            _require_version(record.get("owner_revision"), field="owner_revision")
+            _require_identifier(record.get("confirmation_receipt_id"), field="confirmation_receipt_id")
+            for field in (
+                "owner_contract_digest",
+                "confirmation_receipt_digest",
+                "budget_digest",
+            ):
+                _require_sha256(record.get(field), field=field)
+        except (AcquisitionStartV2Error, KeyError, TypeError, ValueError) as exc:
+            raise AcquisitionStartV2Error(ACQUISITION_START_V2_PARENT_BUDGET_INVALID) from exc
+        canonical_record = {
+            field: str(record[field]) for field in _ACQUISITION_PARENT_BUDGET_ENVELOPE_REF_FIELDS
+        }
+        object.__setattr__(self, "_record", _freeze_json(canonical_record))
+
+    @property
+    def owner_id(self) -> str:
+        return str(self._record["owner_id"])
+
+    @property
+    def owner_revision(self) -> str:
+        return str(self._record["owner_revision"])
+
+    @property
+    def owner_contract_digest(self) -> str:
+        return str(self._record["owner_contract_digest"])
+
+    @property
+    def confirmation_receipt_id(self) -> str:
+        return str(self._record["confirmation_receipt_id"])
+
+    @property
+    def confirmation_receipt_digest(self) -> str:
+        return str(self._record["confirmation_receipt_digest"])
+
+    @property
+    def budget_digest(self) -> str:
+        return str(self._record["budget_digest"])
+
+    def to_record(self) -> dict[str, str]:
+        return cast(dict[str, str], _thaw_json(self._record))
+
+
+def build_acquisition_parent_budget_envelope_ref(
+    receipt: AcquisitionConfirmationReceipt,
+    registered_owner_pin: AgentToolOwnerPin,
+) -> AcquisitionParentBudgetEnvelopeRef:
+    """Build the only legal start-v2 parent-budget reference.
+
+    Both arguments are typed owner outputs.  Raw dictionaries, subclasses, and
+    caller-selected owner fingerprints fail closed.  The registered Agent tool
+    remains the current source of truth for the exact budget-owner fingerprint.
+    """
+
+    try:
+        if type(receipt) is not AcquisitionConfirmationReceipt or type(registered_owner_pin) is not AgentToolOwnerPin:
+            raise AcquisitionStartV2Error(ACQUISITION_START_V2_PARENT_BUDGET_INVALID)
+
+        # Imported lazily because the canary registry consumes this pure leaf
+        # while constructing the current tool declaration.
+        from .agent_canary_registry import START_ACQUISITION_RUN_TOOL_SPEC
+
+        current_owner_pin = START_ACQUISITION_RUN_TOOL_SPEC.budget.budget_owner
+        if type(current_owner_pin) is not AgentToolOwnerPin:
+            raise AcquisitionStartV2Error(ACQUISITION_START_V2_PARENT_BUDGET_INVALID)
+        owner_fingerprint = registered_owner_pin.to_fingerprint_record()
+        if owner_fingerprint != current_owner_pin.to_fingerprint_record():
+            raise AcquisitionStartV2Error(ACQUISITION_START_V2_PARENT_BUDGET_INVALID)
+
+        receipt_record = receipt.to_record()
+        revalidated_receipt = AcquisitionConfirmationReceipt(receipt_record)
+        if revalidated_receipt.to_record() != receipt_record:
+            raise AcquisitionStartV2Error(ACQUISITION_START_V2_PARENT_BUDGET_INVALID)
+        expected_receipt_digest = _sha256_json(
+            {key: value for key, value in receipt_record.items() if key != "receipt_digest"}
+        )
+        if receipt.receipt_digest != expected_receipt_digest:
+            raise AcquisitionStartV2Error(ACQUISITION_START_V2_PARENT_BUDGET_INVALID)
+
+        budget = _canonical_acquisition_parent_budget(receipt_record.get("budget"))
+        return AcquisitionParentBudgetEnvelopeRef(
+            {
+                **owner_fingerprint,
+                "confirmation_receipt_id": revalidated_receipt.receipt_id,
+                "confirmation_receipt_digest": expected_receipt_digest,
+                "budget_digest": _sha256_json(budget),
+            }
+        )
+    except (AcquisitionStartV2Error, KeyError, TypeError, ValueError) as exc:
+        raise AcquisitionStartV2Error(ACQUISITION_START_V2_PARENT_BUDGET_INVALID) from exc
+
+
+@dataclass(frozen=True, slots=True)
 class AcquisitionStartV2RootCommandPayload:
     """Immutable v2 root-command payload with no free-text interpretation seam."""
 
@@ -1090,6 +1226,25 @@ def _require_reason(value: Any) -> str:
     return value
 
 
+def _canonical_acquisition_parent_budget(value: Any) -> dict[str, int]:
+    record = _strict_mapping_copy(value, code=ACQUISITION_START_V2_PARENT_BUDGET_INVALID)
+    if set(record) != set(ACQUISITION_PARENT_BUDGET_FIELDS) or any(
+        type(record.get(field)) is not int for field in ACQUISITION_PARENT_BUDGET_FIELDS
+    ):
+        raise AcquisitionStartV2Error(ACQUISITION_START_V2_PARENT_BUDGET_INVALID)
+    budget = {field: int(record[field]) for field in ACQUISITION_PARENT_BUDGET_FIELDS}
+    if (
+        not 1 <= budget["max_provider_calls"] <= MAX_COHORT_PROVIDER_LANES
+        or not 1 <= budget["max_provider_items"] <= MAX_PREVIEW_PROVIDER_ITEMS
+        or not 1 <= budget["max_output_candidates"] <= MAX_PREVIEW_OUTPUT_CANDIDATES
+        or not 0 <= budget["max_cost_micro_usd"] <= MAX_PREVIEW_COST_MICRO_USD
+        or not 1 <= budget["max_elapsed_seconds"] <= MAX_PREVIEW_ELAPSED_SECONDS
+        or budget["max_output_candidates"] > budget["max_provider_items"]
+    ):
+        raise AcquisitionStartV2Error(ACQUISITION_START_V2_PARENT_BUDGET_INVALID)
+    return budget
+
+
 def _parse_utc_timestamp(value: str) -> datetime:
     if type(value) is not str or _UTC_TIMESTAMP_PATTERN.fullmatch(value) is None:
         raise AcquisitionStartV2Error(ACQUISITION_START_V2_REQUEST_INVALID, "timestamp")
@@ -1155,9 +1310,11 @@ def _thaw_json(value: Any) -> Any:
 
 __all__ = [
     "ACQUISITION_CONFIRMATION_RECEIPT_SCHEMA_VERSION",
+    "ACQUISITION_PARENT_BUDGET_FIELDS",
     "ACQUISITION_START_ACTION_TYPE",
     "ACQUISITION_START_V2_APPROVAL_INVALID",
     "ACQUISITION_START_V2_COMMAND_INVALID",
+    "ACQUISITION_START_V2_PARENT_BUDGET_INVALID",
     "ACQUISITION_START_V2_PREVIEW_NOT_FOUND_OR_CONFLICT",
     "ACQUISITION_START_V2_REQUEST_INVALID",
     "ACQUISITION_START_V2_REQUEST_SCHEMA_DIGEST",
@@ -1169,6 +1326,7 @@ __all__ = [
     "ACQUISITION_START_V2_ROOT_COMMAND_TYPE",
     "ACQUISITION_START_V2_SNAPSHOT_SCHEMA_VERSION",
     "AcquisitionConfirmationReceipt",
+    "AcquisitionParentBudgetEnvelopeRef",
     "AcquisitionPlanPreviewOwnerReader",
     "AcquisitionStartV2BindContext",
     "AcquisitionStartV2BoundRequest",
@@ -1182,6 +1340,7 @@ __all__ = [
     "acquisition_start_v2_persisted_action_record",
     "acquisition_start_v2_request_schema",
     "acquisition_start_v2_success_result",
+    "build_acquisition_parent_budget_envelope_ref",
     "build_acquisition_start_v2_root_command_payload",
     "serialize_acquisition_start_v2_result",
 ]
