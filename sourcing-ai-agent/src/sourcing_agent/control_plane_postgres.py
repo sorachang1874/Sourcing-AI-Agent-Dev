@@ -30,6 +30,15 @@ LEGACY_TARGET_PUBLIC_WEB_TABLES = (
     "target_candidate_public_web_promotions",
 )
 
+GENERIC_POSTGRES_IMPORT_EXCLUDED_TABLES = frozenset(
+    {
+        # Durable commands are a PG-only causal aggregate. Generic snapshots and
+        # migration-only SQLite mirrors cannot safely replace, truncate, or upsert
+        # held command state.
+        "workflow_commands",
+    }
+)
+
 DEFAULT_CONTROL_PLANE_TABLES = [
     "candidates",
     "evidence",
@@ -75,7 +84,6 @@ DEFAULT_CONTROL_PLANE_TABLES = [
     "workflow_recovery_intents",
     "workflow_events",
     "workflow_current_state",
-    "workflow_commands",
     "runtime_outbox",
     "agent_actions",
     "operation_runs",
@@ -620,6 +628,7 @@ def sync_control_plane_snapshot_to_postgres(
     snapshot_payload = json.loads(resolved_snapshot_path.read_text(encoding="utf-8"))
     tables_payload = dict(snapshot_payload.get("tables") or {})
     selected_tables = _resolve_snapshot_table_names(snapshot_payload=snapshot_payload, tables=tables)
+    _reject_generic_postgres_import_tables(selected_tables)
     effective_dsn = str(dsn or resolve_control_plane_postgres_dsn(resolved_snapshot_path)).strip()
     effective_schema = resolve_control_plane_postgres_schema(resolved_snapshot_path)
     if not effective_dsn:
@@ -890,6 +899,7 @@ def sync_runtime_control_plane_to_postgres(
         )
     finally:
         connection.close()
+    _reject_generic_postgres_import_tables(selected_tables)
     effective_dsn = str(dsn or resolve_control_plane_postgres_dsn(runtime_root)).strip()
     effective_schema = (
         normalize_control_plane_postgres_schema(schema)
@@ -1376,6 +1386,7 @@ def _sync_runtime_sqlite_to_postgres_direct(
     progress_every_chunks: int,
     chunk_pause_seconds: float,
 ) -> dict[str, Any]:
+    _reject_generic_postgres_import_tables(tables)
     sqlite_connection = _connect_sqlite(str(sqlite_path))
     sqlite_connection.row_factory = sqlite3.Row
     try:
@@ -1511,6 +1522,7 @@ def _copy_sqlite_table_to_postgres(
     chunk_pause_seconds: float,
     progress_callback: Callable[[dict[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
+    _reject_generic_postgres_import_tables([table_name])
     if table_name == "generation_index_entries":
         exported = _export_generation_index_entries(runtime_dir)
         if not exported:
@@ -1859,6 +1871,19 @@ def _resolve_snapshot_table_names(
     if explicit_tables:
         return _dedupe_table_names(explicit_tables)
     return _dedupe_table_names(list(dict(snapshot_payload.get("tables") or {}).keys()))
+
+
+def _reject_generic_postgres_import_tables(table_names: list[str] | tuple[str, ...]) -> None:
+    rejected_tables = sorted(
+        set(_dedupe_table_names(table_names)).intersection(GENERIC_POSTGRES_IMPORT_EXCLUDED_TABLES)
+    )
+    if not rejected_tables:
+        return
+    raise ValueError(
+        "Generic control-plane snapshot/SQLite import cannot restore PG-only durable runtime tables: "
+        + ", ".join(rejected_tables)
+        + ". A quiesced causal-aggregate durable-runtime restore is not available through this generic path."
+    )
 
 
 def _dedupe_table_names(table_names: list[str] | tuple[str, ...]) -> list[str]:

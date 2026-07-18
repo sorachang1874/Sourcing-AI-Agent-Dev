@@ -1106,9 +1106,10 @@ def import_cloud_assets(
         resolved_bundle_kind == "control_plane_snapshot"
         and str(control_plane_snapshot_sync.get("status") or "") != "completed"
     ):
+        sync_error = str(control_plane_snapshot_sync.get("error") or "").strip()
         raise AssetBundleError(
             "control_plane_snapshot restore requires Postgres sync to complete; "
-            f"status={control_plane_snapshot_sync.get('status')}"
+            f"status={control_plane_snapshot_sync.get('status')}" + (f"; error={sync_error}" if sync_error else "")
         )
 
     manifest_metadata = dict(manifest_payload.get("metadata") or {})

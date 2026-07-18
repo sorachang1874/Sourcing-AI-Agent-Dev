@@ -11,6 +11,7 @@ from sourcing_agent.control_plane_postgres import (
     ACQUISITION_SHARD_REGISTRY_CURRENT_TABLE,
     ACQUISITION_SHARD_REGISTRY_FORMER_TABLE,
     ACQUISITION_SHARD_REGISTRY_LOGICAL_TABLE,
+    DEFAULT_CONTROL_PLANE_TABLES,
     _connect_postgres,
     control_plane_postgres_sync_state_path,
     ensure_acquisition_shard_registry_split_schema,
@@ -172,6 +173,9 @@ class _FakeSnapshotPostgresConnection:
 
 
 class ControlPlanePostgresTest(unittest.TestCase):
+    def test_default_generic_import_inventory_excludes_workflow_commands(self) -> None:
+        self.assertNotIn("workflow_commands", DEFAULT_CONTROL_PLANE_TABLES)
+
     def test_ensure_acquisition_shard_registry_split_schema_normalizes_legacy_provider_cap_hit(self) -> None:
         class _LegacyCursor:
             def __init__(self) -> None:
@@ -505,6 +509,66 @@ class ControlPlanePostgresTest(unittest.TestCase):
                         truncate_first=True,
                     )
 
+    def test_snapshot_import_rejects_explicit_and_auto_selected_workflow_commands_before_postgres(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            snapshot_path = Path(tempdir) / "control-plane.json"
+            snapshot_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "tables": {
+                            "workflow_commands": {
+                                "columns": [
+                                    {
+                                        "name": "command_id",
+                                        "type": "TEXT",
+                                        "notnull": 1,
+                                        "default": "",
+                                        "pk_position": 1,
+                                    },
+                                    {
+                                        "name": "status",
+                                        "type": "TEXT",
+                                        "notnull": 1,
+                                        "default": "",
+                                        "pk_position": 0,
+                                    },
+                                ],
+                                "row_count": 1,
+                                "rows": [{"command_id": "held-1", "status": "held"}],
+                            }
+                        },
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+
+            for tables, truncate_first in [
+                (["workflow_commands"], False),
+                (["workflow_commands"], True),
+                (None, False),
+                (None, True),
+            ]:
+                with self.subTest(tables=tables, truncate_first=truncate_first):
+                    with (
+                        mock.patch("sourcing_agent.control_plane_postgres._import_psycopg") as import_psycopg,
+                        mock.patch("sourcing_agent.control_plane_postgres._connect_postgres") as connect_postgres,
+                        self.assertRaisesRegex(
+                            ValueError,
+                            "cannot restore PG-only durable runtime tables: workflow_commands",
+                        ),
+                    ):
+                        sync_control_plane_snapshot_to_postgres(
+                            snapshot_path=snapshot_path,
+                            dsn="postgresql://user:pass@localhost:5432/sourcing",
+                            tables=tables,
+                            truncate_first=truncate_first,
+                        )
+                    import_psycopg.assert_not_called()
+                    connect_postgres.assert_not_called()
+
     def test_sync_control_plane_snapshot_to_postgres_uses_psycopg_adapter(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             snapshot_path = Path(tempdir) / "control-plane.json"
@@ -713,6 +777,66 @@ class ControlPlanePostgresTest(unittest.TestCase):
             self.assertEqual(result["status"], "synced")
             self.assertIn("candidates", result["tables"])
             self.assertEqual(result["postgres"]["validation"]["tables"]["candidates"]["actual_row_count"], 1)
+
+    def test_runtime_import_rejects_workflow_commands_across_direct_all_and_truncate_before_postgres(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            runtime_dir = Path(tempdir) / "runtime"
+            runtime_dir.mkdir(parents=True, exist_ok=True)
+            db_path = runtime_dir / "sourcing_agent.db"
+            connection = sqlite3.connect(db_path)
+            connection.execute("CREATE TABLE jobs (job_id TEXT PRIMARY KEY, status TEXT NOT NULL)")
+            connection.execute("CREATE TABLE workflow_commands (command_id TEXT PRIMARY KEY, status TEXT NOT NULL)")
+            connection.execute("INSERT INTO jobs (job_id, status) VALUES (?, ?)", ("job-1", "completed"))
+            connection.execute(
+                "INSERT INTO workflow_commands (command_id, status) VALUES (?, ?)",
+                ("held-1", "held"),
+            )
+            connection.commit()
+            connection.close()
+
+            for direct_stream, include_all, tables, truncate_first in [
+                (False, False, ["workflow_commands"], False),
+                (True, False, ["workflow_commands"], True),
+                (False, True, None, True),
+                (True, True, None, True),
+            ]:
+                with self.subTest(
+                    direct_stream=direct_stream,
+                    include_all=include_all,
+                    tables=tables,
+                    truncate_first=truncate_first,
+                ):
+                    with (
+                        mock.patch("sourcing_agent.control_plane_postgres._import_psycopg") as import_psycopg,
+                        mock.patch("sourcing_agent.control_plane_postgres._connect_postgres") as connect_postgres,
+                        self.assertRaisesRegex(
+                            ValueError,
+                            "cannot restore PG-only durable runtime tables: workflow_commands",
+                        ),
+                    ):
+                        sync_runtime_control_plane_to_postgres(
+                            runtime_dir=runtime_dir,
+                            sqlite_path=db_path,
+                            dsn="postgresql://user:pass@localhost:5432/sourcing",
+                            tables=tables,
+                            truncate_first=truncate_first,
+                            include_all_sqlite_tables=include_all,
+                            direct_stream=direct_stream,
+                            force=True,
+                        )
+                    import_psycopg.assert_not_called()
+                    connect_postgres.assert_not_called()
+                    self.assertFalse(control_plane_postgres_sync_state_path(runtime_dir).exists())
+
+            source_connection = sqlite3.connect(db_path)
+            try:
+                held_row = source_connection.execute(
+                    "SELECT command_id, status FROM workflow_commands WHERE command_id = ?",
+                    ("held-1",),
+                ).fetchone()
+            finally:
+                source_connection.close()
+            self.assertEqual(held_row, ("held-1", "held"))
 
     def test_sync_runtime_control_plane_to_postgres_can_stream_direct_in_chunks(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:

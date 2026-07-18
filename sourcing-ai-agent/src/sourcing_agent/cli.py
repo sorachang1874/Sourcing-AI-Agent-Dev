@@ -3118,7 +3118,10 @@ def main() -> None:
 
     sync_control_plane_parser = subparsers.add_parser(
         "sync-control-plane-postgres",
-        help="Sync an exported control-plane snapshot into Postgres, or run a migration-only runtime mirror",
+        help=(
+            "Sync an exported control-plane snapshot into Postgres, or run a migration-only runtime mirror; "
+            "PG-only durable runtime tables are rejected"
+        ),
     )
     sync_control_plane_parser.add_argument(
         "--snapshot", default="", help="Optional path to an exported control-plane snapshot JSON"
@@ -3762,49 +3765,55 @@ def main() -> None:
         return
 
     if args.command == "sync-control-plane-postgres":
-        if str(args.snapshot or "").strip():
-            summary = sync_control_plane_snapshot_to_postgres(
-                snapshot_path=str(args.snapshot or "").strip(),
-                dsn=str(args.dsn or "").strip(),
-                tables=(
-                    [str(item or "").strip() for item in list(args.table or []) if str(item or "").strip()] or None
-                ),
-                truncate_first=bool(args.truncate_first),
-                validate_postgres=bool(args.validate_postgres),
-            )
-        else:
-            catalog = AssetCatalog.discover()
-            settings = load_settings(catalog.project_root)
-            runtime_dir = (
-                Path(str(args.runtime_dir or "").strip()).expanduser()
-                if str(args.runtime_dir or "").strip()
-                else settings.runtime_dir
-            )
-            sqlite_path = (
-                Path(str(args.sqlite_path or "").strip()).expanduser()
-                if str(args.sqlite_path or "").strip()
-                else settings.db_path
-            )
-            state_path = (
-                Path(str(args.state_path or "").strip()).expanduser() if str(args.state_path or "").strip() else None
-            )
-            summary = sync_runtime_control_plane_to_postgres(
-                runtime_dir=runtime_dir,
-                sqlite_path=sqlite_path,
-                dsn=str(args.dsn or "").strip(),
-                tables=[str(item or "").strip() for item in list(args.table or []) if str(item or "").strip()],
-                truncate_first=bool(args.truncate_first),
-                state_path=state_path,
-                min_interval_seconds=float(args.min_interval_seconds or 0.0),
-                force=bool(args.force),
-                include_all_sqlite_tables=bool(args.all_sqlite_tables),
-                validate_postgres=bool(args.validate_postgres),
-                direct_stream=bool(args.direct_stream),
-                chunk_size=int(args.chunk_size or 0),
-                commit_every_chunks=int(args.commit_every_chunks or 0),
-                progress_every_chunks=int(args.progress_every_chunks or 0),
-                chunk_pause_seconds=float(args.chunk_pause_seconds or 0.0),
-            )
+        try:
+            if str(args.snapshot or "").strip():
+                summary = sync_control_plane_snapshot_to_postgres(
+                    snapshot_path=str(args.snapshot or "").strip(),
+                    dsn=str(args.dsn or "").strip(),
+                    tables=(
+                        [str(item or "").strip() for item in list(args.table or []) if str(item or "").strip()]
+                        or None
+                    ),
+                    truncate_first=bool(args.truncate_first),
+                    validate_postgres=bool(args.validate_postgres),
+                )
+            else:
+                catalog = AssetCatalog.discover()
+                settings = load_settings(catalog.project_root)
+                runtime_dir = (
+                    Path(str(args.runtime_dir or "").strip()).expanduser()
+                    if str(args.runtime_dir or "").strip()
+                    else settings.runtime_dir
+                )
+                sqlite_path = (
+                    Path(str(args.sqlite_path or "").strip()).expanduser()
+                    if str(args.sqlite_path or "").strip()
+                    else settings.db_path
+                )
+                state_path = (
+                    Path(str(args.state_path or "").strip()).expanduser()
+                    if str(args.state_path or "").strip()
+                    else None
+                )
+                summary = sync_runtime_control_plane_to_postgres(
+                    runtime_dir=runtime_dir,
+                    sqlite_path=sqlite_path,
+                    dsn=str(args.dsn or "").strip(),
+                    tables=[str(item or "").strip() for item in list(args.table or []) if str(item or "").strip()],
+                    truncate_first=bool(args.truncate_first),
+                    state_path=state_path,
+                    min_interval_seconds=float(args.min_interval_seconds or 0.0),
+                    force=bool(args.force),
+                    include_all_sqlite_tables=bool(args.all_sqlite_tables),
+                    validate_postgres=bool(args.validate_postgres),
+                    direct_stream=bool(args.direct_stream),
+                    chunk_size=int(args.chunk_size or 0),
+                    commit_every_chunks=int(args.commit_every_chunks or 0),
+                    progress_every_chunks=int(args.progress_every_chunks or 0),
+                    chunk_pause_seconds=float(args.chunk_pause_seconds or 0.0),
+                )
+        except ValueError as exc:
+            raise SystemExit(str(exc)) from exc
         print(
             json.dumps(
                 summary,

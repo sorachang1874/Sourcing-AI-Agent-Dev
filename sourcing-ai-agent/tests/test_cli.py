@@ -2511,6 +2511,45 @@ class CliWorkflowRunnerContinuationTest(PGControlPlaneStoreTestMixin, unittest.T
         )
         print_mock.assert_called_once()
 
+    def test_sync_control_plane_postgres_command_surfaces_durable_table_rejection(self) -> None:
+        rejection = (
+            "Generic control-plane snapshot/SQLite import cannot restore PG-only durable runtime tables: "
+            "workflow_commands."
+        )
+        with (
+            mock.patch.object(
+                cli,
+                "sync_control_plane_snapshot_to_postgres",
+                side_effect=ValueError(rejection),
+            ) as sync_mock,
+            mock.patch.object(
+                cli.sys,
+                "argv",
+                [
+                    "cli",
+                    "sync-control-plane-postgres",
+                    "--snapshot",
+                    "/tmp/control-plane.json",
+                    "--dsn",
+                    "postgresql://user:pass@localhost:5432/sourcing",
+                    "--table",
+                    "workflow_commands",
+                    "--truncate-first",
+                ],
+            ),
+            self.assertRaises(SystemExit) as raised,
+        ):
+            cli.main()
+
+        self.assertEqual(str(raised.exception), rejection)
+        sync_mock.assert_called_once_with(
+            snapshot_path="/tmp/control-plane.json",
+            dsn="postgresql://user:pass@localhost:5432/sourcing",
+            tables=["workflow_commands"],
+            truncate_first=True,
+            validate_postgres=False,
+        )
+
     def test_sync_control_plane_postgres_snapshot_command_can_validate_all_tables(self) -> None:
         snapshot_path = "/tmp/control-plane.json"
         with (

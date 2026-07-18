@@ -8,7 +8,12 @@ from pathlib import Path
 
 from sourcing_agent.artifact_cache import load_hot_cache_governance_state
 from sourcing_agent.asset_sync import AssetBundleError, AssetBundleManager
-from sourcing_agent.cloud_asset_import import hydrate_cloud_generation, import_cloud_assets
+from sourcing_agent.cloud_asset_import import (
+    _sync_restored_control_plane_snapshot,
+    hydrate_cloud_generation,
+    import_cloud_assets,
+)
+from sourcing_agent.control_plane_postgres import control_plane_snapshot_output_path
 from sourcing_agent.domain import Candidate, make_evidence_id
 from sourcing_agent.local_postgres import _LOCAL_POSTGRES_ENV_KEYS
 from sourcing_agent.object_storage import ObjectStorageConfig, build_object_storage_client
@@ -791,6 +796,80 @@ class CloudAssetImportTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 bundle_kind="sqlite_snapshot",
                 bundle_id="retired-sqlite-bundle",
                 companies=["Acme"],
+            )
+
+    def test_cloud_restore_surfaces_workflow_command_generic_import_rejection(self) -> None:
+        snapshot_path = control_plane_snapshot_output_path(self.target_runtime)
+        snapshot_path.parent.mkdir(parents=True, exist_ok=True)
+        snapshot_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "tables": {
+                        "workflow_commands": {
+                            "columns": [
+                                {
+                                    "name": "command_id",
+                                    "type": "TEXT",
+                                    "notnull": 1,
+                                    "default": "",
+                                    "pk_position": 1,
+                                }
+                            ],
+                            "row_count": 1,
+                            "rows": [{"command_id": "held-1"}],
+                        }
+                    },
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+
+        with unittest.mock.patch(
+            "sourcing_agent.cloud_asset_import.resolve_control_plane_postgres_dsn",
+            return_value="postgresql://user:pass@localhost:5432/sourcing",
+        ):
+            summary = _sync_restored_control_plane_snapshot(self.target_runtime)
+
+        self.assertEqual(summary["status"], "failed")
+        self.assertIn("ValueError", summary["error"])
+        self.assertIn("workflow_commands", summary["error"])
+
+    def test_control_plane_bundle_restore_includes_durable_table_rejection_detail(self) -> None:
+        bundle_root = self.source_runtime / "asset_exports" / "control-plane"
+        bundle_root.mkdir(parents=True, exist_ok=True)
+        manifest_path = bundle_root / "bundle_manifest.json"
+        manifest_path.write_text(
+            json.dumps(
+                {
+                    "bundle_kind": "control_plane_snapshot",
+                    "bundle_id": "control-plane",
+                    "files": [],
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+
+        with (
+            unittest.mock.patch(
+                "sourcing_agent.cloud_asset_import._sync_restored_control_plane_snapshot",
+                return_value={
+                    "status": "failed",
+                    "error": (
+                        "ValueError: Generic control-plane snapshot/SQLite import cannot restore "
+                        "PG-only durable runtime tables: workflow_commands."
+                    ),
+                },
+            ),
+            self.assertRaisesRegex(AssetBundleError, "workflow_commands"),
+        ):
+            import_cloud_assets(
+                bundle_manager=self.target_manager,
+                manifest_path=str(manifest_path),
             )
 
 
