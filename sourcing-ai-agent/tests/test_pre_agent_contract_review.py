@@ -345,7 +345,7 @@ def test_agent_tool_result_aggregate_owner_contract_is_canonical() -> None:
         "`agent_tool_terminal_aggregate.result_link_policy`",
         "`start_acquisition_run.result_hold_release_owner`",
         "`inspect_operation.result_readiness`",
-        "`filter_projection.publication_owner`",
+        "`filter_projection.publication_foundation`",
         "`operation_run.control_state`",
         "`operation_runs.progress.reason`",
     }
@@ -3672,10 +3672,13 @@ def test_operation_run_control_state_is_contract_owned() -> None:
             ),
             disabled_reason=reason,
         ).to_record()
-        assert validate_operation_run_control_state_projection(
-            projected,
-            operation_run_id="operation_contract_preflight",
-        ).to_record() == projected
+        assert (
+            validate_operation_run_control_state_projection(
+                projected,
+                operation_run_id="operation_contract_preflight",
+            ).to_record()
+            == projected
+        )
     find_class_method("_operation_run_control_state_record")
     find_class_method("_operation_run_control_response_record")
 

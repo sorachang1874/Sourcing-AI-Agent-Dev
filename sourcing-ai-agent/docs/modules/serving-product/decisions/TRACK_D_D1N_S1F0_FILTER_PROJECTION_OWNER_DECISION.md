@@ -1,228 +1,163 @@
-# Track D D1n S1f0a — filter-projection publication owner decision
+# Track D D1n S1f0a — filter-projection publication foundation boundary
 
-> Status: non-live, zero-DDL owner decision lock (2026-07-18). This batch changes no product writer, reader,
-> migration, Agent registry population, provider/model route, or serving state. S1f0b must implement the physical
-> carrier exactly; S1f1 must then add the owner-only reader and connect the already-defined v2 adapter/result-slot
-> path. This is
-> author evidence, not an independent-review verdict.
+> Status: fixed-forward candidate after the pinned Ultra review of `64a7dfc8f84f416a166a6ded69c666c7e50e523e`
+> returned `NO-GO 0/10/2/2`. The rejected proposal is not implementation authority. This document locks only the
+> foundation boundary and the dependency graph needed to ratify a product owner. It changes no product writer,
+> reader, migration, Agent registry population, provider/model route, or serving state. This is author evidence,
+> not an independent-review verdict.
 
-## 1. Outcome and bounded scope
+## 1. Fixed-forward outcome
 
-S1f0a ratifies one physical owner for `filter_projection` v2 without adding request fields or inventing a second
-population selector:
+S1f0a does **not** ratify an exact-start-v2 product publication owner. Current code has no durable join from the
+approved start occurrence to the committed Cohort result and run projection, so a receipt, run, snapshot, result
+view, execution result, and member list supplied as independent arguments cannot become owner evidence merely by
+passing local shape checks.
+
+The only ratified ownership boundary is:
 
 ```text
-owner=projection_search_service.filter_projection_publication_owner
-owner_revision=filter_projection_publication_owner_v1
-eligible_projection_type=run_scope_projection
-eligible_start_lineage=start_acquisition_run v2 exact receipt lineage
-eligible_provider_modes=simulate,scripted
-parent_carrier=serving_projections.metadata.filter_projection_owner_v1
-member_carrier=serving_projection_members.provenance.filter_projection_membership_v1
-result_link_policy=no_command_v1
+physical_projection_writer=serving_projection_owner
+candidate_field_validator=projection_search_service.filter_projection_publication_candidate
+candidate_field_validator_revision=filter_projection_publication_candidate_v1
+candidate_state=foundation_only_unbound
+product_owner_state=unratified
+agent_reader_state=blocked
+result_slot_state=blocked
+served_population=0
+provider_model_live_invocations=0
 migration_delta=0
 backfill=forbidden
-collection_authoritative_adoption=forbidden
-default_public_agent_served_population=0
 ```
 
-The current `projection_filter_request_v2` target remains exactly
-`projection_id + membership_revision + cohort_selection_registry_version +
-cohort_selection_registry_digest + cohort_selection_digest`. Planning, execution, result, publication, runtime, and
-lane evidence remain server-owned publication state; they are not added to caller-visible request arguments.
+`serving_projection_owner` remains the sole physical writer for a run-scope projection, its members, route,
+Activity/Attempt/EntityDelta evidence, and recovery. A filter component may validate a future field bundle inside
+that writer's existing publication UoW; it is not a second physical owner and may not open its own connection or lock
+order.
 
-This decision does not activate the current canary registry, change the historical v1 filter action, authorize a
-provider/model call, or claim live/hosted readiness. R-019 and R-029 remain open.
-
-## 2. Eligibility and rejection boundary
-
-An owner record may be published only when every item below is true before the first projection/member write:
-
-1. the target is one `run_scope_projection` with one nonempty `source_run_id`; `collection_authoritative_projection`
-   is ineligible because it may merge multiple runs and cannot claim one planning/execution lineage;
-2. the run descends from an exact start-v2 `ActionApproved` confirmation receipt, and the receipt's
-   `provider_manifest_identity.manifest_digest` is the planning digest;
-3. the exact committed `cohort_execution_result.v1` and candidate-document commit marker agree on the publication
-   digest, and its execution-manifest/result digests are nonempty lowercase SHA-256 values;
-4. receipt Cohort registry/version/selection identity exact-matches the execution manifest and the committed result;
-5. `CohortExecutionCapability` exact-validates and carries `provider_mode=simulate|scripted` plus the canonical
-   nonempty isolated `runtime_namespace`;
-6. the execution manifest's lane ids/digests and terminal lane summaries form an exact one-to-one set; every lane is
-   terminal-complete and every persisted candidate membership names one of those lanes with the same role/status;
-7. every visible candidate can be projected to the already-closed owner-candidate schema without raw/private fields,
-   path-shaped display data, duplicate identity, or a count above the existing 1,000-candidate bound.
-
-Missing, malformed, mixed-lineage, legacy, replay, live, partial-lane, collection-merged, or equality-alias evidence
-is ineligible. S1f0b must fail before parent/member/link/route writes; it must not publish an empty success or a
-partially owned projection. `replay` is not normalized to `simulate`, and `live` remains blocked until L1/CS6 provides
-the separately reviewed durable live capability.
-
-## 3. Parent carrier and exact field ownership
-
-`serving_projections.metadata.filter_projection_owner_v1` is a closed wrapper:
+The current `projection_filter_request_v2` target remains unchanged:
 
 ```text
-schema_version=filter_projection_publication_owner_wrapper.v1
-owner_record=<closed record below>
-owner_record_digest=sha256(canonical_json(owner_record))
+projection_id + membership_revision + cohort_selection_registry_version +
+cohort_selection_registry_digest + cohort_selection_digest
 ```
 
-The closed `owner_record` contains exactly:
+No caller-visible planning, execution, receipt, path, runtime, lane, or result fields are added.
 
-```text
-schema_version
-owner
-owner_revision
-source_run_id
-result_view_id
-snapshot_id
-cohort_selection_registry_version
-cohort_selection_registry_digest
-cohort_selection_digest
-selection_digest
-planning_digest
-execution_digest
-result_digest
-publication_digest
-provider_mode
-runtime_namespace
-cache_provenance
-requested_lane_coverage
-lane_summaries
-terminal_owner_ref
-terminal_owner_digest
-```
+## 2. Current lineage characterization
 
-Every scalar string is an exact plain JSON string; booleans/numbers/string subclasses are rejected before string
-equality checks. `cache_provenance`, `requested_lane_coverage`, `lane_summaries`, and `terminal_owner_ref` are the
-closed object/array values defined below, never string aliases. The canonical JSON form is UTF-8, sorted keys,
-compact separators, `allow_nan=false`.
+The repository currently contains three incomplete segments:
 
-| Owner-record field | Physical source of truth | Derivation / fallback |
+1. exact start-v2 authority: `operation_runs.action_id` joins the Action stream's exact `ActionApproved` sequence-2
+   receipt; the command-acceptance owner binds Action, OperationRun, WorkflowRun, root WorkflowCommand, receipt,
+   start snapshot, and result occurrence;
+2. legacy Cohort publication: `jobs.job_id -> job_result_views.job_id/snapshot_id -> SearchSeedSnapshot files ->
+   cohort_execution_result.v1 -> run_scope_projection(source_run_id=job_id)`;
+3. operation-native acquisition: `acquisition_runs.operation_run_id/workflow_run_id` retains typed runtime lineage
+   and publishes incremental projection admission with `source_run_id=workflow_run_id`, but creates no legacy Job,
+   SearchSeedSnapshot, result view, or committed Cohort result.
+
+There is no join between segments 1/3 and segment 2. In addition, the start-v2 root payload's receipt/Cohort/planning
+identity is copied into `resolved_intent.source_workflow_payload` and then dropped by the current plan builder before
+plan review and acquisition-run persistence. Consequently:
+
+- a valid receipt can be paired with an unrelated run;
+- a valid execution result can be paired with an unrelated snapshot/result view;
+- a caller-provided publication digest does not prove the candidate-document commit marker;
+- an internally consistent member subset does not prove equality with the committed candidate population.
+
+All such inputs remain characterization or fixture values. They are not adoptable product authority.
+
+## 3. Required dependency batches
+
+The exact product path is operation-native. It must not create a legacy `job_id` shell bridge.
+
+| Batch | Owner and required outcome | Promotion boundary |
 | --- | --- | --- |
-| `source_run_id` | `serving_projections.source_run_id` and the exact run/result-view lineage | exact-copy; missing or disagreement is ineligible |
-| `result_view_id`, `snapshot_id` | locked publication inputs and committed SearchSeedSnapshot/result view | exact-copy; no latest-file lookup or path fallback |
-| registry/version/selection fields | start-v2 `ActionApproved` receipt `cohort_identity` plus exact execution-manifest parity | `selection_digest == cohort_selection_digest`; mismatch is ineligible |
-| `planning_digest` | receipt `provider_manifest_identity.manifest_digest` | capability-free v2 planning identity; never taken from mutable Job summary |
-| `execution_digest` | committed result `cohort_provider_manifest_digest`, exact-equal to the validated capability-bearing execution manifest | no planning/execution aliasing |
-| `result_digest` | committed `cohort_execution_result.v1.result_digest` | exact-copy of compiler combine result digest |
-| `publication_digest` | committed `cohort_publication_digest` and candidate-document commit marker | both must exact-match |
-| `provider_mode`, `runtime_namespace` | exact validated `CohortExecutionCapability` embedded in the committed result | only `simulate|scripted`; no request/ambient fallback |
-| `cache_provenance` | cohort runtime binding plus per-lane request-manifest namespace validation | `{cache_scope: isolated_non_live, source_of_truth: projection_search_service.cache_provenance}` only |
-| `requested_lane_coverage`, `lane_summaries` | exact execution manifest lanes joined one-to-one to committed lane summaries | committed S1f0 owner is `complete`; absent/extra/duplicate/mismatched lane is ineligible |
-| `terminal_owner_ref/digest` | closed ref in section 5 | digest recomputed before publication/read |
+| `S1f0b-foundation` | `serving_projection_owner`: dedicated carrier-key reservation registry, generic membership-change atomic invalidation, collection strip, and existing parent/member/route UoW tests | foundation only; no Agent reader or product-eligible carrier |
+| `S1f0c0-lineage-decision` | `acquisition_planner` + `cohort_provider_runtime`: ratify the exact operation-native start-lineage carrier and the commit-once Cohort terminal lineage owner, fields, CAS, and migration status | decision only; no inferred aliases |
+| `S1f0c1-start-propagation` | preserve the exact start authority through intent, plan, review session, execution bundle, and `acquisition_runs` without a second writable source | must have scope-matched review before product adoption |
+| `S1f0c2-cohort-terminal` | persist one immutable terminal lineage record binding acquisition/workflow source run, receipt/root authority, SearchSeedSnapshot/result view, exact execution result, candidate-document marker, and full candidate-set commitment | no partial/mutable/latest-file authority |
+| `S1f0d-owner-v2` | `serving_projection_owner` loads the typed terminal owner and publishes the final closed parent/member set inside the existing UoW | first product-eligible physical carrier candidate |
+| `S1f1-reader-result` | owner-only read snapshot plus commandless shared result-slot acceptance | depends on reviewed `S1f0d`; remains unserved until release gates |
 
-The current projection membership revision remains the opaque
-`PROJECTION_SEARCH_INDEX_INPUT_REVISION_KEY` value minted by the atomic publication owner. It is not copied into the
-owner record because the repository mints it during the same publication UoW; the S1f0b reader binds the parent
-record digest to the pre/post-fenced revision when S1f1 adds the owner-only reader.
+Implementation and review may run asynchronously where exact write sets are disjoint. The only promotion edges are
+shown in the table; a review request does not freeze unrelated Track D work.
 
-## 4. Member carrier
+## 4. S1f0c0 decisions that must be frozen before product code
 
-Each visible member in an eligible owner publication carries
-`serving_projection_members.provenance.filter_projection_membership_v1`:
+The lineage decision must structurally define, with unknown-key rejection:
 
-```text
-schema_version
-owner
-owner_revision
-parent_owner_digest
-candidate_identity_key
-memberships
-membership_digest
-```
+1. the operation-native source-run identity and its exact join through acquisition run, workflow root command,
+   OperationRun, Action, and the unique confirmation receipt;
+2. the immutable start-authority ref, including receipt id/digest, Action/Operation/Workflow/root-command identities,
+   command-acceptance digest, start-snapshot digest, workspace/requester binding, and result occurrence;
+3. exact receipt -> retained capability-free planning manifest -> exact recompile -> capability-bearing execution
+   manifest -> committed result validation, including the only permitted capability difference;
+4. a commit-once terminal lineage record and CAS that binds snapshot id, result-view id, execution/result/publication
+   digests, candidate-document commit marker, and the exact start authority;
+5. complete source-to-projection population equality: nonzero source count, `<=1000`, visible count, excluded count,
+   exclusion rule, canonical member-set digest, and duplicate/extra/omitted/cross-run rejection;
+6. a versioned opaque runtime namespace ref. The canonical filesystem namespace remains private; the Agent-visible
+   identifier must be server-minted and cryptographically bound without exposing a path;
+7. exact freshness/readiness owners and the complete private-to-model-safe lane transformation;
+8. the final projection-publication terminal owner and every shared result-slot owner target/ref/digest/token field.
 
-Here `schema_version=filter_projection_membership_wrapper.v1`,
-`owner=projection_search_service.cohort_lane_membership`, and
-`owner_revision=filter_projection_membership_v1`. `membership_digest` is SHA-256 over the canonical object containing
-all prior fields.
+S1f0c0 must publish a machine-readable closed decision manifest. Prose or local tuples are not a substitute.
 
-Memberships preserve execution-manifest lane order, are nonempty and duplicate-free, and each item is a closed plain
-string `{lane_id,employment_status,role_bucket_id}` object. Empty `role_bucket_id` represents the compiler's explicit
-all-roles lane; it is not inferred from job-title/function heuristics. The model-safe reader emits only the
-already-defined public candidate fields and derives the opaque `candidate_ref` from projection id, membership
-revision, and private candidate identity. It never exposes the carrier, candidate identity key, raw cache path,
-evidence, contact data, or private metadata.
+## 5. Foundation-only writer behavior
 
-Any membership-changing writer that does not supply a complete valid S1f0 owner set must atomically remove the parent
-owner wrapper and every member wrapper. It may not preserve a stale parent digest over new members. An owner-aware
-republish recomputes the complete parent/member set; it never patches one candidate in place under the old digest.
+S1f0b may improve the existing generic writer safely before S1f0c0 completes:
 
-## 5. Terminal owner and Agent result link
+- parent and member carrier keys use dedicated reservation registries; they are not search-index binding keys;
+- direct generic creation or overwrite of a reserved key fails before writes;
+- if an owner-unaware writer changes membership, the same existing UoW removes the parent carrier and every member
+  carrier before committing the changed membership;
+- a semantic no-op preserves a valid carrier and the existing opaque membership revision;
+- collection-authoritative publication always strips both carriers;
+- full run publication, incremental board/facet paths, repair/migration paths, direct member upsert/replace, combined
+  parent/member writes, facade methods, repository delegates, and native PG adapters are all in the enumerated writer
+  inventory;
+- no new `_connect_with_transaction_lock` caller or lock order is introduced.
 
-The closed `terminal_owner_ref` contains exactly:
+Until S1f0d, any experimental carrier must be marked `foundation_only_unbound`, must use an identity/version distinct
+from the eventual product owner, and must be rejected by every Agent/product reader. It is disposable shadow evidence,
+not backfill material.
 
-```text
-schema_version
-owner
-owner_revision
-source_run_id
-result_view_id
-snapshot_id
-planning_manifest_digest
-execution_manifest_digest
-result_digest
-publication_digest
-```
+## 6. Terminal/result-slot boundary
 
-Here `schema_version=filter_projection_terminal_owner_ref.v1`,
-`owner=cohort_provider_runtime.cohort_execution_result`, and `owner_revision=cohort_execution_result.v1`.
-`terminal_owner_digest` is SHA-256 over the canonical ref. The ref binds the planning receipt to the committed
-execution and publication; a file path or newest-result lookup is never terminal authority.
+`filter_projection` remains `result_link_policy=no_command_v1`. The shared result-slot transport needs no new DDL,
+but no success/deferred terminal owner is ratified in this batch.
 
-`filter_projection` remains a read-only Agent action with `result_link_policy=no_command_v1`. S1f1 prepares one exact
-result slot, reads the owner snapshot without writes, and passes the recomputed terminal ref/digest as the accepted
-owner result. No `workflow_command_id` or `activity_attempt_id` is invented. Missing/stale/not-ready results use the
-already-closed error/deferred variants and the same commandless result-slot aggregate.
+The current `cohort_execution_result.v1` is audit provenance, not the projection result authority. The eventual
+terminal authority is the reviewed exact projection publication from S1f0d. Missing/foreign may reuse the existing
+slot-generation masked-absence family. Malformed owner state, lineage drift, prepare/accept races, or membership-token
+drift keep the slot pending and write zero result attempt/slot/journal rows. S1f0c0/S1f1 must separately define the
+permitted shared result-slot writes after successful revalidation; domain, projection, repair, provider, and model
+writes remain zero on the read path.
 
-## 6. S1f1 read algorithm and zero-write behavior
+No `workflow_command_id`, ActivityAttempt, command fence, or mutable succeeded-command projection is invented for
+this commandless action.
 
-S1f1 must add an owner-only reader; it must not overload the generic public projection endpoint:
+## 7. Tests and evidence boundary
 
-1. resolve exact shared-canonical access and require `run_scope_projection`;
-2. take the existing finite-deadline publication lock/read snapshot and load the parent wrapper plus opaque membership
-   revision;
-3. validate/recompute the parent and terminal digests before member reads;
-4. read all visible members needed by the bounded result and validate every member wrapper against the parent digest,
-   candidate identity, lane manifest, and closed membership shape;
-5. reread the projection and require the same owner digest, membership revision, projection state, and visible count;
-6. construct the existing `_FILTER_OWNER_SNAPSHOT_TOOL_SPEC` record in memory and call
-   `execute_filter_projection_v2`;
-7. only the later shared result-slot acceptance UoW may persist the model-safe result.
+S1f0a fixed-forward tests must parse the closed machine manifest, reject unknown keys, and assert exact Markdown
+routes/status digests. Lexical substring counts are characterization only.
 
-Missing and foreign projection identity remain the same `projection_not_found` result. Owner/schema/digest/revision
-drift is stale/not-ready or fail-closed according to the existing adapter contract. The read path performs zero
-projection/member/link/route/domain writes and no repair/backfill.
+S1f0b foundation tests may prove:
 
-## 7. JSON carrier decision, reservation, and migration
+- dedicated reservation registries cover every enumerated mutation entrypoint;
+- owner-unaware semantic membership changes atomically invalidate every carrier;
+- semantic no-op preserves the carrier and membership revision;
+- collection/legacy/repair paths never adopt a carrier;
+- fault injection rolls back parent/member/route writes;
+- identical and divergent concurrent publications serialize under the existing lock.
 
-No DDL is required: both tables already have non-null JSON metadata/provenance columns, the repository already owns a
-single atomic parent/member/route publication, and the existing publication lock/revision fences the read. Adding
-columns would duplicate the closed owner record and create a mixed-source migration with no current durable consumer.
+They may not prove exact-start lineage, product eligibility, Agent result acceptance, E2E, served readiness, or live
+readiness. Those claims require S1f0c0-S1f1 in dependency order.
 
-S1f0b must centrally reserve both carrier keys. Generic publication-field patching must reject the parent key;
-generic member patch/upsert must reject direct creation or overwrite of the member key and preserve/remove it only
-through the owner-aware full-publication rules above. Collection-authoritative merge must strip both carriers.
+## 8. Release and residual boundary
 
-There is no backfill. Existing rows remain valid for current public readers but are ineligible for filter v2. The
-owner record is additive shadow state until S1f1 and the exact canary tool/result path receive scope-matched review.
-Removal of v1 carriers requires a separately reviewed successor, historical tool/result lookup for all durable
-references, a zero-reference inventory, and an atomic migration; deleting the keys because a newer writer exists is
-forbidden.
-
-## 8. Required S1f0b/S1f1 acceptance matrix
-
-S1f0b physical propagation must prove:
-
-- missing/malformed/uncommitted/digest-mismatched/lane-invalid evidence writes zero parent/member/link/route rows;
-- fault injection rolls back the complete owner-aware parent/member/route publication;
-- identical replay preserves the same semantic owner digest and existing membership revision;
-- concurrent identical/divergent publications serialize under the existing lock;
-- generic parent/member mutation rejects reserved-key overwrite, and unrelated patches cannot erase a valid owner;
-- collection-authoritative merge and legacy run publication carry no S1f0 owner;
-- no new `_connect_with_transaction_lock` caller or independent lock order is introduced.
-
-S1f1 then proves same-owner success, missing/foreign masking, no-ref compatibility, simulate/scripted fixtures,
-prepare-to-publication races with zero terminal write, commandless result acceptance/replay/late quarantine, and
-model-safe serialization. Both batches keep
-`served=0`, provider/model/live invocation count zero, and R-019/R-029 open.
+`served=0`; provider/model/live invocation count remains zero. R-019 and R-029 remain open. The S1f0a Ultra
+`NO-GO 0/10/2/2` remains the controlling verdict until a fresh pinned non-author review accepts this fixed-forward
+scope. No W6/nightly, paid provider, founder/manual signoff, or milestone claim may use the rejected `64a7dfc`
+decision.

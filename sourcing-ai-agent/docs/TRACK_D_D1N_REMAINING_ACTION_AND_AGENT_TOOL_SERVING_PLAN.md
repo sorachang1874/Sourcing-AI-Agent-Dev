@@ -652,14 +652,16 @@ See `TRACK_D_D1N_S1E1_START_AUTHORITY_OWNER_DECISION.md` and
 `TRACK_D_D1N_S1E2B_START_CREATE_UOW_IMPLEMENTATION.md` /
 `TRACK_D_D1N_S1E2B_START_CREATE_UOW_REVIEW_RESPONSE.md`.
 
-S1f0a now decision-locks the missing `filter_projection` physical owner without product code or DDL. Only one exact
-start-v2, single-run `run_scope_projection` may carry the closed parent/member owner records; the planning digest comes
-from the confirmation receipt, execution/result/publication/runtime/lane evidence comes from the exact committed
-Cohort result, and filter result acceptance remains `no_command_v1`. Collection-authoritative merge, legacy runs,
-replay, live, partial lanes, and backfill are ineligible. S1f0b owns atomic physical propagation/reserved-key behavior;
-S1f1 owns the owner-only reader, commandless result-slot acceptance, and existing v2 adapter connection. Default
-served population and provider/model/live invocation remain zero. See
-`modules/serving-product/decisions/TRACK_D_D1N_S1F0_FILTER_PROJECTION_OWNER_DECISION.md`.
+S1f0a candidate `64a7dfc` did not close the missing `filter_projection` product owner: pinned Ultra review returned
+`NO-GO 0/10/2/2`. The fixed-forward status is `foundation_only_unbound`. `serving_projection_owner` remains the sole
+physical writer; S1f0b is bounded to dedicated carrier reservation, generic membership-change atomic invalidation,
+semantic-noop preservation, collection strip, and the existing parent/member/route UoW. The current tree has no
+durable exact-start-v2 -> committed Cohort SearchSeedSnapshot/result-view -> run-projection join. S1f0c0 must ratify
+that operation-native lineage and a commit-once Cohort terminal record; S1f0c1/S1f0c2 implement it; S1f0d then owns
+the first product-eligible owner v2. S1f1 reader/commandless result acceptance depends on reviewed S1f0d. Default
+served population and provider/model/live invocation remain zero. Decision and closed foundation manifest:
+`modules/serving-product/decisions/TRACK_D_D1N_S1F0_FILTER_PROJECTION_OWNER_DECISION.md` and
+`modules/serving-product/contracts/filter_projection_foundation_boundary_v1.json`.
 
 Shared hotspots—`operation_runtime.py`, `orchestrator.py`, public API routing, registry aggregation, migrations, and
 release-state derivation—have one serial integration owner. Leaf modules/tests may be developed in parallel. No leaf

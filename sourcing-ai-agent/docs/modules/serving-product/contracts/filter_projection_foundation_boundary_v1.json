@@ -1,0 +1,143 @@
+{
+  "schema_version": "filter_projection_foundation_boundary.v1",
+  "decision_id": "track_d.d1n.s1f0a.fixed_forward",
+  "status": "foundation_only_unbound",
+  "reviewed_candidate": {
+    "commit": "64a7dfc8f84f416a166a6ded69c666c7e50e523e",
+    "verdict": "NO-GO",
+    "finding_counts": {
+      "p0": 0,
+      "p1": 10,
+      "p2": 2,
+      "p3": 2
+    }
+  },
+  "ownership": {
+    "physical_writer": "serving_projection_owner",
+    "candidate_field_validator": "projection_search_service.filter_projection_publication_candidate",
+    "candidate_field_validator_revision": "filter_projection_publication_candidate_v1",
+    "product_owner": "unratified"
+  },
+  "request_target_fields": [
+    "projection_id",
+    "membership_revision",
+    "cohort_selection_registry_version",
+    "cohort_selection_registry_digest",
+    "cohort_selection_digest"
+  ],
+  "lineage_state": {
+    "exact_start_to_operation_run": "present",
+    "legacy_job_to_cohort_result": "present",
+    "operation_native_to_incremental_projection": "present",
+    "exact_start_to_committed_cohort_projection": "missing",
+    "root_payload_to_acquisition_run_exact_propagation": "missing"
+  },
+  "ratified_foundation_capabilities": [
+    "dedicated_carrier_reservation_registry",
+    "generic_membership_change_atomic_carrier_invalidation",
+    "generic_membership_noop_carrier_preservation",
+    "collection_authoritative_carrier_strip",
+    "existing_parent_member_route_publication_uow",
+    "existing_publication_lock_order"
+  ],
+  "forbidden_claims": [
+    "exact_start_v2_product_owner",
+    "product_eligible_carrier",
+    "agent_owner_reader",
+    "result_slot_acceptance",
+    "start_v2_end_to_end",
+    "served_readiness",
+    "local_live_readiness",
+    "hosted_readiness",
+    "migration_or_backfill"
+  ],
+  "dependency_batches": [
+    {
+      "batch_id": "S1f0b-foundation",
+      "depends_on": [],
+      "owner": "serving_projection_owner",
+      "outcome": "reservation_invalidation_and_atomic_uow_foundation"
+    },
+    {
+      "batch_id": "S1f0c0-lineage-decision",
+      "depends_on": [],
+      "owner": "acquisition_planner+cohort_provider_runtime",
+      "outcome": "closed_start_and_terminal_lineage_decision"
+    },
+    {
+      "batch_id": "S1f0c1-start-propagation",
+      "depends_on": [
+        "S1f0c0-lineage-decision"
+      ],
+      "owner": "acquisition_planner",
+      "outcome": "exact_start_lineage_through_acquisition_run"
+    },
+    {
+      "batch_id": "S1f0c2-cohort-terminal",
+      "depends_on": [
+        "S1f0c1-start-propagation"
+      ],
+      "owner": "cohort_provider_runtime",
+      "outcome": "commit_once_cohort_terminal_lineage"
+    },
+    {
+      "batch_id": "S1f0d-owner-v2",
+      "depends_on": [
+        "S1f0b-foundation",
+        "S1f0c2-cohort-terminal"
+      ],
+      "owner": "serving_projection_owner",
+      "outcome": "first_product_eligible_projection_owner_candidate"
+    },
+    {
+      "batch_id": "S1f1-reader-result",
+      "depends_on": [
+        "S1f0d-owner-v2"
+      ],
+      "owner": "projection_search_service+agent_tool_result_slot_owner",
+      "outcome": "owner_only_read_and_commandless_result_acceptance"
+    }
+  ],
+  "required_lineage_decisions": [
+    "operation_native_source_run_identity",
+    "unique_receipt_action_operation_workflow_root_join",
+    "exact_planning_to_execution_recompile",
+    "commit_once_terminal_record_and_cas",
+    "complete_candidate_set_commitment",
+    "opaque_runtime_namespace_ref",
+    "freshness_and_readiness_owners",
+    "projection_terminal_owner_and_result_slot_fields"
+  ],
+  "writer_inventory": [
+    "serving_projection_writer.ServingProjectionWriter.publish_run_scope_projection",
+    "serving_projection_writer.ServingProjectionWriter.publish_collection_authoritative_projection",
+    "repositories.serving_projection.ServingProjectionRepository.upsert",
+    "repositories.serving_projection.ServingProjectionRepository.upsert_members",
+    "repositories.serving_projection.ServingProjectionRepository.replace_members",
+    "repositories.serving_projection.ServingProjectionRepository.upsert_with_members",
+    "repositories.serving_projection.ServingProjectionRepository.upsert_with_replaced_members",
+    "repositories.serving_projection.ServingProjectionRepository.publish_run_scope_projection",
+    "repositories.serving_projection.ServingProjectionRepository.publish_collection_authoritative_projection",
+    "control_plane_live_postgres.LiveControlPlanePostgresAdapter.write_serving_projection_members_with_input_revision",
+    "control_plane_live_postgres.LiveControlPlanePostgresAdapter.upsert_row_and_upsert_rows",
+    "control_plane_live_postgres.LiveControlPlanePostgresAdapter.upsert_row_and_replace_rows",
+    "control_plane_live_postgres.LiveControlPlanePostgresAdapter.publish_serving_projection",
+    "orchestrator.SourcingOrchestrator._publish_run_scope_projection_from_result_view_owner",
+    "orchestrator.SourcingOrchestrator._execute_operation_native_projection_admission_command_payload",
+    "orchestrator.SourcingOrchestrator._extend_run_scope_projection_from_board_visible_records",
+    "serving_projection_migration.ServingProjectionMigrationBackfill.backfill_run_scope_projection",
+    "asset_consolidation_repair_apply.apply_asset_consolidation_repair"
+  ],
+  "release_state": {
+    "served_population": 0,
+    "provider_invocations": 0,
+    "model_invocations": 0,
+    "live_invocations": 0,
+    "migration_delta": 0,
+    "backfill": "forbidden",
+    "open_residuals": [
+      "R-019",
+      "R-029"
+    ]
+  }
+}

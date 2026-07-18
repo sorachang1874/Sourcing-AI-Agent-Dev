@@ -512,15 +512,16 @@
   root command -> root drain -> queued `acquisition.intent.resolve` 已由 PG test 覆盖。Evidence：root-hop node=`1
   passed`，create/result/root PG matrix=`14 passed + 21 subtests`，legacy adjacent root owner=`1 passed`，scoped
   mypy=`0/1`、Ruff green。S1e2d 不改变 served/live/provider/model=0，也不关闭 S1e2b formal `NO-GO`。
-- [ ] D1n S1f filter-projection physical owner：S1f0a 已在
-  `modules/serving-product/decisions/TRACK_D_D1N_S1F0_FILTER_PROJECTION_OWNER_DECISION.md` decision-lock 零 DDL
-  方案。仅 exact start-v2 单 run 的 `run_scope_projection` 可写 parent
-  `metadata.filter_projection_owner_v1` + member `provenance.filter_projection_membership_v1`；planning digest 来自
-  `ActionApproved` receipt，execution/result/publication/runtime/lane owner 来自 committed Cohort result；terminal
-  owner 以 closed ref/digest 编码，Agent result 继续 `no_command_v1`。collection-authoritative、legacy、replay、live、
-  partial lane、backfill 均 fail closed。下一批 S1f0b 实现 atomic propagation、reserved-key/strip 规则与 PG matrix；
-  S1f1 再接 owner-only reader、existing v2 adapter 与 commandless result slot。当前 served=0、provider/model/live=0，
-  R-019/R-029 open；S1e2b NO-GO fixed-forward 独立进行。
+- [ ] D1n S1f filter-projection product owner：`64a7dfc` 的 S1f0a pinned Ultra review 为
+  `NO-GO 0/10/2/2`；fixed-forward decision/manifest 将状态收窄为 `foundation_only_unbound`，不再声称 current tree
+  已有 exact-start-v2 product owner。`serving_projection_owner` 保持唯一物理 writer。S1f0b 只可实现 dedicated
+  carrier reservation、owner-unaware membership-change atomic invalidation、semantic-noop preserve、collection strip
+  与现有 parent/member/route UoW foundation；不得接 Agent reader。并行 S1f0c0 先 ratify operation-native
+  start-lineage propagation 与 commit-once Cohort terminal record，S1f0c1/S1f0c2 实现后，S1f0d 才发布首个
+  product-eligible owner v2，S1f1 再接 owner-only reader/commandless result slot。Decision=
+  `modules/serving-product/decisions/TRACK_D_D1N_S1F0_FILTER_PROJECTION_OWNER_DECISION.md`，machine contract=
+  `modules/serving-product/contracts/filter_projection_foundation_boundary_v1.json`。当前 served=0、
+  provider/model/live=0、R-019/R-029 open；S1e2b fixed-forward 仍独立进行。
 - [ ] D1m mixed-version rollout gate（R-019）：pre-D1m binary 可继续写 revisionless source row 并绕开
   revision-aware exact-claim canonical materializer。任何 hosted activation 前必须选择并验证其一：quiesced
   single-version cutover，或 separately reviewed dual-write/compatibility bridge；完成前不得声称 rolling overlap
