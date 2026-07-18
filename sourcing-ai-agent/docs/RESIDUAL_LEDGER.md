@@ -225,6 +225,19 @@
   R-019's status and ratchet remain open; R-023, R-027, R-028, R-029, action-root, other OB gates, served=0,
   provider/live, and Migration A-D are unchanged.
 
+- **R-019 / R-029 / D1n S1e1 (2026-07-18):** decision-only, zero-migration start-authority lock chooses the existing
+  operation-event payload as the physical owner rather than adding a table. Specialized submit will create the exact
+  v2 pending Action plus ActionApprovalRequired sequence 1. Specialized create will atomically persist ActionApproved
+  sequence 2 with the complete `acquisition_confirmation_receipt.v1` payload, exact Action/Operation projections,
+  WorkflowStarted/CommandPlanRequested sequences 1/2, one root command, exact `workflow_current_state`, and
+  OperationCommandPlanned sequence 1 as the
+  command-acceptance winner. The same immutable receipt/digest owns the five-field acquisition parent-budget admission
+  envelope; it is not D3 `cost_reservations`/`dispatch_exposures` and has no release/consume CAS. Result prepare remains
+  read-only and shared accept owns attempt/slot/journal. Scope is only `isolated_local_canary + simulate|scripted` with
+  runtime_outbox delta zero; generic approve/dispatch, live/replay, provider/model calls, and serving do not expand.
+  This annotation changes neither row status nor R-019's current ratchet, and does not close R-029's 5/15 bridge,
+  Plan §6#6, OB-2.2/10.3/10.4, or served=0. S1e2 product implementation and fresh pinned review remain pending.
+
 - **R-019 / D3c2h1 fixed-forward (2026-07-15):** the first pinned highest-effort non-author review of
   `1c4a2d9177dcb3470117700086b12fd533898bb7` returned formal `NO-GO 0/3/3/0`. The author repair addresses all six
   findings without SQL/runtime: classification now has nonterminal `current_pending_apply` plus a fresh normal-terminal

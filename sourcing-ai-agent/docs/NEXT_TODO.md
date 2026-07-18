@@ -448,6 +448,16 @@
   Fresh S1b review 的两次 canonical execution 均未形成 verdict；filtered-cache diagnostic 已证明独立
   `gpt-5.6-sol/ultra/priority` transport 可启动，但随后由服务端 `usageLimitExceeded` fail closed。因此 S1b/S1d
   formal review 均继续 pending，当前 NO-GO 继续阻塞 signoff/live，但不阻塞 S1e0/S1e1 非 live 开发。
+- [ ] D1n S1e start physical adapter：S1e0=`d05a073` 已 characterize generic approval/dispatch/budget gap；S1e1
+  decision-lock（零 product code / 零 migration）选择专用 submit/create/result-accept 三 UoW。Physical Action 使用
+  `approval_required`；ActionApproved seq2 的 exact `acquisition_confirmation_receipt.v1` event payload 同时是审批
+  SOT 与五字段 acquisition parent-budget envelope；WorkflowStarted/CommandPlanRequested seq1/2 创建 root command，
+  同 UoW reduce 到 exact `workflow_current_state`，OperationCommandPlanned seq1 是
+  `workflow_command_acceptance_v1` winner。仅允许
+  `isolated_local_canary + simulate|scripted`，generic approve/dispatch 不扩张，runtime_outbox delta=0。下一批 S1e2
+  实现 specialized repository/adapter + read-only prepare/shared accept 与 PG fault/concurrency/terminal-success。
+  S1e1 author test/future review 都不改变 `10/5`、served=0、provider/model/live=0；R-019/R-029、Plan §6#6、
+  OB-2.2/10.3/10.4 均继续 open，fresh pinned non-author review pending。
 - [ ] D1m mixed-version rollout gate（R-019）：pre-D1m binary 可继续写 revisionless source row 并绕开
   revision-aware exact-claim canonical materializer。任何 hosted activation 前必须选择并验证其一：quiesced
   single-version cutover，或 separately reviewed dual-write/compatibility bridge；完成前不得声称 rolling overlap

@@ -623,6 +623,18 @@ the older multi-transaction dispatch path. Default/public serving remains zero. 
 `TRACK_D_D1N_S1C_OPAQUE_OWNER_REVISION_CARRIER_IMPLEMENTATION.md`, and
 `TRACK_D_D1N_S1D_RESULT_LINK_POLICY_IMPLEMENTATION.md`.
 
+S1e0 (`d05a073`) characterizes the unratified generic approval/dispatch/budget surfaces. S1e1 now decision-locks the
+non-live implementation target without product code or migration: a specialized pending-Action UoW writes physical
+`approval_required` plus ActionApprovalRequired sequence 1; a specialized create UoW uses ActionApproved sequence 2
+and its exact `acquisition_confirmation_receipt.v1` payload as both approval SOT and immutable five-field acquisition
+parent-budget envelope, creates WorkflowStarted/CommandPlanRequested sequences 1/2 plus one root command, and makes
+their canonical `workflow_current_state` projection in the same UoW, then makes OperationCommandPlanned sequence 1
+the command-acceptance winner. Result prepare is read-only and shared acceptance
+owns attempt/slot/journal. All paths are exact `isolated_local_canary + simulate|scripted`, runtime-outbox delta is
+zero, and generic approve/dispatch do not expand. S1e2 must implement the three UoWs and PG fault/concurrency proof.
+R-019, R-029, Plan §6#6, OB-2.2/10.3/10.4, the `10/5` partition, provider/model/live=0, and `served=0` remain open.
+See `TRACK_D_D1N_S1E1_START_AUTHORITY_OWNER_DECISION.md`.
+
 Shared hotspots—`operation_runtime.py`, `orchestrator.py`, public API routing, registry aggregation, migrations, and
 release-state derivation—have one serial integration owner. Leaf modules/tests may be developed in parallel. No leaf
 stages or commits another worker's files.
