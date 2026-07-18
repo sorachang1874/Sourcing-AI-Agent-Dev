@@ -1,0 +1,2144 @@
+{
+  "schema_version": "filter_projection_lineage_fixed_forward_decision.v1",
+  "decision_id": "track_d.d1n.s1f0c.fixed_forward_lineage",
+  "status": "decision_locked_not_implemented",
+  "scope": {
+    "batch": "S1f0c-fixed-forward-decision",
+    "decision_only": true,
+    "ddl_delta": 0,
+    "runtime_write_delta": 0,
+    "provider_invocation_delta": 0,
+    "model_invocation_delta": 0,
+    "served_population_delta": 0
+  },
+  "obligation_basis": {
+    "track": "D1n",
+    "design_source": ".coord/handoffs/s1f0c-ff-di-v1.md",
+    "design_source_pinned_base": "3bd3ed2fd803e428846961982d76f74c0fb4437e",
+    "canonization_base": "c3efff2aa07330dee52408ebc9dcc7f1786564f5",
+    "precedent_commit": "3bd3ed2fd803e428846961982d76f74c0fb4437e",
+    "precedent_manifest": "docs/modules/serving-product/contracts/filter_projection_lineage_terminal_owner_decision_v1.json",
+    "controlling_review": {
+      "artifact": "runtime/reviews/20260718T113429Z_Track_D_D1n_S1f0c0_lineage_terminal_owner_decision.md",
+      "verdict": "NO-GO",
+      "new_findings": "P0/P1/P2/P3=0/9/1/0",
+      "residuals": [
+        "R-019",
+        "R-029"
+      ]
+    },
+    "wave0_inputs": [
+      ".coord/handoffs/s1f0c-ff-jc-v1.md",
+      ".coord/handoffs/s1f0c-ff-cr-v1.md",
+      ".coord/handoffs/s1f0c-ff-cs-v1.md",
+      ".coord/handoffs/s1f0c-ff-rs-v1.md",
+      ".coord/handoffs/s1f0c-ff-fr-v1.md"
+    ],
+    "not_closed_by_this_batch": [
+      "R-019",
+      "R-029",
+      "public/default served population",
+      "provider/model/live authorization"
+    ],
+    "review_required_before": [
+      "canonical S1f0c implementation (FF-SCHEMA, FF-CARRIER, FF-COMPILER, FF-SOURCE)",
+      "migration 0015 authoring"
+    ]
+  },
+  "owners": {
+    "start_command_owner": "acquisition_run_writer",
+    "start_carrier_owner": "acquisition_planner",
+    "execution_authority_owner": "acquisition_planner",
+    "namespace_registry_owner": "agent_runtime_namespace_registry",
+    "compiler_derivation_owner": "cohort_runtime",
+    "cohort_execution_writer": "cohort_provider_runtime",
+    "provider_execution_command_owner": "cohort_provider_runtime",
+    "physical_projection_writer": "serving_projection_owner",
+    "product_terminal_writer": "serving_projection_owner",
+    "freshness_readiness_owner": "serving_projection_owner",
+    "owner_ref_owner": "projection_search_service",
+    "serializer_owner": "projection_search_service",
+    "result_v3_route_owner": "filter_projection",
+    "tool_registry_owner": "local Agent tool registry",
+    "result_registry": "ActionResultRegistry",
+    "result_acceptance_writer": "agent_tool_result_slot_owner",
+    "product_owner_state": "ratified_for_future_s1f0c_implementation_only"
+  },
+  "schema_registry_lock": [
+    {
+      "contract": "downstream start carrier",
+      "literal": "acquisition_start_authority_carrier.v1",
+      "contract_owner": "acquisition_planner",
+      "physical_writer": "existing root/action/operation writers establish authority; acquisition_planner first persists it on the intent child",
+      "collision_rule": "zero pinned matches; does not mutate acquisition_root_command_payload.v2 and is not the rejected carrier"
+    },
+    {
+      "contract": "reviewed execution-bundle authority",
+      "literal": "acquisition_execution_authority.v1",
+      "contract_owner": "acquisition_planner",
+      "physical_writer": "review-session and AcquisitionRun existing JSON writers copy one closed nested object",
+      "collision_rule": "zero matches; closes only authority/digest fields and does not reinterpret the surrounding legacy JSON object"
+    },
+    {
+      "contract": "opaque runtime ref",
+      "literal": "agent_runtime_namespace_ref.v1",
+      "contract_owner": "agent_runtime_namespace_registry",
+      "physical_writer": "new PG registry agent_runtime_namespace_refs",
+      "collision_rule": "zero matches; retained v1 capability remains path-bearing history"
+    },
+    {
+      "contract": "execution capability successor",
+      "literal": "cohort_execution_capability.v2",
+      "contract_owner": "cohort_runtime",
+      "physical_writer": "compiler derives; cohort_provider_runtime persists exact bytes",
+      "collision_rule": "zero matches; v1 retained exactly"
+    },
+    {
+      "contract": "capability-bearing execution envelope",
+      "literal": "cohort_execution_envelope.v1",
+      "contract_owner": "cohort_runtime",
+      "physical_writer": "compiler derives; cohort_provider_runtime persists",
+      "collision_rule": "zero matches; replaces the rejected cohort_provider_execution_manifest.v2 name rather than adopting it"
+    },
+    {
+      "contract": "one result-lane record",
+      "literal": "cohort_execution_lane_result.v2",
+      "contract_owner": "cohort_runtime",
+      "physical_writer": "cohort_provider_runtime",
+      "collision_rule": "zero matches; one-to-one with planning-v2 lane order"
+    },
+    {
+      "contract": "canonical committed candidate",
+      "literal": "cohort_candidate_member.v1",
+      "contract_owner": "cohort_runtime",
+      "physical_writer": "cohort_provider_runtime",
+      "collision_rule": "zero matches; not a raw SearchSeed path or mutable root Candidate document"
+    },
+    {
+      "contract": "candidate set header",
+      "literal": "cohort_candidate_set.v1",
+      "contract_owner": "cohort_runtime",
+      "physical_writer": "cohort_provider_runtime",
+      "collision_rule": "zero matches; authoritative enumeration is the immutable PG child collection"
+    },
+    {
+      "contract": "execution-result successor",
+      "literal": "cohort_execution_result.v2",
+      "contract_owner": "cohort_runtime",
+      "physical_writer": "compiler derives; cohort_provider_runtime persists",
+      "collision_rule": "zero matches; v1 retained exactly and its count meanings are unchanged"
+    },
+    {
+      "contract": "accepted execution commit",
+      "literal": "cohort_execution_commit.v1",
+      "contract_owner": "cohort_provider_runtime",
+      "physical_writer": "cohort_provider_runtime",
+      "collision_rule": "zero matches; this is an upstream execution fact, not the product projection terminal"
+    },
+    {
+      "contract": "product terminal",
+      "literal": "filter_projection_product_terminal.v1",
+      "contract_owner": "serving_projection_owner",
+      "physical_writer": "serving_projection_owner in the existing parent/member/route publication UoW",
+      "collision_rule": "zero matches; replaces rejected filter_projection_publication_terminal.v1; there is only one product terminal owner"
+    },
+    {
+      "contract": "immutable fresh input",
+      "literal": "filter_projection_freshness_ref.v1",
+      "contract_owner": "serving_projection_owner",
+      "physical_writer": "nested in product terminal",
+      "collision_rule": "zero matches; reader cannot mint or repair it"
+    },
+    {
+      "contract": "immutable ready input",
+      "literal": "filter_projection_readiness_ref.v1",
+      "contract_owner": "serving_projection_owner",
+      "physical_writer": "nested in product terminal",
+      "collision_rule": "zero matches; mutable readiness JSON is diagnostic only"
+    },
+    {
+      "contract": "success owner ref",
+      "literal": "filter_projection_success_owner_ref.v1",
+      "contract_owner": "projection_search_service",
+      "physical_writer": "canonical bytes stored by generic result-slot aggregate",
+      "collision_rule": "zero matches"
+    },
+    {
+      "contract": "stale owner ref",
+      "literal": "filter_projection_stale_owner_ref.v1",
+      "contract_owner": "projection_search_service",
+      "physical_writer": "generic result-slot aggregate after locked proof",
+      "collision_rule": "zero matches"
+    },
+    {
+      "contract": "not-ready owner ref",
+      "literal": "filter_projection_not_ready_owner_ref.v1",
+      "contract_owner": "projection_search_service",
+      "physical_writer": "generic result-slot aggregate after locked proof",
+      "collision_rule": "zero matches"
+    },
+    {
+      "contract": "masked owner ref",
+      "literal": "filter_projection_masked_absence_owner_ref.v1",
+      "contract_owner": "projection_search_service",
+      "physical_writer": "generic result-slot aggregate; result slot itself is the absence witness",
+      "collision_rule": "zero matches"
+    },
+    {
+      "contract": "model-safe result successor",
+      "literal": "filter_projection_result_v3",
+      "contract_owner": "action owner route filter_projection",
+      "physical_writer": "immutable ActionResultRegistry",
+      "collision_rule": "zero matches; v2 is retained byte-for-byte"
+    },
+    {
+      "contract": "successor serializer",
+      "literal": "filter_projection_result_serializer_v3",
+      "contract_owner": "projection_search_service",
+      "physical_writer": "pure serializer",
+      "collision_rule": "zero matches; registry owner name projection_search_service.filter_projection_result_serializer_v3 and revision filter_projection_result_serializer_v3"
+    },
+    {
+      "contract": "successor tool spec",
+      "literal": "filter_projection_tool_v3",
+      "contract_owner": "local Agent tool registry",
+      "physical_writer": "retained historical registry",
+      "collision_rule": "zero matches; creation does not make it current or served"
+    },
+    {
+      "contract": "provider execution command",
+      "literal": "acquisition.cohort.execute",
+      "contract_owner": "cohort_provider_runtime",
+      "physical_writer": "existing WorkflowCommand registry plus specialized executor",
+      "collision_rule": "zero matches; fills the current planned_pending_owner gap after scale planning"
+    }
+  ],
+  "contract_digest_equation": {
+    "equation": "SHA256(UTF8(canonical_json({\"schema_version\": exact literal, \"owner\": exact owner, \"ordered_fields\": ordered closed field/rule manifest below})))",
+    "canonical_json_rules": [
+      "sorted object keys",
+      "compact separators",
+      "unicode preserved",
+      "allow_nan=false",
+      "duplicate keys rejected at decode",
+      "recursive type-strict equality"
+    ],
+    "type_strictness": [
+      "true != 1",
+      "1 != 1.0",
+      "a copied digest is never proof without rebuilding its source object"
+    ],
+    "consumption_rule": "implementations consume the manifest constants and may not retype these tables independently"
+  },
+  "contract_digests": [
+    {
+      "literal": "acquisition_start_authority_carrier.v1",
+      "contract_owner": "acquisition_planner",
+      "ordered_fields": [
+        "schema_version",
+        "root_command_payload",
+        "root_command_payload_digest",
+        "command_acceptance_owner_ref",
+        "command_acceptance_owner_ref_digest",
+        "carrier_digest"
+      ],
+      "contract_digest": "7df42c5408a94a6ed07da742296f59a87863fea0d4ba4c1a0d9c99152f0862ea"
+    },
+    {
+      "literal": "acquisition_execution_authority.v1",
+      "contract_owner": "acquisition_planner",
+      "ordered_fields": [
+        "schema_version",
+        "owner",
+        "workspace_id",
+        "operation_run_id",
+        "workflow_run_id",
+        "plan_id",
+        "plan_review_id",
+        "request_digest",
+        "plan_body_digest",
+        "start_authority_carrier",
+        "authority_digest"
+      ],
+      "contract_digest": "99d5d7535dcea5674f7676bf6a1967500b777d3dd80fc7b93bf2acf67429aff0"
+    },
+    {
+      "literal": "agent_runtime_namespace_ref.v1",
+      "contract_owner": "agent_runtime_namespace_registry",
+      "ordered_fields": [
+        "schema_version",
+        "owner",
+        "namespace_ref_id",
+        "workspace_id",
+        "provider_mode",
+        "policy_revision",
+        "generation",
+        "ref_digest"
+      ],
+      "contract_digest": "736f2d3573eb6407f9decbd3ae1189480bda0da2417cb964511091ea4d17e217"
+    },
+    {
+      "literal": "cohort_execution_capability.v2",
+      "contract_owner": "cohort_runtime",
+      "ordered_fields": [
+        "schema_version",
+        "owner",
+        "workspace_id",
+        "acquisition_run_id",
+        "planning_manifest_digest",
+        "cohort_selection_digest",
+        "provider_mode",
+        "runtime_namespace_ref",
+        "policy_revision",
+        "max_provider_calls",
+        "max_provider_items",
+        "max_output_candidates",
+        "role_proof_verifier_id",
+        "role_proof_verifier_revision",
+        "cost_policy_revision",
+        "retry_policy_revision",
+        "circuit_policy_revision",
+        "execution_generation",
+        "capability_digest"
+      ],
+      "contract_digest": "5093ecd582050433910505ba21cb422936f0500ad2aae8de6b518626c841e491"
+    },
+    {
+      "literal": "cohort_execution_envelope.v1",
+      "contract_owner": "cohort_runtime",
+      "ordered_fields": [
+        "schema_version",
+        "owner",
+        "workspace_id",
+        "acquisition_run_id",
+        "planning_manifest_digest",
+        "capability",
+        "capability_digest",
+        "provider_mode",
+        "runtime_namespace_ref",
+        "ordered_planned_lane_refs",
+        "execution_generation",
+        "envelope_digest"
+      ],
+      "contract_digest": "1dc3d64dcf712f1b9b85b489d8d1f893c4079d73969d6dbcab685a3af8ae053d"
+    },
+    {
+      "literal": "cohort_execution_lane_result.v2",
+      "contract_owner": "cohort_runtime",
+      "ordered_fields": [
+        "schema_version",
+        "ordinal",
+        "lane_id",
+        "planned_lane_digest",
+        "provider_exposure_id",
+        "provider_call_id",
+        "provider_response_digest",
+        "evidence_ref",
+        "evidence_digest",
+        "raw_occurrence_count",
+        "accepted_occurrence_count",
+        "rejected_occurrence_count",
+        "truncated_occurrence_count",
+        "ordered_accepted_occurrence_digests",
+        "lane_result_digest"
+      ],
+      "contract_digest": "e1331acbedcd480b4956a2e66c431d43e3cb58f5d72c51f24cc4339ded59fdc7"
+    },
+    {
+      "literal": "cohort_candidate_member.v1",
+      "contract_owner": "cohort_runtime",
+      "ordered_fields": [
+        "schema_version",
+        "candidate_identity_key",
+        "display_name",
+        "headline",
+        "public_profile_url",
+        "ordered_lane_memberships",
+        "member_digest"
+      ],
+      "contract_digest": "06ebab244ce8e2205df9f2bb9e3a0220afcf8395f6523604dbc87303d993117d"
+    },
+    {
+      "literal": "cohort_candidate_set.v1",
+      "contract_owner": "cohort_runtime",
+      "ordered_fields": [
+        "schema_version",
+        "workspace_id",
+        "acquisition_run_id",
+        "execution_generation",
+        "planning_manifest_digest",
+        "execution_result_digest",
+        "member_count",
+        "ordered_member_digests",
+        "candidate_set_digest"
+      ],
+      "contract_digest": "3030330ae0442ea95eb83bb6c494b7b2e823283aa35d8ca7be3ffa2ae1e249fd"
+    },
+    {
+      "literal": "cohort_execution_result.v2",
+      "contract_owner": "cohort_runtime",
+      "ordered_fields": [
+        "schema_version",
+        "owner",
+        "workspace_id",
+        "acquisition_run_id",
+        "planning_manifest_digest",
+        "capability_digest",
+        "execution_envelope_digest",
+        "execution_attempt_id",
+        "execution_generation",
+        "ordered_lane_results",
+        "lane_coverage_status",
+        "planned_lane_count",
+        "executed_lane_count",
+        "raw_occurrence_count",
+        "accepted_occurrence_count",
+        "unique_candidate_count",
+        "truncated_count",
+        "rejected_unverified_count",
+        "missing_required_lane_count",
+        "candidate_set_digest",
+        "result_digest"
+      ],
+      "contract_digest": "7e8dc43be4d3a880fadaf42c7016eb3ef6f7e4538efc09a40e5508937a5ccd8e"
+    },
+    {
+      "literal": "cohort_execution_commit.v1",
+      "contract_owner": "cohort_provider_runtime",
+      "ordered_fields": [
+        "execution_commit_id",
+        "workspace_id",
+        "acquisition_run_id",
+        "operation_run_id",
+        "workflow_run_id",
+        "execution_attempt_id",
+        "execution_generation",
+        "start_authority_carrier_digest",
+        "execution_authority_digest",
+        "planning_manifest_digest",
+        "capability_digest",
+        "execution_envelope_digest",
+        "execution_result_json",
+        "execution_result_digest",
+        "candidate_set_digest",
+        "candidate_count",
+        "commit_digest"
+      ],
+      "contract_digest": "8876f4aa97d67ae8062980db6337f5d1d4475414389cc4d6fe0d8c0254df8260"
+    },
+    {
+      "literal": "filter_projection_product_terminal.v1",
+      "contract_owner": "serving_projection_owner",
+      "ordered_fields": [
+        "schema_version",
+        "owner",
+        "product_terminal_id",
+        "workspace_id",
+        "acquisition_run_id",
+        "operation_run_id",
+        "workflow_run_id",
+        "execution_commit_id",
+        "execution_commit_digest",
+        "projection_id",
+        "projection_version",
+        "membership_revision",
+        "route_kind",
+        "route_key",
+        "route_revision_token",
+        "provider_mode",
+        "runtime_namespace_ref",
+        "candidate_set_digest",
+        "candidate_count",
+        "visible_member_count",
+        "excluded_member_count",
+        "freshness_ref",
+        "readiness_ref",
+        "predecessor_terminal_digest",
+        "terminal_generation",
+        "terminal_digest"
+      ],
+      "contract_digest": "142c26a16ac14c9652a31e07258c02637a64ee6a0e8efaec237bba586a31888e"
+    },
+    {
+      "literal": "filter_projection_freshness_ref.v1",
+      "contract_owner": "serving_projection_owner",
+      "ordered_fields": [
+        "schema_version",
+        "owner",
+        "status",
+        "product_terminal_id",
+        "terminal_digest",
+        "route_kind",
+        "route_key",
+        "route_revision_token",
+        "membership_revision",
+        "candidate_set_digest",
+        "freshness_ref_digest"
+      ],
+      "contract_digest": "a7edc7876d9fc38de3873998547ecce623776400e5e9c5ca3f0344137644886c"
+    },
+    {
+      "literal": "filter_projection_readiness_ref.v1",
+      "contract_owner": "serving_projection_owner",
+      "ordered_fields": [
+        "schema_version",
+        "owner",
+        "status",
+        "reason",
+        "product_terminal_id",
+        "terminal_digest",
+        "projection_state",
+        "membership_revision",
+        "candidate_set_digest",
+        "candidate_count",
+        "visible_member_count",
+        "row_ready_count",
+        "prerequisite_set_digest",
+        "readiness_ref_digest"
+      ],
+      "contract_digest": "0124649d52b4162b4f25b7caa556129d9bd1d41612aa2148476a557aca898ec9"
+    },
+    {
+      "literal": "filter_projection_product_ref.v1",
+      "contract_owner": "serving_projection_owner",
+      "ordered_fields": [
+        "schema_version",
+        "projection_id",
+        "membership_revision",
+        "terminal_digest"
+      ],
+      "contract_digest": "5e36555babcdd27713ac6691c2c1481350bf3bc233ffbca2dd7e3b6916eaf019"
+    },
+    {
+      "literal": "filter_projection_success_owner_ref.v1",
+      "contract_owner": "projection_search_service",
+      "ordered_fields": [
+        "schema",
+        "logical occurrence digest",
+        "slot id/generation",
+        "product terminal id/digest/generation",
+        "projection id/membership revision",
+        "execution commit digest",
+        "candidate-set digest",
+        "freshness/readiness digests",
+        "exact result/serializer pins",
+        "owner-ref digest"
+      ],
+      "contract_digest": "d440acabda7cfd29ff89b2c6f52852776868fc6dc701361e05ac584d1824e035"
+    },
+    {
+      "literal": "filter_projection_stale_owner_ref.v1",
+      "contract_owner": "projection_search_service",
+      "ordered_fields": [
+        "schema",
+        "occurrence/slot tuple",
+        "complete requested-target digest",
+        "requested retained terminal id/digest",
+        "exact successor terminal id/digest",
+        "route revision token",
+        "result pins",
+        "owner-ref digest"
+      ],
+      "contract_digest": "0514c1d003bece6eec76e3eab8bd3d33f658d223fc3aaf65f89c11471362497c"
+    },
+    {
+      "literal": "filter_projection_not_ready_owner_ref.v1",
+      "contract_owner": "projection_search_service",
+      "ordered_fields": [
+        "schema",
+        "occurrence/slot tuple",
+        "requested-target digest",
+        "locked projection id/version/state/membership revision",
+        "locked route digest",
+        "exact closed reason and retry/reselection flags",
+        "result pins",
+        "owner-ref digest"
+      ],
+      "contract_digest": "7de0152fab8b5984eed1a24165741c55823a4e1a356702eb8ec79466276def67"
+    },
+    {
+      "literal": "filter_projection_masked_absence_owner_ref.v1",
+      "contract_owner": "projection_search_service",
+      "ordered_fields": [
+        "schema",
+        "occurrence/slot tuple",
+        "public reason projection_not_found",
+        "result pins",
+        "owner-ref digest"
+      ],
+      "contract_digest": "88bc08e63beb018cf2da220e2bb05b7e1310801de242dc26f995f4fc983079f3"
+    }
+  ],
+  "pg_aggregate_surfaces": {
+    "new_relation_names": [
+      "agent_runtime_namespace_refs",
+      "cohort_execution_attempts",
+      "cohort_execution_lane_results",
+      "cohort_candidate_set_members",
+      "cohort_execution_commits",
+      "filter_projection_product_terminals"
+    ],
+    "relation_owners": {
+      "agent_runtime_namespace_refs": "agent_runtime_namespace_registry",
+      "cohort_execution_attempts": "cohort_provider_runtime",
+      "cohort_execution_lane_results": "cohort_provider_runtime",
+      "cohort_candidate_set_members": "cohort_provider_runtime",
+      "cohort_execution_commits": "cohort_provider_runtime",
+      "filter_projection_product_terminals": "serving_projection_owner"
+    },
+    "owner_aggregates": [
+      "namespace registry",
+      "Cohort execution aggregate",
+      "serving projection aggregate"
+    ],
+    "sqlite_ddl_fallback_mirror": "forbidden",
+    "migration_reservation": {
+      "path": "src/sourcing_agent/migrations/0015_s1f0c_filter_projection_lineage.sql",
+      "slot": 15,
+      "predecessor_slot": 14,
+      "status": "reserved_not_authored",
+      "authoring_packet": "FF-PG-SCHEMA",
+      "stale_if": "another migration claims 0015 before dispatch"
+    }
+  },
+  "start_authority_contracts": {
+    "carrier": {
+      "schema_version": "acquisition_start_authority_carrier.v1",
+      "contract_owner": "acquisition_planner",
+      "ordered_fields": [
+        "schema_version",
+        "root_command_payload",
+        "root_command_payload_digest",
+        "command_acceptance_owner_ref",
+        "command_acceptance_owner_ref_digest",
+        "carrier_digest"
+      ],
+      "internal_only": true,
+      "may_contain_private_runtime_namespace": true,
+      "model_safe_results_expose_carrier": false,
+      "propagation_chain": [
+        "root_command",
+        "resolved_intent",
+        "plan_build",
+        "review_session",
+        "plan_commit",
+        "acquisition_run"
+      ],
+      "propagation_rule": "every stage copies exact canonical bytes; no stage rebuilds or repairs from ambient state",
+      "root_v2_mutation": "forbidden"
+    },
+    "execution_authority": {
+      "schema_version": "acquisition_execution_authority.v1",
+      "contract_owner": "acquisition_planner",
+      "ordered_fields": [
+        "schema_version",
+        "owner",
+        "workspace_id",
+        "operation_run_id",
+        "workflow_run_id",
+        "plan_id",
+        "plan_review_id",
+        "request_digest",
+        "plan_body_digest",
+        "start_authority_carrier",
+        "authority_digest"
+      ],
+      "plan_body_digest_exclusion": "authority wrapper excluded; normative anti-cycle",
+      "carried_by": "review-session, commit-command, and AcquisitionRun execution_bundle_json carry the complete execution authority",
+      "later_stages": "copy bytes only; never reconstruct"
+    },
+    "writer_taxonomy": [
+      {
+        "stage": "accepted root",
+        "physical_writer": "existing start-create PG UoW",
+        "command_owner": "acquisition_run_writer",
+        "event_actor": "approval actor / root planner actor",
+        "required_behavior": "no new carrier in v2; root/action/operation establish relational authority"
+      },
+      {
+        "stage": "intent",
+        "physical_writer": "existing workflow runtime append/reduce",
+        "command_owner": "acquisition_planner",
+        "event_actor": "acquisition_run_create_owner",
+        "required_behavior": "mint carrier only after exact locked root preflight"
+      },
+      {
+        "stage": "plan build",
+        "physical_writer": "existing durable writer",
+        "command_owner": "acquisition_planner",
+        "event_actor": "intent owner",
+        "required_behavior": "copy carrier and mint execution authority after plan body exists"
+      },
+      {
+        "stage": "review request/session",
+        "physical_writer": "durable writer + review-session store",
+        "command_owner": "acquisition_planner",
+        "event_actor": "plan-build owner",
+        "required_behavior": "copy exact execution authority"
+      },
+      {
+        "stage": "plan commit",
+        "physical_writer": "durable writer",
+        "command_owner": "acquisition_planner",
+        "event_actor": "authenticated reviewer / API fallback",
+        "required_behavior": "exact copy; no approval-time rebuild"
+      },
+      {
+        "stage": "AcquisitionRun",
+        "physical_writer": "existing AcquisitionRun UoW",
+        "command_owner": "acquisition_planner",
+        "event_actor": "commit owner",
+        "required_behavior": "exact copy; carrierless/fallback reconstruction forbidden"
+      }
+    ],
+    "source_join": {
+      "predicate": "exact eight-row Action + OperationRun + five WorkflowCommands + AcquisitionRun locked predicate",
+      "lifecycle_alias_in_identity": "forbidden",
+      "join_token": "transaction-local; consumable only while locks remain held",
+      "public_miss_outcome": "every miss/duplicate/foreign/malformed/split identity maps publicly to projection_not_found",
+      "internal_diagnostics_visibility": "non-public"
+    }
+  },
+  "runtime_namespace_capability_envelope": {
+    "namespace_ref": {
+      "schema_version": "agent_runtime_namespace_ref.v1",
+      "contract_owner": "agent_runtime_namespace_registry",
+      "ordered_fields": [
+        "schema_version",
+        "owner",
+        "namespace_ref_id",
+        "workspace_id",
+        "provider_mode",
+        "policy_revision",
+        "generation",
+        "ref_digest"
+      ],
+      "ref_digest_rule": "ref_digest covers the first seven fields",
+      "generation_rule": "positive exact integer",
+      "pg_private_columns": "the PG row additionally stores the private canonical runtime_namespace path and lifecycle state",
+      "resolution_rule": "only the registry resolves it",
+      "public_fields": [
+        "schema_version",
+        "namespace_ref_id",
+        "ref_digest"
+      ],
+      "public_boundary": "workspace, path, and lifecycle do not leave the server boundary"
+    },
+    "capability": {
+      "schema_version": "cohort_execution_capability.v2",
+      "contract_owner": "cohort_runtime",
+      "ordered_fields": [
+        "schema_version",
+        "owner",
+        "workspace_id",
+        "acquisition_run_id",
+        "planning_manifest_digest",
+        "cohort_selection_digest",
+        "provider_mode",
+        "runtime_namespace_ref",
+        "policy_revision",
+        "max_provider_calls",
+        "max_provider_items",
+        "max_output_candidates",
+        "role_proof_verifier_id",
+        "role_proof_verifier_revision",
+        "cost_policy_revision",
+        "retry_policy_revision",
+        "circuit_policy_revision",
+        "execution_generation",
+        "capability_digest"
+      ],
+      "provider_mode_allowed": [
+        "simulate",
+        "scripted"
+      ],
+      "positive_exact_integer_fields": [
+        "max_provider_calls",
+        "max_provider_items",
+        "max_output_candidates",
+        "execution_generation"
+      ],
+      "max_output_candidates_bound": 1000,
+      "capability_digest_rule": "capability_digest over fields 1-18"
+    },
+    "envelope": {
+      "schema_version": "cohort_execution_envelope.v1",
+      "contract_owner": "cohort_runtime",
+      "ordered_fields": [
+        "schema_version",
+        "owner",
+        "workspace_id",
+        "acquisition_run_id",
+        "planning_manifest_digest",
+        "capability",
+        "capability_digest",
+        "provider_mode",
+        "runtime_namespace_ref",
+        "ordered_planned_lane_refs",
+        "execution_generation",
+        "envelope_digest"
+      ],
+      "planned_lane_ref_fields": [
+        "ordinal",
+        "lane_id",
+        "lane_digest"
+      ],
+      "ordinal_rule": "zero-based exact integer",
+      "lane_order_rule": "the array is the validated planning-v2 order",
+      "envelope_digest_rule": "envelope_digest covers all preceding fields",
+      "recompile_sequence": [
+        "stored planning-v2 bytes",
+        "exact CohortProviderCompiler recompile",
+        "complete byte equality and manifest_digest equality",
+        "capability-v2 validation/ref resolution",
+        "execution-envelope derivation",
+        "connector invocation eligibility"
+      ],
+      "mismatch_effect": "any mismatch occurs before provider exposure/call and before result/publication writes"
+    },
+    "rejected_execution_manifest_literal": "cohort_provider_execution_manifest.v2",
+    "retained_v1_capability_literal": "cohort_execution_capability.v1"
+  },
+  "execution_record_contracts": {
+    "lane_result": {
+      "schema_version": "cohort_execution_lane_result.v2",
+      "contract_owner": "cohort_runtime",
+      "ordered_fields": [
+        "schema_version",
+        "ordinal",
+        "lane_id",
+        "planned_lane_digest",
+        "provider_exposure_id",
+        "provider_call_id",
+        "provider_response_digest",
+        "evidence_ref",
+        "evidence_digest",
+        "raw_occurrence_count",
+        "accepted_occurrence_count",
+        "rejected_occurrence_count",
+        "truncated_occurrence_count",
+        "ordered_accepted_occurrence_digests",
+        "lane_result_digest"
+      ],
+      "ordinal_mapping": "one per planning lane at the same ordinal",
+      "completeness_rule": "planned_lane_count == executed_lane_count and exact ordinal mapping",
+      "missing_required_lane_count_as_coverage": "forbidden"
+    },
+    "candidate_member": {
+      "schema_version": "cohort_candidate_member.v1",
+      "contract_owner": "cohort_runtime",
+      "ordered_fields": [
+        "schema_version",
+        "candidate_identity_key",
+        "display_name",
+        "headline",
+        "public_profile_url",
+        "ordered_lane_memberships",
+        "member_digest"
+      ],
+      "membership_fields": [
+        "lane_id",
+        "planned_lane_digest",
+        "lane_result_digest",
+        "employment_status",
+        "role_bucket_id"
+      ],
+      "membership_order": "sorted by planning ordinal",
+      "identity_order": "candidate identities sort by UTF-8 bytes",
+      "public_profile_url_rule": "either absent from the canonical source object or an HTTPS URL; one closed variant schema; empty-string alias forbidden",
+      "duplicate_rule": "duplicate identity + byte-identical member core merges only the exact membership union; duplicate identity with unequal member core rejects the whole execution; arrival order never selects a winner"
+    },
+    "candidate_set": {
+      "schema_version": "cohort_candidate_set.v1",
+      "contract_owner": "cohort_runtime",
+      "ordered_fields": [
+        "schema_version",
+        "workspace_id",
+        "acquisition_run_id",
+        "execution_generation",
+        "planning_manifest_digest",
+        "execution_result_digest",
+        "member_count",
+        "ordered_member_digests",
+        "candidate_set_digest"
+      ],
+      "authoritative_collection": "the immutable PG child rows",
+      "header_rebuild_rule": "the header is rebuilt from the child rows under lock",
+      "digest_rule": "candidate_set_digest covers all header fields except itself",
+      "product_publication_bounds": "nonempty and at most 1000 members"
+    },
+    "execution_result": {
+      "schema_version": "cohort_execution_result.v2",
+      "contract_owner": "cohort_runtime",
+      "ordered_fields": [
+        "schema_version",
+        "owner",
+        "workspace_id",
+        "acquisition_run_id",
+        "planning_manifest_digest",
+        "capability_digest",
+        "execution_envelope_digest",
+        "execution_attempt_id",
+        "execution_generation",
+        "ordered_lane_results",
+        "lane_coverage_status",
+        "planned_lane_count",
+        "executed_lane_count",
+        "raw_occurrence_count",
+        "accepted_occurrence_count",
+        "unique_candidate_count",
+        "truncated_count",
+        "rejected_unverified_count",
+        "missing_required_lane_count",
+        "candidate_set_digest",
+        "result_digest"
+      ],
+      "lane_coverage_status": "complete",
+      "derivation_rule": "all counts and result_digest are compiler-derived; acquisition orchestration may persist the exact record but has no summary/count/digest input authority"
+    },
+    "execution_commit": {
+      "schema_version": "cohort_execution_commit.v1",
+      "contract_owner": "cohort_provider_runtime",
+      "ordered_fields": [
+        "execution_commit_id",
+        "workspace_id",
+        "acquisition_run_id",
+        "operation_run_id",
+        "workflow_run_id",
+        "execution_attempt_id",
+        "execution_generation",
+        "start_authority_carrier_digest",
+        "execution_authority_digest",
+        "planning_manifest_digest",
+        "capability_digest",
+        "execution_envelope_digest",
+        "execution_result_json",
+        "execution_result_digest",
+        "candidate_set_digest",
+        "candidate_count",
+        "commit_digest"
+      ],
+      "ordered_fields_note": "fields mirror the section-5.5 physical columns excluding created_at",
+      "insert_once": true,
+      "digest_rule": "commit_digest covers every preceding contract field except timestamps and itself",
+      "uow_rule": "the row and all candidate children commit in one UoW after the locked current-attempt predicate succeeds"
+    }
+  },
+  "physical_relations": {
+    "agent_runtime_namespace_refs": {
+      "owner": "agent_runtime_namespace_registry",
+      "columns": [
+        "namespace_ref_id",
+        "workspace_id",
+        "provider_mode",
+        "policy_revision",
+        "generation",
+        "state",
+        "runtime_namespace",
+        "ref_contract_digest",
+        "ref_digest",
+        "created_at",
+        "retired_at"
+      ],
+      "constraints": [
+        "namespace_ref_id PK",
+        "exact nonempty strings",
+        "positive generation",
+        "state in active|retired",
+        "unique (workspace_id,provider_mode,policy_revision,runtime_namespace,generation)",
+        "ref_digest unique",
+        "no update to identity/path/digest fields",
+        "only state may transition active -> retired under the registry owner",
+        "no public reader receives runtime_namespace"
+      ]
+    },
+    "cohort_execution_attempts": {
+      "owner": "cohort_provider_runtime",
+      "columns": [
+        "execution_attempt_id",
+        "workspace_id",
+        "acquisition_run_id",
+        "operation_run_id",
+        "workflow_run_id",
+        "workflow_command_id",
+        "command_attempt",
+        "execution_generation",
+        "control_epoch",
+        "lease_token_digest",
+        "activity_run_id",
+        "activity_attempt_id",
+        "provider_mode",
+        "namespace_ref_id",
+        "planning_manifest_digest",
+        "capability_digest",
+        "execution_envelope_digest",
+        "status",
+        "provider_exposure_id",
+        "provider_call_id",
+        "provider_response_digest",
+        "retry_disposition",
+        "result_digest",
+        "superseded_by_attempt_id",
+        "created_at",
+        "updated_at"
+      ],
+      "constraints": [
+        "execution_attempt_id PK",
+        "unique (workspace_id,acquisition_run_id,execution_generation)",
+        "unique nonempty provider_exposure_id and provider_call_id only when sent",
+        "positive command attempt/generation, nonnegative control epoch",
+        "state machine prepared -> sent -> response_received -> accepted or prepared|sent|response_received -> superseded|quarantined|failed",
+        "terminal states never reopen",
+        "accepted requires complete command/activity/current-fence and provider response fields",
+        "non-live no_call is permitted only for an explicitly fixture-owned simulate result and still has a deterministic exposure record",
+        "retry_disposition exactly none|retry_planned|retry_exhausted|cancelled|superseded",
+        "a late response cannot select none after supersession",
+        "scope-local generation/current-winner authority required by F5; does not close R-019"
+      ]
+    },
+    "cohort_execution_lane_results": {
+      "owner": "cohort_provider_runtime",
+      "columns": [
+        "execution_attempt_id",
+        "lane_ordinal",
+        "lane_id",
+        "planned_lane_digest",
+        "provider_exposure_id",
+        "provider_call_id",
+        "provider_response_digest",
+        "evidence_ref",
+        "evidence_digest",
+        "raw_occurrence_count",
+        "accepted_occurrence_count",
+        "rejected_occurrence_count",
+        "truncated_occurrence_count",
+        "accepted_occurrence_digests_json",
+        "lane_result_json",
+        "lane_result_digest",
+        "created_at"
+      ],
+      "constraints": [
+        "primary key (execution_attempt_id,lane_ordinal)",
+        "unique (execution_attempt_id,lane_id)",
+        "immutable after insert",
+        "evidence refs are opaque server identifiers, never filesystem paths"
+      ]
+    },
+    "cohort_candidate_set_members": {
+      "owner": "cohort_provider_runtime",
+      "columns": [
+        "execution_commit_id",
+        "member_ordinal",
+        "candidate_identity_key",
+        "member_json",
+        "member_digest",
+        "lane_membership_json",
+        "lane_membership_digest",
+        "created_at"
+      ],
+      "constraints": [
+        "primary key (execution_commit_id,candidate_identity_key)",
+        "unique (execution_commit_id,member_ordinal)",
+        "unique (execution_commit_id,member_digest)",
+        "immutable",
+        "ordinals are contiguous 0..member_count-1 in UTF-8 identity order"
+      ]
+    },
+    "cohort_execution_commits": {
+      "owner": "cohort_provider_runtime",
+      "columns": [
+        "execution_commit_id",
+        "workspace_id",
+        "acquisition_run_id",
+        "operation_run_id",
+        "workflow_run_id",
+        "execution_attempt_id",
+        "execution_generation",
+        "start_authority_carrier_digest",
+        "execution_authority_digest",
+        "planning_manifest_digest",
+        "capability_digest",
+        "execution_envelope_digest",
+        "execution_result_json",
+        "execution_result_digest",
+        "candidate_set_digest",
+        "candidate_count",
+        "commit_digest",
+        "created_at"
+      ],
+      "constraints": [
+        "execution_commit_id PK",
+        "unique (workspace_id,acquisition_run_id,execution_generation)",
+        "unique execution_attempt_id",
+        "insert once",
+        "commit_digest covers every preceding contract field except timestamps and itself",
+        "the row and all candidate children commit in one UoW after the locked current-attempt predicate succeeds"
+      ]
+    },
+    "filter_projection_product_terminals": {
+      "owner": "serving_projection_owner",
+      "columns": [
+        "product_terminal_id",
+        "workspace_id",
+        "acquisition_run_id",
+        "operation_run_id",
+        "workflow_run_id",
+        "execution_commit_id",
+        "projection_id",
+        "membership_revision",
+        "route_kind",
+        "route_key",
+        "route_state",
+        "route_revision_token",
+        "projection_version",
+        "provider_mode",
+        "namespace_ref_id",
+        "namespace_ref_digest",
+        "candidate_set_digest",
+        "candidate_count",
+        "visible_member_count",
+        "excluded_member_count",
+        "predecessor_terminal_id",
+        "predecessor_terminal_digest",
+        "freshness_ref_json",
+        "freshness_ref_digest",
+        "readiness_ref_json",
+        "readiness_ref_digest",
+        "terminal_record_json",
+        "terminal_digest",
+        "terminal_generation",
+        "created_at"
+      ],
+      "constraints": [
+        "product_terminal_id PK",
+        "unique (workspace_id,projection_id,membership_revision)",
+        "unique (workspace_id,execution_commit_id,projection_id)",
+        "positive terminal generation; insert once; no UPDATE/DELETE normal path",
+        "only route_kind=run_scope and active result route are eligible in S1f0c; collection-authoritative remains excluded",
+        "candidate_count == visible_member_count > 0, excluded count is zero, and member bytes/digest equal the exact execution commit",
+        "terminal/freshness/readiness digests are recomputed from canonical nested records before insert",
+        "inserted by serving_projection_owner in the same transaction as the existing projection parent, exact replacement member set, and run route",
+        "not a second connection, second projection writer, or reader repair path"
+      ]
+    }
+  },
+  "product_terminal_records": {
+    "product_terminal": {
+      "schema_version": "filter_projection_product_terminal.v1",
+      "contract_owner": "serving_projection_owner",
+      "ordered_fields": [
+        "schema_version",
+        "owner",
+        "product_terminal_id",
+        "workspace_id",
+        "acquisition_run_id",
+        "operation_run_id",
+        "workflow_run_id",
+        "execution_commit_id",
+        "execution_commit_digest",
+        "projection_id",
+        "projection_version",
+        "membership_revision",
+        "route_kind",
+        "route_key",
+        "route_revision_token",
+        "provider_mode",
+        "runtime_namespace_ref",
+        "candidate_set_digest",
+        "candidate_count",
+        "visible_member_count",
+        "excluded_member_count",
+        "freshness_ref",
+        "readiness_ref",
+        "predecessor_terminal_digest",
+        "terminal_generation",
+        "terminal_digest"
+      ],
+      "terminal_digest_rule": "terminal_digest covers every preceding field"
+    },
+    "terminal_digest_equality": "serialized_result.projection_ref.terminal_digest == success_owner_ref.terminal_digest == freshness_ref.terminal_digest == readiness_ref.terminal_digest == filter_projection_product_terminals.terminal_digest",
+    "freshness_ref": {
+      "schema_version": "filter_projection_freshness_ref.v1",
+      "contract_owner": "serving_projection_owner",
+      "ordered_fields": [
+        "schema_version",
+        "owner",
+        "status",
+        "product_terminal_id",
+        "terminal_digest",
+        "route_kind",
+        "route_key",
+        "route_revision_token",
+        "membership_revision",
+        "candidate_set_digest",
+        "freshness_ref_digest"
+      ],
+      "status": "fresh",
+      "fresh_rule": "requested projection/membership/Cohort pins equal this retained terminal and the locked current run route points to it with the same route revision token",
+      "stale_rule": "the requested retained terminal belongs to the authorized same workspace/run scope and the locked current route points to a successor whose predecessor digest equals the requested terminal digest",
+      "never_stale_proof": [
+        "missing target",
+        "inaccessible target",
+        "unrelated current route",
+        "arbitrary digest mismatch",
+        "timestamps"
+      ]
+    },
+    "readiness_ref": {
+      "schema_version": "filter_projection_readiness_ref.v1",
+      "contract_owner": "serving_projection_owner",
+      "ordered_fields": [
+        "schema_version",
+        "owner",
+        "status",
+        "reason",
+        "product_terminal_id",
+        "terminal_digest",
+        "projection_state",
+        "membership_revision",
+        "candidate_set_digest",
+        "candidate_count",
+        "visible_member_count",
+        "row_ready_count",
+        "prerequisite_set_digest",
+        "readiness_ref_digest"
+      ],
+      "status": "ready",
+      "reason": "",
+      "projection_state": "serving",
+      "prerequisite_set": [
+        "execution_lanes_complete",
+        "candidate_set_nonempty",
+        "candidate_set_exact",
+        "projection_state_serving",
+        "route_active",
+        "membership_exact",
+        "all_members_visible",
+        "all_rows_ready"
+      ],
+      "excluded_diagnostics": [
+        "profile readiness",
+        "card readiness",
+        "search-index generation",
+        "facet publication",
+        "watermarks",
+        "timestamps",
+        "persisted open readiness JSON"
+      ],
+      "diagnostic_mutation_effect": "mutation of an excluded diagnostic does not alter the terminal/readiness ref"
+    },
+    "zero_member_rule": {
+      "outcome": "deferred not_ready",
+      "reason": "projection_candidate_set_empty",
+      "retryable": false,
+      "reselection_required": true
+    },
+    "deferred_reason_precedence": [
+      "projection_candidate_set_empty",
+      "projection_publication_pending",
+      "projection_state_not_serving",
+      "projection_membership_pending",
+      "projection_members_not_ready"
+    ],
+    "missing_foreign_rule": "missing and foreign never enter this precedence and remain projection_not_found"
+  },
+  "result_v3_slot_contract": {
+    "result_schema_version": "filter_projection_result_v3",
+    "serializer": {
+      "owner_name": "projection_search_service.filter_projection_result_serializer_v3",
+      "revision": "filter_projection_result_serializer_v3",
+      "owner": "projection_search_service"
+    },
+    "tool_spec": "filter_projection_tool_v3",
+    "registration_rule": "append-only retained history; V3 is neither current nor served on registration",
+    "result_link_policy": "no_command_v1",
+    "effect_class": "read_only",
+    "projection_ref": {
+      "schema_version": "filter_projection_product_ref.v1",
+      "ordered_fields": [
+        "schema_version",
+        "projection_id",
+        "membership_revision",
+        "terminal_digest"
+      ]
+    },
+    "public_runtime_namespace_ref_fields": [
+      "schema_version",
+      "namespace_ref_id",
+      "ref_digest"
+    ],
+    "success_root_fields": [
+      "variant",
+      "status",
+      "projection_ref",
+      "cohort_selection",
+      "cohort_selection_registry_version",
+      "cohort_selection_registry_digest",
+      "cohort_selection_digest",
+      "execution_commit_digest",
+      "candidate_set_digest",
+      "freshness",
+      "readiness",
+      "provider_mode",
+      "runtime_namespace_ref",
+      "requested_lane_coverage",
+      "lane_summaries",
+      "offset",
+      "limit",
+      "total_count",
+      "returned_count",
+      "truncated",
+      "candidates"
+    ],
+    "deferred_root_fields": [
+      "variant",
+      "status",
+      "reason",
+      "retryable",
+      "reselection_required",
+      "requested_target_ref",
+      "decision_ref"
+    ],
+    "deferred_variant_constant": "deferred",
+    "masked_root_fields": [
+      "variant",
+      "status",
+      "reason",
+      "retryable",
+      "decision_ref"
+    ],
+    "masked_root_constants": {
+      "variant": "error",
+      "status": "failed",
+      "reason": "projection_not_found",
+      "retryable": false
+    },
+    "decision_ref_rule": "opaque SHA-256 over the occurrence-bound internal owner ref; discloses no foreign target; missing and foreign serialize byte-identical public shapes for the same occurrence pins",
+    "candidate_ref_rule": "candidate refs remain revision-bound, bounded SHA-256 values; all candidate display/URL policies and the 64-KiB result limit remain at least as strict as v2",
+    "terminal_tuple_common": {
+      "action_id": "",
+      "operation_run_id": "",
+      "workflow_command_id": "",
+      "activity_run_id": "",
+      "activity_attempt_id": "",
+      "command_attempt": 0,
+      "command_generation": 0,
+      "control_epoch": 0,
+      "provider_call_id_template": "no_provider:filter_projection:<logical_occurrence_digest>",
+      "tool_call_id": "the exact server-received Agent tool-call id",
+      "result_attempt_id": "server-minted and collision checked",
+      "owner_result_digest": "SHA-256 canonical complete owner-ref bytes",
+      "serialized_result_digest": "SHA-256 exact occurrence-pinned serializer bytes"
+    },
+    "success_target": {
+      "owner_target_kind": "filter_projection_product_terminal",
+      "owner_target_id": "product_terminal_id",
+      "owner_target_revision": 1,
+      "owner_target_generation": "terminal_generation",
+      "owner_target_revision_token": "terminal_digest",
+      "is_error": false
+    },
+    "deferred_masked_target": {
+      "owner_target_kind": "filter_projection_occurrence_decision",
+      "owner_target_id": "occurrence.result_slot_id",
+      "owner_target_revision": 0,
+      "owner_target_generation": "occurrence.slot_generation",
+      "owner_target_revision_token": "occurrence.logical_occurrence_digest",
+      "is_error": "false for stale/not-ready; true for masked"
+    },
+    "terminal_winner": {
+      "literal": "filter_projection_terminal_winner.v1",
+      "equation": "SHA256(\"filter_projection_terminal_winner.v1\\0\" + logical_occurrence_digest + \"\\0\" + decimal(slot_generation) + \"\\0\" + owner_result_digest)",
+      "determinism": "deterministic and attempt-independent"
+    },
+    "owner_refs": {
+      "success": {
+        "schema_version": "filter_projection_success_owner_ref.v1",
+        "ordered_field_rules": [
+          "schema",
+          "logical occurrence digest",
+          "slot id/generation",
+          "product terminal id/digest/generation",
+          "projection id/membership revision",
+          "execution commit digest",
+          "candidate-set digest",
+          "freshness/readiness digests",
+          "exact result/serializer pins",
+          "owner-ref digest"
+        ]
+      },
+      "stale": {
+        "schema_version": "filter_projection_stale_owner_ref.v1",
+        "ordered_field_rules": [
+          "schema",
+          "occurrence/slot tuple",
+          "complete requested-target digest",
+          "requested retained terminal id/digest",
+          "exact successor terminal id/digest",
+          "route revision token",
+          "result pins",
+          "owner-ref digest"
+        ]
+      },
+      "not_ready": {
+        "schema_version": "filter_projection_not_ready_owner_ref.v1",
+        "ordered_field_rules": [
+          "schema",
+          "occurrence/slot tuple",
+          "requested-target digest",
+          "locked projection id/version/state/membership revision",
+          "locked route digest",
+          "exact closed reason and retry/reselection flags",
+          "result pins",
+          "owner-ref digest"
+        ]
+      },
+      "masked": {
+        "schema_version": "filter_projection_masked_absence_owner_ref.v1",
+        "ordered_field_rules": [
+          "schema",
+          "occurrence/slot tuple",
+          "public reason projection_not_found",
+          "result pins",
+          "owner-ref digest"
+        ],
+        "excluded_content": "no target id/workspace/existence/foreign owner bytes; the occurrence digest already binds the request without disclosing it anew"
+      }
+    },
+    "prepare_rule": "prepare derives and serializes all values server-side; caller result/ref/digest/winner values are never authority",
+    "replay_rule": "accepted same-attempt replay is proven solely from the immutable accepted slot/attempt/journal aggregate and does not reserialize current owner state",
+    "quarantine_rule": "before any new competing/quarantine attempt, the adapter must still assert the retained owner/slot witness under lock; if retained owner evidence is no longer available, the competing attempt fails with zero writes rather than fabricating an owner",
+    "retention_consequence": "owner rows cannot be deleted inside the replay/quarantine retention window"
+  },
+  "owner_graph": [
+    {
+      "edge": "accepted start",
+      "contract_data": "root v2 + existing 18-field owner ref",
+      "physical_writer": "start-create PG UoW",
+      "contract_owner": "acquisition_run_writer",
+      "event_actor": "approval/root planner actors",
+      "reader_consumer": "carrier builder"
+    },
+    {
+      "edge": "root -> intent",
+      "contract_data": "start authority carrier",
+      "physical_writer": "workflow runtime",
+      "contract_owner": "acquisition_planner",
+      "event_actor": "acquisition_run_create_owner",
+      "reader_consumer": "plan builder"
+    },
+    {
+      "edge": "intent -> plan/review/commit/run",
+      "contract_data": "carrier + execution authority",
+      "physical_writer": "durable runtime/review/AcquisitionRun writers",
+      "contract_owner": "acquisition_planner",
+      "event_actor": "per-stage actors",
+      "reader_consumer": "exact source join and compiler route"
+    },
+    {
+      "edge": "run -> compiler",
+      "contract_data": "planning-v2 exact bytes",
+      "physical_writer": "acquisition cohort command owner",
+      "contract_owner": "cohort_runtime compiler contract",
+      "event_actor": "cohort_provider_runtime",
+      "reader_consumer": "capability issuer"
+    },
+    {
+      "edge": "namespace resolution",
+      "contract_data": "opaque ref -> private namespace",
+      "physical_writer": "namespace registry",
+      "contract_owner": "agent_runtime_namespace_registry",
+      "event_actor": "issuer service",
+      "reader_consumer": "compiler/runtime only"
+    },
+    {
+      "edge": "compiler -> attempt",
+      "contract_data": "capability + envelope + ordered lane refs",
+      "physical_writer": "cohort_provider_runtime",
+      "contract_owner": "cohort_runtime schemas",
+      "event_actor": "provider executor",
+      "reader_consumer": "lane-result validator"
+    },
+    {
+      "edge": "provider -> lane results",
+      "contract_data": "exposure/call/response + lane evidence",
+      "physical_writer": "cohort_provider_runtime",
+      "contract_owner": "Cohort execution aggregate",
+      "event_actor": "provider callback/executor",
+      "reader_consumer": "canonical combiner"
+    },
+    {
+      "edge": "lanes -> candidate set/result",
+      "contract_data": "canonical members + result v2",
+      "physical_writer": "cohort_provider_runtime",
+      "contract_owner": "cohort_runtime schemas",
+      "event_actor": "same owner",
+      "reader_consumer": "commit CAS"
+    },
+    {
+      "edge": "current attempt -> execution commit",
+      "contract_data": "immutable commit + members",
+      "physical_writer": "cohort_provider_runtime",
+      "contract_owner": "cohort_provider_runtime",
+      "event_actor": "same owner",
+      "reader_consumer": "serving projection owner"
+    },
+    {
+      "edge": "execution commit -> product projection",
+      "contract_data": "projection parent + exact members + run route + product terminal",
+      "physical_writer": "existing publication PG UoW",
+      "contract_owner": "serving_projection_owner",
+      "event_actor": "projection command actor",
+      "reader_consumer": "filter result adapter"
+    },
+    {
+      "edge": "terminal -> fresh/ready read",
+      "contract_data": "retained terminal + locked current route",
+      "physical_writer": "none",
+      "contract_owner": "serving_projection_owner retained refs",
+      "event_actor": "none",
+      "reader_consumer": "projection_search_service"
+    },
+    {
+      "edge": "occurrence -> model result",
+      "contract_data": "owner ref + V3 serializer",
+      "physical_writer": "none during prepare",
+      "contract_owner": "projection_search_service",
+      "event_actor": "Agent tool invocation",
+      "reader_consumer": "generic acceptor"
+    },
+    {
+      "edge": "first accept/replay/quarantine",
+      "contract_data": "result slot + attempt + journal",
+      "physical_writer": "generic PG acceptor",
+      "contract_owner": "agent_tool_result_slot_owner",
+      "event_actor": "none",
+      "reader_consumer": "Agent caller/audit"
+    }
+  ],
+  "lock_order": {
+    "rules": [
+      "one monotonic deadline",
+      "transaction-scoped advisory keys",
+      "values inside a group sort by UTF-8 bytes",
+      "no operation may enter a lower number after a higher number"
+    ],
+    "groups": [
+      {
+        "order": 0,
+        "lock_group": "namespace-ref scope/id, then namespace row",
+        "used_by": "namespace issue/resolve, execution",
+        "first_write_after": "exact workspace/mode/policy/ref validation"
+      },
+      {
+        "order": 1,
+        "lock_group": "AcquisitionRun source and alternate keys; OperationRun; Action; five command identities as specified by FF-JC",
+        "used_by": "carrier/join/commit",
+        "first_write_after": "complete eight-row identity and carrier equality"
+      },
+      {
+        "order": 2,
+        "lock_group": "execution command id, Cohort attempt (run,generation), ActivityRun, ActivityAttempt, provider exposure/call",
+        "used_by": "execution/result callback",
+        "first_write_after": "current generation/epoch/lease and exact command/activity cross-links"
+      },
+      {
+        "order": 3,
+        "lock_group": "execution commit id; lane rows by ordinal; candidate members by identity bytes",
+        "used_by": "commit/publication/result read",
+        "first_write_after": "all lane/count/member/digest equations"
+      },
+      {
+        "order": 4,
+        "lock_group": "run-route scope, projection id, serving projection, members by identity, route, product terminal id",
+        "used_by": "product publication/current read",
+        "first_write_after": "exact execution commit and replacement member bytes"
+      },
+      {
+        "order": 5,
+        "lock_group": "Agent result slot id/generation",
+        "used_by": "result acceptance",
+        "first_write_after": "exact occurrence, variant owner, serialized bytes, and target version"
+      },
+      {
+        "order": 6,
+        "lock_group": "result attempt id, then journal occurrence id",
+        "used_by": "first accept/quarantine",
+        "first_write_after": "owner assertion and slot state predicate"
+      }
+    ],
+    "write_race_outcomes": [
+      {
+        "case": "carrier/join missing, duplicate, foreign, malformed, split identity",
+        "locked_decision": "public projection_not_found; rollback",
+        "permitted_write": "zero carrier/attempt/commit/projection/terminal/result-slot/domain writes"
+      },
+      {
+        "case": "connector preflight/capability/namespace mismatch",
+        "locked_decision": "reject before exposure",
+        "permitted_write": "zero provider calls and zero result/publication writes"
+      },
+      {
+        "case": "exact current attempt first response",
+        "locked_decision": "accept response evidence, derive lane/result",
+        "permitted_write": "only Cohort attempt/lane rows in same owner UoW"
+      },
+      {
+        "case": "stale/late/cancelled attempt",
+        "locked_decision": "current fence mismatch",
+        "permitted_write": "only scope-local attempt quarantine/superseded terminal; no commit/product writes"
+      },
+      {
+        "case": "exact commit replay",
+        "locked_decision": "all root/child canonical bytes equal",
+        "permitted_write": "return retained commit, zero new rows"
+      },
+      {
+        "case": "divergent commit replay",
+        "locked_decision": "any field/child/count/digest differs",
+        "permitted_write": "rollback, zero delta"
+      },
+      {
+        "case": "projection publication exact replay",
+        "locked_decision": "parent/member/route/terminal all byte-equal",
+        "permitted_write": "return retained terminal, zero semantic delta"
+      },
+      {
+        "case": "membership/route concurrent change",
+        "locked_decision": "locked revision/route differs",
+        "permitted_write": "rollback all product writes"
+      },
+      {
+        "case": "read success",
+        "locked_decision": "current route equals retained terminal and readiness exact",
+        "permitted_write": "prepare only; no owner writes"
+      },
+      {
+        "case": "stale read",
+        "locked_decision": "retained predecessor + exact current successor",
+        "permitted_write": "prepare deferred only"
+      },
+      {
+        "case": "not-ready read",
+        "locked_decision": "access proved; closed readiness reason",
+        "permitted_write": "prepare deferred only"
+      },
+      {
+        "case": "missing/foreign read",
+        "locked_decision": "same occurrence-bound absence witness",
+        "permitted_write": "prepare byte-identical masked result only"
+      },
+      {
+        "case": "prepare failure/race before accept",
+        "locked_decision": "any owner/spec/serializer mismatch",
+        "permitted_write": "pending slot unchanged; attempts/journal/domain delta zero"
+      },
+      {
+        "case": "first result accept",
+        "locked_decision": "pending slot generation and owner exact",
+        "permitted_write": "accepted attempt + slot CAS + journal, one transaction"
+      },
+      {
+        "case": "exact accepted replay",
+        "locked_decision": "immutable aggregate exact",
+        "permitted_write": "zero writes; return retained bytes"
+      },
+      {
+        "case": "different late result after accept",
+        "locked_decision": "current owner still assertable",
+        "permitted_write": "one terminal_winner_already_accepted quarantine attempt only"
+      },
+      {
+        "case": "wrong pending generation",
+        "locked_decision": "current owner still assertable",
+        "permitted_write": "one slot_generation_mismatch quarantine attempt only"
+      },
+      {
+        "case": "owner unavailable for a new quarantine",
+        "locked_decision": "cannot assert owner",
+        "permitted_write": "zero writes"
+      }
+    ]
+  },
+  "count_digest_equations": {
+    "definitions": "P ordered validated planning-v2 lanes; L ordered lane-result rows; O_i raw result occurrences in lane i; A_i/R_i/T_i their accepted, rejected, and truncated partitions; M the canonical unique member set",
+    "lane_count_equations": [
+      "len(P) = planned_lane_count = len(L) = executed_lane_count",
+      "forall i: L[i].ordinal=i",
+      "L[i].lane_id=P[i].lane_id",
+      "L[i].planned_lane_digest=recompute(P[i])",
+      "|O_i|=|A_i|+|R_i|+|T_i|",
+      "lane_coverage_status = complete"
+    ],
+    "occurrence_count_equations": [
+      "raw_occurrence_count = sum_i |O_i|",
+      "accepted_occurrence_count = sum_i |A_i|",
+      "truncated_count = sum_i |T_i|",
+      "rejected_unverified_count = sum_i |R_i|"
+    ],
+    "member_set_equations": [
+      "M = unique canonical member cores from union_i A_i, merging only byte-equal cores and exact membership union",
+      "unique_candidate_count = |M| = candidate_set.member_count",
+      "0 < |M| <= 1000 for product eligibility"
+    ],
+    "missing_required_lane_count_rule": "compiler-derived role-intersection identity loss and is not lane coverage; it may be nonzero only if the selected Cohort semantics permit that result; product eligibility for an exact requested role_match=all requires it to be zero",
+    "digest_equations": [
+      "lane_result_digest_i = SHA256(canonical lane-result fields except itself)",
+      "member_digest_m = SHA256(canonical member fields except itself)",
+      "candidate_set_digest = SHA256(canonical candidate-set header with ordered_member_digests=[member_digest_m])",
+      "execution_result_digest = SHA256(canonical result-v2 fields except result_digest)",
+      "execution_commit_digest = SHA256(canonical commit fields except commit_digest)",
+      "product_terminal_digest = SHA256(canonical product-terminal fields except terminal_digest)",
+      "owner_result_digest = SHA256(canonical complete variant owner ref except owner_ref_digest)",
+      "serialized_result_digest = SHA256(exact historical serializer UTF-8 bytes)"
+    ],
+    "cross_surface_equations": [
+      "execution_result.unique_candidate_count = execution_commit.candidate_count = count(cohort_candidate_set_members) = product_terminal.candidate_count = count(exact published serving_projection_members) = product_terminal.visible_member_count",
+      "execution_result.candidate_set_digest = execution_commit.candidate_set_digest = recompute(published selected member bytes) = product_terminal.candidate_set_digest",
+      "projection stored result_count/candidate_count/visible_member_count, when retained on the exact terminal revision, equal product_terminal.candidate_count"
+    ],
+    "excluded_counts": [
+      "mutable global root Candidate-document superset count",
+      "later enrichment count",
+      "profile/card counts",
+      "search-index count",
+      "facet count"
+    ],
+    "v3_page_equations": [
+      "total_count = count(M matching the occurrence-pinned predicate)",
+      "returned_count = len(candidates) = min(limit, max(0,total_count-offset))",
+      "truncated = (offset + returned_count < total_count)"
+    ],
+    "reader_repair": "no reader uses max, floors, supplied counts, or repairs to satisfy an equation"
+  },
+  "retention_replay_migration_gates": {
+    "retained_literals": [
+      "acquisition_root_command_payload.v2",
+      "cohort_execution_capability.v1",
+      "cohort_provider_manifest.v1",
+      "cohort_provider_manifest.v2",
+      "cohort_execution_result.v1",
+      "filter_projection_result_v2",
+      "filter_projection_tool_v2"
+    ],
+    "retained_rule": "retain exact semantics; lookup is exact version + contract/result digest",
+    "lookup_forbidden": [
+      "shape inference",
+      "lexicographic latest",
+      "mutable current alias",
+      "auto-upgrade"
+    ],
+    "rejected_literals": {
+      "acquisition_start_lineage_ref.v1": "rejected as an implementation literal; the adopted downstream start carrier is acquisition_start_authority_carrier.v1",
+      "cohort_provider_execution_manifest.v2": "rejected as an implementation literal; replaced by the cohort_execution_envelope.v1 name rather than adopted",
+      "filter_projection_publication_terminal.v1": "rejected as an implementation literal; replaced by filter_projection_product_terminal.v1"
+    },
+    "gates": [
+      "Retain exact acquisition_root_command_payload.v2, cohort_execution_capability.v1, cohort_provider_manifest.v1, planning cohort_provider_manifest.v2, cohort_execution_result.v1, filter_projection_result_v2, and filter_projection_tool_v2 semantics.",
+      "Lookup is exact version + contract/result digest. No shape inference, lexicographic latest, mutable current alias, or auto-upgrade.",
+      "Carrierless historical start rows and v1 Cohort results cannot satisfy the operation-native V1 carrier/V2 execution/product-terminal route. They take the same unavailable/masked outcome and are not backfilled from files.",
+      "V3 registration creates retained history only. The current tool alias remains V2 and public/default served population remains zero until the release edge in section 15.",
+      "Namespace refs cannot be retired while any capability, envelope, attempt, commit, product terminal, occurrence, slot/attempt/journal, or audit artifact references them.",
+      "Carrier/capability/result/member/terminal/V3 deletion requires: a reviewed retention decision; zero-reference audit across Action, OperationRun, WorkflowCommand, review session, AcquisitionRun, attempts, commits, projections, terminals, result slots/attempts/journal, releases, exports, replays and audit artifacts; historical fixtures/replay green; and a reviewed migration artifact. Age alone is never proof.",
+      "Accepted same-attempt Agent replay remains possible from the immutable generic aggregate after mutable route/projection advance. New quarantine writes still require their owner assertion; owner deletion therefore waits for the maximum competing-attempt window or an explicit reviewed replacement assertion.",
+      "Product terminal rows are append-only. A later publication creates a new terminal with an exact predecessor digest; it never rewrites historical freshness/readiness bytes."
+    ]
+  },
+  "hostile_mutation_oracles": {
+    "rule": "every row is an independent mutation; unless a row explicitly permits a quarantine attempt, terminal/domain/projection/result-slot deltas are zero",
+    "families": [
+      {
+        "family": "eight-row source join",
+        "mutations": "missing/duplicate/split alternate identity for every row; foreign workspace/requester; actual-mode vs intent alias; runtime namespace mismatch; every command parent/owner/type/stage/idempotency/causality mutation; same-owner positive"
+      },
+      {
+        "family": "carrier/authority",
+        "mutations": "nested root byte/type mutation; owner-ref mutation; copied digest alias; carrier absent; downstream one-stage drift; request/plan-body digest cycle/alias; root v2 byte-stable history"
+      },
+      {
+        "family": "namespace/capability",
+        "mutations": "missing/duplicate/foreign/retired ref; workspace/mode/policy/generation mismatch; raw-path leak; every budget/proof/cost/retry/circuit/planning digest mutation; bool-as-int; retained-v1 positive"
+      },
+      {
+        "family": "planning/lane mapping",
+        "mutations": "planning digest vs physical-query alias; missing/duplicate/extra/reordered lane; id/digest/evidence mismatch; empty valid lane vs absent lane; completion/map insertion order aliases"
+      },
+      {
+        "family": "execution attempt",
+        "mutations": "stale command attempt, execution generation, control epoch, lease; wrong ActivityRun/Attempt; duplicate exposure/call; response digest mismatch; retry disposition drift; late response after cancel/supersession; exact accepted attempt positive"
+      },
+      {
+        "family": "candidate source/set",
+        "mutations": "omitted/extra/cross-run occurrence; duplicate identity equal bytes and unequal bytes; committed-field/type mutation; membership omitted/extra/duplicate/cross-manifest; arrival reorder; one-off count; selected subset; copied-marker equal over unequal bytes"
+      },
+      {
+        "family": "execution commit",
+        "mutations": "divergent child/header replay; result/candidate digest alias; crash after attempt/lane/member/header insertion; wrong source carrier/authority; exact replay zero-write"
+      },
+      {
+        "family": "product publication",
+        "mutations": "wrong projection/run route/version/state/revision; collection pointer substitution; mutable-row-only proof; hidden/extra/duplicate member; route/membership race; crash at parent/member/route/terminal boundaries; exact replay"
+      },
+      {
+        "family": "freshness",
+        "mutations": "caller fresh; timestamp ordering; unrelated successor; missing/foreign mislabeled stale; predecessor mismatch; route movement; retained historical replay after successor"
+      },
+      {
+        "family": "readiness",
+        "mutations": "building/degraded alias; caller status/reason; empty set; one row not ready/hidden; persisted readiness disagreement; profile/card/index/facet mutation proves no authority effect; count/type mismatch"
+      },
+      {
+        "family": "terminal digest",
+        "mutations": "same-named digest from another schema; product/result/owner-ref mismatch; stale terminal generation; candidate set changes with equal counts"
+      },
+      {
+        "family": "V3 registry/schema",
+        "mutations": "v2 exact bytes/digests retained; unknown/same-version drift/owner-route collision; current/latest fallback; raw path/private id leak; every field provenance/value-role/budget; all three positives"
+      },
+      {
+        "family": "terminal tuple",
+        "mutations": "each occurrence pin; both-empty action/operation group; command/activity empties/zeros; target kind/id/version/token; winner; owner ref/digest; serialized bytes/digest; is_error parity"
+      },
+      {
+        "family": "missing/foreign",
+        "mutations": "byte-identical public masked result/ref shape for same occurrence; no existence/workspace/private-id oracle; same-owner success remains positive"
+      },
+      {
+        "family": "result accept/replay",
+        "mutations": "prepare exception, registry miss, serializer failure, owner race, lock timeout, lost CAS, partial aggregate, accepted replay, both quarantine reasons, quarantine replay, attempt-id collision, commit failure"
+      },
+      {
+        "family": "reader behavior",
+        "mutations": "reader never writes/patches/enqueues; mutable public diagnostics remain useful but cannot create terminal/readiness/freshness authority"
+      }
+    ],
+    "concurrency_coverage": [
+      "join vs start-create",
+      "plan review/commit",
+      "execution retry/cancel/late response",
+      "execution commit replay",
+      "product publish vs member/route update",
+      "result prepare vs product successor",
+      "first Agent accept vs generation/takeover"
+    ]
+  },
+  "mechanism_invariant_matrix": [
+    {
+      "mechanism": "carrier_execution_authority",
+      "single_writer": "planner schema owner; existing stage writers",
+      "tenant_key": "workspace/requester exact root bind",
+      "generation_fence": "root/action/operation locks; no detached token",
+      "lifecycle": "append-only version; carrierless history ineligible",
+      "late_partial": "commit/review race zero-write",
+      "cost": "N/A, no provider call",
+      "physical_identity": "full owner ref + root/request/plan digests",
+      "provenance": "actors not owners; caller cannot mint",
+      "consistency": "closed fields and cycle exclusion",
+      "runtime_isolation": "actual mode/namespace from owner ref, never request intent"
+    },
+    {
+      "mechanism": "namespace_registry",
+      "single_writer": "single registry writer",
+      "tenant_key": "workspace in row/lookup/CAS",
+      "generation_fence": "generation + active-state lock",
+      "lifecycle": "active -> retired only; zero-reference delete",
+      "late_partial": "retired/stale resolve fails before call",
+      "cost": "N/A",
+      "physical_identity": "opaque ref/digest -> private exact path",
+      "provenance": "public ref strips path",
+      "consistency": "closed ref + unique tuple",
+      "runtime_isolation": "workspace/provider mode/policy are identity"
+    },
+    {
+      "mechanism": "capability_envelope",
+      "single_writer": "compiler single derivation",
+      "tenant_key": "workspace/acquisition pins",
+      "generation_fence": "execution generation",
+      "lifecycle": "retained v1 and v2 exact lookup",
+      "late_partial": "mismatch before exposure",
+      "cost": "budgets + cost/retry/circuit revisions",
+      "physical_identity": "planning/capability/ref/lane digests",
+      "provenance": "raw path excluded from successor",
+      "consistency": "complete record recompile",
+      "runtime_isolation": "only simulate/scripted here; live remains unauthorized"
+    },
+    {
+      "mechanism": "execution_attempt",
+      "single_writer": "Cohort runtime writer",
+      "tenant_key": "workspace/run in PK/locks",
+      "generation_fence": "generation+epoch+lease+command/activity",
+      "lifecycle": "complete state machine, terminal no reopen",
+      "late_partial": "stale/late quarantined",
+      "cost": "one exposure/call identity and disposition",
+      "physical_identity": "command/activity/provider response exact",
+      "provenance": "provider evidence server-derived",
+      "consistency": "typed columns, no JSON alias authority",
+      "runtime_isolation": "mode + namespace ref exact"
+    },
+    {
+      "mechanism": "lane_result_candidate_aggregate",
+      "single_writer": "compiler derives; runtime persists",
+      "tenant_key": "inherited exact attempt scope",
+      "generation_fence": "current attempt lock before commit",
+      "lifecycle": "insert-once/replay/deletion gates",
+      "late_partial": "partial lane/member rejects commit",
+      "cost": "no new call authority",
+      "physical_identity": "plan-lane/evidence/member/commit digests",
+      "provenance": "raw evidence private; model bytes closed",
+      "consistency": "equations in section 10",
+      "runtime_isolation": "commit inherits namespace/mode"
+    },
+    {
+      "mechanism": "product_terminal",
+      "single_writer": "existing projection writer only",
+      "tenant_key": "workspace/run route",
+      "generation_fence": "commit -> route/projection/member/terminal order",
+      "lifecycle": "append-only predecessor chain",
+      "late_partial": "stale publication loses, no rewrite",
+      "cost": "N/A",
+      "physical_identity": "execution commit + exact member bytes + route",
+      "provenance": "writer label not proof",
+      "consistency": "one UoW, terminal equality",
+      "runtime_isolation": "terminal binds provider mode/ref"
+    },
+    {
+      "mechanism": "fresh_ready_refs",
+      "single_writer": "terminal owner writes; readers read",
+      "tenant_key": "inherited terminal scope",
+      "generation_fence": "route revision + terminal generation",
+      "lifecycle": "successor appends; history replay stable",
+      "late_partial": "pending/stale/masked separated",
+      "cost": "N/A",
+      "physical_identity": "terminal/membership/set digests",
+      "provenance": "caller status/reason rejected",
+      "consistency": "closed prerequisite/reason sets",
+      "runtime_isolation": "mode/ref inherited"
+    },
+    {
+      "mechanism": "v3_result_generic_slot",
+      "single_writer": "serializer prepares; generic slot writes",
+      "tenant_key": "occurrence exact workspace/actor",
+      "generation_fence": "slot generation + owner target token",
+      "lifecycle": "retained v2/v3; replay/quarantine states",
+      "late_partial": "different/late attempts quarantine only",
+      "cost": "read-only no provider/model cost",
+      "physical_identity": "full occurrence/target/winner/ref/result tuple",
+      "provenance": "public model-safe whitelist",
+      "consistency": "exact registry pins and schemas",
+      "runtime_isolation": "occurrence provider mode/ref equality"
+    }
+  ],
+  "implementation_batches": [
+    {
+      "packet": "FF-SCHEMA",
+      "wave": 1,
+      "depends_on": [
+        "FF-DI-decision-GO"
+      ],
+      "exclusive_write_paths": [
+        "src/sourcing_agent/cohort_execution_contract.py (new)",
+        "src/sourcing_agent/filter_projection_terminal_contract.py (new)",
+        "src/sourcing_agent/agent_runtime_namespace_ref.py (new)",
+        "focused new pure tests (new)"
+      ],
+      "review_edge": "closed-key/type/digest/collision/history tests; schema review blocks PG/result adoption but not the three disjoint implementation branches",
+      "promotion_requires_review": true
+    },
+    {
+      "packet": "FF-CARRIER",
+      "wave": 1,
+      "depends_on": [
+        "FF-SCHEMA"
+      ],
+      "exclusive_write_paths": [
+        "src/sourcing_agent/acquisition_start_v2.py",
+        "src/sourcing_agent/acquisition_start_v2_create_postgres.py",
+        "src/sourcing_agent/acquisition_command_owner.py",
+        "new focused carrier tests"
+      ],
+      "review_edge": "exact six-stage positive, all join/carrier mutations, concurrency, v2 replay; carrier review blocks its integration into FF-ACQ-INTEGRATE",
+      "promotion_requires_review": true
+    },
+    {
+      "packet": "FF-COMPILER",
+      "wave": 1,
+      "depends_on": [
+        "FF-SCHEMA"
+      ],
+      "exclusive_write_paths": [
+        "src/sourcing_agent/cohort_provider_compiler.py",
+        "src/sourcing_agent/cohort_execution_result.py (new)",
+        "focused compiler tests"
+      ],
+      "review_edge": "v1 history, exact v2 planning recompile, namespace/capability/envelope/lane/result matrix; connector spy zero-call failures; compiler review blocks acquisition/result-byte adoption",
+      "promotion_requires_review": true
+    },
+    {
+      "packet": "FF-SOURCE",
+      "wave": 1,
+      "depends_on": [
+        "FF-SCHEMA"
+      ],
+      "exclusive_write_paths": [
+        "src/sourcing_agent/cohort_candidate_set.py (new)",
+        "focused candidate-set tests"
+      ],
+      "review_edge": "occurrence partition, identity/bytes/order/membership/count/digest mutations; source review blocks candidate-set adoption but not carrier/compiler work",
+      "promotion_requires_review": true
+    },
+    {
+      "packet": "FF-ACQ-INTEGRATE",
+      "wave": 2,
+      "depends_on": [
+        "FF-CARRIER",
+        "FF-COMPILER",
+        "FF-SOURCE"
+      ],
+      "exclusive_write_paths": [
+        "src/sourcing_agent/acquisition.py",
+        "one new acquisition integration test"
+      ],
+      "review_edge": "exact compiler-owned result persistence, no caller summaries/counts, no raw-path publication, fake connector E2E; its pinned review blocks PG adoption of its result bytes but not FF-PG-SCHEMA",
+      "promotion_requires_review": true
+    },
+    {
+      "packet": "FF-PG-SCHEMA",
+      "wave": 2,
+      "depends_on": [
+        "FF-SCHEMA",
+        "FF-CARRIER",
+        "FF-COMPILER",
+        "FF-SOURCE"
+      ],
+      "exclusive_write_paths": [
+        "src/sourcing_agent/migrations/0015_s1f0c_filter_projection_lineage.sql",
+        "migration descriptor/DDL tests only"
+      ],
+      "review_edge": "exact 6-relation/column/index/check/FK manifest, 63-byte names, clean install/rollback, PG-only/no SQLite; schema review blocks FF-PG-UOW activation",
+      "promotion_requires_review": true
+    },
+    {
+      "packet": "FF-PG-UOW",
+      "wave": 2,
+      "depends_on": [
+        "FF-ACQ-INTEGRATE",
+        "FF-PG-SCHEMA"
+      ],
+      "exclusive_write_paths": [
+        "src/sourcing_agent/cohort_lineage_postgres.py (new)",
+        "src/sourcing_agent/control_plane_live_postgres.py",
+        "src/sourcing_agent/repositories/serving_projection.py",
+        "src/sourcing_agent/serving_projection_writer.py",
+        "focused PG tests"
+      ],
+      "review_edge": "global lock order, eight-row join, attempt/late quarantine, commit/member UoW, projection+route+terminal UoW, crash/race/zero-write matrix; pinned PG review blocks FF-RESULT owner adoption/promotion",
+      "promotion_requires_review": true
+    },
+    {
+      "packet": "FF-RESULT",
+      "wave": 3,
+      "depends_on": [
+        "FF-PG-UOW"
+      ],
+      "exclusive_write_paths": [
+        "src/sourcing_agent/agent_projection_query.py",
+        "src/sourcing_agent/agent_canary_registry.py",
+        "src/sourcing_agent/agent_tool_result_postgres.py",
+        "src/sourcing_agent/filter_projection_result_postgres.py (new)",
+        "focused result tests"
+      ],
+      "review_edge": "retained v2/V3 exact registries, three variant positives, tuple mutations, owner races, replay/quarantine, no reader repair, served remains zero; review blocks result/tool current/served transition only",
+      "promotion_requires_review": true
+    },
+    {
+      "packet": "FF-XO",
+      "wave": 3,
+      "depends_on": [
+        "FF-ACQ-INTEGRATE",
+        "FF-PG-SCHEMA",
+        "FF-PG-UOW",
+        "FF-RESULT"
+      ],
+      "exclusive_write_paths": [
+        "one new cross-owner pure test",
+        "one new PG/E2E test",
+        "central decision test only by integration owner"
+      ],
+      "review_edge": "complete section-12 hostile matrix, fake/scripted E2E, exact realistic V3 payload, zero provider/model/live calls, global mypy ratchet; final integrated review blocks S1f0d/S1f1/live/milestone promotion but unrelated development continues",
+      "promotion_requires_review": true
+    }
+  ],
+  "implementation_dag": {
+    "wave1_exclusions": "wave-1 packets may not edit acquisition.py, migrations, control plane, serving projection, Agent registry/result files, central decision tests, or each other's new files",
+    "integration_order": "FF-DI canonical decision GO -> [FF-SCHEMA] -> [FF-CARRIER || FF-COMPILER || FF-SOURCE] -> [FF-ACQ-INTEGRATE || FF-PG-SCHEMA] -> FF-PG-UOW -> FF-RESULT -> FF-XO -> targeted pure/PG/transport/fake E2E -> final explicit-path integration commit -> fresh pinned non-author implementation review -> only then S1f0d/S1f1 promotion/release edges",
+    "cherry_pick_rule": "the integration owner, not a domain Session, cherry-picks in DAG order and runs the combined oracle; shared tracked paths are never concurrently edited"
+  },
+  "transition_states": [
+    {
+      "state": "R-019",
+      "current_value": "open",
+      "fixed_forward_can_do": "add scope-local Cohort attempt/late-result fence and tests",
+      "first_change_condition": "only the ledgered global operation/action/event/command UoW, generation/lease, dispatch and late-result ratchet reaches its reviewed deletion condition; this slice alone never closes it"
+    },
+    {
+      "state": "R-029",
+      "current_value": "open; pinned Plan status 10 schema-defined / 5 schema-less",
+      "fixed_forward_can_do": "retain tripwire and exact history; do not claim bridge deletion",
+      "first_change_condition": "all five remaining API-submittable actions have closed request binders plus populated revisioned result specs/serializers, durable release-window hit audit, independent constraint validation, complete-population proof, and scope-matched GO"
+    },
+    {
+      "state": "public/default served population",
+      "current_value": "0",
+      "fixed_forward_can_do": "register retained V3 history while keeping current alias/release state unserved",
+      "first_change_condition": "S1f0c implementation GO + reviewed S1f0d exact product owner + reviewed S1f1 result adapter + simulate/scripted E2E + explicit release-state transition and complete served predicate; then only the specifically reviewed action may become served"
+    },
+    {
+      "state": "provider invocations",
+      "current_value": "0 for this decision/fixed-forward",
+      "fixed_forward_can_do": "fake connector spies only",
+      "first_change_condition": "separate provider-costing canary authorization after scope-matched GO/release/preflight"
+    },
+    {
+      "state": "model invocations",
+      "current_value": "0",
+      "fixed_forward_can_do": "none required",
+      "first_change_condition": "separate product model route and live canary authorization; filtering itself needs no model"
+    },
+    {
+      "state": "live invocations",
+      "current_value": "0",
+      "fixed_forward_can_do": "simulate/scripted only after implementation",
+      "first_change_condition": "valid final implementation GO, served/release gate, operator-approved bounded canary, runtime isolation/cost evidence"
+    },
+    {
+      "state": "migration delta",
+      "current_value": "0 in this Session",
+      "fixed_forward_can_do": "decision names an exact future migration",
+      "first_change_condition": "only FF-PG-SCHEMA after canonical decision GO and a fresh collision check"
+    }
+  ],
+  "release_boundary": {
+    "served_population": 0,
+    "provider_invocations": 0,
+    "model_invocations": 0,
+    "live_invocations": 0,
+    "migration_delta": 0,
+    "backfill": "forbidden",
+    "agent_reader": "blocked",
+    "local_live": "blocked",
+    "hosted": "blocked",
+    "open_residuals": [
+      "R-019",
+      "R-029"
+    ],
+    "author_evidence_only": true
+  },
+  "evidence": {
+    "handoff": ".coord/handoffs/s1f0c-ff-di-v1.md",
+    "precedent_decision": "docs/modules/serving-product/decisions/TRACK_D_D1N_S1F0C_LINEAGE_TERMINAL_OWNER_DECISION.md",
+    "precedent_test": "tests/test_d1n_s1f0c_lineage_terminal_owner_decision.py",
+    "collision_method": "exact git grep -F against pinned base commit c3efff2aa07330dee52408ebc9dcc7f1786564f5; all 23 new literals and 6 relation names had zero matches",
+    "migration_inventory": "src/sourcing_agent/migrations ends at 0014_agent_tool_result_attempt_effect_contract.sql at the canonization base",
+    "retained_literal_evidence": "retained v1/v2 literals verified present in the tracked tree at the canonization base"
+  }
+}
