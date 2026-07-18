@@ -113,9 +113,12 @@ class AcquisitionStartCommandAcceptanceOwnerRef:
             _identity_text(record.get(field), field=field)
         if record["schema_version"] != ACQUISITION_START_COMMAND_ACCEPTANCE_OWNER_REF_SCHEMA_VERSION:
             raise AcquisitionStartCommandAcceptanceError("acquisition start command acceptance schema version invalid")
-        if record.get("terminal_winner_sequence_number") != 1 or record.get(
-            "command_source_event_sequence_number"
-        ) != 2:
+        if (
+            type(record["terminal_winner_sequence_number"]) is not int
+            or record["terminal_winner_sequence_number"] != 1
+            or type(record["command_source_event_sequence_number"]) is not int
+            or record["command_source_event_sequence_number"] != 2
+        ):
             raise AcquisitionStartCommandAcceptanceError("acquisition start command acceptance topology invalid")
         for field in (
             "command_source_event_contract_digest",
