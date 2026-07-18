@@ -22,6 +22,7 @@ from .local_postgres import (
     quote_control_plane_postgres_identifier,
     resolve_control_plane_postgres_dsn,
 )
+from .migration_runner import apply_pending_migrations
 from .process_supervision import process_alive
 from .runtime_environment import (
     LIVE_PROVIDER_ACCESS_DISABLED_ENV,
@@ -186,7 +187,12 @@ def _write_runtime_scoped_postgres_env_file(
 
 
 def prepare_workflow_confidence_postgres_schema(env_payload: Mapping[str, str]) -> dict[str, Any]:
-    """Fail closed unless the isolated workflow runtime can use a PG-only schema."""
+    """Fail closed unless the isolated workflow runtime can use a PG-only schema.
+
+    A prepared schema is not just created — its versioned migrations are
+    applied before the runtime seeds or serves, so a fresh per-runtime schema
+    never exposes missing authoritative tables to the seed path.
+    """
 
     raw_dsn = str(env_payload.get("SOURCING_CONTROL_PLANE_POSTGRES_DSN") or "").strip()
     schema = normalize_control_plane_postgres_schema(
@@ -219,11 +225,24 @@ def prepare_workflow_confidence_postgres_schema(env_payload: Mapping[str, str]) 
             "PG-only workflow confidence runtime could not connect to or prepare Postgres schema "
             f"{schema}: {type(exc).__name__}: {exc}"
         ) from exc
+    try:
+        # The migration runner manages its own atomic transaction and requires a
+        # non-autocommit connection; it is idempotent on pre-existing schemas.
+        with psycopg.connect(dsn, connect_timeout=5, client_encoding="utf8") as connection:
+            migrations = apply_pending_migrations(connection, schema=schema)
+    except Exception as exc:
+        raise RuntimeError(
+            "PG-only workflow confidence runtime could not apply schema migrations "
+            f"to {schema}: {type(exc).__name__}: {exc}"
+        ) from exc
     return {
         "status": "ready",
         "schema": schema,
         "dsn_configured": True,
         "pre_existing": pre_existing,
+        "migrations_applied": list(migrations.applied),
+        "migrations_stamped": list(migrations.stamped),
+        "migrations_already_applied": list(migrations.already_applied),
     }
 
 

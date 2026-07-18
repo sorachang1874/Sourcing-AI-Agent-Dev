@@ -209,6 +209,38 @@ class ScriptedRuntimeSchemaTeardownPGTest(unittest.TestCase):
             self.assertEqual(result, {"status": "dropped", "schema": schema})
             self.assertFalse(_schema_exists(self.dsn, schema))
 
+    def test_prepare_applies_migrations_before_seeding(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="schema-migrate-") as tmp:
+            env_payload, _ = build_isolated_runtime_env(runtime_dir=tmp)
+            prepare = prepare_workflow_confidence_postgres_schema(env_payload)
+            schema = str(prepare["schema"])
+            self._cleanup_schemas.append(schema)
+            self.assertIn("0001_baseline", prepare["migrations_applied"])
+            connect_dsn = normalize_control_plane_postgres_connect_dsn(self.dsn)
+            with psycopg.connect(connect_dsn, autocommit=True, connect_timeout=5, client_encoding="utf8") as connection:
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        "SELECT 1 FROM information_schema.tables "
+                        "WHERE table_schema = %s AND table_name = %s",
+                        (schema, "organization_asset_registry"),
+                    )
+                    self.assertIsNotNone(cursor.fetchone())
+                    cursor.execute(
+                        f"SELECT count(*) FROM {quote_control_plane_postgres_identifier(schema)}.schema_migrations"
+                    )
+                    row = cursor.fetchone()
+                    self.assertIsNotNone(row)
+                    self.assertGreaterEqual(int(row[0]), 14)
+            second = prepare_workflow_confidence_postgres_schema(env_payload)
+            self.assertEqual(second["migrations_applied"], [])
+
+    def test_isolated_hosted_test_runtime_seeds_fresh_schema(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="seed-fresh-") as tmp:
+            with isolated_hosted_test_runtime(runtime_dir=tmp, seed_reference_runtime=True) as runtime:
+                schema = str(runtime.postgres_prepare_result["schema"])
+                self._cleanup_schemas.append(schema)
+                self.assertTrue(runtime.seed_result)
+
     def test_isolated_hosted_test_runtime_drops_schema_and_writes_marker(self) -> None:
         with tempfile.TemporaryDirectory(prefix="teardown-drop-") as tmp:
             with isolated_hosted_test_runtime(runtime_dir=tmp) as runtime:
