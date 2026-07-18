@@ -417,9 +417,9 @@
 - **R-019 / R-029 / D1n S1e2c partial response (2026-07-18):** the S1e2c response rejects forged
   serialized-result/error terminals before writes, exact-loads slot and preview owner rows, refreshes prepare
   lock/statement timeout from the remaining deadline, and adds stable owner-result proof for accepted replay plus
-  late-result quarantine after downstream root-command progress. It does not close the S1e2c formal `NO-GO`: shared
-  lock topology remains under R-019, the central pre-agent matrix/preflight is not yet updated for hold/release
-  ownership, and no provider/model/live/served path is authorized.
+  late-result quarantine after downstream root-command progress. The central pre-agent matrix/preflight now includes
+  the start-v2 result hold/release owner entry. It does not close the S1e2c formal `NO-GO`: shared lock topology remains
+  under R-019, and no provider/model/live/served path is authorized.
 
 ## 使用方式
 

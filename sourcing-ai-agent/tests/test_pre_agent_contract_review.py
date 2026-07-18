@@ -340,6 +340,7 @@ def test_agent_tool_result_aggregate_owner_contract_is_canonical() -> None:
     assert header == expected_header
     assert set(field_rows) == {
         "`agent_tool_terminal_aggregate.result_link_policy`",
+        "`start_acquisition_run.result_hold_release_owner`",
         "`inspect_operation.result_readiness`",
         "`operation_runs.progress.reason`",
     }
@@ -379,6 +380,18 @@ def test_agent_tool_result_aggregate_owner_contract_is_canonical() -> None:
     assert set(re.findall(r"`([^`]+)`", policy_row[allowed_values_index])) == expected_policies
     assert "server-owned `AgentToolRegistry`" in policy_row[header.index("Owner")]
     assert "fail_closed" in policy_row[header.index("Fallback")]
+
+    start_result_row = field_rows["`start_acquisition_run.result_hold_release_owner`"]
+    assert "acquisition_start_v2_result_postgres" in start_result_row[header.index("Owner")]
+    assert "agent_tool_result_slots" in start_result_row[header.index("Source of truth")]
+    assert "acquisition.run.create" in start_result_row[header.index("Source of truth")]
+    assert "owner-result target/ref/digest" in start_result_row[header.index("Source of truth")]
+    assert "not_before_at=9999-12-31 23:59:59" in start_result_row[header.index("Derivation")]
+    assert "prepare_start_acquisition_tool_result" in start_result_row[header.index("Normal consumers")]
+    assert "accept_start_acquisition_tool_result_uow" in start_result_row[header.index("Normal consumers")]
+    assert "Generic Operation dispatch/control" in start_result_row[header.index("Forbidden consumers")]
+    assert "fail_closed" in start_result_row[header.index("Fallback")]
+    assert "public/default served population remains zero" in start_result_row[header.index("Migration status")]
 
     readiness_cases = {
         ("running", False): "pending",

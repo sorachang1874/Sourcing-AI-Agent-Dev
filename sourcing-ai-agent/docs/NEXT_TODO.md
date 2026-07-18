@@ -484,8 +484,10 @@
   terminals before writes, locks/exact-checks slot+preview owner rows during start result owner loading, and refreshes
   prepare lock+statement timeout from the remaining deadline. A second response adds stable owner-result proof for
   accepted replay and late quarantine after the released root command has been consumed by the downstream intent hop.
+  The central PRE_AGENT matrix now records `start_acquisition_run.result_hold_release_owner` and fast preflight asserts
+  its owner/source/consumer/fail-closed/served-zero tokens.
   Response evidence currently includes PG create/result+delegate matrix `28 passed + 27 subtests` and scoped mypy
-  `0/1`; shared lock topology and central preflight/matrix wiring remain open. S1e1/S1e2a/S1e2b/S1e2c author
+  `0/1`; shared lock topology remains open. S1e1/S1e2a/S1e2b/S1e2c author
   evidence/future review 都不改变 `10/5`、served=0、provider/model/live=0；
   R-019/R-029、Plan §6#6、OB-2.2/10.3/10.4 均继续 open，fresh pinned non-author review pending。实现记录见
   `TRACK_D_D1N_S1E2A_START_SUBMIT_UOW_IMPLEMENTATION.md` 与
