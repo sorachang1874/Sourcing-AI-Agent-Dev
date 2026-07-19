@@ -13,6 +13,7 @@ from sourcing_agent.control_plane_postgres import (
     ACQUISITION_SHARD_REGISTRY_LOGICAL_TABLE,
     DEFAULT_CONTROL_PLANE_TABLES,
     GENERIC_POSTGRES_IMPORT_EXCLUDED_TABLES,
+    NONPORTABLE_RUNTIME_COORDINATION_TABLES,
     _connect_postgres,
     control_plane_postgres_sync_state_path,
     ensure_acquisition_shard_registry_split_schema,
@@ -22,6 +23,8 @@ from sourcing_agent.control_plane_postgres import (
     sync_runtime_control_plane_to_postgres,
     upsert_acquisition_shard_registry_rows,
 )
+from sourcing_agent.local_postgres import quote_control_plane_postgres_identifier
+from tests.pg_store_fixture import PGControlPlaneStoreTestMixin, psycopg
 
 _PG_ONLY_CAUSAL_AGGREGATE_TABLES = (
     "workflow_commands",
@@ -38,6 +41,12 @@ _PG_ONLY_CAUSAL_AGGREGATE_TABLES = (
     "workflow_entity_deltas",
     "operation_events",
 )
+_NONPORTABLE_COORDINATION_TABLES = (
+    "workflow_job_leases",
+    "workflow_recovery_intents",
+    "runtime_provider_limiter_leases",
+)
+_EXPECTED_EXCLUSION_GAP = sorted(GENERIC_POSTGRES_IMPORT_EXCLUDED_TABLES)
 
 
 class _FakeCursor:
@@ -197,12 +206,27 @@ class ControlPlanePostgresTest(unittest.TestCase):
     def test_generic_import_exclusion_covers_the_complete_pg_only_causal_aggregate(self) -> None:
         self.assertEqual(
             GENERIC_POSTGRES_IMPORT_EXCLUDED_TABLES,
-            frozenset(_PG_ONLY_CAUSAL_AGGREGATE_TABLES),
+            frozenset(_PG_ONLY_CAUSAL_AGGREGATE_TABLES) | frozenset(_NONPORTABLE_COORDINATION_TABLES),
         )
         for table_name in _PG_ONLY_CAUSAL_AGGREGATE_TABLES:
             self.assertNotIn(table_name, DEFAULT_CONTROL_PLANE_TABLES)
 
-    def _snapshot_payload(self, table_rows: dict[str, list[dict[str, object]]]) -> dict[str, object]:
+    def test_portability_registry_excludes_nonportable_coordination_tables_from_default_inventory(self) -> None:
+        self.assertEqual(
+            NONPORTABLE_RUNTIME_COORDINATION_TABLES,
+            frozenset(_NONPORTABLE_COORDINATION_TABLES),
+        )
+        self.assertTrue(NONPORTABLE_RUNTIME_COORDINATION_TABLES.issubset(GENERIC_POSTGRES_IMPORT_EXCLUDED_TABLES))
+        for table_name in _NONPORTABLE_COORDINATION_TABLES:
+            self.assertNotIn(table_name, DEFAULT_CONTROL_PLANE_TABLES)
+
+    def _snapshot_payload(
+        self,
+        table_rows: dict[str, list[dict[str, object]]],
+        *,
+        declaration: object = "default",
+        schema_version: object = 1,
+    ) -> dict[str, object]:
         tables: dict[str, object] = {}
         for table_name, rows in table_rows.items():
             columns = [
@@ -210,7 +234,14 @@ class ControlPlanePostgresTest(unittest.TestCase):
                 for index, column in enumerate(rows[0] if rows else ("placeholder",))
             ]
             tables[table_name] = {"columns": columns, "row_count": len(rows), "rows": rows}
-        return {"schema_version": 1, "tables": tables}
+        payload: dict[str, object] = {"tables": tables}
+        if schema_version != "omit":
+            payload["schema_version"] = schema_version
+        if declaration == "default":
+            payload["excluded_pg_only_durable_runtime_tables"] = _EXPECTED_EXCLUSION_GAP
+        elif declaration != "omit":
+            payload["excluded_pg_only_durable_runtime_tables"] = declaration
+        return payload
 
     def test_default_export_excludes_aggregate_and_records_typed_explicit_gap(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
@@ -240,7 +271,7 @@ class ControlPlanePostgresTest(unittest.TestCase):
                 source_backend="sqlite",
             )
 
-            expected_gap = sorted(_PG_ONLY_CAUSAL_AGGREGATE_TABLES)
+            expected_gap = _EXPECTED_EXCLUSION_GAP
             self.assertEqual(result["status"], "exported")
             self.assertEqual(result["excluded_pg_only_durable_runtime_tables"], expected_gap)
             self.assertIn("jobs", result["tables"])
@@ -278,7 +309,7 @@ class ControlPlanePostgresTest(unittest.TestCase):
             self.assertEqual(set(snapshot_payload["tables"]), {"jobs"})
             self.assertEqual(
                 snapshot_payload["excluded_pg_only_durable_runtime_tables"],
-                sorted(_PG_ONLY_CAUSAL_AGGREGATE_TABLES),
+                _EXPECTED_EXCLUSION_GAP,
             )
 
     def test_explicit_export_of_durable_runtime_tables_is_rejected(self) -> None:
@@ -292,7 +323,7 @@ class ControlPlanePostgresTest(unittest.TestCase):
             connection.commit()
             connection.close()
 
-            for table_name in _PG_ONLY_CAUSAL_AGGREGATE_TABLES:
+            for table_name in (*_PG_ONLY_CAUSAL_AGGREGATE_TABLES, *_NONPORTABLE_COORDINATION_TABLES):
                 with self.subTest(table_name=table_name):
                     with self.assertRaisesRegex(
                         ValueError,
@@ -305,9 +336,40 @@ class ControlPlanePostgresTest(unittest.TestCase):
                             tables=[table_name],
                         )
 
+    def test_include_all_export_filters_nonportable_coordination_tables(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            runtime_dir = Path(tempdir) / "runtime"
+            runtime_dir.mkdir(parents=True, exist_ok=True)
+            db_path = runtime_dir / "sourcing_agent.db"
+            connection = sqlite3.connect(db_path)
+            connection.execute("CREATE TABLE jobs (job_id TEXT PRIMARY KEY, status TEXT NOT NULL)")
+            for table_name in _NONPORTABLE_COORDINATION_TABLES:
+                connection.execute(f'CREATE TABLE "{table_name}" (lease_key TEXT PRIMARY KEY, lease_owner TEXT)')
+                connection.execute(
+                    f'INSERT INTO "{table_name}" (lease_key, lease_owner) VALUES (?, ?)',
+                    ("held-lease", "daemon-A"),
+                )
+            connection.commit()
+            connection.close()
+            output_path = Path(tempdir) / "snapshot.json"
+
+            result = export_control_plane_snapshot(
+                runtime_dir=runtime_dir,
+                output_path=output_path,
+                source_backend="sqlite",
+                include_all_sqlite_tables=True,
+            )
+
+            self.assertEqual(result["status"], "exported")
+            self.assertEqual(set(result["tables"]), {"jobs"})
+            snapshot_payload = json.loads(output_path.read_text(encoding="utf-8"))
+            self.assertEqual(set(snapshot_payload["tables"]), {"jobs"})
+            for table_name in _NONPORTABLE_COORDINATION_TABLES:
+                self.assertNotIn(table_name, snapshot_payload["tables"])
+
     def test_snapshot_import_rejects_each_durable_runtime_table_before_postgres(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
-            for table_name in _PG_ONLY_CAUSAL_AGGREGATE_TABLES:
+            for table_name in (*_PG_ONLY_CAUSAL_AGGREGATE_TABLES, *_NONPORTABLE_COORDINATION_TABLES):
                 snapshot_path = Path(tempdir) / f"snapshot-{table_name}.json"
                 snapshot_path.write_text(
                     json.dumps(
@@ -378,6 +440,93 @@ class ControlPlanePostgresTest(unittest.TestCase):
             )
             self.assertEqual(restored["status"], "restored")
             self.assertEqual(restored["tables"]["jobs"]["row_count"], 1)
+            self.assertEqual(restored["excluded_pg_only_durable_runtime_tables"], _EXPECTED_EXCLUSION_GAP)
+
+    def test_generic_import_requires_exact_schema_versioned_exclusion_declaration(self) -> None:
+        declaration_cases = (
+            ("missing", "omit", 1),
+            ("subset", sorted(_PG_ONLY_CAUSAL_AGGREGATE_TABLES), 1),
+            ("superset", [*_EXPECTED_EXCLUSION_GAP, "extra_table"], 1),
+            ("drifted", ["not_a_registry_table"], 1),
+            ("non_list", "workflow_commands", 1),
+            ("non_string_items", [*_EXPECTED_EXCLUSION_GAP[:-1], 7], 1),
+            ("missing_schema_version", "default", "omit"),
+            ("wrong_schema_version", "default", 2),
+            ("bool_schema_version", "default", True),
+        )
+        with tempfile.TemporaryDirectory() as tempdir:
+            runtime_dir = Path(tempdir) / "runtime"
+            for label, declaration, schema_version in declaration_cases:
+                snapshot_path = Path(tempdir) / f"snapshot-{label}.json"
+                snapshot_path.write_text(
+                    json.dumps(
+                        self._snapshot_payload(
+                            {"jobs": [{"job_id": "job-1", "status": "completed"}]},
+                            declaration=declaration,
+                            schema_version=schema_version,
+                        ),
+                        ensure_ascii=False,
+                        indent=2,
+                    ),
+                    encoding="utf-8",
+                )
+                with self.subTest(declaration=label):
+                    with (
+                        mock.patch("sourcing_agent.control_plane_postgres._import_psycopg") as import_psycopg,
+                        mock.patch("sourcing_agent.control_plane_postgres._connect_postgres") as connect_postgres,
+                        self.assertRaisesRegex(
+                            ValueError,
+                            "requires an exact schema-versioned exclusion declaration",
+                        ),
+                    ):
+                        sync_control_plane_snapshot_to_postgres(
+                            snapshot_path=snapshot_path,
+                            dsn="postgresql://user:pass@localhost:5432/sourcing",
+                            truncate_first=True,
+                        )
+                    import_psycopg.assert_not_called()
+                    connect_postgres.assert_not_called()
+                    with self.assertRaisesRegex(
+                        ValueError,
+                        "requires an exact schema-versioned exclusion declaration",
+                    ):
+                        restore_control_plane_snapshot_to_sqlite(
+                            snapshot_path=snapshot_path,
+                            runtime_dir=runtime_dir,
+                        )
+                    self.assertFalse((runtime_dir / "sourcing_agent.db").exists())
+
+    def test_sync_summary_propagates_the_verified_exclusion_gap(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            snapshot_path = Path(tempdir) / "control-plane.json"
+            snapshot_path.write_text(
+                json.dumps(
+                    self._snapshot_payload({"jobs": [{"job_id": "job-1", "status": "completed"}]}),
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            fake_connections: list[_FakeConnection] = []
+
+            def _connect(dsn: str) -> _FakeConnection:
+                connection = _FakeConnection(dsn, row_counts={"jobs": 1})
+                fake_connections.append(connection)
+                return connection
+
+            fake_psycopg = SimpleNamespace(connect=_connect)
+            with mock.patch(
+                "sourcing_agent.control_plane_postgres._import_psycopg",
+                return_value=fake_psycopg,
+            ):
+                result = sync_control_plane_snapshot_to_postgres(
+                    snapshot_path=snapshot_path,
+                    dsn="postgresql://user:pass@localhost:5432/sourcing",
+                    truncate_first=True,
+                )
+
+            self.assertEqual(result["status"], "synced")
+            self.assertEqual(result["excluded_pg_only_durable_runtime_tables"], _EXPECTED_EXCLUSION_GAP)
 
     def test_runtime_mirror_default_selection_skips_aggregate_but_explicit_selection_rejects(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
@@ -724,6 +873,7 @@ class ControlPlanePostgresTest(unittest.TestCase):
                 json.dumps(
                     {
                         "schema_version": 1,
+                        "excluded_pg_only_durable_runtime_tables": _EXPECTED_EXCLUSION_GAP,
                         "tables": {
                             "jobs": {
                                 "columns": [
@@ -775,6 +925,7 @@ class ControlPlanePostgresTest(unittest.TestCase):
                 json.dumps(
                     {
                         "schema_version": 1,
+                        "excluded_pg_only_durable_runtime_tables": _EXPECTED_EXCLUSION_GAP,
                         "tables": {
                             "workflow_commands": {
                                 "columns": [
@@ -835,6 +986,7 @@ class ControlPlanePostgresTest(unittest.TestCase):
                 json.dumps(
                     {
                         "schema_version": 1,
+                        "excluded_pg_only_durable_runtime_tables": _EXPECTED_EXCLUSION_GAP,
                         "tables": {
                             "jobs": {
                                 "columns": [
@@ -899,6 +1051,7 @@ class ControlPlanePostgresTest(unittest.TestCase):
                 json.dumps(
                     {
                         "schema_version": 1,
+                        "excluded_pg_only_durable_runtime_tables": _EXPECTED_EXCLUSION_GAP,
                         "tables": {
                             "jobs": {
                                 "columns": [
@@ -1361,6 +1514,133 @@ class ControlPlanePostgresTest(unittest.TestCase):
                 )
             self.assertEqual(result["status"], "disabled")
             self.assertEqual(result["reason"], "missing_dsn")
+
+
+class ControlPlanePostgresPortabilityPGTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
+    """Prove generic export/import can neither observe nor mutate live coordination state."""
+
+    pg_store_schema_label = "control_plane_portability"
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.tempdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tempdir.cleanup)
+        self.runtime_dir = Path(self.tempdir.name) / "runtime"
+        self.runtime_dir.mkdir(parents=True, exist_ok=True)
+        self.store = self.make_pg_store(Path(self.tempdir.name) / "portability.db")
+        self.adapter = self.store._control_plane_postgres  # noqa: SLF001
+
+    def _coordination_rows(self, table_name: str) -> tuple[dict[str, object], ...]:
+        fixture = self._pg_store_fixture
+        self.assertIsNotNone(fixture)
+        self.assertIsNotNone(psycopg)
+        assert fixture is not None and psycopg is not None
+        quoted_schema = quote_control_plane_postgres_identifier(fixture.schema)
+        quoted_table = quote_control_plane_postgres_identifier(table_name)
+        with psycopg.connect(fixture.dsn, client_encoding="utf8") as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    f"SELECT row_to_json(row_value) FROM {quoted_schema}.{quoted_table} AS row_value "
+                    "ORDER BY row_to_json(row_value)::text"
+                )
+                return tuple(dict(row[0]) for row in cursor.fetchall())
+
+    def test_generic_export_import_ignores_active_leases_and_pending_intents(self) -> None:
+        self.adapter._execute_non_query(  # noqa: SLF001
+            "INSERT INTO workflow_job_leases (job_id, lease_owner, lease_token, lease_expires_at, created_at, "
+            "updated_at) VALUES (%s, %s, %s, %s, %s, %s)",
+            (
+                "job-active-lease",
+                "daemon-A",
+                "lease-token-1",
+                "2099-01-01 00:00:00",
+                "2026-07-19T00:00:00Z",
+                "2026-07-19T00:00:00Z",
+            ),
+        )
+        self.adapter._execute_non_query(  # noqa: SLF001
+            "INSERT INTO workflow_recovery_intents (job_id, classification, status, requested_at, requested_by, "
+            "params_json, lease_owner, lease_expires_at, claimed_at, schema_version, created_at, updated_at) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            (
+                "job-pending-intent",
+                "stale_runner",
+                "pending",
+                "2026-07-19T00:00:00Z",
+                "read-path",
+                "{}",
+                "",
+                "",
+                "",
+                "workflow_recovery_intent_v1",
+                "2026-07-19T00:00:00Z",
+                "2026-07-19T00:00:00Z",
+            ),
+        )
+        self.adapter._execute_non_query(  # noqa: SLF001
+            "INSERT INTO runtime_provider_limiter_leases (lease_token, limiter_key, lease_owner, lease_expires_at, "
+            "metadata_json, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+            (
+                "limiter-lease-1",
+                "harvest_profile_scraper_actor",
+                "worker-1",
+                "2099-01-01 00:00:00",
+                "{}",
+                "2026-07-19T00:00:00Z",
+                "2026-07-19T00:00:00Z",
+            ),
+        )
+        coordination_baseline = {
+            table_name: self._coordination_rows(table_name) for table_name in _NONPORTABLE_COORDINATION_TABLES
+        }
+        self.assertTrue(all(coordination_baseline.values()))
+
+        output_path = Path(self.tempdir.name) / "snapshot.json"
+        exported = export_control_plane_snapshot(
+            runtime_dir=self.runtime_dir,
+            output_path=output_path,
+            source_backend="postgres",
+        )
+
+        self.assertEqual(exported["status"], "exported")
+        self.assertEqual(exported["excluded_pg_only_durable_runtime_tables"], _EXPECTED_EXCLUSION_GAP)
+        snapshot_payload = json.loads(output_path.read_text(encoding="utf-8"))
+        self.assertEqual(snapshot_payload["excluded_pg_only_durable_runtime_tables"], _EXPECTED_EXCLUSION_GAP)
+        for table_name in _NONPORTABLE_COORDINATION_TABLES:
+            self.assertNotIn(table_name, snapshot_payload["tables"])
+        self.assertNotIn("job-active-lease", output_path.read_text(encoding="utf-8"))
+
+        synced = sync_control_plane_snapshot_to_postgres(
+            snapshot_path=output_path,
+            truncate_first=True,
+        )
+        self.assertEqual(synced["status"], "synced")
+        self.assertEqual(synced["excluded_pg_only_durable_runtime_tables"], _EXPECTED_EXCLUSION_GAP)
+        for table_name in _NONPORTABLE_COORDINATION_TABLES:
+            self.assertEqual(self._coordination_rows(table_name), coordination_baseline[table_name])
+
+        for table_name in _NONPORTABLE_COORDINATION_TABLES:
+            with self.subTest(boundary="export", table_name=table_name):
+                with self.assertRaisesRegex(
+                    ValueError,
+                    f"cannot restore PG-only durable runtime tables: {table_name}",
+                ):
+                    export_control_plane_snapshot(
+                        runtime_dir=self.runtime_dir,
+                        output_path=Path(self.tempdir.name) / f"snapshot-{table_name}.json",
+                        source_backend="postgres",
+                        tables=[table_name],
+                    )
+            with self.subTest(boundary="sync", table_name=table_name):
+                with self.assertRaisesRegex(
+                    ValueError,
+                    f"cannot restore PG-only durable runtime tables: {table_name}",
+                ):
+                    sync_control_plane_snapshot_to_postgres(
+                        snapshot_path=output_path,
+                        tables=[table_name],
+                    )
+            self.assertEqual(self._coordination_rows(table_name), coordination_baseline[table_name])
 
 
 if __name__ == "__main__":

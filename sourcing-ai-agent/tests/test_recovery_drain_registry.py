@@ -320,7 +320,7 @@ class RecoveryTickDrainCharacterizationTest(PGDurableRuntimeTestMixin, unittest.
         self.store.claim_workflow_command(command_id, lease_owner="dead-worker", lease_seconds=300)
         self.assertEqual(str(self.store.get_workflow_command(command_id).get("status") or ""), "claimed")
         # Backdate the lease to the past (authoritative adapter) to simulate expiry.
-        self.store._control_plane_postgres.execute_non_query(  # noqa: SLF001
+        self.store._control_plane_postgres._execute_non_query(  # noqa: SLF001
             "UPDATE workflow_commands SET lease_expires_at = %s WHERE command_id = %s",
             ("2000-01-01T00:00:00+00:00", command_id),
         )

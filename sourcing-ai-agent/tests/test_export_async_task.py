@@ -304,7 +304,7 @@ class ExportAsyncTaskTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertTrue(task_id)
             # A worker claims it then dies before mark_running -> stranded 'claimed'.
             self.store.claim_workflow_command(task_id, lease_owner="dead-worker", lease_seconds=300)
-            self.store._control_plane_postgres.execute_non_query(  # noqa: SLF001
+            self.store._control_plane_postgres._execute_non_query(  # noqa: SLF001
                 "UPDATE workflow_commands SET lease_expires_at = %s WHERE command_id = %s",
                 ("2000-01-01T00:00:00+00:00", task_id),
             )

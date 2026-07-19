@@ -142,7 +142,7 @@ def test_d0f_real_pg_migration_exact_replay_isolation_concurrency_tamper_and_tom
             scripted_envelope,
             canonical_result_digest=_digest("tampered-result"),
         ).to_canonical_json()
-        adapter.execute_non_query(
+        adapter._execute_non_query(
             "UPDATE model_invocation_envelopes SET envelope_record_json = %s "
             "WHERE runtime_namespace = %s AND provider_mode = %s AND workspace_id = %s "
             "AND scope_digest = %s AND coordination_plan_review_id = %s "
@@ -169,7 +169,7 @@ def test_d0f_real_pg_migration_exact_replay_isolation_concurrency_tamper_and_tom
                 model_invocation_envelope_ref=scripted_row["model_invocation_envelope_ref"],
                 envelope_digest=scripted_row["envelope_digest"],
             )
-        adapter.execute_non_query(
+        adapter._execute_non_query(
             "UPDATE model_invocation_envelopes SET envelope_record_json = %s "
             "WHERE runtime_namespace = %s AND provider_mode = %s AND workspace_id = %s "
             "AND scope_digest = %s AND coordination_plan_review_id = %s "
@@ -192,7 +192,7 @@ def test_d0f_real_pg_migration_exact_replay_isolation_concurrency_tamper_and_tom
         )
 
         with pytest.raises(Exception, match="model_invocation_envelopes_provider_mode_shape_ck"):
-            adapter.execute_non_query(
+            adapter._execute_non_query(
                 "UPDATE model_invocation_envelopes SET provider_mode = 'replay' "
                 "WHERE runtime_namespace = %s AND provider_mode = %s AND workspace_id = %s "
                 "AND scope_digest = %s AND coordination_plan_review_id = %s "
@@ -212,7 +212,7 @@ def test_d0f_real_pg_migration_exact_replay_isolation_concurrency_tamper_and_tom
                 ),
             )
 
-        adapter.execute_non_query(
+        adapter._execute_non_query(
             "UPDATE model_invocation_envelopes "
             "SET created_at = transaction_timestamp() - interval '31 days', "
             "retained_until = transaction_timestamp() - interval '1 day' "

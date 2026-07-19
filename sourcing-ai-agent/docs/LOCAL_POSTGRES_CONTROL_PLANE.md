@@ -244,9 +244,13 @@ pg_ctl -D "$LOCAL_PG_DATA" -l "$LOCAL_PG_RUN/postgres.log" -o "-k $LOCAL_PG_RUN 
   （`workflow_commands`、`workflow_events`、`workflow_current_state`、`runtime_outbox`、`agent_actions`、
   `operation_runs`、`agent_tool_result_slots` / `agent_tool_result_attempts` / `agent_tool_result_journal`、
   `workflow_activity_runs`、`workflow_activity_attempts`、`workflow_entity_deltas`、`operation_events`）
+  以及不可移植的 live execution/recovery/lease/cost-control 协调表
+  （`workflow_job_leases`、`workflow_recovery_intents`、`runtime_provider_limiter_leases`）
   一律不进入 generic export；snapshot 头部用 `excluded_pg_only_durable_runtime_tables` 显式记录这个 typed gap，
-  且所有 generic import/restore 边界（PG snapshot sync、runtime mirror sync、SQLite restore）都会拒绝这些表，
-  因此任何部分聚合都无法冒充完整恢复。durable runtime 的备份/恢复必须走 quiesced 的 PG 逻辑备份，而不是 generic snapshot。
+  且所有 generic import/restore 边界（PG snapshot sync、runtime mirror sync、SQLite restore）在导入前强制要求
+  这份 exact schema-versioned exclusion declaration（缺失或不匹配即拒绝）、拒绝这些表、并把验证过的 gap 复制到
+  每个 restore/sync/cloud-import summary，因此任何部分聚合或 live 协调切片都无法冒充完整恢复。
+  durable runtime 的备份/恢复必须走 quiesced 的 PG 逻辑备份，而不是 generic snapshot。
 - 如果要把环境迁到另一台 Mac，优先使用：
   - Postgres logical dump
   - `.local-postgres.env`

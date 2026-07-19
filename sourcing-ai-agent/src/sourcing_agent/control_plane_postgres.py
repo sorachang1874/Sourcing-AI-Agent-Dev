@@ -30,7 +30,7 @@ LEGACY_TARGET_PUBLIC_WEB_TABLES = (
     "target_candidate_public_web_promotions",
 )
 
-GENERIC_POSTGRES_IMPORT_EXCLUDED_TABLES = frozenset(
+PG_ONLY_DURABLE_RUNTIME_CAUSAL_AGGREGATE_TABLES = frozenset(
     {
         # The durable runtime is one PG-only causal aggregate: commands, their
         # event/current-state/outbox children, the Action/Operation rows that
@@ -57,11 +57,33 @@ GENERIC_POSTGRES_IMPORT_EXCLUDED_TABLES = frozenset(
     }
 )
 
+NONPORTABLE_RUNTIME_COORDINATION_TABLES = frozenset(
+    {
+        # Live execution/recovery/lease/cost-control coordination state.  Job
+        # leases and recovery intents fence current owners and pending
+        # takeovers; provider limiter leases cap cross-process provider
+        # concurrency.  Generic export/import can neither observe nor mutate
+        # them: exporting would snapshot live fencing state, and a generic
+        # restore (truncate/upsert) could resurrect work, block current
+        # owners, or clear active limiter leases and admit provider calls
+        # beyond the configured concurrency budget.  They are excluded at
+        # export and at every generic restore boundary.
+        "workflow_job_leases",
+        "workflow_recovery_intents",
+        "runtime_provider_limiter_leases",
+    }
+)
+
+GENERIC_POSTGRES_IMPORT_EXCLUDED_TABLES = frozenset(
+    PG_ONLY_DURABLE_RUNTIME_CAUSAL_AGGREGATE_TABLES | NONPORTABLE_RUNTIME_COORDINATION_TABLES
+)
+
 DEFAULT_CONTROL_PLANE_TABLES = [
     # Portable projection/domain control-plane inventory used by generic
     # snapshot export and migration-only runtime sync.  The complete PG-only
-    # durable runtime causal aggregate is deliberately absent; see
-    # GENERIC_POSTGRES_IMPORT_EXCLUDED_TABLES.
+    # durable runtime causal aggregate and the nonportable live
+    # execution/recovery/lease/cost-control coordination tables are
+    # deliberately absent; see GENERIC_POSTGRES_IMPORT_EXCLUDED_TABLES.
     "candidates",
     "evidence",
     "jobs",
@@ -102,8 +124,6 @@ DEFAULT_CONTROL_PLANE_TABLES = [
     "agent_runtime_sessions",
     "agent_trace_spans",
     "agent_worker_runs",
-    "workflow_job_leases",
-    "workflow_recovery_intents",
     "acquisition_plan_previews",
     "acquisition_runs",
     "acquisition_discovery_lanes",
@@ -135,7 +155,6 @@ DEFAULT_CONTROL_PLANE_TABLES = [
     "linkedin_profile_registry_leases",
     "linkedin_profile_registry_events",
     "linkedin_profile_registry_backfill_runs",
-    "runtime_provider_limiter_leases",
     "model_invocation_envelopes",
 ]
 
@@ -639,6 +658,7 @@ def sync_control_plane_snapshot_to_postgres(
     snapshot_payload = json.loads(resolved_snapshot_path.read_text(encoding="utf-8"))
     tables_payload = dict(snapshot_payload.get("tables") or {})
     selected_tables = _resolve_snapshot_table_names(snapshot_payload=snapshot_payload, tables=tables)
+    verified_exclusion_gap = _require_snapshot_exclusion_declaration(snapshot_payload)
     _reject_generic_postgres_import_tables(selected_tables)
     effective_dsn = str(dsn or resolve_control_plane_postgres_dsn(resolved_snapshot_path)).strip()
     effective_schema = resolve_control_plane_postgres_schema(resolved_snapshot_path)
@@ -739,6 +759,7 @@ def sync_control_plane_snapshot_to_postgres(
         "snapshot_path": str(resolved_snapshot_path),
         "table_count": len(synced_tables),
         "tables": synced_tables,
+        "excluded_pg_only_durable_runtime_tables": verified_exclusion_gap,
         "validated_postgres": bool(validate_postgres),
         "validation": {
             "mode": "exact" if truncate_first else "at_least",
@@ -765,6 +786,7 @@ def restore_control_plane_snapshot_to_sqlite(
     ).expanduser()
     target_sqlite_path.parent.mkdir(parents=True, exist_ok=True)
     selected_tables = _resolve_snapshot_table_names(snapshot_payload=snapshot_payload, tables=tables)
+    verified_exclusion_gap = _require_snapshot_exclusion_declaration(snapshot_payload)
     _reject_generic_postgres_import_tables(selected_tables)
     tables_payload = dict(snapshot_payload.get("tables") or {})
     restored_tables: dict[str, Any] = {}
@@ -810,6 +832,7 @@ def restore_control_plane_snapshot_to_sqlite(
         "sqlite_path": str(target_sqlite_path),
         "table_count": len(restored_tables),
         "tables": restored_tables,
+        "excluded_pg_only_durable_runtime_tables": verified_exclusion_gap,
     }
 
 
@@ -1140,7 +1163,7 @@ def _write_control_plane_snapshot_json(
     temp_path = output_path.with_suffix(f"{output_path.suffix}.tmp")
     table_summaries: dict[str, dict[str, int]] = {}
     header_fields = [
-        ("schema_version", 1),
+        ("schema_version", _CONTROL_PLANE_SNAPSHOT_SCHEMA_VERSION),
         ("created_at", _utc_now_iso()),
         ("runtime_dir", str(runtime_root)),
         ("sqlite_path", sqlite_path),
@@ -1148,9 +1171,11 @@ def _write_control_plane_snapshot_json(
         ("include_all_sqlite_tables", bool(include_all_sqlite_tables)),
         ("requested_tables", list(requested_tables)),
         # Typed explicit gap: the snapshot is a projection/domain-only
-        # export.  The complete PG-only durable runtime causal aggregate is
-        # never carried by generic snapshots, and every generic import
-        # boundary rejects it, so no partial aggregate can pass as complete.
+        # export.  The complete PG-only durable runtime causal aggregate and
+        # the nonportable live coordination/cost-control tables are never
+        # carried by generic snapshots, every generic import boundary rejects
+        # them, and every generic import requires this exact declaration
+        # before restoring, so no partial aggregate can pass as complete.
         ("excluded_pg_only_durable_runtime_tables", sorted(GENERIC_POSTGRES_IMPORT_EXCLUDED_TABLES)),
     ]
     with temp_path.open("w", encoding="utf-8") as handle:
@@ -1903,6 +1928,43 @@ def _exclude_pg_only_durable_runtime_tables(table_names: list[str]) -> list[str]
     """
 
     return [table_name for table_name in table_names if table_name not in GENERIC_POSTGRES_IMPORT_EXCLUDED_TABLES]
+
+
+_CONTROL_PLANE_SNAPSHOT_SCHEMA_VERSION = 1
+
+
+def _require_snapshot_exclusion_declaration(snapshot_payload: dict[str, Any]) -> list[str]:
+    """Require the exact schema-versioned exclusion declaration before generic import.
+
+    Generic restore must never report an old or handcrafted snapshot as
+    successfully restored without durable proof that the producer
+    intentionally omitted the PG-only durable runtime aggregate and the
+    nonportable coordination tables.  The declaration is exact: the snapshot
+    schema version must match and the declared exclusion set must equal the
+    current non-portable registry; a missing, partial, or drifted declaration
+    fails closed.  Returns the verified gap so every restore summary can
+    propagate it.
+    """
+
+    schema_version = snapshot_payload.get("schema_version")
+    if type(schema_version) is not int or schema_version != _CONTROL_PLANE_SNAPSHOT_SCHEMA_VERSION:
+        raise ValueError(
+            "Generic control-plane snapshot import requires an exact schema-versioned exclusion declaration: "
+            f"snapshot schema_version must be {_CONTROL_PLANE_SNAPSHOT_SCHEMA_VERSION}, got {schema_version!r}."
+        )
+    expected = sorted(GENERIC_POSTGRES_IMPORT_EXCLUDED_TABLES)
+    declared = snapshot_payload.get("excluded_pg_only_durable_runtime_tables")
+    if (
+        not isinstance(declared, list)
+        or any(type(item) is not str for item in declared)
+        or sorted(declared) != expected
+    ):
+        raise ValueError(
+            "Generic control-plane snapshot import requires an exact schema-versioned exclusion declaration: "
+            "excluded_pg_only_durable_runtime_tables must exactly match the current non-portable registry; "
+            "re-export the snapshot with the current exporter."
+        )
+    return expected
 
 
 def _reject_generic_postgres_import_tables(table_names: list[str] | tuple[str, ...]) -> None:

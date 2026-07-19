@@ -456,6 +456,88 @@ def _workflow_command_lifecycle_state(workflow_command: dict[str, Any], *, hold_
     return "progressed"
 
 
+def _verify_progressed_workflow_command_children(
+    *,
+    workflow_command: dict[str, Any],
+    child_commands: list[dict[str, Any]],
+    workflow_events: list[dict[str, Any]],
+) -> None:
+    """Require every progressed downstream edge to resolve to a real locked child.
+
+    A ``progressed`` root links children only through the root-completion owner
+    path, which commits the child command, its ``CommandPlanRequested`` workflow
+    event, and the root ``downstream_command_ids`` edge in one transaction.
+    Inspect must therefore re-verify that exact physical lineage for every
+    referenced identifier instead of trusting the edge list: the child row must
+    exist (locked ``FOR UPDATE`` by the base-owner loader), belong to the same
+    workflow run and operation, point back at the root through
+    ``parent_command_id``, carry payload causality that matches its own columns,
+    and reference exactly one same-run ``CommandPlanRequested`` event that names
+    the root command and the child command type/idempotency pair.
+    """
+
+    root_contract = _canonical_workflow_command_contract(workflow_command)
+    root_command_id = str(root_contract["command_id"] or "")
+    root_workflow_run_id = str(root_contract["workflow_run_id"] or "")
+    root_operation_id = str(root_contract["operation_id"] or "")
+    downstream_ids = list(root_contract["downstream_command_ids"])
+    children_by_id: dict[str, dict[str, Any]] = {}
+    for child in child_commands:
+        child_contract = _canonical_workflow_command_contract(child)
+        child_id = str(child_contract["command_id"] or "")
+        if not child_id or child_id in children_by_id:
+            raise ValueError("agent tool inspect result workflow command link mismatch")
+        children_by_id[child_id] = child_contract
+    if set(children_by_id) != set(downstream_ids):
+        raise ValueError("agent tool inspect result workflow command link mismatch")
+    for child_id in downstream_ids:
+        child_contract = children_by_id[child_id]
+        child_command_type = str(child_contract["command_type"] or "")
+        child_idempotency_key = str(child_contract["idempotency_key"] or "")
+        source_event_id = str(child_contract["source_event_id"] or "")
+        if (
+            str(child_contract["workflow_run_id"] or "") != root_workflow_run_id
+            or str(child_contract["operation_id"] or "") != root_operation_id
+            or str(child_contract["parent_command_id"] or "") != root_command_id
+            or not source_event_id
+            or str(child_contract["source_event_type"] or "") != "CommandPlanRequested"
+        ):
+            raise ValueError("agent tool inspect result workflow command link mismatch")
+        child_causality = child_contract["payload"].get("causality")
+        if not isinstance(child_causality, dict) or (
+            str(child_causality.get("workflow_run_id") or "") != root_workflow_run_id
+            or str(child_causality.get("operation_id") or "") != root_operation_id
+            or str(child_causality.get("command_type") or "") != child_command_type
+            or str(child_causality.get("owner") or "") != str(child_contract["owner"] or "")
+            or str(child_causality.get("idempotency_key") or "") != child_idempotency_key
+            or str(child_causality.get("parent_command_id") or "") != root_command_id
+            or str(child_causality.get("source_event_id") or "") != source_event_id
+            or str(child_causality.get("source_event_type") or "") != "CommandPlanRequested"
+        ):
+            raise ValueError("agent tool inspect result workflow command link mismatch")
+        source_events = [event for event in workflow_events if str(event.get("event_id") or "") == source_event_id]
+        if len(source_events) != 1:
+            raise ValueError("agent tool inspect result workflow command link mismatch")
+        source_event = source_events[0]
+        event_payload = _required_json_dict(
+            source_event.get("payload_json"),
+            field="workflow child plan event payload",
+        )
+        if (
+            str(source_event.get("workflow_run_id") or "") != root_workflow_run_id
+            or str(source_event.get("operation_id") or "") != root_operation_id
+            or str(source_event.get("command_id") or "") != root_command_id
+            or str(source_event.get("activity_attempt_id") or "") != ""
+            or str(source_event.get("event_family") or "") != "workflow_event"
+            or str(source_event.get("event_type") or "") != "CommandPlanRequested"
+            or str(source_event.get("schema_version") or "") != "workflow_event_v1"
+            or str(event_payload.get("command_type") or "") != child_command_type
+            or str(event_payload.get("idempotency_key") or "") != child_idempotency_key
+            or str(event_payload.get("parent_command_id") or "") != root_command_id
+        ):
+            raise ValueError("agent tool inspect result workflow command link mismatch")
+
+
 def _operation_command_planned_event_identity(
     event: dict[str, Any],
     event_payload: dict[str, Any],
@@ -800,6 +882,7 @@ def load_inspect_operation_base_owner(
         and str(operation.get("action_id") or "") == action_id
     )
     commands: list[dict[str, Any]] = []
+    child_commands: list[dict[str, Any]] = []
     events_desc: list[dict[str, Any]] = []
     action_events_desc: list[dict[str, Any]] = []
     workflow_events: list[dict[str, Any]] = []
@@ -838,6 +921,31 @@ def load_inspect_operation_base_owner(
             (workflow_run_id,),
         )
         workflow_events = _fetch_all_dict_rows(cursor)
+    if len(commands) == 1:
+        # A progressed root links children through the root-completion owner
+        # path; lock every referenced child row (after the root and workflow
+        # event locks, mirroring that owner path's lock order) so the lifecycle
+        # verification re-checks the exact physical lineage instead of trusting
+        # the persisted identifier list.
+        try:
+            referenced_child_ids = _required_json_list(
+                commands[0].get("downstream_command_ids_json"),
+                field="workflow command downstream_command_ids",
+            )
+        except ValueError:
+            referenced_child_ids = []
+        locked_child_ids = sorted(
+            {item for item in referenced_child_ids if type(item) is str and item},
+            key=lambda value: value.encode("utf-8"),
+        )
+        for locked_child_id in locked_child_ids:
+            cursor.execute(
+                "SELECT * FROM workflow_commands WHERE command_id = %s FOR UPDATE",
+                (locked_child_id,),
+            )
+            child_row = _fetch_one_dict_row(cursor, cursor.fetchone())
+            if child_row is not None:
+                child_commands.append(child_row)
     if exact_owner:
         cursor.execute(
             "SELECT * FROM operation_events "
@@ -886,6 +994,7 @@ def load_inspect_operation_base_owner(
         "action": action,
         "operation_run": operation,
         "workflow_commands": commands,
+        "workflow_child_commands": child_commands,
         "operation_events_desc": events_desc,
         "action_events_desc": action_events_desc,
         "workflow_events": workflow_events,
@@ -904,6 +1013,7 @@ def _validate_start_acceptance_physical_dependencies(
     workflow_events: list[dict[str, Any]],
     start_result_slots: list[dict[str, Any]],
     planned_event: dict[str, Any],
+    child_commands: list[dict[str, Any]],
 ) -> None:
     """Bind the closed acceptance ref to every immutable physical owner."""
 
@@ -1108,7 +1218,13 @@ def _validate_start_acceptance_physical_dependencies(
         for event in expected_rows["workflow_events"]
         if str(event.get("event_type") or "") == "CommandPlanRequested"
     )
-    _workflow_command_lifecycle_state(workflow_command, hold_until=_RESULT_ACCEPTANCE_HOLD_UNTIL)
+    lifecycle_state = _workflow_command_lifecycle_state(workflow_command, hold_until=_RESULT_ACCEPTANCE_HOLD_UNTIL)
+    if lifecycle_state == "progressed":
+        _verify_progressed_workflow_command_children(
+            workflow_command=workflow_command,
+            child_commands=child_commands,
+            workflow_events=workflow_events,
+        )
     if (
         not json_contract_equal(owner_result_ref, expected_rows["owner_result_ref"])
         or not json_contract_equal(
@@ -1370,6 +1486,7 @@ def terminal_from_locked_inspect_operation_owner(
                     workflow_events=list(base_owner.get("workflow_events") or []),
                     start_result_slots=list(base_owner.get("start_result_slots") or []),
                     planned_event=plan_event,
+                    child_commands=list(base_owner.get("workflow_child_commands") or []),
                 )
         selected_plan_event = next(
             evidence for evidence in event_evidence if evidence["event_id"] == str(plan_event.get("event_id") or "")

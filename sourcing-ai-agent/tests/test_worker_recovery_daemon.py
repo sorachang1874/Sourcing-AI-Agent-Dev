@@ -10,8 +10,8 @@ from sourcing_agent.agent_runtime import AgentRuntimeCoordinator
 from sourcing_agent.connectors import CompanyIdentity
 from sourcing_agent.domain import Candidate, JobRequest
 from sourcing_agent.storage import ControlPlaneStore
-from tests.pg_store_fixture import PGControlPlaneStoreTestMixin
 from sourcing_agent.worker_daemon import PersistentWorkerRecoveryDaemon
+from tests.pg_store_fixture import PGControlPlaneStoreTestMixin
 
 
 class _FakeSearchSeedAcquirer:
@@ -1011,7 +1011,7 @@ class PersistentWorkerRecoveryDaemonTest(PGControlPlaneStoreTestMixin, unittest.
         # Backdate the AUTHORITATIVE row (PG) — a SQLite-shadow UPDATE would
         # leave the row the recovery scan actually reads untouched.
         backdated_at = (datetime.now(timezone.utc) - timedelta(seconds=600)).isoformat()
-        self.controller_store._control_plane_postgres.execute_non_query(
+        self.controller_store._control_plane_postgres._execute_non_query(
             "UPDATE agent_worker_runs SET updated_at = %s WHERE worker_id = %s",
             (backdated_at, int(handle.worker_id)),
         )

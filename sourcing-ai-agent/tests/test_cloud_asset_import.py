@@ -13,7 +13,10 @@ from sourcing_agent.cloud_asset_import import (
     hydrate_cloud_generation,
     import_cloud_assets,
 )
-from sourcing_agent.control_plane_postgres import control_plane_snapshot_output_path
+from sourcing_agent.control_plane_postgres import (
+    GENERIC_POSTGRES_IMPORT_EXCLUDED_TABLES,
+    control_plane_snapshot_output_path,
+)
 from sourcing_agent.domain import Candidate, make_evidence_id
 from sourcing_agent.local_postgres import _LOCAL_POSTGRES_ENV_KEYS
 from sourcing_agent.object_storage import ObjectStorageConfig, build_object_storage_client
@@ -805,6 +808,7 @@ class CloudAssetImportTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             json.dumps(
                 {
                     "schema_version": 1,
+                    "excluded_pg_only_durable_runtime_tables": sorted(GENERIC_POSTGRES_IMPORT_EXCLUDED_TABLES),
                     "tables": {
                         "workflow_commands": {
                             "columns": [

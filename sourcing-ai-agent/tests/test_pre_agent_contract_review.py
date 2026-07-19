@@ -409,7 +409,19 @@ def test_agent_tool_result_aggregate_owner_contract_is_canonical() -> None:
     assert "agent_tool_result_slots" in start_result_row[header.index("Source of truth")]
     assert "acquisition.run.create" in start_result_row[header.index("Source of truth")]
     assert "owner-result target/ref/digest" in start_result_row[header.index("Source of truth")]
-    assert "not_before_at=9999-12-31 23:59:59" in start_result_row[header.index("Derivation")]
+    assert set(re.findall(r"`([^`]+)`", start_result_row[allowed_values_index])) == {
+        "pending_hold",
+        "released",
+        "progressed",
+        "accepted_replay",
+        "late_quarantined",
+    }
+    start_result_derivation = start_result_row[header.index("Derivation")]
+    assert "not_before_at=9999-12-31 23:59:59" in start_result_derivation
+    assert "downstream_command_ids" in start_result_derivation
+    assert "parent_command_id" in start_result_derivation
+    assert "CommandPlanRequested" in start_result_derivation
+    assert "complete_acquisition_root_command" in start_result_derivation
     assert "prepare_start_acquisition_tool_result" in start_result_row[header.index("Normal consumers")]
     assert "accept_start_acquisition_tool_result_uow" in start_result_row[header.index("Normal consumers")]
     assert "Generic Operation dispatch/control" in start_result_row[header.index("Forbidden consumers")]

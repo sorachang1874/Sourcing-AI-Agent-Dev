@@ -439,3 +439,131 @@ def test_agent_start_v2_idempotency_identity_on_non_start_action_fails_closed() 
     action["idempotency_key"] = "agent-start-v2:" + "b" * 64
 
     assert classify_acquisition_start_v2_generic_control_provenance(action=action) == "partial_or_mixed_v2"
+
+
+def _erased_start_candidate_records() -> tuple[dict[str, Any], dict[str, Any]]:
+    """Return start-candidate records with every pin erased and carriers cleared."""
+
+    action, operation = _exact_records()
+    for record in (action, operation):
+        _erase_all_pins(record)
+    _erase_start_snapshot_and_input_keys(action)
+    _erase_accepted_result_carriers(action, operation)
+    return action, operation
+
+
+def _legacy_coherent_pins(record: dict[str, Any]) -> None:
+    legacy_version, legacy_digest = (
+        str(DEFAULT_ACTION_REGISTRY.spec_for(ACTION_START_ACQUISITION_RUN).request_schema_version or ""),
+        str(DEFAULT_ACTION_REGISTRY.spec_for(ACTION_START_ACQUISITION_RUN).request_schema_digest or ""),
+    )
+    record["request_schema_version"] = legacy_version
+    record["request_schema_digest"] = legacy_digest
+
+
+_CORRUPT_CARRIER_CASES = (
+    "action_result_ref_schema_family_drift",
+    "operation_result_ref_schema_family_drift",
+    "action_result_ref_malformed_json",
+    "action_metadata_malformed_json",
+    "operation_workflow_ref_malformed_json",
+    "action_idempotency_blank_suffix",
+    "operation_idempotency_blank_suffix",
+    "occurrence_ref_present_but_malformed",
+    "operation_workflow_ref_split_owner",
+    "operation_workflow_ref_incomplete_ids",
+    "action_metadata_decoded_raw_conflict",
+    "action_result_ref_decoded_raw_conflict",
+)
+
+
+def _corrupt_carrier(records: tuple[dict[str, Any], dict[str, Any]], case: str) -> None:
+    action, operation = records
+    if case == "action_result_ref_schema_family_drift":
+        action["result_ref_json"] = {"schema_version": "acquisition_start_command_acceptance_owner_result_ref.v999"}
+    elif case == "operation_result_ref_schema_family_drift":
+        operation["result_ref_json"] = {"schema_version": "acquisition_start_command_acceptance.v2"}
+    elif case == "action_result_ref_malformed_json":
+        action["result_ref_json"] = "{not-json"
+    elif case == "action_metadata_malformed_json":
+        action["metadata_json"] = '["not", "a", "mapping"]'
+    elif case == "operation_workflow_ref_malformed_json":
+        operation["workflow_ref_json"] = "{not-json"
+    elif case == "action_idempotency_blank_suffix":
+        action["idempotency_key"] = "agent-start-v2:"
+    elif case == "operation_idempotency_blank_suffix":
+        operation["idempotency_key"] = "agent-start-v2:   "
+    elif case == "occurrence_ref_present_but_malformed":
+        action["metadata_json"] = {"result_occurrence_ref": copy.deepcopy(_MALFORMED_OCCURRENCE)}
+    elif case == "operation_workflow_ref_split_owner":
+        carrier = _start_workflow_ref_carrier()
+        carrier["owner"] = "drifted_owner"
+        operation["workflow_ref_json"] = carrier
+    elif case == "operation_workflow_ref_incomplete_ids":
+        carrier = _start_workflow_ref_carrier()
+        del carrier["command_id"]
+        operation["workflow_ref_json"] = carrier
+    elif case == "action_metadata_decoded_raw_conflict":
+        action["metadata"] = {"unrelated_key": True}
+        action["metadata_json"] = json.dumps({"other_key": 1})
+    elif case == "action_result_ref_decoded_raw_conflict":
+        action["result_ref"] = {"schema_version": "unrelated_ref.v1"}
+        action["result_ref_json"] = json.dumps({"schema_version": "other_ref.v2"})
+    else:  # pragma: no cover - parametrization guard
+        raise AssertionError(f"unknown corrupt carrier case {case}")
+
+
+@pytest.mark.parametrize("case", _CORRUPT_CARRIER_CASES)
+@pytest.mark.parametrize("pins", ("erased", "legacy_coherent"))
+def test_each_corrupt_start_carrier_forces_partial_or_mixed_v2(case: str, pins: str) -> None:
+    records = _erased_start_candidate_records()
+    if pins == "legacy_coherent":
+        for record in records:
+            _legacy_coherent_pins(record)
+    _corrupt_carrier(records, case)
+    action, operation = records
+    baseline = copy.deepcopy(records)
+
+    assert (
+        classify_acquisition_start_v2_generic_control_provenance(
+            action=action,
+            operation_run=operation,
+        )
+        == "partial_or_mixed_v2"
+    ), (case, pins)
+    preflight = acquisition_start_v2_generic_operation_control_preflight(
+        action=action,
+        operation_run=operation,
+    )
+
+    assert preflight["status"] == "invalid"
+    assert preflight["reason"] == ACQUISITION_START_V2_GENERIC_OPERATION_CONTROL_IDENTITY_MISMATCH
+    assert preflight["module_state_mutated"] is False
+    assert (action, operation) == baseline
+
+
+def test_drifted_start_acceptance_schema_family_on_non_start_action_fails_closed() -> None:
+    action = _schema_less_non_start_action()
+    action["result_ref"] = {"schema_version": "acquisition_start_command_acceptance_owner_result_ref.v999"}
+
+    assert classify_acquisition_start_v2_generic_control_provenance(action=action) == "partial_or_mixed_v2"
+
+
+def test_malformed_json_carriers_on_non_start_action_remain_ignored() -> None:
+    action = _schema_less_non_start_action()
+    action["metadata_json"] = "{not-json"
+    action["result_ref_json"] = "[1, 2]"
+    operation = {
+        "operation_run_id": "op-non-start-malformed",
+        "action_id": action["action_id"],
+        "workspace_id": action["workspace_id"],
+        "workflow_ref_json": "{not-json",
+    }
+
+    assert (
+        classify_acquisition_start_v2_generic_control_provenance(
+            action=action,
+            operation_run=operation,
+        )
+        == "non_v2"
+    )

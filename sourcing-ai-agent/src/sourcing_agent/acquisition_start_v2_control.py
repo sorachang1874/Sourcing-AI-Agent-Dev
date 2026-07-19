@@ -41,6 +41,55 @@ def action_mapping_field(record: Mapping[str, Any], decoded_field: str, json_fie
     return dict(loaded) if isinstance(loaded, dict) else {}
 
 
+_JSON_CARRIER_ABSENT = "absent"
+_JSON_CARRIER_DECODED = "decoded"
+_JSON_CARRIER_MALFORMED = "malformed"
+_JSON_CARRIER_CONFLICT = "conflict"
+
+
+def _json_carrier_state(
+    record: Mapping[str, Any],
+    decoded_field: str,
+    json_field: str,
+) -> tuple[str, dict[str, Any]]:
+    """Decode one JSON mapping carrier into an explicit tri-state-plus-conflict value.
+
+    ``action_mapping_field`` collapses malformed or conflicting carriers to
+    ``{}``, which silently erases provenance.  Provenance classification must
+    instead distinguish a genuinely absent carrier from a present-but-malformed
+    one, and from a record whose decoded and raw JSON forms disagree, so that a
+    corrupt start carrier can never be silently treated as missing.
+    """
+
+    decoded_value = record.get(decoded_field)
+    raw_value = record.get(json_field)
+    decoded_mapping = dict(decoded_value) if isinstance(decoded_value, Mapping) else None
+    raw_mapping: dict[str, Any] | None = None
+    raw_present = raw_value is not None and raw_value != ""
+    raw_malformed = False
+    if isinstance(raw_value, Mapping):
+        raw_mapping = dict(raw_value)
+    elif raw_present:
+        try:
+            loaded = json.loads(str(raw_value))
+        except (TypeError, ValueError, json.JSONDecodeError):
+            raw_malformed = True
+        else:
+            if isinstance(loaded, Mapping):
+                raw_mapping = dict(loaded)
+            else:
+                raw_malformed = True
+    if decoded_mapping is not None:
+        if raw_malformed or (raw_mapping is not None and raw_mapping != decoded_mapping):
+            return _JSON_CARRIER_CONFLICT, {}
+        return _JSON_CARRIER_DECODED, decoded_mapping
+    if decoded_value is not None and decoded_value != "":
+        return _JSON_CARRIER_MALFORMED, {}
+    if raw_malformed or raw_present:
+        return (_JSON_CARRIER_DECODED, raw_mapping) if raw_mapping is not None else (_JSON_CARRIER_MALFORMED, {})
+    return _JSON_CARRIER_ABSENT, {}
+
+
 def _exact_result_contract_pins(record: Mapping[str, Any]) -> bool:
     return (
         str(record.get("result_schema_version") or "") == ACQUISITION_START_V2_RESULT_SPEC.result_schema_version
@@ -106,68 +155,103 @@ def _has_drifted_start_v2_pin_on_start_candidate(record: Mapping[str, Any]) -> b
     return False
 
 
-def _has_acceptance_owner_ref_marker(record: Mapping[str, Any]) -> bool:
-    """Return whether the persisted acceptance owner-result-ref schema survives."""
+_CARRIER_ABSENT = "absent"
+_CARRIER_EXACT = "exact"
+_CARRIER_CORRUPT = "corrupt"
 
-    result_ref = action_mapping_field(record, "result_ref", "result_ref_json")
-    return str(result_ref.get("schema_version") or "") == ACQUISITION_START_COMMAND_ACCEPTANCE_OWNER_REF_SCHEMA_VERSION
+_ACQUISITION_START_COMMAND_ACCEPTANCE_SCHEMA_FAMILY = "acquisition_start_command_acceptance"
+_AGENT_START_V2_IDEMPOTENCY_PREFIX = "agent-start-v2:"
 
 
-def _has_start_v2_idempotency_identity(record: Mapping[str, Any]) -> bool:
-    """Return whether the owner-bound ``agent-start-v2:`` idempotency identity survives."""
+def _acceptance_owner_ref_carrier_state(result_ref: Mapping[str, Any]) -> str:
+    """Tri-state the persisted acceptance owner-result-ref carrier.
+
+    A ``schema_version`` from the start-acceptance schema family remains
+    start-specific provenance even when its exact version drifted; only a
+    completely unrelated or missing schema is genuinely absent.
+    """
+
+    schema_version = result_ref.get("schema_version")
+    if schema_version == ACQUISITION_START_COMMAND_ACCEPTANCE_OWNER_REF_SCHEMA_VERSION:
+        return _CARRIER_EXACT
+    if type(schema_version) is str and schema_version.startswith(_ACQUISITION_START_COMMAND_ACCEPTANCE_SCHEMA_FAMILY):
+        return _CARRIER_CORRUPT
+    return _CARRIER_ABSENT
+
+
+def _start_v2_idempotency_carrier_state(record: Mapping[str, Any]) -> str:
+    """Tri-state the owner-bound ``agent-start-v2:`` idempotency identity."""
 
     idempotency_key = record.get("idempotency_key")
-    return (
-        type(idempotency_key) is str
-        and idempotency_key.startswith("agent-start-v2:")
-        and bool(idempotency_key.removeprefix("agent-start-v2:").strip())
-    )
+    if type(idempotency_key) is not str or not idempotency_key.startswith(_AGENT_START_V2_IDEMPOTENCY_PREFIX):
+        return _CARRIER_ABSENT
+    if idempotency_key.removeprefix(_AGENT_START_V2_IDEMPOTENCY_PREFIX).strip():
+        return _CARRIER_EXACT
+    return _CARRIER_CORRUPT
 
 
-def _has_owner_bound_occurrence_marker(action: Mapping[str, Any], *, action_metadata: Mapping[str, Any]) -> bool:
-    """Return whether the owner-bound occurrence reference survives.
+def _owner_bound_occurrence_carrier_state(
+    action: Mapping[str, Any],
+    *,
+    action_metadata: Mapping[str, Any],
+    start_candidate: bool,
+) -> str:
+    """Tri-state the owner-bound occurrence reference carrier.
 
     A well-formed ``result_occurrence_ref`` is start-v2 provenance only when it
     is bound to the start owner: either the action carries the matching
     ``agent-start-v2:<logical_occurrence_digest>`` idempotency pair, or the
     action is itself a start candidate.  Stray occurrence-shaped metadata on
-    non-start actions remains ignored so it cannot reserve legacy actions.
+    non-start actions remains ignored so it cannot reserve legacy actions; on a
+    start candidate, or paired with an exact ``agent-start-v2:`` idempotency
+    identity, a present-but-malformed occurrence reference is corrupt instead.
     """
 
+    if "result_occurrence_ref" not in action_metadata or action_metadata.get("result_occurrence_ref") is None:
+        return _CARRIER_ABSENT
     occurrence_ref = action_metadata.get("result_occurrence_ref")
-    if not _exact_result_occurrence_ref(occurrence_ref):
-        return False
-    logical_occurrence_digest = str(dict(occurrence_ref)["logical_occurrence_digest"])
-    return bool(
-        str(action.get("idempotency_key") or "") == f"agent-start-v2:{logical_occurrence_digest}"
-        or str(action.get("action_type") or "").strip() == ACTION_START_ACQUISITION_RUN
-    )
+    if _exact_result_occurrence_ref(occurrence_ref):
+        logical_occurrence_digest = str(dict(occurrence_ref)["logical_occurrence_digest"])
+        owner_bound = bool(
+            str(action.get("idempotency_key") or "") == f"agent-start-v2:{logical_occurrence_digest}" or start_candidate
+        )
+        return _CARRIER_EXACT if owner_bound else _CARRIER_ABSENT
+    if start_candidate or _start_v2_idempotency_carrier_state(action) == _CARRIER_EXACT:
+        return _CARRIER_CORRUPT
+    return _CARRIER_ABSENT
 
 
-def _has_start_workflow_reference_marker(operation: Mapping[str, Any]) -> bool:
-    """Return whether the Operation start workflow reference survives.
+def _start_workflow_reference_carrier_state(
+    operation: Mapping[str, Any],
+    *,
+    workflow_ref: Mapping[str, Any],
+) -> str:
+    """Tri-state the Operation start workflow reference carrier.
 
     The legacy schema-defined start path persists the same
-    ``acquisition.run.create`` workflow reference, so the reference alone is
-    ambiguous.  It is start-v2 provenance only when the Operation cannot be
-    explained as a coherent legacy start, i.e. when it does not carry the
-    exact legacy request pin pair.
+    ``acquisition.run.create`` workflow reference, so a complete reference alone
+    is ambiguous: it is start-v2 provenance only when the Operation cannot be
+    explained as a coherent legacy start, i.e. when it does not carry the exact
+    legacy request pin pair.  A split reference (exactly one of the
+    command-type/owner pair survives) or an incomplete one (the pair survives
+    without both identifiers) can never be legacy-coherent and is corrupt.
     """
 
-    workflow_ref = action_mapping_field(operation, "workflow_ref", "workflow_ref_json")
     spec = DEFAULT_ACTION_REGISTRY.spec_for(ACTION_START_ACQUISITION_RUN)
-    if (
-        str(workflow_ref.get("command_type") or "") != str(spec.default_workflow_command_type or "")
-        or str(workflow_ref.get("owner") or "") != str(spec.owner_module or "")
-        or not str(workflow_ref.get("workflow_run_id") or "")
-        or not str(workflow_ref.get("command_id") or "")
-    ):
-        return False
+    command_type_matches = str(workflow_ref.get("command_type") or "") == str(spec.default_workflow_command_type or "")
+    owner_matches = str(workflow_ref.get("owner") or "") == str(spec.owner_module or "")
+    if command_type_matches != owner_matches:
+        return _CARRIER_CORRUPT
+    if not command_type_matches:
+        return _CARRIER_ABSENT
+    if not str(workflow_ref.get("workflow_run_id") or "") or not str(workflow_ref.get("command_id") or ""):
+        return _CARRIER_CORRUPT
     legacy_version, legacy_digest = _legacy_start_request_pin_pair()
-    return not (
+    legacy_coherent = (
         str(operation.get("request_schema_version") or "") == legacy_version
         and str(operation.get("request_schema_digest") or "") == legacy_digest
     )
+    return _CARRIER_ABSENT if legacy_coherent else _CARRIER_EXACT
 
 
 def _exact_result_occurrence_ref(value: object) -> bool:
@@ -272,7 +356,16 @@ def classify_acquisition_start_v2_generic_control_provenance(
     - ``exact_v2``: the known current start-v2 provenance is complete enough to report the normal unsupported reason.
     - ``partial_or_mixed_v2``: any start-v2 marker is present, corrupt, downgraded, or split; generic controls fail closed.
 
-    Provenance markers are intentionally independent so that a compound
+    Every start carrier is tri-stated as ``absent`` / ``exact`` / ``corrupt``
+    instead of collapsing unrecognized content to absent: any present-but-
+    malformed start carrier on a start candidate, any start-specific
+    schema/prefix family member (a drifted start-acceptance owner-ref schema or
+    a blank-suffix ``agent-start-v2:`` idempotency key), any conflicting
+    decoded/raw JSON carrier, any malformed owner-bound occurrence reference,
+    and any split or incomplete start workflow reference all force
+    ``partial_or_mixed_v2`` and can never silently classify as ``non_v2``.
+
+    Exact provenance markers are intentionally independent so that a compound
     downgrade cannot erase them together: any exact current request/tool/result
     pin, a start-snapshot marker, preview input keys, the persisted acceptance
     owner-result-ref schema in Action/Operation result refs, the owner-bound
@@ -282,15 +375,47 @@ def classify_acquisition_start_v2_generic_control_provenance(
     """
 
     action_type = str(action.get("action_type") or "").strip()
-    action_input = action_mapping_field(action, "input", "input_json")
-    action_target = action_mapping_field(action, "target_ref", "target_ref_json")
-    action_metadata = action_mapping_field(action, "metadata", "metadata_json")
+    start_candidate = action_type == ACTION_START_ACQUISITION_RUN
     operation = dict(operation_run or {})
+    action_input_state, action_input = _json_carrier_state(action, "input", "input_json")
+    action_target_state, action_target = _json_carrier_state(action, "target_ref", "target_ref_json")
+    action_metadata_state, action_metadata = _json_carrier_state(action, "metadata", "metadata_json")
+    action_result_ref_state, action_result_ref = _json_carrier_state(action, "result_ref", "result_ref_json")
+    operation_result_ref_state, operation_result_ref = _json_carrier_state(operation, "result_ref", "result_ref_json")
+    operation_workflow_ref_state, operation_workflow_ref = _json_carrier_state(
+        operation, "workflow_ref", "workflow_ref_json"
+    )
+    json_carrier_states = (
+        action_input_state,
+        action_target_state,
+        action_metadata_state,
+        action_result_ref_state,
+        operation_result_ref_state,
+        operation_workflow_ref_state,
+    )
+    corrupt_json_carrier = start_candidate and any(
+        state in {_JSON_CARRIER_MALFORMED, _JSON_CARRIER_CONFLICT} for state in json_carrier_states
+    )
+    carrier_states = (
+        _acceptance_owner_ref_carrier_state(action_result_ref),
+        _acceptance_owner_ref_carrier_state(operation_result_ref) if operation else _CARRIER_ABSENT,
+        _start_v2_idempotency_carrier_state(action),
+        _start_v2_idempotency_carrier_state(operation) if operation else _CARRIER_ABSENT,
+        _owner_bound_occurrence_carrier_state(
+            action,
+            action_metadata=action_metadata,
+            start_candidate=start_candidate,
+        ),
+        _start_workflow_reference_carrier_state(operation, workflow_ref=operation_workflow_ref)
+        if operation
+        else _CARRIER_ABSENT,
+    )
+    if corrupt_json_carrier or _CARRIER_CORRUPT in carrier_states:
+        return "partial_or_mixed_v2"
+
     action_v2_input_keys = {"preview_id", "preview_revision", "preview_digest"}
     action_input_key_set = {str(key) for key in action_input}
-    action_has_any_v2_input_key = action_type == ACTION_START_ACQUISITION_RUN and bool(
-        action_v2_input_keys & action_input_key_set
-    )
+    action_has_any_v2_input_key = start_candidate and bool(action_v2_input_keys & action_input_key_set)
     action_has_any_current_v2_pin = _has_any_current_start_v2_contract_pin(action)
     operation_has_any_current_v2_pin = bool(operation) and _has_any_current_start_v2_contract_pin(operation)
     start_snapshot = action_target.get("start_snapshot")
@@ -298,21 +423,25 @@ def classify_acquisition_start_v2_generic_control_provenance(
     action_has_v2_start_snapshot = bool(start_snapshot_mapping) and bool(
         start_snapshot_mapping.get("schema_version") or start_snapshot_mapping.get("snapshot_digest")
     )
-    start_candidate = action_type == ACTION_START_ACQUISITION_RUN
     action_has_v2_provenance = (
         action_has_any_current_v2_pin
         or action_has_v2_start_snapshot
         or action_has_any_v2_input_key
-        or _has_acceptance_owner_ref_marker(action)
-        or _has_start_v2_idempotency_identity(action)
-        or _has_owner_bound_occurrence_marker(action, action_metadata=action_metadata)
+        or _acceptance_owner_ref_carrier_state(action_result_ref) == _CARRIER_EXACT
+        or _start_v2_idempotency_carrier_state(action) == _CARRIER_EXACT
+        or _owner_bound_occurrence_carrier_state(
+            action,
+            action_metadata=action_metadata,
+            start_candidate=start_candidate,
+        )
+        == _CARRIER_EXACT
         or (start_candidate and _has_drifted_start_v2_pin_on_start_candidate(action))
     )
     operation_has_v2_provenance = bool(operation) and (
         operation_has_any_current_v2_pin
-        or _has_acceptance_owner_ref_marker(operation)
-        or _has_start_v2_idempotency_identity(operation)
-        or _has_start_workflow_reference_marker(operation)
+        or _acceptance_owner_ref_carrier_state(operation_result_ref) == _CARRIER_EXACT
+        or _start_v2_idempotency_carrier_state(operation) == _CARRIER_EXACT
+        or _start_workflow_reference_carrier_state(operation, workflow_ref=operation_workflow_ref) == _CARRIER_EXACT
         or (start_candidate and _has_drifted_start_v2_pin_on_start_candidate(operation))
     )
     if not action_has_v2_provenance and not operation_has_v2_provenance:

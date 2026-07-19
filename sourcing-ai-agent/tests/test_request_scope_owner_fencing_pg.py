@@ -18,7 +18,7 @@ def _seed_criteria_suggestion(
     feedback_job_id: str,
 ) -> None:
     adapter = store._control_plane_postgres  # noqa: SLF001
-    adapter.execute_non_query(
+    adapter._execute_non_query(
         """
         INSERT INTO criteria_feedback (
             feedback_id, job_id, feedback_type, payload_json, created_at
@@ -26,7 +26,7 @@ def _seed_criteria_suggestion(
         """,
         (suggestion_id, feedback_job_id),
     )
-    adapter.execute_non_query(
+    adapter._execute_non_query(
         """
         INSERT INTO criteria_pattern_suggestions (
             suggestion_id, target_company, source_feedback_id, source_job_id,
@@ -274,7 +274,7 @@ def test_postgres_owner_cas_rejects_stale_job_and_crm_snapshots() -> None:
         )
         assert applied["status"] == "applied"
         stale_job = dict(store.get_job("job-owner-cas") or {})
-        store._control_plane_postgres.execute_non_query(  # noqa: SLF001
+        store._control_plane_postgres._execute_non_query(  # noqa: SLF001
             "UPDATE jobs SET requester_id = %s, tenant_id = %s WHERE job_id = %s",
             ("bob", "user-bob", "job-owner-cas"),
         )
@@ -305,7 +305,7 @@ def test_postgres_owner_cas_rejects_stale_job_and_crm_snapshots() -> None:
                 "person_identity_key": "linkedin:owner-cas",
             }
         )
-        store._control_plane_postgres.execute_non_query(  # noqa: SLF001
+        store._control_plane_postgres._execute_non_query(  # noqa: SLF001
             "UPDATE crm_records SET workspace_id = %s, owner_user_id = %s WHERE crm_record_id = %s",
             ("user-bob", "bob", "crm-owner-cas"),
         )
@@ -350,7 +350,7 @@ def test_postgres_stage2_cas_preserves_terminal_interleaving() -> None:
             tenant_id="user-alice",
         )
         stale = dict(store.get_job("job-stage2-race") or {})
-        store._control_plane_postgres.execute_non_query(  # noqa: SLF001
+        store._control_plane_postgres._execute_non_query(  # noqa: SLF001
             "UPDATE jobs SET status = %s, stage = %s, summary_json = %s WHERE job_id = %s",
             ("completed", "completed", '{"terminal_marker":"winner"}', "job-stage2-race"),
         )
@@ -399,7 +399,7 @@ def test_postgres_cancel_cas_preserves_terminal_interleaving() -> None:
             tenant_id="user-alice",
         )
         stale = dict(store.get_job("job-cancel-race") or {})
-        store._control_plane_postgres.execute_non_query(  # noqa: SLF001
+        store._control_plane_postgres._execute_non_query(  # noqa: SLF001
             "UPDATE jobs SET status = %s, stage = %s, summary_json = %s WHERE job_id = %s",
             ("failed", "failed", '{"terminal_marker":"winner"}', "job-cancel-race"),
         )

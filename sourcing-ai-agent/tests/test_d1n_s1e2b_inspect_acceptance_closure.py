@@ -11,6 +11,7 @@ from typing import Any
 
 from sourcing_agent import acquisition_start_v2_create_postgres as create_pg
 from sourcing_agent import acquisition_start_v2_postgres as submit_pg
+from sourcing_agent.acquisition import AcquisitionEngine
 from sourcing_agent.acquisition_start_v2 import (
     ACQUISITION_START_V2_REQUEST_SCHEMA_DIGEST,
     ACQUISITION_START_V2_REQUEST_SCHEMA_VERSION,
@@ -21,8 +22,19 @@ from sourcing_agent.acquisition_start_v2 import (
 from sourcing_agent.agent_canary_registry import INSPECT_OPERATION_TOOL_SPEC, START_ACQUISITION_RUN_TOOL_SPEC
 from sourcing_agent.agent_operation_query_postgres import _operation_command_planned_event_identity
 from sourcing_agent.agent_tool_result_slot import AgentToolOccurrence
+from sourcing_agent.asset_catalog import AssetCatalog
 from sourcing_agent.control_plane_live_postgres import ControlPlaneAdvisoryLockBusy
 from sourcing_agent.local_postgres import quote_control_plane_postgres_identifier
+from sourcing_agent.model_provider import DeterministicModelClient
+from sourcing_agent.orchestrator import SourcingOrchestrator
+from sourcing_agent.semantic_provider import LocalSemanticProvider
+from sourcing_agent.settings import (
+    AppSettings,
+    HarvestActorSettings,
+    HarvestSettings,
+    QwenSettings,
+    SemanticProviderSettings,
+)
 from tests.pg_store_fixture import PGControlPlaneStoreTestMixin, psycopg
 from tests.test_d1n_acquisition_plan_preview_uow import _uow_kwargs
 
@@ -458,6 +470,73 @@ class D1nS1e2bInspectAcceptanceClosureTest(PGControlPlaneStoreTestMixin, unittes
         self.assertEqual(len(rows), 1)
         return rows[0]
 
+    def _orchestrator(self) -> SourcingOrchestrator:
+        runtime_dir = Path(self.tempdir.name) / "runtime"
+        settings = AppSettings(
+            project_root=runtime_dir,
+            runtime_dir=runtime_dir,
+            secrets_file=runtime_dir / "secrets.toml",
+            db_path=runtime_dir / "control-plane.db",
+            jobs_dir=runtime_dir / "jobs",
+            company_assets_dir=runtime_dir / "company_assets",
+            qwen=QwenSettings(enabled=False),
+            semantic=SemanticProviderSettings(enabled=False),
+            harvest=HarvestSettings(profile_scraper=HarvestActorSettings(enabled=False)),
+        )
+        catalog = AssetCatalog.discover()
+        model_client = DeterministicModelClient()
+        return SourcingOrchestrator(
+            catalog=catalog,
+            store=self.store,
+            jobs_dir=settings.jobs_dir,
+            model_client=model_client,
+            semantic_provider=LocalSemanticProvider(),
+            acquisition_engine=AcquisitionEngine(catalog, settings, self.store, model_client),
+        )
+
+    def _release_start_hold(self, *, start_occurrence: AgentToolOccurrence, suffix: str) -> None:
+        start_terminal = self._prepare_start_terminal(start_occurrence=start_occurrence, suffix=suffix)
+        accepted = self.repository.accept_start_acquisition_tool_result_uow(
+            occurrence=start_occurrence,
+            terminal=start_terminal,
+            attempted_slot_generation=start_occurrence.slot_generation,
+        )
+        self.assertEqual(accepted["outcome"], "accepted")
+
+    def _complete_root_with_real_child(self, *, owner_ref: dict[str, Any], suffix: str) -> dict[str, Any]:
+        """Progress one released root through the root-completion owner path."""
+
+        command_id = str(owner_ref["workflow_command_id"])
+        lease_owner = f"s1e2b_progressed_lease_{suffix}"
+        lease_expires_at = "2099-01-01 00:00:00"
+        self._execute(
+            "UPDATE {schema}.workflow_commands SET status = %s, lease_owner = %s, lease_expires_at = %s, "
+            "attempt = %s WHERE command_id = %s",
+            ("running", lease_owner, lease_expires_at, 1, command_id),
+        )
+        root = dict(self.store.get_workflow_command(command_id) or {})
+        owner = self._orchestrator()._acquisition_command_owner  # noqa: SLF001
+        contract = owner._acquisition_root_intent_plan_contract(root, claim_attempt=1)  # noqa: SLF001
+        self.assertTrue(contract)
+        completed = self.repository.complete_acquisition_root_command(
+            command_id,
+            expected_lease_owner=lease_owner,
+            expected_lease_expires_at=lease_expires_at,
+            expected_attempt=1,
+            expected_root_command=owner._acquisition_root_locked_identity(root),  # noqa: SLF001
+            plan_event=dict(contract.get("plan_event") or {}),
+            child_command=dict(contract.get("child_command") or {}),
+            child_causality=dict(contract.get("child_causality") or {}),
+            root_result=dict(contract.get("root_result") or {}),
+        )
+        self.assertEqual(completed["outcome"], "applied")
+        child = dict(completed["child_command"] or {})
+        event = dict(completed["event"] or {})
+        root_row = self._command_row(command_id)
+        self.assertEqual(root_row["not_before_at"], "")
+        self.assertEqual(json.loads(root_row["downstream_command_ids_json"]), [child["command_id"]])
+        return {"root": root_row, "child": child, "event": event}
+
     def test_inspect_preparation_and_acceptance_follow_command_lifecycle_after_s1e2c_release(self) -> None:
         start_occurrence, owner_ref = self._arrange_created(suffix="lifecycle_release")
         command_id = str(owner_ref["workflow_command_id"])
@@ -505,12 +584,10 @@ class D1nS1e2bInspectAcceptanceClosureTest(PGControlPlaneStoreTestMixin, unittes
     def test_inspect_preparation_follows_progressed_command_with_linked_downstream_child(self) -> None:
         start_occurrence, owner_ref = self._arrange_created(suffix="lifecycle_progressed")
         command_id = str(owner_ref["workflow_command_id"])
-        child_command_id = f"cmd_s1e2b_child_{command_id.removeprefix('cmd_')}"
-        self._execute(
-            "UPDATE {schema}.workflow_commands SET not_before_at = '', downstream_command_ids_json = %s "
-            "WHERE command_id = %s",
-            (json.dumps([child_command_id]), command_id),
-        )
+        self._release_start_hold(start_occurrence=start_occurrence, suffix="lifecycle_progressed")
+        progressed = self._complete_root_with_real_child(owner_ref=owner_ref, suffix="lifecycle_progressed")
+        child = progressed["child"]
+        self.assertEqual(str(child.get("parent_command_id") or ""), command_id)
 
         progressed_occurrence = self._inspect_occurrence(
             start_occurrence=start_occurrence,
@@ -529,6 +606,72 @@ class D1nS1e2bInspectAcceptanceClosureTest(PGControlPlaneStoreTestMixin, unittes
             attempted_slot_generation=progressed_occurrence.slot_generation,
         )
         self.assertEqual(inspect_accepted["outcome"], "accepted")
+
+    def test_inspect_rejects_progressed_command_with_dangling_child_identifier(self) -> None:
+        start_occurrence, owner_ref = self._arrange_created(suffix="progressed_dangling")
+        command_id = str(owner_ref["workflow_command_id"])
+        self._release_start_hold(start_occurrence=start_occurrence, suffix="progressed_dangling")
+        self._execute(
+            "UPDATE {schema}.workflow_commands SET downstream_command_ids_json = %s WHERE command_id = %s",
+            (json.dumps([f"cmd_s1e2b_invented_{command_id.removeprefix('cmd_')}"]), command_id),
+        )
+        self._assert_inspect_rejects_without_effects(
+            start_occurrence=start_occurrence,
+            owner_ref=owner_ref,
+            suffix="progressed_dangling",
+        )
+
+    def test_inspect_rejects_progressed_command_with_foreign_operation_child(self) -> None:
+        foreign_occurrence, foreign_ref = self._arrange_created(suffix="progressed_foreign_source")
+        self._release_start_hold(start_occurrence=foreign_occurrence, suffix="progressed_foreign_source")
+        foreign = self._complete_root_with_real_child(owner_ref=foreign_ref, suffix="progressed_foreign_source")
+        foreign_child_id = str(foreign["child"]["command_id"])
+
+        start_occurrence, owner_ref = self._arrange_created(suffix="progressed_foreign_target")
+        command_id = str(owner_ref["workflow_command_id"])
+        self._release_start_hold(start_occurrence=start_occurrence, suffix="progressed_foreign_target")
+        self._execute(
+            "UPDATE {schema}.workflow_commands SET downstream_command_ids_json = %s WHERE command_id = %s",
+            (json.dumps([foreign_child_id]), command_id),
+        )
+        self._assert_inspect_rejects_without_effects(
+            start_occurrence=start_occurrence,
+            owner_ref=owner_ref,
+            suffix="progressed_foreign_target",
+        )
+
+    def test_inspect_rejects_progressed_command_with_wrong_parent_child(self) -> None:
+        start_occurrence, owner_ref = self._arrange_created(suffix="progressed_wrong_parent")
+        self._release_start_hold(start_occurrence=start_occurrence, suffix="progressed_wrong_parent")
+        progressed = self._complete_root_with_real_child(owner_ref=owner_ref, suffix="progressed_wrong_parent")
+        child_id = str(progressed["child"]["command_id"])
+        self._execute(
+            "UPDATE {schema}.workflow_commands SET parent_command_id = %s WHERE command_id = %s",
+            ("cmd_s1e2b_unrelated_parent", child_id),
+        )
+        self._assert_inspect_rejects_without_effects(
+            start_occurrence=start_occurrence,
+            owner_ref=owner_ref,
+            suffix="progressed_wrong_parent",
+        )
+
+    def test_inspect_rejects_progressed_command_with_missing_child_event(self) -> None:
+        start_occurrence, owner_ref = self._arrange_created(suffix="progressed_missing_event")
+        self._release_start_hold(start_occurrence=start_occurrence, suffix="progressed_missing_event")
+        progressed = self._complete_root_with_real_child(owner_ref=owner_ref, suffix="progressed_missing_event")
+        child_id = str(progressed["child"]["command_id"])
+        child_row = self._command_row(child_id)
+        source_event_id = str(child_row["source_event_id"])
+        self.assertTrue(source_event_id)
+        self._execute(
+            "DELETE FROM {schema}.workflow_events WHERE event_id = %s",
+            (source_event_id,),
+        )
+        self._assert_inspect_rejects_without_effects(
+            start_occurrence=start_occurrence,
+            owner_ref=owner_ref,
+            suffix="progressed_missing_event",
+        )
 
     def test_inspect_rejects_command_lifecycle_states_outside_the_explicit_contract(self) -> None:
         cases = (

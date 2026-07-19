@@ -588,7 +588,7 @@ class RecoveryTakeoverIntentTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         # Simulate takeover_failed: the row stays 'claimed' (NOT consumed), then
         # its lease expires (backdated to the past via the authoritative adapter).
         self.assertEqual(self.store.repos.workflow_runtime.get_recovery_intent(job_id).get("status"), "claimed")
-        self.store._control_plane_postgres.execute_non_query(  # noqa: SLF001
+        self.store._control_plane_postgres._execute_non_query(  # noqa: SLF001
             "UPDATE workflow_recovery_intents SET lease_expires_at = %s WHERE job_id = %s",
             ("2000-01-01T00:00:00+00:00", job_id),
         )

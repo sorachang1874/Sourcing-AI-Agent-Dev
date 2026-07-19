@@ -1,12 +1,84 @@
 # Track D D1n S1e2b — formal review response
 
 Status: fixed-forward implementation response to the latest formal S1e2b `NO-GO` artifact
-`runtime/reviews/20260718T095734Z_Track_D_D1n_S1e2b_closed_acceptance_and_total_held-command_fence.md`; earlier S1e2b
-artifacts remain historical evidence, not a substitute for a fresh pinned review.
+`runtime/reviews/20260719T111300Z_Track_D_D1n_S1e2b_fixed-forward_A-F_integrated_closure_rerun.md` (4 P1 + 2 P2,
+`4f246b3..a98e3df`), closed by the FF-H batch recorded below. The immediately prior artifact
+`runtime/reviews/20260719T074000Z_Track_D_D1n_S1e2b_fixed-forward_A-F_integrated_closure_retry2.md` (4 P1) was closed
+by `a98e3df` (FF-G); `runtime/reviews/20260718T095734Z_Track_D_D1n_S1e2b_closed_acceptance_and_total_held-command_fence.md`
+and earlier S1e2b artifacts remain historical evidence, not a substitute for a fresh pinned review.
 
 This batch remains non-live and non-served: served Agent tool population, provider calls, model calls, and live calls all
 remain zero. It does not close `R-019`, `R-029`, Plan §6#6, `OB-2.2`, `OB-10.3`, `OB-10.4`, hosted serving, or
 provider/model invocation gates.
+
+## Current closure record
+
+### FF-G (`a98e3df`) — the four retry2 P1 repairs
+
+- `inspect_operation` no longer freezes mutable WorkflowCommand lifecycle state to its creation-time value: immutable
+  command/acceptance identity is still compared exactly, while `not_before_at` and `downstream_command_ids` are validated
+  through the explicit `pending_hold -> released -> progressed` lifecycle contract.
+- Start-v2 provenance can no longer downgrade to `non_v2` under compound pin drift: the acceptance owner-result-ref
+  schema, the owner-bound `agent-start-v2:` idempotency identity, the owner-bound occurrence reference, the Operation
+  start workflow reference that no coherent legacy start can explain, and nonempty drifted pins on a start candidate are
+  independent fail-closed markers.
+- The public raw SQL workflow-command fence failed closed on opaque or executing wrappers (`DO`, `CALL`, `EXECUTE`,
+  mutating `PREPARE`/`EXPLAIN`, `SELECT INTO`, `CREATE FUNCTION/PROCEDURE`, `DROP OWNED`) and normalized parenthesized
+  `ONLY` targets and `U&"..."` identifier spelling.
+- Generic control-plane snapshot export/import became projection/domain-only: the complete PG-only durable runtime
+  causal aggregate is excluded from default inventory, recorded as a typed gap in snapshot headers and sync summaries,
+  and rejected at every generic restore boundary.
+
+### FF-H (this batch) — the six rerun findings
+
+1. **Progressed lifecycle child verification** (`agent_operation_query_postgres.py`): a `progressed` root no longer
+   accepts dangling child identifiers. `load_inspect_operation_base_owner` locks every referenced child `FOR UPDATE`
+   after the root/workflow-event locks (mirroring the root-completion owner path's lock order), and
+   `_verify_progressed_workflow_command_children` requires each referenced identifier to resolve to a real child in the
+   same workflow run and operation, with a `parent_command_id` back-reference to the root, payload causality equal to
+   its own columns, and exactly one same-run `CommandPlanRequested` source event naming the root command plus the child
+   command type/idempotency pair. The positive regression now progresses a real child through
+   `complete_acquisition_root_command` after an S1e2c hold release; dangling, foreign-operation, wrong-parent, and
+   missing-event negatives all reject with zero effects.
+2. **Tri-state start-v2 carrier parsing** (`acquisition_start_v2_control.py`): every start carrier is classified
+   `absent`/`exact`/`corrupt` via `_json_carrier_state` plus per-carrier tri-state helpers. Any present-but-malformed
+   start carrier on a start candidate (malformed or conflicting decoded/raw `input`/`target_ref`/`metadata`/
+   `result_ref`/`workflow_ref` JSON), any start-specific schema/prefix family member (a drifted
+   `acquisition_start_command_acceptance*` owner-ref schema or a blank-suffix `agent-start-v2:` idempotency key), a
+   present-but-malformed owner-bound `result_occurrence_ref`, and a split or incomplete Operation start workflow
+   reference are corrupt and force `partial_or_mixed_v2`; they can never silently classify as `non_v2`. A 12-case
+   carrier matrix runs each corruption with all other pins erased and with the legacy-coherent request pair.
+3. **Read-only raw-SQL allowlist** (`control_plane_live_postgres.py`): the mutation denylist is replaced by a strict
+   single-statement, read-only allowlist (`_require_public_read_only_sql`) backed by recursive PostgreSQL statement
+   decomposition over tokens. Only plainly read-only statements pass the public helpers (`SELECT`/`VALUES`/`TABLE`/
+   `WITH`-of-read-only-queries, `EXPLAIN` of a provably read-only statement, `SHOW`); `SELECT INTO`, locking reads,
+   multi-statement input, and function calls outside an explicit read-only builtin allowlist fail. DDL and utility
+   execution moved to the private migration/test interface (`_execute_returning_one`/`_execute_non_query`); mutating
+   test callers were migrated. Real-PG regressions kill the reviewer's bypasses: `MERGE INTO ONLY workflow_commands`,
+   `SELECT existing_mutator()` (installed and fired once through the private interface as the control, then rejected
+   publicly), `DROP SCHEMA <active> CASCADE`, and a cross-table `CREATE RULE` that updates `workflow_commands`
+   (rule firing proven through the private interface), plus the previously fenced families
+   (`DO`/`CALL`/`EXECUTE`/`PREPARE`/`EXPLAIN`-mutating/`SELECT INTO`/`CREATE FUNCTION`/`DROP OWNED`).
+4. **Centralized portability registry** (`control_plane_postgres.py`): `PG_ONLY_DURABLE_RUNTIME_CAUSAL_AGGREGATE_TABLES`
+   and `NONPORTABLE_RUNTIME_COORDINATION_TABLES` (`workflow_job_leases`, `workflow_recovery_intents`,
+   `runtime_provider_limiter_leases`) are the explicit registry unioned into `GENERIC_POSTGRES_IMPORT_EXCLUDED_TABLES`;
+   the coordination tables left `DEFAULT_CONTROL_PLANE_TABLES`, so they are excluded at export and every restore
+   boundary. A real-PG test with an active job lease, a pending recovery intent, and an active provider limiter lease
+   proves generic export/import can neither observe nor mutate them.
+5. **Required exclusion declaration on restore** (`control_plane_postgres.py`):
+   `_require_snapshot_exclusion_declaration` requires the exact schema-versioned exclusion declaration before generic
+   import and rejects missing/mismatched declarations (subset, superset, drifted, non-list, wrong/absent
+   `schema_version`); snapshot→PG sync and snapshot→SQLite restore copy the verified gap into their summaries, which
+   the cloud-import summary nests. No temporary legacy import path exists: the declaration is unconditional.
+6. **Closure record + owner matrix** (this document, `docs/PRE_AGENT_CONTRACT_REVIEW.md`): the
+   `start_acquisition_run.result_hold_release_owner` row now lists the complete `pending_hold`/`released`/`progressed`
+   lifecycle state machine with physical derivation rules, and the `operation_run.control_state` row records the
+   tri-state corrupt-carrier rule. `docs/DURABLE_EXECUTION_RUNTIME_CONTRACT.md` and
+   `docs/LOCAL_POSTGRES_CONTROL_PLANE.md` describe the read-only allowlist, the centralized portability registry, and
+   the required exclusion declaration.
+
+Residuals `R-019`/`R-029` stay open. Author evidence is not a formal review; this batch requires a fresh pinned
+independent review before any live/W6/manual signoff.
 
 ## Fixed-forward scope
 
@@ -124,6 +196,33 @@ provider/model invocation gates.
   positive without invoking a legal mutating control delegate.
 
 ## Fixed-forward validation evidence
+
+Exact-head FF-H evidence (this batch; commands and counts are recorded for the pinned head commit, whose SHA is
+recorded in `.coord/handoffs/s1e2b-ff-h-v1.md`):
+
+- `python -m pytest tests/test_d1n_s1e2b_acceptance_contract.py tests/test_d1n_s1e2b_inspect_acceptance_closure.py
+  tests/test_d1n_s1e2b_raw_sql_workflow_command_fence.py tests/test_d1n_s1e2b_start_v2_provenance.py
+  tests/test_control_plane_postgres.py tests/test_pre_agent_contract_review.py
+  tests/test_d1n_start_acquisition_v2_create_pg.py -q`: `258 passed, 446 subtests passed in 236.98s`, zero
+  failures/errors. (The worktree lacks `frontend-demo/node_modules`; the one esbuild-dependent case ran with
+  `SOURCING_TEST_ESBUILD_MODULE_PATH` pointed at the main tree's module. Without that override the same case fails
+  identically on the base commit, so it is an environment artifact, not a regression.)
+- Per-suite counts inside that battery: inspect acceptance closure `15 passed + 19 subtests`; raw-SQL fence
+  `9 passed + 265 subtests`; start-v2 provenance `90 passed`; control-plane postgres `33 passed + 68 subtests`.
+- Touched-suite adjacency: `tests/test_cloud_asset_import.py` `12 passed`; `tests/test_control_plane_pool.py` plus
+  `tests/test_d0f_model_invocation_envelope_postgres.py` `9 passed`; `tests/test_request_scope_owner_fencing_pg.py`
+  `13 passed`; `tests/test_recovery_takeover_intent.py`, `tests/test_recovery_drain_registry.py`,
+  `tests/test_export_async_task.py`, and the three touched `tests/test_results_api.py` cases `34 passed`;
+  `tests/test_worker_recovery_daemon.py` `21 passed`.
+- Ruff check on every changed file: clean; ruff format shows no drift beyond pre-existing baseline.
+  `git diff --check`: clean. Scoped mypy (`make typecheck` file set): `81 errors / 4 files`, exactly the allowed
+  global baseline; this batch adds zero new mypy errors. `tests/test_markdown_status.py` has one pre-existing
+  unrelated banner failure that fails identically with this batch stashed.
+- Every new regression was stash-verified to fail before its fix (the progressed-child negatives, the corrupt-carrier
+  matrix, the raw-SQL bypass regressions, and the portability/declaration tests).
+
+The totals below this line belong to the earlier `20260718T095734Z` batch and predate `a98e3df`; they are retained as
+historical evidence for that artifact's closure, not as exact-head evidence.
 
 - Start-create PostgreSQL suite: `36 passed`; JUnit expansion `130 cases` (`36` top-level plus `94` parameterized
   subtests), zero failures/errors.

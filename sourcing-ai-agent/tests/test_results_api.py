@@ -8704,7 +8704,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         # Backdate the AUTHORITATIVE row (PG) — a SQLite-shadow UPDATE would
         # leave the exercised PG row untouched.
         now_utc = datetime.now(timezone.utc).replace(microsecond=0)
-        self.store._control_plane_postgres.execute_non_query(  # noqa: SLF001
+        self.store._control_plane_postgres._execute_non_query(  # noqa: SLF001
             """
             UPDATE workflow_job_leases
             SET updated_at = %s,
@@ -25736,7 +25736,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         self.assertEqual(duplicate_claim, {})
         # Expire the lease on the AUTHORITATIVE row (PG) — a SQLite-shadow
         # UPDATE would leave the exercised PG row untouched.
-        self.store._control_plane_postgres.execute_non_query(  # noqa: SLF001
+        self.store._control_plane_postgres._execute_non_query(  # noqa: SLF001
             """
             UPDATE job_materialization_items
             SET lease_expires_at = '2000-01-01 00:00:00'
@@ -29092,7 +29092,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         )
         # Mark the job as completed directly in the store — on the
         # AUTHORITATIVE PG row, not the SQLite compatibility shadow.
-        self.store._control_plane_postgres.execute_non_query(  # noqa: SLF001
+        self.store._control_plane_postgres._execute_non_query(  # noqa: SLF001
             "UPDATE jobs SET status = 'completed', stage = 'completed' WHERE job_id = %s",
             (job_id,),
         )

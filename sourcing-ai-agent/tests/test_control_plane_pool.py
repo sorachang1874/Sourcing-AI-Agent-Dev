@@ -133,12 +133,12 @@ class ControlPlanePostgresPoolTest(unittest.TestCase):
             clear=False,
         ):
             adapter = self._make_adapter(schema)
-            adapter.execute_non_query(
+            adapter._execute_non_query(
                 "CREATE TABLE pool_probe (id INT PRIMARY KEY, value TEXT NOT NULL)", ()
             )
             backend_pids: set[int] = set()
             for index in range(40):
-                adapter.execute_non_query(
+                adapter._execute_non_query(
                     "INSERT INTO pool_probe (id, value) VALUES (%s, %s) "
                     "ON CONFLICT (id) DO UPDATE SET value = EXCLUDED.value",
                     (index % 5, f"value-{index}"),
@@ -173,7 +173,7 @@ class ControlPlanePostgresPoolTest(unittest.TestCase):
     def test_concurrent_mixed_reads_writes_stay_correct(self) -> None:
         schema = self._new_schema("hammer")
         adapter = self._make_adapter(schema)
-        adapter.execute_non_query(
+        adapter._execute_non_query(
             "CREATE TABLE pool_hammer (id INT PRIMARY KEY, value TEXT NOT NULL, hits INT NOT NULL)",
             (),
         )
@@ -181,7 +181,7 @@ class ControlPlanePostgresPoolTest(unittest.TestCase):
         def worker(worker_id: int) -> None:
             for step in range(12):
                 row_id = (worker_id * 12 + step) % 24
-                affected = adapter.execute_non_query(
+                affected = adapter._execute_non_query(
                     "INSERT INTO pool_hammer (id, value, hits) VALUES (%s, %s, 1) "
                     "ON CONFLICT (id) DO UPDATE SET value = EXCLUDED.value, "
                     "hits = pool_hammer.hits + 1",
@@ -214,8 +214,8 @@ class ControlPlanePostgresPoolTest(unittest.TestCase):
         adapter_a = self._make_adapter(schema_a)
         adapter_b = self._make_adapter(schema_b)
         for adapter, marker in ((adapter_a, "alpha"), (adapter_b, "beta")):
-            adapter.execute_non_query("CREATE TABLE pool_iso (marker TEXT NOT NULL)", ())
-            adapter.execute_non_query("INSERT INTO pool_iso (marker) VALUES (%s)", (marker,))
+            adapter._execute_non_query("CREATE TABLE pool_iso (marker TEXT NOT NULL)", ())
+            adapter._execute_non_query("INSERT INTO pool_iso (marker) VALUES (%s)", (marker,))
         # Unqualified reads resolve through each adapter's own search_path.
         row_a = adapter_a.execute_returning_one("SELECT marker FROM pool_iso", ())
         row_b = adapter_b.execute_returning_one("SELECT marker FROM pool_iso", ())
@@ -290,7 +290,7 @@ class ControlPlanePostgresPoolTest(unittest.TestCase):
         schema = self._new_schema("tx")
         adapter = self._make_adapter(schema)
         quoted_schema = quote_control_plane_postgres_identifier(schema)
-        adapter.execute_non_query(
+        adapter._execute_non_query(
             "CREATE TABLE pool_tx (id INT PRIMARY KEY, value TEXT NOT NULL)", ()
         )
 
@@ -300,7 +300,7 @@ class ControlPlanePostgresPoolTest(unittest.TestCase):
             )
 
         # (1) helper write is committed and visible from a fresh connection.
-        adapter.execute_non_query(
+        adapter._execute_non_query(
             "INSERT INTO pool_tx (id, value) VALUES (%s, %s)", (1, "helper-commit")
         )
         self.assertEqual(fresh_value(1), ("helper-commit",))
@@ -345,7 +345,7 @@ class ControlPlanePostgresPoolTest(unittest.TestCase):
 
         schema = self._new_schema("timeout")
         adapter = self._make_adapter(schema)
-        adapter.execute_non_query("CREATE TABLE pool_timeout_probe (id INT PRIMARY KEY)", ())
+        adapter._execute_non_query("CREATE TABLE pool_timeout_probe (id INT PRIMARY KEY)", ())
         pool = adapter._ensure_pool()
         real_getconn = pool.getconn
         calls = {"count": 0}

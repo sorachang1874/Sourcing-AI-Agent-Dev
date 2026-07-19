@@ -15901,11 +15901,11 @@ class LiveControlPlanePostgresAdapter:
                 time.sleep(_control_plane_postgres_retry_delay_seconds(attempt))
 
     def execute_returning_one(self, sql: str, params: tuple[Any, ...] | list[Any]) -> dict[str, Any] | None:
-        _require_no_public_workflow_command_sql_mutation(sql, method="execute_returning_one")
+        _require_public_read_only_sql(sql, method="execute_returning_one")
         return self._execute_returning_one(sql, params)
 
     def execute_non_query(self, sql: str, params: tuple[Any, ...] | list[Any]) -> int:
-        _require_no_public_workflow_command_sql_mutation(sql, method="execute_non_query")
+        _require_public_read_only_sql(sql, method="execute_non_query")
         return self._execute_non_query(sql, params)
 
     def _advisory_lock_key(self, lock_key: str) -> str:
@@ -16176,31 +16176,348 @@ def _require_dedicated_workflow_command_writer(*table_names: str, method: str) -
 _PostgresSqlToken = tuple[str, str]
 
 
-def _require_no_public_workflow_command_sql_mutation(sql: str, *, method: str) -> None:
-    """Keep raw public SQL from bypassing the durable command owner.
+def _require_public_read_only_sql(sql: str, *, method: str) -> None:
+    """Restrict public raw SQL to plainly read-only single statements.
 
-    The public helpers remain useful for read probes and migration tests on
-    ordinary tables.  ``workflow_commands`` writes, however, must enter via a
-    dedicated command method so its hold, claim, and causality contracts stay
-    atomic.  Inspect SQL tokens rather than raw substrings so comments and
-    string literals cannot either hide a write or cause a false rejection.
-
-    Statements whose mutation behavior cannot be proven from their tokens fail
-    closed: ``DO`` (dollar-quoted body), ``CALL`` (procedure body), ``EXECUTE``
-    (prepared statement body), ``PREPARE`` of a mutating body, ``EXPLAIN`` of a
-    mutating statement (``ANALYZE`` executes it), ``CREATE FUNCTION/PROCEDURE``
-    (opaque body invoked later), and ``DROP OWNED``.  Parenthesized
-    ``ONLY (table_name)`` targets and ``U&"..."`` unicode-escape identifier
-    spelling are normalized before target comparison so they cannot hide the
-    command table either.
+    The public helpers remain useful for read probes.  Anything else — DML,
+    DDL, utility execution, opaque bodies, side-effecting function calls, or
+    multi-statement payloads — must enter through the private migration/test
+    interface (``_execute_returning_one`` / ``_execute_non_query``) instead.
+    Admission is a strict allowlist backed by recursive statement
+    decomposition over PostgreSQL tokens: a statement is executed only when it
+    is provably read-only, so previously fenced families (``DO``, ``CALL``,
+    ``EXECUTE``, mutating ``PREPARE``/``EXPLAIN``, ``SELECT INTO``,
+    ``CREATE FUNCTION``, ``DROP OWNED``) and target-smuggling forms
+    (``MERGE INTO ONLY``, cross-table ``CREATE RULE``, ``DROP SCHEMA
+    CASCADE``, side-effecting ``SELECT fn()``) all fail by default rather than
+    by enumerating dangerous shapes.
     """
 
-    if _postgres_sql_mutates_workflow_commands(sql):
-        raise ValueError(f"{method} requires a dedicated workflow command writer")
+    if not _postgres_public_sql_is_read_only(sql):
+        raise ValueError(
+            f"{method} allows only plainly read-only single statements; use the private migration/test SQL interface"
+        )
 
 
-def _postgres_sql_mutates_workflow_commands(sql: str) -> bool:
+_POSTGRES_READ_ONLY_QUERY_HEADS = frozenset({"select", "values", "table"})
+
+# Keyword constructs whose following parenthesis is SQL grammar, not a
+# function call (subqueries, derived tables, special-expression syntax).
+_POSTGRES_SQL_PAREN_KEYWORD_CONSTRUCTS = frozenset(
+    {
+        "select",
+        "values",
+        "table",
+        "in",
+        "not",
+        "exists",
+        "any",
+        "all",
+        "some",
+        "array",
+        "row",
+        "cast",
+        "trim",
+        "substring",
+        "position",
+        "extract",
+        "overlay",
+        "case",
+        "when",
+        "from",
+        "where",
+        "and",
+        "or",
+        "as",
+        "on",
+        "using",
+        "join",
+        "inner",
+        "left",
+        "right",
+        "full",
+        "cross",
+        "natural",
+        "lateral",
+        "with",
+        "recursive",
+        "over",
+        "filter",
+        "within",
+        "group",
+        "order",
+        "by",
+        "having",
+        "limit",
+        "offset",
+        "fetch",
+        "union",
+        "intersect",
+        "except",
+        "returning",
+        "operator",
+        "collate",
+        "at",
+        "zone",
+        "is",
+        "like",
+        "ilike",
+        "similar",
+        "between",
+        "window",
+        "partition",
+        "range",
+        "rows",
+        "groups",
+    }
+)
+
+# Built-in functions that cannot mutate database state.  Volatility alone
+# (``random``, ``clock_timestamp``) does not write; sequence advancers
+# (``nextval``/``setval``), advisory-lock functions, and every user-defined or
+# unlisted function are rejected by default.
+_POSTGRES_READ_ONLY_FUNCTIONS = frozenset(
+    {
+        # aggregates and window functions
+        "count",
+        "sum",
+        "avg",
+        "min",
+        "max",
+        "every",
+        "bool_and",
+        "bool_or",
+        "string_agg",
+        "array_agg",
+        "json_agg",
+        "jsonb_agg",
+        "json_object_agg",
+        "jsonb_object_agg",
+        "row_number",
+        "rank",
+        "dense_rank",
+        "ntile",
+        "lag",
+        "lead",
+        "first_value",
+        "last_value",
+        "nth_value",
+        "percent_rank",
+        "cume_dist",
+        # json
+        "row_to_json",
+        "to_json",
+        "to_jsonb",
+        "json_build_object",
+        "jsonb_build_object",
+        "json_build_array",
+        "jsonb_build_array",
+        "json_extract_path",
+        "jsonb_extract_path",
+        "json_extract_path_text",
+        "jsonb_extract_path_text",
+        "json_array_length",
+        "jsonb_array_length",
+        "json_typeof",
+        "jsonb_typeof",
+        "jsonb_pretty",
+        "json_array_elements",
+        "jsonb_array_elements",
+        "json_array_elements_text",
+        "jsonb_array_elements_text",
+        "json_each",
+        "jsonb_each",
+        "json_each_text",
+        "jsonb_each_text",
+        "json_object_keys",
+        "jsonb_object_keys",
+        "jsonb_path_exists",
+        "jsonb_path_query",
+        "jsonb_path_match",
+        # comparison / conditional
+        "coalesce",
+        "nullif",
+        "greatest",
+        "least",
+        # string
+        "upper",
+        "lower",
+        "initcap",
+        "length",
+        "char_length",
+        "character_length",
+        "octet_length",
+        "bit_length",
+        "ascii",
+        "chr",
+        "repeat",
+        "replace",
+        "reverse",
+        "concat",
+        "concat_ws",
+        "left",
+        "right",
+        "lpad",
+        "rpad",
+        "ltrim",
+        "rtrim",
+        "btrim",
+        "strpos",
+        "split_part",
+        "translate",
+        "starts_with",
+        "md5",
+        "encode",
+        "decode",
+        "quote_ident",
+        "quote_literal",
+        "quote_nullable",
+        "format",
+        "to_char",
+        "regexp_replace",
+        "regexp_matches",
+        "regexp_split_to_array",
+        "regexp_split_to_table",
+        "string_to_array",
+        "array_to_string",
+        # math
+        "abs",
+        "round",
+        "floor",
+        "ceil",
+        "ceiling",
+        "trunc",
+        "power",
+        "pow",
+        "sqrt",
+        "exp",
+        "ln",
+        "log",
+        "mod",
+        "div",
+        "sign",
+        "pi",
+        "random",
+        # date/time
+        "now",
+        "clock_timestamp",
+        "statement_timestamp",
+        "transaction_timestamp",
+        "date_trunc",
+        "date_part",
+        "age",
+        "to_date",
+        "to_timestamp",
+        "to_number",
+        "make_date",
+        "make_time",
+        "make_timestamp",
+        "make_timestamptz",
+        "make_interval",
+        "timezone",
+        "justify_days",
+        "justify_hours",
+        "justify_interval",
+        # arrays / set-returning
+        "generate_series",
+        "unnest",
+        "array_length",
+        "array_upper",
+        "array_lower",
+        "cardinality",
+        "array_position",
+        "array_positions",
+        "array_append",
+        "array_prepend",
+        "array_cat",
+        "array_remove",
+        # system catalog information (read-only)
+        "current_schema",
+        "current_schemas",
+        "current_setting",
+        "version",
+        "pg_backend_pid",
+        "pg_is_in_recovery",
+        "to_regclass",
+        "to_regnamespace",
+        "to_regtype",
+        "to_regrole",
+        "to_regproc",
+        "to_regprocedure",
+        "to_regoper",
+        "to_regoperator",
+        "pg_table_is_visible",
+        "pg_function_is_visible",
+        "pg_type_is_visible",
+        "pg_get_userbyid",
+        "pg_get_expr",
+        "pg_get_indexdef",
+        "pg_get_constraintdef",
+        "pg_get_functiondef",
+        "pg_get_viewdef",
+        "pg_get_ruledef",
+        "pg_get_triggerdef",
+        "pg_get_partkeydef",
+        "pg_get_statisticsobjdef",
+        "pg_total_relation_size",
+        "pg_relation_size",
+        "pg_table_size",
+        "pg_indexes_size",
+        "pg_database_size",
+        "pg_size_pretty",
+        "has_table_privilege",
+        "has_schema_privilege",
+        "has_database_privilege",
+        "has_column_privilege",
+        "has_function_privilege",
+        "obj_description",
+        "col_description",
+        "shobj_description",
+        "txid_current",
+        "pg_current_xact_id",
+        "inet_client_addr",
+        "inet_server_addr",
+        "pg_postmaster_start_time",
+        "pg_conf_load_time",
+        "row_security_active",
+        "current_query",
+        # common type-constructor spellings used as casts
+        "date",
+        "time",
+        "timestamp",
+        "timestamptz",
+        "interval",
+        "numeric",
+        "decimal",
+        "text",
+        "varchar",
+        "char",
+        "bpchar",
+        "name",
+        "int2",
+        "int4",
+        "int8",
+        "integer",
+        "bigint",
+        "smallint",
+        "float4",
+        "float8",
+        "real",
+        "boolean",
+        "bool",
+        "uuid",
+        "oid",
+        "regclass",
+        "json",
+        "jsonb",
+        "bytea",
+    }
+)
+
+
+def _postgres_public_sql_is_read_only(sql: str) -> bool:
     tokens = _tokenize_postgres_sql(sql)
+    statements: list[tuple[int, int]] = []
     depth = 0
     statement_start = 0
     for index, token in enumerate(tokens):
@@ -16209,161 +16526,110 @@ def _postgres_sql_mutates_workflow_commands(sql: str) -> bool:
         elif token == ("symbol", ")"):
             depth = max(0, depth - 1)
         elif token == ("symbol", ";") and depth == 0:
-            if _postgres_statement_mutates_workflow_commands(tokens, statement_start, index):
-                return True
+            statements.append((statement_start, index))
             statement_start = index + 1
-    return _postgres_statement_mutates_workflow_commands(tokens, statement_start, len(tokens))
+    statements.append((statement_start, len(tokens)))
+    nonempty = [(start, end) for start, end in statements if start < end]
+    if len(nonempty) != 1:
+        return False
+    start, end = nonempty[0]
+    return _postgres_read_only_statement_at(tokens, start, end)
 
 
-def _postgres_statement_mutates_workflow_commands(
-    tokens: list[_PostgresSqlToken],
-    start: int,
-    end: int,
-) -> bool:
+def _postgres_read_only_statement_at(tokens: list[_PostgresSqlToken], start: int, end: int) -> bool:
     if start >= end:
         return False
-    if _sql_word_is(tokens, start, "with"):
-        return any(
-            tokens[index - 1] in {("symbol", "("), ("symbol", ")")}
-            and _postgres_command_mutates_workflow_commands(tokens, index, end)
-            for index in range(start + 1, end)
-            if tokens[index][0] == "word"
-        )
-    return _postgres_command_mutates_workflow_commands(tokens, start, end)
-
-
-def _postgres_command_mutates_workflow_commands(
-    tokens: list[_PostgresSqlToken],
-    start: int,
-    end: int,
-) -> bool:
-    command = tokens[start][1] if tokens[start][0] == "word" else ""
-    index = start + 1
-    if command == "update":
-        index += int(_sql_word_is(tokens, index, "only"))
-        return _sql_target_is_workflow_commands(tokens, index, end)
-    if command == "delete":
-        index += int(_sql_word_is(tokens, index, "from"))
-        index += int(_sql_word_is(tokens, index, "only"))
-        return _sql_target_is_workflow_commands(tokens, index, end)
-    if command == "insert":
-        index += int(_sql_word_is(tokens, index, "into"))
-        index += int(_sql_word_is(tokens, index, "only"))
-        return _sql_target_is_workflow_commands(tokens, index, end)
-    if command == "merge":
-        index += int(_sql_word_is(tokens, index, "into"))
-        return _sql_target_is_workflow_commands(tokens, index, end)
-    if command == "copy":
-        target, after_target = _sql_qualified_identifier(tokens, index, end)
-        return target == "workflow_commands" and any(
-            _sql_word_is(tokens, candidate, "from") for candidate in range(after_target, end)
-        )
-    if command == "truncate":
-        index += int(_sql_word_is(tokens, index, "table"))
-        return _sql_target_list_contains_workflow_commands(tokens, index, end)
-    if command == "alter":
-        if not _sql_word_is(tokens, index, "table"):
+    index = start
+    if _sql_word_is(tokens, index, "with"):
+        index = _postgres_validate_read_only_ctes(tokens, index, end)
+        if index < 0:
             return False
-        index += 1
-        if _sql_word_is(tokens, index, "if") and _sql_word_is(tokens, index + 1, "exists"):
-            index += 2
-        index += int(_sql_word_is(tokens, index, "only"))
-        target, after_target = _sql_qualified_identifier(tokens, index, end)
-        if target == "workflow_commands":
-            return True
-        return (
-            _sql_word_is(tokens, after_target, "rename")
-            and _sql_word_is(tokens, after_target + 1, "to")
-            and (_sql_qualified_identifier(tokens, after_target + 2, end)[0] == "workflow_commands")
-        )
-    if command == "drop":
-        if _sql_word_is(tokens, index, "owned"):
-            # DROP OWNED BY drops every object owned by the role, including the
-            # command table itself and its protective triggers/indexes.
-            return True
-        if not _sql_word_is(tokens, index, "table"):
+        if not any(_sql_word_is(tokens, index, head) for head in _POSTGRES_READ_ONLY_QUERY_HEADS):
             return False
-        index += 1
-        if _sql_word_is(tokens, index, "if") and _sql_word_is(tokens, index + 1, "exists"):
-            index += 2
-        return _sql_target_list_contains_workflow_commands(tokens, index, end)
-    if command == "create":
-        return _postgres_create_mutates_workflow_commands(tokens, index, end)
-    if command == "select":
-        return _postgres_select_mutates_workflow_commands(tokens, index, end)
-    if command == "explain":
-        # EXPLAIN ANALYZE executes its inner statement; classify the inner
-        # statement rather than trusting the EXPLAIN wrapper.
-        return _postgres_explain_mutates_workflow_commands(tokens, index, end)
-    if command == "prepare":
-        # PREPARE stores a statement for later EXECUTE; EXECUTE itself is
-        # always fenced below because its body lives outside this statement.
-        return _postgres_prepare_mutates_workflow_commands(tokens, index, end)
-    if command in {"do", "call", "execute"}:
-        # Dollar-quoted bodies (DO), procedure bodies (CALL), and prepared
-        # statement names (EXECUTE) are opaque to this tokenizer and can carry
-        # arbitrary DML against workflow_commands, so they fail closed.
+    elif _sql_word_is(tokens, index, "explain"):
+        return _postgres_explain_is_read_only(tokens, index + 1, end)
+    elif _sql_word_is(tokens, index, "show"):
         return True
-    return False
+    elif not any(_sql_word_is(tokens, index, head) for head in _POSTGRES_READ_ONLY_QUERY_HEADS):
+        return False
+    return _postgres_query_body_is_read_only(tokens, start, end)
 
 
-def _postgres_explain_mutates_workflow_commands(
-    tokens: list[_PostgresSqlToken],
-    start: int,
-    end: int,
-) -> bool:
+def _postgres_validate_read_only_ctes(tokens: list[_PostgresSqlToken], start: int, end: int) -> int:
+    """Validate every ``WITH`` body recursively; return the main statement index.
+
+    Returns ``-1`` when the clause is malformed or any CTE body is not itself
+    a provably read-only statement (a data-modifying CTE such as
+    ``WITH x AS (DELETE ...)`` executes its body, so it can never pass).
+    CTE column-list definitions (``WITH x(a, b) AS ...``) fail closed: a read
+    probe can alias the columns inside the body instead, and refusing the
+    spelling keeps a definition name from masquerading as a function call.
+    """
+
+    index = start + 1
+    index += int(_sql_word_is(tokens, index, "recursive"))
+    while True:
+        if not _sql_identifier_at(tokens, index):
+            return -1
+        index += 1
+        if not _sql_word_is(tokens, index, "as"):
+            return -1
+        index += 1
+        index += int(_sql_word_is(tokens, index, "not"))
+        index += int(_sql_word_is(tokens, index, "materialized"))
+        if index >= end or tokens[index] != ("symbol", "("):
+            return -1
+        body_end = _skip_postgres_symbol_group(tokens, index, end)
+        if body_end <= index + 1:
+            return -1
+        if not _postgres_read_only_statement_at(tokens, index + 1, body_end - 1):
+            return -1
+        index = body_end
+        if index < end and tokens[index] == ("symbol", ","):
+            index += 1
+            continue
+        return index
+
+
+def _postgres_explain_is_read_only(tokens: list[_PostgresSqlToken], start: int, end: int) -> bool:
+    # EXPLAIN (even with ANALYZE, which executes its inner statement) is safe
+    # exactly when the explained statement itself is provably read-only.
     index = start
     while any(_sql_word_is(tokens, index, option) for option in ("analyze", "verbose")):
         index += 1
     index = _skip_postgres_symbol_group(tokens, index, end)
     if index >= end:
-        # An EXPLAIN without a visible explained statement cannot be proven
-        # read-only, so it fails closed.
-        return True
-    return _postgres_statement_mutates_workflow_commands(tokens, index, end)
+        return False
+    return _postgres_read_only_statement_at(tokens, index, end)
 
 
-def _postgres_prepare_mutates_workflow_commands(
-    tokens: list[_PostgresSqlToken],
-    start: int,
-    end: int,
-) -> bool:
-    index = start
-    if not _sql_identifier_at(tokens, index):
-        return True
-    index += 1
-    index = _skip_postgres_symbol_group(tokens, index, end)
-    if not _sql_word_is(tokens, index, "as"):
-        return True
-    index += 1
-    if index >= end:
-        return True
-    return _postgres_statement_mutates_workflow_commands(tokens, index, end)
-
-
-def _postgres_select_mutates_workflow_commands(
-    tokens: list[_PostgresSqlToken],
-    start: int,
-    end: int,
-) -> bool:
-    depth = 0
+def _postgres_query_body_is_read_only(tokens: list[_PostgresSqlToken], start: int, end: int) -> bool:
     for index in range(start, end):
         token = tokens[index]
-        if token == ("symbol", "("):
-            depth += 1
-        elif token == ("symbol", ")"):
-            depth = max(0, depth - 1)
-        elif token[0] == "word" and depth == 0:
-            if token[1] == "from":
+        if token == ("word", "into"):
+            # SELECT INTO creates and fills a table at any query depth.
+            return False
+        if (
+            token == ("word", "for")
+            and index + 1 < end
+            and tokens[index + 1][0] == "word"
+            and tokens[index + 1][1] in {"update", "share", "no", "key"}
+        ):
+            # Locking reads (FOR UPDATE / FOR SHARE / FOR NO KEY UPDATE /
+            # FOR KEY SHARE) are not plainly read-only.
+            return False
+        if index + 1 < end and tokens[index + 1] == ("symbol", "("):
+            if token[0] == "quoted_identifier":
+                # A quoted function name can never match the builtin allowlist.
                 return False
-            if token[1] == "into":
-                candidate = index + 1
-                while any(
-                    _sql_word_is(tokens, candidate, modifier) for modifier in ("temp", "temporary", "unlogged", "table")
-                ):
-                    candidate += 1
-                return _sql_target_is_workflow_commands(tokens, candidate, end)
-    return False
+            if token[0] == "word":
+                word = token[1]
+                if word in _POSTGRES_SQL_PAREN_KEYWORD_CONSTRUCTS:
+                    continue
+                if word not in _POSTGRES_READ_ONLY_FUNCTIONS:
+                    # An unlisted function may be user-defined and side-effecting.
+                    return False
+    return True
 
 
 def _skip_postgres_symbol_group(
@@ -16384,87 +16650,6 @@ def _skip_postgres_symbol_group(
                 return index + 1
         index += 1
     return index
-
-
-def _postgres_create_mutates_workflow_commands(
-    tokens: list[_PostgresSqlToken],
-    start: int,
-    end: int,
-) -> bool:
-    index = start
-    while any(
-        _sql_word_is(tokens, index, modifier)
-        for modifier in {"global", "local", "temporary", "temp", "unlogged", "unique", "concurrently"}
-    ):
-        index += 1
-    if _sql_word_is(tokens, index, "or") and _sql_word_is(tokens, index + 1, "replace"):
-        index += 2
-    if any(_sql_word_is(tokens, index, kind) for kind in {"function", "procedure"}):
-        # Function/procedure bodies are dollar-quoted and opaque to this
-        # tokenizer; a body can carry arbitrary DML that a later SELECT/CALL
-        # would execute, so creation fails closed.
-        return True
-    if _sql_word_is(tokens, index, "table"):
-        index += 1
-        if (
-            _sql_word_is(tokens, index, "if")
-            and _sql_word_is(tokens, index + 1, "not")
-            and _sql_word_is(tokens, index + 2, "exists")
-        ):
-            index += 3
-        return _sql_target_is_workflow_commands(tokens, index, end)
-    if any(_sql_word_is(tokens, index, kind) for kind in {"index", "trigger", "rule", "policy"}):
-        for candidate in range(index + 1, end):
-            if _sql_word_is(tokens, candidate, "on"):
-                candidate += 1
-                candidate += int(_sql_word_is(tokens, candidate, "only"))
-                return _sql_target_is_workflow_commands(tokens, candidate, end)
-    return False
-
-
-def _sql_target_list_contains_workflow_commands(
-    tokens: list[_PostgresSqlToken],
-    start: int,
-    end: int,
-) -> bool:
-    index = start
-    while index < end:
-        index += int(_sql_word_is(tokens, index, "only"))
-        target, after_target = _sql_qualified_identifier(tokens, index, end)
-        if target == "workflow_commands":
-            return True
-        if not target or after_target >= end or tokens[after_target] != ("symbol", ","):
-            return False
-        index = after_target + 1
-    return False
-
-
-def _sql_target_is_workflow_commands(
-    tokens: list[_PostgresSqlToken],
-    start: int,
-    end: int,
-) -> bool:
-    return _sql_qualified_identifier(tokens, start, end)[0] == "workflow_commands"
-
-
-def _sql_qualified_identifier(
-    tokens: list[_PostgresSqlToken],
-    start: int,
-    end: int,
-) -> tuple[str, int]:
-    index = start
-    while index < end and tokens[index] == ("symbol", "("):
-        # PostgreSQL accepts parenthesized targets such as ONLY (table_name);
-        # unwrap them so the parentheses cannot hide the real target.
-        index += 1
-    if index >= end or not _sql_identifier_at(tokens, index):
-        return "", start
-    target = tokens[index][1]
-    index += 1
-    while index + 1 < end and tokens[index] == ("symbol", ".") and _sql_identifier_at(tokens, index + 1):
-        target = tokens[index + 1][1]
-        index += 2
-    return target, index
 
 
 def _sql_word_is(tokens: list[_PostgresSqlToken], index: int, value: str) -> bool:
