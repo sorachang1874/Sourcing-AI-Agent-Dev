@@ -187,7 +187,7 @@ class LunaBatchRunnerTest(unittest.TestCase):
         receipt = first["operator_receipt"]
         self.assertEqual(receipt["schema_version"], lbr.GROK_OPERATOR_RECEIPT_SCHEMA_VERSION)
         self.assertEqual(receipt["cost_usd"], 0.01)
-        call = transport.calls[0]
+        call = next(c for c in transport.calls if f"candidate_ref: {self.refs[0]}" in c["prompt"])
         self.assertEqual(
             receipt["prompt_sha256"],
             hashlib.sha256(call["prompt"].encode("utf-8")).hexdigest(),
@@ -599,6 +599,37 @@ class LunaBatchRunnerTest(unittest.TestCase):
         elapsed = time.monotonic() - started
         self.assertEqual(result["luna_completed_count"], 2)
         self.assertLess(elapsed, 1.2, "fused pipeline must overlap independent candidates")
+
+    def test_shared_post_across_candidates_no_digest_collision(self) -> None:
+        # the same public post legitimately appears in two bundles; candidate-scoped
+        # per-item digests keep the adapter's global digest keyspace collision-free
+        ref_a, ref_b = self.refs[0], self.refs[1]
+        seed_a, seed_b = self.seed_by_ref[ref_a], self.seed_by_ref[ref_b]
+        bundle_a = lbr.validate_candidate_bundle(copy.deepcopy(self.bundles[ref_a]), seed=seed_a)
+        bundle_b = copy.deepcopy(self.bundles[ref_b])
+        shared_post = copy.deepcopy((bundle_a["items"] or [None])[0])
+        if shared_post is None:
+            self.skipTest("fixture rich bundle has no items")
+        bundle_b["items"] = (bundle_b["items"] or []) + [shared_post]
+        bundle_b = lbr.validate_candidate_bundle(bundle_b, seed=seed_b)
+        manifest_a, digest_a = lbr.build_judged_bundle_manifest(bundle_a, seed=seed_a)
+        manifest_b, digest_b = lbr.build_judged_bundle_manifest(bundle_b, seed=seed_b)
+        shas = [item["sha256"] for item in manifest_a + manifest_b]
+        self.assertEqual(len(shas), len(set(shas)), "candidate-scoped digests must be globally unique")
+        self.assertNotEqual(digest_a, digest_b)
+        reviews = [
+            lbr.build_candidate_review(seed_a, bundle_a, self.outputs[ref_a]),
+            lbr.build_candidate_review(seed_b, bundle_b, self.outputs[ref_b]),
+        ]
+        reduction = lbr.candidate_reviews_to_axis_reduction(
+            reviews=reviews,
+            seeds=[seed_a, seed_b],
+            bundles={ref_a: bundle_a, ref_b: bundle_b},
+            lab_descriptor=self.fixture["lab_descriptor"],
+        )
+        self.assertEqual(reduction["schema_version"], LUNA_AXIS_REDUCTION_SCHEMA_VERSION)
+        for row in reduction["candidate_axis_rows"]:
+            self.assertEqual(row["coverage_status"], "complete")
 
     def test_not_found_resolution_shape_and_live_fit_repairs(self) -> None:
         seed = self.seed_by_ref[self.refs[1]]

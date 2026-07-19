@@ -407,10 +407,12 @@ def build_judged_bundle_manifest(
 ) -> tuple[list[dict[str, Any]], str]:
     """Derive the ordered judged-item manifest and the reducer-compatible digest.
 
-    Per-item ``sha256`` is the canonical sha256 of that item's full judged
-    content (ref included).  ``judged_bundle_sha256`` is the canonical sha256
-    of the SORTED per-item digests, matching the digest the unchanged
-    ``luna_axis_reduction.v1`` reducer recomputes as
+    Per-item ``sha256`` is the canonical sha256 of the item's full judged
+    content **scoped to this candidate** (``candidate_ref`` mixed in): the same
+    public post may legitimately appear in two candidates' bundles, and the
+    reducer keys evidence by digest globally.  ``judged_bundle_sha256`` is the
+    canonical sha256 of the SORTED per-item digests, matching the digest the
+    unchanged ``luna_axis_reduction.v1`` reducer recomputes as
     ``reviewed_evidence_manifest_sha256``.
     """
 
@@ -426,7 +428,7 @@ def build_judged_bundle_manifest(
                 "item_ref": item_ref,
                 "source_kind": source_kind,
                 "source_status": source_status,
-                "sha256": canonical_sha256(content),
+                "sha256": canonical_sha256({"candidate_ref": seed["seed_ref"], "content": content}),
             }
         )
 
