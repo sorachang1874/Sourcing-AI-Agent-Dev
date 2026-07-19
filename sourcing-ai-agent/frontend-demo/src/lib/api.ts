@@ -9,6 +9,7 @@ import {
   buildCohortLocationApiPayload,
   cloneCohortLocationSelection,
   cloneCohortSelection,
+  createDefaultCohortLocationSelection,
   equalCohortLocationSelection,
   equalCohortSelection,
   normalizeLocationList,
@@ -5062,52 +5063,92 @@ function extractPlanCohortSelection(
 
 /**
  * Location fields are siblings of cohort_selection at request top level
- * (FT0 §7.2). They are extracted from the same request mirror records with
- * the same conflict posture, but they NEVER enter the cohort object.
+ * (FT0 §7.2). They NEVER enter the cohort object.
+ *
+ * Reconciliation is presence-intact (FT2 fixed-forward r3, review finding
+ * 1). The canonical request object (`payload.request`) is the single
+ * canonical request-location owner; every other record is a comparison-only
+ * mirror drawn from a CLOSED set that includes ALL request_preview variants
+ * (the first-truthy preview ladder used for display must not hide a stale
+ * preview mirror from the comparison). Per axis, `absent` (server default),
+ * an explicit `[]` opt-out, and present values are three DISTINCT states:
+ * for an explicit-Cohort request an absent mirror is not legacy noise — it
+ * means the server-default US boundary — so an absent canonical owner
+ * against a stale present mirror (or vice versa) disagrees and fails
+ * closed, exactly like a value conflict. Only when every present record is
+ * absent on both axes (legacy request with no location state anywhere) does
+ * the plan carry no location state.
  */
 function extractPlanCohortLocations(
   payload: any,
   explainPayload: any,
-  requestPreview: Record<string, unknown>,
 ): CohortLocationSelection | undefined {
   const metadata = (payload?.metadata as Record<string, unknown>) || {};
-  const records = [
-    payload?.request,
+  const canonicalRequest =
+    payload?.request && typeof payload.request === "object" && !Array.isArray(payload.request)
+      ? (payload.request as Record<string, unknown>)
+      : null;
+  const mirrorRecords = [
     explainPayload?.request,
-    requestPreview,
+    payload?.request_preview,
+    explainPayload?.request_preview,
+    metadata.request_preview,
     payload?.intent_view,
     explainPayload?.intent_view,
     payload?.plan?.intent_view,
     metadata.request,
-    metadata.request_preview,
   ].filter(
     (value): value is Record<string, unknown> =>
       Boolean(value) && typeof value === "object" && !Array.isArray(value),
   );
-  const mirrors = records
-    .map((record) => parseCohortLocationMirror(record))
-    .filter((value): value is CohortLocationSelection => Boolean(value));
-  if (mirrors.length === 0) {
+  const ownerRecord = canonicalRequest || mirrorRecords[0] || null;
+  if (!ownerRecord) {
     return undefined;
   }
-  const canonical = mirrors[0];
-  if (mirrors.some((mirror) => !equalCohortLocationSelection(canonical, mirror))) {
-    throw new Error("Plan response contains conflicting target_locations mirrors.");
+  // Presence-intact per-axis state: a record with neither key yields the
+  // all-absent state and is NOT filtered out, so absence can conflict with
+  // a stale present mirror. A present null/invalid shape still fails closed
+  // inside normalizeLocationList.
+  const parsePresenceIntact = (record: Record<string, unknown>): CohortLocationSelection =>
+    parseCohortLocationMirror(record) ?? createDefaultCohortLocationSelection();
+  const canonical = parsePresenceIntact(ownerRecord);
+  for (const record of mirrorRecords) {
+    if (record === ownerRecord) {
+      continue;
+    }
+    if (!equalCohortLocationSelection(canonical, parsePresenceIntact(record))) {
+      throw new Error("Plan response contains conflicting target_locations mirrors.");
+    }
+  }
+  if (canonical.targetLocations === undefined && canonical.excludeTargetLocations === undefined) {
+    return undefined;
   }
   return cloneCohortLocationSelection(canonical);
 }
 
 /**
  * Server-owned cohort registry pin of the plan (FT2 fixed-forward r2, review
- * finding 3). The backend CohortProviderCompiler embeds
+ * finding 3; r3 hardening). The backend CohortProviderCompiler embeds
  * `{registry_version, registry_digest}` into the provider execution manifest
  * (`cohort_provider_compiler.py:628-629`); the plan response and the
- * frontend-history recovery metadata may mirror that same manifest. Every
- * present manifest mirror must agree byte-exactly (conflict fails closed,
- * same posture as the cohort/location mirrors); a manifest without registry
- * pin fields is invalid pin evidence and fails closed. When no manifest
- * carries pin evidence the plan pin is `undefined` — confirmation of an
- * explicit-Cohort plan must then block on unavailable pin evidence.
+ * frontend-history recovery metadata may mirror that same manifest.
+ *
+ * Pin assignment is PER-MANIFEST EXACT: the pin comes from the canonical
+ * plan manifest (the first present manifest in canonical order); every other
+ * present manifest is a comparison-only mirror. Every present documented
+ * manifest is treated as complete-or-invalid:
+ * - a manifest carrying neither pin field is UNPINNED;
+ * - a manifest carrying exactly one field, empty values, or wrong types is
+ *   INVALID pin evidence and fails closed;
+ * - an unpinned canonical manifest yields NO pin (unconfirmable) — it never
+ *   inherits a stale/other mirror's pin, and a mirror that nonetheless
+ *   carries pin evidence contradicts the canonical manifest (fail closed);
+ * - a pinned canonical manifest requires every present mirror to carry both
+ *   exact pin fields with byte-exact equality (conflict fails closed, same
+ *   posture as the cohort/location mirrors).
+ * When no manifest carries pin evidence anywhere the plan pin is
+ * `undefined` — confirmation of an explicit-Cohort plan must then block on
+ * unavailable pin evidence.
  */
 function extractPlanCohortRegistryPin(
   payload: any,
@@ -5130,26 +5171,47 @@ function extractPlanCohortRegistryPin(
     (value): value is Record<string, unknown> =>
       Boolean(value) && typeof value === "object" && !Array.isArray(value),
   );
-  const pins: CohortRegistryPin[] = [];
-  for (const manifest of manifestRecords) {
+  // Read the pin fields of ONE manifest: `null` when it carries neither pin
+  // field (unpinned), the pin when both fields carry exact non-empty
+  // strings; anything in between is invalid pin evidence and fails closed.
+  const readManifestPin = (manifest: Record<string, unknown>): CohortRegistryPin | null => {
     const hasVersion = Object.prototype.hasOwnProperty.call(manifest, "registry_version");
     const hasDigest = Object.prototype.hasOwnProperty.call(manifest, "registry_digest");
     if (!hasVersion && !hasDigest) {
-      continue;
+      return null;
     }
     const version = manifest.registry_version;
     const digest = manifest.registry_digest;
     if (typeof version !== "string" || !version || typeof digest !== "string" || !digest) {
       throw new Error("Plan response has an invalid cohort registry pin.");
     }
-    if (!pins.some((pin) => pin.registryVersion === version && pin.registryDigest === digest)) {
-      pins.push({ registryVersion: version, registryDigest: digest });
+    return { registryVersion: version, registryDigest: digest };
+  };
+  if (manifestRecords.length === 0) {
+    return undefined;
+  }
+  const canonicalPin = readManifestPin(manifestRecords[0]);
+  const mirrorPins = manifestRecords.slice(1).map((manifest) => readManifestPin(manifest));
+  if (!canonicalPin) {
+    // The canonical plan manifest is unpinned: the plan owns NO pin and must
+    // never borrow one from a stale/other mirror. A mirror carrying pin
+    // evidence alongside the unpinned canonical manifest is contradictory
+    // evidence — fail closed instead of producing a valid-looking pin.
+    if (mirrorPins.some((pin) => pin !== null)) {
+      throw new Error("Plan response contains conflicting cohort registry pins.");
+    }
+    return undefined;
+  }
+  for (const mirrorPin of mirrorPins) {
+    if (
+      !mirrorPin ||
+      mirrorPin.registryVersion !== canonicalPin.registryVersion ||
+      mirrorPin.registryDigest !== canonicalPin.registryDigest
+    ) {
+      throw new Error("Plan response contains conflicting cohort registry pins.");
     }
   }
-  if (pins.length > 1) {
-    throw new Error("Plan response contains conflicting cohort registry pins.");
-  }
-  return pins[0];
+  return canonicalPin;
 }
 
 function mapPlanReviewDecisionDefaults(
@@ -5342,7 +5404,7 @@ function mapPlanPayloadToDemoPlan(payload: any, queryText: string, explainPayloa
     {}
   );
   const cohortSelection = extractPlanCohortSelection(payload, explain, requestPreview);
-  const cohortLocations = extractPlanCohortLocations(payload, explain, requestPreview);
+  const cohortLocations = extractPlanCohortLocations(payload, explain);
   const cohortRegistryPin = extractPlanCohortRegistryPin(payload, explain);
   const organizationExecutionProfile =
     (explain.organization_execution_profile as Record<string, unknown>) ||

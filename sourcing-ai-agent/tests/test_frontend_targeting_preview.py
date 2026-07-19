@@ -426,7 +426,11 @@ const fakeFetch = async (url, options = {}) => {
   const route = fetchRoutes.find(
     (entry) => entry.method === method && pathname.startsWith(entry.pathPrefix),
   );
-  const payload = route ? route.handler(body, pathname) : null;
+  // Awaited so a route may defer its response behind a test-controlled gate
+  // (deferred-promise interleavings for the revision/confirmation overlap
+  // matrix); sync handlers are unaffected (await on a non-promise is the
+  // identity).
+  const payload = route ? await route.handler(body, pathname) : null;
   const ok = Boolean(route) && payload && payload.__status !== 404;
   const status = ok ? 200 : 404;
   const responseBody = ok ? payload : { error: `no stubbed route for ${method} ${pathname}` };
@@ -1349,9 +1353,12 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
 
         # The fail-closed handler is bound on the production button, and the
         # disabled state is the same cohortPreviewBlocker that gates it.
+        # Review finding 4 (r3): the button is ALSO cross-disabled while any
+        # plan action (revision/confirmation) is in flight, so overlapping
+        # actions against different plan identities cannot both succeed.
         plan_source = (REPO_ROOT / "frontend-demo/src/components/PlanCard.tsx").read_text(encoding="utf-8")
         self.assertIn("onClick={handleConfirm}", plan_source)
-        self.assertIn("disabled={isConfirming || Boolean(cohortPreviewBlocker)}", plan_source)
+        self.assertIn("disabled={planActionBusy || Boolean(cohortPreviewBlocker)}", plan_source)
         self.assertIn("if (cohortPreviewBlocker) {", plan_source)
 
     def test_location_fields_round_trip_through_real_request_paths(self) -> None:
@@ -2551,6 +2558,706 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
         # Blocked confirmation made NO approval or start request.
         self.assertEqual(payload["reviewCallCount"], 0)
         self.assertEqual(payload["workflowCallCount"], 0)
+
+    def test_location_mirror_reconciliation_preserves_absent_state(self) -> None:
+        script = textwrap.dedent(
+            _MINIDOM_PREAMBLE
+            + _HARNESS_PREAMBLE
+            + _FIXTURES_PREAMBLE
+            + """
+            (async () => {
+              const cohort = selectionFor(["research"], ["current", "former"]);
+              // Review finding 1 (r3): absent (server default), explicit []
+              // opt-out, and present values are THREE distinct states. An
+              // absent canonical request mirror must NOT be discarded while a
+              // stale present mirror wins — every combination below must fail
+              // closed instead of silently adopting the stale value.
+              const mapError = (payload) =>
+                captureError(() => api.__testMapPlanPayloadToDemoPlan(payload, "find people"));
+              const absentVsPresentPreview = mapError({
+                request: { raw_user_request: "find people", cohort_selection: cohort },
+                request_preview: { cohort_selection: cohort, target_locations: ["Canada"] },
+                plan: {},
+              });
+              const absentVsPresentMetadataPreview = mapError({
+                request: { raw_user_request: "find people", cohort_selection: cohort },
+                plan: {},
+                metadata: { request_preview: { cohort_selection: cohort, target_locations: ["Canada"] } },
+              });
+              const presentVsAbsentPreview = mapError({
+                request: { cohort_selection: cohort, target_locations: ["Canada"] },
+                request_preview: { cohort_selection: cohort },
+                plan: {},
+              });
+              const optOutVsAbsentPreview = mapError({
+                request: { cohort_selection: cohort, target_locations: [] },
+                request_preview: { cohort_selection: cohort },
+                plan: {},
+              });
+              const excludePresentVsAbsentPreview = mapError({
+                request: { cohort_selection: cohort, exclude_target_locations: ["Europe"] },
+                request_preview: { cohort_selection: cohort },
+                plan: {},
+              });
+              // All preview mirrors in the ladder are compared, not just the
+              // first truthy one: payload.request_preview agrees with the
+              // canonical owner while metadata.request_preview is stale.
+              const staleSecondPreviewMirror = mapError({
+                request: { cohort_selection: cohort, target_locations: ["Canada"] },
+                request_preview: { cohort_selection: cohort, target_locations: ["Canada"] },
+                plan: {},
+                metadata: { request_preview: { cohort_selection: cohort, target_locations: ["United States"] } },
+              });
+              // Presence-intact happy paths: every present mirror agrees.
+              const agreedValues = api.__testMapPlanPayloadToDemoPlan(
+                {
+                  request: { cohort_selection: cohort, target_locations: ["Canada"] },
+                  request_preview: { cohort_selection: cohort, target_locations: ["Canada"] },
+                  plan: {},
+                  metadata: { request_preview: { cohort_selection: cohort, target_locations: ["Canada"] } },
+                },
+                "find people",
+              );
+              const agreedOptOut = api.__testMapPlanPayloadToDemoPlan(
+                {
+                  request: { cohort_selection: cohort, target_locations: [] },
+                  request_preview: { cohort_selection: cohort, target_locations: [] },
+                  plan: {},
+                },
+                "find people",
+              );
+              const legacyAllAbsent = api.__testMapPlanPayloadToDemoPlan(
+                {
+                  request: { raw_user_request: "find people", cohort_selection: cohort },
+                  request_preview: { cohort_selection: cohort },
+                  plan: {},
+                },
+                "find people",
+              );
+
+              // Rendered integration: a recovery envelope whose canonical
+              // request owns the absent state while a stale request_preview
+              // carries Canada must FAIL the recovery mapping — no plan card,
+              // no approval/start calls.
+              const staleResponse = planResponseForRequest(
+                { raw_user_request: "find people", cohort_selection: cohort },
+                { historyId: "hist-stale-mirror", reviewId: "review-31" },
+              );
+              staleResponse.request_preview = {
+                cohort_selection: cohort,
+                target_locations: ["Canada"],
+              };
+              addRoute("GET", "/api/cohort-selection/options", () => optionsPayload);
+              addRoute("GET", "/api/frontend-history/", () =>
+                recoveryEnvelopeFor("hist-stale-mirror", staleResponse));
+              addRoute("POST", "/api/plan/review", () => ({ status: "approved" }));
+              addRoute("POST", "/api/workflows", () => ({ job_id: "job-stale", status: "running" }));
+              routeParams.history = "hist-stale-mirror";
+              const { container } = await mountApp();
+              await settle();
+              console.log(JSON.stringify({
+                absentVsPresentPreview,
+                absentVsPresentMetadataPreview,
+                presentVsAbsentPreview,
+                optOutVsAbsentPreview,
+                excludePresentVsAbsentPreview,
+                staleSecondPreviewMirror,
+                agreedValues: {
+                  targetLocations: agreedValues.targetLocations ?? null,
+                  hasTargetKey: Object.prototype.hasOwnProperty.call(agreedValues, "targetLocations"),
+                },
+                agreedOptOut: {
+                  targetLocations: agreedOptOut.targetLocations ?? null,
+                  hasTargetKey: Object.prototype.hasOwnProperty.call(agreedOptOut, "targetLocations"),
+                },
+                legacyAllAbsent: {
+                  targetLocations: legacyAllAbsent.targetLocations ?? null,
+                },
+                rendered: {
+                  hasPlanCard: Boolean(findByTestId(container, "plan-card")),
+                  pageText: container.textContent.slice(0, 500),
+                  historyCallCount: callsTo("/api/frontend-history/").length,
+                  reviewCallCount: callsTo("/api/plan/review").length,
+                  workflowCallCount: callsTo("/api/workflows").length,
+                },
+              }));
+            })().catch((error) => {
+              console.error(error);
+              process.exit(1);
+            });
+            """
+        )
+        payload = _run_node(script)
+
+        # Absent vs present (in either direction, on either axis, in any
+        # preview mirror) is a CONFLICT, not a silent adoption of the stale
+        # value.
+        for key in (
+            "absentVsPresentPreview",
+            "absentVsPresentMetadataPreview",
+            "presentVsAbsentPreview",
+            "optOutVsAbsentPreview",
+            "excludePresentVsAbsentPreview",
+            "staleSecondPreviewMirror",
+        ):
+            self.assertIn("conflicting target_locations mirrors", payload[key], key)
+
+        # Presence-intact agreement round-trips values and opt-out exactly;
+        # all-absent stays absent (legacy request, server default applies).
+        self.assertEqual(payload["agreedValues"]["targetLocations"], ["Canada"])
+        self.assertTrue(payload["agreedValues"]["hasTargetKey"])
+        self.assertEqual(payload["agreedOptOut"]["targetLocations"], [])
+        self.assertTrue(payload["agreedOptOut"]["hasTargetKey"])
+        self.assertIsNone(payload["legacyAllAbsent"]["targetLocations"])
+
+        # Rendered: the stale-preview recovery envelope fails closed — no
+        # plan card, the recovery failure is surfaced visibly (the exact
+        # contract conflict text is asserted at mapper level above; the
+        # harness loads each module in its own vm realm, so the rendered
+        # fallback message is the generic recovery-failure copy), and zero
+        # approval/start calls.
+        rendered = payload["rendered"]
+        self.assertFalse(rendered["hasPlanCard"])
+        self.assertIn("历史记录恢复失败", rendered["pageText"])
+        self.assertGreaterEqual(rendered["historyCallCount"], 1)
+        self.assertEqual(rendered["reviewCallCount"], 0)
+        self.assertEqual(rendered["workflowCallCount"], 0)
+
+    def test_absent_restore_revision_omits_location_keys(self) -> None:
+        script = textwrap.dedent(
+            _MINIDOM_PREAMBLE
+            + _HARNESS_PREAMBLE
+            + _FIXTURES_PREAMBLE
+            + """
+            const findTextareaById = (node, id) => {
+              if (node.nodeType === 1 && node.nodeName === "TEXTAREA" && node.getAttribute("id") === id) {
+                return node;
+              }
+              for (const child of node.childNodes || []) {
+                const found = findTextareaById(child, id);
+                if (found) return found;
+              }
+              return null;
+            };
+            const findButtonByText = (node, text) => {
+              if (node.nodeType === 1 && node.nodeName === "BUTTON" && node.textContent.trim() === text) {
+                return node;
+              }
+              for (const child of node.childNodes || []) {
+                const found = findButtonByText(child, text);
+                if (found) return found;
+              }
+              return null;
+            };
+            const findButtonByAriaLabel = (node, label) => {
+              if (node.nodeType === 1 && node.nodeName === "BUTTON" && node.getAttribute("aria-label") === label) {
+                return node;
+              }
+              for (const child of node.childNodes || []) {
+                const found = findButtonByAriaLabel(child, label);
+                if (found) return found;
+              }
+              return null;
+            };
+            (async () => {
+              const restoreCohort = selectionFor(["research"], ["current", "former"]);
+              const restoreResponse = planResponseForRequest(
+                {
+                  raw_user_request: "find people",
+                  cohort_selection: restoreCohort,
+                  target_locations: ["Canada"],
+                  exclude_target_locations: ["Europe"],
+                },
+                {
+                  historyId: "hist-restore",
+                  reviewId: "review-41",
+                  editableFields: ["target_locations", "exclude_target_locations"],
+                },
+              );
+              addRoute("GET", "/api/cohort-selection/options", () => optionsPayload);
+              addRoute("GET", "/api/frontend-history/", () =>
+                recoveryEnvelopeFor("hist-restore", restoreResponse));
+              addRoute("POST", "/api/plan/submit", (body) =>
+                planResponseForRequest(body, { historyId: "hist-restore", reviewId: "review-41" }));
+
+              searchHistoryStore.set(
+                "hist-restore",
+                seedPlanHistoryItem(
+                  "hist-restore",
+                  makePlan({
+                    cohortSelection: restoreCohort,
+                    targetLocations: ["Canada"],
+                    excludeTargetLocations: ["Europe"],
+                    reviewGate: {
+                      status: "pending",
+                      requiredBeforeExecution: true,
+                      riskLevel: "low",
+                      reasons: [],
+                      confirmationItems: [],
+                      editableFields: ["target_locations", "exclude_target_locations"],
+                      suggestedActions: [],
+                      scopeHints: [],
+                      executionModeHints: [],
+                    },
+                  }),
+                  "review-41",
+                ),
+              );
+              routeParams.history = "hist-restore";
+              const { container } = await mountApp();
+
+              // Authorized edit 1: remove the LAST target tag. Clearing back
+              // to the absent (server-default) state is a first-class edit —
+              // the old plan value must NOT reappear.
+              clickEl(findButtonByAriaLabel(container, "移除 Canada"));
+              await settle(2);
+              const tagsAfterClear = findAllByTestId(
+                container,
+                "plan-review-target-locations-input-tag",
+              ).map((node) => node.textContent.replace(/×/g, "").trim());
+              const defaultMarkerAfterClear = Boolean(
+                findByTestId(container, "plan-review-target-locations-default"),
+              );
+
+              // Authorized edit 2: remove the only exclude tag.
+              clickEl(findButtonByAriaLabel(container, "移除 Europe"));
+              await settle(2);
+
+              // Authorized edit 3: enter explicit opt-out, then EXIT it back
+              // to the absent state.
+              const optOutCheckbox = findByTestId(container, "plan-review-target-locations-optout");
+              setCheckbox(optOutCheckbox, true);
+              await settle(2);
+              const optedOutMarker = Boolean(
+                findByTestId(container, "plan-review-target-locations-opted-out"),
+              );
+              setCheckbox(findByTestId(container, "plan-review-target-locations-optout"), false);
+              await settle(2);
+              const defaultMarkerAfterOptOutExit = Boolean(
+                findByTestId(container, "plan-review-target-locations-default"),
+              );
+              const optedOutMarkerAfterExit = Boolean(
+                findByTestId(container, "plan-review-target-locations-opted-out"),
+              );
+
+              // Revise through the REAL revision path: the restored absent
+              // state must round-trip as ABSENT keys (server default), not
+              // resurrect the plan's Canada/Europe.
+              setInputValue(findTextareaById(container, "plan-revision"), "reset locations");
+              await settle(2);
+              clickEl(findButtonByText(container, "修改方案"));
+              await settle();
+              const submits = callsTo("/api/plan/submit");
+              console.log(JSON.stringify({
+                tagsAfterClear,
+                defaultMarkerAfterClear,
+                optedOutMarker,
+                defaultMarkerAfterOptOutExit,
+                optedOutMarkerAfterExit,
+                submitCallCount: submits.length,
+                revisionBody: submits.length ? submits[submits.length - 1].body : null,
+              }));
+            })().catch((error) => {
+              console.error(error);
+              process.exit(1);
+            });
+            """
+        )
+        payload = _run_node(script)
+
+        # Clearing the last tag restores the absent/server-default render —
+        # the frozen plan value does NOT reappear.
+        self.assertEqual(payload["tagsAfterClear"], [])
+        self.assertTrue(payload["defaultMarkerAfterClear"])
+
+        # Opt-out round-trips distinctly: [] renders the opted-out state,
+        # unchecking restores the absent/server-default state.
+        self.assertTrue(payload["optedOutMarker"])
+        self.assertTrue(payload["defaultMarkerAfterOptOutExit"])
+        self.assertFalse(payload["optedOutMarkerAfterExit"])
+
+        # The revision payload carries the restored ABSENT state: both
+        # location keys are omitted (server default), never resurrected from
+        # the plan mirror.
+        self.assertEqual(payload["submitCallCount"], 1)
+        revision = payload["revisionBody"]
+        self.assertEqual(revision["history_id"], "hist-restore")
+        self.assertNotIn("target_locations", revision)
+        self.assertNotIn("exclude_target_locations", revision)
+        self.assertEqual(revision["cohort_selection"]["role_bucket_ids"], ["research"])
+
+    def test_unpinned_plan_manifest_never_borrows_mirror_pin(self) -> None:
+        script = textwrap.dedent(
+            _MINIDOM_PREAMBLE
+            + _HARNESS_PREAMBLE
+            + _FIXTURES_PREAMBLE
+            + """
+            (async () => {
+              const cohort = selectionFor(["research"], ["current", "former"]);
+              // Review finding 3 (r3): pin assignment is per-manifest exact.
+              // A PRESENT but unpinned canonical plan manifest owns NO pin —
+              // it must never borrow one from a stale/other mirror.
+              const mapPin = (payload) =>
+                captureError(() => api.__testMapPlanPayloadToDemoPlan(payload, "find people"));
+              const unpinnedCanonicalPinnedMirror = mapPin({
+                request: { cohort_selection: cohort },
+                plan: { acquisition_strategy: { provider_execution_manifest: {} } },
+                metadata: { provider_execution_manifest: manifestPin() },
+              });
+              const pinnedCanonicalUnpinnedMirror = mapPin({
+                request: { cohort_selection: cohort },
+                plan: { acquisition_strategy: { provider_execution_manifest: manifestPin() } },
+                metadata: { provider_execution_manifest: {} },
+              });
+              const halfPinnedCanonical = mapPin({
+                request: { cohort_selection: cohort },
+                plan: {
+                  acquisition_strategy: {
+                    provider_execution_manifest: { registry_version: REGISTRY_VERSION },
+                  },
+                },
+                metadata: { provider_execution_manifest: manifestPin() },
+              });
+              // Every manifest unpinned -> no pin evidence anywhere -> the
+              // plan maps with an UNDEFINED pin (confirmation blocks).
+              const allUnpinned = api.__testMapPlanPayloadToDemoPlan(
+                {
+                  request: { cohort_selection: cohort },
+                  plan: { acquisition_strategy: { provider_execution_manifest: {} } },
+                  metadata: {},
+                },
+                "find people",
+              );
+              // Canonical pinned + byte-exact mirrors -> the pin is owned.
+              const agreedPinned = api.__testMapPlanPayloadToDemoPlan(
+                {
+                  request: { cohort_selection: cohort },
+                  plan: { acquisition_strategy: { provider_execution_manifest: manifestPin() } },
+                  metadata: { provider_execution_manifest: manifestPin() },
+                },
+                "find people",
+              );
+
+              // Rendered integration: a recovery envelope with an unpinned
+              // canonical manifest plus a PINNED metadata mirror must fail
+              // the mapping — no valid-looking plan, zero approval/start.
+              const borrowResponse = planResponseForRequest(
+                { raw_user_request: "find people", cohort_selection: cohort },
+                {
+                  historyId: "hist-borrow",
+                  reviewId: "review-42",
+                  editableFields: ["target_locations"],
+                  manifest: {},
+                  metadata: { provider_execution_manifest: manifestPin() },
+                },
+              );
+              addRoute("GET", "/api/cohort-selection/options", () => optionsPayload);
+              addRoute("GET", "/api/frontend-history/", () =>
+                recoveryEnvelopeFor("hist-borrow", borrowResponse));
+              addRoute("POST", "/api/plan/review", () => ({ status: "approved" }));
+              addRoute("POST", "/api/workflows", () => ({ job_id: "job-borrow", status: "running" }));
+              routeParams.history = "hist-borrow";
+              const { container } = await mountApp();
+              await settle();
+              console.log(JSON.stringify({
+                unpinnedCanonicalPinnedMirror,
+                pinnedCanonicalUnpinnedMirror,
+                halfPinnedCanonical,
+                allUnpinnedPin: allUnpinned.cohortRegistryPin ?? null,
+                agreedPinnedPin: agreedPinned.cohortRegistryPin ?? null,
+                rendered: {
+                  hasPlanCard: Boolean(findByTestId(container, "plan-card")),
+                  pageText: container.textContent.slice(0, 500),
+                  reviewCallCount: callsTo("/api/plan/review").length,
+                  workflowCallCount: callsTo("/api/workflows").length,
+                },
+              }));
+            })().catch((error) => {
+              console.error(error);
+              process.exit(1);
+            });
+            """
+        )
+        payload = _run_node(script)
+
+        # Mixed pin evidence fails closed in BOTH directions; half-pinned is
+        # invalid pin evidence.
+        self.assertIn("conflicting cohort registry pins", payload["unpinnedCanonicalPinnedMirror"])
+        self.assertIn("conflicting cohort registry pins", payload["pinnedCanonicalUnpinnedMirror"])
+        self.assertIn("invalid cohort registry pin", payload["halfPinnedCanonical"])
+
+        # All-unpinned stays unconfirmable (no pin), agreed mirrors pin.
+        self.assertIsNone(payload["allUnpinnedPin"])
+        self.assertEqual(
+            payload["agreedPinnedPin"],
+            {"registryVersion": "cohort_selection.registry.v1", "registryDigest": "registry-digest"},
+        )
+
+        # Rendered: the stale pinned mirror cannot manufacture a confirmable
+        # plan — mapping fails, no plan card, the recovery failure surfaces
+        # visibly, and zero approval/start calls.
+        rendered = payload["rendered"]
+        self.assertFalse(rendered["hasPlanCard"])
+        self.assertIn("历史记录恢复失败", rendered["pageText"])
+        self.assertEqual(rendered["reviewCallCount"], 0)
+        self.assertEqual(rendered["workflowCallCount"], 0)
+
+    def test_revision_first_blocks_overlapping_confirmation(self) -> None:
+        script = textwrap.dedent(
+            _MINIDOM_PREAMBLE
+            + _HARNESS_PREAMBLE
+            + _FIXTURES_PREAMBLE
+            + """
+            const findButtonByText = (node, text) => {
+              if (node.nodeType === 1 && node.nodeName === "BUTTON" && node.textContent.trim() === text) {
+                return node;
+              }
+              for (const child of node.childNodes || []) {
+                const found = findButtonByText(child, text);
+                if (found) return found;
+              }
+              return null;
+            };
+            (async () => {
+              const overlapCohort = selectionFor(["research"], ["current", "former"]);
+              const initialResponse = planResponseForRequest(
+                {
+                  raw_user_request: "find people",
+                  cohort_selection: overlapCohort,
+                  target_locations: ["Canada"],
+                },
+                { historyId: "hist-ov1", reviewId: "701", editableFields: ["target_locations"] },
+              );
+              let resolveRevision;
+              const revisionGate = new Promise((resolve) => {
+                resolveRevision = resolve;
+              });
+              addRoute("GET", "/api/cohort-selection/options", () => optionsPayload);
+              addRoute("GET", "/api/frontend-history/", () =>
+                recoveryEnvelopeFor("hist-ov1", initialResponse));
+              addRoute("POST", "/api/plan/submit", async (body) => {
+                await revisionGate;
+                return planResponseForRequest(body, {
+                  historyId: "hist-ov1",
+                  reviewId: "702",
+                  editableFields: ["target_locations"],
+                });
+              });
+              addRoute("POST", "/api/plan/review", () => ({ status: "approved" }));
+              addRoute("POST", "/api/workflows", () => ({
+                job_id: "job-ov1",
+                status: "completed",
+                stage: "completed",
+              }));
+              addRoute("GET", "/api/jobs/", () => ({
+                candidates: [],
+                layers: [],
+                intentKeywords: [],
+                totalCandidates: 0,
+                manualReviewCount: 0,
+              }));
+
+              searchHistoryStore.set(
+                "hist-ov1",
+                seedPlanHistoryItem(
+                  "hist-ov1",
+                  makePlan({
+                    cohortSelection: overlapCohort,
+                    targetLocations: ["Canada"],
+                    reviewGate: {
+                      status: "pending",
+                      requiredBeforeExecution: true,
+                      riskLevel: "low",
+                      reasons: [],
+                      confirmationItems: [],
+                      editableFields: ["target_locations"],
+                      suggestedActions: [],
+                      scopeHints: [],
+                      executionModeHints: [],
+                    },
+                  }),
+                  "701",
+                ),
+              );
+              routeParams.history = "hist-ov1";
+              const { container } = await mountApp();
+
+              // Revision starts first (deferred backend response).
+              clickEl(findButtonByText(container, "修改方案"));
+              await settle(4);
+              const confirmWhileRevising = findByTestId(container, "plan-confirm-button");
+              const confirmDisabledWhileRevising = Boolean(
+                confirmWhileRevising && confirmWhileRevising.hasAttribute("disabled"),
+              );
+              const revisingButton = findButtonByText(container, "更新中...");
+              const reviseDisabledWhileRevising = Boolean(
+                revisingButton && revisingButton.hasAttribute("disabled"),
+              );
+              // A synthetic click on the (cross-disabled) confirm button
+              // must NOT start approval against the OLD identity.
+              clickEl(confirmWhileRevising);
+              await settle(4);
+              const reviewCallsWhileRevising = callsTo("/api/plan/review").length;
+              const workflowCallsWhileRevising = callsTo("/api/workflows").length;
+
+              // The revision lands a NEW plan identity; confirmation of the
+              // FRESH identity is then re-authorized.
+              resolveRevision();
+              await settle();
+              clickEl(findByTestId(container, "plan-confirm-button"));
+              await settle();
+              const reviewCalls = callsTo("/api/plan/review");
+              console.log(JSON.stringify({
+                submitCallCount: callsTo("/api/plan/submit").length,
+                confirmDisabledWhileRevising,
+                reviseDisabledWhileRevising,
+                reviewCallsWhileRevising,
+                workflowCallsWhileRevising,
+                reviewCallCount: reviewCalls.length,
+                reviewBody: reviewCalls.length ? reviewCalls[0].body : null,
+                workflowCallCount: callsTo("/api/workflows").length,
+              }));
+            })().catch((error) => {
+              console.error(error);
+              process.exit(1);
+            });
+            """
+        )
+        payload = _run_node(script)
+
+        # Exactly ONE plan action while the revision was in flight: the
+        # overlapping confirmation was blocked (cross-disabled + mutex) and
+        # made NO approval/start call against the stale identity.
+        self.assertEqual(payload["submitCallCount"], 1)
+        self.assertTrue(payload["confirmDisabledWhileRevising"])
+        self.assertTrue(payload["reviseDisabledWhileRevising"])
+        self.assertEqual(payload["reviewCallsWhileRevising"], 0)
+        self.assertEqual(payload["workflowCallsWhileRevising"], 0)
+
+        # After the revision landed, confirmation of the FRESH identity is
+        # re-authorized: exactly one approval carrying the NEW review id and
+        # exactly one workflow start.
+        self.assertEqual(payload["reviewCallCount"], 1)
+        self.assertEqual(payload["reviewBody"]["review_id"], 702)
+        self.assertEqual(payload["workflowCallCount"], 1)
+
+    def test_confirmation_first_blocks_overlapping_revision(self) -> None:
+        script = textwrap.dedent(
+            _MINIDOM_PREAMBLE
+            + _HARNESS_PREAMBLE
+            + _FIXTURES_PREAMBLE
+            + """
+            const findButtonByText = (node, text) => {
+              if (node.nodeType === 1 && node.nodeName === "BUTTON" && node.textContent.trim() === text) {
+                return node;
+              }
+              for (const child of node.childNodes || []) {
+                const found = findButtonByText(child, text);
+                if (found) return found;
+              }
+              return null;
+            };
+            (async () => {
+              const overlapCohort = selectionFor(["research"], ["current", "former"]);
+              const initialResponse = planResponseForRequest(
+                {
+                  raw_user_request: "find people",
+                  cohort_selection: overlapCohort,
+                  target_locations: ["Canada"],
+                },
+                { historyId: "hist-ov2", reviewId: "703", editableFields: ["target_locations"] },
+              );
+              let resolveApprove;
+              const approveGate = new Promise((resolve) => {
+                resolveApprove = resolve;
+              });
+              addRoute("GET", "/api/cohort-selection/options", () => optionsPayload);
+              addRoute("GET", "/api/frontend-history/", () =>
+                recoveryEnvelopeFor("hist-ov2", initialResponse));
+              addRoute("POST", "/api/plan/submit", (body) =>
+                planResponseForRequest(body, { historyId: "hist-ov2", reviewId: "704" }));
+              addRoute("POST", "/api/plan/review", async () => {
+                await approveGate;
+                return { status: "approved" };
+              });
+              addRoute("POST", "/api/workflows", () => ({
+                job_id: "job-ov2",
+                status: "completed",
+                stage: "completed",
+              }));
+              addRoute("GET", "/api/jobs/", () => ({
+                candidates: [],
+                layers: [],
+                intentKeywords: [],
+                totalCandidates: 0,
+                manualReviewCount: 0,
+              }));
+
+              searchHistoryStore.set(
+                "hist-ov2",
+                seedPlanHistoryItem(
+                  "hist-ov2",
+                  makePlan({
+                    cohortSelection: overlapCohort,
+                    targetLocations: ["Canada"],
+                    reviewGate: {
+                      status: "pending",
+                      requiredBeforeExecution: true,
+                      riskLevel: "low",
+                      reasons: [],
+                      confirmationItems: [],
+                      editableFields: ["target_locations"],
+                      suggestedActions: [],
+                      scopeHints: [],
+                      executionModeHints: [],
+                    },
+                  }),
+                  "703",
+                ),
+              );
+              routeParams.history = "hist-ov2";
+              const { container } = await mountApp();
+
+              // Confirmation starts first (approval deferred).
+              clickEl(findByTestId(container, "plan-confirm-button"));
+              await settle(4);
+              const reviseWhileConfirming = findButtonByText(container, "修改方案");
+              const reviseDisabledWhileConfirming = Boolean(
+                reviseWhileConfirming && reviseWhileConfirming.hasAttribute("disabled"),
+              );
+              // A synthetic click on the (cross-disabled) revision button
+              // must NOT persist a NEW plan while approval/start continues
+              // for the captured one.
+              clickEl(reviseWhileConfirming);
+              await settle(4);
+              const submitCallsWhileConfirming = callsTo("/api/plan/submit").length;
+
+              resolveApprove();
+              await settle();
+              console.log(JSON.stringify({
+                reviseDisabledWhileConfirming,
+                submitCallsWhileConfirming,
+                submitCallCount: callsTo("/api/plan/submit").length,
+                reviewCallCount: callsTo("/api/plan/review").length,
+                workflowCallCount: callsTo("/api/workflows").length,
+              }));
+            })().catch((error) => {
+              console.error(error);
+              process.exit(1);
+            });
+            """
+        )
+        payload = _run_node(script)
+
+        # Exactly ONE plan action under this interleaving: the overlapping
+        # revision was blocked (cross-disabled + mutex) and never reached the
+        # backend; the in-flight confirmation approved and started the SAME
+        # captured identity exactly once.
+        self.assertTrue(payload["reviseDisabledWhileConfirming"])
+        self.assertEqual(payload["submitCallsWhileConfirming"], 0)
+        self.assertEqual(payload["submitCallCount"], 0)
+        self.assertEqual(payload["reviewCallCount"], 1)
+        self.assertEqual(payload["workflowCallCount"], 1)
 
     def test_function_facet_disabled_without_canonical_summary(self) -> None:
         script = textwrap.dedent(

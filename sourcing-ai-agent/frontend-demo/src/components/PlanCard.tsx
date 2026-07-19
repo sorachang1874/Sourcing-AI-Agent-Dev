@@ -215,9 +215,17 @@ export function PlanCard({
   // keep their presence tri-state (absent / explicit opt-out / explicit
   // values) instead of collapsing to an empty list.
   const effectiveCohortSelection = reviewDecision.cohortSelection || plan.cohortSelection || null;
+  // The INITIALIZED review decision is the sole effective owner of the
+  // location axes (FT2 fixed-forward r3, review finding 2): clearing a
+  // location back to the absent (server-default) state is a first-class
+  // authorized edit — there is deliberately NO `?? plan` fallback here, or
+  // the cleared value would silently reappear from the frozen plan mirror.
+  // Older stored decisions are migrated once during recovery
+  // (historyRecovery.normalizeHistoryItem), so by render time the decision
+  // always owns the axes.
   const effectiveLocations: CohortLocationSelection = {
-    targetLocations: reviewDecision.targetLocations ?? plan.targetLocations,
-    excludeTargetLocations: reviewDecision.excludeTargetLocations ?? plan.excludeTargetLocations,
+    targetLocations: reviewDecision.targetLocations,
+    excludeTargetLocations: reviewDecision.excludeTargetLocations,
   };
   // Location review edits are authorized INDEPENDENTLY per field (FT2
   // fixed-forward r2, review finding 2): `target_locations` and
@@ -229,6 +237,13 @@ export function PlanCard({
   const targetLocationsAuthorized = supportsField(plan, "target_locations");
   const excludeLocationsAuthorized = supportsField(plan, "exclude_target_locations");
   const locationEditingAuthorized = targetLocationsAuthorized || excludeLocationsAuthorized;
+  // One plan-action busy state for edit/revision/approval/start (FT2
+  // fixed-forward r3, review finding 4): while EITHER action is in flight,
+  // both action buttons and every review control are cross-disabled, so
+  // revision and confirmation can never overlap against different plan
+  // identities. The fail-closed guard itself lives in the SearchPage
+  // handlers (a mutex ref + identity revalidation); this is the UX layer.
+  const planActionBusy = isApplyingRevision || isConfirming;
   const planShardPreview =
     effectiveCohortSelection && cohortOptions
       ? buildCohortShardPreview(effectiveCohortSelection, cohortOptions)
@@ -376,6 +391,7 @@ export function PlanCard({
                   placeholder={
                     plan.targetCompanyIdentity?.linkedinCompanyUrl || "https://www.linkedin.com/company/ssi-ai/"
                   }
+                  disabled={planActionBusy}
                   onChange={(event) =>
                     onReviewDecisionChange({
                       targetCompanyLinkedinUrl: event.target.value,
@@ -406,6 +422,7 @@ export function PlanCard({
             placeholder="优先复用本地资产，只做Scoped search，要多模态方向（Nano Banana和Veo组）的人"
             onChange={(event) => onRevisionChange(event.target.value)}
             rows={3}
+            disabled={planActionBusy}
           />
         </div>
 
@@ -416,6 +433,7 @@ export function PlanCard({
           isLoading={isLoadingCohortOptions}
           errorMessage={cohortOptionsError}
           locked={Boolean(plan.cohortSelection)}
+          disabled={planActionBusy}
           locationValue={effectiveLocations}
           targetLocationsDisabled={!targetLocationsAuthorized}
           excludeLocationsDisabled={!excludeLocationsAuthorized}
@@ -427,11 +445,22 @@ export function PlanCard({
                   onReviewDecisionChange({
                     // Only the gate-authorized fields may enter the review
                     // decision; the other field keeps its plan-mirror value.
+                    // The patch (re-)initializes the axis durably: an
+                    // explicit `undefined` here is a first-class "restore
+                    // the absent (server-default) state" decision, not an
+                    // uninitialized field (FT2 fixed-forward r3, review
+                    // finding 2).
                     ...(targetLocationsAuthorized
-                      ? { targetLocations: next.targetLocations }
+                      ? {
+                          targetLocations: next.targetLocations,
+                          targetLocationsInitialized: true,
+                        }
                       : {}),
                     ...(excludeLocationsAuthorized
-                      ? { excludeTargetLocations: next.excludeTargetLocations }
+                      ? {
+                          excludeTargetLocations: next.excludeTargetLocations,
+                          excludeTargetLocationsInitialized: true,
+                        }
                       : {}),
                   })
               : undefined
@@ -518,6 +547,7 @@ export function PlanCard({
                       <input
                         type="checkbox"
                         checked={reviewDecision.confirmedCompanyScope.includes(scope)}
+                        disabled={planActionBusy}
                         onChange={(event) =>
                           onReviewDecisionChange({
                             confirmedCompanyScope: toggleScopeValue(
@@ -541,6 +571,7 @@ export function PlanCard({
                   <input
                     type="checkbox"
                     checked={Boolean(reviewDecision.reuseExistingRoster)}
+                    disabled={planActionBusy}
                     onChange={(event) =>
                       onReviewDecisionChange({
                         reuseExistingRoster: event.target.checked,
@@ -558,6 +589,7 @@ export function PlanCard({
                   <input
                     type="checkbox"
                     checked={Boolean(reviewDecision.runFormerSearchSeed)}
+                    disabled={planActionBusy}
                     onChange={(event) =>
                       onReviewDecisionChange({
                         runFormerSearchSeed: event.target.checked,
@@ -575,6 +607,7 @@ export function PlanCard({
                   <input
                     type="checkbox"
                     checked={Boolean(reviewDecision.useCompanyEmployeesLane)}
+                    disabled={planActionBusy}
                     onChange={(event) =>
                       onReviewDecisionChange({
                         useCompanyEmployeesLane: event.target.checked,
@@ -592,6 +625,7 @@ export function PlanCard({
                   <input
                     type="checkbox"
                     checked={Boolean(reviewDecision.keywordPriorityOnly)}
+                    disabled={planActionBusy}
                     onChange={(event) =>
                       onReviewDecisionChange({
                         keywordPriorityOnly: event.target.checked,
@@ -609,6 +643,7 @@ export function PlanCard({
                   <input
                     type="checkbox"
                     checked={Boolean(reviewDecision.formerKeywordQueriesOnly)}
+                    disabled={planActionBusy}
                     onChange={(event) =>
                       onReviewDecisionChange({
                         formerKeywordQueriesOnly: event.target.checked,
@@ -626,6 +661,7 @@ export function PlanCard({
                   <input
                     type="checkbox"
                     checked={Boolean(reviewDecision.forceFreshRun)}
+                    disabled={planActionBusy}
                     onChange={(event) =>
                       onReviewDecisionChange({
                         forceFreshRun: event.target.checked,
@@ -641,6 +677,7 @@ export function PlanCard({
               <AdvancedField title="Provider search query strategy" description="控制 provider query 的合并策略。">
                 <select
                   value={reviewDecision.providerPeopleSearchQueryStrategy || "all_queries_union"}
+                  disabled={planActionBusy}
                   onChange={(event) =>
                     onReviewDecisionChange({
                       providerPeopleSearchQueryStrategy: event.target.value,
@@ -661,6 +698,7 @@ export function PlanCard({
                   min={1}
                   max={24}
                   value={reviewDecision.providerPeopleSearchMaxQueries ?? ""}
+                  disabled={planActionBusy}
                   onChange={(event) =>
                     onReviewDecisionChange({
                       providerPeopleSearchMaxQueries: event.target.value ? Number(event.target.value) : null,
@@ -674,6 +712,7 @@ export function PlanCard({
               <AdvancedField title="Acquisition strategy override" description="必要时手动覆盖执行策略。">
                 <select
                   value={reviewDecision.acquisitionStrategyOverride || ""}
+                  disabled={planActionBusy}
                   onChange={(event) =>
                     onReviewDecisionChange({
                       acquisitionStrategyOverride: event.target.value,
@@ -692,6 +731,7 @@ export function PlanCard({
               <AdvancedField title="Precision / recall bias" description="控制精度与召回倾向。">
                 <select
                   value={reviewDecision.precisionRecallBias || ""}
+                  disabled={planActionBusy}
                   onChange={(event) =>
                     onReviewDecisionChange({
                       precisionRecallBias: event.target.value,
@@ -710,7 +750,7 @@ export function PlanCard({
       </section>
 
       <div className="action-row">
-        <button type="button" className="ghost-button" onClick={onApplyRevision} disabled={isApplyingRevision}>
+        <button type="button" className="ghost-button" onClick={onApplyRevision} disabled={planActionBusy}>
           {isApplyingRevision ? "更新中..." : "修改方案"}
         </button>
         <button
@@ -718,7 +758,7 @@ export function PlanCard({
           className="primary-button"
           data-testid="plan-confirm-button"
           onClick={handleConfirm}
-          disabled={isConfirming || Boolean(cohortPreviewBlocker)}
+          disabled={planActionBusy || Boolean(cohortPreviewBlocker)}
         >
           {isConfirming ? "准备执行..." : "确认执行"}
         </button>

@@ -109,6 +109,21 @@ export interface PlanReviewDecision {
   cohortSelection?: CohortSelection;
   targetLocations?: string[];
   excludeTargetLocations?: string[];
+  /**
+   * Durable per-axis initialization markers for the location review channel
+   * (FT2 fixed-forward r3, review finding 2). Each location axis is a tagged
+   * tri-state — absent (server default), explicit `[]` opt-out, present
+   * values — and an UNINITIALIZED decision (e.g. one recovered from an older
+   * stored flow) is a fourth state that must never be confused with an
+   * explicit "restore absence" edit. The initialized review decision is the
+   * SOLE effective owner of the axes: `cloneReviewDecision` initializes both
+   * markers when seeding from the plan, `normalizeHistoryItem` migrates
+   * older stored decisions once during recovery, and rendering/revision
+   * never fall back to the frozen plan mirror afterwards — so clearing a
+   * location back to absent stays cleared.
+   */
+  targetLocationsInitialized?: boolean;
+  excludeTargetLocationsInitialized?: boolean;
 }
 
 export interface TargetCompanyIdentityPreview {

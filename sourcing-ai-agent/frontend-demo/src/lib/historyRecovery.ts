@@ -61,12 +61,54 @@ export function cloneReviewDecision(plan: DemoPlan | null): PlanReviewDecision {
       : undefined,
     // Sibling location fields must survive the clone presence-intact:
     // dropping them would silently detach the review decision from the
-    // plan's location state (FT2 fixed-forward, review finding 2).
+    // plan's location state (FT2 fixed-forward, review finding 2). The
+    // clone INITIALIZES the location axes (durable markers, FT2
+    // fixed-forward r3): from here on the review decision is the sole
+    // effective owner, so a user clearing a location back to the absent
+    // (server-default) state is never overridden by the plan mirror.
     targetLocations: defaults?.targetLocations ? [...defaults.targetLocations] : undefined,
     excludeTargetLocations: defaults?.excludeTargetLocations
       ? [...defaults.excludeTargetLocations]
       : undefined,
+    targetLocationsInitialized: true,
+    excludeTargetLocationsInitialized: true,
   };
+}
+
+/**
+ * Migrate older stored review decisions ONCE during recovery (FT2
+ * fixed-forward r3, review finding 2): decisions stored before the location
+ * axes gained durable initialization markers are seeded from the plan mirror
+ * presence-intact and marked initialized. After this one-time migration the
+ * review decision owns the axes outright — rendering and revision submission
+ * never fall back to the plan mirror, so an explicit "restore absence" edit
+ * (clear the last tag / uncheck opt-out) round-trips as an absent field
+ * instead of silently resurrecting the old plan value.
+ */
+function migrateReviewDecisionLocationAxes(
+  decision: PlanReviewDecision,
+  plan: DemoPlan | null,
+): PlanReviewDecision {
+  const migrated: PlanReviewDecision = { ...decision };
+  if (migrated.targetLocationsInitialized !== true) {
+    migrated.targetLocations =
+      migrated.targetLocations !== undefined
+        ? [...migrated.targetLocations]
+        : plan?.targetLocations
+          ? [...plan.targetLocations]
+          : undefined;
+    migrated.targetLocationsInitialized = true;
+  }
+  if (migrated.excludeTargetLocationsInitialized !== true) {
+    migrated.excludeTargetLocations =
+      migrated.excludeTargetLocations !== undefined
+        ? [...migrated.excludeTargetLocations]
+        : plan?.excludeTargetLocations
+          ? [...plan.excludeTargetLocations]
+          : undefined;
+    migrated.excludeTargetLocationsInitialized = true;
+  }
+  return migrated;
 }
 
 export function normalizeHistoryMetadata(metadata: unknown): Record<string, unknown> {
@@ -97,7 +139,10 @@ export function normalizeHistoryItem(item: SearchHistoryItem): SearchHistoryItem
     plan: normalizedPlan,
     updatedAt: item.updatedAt || item.createdAt,
     errorMessage: recoveredErrorMessage,
-    reviewDecision: item.reviewDecision || cloneReviewDecision(normalizedPlan),
+    reviewDecision: migrateReviewDecisionLocationAxes(
+      item.reviewDecision || cloneReviewDecision(normalizedPlan),
+      normalizedPlan,
+    ),
     reviewChecklistConfirmed:
       typeof item.reviewChecklistConfirmed === "boolean"
         ? item.reviewChecklistConfirmed

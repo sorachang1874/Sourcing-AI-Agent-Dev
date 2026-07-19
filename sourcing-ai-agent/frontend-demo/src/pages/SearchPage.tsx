@@ -153,6 +153,14 @@ export function SearchPage() {
   const timerRef = useRef<number | null>(null);
   const planHydrationTimerRef = useRef<number | null>(null);
   const requestEpochRef = useRef(0);
+  // One plan-action mutex for edit/revision/approval/start (FT2
+  // fixed-forward r3, review finding 4): revision and confirmation must
+  // never overlap against DIFFERENT plan identities. This ref is the
+  // fail-closed guard — the state-driven cross-disabled buttons and review
+  // controls are only the UX layer, and synthetic events can still reach
+  // the handlers. The FIRST action to arrive wins; a blocked action
+  // performs no backend call.
+  const planActionInFlightRef = useRef(false);
   const dashboardWarmupAttemptedJobIdsRef = useRef<Set<string>>(new Set());
   const boardPatchPublishedAtByJobRef = useRef<Record<string, string>>({});
   const boardPatchSequenceByJobRef = useRef<Record<string, number>>({});
@@ -1251,27 +1259,36 @@ export function SearchPage() {
     if (!currentFlow.plan || !currentFlow.queryText) {
       return;
     }
-    const requestEpoch = requestEpochRef.current;
+    if (planActionInFlightRef.current) {
+      // Another plan action (revision/approval/start) is in flight against
+      // the current plan identity; this action is blocked fail-closed and
+      // performs NO backend call (FT2 fixed-forward r3, review finding 4).
+      return;
+    }
+    planActionInFlightRef.current = true;
+    // Mint a fresh epoch for EVERY plan action (review finding 4): a newer
+    // action or route change invalidates this action's UI response.
+    const requestEpoch = nextRequestEpoch();
     setIsApplyingRevision(true);
     stopPlanHydrationPolling();
     setErrorMessage("");
     setIsLoadingResults(false);
     try {
       // Revision carries the request-owned cohort + location state
-      // explicitly (review finding 1): the review decision wins, the plan
-      // mirror is the fallback, so a recovered flow rehydrates the recovered
-      // request's locations instead of silently falling back to the server
-      // default. Presence tri-state is preserved (absent / explicit opt-out
-      // / explicit values).
+      // explicitly (review finding 1), and the initialized review decision
+      // is the SOLE effective owner of the location axes (FT2 fixed-forward
+      // r3, review finding 2): clearing a location back to the absent
+      // (server-default) state is a first-class authorized edit that
+      // round-trips as an absent key — there is deliberately NO `?? plan`
+      // fallback here, or the cleared value would silently be resurrected
+      // from the frozen plan mirror. Older stored decisions are migrated
+      // once during recovery (historyRecovery.normalizeHistoryItem).
       const revisionCohort =
         currentFlow.reviewDecision.cohortSelection || currentFlow.plan.cohortSelection || undefined;
       const revisionLocations: CohortLocationSelection | undefined = revisionCohort
         ? {
-            targetLocations:
-              currentFlow.reviewDecision.targetLocations ?? currentFlow.plan.targetLocations,
-            excludeTargetLocations:
-              currentFlow.reviewDecision.excludeTargetLocations
-              ?? currentFlow.plan.excludeTargetLocations,
+            targetLocations: currentFlow.reviewDecision.targetLocations,
+            excludeTargetLocations: currentFlow.reviewDecision.excludeTargetLocations,
           }
         : undefined;
       const { plan: planned, reviewId, historyId: nextHistoryId, status, raw } =
@@ -1341,6 +1358,7 @@ export function SearchPage() {
         dashboard,
       );
     } finally {
+      planActionInFlightRef.current = false;
       setIsApplyingRevision(false);
     }
   };
@@ -1350,7 +1368,23 @@ export function SearchPage() {
     if (!currentFlow.plan) {
       return;
     }
+    if (planActionInFlightRef.current) {
+      // Another plan action (revision/approval/start) is in flight against
+      // the current plan identity; this action is blocked fail-closed and
+      // performs NO backend call (FT2 fixed-forward r3, review finding 4).
+      return;
+    }
+    planActionInFlightRef.current = true;
     const requestEpoch = nextRequestEpoch();
+    // Bind approval + workflow start to ONE immutable plan identity (review
+    // finding 4): the plan object, review id, history id, review decision,
+    // and registry pin captured HERE are the only ones this confirmation
+    // may approve and start; the identity is revalidated before starting.
+    const confirmedPlan = currentFlow.plan;
+    const confirmedReviewId = currentFlow.reviewId;
+    const confirmedHistoryId = currentFlow.id;
+    const confirmedRegistryPin = confirmedPlan.cohortRegistryPin;
+    const confirmedDecision = currentFlow.reviewDecision;
     const requiresReviewAcknowledgement =
       (currentFlow.plan.reviewGate?.confirmationItems.length || 0) > 0;
     const reviewChecklistConfirmed =
@@ -1369,11 +1403,24 @@ export function SearchPage() {
           reviewChecklistConfirmed: true,
         }));
       }
-      let reviewId = currentFlow.reviewId;
+      let reviewId = confirmedReviewId;
       if (reviewId) {
-        await sourcingBackendClient.approvePlan(reviewId, currentFlow.plan, currentFlow.reviewDecision);
+        await sourcingBackendClient.approvePlan(reviewId, confirmedPlan, confirmedDecision);
       }
-      const { jobId, runStatus, raw } = await sourcingBackendClient.startWorkflowFromReviewedPlan(reviewId, currentFlow.id);
+      // Revalidate the bound identity before starting (fail closed): if the
+      // flow's plan identity changed while approval was in flight, this
+      // confirmation is STALE — never start a workflow for a different plan
+      // than the one the user approved.
+      const latestFlow = flowRef.current;
+      if (
+        latestFlow.plan !== confirmedPlan
+        || latestFlow.reviewId !== confirmedReviewId
+        || latestFlow.id !== confirmedHistoryId
+        || latestFlow.plan?.cohortRegistryPin !== confirmedRegistryPin
+      ) {
+        throw new Error("方案在确认期间已变更，请重新确认最新方案。");
+      }
+      const { jobId, runStatus, raw } = await sourcingBackendClient.startWorkflowFromReviewedPlan(reviewId, confirmedHistoryId);
       if (!jobId) {
         throw new Error("后端没有返回有效的 job_id，工作流未能启动。");
       }
@@ -1516,6 +1563,7 @@ export function SearchPage() {
         dashboard,
       );
     } finally {
+      planActionInFlightRef.current = false;
       setIsConfirmingPlan(false);
     }
   };

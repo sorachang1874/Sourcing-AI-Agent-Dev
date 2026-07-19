@@ -249,6 +249,12 @@ export function SearchFlow({
   if (phase === "idle") {
     return (
       <div className="search-flow search-flow-empty">
+        {errorMessage ? (
+          <section className="warning-card error-card">
+            <strong>执行失败</strong>
+            <p>{errorMessage}</p>
+          </section>
+        ) : null}
         <SearchComposer
           value={composerValue}
           isSubmitting={isGeneratingPlan}
