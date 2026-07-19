@@ -1,7 +1,11 @@
 import unittest
 
+from sourcing_agent.confidence_policy import _family_relevance_weight
+from sourcing_agent.domain import JobRequest
+from sourcing_agent.orchestrator import SourcingOrchestrator
 from sourcing_agent.request_matching import (
     build_request_matching_bundle,
+    matching_bundle_payload,
     matching_request_family_signature,
     matching_request_signature,
     request_family_score,
@@ -279,3 +283,351 @@ class RequestMatchingTest(unittest.TestCase):
         )
 
         self.assertIsNone(selected)
+
+
+def _location_request(
+    locations: list[str] | None = None,
+    *,
+    exclude: list[str] | None = None,
+    cohort: bool = False,
+) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "target_company": "Acme",
+        "categories": ["employee"],
+        "employment_statuses": ["current"],
+        "keywords": ["rl"],
+    }
+    if locations is not None:
+        payload["target_locations"] = list(locations)
+    if exclude is not None:
+        payload["exclude_target_locations"] = list(exclude)
+    if cohort:
+        payload["cohort_selection"] = {
+            "schema_version": "cohort_selection.v1",
+            "role_bucket_ids": ["research"],
+            "employment_statuses": ["current"],
+            "role_match": "any",
+            "source": "user_explicit",
+        }
+    return JobRequest.from_payload(payload).to_record()
+
+
+class LocationHardFamilyFenceTest(unittest.TestCase):
+    """FT1-FF (finding 1): location is a hard request-family boundary."""
+
+    def test_location_mismatch_scores_zero_with_hard_family_mismatch(self) -> None:
+        for name, left, right in (
+            ("target_values", _location_request(["United States"]), _location_request(["Germany"])),
+            ("absent_vs_explicit_empty", _location_request(), _location_request([])),
+            ("explicit_empty_vs_absent", _location_request([]), _location_request()),
+            ("exclusion_values", _location_request(exclude=["France"]), _location_request(exclude=["Germany"])),
+            ("exclusion_absent_vs_empty", _location_request(), _location_request(exclude=[])),
+            (
+                "cohort_same_digest_different_location",
+                _location_request(["United States"], cohort=True),
+                _location_request(["Germany"], cohort=True),
+            ),
+        ):
+            with self.subTest(name=name):
+                match = request_family_score(left, right)
+                self.assertEqual(match["score"], 0.0)
+                self.assertTrue(match["hard_family_mismatch"])
+                self.assertEqual(match["reasons"], ["location_identity_mismatch"])
+                self.assertFalse(match["exact_request_match"])
+                self.assertFalse(match["exact_family_match"])
+
+    def test_identical_location_identity_still_matches_exactly(self) -> None:
+        for name, left in (
+            ("present", _location_request(["United States"])),
+            ("absent", _location_request()),
+            ("explicit_empty", _location_request([])),
+            ("with_exclusion", _location_request(["United States"], exclude=["France"])),
+        ):
+            with self.subTest(name=name):
+                match = request_family_score(left, dict(left))
+                self.assertTrue(match["exact_request_match"])
+                self.assertNotIn("hard_family_mismatch", match)
+
+    def test_otherwise_identical_high_similarity_cannot_exceed_threshold_across_locations(self) -> None:
+        left = _location_request(["United States"])
+        right = _location_request(["Germany"])
+        # Sanity: without the location fields the payloads are identical.
+        self.assertEqual(
+            {key: value for key, value in left.items() if not key.endswith("locations")},
+            {key: value for key, value in right.items() if not key.endswith("locations")},
+        )
+        match = request_family_score(left, right)
+        self.assertEqual(match["score"], 0.0)
+        self.assertTrue(match["hard_family_mismatch"])
+
+    def test_explanation_marks_location_as_hard_identity_fields(self) -> None:
+        match = request_family_score(_location_request(["United States"]), _location_request(["Germany"]))
+        explanation = match["explanation"]
+        self.assertIn("target_locations", explanation["mismatched_fields"])
+        location_details = [
+            detail for detail in explanation["field_details"] if detail["field"] == "target_locations"
+        ]
+        self.assertEqual(len(location_details), 1)
+        self.assertEqual(location_details[0]["kind"], "hard_identity")
+        self.assertEqual(location_details[0]["status"], "hard_mismatch")
+        self.assertTrue(location_details[0]["left_present"])
+        self.assertTrue(location_details[0]["right_present"])
+
+    def test_automatic_baseline_selection_cannot_cross_location_identity(self) -> None:
+        request = _location_request(["United States"])
+        mismatched_request = _location_request(["Germany"])
+        row = {
+            "job_id": "germany-job",
+            "job_type": "workflow",
+            "request": mismatched_request,
+            "request_matching": build_request_matching_bundle(mismatched_request),
+            "updated_at": "2026-07-15T00:00:00+00:00",
+            "created_at": "2026-07-15T00:00:00+00:00",
+        }
+        store = object.__new__(ControlPlaneStore)
+        store._select_control_plane_job_rows = lambda **_kwargs: [row]
+        store.find_latest_completed_job = lambda **_kwargs: None
+
+        selected = ControlPlaneStore.find_best_completed_job_match(
+            store,
+            target_company="Acme",
+            request_payload=request,
+        )
+        self.assertIsNone(selected)
+
+        # Control: a same-location candidate IS selected.
+        matched_request = _location_request(["United States"])
+        matched_row = {**row, "job_id": "us-job", "request": matched_request,
+                       "request_matching": build_request_matching_bundle(matched_request)}
+        store._select_control_plane_job_rows = lambda **_kwargs: [matched_row]
+        selected = ControlPlaneStore.find_best_completed_job_match(
+            store,
+            target_company="Acme",
+            request_payload=request,
+        )
+        self.assertIsNotNone(selected)
+        self.assertEqual(selected["job_id"], "us-job")
+
+    def test_latest_company_fallback_cannot_cross_location_identity(self) -> None:
+        request = _location_request(["United States"], exclude=["France"])
+        # Different asset_view keeps the similarity below MATCH_THRESHOLD so the
+        # latest-company fallback path engages.
+        fallback_request = {
+            **_location_request(["Germany"]),
+            "asset_view": "strict_roster_only",
+            "categories": ["investor"],
+            "keywords": ["sales"],
+        }
+        fallback_job = {
+            "job_id": "fallback-germany",
+            "job_type": "workflow",
+            "request": fallback_request,
+            "updated_at": "2026-07-15T00:00:00+00:00",
+            "created_at": "2026-07-15T00:00:00+00:00",
+        }
+        store = object.__new__(ControlPlaneStore)
+        store._select_control_plane_job_rows = lambda **_kwargs: [fallback_job]
+        store.find_latest_completed_job = lambda **_kwargs: dict(fallback_job)
+
+        selected = ControlPlaneStore.find_best_completed_job_match(
+            store,
+            target_company="Acme",
+            request_payload=request,
+        )
+        self.assertIsNone(selected)
+
+    def test_snapshot_reuse_cannot_cross_location_identity(self) -> None:
+        orchestrator = object.__new__(SourcingOrchestrator)
+        mismatched_request = _location_request(["Germany"])
+        candidate_job = {
+            "job_id": "germany-snapshot",
+            "job_type": "workflow",
+            "request": mismatched_request,
+            "request_matching": build_request_matching_bundle(mismatched_request),
+            "updated_at": "2026-07-15T00:00:00+00:00",
+            "created_at": "2026-07-15T00:00:00+00:00",
+        }
+        orchestrator.store = type(
+            "_Store",
+            (),
+            {"list_jobs": lambda self, **_kwargs: [candidate_job]},
+        )()
+        orchestrator._load_snapshot_reuse_context_from_job = lambda _job, **_kwargs: {
+            "snapshot_id": "snap-1",
+            "snapshot_dir": "/tmp/snap-1",
+            "source_path": "/tmp/snap-1/snapshot.json",
+        }
+        request = JobRequest.from_payload(
+            {
+                "target_company": "Acme",
+                "categories": ["employee"],
+                "employment_statuses": ["current"],
+                "keywords": ["rl"],
+                "target_locations": ["United States"],
+            }
+        )
+        match = orchestrator._resolve_snapshot_reuse_job_match(request, {"scope": "global"})
+        self.assertEqual(match, {})
+
+        # Control: the same-location snapshot candidate IS reused.
+        matched_request = _location_request(["United States"])
+        candidate_job["request"] = matched_request
+        candidate_job["request_matching"] = build_request_matching_bundle(matched_request)
+        match = orchestrator._resolve_snapshot_reuse_job_match(request, {"scope": "global"})
+        self.assertEqual(match.get("strategy"), "reuse_snapshot")
+        self.assertEqual(match.get("matched_snapshot_id"), "snap-1")
+
+    def test_feedback_reuse_cannot_cross_location_identity(self) -> None:
+        request = _location_request(["United States"])
+        feedback_request = _location_request(["Germany"])
+        matching_bundle = build_request_matching_bundle(request)
+        item = {"metadata": {"request_payload": feedback_request}}
+        weight, reason, family = _family_relevance_weight(
+            item,
+            request_payload=request,
+            request_sig=request_signature(request),
+            request_family_sig=request_family_signature(request),
+            matching_request_sig=str(matching_bundle.get("matching_request_signature") or ""),
+            matching_request_family_sig=str(matching_bundle.get("matching_request_family_signature") or ""),
+        )
+        self.assertEqual(weight, 0.0)
+        self.assertEqual(family, "mismatch")
+        self.assertTrue(reason.startswith("family_mismatch="))
+
+        same_item = {"metadata": {"request_payload": _location_request(["United States"])}}
+        weight, reason, family = _family_relevance_weight(
+            same_item,
+            request_payload=request,
+            request_sig=request_signature(request),
+            request_family_sig=request_family_signature(request),
+            matching_request_sig=str(matching_bundle.get("matching_request_signature") or ""),
+            matching_request_family_sig=str(matching_bundle.get("matching_request_family_signature") or ""),
+        )
+        self.assertEqual(weight, 1.0)
+        self.assertEqual(family, "exact_family")
+
+
+class StaleMatchingBundleTest(unittest.TestCase):
+    """FT1-FF (finding 3): persisted bundles are trusted only on full canonical match."""
+
+    def test_stale_bundle_missing_location_is_rebuilt(self) -> None:
+        request = _location_request(["United States"])
+        stale_bundle = build_request_matching_bundle(_location_request())
+        rebuilt = matching_bundle_payload(
+            request,
+            execution_bundle_payload={"request_matching": stale_bundle},
+        )
+        self.assertEqual(rebuilt["matching_request"].get("target_locations"), ["united states"])
+        self.assertNotEqual(
+            rebuilt["matching_request_signature"],
+            stale_bundle["matching_request_signature"],
+        )
+
+    def test_stale_bundle_with_changed_location_is_rebuilt(self) -> None:
+        request = _location_request(["United States"])
+        stale_bundle = build_request_matching_bundle(_location_request(["Germany"]))
+        rebuilt = matching_bundle_payload(
+            request,
+            execution_bundle_payload={"request_matching": stale_bundle},
+        )
+        self.assertEqual(rebuilt["matching_request"].get("target_locations"), ["united states"])
+
+    def test_stale_bundle_absent_versus_empty_is_rebuilt(self) -> None:
+        request = _location_request([])
+        stale_bundle = build_request_matching_bundle(_location_request())
+        rebuilt = matching_bundle_payload(
+            request,
+            execution_bundle_payload={"request_matching": stale_bundle},
+        )
+        self.assertEqual(rebuilt["matching_request"].get("target_locations"), [])
+
+    def test_stale_bundle_with_exclusion_drift_is_rebuilt(self) -> None:
+        request = _location_request(["United States"], exclude=["France"])
+        stale_bundle = build_request_matching_bundle(_location_request(["United States"], exclude=["Germany"]))
+        rebuilt = matching_bundle_payload(
+            request,
+            execution_bundle_payload={"request_matching": stale_bundle},
+        )
+        self.assertEqual(rebuilt["matching_request"].get("exclude_target_locations"), ["france"])
+
+    def test_signature_mismatch_is_rebuilt_even_when_payloads_match(self) -> None:
+        request = _location_request(["United States"])
+        canonical = build_request_matching_bundle(request)
+        tampered = {**canonical, "matching_request_signature": "0" * 16}
+        rebuilt = matching_bundle_payload(
+            request,
+            execution_bundle_payload={"request_matching": tampered},
+        )
+        self.assertEqual(rebuilt["matching_request_signature"], canonical["matching_request_signature"])
+
+    def test_matching_persisted_bundle_is_trusted_and_signatures_backfilled(self) -> None:
+        request = _location_request(["United States"])
+        canonical = build_request_matching_bundle(request)
+        persisted = {
+            "matching_request": dict(canonical["matching_request"]),
+            "matching_family_request": dict(canonical["matching_family_request"]),
+        }
+        trusted = matching_bundle_payload(
+            request,
+            execution_bundle_payload={"request_matching": persisted},
+        )
+        self.assertEqual(trusted["matching_request"], canonical["matching_request"])
+        self.assertEqual(trusted["matching_request_signature"], canonical["matching_request_signature"])
+        self.assertEqual(
+            trusted["matching_request_family_signature"],
+            canonical["matching_request_family_signature"],
+        )
+
+    def test_stale_bundle_cannot_produce_exact_match_across_location_identity(self) -> None:
+        # Persisted bundle claims United States while the raw request payload
+        # says Germany: trusting the bundle would fabricate an exact match and
+        # reuse the wrong snapshot family.
+        left = _location_request(["United States"])
+        right_raw = _location_request(["Germany"])
+        stale_right = build_request_matching_bundle(_location_request(["United States"]))
+        match = request_family_score(
+            left,
+            right_raw,
+            left_bundle=build_request_matching_bundle(left),
+            right_bundle=stale_right,
+        )
+        self.assertEqual(match["score"], 0.0)
+        self.assertTrue(match["hard_family_mismatch"])
+        self.assertEqual(match["reasons"], ["location_identity_mismatch"])
+
+        # Control: stale bundle that merely OMITS location is rebuilt from the
+        # raw payload, so a genuinely identical request still matches exactly.
+        stale_missing = build_request_matching_bundle(_location_request())
+        match = request_family_score(
+            left,
+            dict(left),
+            left_bundle=build_request_matching_bundle(left),
+            right_bundle=stale_missing,
+        )
+        self.assertTrue(match["exact_request_match"])
+
+
+class LocationPresenceSemanticsTest(unittest.TestCase):
+    """FT1-FF (finding 4, matching side): present JSON null is not field absence."""
+
+    def test_present_null_raises_in_signature_builders(self) -> None:
+        from sourcing_agent.cohort_selection import CohortSelectionValidationError
+
+        for field in ("target_locations", "exclude_target_locations"):
+            with self.subTest(field=field):
+                with self.assertRaises(CohortSelectionValidationError) as captured:
+                    request_signature({"target_company": "Acme", field: None})
+                self.assertEqual(captured.exception.code, "request_location_invalid_type")
+                with self.assertRaises(CohortSelectionValidationError):
+                    build_request_matching_bundle({"target_company": "Acme", field: None})
+
+    def test_present_null_is_a_stable_hard_mismatch_in_family_scoring(self) -> None:
+        for field in ("target_locations", "exclude_target_locations"):
+            with self.subTest(field=field):
+                match = request_family_score(
+                    {"target_company": "Acme", field: None},
+                    _location_request(["United States"]),
+                )
+                self.assertEqual(match["score"], 0.0)
+                self.assertTrue(match["hard_family_mismatch"])
+                self.assertEqual(match["reasons"], ["request_location_invalid_type"])

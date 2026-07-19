@@ -397,6 +397,12 @@ from .public_candidate_facets import (
     candidate_auto_review_status_for_filter as _public_candidate_auto_review_status_for_filter,
 )
 from .public_candidate_facets import (
+    candidate_employment_statuses_for_public_facets as _public_candidate_employment_statuses,
+)
+from .public_candidate_facets import (
+    candidate_function_bucket_projection_for_public_facets as _public_candidate_function_bucket_projection,
+)
+from .public_candidate_facets import (
     candidate_function_buckets_for_public_facets as _public_candidate_function_buckets,
 )
 from .public_candidate_facets import (
@@ -34152,6 +34158,31 @@ class SourcingOrchestrator:
             and (not experience_lines or not education_lines)
         )
         compact["low_profile_richness"] = low_profile_richness
+        # Canonical served facet projection (FT0 §5.2/§6; FT1-FF): every
+        # public summary carries the owned function-bucket pair and — when
+        # non-empty — the authoritative membership employment status set, plus
+        # the server-owned Cohort provenance metadata.  Consumers (facet
+        # counts, filters, projection members, index filter records) use these
+        # owned values instead of re-deriving from lossy role/function text.
+        # Malformed provenance raises (fail closed; blocks publication).
+        function_bucket_projection = _public_candidate_function_bucket_projection(
+            {**serialized, "metadata": dict(serialized.get("metadata") or {})}
+        )
+        compact["function_bucket_ids"] = list(function_bucket_projection["function_bucket_ids"])
+        compact["function_bucket_source"] = str(function_bucket_projection["function_bucket_source"])
+        membership_statuses = _public_candidate_employment_statuses(
+            {**serialized, "metadata": dict(serialized.get("metadata") or {})}
+        )
+        if membership_statuses:
+            compact["employment_statuses"] = list(membership_statuses)
+        serialized_metadata = dict(serialized.get("metadata") or {})
+        cohort_metadata = {
+            key: serialized_metadata[key]
+            for key in ("cohort_lane_membership", "cohort_role_bucket_ids", "cohort_employment_statuses")
+            if serialized_metadata.get(key) not in (None, "", [], {})
+        }
+        if cohort_metadata:
+            compact["metadata"] = {**dict(compact.get("metadata") or {}), **cohort_metadata}
         return compact
 
     def _build_profile_fetch_progress_payload(self, records: list[dict[str, Any]]) -> dict[str, Any]:
@@ -78192,6 +78223,25 @@ class SourcingOrchestrator:
                         "exact_request_match": False,
                         "exact_family_match": False,
                         "reasons": list(baseline_match.get("reasons") or ["cohort_selection_identity_mismatch"]),
+                    },
+                }
+            # Request-identity hard fence: an explicit baseline NEVER proceeds
+            # across a request-identity hard mismatch (location sibling-field
+            # presence/value, Cohort identity).  The rejection happens before
+            # any baseline result read or rerun policy execution, and an
+            # explicit non-Cohort baseline is never force-marked exact across
+            # location differences.
+            if bool(baseline_match.get("hard_family_mismatch")):
+                return {
+                    "status": "skipped",
+                    "reason": "baseline_request_identity_mismatch",
+                    "baseline_job_id": baseline_job_id,
+                    "baseline_selection": {
+                        "selected_via": "explicit_job_id" if explicit_baseline_requested else "automatic",
+                        "family_score": 0.0,
+                        "exact_request_match": False,
+                        "exact_family_match": False,
+                        "reasons": list(baseline_match.get("reasons") or ["location_identity_mismatch"]),
                     },
                 }
             if explicit_baseline_requested:

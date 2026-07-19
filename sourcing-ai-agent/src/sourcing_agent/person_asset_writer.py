@@ -1001,7 +1001,15 @@ def _projection_filter_record(
     projection_metrics: dict[str, Any],
     member_metadata: dict[str, Any],
 ) -> dict[str, Any]:
-    """Persist public filter inputs so projection filters do not scan raw assets."""
+    """Persist public filter inputs so projection filters do not scan raw assets.
+
+    The record carries the OWNED canonical facet projection fields from the
+    public summary (FT0 §5.2/§6; FT1-FF): ``function_bucket_ids`` /
+    ``function_bucket_source`` and — when non-empty — the authoritative
+    membership ``employment_statuses`` set.  Count/index/filter consumers use
+    these owned values; the scalar ``employment_status`` remains the
+    documented lossy display/fallback field.
+    """
 
     record = {
         **public_summary,
@@ -1027,4 +1035,13 @@ def _projection_filter_record(
             **member_metadata,
         },
     }
+    authoritative_statuses = [
+        str(item).strip()
+        for item in list(public_summary.get("employment_statuses") or [])
+        if str(item or "").strip()
+    ]
+    if authoritative_statuses:
+        record["employment_statuses"] = authoritative_statuses
+    else:
+        record.pop("employment_statuses", None)
     return record

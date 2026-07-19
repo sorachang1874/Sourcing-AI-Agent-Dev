@@ -1748,7 +1748,7 @@ class CliWorkflowRunnerContinuationTest(PGControlPlaneStoreTestMixin, unittest.T
                         "candidate_count": 1,
                         "candidate_shard_count": 1,
                         "build_profile": "foreground_fast",
-                        "projection_version": "candidate_artifact_projection_v20260427_source_matches",
+                        "projection_version": "candidate_artifact_projection_v20260719_served_facet_projection",
                         "materialization_generation_key": "gen-new",
                         "source_snapshot_selection": {
                             "mode": "current_snapshot_only_large_org",
@@ -1769,7 +1769,7 @@ class CliWorkflowRunnerContinuationTest(PGControlPlaneStoreTestMixin, unittest.T
                         "asset_view": "canonical_merged",
                         "candidate_count": 1,
                         "build_profile": "foreground_fast",
-                        "projection_version": "candidate_artifact_projection_v20260427_source_matches",
+                        "projection_version": "candidate_artifact_projection_v20260719_served_facet_projection",
                         "pagination": {"page_count": 1, "page_size": 50},
                         "candidate_shards": [{"candidate_id": "c1", "path": "candidates/c1.json"}],
                         "pages": [{"page": 1, "path": "pages/page-0001.json", "candidate_count": 1}],
@@ -1838,7 +1838,7 @@ class CliWorkflowRunnerContinuationTest(PGControlPlaneStoreTestMixin, unittest.T
         self.assertEqual(result["artifact"]["build_profile"], "foreground_fast")
         self.assertEqual(
             result["artifact"]["projection_version"],
-            "candidate_artifact_projection_v20260427_source_matches",
+            "candidate_artifact_projection_v20260719_served_facet_projection",
         )
         self.assertEqual(result["artifact"]["projection_version_source"], "artifact_summary")
         self.assertEqual(result["source_provenance"]["source_matches_records"], 1)
@@ -1858,7 +1858,7 @@ class CliWorkflowRunnerContinuationTest(PGControlPlaneStoreTestMixin, unittest.T
                         "snapshot_id": "snap-new",
                         "asset_view": "canonical_merged",
                         "candidate_count": 42,
-                        "projection_version": "candidate_artifact_projection_v20260427_source_matches",
+                        "projection_version": "candidate_artifact_projection_v20260719_served_facet_projection",
                     },
                     ensure_ascii=False,
                     indent=2,
@@ -2405,7 +2405,7 @@ class CliWorkflowRunnerContinuationTest(PGControlPlaneStoreTestMixin, unittest.T
                         "asset_view": "canonical_merged",
                         "candidate_count": 2,
                         "build_profile": "foreground_fast",
-                        "projection_version": "candidate_artifact_projection_v20260427_source_matches",
+                        "projection_version": "candidate_artifact_projection_v20260719_served_facet_projection",
                         "materialization_generation_key": "gen-new",
                     },
                     ensure_ascii=False,

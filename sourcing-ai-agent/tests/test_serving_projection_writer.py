@@ -1384,3 +1384,200 @@ class ServingProjectionWriterTest(PGControlPlaneStoreTestMixin, unittest.TestCas
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ServingProjectionFacetOwnershipTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
+    """FT1-FF (finding 5): the canonical function-bucket pair and the
+    authoritative employment status set persist through projection members and
+    the person search index, and count/filter consumers use the owned values."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.tempdir = tempfile.TemporaryDirectory()
+        self.runtime_dir = Path(self.tempdir.name)
+        self.store = self.make_pg_store(self.runtime_dir / "sourcing_agent.db")
+        self.writer = ServingProjectionWriter(self.store)
+        self.reader = ServingProjectionReader(self.store)
+        self.person_asset_writer = PersonAssetWriter(self.store)
+
+    def tearDown(self) -> None:
+        self.tempdir.cleanup()
+        super().tearDown()
+
+    @staticmethod
+    def _members_from_records(records):
+        from sourcing_agent.orchestrator import SourcingOrchestrator
+
+        orchestrator = object.__new__(SourcingOrchestrator)
+        return orchestrator._serving_projection_members_from_records(  # noqa: SLF001
+            records,
+            source_run_id="job-facet-ownership",
+        )
+
+    def test_owned_facet_projection_persists_through_members_index_and_counts(self) -> None:
+        cohort_record = {
+            "candidate_id": "c-cohort",
+            "display_name": "Dual Role",
+            "employment_status": "current",
+            "linkedin_url": "https://www.linkedin.com/in/dual-role/",
+            "metadata": {
+                "cohort_lane_membership": [
+                    {"lane_id": "cohort_current_research_d", "employment_status": "current", "role_bucket_id": "research"},
+                    {"lane_id": "cohort_former_engineering_d", "employment_status": "former", "role_bucket_id": "engineering"},
+                ],
+                "cohort_role_bucket_ids": ["research", "engineering"],
+                "cohort_employment_statuses": ["current", "former"],
+            },
+        }
+        members = self._members_from_records([cohort_record])
+        self.assertEqual(len(members), 1)
+        public_summary = members[0]["public_summary"]
+        self.assertEqual(public_summary["function_bucket_ids"], ["research", "engineering"])
+        self.assertEqual(public_summary["function_bucket_source"], "lane_membership")
+        self.assertEqual(public_summary["employment_statuses"], ["current", "former"])
+
+        published = self.writer.publish_run_scope_projection(
+            run_id="job-facet-ownership",
+            projection_id="proj_facet_ownership",
+            members=members,
+            replace_members=True,
+        )
+        projection_id = published["projection"]["projection_id"]
+        persisted_members = self.store.repos.serving_projection.list_members(projection_id)
+        persisted_summary = persisted_members[0]["public_summary"]
+        # The owned pair and the authoritative status set survive persistence;
+        # the lossy scalar employment_scope stays a display-only field.
+        self.assertEqual(persisted_summary["function_bucket_ids"], ["research", "engineering"])
+        self.assertEqual(persisted_summary["function_bucket_source"], "lane_membership")
+        self.assertEqual(persisted_summary["employment_statuses"], ["current", "former"])
+        self.assertEqual(persisted_members[0]["employment_scope"], "current")
+
+        indexed = self.person_asset_writer.rebuild_projection_person_search_index(
+            projection_id=projection_id,
+            count_scope="exact_projection",
+        )
+        self.assertEqual(indexed["status"], "indexed")
+        index_rows = self.store.repos.serving_projection.list_person_search_index_rows(
+            projection_id,
+            offset=0,
+            limit=10,
+        )
+        self.assertEqual(len(index_rows), 1)
+        filter_record = dict(dict(index_rows[0].get("metadata") or {}).get("filter_record") or {})
+        self.assertEqual(filter_record["function_bucket_ids"], ["research", "engineering"])
+        self.assertEqual(filter_record["function_bucket_source"], "lane_membership")
+        self.assertEqual(filter_record["employment_statuses"], ["current", "former"])
+
+        # Facet counts consume the owned values: the dual-status candidate is
+        # counted under BOTH statuses and BOTH function buckets, even though the
+        # display scalar shows only one status.
+        projection = self.store.repos.serving_projection.get(projection_id)
+        counts = dict(dict(projection.get("counts") or {}).get("public_facet_counts") or {})
+        self.assertEqual(counts["employment_counts"], {"current": 1, "former": 1})
+        self.assertEqual(counts["function_counts"], {"research": 1, "engineering": 1})
+
+        # Filter reads consume the owned values through the index path.
+        former_filter = self.reader.get_projection_candidates(
+            projection_id,
+            candidate_filter={"employment_statuses": ["former"]},
+        )
+        self.assertEqual(former_filter["status"], "ready")
+        self.assertEqual(former_filter["filtered_candidate_count"], 1)
+        infra_filter = self.reader.get_projection_candidates(
+            projection_id,
+            candidate_filter={"function_buckets": ["infra_systems"]},
+        )
+        self.assertEqual(infra_filter["status"], "ready")
+        self.assertEqual(infra_filter["filtered_candidate_count"], 0)
+        engineering_filter = self.reader.get_projection_candidates(
+            projection_id,
+            candidate_filter={"function_buckets": ["engineering"]},
+        )
+        self.assertEqual(engineering_filter["filtered_candidate_count"], 1)
+
+    def test_member_projection_change_bumps_index_input_revision(self) -> None:
+        record_v1 = {
+            "candidate_id": "c-rev",
+            "display_name": "Revision Candidate",
+            "employment_status": "current",
+            "linkedin_url": "https://www.linkedin.com/in/revision-candidate/",
+            "metadata": {
+                "cohort_lane_membership": [
+                    {"lane_id": "cohort_current_research_d", "employment_status": "current", "role_bucket_id": "research"},
+                ],
+                "cohort_role_bucket_ids": ["research"],
+                "cohort_employment_statuses": ["current"],
+            },
+        }
+        first = self.writer.publish_run_scope_projection(
+            run_id="job-facet-revision",
+            projection_id="proj_facet_revision",
+            members=self._members_from_records([record_v1]),
+            replace_members=True,
+        )
+        projection_id = first["projection"]["projection_id"]
+        first_revision = str(
+            dict(first["projection"].get("metadata") or {}).get(PROJECTION_SEARCH_INDEX_INPUT_REVISION_KEY) or ""
+        )
+        self.assertTrue(first_revision)
+        self.person_asset_writer.rebuild_projection_person_search_index(
+            projection_id=projection_id,
+            count_scope="exact_projection",
+        )
+
+        record_v2 = {
+            **record_v1,
+            "metadata": {
+                "cohort_lane_membership": [
+                    {"lane_id": "cohort_current_engineering_d", "employment_status": "current", "role_bucket_id": "engineering"},
+                ],
+                "cohort_role_bucket_ids": ["engineering"],
+                "cohort_employment_statuses": ["current"],
+            },
+        }
+        second = self.writer.publish_run_scope_projection(
+            run_id="job-facet-revision",
+            projection_id="proj_facet_revision",
+            members=self._members_from_records([record_v2]),
+            replace_members=True,
+        )
+        second_revision = str(
+            dict(second["projection"].get("metadata") or {}).get(PROJECTION_SEARCH_INDEX_INPUT_REVISION_KEY) or ""
+        )
+        # The changed bucket pair is a semantic member change: the input
+        # revision bumps so the pre-change index reads stale (fail closed).
+        self.assertTrue(second_revision)
+        self.assertNotEqual(first_revision, second_revision)
+        stale_read = self.reader.get_projection_candidates(
+            projection_id,
+            candidate_filter={"function_buckets": ["engineering"]},
+        )
+        self.assertEqual(stale_read["status"], "not_ready")
+
+        # Control: republishing identical members keeps the revision stable.
+        third = self.writer.publish_run_scope_projection(
+            run_id="job-facet-revision",
+            projection_id="proj_facet_revision",
+            members=self._members_from_records([record_v2]),
+            replace_members=True,
+        )
+        third_revision = str(
+            dict(third["projection"].get("metadata") or {}).get(PROJECTION_SEARCH_INDEX_INPUT_REVISION_KEY) or ""
+        )
+        self.assertEqual(second_revision, third_revision)
+
+    def test_malformed_provenance_blocks_member_publication(self) -> None:
+        malformed = {
+            "candidate_id": "c-malformed",
+            "display_name": "Malformed",
+            "metadata": {
+                "cohort_lane_membership": [
+                    {"lane_id": "l1", "employment_status": "current", "role_bucket_id": "research"},
+                ],
+                "cohort_role_bucket_ids": ["engineering"],
+            },
+        }
+        from sourcing_agent.public_candidate_facets import CohortFacetProvenanceError
+
+        with self.assertRaises(CohortFacetProvenanceError):
+            self._members_from_records([malformed])

@@ -406,11 +406,11 @@ class JobRequest:
             if isinstance(normalized_payload.get("cohort_selection"), dict)
             else None,
             target_locations=_normalize_location_list(
-                normalized_payload.get("target_locations"),
+                normalized_payload.get("target_locations", _REQUEST_FIELD_MISSING),
                 field_name="target_locations",
             ),
             exclude_target_locations=_normalize_location_list(
-                normalized_payload.get("exclude_target_locations"),
+                normalized_payload.get("exclude_target_locations", _REQUEST_FIELD_MISSING),
                 field_name="exclude_target_locations",
             ),
             semantic_rerank_limit=_normalize_semantic_limit(normalized_payload.get("semantic_rerank_limit")),
@@ -450,6 +450,7 @@ class JobRequest:
 
 _REQUEST_LOCATION_MAX_ITEMS = 16
 _REQUEST_LOCATION_ITEM_MAX_LENGTH = 240
+_REQUEST_FIELD_MISSING = object()
 
 
 def _normalize_location_list(value: Any, *, field_name: str) -> list[str] | None:
@@ -460,13 +461,15 @@ def _normalize_location_list(value: Any, *, field_name: str) -> list[str] | None
     characters each (the provider compiler's bounded-list convention).  Wrong
     container types, non-string or null-present items, and over-bound lists
     raise CohortSelectionValidationError so invalid requests fail closed with
-    the same posture as Cohort ingress, before any downstream write.  Returns
-    None when the field is absent so legacy records stay byte-compatible.
+    the same fail-closed posture as Cohort ingress, before any downstream
+    write.  Returns None only when the field is ABSENT so legacy records stay
+    byte-compatible; a present JSON null is NOT field absence and raises the
+    same stable invalid-type error as any other non-list value.
     """
 
-    if value is None:
+    if value is _REQUEST_FIELD_MISSING:
         return None
-    if not isinstance(value, list):
+    if value is None or not isinstance(value, list):
         raise CohortSelectionValidationError(
             "request_location_invalid_type",
             field_name,

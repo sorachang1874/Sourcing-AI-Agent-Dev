@@ -20911,5 +20911,122 @@ class OperationControlHttpConflictTest(unittest.TestCase):
             thread.join(timeout=2)
 
 
+
+class FilterProjectionV1ImmutabilityTest(unittest.TestCase):
+    """FT1-FF (finding 7): projection_filter_request_v1 is immutable; the
+    canonical Cohort mapping is the distinct v2 contract."""
+
+    _V1_DIGEST = "f43d31eb284bfecc6a2b3ee84e69358899eb6827ffb18e0c050b8f325db7f5c8"
+    _SEARCH_V1_DIGEST = "40ffcb4b5632cfe75bfa9667f726f73e8fdaffc4c8f9f92f89bbda863b6cb1fa"
+
+    def _writer(self) -> OperationRuntimeWriter:
+        return OperationRuntimeWriter(store=None)
+
+    def _persisted_v1_action(self, **overrides):
+        action = {
+            "action_id": "action-filter-v1",
+            "action_type": ACTION_FILTER_PROJECTION,
+            "owner_module": "projection_search_service",
+            "operation_type": "projection_filter",
+            "request_schema_version": "projection_filter_request_v1",
+            "request_schema_digest": self._V1_DIGEST,
+            "input": {"limit": 5, "filters": {"function_buckets": ["research", "engineering"]}},
+            "target_ref": {"projection_id": "proj-1", "membership_revision": "rev-1"},
+        }
+        action.update(overrides)
+        return action
+
+    def test_v1_schema_version_and_digest_are_restored_exactly(self) -> None:
+        spec = DEFAULT_ACTION_REGISTRY.spec_for(ACTION_FILTER_PROJECTION)
+        self.assertEqual(spec.request_schema_version, "projection_filter_request_v1")
+        self.assertEqual(spec.request_schema_digest, self._V1_DIGEST)
+        # The sibling search v1 pin is untouched.
+        search_spec = DEFAULT_ACTION_REGISTRY.spec_for(ACTION_SEARCH_PROJECTION)
+        self.assertEqual(search_spec.request_schema_version, "projection_search_request_v1")
+        self.assertEqual(search_spec.request_schema_digest, self._SEARCH_V1_DIGEST)
+
+    def test_v1_accepts_historical_values_and_rejects_ft1_named_facets(self) -> None:
+        from sourcing_agent.operation_runtime import ActionRequestValidationError
+
+        spec = DEFAULT_ACTION_REGISTRY.spec_for(ACTION_FILTER_PROJECTION)
+        normalized_input, _normalized_target = spec.validate_request(
+            input_payload={"limit": 5, "filters": {"function_buckets": ["research", "engineering", "product_management", "other", "unknown"]}},
+            target_ref={"projection_id": "proj-1", "membership_revision": "rev-1"},
+        )
+        self.assertIn("filters", normalized_input)
+        # infra_systems/founding are NOT valid under the immutable v1 enum; the
+        # canonical Cohort mapping for the FT1 named roles is the v2 contract.
+        for named_facet in ("infra_systems", "founding"):
+            with self.subTest(named_facet=named_facet):
+                with self.assertRaises(ActionRequestValidationError):
+                    spec.validate_request(
+                        input_payload={"filters": {"function_buckets": [named_facet]}},
+                        target_ref={"projection_id": "proj-1", "membership_revision": "rev-1"},
+                    )
+
+    def test_v2_cohort_contract_coexists_with_a_distinct_digest(self) -> None:
+        from sourcing_agent.agent_projection_query import (
+            FILTER_PROJECTION_V2_REQUEST_SCHEMA_DIGEST,
+            FILTER_PROJECTION_V2_REQUEST_SCHEMA_VERSION,
+            bind_filter_projection_v2_request,
+        )
+        from sourcing_agent.cohort_selection import (
+            COHORT_SELECTION_REGISTRY_VERSION,
+            cohort_selection_digest,
+            cohort_selection_registry_digest,
+        )
+
+        self.assertEqual(FILTER_PROJECTION_V2_REQUEST_SCHEMA_VERSION, "projection_filter_request_v2")
+        self.assertNotEqual(FILTER_PROJECTION_V2_REQUEST_SCHEMA_DIGEST, self._V1_DIGEST)
+        # The v2 canonical Cohort mapping carries the FT1 named roles.
+        cohort = {
+            "schema_version": "cohort_selection.v1",
+            "role_bucket_ids": ["infra_systems", "founding"],
+            "employment_statuses": ["current"],
+            "role_match": "any",
+            "source": "user_explicit",
+        }
+        bound = bind_filter_projection_v2_request(
+            input_payload={"cohort_selection": cohort, "limit": 5},
+            owner_target_ref={
+                "projection_id": "proj-1",
+                "membership_revision": "rev-1",
+                "cohort_selection_registry_version": COHORT_SELECTION_REGISTRY_VERSION,
+                "cohort_selection_registry_digest": cohort_selection_registry_digest(),
+                "cohort_selection_digest": cohort_selection_digest(cohort),
+            },
+        )
+        self.assertEqual(bound.predicate.role_bucket_ids, ("infra_systems", "founding"))
+
+    def test_historical_v1_persisted_action_replays(self) -> None:
+        writer = self._writer()
+        spec = writer.validate_persisted_action_request(action=self._persisted_v1_action())
+        self.assertEqual(spec.request_schema_version, "projection_filter_request_v1")
+
+    def test_persisted_action_with_tampered_pin_fails_closed(self) -> None:
+        writer = self._writer()
+        with self.assertRaises(OperationRuntimeStateConflict) as raised:
+            writer.validate_persisted_action_request(
+                action=self._persisted_v1_action(request_schema_digest="0" * 64)
+            )
+        self.assertIn("operation_action_request_schema_pin_conflict", str(raised.exception))
+        with self.assertRaises(OperationRuntimeStateConflict):
+            writer.validate_persisted_action_request(
+                action=self._persisted_v1_action(request_schema_version="projection_filter_request_v2")
+            )
+
+    def test_action_persisted_under_the_mutated_schema_fails_replay(self) -> None:
+        # An action persisted while FT1 had mutated v1 in place (v1 pin with an
+        # FT1-only enum value) must fail migration/dispatch replay closed rather
+        # than silently validating under a different schema.
+        writer = self._writer()
+        mutated = self._persisted_v1_action(
+            input={"limit": 5, "filters": {"function_buckets": ["infra_systems"]}},
+        )
+        with self.assertRaises(OperationRuntimeStateConflict) as raised:
+            writer.validate_persisted_action_request(action=mutated)
+        self.assertIn("operation_action_request_schema_validation_conflict", str(raised.exception))
+
+
 if __name__ == "__main__":
     unittest.main()

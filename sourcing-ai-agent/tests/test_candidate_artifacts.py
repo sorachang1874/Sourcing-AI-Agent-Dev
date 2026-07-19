@@ -1021,13 +1021,13 @@ class CandidateArtifactsTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         self.assertEqual(result["summary"]["build_profile"], "foreground_fast")
         self.assertEqual(
             result["summary"]["projection_version"],
-            "candidate_artifact_projection_v20260427_source_matches",
+            "candidate_artifact_projection_v20260719_served_facet_projection",
         )
         manifest = json.loads(Path(result["artifact_paths"]["manifest"]).read_text(encoding="utf-8"))
         self.assertEqual(manifest["build_profile"], "foreground_fast")
         self.assertEqual(
             manifest["projection_version"],
-            "candidate_artifact_projection_v20260427_source_matches",
+            "candidate_artifact_projection_v20260719_served_facet_projection",
         )
         for key in (
             "profile_registry_lookup",
@@ -1866,7 +1866,7 @@ class CandidateArtifactsTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         )
         self.assertEqual(
             first_candidate_shard["projection_version"],
-            "candidate_artifact_projection_v20260427_source_matches",
+            "candidate_artifact_projection_v20260719_served_facet_projection",
         )
 
         second_result = build_company_candidate_artifacts(
@@ -4720,3 +4720,246 @@ class CandidateArtifactsTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CandidateArtifactServedFacetProjectionUpgradeTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
+    """FT1-FF (finding 8): historical, repaired, and materialized-fallback
+    rows receive the new projection; repair detects stale/missing fields and
+    regenerates facet summaries/counts at the bumped artifact version."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.tempdir = tempfile.TemporaryDirectory()
+        self.runtime_dir = Path(self.tempdir.name) / "runtime"
+        self.runtime_dir.mkdir(parents=True, exist_ok=True)
+        self.store = self.make_pg_store(self.runtime_dir / "sourcing_agent.db")
+        self.artifact_dir = (
+            self.runtime_dir / "company_assets" / "acme" / "20260406T120000" / "normalized_artifacts"
+        )
+        self.artifact_dir.mkdir(parents=True, exist_ok=True)
+
+    def tearDown(self) -> None:
+        self.tempdir.cleanup()
+        super().tearDown()
+
+    def _write_json(self, name: str, payload) -> None:
+        path = self.artifact_dir / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    def _write_historical_artifact(self, *, projection_version: str, page_rows: list[dict]) -> None:
+        cohort_metadata = {
+            "cohort_lane_membership": [
+                {"lane_id": "cohort_current_research_d", "employment_status": "current", "role_bucket_id": "research"},
+                {"lane_id": "cohort_former_research_d", "employment_status": "former", "role_bucket_id": "research"},
+            ],
+            "cohort_role_bucket_ids": ["research"],
+            "cohort_employment_statuses": ["current", "former"],
+        }
+        materialized_candidates = [
+            {
+                "candidate_id": "c-cohort",
+                "display_name": "Cohort Candidate",
+                "role": "Research Scientist",
+                "employment_status": "current",
+                "linkedin_url": "https://www.linkedin.com/in/cohort-candidate/",
+                "metadata": dict(cohort_metadata),
+            },
+            {
+                "candidate_id": "c-legacy",
+                "display_name": "Legacy Candidate",
+                "role": "Software Engineer",
+                "employment_status": "current",
+                "linkedin_url": "https://www.linkedin.com/in/legacy-candidate/",
+                "metadata": {},
+            },
+        ]
+        self._write_json(
+            "materialized_candidate_documents.json",
+            {
+                "snapshot": {
+                    "company_key": "acme",
+                    "snapshot_id": "20260406T120000",
+                    "target_company": "Acme",
+                    "source_snapshots": [],
+                },
+                "candidates": materialized_candidates,
+                "evidence": [],
+            },
+        )
+        self._write_json("normalized_candidates.json", [])
+        self._write_json("reusable_candidate_documents.json", [])
+        self._write_json("manual_review_backlog.json", [])
+        self._write_json("profile_completion_backlog.json", [])
+        self._write_json(
+            "artifact_summary.json",
+            {
+                "target_company": "Acme",
+                "company_key": "acme",
+                "snapshot_id": "20260406T120000",
+                "asset_view": "canonical_merged",
+                "candidate_count": 2,
+                "candidate_page_size": 50,
+                "evidence_count": 0,
+                **({"projection_version": projection_version} if projection_version else {}),
+            },
+        )
+        self._write_json(
+            "manifest.json",
+            {
+                "target_company": "Acme",
+                "company_key": "acme",
+                "snapshot_id": "20260406T120000",
+                "asset_view": "canonical_merged",
+                "candidate_count": 2,
+                "pagination": {"page_size": 50, "page_count": 1},
+                "candidate_shards": [],
+                "pages": [{"page": 1, "path": "pages/page-0001.json", "candidate_count": len(page_rows)}],
+            },
+        )
+        self._write_json("pages/page-0001.json", {"candidates": page_rows})
+        self.store.upsert_organization_asset_registry(
+            {
+                "target_company": "Acme",
+                "company_key": "acme",
+                "snapshot_id": "20260406T120000",
+                "asset_view": "canonical_merged",
+                "candidate_count": 2,
+                "evidence_count": 0,
+                "source_path": str(self.artifact_dir / "artifact_summary.json"),
+                "summary": {"candidate_count": 2},
+            },
+            authoritative=True,
+        )
+
+    def _repair(self, **kwargs):
+        return repair_paginated_candidate_artifacts_from_materialized(
+            runtime_dir=self.runtime_dir,
+            store=self.store,
+            companies=["Acme"],
+            snapshot_id="20260406T120000",
+            include_history=True,
+            **kwargs,
+        )
+
+    def _first_page_rows(self) -> list[dict]:
+        return json.loads((self.artifact_dir / "pages" / "page-0001.json").read_text(encoding="utf-8"))["candidates"]
+
+    def test_stale_version_artifact_is_upgraded_by_repair(self) -> None:
+        from sourcing_agent.candidate_artifacts import (
+            _CANDIDATE_ARTIFACT_PROJECTION_VERSION,
+            _candidate_artifact_view_missing_paginated_serving,
+        )
+
+        self._write_historical_artifact(
+            projection_version="candidate_artifact_projection_v20260427_source_matches",
+            page_rows=[
+                {"candidate_id": "c-cohort", "display_name": "Cohort Candidate"},
+                {"candidate_id": "c-legacy", "display_name": "Legacy Candidate"},
+            ],
+        )
+        # Stale detection: version drift marks the view for repair even though
+        # pages exist (pre-FT1 artifacts are not complete anymore).
+        self.assertTrue(_candidate_artifact_view_missing_paginated_serving(self.artifact_dir))
+
+        result = self._repair()
+        self.assertEqual(result["missing_paginated_view_count"], 1)
+        self.assertEqual(result["repaired_view_count"], 1)
+
+        rows = {row["candidate_id"]: row for row in self._first_page_rows()}
+        self.assertEqual(rows["c-cohort"]["function_bucket_ids"], ["research"])
+        self.assertEqual(rows["c-cohort"]["function_bucket_source"], "lane_membership")
+        self.assertEqual(rows["c-cohort"]["employment_statuses"], ["current", "former"])
+        self.assertEqual(rows["c-legacy"]["function_bucket_ids"], ["engineering"])
+        self.assertNotIn("employment_statuses", rows["c-legacy"])
+
+        # Facet summaries/counts are regenerated and the artifact version is
+        # stamped on both the manifest and the artifact summary.
+        manifest = json.loads((self.artifact_dir / "manifest.json").read_text(encoding="utf-8"))
+        self.assertEqual(manifest["projection_version"], _CANDIDATE_ARTIFACT_PROJECTION_VERSION)
+        self.assertEqual(manifest["public_facet_counts"]["function_counts"], {"research": 1, "engineering": 1})
+        self.assertEqual(manifest["public_facet_counts"]["employment_counts"], {"current": 2, "former": 1})
+        self.assertEqual(manifest["facet_summary"]["candidate_count"], 2)
+        summary = json.loads((self.artifact_dir / "artifact_summary.json").read_text(encoding="utf-8"))
+        self.assertEqual(summary["projection_version"], _CANDIDATE_ARTIFACT_PROJECTION_VERSION)
+        self.assertEqual(summary["public_facet_counts"]["function_counts"], {"research": 1, "engineering": 1})
+
+        # The repaired shard payloads carry the projection version and the
+        # materialized row projection.
+        shard_path = self.artifact_dir / str(manifest["candidate_shards"][0]["path"])
+        shard = json.loads(shard_path.read_text(encoding="utf-8"))
+        self.assertEqual(shard["projection_version"], _CANDIDATE_ARTIFACT_PROJECTION_VERSION)
+        self.assertIn("function_bucket_ids", shard["materialized_candidate"])
+
+        # The materialized-fallback product itself is upgraded durably, not
+        # just the page payloads.
+        materialized_rows = {
+            row["candidate_id"]: row
+            for row in json.loads(
+                (self.artifact_dir / "materialized_candidate_documents.json").read_text(encoding="utf-8")
+            )["candidates"]
+        }
+        self.assertEqual(materialized_rows["c-cohort"]["function_bucket_ids"], ["research"])
+        self.assertEqual(materialized_rows["c-cohort"]["function_bucket_source"], "lane_membership")
+        self.assertEqual(materialized_rows["c-cohort"]["employment_statuses"], ["current", "former"])
+        self.assertEqual(materialized_rows["c-legacy"]["function_bucket_ids"], ["engineering"])
+        self.assertNotIn("employment_statuses", materialized_rows["c-legacy"])
+
+        # Second pass: the upgraded artifact is no longer stale — no repair.
+        self.assertFalse(_candidate_artifact_view_missing_paginated_serving(self.artifact_dir))
+        second = self._repair()
+        self.assertEqual(second["missing_paginated_view_count"], 0)
+        self.assertEqual(second["repaired_view_count"], 0)
+
+    def test_missing_projection_fields_on_pages_trigger_repair(self) -> None:
+        from sourcing_agent.candidate_artifacts import (
+            _CANDIDATE_ARTIFACT_PROJECTION_VERSION,
+            _candidate_artifact_view_missing_paginated_serving,
+        )
+
+        self._write_historical_artifact(
+            projection_version=_CANDIDATE_ARTIFACT_PROJECTION_VERSION,
+            page_rows=[{"candidate_id": "c-cohort", "display_name": "Cohort Candidate"}],
+        )
+        # Current version but page rows missing the canonical fields: stale.
+        self.assertTrue(_candidate_artifact_view_missing_paginated_serving(self.artifact_dir))
+        result = self._repair(dry_run=True)
+        self.assertEqual(result["missing_paginated_view_count"], 1)
+        self.assertEqual(result["repaired_view_count"], 1)
+
+    def test_current_artifact_is_not_marked_for_repair(self) -> None:
+        from sourcing_agent.candidate_artifacts import (
+            _CANDIDATE_ARTIFACT_PROJECTION_VERSION,
+            _candidate_artifact_view_missing_paginated_serving,
+        )
+
+        self._write_historical_artifact(
+            projection_version=_CANDIDATE_ARTIFACT_PROJECTION_VERSION,
+            page_rows=[
+                {
+                    "candidate_id": "c-cohort",
+                    "display_name": "Cohort Candidate",
+                    "function_bucket_ids": ["research"],
+                    "function_bucket_source": "lane_membership",
+                }
+            ],
+        )
+        self.assertFalse(_candidate_artifact_view_missing_paginated_serving(self.artifact_dir))
+
+    def test_malformed_provenance_blocks_repair(self) -> None:
+        from sourcing_agent.candidate_artifacts import _CANDIDATE_ARTIFACT_PROJECTION_VERSION
+        from sourcing_agent.public_candidate_facets import CohortFacetProvenanceError
+
+        self._write_historical_artifact(
+            projection_version=_CANDIDATE_ARTIFACT_PROJECTION_VERSION,
+            page_rows=[{"candidate_id": "c-cohort", "display_name": "Cohort Candidate"}],
+        )
+        # Corrupt the materialized provenance: lane/mirror disagreement must
+        # fail the repair closed instead of silently re-publishing.
+        materialized_path = self.artifact_dir / "materialized_candidate_documents.json"
+        materialized = json.loads(materialized_path.read_text(encoding="utf-8"))
+        materialized["candidates"][0]["metadata"]["cohort_role_bucket_ids"] = ["engineering"]
+        materialized_path.write_text(json.dumps(materialized, ensure_ascii=False), encoding="utf-8")
+
+        with self.assertRaises(CohortFacetProvenanceError):
+            self._repair()

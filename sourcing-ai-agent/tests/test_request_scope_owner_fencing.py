@@ -1284,3 +1284,146 @@ def test_criteria_automatic_baseline_selection_is_exact_owner_scoped() -> None:
     assert result["status"] == "gated_off"
     assert captured["requester_id"] == "alice"
     assert captured["tenant_id"] == "user-alice"
+
+
+def _location_request_record(
+    locations,
+    *,
+    exclude=None,
+    cohort: bool = False,
+) -> dict:
+    payload: dict[str, object] = {
+        "target_company": "OpenAI",
+        "categories": ["employee"],
+        "employment_statuses": ["current"],
+        "keywords": ["rl"],
+    }
+    if locations is not None:
+        payload["target_locations"] = list(locations)
+    if exclude is not None:
+        payload["exclude_target_locations"] = list(exclude)
+    if cohort:
+        payload["cohort_selection"] = {
+            "schema_version": "cohort_selection.v1",
+            "role_bucket_ids": ["research"],
+            "employment_statuses": ["current"],
+            "role_match": "any",
+            "source": "user_explicit",
+        }
+    return JobRequest.from_payload(payload).to_record()
+
+
+@pytest.mark.parametrize("cohort", [False, True], ids=["legacy", "cohort"])
+@pytest.mark.parametrize(
+    ("current_locations", "baseline_locations"),
+    [
+        (["United States"], ["Germany"]),
+        (["United States"], []),
+        ([], ["United States"]),
+        (None, ["United States"]),
+        (["United States"], None),
+    ],
+    ids=["value_mismatch", "present_vs_empty", "empty_vs_present", "absent_vs_present", "present_vs_absent"],
+)
+def test_criteria_rerun_explicit_baseline_never_crosses_location_identity(
+    cohort: bool,
+    current_locations,
+    baseline_locations,
+) -> None:
+    """FT1-FF (finding 2): an explicit baseline is rejected on any request-identity
+    hard mismatch — including target/exclusion location presence or value drift —
+    before any baseline result read or rerun policy execution, and is never
+    force-marked exact across location differences."""
+
+    current_request = _location_request_record(current_locations, cohort=cohort)
+    baseline_request = _location_request_record(baseline_locations, cohort=cohort)
+    events: list[str] = []
+    baseline_job = _owned_job(
+        job_id="job-owned",
+        status="completed",
+        request=baseline_request,
+    )
+    orchestrator = object.__new__(SourcingOrchestrator)
+    orchestrator.store = SimpleNamespace(
+        get_job=lambda job_id: events.append(f"read:job:{job_id}") or baseline_job,
+        get_job_results=lambda job_id: events.append(f"read:results:{job_id}") or [],
+    )
+    with patch(
+        "sourcing_agent.orchestrator.decide_rerun_policy",
+        side_effect=AssertionError("policy must not execute on identity mismatch"),
+    ):
+        result = orchestrator._rerun_after_recompile_if_requested(
+            {"job_id": "job-owned", "rerun_retrieval": True},
+            {"feedback_id": 1},
+            {"status": "recompiled", "request": current_request, "plan": {}},
+            expected_requester_id="alice",
+            expected_tenant_id="user-alice",
+        )
+
+    assert result["status"] == "skipped"
+    assert result["reason"] == "baseline_request_identity_mismatch"
+    assert result["baseline_job_id"] == "job-owned"
+    assert result["baseline_selection"]["family_score"] == 0.0
+    assert result["baseline_selection"]["exact_request_match"] is False
+    assert result["baseline_selection"]["reasons"] == ["location_identity_mismatch"]
+    # Zero baseline result reads and zero policy execution/writes.
+    assert events == ["read:job:job-owned"]
+
+
+def test_criteria_rerun_explicit_baseline_exclusion_mismatch_is_rejected() -> None:
+    current_request = _location_request_record(["United States"], exclude=["France"])
+    baseline_request = _location_request_record(["United States"], exclude=["Germany"])
+    events: list[str] = []
+    baseline_job = _owned_job(job_id="job-owned", status="completed", request=baseline_request)
+    orchestrator = object.__new__(SourcingOrchestrator)
+    orchestrator.store = SimpleNamespace(
+        get_job=lambda job_id: events.append(f"read:job:{job_id}") or baseline_job,
+        get_job_results=lambda job_id: events.append(f"read:results:{job_id}") or [],
+    )
+    with patch(
+        "sourcing_agent.orchestrator.decide_rerun_policy",
+        side_effect=AssertionError("policy must not execute on identity mismatch"),
+    ):
+        result = orchestrator._rerun_after_recompile_if_requested(
+            {"job_id": "job-owned", "rerun_retrieval": True},
+            {"feedback_id": 1},
+            {"status": "recompiled", "request": current_request, "plan": {}},
+            expected_requester_id="alice",
+            expected_tenant_id="user-alice",
+        )
+
+    assert result["status"] == "skipped"
+    assert result["reason"] == "baseline_request_identity_mismatch"
+    assert events == ["read:job:job-owned"]
+
+
+@pytest.mark.parametrize("cohort", [False, True], ids=["legacy", "cohort"])
+def test_criteria_rerun_explicit_baseline_with_identical_location_proceeds(cohort: bool) -> None:
+    """Control: an explicit baseline with the identical location identity keeps
+    the existing explicit-selection behavior (results read, policy executes)."""
+
+    current_request = _location_request_record(["United States"], cohort=cohort)
+    baseline_request = _location_request_record(["United States"], cohort=cohort)
+    events: list[str] = []
+    baseline_job = _owned_job(job_id="job-owned", status="completed", request=baseline_request)
+    orchestrator = object.__new__(SourcingOrchestrator)
+    orchestrator.store = SimpleNamespace(
+        get_job=lambda job_id: events.append(f"read:job:{job_id}") or baseline_job,
+        get_job_results=lambda job_id: events.append(f"read:results:{job_id}") or [],
+    )
+    with patch(
+        "sourcing_agent.orchestrator.decide_rerun_policy",
+        return_value={"status": "gated_off", "mode": "none"},
+    ):
+        result = orchestrator._rerun_after_recompile_if_requested(
+            {"job_id": "job-owned", "rerun_retrieval": True},
+            {"feedback_id": 1},
+            {"status": "recompiled", "request": current_request, "plan": {}},
+            expected_requester_id="alice",
+            expected_tenant_id="user-alice",
+        )
+
+    assert result["status"] == "gated_off"
+    assert result["baseline_selection"]["family_score"] == 100.0
+    assert result["baseline_selection"]["exact_request_match"] is True
+    assert events == ["read:job:job-owned", "read:results:job-owned"]

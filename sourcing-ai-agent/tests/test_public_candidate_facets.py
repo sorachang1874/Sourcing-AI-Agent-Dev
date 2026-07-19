@@ -22,6 +22,8 @@ from sourcing_agent.public_candidate_facets import (
     FUNCTION_BUCKET_SOURCE_LEGACY_INFERENCE,
     FUNCTION_BUCKET_SOURCE_REGISTRY_EVIDENCE,
     FUNCTION_BUCKET_SOURCES,
+    CohortFacetProvenanceError,
+    candidate_employment_statuses_for_public_facets,
     candidate_function_bucket_projection_for_public_facets,
     candidate_function_buckets_for_public_facets,
     candidate_matches_candidate_page_filter,
@@ -424,23 +426,62 @@ class FunctionFilterEnumTest(unittest.TestCase):
             )
         )
 
-    def test_operation_runtime_schema_enum_derives_from_the_one_helper(self) -> None:
+    def test_operation_runtime_v1_schema_keeps_exact_historical_enum(self) -> None:
+        # FT1-FF (finding 7): the published projection_filter_request_v1
+        # schema is immutable — the FT1 in-place enum mutation was reverted,
+        # so v1 keeps its exact historical five-value enum and the canonical
+        # Cohort mapping (with the FT1 named roles) lives in the distinct
+        # projection_filter_request_v2 contract.
         schema = _PROJECTION_READ_FILTER_PROPERTIES["function_buckets"]
-        expected = [item_id for item_id, _label in public_function_facet_option_spec()]
-        self.assertEqual(schema["items"]["enum"], expected)
-        self.assertEqual(schema["maxItems"], len(expected))
-        self.assertIn("infra_systems", schema["items"]["enum"])
-        self.assertIn("founding", schema["items"]["enum"])
+        self.assertEqual(
+            schema["items"]["enum"],
+            ["research", "engineering", "product_management", "other", "unknown"],
+        )
+        self.assertEqual(schema["maxItems"], 5)
 
-    def test_serving_projection_keyword_only_check_accepts_new_ids(self) -> None:
-        self.assertTrue(
+    def test_serving_projection_keyword_only_check_keeps_active_facet_filters(self) -> None:
+        # FT1-FF (finding 6): keyword-only iff removing search_keyword leaves
+        # NO active normalized filter.  A keyword combined with a single
+        # function/location/employment value is NOT keyword-only — the facet
+        # filter must reach the filtered index path instead of being silently
+        # discarded.
+        self.assertFalse(
             _candidate_filter_is_keyword_only(
-                {"search_keyword": "agent", "function_buckets": ["infra_systems", "founding"]}
+                {"search_keyword": "agent", "function_buckets": ["infra_systems"]}
             )
         )
         self.assertFalse(
+            _candidate_filter_is_keyword_only({"search_keyword": "agent", "function_buckets": ["founding"]})
+        )
+        self.assertFalse(
+            _candidate_filter_is_keyword_only({"search_keyword": "agent", "locations": ["us"]})
+        )
+        self.assertFalse(
+            _candidate_filter_is_keyword_only({"search_keyword": "agent", "employment_statuses": ["current"]})
+        )
+        # Unrecognized values are not full-domain no-ops either: the safe
+        # answer stays "not keyword-only" (normalized filters drop them
+        # upstream; a raw caller gets the conservative filtered path).
+        self.assertFalse(
             _candidate_filter_is_keyword_only({"search_keyword": "agent", "function_buckets": ["bogus"]})
         )
+        # The genuine all-values no-op selection IS keyword-only.
+        all_ids = [item_id for item_id, _label in public_function_facet_option_spec()]
+        self.assertTrue(
+            _candidate_filter_is_keyword_only({"search_keyword": "agent", "function_buckets": all_ids})
+        )
+        self.assertTrue(
+            _candidate_filter_is_keyword_only(
+                {"search_keyword": "agent", "employment_statuses": ["current", "former"]}
+            )
+        )
+        self.assertTrue(
+            _candidate_filter_is_keyword_only(
+                {"search_keyword": "agent", "locations": ["us", "other", "unknown"]}
+            )
+        )
+        self.assertTrue(_candidate_filter_is_keyword_only({"search_keyword": "agent"}))
+        self.assertFalse(_candidate_filter_is_keyword_only({"function_buckets": ["infra_systems"]}))
 
     def test_orchestrator_projection_filter_accepts_new_ids_and_rejects_garbage(self) -> None:
         normalized = SourcingOrchestrator._normalize_operation_projection_filter(
@@ -520,9 +561,9 @@ class ServedFunctionBucketProjectionTest(unittest.TestCase):
             },
         )
         legacy_engineer = Candidate(candidate_id="c2", name_en="Legacy Dev", role="Software Engineer", employment_status="current")
-        legacy_unknown = Candidate(candidate_id="c3", name_en="Legacy Other", role="Sales Director", employment_status="former")
+        legacy_asset_only = Candidate(candidate_id="c3", name_en="Legacy Other", role="Sales Director", employment_status="former")
 
-        result = self._build([cohort_candidate, legacy_engineer, legacy_unknown])
+        result = self._build([cohort_candidate, legacy_engineer, legacy_asset_only])
         served = [
             row
             for page in result["incremental_artifacts"]["page_payloads"]
@@ -534,14 +575,325 @@ class ServedFunctionBucketProjectionTest(unittest.TestCase):
         self.assertEqual(by_id["c1"]["function_bucket_source"], "lane_membership")
         self.assertEqual(by_id["c2"]["function_bucket_ids"], ["engineering"])
         self.assertEqual(by_id["c2"]["function_bucket_source"], "registry_evidence")
-        self.assertEqual(by_id["c3"]["function_bucket_ids"], ["unknown"])
-        self.assertEqual(by_id["c3"]["function_bucket_source"], "legacy_inference")
+        # FT1-FF (finding 10): the artifact normalization derives the TML
+        # asset-only ``leadership`` role bucket for "Sales Director"; asset-only
+        # buckets are structured ``other`` evidence, never legacy inference.
+        self.assertEqual(by_id["c3"]["function_bucket_ids"], ["other"])
+        self.assertEqual(by_id["c3"]["function_bucket_source"], "registry_evidence")
+
+        # FT1-FF (findings 5/8): page rows also carry the authoritative
+        # membership employment status set exactly when non-empty.
+        self.assertEqual(by_id["c1"]["employment_statuses"], ["current", "former"])
+        self.assertNotIn("employment_statuses", by_id["c2"])
+        self.assertNotIn("employment_statuses", by_id["c3"])
 
         # Per-row ids always agree with the served facet counts at the same build point.
         counts = result["artifact_summary"]["public_facet_counts"]
-        self.assertEqual(counts["function_counts"], {"research": 1, "engineering": 2, "unknown": 1})
+        self.assertEqual(counts["function_counts"], {"research": 1, "engineering": 2, "other": 1})
         # Dual-status membership is counted under both statuses.
         self.assertEqual(counts["employment_counts"], {"current": 2, "former": 2})
+
+        # FT1-FF (finding 8): materialized candidate documents receive the
+        # identical centralized row projection, not just page payloads.
+        materialized_by_id = {
+            row["candidate_id"]: row for row in result["materialized_documents"]["candidates"]
+        }
+        self.assertEqual(materialized_by_id["c1"]["function_bucket_ids"], ["research", "engineering"])
+        self.assertEqual(materialized_by_id["c1"]["function_bucket_source"], "lane_membership")
+        self.assertEqual(materialized_by_id["c1"]["employment_statuses"], ["current", "former"])
+        self.assertEqual(materialized_by_id["c2"]["function_bucket_ids"], ["engineering"])
+        self.assertEqual(materialized_by_id["c3"]["function_bucket_ids"], ["other"])
+        self.assertNotIn("employment_statuses", materialized_by_id["c2"])
+        # The artifact carries the bumped projection version (finding 8).
+        from sourcing_agent.candidate_artifacts import _CANDIDATE_ARTIFACT_PROJECTION_VERSION
+
+        self.assertEqual(result["artifact_summary"]["projection_version"], _CANDIDATE_ARTIFACT_PROJECTION_VERSION)
+
+
+class TmlAssetOnlyRoleMappingTest(unittest.TestCase):
+    """FT1-FF (finding 10): TML asset-only roles map to structured ``other``."""
+
+    def test_all_three_asset_only_roles_produce_structured_other(self) -> None:
+        for role_bucket in ("leadership", "ops", "investor"):
+            with self.subTest(role_bucket=role_bucket):
+                projection = candidate_function_bucket_projection_for_public_facets(
+                    {"role_bucket": role_bucket}
+                )
+                self.assertEqual(projection["function_bucket_ids"], ["other"])
+                self.assertEqual(projection["function_bucket_source"], "registry_evidence")
+                metadata_projection = candidate_function_bucket_projection_for_public_facets(
+                    {"metadata": {"role_bucket": role_bucket}}
+                )
+                self.assertEqual(metadata_projection["function_bucket_ids"], ["other"])
+                self.assertEqual(metadata_projection["function_bucket_source"], "registry_evidence")
+
+    def test_conflicting_headline_never_converts_asset_only_evidence_into_a_named_role(self) -> None:
+        for role_bucket in ("leadership", "ops", "investor"):
+            with self.subTest(role_bucket=role_bucket):
+                projection = candidate_function_bucket_projection_for_public_facets(
+                    {"role_bucket": role_bucket, "headline": "Software Engineer"}
+                )
+                self.assertEqual(projection["function_bucket_ids"], ["other"])
+                self.assertEqual(projection["function_bucket_source"], "registry_evidence")
+
+    def test_unrelated_legacy_parity_is_retained(self) -> None:
+        # Non-registry, non-asset-only buckets still fall to legacy inference.
+        projection = candidate_function_bucket_projection_for_public_facets({"role_bucket": "sales"})
+        self.assertEqual(projection["function_bucket_source"], "legacy_inference")
+        # Asset-only evidence combines with registry function evidence.
+        projection = candidate_function_bucket_projection_for_public_facets(
+            {"role_bucket": "ops", "function_ids": ["24"]}
+        )
+        self.assertEqual(projection["function_bucket_ids"], ["research", "other"])
+        self.assertEqual(projection["function_bucket_source"], "registry_evidence")
+
+
+class CohortProvenanceValidatorTest(unittest.TestCase):
+    """FT1-FF (finding 9): malformed Cohort provenance blocks, never falls back."""
+
+    def test_invalid_membership_shapes_raise(self) -> None:
+        bad_records = [
+            {"metadata": {"cohort_lane_membership": "research"}},
+            {"metadata": {"cohort_lane_membership": ["research"]}},
+            {"metadata": {"cohort_lane_membership": [{"employment_status": "current", "role_bucket_id": "research"}]}},
+            {
+                "metadata": {
+                    "cohort_lane_membership": [
+                        {"lane_id": "l1", "employment_status": "current", "role_bucket_id": "sales"}
+                    ]
+                }
+            },
+            {
+                "metadata": {
+                    "cohort_lane_membership": [
+                        {"lane_id": "l1", "employment_status": "lead", "role_bucket_id": "research"}
+                    ]
+                }
+            },
+            {
+                "metadata": {
+                    "cohort_lane_membership": [
+                        {"lane_id": "l1", "employment_status": "current", "role_bucket_id": 7}
+                    ]
+                }
+            },
+        ]
+        for record in bad_records:
+            with self.subTest(record=record):
+                with self.assertRaises(CohortFacetProvenanceError):
+                    candidate_function_bucket_projection_for_public_facets(record)
+
+    def test_invalid_mirror_shapes_raise(self) -> None:
+        for mirror in ("research", ["research", "sales"], [None], ["leadership"]):
+            with self.subTest(mirror=mirror):
+                with self.assertRaises(CohortFacetProvenanceError):
+                    candidate_function_bucket_projection_for_public_facets(
+                        {"metadata": {"cohort_role_bucket_ids": mirror}}
+                    )
+
+    def test_lane_mirror_disagreement_raises(self) -> None:
+        record = {
+            "metadata": {
+                "cohort_lane_membership": [
+                    {"lane_id": "l1", "employment_status": "current", "role_bucket_id": "research"}
+                ],
+                "cohort_role_bucket_ids": ["research", "engineering"],
+            }
+        }
+        with self.assertRaises(CohortFacetProvenanceError) as captured:
+            candidate_function_bucket_projection_for_public_facets(record)
+        self.assertEqual(captured.exception.code, "cohort_facet_provenance_role_disagreement")
+
+    def test_employment_disagreement_and_empty_mirror_raise(self) -> None:
+        disagreement = {
+            "metadata": {
+                "cohort_lane_membership": [
+                    {"lane_id": "l1", "employment_status": "current", "role_bucket_id": "research"}
+                ],
+                "cohort_employment_statuses": ["current", "former"],
+            }
+        }
+        with self.assertRaises(CohortFacetProvenanceError) as captured:
+            candidate_employment_statuses_for_public_facets(disagreement)
+        self.assertEqual(captured.exception.code, "cohort_facet_provenance_employment_disagreement")
+
+        empty_mirror = {"metadata": {"cohort_employment_statuses": []}}
+        with self.assertRaises(CohortFacetProvenanceError) as captured_empty:
+            candidate_employment_statuses_for_public_facets(empty_mirror)
+        self.assertEqual(captured_empty.exception.code, "cohort_facet_provenance_empty_employment_statuses")
+
+        invalid_status = {"metadata": {"cohort_employment_statuses": ["lead"]}}
+        with self.assertRaises(CohortFacetProvenanceError):
+            candidate_employment_statuses_for_public_facets(invalid_status)
+
+    def test_legitimate_all_roles_blank_role_case_passes_through(self) -> None:
+        # Status-only lanes carry a blank role_bucket_id and the role mirror is
+        # an empty list: well-formed provenance with no role evidence, so the
+        # record passes through to the registry/legacy tiers.
+        record = {
+            "function_ids": ["8"],
+            "metadata": {
+                "cohort_lane_membership": [
+                    {"lane_id": "cohort_current_all_roles_d", "employment_status": "current", "role_bucket_id": ""},
+                    {"lane_id": "cohort_former_all_roles_d", "employment_status": "former", "role_bucket_id": ""},
+                ],
+                "cohort_role_bucket_ids": [],
+                "cohort_employment_statuses": ["current", "former"],
+            },
+        }
+        projection = candidate_function_bucket_projection_for_public_facets(record)
+        self.assertEqual(projection["function_bucket_ids"], ["engineering"])
+        self.assertEqual(projection["function_bucket_source"], "registry_evidence")
+        self.assertEqual(
+            candidate_employment_statuses_for_public_facets(record),
+            ["current", "former"],
+        )
+        legacy_shaped = {
+            "headline": "Software Engineer",
+            "metadata": {
+                "cohort_lane_membership": [
+                    {"lane_id": "cohort_current_all_roles_d", "employment_status": "current", "role_bucket_id": ""}
+                ],
+                "cohort_role_bucket_ids": [],
+                "cohort_employment_statuses": ["current"],
+            },
+        }
+        legacy_projection = candidate_function_bucket_projection_for_public_facets(legacy_shaped)
+        self.assertEqual(legacy_projection["function_bucket_ids"], ["engineering"])
+        self.assertEqual(legacy_projection["function_bucket_source"], "legacy_inference")
+
+    def test_mirror_only_historical_path_is_validated(self) -> None:
+        accepted = candidate_function_bucket_projection_for_public_facets(
+            {"metadata": {"cohort_role_bucket_ids": ["infra_systems"]}}
+        )
+        self.assertEqual(accepted["function_bucket_ids"], ["infra_systems"])
+        self.assertEqual(accepted["function_bucket_source"], "lane_membership")
+        status_only = candidate_employment_statuses_for_public_facets(
+            {"metadata": {"cohort_employment_statuses": ["former"]}}
+        )
+        self.assertEqual(status_only, ["former"])
+
+    def test_malformed_provenance_blocks_facet_count_publication(self) -> None:
+        malformed = {
+            "metadata": {
+                "cohort_lane_membership": [
+                    {"lane_id": "l1", "employment_status": "current", "role_bucket_id": "research"}
+                ],
+                "cohort_role_bucket_ids": ["engineering"],
+            }
+        }
+        with self.assertRaises(CohortFacetProvenanceError):
+            public_facet_counts_from_records([malformed])
+
+    def test_persisted_pair_is_the_owned_value_for_read_consumers(self) -> None:
+        record = {
+            "function_bucket_ids": ["infra_systems"],
+            "function_bucket_source": "lane_membership",
+            "headline": "Software Engineer",
+        }
+        projection = candidate_function_bucket_projection_for_public_facets(record)
+        self.assertEqual(projection["function_bucket_ids"], ["infra_systems"])
+        self.assertEqual(projection["function_bucket_source"], "lane_membership")
+
+    def test_malformed_persisted_pair_or_status_set_raises(self) -> None:
+        for record in (
+            {"function_bucket_ids": ["research"]},
+            {"function_bucket_source": "lane_membership"},
+            {"function_bucket_ids": [], "function_bucket_source": "lane_membership"},
+            {"function_bucket_ids": ["bogus"], "function_bucket_source": "lane_membership"},
+            {"function_bucket_ids": ["research"], "function_bucket_source": "bogus"},
+        ):
+            with self.subTest(record=record):
+                with self.assertRaises(CohortFacetProvenanceError):
+                    candidate_function_bucket_projection_for_public_facets(record)
+        for record in (
+            {"employment_statuses": []},
+            {"employment_statuses": ["lead"]},
+            {"employment_statuses": "current"},
+        ):
+            with self.subTest(record=record):
+                with self.assertRaises(CohortFacetProvenanceError):
+                    candidate_employment_statuses_for_public_facets(record)
+
+    def test_persisted_status_set_is_the_owned_value_for_filters(self) -> None:
+        record = {"employment_statuses": ["current", "former"], "employment_status": "current"}
+        self.assertEqual(candidate_employment_statuses_for_public_facets(record), ["current", "former"])
+        for selected in (["current"], ["former"]):
+            with self.subTest(selected=selected):
+                self.assertTrue(
+                    candidate_matches_candidate_page_filter(
+                        record=record,
+                        candidate_filter=normalize_candidate_page_filter({"employment_statuses": selected}),
+                    )
+                )
+
+
+class ServedPublicSummaryProjectionTest(unittest.TestCase):
+    """FT1-FF (finding 5): public summaries carry the owned projection pair,
+    the authoritative employment status set, and Cohort provenance metadata."""
+
+    def _serialize(self, record: dict) -> dict:
+        orchestrator = object.__new__(SourcingOrchestrator)
+        return orchestrator._serialize_asset_population_candidate_api_record(
+            dict(record),
+            load_profile_timeline=False,
+            publishable_email_lookup=None,
+        )
+
+    def test_compact_serializer_carries_owned_projection_and_cohort_metadata(self) -> None:
+        record = {
+            "candidate_id": "c1",
+            "display_name": "Dual Role",
+            "employment_status": "current",
+            "linkedin_url": "https://www.linkedin.com/in/dual-role/",
+            "metadata": {
+                "cohort_lane_membership": [
+                    {"lane_id": "cohort_current_research_d", "employment_status": "current", "role_bucket_id": "research"},
+                    {"lane_id": "cohort_former_engineering_d", "employment_status": "former", "role_bucket_id": "engineering"},
+                ],
+                "cohort_role_bucket_ids": ["research", "engineering"],
+                "cohort_employment_statuses": ["current", "former"],
+            },
+        }
+        compact = self._serialize(record)
+        self.assertEqual(compact["function_bucket_ids"], ["research", "engineering"])
+        self.assertEqual(compact["function_bucket_source"], "lane_membership")
+        self.assertEqual(compact["employment_statuses"], ["current", "former"])
+        metadata = compact["metadata"]
+        self.assertEqual(metadata["cohort_role_bucket_ids"], ["research", "engineering"])
+        self.assertEqual(metadata["cohort_employment_statuses"], ["current", "former"])
+        self.assertEqual(len(metadata["cohort_lane_membership"]), 2)
+
+    def test_compact_serializer_honors_the_persisted_pair_and_omits_empty_status_sets(self) -> None:
+        persisted = {
+            "candidate_id": "c2",
+            "display_name": "Persisted Infra",
+            "function_bucket_ids": ["infra_systems"],
+            "function_bucket_source": "lane_membership",
+        }
+        compact = self._serialize(persisted)
+        self.assertEqual(compact["function_bucket_ids"], ["infra_systems"])
+        self.assertEqual(compact["function_bucket_source"], "lane_membership")
+        self.assertNotIn("employment_statuses", compact)
+        self.assertNotIn("metadata", compact)
+        # Legacy rows keep derived legacy_inference values rather than
+        # silently dropping the pair.
+        legacy = self._serialize({"candidate_id": "c3", "headline": "Software Engineer"})
+        self.assertEqual(legacy["function_bucket_ids"], ["engineering"])
+        self.assertEqual(legacy["function_bucket_source"], "legacy_inference")
+
+    def test_compact_serializer_fails_closed_on_malformed_provenance(self) -> None:
+        malformed = {
+            "candidate_id": "c4",
+            "metadata": {
+                "cohort_lane_membership": [
+                    {"lane_id": "l1", "employment_status": "current", "role_bucket_id": "research"}
+                ],
+                "cohort_role_bucket_ids": ["engineering"],
+            },
+        }
+        with self.assertRaises(CohortFacetProvenanceError):
+            self._serialize(malformed)
 
 
 if __name__ == "__main__":

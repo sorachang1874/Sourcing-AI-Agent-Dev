@@ -78,24 +78,52 @@ def matching_bundle_payload(
 ) -> dict[str, Any]:
     # Moved verbatim from storage._matching_bundle_payload (Track B ②.1): prefer the execution bundle's
     # persisted request_matching (backfilling its signatures) over recomputing from the raw payload.
+    # FT1-FF: the persisted bundle is trusted only after a full canonical
+    # regeneration compares equal — any normalized-payload or signature
+    # mismatch (e.g. an older bundle missing location identity) rebuilds from
+    # the canonical request instead of erasing request identity.
     execution_bundle_payload = dict(execution_bundle_payload or {})
     request_matching = dict(execution_bundle_payload.get("request_matching") or {})
     if request_matching:
         matching_request = dict(request_matching.get("matching_request") or {})
         matching_family_request = dict(request_matching.get("matching_family_request") or {})
         if matching_request and matching_family_request:
-            request_matching["matching_request"] = matching_request
-            request_matching["matching_family_request"] = matching_family_request
-            request_matching.setdefault(
-                "matching_request_signature",
-                matching_request_signature(request_payload),
-            )
-            request_matching.setdefault(
-                "matching_request_family_signature",
-                matching_request_family_signature(request_payload),
-            )
-            return request_matching
+            canonical_bundle = build_request_matching_bundle(request_payload)
+            if _persisted_matching_bundle_matches_canonical(
+                request_matching,
+                matching_request=matching_request,
+                matching_family_request=matching_family_request,
+                canonical_bundle=canonical_bundle,
+            ):
+                request_matching["matching_request"] = matching_request
+                request_matching["matching_family_request"] = matching_family_request
+                request_matching["matching_request_signature"] = str(
+                    canonical_bundle.get("matching_request_signature") or ""
+                )
+                request_matching["matching_request_family_signature"] = str(
+                    canonical_bundle.get("matching_request_family_signature") or ""
+                )
+                return request_matching
+            return canonical_bundle
     return build_request_matching_bundle(request_payload)
+
+
+def _persisted_matching_bundle_matches_canonical(
+    persisted_bundle: dict[str, Any],
+    *,
+    matching_request: dict[str, Any],
+    matching_family_request: dict[str, Any],
+    canonical_bundle: dict[str, Any],
+) -> bool:
+    if matching_request != dict(canonical_bundle.get("matching_request") or {}):
+        return False
+    if matching_family_request != dict(canonical_bundle.get("matching_family_request") or {}):
+        return False
+    for key in ("matching_request_signature", "matching_request_family_signature"):
+        persisted_signature = str(persisted_bundle.get(key) or "")
+        if persisted_signature and persisted_signature != str(canonical_bundle.get(key) or ""):
+            return False
+    return True
 
 
 def request_signature_context(
@@ -136,9 +164,12 @@ def request_family_score(
     try:
         left_matching_bundle = _coerce_matching_bundle(left, left_bundle)
         right_matching_bundle = _coerce_matching_bundle(right, right_bundle)
-    except CohortSelectionValidationError:
+    except CohortSelectionValidationError as exc:
         left_norm = _invalid_cohort_matching_payload(left, side="left")
         right_norm = _invalid_cohort_matching_payload(right, side="right")
+        invalid_reason = str(getattr(exc, "code", "") or "").strip()
+        if not invalid_reason.startswith("request_location_"):
+            invalid_reason = "cohort_selection_invalid"
         result = {
             "score": 0.0,
             "hard_family_mismatch": True,
@@ -146,7 +177,7 @@ def request_family_score(
             "exact_family_match": False,
             "family_signature_left": "",
             "family_signature_right": "",
-            "reasons": ["cohort_selection_invalid"],
+            "reasons": [invalid_reason],
             "matching_request_left": left_norm,
             "matching_request_right": right_norm,
         }
@@ -183,6 +214,25 @@ def request_family_score(
             "family_signature_left": left_request_family_signature,
             "family_signature_right": right_request_family_signature,
             "reasons": ["cohort_selection_identity_mismatch"],
+            "matching_request_left": left_norm,
+            "matching_request_right": right_norm,
+        }
+        result["explanation"] = build_request_family_match_explanation(left, right, match=result)
+        return result
+
+    # Location is a HARD request-family boundary: canonical presence and values
+    # of both sibling fields must match before any similarity scoring.  Any
+    # mismatch — including absent versus an explicit empty list — scores zero
+    # and can never reuse a snapshot, baseline, or feedback family.
+    if _location_request_identity(left_norm) != _location_request_identity(right_norm):
+        result = {
+            "score": 0.0,
+            "hard_family_mismatch": True,
+            "exact_request_match": False,
+            "exact_family_match": False,
+            "family_signature_left": left_request_family_signature,
+            "family_signature_right": right_request_family_signature,
+            "reasons": ["location_identity_mismatch"],
             "matching_request_left": left_norm,
             "matching_request_right": right_norm,
         }
@@ -358,6 +408,36 @@ def build_request_family_match_explanation(
             }
         )
 
+    for location_field in ("target_locations", "exclude_target_locations"):
+        left_present = location_field in left_norm
+        right_present = location_field in right_norm
+        if not left_present and not right_present:
+            continue
+        left_location_value = list(left_norm.get(location_field) or [])
+        right_location_value = list(right_norm.get(location_field) or [])
+        location_status = (
+            "match"
+            if left_present == right_present and left_location_value == right_location_value
+            else "hard_mismatch"
+        )
+        if location_status == "match":
+            matched_fields.append(location_field)
+        else:
+            mismatched_fields.append(location_field)
+        field_details.append(
+            {
+                "field": location_field,
+                "kind": "hard_identity",
+                "weight": 0.0,
+                "status": location_status,
+                "left_value": left_location_value if left_present else None,
+                "right_value": right_location_value if right_present else None,
+                "left_present": left_present,
+                "right_present": right_present,
+                "contribution": 0.0,
+            }
+        )
+
     explanation = {
         "selection_mode": str(selection_mode or "request_family_score"),
         "match_threshold": MATCH_THRESHOLD,
@@ -410,10 +490,7 @@ def _normalized_request_payload(payload: dict[str, Any], *, include_runtime_limi
     # Location sibling fields join signature identity only when present, so
     # different locations never share request signatures/reuse families while
     # legacy requests without the fields keep byte-identical signatures.
-    if payload.get("target_locations") is not None:
-        normalized["target_locations"] = _normalize_list(payload.get("target_locations"))
-    if payload.get("exclude_target_locations") is not None:
-        normalized["exclude_target_locations"] = _normalize_list(payload.get("exclude_target_locations"))
+    _apply_location_signature_fields(payload, normalized)
     cohort_identity = cohort_execution_identity_for_signature(payload)
     if cohort_identity:
         normalized["cohort_selection_digest"] = cohort_identity
@@ -483,12 +560,7 @@ def _normalized_effective_request_payload(
     # Same location signature identity as _normalized_request_payload: present
     # values split matching signatures/reuse by location; absent fields keep
     # legacy matching payloads byte-identical.
-    if effective_payload.get("target_locations") is not None:
-        normalized["target_locations"] = _normalize_list(effective_payload.get("target_locations"))
-    if effective_payload.get("exclude_target_locations") is not None:
-        normalized["exclude_target_locations"] = _normalize_list(
-            effective_payload.get("exclude_target_locations")
-        )
+    _apply_location_signature_fields(effective_payload, normalized)
     cohort_identity = cohort_execution_identity_for_signature(effective_payload)
     if cohort_identity:
         normalized["cohort_selection_digest"] = cohort_identity
@@ -516,23 +588,55 @@ def _coerce_matching_bundle(payload: dict[str, Any], bundle: dict[str, Any] | No
         matching_request = dict(normalized_bundle.get("matching_request") or {})
         matching_family_request = dict(normalized_bundle.get("matching_family_request") or {})
         if matching_request and matching_family_request:
-            payload_cohort_identity = cohort_execution_identity_for_signature(payload)
-            request_cohort_identity = str(matching_request.get("cohort_selection_digest") or "")
-            family_cohort_identity = str(matching_family_request.get("cohort_selection_digest") or "")
-            if payload_cohort_identity != request_cohort_identity or payload_cohort_identity != family_cohort_identity:
-                return build_request_matching_bundle(payload)
-            normalized_bundle["matching_request"] = matching_request
-            normalized_bundle["matching_family_request"] = matching_family_request
-            normalized_bundle.setdefault(
-                "matching_request_signature",
-                _signature_for_payload(matching_request),
-            )
-            normalized_bundle.setdefault(
-                "matching_request_family_signature",
-                _signature_for_payload(matching_family_request),
-            )
-            return normalized_bundle
+            # FT1-FF: trust a persisted/passed bundle only when the complete
+            # canonical regeneration compares equal; rebuild on ANY normalized
+            # payload or signature mismatch (Cohort-digest drift, location
+            # drift, absent-versus-empty, stale exclusions), never just on
+            # Cohort-digest drift.
+            canonical_bundle = build_request_matching_bundle(payload)
+            if _persisted_matching_bundle_matches_canonical(
+                normalized_bundle,
+                matching_request=matching_request,
+                matching_family_request=matching_family_request,
+                canonical_bundle=canonical_bundle,
+            ):
+                normalized_bundle["matching_request"] = matching_request
+                normalized_bundle["matching_family_request"] = matching_family_request
+                normalized_bundle["matching_request_signature"] = str(
+                    canonical_bundle.get("matching_request_signature") or ""
+                )
+                normalized_bundle["matching_request_family_signature"] = str(
+                    canonical_bundle.get("matching_request_family_signature") or ""
+                )
+                return normalized_bundle
+            return canonical_bundle
     return build_request_matching_bundle(payload)
+
+
+def _apply_location_signature_fields(payload: dict[str, Any], normalized: dict[str, Any]) -> None:
+    # Presence semantics mirror request ingress (domain._normalize_location_list):
+    # a present JSON null is NOT field absence and fails closed with the same
+    # stable invalid-type posture instead of being silently treated as absent.
+    for field_name in ("target_locations", "exclude_target_locations"):
+        if field_name not in payload:
+            continue
+        value = payload.get(field_name)
+        if value is None:
+            raise CohortSelectionValidationError(
+                "request_location_invalid_type",
+                field_name,
+                f"{field_name} must be an array of location strings",
+            )
+        normalized[field_name] = _normalize_list(value)
+
+
+def _location_request_identity(normalized: dict[str, Any]) -> tuple:
+    # Canonical presence+value identity for both location sibling fields:
+    # field absence and an explicit empty list are different identities.
+    return tuple(
+        (field_name in normalized, tuple(normalized.get(field_name) or ()))
+        for field_name in ("target_locations", "exclude_target_locations")
+    )
 
 
 def _signature_for_payload(payload: dict[str, Any]) -> str:

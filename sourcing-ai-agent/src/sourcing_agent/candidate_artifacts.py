@@ -101,7 +101,10 @@ from .profile_timeline import (
     timeline_has_complete_profile_detail,
 )
 from .public_candidate_facets import (
-    candidate_function_bucket_projection_for_public_facets as _candidate_function_bucket_projection,
+    derive_candidate_employment_statuses_for_public_facets as _derive_candidate_employment_statuses,
+)
+from .public_candidate_facets import (
+    derive_function_bucket_projection_for_public_facets as _derive_function_bucket_projection,
 )
 from .public_candidate_facets import (
     public_facet_counts_from_records as _public_facet_counts_from_records,
@@ -131,7 +134,42 @@ _FOREGROUND_FAST_ARTIFACT_BUILD_MAX_WORKERS = 12
 _CANDIDATE_ARTIFACT_FORCE_SERIAL_ENV = "SOURCING_CANDIDATE_ARTIFACT_FORCE_SERIAL"
 _CANDIDATE_ARTIFACT_DISABLE_BATCH_JSON_WRITES_ENV = "SOURCING_CANDIDATE_ARTIFACT_DISABLE_BATCH_JSON_WRITES"
 _CANDIDATE_ARTIFACT_DISABLE_BULK_STATE_UPSERT_ENV = "SOURCING_CANDIDATE_ARTIFACT_DISABLE_BULK_STATE_UPSERT"
-_CANDIDATE_ARTIFACT_PROJECTION_VERSION = "candidate_artifact_projection_v20260427_source_matches"
+_CANDIDATE_ARTIFACT_PROJECTION_VERSION = "candidate_artifact_projection_v20260719_served_facet_projection"
+
+
+def _attach_candidate_served_facet_projection(
+    record: dict[str, Any],
+    *,
+    projection_record: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Attach the canonical served facet projection to one candidate row.
+
+    This is the SINGLE row-projection owner for every product shape — page
+    payloads, materialized candidate documents, repaired pages/shards, and the
+    materialized-fallback serving window.  It always RECOMPUTES from evidence
+    (never trusts a persisted pair), so build and repair paths detect and
+    overwrite stale or missing fields:
+
+    - ``function_bucket_ids`` / ``function_bucket_source`` (FT0 §5.2);
+    - ``employment_statuses``: the authoritative membership status set (FT0
+      §6), present exactly when non-empty so legacy rows keep the documented
+      top-level/``lead`` fallback semantics.
+
+    Malformed Cohort provenance raises ``CohortFacetProvenanceError`` so
+    publication fails closed instead of serving a silently re-derived row.
+    """
+
+    attached = dict(record or {})
+    source = dict(projection_record or attached)
+    function_bucket_projection = _derive_function_bucket_projection(source)
+    attached["function_bucket_ids"] = list(function_bucket_projection["function_bucket_ids"])
+    attached["function_bucket_source"] = str(function_bucket_projection["function_bucket_source"])
+    membership_statuses = _derive_candidate_employment_statuses(source)
+    if membership_statuses:
+        attached["employment_statuses"] = list(membership_statuses)
+    else:
+        attached.pop("employment_statuses", None)
+    return attached
 
 
 def _candidate_artifact_flag_enabled(env_name: str) -> bool:
@@ -1798,7 +1836,27 @@ def _candidate_artifact_view_missing_paginated_serving(artifact_dir: Path) -> bo
     if not (artifact_dir / "manifest.json").exists():
         return True
     pages_dir = artifact_dir / "pages"
-    return not pages_dir.exists() or not any(pages_dir.glob("page-*.json"))
+    if not pages_dir.exists() or not any(pages_dir.glob("page-*.json")):
+        return True
+    # Stale-projection detection (FT1-FF): an artifact built or repaired before
+    # the served facet projection version is upgraded — version drift on the
+    # artifact summary, or served page rows missing the canonical projection
+    # fields — so historical products receive the new projection instead of
+    # being treated as complete.
+    artifact_summary = load_company_snapshot_json(artifact_dir / "artifact_summary.json")
+    if isinstance(artifact_summary, dict):
+        projection_version = str(artifact_summary.get("projection_version") or "").strip()
+        if projection_version != _CANDIDATE_ARTIFACT_PROJECTION_VERSION:
+            return True
+    first_page_path = sorted(pages_dir.glob("page-*.json"))[0]
+    first_page = load_company_snapshot_json(first_page_path)
+    if isinstance(first_page, dict):
+        page_rows = [dict(item) for item in list(first_page.get("candidates") or []) if isinstance(item, dict)]
+        if page_rows and any(
+            "function_bucket_ids" not in row or "function_bucket_source" not in row for row in page_rows
+        ):
+            return True
+    return False
 
 
 def _repair_paginated_candidate_artifact_view_from_materialized(
@@ -1864,6 +1922,8 @@ def _repair_paginated_candidate_artifact_view_from_materialized(
     shard_entries: list[dict[str, Any]] = []
     page_candidates: list[dict[str, Any]] = []
     shard_write_plan: list[tuple[Path, dict[str, Any]]] = []
+    facet_projection_records: list[dict[str, Any]] = []
+    upgraded_materialized_candidates: list[dict[str, Any]] = []
     for index, materialized_candidate in enumerate(materialized_candidates):
         candidate_id = _artifact_candidate_id(materialized_candidate, fallback_index=index)
         manual_review_item = dict(manual_review_by_id.get(candidate_id) or {})
@@ -1890,6 +1950,19 @@ def _repair_paginated_candidate_artifact_view_from_materialized(
             profile_completion_item,
         )
         candidate_evidence = list(evidence_by_candidate.get(candidate_id) or [])
+        # FT1-FF: the repair path runs the SAME centralized row projection as
+        # the build point, recomputed from provenance/evidence, so historical
+        # and materialized-fallback rows receive the new projection and stale
+        # or missing fields are overwritten.  Malformed Cohort provenance
+        # raises here and fails the repair closed instead of silently
+        # re-publishing a lossy row.
+        projection_input = _candidate_facet_projection_record(normalized_candidate, materialized_candidate)
+        facet_projection_records.append(projection_input)
+        materialized_candidate = _attach_candidate_served_facet_projection(
+            materialized_candidate,
+            projection_record=projection_input,
+        )
+        upgraded_materialized_candidates.append(materialized_candidate)
         fingerprint_seed = {
             "materialized_candidate": materialized_candidate,
             "normalized_candidate": normalized_candidate,
@@ -1922,6 +1995,7 @@ def _repair_paginated_candidate_artifact_view_from_materialized(
                 {
                     "candidate_id": candidate_id,
                     "fingerprint": fingerprint,
+                    "projection_version": _CANDIDATE_ARTIFACT_PROJECTION_VERSION,
                     "target_company": target_company,
                     "snapshot_id": snapshot_id,
                     "asset_view": asset_view,
@@ -1940,11 +2014,14 @@ def _repair_paginated_candidate_artifact_view_from_materialized(
         # signals, so list correctness never depends on public-read timeline
         # hydration.
         page_candidates.append(
-            _build_candidate_serving_page_record(
-                materialized_record=materialized_candidate,
-                normalized_record=normalized_candidate,
-                reusable_record=reusable_document,
-                profile_completion_item=profile_completion_item,
+            _attach_candidate_served_facet_projection(
+                _build_candidate_serving_page_record(
+                    materialized_record=materialized_candidate,
+                    normalized_record=normalized_candidate,
+                    reusable_record=reusable_document,
+                    profile_completion_item=profile_completion_item,
+                ),
+                projection_record=projection_input,
             )
         )
 
@@ -1978,12 +2055,18 @@ def _repair_paginated_candidate_artifact_view_from_materialized(
         )
 
     snapshot_payload = dict(materialized_payload.get("snapshot") or {})
+    # FT1-FF: regenerate the facet products from the repaired projection
+    # records so repaired/historical artifacts republish counts/summaries that
+    # agree with the new per-row projection, and stamp the artifact version.
+    repaired_facet_counts = _public_facet_counts_from_records(facet_projection_records)
+    repaired_facet_summary = _public_facet_summary_from_counts(repaired_facet_counts)
     manifest_payload = {
         "target_company": target_company,
         "company_key": company_key,
         "snapshot_id": snapshot_id,
         "asset_view": asset_view,
         "materialized_at": materialized_at,
+        "projection_version": _CANDIDATE_ARTIFACT_PROJECTION_VERSION,
         "candidate_count": len(page_candidates),
         "pagination": {
             "page_size": page_size,
@@ -1995,6 +2078,9 @@ def _repair_paginated_candidate_artifact_view_from_materialized(
         "reused_candidate_count": 0,
         "candidate_shards": shard_entries,
         "pages": pages_manifest,
+        "public_facet_counts": repaired_facet_counts,
+        "facet_summary": repaired_facet_summary,
+        "facet_summary_scope": "global_full_population" if repaired_facet_summary else "",
         "backlogs": {
             "manual_review": "backlogs/manual_review.json",
             "profile_completion": "backlogs/profile_completion.json",
@@ -2071,6 +2157,24 @@ def _repair_paginated_candidate_artifact_view_from_materialized(
             )
             repaired_paths.append("publishable_primary_emails.json")
         _write_json_artifact(artifact_dir / "manifest.json", manifest_payload)
+        if upgraded_materialized_candidates != materialized_candidates:
+            upgraded_materialized_payload = {
+                **materialized_payload,
+                "candidates": upgraded_materialized_candidates,
+            }
+            _write_json_artifact(materialized_path, upgraded_materialized_payload)
+            repaired_paths.append("materialized_candidate_documents.json")
+        if isinstance(artifact_summary, dict):
+            updated_artifact_summary = {
+                **artifact_summary,
+                "projection_version": _CANDIDATE_ARTIFACT_PROJECTION_VERSION,
+                "public_facet_counts": repaired_facet_counts,
+                "facet_summary": repaired_facet_summary,
+                "facet_summary_scope": "global_full_population" if repaired_facet_summary else "",
+            }
+            if updated_artifact_summary != artifact_summary:
+                _write_json_artifact(artifact_dir / "artifact_summary.json", updated_artifact_summary)
+                repaired_paths.append("artifact_summary.json")
         pages_dir = artifact_dir / "pages"
         expected_pages = {str(path.relative_to(artifact_dir)) for path, _ in page_payloads}
         if pages_dir.exists():
@@ -5447,20 +5551,35 @@ def _build_artifact_view_payloads(
     ]
     public_facet_counts = _public_facet_counts_from_records(facet_projection_records)
     public_facet_summary = _public_facet_summary_from_counts(public_facet_counts)
-    # Served per-candidate function-bucket projection (append-only).  Computed
-    # once here — the same build point and the same facet projection records
-    # that feed public_facet_counts — so per-row bucket ids always agree with
-    # the served facet counts.  Page candidates are built in normalized order,
-    # so the flattened page sequence aligns 1:1 with facet_projection_records.
+    # Served per-candidate facet projection (append-only).  Computed once here
+    # — the same build point and the same facet projection records that feed
+    # public_facet_counts — so per-row bucket ids always agree with the served
+    # facet counts.  Page candidates are built in normalized order, so the
+    # flattened page sequence aligns 1:1 with facet_projection_records.  The
+    # centralized row projection (_attach_candidate_served_facet_projection)
+    # covers BOTH page payloads and materialized candidate documents, so
+    # page/materialized/repair/materialized-fallback rows all carry the
+    # identical canonical fields (function_bucket_ids, function_bucket_source,
+    # and the authoritative employment status set).
     served_page_candidates = [
         served_candidate
         for page_payload in page_payloads
         for served_candidate in list(dict(page_payload.get("payload") or {}).get("candidates") or [])
     ]
+    for index, projection_record in enumerate(facet_projection_records):
+        if index >= len(materialized_candidate_records):
+            break
+        materialized_candidate_records[index] = _attach_candidate_served_facet_projection(
+            materialized_candidate_records[index],
+            projection_record=projection_record,
+        )
     for served_candidate, projection_record in zip(served_page_candidates, facet_projection_records, strict=False):
-        function_bucket_projection = _candidate_function_bucket_projection(projection_record)
-        served_candidate["function_bucket_ids"] = list(function_bucket_projection["function_bucket_ids"])
-        served_candidate["function_bucket_source"] = str(function_bucket_projection["function_bucket_source"])
+        attached_candidate = _attach_candidate_served_facet_projection(
+            served_candidate,
+            projection_record=projection_record,
+        )
+        served_candidate.clear()
+        served_candidate.update(attached_candidate)
     artifact_summary = {
         "target_company": materialized_view["target_company"],
         "company_key": materialized_view["company_key"],

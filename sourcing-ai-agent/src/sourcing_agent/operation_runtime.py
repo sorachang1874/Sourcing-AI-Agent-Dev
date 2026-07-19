@@ -44,12 +44,7 @@ from sourcing_agent.durable_runtime import (
     workflow_command_display_contract,
 )
 from sourcing_agent.model_tool_runtime import ModelToolSchemaError, ToolSpec
-from sourcing_agent.public_candidate_facets import public_function_facet_option_spec
 from sourcing_agent.public_web_search import DEFAULT_TARGET_CANDIDATE_SOURCE_FAMILIES
-
-# Result function-facet filter values derive from the ONE registry-driven
-# option spec (public_candidate_facets); no second hard-coded enum here.
-_PUBLIC_FUNCTION_FACET_IDS = [item_id for item_id, _label in public_function_facet_option_spec()]
 
 ACTION_PLAN_ACQUISITION = "plan_acquisition"
 ACTION_START_ACQUISITION_RUN = "start_acquisition_run"
@@ -633,9 +628,15 @@ _PROJECTION_READ_FILTER_PROPERTIES: dict[str, dict[str, Any]] = {
         "type": "array",
         "items": {
             "type": "string",
-            "enum": _PUBLIC_FUNCTION_FACET_IDS,
+            # Exact historical v1 enum: the immutable version/digest contract
+            # (docs/AGENT_OPERATION_CONTRACT.md) forbids mutating a published
+            # request schema in place.  The canonical Cohort mapping —
+            # including the FT1 named facets — is the distinct
+            # ``projection_filter_request_v2`` contract in
+            # ``agent_projection_query`` (TRACK_D D1n plan row 6).
+            "enum": ["research", "engineering", "product_management", "other", "unknown"],
         },
-        "maxItems": len(_PUBLIC_FUNCTION_FACET_IDS),
+        "maxItems": 5,
     },
     "layer_includes": {
         "type": "array",

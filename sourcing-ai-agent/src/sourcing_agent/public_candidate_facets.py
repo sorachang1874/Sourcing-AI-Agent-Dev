@@ -23,6 +23,34 @@ FUNCTION_BUCKET_SOURCES = (
     FUNCTION_BUCKET_SOURCE_LEGACY_INFERENCE,
 )
 
+# TML canonical asset buckets that are NOT selectable registry roles
+# (docs/THINKING_MACHINES_LAB_CANONICAL_ASSET.md; FT0 v2 §4.5).  They are
+# structured ``other`` evidence — never legacy headline inference and never a
+# silent alias into a selectable role.
+_TML_ASSET_ONLY_ROLE_BUCKET_IDS: frozenset[str] = frozenset({"leadership", "ops", "investor"})
+
+_COHORT_EMPLOYMENT_STATUSES: frozenset[str] = frozenset({"current", "former"})
+
+
+class CohortFacetProvenanceError(ValueError):
+    """Stable fail-closed error for malformed Cohort facet provenance.
+
+    Raised by the presence-aware closed validator when server-owned Cohort
+    provenance (lane membership, role/status mirrors, or the persisted served
+    projection fields) is malformed or internally inconsistent.  Publication
+    paths fail closed on this error instead of silently falling back to
+    lower-authority evidence.
+    """
+
+    def __init__(self, code: str, field: str = "", detail: str = "") -> None:
+        self.code = str(code or "cohort_facet_provenance_invalid")
+        self.field = str(field or "")
+        self.detail = str(detail or "")
+        super().__init__(self.code)
+
+    def __str__(self) -> str:
+        return f"{self.code}: {self.field}" if self.field else self.code
+
 # Documented result-only facet states.  ``other`` means the record carries
 # role evidence that maps to no selectable registry role (e.g. an unmapped
 # numeric function id or a non-registry asset bucket); ``unknown`` means the
@@ -170,10 +198,178 @@ def candidate_location_bucket_for_public_facets(record: dict[str, Any]) -> str:
     return "us"
 
 
+def _validated_cohort_provenance(metadata: dict[str, Any]) -> dict[str, Any]:
+    """Presence-aware closed validation of server-owned Cohort provenance.
+
+    Returns ``{"has_provenance": bool, "role_bucket_ids": [...],
+    "employment_statuses": [...]}``.  Any malformed provenance — wrong
+    container/item types, unknown role ids, invalid statuses, an empty
+    employment mirror (invalid at request time, FT0 §3.5), or lane/mirror
+    disagreement when both exist — raises ``CohortFacetProvenanceError`` so
+    facet/index publication fails closed instead of silently falling back to
+    lower-authority evidence.  The legitimate all-roles case (status-only
+    lanes carry a blank ``role_bucket_id`` and the role mirror is an empty
+    list) is well-formed and simply yields no role evidence, passing the
+    record through to the registry/legacy tiers.
+    """
+
+    has_membership = "cohort_lane_membership" in metadata
+    has_role_mirror = "cohort_role_bucket_ids" in metadata
+    has_status_mirror = "cohort_employment_statuses" in metadata
+    if not has_membership and not has_role_mirror and not has_status_mirror:
+        return {"has_provenance": False, "role_bucket_ids": [], "employment_statuses": []}
+
+    lane_roles: list[str] = []
+    lane_statuses: list[str] = []
+    if has_membership:
+        membership = metadata.get("cohort_lane_membership")
+        if not isinstance(membership, list):
+            raise CohortFacetProvenanceError(
+                "cohort_facet_provenance_invalid_type",
+                "cohort_lane_membership",
+            )
+        for item in membership:
+            if not isinstance(item, dict):
+                raise CohortFacetProvenanceError(
+                    "cohort_facet_provenance_invalid_item",
+                    "cohort_lane_membership",
+                )
+            lane_id = item.get("lane_id")
+            if not isinstance(lane_id, str) or not lane_id.strip():
+                raise CohortFacetProvenanceError(
+                    "cohort_facet_provenance_invalid_lane",
+                    "cohort_lane_membership",
+                )
+            status = item.get("employment_status")
+            if not isinstance(status, str) or status.strip().lower() not in _COHORT_EMPLOYMENT_STATUSES:
+                raise CohortFacetProvenanceError(
+                    "cohort_facet_provenance_invalid_employment_status",
+                    "cohort_lane_membership",
+                )
+            normalized_status = status.strip().lower()
+            if normalized_status not in lane_statuses:
+                lane_statuses.append(normalized_status)
+            role_id = item.get("role_bucket_id")
+            if not isinstance(role_id, str):
+                raise CohortFacetProvenanceError(
+                    "cohort_facet_provenance_invalid_role",
+                    "cohort_lane_membership",
+                )
+            normalized_role = role_id.strip()
+            if not normalized_role:
+                continue  # status-only (all-roles) lane: no role evidence
+            if normalized_role not in _SELECTABLE_FUNCTION_ROLE_ID_SET:
+                raise CohortFacetProvenanceError(
+                    "cohort_facet_provenance_unknown_role",
+                    "cohort_lane_membership",
+                )
+            if normalized_role not in lane_roles:
+                lane_roles.append(normalized_role)
+
+    mirror_roles: list[str] | None = None
+    if has_role_mirror:
+        raw_mirror = metadata.get("cohort_role_bucket_ids")
+        if not isinstance(raw_mirror, list):
+            raise CohortFacetProvenanceError(
+                "cohort_facet_provenance_invalid_type",
+                "cohort_role_bucket_ids",
+            )
+        mirror_roles = []
+        for item in raw_mirror:
+            if not isinstance(item, str) or item.strip() not in _SELECTABLE_FUNCTION_ROLE_ID_SET:
+                raise CohortFacetProvenanceError(
+                    "cohort_facet_provenance_unknown_role",
+                    "cohort_role_bucket_ids",
+                )
+            normalized_role = item.strip()
+            if normalized_role not in mirror_roles:
+                mirror_roles.append(normalized_role)
+
+    mirror_statuses: list[str] | None = None
+    if has_status_mirror:
+        raw_statuses = metadata.get("cohort_employment_statuses")
+        if not isinstance(raw_statuses, list):
+            raise CohortFacetProvenanceError(
+                "cohort_facet_provenance_invalid_type",
+                "cohort_employment_statuses",
+            )
+        mirror_statuses = []
+        for item in raw_statuses:
+            if not isinstance(item, str) or item.strip().lower() not in _COHORT_EMPLOYMENT_STATUSES:
+                raise CohortFacetProvenanceError(
+                    "cohort_facet_provenance_invalid_employment_status",
+                    "cohort_employment_statuses",
+                )
+            normalized_status = item.strip().lower()
+            if normalized_status not in mirror_statuses:
+                mirror_statuses.append(normalized_status)
+        if not mirror_statuses:
+            # An empty employment mirror is never legitimate: empty statuses
+            # fail closed at request ingress (FT0 §3.5), so a present-empty
+            # mirror on a served record is malformed provenance.
+            raise CohortFacetProvenanceError(
+                "cohort_facet_provenance_empty_employment_statuses",
+                "cohort_employment_statuses",
+            )
+
+    if mirror_roles is not None and has_membership and set(mirror_roles) != set(lane_roles):
+        raise CohortFacetProvenanceError(
+            "cohort_facet_provenance_role_disagreement",
+            "cohort_role_bucket_ids",
+        )
+    if mirror_statuses is not None and has_membership and set(mirror_statuses) != set(lane_statuses):
+        raise CohortFacetProvenanceError(
+            "cohort_facet_provenance_employment_disagreement",
+            "cohort_employment_statuses",
+        )
+
+    return {
+        "has_provenance": True,
+        "role_bucket_ids": list(mirror_roles if mirror_roles is not None else lane_roles),
+        "employment_statuses": list(mirror_statuses if mirror_statuses is not None else lane_statuses),
+    }
+
+
+def _persisted_function_bucket_projection(record: dict[str, Any]) -> dict[str, Any] | None:
+    """Return the owned persisted projection pair when present, else None.
+
+    The pair is a production contract field (FT0 §5.2): exactly one of the
+    two keys, an empty/unknown id set, or an unknown source is malformed and
+    fails closed instead of being silently re-derived.
+    """
+
+    has_ids = "function_bucket_ids" in record
+    has_source = "function_bucket_source" in record
+    if not has_ids and not has_source:
+        return None
+    if not has_ids or not has_source:
+        raise CohortFacetProvenanceError(
+            "cohort_facet_projection_incomplete",
+            "function_bucket_ids" if not has_ids else "function_bucket_source",
+        )
+    raw_ids = record.get("function_bucket_ids")
+    source = record.get("function_bucket_source")
+    if (
+        not isinstance(raw_ids, list)
+        or not raw_ids
+        or any(not isinstance(item, str) or item.strip() not in _FUNCTION_FACET_OPTION_ID_SET for item in raw_ids)
+    ):
+        raise CohortFacetProvenanceError("cohort_facet_projection_invalid_ids", "function_bucket_ids")
+    if source not in FUNCTION_BUCKET_SOURCES:
+        raise CohortFacetProvenanceError("cohort_facet_projection_invalid_source", "function_bucket_source")
+    return {
+        "function_bucket_ids": _ordered_function_facet_ids(raw_ids),
+        "function_bucket_source": str(source),
+    }
+
+
 def candidate_function_bucket_projection_for_public_facets(record: dict[str, Any]) -> dict[str, Any]:
     """Return the served per-candidate function-bucket projection.
 
-    Multi-valued membership-first derivation with exact precedence:
+    Read-side consumers (facet counts, filters, projection members, index
+    filter records) use the OWNED persisted ``function_bucket_ids`` /
+    ``function_bucket_source`` pair when the record carries it; otherwise the
+    projection is derived from evidence with exact precedence:
 
     1. ``lane_membership`` — Cohort-produced records carry server-derived
        ``metadata.cohort_lane_membership`` / ``metadata.cohort_role_bucket_ids``
@@ -182,26 +378,36 @@ def candidate_function_bucket_projection_for_public_facets(record: dict[str, Any
        ``function_ids`` mapped through the registry (bare ``"8"`` resolves to
        ``engineering`` only, registry-order tie-break; unmapped ids become
        ``other``) plus explicit registry ``role_bucket`` evidence, which is
-       additionally how ``infra_systems``/``founding`` are attributed.
+       additionally how ``infra_systems``/``founding`` are attributed.  TML
+       asset-only buckets (``leadership``/``ops``/``investor``) are structured
+       ``other`` evidence in this tier, never legacy text inference.
     3. ``legacy_inference`` — the documented pre-FT1 text/``role_bucket``
        inference fallback, retained byte-for-byte for records with neither
        membership nor registry-mappable evidence (historical persisted
        candidates and legacy non-Cohort acquisitions).
+
+    Malformed Cohort provenance or a malformed persisted pair raises
+    ``CohortFacetProvenanceError`` (fail closed; no silent fallback).
+    """
+
+    persisted = _persisted_function_bucket_projection(record)
+    if persisted is not None:
+        return persisted
+    return derive_function_bucket_projection_for_public_facets(record)
+
+
+def derive_function_bucket_projection_for_public_facets(record: dict[str, Any]) -> dict[str, Any]:
+    """Derive the projection from record evidence only (build/repair side).
+
+    Unlike the read-side entry point this never consumes the persisted pair,
+    so build and repair paths always recompute the canonical values from
+    provenance/evidence and detect stale or missing persisted fields.
     """
 
     metadata = dict(record.get("metadata") or {})
 
-    membership_roles: list[str] = []
-    for item in list(metadata.get("cohort_lane_membership") or []):
-        if not isinstance(item, dict):
-            continue
-        role_id = str(item.get("role_bucket_id") or "").strip()
-        if role_id in _SELECTABLE_FUNCTION_ROLE_ID_SET and role_id not in membership_roles:
-            membership_roles.append(role_id)
-    for item in list(metadata.get("cohort_role_bucket_ids") or []):
-        role_id = str(item or "").strip()
-        if role_id in _SELECTABLE_FUNCTION_ROLE_ID_SET and role_id not in membership_roles:
-            membership_roles.append(role_id)
+    provenance = _validated_cohort_provenance(metadata)
+    membership_roles = list(provenance["role_bucket_ids"])
     if membership_roles:
         return {
             "function_bucket_ids": _ordered_function_facet_ids(membership_roles),
@@ -220,6 +426,11 @@ def candidate_function_bucket_projection_for_public_facets(record: dict[str, Any
     role_bucket = str(record.get("role_bucket") or metadata.get("role_bucket") or "").strip().lower()
     if role_bucket in _SELECTABLE_FUNCTION_ROLE_ID_SET:
         evidence.add(role_bucket)
+    elif role_bucket in _TML_ASSET_ONLY_ROLE_BUCKET_IDS:
+        # TML asset-only buckets are structured ``other`` evidence (FT0 §4.5):
+        # explicit asset-only evidence must not fall through to headline
+        # inference, where conflicting text could convert it into a named role.
+        evidence.add("other")
     if evidence:
         return {
             "function_bucket_ids": _ordered_function_facet_ids(evidence),
@@ -310,28 +521,44 @@ def _legacy_inferred_function_buckets(record: dict[str, Any]) -> list[str]:
 def candidate_employment_statuses_for_public_facets(record: dict[str, Any]) -> list[str]:
     """Return the authoritative employment status set for facet counts/filters.
 
-    For Cohort-produced records ``metadata.cohort_lane_membership`` /
-    ``metadata.cohort_employment_statuses`` are the ONLY authoritative
-    employment provenance: a candidate qualifying in both current and former
-    lanes is counted and filterable under BOTH even though the card's
-    top-level ``employment_status`` keeps its frozen display-only derivation.
-    Returns [] when no membership provenance exists (legacy records), so
-    callers fall back to the documented top-level/``lead`` semantics.
+    Read-side consumers use the OWNED persisted ``employment_statuses`` set
+    when the record carries it (written by the backend projection build).
+    Otherwise the set is derived from the ONLY authoritative employment
+    provenance for Cohort-produced records — ``metadata.cohort_lane_membership``
+    / ``metadata.cohort_employment_statuses`` — so a candidate qualifying in
+    both current and former lanes is counted and filterable under BOTH even
+    though the card's top-level ``employment_status`` keeps its frozen
+    display-only derivation.  Returns [] when no membership provenance exists
+    (legacy records), so callers fall back to the documented
+    top-level/``lead`` semantics.  Malformed provenance or a malformed
+    persisted set raises ``CohortFacetProvenanceError`` (fail closed).
+    """
+
+    if "employment_statuses" in record:
+        persisted = record.get("employment_statuses")
+        if (
+            not isinstance(persisted, list)
+            or not persisted
+            or any(not isinstance(item, str) or item not in _COHORT_EMPLOYMENT_STATUSES for item in persisted)
+        ):
+            raise CohortFacetProvenanceError(
+                "cohort_facet_employment_projection_invalid",
+                "employment_statuses",
+            )
+        return list(dict.fromkeys(persisted))
+    return derive_candidate_employment_statuses_for_public_facets(record)
+
+
+def derive_candidate_employment_statuses_for_public_facets(record: dict[str, Any]) -> list[str]:
+    """Derive the authoritative status set from Cohort provenance only.
+
+    Build/repair paths use this so persisted sets are always recomputed from
+    provenance; legacy records without provenance return [].
     """
 
     metadata = dict(record.get("metadata") or {})
-    statuses: list[str] = []
-    for item in list(metadata.get("cohort_lane_membership") or []):
-        if not isinstance(item, dict):
-            continue
-        status = str(item.get("employment_status") or "").strip().lower()
-        if status in {"current", "former"} and status not in statuses:
-            statuses.append(status)
-    for item in list(metadata.get("cohort_employment_statuses") or []):
-        status = str(item or "").strip().lower()
-        if status in {"current", "former"} and status not in statuses:
-            statuses.append(status)
-    return statuses
+    provenance = _validated_cohort_provenance(metadata)
+    return list(provenance["employment_statuses"])
 
 
 def candidate_recall_keywords_for_public_facets(record: dict[str, Any]) -> list[str]:

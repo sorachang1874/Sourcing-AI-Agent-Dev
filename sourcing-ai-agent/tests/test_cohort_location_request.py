@@ -134,6 +134,27 @@ class LocationFieldValidationTest(unittest.TestCase):
                 self.assertEqual(captured.exception.code, expected_code)
                 self.assertEqual(captured.exception.field, expected_field)
 
+    def test_present_json_null_is_not_field_absence(self) -> None:
+        # FT1-FF (finding 4): a present JSON null fails closed with the stable
+        # invalid-type error — it must NOT be silently treated as an absent
+        # field (which would activate the explicit-Cohort US default).
+        for field in ("target_locations", "exclude_target_locations"):
+            with self.subTest(field=field):
+                with self.assertRaises(CohortSelectionValidationError) as captured:
+                    JobRequest.from_payload({"target_company": "Acme", field: None})
+                self.assertEqual(captured.exception.code, "request_location_invalid_type")
+                self.assertEqual(captured.exception.field, field)
+                # Explicit-Cohort requests fail the same way: no silent US default.
+                with self.assertRaises(CohortSelectionValidationError) as captured_cohort:
+                    JobRequest.from_payload({"target_company": "Acme", "cohort_selection": _cohort(), field: None})
+                self.assertEqual(captured_cohort.exception.code, "request_location_invalid_type")
+        # Absence and present-empty remain distinct, well-formed identities.
+        absent = JobRequest.from_payload({"target_company": "Acme"})
+        self.assertIsNone(absent.target_locations)
+        present_empty = JobRequest.from_payload({"target_company": "Acme", "target_locations": []})
+        self.assertEqual(present_empty.target_locations, [])
+        self.assertNotEqual(absent.to_record(), present_empty.to_record())
+
     def test_boundary_lengths_are_accepted(self) -> None:
         request = JobRequest.from_payload(
             {
@@ -329,6 +350,42 @@ class LocationHttpIngressTest(unittest.TestCase):
                 self.assertEqual(result["status"], "invalid")
                 self.assertEqual(result["reason"], expected_reason)
         self.assertEqual(self.orchestrator.calls["criteria_recorded"], 0)
+
+    def test_present_null_location_values_return_http_400_with_zero_writes(self) -> None:
+        # FT1-FF (finding 4): present JSON null fails closed at the API
+        # boundary for BOTH sibling fields, with zero recorded writes.
+        for field in ("target_locations", "exclude_target_locations"):
+            with self.subTest(field=field):
+                status, result = self._request(
+                    "/api/criteria/feedback",
+                    method="POST",
+                    body={"request_payload": {"target_company": "Acme", field: None}},
+                )
+                self.assertEqual(status, 400)
+                self.assertEqual(result["status"], "invalid")
+                self.assertEqual(result["reason"], "request_location_invalid_type")
+                self.assertEqual(result["field"], field)
+                # An explicit-Cohort request with a present null fails the same
+                # way — the US default is never silently activated.
+                status, result = self._request(
+                    "/api/criteria/feedback",
+                    method="POST",
+                    body={"request_payload": {"target_company": "Acme", "cohort_selection": _cohort(), field: None}},
+                )
+                self.assertEqual(status, 400)
+                self.assertEqual(result["reason"], "request_location_invalid_type")
+        self.assertEqual(self.orchestrator.calls["criteria_recorded"], 0)
+
+    def test_criteria_write_boundary_revalidates_present_null_without_http(self) -> None:
+        for field in ("target_locations", "exclude_target_locations"):
+            with self.subTest(field=field):
+                prepared, preflight = prepare_criteria_write_payload(
+                    {"request_payload": {"target_company": "Acme", field: None}},
+                    job_lookup=lambda _job_id: None,
+                )
+                self.assertEqual(prepared, {})
+                self.assertEqual(preflight["status"], "invalid")
+                self.assertEqual(preflight["reason"], "request_location_invalid_type")
 
     def test_criteria_write_boundary_revalidates_without_http(self) -> None:
         prepared, preflight = prepare_criteria_write_payload(

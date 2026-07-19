@@ -18,13 +18,8 @@ from .public_candidate_facets import (
     candidate_page_filter_signature,
     normalize_candidate_page_filter,
     public_facet_summary_from_counts,
-    public_function_facet_option_spec,
 )
 from .storage import ControlPlaneStore
-
-# Registry-derived function-facet ids from the ONE backend option spec;
-# the keyword-only fast-path check accepts exactly these values.
-_PUBLIC_FUNCTION_FACET_ID_SET = {item_id for item_id, _label in public_function_facet_option_spec()}
 
 _SERVABLE_PROJECTION_STATES = {"serving", "building", "degraded"}
 SHARED_CANONICAL_PROJECTION_ACCESS_SCOPE = "shared_canonical_read"
@@ -1491,46 +1486,21 @@ class ServingProjectionReader:
 
 
 def _candidate_filter_is_keyword_only(candidate_filter: dict[str, Any]) -> bool:
+    """True iff removing ``search_keyword`` leaves NO active normalized filter.
+
+    The candidate filter is normalized upstream
+    (``normalize_candidate_page_filter``), so full-domain selections are
+    no-ops and every remaining value is a valid, active selection.  The
+    single active-filter owner (``candidate_page_filter_active``) decides —
+    a keyword combined with any active function/location/employment/layer/
+    recall/audit selection must take the filtered index path, never the
+    keyword-only path that would silently discard the facet filter.
+    """
+
     source = dict(candidate_filter or {})
     if not str(source.get("search_keyword") or "").strip():
         return False
-    for key in (
-        "recall_buckets",
-        "employment_statuses",
-        "locations",
-        "function_buckets",
-        "layer_includes",
-        "layer_excludes",
-        "audit_statuses",
-    ):
-        values = [str(item or "").strip() for item in list(source.get(key) or []) if str(item or "").strip()]
-        if key == "recall_buckets":
-            values = [item for item in values if item != "all"]
-        elif key == "employment_statuses":
-            values = [item for item in values if item not in {"current", "former"}]
-        elif key == "locations":
-            values = [item for item in values if item not in {"us", "other", "unknown"}]
-        elif key == "function_buckets":
-            values = [item for item in values if item not in _PUBLIC_FUNCTION_FACET_ID_SET]
-        elif key == "layer_includes":
-            values = [item for item in values if item != "layer_0"]
-        elif key == "audit_statuses":
-            values = [
-                item
-                for item in values
-                if item
-                not in {
-                    "no_review_needed",
-                    "needs_review",
-                    "needs_profile_completion",
-                    "low_profile_richness",
-                    "verified_keep",
-                    "verified_exclude",
-                }
-            ]
-        if values:
-            return False
-    return True
+    return not candidate_page_filter_active({**source, "search_keyword": ""})
 
 
 def _legacy_projection_filter_scan_fallback_enabled() -> bool:
